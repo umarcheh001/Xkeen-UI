@@ -2042,6 +2042,36 @@ def test_codemirror_lint_tooltips_are_scrollable_and_width_limited_inside_editor
     assert "overscrollBehavior: 'contain'," in boot
 
 
+def test_monaco_schema_hovers_keep_single_scroll_layer():
+    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+
+    hover_block = styles.split(
+        '.monaco-hover .monaco-scrollable-element,\n.monaco-editor-hover .monaco-scrollable-element {',
+        1,
+    )[1].split('}', 1)[0]
+    markdown_block = styles.split(
+        '.monaco-editor-hover .hover-contents,\n'
+        '.monaco-hover .hover-contents,\n'
+        '.monaco-editor-hover .markdown-hover,\n'
+        '.monaco-hover .markdown-hover {',
+        1,
+    )[1].split('}', 1)[0]
+    pre_block = styles.split(
+        '.monaco-editor-hover .markdown-hover pre,\n.monaco-hover .markdown-hover pre {',
+        1,
+    )[1].split('}', 1)[0]
+
+    assert 'max-height: min(320px, calc(100vh - 96px)) !important;' in hover_block
+    assert 'overscroll-behavior: contain;' in hover_block
+    assert 'max-height: none !important;' in markdown_block
+    assert 'overflow: visible !important;' in markdown_block
+    assert 'scrollbar-gutter: auto;' in markdown_block
+    assert 'overflow-y: auto;' not in markdown_block
+    assert 'overflow: auto;' not in markdown_block
+    assert 'overflow-x: auto;' in pre_block
+    assert 'overflow-y: visible;' in pre_block
+
+
 def test_terminal_xray_tail_reclaims_pty_after_stop_or_disable():
     text = Path('xkeen-ui/static/js/terminal/xray_tail.js').read_text(encoding='utf-8')
     start_body = text.split('async function start()', 1)[1].split('\n  function stopViewer', 1)[0]

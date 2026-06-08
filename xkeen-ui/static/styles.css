@@ -964,6 +964,12 @@ html[data-theme="light"] .context-view .monaco-menu .monaco-menu-option.active {
   overflow: hidden !important;
 }
 
+.monaco-hover .monaco-scrollable-element,
+.monaco-editor-hover .monaco-scrollable-element {
+  max-height: min(320px, calc(100vh - 96px)) !important;
+  overscroll-behavior: contain;
+}
+
 .monaco-hover .hover-row .hover-row-contents,
 .monaco-editor-hover .hover-row .hover-row-contents {
   padding: 12px 14px !important;
@@ -992,10 +998,10 @@ html[data-theme="light"] .context-view .monaco-menu .monaco-menu-option.active {
 .monaco-hover .markdown-hover {
   box-sizing: border-box;
   max-width: min(520px, calc(100vw - 48px));
-  max-height: min(320px, calc(100vh - 96px));
-  overflow: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  max-height: none !important;
+  overflow: visible !important;
+  overscroll-behavior: auto;
+  scrollbar-gutter: auto;
 }
 
 .monaco-editor-hover .markdown-hover p,
@@ -1062,7 +1068,8 @@ html[data-theme="light"] .context-view .monaco-menu .monaco-menu-option.active {
   background: var(--xk-monaco-hover-code-bg) !important;
   border: 1px solid color-mix(in srgb, var(--xk-monaco-hover-border) 76%, transparent);
   border-radius: 8px;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: visible;
   white-space: pre-wrap;
 }
 
