@@ -1631,12 +1631,13 @@ let xrayLogsModuleApi = null;
 
   function b64Decode(b64) {
     try {
-      return window.atob(String(b64 || ''));
-    } catch (e) {
+      const raw = window.atob(String(b64 || ''));
       try {
-        return decodeURIComponent(escape(window.atob(String(b64 || ''))));
-      } catch (e2) {}
-    }
+        return decodeURIComponent(escape(raw));
+      } catch (e2) {
+        return raw;
+      }
+    } catch (e) {}
     return '';
   }
 

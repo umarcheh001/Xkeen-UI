@@ -1863,6 +1863,11 @@ def test_xray_logs_device_names_ui_contract():
     assert 'function openXrayDeviceNamesModal' in script
     assert 'function addXrayLogFilterTerm' in script
     assert 'function scheduleXrayDeviceNameFilterClick' in script
+    b64_decode_block = script.split('function b64Decode(b64) {', 1)[1].split('\n  function getCsrfToken()', 1)[0]
+    assert "const raw = window.atob(String(b64 || ''));" in b64_decode_block
+    assert 'return decodeURIComponent(escape(raw));' in b64_decode_block
+    assert 'return raw;' in b64_decode_block
+    assert "return window.atob(String(b64 || ''));" not in b64_decode_block
     assert "addEventListener('dblclick'" in script
     assert 'Клик: фильтр по IP • двойной клик: редактировать' in script
     assert "'device_name_click'" in script
