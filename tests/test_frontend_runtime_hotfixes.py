@@ -1869,7 +1869,22 @@ def test_xray_logs_device_names_ui_contract():
     assert 'class="xray-log-device-name"' in script
     assert "headers.set('X-CSRF-Token', csrf);" in script
     assert '.log-block .xray-log-device-name' in css
-    assert '.xray-devices-modal-content' in css
+    assert '#xray-devices-modal .xray-devices-modal-content' in css
+    modal_block = css.split('#xray-devices-modal .xray-devices-modal-content {', 1)[1].split('\n}', 1)[0]
+    body_block = css.split('#xray-devices-modal .xray-devices-body {', 1)[1].split('\n}', 1)[0]
+    list_block = css.split('#xray-devices-modal .xray-devices-list {', 1)[1].split('\n}', 1)[0]
+    row_block = css.split('#xray-devices-modal .xray-device-row {', 1)[1].split('\n}', 1)[0]
+    assert 'display: grid;' in modal_block
+    assert 'grid-template-rows: auto minmax(0, 1fr) auto;' in modal_block
+    assert 'resize: both;' in modal_block
+    assert 'grid-template-rows: auto auto minmax(0, 1fr);' in body_block
+    assert 'min-height: 0;' in body_block
+    assert 'overflow: hidden;' in body_block
+    assert 'min-height: 0;' in list_block
+    assert 'max-height: none;' in list_block
+    assert 'overflow: auto;' in list_block
+    assert 'scrollbar-gutter: stable;' in list_block
+    assert 'grid-template-columns: minmax(180px, 1fr) auto auto;' in row_block
 
 
 def test_file_manager_non_navigation_refreshes_do_not_consume_path_input_drafts():

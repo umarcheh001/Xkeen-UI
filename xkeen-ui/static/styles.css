@@ -5770,73 +5770,164 @@ html[data-theme="light"] .log-block .xray-log-device-name {
   color: color-mix(in srgb, var(--sem-success, #16a34a) 70%, #0f172a 30%);
 }
 
-.xray-devices-modal-content {
+#xray-devices-modal .xray-devices-modal-content {
   width: min(760px, calc(100vw - 28px));
-  max-width: 760px;
-}
-
-.xray-devices-body {
+  height: min(680px, calc(100vh - 48px));
+  min-width: min(520px, calc(100vw - 28px));
+  min-height: min(480px, calc(100vh - 48px));
+  max-width: min(1120px, calc(100vw - 28px));
+  max-height: calc(100vh - 48px);
+  padding: 0;
   display: grid;
-  gap: 12px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  resize: both;
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(9, 18, 34, 0.98), rgba(3, 8, 19, 0.98)),
+    var(--modal-bg, #060e1eeb);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.58),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.xray-devices-toolbar,
-.xray-devices-form,
-.xray-device-row,
-.xray-device-actions {
+#xray-devices-modal .xray-devices-modal-content .modal-header {
+  padding: 16px 18px 14px;
+  margin: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border, #334155) 74%, transparent);
+}
+
+#xray-devices-modal .xray-devices-modal-content .modal-title {
+  font-size: calc(18px * var(--xk-font-scale));
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+#xray-devices-modal .xray-devices-modal-content .modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--card-bg, #020617) 76%, transparent);
+  border: 1px solid transparent;
+}
+
+#xray-devices-modal .xray-devices-modal-content .modal-close:hover {
+  border-color: color-mix(in srgb, var(--accent, #60a5fa) 28%, transparent);
+  background: color-mix(in srgb, var(--accent, #60a5fa) 12%, var(--card-bg, #020617) 88%);
+}
+
+#xray-devices-modal .xray-devices-body {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 12px;
+  min-height: 0;
+  padding: 14px 18px 12px;
+  overflow: hidden;
+}
+
+#xray-devices-modal .xray-devices-toolbar,
+#xray-devices-modal .xray-devices-form,
+#xray-devices-modal .xray-device-row,
+#xray-devices-modal .xray-device-actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.xray-devices-toolbar {
+#xray-devices-modal .xray-devices-toolbar {
   justify-content: space-between;
   flex-wrap: wrap;
+  padding: 2px 0 0;
 }
 
-.xray-devices-summary {
-  opacity: 0.82;
+#xray-devices-modal .xray-devices-summary {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border, #334155) 68%, transparent);
+  background: color-mix(in srgb, var(--card-bg, #020617) 72%, transparent);
+  color: color-mix(in srgb, var(--text, #e5e7eb) 82%, var(--muted, #94a3b8) 18%);
+  font-weight: 700;
 }
 
-.xray-devices-form {
+#xray-devices-modal .xray-devices-form {
   display: grid;
-  grid-template-columns: minmax(140px, 180px) minmax(180px, 1fr) auto;
+  grid-template-columns: minmax(150px, 210px) minmax(220px, 1fr) auto;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--border, #334155) 68%, transparent);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.48), rgba(15, 23, 42, 0.26)),
+    color-mix(in srgb, var(--card-bg, #020617) 74%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
-.xray-devices-form .xray-log-filter {
+#xray-devices-modal .xray-devices-form .xray-log-filter {
   min-width: 0;
   border-radius: 12px;
+  height: 36px;
 }
 
-.xray-devices-list {
+#xray-devices-modal .xray-devices-form .btn-secondary {
+  min-height: 36px;
+  border-radius: 12px;
+  padding-inline: 14px;
+}
+
+#xray-devices-modal .xray-devices-list {
   display: grid;
+  align-content: start;
   gap: 8px;
-  max-height: min(440px, 52vh);
+  min-height: 0;
+  max-height: none;
   overflow: auto;
-  padding-right: 2px;
+  padding: 2px 4px 2px 0;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
-.xray-device-row {
-  justify-content: space-between;
-  padding: 10px 11px;
+#xray-devices-modal .xray-device-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  justify-content: stretch;
+  min-height: 68px;
+  padding: 10px 12px;
   border: 1px solid color-mix(in srgb, var(--border, #334155) 78%, transparent);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--card-bg, #020617) 82%, var(--accent, #60a5fa) 8%);
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(96, 165, 250, 0.08), transparent 48%),
+    color-mix(in srgb, var(--card-bg, #020617) 84%, var(--accent, #60a5fa) 8%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 8px 18px rgba(0, 0, 0, 0.12);
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
 }
 
-.xray-device-main {
+#xray-devices-modal .xray-device-row:hover {
+  border-color: color-mix(in srgb, var(--accent, #60a5fa) 34%, var(--border, #334155) 66%);
+  background:
+    linear-gradient(135deg, rgba(96, 165, 250, 0.14), transparent 52%),
+    color-mix(in srgb, var(--card-bg, #020617) 78%, var(--accent, #60a5fa) 12%);
+}
+
+#xray-devices-modal .xray-device-main {
   display: grid;
   gap: 2px;
   min-width: 0;
 }
 
-.xray-device-ip {
+#xray-devices-modal .xray-device-ip {
   color: var(--accent, #60a5fa);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: calc(12px * var(--xk-font-scale));
 }
 
-.xray-device-name {
+#xray-devices-modal .xray-device-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5845,52 +5936,117 @@ html[data-theme="light"] .log-block .xray-log-device-name {
   color: var(--text, #e5e7eb);
 }
 
-.xray-device-details {
+#xray-devices-modal .xray-device-details {
   color: var(--muted, #94a3b8);
   font-size: calc(12px * var(--xk-font-scale));
 }
 
-.xray-device-source {
+#xray-devices-modal .xray-device-source {
   flex: 0 0 auto;
+  align-self: center;
+  justify-self: center;
   padding: 3px 8px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--border, #334155) 80%, transparent);
   font-size: calc(11px * var(--xk-font-scale));
   color: var(--muted, #94a3b8);
+  background: color-mix(in srgb, var(--card-bg, #020617) 66%, transparent);
 }
 
-.xray-device-source.manual {
+#xray-devices-modal .xray-device-source.manual {
   color: color-mix(in srgb, var(--sem-success, #22c55e) 72%, var(--text, #e5e7eb) 28%);
   border-color: color-mix(in srgb, var(--sem-success, #22c55e) 35%, var(--border, #334155) 65%);
 }
 
-.xray-device-row-btn {
+#xray-devices-modal .xray-device-row-btn {
   padding: 5px 9px;
   border-radius: 9px;
   font-size: calc(12px * var(--xk-font-scale));
 }
 
-.xray-devices-empty {
+#xray-devices-modal .xray-devices-empty {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
   padding: 16px;
   border: 1px dashed color-mix(in srgb, var(--border, #334155) 78%, transparent);
-  border-radius: 10px;
+  border-radius: 14px;
   color: var(--muted, #94a3b8);
   text-align: center;
+  background: color-mix(in srgb, var(--card-bg, #020617) 68%, transparent);
+}
+
+#xray-devices-modal .xray-devices-actions {
+  padding: 12px 18px 16px;
+  margin: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border, #334155) 68%, transparent);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.32)),
+    color-mix(in srgb, var(--modal-bg, #060e1e) 88%, transparent);
+}
+
+html[data-theme="light"] #xray-devices-modal .xray-devices-modal-content {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(248, 250, 252, 0.99)),
+    var(--modal-bg, #ffffff);
+  box-shadow:
+    0 24px 70px rgba(15, 23, 42, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+html[data-theme="light"] #xray-devices-modal .xray-devices-form,
+html[data-theme="light"] #xray-devices-modal .xray-devices-summary,
+html[data-theme="light"] #xray-devices-modal .xray-device-source,
+html[data-theme="light"] #xray-devices-modal .xray-devices-empty {
+  background: color-mix(in srgb, var(--card-bg, #ffffff) 88%, var(--accent, #2563eb) 4%);
+}
+
+html[data-theme="light"] #xray-devices-modal .xray-device-row {
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.075), transparent 52%),
+    color-mix(in srgb, var(--card-bg, #ffffff) 92%, var(--accent, #2563eb) 5%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.76),
+    0 8px 18px rgba(15, 23, 42, 0.07);
+}
+
+html[data-theme="light"] #xray-devices-modal .xray-devices-actions {
+  background:
+    linear-gradient(180deg, rgba(241, 245, 249, 0.3), rgba(226, 232, 240, 0.62)),
+    color-mix(in srgb, var(--modal-bg, #ffffff) 92%, transparent);
 }
 
 @media (max-width: 680px) {
-  .xray-devices-form {
+  #xray-devices-modal .xray-devices-modal-content {
+    width: calc(100vw - 20px);
+    height: min(720px, calc(100vh - 20px));
+    min-width: 0;
+    min-height: min(430px, calc(100vh - 20px));
+    max-height: calc(100vh - 20px);
+    resize: vertical;
+  }
+
+  #xray-devices-modal .xray-devices-body {
+    padding: 12px;
+  }
+
+  #xray-devices-modal .xray-devices-form {
     grid-template-columns: 1fr;
   }
 
-  .xray-device-row {
+  #xray-devices-modal .xray-device-row {
     align-items: stretch;
-    flex-direction: column;
+    grid-template-columns: 1fr;
+    min-height: 0;
   }
 
-  .xray-device-actions {
+  #xray-devices-modal .xray-device-actions {
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  #xray-devices-modal .xray-device-source {
+    justify-self: start;
   }
 }
 
