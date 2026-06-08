@@ -141,6 +141,7 @@ let xrayLogsModuleApi = null;
   let _xrayDeviceNamesLastFetchAt = 0;
   let _xrayDeviceNamesRequest = null;
   let _xrayDeviceNamesRefreshTimer = null;
+  let _xrayDeviceNameClickTimer = null;
   let _xrayDeviceNamesByIp = Object.create(null);
   let _xrayDeviceNameEntries = [];
   const _xrayLogUiStatus = {
@@ -1778,7 +1779,7 @@ let xrayLogsModuleApi = null;
     if (!label || label === ip) return '';
 
     const source = xrayDeviceSourceLabel(entry.source);
-    const title = 'Имя устройства: ' + label + ' (' + source + '). Клик: редактировать';
+    const title = 'Имя устройства: ' + label + ' (' + source + '). Клик: фильтр по IP • двойной клик: редактировать';
     const ipB64 = b64Encode(ip);
     const nameB64 = b64Encode(label);
     return '<button type="button" class="xray-log-device-name" data-ip-b64="' + ipB64 + '" data-name-b64="' + nameB64 + '" title="' + escapeHtml(title) + '" aria-label="' + escapeHtml(title) + '">' + escapeHtml(label) + '</button>';
@@ -3468,6 +3469,23 @@ function copyToClipboard(text, okMsg) {
 
 }
 
+function addXrayLogFilterTerm(token, okMsg, reason) {
+  const value = String(token || '').trim();
+  if (!value) return false;
+
+  const filterEl = $('xray-log-filter');
+  if (!filterEl) return false;
+
+  const cur = String(filterEl.value || '').trim();
+  const parts = cur ? cur.split(/\s+/).filter(Boolean) : [];
+  if (!parts.includes(value)) parts.push(value);
+  filterEl.value = parts.join(' ');
+  try { flushXrayLogFilterApply(reason || 'filter_term_click'); } catch (e2) {}
+  actionToast('xray-logs-filter', okMsg || 'Добавлено в фильтр', 'success');
+  try { filterEl.focus(); } catch (e3) {}
+  return true;
+}
+
 function handleLogTokenClick(linkEl, e) {
   try {
     if (!linkEl) return;
@@ -3493,15 +3511,7 @@ function handleLogTokenClick(linkEl, e) {
 
     // Shift+Click -> add token to filter (AND semantics: space-separated terms)
     if (e && e.shiftKey) {
-      const filterEl = $('xray-log-filter');
-      if (filterEl) {
-        const cur = String(filterEl.value || '').trim();
-        const parts = cur ? cur.split(/\s+/).filter(Boolean) : [];
-        if (!parts.includes(token)) parts.push(token);
-        filterEl.value = parts.join(' ');
-        try { flushXrayLogFilterApply('token_shift_click'); } catch (e2) {}
-        actionToast('xray-logs-filter', kindLabel + ' добавлен в фильтр', 'success');
-        try { filterEl.focus(); } catch (e3) {}
+      if (addXrayLogFilterTerm(token, kindLabel + ' добавлен в фильтр', 'token_shift_click')) {
         return;
       }
       // If filter UI is missing — fallback to copy
@@ -3512,6 +3522,40 @@ function handleLogTokenClick(linkEl, e) {
     // Safe fallback
     try { copyToClipboard(String(linkEl && linkEl.textContent || '').trim(), 'Скопировано'); } catch (e2) {}
   }
+}
+
+function readXrayDeviceButtonData(deviceEl) {
+  const ip = normalizeXrayDeviceIp(b64Decode(String(deviceEl && deviceEl.getAttribute('data-ip-b64') || '')));
+  const name = normalizeXrayDeviceName(
+    b64Decode(String(deviceEl && deviceEl.getAttribute('data-name-b64') || '')) ||
+    String(deviceEl && deviceEl.textContent || '')
+  );
+  return { ip, name };
+}
+
+function clearXrayDeviceNameClickTimer() {
+  if (!_xrayDeviceNameClickTimer) return;
+  try { clearTimeout(_xrayDeviceNameClickTimer); } catch (e) {}
+  _xrayDeviceNameClickTimer = null;
+}
+
+function scheduleXrayDeviceNameFilterClick(deviceEl) {
+  clearXrayDeviceNameClickTimer();
+  _xrayDeviceNameClickTimer = setTimeout(() => {
+    _xrayDeviceNameClickTimer = null;
+    const data = readXrayDeviceButtonData(deviceEl);
+    if (!data.ip) return;
+    const label = data.name ? ('Устройство ' + data.name) : 'Устройство';
+    if (!addXrayLogFilterTerm(data.ip, label + ' добавлено в фильтр по IP', 'device_name_click')) {
+      copyToClipboard(data.ip, 'IP устройства скопирован');
+    }
+  }, 220);
+}
+
+function openXrayDeviceNameEditorFromButton(deviceEl) {
+  clearXrayDeviceNameClickTimer();
+  const data = readXrayDeviceButtonData(deviceEl);
+  void openXrayDeviceNamesModal({ ip: data.ip, name: data.name });
 }
 
 function xrayLogsCopySelection() {
@@ -4207,6 +4251,18 @@ function copyXrayContextModal() {
       openLineMenu(e.clientX || 0, e.clientY || 0, idx);
     });
 
+    // Device badges: click -> filter by source IP, double-click -> edit alias.
+    outputEl.addEventListener('dblclick', (e) => {
+      const t = e.target;
+      const deviceEl = t && t.closest ? t.closest('.xray-log-device-name') : null;
+      if (!deviceEl || !outputEl.contains(deviceEl)) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      closeLineMenu();
+      openXrayDeviceNameEditorFromButton(deviceEl);
+    });
+
     // Clickable tokens (IP/domains): click -> copy, Shift+Click -> add to filter
     // Alt+Click (on line) opens context immediately
     outputEl.addEventListener('click', (e) => {
@@ -4238,9 +4294,7 @@ function copyXrayContextModal() {
         e.preventDefault();
         e.stopPropagation();
         closeLineMenu();
-        const ip = b64Decode(String(deviceEl.getAttribute('data-ip-b64') || ''));
-        const name = b64Decode(String(deviceEl.getAttribute('data-name-b64') || '')) || deviceEl.textContent || '';
-        void openXrayDeviceNamesModal({ ip, name });
+        scheduleXrayDeviceNameFilterClick(deviceEl);
         return;
       }
 

@@ -1861,6 +1861,11 @@ def test_xray_logs_device_names_ui_contract():
     assert "const XRAY_DEVICE_NAMES_API = '/api/xray-logs/devices';" in script
     assert 'function refreshXrayLogDeviceNames' in script
     assert 'function openXrayDeviceNamesModal' in script
+    assert 'function addXrayLogFilterTerm' in script
+    assert 'function scheduleXrayDeviceNameFilterClick' in script
+    assert "addEventListener('dblclick'" in script
+    assert 'Клик: фильтр по IP • двойной клик: редактировать' in script
+    assert "'device_name_click'" in script
     assert 'class="xray-log-device-name"' in script
     assert "headers.set('X-CSRF-Token', csrf);" in script
     assert '.log-block .xray-log-device-name' in css
