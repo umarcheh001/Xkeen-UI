@@ -1,5 +1,11 @@
 import { getXrayLogLineClass } from './xray_log_line_class.js';
 import {
+  collectXrayLogDestinationIpPorts,
+  collectXrayLogDomainCandidates,
+  extractXrayLogConnectionId,
+  normalizeXrayLogDomain,
+} from './xray_log_domain_hints.js';
+import {
   closeXkeenModal,
   confirmXkeenAction,
   escapeXkeenHtml,
@@ -75,6 +81,9 @@ let xrayLogsModuleApi = null;
   const XRAY_DEVICE_NAMES_API = '/api/xray-logs/devices';
   const XRAY_DEVICE_NAMES_REFRESH_MS = 60000;
   const XRAY_DEVICE_NAMES_STALE_MS = 30000;
+  const XRAY_DESTINATION_DOMAIN_HINTS_REFRESH_MS = 30000;
+  const XRAY_DESTINATION_DOMAIN_HINTS_MAX_LINES = isPerfLite() ? 600 : 1200;
+  const XRAY_DESTINATION_DOMAIN_CACHE_MAX = 500;
 
   let _maxLines = DEFAULT_MAX_LINES;
   let _pollMs = DEFAULT_POLL_MS;
@@ -144,6 +153,10 @@ let xrayLogsModuleApi = null;
   let _xrayDeviceNameClickTimer = null;
   let _xrayDeviceNamesByIp = Object.create(null);
   let _xrayDeviceNameEntries = [];
+  let _xrayDestinationDomainsByIp = Object.create(null);
+  let _xrayDestinationDomainsByConnId = Object.create(null);
+  let _xrayDestinationDomainHintsRequest = null;
+  let _xrayDestinationDomainHintsLastFetchAt = 0;
   const _xrayLogUiStatus = {
     phase: 'idle',
     tone: 'muted',
@@ -1176,6 +1189,7 @@ let xrayLogsModuleApi = null;
     } else {
       outputEl.innerHTML = renderXrayLogEmptyStateHtml(buildXrayLogEmptyStateModel(runtime, view, filtered));
     }
+    try { maybeRefreshXrayDestinationDomainHints({ render: true }); } catch (e) {}
     if (shouldScroll) outputEl.scrollTop = outputEl.scrollHeight;
   }
 
@@ -1189,12 +1203,14 @@ let xrayLogsModuleApi = null;
 
   function replaceXrayLogBuffer(lines) {
     _lastLines = trimLogBuffer(lines, _maxLines);
+    try { ingestXrayLogDestinationDomains(_lastLines, { source: _currentFile || 'log' }); } catch (e) {}
     return _lastLines;
   }
 
   function appendXrayLogBuffer(lines) {
     const nextLines = Array.isArray(lines) ? lines : [];
     _lastLines = trimLogBuffer([].concat(Array.isArray(_lastLines) ? _lastLines : [], nextLines), _maxLines);
+    try { ingestXrayLogDestinationDomains(nextLines, { source: _currentFile || 'log' }); } catch (e) {}
     return _lastLines;
   }
 
@@ -1406,6 +1422,11 @@ let xrayLogsModuleApi = null;
   function _isErrorFileName(name) {
     const f = String(name || '').toLowerCase();
     return f === 'error' || f === 'error.log';
+  }
+
+  function _isAccessFileName(name) {
+    const f = String(name || '').toLowerCase();
+    return !f || f === 'access' || f === 'access.log';
   }
 
   function updateLoglevelUiForCurrentFile() {
@@ -1800,6 +1821,185 @@ let xrayLogsModuleApi = null;
       const n = parseInt(idx, 10);
       return isFinite(n) && aliases[n] ? aliases[n] : '';
     });
+  }
+
+  function pruneXrayDestinationDomainCache() {
+    const keys = Object.keys(_xrayDestinationDomainsByIp || {});
+    if (keys.length <= XRAY_DESTINATION_DOMAIN_CACHE_MAX) return;
+
+    keys
+      .map((ip) => {
+        const item = _xrayDestinationDomainsByIp[ip] || {};
+        return { ip, ts: parseInt(item.updatedAt || item.seenAt || 0, 10) || 0 };
+      })
+      .sort((a, b) => a.ts - b.ts)
+      .slice(0, Math.max(0, keys.length - XRAY_DESTINATION_DOMAIN_CACHE_MAX))
+      .forEach((item) => {
+        try { delete _xrayDestinationDomainsByIp[item.ip]; } catch (e) {}
+      });
+  }
+
+  function rememberXrayDestinationDomain(ipRaw, domainRaw, source) {
+    const ip = normalizeXrayDeviceIp(ipRaw);
+    const domain = normalizeXrayLogDomain(domainRaw);
+    if (!ip || !domain) return false;
+
+    const prev = _xrayDestinationDomainsByIp[ip] || null;
+    if (prev && prev.domain === domain) {
+      prev.updatedAt = Date.now();
+      if (source && !prev.source) prev.source = String(source || '');
+      return false;
+    }
+
+    _xrayDestinationDomainsByIp[ip] = {
+      ip,
+      domain,
+      source: String(source || 'log'),
+      updatedAt: Date.now(),
+    };
+    pruneXrayDestinationDomainCache();
+    return true;
+  }
+
+  function ingestXrayLogDestinationDomains(lines, options) {
+    const src = Array.isArray(lines) ? lines : [];
+    if (!src.length) return false;
+
+    const opts = options || {};
+    let changed = false;
+
+    src.forEach((line) => {
+      const raw = normalizeLogLine(line);
+      if (!raw) return;
+
+      const connId = extractXrayLogConnectionId(raw);
+      const candidates = collectXrayLogDomainCandidates(raw);
+      const firstDomain = candidates.length ? candidates[0].domain : '';
+
+      if (connId && firstDomain) {
+        const prev = _xrayDestinationDomainsByConnId[connId] || '';
+        if (prev !== firstDomain) _xrayDestinationDomainsByConnId[connId] = firstDomain;
+      }
+
+      const destinations = collectXrayLogDestinationIpPorts(raw);
+      if (!destinations.length) return;
+
+      const connDomain = connId ? normalizeXrayLogDomain(_xrayDestinationDomainsByConnId[connId]) : '';
+      const domain = connDomain || firstDomain;
+      if (!domain) return;
+
+      destinations.forEach((dest) => {
+        if (rememberXrayDestinationDomain(dest.ip, domain, opts.source || (connDomain ? 'connection' : 'line'))) {
+          changed = true;
+        }
+      });
+    });
+
+    return changed;
+  }
+
+  function buildXrayDestinationIpTokenLookup(line) {
+    const out = Object.create(null);
+    collectXrayLogDestinationIpPorts(line).forEach((dest) => {
+      if (!dest || !dest.ip) return;
+      out[dest.ip] = true;
+      if (dest.key) out[dest.key] = true;
+    });
+    return out;
+  }
+
+  function getXrayDestinationDomainHint(ip) {
+    const normalized = normalizeXrayDeviceIp(ip);
+    if (!normalized) return null;
+    const item = _xrayDestinationDomainsByIp[normalized] || null;
+    if (!item || !item.domain) return null;
+    const domain = normalizeXrayLogDomain(item.domain);
+    if (!domain) return null;
+    return Object.assign({}, item, { ip: normalized, domain });
+  }
+
+  function renderXrayDestinationDomainHtml(ip, port) {
+    const hint = getXrayDestinationDomainHint(ip);
+    if (!hint || !hint.domain) return '';
+
+    const tokenKey = String(ip || '') + (port ? (':' + String(port)) : '');
+    const title = 'Domain seen for ' + tokenKey + ': ' + hint.domain;
+    const b64 = b64Encode(hint.domain);
+    if (!b64) {
+      return ' <span class="xray-log-dest-domain" title="' + escapeHtml(title) + '"><span class="xray-log-dest-domain__prefix">dns</span>' + escapeHtml(hint.domain) + '</span>';
+    }
+
+    return (
+      ' <a href="#" class="log-link log-domain xray-log-dest-domain" data-kind="domain" data-b64="' +
+      b64 +
+      '" title="' +
+      escapeHtml(title) +
+      '"><span class="xray-log-dest-domain__prefix">dns</span>' +
+      escapeHtml(hint.domain) +
+      '</a>'
+    );
+  }
+
+  function appendXrayDestinationDomainPlaceholder(ip, port, destinationTokens, aliases) {
+    const key = String(ip || '') + (port ? (':' + String(port)) : '');
+    if (!destinationTokens || (!destinationTokens[key] && !destinationTokens[String(ip || '')])) return '';
+
+    const html = renderXrayDestinationDomainHtml(ip, port);
+    if (!html) return '';
+
+    const idx = aliases.length;
+    aliases.push(html);
+    return ' @@XK_DEST_DOMAIN_' + idx + '@@';
+  }
+
+  function restoreXrayDestinationDomainPlaceholders(html, aliases) {
+    if (!aliases || !aliases.length) return html;
+    return String(html || '').replace(/@@XK_DEST_DOMAIN_(\d+)@@/g, (m, idx) => {
+      const n = parseInt(idx, 10);
+      return isFinite(n) && aliases[n] ? aliases[n] : '';
+    });
+  }
+
+  async function refreshXrayDestinationDomainHints(options) {
+    const opts = options || {};
+    const force = !!opts.force;
+    const staleMs = typeof opts.staleMs === 'number' ? opts.staleMs : XRAY_DESTINATION_DOMAIN_HINTS_REFRESH_MS;
+    const now = Date.now();
+
+    if (!force && now - _xrayDestinationDomainHintsLastFetchAt < staleMs) return false;
+    if (_xrayDestinationDomainHintsRequest) return _xrayDestinationDomainHintsRequest;
+
+    _xrayDestinationDomainHintsRequest = (async () => {
+      try {
+        const params = new URLSearchParams();
+        params.set('file', 'error');
+        params.set('max_lines', String(Math.max(50, Math.min(MAX_MAX_LINES, XRAY_DESTINATION_DOMAIN_HINTS_MAX_LINES))));
+        params.set('source', 'domain_hints');
+
+        const res = await fetch('/api/xray-logs?' + params.toString(), { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error('http ' + res.status);
+
+        const changed = ingestXrayLogDestinationDomains(Array.isArray(data.lines) ? data.lines : [], { source: 'error_log' });
+        _xrayDestinationDomainHintsLastFetchAt = Date.now();
+        if (changed && opts.render !== false) {
+          try { applyXrayLogFilterToOutput(); } catch (e) {}
+        }
+        return changed;
+      } catch (e) {
+        _xrayDestinationDomainHintsLastFetchAt = Date.now();
+        return false;
+      } finally {
+        _xrayDestinationDomainHintsRequest = null;
+      }
+    })();
+
+    return _xrayDestinationDomainHintsRequest;
+  }
+
+  function maybeRefreshXrayDestinationDomainHints(options) {
+    if (!_isAccessFileName(_currentFile)) return;
+    void refreshXrayDestinationDomainHints(Object.assign({ staleMs: XRAY_DESTINATION_DOMAIN_HINTS_REFRESH_MS }, options || {}));
   }
 
   async function refreshXrayLogDeviceNames(options) {
@@ -2208,6 +2408,7 @@ let xrayLogsModuleApi = null;
     if (!clean || !String(clean).trim()) return '';
 
     const cls = getXrayLogLineClass(clean);
+    const destinationTokens = buildXrayDestinationIpTokenLookup(clean);
     let processed = escapeHtml(clean);
 
     // Clickable level badges (INFO/WARN/ERROR/etc.)
@@ -2294,6 +2495,7 @@ let xrayLogsModuleApi = null;
     processed = processed.replace(/(^|[^>])\b(tcp|udp|ws|grpc|http|https|tls|quic|h2|h3|http\/1\.1|http\/2)\b/gi, '$1<span class="log-proto">$2</span>');
 
     const deviceAliases = [];
+    const destinationDomainAliases = [];
 
     // IPv4 (+ optional port) -> clickable token
     processed = processed.replace(/\b((?:\d{1,3}\.){3}\d{1,3})(?::(\d{1,5}))?\b/g, (m, ip, port) => {
@@ -2301,8 +2503,9 @@ let xrayLogsModuleApi = null;
       const b64 = b64Encode(raw);
       const vis = String(ip || '') + (port ? (':<span class="log-port">' + String(port) + '</span>') : '');
       const alias = appendXrayDeviceAliasPlaceholder(String(ip || ''), deviceAliases);
-      if (!b64) return '<span class="log-ip">' + vis + '</span>' + alias;
-      return '<a href="#" class="log-link log-ip" data-kind="ip" data-b64="' + b64 + '" title="' + linkTitle + '">' + vis + '</a>' + alias;
+      const domainAlias = appendXrayDestinationDomainPlaceholder(String(ip || ''), port, destinationTokens, destinationDomainAliases);
+      if (!b64) return '<span class="log-ip">' + vis + '</span>' + alias + domainAlias;
+      return '<a href="#" class="log-link log-ip" data-kind="ip" data-b64="' + b64 + '" title="' + linkTitle + '">' + vis + '</a>' + alias + domainAlias;
     });
 
     // Domains (avoid hitting inside already injected tags) -> clickable token
@@ -2314,6 +2517,7 @@ let xrayLogsModuleApi = null;
       return String(pfx || '') + '<a href="#" class="log-link log-domain" data-kind="domain" data-b64="' + b64 + '" title="' + linkTitle + '">' + vis + '</a>';
     });
 
+    processed = restoreXrayDestinationDomainPlaceholders(processed, destinationDomainAliases);
     processed = restoreXrayDeviceAliasPlaceholders(processed, deviceAliases);
 
     // Optional: render ANSI colors from logs (SGR) into HTML spans.

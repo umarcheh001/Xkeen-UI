@@ -5770,6 +5770,66 @@ html[data-theme="light"] .log-block .xray-log-device-name {
   color: color-mix(in srgb, var(--sem-success, #16a34a) 70%, #0f172a 30%);
 }
 
+.log-block .xray-log-dest-domain {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  max-width: 280px;
+  margin-left: 4px;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--log-dns, #38bdf8) 42%, rgba(129, 140, 248, 0.34));
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(56, 189, 248, 0.15), rgba(99, 102, 241, 0.11)),
+    rgba(15, 23, 42, 0.46);
+  color: var(--log-dns, #7dd3fc);
+  font-size: 0.9em;
+  line-height: 1.22;
+  text-decoration: none;
+  vertical-align: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.log-block .xray-log-dest-domain__prefix {
+  color: color-mix(in srgb, var(--log-dns, #38bdf8) 68%, var(--text-muted, #94a3b8) 32%);
+  font-size: 0.78em;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.log-block .xray-log-dest-domain:hover,
+.log-block .xray-log-dest-domain:focus-visible {
+  border-color: color-mix(in srgb, var(--log-dns, #38bdf8) 64%, var(--accent-2, #a78bfa) 36%);
+  background:
+    linear-gradient(180deg, rgba(56, 189, 248, 0.23), rgba(99, 102, 241, 0.16)),
+    rgba(15, 23, 42, 0.66);
+  outline: none;
+  text-decoration: none;
+}
+
+.log-block .log-link.xray-log-dest-domain:visited {
+  color: var(--log-dns, #7dd3fc);
+}
+
+html[data-theme="light"] .log-block .xray-log-dest-domain {
+  border-color: color-mix(in srgb, var(--log-dns, #0284c7) 34%, #c4b5fd 66%);
+  background:
+    linear-gradient(180deg, rgba(224, 242, 254, 0.94), rgba(238, 242, 255, 0.9)),
+    #ffffff;
+  color: var(--log-dns, #075985);
+}
+
+html[data-theme="light"] .log-block .xray-log-dest-domain__prefix {
+  color: color-mix(in srgb, var(--log-dns, #0284c7) 72%, #475569 28%);
+}
+
+html[data-theme="light"] .log-block .log-link.xray-log-dest-domain:visited {
+  color: var(--log-dns, #075985);
+}
+
 #xray-devices-modal .xray-devices-modal-content {
   width: min(760px, calc(100vw - 28px));
   height: min(680px, calc(100vh - 48px));

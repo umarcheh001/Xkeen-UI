@@ -1892,6 +1892,21 @@ def test_xray_logs_device_names_ui_contract():
     assert 'grid-template-columns: minmax(180px, 1fr) auto auto;' in row_block
 
 
+def test_xray_logs_destination_domain_hints_ui_contract():
+    script = Path('xkeen-ui/static/js/features/xray_logs.js').read_text(encoding='utf-8')
+    parser = Path('xkeen-ui/static/js/features/xray_log_domain_hints.js').read_text(encoding='utf-8')
+    css = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+
+    assert "from './xray_log_domain_hints.js';" in script
+    assert 'function ingestXrayLogDestinationDomains' in script
+    assert 'function appendXrayDestinationDomainPlaceholder' in script
+    assert 'data-kind="domain"' in script
+    assert "'domain_hints'" in script
+    assert 'collectXrayLogDestinationIpPorts' in parser
+    assert 'collectXrayLogDomainCandidates' in parser
+    assert '.log-block .xray-log-dest-domain' in css
+
+
 def test_file_manager_non_navigation_refreshes_do_not_consume_path_input_drafts():
     editor_text = Path('xkeen-ui/static/js/features/file_manager/editor.js').read_text(encoding='utf-8')
     listing_text = Path('xkeen-ui/static/js/features/file_manager/listing.js').read_text(encoding='utf-8')
