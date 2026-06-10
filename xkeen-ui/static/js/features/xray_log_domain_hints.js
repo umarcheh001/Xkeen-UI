@@ -89,6 +89,8 @@ export function collectXrayLogDestinationIpPorts(line) {
   const patterns = [
     { re: /\baccepted\s+(?:tcp|udp):((?:\d{1,3}\.){3}\d{1,3})(?::(\d{1,5}))?/gi, kind: 'accepted' },
     { re: /\btunneling request to\s+(?:tcp|udp):((?:\d{1,3}\.){3}\d{1,3})(?::(\d{1,5}))?/gi, kind: 'tunnel' },
+    { re: /\bprocessing from\s+(?:tcp|udp):\S+\s+to\s+(?:tcp|udp):((?:\d{1,3}\.){3}\d{1,3})(?::(\d{1,5}))?/gi, kind: 'processing' },
+    { re: /\bdialing\s+(?:tcp|udp)\s+to\s+(?:tcp|udp):((?:\d{1,3}\.){3}\d{1,3})(?::(\d{1,5}))?/gi, kind: 'dial' },
     { re: /\bfor\s+\[(?:tcp|udp):((?:\d{1,3}\.){3}\d{1,3})(?::(\d{1,5}))?\]/gi, kind: 'route' },
   ];
 

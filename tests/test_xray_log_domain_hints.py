@@ -32,6 +32,8 @@ def test_xray_log_domain_hints_extract_destinations_and_domains():
         const access = '2026/06/08 15:07:50 from 192.168.1.83:51158 accepted tcp:8.6.112.0:443 [redirect -> direct]';
         const sniffed = '2026/06/08 15:08:01 [INFO] [3868264735] app/dispatcher: sniffed domain: ab.chatgpt.com';
         const route = '2026/06/08 15:08:01 [INFO] [3868264735] app/dispatcher: Hit route rule: [xk_auto] for [tcp:ab.chatgpt.com:443]';
+        const tunProcessing = '2026/06/06 23:38:25.092182 [Info] [1744767180] proxy/tun: processing from tcp:10.0.0.1:55765 to tcp:110.242.74.102:80';
+        const directDial = '2026/06/06 23:38:25.095597 [Info] [1744767180] transport/internet/tcp: dialing TCP to tcp:110.242.74.102:80';
         const outboundDial = '2026/06/08 15:07:53 [INFO] [3278736167] transport/internet/splithttp: XHTTP is dialing to tcp:90.156.217.107:443, mode packet-up, HTTP version 2, host bonus05-03.uiu.fyi';
         const accessWithOutboundTag = '2026/06/09 22:26:25 from 192.168.1.83:60025 accepted tcp:149.154.167.99:443 [redirect -> cdn.pecan.run--Анти_Белые_списки_00-03.1f07]';
 
@@ -39,6 +41,8 @@ def test_xray_log_domain_hints_extract_destinations_and_domains():
           accessDestinations: collectXrayLogDestinationIpPorts(access),
           sniffedDomains: collectXrayLogDomainCandidates(sniffed),
           routeDomains: collectXrayLogDomainCandidates(route),
+          tunProcessingDestinations: collectXrayLogDestinationIpPorts(tunProcessing),
+          directDialDestinations: collectXrayLogDestinationIpPorts(directDial),
           outboundDialDestinations: collectXrayLogDestinationIpPorts(outboundDial),
           outboundDialDomains: collectXrayLogDomainCandidates(outboundDial),
           accessWithOutboundTagDestinations: collectXrayLogDestinationIpPorts(accessWithOutboundTag),
@@ -54,6 +58,12 @@ def test_xray_log_domain_hints_extract_destinations_and_domains():
     assert data["accessDestinations"][0]["port"] == "443"
     assert data["sniffedDomains"][0]["domain"] == "ab.chatgpt.com"
     assert data["routeDomains"][0]["domain"] == "ab.chatgpt.com"
+    assert data["tunProcessingDestinations"][0]["ip"] == "110.242.74.102"
+    assert data["tunProcessingDestinations"][0]["port"] == "80"
+    assert data["tunProcessingDestinations"][0]["kind"] == "processing"
+    assert data["directDialDestinations"][0]["ip"] == "110.242.74.102"
+    assert data["directDialDestinations"][0]["port"] == "80"
+    assert data["directDialDestinations"][0]["kind"] == "dial"
     assert data["outboundDialDestinations"] == []
     assert data["outboundDialDomains"] == []
     assert data["accessWithOutboundTagDestinations"][0]["ip"] == "149.154.167.99"
