@@ -217,6 +217,20 @@ def _mihomo_provider_payload_is_non_empty(payload: str, meta: Dict[str, Any] | N
     return bool(summary.get("has_nodes"))
 
 
+def _mihomo_header_truthy(value: Any) -> bool:
+    text = str(value or "").strip().lower()
+    return bool(text) and text not in {"0", "false", "no", "off", "none", "null"}
+
+
+def _mihomo_hwid_headers_suggest_required(headers: Any) -> bool:
+    if not isinstance(headers, dict):
+        return False
+    return any(
+        _mihomo_header_truthy(headers.get(key))
+        for key in ("x-hwid-not-supported", "x-hwid-max-devices-reached", "x-hwid-limit")
+    )
+
+
 def _mihomo_decode_base64_subscription(text: str) -> str:
     raw = re.sub(r"\s+", "", str(text or ""))
     if len(raw) < 16 or not re.fullmatch(r"[A-Za-z0-9+/=_-]+", raw):
@@ -230,7 +244,7 @@ def _mihomo_decode_base64_subscription(text: str) -> str:
 
 
 _MIHOMO_URI_RE = re.compile(
-    r"(?mi)^\s*(?:vless|vmess|trojan|ss|ssr|hysteria2|hy2|tuic|wireguard)://"
+    r"(?mi)^\s*(?:vless|vmess|trojan|ss|ssr|shadowsocks|hysteria2|hy2|hysteria|tuic|wireguard)://"
 )
 _MIHOMO_YAML_PROXY_NAME_RE = re.compile(r"(?m)^\s*-\s*name\s*:\s*")
 
@@ -257,6 +271,11 @@ def _mihomo_provider_payload_summary(
     return {
         "format": m.get("format"),
         "converted": bool(m.get("converted")),
+        "xray_json": bool(m.get("xray_json")),
+        "happ_fallback_used": bool(m.get("happ_fallback_used")),
+        "happ_fallback_original_count": m.get("happ_fallback_original_count"),
+        "proxy_count": m.get("proxy_count"),
+        "skipped_count": m.get("skipped_count"),
         "proxy_section": bool(m.get("proxy_section")),
         "bytes": m.get("bytes"),
         "content_type": m.get("content_type"),
@@ -534,6 +553,7 @@ def create_mihomo_blueprint(
                 result["provider_url"] = adapter_url
                 result["provider_headers"] = {}
                 result["provider_mode"] = "adapter"
+                current_provider_summary: Dict[str, Any] | None = None
 
                 direct_headers = _mihomo_provider_direct_headers()
                 if direct_headers:
@@ -545,17 +565,49 @@ def create_mihomo_blueprint(
                             timeout=timeout_s,
                             policy=policy,
                         )
-                        if _mihomo_provider_payload_is_non_empty(payload, meta):
+                        direct_summary = _mihomo_provider_payload_summary(payload, meta)
+                        if direct_summary.get("has_nodes"):
                             result["provider_url"] = url
                             result["provider_headers"] = dict(direct_headers)
                             result["provider_mode"] = "direct_headers"
-                            result["provider_payload"] = {
-                                "format": (meta or {}).get("format"),
-                                "content_type": (meta or {}).get("content_type"),
-                                "bytes": (meta or {}).get("bytes"),
-                            }
+                            result["provider_payload"] = direct_summary
+                            current_provider_summary = direct_summary
                     except Exception as exc:
                         result["provider_direct_error"] = _subscription_fetch_failure_reason(exc)
+
+                hwid_markers = {}
+                try:
+                    hwid_markers.update(result.get("hwid_response_headers") or {})
+                except Exception:
+                    pass
+                try:
+                    if current_provider_summary:
+                        hwid_markers.update(current_provider_summary.get("hwid_response_headers") or {})
+                except Exception:
+                    pass
+
+                if _mihomo_hwid_headers_suggest_required(hwid_markers):
+                    try:
+                        info = _mh_hwid_get_device_info()
+                        hwid_payload, hwid_meta = _mh_hwid_fetch_provider_payload(
+                            url,
+                            headers=info.get("headers") or {},
+                            insecure=insecure,
+                            timeout=timeout_s,
+                            policy=_mihomo_hwid_url_policy(),
+                        )
+                        hwid_summary = _mihomo_provider_payload_summary(hwid_payload, hwid_meta)
+                        current_count = int((current_provider_summary or {}).get("node_count") or 0)
+                        if hwid_summary.get("has_nodes") and int(hwid_summary.get("node_count") or 0) > current_count:
+                            result["provider_url"] = (
+                                f"http://127.0.0.1:{_ui_loopback_port()}/mihomo/hwid/provider.yaml?"
+                                + urllib.parse.urlencode({"url": url, "insecure": "1" if insecure else "0"})
+                            )
+                            result["provider_headers"] = {}
+                            result["provider_mode"] = "hwid_adapter"
+                            result["provider_payload"] = hwid_summary
+                    except Exception as exc:
+                        result["provider_hwid_error"] = _subscription_fetch_failure_reason(exc)
 
         if isinstance(result, dict) and result.get("ok") is True:
             return jsonify(result), 200

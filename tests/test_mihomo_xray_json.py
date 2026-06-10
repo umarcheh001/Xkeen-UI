@@ -95,6 +95,40 @@ def _outbound_vless_grpc_without_service():
     }
 
 
+def _outbound_hysteria2():
+    return {
+        "tag": "proxy",
+        "protocol": "hysteria",
+        "settings": {
+            "address": "hy.example.com",
+            "port": 443,
+            "version": 2,
+        },
+        "streamSettings": {
+            "network": "hysteria",
+            "hysteriaSettings": {
+                "version": 2,
+                "auth": "hy-secret",
+            },
+            "security": "tls",
+            "tlsSettings": {
+                "serverName": "hy.example.com",
+                "fingerprint": "chrome",
+                "alpn": ["h3"],
+            },
+            "finalmask": {
+                "udpmasks": [
+                    {"type": "salamander", "settings": {"password": "obfs-secret"}}
+                ],
+                "quicParams": {
+                    "brutalUp": "110 mbps",
+                    "brutalDown": "110 mbps",
+                },
+            },
+        },
+    }
+
+
 def _full_xray_config(remarks, outbound):
     """Wrap an outbound in a full Xray config (matching real subscription format)."""
     return {
@@ -170,6 +204,26 @@ def test_convert_vless_grpc_without_service_omits_empty_grpc_opts():
     assert "grpc-opts:" not in result.yaml
 
 
+def test_convert_hysteria_v2_emits_hysteria2_yaml():
+    result = convert_outbound_to_mihomo(_outbound_hysteria2(), "Hy2-Node")
+    assert result is not None
+    parsed = yaml.safe_load(result.yaml)[0]
+
+    assert parsed["name"] == "Hy2-Node"
+    assert parsed["type"] == "hysteria2"
+    assert parsed["server"] == "hy.example.com"
+    assert parsed["port"] == 443
+    assert parsed["password"] == "hy-secret"
+    assert parsed["udp"] is True
+    assert parsed["fast-open"] is True
+    assert parsed["sni"] == "hy.example.com"
+    assert parsed["alpn"] == ["h3"]
+    assert parsed["obfs"] == "salamander"
+    assert parsed["obfs-password"] == "obfs-secret"
+    assert parsed["up"] == "110 mbps"
+    assert parsed["down"] == "110 mbps"
+
+
 @pytest.mark.parametrize("short_id", ["28000000", "12345", "0"])
 def test_numeric_looking_short_ids_stay_strings(short_id):
     """Reality short-id values that look numeric must round-trip as strings."""
@@ -192,13 +246,15 @@ def test_convert_subscription_text_parses_real_world_array_shape():
         [
             _full_xray_config("Germany", _outbound_vless_xhttp_tls()),
             _full_xray_config("Reality-Node", _outbound_vless_tcp_reality_vision()),
+            _full_xray_config("Hy2-Node", _outbound_hysteria2()),
         ]
     )
     proxies, skipped = convert_subscription_text(body)
-    assert len(proxies) == 2
+    assert len(proxies) == 3
     assert skipped == []
     assert proxies[0].name == "Germany"
     assert proxies[1].name == "Reality-Node"
+    assert proxies[2].name == "Hy2-Node"
 
 
 def test_convert_subscription_text_dedupes_against_existing_names():

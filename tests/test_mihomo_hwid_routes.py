@@ -198,6 +198,38 @@ def test_mihomo_provider_payload_summary_counts_base64_uri_nodes():
     assert summary["node_count"] == 1
 
 
+def test_mihomo_provider_payload_summary_counts_hysteria_uri_nodes():
+    summary = mihomo._mihomo_provider_payload_summary(
+        "hysteria://secret@example.com:443#hy\n",
+        {"format": "raw", "bytes": 40},
+    )
+
+    assert summary["has_nodes"] is True
+    assert summary["raw_uri_count"] == 1
+    assert summary["node_count"] == 1
+
+
+def test_mihomo_provider_payload_summary_exposes_happ_fallback_meta():
+    summary = mihomo._mihomo_provider_payload_summary(
+        "proxies:\n  - name: hy\n    type: hysteria2\n",
+        {
+            "format": "xray-json",
+            "converted": True,
+            "xray_json": True,
+            "happ_fallback_used": True,
+            "happ_fallback_original_count": 6,
+            "proxy_count": 15,
+            "skipped_count": 0,
+        },
+    )
+
+    assert summary["xray_json"] is True
+    assert summary["happ_fallback_used"] is True
+    assert summary["happ_fallback_original_count"] == 6
+    assert summary["proxy_count"] == 15
+    assert summary["skipped_count"] == 0
+
+
 def test_hwid_probe_route_maps_tls_handshake_timeout_to_504(monkeypatch, client):
     monkeypatch.setattr(
         mihomo,
@@ -414,3 +446,59 @@ def test_regular_provider_probe_falls_back_to_adapter_when_direct_headers_empty(
     assert "/mihomo/provider.yaml?" in payload["provider_url"]
     assert payload["provider_headers"] == {}
     assert payload["provider_mode"] == "adapter"
+
+
+def test_regular_provider_probe_prefers_hwid_adapter_when_hwid_payload_has_more_nodes(monkeypatch, client):
+    monkeypatch.setattr(
+        mihomo,
+        "_mh_hwid_get_device_info",
+        lambda: {"headers": {"x-hwid": "AABBCCDDEEFF", "User-Agent": "ClashMeta/1.19.24"}},
+    )
+
+    def fake_probe(url, *, headers, insecure, timeout, prefer, policy):
+        return {
+            "ok": True,
+            "probe": {"url": url, "http_status": 200},
+            "profile": {"profile_title": "HWID", "suggested_name": "HWID"},
+            "headers_used": headers or {},
+            "hwid_response_headers": {"x-hwid-not-supported": "true"},
+            "warnings": [],
+        }
+
+    fetch_calls = []
+
+    def fake_fetch(url, *, headers, insecure, timeout, policy):
+        fetch_calls.append(dict(headers or {}))
+        if (headers or {}).get("x-hwid"):
+            return (
+                "proxies:\n"
+                "  - name: one\n"
+                "    type: vless\n"
+                "  - name: two\n"
+                "    type: hysteria2\n",
+                {"format": "xray-json", "converted": True, "proxy_section": True},
+            )
+        return (
+            "dmxlc3M6Ly9leGFtcGxl\n",
+            {
+                "format": "raw",
+                "hwid_response_headers": {"x-hwid-not-supported": "true"},
+            },
+        )
+
+    monkeypatch.setattr(mihomo, "_mh_hwid_probe_subscription_safe", fake_probe)
+    monkeypatch.setattr(mihomo, "_mh_hwid_fetch_provider_payload", fake_fetch)
+
+    response = client.post(
+        "/api/mihomo/provider/probe",
+        json={"url": "https://provider.example/sub"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["provider_mode"] == "hwid_adapter"
+    assert "/mihomo/hwid/provider.yaml?" in payload["provider_url"]
+    assert payload["provider_headers"] == {}
+    assert payload["provider_payload"]["node_count"] == 2
+    assert fetch_calls[0] == {"User-Agent": "router"}
+    assert fetch_calls[1]["x-hwid"] == "AABBCCDDEEFF"

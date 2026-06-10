@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 import urllib.error
+
+import yaml
 
 from services import mihomo_hwid_sub as hwid
 
@@ -210,6 +213,148 @@ proxy-groups:
     assert "  - name: node-1" in payload
     assert "mixed-port:" not in payload
     assert "proxy-groups:" not in payload
+
+
+def test_hwid_provider_payload_converts_xray_json_with_hysteria2_to_provider_yaml():
+    payload, meta = hwid.provider_payload_from_subscription_text(
+        json.dumps(
+            [
+                {
+                    "remarks": "Hy2",
+                    "outbounds": [
+                        {
+                            "tag": "proxy",
+                            "protocol": "hysteria",
+                            "settings": {
+                                "address": "hy.example.com",
+                                "port": 443,
+                                "version": 2,
+                            },
+                            "streamSettings": {
+                                "network": "hysteria",
+                                "hysteriaSettings": {"version": 2, "auth": "hy-secret"},
+                                "security": "tls",
+                                "tlsSettings": {
+                                    "serverName": "hy.example.com",
+                                    "alpn": ["h3"],
+                                },
+                                "finalmask": {
+                                    "udp": [
+                                        {
+                                            "type": "salamander",
+                                            "settings": {"password": "obfs-secret"},
+                                        }
+                                    ],
+                                    "quicParams": {
+                                        "brutalUp": "100 mbps",
+                                        "brutalDown": "100 mbps",
+                                    },
+                                },
+                            },
+                        }
+                    ],
+                }
+            ]
+        )
+    )
+
+    assert meta["format"] == "xray-json"
+    assert meta["converted"] is True
+    assert meta["proxy_section"] is True
+    assert meta["proxy_count"] == 1
+    parsed = yaml.safe_load(payload)
+    proxy = parsed["proxies"][0]
+    assert proxy["name"] == "Hy2"
+    assert proxy["type"] == "hysteria2"
+    assert proxy["password"] == "hy-secret"
+    assert proxy["obfs"] == "salamander"
+    assert proxy["obfs-password"] == "obfs-secret"
+
+
+def test_hwid_fetch_provider_payload_prefers_happ_json_when_it_has_more_nodes(monkeypatch):
+    calls = []
+
+    def fake_fetch(url, *, headers, insecure, timeout, policy, max_bytes):
+        calls.append(dict(headers or {}))
+        ua = str((headers or {}).get("User-Agent") or "")
+        if ua == "Happ/1.0":
+            return (
+                json.dumps(
+                    [
+                        {
+                            "remarks": "Hy2",
+                            "outbounds": [
+                                {
+                                    "tag": "proxy",
+                                    "protocol": "hysteria",
+                                    "settings": {
+                                        "address": "hy.example.com",
+                                        "port": 443,
+                                        "version": 2,
+                                    },
+                                    "streamSettings": {
+                                        "network": "hysteria",
+                                        "hysteriaSettings": {"version": 2, "auth": "hy-secret"},
+                                        "security": "tls",
+                                        "tlsSettings": {"serverName": "hy.example.com"},
+                                    },
+                                }
+                            ],
+                        },
+                        {
+                            "remarks": "Vless",
+                            "outbounds": [
+                                {
+                                    "tag": "proxy",
+                                    "protocol": "vless",
+                                    "settings": {
+                                        "vnext": [
+                                            {
+                                                "address": "vless.example.com",
+                                                "port": 443,
+                                                "users": [
+                                                    {
+                                                        "id": "11111111-1111-1111-1111-111111111111",
+                                                        "encryption": "none",
+                                                    }
+                                                ],
+                                            }
+                                        ]
+                                    },
+                                    "streamSettings": {
+                                        "network": "tcp",
+                                        "security": "tls",
+                                        "tlsSettings": {"serverName": "vless.example.com"},
+                                    },
+                                }
+                            ],
+                        },
+                    ]
+                ),
+                {"content_type": "application/json", "bytes": 200, "hwid_response_headers": {}},
+            )
+        return (
+            "proxies:\n  - name: Only\n    type: vless\n    server: only.example.com\n    port: 443\n",
+            {"content_type": "text/yaml", "bytes": 80, "hwid_response_headers": {}},
+        )
+
+    monkeypatch.setattr(hwid, "_fetch_provider_subscription_text", fake_fetch)
+
+    payload, meta = hwid.fetch_provider_payload(
+        "https://provider.example/sub",
+        headers={
+            "x-hwid": "AABBCCDDEEFF",
+            "User-Agent": "ClashMeta/1.19.24; mihomo/1.19.24",
+        },
+    )
+
+    assert len(calls) == 2
+    assert calls[0]["User-Agent"].startswith("ClashMeta/")
+    assert calls[1]["User-Agent"] == "Happ/1.0"
+    assert meta["happ_fallback_used"] is True
+    assert meta["happ_fallback_original_count"] == 1
+    parsed = yaml.safe_load(payload)
+    assert [proxy["type"] for proxy in parsed["proxies"]] == ["hysteria2", "vless"]
 
 
 def test_hwid_provider_entry_can_use_local_adapter_url_without_headers():

@@ -41,6 +41,12 @@ _HWID_RESPONSE_HEADER_KEYS = (
     "x-hwid-max-devices-reached",
     "x-hwid-not-supported",
 )
+_HAPP_FALLBACK_UA_ENV = "XKEEN_MIHOMO_HWID_HAPP_USER_AGENT"
+_HAPP_FALLBACK_ENABLED_ENV = "XKEEN_MIHOMO_HWID_HAPP_FALLBACK"
+_HAPP_FALLBACK_DEFAULT_UA = "Happ/1.0"
+_PROXY_URI_RE = re.compile(
+    r"(?mi)^\s*(?:vless|vmess|trojan|ss|ssr|shadowsocks|hysteria2|hy2|hysteria|tuic|wireguard)://"
+)
 
 
 def _read_text(path: str, *, max_bytes: int = 64 * 1024) -> str | None:
@@ -705,6 +711,28 @@ def provider_payload_from_subscription_text(text: str) -> tuple[str, Dict[str, A
     if not raw:
         return "proxies: []\n", {"format": "empty", "converted": False, "proxy_section": False}
 
+    if raw[:1] in ("[", "{"):
+        try:
+            from services.mihomo_xray_json import (
+                convert_subscription_text,
+                format_proxies_section,
+            )
+
+            proxies, skipped = convert_subscription_text(raw)
+            if proxies:
+                return format_proxies_section(proxies), {
+                    "format": "xray-json",
+                    "converted": True,
+                    "proxy_section": True,
+                    "xray_json": True,
+                    "proxy_count": len(proxies),
+                    "skipped_count": len(skipped),
+                }
+        except ValueError:
+            pass
+        except Exception:
+            pass
+
     proxies_section, top_level_keys = _yaml_extract_top_level_section(raw, "proxies")
     if proxies_section:
         converted = top_level_keys > 1
@@ -724,31 +752,47 @@ def provider_payload_from_subscription_text(text: str) -> tuple[str, Dict[str, A
     }
 
 
-def fetch_provider_payload(
+def _decode_base64_subscription_text(text: str) -> str:
+    raw = re.sub(r"\s+", "", str(text or ""))
+    if len(raw) < 16 or not re.fullmatch(r"[A-Za-z0-9+/=_-]+", raw):
+        return ""
+    raw = raw.replace("-", "+").replace("_", "/")
+    raw += "=" * ((4 - len(raw) % 4) % 4)
+    try:
+        return base64.b64decode(raw, validate=False).decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+
+
+def _provider_payload_node_count(payload: str) -> int:
+    text = str(payload or "").strip()
+    if not text:
+        return 0
+    yaml_markers = len(re.findall(r"(?m)^\s*-\s*name\s*:\s*", text))
+    if yaml_markers:
+        return yaml_markers
+    raw_markers = len(_PROXY_URI_RE.findall(text))
+    if raw_markers:
+        return raw_markers
+    decoded = _decode_base64_subscription_text(text)
+    return len(_PROXY_URI_RE.findall(decoded)) if decoded else 0
+
+
+def _fetch_provider_subscription_text(
     url: str,
     *,
-    headers: Dict[str, str] | None,
-    insecure: bool = False,
-    timeout: float = 20.0,
-    policy: URLPolicy | None = None,
-    max_bytes: int = 2 * 1024 * 1024,
+    headers: Dict[str, str],
+    insecure: bool,
+    timeout: float,
+    policy: URLPolicy,
+    max_bytes: int,
 ) -> tuple[str, Dict[str, Any]]:
-    """Fetch a HWID subscription and return provider-compatible YAML/text."""
-
-    u = (url or "").strip()
-    effective_policy = policy or _hwid_subscription_policy()
-    ok_url, reason = is_url_allowed(u, effective_policy)
-    if not ok_url:
-        raise ValueError("url_blocked:" + reason)
-
-    req_headers = dict(headers or {})
-    req_headers.setdefault("Accept", "text/yaml, text/plain, */*")
-    req = urllib.request.Request(u, headers=req_headers, method="GET")
+    req = urllib.request.Request(url, headers=dict(headers or {}), method="GET")
     ctx = ssl._create_unverified_context() if insecure else None
 
     class SafeRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D401,N803
-            ok, redirect_reason = is_url_allowed(newurl, effective_policy)
+            ok, redirect_reason = is_url_allowed(newurl, policy)
             if not ok:
                 raise urllib.error.URLError("url_blocked:" + redirect_reason)
             return super().redirect_request(req, fp, code, msg, headers, newurl)
@@ -774,14 +818,123 @@ def fetch_provider_payload(
     except LookupError:
         text = raw.decode("utf-8", errors="replace")
 
-    payload, meta = provider_payload_from_subscription_text(text)
-    meta.update(
-        {
-            "content_type": content_type,
-            "bytes": len(raw),
-            "hwid_response_headers": hwid_response_headers,
-        }
+    return text, {
+        "content_type": content_type,
+        "bytes": len(raw),
+        "hwid_response_headers": hwid_response_headers,
+    }
+
+
+def _happ_fallback_headers(headers: Dict[str, str]) -> Dict[str, str] | None:
+    if not env_flag(_HAPP_FALLBACK_ENABLED_ENV, True):
+        return None
+    h = dict(headers or {})
+    hwid = ""
+    ua = ""
+    for key, value in h.items():
+        key_l = str(key or "").strip().lower()
+        if key_l == "x-hwid":
+            hwid = str(value or "").strip()
+        elif key_l == "user-agent":
+            ua = str(value or "").strip()
+    if not hwid or "happ" in ua.lower():
+        return None
+
+    fallback_ua = str(os.environ.get(_HAPP_FALLBACK_UA_ENV) or _HAPP_FALLBACK_DEFAULT_UA).strip()
+    if not fallback_ua:
+        return None
+    h["User-Agent"] = fallback_ua
+    return h
+
+
+def _maybe_use_happ_fallback(
+    url: str,
+    *,
+    request_headers: Dict[str, str],
+    current_payload: str,
+    current_meta: Dict[str, Any],
+    insecure: bool,
+    timeout: float,
+    policy: URLPolicy,
+    max_bytes: int,
+) -> tuple[str, Dict[str, Any]] | None:
+    if current_meta.get("xray_json"):
+        return None
+
+    fallback_headers = _happ_fallback_headers(request_headers)
+    if not fallback_headers:
+        return None
+
+    try:
+        text, fetch_meta = _fetch_provider_subscription_text(
+            url,
+            headers=fallback_headers,
+            insecure=insecure,
+            timeout=timeout,
+            policy=policy,
+            max_bytes=max_bytes,
+        )
+        payload, meta = provider_payload_from_subscription_text(text)
+        meta.update(fetch_meta)
+    except Exception:
+        return None
+
+    if not meta.get("xray_json"):
+        return None
+
+    original_count = _provider_payload_node_count(current_payload)
+    fallback_count = _provider_payload_node_count(payload)
+    if fallback_count <= original_count:
+        return None
+
+    meta["happ_fallback_used"] = True
+    meta["happ_fallback_original_count"] = original_count
+    meta["happ_fallback_original_format"] = current_meta.get("format")
+    return payload, meta
+
+
+def fetch_provider_payload(
+    url: str,
+    *,
+    headers: Dict[str, str] | None,
+    insecure: bool = False,
+    timeout: float = 20.0,
+    policy: URLPolicy | None = None,
+    max_bytes: int = 2 * 1024 * 1024,
+) -> tuple[str, Dict[str, Any]]:
+    """Fetch a HWID subscription and return provider-compatible YAML/text."""
+
+    u = (url or "").strip()
+    effective_policy = policy or _hwid_subscription_policy()
+    ok_url, reason = is_url_allowed(u, effective_policy)
+    if not ok_url:
+        raise ValueError("url_blocked:" + reason)
+
+    req_headers = dict(headers or {})
+    req_headers.setdefault("Accept", "text/yaml, text/plain, */*")
+    text, fetch_meta = _fetch_provider_subscription_text(
+        u,
+        headers=req_headers,
+        insecure=insecure,
+        timeout=timeout,
+        policy=effective_policy,
+        max_bytes=max_bytes,
     )
+    payload, meta = provider_payload_from_subscription_text(text)
+    meta.update(fetch_meta)
+
+    fallback = _maybe_use_happ_fallback(
+        u,
+        request_headers=req_headers,
+        current_payload=payload,
+        current_meta=meta,
+        insecure=insecure,
+        timeout=timeout,
+        policy=effective_policy,
+        max_bytes=max_bytes,
+    )
+    if fallback:
+        return fallback
     return payload, meta
 
 

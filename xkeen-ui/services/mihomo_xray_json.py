@@ -29,7 +29,7 @@ from .xray_subscriptions import (
 )
 
 
-SUPPORTED_PROTOCOLS = {"vless"}
+SUPPORTED_PROTOCOLS = {"vless", "hysteria", "hysteria2", "hy2"}
 
 
 def convert_outbound_to_mihomo(
@@ -51,6 +51,8 @@ def convert_outbound_to_mihomo(
 
     if proto == "vless":
         return _convert_vless(settings, stream, name)
+    if proto in {"hysteria", "hysteria2", "hy2"}:
+        return _convert_hysteria2(settings, stream, name, proto)
     return None
 
 
@@ -208,6 +210,182 @@ def _convert_vless(
             yaml_lines.append("    headers:")
             yaml_lines.append(f"      Host: {_yaml_str(host)}")
     # network == "tcp" — bare, no transport opts (typical for reality+vision)
+
+    yaml = "\n".join(yaml_lines) + "\n"
+    return ProxyParseResult(name=name, yaml=yaml)
+
+
+def _first_text(*values: Any) -> str:
+    for value in values:
+        text = str(value or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def _first_value(*values: Any) -> Any:
+    for value in values:
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _as_mapping(value: Any) -> Dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _int_port(value: Any) -> Optional[int]:
+    try:
+        port = int(value)
+    except (TypeError, ValueError):
+        return None
+    if port <= 0 or port > 65535:
+        return None
+    return port
+
+
+def _int_or_none(value: Any) -> Optional[int]:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _string_list(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item or "").strip()]
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    return []
+
+
+def _hysteria_finalmask_obfs(finalmask: Dict[str, Any]) -> Tuple[str, str]:
+    if not isinstance(finalmask, dict):
+        return "", ""
+    masks = finalmask.get("udpmasks")
+    if not isinstance(masks, list):
+        masks = finalmask.get("udp")
+    if not isinstance(masks, list):
+        return "", ""
+    for item in masks:
+        if not isinstance(item, dict):
+            continue
+        obfs_type = str(item.get("type") or "").strip()
+        settings = _as_mapping(item.get("settings"))
+        password = _first_text(
+            settings.get("password"),
+            settings.get("obfs-password"),
+            settings.get("obfsPassword"),
+            settings.get("obfs_password"),
+        )
+        if obfs_type or password:
+            return obfs_type, password
+    return "", ""
+
+
+def _convert_hysteria2(
+    settings: Dict[str, Any],
+    stream: Dict[str, Any],
+    name: str,
+    proto: str,
+) -> Optional[ProxyParseResult]:
+    settings = _as_mapping(settings)
+    stream = _as_mapping(stream)
+    hysteria_settings = _as_mapping(stream.get("hysteriaSettings"))
+    tls_settings = _as_mapping(stream.get("tlsSettings"))
+    finalmask = _as_mapping(stream.get("finalmask"))
+    quic_params = _as_mapping(finalmask.get("quicParams"))
+
+    version = _int_or_none(_first_value(settings.get("version"), hysteria_settings.get("version")))
+    if version not in (None, 2) and proto == "hysteria":
+        return None
+
+    server = _first_text(
+        settings.get("address"),
+        settings.get("server"),
+        hysteria_settings.get("address"),
+        hysteria_settings.get("server"),
+    )
+    port = _int_port(_first_value(settings.get("port"), hysteria_settings.get("port")))
+    password = _first_text(
+        hysteria_settings.get("auth"),
+        hysteria_settings.get("auth_str"),
+        hysteria_settings.get("authStr"),
+        settings.get("auth"),
+        settings.get("password"),
+    )
+    if not server or port is None or not password:
+        return None
+
+    sni = _first_text(
+        tls_settings.get("serverName"),
+        tls_settings.get("servername"),
+        hysteria_settings.get("sni"),
+        settings.get("sni"),
+    )
+    alpn = _string_list(_first_value(tls_settings.get("alpn"), hysteria_settings.get("alpn")))
+    if not alpn:
+        alpn = ["h3"]
+
+    allow_insecure = bool(
+        _mapping_bool(tls_settings, "allowInsecure", "allow_insecure", "skip-cert-verify", "skipCertVerify")
+        or _mapping_bool(settings, "allowInsecure", "insecure", "skip-cert-verify", "skipCertVerify")
+    )
+
+    up = _first_text(
+        hysteria_settings.get("up"),
+        settings.get("up"),
+        quic_params.get("brutalUp"),
+        quic_params.get("up"),
+    )
+    down = _first_text(
+        hysteria_settings.get("down"),
+        settings.get("down"),
+        quic_params.get("brutalDown"),
+        quic_params.get("down"),
+    )
+
+    obfs = _first_text(
+        hysteria_settings.get("obfs"),
+        settings.get("obfs"),
+        hysteria_settings.get("obfsType"),
+    )
+    obfs_password = _first_text(
+        hysteria_settings.get("obfs-password"),
+        hysteria_settings.get("obfs_password"),
+        hysteria_settings.get("obfsPassword"),
+        settings.get("obfs-password"),
+        settings.get("obfs_password"),
+        settings.get("obfsPassword"),
+    )
+    fm_obfs, fm_obfs_password = _hysteria_finalmask_obfs(finalmask)
+    if not obfs:
+        obfs = fm_obfs
+    if not obfs_password:
+        obfs_password = fm_obfs_password
+
+    yaml_lines: List[str] = []
+    yaml_lines.append(f"- name: {_yaml_str(name)}")
+    yaml_lines.append("  type: hysteria2")
+    yaml_lines.append(f"  server: {_yaml_str(server)}")
+    yaml_lines.append(f"  port: {port}")
+    yaml_lines.append(f"  password: {_yaml_str(password)}")
+    yaml_lines.append("  udp: true")
+    yaml_lines.append("  fast-open: true")
+    if alpn:
+        yaml_lines.append(f"  alpn: {_yaml_list(alpn)}")
+    if up:
+        yaml_lines.append(f"  up: {_yaml_str(up)}")
+    if down:
+        yaml_lines.append(f"  down: {_yaml_str(down)}")
+    if sni:
+        yaml_lines.append(f"  sni: {_yaml_str(sni)}")
+    if allow_insecure:
+        yaml_lines.append("  skip-cert-verify: true")
+    if obfs:
+        yaml_lines.append(f"  obfs: {_yaml_str(obfs)}")
+    if obfs_password:
+        yaml_lines.append(f"  obfs-password: {_yaml_str(obfs_password)}")
 
     yaml = "\n".join(yaml_lines) + "\n"
     return ProxyParseResult(name=name, yaml=yaml)
