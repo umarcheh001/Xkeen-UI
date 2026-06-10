@@ -34,6 +34,8 @@ def test_xray_log_domain_hints_extract_destinations_and_domains():
         const route = '2026/06/08 15:08:01 [INFO] [3868264735] app/dispatcher: Hit route rule: [xk_auto] for [tcp:ab.chatgpt.com:443]';
         const tunProcessing = '2026/06/06 23:38:25.092182 [Info] [1744767180] proxy/tun: processing from tcp:10.0.0.1:55765 to tcp:110.242.74.102:80';
         const directDial = '2026/06/06 23:38:25.095597 [Info] [1744767180] transport/internet/tcp: dialing TCP to tcp:110.242.74.102:80';
+        const outboundEndpointDial = '2026/06/10 09:24:27.220660 [Info] [2779876993] transport/internet/tcp: dialing TCP to tcp:cp.landing-lv.rfid-technologies.org:443';
+        const outboundTunnelViaEndpoint = '2026/06/10 09:24:27.220660 [Info] [2779876993] proxy/vless/outbound: tunneling request to tcp:149.154.167.51:80 via cp.landing-lv.rfid-technologies.org:443';
         const outboundDial = '2026/06/08 15:07:53 [INFO] [3278736167] transport/internet/splithttp: XHTTP is dialing to tcp:90.156.217.107:443, mode packet-up, HTTP version 2, host bonus05-03.uiu.fyi';
         const accessWithOutboundTag = '2026/06/09 22:26:25 from 192.168.1.83:60025 accepted tcp:149.154.167.99:443 [redirect -> cdn.pecan.run--Анти_Белые_списки_00-03.1f07]';
 
@@ -43,6 +45,9 @@ def test_xray_log_domain_hints_extract_destinations_and_domains():
           routeDomains: collectXrayLogDomainCandidates(route),
           tunProcessingDestinations: collectXrayLogDestinationIpPorts(tunProcessing),
           directDialDestinations: collectXrayLogDestinationIpPorts(directDial),
+          outboundEndpointDialDomains: collectXrayLogDomainCandidates(outboundEndpointDial),
+          outboundTunnelViaEndpointDestinations: collectXrayLogDestinationIpPorts(outboundTunnelViaEndpoint),
+          outboundTunnelViaEndpointDomains: collectXrayLogDomainCandidates(outboundTunnelViaEndpoint),
           outboundDialDestinations: collectXrayLogDestinationIpPorts(outboundDial),
           outboundDialDomains: collectXrayLogDomainCandidates(outboundDial),
           accessWithOutboundTagDestinations: collectXrayLogDestinationIpPorts(accessWithOutboundTag),
@@ -64,6 +69,10 @@ def test_xray_log_domain_hints_extract_destinations_and_domains():
     assert data["directDialDestinations"][0]["ip"] == "110.242.74.102"
     assert data["directDialDestinations"][0]["port"] == "80"
     assert data["directDialDestinations"][0]["kind"] == "dial"
+    assert data["outboundEndpointDialDomains"] == []
+    assert data["outboundTunnelViaEndpointDestinations"][0]["ip"] == "149.154.167.51"
+    assert data["outboundTunnelViaEndpointDestinations"][0]["port"] == "80"
+    assert data["outboundTunnelViaEndpointDomains"] == []
     assert data["outboundDialDestinations"] == []
     assert data["outboundDialDomains"] == []
     assert data["accessWithOutboundTagDestinations"][0]["ip"] == "149.154.167.99"

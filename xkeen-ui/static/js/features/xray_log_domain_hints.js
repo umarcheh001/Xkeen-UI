@@ -119,6 +119,11 @@ function addDomainCandidate(out, seen, raw, source) {
   out.push({ domain, source: String(source || '') });
 }
 
+function isXrayOutboundEndpointDialLine(line) {
+  const s = String(line || '');
+  return /\btransport\/internet\/[A-Za-z0-9_.-]+:\s+dialing\s+(?:tcp|udp)\s+to\s+(?:tcp|udp):/i.test(s);
+}
+
 export function collectXrayLogDomainCandidates(line) {
   const s = String(line || '');
   if (!s) return [];
@@ -128,6 +133,8 @@ export function collectXrayLogDomainCandidates(line) {
 
   const sniffed = s.match(/\bsniffed domain:\s*([A-Za-z0-9.-]+\.[A-Za-z0-9-]+)(?=$|[\s,\]])/i);
   if (sniffed && sniffed[1]) addDomainCandidate(out, seen, sniffed[1], 'sniffed');
+
+  if (isXrayOutboundEndpointDialLine(s)) return out;
 
   const domainTargets = [
     /\b(?:accepted|to|for)\s+\[(?:tcp|udp):([A-Za-z0-9.-]+\.[A-Za-z0-9-]+)(?::\d{1,5})?\]/gi,
