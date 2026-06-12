@@ -86,6 +86,34 @@ let serviceStatusModuleApi = null;
     return [];
   }
 
+  function getCoreModalButtonRow(btn) {
+    try {
+      return btn && typeof btn.closest === 'function' ? btn.closest('.xk-core-engine-row') : null;
+    } catch (e) {}
+    return null;
+  }
+
+  function getCoreModalButtonState(btn) {
+    const row = getCoreModalButtonRow(btn);
+    try {
+      return (row && row.querySelector('.xk-core-option-state')) || (btn && btn.querySelector('.xk-core-option-state')) || null;
+    } catch (e) {}
+    return null;
+  }
+
+  function setCoreModalButtonVisible(btn, visible) {
+    if (!btn) return;
+    const nextDisplay = visible ? '' : 'none';
+    btn.style.display = nextDisplay;
+    const row = getCoreModalButtonRow(btn);
+    if (row) row.style.display = nextDisplay;
+  }
+
+  function isCoreModalButtonVisible(btn) {
+    const row = getCoreModalButtonRow(btn);
+    return !!btn && btn.style.display !== 'none' && (!row || row.style.display !== 'none');
+  }
+
   function getCoreModalCurrentCore() {
     const modal = getCoreModal();
     try {
@@ -124,10 +152,12 @@ let serviceStatusModuleApi = null;
 
     coreButtons.forEach((btn) => {
       btn.disabled = false;
-      btn.style.display = '';
+      setCoreModalButtonVisible(btn, true);
       btn.classList.remove('active', 'is-current');
+      const row = getCoreModalButtonRow(btn);
+      if (row) row.classList.remove('active', 'is-current', 'is-disabled');
       try { btn.setAttribute('aria-checked', 'false'); } catch (e) {}
-      const stateEl = btn.querySelector('.xk-core-option-state');
+      const stateEl = getCoreModalButtonState(btn);
       if (stateEl) stateEl.textContent = 'Доступно';
     });
   }
@@ -144,18 +174,24 @@ let serviceStatusModuleApi = null;
 
     coreButtons.forEach((btn) => {
       const core = normalizeCore(btn.getAttribute('data-core'));
-      const isVisible = btn.style.display !== 'none';
+      const isVisible = isCoreModalButtonVisible(btn);
       const isDisabled = !!btn.disabled || !isVisible;
       const isSelected = isVisible && btn.classList.contains('active');
       const isCurrent = !!core && core === currentCore;
+      const row = getCoreModalButtonRow(btn);
 
       if (isVisible && !btn.disabled) anyEnabled = true;
       if (isSelected && !isDisabled) selectedCore = core;
 
       btn.classList.toggle('is-current', isCurrent);
+      if (row) {
+        row.classList.toggle('active', isSelected);
+        row.classList.toggle('is-current', isCurrent);
+        row.classList.toggle('is-disabled', isDisabled);
+      }
       try { btn.setAttribute('aria-checked', isSelected ? 'true' : 'false'); } catch (e) {}
 
-      const stateEl = btn.querySelector('.xk-core-option-state');
+      const stateEl = getCoreModalButtonState(btn);
       if (!stateEl) return;
       if (isSelected && isCurrent) stateEl.textContent = 'Активно';
       else if (isSelected) stateEl.textContent = 'Выбрано';
@@ -1076,10 +1112,12 @@ let serviceStatusModuleApi = null;
 
     coreButtons.forEach((btn) => {
       btn.disabled = true;
-      btn.style.display = '';
+      setCoreModalButtonVisible(btn, true);
       btn.classList.remove('active', 'is-current');
+      const row = getCoreModalButtonRow(btn);
+      if (row) row.classList.remove('active', 'is-current', 'is-disabled');
       try { btn.setAttribute('aria-checked', 'false'); } catch (e) {}
-      const stateEl = btn.querySelector('.xk-core-option-state');
+      const stateEl = getCoreModalButtonState(btn);
       if (stateEl) stateEl.textContent = 'Недоступно';
     });
 
@@ -1110,8 +1148,18 @@ let serviceStatusModuleApi = null;
           );
           confirmBtn.disabled = true;
           coreButtons.forEach((btn) => {
+            const isCurrent = normalizeCore(btn.getAttribute('data-core')) === current;
             btn.disabled = true;
-            btn.classList.toggle('is-current', normalizeCore(btn.getAttribute('data-core')) === current);
+            btn.classList.toggle('is-current', isCurrent);
+            btn.classList.toggle('active', isCurrent);
+            const row = getCoreModalButtonRow(btn);
+            if (row) {
+              row.classList.toggle('active', isCurrent);
+              row.classList.toggle('is-current', isCurrent);
+              row.classList.add('is-disabled');
+            }
+            const stateEl = getCoreModalButtonState(btn);
+            if (stateEl) stateEl.textContent = isCurrent ? 'Активно' : 'Недоступно';
           });
           return;
         }
@@ -1123,22 +1171,24 @@ let serviceStatusModuleApi = null;
         coreButtons.forEach((btn) => {
           const value = normalizeCore(btn.getAttribute('data-core'));
           if (!value || !cores.includes(value)) {
-            btn.style.display = 'none';
+            setCoreModalButtonVisible(btn, false);
             btn.disabled = true;
             btn.classList.remove('active', 'is-current');
-            const stateEl = btn.querySelector('.xk-core-option-state');
+            const row = getCoreModalButtonRow(btn);
+            if (row) row.classList.remove('active', 'is-current');
+            const stateEl = getCoreModalButtonState(btn);
             if (stateEl) stateEl.textContent = 'Недоступно';
             return;
           }
           anyVisible = true;
-          btn.style.display = '';
+          setCoreModalButtonVisible(btn, true);
           btn.disabled = false;
           btn.classList.toggle('active', !!current && value === current);
           if (btn.classList.contains('active')) hasActiveSelection = true;
         });
 
         if (!hasActiveSelection) {
-          const fallbackButton = coreButtons.find((btn) => btn.style.display !== 'none' && !btn.disabled);
+          const fallbackButton = coreButtons.find((btn) => isCoreModalButtonVisible(btn) && !btn.disabled);
           if (fallbackButton) fallbackButton.classList.add('active');
         }
 
@@ -1178,7 +1228,7 @@ let serviceStatusModuleApi = null;
 
     let selectedCore = null;
     coreButtons.forEach((btn) => {
-      if (btn.classList.contains('active') && !btn.disabled && btn.style.display !== 'none') {
+      if (btn.classList.contains('active') && !btn.disabled && isCoreModalButtonVisible(btn)) {
         selectedCore = btn.getAttribute('data-core');
       }
     });
@@ -1219,7 +1269,7 @@ let serviceStatusModuleApi = null;
         _coreModalLoading = false;
         confirmBtn.disabled = false;
         coreButtons.forEach((btn) => {
-          if (btn.style.display !== 'none') btn.disabled = false;
+          if (isCoreModalButtonVisible(btn)) btn.disabled = false;
         });
         syncCoreModalSelectionUi();
         toast({
@@ -1248,7 +1298,7 @@ let serviceStatusModuleApi = null;
       _coreModalLoading = false;
       confirmBtn.disabled = false;
       coreButtons.forEach((btn) => {
-        if (btn.style.display !== 'none') btn.disabled = false;
+        if (isCoreModalButtonVisible(btn)) btn.disabled = false;
       });
       syncCoreModalSelectionUi();
       toast({

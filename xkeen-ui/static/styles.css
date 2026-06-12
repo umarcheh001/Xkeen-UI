@@ -25979,8 +25979,8 @@ html[data-theme="light"] #ui-settings-modal .xk-ui-settings-status {
 
 #core-modal .xk-core-lead {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: flex-end;
   gap: 12px;
   padding: 14px 16px;
   border-radius: 18px;
@@ -26068,11 +26068,11 @@ html[data-theme="light"] #ui-settings-modal .xk-ui-settings-status {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: 10px;
-  min-height: 152px;
-  padding: 15px 16px 16px;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  min-height: 96px;
+  padding: 18px 16px;
   border-radius: 18px;
   border: 1px solid rgba(96, 165, 250, 0.14);
   background:
@@ -26083,7 +26083,7 @@ html[data-theme="light"] #ui-settings-modal .xk-ui-settings-status {
     0 14px 30px rgba(2, 8, 23, 0.18);
   position: relative;
   overflow: hidden;
-  text-align: left;
+  text-align: center;
   transition:
     border-color 0.18s ease,
     transform 0.18s ease,
@@ -28678,6 +28678,351 @@ html[data-theme="light"] #core-modal .xk-core-status[data-state="error"] {
   border-color: rgba(239, 68, 68, 0.18);
   background: linear-gradient(180deg, rgba(254, 242, 242, 0.98), rgba(254, 226, 226, 0.92));
   color: #b91c1c;
+}
+
+/* Core switcher: compact engine manager */
+#core-modal.xk-core-modal-shell {
+  align-items: flex-start !important;
+  justify-content: center !important;
+  padding-top: clamp(36px, 6vh, 72px) !important;
+  padding-right: 24px;
+  padding-bottom: 24px;
+  padding-left: 24px;
+}
+
+#core-modal .xk-core-modal-content {
+  width: min(92vw, 430px);
+  max-width: 430px;
+  padding: 16px;
+  border-radius: 20px;
+  border-color: rgba(83, 115, 166, 0.54);
+  background:
+    radial-gradient(circle at 86% 10%, rgba(92, 132, 228, 0.14), transparent 30%),
+    linear-gradient(180deg, rgba(13, 22, 42, 0.98), rgba(9, 16, 31, 0.98));
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+#core-modal .xk-core-modal-header {
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 4px 2px 14px;
+  border-bottom-color: rgba(112, 146, 206, 0.10);
+}
+
+#core-modal .xk-core-titleline {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#core-modal .xk-core-title-icon {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 10px;
+  border: 1px solid rgba(96, 165, 250, 0.26);
+  background:
+    radial-gradient(circle at 30% 24%, rgba(125, 211, 252, 0.42), transparent 36%),
+    linear-gradient(180deg, rgba(37, 99, 235, 0.34), rgba(6, 16, 39, 0.96));
+  box-shadow:
+    0 10px 24px rgba(37, 99, 235, 0.20),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+#core-modal .xk-core-title-icon::before,
+#core-modal .xk-core-title-icon::after {
+  content: '';
+  position: absolute;
+  border-radius: 5px;
+}
+
+#core-modal .xk-core-title-icon::before {
+  inset: 8px;
+  border: 2px solid rgba(191, 219, 254, 0.82);
+  box-shadow: 0 0 14px rgba(125, 211, 252, 0.30);
+}
+
+#core-modal .xk-core-title-icon::after {
+  inset: 13px;
+  background: rgba(125, 211, 252, 0.90);
+}
+
+#core-modal .xk-core-kicker {
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+#core-modal .modal-title {
+  font-size: 1.08rem;
+  letter-spacing: 0;
+}
+
+#core-modal .modal-close {
+  width: 34px;
+  height: 34px;
+  font-size: 22px;
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.48);
+}
+
+#core-modal .xk-core-modal-body {
+  gap: 10px;
+}
+
+#core-modal .xk-core-lead {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#core-modal .xk-core-lead-chip {
+  min-height: 24px;
+  padding: 0 9px;
+  margin-left: auto;
+  border-color: rgba(96, 165, 250, 0.16);
+  background: rgba(7, 15, 33, 0.78);
+  color: rgba(191, 219, 254, 0.78);
+  font-size: 0.68rem;
+  letter-spacing: 0;
+}
+
+#core-modal .xk-core-engine-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+#core-modal .xk-core-engine-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  padding: 8px;
+  border-radius: 14px;
+  border: 1px solid rgba(96, 165, 250, 0.10);
+  background:
+    linear-gradient(180deg, rgba(20, 30, 51, 0.86), rgba(11, 18, 33, 0.92)),
+    radial-gradient(circle at 92% 16%, rgba(125, 211, 252, 0.08), transparent 34%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 14px 28px rgba(0, 0, 0, 0.16);
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+#core-modal .xk-core-engine-row:hover:not(.is-disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(125, 211, 252, 0.22);
+  background:
+    linear-gradient(180deg, rgba(24, 37, 64, 0.92), rgba(12, 21, 39, 0.95)),
+    radial-gradient(circle at 92% 16%, rgba(125, 211, 252, 0.10), transparent 36%);
+}
+
+#core-modal .xk-core-engine-row.active {
+  border-color: rgba(96, 165, 250, 0.42);
+  background:
+    linear-gradient(180deg, rgba(30, 64, 175, 0.66), rgba(19, 39, 88, 0.92)),
+    radial-gradient(circle at 16% 50%, rgba(125, 211, 252, 0.18), transparent 36%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 16px 32px rgba(37, 99, 235, 0.18);
+}
+
+#core-modal .xk-core-engine-row.is-disabled {
+  opacity: 0.55;
+  box-shadow: none;
+}
+
+#core-modal .xk-core-option {
+  width: 100%;
+  min-height: 44px;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+}
+
+#core-modal .xk-core-option::after {
+  display: none;
+}
+
+#core-modal .xk-core-option:hover:not([disabled]),
+#core-modal .xk-core-option.active,
+#core-modal .xk-core-option.is-current:not(.active) {
+  transform: none;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+#core-modal .xk-core-option-title {
+  font-size: 1rem;
+  font-weight: 760;
+  letter-spacing: 0;
+}
+
+#core-modal .xk-core-option-state {
+  min-width: 78px;
+  min-height: 26px;
+  padding: 0 10px;
+  border-color: rgba(96, 165, 250, 0.12);
+  background: rgba(5, 13, 29, 0.62);
+  color: rgba(191, 219, 254, 0.72);
+  font-size: 0.72rem;
+  letter-spacing: 0;
+}
+
+#core-modal .xk-core-engine-row.active .xk-core-option-state {
+  border-color: rgba(52, 211, 153, 0.20);
+  background: rgba(6, 95, 70, 0.24);
+  color: #8ff5c4;
+}
+
+#core-modal .xk-core-engine-row:not(.active) .xk-core-option-state {
+  color: rgba(148, 163, 184, 0.82);
+}
+
+#core-modal .xk-core-status {
+  min-height: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border-color: rgba(96, 165, 250, 0.10);
+  background: rgba(3, 9, 21, 0.44);
+  color: rgba(191, 219, 254, 0.74);
+  font-size: 0.80rem;
+}
+
+#core-modal .xk-core-modal-actions {
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top-color: rgba(96, 165, 250, 0.10);
+}
+
+#core-modal .xk-core-actions-row > button {
+  min-width: 108px;
+  min-height: 36px;
+  border-radius: 12px;
+}
+
+html[data-theme="light"] #core-modal .xk-core-modal-content {
+  border-color: rgba(63, 111, 203, 0.18);
+  background:
+    radial-gradient(circle at 86% 10%, rgba(96, 165, 250, 0.14), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 246, 255, 0.98));
+  box-shadow:
+    0 30px 70px rgba(59, 91, 154, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.84);
+}
+
+html[data-theme="light"] #core-modal .xk-core-title-icon {
+  border-color: rgba(37, 99, 235, 0.22);
+  background:
+    radial-gradient(circle at 30% 24%, rgba(125, 211, 252, 0.48), transparent 36%),
+    linear-gradient(180deg, rgba(219, 234, 254, 0.98), rgba(191, 219, 254, 0.88));
+  box-shadow:
+    0 10px 22px rgba(59, 91, 154, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.90);
+}
+
+html[data-theme="light"] #core-modal .xk-core-title-icon::before {
+  border-color: rgba(37, 99, 235, 0.72);
+}
+
+html[data-theme="light"] #core-modal .xk-core-title-icon::after {
+  background: rgba(37, 99, 235, 0.78);
+}
+
+html[data-theme="light"] #core-modal .xk-core-lead-chip {
+  border-color: rgba(63, 111, 203, 0.14);
+  background: rgba(255, 255, 255, 0.72);
+  color: #475569;
+}
+
+html[data-theme="light"] #core-modal .xk-core-engine-row {
+  border-color: rgba(63, 111, 203, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 246, 255, 0.90)),
+    radial-gradient(circle at 92% 16%, rgba(96, 165, 250, 0.08), transparent 34%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.84),
+    0 14px 28px rgba(59, 91, 154, 0.09);
+}
+
+html[data-theme="light"] #core-modal .xk-core-engine-row:hover:not(.is-disabled) {
+  border-color: rgba(37, 99, 235, 0.24);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(236, 244, 255, 0.96)),
+    radial-gradient(circle at 92% 16%, rgba(96, 165, 250, 0.12), transparent 36%);
+}
+
+html[data-theme="light"] #core-modal .xk-core-engine-row.active {
+  border-color: rgba(37, 99, 235, 0.36);
+  background:
+    linear-gradient(180deg, rgba(219, 234, 254, 0.98), rgba(203, 220, 255, 0.92)),
+    radial-gradient(circle at 16% 50%, rgba(96, 165, 250, 0.16), transparent 36%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 16px 32px rgba(59, 91, 154, 0.14);
+}
+
+html[data-theme="light"] #core-modal .xk-core-engine-row.active .xk-core-option-title {
+  color: #173b7a;
+  text-shadow: none;
+}
+
+html[data-theme="light"] #core-modal .xk-core-option {
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-theme="light"] #core-modal .xk-core-option-state {
+  border-color: rgba(63, 111, 203, 0.12);
+  background: rgba(255, 255, 255, 0.68);
+  color: #64748b;
+}
+
+html[data-theme="light"] #core-modal .xk-core-engine-row.active .xk-core-option-state {
+  border-color: rgba(16, 185, 129, 0.20);
+  background: rgba(209, 250, 229, 0.86);
+  color: #047857;
+}
+
+html[data-theme="light"] #core-modal .xk-core-status {
+  border-color: rgba(63, 111, 203, 0.12);
+  background: rgba(255, 255, 255, 0.58);
+  color: #4a5d7a;
+}
+
+@media (max-width: 760px) {
+  #core-modal.xk-core-modal-shell {
+    align-items: flex-start !important;
+    justify-content: center !important;
+    padding-top: 14px !important;
+    padding-right: 8px;
+    padding-bottom: 8px;
+    padding-left: 8px;
+  }
+
+  #core-modal .xk-core-modal-content {
+    width: min(calc(100vw - 16px), 430px);
+    max-width: min(calc(100vw - 16px), 430px);
+  }
 }
 
 html[data-theme="light"] .xk-forced-wizard-lead-title,
