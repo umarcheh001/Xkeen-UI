@@ -4,10 +4,50 @@ set -e
 UI_DIR="/opt/etc/xkeen-ui"
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 INIT_DIR="/opt/etc/init.d"
-INIT_SCRIPT="$INIT_DIR/S99xkeen-ui"
+INIT_SCRIPT_DEFAULT="$INIT_DIR/S99xkeen-ui-umarcheh001"
+LEGACY_INIT_SCRIPT="$INIT_DIR/S99xkeen-ui"
+INIT_SCRIPT="${XKEEN_UI_INIT_SCRIPT:-$INIT_SCRIPT_DEFAULT}"
 PYTHON_BIN="/opt/bin/python3"
 LOG_DIR="/opt/var/log"
 RUN_DIR="/opt/var/run"
+
+is_our_ui_init_script() {
+  _path="$1"
+  [ -n "$_path" ] || return 1
+  [ -f "$_path" ] || return 1
+
+  if grep -q 'XKEEN_UI_INIT_OWNER="umarcheh001/Xkeen-UI"' "$_path" 2>/dev/null; then
+    return 0
+  fi
+
+  if grep -q 'UI_DIR="/opt/etc/xkeen-ui"' "$_path" 2>/dev/null; then
+    if grep -q 'RUN_SERVER="\$UI_DIR/run_server.py"' "$_path" 2>/dev/null || \
+       grep -q 'APP_PY="\$UI_DIR/app.py"' "$_path" 2>/dev/null; then
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+assert_safe_ui_init_target() {
+  _path="$1"
+  [ -n "$_path" ] || return 0
+  [ -e "$_path" ] || return 0
+
+  if is_our_ui_init_script "$_path"; then
+    return 0
+  fi
+
+  echo "[!] init-скрипт уже существует и не похож на Xkeen UI: $_path"
+  echo "    Установщик прерывает запись, чтобы не перезаписать чужую панель."
+  echo "    Используй XKEEN_UI_INIT_SCRIPT с отдельным именем, если нужен кастомный путь."
+  return 1
+}
+
+if ! assert_safe_ui_init_target "$INIT_SCRIPT"; then
+  exit 1
+fi
 
 # JSONC sidecar-dir для "сырого" текста с комментариями (routing/inbounds/outbounds).
 # Должен лежать ВНЕ /opt/etc/xray/configs, иначе некоторые сборки Xray могут
@@ -1566,6 +1606,8 @@ echo "[*] Создаю init-скрипт $INIT_SCRIPT..."
 cat > "$INIT_SCRIPT" << 'EOF'
 #!/bin/sh
 
+# Xkeen UI dedicated init script.
+XKEEN_UI_INIT_OWNER="umarcheh001/Xkeen-UI"
 ENABLED=yes
 UI_DIR="/opt/etc/xkeen-ui"
 PYTHON_BIN="/opt/bin/python3"
@@ -1782,6 +1824,11 @@ if grep -q "__XKEEN_UI_PORT__" "$INIT_SCRIPT" 2>/dev/null; then
 fi
 
 chmod +x "$INIT_SCRIPT"
+
+if [ "$INIT_SCRIPT" != "$LEGACY_INIT_SCRIPT" ] && [ -e "$LEGACY_INIT_SCRIPT" ] && is_our_ui_init_script "$LEGACY_INIT_SCRIPT"; then
+  echo "[*] Удаляю legacy init-скрипт $LEGACY_INIT_SCRIPT, чтобы не конфликтовать с другими панелями..."
+  rm -f "$LEGACY_INIT_SCRIPT" 2>/dev/null || true
+fi
 
 echo "[*] Запускаю сервис..."
 "$INIT_SCRIPT" restart || true

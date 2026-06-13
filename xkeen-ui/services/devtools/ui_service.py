@@ -13,7 +13,9 @@ import subprocess
 from typing import Any, Dict
 
 
-UI_INIT_SCRIPT = os.environ.get("XKEEN_UI_INIT_SCRIPT", "/opt/etc/init.d/S99xkeen-ui")
+UI_INIT_SCRIPT_DEFAULT = "/opt/etc/init.d/S99xkeen-ui-umarcheh001"
+UI_INIT_SCRIPT_LEGACY = "/opt/etc/init.d/S99xkeen-ui"
+UI_INIT_OWNER_MARKER = 'XKEEN_UI_INIT_OWNER="umarcheh001/Xkeen-UI"'
 UI_PID_FILE = os.environ.get("XKEEN_UI_PID_FILE", "/opt/var/run/xkeen-ui.pid")
 # Optional: custom command to control UI in dev (e.g. launchctl/systemd). Supports "{action}" placeholder.
 UI_CONTROL_CMD = os.environ.get("XKEEN_UI_CONTROL_CMD") or os.environ.get("XKEEN_UI_RESTART_CMD")
@@ -37,9 +39,43 @@ def _runtime_mode() -> str:
     return "router" if (has_ndm or has_opkg) else "dev"
 
 
+def _is_executable_file(path: str) -> bool:
+    try:
+        return bool(path) and os.path.isfile(path) and os.access(path, os.X_OK)
+    except Exception:
+        return False
+
+
+def _is_our_ui_init_script(path: str) -> bool:
+    try:
+        if not path or not os.path.isfile(path):
+            return False
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+        if UI_INIT_OWNER_MARKER in content:
+            return True
+        if 'UI_DIR="/opt/etc/xkeen-ui"' not in content:
+            return False
+        return 'RUN_SERVER="$UI_DIR/run_server.py"' in content or 'APP_PY="$UI_DIR/app.py"' in content
+    except Exception:
+        return False
+
+
+def _resolve_ui_init_script() -> str | None:
+    override = str(os.environ.get("XKEEN_UI_INIT_SCRIPT", "") or "").strip()
+    if override and _is_executable_file(override):
+        return override
+
+    for cand in (UI_INIT_SCRIPT_DEFAULT, UI_INIT_SCRIPT_LEGACY):
+        if _is_executable_file(cand) and _is_our_ui_init_script(cand):
+            return cand
+    return None
+
+
 def ui_status() -> Dict[str, Any]:
+    ui_init_script = _resolve_ui_init_script()
     # In dev mode UI is often managed externally (IDE run, docker, etc.)
-    if _runtime_mode() != "router" and not (os.path.isfile(UI_INIT_SCRIPT) and os.access(UI_INIT_SCRIPT, os.X_OK)):
+    if _runtime_mode() != "router" and not ui_init_script:
         return {"running": None, "pid": None, "managed": "external"}
 
     pid = None
@@ -69,21 +105,23 @@ def ui_action(action: str) -> Dict[str, Any]:
         st = ui_status()
         return {"ok": True, "action": action, **st}
 
-    # Prefer init script when present.
-    if os.path.isfile(UI_INIT_SCRIPT) and os.access(UI_INIT_SCRIPT, os.X_OK):
+    ui_init_script = _resolve_ui_init_script()
+
+    # Prefer our dedicated init script when present.
+    if ui_init_script:
         # For stop/restart we run in background to increase chances that HTTP response is sent.
         if action in ("stop", "restart"):
             try:
-                subprocess.Popen([UI_INIT_SCRIPT, action], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen([ui_init_script, action], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception as e:
                 return {"ok": False, "action": action, "error": str(e)}
-            return {"ok": True, "action": action, "scheduled": True, "mode": "initd"}
+            return {"ok": True, "action": action, "scheduled": True, "mode": "initd", "script": ui_init_script}
 
         try:
-            subprocess.check_call([UI_INIT_SCRIPT, action], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return {"ok": True, "action": action, "mode": "initd"}
+            subprocess.check_call([ui_init_script, action], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return {"ok": True, "action": action, "mode": "initd", "script": ui_init_script}
         except Exception as e:
-            return {"ok": False, "action": action, "error": str(e), "mode": "initd"}
+            return {"ok": False, "action": action, "error": str(e), "mode": "initd", "script": ui_init_script}
 
     # Dev/desktop: allow custom control command if provided.
     if UI_CONTROL_CMD:

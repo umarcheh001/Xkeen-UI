@@ -22,6 +22,44 @@
 set -eu
 
 UI_DIR="/opt/etc/xkeen-ui"
+UI_INIT_SCRIPT_DEFAULT="/opt/etc/init.d/S99xkeen-ui-umarcheh001"
+UI_INIT_SCRIPT_LEGACY="/opt/etc/init.d/S99xkeen-ui"
+UI_INIT_SCRIPT="${XKEEN_UI_INIT_SCRIPT:-$UI_INIT_SCRIPT_DEFAULT}"
+
+is_our_ui_init_script() {
+  _path="$1"
+  [ -n "$_path" ] || return 1
+  [ -f "$_path" ] || return 1
+
+  if grep -q 'XKEEN_UI_INIT_OWNER="umarcheh001/Xkeen-UI"' "$_path" 2>/dev/null; then
+    return 0
+  fi
+
+  if grep -q 'UI_DIR="/opt/etc/xkeen-ui"' "$_path" 2>/dev/null; then
+    if grep -q 'RUN_SERVER="\$UI_DIR/run_server.py"' "$_path" 2>/dev/null || \
+       grep -q 'APP_PY="\$UI_DIR/app.py"' "$_path" 2>/dev/null; then
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+resolve_our_ui_init_script() {
+  if [ -x "$UI_INIT_SCRIPT" ] && is_our_ui_init_script "$UI_INIT_SCRIPT"; then
+    echo "$UI_INIT_SCRIPT"
+    return 0
+  fi
+  if [ "$UI_INIT_SCRIPT_DEFAULT" != "$UI_INIT_SCRIPT" ] && [ -x "$UI_INIT_SCRIPT_DEFAULT" ] && is_our_ui_init_script "$UI_INIT_SCRIPT_DEFAULT"; then
+    echo "$UI_INIT_SCRIPT_DEFAULT"
+    return 0
+  fi
+  if [ "$UI_INIT_SCRIPT_LEGACY" != "$UI_INIT_SCRIPT" ] && [ -x "$UI_INIT_SCRIPT_LEGACY" ] && is_our_ui_init_script "$UI_INIT_SCRIPT_LEGACY"; then
+    echo "$UI_INIT_SCRIPT_LEGACY"
+    return 0
+  fi
+  return 1
+}
 
 REPO="${XKEEN_UI_UPDATE_REPO:-umarcheh001/Xkeen-UI}"
 CHANNEL="${XKEEN_UI_UPDATE_CHANNEL:-stable}"
@@ -769,8 +807,9 @@ if [ "$ACTION" = "rollback" ]; then
   log "[*] Rollback from: $backup_pick"
 
   write_status "running" "rollback_stop" "Stopping UI service"
-  if [ -x "/opt/etc/init.d/S99xkeen-ui" ]; then
-    /opt/etc/init.d/S99xkeen-ui stop >>"$LOG_FILE" 2>&1 || true
+  UI_INIT_ACTIVE="$(resolve_our_ui_init_script || true)"
+  if [ -n "$UI_INIT_ACTIVE" ] && [ -x "$UI_INIT_ACTIVE" ]; then
+    "$UI_INIT_ACTIVE" stop >>"$LOG_FILE" 2>&1 || true
   fi
 
   write_status "running" "rollback_restore" "Restoring backup"
@@ -802,9 +841,10 @@ if [ "$ACTION" = "rollback" ]; then
   fi
 
   write_status "running" "restart" "Restarting UI service"
-  if [ -x "/opt/etc/init.d/S99xkeen-ui" ]; then
-    log "[*] Restarting service via init.d..."
-    /opt/etc/init.d/S99xkeen-ui restart >>"$LOG_FILE" 2>&1 || true
+  UI_INIT_ACTIVE="$(resolve_our_ui_init_script || true)"
+  if [ -n "$UI_INIT_ACTIVE" ] && [ -x "$UI_INIT_ACTIVE" ]; then
+    log "[*] Restarting service via init.d: $UI_INIT_ACTIVE"
+    "$UI_INIT_ACTIVE" restart >>"$LOG_FILE" 2>&1 || true
   else
     log "[*] init.d script not found; please restart UI service manually"
   fi
@@ -1913,9 +1953,10 @@ INSTALL_DIR="$(cd "$(dirname "$INSTALL_SH")" && pwd)"
 
 # 7) Restart (best-effort)
 write_status "running" "restart" "Restarting UI service"
-if [ -x "/opt/etc/init.d/S99xkeen-ui" ]; then
-  log "[*] Restarting service via init.d..."
-  /opt/etc/init.d/S99xkeen-ui restart >>"$LOG_FILE" 2>&1 || true
+UI_INIT_ACTIVE="$(resolve_our_ui_init_script || true)"
+if [ -n "$UI_INIT_ACTIVE" ] && [ -x "$UI_INIT_ACTIVE" ]; then
+  log "[*] Restarting service via init.d: $UI_INIT_ACTIVE"
+  "$UI_INIT_ACTIVE" restart >>"$LOG_FILE" 2>&1 || true
 else
   log "[*] init.d script not found; assume install.sh restarted service"
 fi
