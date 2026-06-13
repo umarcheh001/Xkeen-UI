@@ -170,7 +170,7 @@ sh install.sh
 - ставит `Flask`;
 - по возможности ставит `gevent/gevent-websocket` для WebSocket-сценариев;
 - ставит `lftp` для файлового менеджера;
-- регистрирует сервис `/opt/etc/init.d/S99xkeen-ui`;
+- регистрирует сервис `/opt/etc/init.d/S99xkeen-ui-umarcheh001`;
 - выбирает свободный порт: `8088`, затем `8091`, затем диапазон `8100-8199`;
 - очищает устаревшие файлы в `static/frontend-build` при обновлении;
 - может предложить установить `xk-geodat`.
@@ -235,11 +235,14 @@ http://<IP_роутера>:<порт>/
 ## Управление сервисом
 
 ```sh
-/opt/etc/init.d/S99xkeen-ui start
-/opt/etc/init.d/S99xkeen-ui stop
-/opt/etc/init.d/S99xkeen-ui restart
-/opt/etc/init.d/S99xkeen-ui status
+/opt/etc/init.d/S99xkeen-ui-umarcheh001 start
+/opt/etc/init.d/S99xkeen-ui-umarcheh001 stop
+/opt/etc/init.d/S99xkeen-ui-umarcheh001 restart
+/opt/etc/init.d/S99xkeen-ui-umarcheh001 status
 ```
+
+Для старых установок, которые ещё не обновлялись до новой схемы совместимости,
+init-скрипт может оставаться по legacy-пути `/opt/etc/init.d/S99xkeen-ui`.
 
 ## Сбросить логин/пароль
 
@@ -248,9 +251,9 @@ http://<IP_роутера>:<порт>/
 Сбросить доступ можно так:
 
 ```sh
-/opt/etc/init.d/S99xkeen-ui stop
+/opt/etc/init.d/S99xkeen-ui-umarcheh001 stop
 rm -f /opt/etc/xkeen-ui/auth.json
-/opt/etc/init.d/S99xkeen-ui start
+/opt/etc/init.d/S99xkeen-ui-umarcheh001 start
 ```
 
 После этого панель снова предложит пройти первичную настройку логина и пароля.
@@ -268,7 +271,7 @@ sh /opt/etc/xkeen-ui/uninstall.sh
 Это удалит:
 
 - файлы панели из `/opt/etc/xkeen-ui`;
-- init-скрипт `/opt/etc/init.d/S99xkeen-ui`;
+- init-скрипт `/opt/etc/init.d/S99xkeen-ui-umarcheh001`;
 - PID-файл панели.
 
 ### Дополнительная очистка
