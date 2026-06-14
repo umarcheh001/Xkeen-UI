@@ -57,6 +57,7 @@ export function normalizeXrayLogIp(raw) {
     if (!Number.isFinite(n) || n < 0 || n > 255) return '';
     normalized.push(String(n));
   }
+  if (normalized.every((part) => part === '0')) return '';
 
   return normalized.join('.');
 }

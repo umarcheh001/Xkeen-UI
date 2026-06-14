@@ -77,6 +77,7 @@ let xrayLogsModuleApi = null;
   const STORAGE_KEY = 'xkeen.ui.xrayLogs.v1';
   const SEED_KEY = 'xkeen.seed.logsPrefs.v1';
   const FILTER_APPLY_DEBOUNCE_MS = 180;
+  const LOG_RENDER_DEBOUNCE_MS = isPerfLite() ? 180 : 80;
   const LOG_WINDOW_MIN_HEIGHT = 420;
   const XRAY_DEVICE_NAMES_API = '/api/xray-logs/devices';
   const XRAY_DEVICE_NAMES_REFRESH_MS = 60000;
@@ -84,6 +85,7 @@ let xrayLogsModuleApi = null;
   const XRAY_DESTINATION_DOMAIN_HINTS_REFRESH_MS = 30000;
   const XRAY_DESTINATION_DOMAIN_HINTS_MAX_LINES = isPerfLite() ? 600 : 1200;
   const XRAY_DESTINATION_DOMAIN_CACHE_MAX = 500;
+  const XRAY_DESTINATION_CONN_CACHE_MAX = isPerfLite() ? 1000 : 2000;
 
   let _maxLines = DEFAULT_MAX_LINES;
   let _pollMs = DEFAULT_POLL_MS;
@@ -144,6 +146,7 @@ let xrayLogsModuleApi = null;
   let _filterApplyTimer = null;
   let _ws2FailStreak = 0;
   let _ws2LastOpenAt = 0;
+  let _xrayLogOutputRenderTimer = null;
   let _chromeRenderQueued = false;
   let _xrayLogUiStatusRenderQueued = false;
   let _xrayDeviceNamesLoaded = false;
@@ -155,6 +158,7 @@ let xrayLogsModuleApi = null;
   let _xrayDeviceNameEntries = [];
   let _xrayDestinationDomainsByIp = Object.create(null);
   let _xrayDestinationDomainsByConnId = Object.create(null);
+  let _xrayDestinationDomainConnOrder = [];
   let _xrayDestinationDomainHintsRequest = null;
   let _xrayDestinationDomainHintsLastFetchAt = 0;
   const _xrayLogUiStatus = {
@@ -1196,12 +1200,14 @@ let xrayLogsModuleApi = null;
   function resetXrayLogBuffer(options) {
     const opts = options || {};
     _lastLines = [];
+    resetXrayDestinationDomainCaches();
     if (opts.resetCursor !== false) _cursor = '';
     if (opts.resetPending !== false) _pendingCount = 0;
     return readXrayLogsRuntimeState();
   }
 
   function replaceXrayLogBuffer(lines) {
+    resetXrayDestinationDomainCaches();
     _lastLines = trimLogBuffer(lines, _maxLines);
     try { ingestXrayLogDestinationDomains(_lastLines, { source: _currentFile || 'log' }); } catch (e) {}
     return _lastLines;
@@ -1212,6 +1218,30 @@ let xrayLogsModuleApi = null;
     _lastLines = trimLogBuffer([].concat(Array.isArray(_lastLines) ? _lastLines : [], nextLines), _maxLines);
     try { ingestXrayLogDestinationDomains(nextLines, { source: _currentFile || 'log' }); } catch (e) {}
     return _lastLines;
+  }
+
+  function flushScheduledXrayLogOutputRender() {
+    if (_xrayLogOutputRenderTimer) {
+      try { clearTimeout(_xrayLogOutputRenderTimer); } catch (e) {}
+      _xrayLogOutputRenderTimer = null;
+    }
+    _pendingCount = 0;
+    applyXrayLogFilterToOutput();
+  }
+
+  function scheduleXrayLogOutputRender() {
+    if (_xrayLogOutputRenderTimer) {
+      try { updateXrayLogStats(); } catch (e) {}
+      return false;
+    }
+
+    _xrayLogOutputRenderTimer = setTimeout(() => {
+      _xrayLogOutputRenderTimer = null;
+      _pendingCount = 0;
+      applyXrayLogFilterToOutput();
+    }, LOG_RENDER_DEBOUNCE_MS);
+    try { updateXrayLogStats(); } catch (e) {}
+    return true;
   }
 
   function reconcileXrayLogBufferRender(options) {
@@ -1234,8 +1264,11 @@ let xrayLogsModuleApi = null;
     }
 
     _pendingCount = 0;
-    applyXrayLogFilterToOutput();
-    return true;
+    if (forceRender) {
+      flushScheduledXrayLogOutputRender();
+      return true;
+    }
+    return scheduleXrayLogOutputRender();
   }
 
   function readStoredUiState() {
@@ -1844,6 +1877,33 @@ let xrayLogsModuleApi = null;
       });
   }
 
+  function rememberXrayDestinationConnDomain(connIdRaw, domainRaw) {
+    const connId = String(connIdRaw || '').trim();
+    const domain = normalizeXrayLogDomain(domainRaw);
+    if (!connId || !domain) return false;
+
+    const prev = _xrayDestinationDomainsByConnId[connId] || '';
+    if (prev === domain) return false;
+
+    if (!prev) _xrayDestinationDomainConnOrder.push(connId);
+    _xrayDestinationDomainsByConnId[connId] = domain;
+
+    if (_xrayDestinationDomainConnOrder.length > XRAY_DESTINATION_CONN_CACHE_MAX) {
+      const dropCount = Math.max(1, _xrayDestinationDomainConnOrder.length - XRAY_DESTINATION_CONN_CACHE_MAX);
+      _xrayDestinationDomainConnOrder.splice(0, dropCount).forEach((oldConnId) => {
+        try { delete _xrayDestinationDomainsByConnId[oldConnId]; } catch (e) {}
+      });
+    }
+    return true;
+  }
+
+  function resetXrayDestinationDomainCaches() {
+    _xrayDestinationDomainsByIp = Object.create(null);
+    _xrayDestinationDomainsByConnId = Object.create(null);
+    _xrayDestinationDomainConnOrder = [];
+    _xrayDestinationDomainHintsLastFetchAt = 0;
+  }
+
   function rememberXrayDestinationDomain(ipRaw, domainRaw, source) {
     const ip = normalizeXrayDeviceIp(ipRaw);
     const domain = normalizeXrayLogDomain(domainRaw);
@@ -1882,8 +1942,7 @@ let xrayLogsModuleApi = null;
       const firstDomain = candidates.length ? candidates[0].domain : '';
 
       if (connId && firstDomain) {
-        const prev = _xrayDestinationDomainsByConnId[connId] || '';
-        if (prev !== firstDomain) _xrayDestinationDomainsByConnId[connId] = firstDomain;
+        rememberXrayDestinationConnDomain(connId, firstDomain);
       }
 
       const destinations = collectXrayLogDestinationIpPorts(raw);
