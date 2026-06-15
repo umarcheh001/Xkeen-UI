@@ -708,8 +708,16 @@ def build_hy2_url_from_config(cfg):
 
         params = []
         sni = tls.get("serverName")
+        fp = tls.get("fingerprint")
+        alpn = tls.get("alpn")
         if sni:
             params.append("sni=" + _q(str(sni)))
+        if fp:
+            params.append("fp=" + _q(str(fp)))
+        if isinstance(alpn, list) and alpn:
+            alpn_values = [str(x).strip() for x in alpn if str(x).strip()]
+            if alpn_values:
+                params.append("alpn=" + _q(",".join(alpn_values)))
         if bool(tls.get("allowInsecure")):
             params.append("insecure=1")
 
@@ -863,6 +871,9 @@ def build_outbounds_config_from_hysteria2(url: str, *, proxy_tags: Optional[List
     qs = parse_qs(parsed.query, keep_blank_values=True)
 
     sni = _first(qs, "sni", None) or host
+    fp = _first(qs, "fp", None) or _first(qs, "fingerprint", None)
+    alpn_raw = _first(qs, "alpn", None)
+    alpn = [x.strip() for x in str(alpn_raw or "").split(",") if x.strip()] if alpn_raw else ["h3"]
     insecure = _to_bool(_first(qs, "insecure", None)) or _to_bool(_first(qs, "allowInsecure", None))
 
     # pinSHA256 (certificate pinning)
@@ -886,6 +897,36 @@ def build_outbounds_config_from_hysteria2(url: str, *, proxy_tags: Optional[List
     # obfs salamander
     obfs = str(_first(qs, "obfs", "") or "").strip().lower()
     obfs_pwd = _first(qs, "obfs-password", None) or _first(qs, "obfs_password", None)
+    udpmasks: List[Dict[str, Any]] = []
+    if obfs == "salamander":
+        pwd = str(obfs_pwd or "").strip()
+        m: Dict[str, Any] = {
+            "type": "salamander",
+            "settings": {},
+        }
+        if pwd:
+            m["settings"]["password"] = pwd
+        udpmasks.append(m)
+    elif _first(qs, "fm", None):
+        try:
+            final_mask = json.loads(unquote(str(_first(qs, "fm", "") or "")))
+            raw_udp = final_mask.get("udp") if isinstance(final_mask, dict) else None
+            if isinstance(raw_udp, list):
+                for item in raw_udp:
+                    if not isinstance(item, dict):
+                        continue
+                    item_type = str(item.get("type") or "").strip()
+                    if not item_type:
+                        continue
+                    settings = item.get("settings")
+                    udpmasks.append(
+                        {
+                            "type": item_type,
+                            "settings": settings if isinstance(settings, dict) else {},
+                        }
+                    )
+        except Exception:
+            udpmasks = []
 
     # Optional: user-specified params (best-effort)
     congestion = _first(qs, "congestion", None)
@@ -909,10 +950,12 @@ def build_outbounds_config_from_hysteria2(url: str, *, proxy_tags: Optional[List
         "security": "tls",
         "tlsSettings": {
             "serverName": str(sni),
-            "alpn": ["h3"],
+            "alpn": alpn or ["h3"],
         },
     }
 
+    if fp:
+        stream_settings["tlsSettings"]["fingerprint"] = str(fp)
     if pin_values:
         stream_settings["tlsSettings"]["pinnedPeerCertificateChainSha256"] = pin_values
     if insecure:
@@ -928,6 +971,9 @@ def build_outbounds_config_from_hysteria2(url: str, *, proxy_tags: Optional[List
         if pwd:
             m["settings"]["password"] = pwd
         stream_settings["udpmasks"] = [m]
+
+    if udpmasks and "udpmasks" not in stream_settings:
+        stream_settings["udpmasks"] = udpmasks
 
     outbound = {
         "tag": PROXY_OUTBOUND_TAG,

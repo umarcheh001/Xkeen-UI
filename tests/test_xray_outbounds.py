@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 
 def test_build_outbounds_config_from_vless_uses_compact_settings_format():
@@ -117,3 +117,68 @@ def test_build_vless_url_from_config_keeps_legacy_vnext_compatibility():
     assert qs["security"] == ["tls"]
     assert qs["host"] == ["cdn.example.com"]
     assert qs["path"] == ["/ws"]
+
+
+def test_build_hysteria2_from_link_preserves_tls_fingerprint_and_finalmask():
+    from services import xray_outbounds as outbounds
+
+    fm = quote('{"udp":[{"type":"salamander","settings":{"password":"mask-secret"}}]}', safe="")
+    cfg = outbounds.build_outbounds_config_from_hysteria2(
+        "hysteria2://auth-token@94.159.111.238:1935"
+        f"?sni=nosfer-nle.mooo.com&fp=chrome&alpn=h3,h2&fm={fm}"
+        "#Hy2"
+    )
+
+    proxy = cfg["outbounds"][0]
+    stream = proxy["streamSettings"]
+
+    assert proxy["protocol"] == "hysteria"
+    assert proxy["settings"]["address"] == "94.159.111.238"
+    assert proxy["settings"]["port"] == 1935
+    assert stream["hysteriaSettings"]["auth"] == "auth-token"
+    assert stream["tlsSettings"]["serverName"] == "nosfer-nle.mooo.com"
+    assert stream["tlsSettings"]["fingerprint"] == "chrome"
+    assert stream["tlsSettings"]["alpn"] == ["h3", "h2"]
+    assert stream["udpmasks"] == [
+        {"type": "salamander", "settings": {"password": "mask-secret"}}
+    ]
+
+
+def test_build_hysteria2_url_from_config_preserves_tls_fingerprint_and_alpn():
+    from services import xray_outbounds as outbounds
+
+    cfg = {
+        "outbounds": [
+            {
+                "tag": "proxy",
+                "protocol": "hysteria",
+                "settings": {
+                    "version": 2,
+                    "address": "94.159.111.238",
+                    "port": 1935,
+                },
+                "streamSettings": {
+                    "network": "hysteria",
+                    "hysteriaSettings": {"version": 2, "auth": "auth-token"},
+                    "security": "tls",
+                    "tlsSettings": {
+                        "serverName": "nosfer-nle.mooo.com",
+                        "fingerprint": "chrome",
+                        "alpn": ["h3"],
+                    },
+                },
+            }
+        ]
+    }
+
+    url = outbounds.build_hy2_url_from_config(cfg)
+    parsed = urlparse(url or "")
+    qs = parse_qs(parsed.query)
+
+    assert parsed.scheme == "hy2"
+    assert parsed.username == "auth-token"
+    assert parsed.hostname == "94.159.111.238"
+    assert parsed.port == 1935
+    assert qs["sni"] == ["nosfer-nle.mooo.com"]
+    assert qs["fp"] == ["chrome"]
+    assert qs["alpn"] == ["h3"]

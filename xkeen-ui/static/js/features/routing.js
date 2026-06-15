@@ -209,7 +209,6 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
     // Routing fragment selector (optional)
     fragmentSelect: 'routing-fragment-select',
     fragmentRefresh: 'routing-fragment-refresh-btn',
-    fragmentAllToggle: 'routing-fragment-all-toggle',
     fileCode: 'routing-file-code',
 
     // Mode badge (Routing vs Fragment)
@@ -1448,27 +1447,6 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
     } catch (e) {}
   }
 
-  function rememberFragmentsScopeAll(enabled) {
-    try { _storeSet('xkeen.routing.fragments.all', enabled ? '1' : '0'); } catch (e) {}
-  }
-
-  function restoreFragmentsScopeAll() {
-    try {
-      const v = _storeGet('xkeen.routing.fragments.all');
-      if (v === null || v === undefined) return false;
-      return String(v) === '1' || String(v).toLowerCase() === 'true';
-    } catch (e) {}
-    return false;
-  }
-
-  function isFragmentsScopeAllEnabled() {
-    try {
-      const cb = $(IDS.fragmentAllToggle);
-      if (cb) return !!cb.checked;
-    } catch (e) {}
-    return restoreFragmentsScopeAll();
-  }
-
   function restoreRememberedFragment() {
     try {
       const v = _storeGet('xkeen.routing.fragment');
@@ -1996,8 +1974,7 @@ function _setRoutingMode(mode, reason) {
     const sel = $(IDS.fragmentSelect);
     if (!sel) return;
 
-    const all = isFragmentsScopeAllEnabled();
-    const url = all ? '/api/routing/fragments?all=1' : '/api/routing/fragments';
+    const url = '/api/routing/fragments';
 
     const notify = !!(opts && opts.notify);
     const syncActive = !(opts && opts.syncActive === false);
@@ -2019,7 +1996,7 @@ function _setRoutingMode(mode, reason) {
       // Fallback: keep whatever is rendered by server
       try {
         if (notify) {
-          toastXkeen(all ? 'Не удалось обновить список файлов Xray' : 'Не удалось обновить список файлов роутинга', 'error');
+          toastXkeen('Не удалось обновить список файлов Xray', 'error');
         }
       } catch (e) {}
       return;
@@ -2036,10 +2013,7 @@ function _setRoutingMode(mode, reason) {
     const activePreferred = isRemovedFragmentName(activeRaw, removedFiles) ? '' : activeRaw;
     const preferred = (activePreferred || remembered || currentDefault || (items[0] ? items[0].name : '')).toString();
 
-    // Optional UX: when switching from "All files" -> routing-only list,
-    // explain why selection may jump back to the routing file.
     const prevSelection = (opts && opts.prevSelection) ? String(opts.prevSelection) : null;
-    const scopeChanged = (opts && opts.scopeChanged) ? String(opts.scopeChanged) : '';
 
     // Rebuild options
     try { if (sel.dataset) sel.dataset.dir = String(data.dir || ''); } catch (e) {}
@@ -2074,34 +2048,22 @@ function _setRoutingMode(mode, reason) {
       else syncShellState(dir, items);
     } catch (e) {}
 
-    // If scope was reduced and a non-routing file disappeared from the list, clarify the jump.
-    try {
-      if (scopeChanged === 'off' && prevSelection && _activeFragment && prevSelection !== _activeFragment) {
-        if (names.indexOf(prevSelection) === -1) {
-          toastXkeen('«Все файлы» выключено — переключено на: ' + String(_activeFragment), 'info');
-        }
-      }
-    } catch (e) {}
-
     // Keep badge/tooltips up-to-date (selection may change during refresh).
     try { _updateModeBadge(); } catch (e) {}
     try { _updateFileScopedTooltips(); } catch (e) {}
     try { syncShellState(); } catch (e) {}
 
-    // Refresh button tooltip follows the current scope.
     try {
       const btn = $(IDS.fragmentRefresh);
       if (btn) {
-        btn.setAttribute('data-tooltip', all
-          ? 'Обновить список JSON-файлов Xray из /opt/etc/xray/configs/ (кроме 01_log.json)'
-          : 'Обновить список файлов роутинга из /opt/etc/xray/configs/');
+        btn.setAttribute('data-tooltip', 'Обновить список JSON-файлов Xray из /opt/etc/xray/configs/ (кроме 01_log.json)');
       }
     } catch (e) {}
 
     // Success toast (only when explicitly requested)
     try {
       if (notify) {
-        toastXkeen(all ? 'Список файлов Xray обновлён' : 'Список файлов роутинга обновлён', 'success');
+        toastXkeen('Список файлов Xray обновлён', 'success');
       }
     } catch (e) {}
   }
@@ -4697,41 +4659,6 @@ function closeHelp() {
       if (refreshBtn.dataset) refreshBtn.dataset.xkWired = '1';
     }
 
-    // "All files" toggle for fragment selector (optional)
-    const allCb = $(IDS.fragmentAllToggle);
-    if (allCb && !(allCb.dataset && allCb.dataset.xkWired === '1')) {
-      try { allCb.checked = restoreFragmentsScopeAll(); } catch (e) {}
-      allCb.addEventListener('change', async () => {
-        const enabled = !!allCb.checked;
-        const prevEnabled = !enabled;
-        const prevSel = getActiveFragment();
-        const prevDir = _fragmentDir;
-        const prevItems = _fragmentItems.slice();
-        rememberFragmentsScopeAll(enabled);
-        await refreshFragmentsList({ notify: true, scopeChanged: enabled ? 'on' : 'off', prevSelection: prevSel, syncActive: false });
-        const nextSel = getSelectedFragmentFromUI() || getActiveFragment();
-        if (!nextSel || nextSel === prevSel) return;
-        await guardFragmentSwitch(nextSel, prevSel, {
-          onCancel: async () => {
-            try { allCb.checked = prevEnabled; } catch (e2) {}
-            rememberFragmentsScopeAll(prevEnabled);
-            await refreshFragmentsList({ notify: false, prevSelection: prevSel, syncActive: false });
-            restoreFragmentSelection($(IDS.fragmentSelect), prevSel, prevDir, prevItems);
-          },
-          beforeSwitch: () => { try { saveCurrentViewState(); } catch (e2) {} },
-          commit: async () => loadCommittedFragmentSelection(nextSel, {
-            selectEl: $(IDS.fragmentSelect),
-            nextDir: currentFragmentDirFromUi($(IDS.fragmentSelect)),
-            nextItems: _fragmentItems,
-            prev: prevSel,
-            prevDir,
-            prevItems,
-          }),
-        });
-      });
-      if (allCb.dataset) allCb.dataset.xkWired = '1';
-    }
-
     // Help line
     const help = $(IDS.helpLine);
     if (help && !(help.dataset && help.dataset.xkeenWired === '1')) {
@@ -4766,7 +4693,6 @@ function closeHelp() {
         panel.addEventListener('click', (e) => {
           const btn = e.target && e.target.closest ? e.target.closest('button') : null;
           if (!btn) return;
-          // Keep menu open for non-action controls (currently only the scope toggle lives in a <label>).
           // For any button click, close the menu.
           try { details.open = false; } catch (e2) {}
         });

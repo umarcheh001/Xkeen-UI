@@ -17,14 +17,13 @@ def register_fragments_routes(bp: Blueprint, *, xray_configs_dir: str, routing_f
     def api_list_routing_fragments() -> Any:
         """List routing fragment files in xray_configs_dir.
 
-        Default: used by UI dropdown (routing only): /opt/etc/xray/configs/*routing*.json
-        Optional: /api/routing/fragments?all=1 lists all *.json fragments (except 01_log.json).
+        Default: list Xray JSON fragments for the editor selector.
+        Compatibility: /api/routing/fragments?all=1 is accepted and returns the same list.
+        01_log.json is excluded because logs are managed in a dedicated UI card.
         """
 
-        q_all = str(request.args.get("all") or "").strip().lower()
-        list_all = q_all in {"1", "true", "yes", "on"}
-
         items = []
+        current_name = os.path.basename(routing_file)
         try:
             if os.path.isdir(xray_configs_dir):
                 for name in os.listdir(xray_configs_dir):
@@ -33,8 +32,6 @@ def register_fragments_routes(bp: Blueprint, *, xray_configs_dir: str, routing_f
                         continue
                     # Always exclude the log config: logs are managed in a dedicated UI card.
                     if lname == "01_log.json":
-                        continue
-                    if (not list_all) and ("routing" not in lname):
                         continue
                     full = os.path.join(xray_configs_dir, name)
                     if not os.path.isfile(full):
@@ -60,7 +57,6 @@ def register_fragments_routes(bp: Blueprint, *, xray_configs_dir: str, routing_f
         except Exception:
             pass
 
-        current_name = os.path.basename(routing_file)
         return jsonify({
             "ok": True,
             "dir": xray_configs_dir,
