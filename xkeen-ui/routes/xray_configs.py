@@ -777,6 +777,17 @@ def create_xray_configs_blueprint(
             _append_path(path)
 
         if all_fragments:
+            try:
+                if os.path.isdir(XRAY_CONFIGS_DIR):
+                    for name in os.listdir(XRAY_CONFIGS_DIR):
+                        lname = str(name or "").lower()
+                        if not lname.endswith(".json"):
+                            continue
+                        if lname == "01_log.json":
+                            continue
+                        _append_path(_normalize_main_json_path(os.path.join(XRAY_CONFIGS_DIR, name)))
+            except Exception:
+                pass
             for kind, default_path in (
                 ("inbounds", INBOUNDS_FILE),
                 ("outbounds", OUTBOUNDS_FILE),

@@ -560,7 +560,7 @@ def test_xray_inbound_tags_all_includes_dns_tag_virtual_inbound(tmp_path, monkey
     jsonc_dir.mkdir()
 
     inbounds_name = "03_inbounds.json"
-    routing_name = "05_routing_dns.json"
+    routing_name = "02_dns.json"
 
     (configs_dir / inbounds_name).write_text(
         json.dumps({"inbounds": [{"tag": "redirect", "protocol": "dokodemo-door"}]}, ensure_ascii=False, indent=2)
@@ -582,11 +582,15 @@ def test_xray_inbound_tags_all_includes_dns_tag_virtual_inbound(tmp_path, monkey
         encoding="utf-8",
     )
 
+    monkeypatch.setattr(xray_configs_mod, "XRAY_CONFIGS_DIR", str(configs_dir))
+    monkeypatch.setattr(xray_configs_mod, "INBOUNDS_FILE", str(configs_dir / inbounds_name))
+    monkeypatch.setattr(xray_configs_mod, "OUTBOUNDS_FILE", str(configs_dir / "04_outbounds.json"))
+    monkeypatch.setattr(xray_configs_mod, "ROUTING_FILE", str(configs_dir / "05_routing.json"))
     def _list_fragments(kind: str):
         if kind == "inbounds":
             return [{"name": inbounds_name}]
         if kind == "routing":
-            return [{"name": routing_name}]
+            return [{"name": "05_routing.json"}]
         return []
 
     monkeypatch.setattr(xray_configs_mod, "list_xray_fragments", _list_fragments)
