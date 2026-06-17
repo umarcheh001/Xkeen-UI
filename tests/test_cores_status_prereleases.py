@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import threading
+import time
 import urllib.error
 from pathlib import Path
+
+from flask import Flask
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +35,44 @@ def _load_cores_status_module():
 
 
 cores_status = _load_cores_status_module()
+
+
+def _make_cores_status_client(tmp_path: Path):
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    app.register_blueprint(cores_status.create_cores_status_blueprint(str(tmp_path)))
+    return app.test_client()
+
+
+def _mock_installed_cores(monkeypatch):
+    original_exists = cores_status.os.path.exists
+
+    def fake_exists(path):
+        if path in ("/opt/sbin/xray", "/opt/sbin/mihomo"):
+            return True
+        return original_exists(path)
+
+    def fake_run_cmd(cmd, *, timeout_s=2.5):
+        binary = str((cmd or [""])[0] or "")
+        if binary == "/opt/sbin/xray":
+            return 0, "Xray 26.1.1 (Xray, Penetrates Everything.)\n"
+        if binary == "/opt/sbin/mihomo":
+            return 0, "Mihomo Meta v1.18.2 linux arm64\n"
+        return 127, ""
+
+    monkeypatch.setattr(cores_status.os.path, "exists", fake_exists)
+    monkeypatch.setattr(cores_status, "_run_cmd", fake_run_cmd)
+
+
+def _wait_for_background_refresh(client, *, timeout_s: float = 2.5):
+    deadline = time.time() + timeout_s
+    last_payload = None
+    while time.time() < deadline:
+        last_payload = client.get("/api/cores/updates").get_json()
+        if last_payload and not last_payload.get("refreshing"):
+            return last_payload
+        time.sleep(0.05)
+    return last_payload
 
 
 def test_cmp_versions_handles_prerelease_ordering():
@@ -151,6 +193,139 @@ def test_resolve_mihomo_prerelease_install_prefers_softfloat_first_on_mips():
     assert plan["build_id"] == "alpha-abc123"
     assert plan["build_ids"] == ["alpha-abc123"]
     assert "softfloat" in plan["note"]
+
+
+def test_cores_updates_returns_immediately_and_refreshes_in_background(tmp_path, monkeypatch):
+    client = _make_cores_status_client(tmp_path)
+    _mock_installed_cores(monkeypatch)
+
+    gate = threading.Event()
+
+    def fake_latest_release_or_skip(repo, *, installed, timeout_s):
+        assert installed is True
+        gate.wait(2.0)
+        if repo == "XTLS/Xray-core":
+            return {
+                "ok": True,
+                "repo": repo,
+                "tag": "v26.3.27",
+                "url": "https://example.test/xray",
+                "stable": {"tag": "v26.3.27", "url": "https://example.test/xray"},
+                "prerelease": None,
+                "error": None,
+                "meta": None,
+                "skipped": False,
+            }
+        return {
+            "ok": True,
+            "repo": repo,
+            "tag": "v1.19.27",
+            "url": "https://example.test/mihomo",
+            "stable": {"tag": "v1.19.27", "url": "https://example.test/mihomo"},
+            "prerelease": None,
+            "error": None,
+            "meta": None,
+            "skipped": False,
+        }
+
+    monkeypatch.setattr(cores_status, "_latest_release_or_skip", fake_latest_release_or_skip)
+
+    started_at = time.perf_counter()
+    response = client.get("/api/cores/updates")
+    elapsed_s = time.perf_counter() - started_at
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert elapsed_s < 0.25
+    assert payload["refreshing"] is True
+    assert payload["latest"] == {"xray": {}, "mihomo": {}}
+    assert payload["installed"]["xray"]["version"] == "26.1.1"
+    assert payload["installed"]["mihomo"]["version"] == "1.18.2"
+    assert payload["update_available"]["xray"] is False
+    assert payload["update_available"]["mihomo"] is False
+
+    gate.set()
+    settled = _wait_for_background_refresh(client)
+
+    assert settled is not None
+    assert settled["refreshing"] is False
+    assert settled["latest"]["xray"]["stable"]["tag"] == "v26.3.27"
+    assert settled["latest"]["mihomo"]["stable"]["tag"] == "v1.19.27"
+    assert settled["update_available"]["xray"] is True
+    assert settled["update_available"]["mihomo"] is True
+
+
+def test_cores_updates_returns_stale_cache_while_refresh_runs_in_background(tmp_path, monkeypatch):
+    client = _make_cores_status_client(tmp_path)
+    _mock_installed_cores(monkeypatch)
+
+    cache_path = tmp_path / "cores_updates_cache.json"
+    cores_status._write_json_atomic(
+        str(cache_path),
+        {
+            "format_version": cores_status._CACHE_FORMAT_VERSION,
+            "checked_ts": time.time() - 7200,
+            "ttl_s": 60,
+            "stale": False,
+            "data": {
+                "ok": True,
+                "latest": {
+                    "xray": {
+                        "ok": True,
+                        "tag": "v26.2.0",
+                        "url": "https://example.test/xray-old",
+                        "stable": {"tag": "v26.2.0", "url": "https://example.test/xray-old"},
+                        "prerelease": None,
+                    },
+                    "mihomo": {
+                        "ok": True,
+                        "tag": "v1.19.20",
+                        "url": "https://example.test/mihomo-old",
+                        "stable": {"tag": "v1.19.20", "url": "https://example.test/mihomo-old"},
+                        "prerelease": None,
+                    },
+                },
+            },
+        },
+    )
+
+    gate = threading.Event()
+
+    def fake_latest_release_or_skip(repo, *, installed, timeout_s):
+        assert installed is True
+        gate.wait(2.0)
+        return {
+            "ok": True,
+            "repo": repo,
+            "tag": "v99.0.0",
+            "url": "https://example.test/new",
+            "stable": {"tag": "v99.0.0", "url": "https://example.test/new"},
+            "prerelease": None,
+            "error": None,
+            "meta": None,
+            "skipped": False,
+        }
+
+    monkeypatch.setattr(cores_status, "_latest_release_or_skip", fake_latest_release_or_skip)
+
+    started_at = time.perf_counter()
+    response = client.get("/api/cores/updates")
+    elapsed_s = time.perf_counter() - started_at
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert elapsed_s < 0.25
+    assert payload["refreshing"] is True
+    assert payload["stale"] is True
+    assert payload["latest"]["xray"]["stable"]["tag"] == "v26.2.0"
+    assert payload["latest"]["mihomo"]["stable"]["tag"] == "v1.19.20"
+    assert payload["update_available"]["xray"] is True
+    assert payload["update_available"]["mihomo"] is True
+
+    gate.set()
+    settled = _wait_for_background_refresh(client)
+    assert settled is not None
+    assert settled["refreshing"] is False
 
 
 def test_commands_panel_has_dedicated_prerelease_links_and_styles():

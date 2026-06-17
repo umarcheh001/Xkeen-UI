@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -575,10 +576,86 @@ def _latest_release_or_skip(repo: str, *, installed: bool, timeout_s: float) -> 
     }
 
 
+def _compute_update_available(installed: Dict[str, Dict[str, Any]], latest: Dict[str, Any]) -> Dict[str, bool]:
+    return {
+        "xray": bool(installed.get("xray", {}).get("installed"))
+        and _norm_ver(installed.get("xray", {}).get("version"))
+        and _is_update_available(
+            installed.get("xray", {}).get("version"),
+            ((latest.get("xray", {}).get("stable") or {}).get("tag"))
+            or latest.get("xray", {}).get("tag"),
+        ),
+        "mihomo": bool(installed.get("mihomo", {}).get("installed"))
+        and _norm_ver(installed.get("mihomo", {}).get("version"))
+        and _is_update_available(
+            installed.get("mihomo", {}).get("version"),
+            ((latest.get("mihomo", {}).get("stable") or {}).get("tag"))
+            or latest.get("mihomo", {}).get("tag"),
+        ),
+    }
+
+
+def _cache_checked_ts(cached: Optional[dict]) -> Optional[float]:
+    if not isinstance(cached, dict):
+        return None
+    try:
+        ts = float(cached.get("checked_ts") or 0)
+    except Exception:
+        return None
+    return ts if ts > 0 else None
+
+
+def _cache_latest_data(cached: Optional[dict]) -> Dict[str, Any]:
+    if not isinstance(cached, dict):
+        return {}
+    data = cached.get("data")
+    if not isinstance(data, dict):
+        return {}
+    latest = data.get("latest")
+    return latest if isinstance(latest, dict) else {}
+
+
+def _cache_ok_flag(cached: Optional[dict]) -> bool:
+    if not isinstance(cached, dict):
+        return True
+    data = cached.get("data")
+    if not isinstance(data, dict):
+        return True
+    return bool(data.get("ok", True))
+
+
+def _build_updates_response(
+    *,
+    installed: Dict[str, Dict[str, Any]],
+    latest: Optional[Dict[str, Any]],
+    ok: bool,
+    checked_ts: Optional[float],
+    ttl_s: int,
+    stale: bool,
+    refreshing: bool,
+) -> Dict[str, Any]:
+    latest_data = latest if isinstance(latest, dict) else {}
+    return {
+        "ok": bool(ok),
+        "latest": latest_data,
+        "installed": installed,
+        "update_available": _compute_update_available(installed, latest_data),
+        "checked_ts": checked_ts,
+        "ttl_s": ttl_s,
+        "stale": bool(stale),
+        "refreshing": bool(refreshing),
+    }
+
+
 def create_cores_status_blueprint(ui_state_dir: str) -> Blueprint:
     bp = Blueprint("cores_status", __name__)
 
     cache_path = os.path.join(str(ui_state_dir or "/tmp"), "cores_updates_cache.json")
+    refresh_lock = threading.Lock()
+    refresh_state = {
+        "running": False,
+        "started_ts": 0.0,
+    }
 
     def _detect_installed() -> Dict[str, Dict[str, Any]]:
         out: Dict[str, Dict[str, Any]] = {}
@@ -601,6 +678,106 @@ def create_cores_status_blueprint(ui_state_dir: str) -> Blueprint:
 
         return out
 
+    def _build_cached_response(
+        cached: Optional[dict],
+        *,
+        installed: Dict[str, Dict[str, Any]],
+        ttl_s: int,
+        stale: bool,
+        refreshing: bool,
+    ) -> Dict[str, Any]:
+        return _build_updates_response(
+            installed=installed,
+            latest=_cache_latest_data(cached),
+            ok=_cache_ok_flag(cached),
+            checked_ts=_cache_checked_ts(cached),
+            ttl_s=ttl_s,
+            stale=stale,
+            refreshing=refreshing,
+        )
+
+    def _refresh_cache_in_background(
+        *,
+        app: Any,
+        ttl_s: int,
+        timeout_s: float,
+        xray_repo: str,
+        mihomo_repo: str,
+    ) -> None:
+        try:
+            with app.app_context():
+                installed = _detect_installed()
+
+                xr = _latest_release_or_skip(
+                    xray_repo,
+                    installed=bool(installed.get("xray", {}).get("installed")),
+                    timeout_s=timeout_s,
+                )
+                mh = _latest_release_or_skip(
+                    mihomo_repo,
+                    installed=bool(installed.get("mihomo", {}).get("installed")),
+                    timeout_s=timeout_s,
+                )
+
+                latest: Dict[str, Any] = {
+                    "xray": xr,
+                    "mihomo": mh,
+                }
+                ok = bool(xr.get("ok")) and bool(mh.get("ok"))
+                checked_ts = time.time()
+
+                _write_json_atomic(
+                    cache_path,
+                    {
+                        "format_version": _CACHE_FORMAT_VERSION,
+                        "checked_ts": checked_ts,
+                        "ttl_s": ttl_s,
+                        "stale": False,
+                        "data": {"ok": ok, "latest": latest},
+                    },
+                )
+        except Exception:
+            try:
+                with app.app_context():
+                    log_route_exception("cores_status.background_refresh_failed")
+            except Exception:
+                pass
+        finally:
+            with refresh_lock:
+                refresh_state["running"] = False
+
+    def _ensure_background_refresh(
+        *,
+        ttl_s: int,
+        timeout_s: float,
+        xray_repo: str,
+        mihomo_repo: str,
+    ) -> bool:
+        app = current_app._get_current_object()
+        with refresh_lock:
+            if refresh_state["running"]:
+                return False
+            refresh_state["running"] = True
+            refresh_state["started_ts"] = time.time()
+        try:
+            worker = threading.Thread(
+                target=_refresh_cache_in_background,
+                kwargs={
+                    "app": app,
+                    "ttl_s": ttl_s,
+                    "timeout_s": timeout_s,
+                    "xray_repo": xray_repo,
+                    "mihomo_repo": mihomo_repo,
+                },
+                daemon=True,
+            )
+            worker.start()
+            return True
+        except Exception:
+            with refresh_lock:
+                refresh_state["running"] = False
+            raise
+
     @bp.get("/api/cores/versions")
     def api_cores_versions() -> Any:
         try:
@@ -615,107 +792,82 @@ def create_cores_status_blueprint(ui_state_dir: str) -> Blueprint:
         force = str(request.args.get("force") or "").strip() in ("1", "true", "yes", "force")
         ttl_s = _cfg_cache_ttl_s()
         now = time.time()
-
-        if not force:
-            cached = _read_json(cache_path)
-            try:
-                if cached and float(cached.get("checked_ts") or 0) > 0:
-                    age = now - float(cached.get("checked_ts") or 0)
-                    if int(cached.get("format_version") or 0) == _CACHE_FORMAT_VERSION and age < float(cached.get("ttl_s") or ttl_s):
-                        data = cached.get("data") if isinstance(cached.get("data"), dict) else None
-                        if data:
-                            installed = _detect_installed()
-                            latest = data.get("latest") if isinstance(data.get("latest"), dict) else {}
-                            resp = {
-                                "ok": bool(data.get("ok", True)),
-                                "latest": latest,
-                                "checked_ts": float(cached.get("checked_ts") or now),
-                                "ttl_s": float(cached.get("ttl_s") or ttl_s),
-                                "stale": bool(cached.get("stale") or False),
-                                "installed": installed,
-                            }
-                            resp["update_available"] = {
-                                "xray": bool(installed.get("xray", {}).get("installed"))
-                                and _norm_ver(installed.get("xray", {}).get("version"))
-                                and _is_update_available(
-                                    installed.get("xray", {}).get("version"),
-                                    ((latest.get("xray", {}).get("stable") or {}).get("tag"))
-                                    or latest.get("xray", {}).get("tag"),
-                                ),
-                                "mihomo": bool(installed.get("mihomo", {}).get("installed"))
-                                and _norm_ver(installed.get("mihomo", {}).get("version"))
-                                and _is_update_available(
-                                    installed.get("mihomo", {}).get("version"),
-                                    ((latest.get("mihomo", {}).get("stable") or {}).get("tag"))
-                                    or latest.get("mihomo", {}).get("tag"),
-                                ),
-                            }
-                            return jsonify(resp)
-            except Exception:
-                pass
-
-        installed = _detect_installed()
         timeout_s = _cfg_api_timeout_s()
 
         xray_repo = str(os.environ.get("XKEEN_UI_XRAY_REPO") or "XTLS/Xray-core")
         mihomo_repo = str(os.environ.get("XKEEN_UI_MIHOMO_REPO") or "MetaCubeX/mihomo")
+        cached = _read_json(cache_path)
+        installed = _detect_installed()
+        cached_checked_ts = _cache_checked_ts(cached)
+        cache_is_fresh = False
+        cache_stale_flag = bool(cached.get("stale") or False) if isinstance(cached, dict) else False
 
-        xr = _latest_release_or_skip(
-            xray_repo,
-            installed=bool(installed.get("xray", {}).get("installed")),
-            timeout_s=timeout_s,
-        )
-        mh = _latest_release_or_skip(
-            mihomo_repo,
-            installed=bool(installed.get("mihomo", {}).get("installed")),
-            timeout_s=timeout_s,
-        )
-
-        latest: Dict[str, Any] = {
-            "xray": xr,
-            "mihomo": mh,
-        }
-        ok = bool(xr.get("ok")) and bool(mh.get("ok"))
-
-        upd = {
-            "xray": bool(installed.get("xray", {}).get("installed"))
-            and _norm_ver(installed.get("xray", {}).get("version"))
-            and _is_update_available(
-                installed.get("xray", {}).get("version"),
-                ((latest["xray"].get("stable") or {}).get("tag")) or latest["xray"].get("tag"),
-            ),
-            "mihomo": bool(installed.get("mihomo", {}).get("installed"))
-            and _norm_ver(installed.get("mihomo", {}).get("version"))
-            and _is_update_available(
-                installed.get("mihomo", {}).get("version"),
-                ((latest["mihomo"].get("stable") or {}).get("tag")) or latest["mihomo"].get("tag"),
-            ),
-        }
-
-        resp = {
-            "ok": ok,
-            "latest": latest,
-            "installed": installed,
-            "update_available": upd,
-            "checked_ts": now,
-            "ttl_s": ttl_s,
-            "stale": False,
-        }
+        if not force and cached:
+            try:
+                if cached_checked_ts and int(cached.get("format_version") or 0) == _CACHE_FORMAT_VERSION:
+                    age = now - cached_checked_ts
+                    cache_is_fresh = age < float(cached.get("ttl_s") or ttl_s)
+                    if cache_is_fresh:
+                        return jsonify(
+                            _build_cached_response(
+                                cached,
+                                installed=installed,
+                                ttl_s=ttl_s,
+                                stale=cache_stale_flag,
+                                refreshing=False,
+                            )
+                        )
+            except Exception:
+                pass
+        elif cached:
+            try:
+                if cached_checked_ts and int(cached.get("format_version") or 0) == _CACHE_FORMAT_VERSION:
+                    age = now - cached_checked_ts
+                    cache_is_fresh = age < float(cached.get("ttl_s") or ttl_s)
+            except Exception:
+                pass
 
         try:
-            _write_json_atomic(
-                cache_path,
-                {
-                    "format_version": _CACHE_FORMAT_VERSION,
-                    "checked_ts": now,
-                    "ttl_s": ttl_s,
-                    "stale": False,
-                    "data": {"ok": ok, "latest": latest},
-                },
+            _ensure_background_refresh(
+                ttl_s=ttl_s,
+                timeout_s=timeout_s,
+                xray_repo=xray_repo,
+                mihomo_repo=mihomo_repo,
             )
         except Exception:
-            pass
+            return jsonify(
+                _build_updates_response(
+                    installed=installed,
+                    latest=_cache_latest_data(cached),
+                    ok=_cache_ok_flag(cached),
+                    checked_ts=_cache_checked_ts(cached),
+                    ttl_s=ttl_s,
+                    stale=bool(cached),
+                    refreshing=False,
+                )
+            )
 
-        return jsonify(resp)
+        if cached:
+            return jsonify(
+                _build_cached_response(
+                    cached,
+                    installed=installed,
+                    ttl_s=ttl_s,
+                    stale=bool(cache_stale_flag or not cache_is_fresh),
+                    refreshing=True,
+                )
+            )
+
+        return jsonify(
+            _build_updates_response(
+                installed=installed,
+                latest={"xray": {}, "mihomo": {}},
+                ok=True,
+                checked_ts=None,
+                ttl_s=ttl_s,
+                stale=False,
+                refreshing=True,
+            )
+        )
 
     return bp

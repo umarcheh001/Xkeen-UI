@@ -21,6 +21,8 @@ let coresStatusModuleApi = null;
   const API_UPDATES = '/api/cores/updates';
   const NOT_INSTALLED_LABEL = '—';
   let lastInstalled = {};
+  let refreshPollPromise = null;
+  let refreshPollNonce = 0;
 
   function $(id) {
     return document.getElementById(id);
@@ -205,6 +207,10 @@ let coresStatusModuleApi = null;
 
   function toastMsg(msg, kind) {
     toastXkeen(String(msg || ''), kind || 'info');
+  }
+
+  function isRefreshInProgress(payload) {
+    return !!(payload && payload.refreshing);
   }
 
   function wasDelivered(sendRes) {
@@ -642,6 +648,53 @@ let coresStatusModuleApi = null;
     checkBtn.classList.toggle('loading', !!isLoading);
   }
 
+  function scheduleUpdatesRefreshPoll({
+    delayMs = 1200,
+    maxAttempts = 12,
+  } = {}) {
+    if (refreshPollPromise) return refreshPollPromise;
+
+    const nonce = ++refreshPollNonce;
+    refreshPollPromise = (async () => {
+      const waitMs = Math.max(250, Number(delayMs) || 0);
+      const attempts = Math.max(1, Number(maxAttempts) || 0);
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        await sleep(waitMs);
+        if (nonce !== refreshPollNonce) return null;
+        try {
+          const data = await refreshUpdates(false, { schedulePoll: false });
+          if (!isRefreshInProgress(data)) return data;
+        } catch (e) {}
+      }
+      return null;
+    })().finally(() => {
+      if (nonce === refreshPollNonce) {
+        refreshPollPromise = null;
+      }
+    });
+
+    return refreshPollPromise;
+  }
+
+  async function waitForRefreshCompletion({
+    timeoutMs = 18000,
+    stepMs = 1200,
+  } = {}) {
+    const deadline = Date.now() + Math.max(1000, Number(timeoutMs) || 0);
+    const waitMs = Math.max(250, Number(stepMs) || 0);
+    let lastData = null;
+    while (Date.now() < deadline) {
+      await sleep(waitMs);
+      try {
+        lastData = await refreshUpdates(false, { schedulePoll: false });
+      } catch (e) {
+        lastData = null;
+      }
+      if (!isRefreshInProgress(lastData)) return lastData;
+    }
+    return lastData;
+  }
+
   function applyVersions(cores) {
     const xray = (cores && cores.xray) ? cores.xray : {};
     const mihomo = (cores && cores.mihomo) ? cores.mihomo : {};
@@ -662,10 +715,17 @@ let coresStatusModuleApi = null;
     const installed = (payload && payload.installed) ? payload.installed : lastInstalled;
     const checkedTs = payload && payload.checked_ts ? payload.checked_ts : null;
     const stale = !!(payload && payload.stale);
+    const refreshing = isRefreshInProgress(payload);
 
     const checkedEl = $('cores-checked-at');
     if (checkedEl) {
-      if (checkedTs) {
+      if (refreshing) {
+        if (checkedTs) {
+          checkedEl.textContent = `обновляем: ${fmtTime(checkedTs)}${stale ? ' (кэш)' : ''}`;
+        } else {
+          checkedEl.textContent = 'проверяем...';
+        }
+      } else if (checkedTs) {
         checkedEl.textContent = `проверено: ${fmtTime(checkedTs)}${stale ? ' (кэш)' : ''}`;
       } else {
         checkedEl.textContent = stale ? 'кэш' : '';
@@ -732,12 +792,15 @@ let coresStatusModuleApi = null;
     return data;
   }
 
-  async function refreshUpdates(force) {
+  async function refreshUpdates(force, { schedulePoll = true } = {}) {
     const url = API_UPDATES + (force ? '?force=1' : '');
     const { res, data } = await getJSON(url);
     if (!res.ok || !data) throw new Error('updates_failed');
     if (data.installed) applyVersions(data.installed);
     applyUpdates(data);
+    if (schedulePoll && isRefreshInProgress(data)) {
+      scheduleUpdatesRefreshPoll();
+    }
     return data;
   }
 
@@ -747,8 +810,21 @@ let coresStatusModuleApi = null;
       checkBtn.addEventListener('click', async () => {
         setLoading(true);
         try {
-          await refreshUpdates(true);
-          toastMsg('Проверка обновлений выполнена.', 'info');
+          const data = await refreshUpdates(true);
+          if (isRefreshInProgress(data)) {
+            const settled = await waitForRefreshCompletion();
+            if (isRefreshInProgress(settled)) {
+              toastMsg('Проверка обновлений продолжается в фоне.', 'info');
+            } else if (settled && settled.ok === false) {
+              toastMsg('Не удалось проверить обновления.', 'error');
+            } else {
+              toastMsg('Проверка обновлений выполнена.', 'info');
+            }
+          } else if (data && data.ok === false) {
+            toastMsg('Не удалось проверить обновления.', 'error');
+          } else {
+            toastMsg('Проверка обновлений выполнена.', 'info');
+          }
         } catch (e) {
           toastMsg('Не удалось проверить обновления.', 'error');
         } finally {
