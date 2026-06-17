@@ -256,6 +256,42 @@ def test_clean_json_returned_when_main_reformatted_externally(routing_env):
             assert resp.headers.get("X-XKeen-JSONC-Using") == "1"
 
 
+def test_selected_fragment_ignores_routing_raw_override(routing_env):
+    """A routing raw override must not shadow other selected Xray fragments."""
+    env = routing_env
+    observatory_file = Path(env["configs_dir"]) / "07_observatory.json"
+    observatory_obj = {"observatory": {"subjectSelector": ["proxy"]}}
+
+    env["main_file"].write_text(SAMPLE_CLEAN, encoding="utf-8")
+    env["raw_file"].write_text(SAMPLE_JSONC, encoding="utf-8")
+    observatory_file.write_text(
+        json.dumps(observatory_obj, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    # Before the fix, the selected observatory file could still return
+    # 05_routing.jsonc when XKEEN_XRAY_ROUTING_FILE_RAW was configured.
+    _set_mtime(observatory_file, -20)
+    _set_mtime(env["raw_file"], 0)
+
+    with patch.object(_routing_config_mod, "XRAY_JSONC_DIR_REAL", env["jsonc_dir"]), \
+         patch.object(_xcf_mod, "XRAY_JSONC_DIR", env["jsonc_dir"]), \
+         patch.dict(os.environ, {"XKEEN_XRAY_ROUTING_FILE_RAW": str(env["raw_file"])}, clear=False):
+        app = _make_app(
+            routing_file=str(env["main_file"]),
+            routing_file_raw=str(env["raw_file"]),
+            xray_configs_dir=env["configs_dir"],
+            xray_configs_dir_real=env["configs_dir"],
+        )
+        with app.test_client() as c:
+            resp = c.get("/api/routing?file=07_observatory.json")
+            assert resp.status_code == 200
+            body = resp.get_data(as_text=True)
+            assert "observatory" in body
+            assert "routing" not in body
+            assert resp.headers.get("X-XKeen-JSONC-Using") == "0"
+
+
 def test_routing_get_loads_cp1251_legacy_json_without_empty_file_fallback(routing_env):
     env = routing_env
     legacy_obj = {

@@ -13,7 +13,7 @@ import os
 import re
 from typing import Dict, Optional, Tuple
 
-from services.xray_config_files import legacy_jsonc_path_for, resolve_jsonc_path
+from services.xray_config_files import jsonc_path_for, legacy_jsonc_path_for, resolve_jsonc_path
 
 
 _TEMPLATE_HEADER_RE = re.compile(r"^\s*//\s*xkeen-template:\s*(\{.*\})\s*$")
@@ -155,9 +155,22 @@ def _paths_for_routing(
     """
     raw_override = os.environ.get("XKEEN_XRAY_ROUTING_FILE_RAW", "")
 
+    def _raw_path_for(clean_path: str) -> str:
+        try:
+            selected_real = os.path.realpath(clean_path)
+            routing_real = os.path.realpath(routing_file)
+        except Exception:
+            selected_real = str(clean_path or "")
+            routing_real = str(routing_file or "")
+        if selected_real == routing_real:
+            if routing_file_raw:
+                return str(routing_file_raw)
+            return resolve_jsonc_path(raw_override, main_json_abs_path=clean_path)
+        return jsonc_path_for(clean_path)
+
     if not file_arg:
         clean_path = routing_file
-        raw_path = resolve_jsonc_path(raw_override, main_json_abs_path=clean_path)
+        raw_path = _raw_path_for(clean_path)
         legacy_raw_path = legacy_jsonc_path_for(clean_path)
         return clean_path, raw_path, legacy_raw_path
 
@@ -167,7 +180,7 @@ def _paths_for_routing(
         v = ""
     if not v:
         clean_path = routing_file
-        raw_path = resolve_jsonc_path(raw_override, main_json_abs_path=clean_path)
+        raw_path = _raw_path_for(clean_path)
         legacy_raw_path = legacy_jsonc_path_for(clean_path)
         return clean_path, raw_path, legacy_raw_path
 
@@ -205,7 +218,7 @@ def _paths_for_routing(
     else:
         clean_path = cand_real
 
-    raw_path = resolve_jsonc_path(raw_override, main_json_abs_path=clean_path)
+    raw_path = _raw_path_for(clean_path)
     legacy_raw_path = legacy_jsonc_path_for(clean_path)
 
     return clean_path, raw_path, legacy_raw_path
