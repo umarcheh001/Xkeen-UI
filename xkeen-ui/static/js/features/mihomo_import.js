@@ -2107,7 +2107,7 @@ let mihomoImportModuleApi = null;
       return `${base}_${index}`;
     };
 
-    if (uri.startsWith('http')) {
+    if (isBackendSubscriptionLink(uri)) {
       const opts = options || {};
       const name = uniqueProviderName(opts.providerName || '', existingConfig, 'subscription');
       const providerUrl = String(opts.providerUrl || '').trim() || localProviderAdapterUrl(uri, false);
