@@ -45,6 +45,40 @@ def test_hwid_probe_route_blocks_private_url_before_probe(monkeypatch, client):
     assert calls == []
 
 
+def test_hwid_device_route_returns_diagnostics(monkeypatch, client):
+    monkeypatch.setattr(
+        mihomo,
+        "_mh_hwid_get_device_info",
+        lambda: {
+            "mac": "aa:bb:cc:dd:ee:ff",
+            "mac_hwid": "AABBCCDDEEFF",
+            "hwid": "4194304",
+            "hwid_source": "XKEEN_MIHOMO_HWID",
+            "hwid_format": "string",
+            "has_env_override": True,
+            "hwid_matches_router_mac": False,
+            "override_differs_from_router": True,
+            "device_model": "Keenetic",
+            "os_release": "4.2.6",
+            "kernel_release": "4.2.6",
+            "mihomo_version": "1.19.25",
+            "mihomo_version_raw": "v1.19.25",
+            "user_agent": "ClashMeta/1.19.25; mihomo/1.19.25",
+            "headers": {"x-hwid": "4194304"},
+            "hwid_warning": "warning",
+        },
+    )
+
+    response = client.get("/api/mihomo/hwid/device")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["mac_hwid"] == "AABBCCDDEEFF"
+    assert payload["hwid_format"] == "string"
+    assert payload["override_differs_from_router"] is True
+
+
 def test_hwid_apply_route_blocks_http_url_before_probe(monkeypatch, client):
     monkeypatch.delenv("XKEEN_MIHOMO_HWID_ALLOW_HTTP", raising=False)
     calls = []

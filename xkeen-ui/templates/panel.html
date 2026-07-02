@@ -3072,6 +3072,51 @@ https://..."></textarea>
               <div id="mihomo-hwid-status" class="status xk-hw-status hidden"></div>
               <div id="mihomo-hwid-meta" class="xk-hw-meta hidden"></div>
               <div id="mihomo-hwid-tip" class="xk-hw-tip hidden"></div>
+
+              <section id="mihomo-hwid-diag" class="xk-hw-diag hidden" aria-live="polite">
+                <div class="xk-hw-section-head xk-hw-section-head--compact">
+                  <div>
+                    <div class="xk-hw-section-title">HWID diagnostics</div>
+                    <div class="xk-hw-section-subtitle">Показывает, какой идентификатор и какие заголовки реально уйдут в запросе.</div>
+                  </div>
+                </div>
+
+                <div class="xk-hw-diag-grid">
+                  <article class="xk-hw-diag-card">
+                    <div class="xk-hw-diag-label">Активный HWID</div>
+                    <div id="mihomo-hwid-diag-active" class="xk-hw-diag-value">—</div>
+                    <div id="mihomo-hwid-diag-active-note" class="xk-hw-diag-note hidden"></div>
+                  </article>
+
+                  <article class="xk-hw-diag-card">
+                    <div class="xk-hw-diag-label">Источник</div>
+                    <div id="mihomo-hwid-diag-source" class="xk-hw-diag-value">—</div>
+                    <div id="mihomo-hwid-diag-source-note" class="xk-hw-diag-note hidden"></div>
+                  </article>
+
+                  <article class="xk-hw-diag-card">
+                    <div class="xk-hw-diag-label">Router MAC → HWID</div>
+                    <div id="mihomo-hwid-diag-router" class="xk-hw-diag-value">—</div>
+                    <div id="mihomo-hwid-diag-router-note" class="xk-hw-diag-note hidden"></div>
+                  </article>
+
+                  <article class="xk-hw-diag-card">
+                    <div class="xk-hw-diag-label">Устройство и runtime</div>
+                    <div id="mihomo-hwid-diag-device" class="xk-hw-diag-value">—</div>
+                    <div id="mihomo-hwid-diag-device-note" class="xk-hw-diag-note hidden"></div>
+                  </article>
+
+                  <article class="xk-hw-diag-card xk-hw-diag-card--full">
+                    <div class="xk-hw-diag-label">Request headers</div>
+                    <pre id="mihomo-hwid-diag-headers" class="xk-hw-diag-pre">—</pre>
+                  </article>
+
+                  <article class="xk-hw-diag-card xk-hw-diag-card--full">
+                    <div class="xk-hw-diag-label">Ответ провайдера</div>
+                    <pre id="mihomo-hwid-diag-response" class="xk-hw-diag-pre">Появится после «Проверить».</pre>
+                  </article>
+                </div>
+              </section>
             </section>
 
             <section class="xk-hw-panel xk-hw-panel--preview">

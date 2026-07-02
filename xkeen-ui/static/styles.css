@@ -23127,6 +23127,69 @@ html[data-theme="light"] .routing-rule-grid.is-dnd-live .routing-rule-handle {
   color: #fde68a;
 }
 
+.xk-hw-diag {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.xk-hw-section-head--compact {
+  align-items: center;
+}
+
+.xk-hw-diag-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.xk-hw-diag-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.22);
+}
+
+.xk-hw-diag-card--full {
+  grid-column: 1 / -1;
+}
+
+.xk-hw-diag-label {
+  color: rgba(226, 232, 240, 0.68);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.xk-hw-diag-value {
+  color: var(--fg, #f8fafc);
+  font-family: var(--xk-mono-font-family, "Cascadia Code", Consolas, monospace);
+  font-size: 0.92rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.xk-hw-diag-note {
+  color: rgba(226, 232, 240, 0.76);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.xk-hw-diag-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--fg, #f8fafc);
+  font-family: var(--xk-mono-font-family, "Cascadia Code", Consolas, monospace);
+  font-size: 0.87rem;
+  line-height: 1.45;
+}
+
 .xk-hw-section-head {
   display: flex;
   align-items: flex-start;
@@ -23237,7 +23300,8 @@ html[data-theme="light"] .routing-rule-grid.is-dnd-live .routing-rule-handle {
 
 @media (max-width: 920px) {
   .xk-hw-grid,
-  .xk-hw-form-grid {
+  .xk-hw-form-grid,
+  .xk-hw-diag-grid {
     grid-template-columns: 1fr;
   }
 
@@ -23306,6 +23370,24 @@ html[data-theme="light"] .xk-hw-preview-wrap {
 
 html[data-theme="light"] .xk-hw-kicker {
   color: rgba(71, 85, 105, 0.9);
+}
+
+html[data-theme="light"] .xk-hw-diag-card {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(248, 250, 252, 0.92);
+}
+
+html[data-theme="light"] .xk-hw-diag-label {
+  color: rgba(71, 85, 105, 0.92);
+}
+
+html[data-theme="light"] .xk-hw-diag-value,
+html[data-theme="light"] .xk-hw-diag-pre {
+  color: #0f172a;
+}
+
+html[data-theme="light"] .xk-hw-diag-note {
+  color: rgba(15, 23, 42, 0.72);
 }
 
 html[data-theme="light"] .xk-hw-label-tip {

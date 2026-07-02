@@ -131,6 +131,11 @@ def test_hwid_device_info_uses_stored_generated_fallback_when_mac_missing(monkey
 
     assert info["hwid"] == "12DDB1C0BADF"
     assert info["hwid_source"] == "generated_state"
+    assert info["hwid_format"] == "mac12"
+    assert info["mac_hwid"] == ""
+    assert info["has_env_override"] is False
+    assert info["hwid_matches_router_mac"] is False
+    assert info["override_differs_from_router"] is False
     assert info["headers"]["x-hwid"] == "12DDB1C0BADF"
     assert info["mihomo_version"] == "1.19.25"
     assert info["headers"]["User-Agent"] == "ClashMeta/1.19.25; mihomo/1.19.25"
@@ -155,7 +160,28 @@ def test_hwid_device_info_accepts_string_env_override(monkeypatch):
 
     assert info["hwid"] == "4194304"
     assert info["hwid_source"] == "XKEEN_MIHOMO_HWID"
+    assert info["hwid_format"] == "string"
+    assert info["mac_hwid"] == "AABBCCDDEEFF"
+    assert info["has_env_override"] is True
+    assert info["hwid_matches_router_mac"] is False
+    assert info["override_differs_from_router"] is True
     assert info["headers"]["x-hwid"] == "4194304"
+
+
+def test_hwid_device_info_marks_router_mac_match_when_override_equals_router(monkeypatch):
+    monkeypatch.setenv("XKEEN_MIHOMO_HWID", "aa:bb:cc:dd:ee:ff")
+    monkeypatch.setattr(hwid, "_pick_mac_address_keenetic", lambda: "aa:bb:cc:dd:ee:ff")
+    monkeypatch.setattr(hwid, "_ndmc_show_version", lambda: "")
+    monkeypatch.setattr(hwid, "_detect_mihomo_version", lambda: "v1.19.25")
+
+    info = hwid.get_device_info()
+
+    assert info["hwid"] == "AABBCCDDEEFF"
+    assert info["mac_hwid"] == "AABBCCDDEEFF"
+    assert info["hwid_format"] == "mac12"
+    assert info["has_env_override"] is True
+    assert info["hwid_matches_router_mac"] is True
+    assert info["override_differs_from_router"] is False
 
 
 def test_hwid_env_override_normalizes_mac_like_values_but_rejects_invalid_headers():

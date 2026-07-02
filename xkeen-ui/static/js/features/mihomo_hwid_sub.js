@@ -40,6 +40,17 @@ let mihomoHwidSubModuleApi = null;
     status: 'mihomo-hwid-status',
     meta: 'mihomo-hwid-meta',
     tip: 'mihomo-hwid-tip',
+    diag: 'mihomo-hwid-diag',
+    diagActive: 'mihomo-hwid-diag-active',
+    diagActiveNote: 'mihomo-hwid-diag-active-note',
+    diagSource: 'mihomo-hwid-diag-source',
+    diagSourceNote: 'mihomo-hwid-diag-source-note',
+    diagRouter: 'mihomo-hwid-diag-router',
+    diagRouterNote: 'mihomo-hwid-diag-router-note',
+    diagDevice: 'mihomo-hwid-diag-device',
+    diagDeviceNote: 'mihomo-hwid-diag-device-note',
+    diagHeaders: 'mihomo-hwid-diag-headers',
+    diagResponse: 'mihomo-hwid-diag-response',
 
     btnProbe: 'mihomo-hwid-probe-btn',
     btnInsert: 'mihomo-hwid-insert-btn',
@@ -109,6 +120,135 @@ let mihomoHwidSubModuleApi = null;
     const s = String(msg || '').trim();
     el.textContent = s;
     toggleBlock(el, !!s);
+  }
+
+  function setDiagValue(id, value, fallback) {
+    const el = $(id);
+    if (!el) return;
+    const text = String(value == null ? '' : value).trim();
+    el.textContent = text || String(fallback || '—');
+  }
+
+  function setDiagNote(id, value) {
+    const el = $(id);
+    if (!el) return;
+    const text = String(value == null ? '' : value).trim();
+    el.textContent = text;
+    toggleBlock(el, !!text);
+  }
+
+  function hwidFormatLabel(kind) {
+    const s = String(kind || '').trim().toLowerCase();
+    if (s === 'mac12') return 'MAC-12 format';
+    if (s === 'string') return 'provider string override';
+    return 'not detected';
+  }
+
+  function formatHeaderBlock(headers, emptyText) {
+    const h = headers && typeof headers === 'object' ? headers : null;
+    if (!h) return String(emptyText || '—');
+    const keys = Object.keys(h).filter((key) => String(h[key] || '').trim());
+    if (!keys.length) return String(emptyText || '—');
+    keys.sort((a, b) => a.localeCompare(b));
+    return keys.map((key) => `${key}: ${String(h[key] || '').trim()}`).join('\n');
+  }
+
+  function formatProviderResponseBlock(result) {
+    const res = result && typeof result === 'object' ? result : null;
+    if (!res) return 'Появится после «Проверить».';
+
+    const lines = [];
+    const hdr = res.hwid_response_headers && typeof res.hwid_response_headers === 'object'
+      ? res.hwid_response_headers
+      : null;
+    if (hdr) {
+      const headerText = formatHeaderBlock(hdr, '');
+      if (headerText) lines.push(headerText);
+    }
+
+    const limit = res.hwid_limit_info && typeof res.hwid_limit_info === 'object'
+      ? res.hwid_limit_info
+      : null;
+    if (limit && limit.summary) lines.push(`devices: ${String(limit.summary)}`);
+    else if (limit && typeof limit.used === 'number' && typeof limit.limit === 'number') {
+      lines.push(`devices: ${String(limit.used)}/${String(limit.limit)}`);
+    }
+
+    const payload = res.provider_payload && typeof res.provider_payload === 'object'
+      ? res.provider_payload
+      : null;
+    if (payload && typeof payload.node_count === 'number') {
+      lines.push(`nodes: ${String(payload.node_count)}`);
+    }
+    if (payload && payload.hwid_placeholder_reason) {
+      lines.push(`placeholder: ${String(payload.hwid_placeholder_reason)}`);
+    }
+
+    return lines.filter(Boolean).join('\n') || 'Провайдер не вернул специальных HWID-заголовков.';
+  }
+
+  function clearDiagnostics() {
+    setDiagValue(IDS.diagActive, '—');
+    setDiagValue(IDS.diagSource, '—');
+    setDiagValue(IDS.diagRouter, '—');
+    setDiagValue(IDS.diagDevice, '—');
+    setDiagValue(IDS.diagHeaders, '—');
+    setDiagValue(IDS.diagResponse, 'Появится после «Проверить».');
+    setDiagNote(IDS.diagActiveNote, '');
+    setDiagNote(IDS.diagSourceNote, '');
+    setDiagNote(IDS.diagRouterNote, '');
+    setDiagNote(IDS.diagDeviceNote, '');
+    toggleBlock($(IDS.diag), false);
+  }
+
+  function renderDiagnostics(device, result) {
+    const wrap = $(IDS.diag);
+    if (!wrap || !device || typeof device !== 'object') {
+      clearDiagnostics();
+      return;
+    }
+
+    const hwid = String(device.hwid || '').trim();
+    const source = hwidSourceLabel(device.hwid_source);
+    const mac = String(device.mac || '').trim();
+    const macHwid = String(device.mac_hwid || '').trim();
+    const activeNote = [hwidFormatLabel(device.hwid_format)];
+    if (device.hwid_matches_router_mac) activeNote.push('совпадает с router MAC');
+    else if (device.override_differs_from_router) activeNote.push('override отличается от router MAC');
+    else if (!hwid) activeNote.push('заголовок x-hwid будет пустым');
+
+    const sourceNote = device.override_differs_from_router
+      ? 'Сейчас используется ручной override, а не HWID, вычисленный из MAC роутера.'
+      : String(device.hwid_warning || '').trim();
+
+    let routerValue = 'MAC роутера недоступен';
+    if (mac && macHwid) routerValue = `${mac} -> ${macHwid}`;
+    else if (mac) routerValue = mac;
+    else if (macHwid) routerValue = macHwid;
+    const routerNote = macHwid
+      ? 'Это router-native кандидат, который панель смогла вычислить из MAC.'
+      : 'Панель не смогла получить MAC роутера и использует fallback-источник.';
+
+    const deviceValue = [
+      String(device.device_model || '').trim(),
+      String(device.os_release || '').trim(),
+    ].filter(Boolean).join(' • ');
+    const deviceNote = [
+      device.mihomo_version ? ('mihomo: ' + String(device.mihomo_version)) : '',
+      device.user_agent ? ('UA: ' + String(device.user_agent)) : '',
+    ].filter(Boolean).join('\n');
+
+    setDiagValue(IDS.diagActive, hwid || 'не определён');
+    setDiagNote(IDS.diagActiveNote, activeNote.filter(Boolean).join(' • '));
+    setDiagValue(IDS.diagSource, source || 'не определён');
+    setDiagNote(IDS.diagSourceNote, sourceNote);
+    setDiagValue(IDS.diagRouter, routerValue);
+    setDiagNote(IDS.diagRouterNote, routerNote);
+    setDiagValue(IDS.diagDevice, deviceValue || '—');
+    setDiagNote(IDS.diagDeviceNote, deviceNote);
+    setDiagValue(IDS.diagHeaders, formatHeaderBlock(device.headers, 'Заголовки пока не собраны.'));
+    setDiagValue(IDS.diagResponse, formatProviderResponseBlock(result));
+    toggleBlock(wrap, true);
   }
 
   function hwidSourceLabel(source) {
@@ -675,9 +815,11 @@ let mihomoHwidSubModuleApi = null;
 
     if (show) {
       _lastProbe = null;
+      _device = null;
       setStatus('', false);
       setMeta('');
       setTip('');
+      clearDiagnostics();
       setPreview('');
       setInsertEnabled(false);
       setApplyEnabled(false);
@@ -744,17 +886,17 @@ let mihomoHwidSubModuleApi = null;
     try {
       const data = await http.fetchJSON('/api/mihomo/hwid/device');
       _device = data || null;
-      // Non-intrusive hint
+      renderDiagnostics(_device, _lastProbe);
+      // Non-intrusive summary
       try {
-        const mac = data && data.mac ? String(data.mac) : '';
         const hwid = data && data.hwid ? String(data.hwid) : '';
         const source = hwidSourceLabel(data && data.hwid_source);
-        const ua = (data && data.user_agent) ? String(data.user_agent) : '';
-        if (hwid || mac || ua) {
+        const model = data && data.device_model ? String(data.device_model) : '';
+        if (hwid || source || model) {
           setMeta([
-            hwid ? ('HWID: ' + hwid + (source ? (' (' + source + ')') : '')) : '',
-            (!hwid && mac) ? ('MAC: ' + mac) : (hwid && mac ? ('MAC: ' + mac) : ''),
-            ua ? ('UA: ' + ua) : '',
+            hwid ? ('HWID: ' + hwid) : '',
+            source ? ('источник: ' + source) : '',
+            model ? ('устройство: ' + model) : '',
           ].filter(Boolean).join(' • '));
         }
       } catch (e2) {}
@@ -762,6 +904,7 @@ let mihomoHwidSubModuleApi = null;
     } catch (e) {
       // do not block the flow
       _device = null;
+      clearDiagnostics();
       return null;
     }
   }
@@ -919,6 +1062,7 @@ let mihomoHwidSubModuleApi = null;
       const r = await postJSONAllowError('/api/mihomo/hwid/probe', { url, insecure: insecure });
       const res = r && r.data ? r.data : null;
       _lastProbe = res || null;
+      renderDiagnostics(dev, _lastProbe);
 
       if (!r.ok || !res || !res.ok) {
         const errObj = (res && res.error) ? res.error : null;
@@ -985,6 +1129,7 @@ let mihomoHwidSubModuleApi = null;
       parts.push(...hwidProviderHeaderMeta(res.hwid_response_headers));
       parts.push(...payloadSummaryMeta(res));
       if (parts.length) setMeta(parts.join(' • '));
+      renderDiagnostics(dev, res);
 
       // Warnings
       try {

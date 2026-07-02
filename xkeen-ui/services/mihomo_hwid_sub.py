@@ -261,6 +261,15 @@ def _valid_hwid(hwid: str | None) -> str:
     return s
 
 
+def _hwid_format_kind(hwid: str | None) -> str:
+    s = str(hwid or "").strip()
+    if not s:
+        return "missing"
+    if re.fullmatch(r"[0-9A-F]{12}", s):
+        return "mac12"
+    return "string"
+
+
 def _new_random_hwid() -> str:
     raw = bytearray(os.urandom(6))
     # MAC-like, locally administered, unicast. Stable storage happens below.
@@ -470,6 +479,12 @@ def get_device_info() -> Dict[str, Any]:
     mh_ver_raw = _detect_mihomo_version()
     mh_ver = _normalize_mihomo_version_for_ua(mh_ver_raw)
     ua = _mihomo_hwid_user_agent(mh_ver_raw)
+    hwid_format = _hwid_format_kind(hwid)
+    has_env_override = bool(env_hwid)
+    matches_router_mac = bool(hwid and mac_hwid and hwid == mac_hwid)
+    override_differs_from_router = bool(
+        has_env_override and mac_hwid and hwid and hwid != mac_hwid
+    )
 
     headers: Dict[str, str] = {
         # Upstream expects HWID without separators and in uppercase.
@@ -493,8 +508,13 @@ def get_device_info() -> Dict[str, Any]:
 
     return {
         "mac": mac,
+        "mac_hwid": mac_hwid,
         "hwid": hwid,
         "hwid_source": hwid_source,
+        "hwid_format": hwid_format,
+        "has_env_override": has_env_override,
+        "hwid_matches_router_mac": matches_router_mac,
+        "override_differs_from_router": override_differs_from_router,
         "device_model": device_model,
         "os_release": os_release,
         "kernel_release": kernel_release,
