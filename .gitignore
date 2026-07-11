@@ -49,6 +49,7 @@ e2e/.auth/
 # Local audit working notes
 /README_AUDIT_CHECKLIST_CURRENT.md
 /docs/README_AUDIT_CHECKLIST_CURRENT.md
+/docs/mobile-companion/
 
 .gobin/
 go-check.*/
