@@ -161,6 +161,30 @@ def test_fetch_subscription_body_for_xray_retries_raw_happ_with_happ_hwid_after_
     ]
 
 
+def test_fetch_subscription_body_for_xray_retries_direct_url_with_happ_user_agent_after_direct_error(monkeypatch):
+    from services import xray_subscriptions as subs
+
+    calls = []
+
+    def fake_fetch(url, request_headers=None, _happ_depth=0):
+        headers = {str(k): str(v) for k, v in (request_headers or {}).items()}
+        calls.append(headers)
+        if headers.get("User-Agent") != "Happ/1.0":
+            raise urllib.error.HTTPError(url, 502, "Bad Gateway", hdrs=None, fp=None)
+        return (_vless("Recovered Direct"), {"content-type": "text/plain; charset=utf-8"})
+
+    monkeypatch.setattr(subs, "fetch_subscription_body", fake_fetch)
+    monkeypatch.setattr("services.mihomo_hwid_sub.get_device_info", lambda: {"headers": {}})
+
+    body, headers, meta = subs.fetch_subscription_body_for_xray("https://moriarty-vpn.com/oet_Wqs-WLEWEcPE")
+
+    assert _vless("Recovered Direct") in body
+    assert headers["content-type"] == "text/plain; charset=utf-8"
+    assert meta["fetch_mode"] == "happ_ua"
+    assert any("Happ User-Agent" in line for line in meta["warnings"])
+    assert calls == [{}, {"User-Agent": "Happ/1.0"}]
+
+
 def test_preview_subscription_rejects_html_install_landing_page(monkeypatch):
     from services import xray_subscriptions as subs
 

@@ -1392,18 +1392,15 @@ def _compact_happ_error_detail(code: str, prefix: str) -> str:
     return detail[:360]
 
 
-def _happ_subscription_headers(headers: Dict[str, str]) -> Dict[str, str] | None:
+def _happ_subscription_headers(headers: Dict[str, str] | None) -> Dict[str, str] | None:
     if not env_flag("XKEEN_SUBSCRIPTION_HAPP_FALLBACK", True):
         return None
-    hwid = ""
     ua = ""
     for key, value in (headers or {}).items():
         key_l = str(key or "").strip().lower()
-        if key_l == "x-hwid":
-            hwid = str(value or "").strip()
-        elif key_l == "user-agent":
+        if key_l == "user-agent":
             ua = str(value or "").strip()
-    if not hwid or "happ" in ua.lower():
+    if "happ" in ua.lower():
         return None
     fallback_ua = str(os.environ.get("XKEEN_SUBSCRIPTION_HAPP_USER_AGENT") or "Happ/1.0").strip()
     if not fallback_ua:
@@ -1419,27 +1416,46 @@ def _subscription_request_variants() -> List[Tuple[str, Dict[str, str], str]]:
 
         device_info = get_device_info()
     except Exception:
-        return []
+        device_info = {}
     request_headers = device_info.get("headers") if isinstance(device_info, dict) else {}
-    if not isinstance(request_headers, dict) or not request_headers:
-        return []
+    normalized_headers = (
+        {str(k): str(v) for k, v in request_headers.items() if str(k or "").strip()}
+        if isinstance(request_headers, dict)
+        else {}
+    )
+    has_hwid = any(
+        str(key or "").strip().lower() == "x-hwid" and str(value or "").strip()
+        for key, value in normalized_headers.items()
+    )
 
-    variants: List[Tuple[str, Dict[str, str], str]] = [
-        (
-            "hwid",
-            {str(k): str(v) for k, v in request_headers.items() if str(k or "").strip()},
-            "Подписка была скачана с HWID-заголовками устройства.",
-        )
-    ]
-    happ_headers = _happ_subscription_headers(request_headers)
-    if happ_headers:
+    variants: List[Tuple[str, Dict[str, str], str]] = []
+    if has_hwid:
         variants.append(
             (
-                "happ_hwid",
-                {str(k): str(v) for k, v in happ_headers.items() if str(k or "").strip()},
-                "Подписка была скачана с HWID-заголовками устройства и Happ User-Agent.",
+                "hwid",
+                normalized_headers,
+                "Подписка была скачана с HWID-заголовками устройства.",
             )
         )
+
+    happ_headers = _happ_subscription_headers(normalized_headers)
+    if happ_headers:
+        if has_hwid:
+            variants.append(
+                (
+                    "happ_hwid",
+                    {str(k): str(v) for k, v in happ_headers.items() if str(k or "").strip()},
+                    "Подписка была скачана с HWID-заголовками устройства и Happ User-Agent.",
+                )
+            )
+        else:
+            variants.append(
+                (
+                    "happ_ua",
+                    {str(k): str(v) for k, v in happ_headers.items() if str(k or "").strip()},
+                    "Подписка была скачана с Happ User-Agent.",
+                )
+            )
     return variants
 
 
@@ -1499,10 +1515,9 @@ def fetch_subscription_body_for_xray(url: str) -> Tuple[str, Dict[str, str], Dic
         direct_fetch_error = exc
 
     if direct_fetch_error is not None:
-        if happ_links.is_happ_deep_link(url):
-            result, _errors = _try_subscription_request_variants(url, _subscription_request_variants())
-            if result is not None:
-                return result
+        result, _errors = _try_subscription_request_variants(url, _subscription_request_variants())
+        if result is not None:
+            return result
         raise direct_fetch_error
 
     probe = _subscription_body_source_probe(body)
