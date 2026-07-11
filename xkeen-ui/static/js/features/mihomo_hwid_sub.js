@@ -1,4 +1,5 @@
 import { getMihomoPanelApi } from './mihomo_panel.js';
+import { getMihomoImportApi } from './mihomo_import.js';
 import { getMihomoYamlPatchApi } from './mihomo_yaml_patch.js';
 import {
   getMihomoCommandJobApi,
@@ -116,17 +117,45 @@ let mihomoHwidSubModuleApi = null;
     return false;
   }
 
+  function getLegacyMihomoImportApi() {
+    try {
+      const features = window && window.XKeen && window.XKeen.features;
+      if (!features || typeof features !== 'object') return null;
+      return features.mihomoImport || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function resolveMihomoImportApi() {
+    try {
+      const lazy = getXkeenLazyRuntimeApi();
+      if (lazy && typeof lazy.ensureFeature === 'function' && typeof lazy.getFeatureApi === 'function') {
+        await lazy.ensureFeature('mihomoImport');
+        const api = lazy.getFeatureApi('mihomoImport');
+        if (api && typeof api.openWithInput === 'function') return api;
+      }
+    } catch (e) {}
+
+    try {
+      const api = getMihomoImportApi();
+      if (api && typeof api.openWithInput === 'function') return api;
+    } catch (e) {}
+
+    try {
+      const api = getLegacyMihomoImportApi();
+      if (api && typeof api.openWithInput === 'function') return api;
+    } catch (e) {}
+
+    return null;
+  }
+
   async function handoffToImportModal(rawValue, options = {}) {
     const value = String(rawValue || '').trim();
     const opts = options && typeof options === 'object' ? options : {};
     if (!value) return false;
     try {
-      const lazy = getXkeenLazyRuntimeApi();
-      if (!lazy || typeof lazy.ensureFeature !== 'function' || typeof lazy.getFeatureApi !== 'function') {
-        return false;
-      }
-      await lazy.ensureFeature('mihomoImport');
-      const api = lazy.getFeatureApi('mihomoImport');
+      const api = await resolveMihomoImportApi();
       if (!api || typeof api.openWithInput !== 'function') return false;
       showModal(false);
       if (opts.toast !== false) {

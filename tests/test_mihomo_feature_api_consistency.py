@@ -133,8 +133,13 @@ def test_mihomo_menu_feature_flows_keep_editor_patch_integrations_and_single_sav
             "wordWrap: 'on'",
             "readOnly: 'nocursor'",
             "getXkeenLazyRuntimeApi",
+            "import { getMihomoImportApi } from './mihomo_import.js';",
+            "async function resolveMihomoImportApi()",
             "await lazy.ensureFeature('mihomoImport');",
             "const api = lazy.getFeatureApi('mihomoImport');",
+            "const api = getMihomoImportApi();",
+            "function getLegacyMihomoImportApi()",
+            "return features.mihomoImport || null;",
             "await api.openWithInput(value, { mode: 'auto' });",
         ],
     }

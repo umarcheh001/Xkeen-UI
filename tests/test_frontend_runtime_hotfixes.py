@@ -51,10 +51,15 @@ def test_hwid_modal_handoffs_unsupported_inputs_to_general_import():
     assert 'openWithInput: openMihomoImportWithInput,' in mihomo_import
 
     assert 'getXkeenLazyRuntimeApi' in hwid_modal
+    assert "import { getMihomoImportApi } from './mihomo_import.js';" in hwid_modal
     assert 'function isHwidSupportedUrl(value)' in hwid_modal
     assert 'function shouldHandoffToImport(msg, hint)' in hwid_modal
+    assert 'async function resolveMihomoImportApi()' in hwid_modal
     assert "await lazy.ensureFeature('mihomoImport');" in hwid_modal
     assert "const api = lazy.getFeatureApi('mihomoImport');" in hwid_modal
+    assert 'const api = getMihomoImportApi();' in hwid_modal
+    assert 'function getLegacyMihomoImportApi()' in hwid_modal
+    assert 'return features.mihomoImport || null;' in hwid_modal
     assert "await api.openWithInput(value, { mode: 'auto' });" in hwid_modal
     assert 'HWID-модал принимает только http/https URL.' in hwid_modal
 
