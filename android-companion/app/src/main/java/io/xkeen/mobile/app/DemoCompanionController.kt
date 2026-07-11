@@ -6,6 +6,23 @@ import androidx.compose.runtime.setValue
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
+private enum class SessionFlow(
+    val actionLabel: String,
+    val eventTitle: String,
+    val logLabel: String,
+) {
+    Pairing(
+        actionLabel = "Сопряжение",
+        eventTitle = "Сопряжение завершено",
+        logLabel = "сопряжение",
+    ),
+    Login(
+        actionLabel = "Вход",
+        eventTitle = "Вход выполнен",
+        logLabel = "вход",
+    ),
+}
+
 class DemoCompanionController(
     initialState: CompanionUiState = CompanionUiState(),
 ) {
@@ -37,7 +54,7 @@ class DemoCompanionController(
             name = draft.name.trim(),
             baseUrl = draft.baseUrl.trim(),
             status = ConnectionStatus.SetupRequired,
-            lastSeen = "New draft",
+            lastSeen = "Новый черновик",
         )
 
         state = state.copy(
@@ -56,10 +73,10 @@ class DemoCompanionController(
                 instanceLabel = selected.name,
                 endpoint = selected.baseUrl,
                 statusSummary = when (selected.status) {
-                    ConnectionStatus.Configured -> "Ready for safe control"
-                    ConnectionStatus.NeedsAuth -> "Authentication required"
-                    ConnectionStatus.SetupRequired -> "Setup required"
-                    ConnectionStatus.Offline -> "Offline"
+                    ConnectionStatus.Configured -> "Готов к безопасному управлению"
+                    ConnectionStatus.NeedsAuth -> "Требуется вход"
+                    ConnectionStatus.SetupRequired -> "Требуется настройка"
+                    ConnectionStatus.Offline -> "Офлайн"
                 },
             ),
         )
@@ -82,11 +99,11 @@ class DemoCompanionController(
     }
 
     fun pairDemoDevice() {
-        completeSession("Pairing")
+        completeSession(SessionFlow.Pairing)
     }
 
     fun login() {
-        completeSession("Login")
+        completeSession(SessionFlow.Login)
     }
 
     fun selectTab(tab: MainTab) {
@@ -106,10 +123,10 @@ class DemoCompanionController(
                     routing = state.routing.copy(
                         validation = RoutingValidation(
                             state = RoutingValidationState.Dirty,
-                            message = "Save the draft before apply.",
+                            message = "Сначала сохраните черновик перед применением.",
                             details = listOf(
-                                "Draft is different from the last saved preview.",
-                                "Validate again after save if you change the content.",
+                                "Черновик отличается от последнего сохраненного превью.",
+                                "Если измените содержимое после сохранения, проверьте его еще раз.",
                             ),
                         ),
                     ),
@@ -172,7 +189,7 @@ class DemoCompanionController(
                 mode = RoutingMode.Edit,
                 validation = RoutingValidation(
                     state = RoutingValidationState.Dirty,
-                    message = "Draft changed. Validate before preview or apply.",
+                    message = "Черновик изменен. Выполните проверку перед превью или применением.",
                 ),
                 preview = null,
             ),
@@ -190,7 +207,7 @@ class DemoCompanionController(
                 documents = state.routing.documents.replaceDocument(reverted),
                 mode = RoutingMode.Read,
                 validation = RoutingValidation(
-                    message = "Draft reverted to published revision.",
+                    message = "Черновик возвращен к опубликованной ревизии.",
                 ),
                 preview = null,
             ),
@@ -233,16 +250,16 @@ class DemoCompanionController(
                 documents = state.routing.documents.replaceDocument(updated),
                 validation = RoutingValidation(
                     state = RoutingValidationState.Valid,
-                    message = "Draft saved. Preview or apply when ready.",
+                    message = "Черновик сохранен. Откройте превью или примените, когда будете готовы.",
                     details = listOf(
-                        "Saved at $savedAt",
-                        "Published revision is unchanged until apply.",
+                        "Сохранено в $savedAt",
+                        "Опубликованная ревизия не изменится до применения.",
                     ),
                 ),
             ),
-            dashboard = state.dashboard.copy(lastOperation = "Routing draft saved at $savedAt"),
+            dashboard = state.dashboard.copy(lastOperation = "Черновик маршрутов сохранен в $savedAt"),
             logs = state.logs.prepend(
-                LogEntry(nowLong(), "routing", LogLevel.Info, "draft saved for ${document.title}"),
+                LogEntry(nowLong(), "routing", LogLevel.Info, "Черновик сохранен для ${document.title}"),
             ),
         )
     }
@@ -255,7 +272,7 @@ class DemoCompanionController(
         val connectionId = state.selectedConnectionId ?: return
         val updatedConnections = state.connections.map { connection ->
             if (connection.id == connectionId) {
-                connection.copy(status = ConnectionStatus.NeedsAuth, lastSeen = "Session closed")
+                connection.copy(status = ConnectionStatus.NeedsAuth, lastSeen = "Сессия закрыта")
             } else {
                 connection
             }
@@ -266,18 +283,18 @@ class DemoCompanionController(
             selectedConnectionId = null,
             connections = updatedConnections,
             mainTab = MainTab.Home,
-            dashboard = state.dashboard.copy(statusSummary = "Authentication required"),
+            dashboard = state.dashboard.copy(statusSummary = "Требуется вход"),
             logs = state.logs.prepend(
-                LogEntry(nowLong(), "auth", LogLevel.Warning, "mobile session closed by user"),
+                LogEntry(nowLong(), "auth", LogLevel.Warning, "Пользователь закрыл мобильную сессию"),
             ),
         )
     }
 
-    private fun completeSession(mode: String) {
+    private fun completeSession(flow: SessionFlow) {
         val connectionId = state.selectedConnectionId ?: return
         val updatedConnections = state.connections.map { connection ->
             if (connection.id == connectionId) {
-                connection.copy(status = ConnectionStatus.Configured, lastSeen = "Ready now")
+                connection.copy(status = ConnectionStatus.Configured, lastSeen = "Готово")
             } else {
                 connection
             }
@@ -288,7 +305,7 @@ class DemoCompanionController(
             time = nowLong(),
             source = "auth",
             level = LogLevel.Info,
-            message = "${mode.lowercase()} session opened for ${selected.name}",
+            message = "${flow.logLabel.replaceFirstChar(Char::titlecase)} открыто для ${selected.name}",
         )
 
         state = state.copy(
@@ -297,15 +314,15 @@ class DemoCompanionController(
             dashboard = state.dashboard.copy(
                 instanceLabel = selected.name,
                 endpoint = selected.baseUrl,
-                statusSummary = "Ready for safe control",
-                lastOperation = "$mode session opened",
+                statusSummary = "Готов к безопасному управлению",
+                lastOperation = "${flow.actionLabel} завершено",
                 recentEvents = listOf(
-                    RecentEvent(eventTime, "$mode complete", "Session opened without browser fallback"),
+                    RecentEvent(eventTime, flow.eventTitle, "Сессия открыта без перехода в браузер"),
                 ) + state.dashboard.recentEvents.take(2),
             ),
             diagnostics = state.diagnostics.replaceDiagnostic(
-                label = "Mobile session",
-                status = "Ready",
+                label = "Мобильная сессия",
+                status = "Готово",
                 severity = DiagnosticSeverity.Ok,
             ),
             logs = state.logs.prepend(authLog),
@@ -321,18 +338,18 @@ class DemoCompanionController(
         }
         val finalState = if (action == ServiceAction.Restart) ServiceState.Running else serviceState
         val summary = when (action) {
-            ServiceAction.Start -> "Service start requested"
-            ServiceAction.Stop -> "Service stopped safely"
-            ServiceAction.Restart -> "Runtime recycled successfully"
+            ServiceAction.Start -> "Запрошен запуск сервиса"
+            ServiceAction.Stop -> "Сервис безопасно остановлен"
+            ServiceAction.Restart -> "Среда выполнения успешно перезапущена"
         }
 
         state = state.copy(
             dashboard = state.dashboard.copy(
                 serviceState = finalState,
                 statusSummary = if (finalState == ServiceState.Running) {
-                    "Ready for safe control"
+                    "Готов к безопасному управлению"
                 } else {
-                    "Service stopped"
+                    "Сервис остановлен"
                 },
                 lastOperation = summary,
                 recentEvents = listOf(
@@ -340,7 +357,7 @@ class DemoCompanionController(
                 ) + state.dashboard.recentEvents.take(2),
             ),
             logs = state.logs.prepend(
-                LogEntry(nowLong(), "service", LogLevel.Info, "${action.label.lowercase()} action confirmed"),
+                LogEntry(nowLong(), "service", LogLevel.Info, "Подтверждено действие: ${action.label.lowercase()}"),
             ),
         )
     }
@@ -360,24 +377,24 @@ class DemoCompanionController(
                 mode = RoutingMode.Read,
                 validation = RoutingValidation(
                     state = RoutingValidationState.Valid,
-                    message = "Apply complete. Published revision is now live.",
+                    message = "Применение завершено. Опубликованная ревизия уже активна.",
                     details = listOf(
-                        "Revision r${updated.revision} published at $appliedAt",
-                        "No conflict detected in demo shell.",
+                        "Ревизия r${updated.revision} опубликована в $appliedAt",
+                        "В демонстрационной оболочке конфликтов не найдено.",
                     ),
                 ),
                 preview = buildRoutingPreview(updated).copy(
-                    headline = "Applied to ${updated.title}",
+                    headline = "Применено к ${updated.title}",
                 ),
             ),
             dashboard = state.dashboard.copy(
-                lastOperation = "Routing applied at $appliedAt",
+                lastOperation = "Маршруты применены в $appliedAt",
                 recentEvents = listOf(
-                    RecentEvent(appliedAt, "Routing apply", "${updated.title} moved to revision r${updated.revision}"),
+                    RecentEvent(appliedAt, "Маршруты применены", "${updated.title} переведен на ревизию r${updated.revision}"),
                 ) + state.dashboard.recentEvents.take(2),
             ),
             logs = state.logs.prepend(
-                LogEntry(nowLong(), "routing", LogLevel.Info, "applied revision r${updated.revision} for ${updated.title}"),
+                LogEntry(nowLong(), "routing", LogLevel.Info, "Применена ревизия r${updated.revision} для ${updated.title}"),
             ),
         )
     }
@@ -396,32 +413,32 @@ fun validateRoutingDraft(draft: String): RoutingValidation {
     val details = mutableListOf<String>()
 
     if (!draft.contains("\"routing\"")) {
-        details += "Missing top-level routing object."
+        details += "Отсутствует корневой объект routing."
     }
     if (!draft.contains("\"rules\"")) {
-        details += "No rules block found."
+        details += "Не найден блок rules."
     }
     if (draft.count { it == '{' } != draft.count { it == '}' }) {
-        details += "Brace count does not match."
+        details += "Количество фигурных скобок не совпадает."
     }
     if (draft.contains("TODO_INVALID")) {
-        details += "Draft still contains TODO_INVALID marker."
+        details += "В черновике все еще есть маркер TODO_INVALID."
     }
 
     return if (details.isEmpty()) {
         RoutingValidation(
             state = RoutingValidationState.Valid,
-            message = "Validation passed. Safe to preview and save.",
+            message = "Проверка пройдена. Можно открывать превью и сохранять.",
             details = listOf(
-                "routing object found",
-                "rules block detected",
-                "basic JSON shape looks consistent",
+                "объект routing найден",
+                "блок rules обнаружен",
+                "базовая структура JSON выглядит корректно",
             ),
         )
     } else {
         RoutingValidation(
             state = RoutingValidationState.Invalid,
-            message = "Fix ${details.size} issue(s) before apply.",
+            message = "Исправьте ${details.size} пункт(а) перед применением.",
             details = details,
         )
     }
@@ -432,12 +449,12 @@ private fun buildRoutingPreview(document: RoutingDocument): RoutingPreview {
     val ruleMentions = Regex("\"type\"\\s*:\\s*\"field\"").findAll(document.draftContent).count()
 
     return RoutingPreview(
-        headline = "Preview ready for ${document.title}",
+        headline = "Превью готово для ${document.title}",
         details = listOf(
-            "rule blocks touched: $ruleMentions",
-            "outbound tags referenced: $outboundMentions",
-            "published revision: r${document.revision}",
-            "saved preview is ready for apply",
+            "изменено блоков правил: $ruleMentions",
+            "найдено outbound-тегов: $outboundMentions",
+            "опубликованная ревизия: r${document.revision}",
+            "сохраненное превью готово к применению",
         ),
     )
 }

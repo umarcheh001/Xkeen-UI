@@ -59,9 +59,9 @@ enum class DiagnosticSeverity {
 }
 
 enum class ServiceAction(val label: String) {
-    Start("Start"),
-    Stop("Stop"),
-    Restart("Restart"),
+    Start("Старт"),
+    Stop("Стоп"),
+    Restart("Перезапуск"),
 }
 
 data class Connection(
@@ -125,7 +125,7 @@ data class RoutingDocument(
 
 data class RoutingValidation(
     val state: RoutingValidationState = RoutingValidationState.Idle,
-    val message: String = "Open a document and validate before apply.",
+    val message: String = "Откройте конфиг и выполните проверку перед применением.",
     val details: List<String> = emptyList(),
 )
 
@@ -183,41 +183,41 @@ data class CompanionUiState(
 fun demoConnections(): List<Connection> = listOf(
     Connection(
         id = "home-lab",
-        name = "Home Lab",
+        name = "Домашний узел",
         baseUrl = "https://lab.lan:8443",
         status = ConnectionStatus.Configured,
-        lastSeen = "Seen 20 sec ago",
+        lastSeen = "Был на связи 20 сек назад",
     ),
     Connection(
         id = "edge-node",
-        name = "Edge Node",
+        name = "Пограничный узел",
         baseUrl = "https://edge.lan:8443",
         status = ConnectionStatus.NeedsAuth,
-        lastSeen = "Auth expired",
+        lastSeen = "Вход устарел",
     ),
     Connection(
         id = "travel-box",
-        name = "Travel Box",
+        name = "Дорожный узел",
         baseUrl = "http://192.168.31.20:8080",
         status = ConnectionStatus.Offline,
-        lastSeen = "Offline",
+        lastSeen = "Офлайн",
     ),
 )
 
 fun demoDashboardState(): DashboardState = DashboardState(
-    instanceLabel = "Home Lab",
+    instanceLabel = "Домашний узел",
     endpoint = "https://lab.lan:8443",
-    statusSummary = "Ready for safe control",
+    statusSummary = "Готов к безопасному управлению",
     serviceState = ServiceState.Running,
     activeCore = "Xray",
     version = "Xkeen 0.8.0-alpha",
-    lastOperation = "Routing preview prepared",
+    lastOperation = "Подготовлено превью маршрутов",
     lastError = null,
     capabilities = listOf("routingEditor", "logs", "restart", "diagnostics"),
     recentEvents = listOf(
-        RecentEvent("17:48", "Service healthy", "xray runtime is accepting traffic"),
-        RecentEvent("17:42", "Routing draft saved", "main-routing.json is ready to apply"),
-        RecentEvent("17:35", "Session restored", "mobile token reused without browser fallback"),
+        RecentEvent("17:48", "Сервис в норме", "Ядро xray принимает трафик"),
+        RecentEvent("17:42", "Черновик сохранен", "main-routing.json готов к применению"),
+        RecentEvent("17:35", "Сессия восстановлена", "Мобильный токен использован без браузера"),
     ),
 )
 
@@ -268,9 +268,9 @@ fun demoRoutingState(): RoutingState {
         documents = listOf(
             RoutingDocument(
                 id = "main-routing",
-                title = "Main Routing",
+                title = "Основной маршрут",
                 path = "/etc/xkeen/xray/main-routing.json",
-                summary = "Active Xray policy set for LAN and DNS rules",
+                summary = "Активный набор правил Xray для LAN и DNS",
                 revision = 14,
                 publishedContent = main,
                 draftContent = main,
@@ -280,9 +280,9 @@ fun demoRoutingState(): RoutingState {
             ),
             RoutingDocument(
                 id = "bypass-routing",
-                title = "Ad Bypass",
+                title = "Обход рекламы",
                 path = "/etc/xkeen/xray/ad-bypass.json",
-                summary = "Secondary rules for block and bypass entries",
+                summary = "Дополнительные правила для блокировок и обхода",
                 revision = 6,
                 publishedContent = bypass,
                 draftContent = bypass,
@@ -297,17 +297,17 @@ fun demoRoutingState(): RoutingState {
 
 fun demoLogsState(): LogsState = LogsState(
     entries = listOf(
-        LogEntry("17:49:11", "service", LogLevel.Info, "runtime heartbeat looks healthy"),
-        LogEntry("17:48:02", "routing", LogLevel.Info, "preview generated for main-routing.json"),
-        LogEntry("17:46:55", "service", LogLevel.Warning, "restart window opened for 8 seconds"),
-        LogEntry("17:41:13", "auth", LogLevel.Info, "mobile session restored from secure storage"),
-        LogEntry("17:35:28", "routing", LogLevel.Error, "draft 13 failed validate on missing rules"),
+        LogEntry("17:49:11", "service", LogLevel.Info, "Пульс сервиса выглядит штатно"),
+        LogEntry("17:48:02", "routing", LogLevel.Info, "Превью собрано для main-routing.json"),
+        LogEntry("17:46:55", "service", LogLevel.Warning, "Окно перезапуска открыто на 8 секунд"),
+        LogEntry("17:41:13", "auth", LogLevel.Info, "Мобильная сессия восстановлена из хранилища"),
+        LogEntry("17:35:28", "routing", LogLevel.Error, "Черновик 13 не прошел проверку: нет правил"),
     ),
 )
 
 fun demoDiagnostics(): List<DiagnosticItem> = listOf(
-    DiagnosticItem("Mobile session", "Warm and restored", DiagnosticSeverity.Ok),
-    DiagnosticItem("Streaming", "Reconnect window 30 sec", DiagnosticSeverity.Ok),
-    DiagnosticItem("Secure storage", "Not wired yet", DiagnosticSeverity.Warning),
-    DiagnosticItem("Backend mobile API", "Still mocked in shell", DiagnosticSeverity.Warning),
+    DiagnosticItem("Мобильная сессия", "Активна и восстановлена", DiagnosticSeverity.Ok),
+    DiagnosticItem("Поток логов", "Окно переподключения 30 сек", DiagnosticSeverity.Ok),
+    DiagnosticItem("Защищенное хранилище", "Пока не подключено", DiagnosticSeverity.Warning),
+    DiagnosticItem("API мобильного клиента", "Пока работает на моках", DiagnosticSeverity.Warning),
 )

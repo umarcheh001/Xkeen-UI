@@ -8,11 +8,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -80,9 +82,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -127,11 +131,11 @@ private fun LaunchRoute(controller: DemoCompanionController) {
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surface,
             ),
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(24.dp),
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 28.dp, vertical = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.padding(horizontal = 22.dp, vertical = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = Alignment.Start,
             ) {
                 Surface(
@@ -150,7 +154,7 @@ private fun LaunchRoute(controller: DemoCompanionController) {
                     style = MaterialTheme.typography.headlineSmall,
                 )
                 Text(
-                    text = "Restoring the last trusted shell and preparing compact controls for phone-sized workflows.",
+                    text = "Восстанавливаем последний доверенный сеанс и подготавливаем данные клиента.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -160,7 +164,7 @@ private fun LaunchRoute(controller: DemoCompanionController) {
                 ) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     Text(
-                        text = "Checking saved connections, auth state, and routing drafts",
+                        text = "Проверяем подключения, авторизацию и черновики маршрутов",
                         style = MaterialTheme.typography.labelLarge,
                     )
                 }
@@ -179,50 +183,58 @@ private fun ConnectionsRoute(
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         TitleBlock(
-            eyebrow = "Connections",
-            title = "Trusted instances",
-            subtitle = "Manual host entry first, then pairing or login. No browser-sized layout, no stretched controls.",
+            eyebrow = "Подключения",
+            title = "Доверенные узлы",
+            subtitle = "Сначала добавьте адрес вручную, затем выполните сопряжение или вход.",
         )
 
         SectionCard(
-            title = "Add instance",
-            supporting = "Draft a connection now. In the real app this will feed secure storage and mobile bootstrap.",
+            title = "Добавить узел",
+            supporting = "Подготовьте черновик подключения. Позже он будет сохранен в защищенное хранилище и использован для мобильного старта.",
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 CompactField(
                     modifier = Modifier.weight(1f),
                     value = state.connectionDraft.name,
                     onValueChange = controller::updateConnectionDraftName,
-                    label = "Label",
+                    label = "Имя",
+                    labelMode = CompactFieldLabelMode.Above,
                     leadingIcon = { Icon(Icons.Outlined.Lan, contentDescription = null) },
                 )
                 CompactField(
                     modifier = Modifier.weight(1f),
                     value = state.connectionDraft.baseUrl,
                     onValueChange = controller::updateConnectionDraftUrl,
-                    label = "Base URL",
+                    label = "URL",
+                    labelMode = CompactFieldLabelMode.Above,
                     leadingIcon = { Icon(Icons.Outlined.Http, contentDescription = null) },
                     keyboardType = KeyboardType.Uri,
                 )
             }
-            CompactActionRow {
-                FilledTonalButton(onClick = controller::saveConnectionDraft) {
-                    Icon(Icons.Outlined.Save, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Save draft")
-                }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                CompactActionButton(
+                    label = "Сохранить",
+                    icon = Icons.Outlined.Save,
+                    onClick = controller::saveConnectionDraft,
+                )
             }
         }
 
         SectionCard(
-            title = "Saved connections",
-            supporting = "Tap any card to continue into pairing or login.",
+            title = "Сохраненные подключения",
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.connections.forEach { connection ->
                     ConnectionCard(
                         connection = connection,
@@ -246,17 +258,17 @@ private fun PairLoginRoute(
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = controller::backToConnections) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Назад")
             }
             Spacer(Modifier.width(4.dp))
             Column {
                 Text(
-                    text = connection?.name ?: "Selected instance",
+                    text = connection?.name ?: "Выбранный узел",
                     style = MaterialTheme.typography.titleLarge,
                 )
                 Text(
@@ -268,56 +280,66 @@ private fun PairLoginRoute(
         }
 
         SectionCard(
-            title = "Auth gate",
-            supporting = "This shell keeps pairing and login separate from the main navigation, so the bottom nav only appears after a trusted session exists.",
+            title = "Авторизация",
         ) {
             CompactStatusRow(
                 items = listOf(
                     connectionStatusChip(connection?.status ?: ConnectionStatus.NeedsAuth),
-                    StatusChipModel("Phone-safe flow", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer),
                 ),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 CompactField(
                     modifier = Modifier.weight(1f),
                     value = state.loginForm.username,
                     onValueChange = controller::updateUsername,
-                    label = "User",
+                    label = "Логин",
+                    labelMode = CompactFieldLabelMode.Above,
                     leadingIcon = { Icon(Icons.Outlined.Key, contentDescription = null) },
                 )
                 CompactField(
                     modifier = Modifier.weight(1f),
                     value = state.loginForm.password,
                     onValueChange = controller::updatePassword,
-                    label = "Password",
+                    label = "Пароль",
+                    labelMode = CompactFieldLabelMode.Above,
                     leadingIcon = { Icon(Icons.Outlined.Password, contentDescription = null) },
                     visualTransformation = PasswordVisualTransformation(),
                 )
             }
-            CompactActionRow {
-                FilledTonalButton(onClick = controller::pairDemoDevice) {
-                    Icon(Icons.Outlined.VpnKey, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Pair demo")
-                }
-                OutlinedButton(onClick = controller::login) {
-                    Icon(Icons.Outlined.Verified, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Login")
-                }
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                CompactActionButton(
+                    label = "Демо-сопряжение",
+                    icon = Icons.Outlined.VpnKey,
+                    onClick = controller::pairDemoDevice,
+                    modifier = Modifier.weight(1f),
+                )
+                CompactActionButton(
+                    label = "Войти",
+                    icon = Icons.Outlined.Verified,
+                    onClick = controller::login,
+                    modifier = Modifier.weight(1f),
+                    style = CompactButtonStyle.Outlined,
+                )
             }
         }
 
         SectionCard(
-            title = "What opens next",
-            supporting = "The first ready shell is intentionally compact and useful before any backend integration lands.",
+            title = "Доступные разделы",
         ) {
             CompactStatusRow(
                 items = listOf(
-                    statusChip("Dashboard"),
-                    statusChip("Routing Xray"),
-                    statusChip("Logs"),
-                    statusChip("More"),
+                    statusChip("Сводка"),
+                    statusChip("Маршруты Xray"),
+                    statusChip("Логи"),
+                    statusChip("Еще"),
                 ),
             )
         }
@@ -344,7 +366,7 @@ private fun ReadyRoute(
     ) { innerPadding ->
         val contentModifier = Modifier
             .padding(innerPadding)
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 14.dp)
             .windowInsetsPadding(WindowInsets.navigationBars)
 
         when (state.mainTab) {
@@ -403,10 +425,10 @@ private fun ReadyBottomBar(
     onSelected: (MainTab) -> Unit,
 ) {
     NavigationBar {
-        BottomBarItem(MainTab.Home, selected, onSelected, Icons.Outlined.Home, "Home")
-        BottomBarItem(MainTab.Routing, selected, onSelected, Icons.Outlined.AccountTree, "Routing")
-        BottomBarItem(MainTab.Logs, selected, onSelected, Icons.AutoMirrored.Outlined.Subject, "Logs")
-        BottomBarItem(MainTab.More, selected, onSelected, Icons.Outlined.MoreHoriz, "More")
+        BottomBarItem(MainTab.Home, selected, onSelected, Icons.Outlined.Home, "Сводка")
+        BottomBarItem(MainTab.Routing, selected, onSelected, Icons.Outlined.AccountTree, "Маршруты")
+        BottomBarItem(MainTab.Logs, selected, onSelected, Icons.AutoMirrored.Outlined.Subject, "Логи")
+        BottomBarItem(MainTab.More, selected, onSelected, Icons.Outlined.MoreHoriz, "Еще")
     }
 }
 
@@ -420,53 +442,65 @@ private fun DashboardScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SectionCard(
-            title = "Instance summary",
+            title = "Сводка узла",
             supporting = state.dashboard.endpoint,
         ) {
             CompactStatusRow(
                 items = buildList {
                     add(serviceStateChip(state.dashboard.serviceState))
                     add(statusChip(state.dashboard.activeCore))
-                    state.dashboard.capabilities.forEach { add(statusChip(it)) }
+                    state.dashboard.capabilities.forEach { capability ->
+                        add(statusChip(capabilityLabel(capability)))
+                    }
                 },
             )
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                MetricCard("Version", state.dashboard.version, Modifier.weight(1f))
-                MetricCard("Last action", state.dashboard.lastOperation, Modifier.weight(1f))
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                MetricCard("Версия", state.dashboard.version, Modifier.weight(1f).fillMaxHeight())
+                MetricCard("Последнее действие", state.dashboard.lastOperation, Modifier.weight(1f).fillMaxHeight())
             }
             state.dashboard.lastError?.let { error ->
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
                 WarningBanner(error)
             }
+            Spacer(Modifier.height(8.dp))
+            ActionGrid(
+                columns = 3,
+                actions = listOf(
+                    GridAction(
+                        label = ServiceAction.Start.label,
+                        icon = Icons.Outlined.PlayArrow,
+                        tone = if (state.dashboard.serviceState == ServiceState.Stopped) ActionTone.Accent else ActionTone.Neutral,
+                        onClick = { controller.requestServiceAction(ServiceAction.Start) },
+                    ),
+                    GridAction(
+                        label = ServiceAction.Stop.label,
+                        icon = Icons.Outlined.Stop,
+                        tone = if (state.dashboard.serviceState == ServiceState.Running) ActionTone.Accent else ActionTone.Neutral,
+                        onClick = { controller.requestServiceAction(ServiceAction.Stop) },
+                    ),
+                    GridAction(
+                        label = ServiceAction.Restart.label,
+                        icon = Icons.Outlined.Refresh,
+                        onClick = { controller.requestServiceAction(ServiceAction.Restart) },
+                    ),
+                ),
+            )
         }
 
         SectionCard(
-            title = "Safe actions",
-            supporting = "Small buttons and explicit confirms instead of a full-width control bar.",
+            title = "Последние события",
         ) {
-            CompactActionRow {
-                SmallActionButton("Start", Icons.Outlined.PlayArrow) {
-                    controller.requestServiceAction(ServiceAction.Start)
-                }
-                SmallActionButton("Stop", Icons.Outlined.Stop) {
-                    controller.requestServiceAction(ServiceAction.Stop)
-                }
-                SmallActionButton("Restart", Icons.Outlined.Refresh) {
-                    controller.requestServiceAction(ServiceAction.Restart)
-                }
-            }
-        }
-
-        SectionCard(
-            title = "Recent events",
-            supporting = "Compact status blocks keep the home screen dense but still readable on a phone.",
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.dashboard.recentEvents.forEach { event ->
                     EventRow(event)
                 }
@@ -493,21 +527,21 @@ private fun RoutingScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SectionCard(
-            title = "Routing Xray",
-            supporting = "Read-first shell with save, validate, preview, and apply. No desktop split panes.",
+            title = "Маршруты Xray",
+            supporting = "Конфигов: ${filteredDocuments.size}",
         ) {
             CompactField(
                 value = routing.searchQuery,
                 onValueChange = controller::updateRoutingSearchQuery,
-                label = "Search docs",
+                label = "Поиск конфигов",
                 leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -529,43 +563,62 @@ private fun RoutingScreen(
             CompactStatusRow(
                 items = listOf(
                     statusChip("r${selectedDocument.revision}"),
-                    statusChip(if (selectedDocument.hasDraftChanges) "draft changed" else "published clean"),
-                    statusChip(if (selectedDocument.hasUnsavedChanges) "not saved" else "saved"),
-                    statusChip(if (routing.mode == RoutingMode.Read) "read mode" else "edit mode"),
+                    statusChip(if (selectedDocument.hasDraftChanges) "черновик изменен" else "опубликовано"),
+                    statusChip(if (selectedDocument.hasUnsavedChanges) "не сохранено" else "сохранено"),
+                    statusChip(if (routing.mode == RoutingMode.Read) "чтение" else "редактирование"),
                 ),
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
             Text(
                 text = selectedDocument.summary,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(12.dp))
-            CompactActionRow {
-                SmallActionButton("Edit", Icons.Outlined.Edit, onClick = controller::enterRoutingEditMode)
-                SmallActionButton("Validate", Icons.AutoMirrored.Outlined.FactCheck, onClick = controller::validateRouting)
-                SmallActionButton("Preview", Icons.Outlined.Preview, onClick = controller::previewRouting)
-                SmallActionButton("Save", Icons.Outlined.Save, onClick = controller::saveRouting)
-                SmallActionButton("Apply", Icons.Outlined.DoneAll, onClick = controller::requestRoutingApply)
-                SmallActionButton("Undo", Icons.Outlined.SettingsBackupRestore, onClick = controller::revertRoutingDraft)
-            }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
+            ActionGrid(
+                columns = 3,
+                actions = listOf(
+                    GridAction("Править", Icons.Outlined.Edit, onClick = controller::enterRoutingEditMode),
+                    GridAction("Проверить", Icons.AutoMirrored.Outlined.FactCheck, onClick = controller::validateRouting),
+                    GridAction("Превью", Icons.Outlined.Preview, onClick = controller::previewRouting),
+                    GridAction(
+                        label = "Сохранить",
+                        icon = Icons.Outlined.Save,
+                        tone = if (selectedDocument.hasUnsavedChanges) ActionTone.Accent else ActionTone.Neutral,
+                        onClick = controller::saveRouting,
+                    ),
+                    GridAction(
+                        label = "Применить",
+                        icon = Icons.Outlined.DoneAll,
+                        tone = if (selectedDocument.hasDraftChanges) ActionTone.Accent else ActionTone.Neutral,
+                        onClick = controller::requestRoutingApply,
+                    ),
+                    GridAction("Откатить", Icons.Outlined.SettingsBackupRestore, onClick = controller::revertRoutingDraft),
+                ),
+            )
+            Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 value = selectedDocument.draftContent,
                 onValueChange = controller::updateRoutingDraft,
                 readOnly = routing.mode == RoutingMode.Read,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 220.dp),
+                    .heightIn(min = 188.dp),
                 textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                 label = {
-                    Text(if (routing.mode == RoutingMode.Read) "Published or saved draft" else "Draft editor")
+                    Text(
+                        if (routing.mode == RoutingMode.Read) {
+                            "Опубликованная версия или сохраненный черновик"
+                        } else {
+                            "Редактор черновика"
+                        },
+                    )
                 },
             )
         }
 
         SectionCard(
-            title = "Validation",
+            title = "Проверка",
             supporting = routing.validation.message,
         ) {
             CompactStatusRow(
@@ -587,7 +640,7 @@ private fun RoutingScreen(
 
         routing.preview?.let { preview ->
             SectionCard(
-                title = "Preview",
+                title = "Превью",
                 supporting = preview.headline,
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -623,21 +676,20 @@ private fun LogsScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SectionCard(
-            title = "Live logs",
-            supporting = "This shell keeps recent history and live-tail concerns together, with reconnect kept visible in the diagnostics screen.",
+            title = "Живые логи",
         ) {
             CompactStatusRow(
                 items = listOf(
-                    statusChip("history + tail"),
-                    statusChip("reconnect ready"),
-                    statusChip("source filters"),
+                    statusChip("история + поток"),
+                    statusChip("готово к переподключению"),
+                    statusChip("фильтр по источнику"),
                 ),
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -646,17 +698,17 @@ private fun LogsScreen(
                     FilterChip(
                         selected = filter == state.logs.filter,
                         onClick = { controller.updateLogFilter(filter) },
-                        label = { Text(filter.name) },
+                        label = { Text(logFilterLabel(filter)) },
                     )
                 }
             }
         }
 
         SectionCard(
-            title = "Recent entries",
-            supporting = "${filteredEntries.size} visible in the current filter",
+            title = "Последние записи",
+            supporting = "В текущем фильтре видно: ${filteredEntries.size}",
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 filteredEntries.forEach { entry ->
                     LogRow(entry)
                 }
@@ -675,14 +727,13 @@ private fun MoreScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SectionCard(
-            title = "Diagnostics",
-            supporting = "The app shell keeps operational clarity close at hand instead of hiding it in a web-style settings maze.",
+            title = "Диагностика",
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.diagnostics.forEach { item ->
                     DiagnosticRow(item)
                 }
@@ -690,33 +741,35 @@ private fun MoreScreen(
         }
 
         SectionCard(
-            title = "Connections",
-            supporting = "The current instance can be disconnected without touching destructive admin surfaces.",
+            title = "Подключения",
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.connections.forEach { connection ->
                     ConnectionMiniRow(connection)
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            CompactActionRow {
-                OutlinedButton(onClick = controller::disconnect) {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Disconnect")
-                }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                CompactActionButton(
+                    label = "Отключить",
+                    icon = Icons.AutoMirrored.Outlined.ArrowBack,
+                    onClick = controller::disconnect,
+                    style = CompactButtonStyle.Outlined,
+                )
             }
         }
 
         SectionCard(
-            title = "Build info",
-            supporting = "Initial Android skeleton",
+            title = "О сборке",
         ) {
             CompactStatusRow(
                 items = listOf(
-                    statusChip("Compose shell"),
-                    statusChip("Demo state"),
-                    statusChip("Backend mock"),
+                    statusChip("Compose-оболочка"),
+                    statusChip("Демо-состояние"),
+                    statusChip("Тестовый бэкенд"),
                 ),
             )
         }
@@ -731,14 +784,14 @@ private fun PendingActionDialog(
 ) {
     val dialog = when (pendingAction) {
         is PendingAction.Service -> when (pendingAction.action) {
-            ServiceAction.Start -> DialogModel("Start service?", "This confirms a start request from the mobile shell.")
-            ServiceAction.Stop -> DialogModel("Stop service?", "This confirms a stop request from the mobile shell.")
-            ServiceAction.Restart -> DialogModel("Restart runtime?", "This confirms a restart request from the mobile shell.")
+            ServiceAction.Start -> DialogModel("Запустить сервис?", "Подтвердите запрос на запуск из мобильного клиента.")
+            ServiceAction.Stop -> DialogModel("Остановить сервис?", "Подтвердите запрос на остановку из мобильного клиента.")
+            ServiceAction.Restart -> DialogModel("Перезапустить среду?", "Подтвердите запрос на перезапуск из мобильного клиента.")
         }
 
         PendingAction.ApplyRouting -> DialogModel(
-            title = "Apply routing draft?",
-            body = "The draft was validated and saved. Apply now to publish the current routing revision.",
+            title = "Применить черновик маршрутов?",
+            body = "Черновик уже проверен и сохранен. Подтвердите публикацию текущей ревизии маршрутов.",
         )
 
         null -> null
@@ -750,12 +803,12 @@ private fun PendingActionDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text("Confirm")
+                Text("Подтвердить")
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text("Отмена")
             }
         },
         title = {
@@ -776,11 +829,11 @@ private fun ConnectionCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(18.dp),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -795,12 +848,10 @@ private fun ConnectionCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                FilledTonalButton(
+                CompactActionButton(
+                    label = "Открыть",
                     onClick = onOpen,
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-                ) {
-                    Text("Open")
-                }
+                )
             }
             CompactStatusRow(
                 items = listOf(
@@ -835,16 +886,16 @@ private fun ConnectionMiniRow(connection: Connection) {
 private fun EventRow(event: RecentEvent) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Surface(
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.secondaryContainer,
         ) {
             Text(
                 text = event.time,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
@@ -868,12 +919,14 @@ private fun MetricCard(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         tonalElevation = 1.dp,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
@@ -889,25 +942,19 @@ private fun MetricCard(
 @Composable
 private fun LogRow(entry: LogEntry) {
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                StatusChip(
-                    when (entry.level) {
-                        LogLevel.Info -> StatusChipModel("INFO", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
-                        LogLevel.Warning -> StatusChipModel("WARN", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
-                        LogLevel.Error -> StatusChipModel("ERROR", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
-                    },
-                )
-                Text(entry.source, style = MaterialTheme.typography.labelMedium)
+                StatusChip(logLevelChip(entry.level))
+                Text(logSourceLabel(entry.source), style = MaterialTheme.typography.labelMedium)
                 Text(
                     entry.time,
                     style = MaterialTheme.typography.labelMedium,
@@ -934,24 +981,18 @@ private fun DiagnosticRow(item: DiagnosticItem) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        StatusChip(
-            when (item.severity) {
-                DiagnosticSeverity.Ok -> StatusChipModel("OK", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
-                DiagnosticSeverity.Warning -> StatusChipModel("WARN", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
-                DiagnosticSeverity.Error -> StatusChipModel("ERROR", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
-            },
-        )
+        StatusChip(diagnosticSeverityChip(item.severity))
     }
 }
 
 @Composable
 private fun WarningBanner(message: String) {
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.errorContainer,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -979,22 +1020,22 @@ private fun SectionCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface,
         ),
-        shape = RoundedCornerShape(26.dp),
+        shape = RoundedCornerShape(20.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
+            modifier = Modifier.padding(14.dp),
         ) {
             Text(text = title, style = MaterialTheme.typography.titleLarge)
             if (!supporting.isNullOrBlank()) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(3.dp))
                 Text(
                     text = supporting,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(10.dp))
             content()
         }
     }
@@ -1030,33 +1071,140 @@ private fun CompactField(
     onValueChange: (String) -> Unit,
     label: String,
     modifier: Modifier = Modifier,
+    labelMode: CompactFieldLabelMode = CompactFieldLabelMode.Floating,
     leadingIcon: @Composable (() -> Unit)? = null,
     keyboardType: KeyboardType = KeyboardType.Text,
     visualTransformation: androidx.compose.ui.text.input.VisualTransformation = androidx.compose.ui.text.input.VisualTransformation.None,
 ) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier,
-        label = { Text(label) },
-        leadingIcon = leadingIcon,
-        shape = RoundedCornerShape(18.dp),
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-        visualTransformation = visualTransformation,
-        singleLine = true,
-    )
+    val field: @Composable (Modifier, @Composable (() -> Unit)?) -> Unit = { fieldModifier, labelContent ->
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = fieldModifier.height(52.dp),
+            label = labelContent,
+            leadingIcon = leadingIcon,
+            shape = RoundedCornerShape(14.dp),
+            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+            visualTransformation = visualTransformation,
+            textStyle = MaterialTheme.typography.bodyMedium,
+            singleLine = true,
+        )
+    }
+
+    when (labelMode) {
+        CompactFieldLabelMode.Floating -> field(
+            modifier,
+            {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            },
+        )
+
+        CompactFieldLabelMode.Above -> Column(
+            modifier = modifier,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            field(Modifier.fillMaxWidth(), null)
+        }
+    }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+private enum class ActionTone {
+    Neutral,
+    Accent,
+}
+
+private enum class CompactFieldLabelMode {
+    Floating,
+    Above,
+}
+
+private enum class CompactButtonStyle {
+    Tonal,
+    Outlined,
+}
+
+private data class GridAction(
+    val label: String,
+    val icon: ImageVector,
+    val onClick: () -> Unit,
+    val tone: ActionTone = ActionTone.Neutral,
+)
+
 @Composable
-private fun CompactActionRow(
-    content: @Composable () -> Unit,
+private fun ActionGrid(
+    actions: List<GridAction>,
+    columns: Int,
+    modifier: Modifier = Modifier,
 ) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        content()
+        actions.chunked(columns).forEach { rowActions ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                rowActions.forEach { action ->
+                    ActionGridButton(
+                        action = action,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                repeat(columns - rowActions.size) {
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactActionButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    style: CompactButtonStyle = CompactButtonStyle.Tonal,
+) {
+    val shape = RoundedCornerShape(14.dp)
+    val content: @Composable RowScope.() -> Unit = {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+
+    when (style) {
+        CompactButtonStyle.Tonal -> FilledTonalButton(
+            onClick = onClick,
+            modifier = modifier.height(44.dp),
+            shape = shape,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+            content = content,
+        )
+
+        CompactButtonStyle.Outlined -> OutlinedButton(
+            onClick = onClick,
+            modifier = modifier.height(44.dp),
+            shape = shape,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+            content = content,
+        )
     }
 }
 
@@ -1076,22 +1224,44 @@ private fun CompactStatusRow(
 }
 
 @Composable
-private fun SmallActionButton(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit,
+private fun RowScope.ActionGridButton(
+    action: GridAction,
+    modifier: Modifier = Modifier,
 ) {
-    FilledTonalButton(
-        onClick = onClick,
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-        colors = ButtonDefaults.filledTonalButtonColors(
+    val colors = when (action.tone) {
+        ActionTone.Neutral -> ButtonDefaults.filledTonalButtonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        )
+
+        ActionTone.Accent -> ButtonDefaults.filledTonalButtonColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer,
             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        ),
+        )
+    }
+
+    FilledTonalButton(
+        onClick = action.onClick,
+        modifier = modifier.height(52.dp),
+        shape = RoundedCornerShape(14.dp),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+        colors = colors,
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(label)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(action.icon, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = action.label,
+                style = MaterialTheme.typography.labelMedium,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -1103,7 +1273,7 @@ private fun StatusChip(model: StatusChipModel) {
     ) {
         Text(
             text = model.label,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelMedium,
             color = model.contentColor,
         )
@@ -1132,25 +1302,25 @@ private fun statusChip(label: String): StatusChipModel = StatusChipModel(
 private fun connectionStatusChip(status: ConnectionStatus): StatusChipModel =
     when (status) {
         ConnectionStatus.Configured -> StatusChipModel(
-            "configured",
+            "готово",
             MaterialTheme.colorScheme.secondaryContainer,
             MaterialTheme.colorScheme.onSecondaryContainer,
         )
 
         ConnectionStatus.NeedsAuth -> StatusChipModel(
-            "needs auth",
+            "нужен вход",
             MaterialTheme.colorScheme.tertiaryContainer,
             MaterialTheme.colorScheme.onTertiaryContainer,
         )
 
         ConnectionStatus.SetupRequired -> StatusChipModel(
-            "setup required",
+            "нужна настройка",
             MaterialTheme.colorScheme.primaryContainer,
             MaterialTheme.colorScheme.onPrimaryContainer,
         )
 
         ConnectionStatus.Offline -> StatusChipModel(
-            "offline",
+            "офлайн",
             MaterialTheme.colorScheme.errorContainer,
             MaterialTheme.colorScheme.onErrorContainer,
         )
@@ -1160,19 +1330,19 @@ private fun connectionStatusChip(status: ConnectionStatus): StatusChipModel =
 private fun serviceStateChip(state: ServiceState): StatusChipModel =
     when (state) {
         ServiceState.Running -> StatusChipModel(
-            "running",
+            "работает",
             MaterialTheme.colorScheme.secondaryContainer,
             MaterialTheme.colorScheme.onSecondaryContainer,
         )
 
         ServiceState.Stopped -> StatusChipModel(
-            "stopped",
+            "остановлен",
             MaterialTheme.colorScheme.errorContainer,
             MaterialTheme.colorScheme.onErrorContainer,
         )
 
         ServiceState.Restarting -> StatusChipModel(
-            "restarting",
+            "перезапуск",
             MaterialTheme.colorScheme.tertiaryContainer,
             MaterialTheme.colorScheme.onTertiaryContainer,
         )
@@ -1181,21 +1351,21 @@ private fun serviceStateChip(state: ServiceState): StatusChipModel =
 @Composable
 private fun validationChip(state: RoutingValidationState): StatusChipModel =
     when (state) {
-        RoutingValidationState.Idle -> statusChip("idle")
+        RoutingValidationState.Idle -> statusChip("ожидание")
         RoutingValidationState.Dirty -> StatusChipModel(
-            "dirty",
+            "изменен",
             MaterialTheme.colorScheme.tertiaryContainer,
             MaterialTheme.colorScheme.onTertiaryContainer,
         )
 
         RoutingValidationState.Valid -> StatusChipModel(
-            "valid",
+            "проверено",
             MaterialTheme.colorScheme.secondaryContainer,
             MaterialTheme.colorScheme.onSecondaryContainer,
         )
 
         RoutingValidationState.Invalid -> StatusChipModel(
-            "invalid",
+            "ошибка",
             MaterialTheme.colorScheme.errorContainer,
             MaterialTheme.colorScheme.onErrorContainer,
         )
@@ -1203,9 +1373,78 @@ private fun validationChip(state: RoutingValidationState): StatusChipModel =
 
 private fun serviceStateLabel(state: ServiceState): String =
     when (state) {
-        ServiceState.Running -> "Running"
-        ServiceState.Stopped -> "Stopped"
-        ServiceState.Restarting -> "Restarting"
+        ServiceState.Running -> "Работает"
+        ServiceState.Stopped -> "Остановлен"
+        ServiceState.Restarting -> "Перезапуск"
+    }
+
+private fun capabilityLabel(capability: String): String =
+    when (capability) {
+        "routingEditor" -> "редактор"
+        "logs" -> "логи"
+        "restart" -> "рестарт"
+        "diagnostics" -> "диагностика"
+        else -> capability
+    }
+
+private fun logFilterLabel(filter: LogFilter): String =
+    when (filter) {
+        LogFilter.All -> "Все"
+        LogFilter.Service -> "Сервис"
+        LogFilter.Routing -> "Маршруты"
+        LogFilter.Errors -> "Ошибки"
+    }
+
+private fun logSourceLabel(source: String): String =
+    when (source) {
+        "service" -> "Сервис"
+        "routing" -> "Маршруты"
+        "auth" -> "Авторизация"
+        else -> source
+    }
+
+@Composable
+private fun logLevelChip(level: LogLevel): StatusChipModel =
+    when (level) {
+        LogLevel.Info -> StatusChipModel(
+            "ИНФО",
+            MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.onSecondaryContainer,
+        )
+
+        LogLevel.Warning -> StatusChipModel(
+            "ВНИМАНИЕ",
+            MaterialTheme.colorScheme.tertiaryContainer,
+            MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+
+        LogLevel.Error -> StatusChipModel(
+            "ОШИБКА",
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer,
+        )
+    }
+
+@Composable
+private fun diagnosticSeverityChip(severity: DiagnosticSeverity): StatusChipModel =
+    when (severity) {
+        DiagnosticSeverity.Ok -> StatusChipModel(
+            "НОРМА",
+            MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.onSecondaryContainer,
+        )
+
+        DiagnosticSeverity.Warning -> StatusChipModel(
+            "ВНИМАНИЕ",
+            MaterialTheme.colorScheme.tertiaryContainer,
+            MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+
+        DiagnosticSeverity.Error -> StatusChipModel(
+            "ОШИБКА",
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer,
+        )
     }
 
 @Composable
