@@ -15,6 +15,18 @@ enum class MainTab {
     Generator,
 }
 
+internal fun MainTab.isAvailableFor(availableCores: List<String>): Boolean =
+    when (this) {
+        MainTab.Routing -> availableCores.hasCore("xray")
+        MainTab.Home,
+        MainTab.Generator,
+        -> availableCores.hasCore("mihomo")
+
+        MainTab.Logs,
+        MainTab.More,
+        -> true
+    }
+
 enum class WorkspaceSection(
     val tab: MainTab,
     val title: String,
@@ -22,7 +34,6 @@ enum class WorkspaceSection(
     XrayRouting(MainTab.Routing, "Роутинг Xray"),
     XraySubscriptions(MainTab.Routing, "Подписки Xray"),
     XrayInbounds(MainTab.Routing, "Режим Inbounds"),
-    XrayScenario(MainTab.Routing, "Сценарий маршрутизации"),
     XrayOutbounds(MainTab.Routing, "Прокси / Outbounds"),
     XrayAssets(MainTab.Routing, "DAT-файлы GeoIP / GeoSite"),
     XrayLogs(MainTab.Routing, "Логи Xray"),
@@ -42,6 +53,39 @@ enum class WorkspaceSection(
     GeneratorProfiles(MainTab.Generator, "Профили генератора"),
     GeneratorTemplates(MainTab.Generator, "Шаблоны"),
 }
+
+internal fun WorkspaceSection.isAvailableFor(availableCores: List<String>): Boolean =
+    when (this) {
+        WorkspaceSection.XrayRouting,
+        WorkspaceSection.XraySubscriptions,
+        WorkspaceSection.XrayInbounds,
+        WorkspaceSection.XrayOutbounds,
+        WorkspaceSection.XrayAssets,
+        WorkspaceSection.XrayLogs,
+        WorkspaceSection.PortsXray,
+        -> availableCores.hasCore("xray")
+
+        WorkspaceSection.MihomoRouting,
+        WorkspaceSection.MihomoProfiles,
+        WorkspaceSection.MihomoProviders,
+        WorkspaceSection.MihomoGroups,
+        WorkspaceSection.MihomoRules,
+        WorkspaceSection.PortsMihomo,
+        WorkspaceSection.MihomoGenerator,
+        WorkspaceSection.GeneratorProfiles,
+        WorkspaceSection.GeneratorTemplates,
+        -> availableCores.hasCore("mihomo")
+
+        WorkspaceSection.PortsOverview,
+        WorkspaceSection.RoutingExclusions,
+        WorkspaceSection.ShellCommands,
+        WorkspaceSection.ShellTerminal,
+        WorkspaceSection.ShellHistory,
+        -> true
+    }
+
+internal fun List<String>.hasCore(core: String): Boolean =
+    any { it.equals(core, ignoreCase = true) }
 
 fun MainTab.defaultWorkspaceSection(): WorkspaceSection =
     when (this) {

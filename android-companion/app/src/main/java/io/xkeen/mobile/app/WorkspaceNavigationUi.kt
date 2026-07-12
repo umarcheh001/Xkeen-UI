@@ -36,7 +36,6 @@ import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material.icons.outlined.Memory
-import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.SettingsInputComponent
 import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.outlined.SwapHoriz
@@ -146,7 +145,11 @@ private fun WorkspaceDrawer(
     onCore: () -> Unit,
     onConnections: () -> Unit,
 ) {
-    val entries = remember(state.mainTab) { drawerEntries(state.mainTab) }
+    val entries = remember(state.mainTab, state.dashboard.availableCores) {
+        drawerEntries(state.mainTab).filter { entry ->
+            entry.section.isAvailableFor(state.dashboard.availableCores)
+        }
+    }
     val contextTitle = drawerContextTitle(state.mainTab)
 
     ModalDrawerSheet(
@@ -481,7 +484,6 @@ private fun drawerEntries(tab: MainTab): List<WorkspaceDrawerEntry> =
             WorkspaceDrawerEntry(WorkspaceSection.XrayRouting, Icons.Outlined.AccountTree),
             WorkspaceDrawerEntry(WorkspaceSection.XraySubscriptions, Icons.Outlined.Subscriptions),
             WorkspaceDrawerEntry(WorkspaceSection.XrayInbounds, Icons.Outlined.SettingsInputComponent),
-            WorkspaceDrawerEntry(WorkspaceSection.XrayScenario, Icons.Outlined.Route),
             WorkspaceDrawerEntry(WorkspaceSection.XrayOutbounds, Icons.Outlined.Hub),
             WorkspaceDrawerEntry(WorkspaceSection.XrayAssets, Icons.Outlined.CloudDownload),
             WorkspaceDrawerEntry(WorkspaceSection.XrayLogs, Icons.AutoMirrored.Outlined.ReceiptLong),
@@ -520,7 +522,6 @@ private fun workspaceSectionDescription(section: WorkspaceSection): String =
     when (section) {
         WorkspaceSection.XraySubscriptions -> "Управление подписками, обновлением узлов и профилями Xray."
         WorkspaceSection.XrayInbounds -> "Переключение Redirect, TProxy и Mixed с применением конфигурации."
-        WorkspaceSection.XrayScenario -> "Выбор обычного или мобильного white-list сценария маршрутизации."
         WorkspaceSection.XrayOutbounds -> "Прокси-ссылки, пулы, балансировщики и исходящие подключения Xray."
         WorkspaceSection.XrayAssets -> "Обновление и проверка GeoIP, GeoSite и других DAT-файлов."
         WorkspaceSection.XrayLogs -> "Онлайн-логи access и error для активного ядра Xray."

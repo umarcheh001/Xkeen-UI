@@ -360,6 +360,9 @@ private fun ReadyRoute(
     state: CompanionUiState,
     controller: DemoCompanionController,
 ) {
+    LaunchedEffect(state.dashboard.endpoint) {
+        controller.refreshCoreStatus()
+    }
     WorkspaceNavigationFrame(state, controller) { openDrawer, openCoreDialog ->
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -374,6 +377,7 @@ private fun ReadyRoute(
             bottomBar = {
                 ReadyBottomBar(
                     selected = state.mainTab,
+                    availableCores = state.dashboard.availableCores,
                     onSelected = controller::selectTab,
                 )
             },
@@ -577,6 +581,7 @@ private fun ServiceHeaderButton(
 @Composable
 private fun ReadyBottomBar(
     selected: MainTab,
+    availableCores: List<String>,
     onSelected: (MainTab) -> Unit,
 ) {
     Surface(color = Color.Transparent, shadowElevation = 12.dp) {
@@ -624,11 +629,17 @@ private fun ReadyBottomBar(
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                WorkspaceTab(MainTab.Routing, selected, onSelected, "Xray")
-                WorkspaceTab(MainTab.Home, selected, onSelected, "Mihomo")
+                if (availableCores.hasCore("xray")) {
+                    WorkspaceTab(MainTab.Routing, selected, onSelected, "Xray")
+                }
+                if (availableCores.hasCore("mihomo")) {
+                    WorkspaceTab(MainTab.Home, selected, onSelected, "Mihomo")
+                }
                 WorkspaceTab(MainTab.Logs, selected, onSelected, "Ports")
                 WorkspaceTab(MainTab.More, selected, onSelected, "Shell")
-                WorkspaceTab(MainTab.Generator, selected, onSelected, "Generator")
+                if (availableCores.hasCore("mihomo")) {
+                    WorkspaceTab(MainTab.Generator, selected, onSelected, "Generator")
+                }
             }
         }
     }

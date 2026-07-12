@@ -26,6 +26,7 @@ private enum class SessionFlow(
 class DemoCompanionController internal constructor(
     initialState: CompanionUiState = CompanionUiState(),
     private val xrayConfigSource: XrayConfigSource = WebPanelXrayConfigSource(),
+    private val coreStatusSource: CoreStatusSource = WebPanelCoreStatusSource(),
 ) {
     var state by mutableStateOf(initialState)
         private set
@@ -132,6 +133,9 @@ class DemoCompanionController internal constructor(
     }
 
     fun selectTab(tab: MainTab) {
+        if (!tab.isAvailableFor(state.dashboard.availableCores)) {
+            return
+        }
         state = state.copy(
             mainTab = tab,
             workspaceSection = tab.defaultWorkspaceSection(),
@@ -139,6 +143,9 @@ class DemoCompanionController internal constructor(
     }
 
     fun selectWorkspaceSection(section: WorkspaceSection) {
+        if (!section.isAvailableFor(state.dashboard.availableCores)) {
+            return
+        }
         state = state.copy(
             mainTab = section.tab,
             workspaceSection = section,
@@ -177,6 +184,13 @@ class DemoCompanionController internal constructor(
                 ),
             ),
         )
+    }
+
+    suspend fun refreshCoreStatus() {
+        val result = runCatching {
+            coreStatusSource.load(state.dashboard.endpoint)
+        }
+        result.onSuccess(::applyCoreStatus)
     }
 
     fun requestServiceAction(action: ServiceAction) {
@@ -246,6 +260,9 @@ class DemoCompanionController internal constructor(
     }
 
     suspend fun refreshRoutingDocuments(force: Boolean = false) {
+        if (!state.dashboard.availableCores.hasCore("xray")) {
+            return
+        }
         val routing = state.routing
         if (routing.isRefreshing || (!force && routing.hasAttemptedRemoteLoad)) {
             return
@@ -616,12 +633,43 @@ class DemoCompanionController internal constructor(
     private fun selectedRoutingDocument(): RoutingDocument? =
         state.routing.documents.firstOrNull { it.id == state.routing.selectedDocumentId }
 
+    private fun applyCoreStatus(coreStatus: CoreStatus) {
+        val availableCores = coreStatus.availableCores
+        val activeCore = coreStatus.currentCore
+            ?.takeIf { availableCores.hasCore(it) }
+            ?: state.dashboard.activeCore.takeIf { availableCores.hasCore(it) }
+            ?: availableCores.first()
+        val currentSection = state.workspaceSection
+        val section = if (currentSection.isAvailableFor(availableCores)) {
+            currentSection
+        } else {
+            preferredCoreTab(activeCore, availableCores).defaultWorkspaceSection()
+        }
+
+        state = state.copy(
+            mainTab = section.tab,
+            workspaceSection = section,
+            dashboard = state.dashboard.copy(
+                activeCore = activeCore,
+                availableCores = availableCores,
+            ),
+        )
+    }
+
     private fun nowShort(): String =
         LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
 
     private fun nowLong(): String =
         LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
 }
+
+private fun preferredCoreTab(activeCore: String, availableCores: List<String>): MainTab =
+    when {
+        activeCore.equals("Mihomo", ignoreCase = true) && availableCores.hasCore("mihomo") -> MainTab.Home
+        availableCores.hasCore("xray") -> MainTab.Routing
+        availableCores.hasCore("mihomo") -> MainTab.Home
+        else -> MainTab.More
+    }
 
 fun validateRoutingDraft(draft: String): RoutingValidation {
     val details = mutableListOf<String>()
