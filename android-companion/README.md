@@ -4,13 +4,16 @@
 
 ## Что уже есть
 
-- Jetpack Compose shell с состояниями `launch`, `Connections`, `Pair/Login`, `Home`, `Routing`, `Logs`, `More`.
+- Jetpack Compose shell с состояниями `launch`, `Connections`, `Pair/Login` и основным editor-first workspace.
 - Demo coordinator в памяти без реального backend, чтобы можно было открыть приложение и пройти весь основной поток на устройстве.
 - Экран подключений с ручным добавлением инстанса, проверкой доступности и переходом в pair/login flow.
-- Dashboard со статусной сводкой, capability badges и безопасными действиями `start`, `stop`, `restart` через confirm state.
-- Первый `Routing Xray` flow в виде skeleton-сценария `read`, `validate`, `preview`, `save`, `apply`, `revert`.
+- Компактная верхняя панель с текущим конфигом и безопасными действиями `start`, `stop`, `restart` через confirm state.
+- Полноэкранный редактор `Routing Xray` с номерами строк, подсветкой JSON, быстрыми действиями `validate`, `save`, `apply`, `revert` и строкой состояния.
 - Logs screen с live/recent переключением и компактными фильтрами.
-- Компактный mobile-first UI: плотные карточки, короткие статусы, icon/actions вместо web-like wide layout.
+- Нижнее переключение рабочих зон `Xray`, `Mihomo`, `Ports`, `Shell`, `Generator`; Xray и demo-shell уже интерактивны, остальные зоны обозначают следующий контракт.
+- Контекстный drawer для каждой рабочей зоны: у Xray доступны роутинг, подписки, Inbounds, сценарии, Outbounds, DAT-файлы и логи; у Mihomo — роутинг, профили, провайдеры, группы, правила и генератор.
+- Диалог `Core` в стиле основной панели с выбором Xray/Mihomo, защитой от повторного применения текущего ядра и демонстрацией перезапуска после переключения.
+- При наличии доверенного demo-подключения launch восстанавливает его сразу и открывает редактор; список узлов доступен через пункт `Подключения` в drawer.
 - Базовая структура под дальнейшее подключение mobile API contract и замены demo state на реальные data layers.
 
 ## Как открыть
@@ -32,6 +35,7 @@ cd android-companion
 
 - Нет реального backend transport, auth/session и secure storage.
 - Данные подключения, dashboard state, logs и routing draft пока полностью demo-only.
+- Переключение `Core` пока меняет demo-state; вызовы `GET/POST /api/xkeen/core` будут подключены вместе с реальным transport/auth layer.
 - Нет offline persistence и reconnect behavior поверх настоящего network layer.
 
 ## Ближайшие следующие шаги

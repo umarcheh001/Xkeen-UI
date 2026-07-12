@@ -31,7 +31,23 @@ class DemoCompanionController(
 
     fun finishLaunch() {
         if (state.phase == AppPhase.Launching) {
-            state = state.copy(phase = AppPhase.Connections)
+            val trustedConnection = state.connections.firstOrNull {
+                it.status == ConnectionStatus.Configured
+            }
+            state = if (trustedConnection == null) {
+                state.copy(phase = AppPhase.Connections)
+            } else {
+                state.copy(
+                    phase = AppPhase.Ready,
+                    selectedConnectionId = trustedConnection.id,
+                    mainTab = MainTab.Routing,
+                    workspaceSection = WorkspaceSection.XrayRouting,
+                    dashboard = state.dashboard.copy(
+                        instanceLabel = trustedConnection.name,
+                        endpoint = trustedConnection.baseUrl,
+                    ),
+                )
+            }
         }
     }
 
@@ -90,6 +106,14 @@ class DemoCompanionController(
         )
     }
 
+    fun openConnections() {
+        state = state.copy(
+            phase = AppPhase.Connections,
+            selectedConnectionId = null,
+            pendingAction = null,
+        )
+    }
+
     fun updateUsername(value: String) {
         state = state.copy(loginForm = state.loginForm.copy(username = value))
     }
@@ -107,7 +131,51 @@ class DemoCompanionController(
     }
 
     fun selectTab(tab: MainTab) {
-        state = state.copy(mainTab = tab)
+        state = state.copy(
+            mainTab = tab,
+            workspaceSection = tab.defaultWorkspaceSection(),
+        )
+    }
+
+    fun selectWorkspaceSection(section: WorkspaceSection) {
+        state = state.copy(
+            mainTab = section.tab,
+            workspaceSection = section,
+        )
+    }
+
+    fun switchCore(core: String) {
+        val selectedCore = state.dashboard.availableCores.firstOrNull {
+            it.equals(core, ignoreCase = true)
+        } ?: return
+        if (selectedCore.equals(state.dashboard.activeCore, ignoreCase = true)) {
+            return
+        }
+
+        val switchedAt = nowShort()
+        state = state.copy(
+            dashboard = state.dashboard.copy(
+                activeCore = selectedCore,
+                serviceState = ServiceState.Running,
+                statusSummary = "Готов к безопасному управлению",
+                lastOperation = "Ядро изменено на $selectedCore",
+                recentEvents = listOf(
+                    RecentEvent(
+                        time = switchedAt,
+                        title = "Ядро изменено",
+                        subtitle = "$selectedCore активно после перезапуска xkeen",
+                    ),
+                ) + state.dashboard.recentEvents.take(2),
+            ),
+            logs = state.logs.prepend(
+                LogEntry(
+                    time = nowLong(),
+                    source = "service",
+                    level = LogLevel.Info,
+                    message = "Ядро изменено на $selectedCore; xkeen перезапущен",
+                ),
+            ),
+        )
     }
 
     fun requestServiceAction(action: ServiceAction) {
@@ -282,7 +350,8 @@ class DemoCompanionController(
             phase = AppPhase.Connections,
             selectedConnectionId = null,
             connections = updatedConnections,
-            mainTab = MainTab.Home,
+            mainTab = MainTab.Routing,
+            workspaceSection = WorkspaceSection.XrayRouting,
             dashboard = state.dashboard.copy(statusSummary = "Требуется вход"),
             logs = state.logs.prepend(
                 LogEntry(nowLong(), "auth", LogLevel.Warning, "Пользователь закрыл мобильную сессию"),
@@ -413,16 +482,16 @@ fun validateRoutingDraft(draft: String): RoutingValidation {
     val details = mutableListOf<String>()
 
     if (!draft.contains("\"routing\"")) {
-        details += "Отсутствует корневой объект routing."
+        details += "No routing object found."
     }
     if (!draft.contains("\"rules\"")) {
-        details += "Не найден блок rules."
+        details += "No rules block found."
     }
     if (draft.count { it == '{' } != draft.count { it == '}' }) {
-        details += "Количество фигурных скобок не совпадает."
+        details += "Brace count does not match."
     }
     if (draft.contains("TODO_INVALID")) {
-        details += "В черновике все еще есть маркер TODO_INVALID."
+        details += "Draft still contains TODO_INVALID marker."
     }
 
     return if (details.isEmpty()) {
@@ -430,9 +499,9 @@ fun validateRoutingDraft(draft: String): RoutingValidation {
             state = RoutingValidationState.Valid,
             message = "Проверка пройдена. Можно открывать превью и сохранять.",
             details = listOf(
-                "объект routing найден",
-                "блок rules обнаружен",
-                "базовая структура JSON выглядит корректно",
+                "routing object found",
+                "rules block found",
+                "basic JSON structure looks valid",
             ),
         )
     } else {

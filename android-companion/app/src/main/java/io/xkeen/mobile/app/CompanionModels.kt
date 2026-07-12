@@ -8,11 +8,49 @@ enum class AppPhase {
 }
 
 enum class MainTab {
-    Home,
     Routing,
+    Home,
     Logs,
     More,
+    Generator,
 }
+
+enum class WorkspaceSection(
+    val tab: MainTab,
+    val title: String,
+) {
+    XrayRouting(MainTab.Routing, "Роутинг Xray"),
+    XraySubscriptions(MainTab.Routing, "Подписки Xray"),
+    XrayInbounds(MainTab.Routing, "Режим Inbounds"),
+    XrayScenario(MainTab.Routing, "Сценарий маршрутизации"),
+    XrayOutbounds(MainTab.Routing, "Прокси / Outbounds"),
+    XrayAssets(MainTab.Routing, "DAT-файлы GeoIP / GeoSite"),
+    XrayLogs(MainTab.Routing, "Логи Xray"),
+    MihomoRouting(MainTab.Home, "Роутинг Mihomo"),
+    MihomoProfiles(MainTab.Home, "Профили и подписки"),
+    MihomoProviders(MainTab.Home, "Прокси-провайдеры"),
+    MihomoGroups(MainTab.Home, "Группы прокси"),
+    MihomoRules(MainTab.Home, "Правила Mihomo"),
+    PortsOverview(MainTab.Logs, "Порты и исключения"),
+    PortsXray(MainTab.Logs, "Порты Xray"),
+    PortsMihomo(MainTab.Logs, "Порты Mihomo"),
+    RoutingExclusions(MainTab.Logs, "Исключения маршрутизации"),
+    ShellCommands(MainTab.More, "Команды"),
+    ShellTerminal(MainTab.More, "Терминал"),
+    ShellHistory(MainTab.More, "История команд"),
+    MihomoGenerator(MainTab.Generator, "Генератор Mihomo"),
+    GeneratorProfiles(MainTab.Generator, "Профили генератора"),
+    GeneratorTemplates(MainTab.Generator, "Шаблоны"),
+}
+
+fun MainTab.defaultWorkspaceSection(): WorkspaceSection =
+    when (this) {
+        MainTab.Routing -> WorkspaceSection.XrayRouting
+        MainTab.Home -> WorkspaceSection.MihomoRouting
+        MainTab.Logs -> WorkspaceSection.PortsOverview
+        MainTab.More -> WorkspaceSection.ShellCommands
+        MainTab.Generator -> WorkspaceSection.MihomoGenerator
+    }
 
 enum class ConnectionStatus {
     Offline,
@@ -93,6 +131,7 @@ data class DashboardState(
     val lastError: String?,
     val capabilities: List<String>,
     val recentEvents: List<RecentEvent>,
+    val availableCores: List<String> = listOf("Xray", "Mihomo"),
 )
 
 data class RecentEvent(
@@ -172,7 +211,8 @@ data class CompanionUiState(
     val connectionDraft: ConnectionDraft = ConnectionDraft(),
     val selectedConnectionId: String? = null,
     val loginForm: LoginForm = LoginForm(),
-    val mainTab: MainTab = MainTab.Home,
+    val mainTab: MainTab = MainTab.Routing,
+    val workspaceSection: WorkspaceSection = WorkspaceSection.XrayRouting,
     val dashboard: DashboardState = demoDashboardState(),
     val routing: RoutingState = demoRoutingState(),
     val logs: LogsState = demoLogsState(),
@@ -224,22 +264,27 @@ fun demoDashboardState(): DashboardState = DashboardState(
 private fun mainRoutingContent(): String = """
     {
       "routing": {
-        "domainStrategy": "AsIs",
+        "domainStrategy": "IPIfNonMatch",
         "rules": [
+          // Блокировка QUIC
           {
             "type": "field",
-            "domain": ["geosite:private"],
-            "outboundTag": "direct"
+            "network": "udp",
+            "port": "443",
+            "outboundTag": "block"
           },
+          // Уязвимые UDP-порты
           {
             "type": "field",
-            "ip": ["geoip:private"],
-            "outboundTag": "direct"
+            "network": "udp",
+            "port": "135,137,138,139",
+            "outboundTag": "block"
           },
+          // Реклама и аналитика
           {
             "type": "field",
-            "port": "53",
-            "outboundTag": "dns-out"
+            "domain": ["geosite:category-ads-all"],
+            "outboundTag": "block"
           }
         ]
       }
@@ -268,8 +313,8 @@ fun demoRoutingState(): RoutingState {
         documents = listOf(
             RoutingDocument(
                 id = "main-routing",
-                title = "Основной маршрут",
-                path = "/etc/xkeen/xray/main-routing.json",
+                title = "05_routing.json",
+                path = "/opt/etc/xray/configs/05_routing.json",
                 summary = "Активный набор правил Xray для LAN и DNS",
                 revision = 14,
                 publishedContent = main,
@@ -280,8 +325,8 @@ fun demoRoutingState(): RoutingState {
             ),
             RoutingDocument(
                 id = "bypass-routing",
-                title = "Обход рекламы",
-                path = "/etc/xkeen/xray/ad-bypass.json",
+                title = "06_bypass.json",
+                path = "/opt/etc/xray/configs/06_bypass.json",
                 summary = "Дополнительные правила для блокировок и обхода",
                 revision = 6,
                 publishedContent = bypass,

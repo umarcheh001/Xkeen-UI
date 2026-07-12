@@ -1,6 +1,7 @@
 package io.xkeen.mobile.app
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +44,7 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Http
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Lan
+import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Password
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -84,12 +86,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.xkeen.mobile.ui.theme.XkeenMobileTheme
 import kotlinx.coroutines.delay
 
@@ -98,7 +102,7 @@ fun CompanionApp() {
     val controller = remember { DemoCompanionController() }
     val state = controller.state
 
-    XkeenMobileTheme {
+    XkeenMobileTheme(darkTheme = false) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background,
@@ -351,72 +355,147 @@ private fun ReadyRoute(
     state: CompanionUiState,
     controller: DemoCompanionController,
 ) {
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        topBar = {
-            ReadyTopBar(state)
-        },
-        bottomBar = {
-            ReadyBottomBar(
-                selected = state.mainTab,
-                onSelected = controller::selectTab,
+    WorkspaceNavigationFrame(state, controller) { openDrawer, openCoreDialog ->
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            topBar = {
+                WorkspaceHeader(
+                    state = state,
+                    onMenu = openDrawer,
+                    onCore = openCoreDialog,
+                    onServiceAction = controller::requestServiceAction,
+                )
+            },
+            bottomBar = {
+                ReadyBottomBar(
+                    selected = state.mainTab,
+                    onSelected = controller::selectTab,
+                )
+            },
+        ) { innerPadding ->
+            WorkspaceSectionContent(
+                state = state,
+                controller = controller,
+                modifier = Modifier.padding(innerPadding),
             )
-        },
-        contentWindowInsets = WindowInsets.statusBars,
-    ) { innerPadding ->
-        val contentModifier = Modifier
-            .padding(innerPadding)
-            .padding(horizontal = 14.dp)
-            .windowInsetsPadding(WindowInsets.navigationBars)
 
-        when (state.mainTab) {
-            MainTab.Home -> DashboardScreen(state, controller, contentModifier)
-            MainTab.Routing -> RoutingScreen(state, controller, contentModifier)
-            MainTab.Logs -> LogsScreen(state, controller, contentModifier)
-            MainTab.More -> MoreScreen(state, controller, contentModifier)
+            PendingActionDialog(
+                pendingAction = state.pendingAction,
+                onDismiss = controller::dismissPendingAction,
+                onConfirm = controller::confirmPendingAction,
+            )
         }
-
-        PendingActionDialog(
-            pendingAction = state.pendingAction,
-            onDismiss = controller::dismissPendingAction,
-            onConfirm = controller::confirmPendingAction,
-        )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ReadyTopBar(state: CompanionUiState) {
-    TopAppBar(
-        title = {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = state.dashboard.instanceLabel,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = "${state.dashboard.statusSummary}  •  ${state.dashboard.activeCore}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+private fun WorkspaceHeader(
+    state: CompanionUiState,
+    onMenu: () -> Unit,
+    onCore: () -> Unit,
+    onServiceAction: (ServiceAction) -> Unit,
+) {
+    val selectedDocument = state.routing.documents.firstOrNull {
+        it.id == state.routing.selectedDocumentId
+    }
+
+    val headerTitle = if (state.workspaceSection == WorkspaceSection.XrayRouting) {
+        selectedDocument?.title ?: state.workspaceSection.title
+    } else {
+        state.workspaceSection.title
+    }
+
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 3.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .height(68.dp)
+                .padding(end = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onMenu) {
+                Icon(Icons.Outlined.Menu, contentDescription = "Открыть меню раздела")
             }
-        },
-        actions = {
-            AssistChip(
-                onClick = {},
-                label = {
-                    Text(serviceStateLabel(state.dashboard.serviceState))
-                },
-                leadingIcon = {
-                    Icon(Icons.Outlined.Bolt, contentDescription = null, modifier = Modifier.size(18.dp))
-                },
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(1.dp),
+            ) {
+                Text(
+                    text = headerTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Row(
+                    modifier = Modifier.clickable(onClick = onCore),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = "Core",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color(0xFF123E49),
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "· ${state.dashboard.activeCore}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color(0xFF64767B),
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    repeat(5) { index ->
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .background(
+                                    color = if (index == 0) Color(0xFF244B86) else Color(0xFF8E9AB0),
+                                    shape = CircleShape,
+                                ),
+                        )
+                    }
+                }
+            }
+            ServiceHeaderButton(
+                label = "Start",
+                color = Color(0xFF4B8B34),
+                onClick = { onServiceAction(ServiceAction.Start) },
             )
-            Spacer(Modifier.width(8.dp))
-        },
-    )
+            ServiceHeaderButton(
+                label = "Stop",
+                color = Color(0xFFB74332),
+                onClick = { onServiceAction(ServiceAction.Stop) },
+            )
+            ServiceHeaderButton(
+                label = "Restart",
+                color = Color(0xFF50528D),
+                onClick = { onServiceAction(ServiceAction.Restart) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ServiceHeaderButton(
+    label: String,
+    color: Color,
+    onClick: () -> Unit,
+) {
+    TextButton(
+        onClick = onClick,
+        contentPadding = PaddingValues(horizontal = 5.dp, vertical = 0.dp),
+    ) {
+        Text(
+            text = label,
+            color = color,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 14.sp,
+        )
+    }
 }
 
 @Composable
@@ -424,11 +503,53 @@ private fun ReadyBottomBar(
     selected: MainTab,
     onSelected: (MainTab) -> Unit,
 ) {
-    NavigationBar {
-        BottomBarItem(MainTab.Home, selected, onSelected, Icons.Outlined.Home, "Сводка")
-        BottomBarItem(MainTab.Routing, selected, onSelected, Icons.Outlined.AccountTree, "Маршруты")
-        BottomBarItem(MainTab.Logs, selected, onSelected, Icons.AutoMirrored.Outlined.Subject, "Логи")
-        BottomBarItem(MainTab.More, selected, onSelected, Icons.Outlined.MoreHoriz, "Еще")
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 6.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .height(58.dp)
+                .padding(horizontal = 5.dp, vertical = 7.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            WorkspaceTab(MainTab.Routing, selected, onSelected, "Xray")
+            WorkspaceTab(MainTab.Home, selected, onSelected, "Mihomo")
+            WorkspaceTab(MainTab.Logs, selected, onSelected, "Ports")
+            WorkspaceTab(MainTab.More, selected, onSelected, "Shell")
+            WorkspaceTab(MainTab.Generator, selected, onSelected, "Generator")
+        }
+    }
+}
+
+@Composable
+private fun RowScope.WorkspaceTab(
+    tab: MainTab,
+    selected: MainTab,
+    onSelected: (MainTab) -> Unit,
+    label: String,
+) {
+    val isSelected = tab == selected
+    Box(
+        modifier = Modifier
+            .weight(if (tab == MainTab.Generator) 1.35f else 1f)
+            .fillMaxHeight()
+            .background(
+                color = if (isSelected) Color(0xFF123E49) else Color.Transparent,
+                shape = RoundedCornerShape(5.dp),
+            )
+            .clickable { onSelected(tab) },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            color = if (isSelected) Color.White else Color(0xFF17333B),
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 13.sp,
+            maxLines = 1,
+        )
     }
 }
 
