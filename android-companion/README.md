@@ -45,7 +45,8 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 ## Архитектурный seam
 
 - `DemoCompanionController` заменен на `CompanionController`, который зависит от `CompanionControllerDependencies`, а не от жестко пришитых demo-side effects.
-- Для следующего слоя выделены отдельные порты: `ConnectionsPort`, `SessionPort`, `ServiceActionsPort`, `RoutingWritePort`, `CompanionJournalPort`.
+- Для следующего слоя выделены отдельные порты: `ConnectionsPort`, `SessionPort`, `ServiceActionsPort`, `RoutingWritePort`, `LogsPort`; time/journal helper живет отдельно в `CompanionJournalPort`.
+- `CompanionController` больше не собирает `LogEntry` вручную: запись controller-событий идет через `LogsPort`, поэтому транспорт логов и policy хранения можно будет заменить без роста reducer-логики.
 - Текущий UI все еще работает на demo-адаптерах этих портов, поэтому визуальное поведение не изменилось, но точки подключения для real transport/auth/persistence/write уже подготовлены.
 - Логика controller/reducer теперь тестируется отдельно от transport и storage seam.
 
@@ -95,11 +96,11 @@ cd android-companion
 - Данные подключений и секретов не сохраняются в secure storage.
 - `start`, `stop`, `restart` и переключение `Core` уже вынесены в `ServiceActionsPort`, но пока меняют только локальный state и не вызывают POST-endpoint'ы.
 - `Routing Xray` читает документы с сервера, но `validate` еще локальный, а `save/apply` пока работают через demo `RoutingWritePort`, а не через backend.
-- Нет настоящего logs streaming, PTY transport, reconnect behavior и offline persistence.
+- Controller-события уже проходят через `LogsPort`, но настоящего logs streaming, PTY transport, reconnect behavior и offline persistence пока нет.
 - Большая часть разделов `Mihomo`, `Ports` и `Generator` пока остаётся placeholder-поверхностями.
 
 ## Следующий практический шаг
 
 - Подключить persisted connections и secure storage поверх уже выделенных `ConnectionsPort` и `SessionPort`.
 - Довести `Pair/Login` до реального auth/session transport и trusted session restore.
-- Заменить demo-адаптеры `ServiceActionsPort`, `RoutingWritePort` и журналов на backend-backed реализации.
+- Заменить demo-адаптеры `ServiceActionsPort`, `RoutingWritePort` и `LogsPort` на backend-backed реализации.

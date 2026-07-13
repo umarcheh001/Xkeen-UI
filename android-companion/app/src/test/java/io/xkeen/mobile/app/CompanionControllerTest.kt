@@ -49,6 +49,29 @@ class CompanionControllerTest {
     }
 
     @Test
+    fun switchingCoreUsesLogsPortSeam() {
+        val logsPort = FakeLogsPort(
+            resultingState = LogsState(
+                entries = listOf(
+                    LogEntry("22:04:01", "custom", LogLevel.Warning, "Logged by seam"),
+                ),
+            ),
+        )
+        val controller = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Ready),
+            dependencies = testDependencies(logs = logsPort),
+        )
+
+        controller.switchCore("mihomo")
+
+        assertEquals(
+            LogRecordRequest("service", LogLevel.Info, "Ядро изменено на Mihomo; xkeen перезапущен"),
+            logsPort.requests.single(),
+        )
+        assertEquals("Logged by seam", controller.state.logs.entries.first().message)
+    }
+
+    @Test
     fun currentOrUnavailableCoreDoesNotChangeState() {
         val controller = CompanionController(
             initialState = CompanionUiState(phase = AppPhase.Ready),
@@ -201,6 +224,7 @@ private fun testDependencies(
     session: SessionPort = DemoSessionPort(),
     serviceActions: ServiceActionsPort = DemoServiceActionsPort(),
     routingWrites: RoutingWritePort? = null,
+    logs: LogsPort? = null,
     journal: CompanionJournalPort = FakeJournalPort(),
 ): CompanionControllerDependencies {
     val effectiveJournal = journal
@@ -209,6 +233,7 @@ private fun testDependencies(
         session = session,
         serviceActions = serviceActions,
         routingWrites = routingWrites ?: DemoRoutingWritePort(effectiveJournal),
+        logs = logs ?: DemoLogsPort(effectiveJournal),
         journal = effectiveJournal,
         xrayConfigSource = xrayConfigSource,
         coreStatusSource = coreStatusSource,
@@ -281,6 +306,28 @@ private class FakeRoutingWritePort(
             eventSubtitle = document.title,
             logMessage = "Applied ${document.title}",
         )
+    }
+}
+
+private data class LogRecordRequest(
+    val source: String,
+    val level: LogLevel,
+    val message: String,
+)
+
+private class FakeLogsPort(
+    private val resultingState: LogsState,
+) : LogsPort {
+    val requests = mutableListOf<LogRecordRequest>()
+
+    override fun record(
+        current: LogsState,
+        source: String,
+        level: LogLevel,
+        message: String,
+    ): LogsState {
+        requests += LogRecordRequest(source, level, message)
+        return resultingState
     }
 }
 

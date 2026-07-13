@@ -34,7 +34,8 @@ cd android-companion
 Что сделали:
 
 - `DemoCompanionController` заменен на `CompanionController`, который получает зависимости через `CompanionControllerDependencies`.
-- Side effects вынесены в отдельные интерфейсы для `connections`, `session`, `service actions`, `routing writes`, `logs`.
+- Side effects вынесены в отдельные порты `ConnectionsPort`, `SessionPort`, `ServiceActionsPort`, `RoutingWritePort`, `LogsPort`; time/journal helper оставлен отдельно в `CompanionJournalPort`.
+- `CompanionController` больше не создает `LogEntry` напрямую: controller-события тоже проходят через `LogsPort`, а значит log transport и policy хранения можно будет заменить без роста reducer-логики.
 - Текущее поведение сохранено через demo/fake реализации, поэтому UI-поток не менялся.
 - `XrayConfigSource` и `CoreStatusSource` переведены на общий `CompanionHttpTransport`, а не держат network-логику разрозненно.
 - Добавлены unit tests для seam-based controller wiring и общего transport path.
@@ -43,7 +44,7 @@ cd android-companion
 
 - текущее UI-поведение визуально не меняется;
 - controller/reducer-логика тестируется отдельно от сети и storage;
-- реальные реализации теперь можно подключать без роста `CompanionController`.
+- реальные реализации теперь можно подключать без роста `CompanionController`, включая будущий logs transport.
 
 ## Этап 2. Сохранение подключений между запусками
 

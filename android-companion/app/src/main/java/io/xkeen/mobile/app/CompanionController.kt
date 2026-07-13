@@ -152,13 +152,7 @@ internal class CompanionController(
                     ),
                 ) + state.dashboard.recentEvents.take(2),
             ),
-            logs = state.logs.prepend(
-                dependencies.journal.createEntry(
-                    source = "service",
-                    level = LogLevel.Info,
-                    message = result.logMessage,
-                ),
-            ),
+            logs = recordLog("service", LogLevel.Info, result.logMessage),
         )
     }
 
@@ -453,13 +447,7 @@ internal class CompanionController(
                 validation = result.validation,
             ),
             dashboard = state.dashboard.copy(lastOperation = result.lastOperation),
-            logs = state.logs.prepend(
-                dependencies.journal.createEntry(
-                    source = "routing",
-                    level = LogLevel.Info,
-                    message = result.logMessage,
-                ),
-            ),
+            logs = recordLog("routing", LogLevel.Info, result.logMessage),
         )
     }
 
@@ -479,13 +467,7 @@ internal class CompanionController(
             mainTab = MainTab.Routing,
             workspaceSection = WorkspaceSection.XrayRouting,
             dashboard = state.dashboard.copy(statusSummary = result.statusSummary),
-            logs = state.logs.prepend(
-                dependencies.journal.createEntry(
-                    source = "auth",
-                    level = LogLevel.Warning,
-                    message = result.logMessage,
-                ),
-            ),
+            logs = recordLog("auth", LogLevel.Warning, result.logMessage),
         )
     }
 
@@ -509,13 +491,7 @@ internal class CompanionController(
                 status = "Готово",
                 severity = DiagnosticSeverity.Ok,
             ),
-            logs = state.logs.prepend(
-                dependencies.journal.createEntry(
-                    source = "auth",
-                    level = LogLevel.Info,
-                    message = result.logMessage,
-                ),
-            ),
+            logs = recordLog("auth", LogLevel.Info, result.logMessage),
         )
     }
 
@@ -532,13 +508,7 @@ internal class CompanionController(
                     RecentEvent(actionTime, result.eventTitle, result.eventSubtitle),
                 ) + state.dashboard.recentEvents.take(2),
             ),
-            logs = state.logs.prepend(
-                dependencies.journal.createEntry(
-                    source = "service",
-                    level = LogLevel.Info,
-                    message = result.logMessage,
-                ),
-            ),
+            logs = recordLog("service", LogLevel.Info, result.logMessage),
         )
     }
 
@@ -559,15 +529,20 @@ internal class CompanionController(
                     RecentEvent(appliedAt, result.eventTitle, result.eventSubtitle),
                 ) + state.dashboard.recentEvents.take(2),
             ),
-            logs = state.logs.prepend(
-                dependencies.journal.createEntry(
-                    source = "routing",
-                    level = LogLevel.Info,
-                    message = result.logMessage,
-                ),
-            ),
+            logs = recordLog("routing", LogLevel.Info, result.logMessage),
         )
     }
+
+    private fun recordLog(
+        source: String,
+        level: LogLevel,
+        message: String,
+    ): LogsState = dependencies.logs.record(
+        current = state.logs,
+        source = source,
+        level = level,
+        message = message,
+    )
 
     private fun selectedConnection(): Connection? =
         state.connections.firstOrNull { it.id == state.selectedConnectionId }
@@ -675,9 +650,6 @@ private fun formatFileSize(bytes: Long): String =
         bytes >= 1024 -> "%.1f KB".format(bytes / 1024.0)
         else -> "$bytes B"
     }
-
-private fun LogsState.prepend(entry: LogEntry): LogsState =
-    copy(entries = listOf(entry) + entries.take(19))
 
 private fun List<DiagnosticItem>.replaceDiagnostic(
     label: String,

@@ -27,6 +27,15 @@ internal interface RoutingWritePort {
     fun apply(document: RoutingDocument): RoutingApplyResult
 }
 
+internal interface LogsPort {
+    fun record(
+        current: LogsState,
+        source: String,
+        level: LogLevel,
+        message: String,
+    ): LogsState
+}
+
 internal interface CompanionJournalPort {
     fun shortTime(): String
 
@@ -97,6 +106,7 @@ internal data class CompanionControllerDependencies(
     val session: SessionPort,
     val serviceActions: ServiceActionsPort,
     val routingWrites: RoutingWritePort,
+    val logs: LogsPort,
     val journal: CompanionJournalPort,
     val xrayConfigSource: XrayConfigSource,
     val coreStatusSource: CoreStatusSource,
@@ -111,6 +121,7 @@ internal fun defaultCompanionControllerDependencies(
         session = DemoSessionPort(),
         serviceActions = DemoServiceActionsPort(),
         routingWrites = DemoRoutingWritePort(journal),
+        logs = DemoLogsPort(journal),
         journal = journal,
         xrayConfigSource = WebPanelXrayConfigSource(transport),
         coreStatusSource = WebPanelCoreStatusSource(transport),
@@ -265,6 +276,19 @@ internal class DemoRoutingWritePort(
             logMessage = "Применена ревизия r${updated.revision} для ${updated.title}",
         )
     }
+}
+
+internal class DemoLogsPort(
+    private val journal: CompanionJournalPort,
+) : LogsPort {
+    override fun record(
+        current: LogsState,
+        source: String,
+        level: LogLevel,
+        message: String,
+    ): LogsState = current.copy(
+        entries = listOf(journal.createEntry(source, level, message)) + current.entries.take(19),
+    )
 }
 
 internal class SystemCompanionJournalPort : CompanionJournalPort {
