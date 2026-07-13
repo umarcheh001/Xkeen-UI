@@ -13,23 +13,21 @@ internal class CompanionController(
 
     fun finishLaunch() {
         if (state.phase == AppPhase.Launching) {
-            val trustedConnection = state.connections.firstOrNull {
-                it.status == ConnectionStatus.Configured
+            val stored = dependencies.connections.load().sanitized()
+            val selectedConnection = stored.connections.firstOrNull {
+                it.id == stored.selectedConnectionId
             }
-            state = if (trustedConnection == null) {
-                state.copy(phase = AppPhase.Connections)
-            } else {
-                state.copy(
-                    phase = AppPhase.Ready,
-                    selectedConnectionId = trustedConnection.id,
-                    mainTab = MainTab.Routing,
-                    workspaceSection = WorkspaceSection.XrayRouting,
-                    dashboard = state.dashboard.copy(
-                        instanceLabel = trustedConnection.name,
-                        endpoint = trustedConnection.baseUrl,
-                    ),
-                )
-            }
+            state = state.copy(
+                phase = AppPhase.Connections,
+                connections = stored.connections,
+                selectedConnectionId = selectedConnection?.id,
+                dashboard = selectedConnection?.let { selected ->
+                    state.dashboard.copy(
+                        instanceLabel = selected.name,
+                        endpoint = selected.baseUrl,
+                    )
+                } ?: state.dashboard,
+            )
         }
     }
 
@@ -43,20 +41,48 @@ internal class CompanionController(
 
     fun saveConnectionDraft() {
         val draft = state.connectionDraft
-        if (draft.name.isBlank() || draft.baseUrl.isBlank()) {
+        if (!draft.canBeSaved()) {
             return
         }
 
-        val newConnection = dependencies.connections.createConnection(draft)
+        val existing = draft.editingConnectionId?.let { editingId ->
+            state.connections.firstOrNull { it.id == editingId }
+        }
+        if (draft.isEditing && existing == null) {
+            state = state.copy(connectionDraft = ConnectionDraft())
+            return
+        }
+        val savedConnection = dependencies.connections.save(draft, existing)
+        val updatedConnections = if (existing == null) {
+            listOf(savedConnection) + state.connections
+        } else {
+            state.connections.replaceConnection(savedConnection)
+        }
 
         state = state.copy(
-            connections = listOf(newConnection) + state.connections,
+            connections = updatedConnections,
             connectionDraft = ConnectionDraft(),
         )
     }
 
+    fun editConnection(connectionId: String) {
+        val connection = state.connections.firstOrNull { it.id == connectionId } ?: return
+        state = state.copy(
+            connectionDraft = ConnectionDraft(
+                name = connection.name,
+                baseUrl = connection.baseUrl,
+                editingConnectionId = connection.id,
+            ),
+        )
+    }
+
+    fun cancelConnectionEdit() {
+        state = state.copy(connectionDraft = ConnectionDraft())
+    }
+
     fun selectConnection(connectionId: String) {
         val selected = state.connections.firstOrNull { it.id == connectionId } ?: return
+        dependencies.connections.select(connectionId)
         state = state.copy(
             phase = AppPhase.PairLogin,
             selectedConnectionId = connectionId,
@@ -77,7 +103,6 @@ internal class CompanionController(
     fun backToConnections() {
         state = state.copy(
             phase = AppPhase.Connections,
-            selectedConnectionId = null,
             pendingAction = null,
         )
     }
@@ -85,7 +110,6 @@ internal class CompanionController(
     fun openConnections() {
         state = state.copy(
             phase = AppPhase.Connections,
-            selectedConnectionId = null,
             pendingAction = null,
         )
     }
@@ -459,10 +483,10 @@ internal class CompanionController(
         val connection = selectedConnection() ?: return
         val result = dependencies.session.disconnect(connection)
         val updatedConnections = state.connections.replaceConnection(result.connection)
+        dependencies.connections.update(result.connection)
 
         state = state.copy(
             phase = AppPhase.Connections,
-            selectedConnectionId = null,
             connections = updatedConnections,
             mainTab = MainTab.Routing,
             workspaceSection = WorkspaceSection.XrayRouting,
@@ -474,6 +498,7 @@ internal class CompanionController(
     private fun openSession(result: SessionOpenResult) {
         val eventTime = dependencies.journal.shortTime()
         val updatedConnections = state.connections.replaceConnection(result.connection)
+        dependencies.connections.update(result.connection)
         state = state.copy(
             phase = AppPhase.Ready,
             connections = updatedConnections,
@@ -572,6 +597,15 @@ internal class CompanionController(
             ),
         )
     }
+}
+
+internal fun ConnectionDraft.canBeSaved(): Boolean {
+    val normalizedUrl = baseUrl.trim()
+    val hasSupportedScheme = normalizedUrl.startsWith("http://", ignoreCase = true) ||
+        normalizedUrl.startsWith("https://", ignoreCase = true)
+    return name.isNotBlank() &&
+        hasSupportedScheme &&
+        normalizedUrl.substringAfter("://", missingDelimiterValue = "").isNotBlank()
 }
 
 private fun preferredCoreTab(activeCore: String, availableCores: List<String>): MainTab =

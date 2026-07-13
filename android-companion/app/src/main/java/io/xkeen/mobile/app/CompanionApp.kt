@@ -89,6 +89,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -104,7 +105,14 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun CompanionApp() {
-    val controller = remember { CompanionController() }
+    val applicationContext = LocalContext.current.applicationContext
+    val controller = remember(applicationContext) {
+        CompanionController(
+            dependencies = defaultCompanionControllerDependencies(
+                connections = persistedConnectionsPort(applicationContext),
+            ),
+        )
+    }
     val state = controller.state
 
     XkeenMobileTheme(darkTheme = true) {
@@ -163,7 +171,7 @@ private fun LaunchRoute(controller: CompanionController) {
                     style = MaterialTheme.typography.headlineSmall,
                 )
                 Text(
-                    text = "Восстанавливаем последний доверенный сеанс и подготавливаем данные клиента.",
+                    text = "Загружаем сохраненные подключения и подготавливаем данные клиента.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -173,7 +181,7 @@ private fun LaunchRoute(controller: CompanionController) {
                 ) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     Text(
-                        text = "Проверяем подключения, авторизацию и черновики маршрутов",
+                        text = "Читаем локальный snapshot подключений",
                         style = MaterialTheme.typography.labelLarge,
                     )
                 }
@@ -202,8 +210,8 @@ private fun ConnectionsRoute(
         )
 
         SectionCard(
-            title = "Добавить узел",
-            supporting = "Подготовьте черновик подключения. Позже он будет сохранен в защищенное хранилище и использован для мобильного старта.",
+            title = if (state.connectionDraft.isEditing) "Редактировать узел" else "Добавить узел",
+            supporting = "Имя, адрес и состояние узла сохраняются локально. Данные входа будут храниться отдельно.",
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -230,12 +238,20 @@ private fun ConnectionsRoute(
             Spacer(Modifier.height(10.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
             ) {
+                if (state.connectionDraft.isEditing) {
+                    CompactActionButton(
+                        label = "Отмена",
+                        onClick = controller::cancelConnectionEdit,
+                        style = CompactButtonStyle.Outlined,
+                    )
+                }
                 CompactActionButton(
-                    label = "Сохранить",
+                    label = if (state.connectionDraft.isEditing) "Сохранить изменения" else "Сохранить",
                     icon = Icons.Outlined.Save,
                     onClick = controller::saveConnectionDraft,
+                    enabled = state.connectionDraft.canBeSaved(),
                 )
             }
         }
@@ -244,10 +260,19 @@ private fun ConnectionsRoute(
             title = "Сохраненные подключения",
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (state.connections.isEmpty()) {
+                    Text(
+                        text = "Сохраненных узлов пока нет.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 state.connections.forEach { connection ->
                     ConnectionCard(
                         connection = connection,
+                        isSelected = connection.id == state.selectedConnectionId,
                         onOpen = { controller.selectConnection(connection.id) },
+                        onEdit = { controller.editConnection(connection.id) },
                     )
                 }
             }
@@ -1112,7 +1137,9 @@ private fun PendingActionDialog(
 @Composable
 private fun ConnectionCard(
     connection: Connection,
+    isSelected: Boolean,
     onOpen: () -> Unit,
+    onEdit: () -> Unit,
 ) {
     Card(
         colors = CardDefaults.cardColors(
@@ -1137,16 +1164,24 @@ private fun ConnectionCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                CompactActionButton(
-                    label = "Открыть",
-                    onClick = onOpen,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onEdit) {
+                        Icon(Icons.Outlined.Edit, contentDescription = "Редактировать ${connection.name}")
+                    }
+                    CompactActionButton(
+                        label = "Открыть",
+                        onClick = onOpen,
+                    )
+                }
             }
             CompactStatusRow(
-                items = listOf(
-                    connectionStatusChip(connection.status),
-                    statusChip(connection.lastSeen),
-                ),
+                items = buildList {
+                    if (isSelected) {
+                        add(statusChip("Последний выбранный"))
+                    }
+                    add(connectionStatusChip(connection.status))
+                    add(statusChip(connection.lastSeen))
+                },
             )
         }
     }
@@ -1463,6 +1498,7 @@ private fun CompactActionButton(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     style: CompactButtonStyle = CompactButtonStyle.Tonal,
+    enabled: Boolean = true,
 ) {
     val shape = RoundedCornerShape(14.dp)
     val content: @Composable RowScope.() -> Unit = {
@@ -1481,6 +1517,7 @@ private fun CompactActionButton(
     when (style) {
         CompactButtonStyle.Tonal -> FilledTonalButton(
             onClick = onClick,
+            enabled = enabled,
             modifier = modifier.height(44.dp),
             shape = shape,
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
@@ -1489,6 +1526,7 @@ private fun CompactActionButton(
 
         CompactButtonStyle.Outlined -> OutlinedButton(
             onClick = onClick,
+            enabled = enabled,
             modifier = modifier.height(44.dp),
             shape = shape,
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),

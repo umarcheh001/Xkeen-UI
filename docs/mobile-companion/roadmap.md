@@ -12,7 +12,8 @@ Updated: 2026-07-13
 - Android-клиент подтвержденно собирается командой `.\gradlew.bat testDebugUnitTest assembleDebug`.
 - В `Ready` workspace уже есть capability-aware нижняя навигация `Xray`, `Mihomo`, `Ports`, `Shell`, `Generator` и контекстные drawer-разделы.
 - Уже подключены первые read-only backend flows: `GET /api/xkeen/core`, `GET /api/routing/fragments`, `GET /api/routing?file=...`.
-- Следующий главный узкий участок остается на стыке `Phase 1` и `Phase 2`: mobile contract, auth/session, storage, backend-backed write/apply actions и реальный logs/terminal transport.
+- Уже подключен app-private persistence списка узлов, базового metadata и последнего выбранного подключения; cold start больше не зависит от demo-списка.
+- Следующий главный узкий участок остается на стыке `Phase 1` и `Phase 2`: mobile contract, auth/session, secure storage, backend-backed write/apply actions и реальный logs/terminal transport.
 
 ## Phase 0 - Discovery and scope freeze
 
@@ -80,7 +81,8 @@ Updated: 2026-07-13
 - Уже сделано: в `Ready` используются нижние вкладки `Xray`, `Mihomo`, `Ports`, `Shell`, `Generator`, а содержимое drawer зависит от доступных core/capabilities.
 - Уже сделано: заложена pluggable-структура под дальнейшие module slices, включая рабочий `Routing Xray` read/edit baseline и demo shell surfaces.
 - Уже сделано: подключены первые backend reads для active core и Xray routing documents.
-- Еще осталось: реализовать storage для подключений и секретов.
+- Уже сделано: реализовано локальное хранение списка подключений, последнего выбора и базового metadata с безопасным редактированием.
+- Еще осталось: реализовать secure storage для session material и trusted-restore marker.
 - Еще осталось: реализовать network client, auth/session layer и reconnect behavior.
 - Еще осталось: довести backend-backed `save/apply/service actions`, logs transport и terminal transport.
 - Еще осталось: проверить подход к оберткам над open-source editor/log/terminal компонентами без ранней жесткой привязки.
@@ -92,7 +94,7 @@ Updated: 2026-07-13
 - Сессия и данные подключения переживают перезапуск приложения корректно.
 - Базовые состояния UI выглядят предсказуемо и не требуют web fallback.
 
-Первый критерий и часть второго уже закрыты; phase нельзя считать завершенной до появления реальных storage/session/network слоев и backend-backed write/stream flows.
+Первый критерий, persistence данных подключения и часть второго уже закрыты; phase нельзя считать завершенной до появления secure session/network слоев и backend-backed write/stream flows.
 
 ## Phase 3 - MVP feature slices
 

@@ -13,8 +13,8 @@ Updated: 2026-07-13
 
 Что реально реализовано в baseline:
 
-- `Launching` c попыткой restore для доверенного подключения;
-- `Connections` с ручным добавлением инстанса по `name` и `baseUrl`;
+- `Launching` с загрузкой persisted списка подключений и последнего выбранного узла;
+- `Connections` с ручным добавлением, повторным выбором и редактированием инстанса по `name` и `baseUrl`;
 - `Pair/Login` как отдельная фаза приложения;
 - `Ready`-workspace с компактной верхней панелью, confirm-based `start` / `stop` / `restart` и кнопкой `Core`;
 - capability-aware нижняя навигация `Xray`, `Mihomo`, `Ports`, `Shell`, `Generator`;
@@ -27,7 +27,7 @@ Updated: 2026-07-13
 Что пока сознательно не завершено:
 
 - реальный auth/session transport;
-- secure storage и persistence для подключений;
+- secure storage для session material и trusted session restore;
 - backend-backed `start`, `stop`, `restart` и `Core` switch;
 - backend-backed `Routing Xray` write/apply flow;
 - настоящий logs streaming, PTY transport и reconnect behavior;
@@ -79,9 +79,11 @@ Updated: 2026-07-13
 ### 1. Connections / Pairing
 
 - Добавление инстанса вручную.
-- Выбор уже добавленного узла из текущего списка.
+- Загрузка списка, metadata и последнего выбранного узла из app-private storage после cold start.
+- Выбор и редактирование уже добавленного узла со стабильным `id`.
 - Переход в `Pair/Login`.
-- Понятная граница между доступным UI-flow и ещё не подключённым auth/session transport.
+- Понятная граница между persisted видимыми данными и ещё не подключёнными secure storage/auth/session transport.
+- Сохраненный `Configured` status не дает автоматический вход без будущего trusted-restore marker.
 
 ### 2. Ready workspace
 
@@ -143,8 +145,9 @@ Updated: 2026-07-13
 - ready-workspace с capability-aware навигацией;
 - safe actions `start` / `stop` / `restart` на уровне UI-flow;
 - первый реальный backend read-slice для ядер и `Routing Xray`;
-- первый editor-like модуль с локальной валидацией и управлением draft state.
+- первый editor-like модуль с локальной валидацией и управлением draft state;
+- persisted connections с повторным выбором и безопасным редактированием.
 
-Следующий рубеж теперь не в добавлении новых экранов как таковых, а в замене demo-state на настоящий mobile contract, persistence и write-safe backend operations.
+Следующий рубеж теперь не в добавлении новых экранов как таковых, а в secure session storage, настоящем mobile contract и write-safe backend operations.
 
 Если этот набор не работает удобно с телефона, остальные advanced-модули переносить рано.

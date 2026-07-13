@@ -157,7 +157,11 @@ data class Connection(
 data class ConnectionDraft(
     val name: String = "",
     val baseUrl: String = "http://",
-)
+    val editingConnectionId: String? = null,
+) {
+    val isEditing: Boolean
+        get() = editingConnectionId != null
+}
 
 data class LoginForm(
     val username: String = "admin",
@@ -262,7 +266,7 @@ sealed interface PendingAction {
 
 data class CompanionUiState(
     val phase: AppPhase = AppPhase.Launching,
-    val connections: List<Connection> = demoConnections(),
+    val connections: List<Connection> = emptyList(),
     val connectionDraft: ConnectionDraft = ConnectionDraft(),
     val selectedConnectionId: String? = null,
     val loginForm: LoginForm = LoginForm(),
@@ -273,30 +277,6 @@ data class CompanionUiState(
     val logs: LogsState = demoLogsState(),
     val diagnostics: List<DiagnosticItem> = demoDiagnostics(),
     val pendingAction: PendingAction? = null,
-)
-
-fun demoConnections(): List<Connection> = listOf(
-    Connection(
-        id = "home-lab",
-        name = "Домашний узел",
-        baseUrl = "https://lab.lan:8443",
-        status = ConnectionStatus.Configured,
-        lastSeen = "Был на связи 20 сек назад",
-    ),
-    Connection(
-        id = "edge-node",
-        name = "Пограничный узел",
-        baseUrl = "https://edge.lan:8443",
-        status = ConnectionStatus.NeedsAuth,
-        lastSeen = "Вход устарел",
-    ),
-    Connection(
-        id = "travel-box",
-        name = "Дорожный узел",
-        baseUrl = "http://192.168.31.20:8080",
-        status = ConnectionStatus.Offline,
-        lastSeen = "Офлайн",
-    ),
 )
 
 fun demoDashboardState(): DashboardState = DashboardState(
@@ -312,7 +292,7 @@ fun demoDashboardState(): DashboardState = DashboardState(
     recentEvents = listOf(
         RecentEvent("17:48", "Сервис в норме", "Ядро xray принимает трафик"),
         RecentEvent("17:42", "Черновик сохранен", "main-routing.json готов к применению"),
-        RecentEvent("17:35", "Сессия восстановлена", "Мобильный токен использован без браузера"),
+        RecentEvent("17:35", "Demo-сессия открыта", "Вход завершен без перехода в браузер"),
     ),
 )
 
@@ -400,13 +380,13 @@ fun demoLogsState(): LogsState = LogsState(
         LogEntry("17:49:11", "service", LogLevel.Info, "Пульс сервиса выглядит штатно"),
         LogEntry("17:48:02", "routing", LogLevel.Info, "Превью собрано для main-routing.json"),
         LogEntry("17:46:55", "service", LogLevel.Warning, "Окно перезапуска открыто на 8 секунд"),
-        LogEntry("17:41:13", "auth", LogLevel.Info, "Мобильная сессия восстановлена из хранилища"),
+        LogEntry("17:41:13", "auth", LogLevel.Info, "Demo-сессия открыта после входа"),
         LogEntry("17:35:28", "routing", LogLevel.Error, "Черновик 13 не прошел проверку: нет правил"),
     ),
 )
 
 fun demoDiagnostics(): List<DiagnosticItem> = listOf(
-    DiagnosticItem("Мобильная сессия", "Активна и восстановлена", DiagnosticSeverity.Ok),
+    DiagnosticItem("Мобильная сессия", "Активна в demo-режиме", DiagnosticSeverity.Ok),
     DiagnosticItem("Поток логов", "Окно переподключения 30 сек", DiagnosticSeverity.Ok),
     DiagnosticItem("Защищенное хранилище", "Пока не подключено", DiagnosticSeverity.Warning),
     DiagnosticItem("API мобильного клиента", "Пока работает на моках", DiagnosticSeverity.Warning),

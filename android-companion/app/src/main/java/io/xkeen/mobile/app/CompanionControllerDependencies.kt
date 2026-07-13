@@ -4,8 +4,22 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
 internal interface ConnectionsPort {
-    fun createConnection(draft: ConnectionDraft): Connection
+    fun load(): StoredConnections
+
+    fun save(
+        draft: ConnectionDraft,
+        existing: Connection?,
+    ): Connection
+
+    fun update(connection: Connection)
+
+    fun select(connectionId: String)
 }
+
+internal data class StoredConnections(
+    val connections: List<Connection> = emptyList(),
+    val selectedConnectionId: String? = null,
+)
 
 internal interface SessionPort {
     fun pair(connection: Connection): SessionOpenResult
@@ -113,11 +127,12 @@ internal data class CompanionControllerDependencies(
 )
 
 internal fun defaultCompanionControllerDependencies(
+    connections: ConnectionsPort = InMemoryConnectionsPort(),
     transport: CompanionHttpTransport = HttpUrlConnectionCompanionTransport(),
 ): CompanionControllerDependencies {
     val journal = SystemCompanionJournalPort()
     return CompanionControllerDependencies(
-        connections = DemoConnectionsPort(),
+        connections = connections,
         session = DemoSessionPort(),
         serviceActions = DemoServiceActionsPort(),
         routingWrites = DemoRoutingWritePort(journal),
@@ -128,16 +143,73 @@ internal fun defaultCompanionControllerDependencies(
     )
 }
 
-internal class DemoConnectionsPort : ConnectionsPort {
-    override fun createConnection(draft: ConnectionDraft): Connection =
-        Connection(
-            id = draft.name.lowercase().replace(" ", "-"),
-            name = draft.name.trim(),
-            baseUrl = draft.baseUrl.trim(),
-            status = ConnectionStatus.SetupRequired,
-            lastSeen = "Новый черновик",
+internal class InMemoryConnectionsPort(
+    initial: StoredConnections = StoredConnections(),
+    private val idFactory: () -> String = { java.util.UUID.randomUUID().toString() },
+) : ConnectionsPort {
+    private var stored = initial.sanitized()
+
+    override fun load(): StoredConnections = stored
+
+    override fun save(
+        draft: ConnectionDraft,
+        existing: Connection?,
+    ): Connection {
+        val connection = connectionFromDraft(
+            draft = draft,
+            existing = existing,
+            idFactory = idFactory,
         )
+        stored = stored.copy(
+            connections = stored.connections.upsert(connection),
+        )
+        return connection
+    }
+
+    override fun update(connection: Connection) {
+        stored = stored.copy(connections = stored.connections.upsert(connection))
+    }
+
+    override fun select(connectionId: String) {
+        if (stored.connections.any { it.id == connectionId }) {
+            stored = stored.copy(selectedConnectionId = connectionId)
+        }
+    }
 }
+
+internal fun connectionFromDraft(
+    draft: ConnectionDraft,
+    existing: Connection?,
+    idFactory: () -> String,
+): Connection = existing?.copy(
+    name = draft.name.trim(),
+    baseUrl = draft.baseUrl.trim(),
+) ?: Connection(
+    id = idFactory(),
+    name = draft.name.trim(),
+    baseUrl = draft.baseUrl.trim(),
+    status = ConnectionStatus.SetupRequired,
+    lastSeen = "Новый черновик",
+)
+
+internal fun StoredConnections.sanitized(): StoredConnections {
+    val uniqueConnections = connections
+        .filter { it.id.isNotBlank() && it.name.isNotBlank() && it.baseUrl.isNotBlank() }
+        .distinctBy(Connection::id)
+    return copy(
+        connections = uniqueConnections,
+        selectedConnectionId = selectedConnectionId?.takeIf { selectedId ->
+            uniqueConnections.any { it.id == selectedId }
+        },
+    )
+}
+
+internal fun List<Connection>.upsert(connection: Connection): List<Connection> =
+    if (any { it.id == connection.id }) {
+        map { current -> if (current.id == connection.id) connection else current }
+    } else {
+        listOf(connection) + this
+    }
 
 internal class DemoSessionPort : SessionPort {
     override fun pair(connection: Connection): SessionOpenResult =

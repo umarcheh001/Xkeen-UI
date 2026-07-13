@@ -9,6 +9,72 @@ import org.junit.Test
 
 class CompanionControllerTest {
     @Test
+    fun finishLaunchLoadsPersistedConnectionsAndKeepsLastSelection() {
+        val selected = Connection(
+            id = "saved-node",
+            name = "Сохраненный узел",
+            baseUrl = "https://saved.lan:8443",
+            status = ConnectionStatus.Configured,
+            lastSeen = "Готово",
+        )
+        val controller = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Launching),
+            dependencies = testDependencies(
+                connections = InMemoryConnectionsPort(
+                    StoredConnections(
+                        connections = listOf(selected),
+                        selectedConnectionId = selected.id,
+                    ),
+                ),
+            ),
+        )
+
+        controller.finishLaunch()
+
+        assertEquals(AppPhase.Connections, controller.state.phase)
+        assertEquals(listOf(selected), controller.state.connections)
+        assertEquals(selected.id, controller.state.selectedConnectionId)
+        assertEquals(selected.name, controller.state.dashboard.instanceLabel)
+        assertEquals(selected.baseUrl, controller.state.dashboard.endpoint)
+    }
+
+    @Test
+    fun editingConnectionKeepsStableIdAndMetadata() {
+        val original = Connection(
+            id = "stable-id",
+            name = "Старое имя",
+            baseUrl = "http://old.lan:8080",
+            status = ConnectionStatus.NeedsAuth,
+            lastSeen = "Вход устарел",
+        )
+        val connections = InMemoryConnectionsPort(
+            initial = StoredConnections(listOf(original), original.id),
+        )
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Connections,
+                connections = listOf(original),
+                selectedConnectionId = original.id,
+            ),
+            dependencies = testDependencies(connections = connections),
+        )
+
+        controller.editConnection(original.id)
+        controller.updateConnectionDraftName("Новое имя")
+        controller.updateConnectionDraftUrl("https://new.lan:8443")
+        controller.saveConnectionDraft()
+
+        val edited = controller.state.connections.single()
+        assertEquals(original.id, edited.id)
+        assertEquals("Новое имя", edited.name)
+        assertEquals("https://new.lan:8443", edited.baseUrl)
+        assertEquals(original.status, edited.status)
+        assertEquals(original.lastSeen, edited.lastSeen)
+        assertEquals(original.id, connections.load().selectedConnectionId)
+        assertFalse(controller.state.connectionDraft.isEditing)
+    }
+
+    @Test
     fun selectingBottomTabResetsItsContextSection() {
         val controller = CompanionController(
             CompanionUiState(
@@ -220,7 +286,7 @@ private fun testDependencies(
         CoreStatus(availableCores = listOf("Xray", "Mihomo"), currentCore = "Xray"),
     ),
     xrayConfigSource: XrayConfigSource = FakeXrayConfigSource(),
-    connections: ConnectionsPort = DemoConnectionsPort(),
+    connections: ConnectionsPort = InMemoryConnectionsPort(),
     session: SessionPort = DemoSessionPort(),
     serviceActions: ServiceActionsPort = DemoServiceActionsPort(),
     routingWrites: RoutingWritePort? = null,

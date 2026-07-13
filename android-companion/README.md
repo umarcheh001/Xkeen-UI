@@ -5,8 +5,9 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 ## Текущее состояние на 2026-07-13
 
 - Приложение проходит через фазы `Launching`, `Connections`, `Pair/Login` и `Ready`.
-- При наличии доверенного demo-подключения launch пытается восстановить его сразу и открыть рабочее пространство без повторного онбординга.
-- `Connections` поддерживает ручное добавление инстанса по `name` и `baseUrl`, а также выбор уже добавленных узлов из in-memory списка.
+- На `Launching` приложение загружает из app-private storage список узлов, их базовый metadata state и последний выбранный узел, после чего открывает `Connections`.
+- `Connections` поддерживает ручное добавление инстанса по `name` и `baseUrl`, повторный выбор и безопасное редактирование уже сохраненного узла без смены его `id` и metadata.
+- Сохраненный `Configured` status сам по себе не открывает `Ready`: автоматический вход появится только вместе с отдельным secure session restore.
 - `Pair/Login` уже существует как экран и часть основного потока, но пока работает в demo-режиме без реального auth/session transport.
 - `Ready`-состояние построено как capability-aware workspace с компактной верхней панелью, отдельной кнопкой `Core` и безопасными действиями `start`, `stop`, `restart` через confirm dialog.
 
@@ -47,8 +48,16 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - `DemoCompanionController` заменен на `CompanionController`, который зависит от `CompanionControllerDependencies`, а не от жестко пришитых demo-side effects.
 - Для следующего слоя выделены отдельные порты: `ConnectionsPort`, `SessionPort`, `ServiceActionsPort`, `RoutingWritePort`, `LogsPort`; time/journal helper живет отдельно в `CompanionJournalPort`.
 - `CompanionController` больше не собирает `LogEntry` вручную: запись controller-событий идет через `LogsPort`, поэтому транспорт логов и policy хранения можно будет заменить без роста reducer-логики.
-- Текущий UI все еще работает на demo-адаптерах этих портов, поэтому визуальное поведение не изменилось, но точки подключения для real transport/auth/persistence/write уже подготовлены.
+- `ConnectionsPort` уже переведен на реальный app-private persistence; `SessionPort`, `ServiceActionsPort`, `RoutingWritePort` и `LogsPort` пока используют demo-адаптеры.
 - Логика controller/reducer теперь тестируется отдельно от transport и storage seam.
+
+## Локальное хранение подключений
+
+- `PersistedConnectionsPort` хранит versioned snapshot в приватных `SharedPreferences` приложения.
+- В snapshot входят только видимые данные: `id`, `name`, `baseUrl`, `status`, `lastSeen` и `selectedConnectionId`.
+- Пароли, cookie, token и иной session material туда не записываются.
+- Поврежденная запись пропускается при чтении, а неизвестный `selectedConnectionId` сбрасывается без падения приложения.
+- Unit tests проверяют восстановление после пересоздания порта, сохранение metadata и стабильный `id` при редактировании.
 
 ## Routing Xray
 
@@ -91,9 +100,8 @@ cd android-companion
 
 ## Что пока остаётся demo-only
 
-- `ConnectionsPort` пока создает подключения только в памяти процесса; persisted connections еще не подключены.
 - `Pair/Login` уже отделен в `SessionPort`, но сам порт пока работает через demo auth/session flow.
-- Данные подключений и секретов не сохраняются в secure storage.
+- Пароли, token/cookie и trusted-restore marker пока не сохраняются в secure storage; это следующий отдельный этап.
 - `start`, `stop`, `restart` и переключение `Core` уже вынесены в `ServiceActionsPort`, но пока меняют только локальный state и не вызывают POST-endpoint'ы.
 - `Routing Xray` читает документы с сервера, но `validate` еще локальный, а `save/apply` пока работают через demo `RoutingWritePort`, а не через backend.
 - Controller-события уже проходят через `LogsPort`, но настоящего logs streaming, PTY transport, reconnect behavior и offline persistence пока нет.
@@ -101,6 +109,6 @@ cd android-companion
 
 ## Следующий практический шаг
 
-- Подключить persisted connections и secure storage поверх уже выделенных `ConnectionsPort` и `SessionPort`.
+- Подключить secure storage для session material и trusted-restore marker поверх уже выделенного `SessionPort`.
 - Довести `Pair/Login` до реального auth/session transport и trusted session restore.
 - Заменить demo-адаптеры `ServiceActionsPort`, `RoutingWritePort` и `LogsPort` на backend-backed реализации.
