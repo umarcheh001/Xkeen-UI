@@ -2,6 +2,8 @@ package io.xkeen.mobile.app
 
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.security.SecureRandom
+import java.util.Base64
 
 internal interface ConnectionsPort {
     fun load(): StoredConnections
@@ -128,12 +130,13 @@ internal data class CompanionControllerDependencies(
 
 internal fun defaultCompanionControllerDependencies(
     connections: ConnectionsPort = InMemoryConnectionsPort(),
+    sessionMaterials: SessionMaterialStore = InMemorySessionMaterialStore(),
     transport: CompanionHttpTransport = HttpUrlConnectionCompanionTransport(),
 ): CompanionControllerDependencies {
     val journal = SystemCompanionJournalPort()
     return CompanionControllerDependencies(
         connections = connections,
-        session = DemoSessionPort(),
+        session = DemoSessionPort(sessionMaterials),
         serviceActions = DemoServiceActionsPort(),
         routingWrites = DemoRoutingWritePort(journal),
         logs = DemoLogsPort(journal),
@@ -211,7 +214,10 @@ internal fun List<Connection>.upsert(connection: Connection): List<Connection> =
         listOf(connection) + this
     }
 
-internal class DemoSessionPort : SessionPort {
+internal class DemoSessionPort(
+    private val sessionMaterials: SessionMaterialStore = InMemorySessionMaterialStore(),
+    private val demoSessionSecretFactory: () -> String = ::newDemoSessionSecret,
+) : SessionPort {
     override fun pair(connection: Connection): SessionOpenResult =
         openSession(
             connection = connection,
@@ -228,8 +234,9 @@ internal class DemoSessionPort : SessionPort {
             logMessage = "Вход открыт для ${connection.name}",
         )
 
-    override fun disconnect(connection: Connection): SessionCloseResult =
-        SessionCloseResult(
+    override fun disconnect(connection: Connection): SessionCloseResult {
+        sessionMaterials.clear(connection.id)
+        return SessionCloseResult(
             connection = connection.copy(
                 status = ConnectionStatus.NeedsAuth,
                 lastSeen = "Сессия закрыта",
@@ -237,14 +244,24 @@ internal class DemoSessionPort : SessionPort {
             statusSummary = "Требуется вход",
             logMessage = "Пользователь закрыл мобильную сессию",
         )
+    }
 
     private fun openSession(
         connection: Connection,
         lastOperation: String,
         eventTitle: String,
         logMessage: String,
-    ): SessionOpenResult =
-        SessionOpenResult(
+    ): SessionOpenResult {
+        sessionMaterials.save(
+            StoredSessionMaterial(
+                connectionId = connection.id,
+                material = SessionMaterial(accessToken = demoSessionSecretFactory()),
+                // A demo credential must never authorize automatic restore. Stage 5 will only set
+                // this marker after a real backend bootstrap has returned a valid session.
+                trustedForRestore = false,
+            ),
+        )
+        return SessionOpenResult(
             connection = connection.copy(
                 status = ConnectionStatus.Configured,
                 lastSeen = "Готово",
@@ -255,6 +272,13 @@ internal class DemoSessionPort : SessionPort {
             eventSubtitle = "Сессия открыта без перехода в браузер",
             logMessage = logMessage,
         )
+    }
+}
+
+private fun newDemoSessionSecret(): String {
+    val bytes = ByteArray(32)
+    SecureRandom().nextBytes(bytes)
+    return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
 }
 
 internal class DemoServiceActionsPort : ServiceActionsPort {

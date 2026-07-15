@@ -75,6 +75,35 @@ class CompanionControllerTest {
     }
 
     @Test
+    fun successfulLoginClearsPasswordFromUiState() {
+        val connection = Connection(
+            id = "login-node",
+            name = "Узел входа",
+            baseUrl = "https://login.lan",
+            status = ConnectionStatus.NeedsAuth,
+            lastSeen = "Требуется вход",
+        )
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.PairLogin,
+                connections = listOf(connection),
+                selectedConnectionId = connection.id,
+                loginForm = LoginForm(username = "admin", password = "erase-after-login"),
+            ),
+            dependencies = testDependencies(
+                connections = InMemoryConnectionsPort(
+                    StoredConnections(listOf(connection), connection.id),
+                ),
+            ),
+        )
+
+        controller.login()
+
+        assertEquals(AppPhase.Ready, controller.state.phase)
+        assertEquals("", controller.state.loginForm.password)
+    }
+
+    @Test
     fun selectingBottomTabResetsItsContextSection() {
         val controller = CompanionController(
             CompanionUiState(

@@ -2,12 +2,12 @@
 
 Android companion-приложение для Xkeen-UI. Каталог `android-companion/` уже является рабочим implementation baseline, а не пустым skeleton: проект собирается, проходит unit tests и содержит живой Compose shell с частичной backend-интеграцией.
 
-## Текущее состояние на 2026-07-13
+## Текущее состояние на 2026-07-15
 
 - Приложение проходит через фазы `Launching`, `Connections`, `Pair/Login` и `Ready`.
 - На `Launching` приложение загружает из app-private storage список узлов, их базовый metadata state и последний выбранный узел, после чего открывает `Connections`.
 - `Connections` поддерживает ручное добавление инстанса по `name` и `baseUrl`, повторный выбор и безопасное редактирование уже сохраненного узла без смены его `id` и metadata.
-- Сохраненный `Configured` status сам по себе не открывает `Ready`: автоматический вход появится только вместе с отдельным secure session restore.
+- Сохраненный `Configured` status сам по себе не открывает `Ready`: marker доверенного восстановления хранится отдельно и сможет использоваться только после backend-проверки на этапе 5.
 - `Pair/Login` уже существует как экран и часть основного потока, но пока работает в demo-режиме без реального auth/session transport.
 - `Ready`-состояние построено как capability-aware workspace с компактной верхней панелью, отдельной кнопкой `Core` и безопасными действиями `start`, `stop`, `restart` через confirm dialog.
 
@@ -48,7 +48,7 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - `DemoCompanionController` заменен на `CompanionController`, который зависит от `CompanionControllerDependencies`, а не от жестко пришитых demo-side effects.
 - Для следующего слоя выделены отдельные порты: `ConnectionsPort`, `SessionPort`, `ServiceActionsPort`, `RoutingWritePort`, `LogsPort`; time/journal helper живет отдельно в `CompanionJournalPort`.
 - `CompanionController` больше не собирает `LogEntry` вручную: запись controller-событий идет через `LogsPort`, поэтому транспорт логов и policy хранения можно будет заменить без роста reducer-логики.
-- `ConnectionsPort` уже переведен на реальный app-private persistence; `SessionPort`, `ServiceActionsPort`, `RoutingWritePort` и `LogsPort` пока используют demo-адаптеры.
+- `ConnectionsPort` уже переведен на реальный app-private persistence; demo `SessionPort` уже проходит через `SessionMaterialStore`, а `ServiceActionsPort`, `RoutingWritePort` и `LogsPort` пока используют demo-адаптеры.
 - Логика controller/reducer теперь тестируется отдельно от transport и storage seam.
 
 ## Локальное хранение подключений
@@ -58,6 +58,19 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - Пароли, cookie, token и иной session material туда не записываются.
 - Поврежденная запись пропускается при чтении, а неизвестный `selectedConnectionId` сбрасывается без падения приложения.
 - Unit tests проверяют восстановление после пересоздания порта, сохранение metadata и стабильный `id` при редактировании.
+
+## Защищенный session material
+
+- `SessionMaterial` хранит только access/refresh token, cookie header и CSRF token; пароль и видимые поля `Connection` в него не входят.
+- Для каждого `connectionId` `SessionMaterialStore` хранит отдельную запись и явно отличает ее от записи, разрешенной для восстановления, через `trustedForRestore` / `loadTrusted()`.
+- Android-реализация шифрует единый payload AES-GCM; неэкспортируемый ключ создается в Android Keystore. В app-private `SharedPreferences` попадает только ciphertext, а не raw token/cookie/CSRF.
+- Поврежденный ciphertext или недоступный ключ очищают unusable payload. Backup выключен через `android:allowBackup="false"`.
+- Пароль не записывается в storage и после успешного входа очищается из UI-state. Logout очищает material только активного узла.
+- Текущий demo flow сохраняет лишь случайный синтетический secret с `trustedForRestore = false`, поэтому он не может превратиться в автоматическую авторизацию.
+
+### Политика automatic restore
+
+На этапе 5 приложение сможет попытаться восстановить только `loadTrusted()`-record выбранного узла и обязано подтвердить либо refresh-нуть его на backend. Повторный вход потребуется при отсутствии marker, поврежденном payload/сбросе Keystore, а также при истекшей или отозванной серверной сессии. Само наличие сохраненного подключения или статуса `Configured` не является доверенной сессией.
 
 ## Routing Xray
 
@@ -101,7 +114,7 @@ cd android-companion
 ## Что пока остаётся demo-only
 
 - `Pair/Login` уже отделен в `SessionPort`, но сам порт пока работает через demo auth/session flow.
-- Пароли, token/cookie и trusted-restore marker пока не сохраняются в secure storage; это следующий отдельный этап.
+- Secure storage готов, но `Pair/Login` пока не получает реальные token/cookie от backend и не запускает automatic restore: это следующий auth/session этап.
 - `start`, `stop`, `restart` и переключение `Core` уже вынесены в `ServiceActionsPort`, но пока меняют только локальный state и не вызывают POST-endpoint'ы.
 - `Routing Xray` читает документы с сервера, но `validate` еще локальный, а `save/apply` пока работают через demo `RoutingWritePort`, а не через backend.
 - Controller-события уже проходят через `LogsPort`, но настоящего logs streaming, PTY transport, reconnect behavior и offline persistence пока нет.
@@ -109,6 +122,6 @@ cd android-companion
 
 ## Следующий практический шаг
 
-- Подключить secure storage для session material и trusted-restore marker поверх уже выделенного `SessionPort`.
-- Довести `Pair/Login` до реального auth/session transport и trusted session restore.
+- Ввести единый transport с нормализацией `baseUrl`, timeout, common headers и app-level ошибками `401/403/428`, HTML login page, offline и timeout.
+- Довести `Pair/Login` до реального auth/session transport и trusted session restore поверх уже готового storage.
 - Заменить demo-адаптеры `ServiceActionsPort`, `RoutingWritePort` и `LogsPort` на backend-backed реализации.

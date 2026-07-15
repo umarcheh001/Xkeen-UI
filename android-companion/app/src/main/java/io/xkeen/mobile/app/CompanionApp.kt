@@ -113,6 +113,7 @@ fun CompanionApp() {
         CompanionController(
             dependencies = defaultCompanionControllerDependencies(
                 connections = persistedConnectionsPort(applicationContext),
+                sessionMaterials = secureSessionMaterialStore(applicationContext),
             ),
         )
     }

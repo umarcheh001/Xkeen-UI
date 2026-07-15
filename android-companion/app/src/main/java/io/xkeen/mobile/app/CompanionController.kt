@@ -502,6 +502,7 @@ internal class CompanionController(
         state = state.copy(
             phase = AppPhase.Ready,
             connections = updatedConnections,
+            loginForm = state.loginForm.copy(password = ""),
             dashboard = state.dashboard.copy(
                 instanceLabel = result.connection.name,
                 endpoint = result.connection.baseUrl,

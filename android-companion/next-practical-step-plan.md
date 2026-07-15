@@ -1,7 +1,7 @@
 # Xkeen Mobile Companion Next Practical Step Plan
 
-Status: stages 1-2 completed, stage 3 next
-Updated: 2026-07-13
+Status: stages 1-3 completed, stage 4 next
+Updated: 2026-07-15
 
 ## Зачем нужен этот план
 
@@ -74,9 +74,27 @@ cd android-companion
 
 - после cold start список, metadata и последний выбранный узел восстанавливаются из локального хранилища;
 - добавление и редактирование сразу записываются в storage, а повторный выбор не создает дубликат;
-- автоматическое восстановление доверенной сессии сознательно остается за этапами 3 и 5, потому что для него нужен отдельный secure session material.
+- автоматическое восстановление доверенной сессии сознательно остается за этапом 5: secure session material уже есть, но нужен реальный backend bootstrap и проверка его валидности.
 
 ## Этап 3. Secure storage для session-материала
+
+Статус: завершено 2026-07-15
+
+Что сделали:
+
+- Добавлены `SessionMaterial` и `StoredSessionMaterial`, изолированные от snapshot видимых `Connection`: хранятся только access/refresh token, cookie header, CSRF token и marker `trustedForRestore`; пароль в эту модель не попадает.
+- Добавлен per-connection `SessionMaterialStore` с `loadTrusted()`, поэтому сохраненный узел со статусом `Configured` сам по себе не разрешает cold-start restore.
+- Для Android работает `AndroidKeystoreSessionMaterialStorage`: весь payload шифруется AES-GCM, ключ неэкспортируемый и создается в Android Keystore; в app-private `SharedPreferences` не записываются raw token/cookie/CSRF. Поврежденный ciphertext или недоступный ключ приводят к очистке unusable record.
+- Backup приложения выключен (`android:allowBackup="false"`), чтобы session payload не попадал в резервную копию вместе с локальными данными приложения.
+- Текущий `DemoSessionPort` проходит через тот же storage boundary с синтетическим случайным secret, но всегда пишет `trustedForRestore = false`; это не дает demo flow случайно стать автоматической авторизацией.
+- Logout очищает material только выбранного узла; после успешного login пароль очищается и из `CompanionUiState`.
+- Добавлены unit tests на пересоздание store, trusted/untrusted marker, выборочное очищение, malformed records и отсутствие пароля в payload.
+
+Политика восстановления:
+
+- Этап 5 сможет попытаться восстановить только запись выбранного узла, которую вернул `loadTrusted()`; затем он обязан подтвердить или refresh-нуть ее на backend.
+- Повторный вход нужен при отсутствии записи, `trustedForRestore = false`, повреждении ciphertext/сбросе Android Keystore, а также при истекшей или отозванной серверной авторизации.
+- Обычное сохраненное подключение и сохраненный статус `Configured` не являются доказательством действующей сессии.
 
 Что делаем:
 
