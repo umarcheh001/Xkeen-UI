@@ -17,6 +17,8 @@ Updated: 2026-07-16
 - наличие вкладок и drawer-разделов зависит от списка установленных ядер, который приходит из `GET /api/xkeen/core`;
 - первый реальный backend slice уже подключён для чтения: `GET /api/xkeen/core`, `GET /api/routing/fragments`, `GET /api/routing?file=...`;
 - все существующие read-only вызовы проходят через единый Android transport с безопасной нормализацией base URL, timeout/common headers/auth hook и типизированными состояниями auth, setup, offline и timeout;
+- вход предпочитает `/api/mobile/v1/*`, но совместим и с установленными версиями, где mobile handshake еще отвечает `401`: в этом случае session adapter прозрачно использует `/api/auth/status` и CSRF-protected `/api/auth/login`, не сохраняя пароль;
+- экран входа автоматически проверяет узел и показывает один основной путь: логин, пароль и `Войти`;
 - список подключений, базовый metadata state и последний выбранный узел уже переживают перезапуск приложения через app-private storage;
 - самый глубокий модуль сейчас это `Routing Xray`: он уже читает реальные routing-документы и даёт локальный editor-flow поверх них;
 - Этап 5 закрыт: secure storage session-материала, real alpha auth/session bootstrap, server-validated restore, explicit `Pair/Login` fallback и backend/Android verification готовы. Сервисные POST-действия, запись routing draft и большая часть не-Xray модулей всё ещё остаются незавершёнными.

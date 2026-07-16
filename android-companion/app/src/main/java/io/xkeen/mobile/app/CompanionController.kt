@@ -161,7 +161,10 @@ internal class CompanionController(
     suspend fun pair() {
         val connection = selectedConnection() ?: return
         if (state.isSessionBusy) return
-        state = state.copy(isSessionBusy = true, sessionMessage = null)
+        state = state.copy(
+            isSessionBusy = true,
+            sessionMessage = "Проверяем доступность узла…",
+        )
 
         try {
             when (val result = dependencies.session.pair(connection)) {
@@ -176,7 +179,10 @@ internal class CompanionController(
     suspend fun login() {
         val connection = selectedConnection() ?: return
         if (state.isSessionBusy) return
-        state = state.copy(isSessionBusy = true, sessionMessage = null)
+        state = state.copy(
+            isSessionBusy = true,
+            sessionMessage = "Проверяем данные и открываем сессию…",
+        )
 
         try {
             openSession(dependencies.session.login(connection, state.loginForm))
@@ -722,10 +728,7 @@ internal class CompanionController(
     private fun sessionErrorMessage(error: Exception): String = when (error) {
         is MobileSessionException -> error.message.orEmpty()
         is IllegalArgumentException -> error.message.orEmpty()
-        is CompanionTransportException -> when (error.failure.kind) {
-            CompanionTransportFailureKind.AuthenticationRequired -> "Проверьте логин и пароль."
-            else -> error.failure.userMessage
-        }
+        is CompanionTransportException -> error.failure.userMessage
 
         else -> error.message?.takeIf(String::isNotBlank)
             ?: "Повторите попытку позже."

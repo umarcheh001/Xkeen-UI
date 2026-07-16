@@ -38,7 +38,12 @@ class CompanionHttpTransportTest {
     @Test
     fun classifiesAuthSetupAndServerResponsesBeforeSourcesParseThem() {
         val unauthorized = assertTransportFailure {
-            requireSuccessfulCompanionResponse(response(statusCode = 401))
+            requireSuccessfulCompanionResponse(
+                response(
+                    statusCode = 401,
+                    body = """{"ok":false,"error":{"code":"invalid_credentials","message":"Неверный логин или пароль. Осталось попыток: 4."}}""",
+                ),
+            )
         }
         val forbidden = assertTransportFailure {
             requireSuccessfulCompanionResponse(response(statusCode = 403))
@@ -56,10 +61,25 @@ class CompanionHttpTransportTest {
         }
 
         assertEquals(CompanionTransportFailureKind.AuthenticationRequired, unauthorized.failure.kind)
+        assertEquals("invalid_credentials", unauthorized.failure.serverCode)
+        assertEquals(
+            "Неверный логин или пароль. Осталось попыток: 4.",
+            unauthorized.failure.userMessage,
+        )
         assertEquals(CompanionTransportFailureKind.AccessDenied, forbidden.failure.kind)
         assertEquals(CompanionTransportFailureKind.SetupRequired, setupRequired.failure.kind)
         assertEquals(CompanionTransportFailureKind.ServerError, serverError.failure.kind)
         assertEquals(CompanionTransportFailureKind.AuthenticationRequired, htmlLogin.failure.kind)
+    }
+
+    @Test
+    fun allowsHtmlOnlyForAnExplicitCompatibilityRequest() {
+        val html = response(
+            statusCode = 200,
+            body = """<!doctype html><meta name="csrf-token" content="token">""",
+        ).copy(contentType = "text/html")
+
+        assertEquals(html, requireSuccessfulCompanionResponse(html, allowHtmlResponse = true))
     }
 
     @Test
@@ -103,6 +123,27 @@ class CompanionHttpTransportTest {
         assertEquals("AuthenticatedCompanion", headers["X-Requested-With"])
         assertEquals(listOf("https://lab.lan:8443/panel"), hookBases)
         assertTrue(headers.keys.none { it.equals("Accept", ignoreCase = true) && it != "accept" })
+    }
+
+    @Test
+    fun explicitHandshakeRequestCanBypassStoredAuthHook() {
+        var hookCalled = false
+        val headers = mergedCompanionHeaders(
+            config = CompanionHttpTransportConfig(commonHeaders = mapOf("Accept" to "application/json")),
+            authHook = CompanionHttpAuthHook {
+                hookCalled = true
+                mapOf("Cookie" to "session=stale")
+            },
+            request = CompanionHttpRequest(
+                baseUrl = "https://lab.lan",
+                endpoint = "/api/auth/login",
+                headers = mapOf("Cookie" to "session=temporary"),
+                useAuthHook = false,
+            ),
+        )
+
+        assertEquals("session=temporary", headers["Cookie"])
+        assertTrue(!hookCalled)
     }
 
     private fun response(

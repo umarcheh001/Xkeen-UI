@@ -8,7 +8,8 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - На `Launching` приложение загружает из app-private storage список узлов, их базовый metadata state и последний выбранный узел; trusted material выбранного узла проверяется server bootstrap до открытия `Ready`.
 - `Connections` поддерживает ручное добавление инстанса по `name` и `baseUrl`, повторный выбор и безопасное редактирование уже сохраненного узла без смены его `id` и metadata.
 - Сохраненный `Configured` status сам по себе не открывает `Ready`: marker доверенного восстановления хранится отдельно, а авторизация подтверждается backend bootstrap.
-- `Pair/Login` работает через реальный `MobileSessionPort`: проверка узла — `GET /api/mobile/v1/bootstrap`, вход — `POST /api/mobile/v1/session`, выход — CSRF-protected `DELETE /api/mobile/v1/session`. В alpha это browser-compatible cookie+CSRF session без сохранения пароля.
+- `Pair/Login` работает через реальный `MobileSessionPort`: сначала используется `GET /api/mobile/v1/bootstrap` и `POST/DELETE /api/mobile/v1/session`. Если установленный Xkeen UI еще закрывает mobile handshake ответом старой версии, приложение автоматически и без перехода в браузер использует совместимый `/api/auth/status` + CSRF-protected `/api/auth/login` flow.
+- Экран входа проверяет узел автоматически и оставляет пользователю одно основное действие: ввести данные веб-панели и нажать `Войти`. Логин и пароль расположены вертикально, пароль можно показать, а клавиша `Done` запускает вход.
 - `Ready`-состояние построено как capability-aware workspace с компактной верхней панелью, отдельной кнопкой `Core` и безопасными действиями `start`, `stop`, `restart` через confirm dialog.
 
 Этап 5 закрыт 2026-07-16; подробная приемка зафиксирована в [stage-5-closure-checklist.md](stage-5-closure-checklist.md). Cold start выбранного узла без trusted material сразу открывает `Pair/Login`, а backend contract и Android unit/build verification проходят.
@@ -92,7 +93,7 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - `targetSdk 36`
 - `minSdk 28`
 - Java/Kotlin target `17`
-- Версия приложения `0.1.0`
+- Версия приложения `0.1.1`
 
 ## Как открыть
 

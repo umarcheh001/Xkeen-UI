@@ -45,6 +45,7 @@ Ready + любой authenticated read получает 401
 
 - [x] Backend предоставляет versioned `bootstrap`, `login` и `logout` contract в `/api/mobile/v1/*`, совместимый с существующей Flask cookie/CSRF session.
 - [x] `MobileSessionPort` использует этот contract; экран вызывает его suspend-методы из coroutine и не содержит `pairDemoDevice` или иной demo bypass.
+- [x] Для уже установленных backend-версий, где `/api/mobile/v1/bootstrap` ошибочно закрыт общим auth guard, есть ограниченный compatibility adapter через `/api/auth/status` и CSRF-protected `/api/auth/login`; ошибки `invalid_credentials` не запускают fallback повторно.
 - [x] После успешного login сохраняются только cookie и CSRF выбранного `connectionId` с `trustedForRestore = true`; пароль очищается из UI и никогда не сохраняется.
 - [x] Trusted record проверяется сервером через bootstrap; только ответ `authenticated = true` переводит `Launching` в `Ready`.
 - [x] Logout отправляет cookie и CSRF, а local material выбранного узла очищается даже если server logout завершился сетевой ошибкой.
@@ -69,3 +70,4 @@ cd android-companion
 3. Удаление cookie на сервере или expiry переводит приложение в `Pair/Login`, удаляет только material этого узла и сохраняет material другого узла, даже при одинаковом `baseUrl`.
 4. `401` при обновлении dashboard или Routing из `Ready` выполняет тот же явный переход в `Pair/Login`.
 5. Logout очищает local record независимо от доступности узла; после возврата в сеть старая локальная session не используется.
+6. Узел с `200` на `/api/auth/status` и `401 unauthorized` на анонимном `/api/mobile/v1/bootstrap` автоматически использует совместимый вход без отдельной кнопки проверки и без перехода в браузер.

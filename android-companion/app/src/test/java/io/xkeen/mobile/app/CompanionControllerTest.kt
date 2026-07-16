@@ -150,6 +150,52 @@ class CompanionControllerTest {
     }
 
     @Test
+    fun failedLoginShowsServerCredentialMessageAndKeepsPasswordForCorrection() = runTest {
+        val connection = Connection(
+            id = "failed-login-node",
+            name = "Узел входа",
+            baseUrl = "https://login.lan",
+            status = ConnectionStatus.NeedsAuth,
+            lastSeen = "Требуется вход",
+        )
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.PairLogin,
+                connections = listOf(connection),
+                selectedConnectionId = connection.id,
+                loginForm = LoginForm(username = "admin", password = "keep-for-fix"),
+            ),
+            dependencies = testDependencies(
+                connections = InMemoryConnectionsPort(
+                    StoredConnections(listOf(connection), connection.id),
+                ),
+                session = object : SessionPort by DemoSessionPort() {
+                    override suspend fun login(
+                        connection: Connection,
+                        credentials: LoginForm,
+                    ): SessionOpenResult = throw CompanionTransportException(
+                        CompanionTransportFailure(
+                            kind = CompanionTransportFailureKind.AuthenticationRequired,
+                            userMessage = "Неверный логин или пароль. Осталось попыток: 4.",
+                            statusCode = 401,
+                            serverCode = "invalid_credentials",
+                        ),
+                    )
+                },
+            ),
+        )
+
+        controller.login()
+
+        assertEquals(
+            "Не удалось выполнить вход: Неверный логин или пароль. Осталось попыток: 4.",
+            controller.state.sessionMessage,
+        )
+        assertEquals("keep-for-fix", controller.state.loginForm.password)
+        assertFalse(controller.state.isSessionBusy)
+    }
+
+    @Test
     fun selectingBottomTabResetsItsContextSection() {
         val controller = CompanionController(
             CompanionUiState(

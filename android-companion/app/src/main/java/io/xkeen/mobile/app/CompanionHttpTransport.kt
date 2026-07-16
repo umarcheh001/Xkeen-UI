@@ -11,12 +11,15 @@ import java.nio.charset.StandardCharsets
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 internal data class CompanionHttpRequest(
     val baseUrl: String,
     val endpoint: String,
     val headers: Map<String, String> = emptyMap(),
     val body: String? = null,
+    val allowHtmlResponse: Boolean = false,
+    val useAuthHook: Boolean = true,
 )
 
 internal data class CompanionHttpResponse(
@@ -119,7 +122,10 @@ internal class HttpUrlConnectionCompanionTransport(
                             .filter { (name, _) -> name.equals("Set-Cookie", ignoreCase = true) }
                             .flatMap { (_, values) -> values.orEmpty() },
                     )
-                    requireSuccessfulCompanionResponse(response)
+                    requireSuccessfulCompanionResponse(
+                        response = response,
+                        allowHtmlResponse = request.allowHtmlResponse,
+                    )
                 } finally {
                     connection.disconnect()
                 }
@@ -149,6 +155,7 @@ internal data class CompanionTransportFailure(
     val kind: CompanionTransportFailureKind,
     val userMessage: String,
     val statusCode: Int? = null,
+    val serverCode: String? = null,
 )
 
 internal class CompanionTransportException(
@@ -163,7 +170,9 @@ internal fun mergedCompanionHeaders(
 ): Map<String, String> = buildMap {
     putNormalizedHeaders(config.commonHeaders)
     putNormalizedHeaders(request.headers)
-    putNormalizedHeaders(authHook.headersFor(normalizeCompanionBaseUrl(request.baseUrl).toString()))
+    if (request.useAuthHook) {
+        putNormalizedHeaders(authHook.headersFor(normalizeCompanionBaseUrl(request.baseUrl).toString()))
+    }
 }
 
 private fun MutableMap<String, String>.putNormalizedHeaders(headers: Map<String, String>) {
@@ -178,24 +187,37 @@ private fun MutableMap<String, String>.putNormalizedHeaders(headers: Map<String,
     }
 }
 
-internal fun requireSuccessfulCompanionResponse(response: CompanionHttpResponse): CompanionHttpResponse {
+internal fun requireSuccessfulCompanionResponse(
+    response: CompanionHttpResponse,
+    allowHtmlResponse: Boolean = false,
+): CompanionHttpResponse {
+    val serverError = if (response.statusCode in 200..299) {
+        CompanionServerError()
+    } else {
+        response.parseServerError()
+    }
     val failure = when {
         response.statusCode == HttpURLConnection.HTTP_UNAUTHORIZED -> CompanionTransportFailure(
             kind = CompanionTransportFailureKind.AuthenticationRequired,
-            userMessage = "Требуется вход в Xkeen UI.",
+            userMessage = serverError.message ?: "Требуется вход в Xkeen UI.",
             statusCode = response.statusCode,
+            serverCode = serverError.code,
         )
 
         response.statusCode == HttpURLConnection.HTTP_FORBIDDEN -> CompanionTransportFailure(
             kind = CompanionTransportFailureKind.AccessDenied,
-            userMessage = "У текущей сессии нет доступа к этому разделу Xkeen UI.",
+            userMessage = serverError.message
+                ?: "У текущей сессии нет доступа к этому разделу Xkeen UI.",
             statusCode = response.statusCode,
+            serverCode = serverError.code,
         )
 
         response.statusCode == 428 -> CompanionTransportFailure(
             kind = CompanionTransportFailureKind.SetupRequired,
-            userMessage = "На Xkeen UI нужно завершить начальную настройку.",
+            userMessage = serverError.message
+                ?: "На Xkeen UI нужно завершить начальную настройку.",
             statusCode = response.statusCode,
+            serverCode = serverError.code,
         )
 
         response.statusCode !in 200..299 -> CompanionTransportFailure(
@@ -207,12 +229,13 @@ internal fun requireSuccessfulCompanionResponse(response: CompanionHttpResponse)
             userMessage = if (response.statusCode in 500..599) {
                 "Xkeen UI временно не может обработать запрос. Попробуйте ещё раз."
             } else {
-                "Xkeen UI вернул ошибку HTTP ${response.statusCode}."
+                serverError.message ?: "Xkeen UI вернул ошибку HTTP ${response.statusCode}."
             },
             statusCode = response.statusCode,
+            serverCode = serverError.code,
         )
 
-        response.isHtmlResponse() -> CompanionTransportFailure(
+        response.isHtmlResponse() && !allowHtmlResponse -> CompanionTransportFailure(
             kind = CompanionTransportFailureKind.AuthenticationRequired,
             userMessage = "Xkeen UI вернул страницу входа. Требуется авторизация.",
             statusCode = response.statusCode,
@@ -222,6 +245,29 @@ internal fun requireSuccessfulCompanionResponse(response: CompanionHttpResponse)
     }
     if (failure != null) throw CompanionTransportException(failure)
     return response
+}
+
+private data class CompanionServerError(
+    val code: String? = null,
+    val message: String? = null,
+)
+
+private fun CompanionHttpResponse.parseServerError(): CompanionServerError {
+    if (body.isBlank()) return CompanionServerError()
+    return runCatching {
+        val root = JSONObject(body)
+        val errorValue = root.opt("error")
+        val errorObject = errorValue as? JSONObject
+        CompanionServerError(
+            code = when (errorValue) {
+                is JSONObject -> errorValue.optString("code").trim().takeIf(String::isNotBlank)
+                is String -> errorValue.trim().takeIf(String::isNotBlank)
+                else -> null
+            },
+            message = errorObject?.optString("message")?.trim()?.takeIf(String::isNotBlank)
+                ?: root.optString("message").trim().takeIf(String::isNotBlank),
+        )
+    }.getOrDefault(CompanionServerError())
 }
 
 private fun CompanionHttpResponse.isHtmlResponse(): Boolean {

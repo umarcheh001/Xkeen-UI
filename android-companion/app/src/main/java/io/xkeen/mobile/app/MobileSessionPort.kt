@@ -36,16 +36,21 @@ internal class MobileSessionPort(
         require(credentials.username.isNotBlank()) { "Введите логин." }
         require(credentials.password.isNotBlank()) { "Введите пароль." }
 
-        val response = transport.post(
-            CompanionHttpRequest(
-                baseUrl = connection.baseUrl,
-                endpoint = "/api/mobile/v1/session",
-                body = JSONObject()
-                    .put("username", credentials.username.trim())
-                    .put("password", credentials.password)
-                    .toString(),
-            ),
-        )
+        val response = try {
+            transport.post(
+                CompanionHttpRequest(
+                    baseUrl = connection.baseUrl,
+                    endpoint = "/api/mobile/v1/session",
+                    body = credentials.toJsonBody(),
+                    useAuthHook = false,
+                ),
+            )
+        } catch (error: CompanionTransportException) {
+            if (error.isLegacyMobileHandshakeFailure()) {
+                return loginThroughWebApi(connection, credentials)
+            }
+            throw error
+        }
         val payload = parseMobilePayload(response.body)
         val session = payload.optJSONObject("session")
             ?: throw MobileSessionException("Сервер не вернул параметры мобильной сессии.")
@@ -55,16 +60,7 @@ internal class MobileSessionPort(
         val cookieHeader = response.setCookieHeaders.toCookieHeader()
             ?: throw MobileSessionException("Сервер не вернул cookie мобильной сессии.")
 
-        sessionMaterials.save(
-            StoredSessionMaterial(
-                connectionId = connection.id,
-                material = SessionMaterial(
-                    cookieHeader = cookieHeader,
-                    csrfToken = csrfToken,
-                ),
-                trustedForRestore = true,
-            ),
-        )
+        saveTrustedSession(connection, cookieHeader, csrfToken)
         return openResult(
             connection = connection,
             user = session.optString("user").trim().ifBlank { credentials.username.trim() },
@@ -104,10 +100,23 @@ internal class MobileSessionPort(
                     baseUrl = connection.baseUrl,
                     endpoint = "/api/mobile/v1/session",
                     headers = stored.material.toSessionHeaders(),
+                    useAuthHook = false,
                 ),
             )
             localResult
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            if ((error as? CompanionTransportException)?.isLegacyMobileHandshakeFailure() == true) {
+                runCatching {
+                    transport.post(
+                        CompanionHttpRequest(
+                            baseUrl = connection.baseUrl,
+                            endpoint = "/api/auth/logout",
+                            headers = stored.material.toSessionHeaders(),
+                            useAuthHook = false,
+                        ),
+                    )
+                }
+            }
             localResult.copy(
                 statusSummary = "Сессия удалена с устройства",
                 logMessage = "Локальная мобильная сессия удалена; сервер подтвердит выход при следующем подключении",
@@ -130,15 +139,111 @@ internal class MobileSessionPort(
     private suspend fun loadBootstrap(
         baseUrl: String,
         material: SessionMaterial? = null,
-    ): MobileBootstrap = parseMobileBootstrap(
-        transport.get(
+    ): MobileBootstrap = try {
+        parseMobileBootstrap(
+            transport.get(
+                CompanionHttpRequest(
+                    baseUrl = baseUrl,
+                    endpoint = "/api/mobile/v1/bootstrap",
+                    headers = material?.toSessionHeaders().orEmpty(),
+                    useAuthHook = false,
+                ),
+            ).body,
+        )
+    } catch (error: CompanionTransportException) {
+        if (error.isLegacyMobileHandshakeFailure()) {
+            loadLegacyBootstrap(baseUrl, material)
+        } else {
+            throw error
+        }
+    }
+
+    /**
+     * Installations predating the mobile-v1 handshake still expose the browser JSON auth API.
+     * Keep this adapter deliberately local to the session layer: UI state never sees the
+     * temporary CSRF token, cookie, or password used for the compatibility login.
+     */
+    private suspend fun loginThroughWebApi(
+        connection: Connection,
+        credentials: LoginForm,
+    ): SessionOpenResult {
+        val loginPage = transport.get(
+            CompanionHttpRequest(
+                baseUrl = connection.baseUrl,
+                endpoint = "/login",
+                allowHtmlResponse = true,
+                useAuthHook = false,
+            ),
+        )
+        val initialCsrf = loginPage.body.extractCsrfToken()
+        val initialCookie = loginPage.setCookieHeaders.toCookieHeader()
+            ?: throw MobileSessionException("Xkeen UI не создал защищенную сессию для входа.")
+
+        val loginResponse = transport.post(
+            CompanionHttpRequest(
+                baseUrl = connection.baseUrl,
+                endpoint = "/api/auth/login",
+                headers = mapOf(
+                    "Cookie" to initialCookie,
+                    "X-CSRF-Token" to initialCsrf,
+                ),
+                body = credentials.toJsonBody(),
+                useAuthHook = false,
+            ),
+        )
+        requireLegacyAuthSuccess(loginResponse.body)
+        val authenticatedCookie = loginResponse.setCookieHeaders.toCookieHeader()
+            ?: throw MobileSessionException("Xkeen UI не вернул cookie после входа.")
+
+        val authenticatedPage = transport.get(
+            CompanionHttpRequest(
+                baseUrl = connection.baseUrl,
+                endpoint = "/",
+                headers = mapOf("Cookie" to authenticatedCookie),
+                allowHtmlResponse = true,
+                useAuthHook = false,
+            ),
+        )
+        val authenticatedCsrf = authenticatedPage.body.extractCsrfToken()
+        saveTrustedSession(connection, authenticatedCookie, authenticatedCsrf)
+        return openResult(
+            connection = connection,
+            user = credentials.username.trim(),
+            restored = false,
+        )
+    }
+
+    private suspend fun loadLegacyBootstrap(
+        baseUrl: String,
+        material: SessionMaterial?,
+    ): MobileBootstrap {
+        val response = transport.get(
             CompanionHttpRequest(
                 baseUrl = baseUrl,
-                endpoint = "/api/mobile/v1/bootstrap",
+                endpoint = "/api/auth/status",
                 headers = material?.toSessionHeaders().orEmpty(),
+                useAuthHook = false,
             ),
-        ).body,
-    )
+        )
+        return parseLegacyBootstrap(response.body)
+    }
+
+    private fun saveTrustedSession(
+        connection: Connection,
+        cookieHeader: String,
+        csrfToken: String,
+    ) {
+        sessionMaterials.save(
+            StoredSessionMaterial(
+                connectionId = connection.id,
+                material = SessionMaterial(
+                    cookieHeader = cookieHeader,
+                    csrfToken = csrfToken,
+                ),
+                trustedForRestore = true,
+            ),
+        )
+    }
 
     private fun openResult(
         connection: Connection,
@@ -198,18 +303,77 @@ private fun parseMobileBootstrap(body: String): MobileBootstrap {
     )
 }
 
-private fun parseMobilePayload(body: String): JSONObject {
-    val root = try {
-        JSONObject(body)
-    } catch (error: Exception) {
-        throw MobileSessionException("Xkeen UI вернул неожиданный ответ мобильной сессии.", error)
+private fun parseLegacyBootstrap(body: String): MobileBootstrap {
+    val root = parseJsonObject(
+        body = body,
+        unexpectedMessage = "Xkeen UI вернул неожиданный ответ проверки авторизации.",
+    )
+    if (!root.optBoolean("ok", false)) {
+        throw MobileSessionException("Xkeen UI отклонил проверку авторизации.")
     }
+    return MobileBootstrap(
+        configured = root.optBoolean("configured", false),
+        authenticated = root.optBoolean("logged_in", false),
+        user = root.optString("user").trim().takeIf(String::isNotBlank),
+    )
+}
+
+private fun parseMobilePayload(body: String): JSONObject {
+    val root = parseJsonObject(
+        body = body,
+        unexpectedMessage = "Xkeen UI вернул неожиданный ответ мобильной сессии.",
+    )
     if (!root.optBoolean("ok", false)) {
         throw MobileSessionException("Xkeen UI отклонил запрос мобильной сессии.")
     }
     return root.optJSONObject("data")
         ?: throw MobileSessionException("Сервер не вернул данные мобильной сессии.")
 }
+
+private fun requireLegacyAuthSuccess(body: String) {
+    val root = parseJsonObject(
+        body = body,
+        unexpectedMessage = "Xkeen UI вернул неожиданный ответ входа.",
+    )
+    if (!root.optBoolean("ok", false)) {
+        val message = root.optString("message").trim().takeIf(String::isNotBlank)
+            ?: "Xkeen UI отклонил вход."
+        throw MobileSessionException(message)
+    }
+}
+
+private fun parseJsonObject(body: String, unexpectedMessage: String): JSONObject = try {
+    JSONObject(body)
+} catch (error: Exception) {
+    throw MobileSessionException(unexpectedMessage, error)
+}
+
+private fun LoginForm.toJsonBody(): String = JSONObject()
+    .put("username", username.trim())
+    .put("password", password)
+    .toString()
+
+private fun String.extractCsrfToken(): String {
+    val patterns = listOf(
+        Regex(
+            """<meta\s+name=["']csrf-token["']\s+content=["']([^"']+)["']""",
+            RegexOption.IGNORE_CASE,
+        ),
+        Regex(
+            """<input\s+type=["']hidden["']\s+name=["']csrf_token["']\s+value=["']([^"']+)["']""",
+            RegexOption.IGNORE_CASE,
+        ),
+    )
+    return patterns.firstNotNullOfOrNull { pattern ->
+        pattern.find(this)?.groupValues?.getOrNull(1)?.trim()?.takeIf(String::isNotBlank)
+    } ?: throw MobileSessionException("Xkeen UI не вернул CSRF-параметр для входа.")
+}
+
+private fun CompanionTransportException.isLegacyMobileHandshakeFailure(): Boolean =
+    failure.statusCode == 404 || (
+        failure.kind == CompanionTransportFailureKind.AuthenticationRequired &&
+            failure.serverCode?.lowercase() in setOf(null, "unauthorized")
+        )
 
 private fun SessionMaterial.toSessionHeaders(): Map<String, String> = buildMap {
     accessToken?.takeIf(String::isNotBlank)?.let { put("Authorization", "Bearer $it") }

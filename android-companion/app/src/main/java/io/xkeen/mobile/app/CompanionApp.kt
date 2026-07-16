@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -59,7 +60,8 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SettingsBackupRestore
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material.icons.outlined.Verified
-import androidx.compose.material.icons.outlined.VpnKey
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -83,11 +85,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -96,8 +101,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -293,6 +300,19 @@ private fun PairLoginRoute(
 ) {
     val connection = state.connections.firstOrNull { it.id == state.selectedConnectionId }
     val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+    val passwordVisible = rememberSaveable(connection?.id) { mutableStateOf(false) }
+    val canLogin = state.loginForm.username.isNotBlank() && state.loginForm.password.isNotBlank()
+    val submitLogin: () -> Unit = {
+        if (canLogin && !state.isSessionBusy) {
+            focusManager.clearFocus()
+            scope.launch { controller.login() }
+        }
+    }
+
+    LaunchedEffect(connection?.id) {
+        if (connection != null) controller.pair()
+    }
 
     Column(
         modifier = Modifier
@@ -309,7 +329,7 @@ private fun PairLoginRoute(
             Spacer(Modifier.width(4.dp))
             Column {
                 Text(
-                    text = connection?.name ?: "Выбранный узел",
+                    text = connection?.let { "Вход в ${it.name}" } ?: "Вход в Xkeen UI",
                     style = MaterialTheme.typography.titleLarge,
                 )
                 Text(
@@ -321,80 +341,101 @@ private fun PairLoginRoute(
         }
 
         SectionCard(
-            title = "Авторизация",
+            title = "Учетная запись",
+            supporting = "Введите тот же логин и пароль администратора, что используете в веб-панели.",
         ) {
             CompactStatusRow(
                 items = listOf(
                     connectionStatusChip(connection?.status ?: ConnectionStatus.NeedsAuth),
                 ),
             )
-            state.sessionMessage?.let { message ->
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Spacer(Modifier.height(10.dp))
+            if (state.isSessionBusy) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Text(
+                        text = state.sessionMessage ?: "Проверяем подключение…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                val message = state.sessionMessage
+                    ?: "Подключение проверяется автоматически перед входом."
+                if (message.startsWith("Не удалось", ignoreCase = true)) {
+                    WarningBanner(message)
+                } else {
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
-            Spacer(Modifier.height(8.dp))
-            Row(
+            Spacer(Modifier.height(12.dp))
+            CompactField(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                CompactField(
-                    modifier = Modifier.weight(1f),
-                    value = state.loginForm.username,
-                    onValueChange = controller::updateUsername,
-                    label = "Логин",
-                    labelMode = CompactFieldLabelMode.Above,
-                    leadingIcon = { Icon(Icons.Outlined.Key, contentDescription = null) },
-                    enabled = !state.isSessionBusy,
-                )
-                CompactField(
-                    modifier = Modifier.weight(1f),
-                    value = state.loginForm.password,
-                    onValueChange = controller::updatePassword,
-                    label = "Пароль",
-                    labelMode = CompactFieldLabelMode.Above,
-                    leadingIcon = { Icon(Icons.Outlined.Password, contentDescription = null) },
-                    visualTransformation = PasswordVisualTransformation(),
-                    enabled = !state.isSessionBusy,
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                CompactActionButton(
-                    label = if (state.isSessionBusy) "Проверяем…" else "Проверить узел",
-                    icon = Icons.Outlined.VpnKey,
-                    onClick = { scope.launch { controller.pair() } },
-                    modifier = Modifier.weight(1f),
-                    enabled = !state.isSessionBusy,
-                )
-                CompactActionButton(
-                    label = if (state.isSessionBusy) "Выполняется…" else "Войти",
-                    icon = Icons.Outlined.Verified,
-                    onClick = { scope.launch { controller.login() } },
-                    modifier = Modifier.weight(1f),
-                    style = CompactButtonStyle.Outlined,
-                    enabled = !state.isSessionBusy,
-                )
-            }
-        }
-
-        SectionCard(
-            title = "Доступные разделы",
-        ) {
-            CompactStatusRow(
-                items = listOf(
-                    statusChip("Сводка"),
-                    statusChip("Маршруты Xray"),
-                    statusChip("Логи"),
-                    statusChip("Еще"),
+                value = state.loginForm.username,
+                onValueChange = controller::updateUsername,
+                label = "Логин",
+                labelMode = CompactFieldLabelMode.Above,
+                leadingIcon = { Icon(Icons.Outlined.Key, contentDescription = null) },
+                imeAction = ImeAction.Next,
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) },
                 ),
+                enabled = !state.isSessionBusy,
             )
+            Spacer(Modifier.height(10.dp))
+            CompactField(
+                modifier = Modifier.fillMaxWidth(),
+                value = state.loginForm.password,
+                onValueChange = controller::updatePassword,
+                label = "Пароль",
+                labelMode = CompactFieldLabelMode.Above,
+                leadingIcon = { Icon(Icons.Outlined.Password, contentDescription = null) },
+                trailingIcon = {
+                    IconButton(onClick = { passwordVisible.value = !passwordVisible.value }) {
+                        Icon(
+                            imageVector = if (passwordVisible.value) {
+                                Icons.Outlined.VisibilityOff
+                            } else {
+                                Icons.Outlined.Visibility
+                            },
+                            contentDescription = if (passwordVisible.value) {
+                                "Скрыть пароль"
+                            } else {
+                                "Показать пароль"
+                            },
+                        )
+                    }
+                },
+                keyboardType = KeyboardType.Password,
+                imeAction = ImeAction.Done,
+                keyboardActions = KeyboardActions(onDone = { submitLogin() }),
+                visualTransformation = if (passwordVisible.value) {
+                    VisualTransformation.None
+                } else {
+                    PasswordVisualTransformation()
+                },
+                enabled = !state.isSessionBusy,
+            )
+            Spacer(Modifier.height(14.dp))
+            Button(
+                onClick = submitLogin,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                enabled = canLogin && !state.isSessionBusy,
+                shape = RoundedCornerShape(14.dp),
+            ) {
+                Icon(Icons.Outlined.Verified, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Войти")
+            }
         }
     }
 }
@@ -1474,8 +1515,11 @@ private fun CompactField(
     modifier: Modifier = Modifier,
     labelMode: CompactFieldLabelMode = CompactFieldLabelMode.Floating,
     leadingIcon: @Composable (() -> Unit)? = null,
+    trailingIcon: @Composable (() -> Unit)? = null,
     keyboardType: KeyboardType = KeyboardType.Text,
-    visualTransformation: androidx.compose.ui.text.input.VisualTransformation = androidx.compose.ui.text.input.VisualTransformation.None,
+    imeAction: ImeAction = ImeAction.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
     enabled: Boolean = true,
 ) {
     val field: @Composable (Modifier, @Composable (() -> Unit)?) -> Unit = { fieldModifier, labelContent ->
@@ -1486,8 +1530,13 @@ private fun CompactField(
             modifier = fieldModifier.height(52.dp),
             label = labelContent,
             leadingIcon = leadingIcon,
+            trailingIcon = trailingIcon,
             shape = RoundedCornerShape(14.dp),
-            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = keyboardType,
+                imeAction = imeAction,
+            ),
+            keyboardActions = keyboardActions,
             visualTransformation = visualTransformation,
             textStyle = MaterialTheme.typography.bodyMedium,
             singleLine = true,

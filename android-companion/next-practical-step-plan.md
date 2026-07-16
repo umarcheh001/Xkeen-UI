@@ -147,6 +147,12 @@ cd android-companion
 
 Ограничение alpha: используется browser-compatible cookie+CSRF session. Device pairing, refresh-token lifecycle и полноценный mobile-native auth contract намеренно остаются последующими этапами.
 
+Post-stage hotfix 2026-07-16:
+
+- Проверка реального узла выявила несовместимость развернутой версии: `/api/auth/status` возвращал рабочее состояние auth, но `/api/mobile/v1/bootstrap` до входа отвечал `401 unauthorized`.
+- `MobileSessionPort` теперь распознает именно отсутствие открытого mobile handshake и безопасно переключается на существующий web auth API с получением CSRF/cookie; явная ошибка `invalid_credentials` не запускает второй запрос и не расходует лишнюю попытку rate limit.
+- `Pair/Login` упрощен до автоматической проверки подключения и одной кнопки входа; добавлены вертикальные поля, показ пароля и keyboard submit.
+
 ## Этап 6. Backend-backed service actions и core switch
 
 Что делаем:

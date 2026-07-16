@@ -45,6 +45,117 @@ class MobileSessionPortTest {
     }
 
     @Test
+    fun pairFallsBackToWebAuthStatusWhenMobileHandshakeIsProtectedByOlderServer() = runTest {
+        val transport = ScriptedSessionTransport(
+            getSteps = listOf(
+                { throw legacyHandshakeFailure() },
+                {
+                    response(
+                        body = """{"ok":true,"configured":true,"logged_in":false,"user":null}""",
+                    )
+                },
+            ),
+        )
+
+        val result = MobileSessionPort(InMemorySessionMaterialStore(), transport).pair(connection)
+
+        assertTrue(result is SessionPairResult.Status)
+        assertEquals(ConnectionStatus.NeedsAuth, (result as SessionPairResult.Status).connection.status)
+        assertEquals(
+            listOf("/api/mobile/v1/bootstrap", "/api/auth/status"),
+            transport.getRequests.map(CompanionHttpRequest::endpoint),
+        )
+        assertTrue(transport.getRequests.all { !it.useAuthHook })
+    }
+
+    @Test
+    fun loginFallsBackToCsrfProtectedWebApiAndStoresAuthenticatedSession() = runTest {
+        val materials = InMemorySessionMaterialStore()
+        val transport = ScriptedSessionTransport(
+            getSteps = listOf(
+                {
+                    response(
+                        body = """<meta name="csrf-token" content="csrf-before">""",
+                        cookies = listOf("session=anonymous-cookie; HttpOnly; Path=/"),
+                    )
+                },
+                {
+                    response(
+                        body = """<meta name="csrf-token" content="csrf-after">""",
+                    )
+                },
+            ),
+            postSteps = listOf(
+                { throw legacyHandshakeFailure() },
+                {
+                    response(
+                        body = """{"ok":true}""",
+                        cookies = listOf("session=authenticated-cookie; HttpOnly; Path=/"),
+                    )
+                },
+            ),
+        )
+
+        val opened = MobileSessionPort(materials, transport).login(
+            connection,
+            LoginForm(username = "admin", password = "secret"),
+        )
+
+        assertEquals(ConnectionStatus.Configured, opened.connection.status)
+        assertEquals(
+            listOf("/api/mobile/v1/session", "/api/auth/login"),
+            transport.postRequests.map(CompanionHttpRequest::endpoint),
+        )
+        assertEquals(listOf("/login", "/"), transport.getRequests.map(CompanionHttpRequest::endpoint))
+        val legacyLogin = transport.postRequests.last()
+        assertEquals("session=anonymous-cookie", legacyLogin.headers["Cookie"])
+        assertEquals("csrf-before", legacyLogin.headers["X-CSRF-Token"])
+        assertTrue(legacyLogin.body.orEmpty().contains("\"password\":\"secret\""))
+        assertTrue(transport.getRequests.all(CompanionHttpRequest::allowHtmlResponse))
+        assertTrue((transport.getRequests + transport.postRequests).all { !it.useAuthHook })
+        assertEquals(
+            StoredSessionMaterial(
+                connectionId = connection.id,
+                material = SessionMaterial(
+                    cookieHeader = "session=authenticated-cookie",
+                    csrfToken = "csrf-after",
+                ),
+                trustedForRestore = true,
+            ),
+            materials.loadTrusted(connection.id),
+        )
+    }
+
+    @Test
+    fun explicitMobileCredentialFailureDoesNotRetryAgainstWebApi() = runTest {
+        val transport = ScriptedSessionTransport(
+            postSteps = listOf(
+                {
+                    throw CompanionTransportException(
+                        CompanionTransportFailure(
+                            kind = CompanionTransportFailureKind.AuthenticationRequired,
+                            userMessage = "Неверный логин или пароль.",
+                            statusCode = 401,
+                            serverCode = "invalid_credentials",
+                        ),
+                    )
+                },
+            ),
+        )
+
+        val error = runCatching {
+            MobileSessionPort(InMemorySessionMaterialStore(), transport).login(
+                connection,
+                LoginForm(username = "admin", password = "wrong"),
+            )
+        }.exceptionOrNull()
+
+        assertTrue(error is CompanionTransportException)
+        assertEquals(listOf("/api/mobile/v1/session"), transport.postRequests.map(CompanionHttpRequest::endpoint))
+        assertTrue(transport.getRequests.isEmpty())
+    }
+
+    @Test
     fun restoreConfirmsTrustedSessionWithItsOwnCookieAndCsrf() = runTest {
         val materials = trustedMaterials()
         val transport = RecordingSessionTransport(
@@ -147,6 +258,44 @@ class MobileSessionPortTest {
         setCookieHeaders = cookies,
     )
 }
+
+private class ScriptedSessionTransport(
+    getSteps: List<() -> CompanionHttpResponse> = emptyList(),
+    postSteps: List<() -> CompanionHttpResponse> = emptyList(),
+    deleteSteps: List<() -> CompanionHttpResponse> = emptyList(),
+) : CompanionHttpTransport {
+    private val pendingGets = java.util.ArrayDeque(getSteps)
+    private val pendingPosts = java.util.ArrayDeque(postSteps)
+    private val pendingDeletes = java.util.ArrayDeque(deleteSteps)
+
+    val getRequests = mutableListOf<CompanionHttpRequest>()
+    val postRequests = mutableListOf<CompanionHttpRequest>()
+    val deleteRequests = mutableListOf<CompanionHttpRequest>()
+
+    override suspend fun get(request: CompanionHttpRequest): CompanionHttpResponse {
+        getRequests += request
+        return pendingGets.removeFirst().invoke()
+    }
+
+    override suspend fun post(request: CompanionHttpRequest): CompanionHttpResponse {
+        postRequests += request
+        return pendingPosts.removeFirst().invoke()
+    }
+
+    override suspend fun delete(request: CompanionHttpRequest): CompanionHttpResponse {
+        deleteRequests += request
+        return pendingDeletes.removeFirst().invoke()
+    }
+}
+
+private fun legacyHandshakeFailure(): CompanionTransportException = CompanionTransportException(
+    CompanionTransportFailure(
+        kind = CompanionTransportFailureKind.AuthenticationRequired,
+        userMessage = "Требуется вход в Xkeen UI.",
+        statusCode = 401,
+        serverCode = "unauthorized",
+    ),
+)
 
 private class RecordingSessionTransport(
     private val getResponse: CompanionHttpResponse? = null,
