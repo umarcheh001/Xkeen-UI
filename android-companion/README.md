@@ -18,6 +18,8 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 
 Этап 8 реализован и документирован в [stage-8-closure-checklist.md](stage-8-closure-checklist.md); финальная operational отметка требует device smoke-test согласованных backend archive и APK.
 
+Этап 9 реализован и документирован в [stage-9-closure-checklist.md](stage-9-closure-checklist.md). `Логи Xray` используют authenticated mobile history/live contract с cursor-based reconnect; финальная operational отметка требует device smoke-test согласованных backend archive и APK.
+
 ## Текущая навигация
 
 - Нижняя панель использует пользовательские вкладки `Xray`, `Mihomo`, `Ports`, `Shell`, `Generator`.
@@ -49,6 +51,7 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - `GET /api/mobile/v1/xray/routing/document?document=...` загружает единый server-authoritative snapshot выбранного routing-документа: published content/revision, сохранённый server draft и conflict metadata.
 - `POST /api/mobile/v1/xray/routing/validate` принимает raw JSONC draft выбранного документа и запускает read-only server Xray preflight; invalid draft возвращает structured diagnostics без persistent config save, restart или DAT-asset sync side effect.
 - `POST /api/mobile/v1/xray/routing/save` сохраняет проверенный draft отдельно от live Xray fragment; `POST /api/mobile/v1/xray/routing/apply` применяет exact saved revision и подтверждает restart xkeen.
+- `GET /api/mobile/v1/logs` возвращает Xray `error`/`access` history и инкрементальные записи по per-source opaque cursor. Android пользуется этим контрактом для live logs, а не web WebSocket endpoint'ами.
 - `POST /api/xkeen/start`, `POST /api/xkeen/stop`, `POST /api/restart` и `POST /api/xkeen/core` выполняют service/core actions; после каждого принятого POST приложение сверяет результат через `GET /api/xkeen/status` и `GET /api/xkeen/core`.
 - Эти read-only запросы идут через единый `CompanionHttpTransport`: он нормализует безопасный `baseUrl`, добавляет common headers, применяет timeout и оставляет seam для session auth headers. Validate и service actions используют отдельный `90 s` transport, потому что server Xray preflight может быть долгим.
 - `401`, `403`, `428`, HTML login page, offline и timeout переводятся в типизированные app-level ошибки. `Core` отражает их в dashboard, diagnostics и logs, а `Routing Xray` — в retryable load state.
@@ -59,7 +62,7 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - `DemoCompanionController` заменен на `CompanionController`, который зависит от `CompanionControllerDependencies`, а не от жестко пришитых demo-side effects.
 - Для следующего слоя выделены отдельные порты: `ConnectionsPort`, `SessionPort`, `ServiceActionsPort`, `RoutingValidationPort`, `RoutingWritePort`, `LogsPort`; time/journal helper живет отдельно в `CompanionJournalPort`.
 - `CompanionController` больше не собирает `LogEntry` вручную: запись controller-событий идет через `LogsPort`, поэтому транспорт логов и policy хранения можно будет заменить без роста reducer-логики.
-- `ConnectionsPort`, `SessionPort`, `ServiceActionsPort`, `RoutingValidationPort` и `RoutingWritePort` имеют production implementations; demo-адаптер пока остаётся у `LogsPort`.
+- `ConnectionsPort`, `SessionPort`, `ServiceActionsPort`, `RoutingValidationPort`, `RoutingWritePort` и `LogsTransportPort` имеют production implementations. `LogsPort` сохраняет только локальную policy controller-событий.
 - Логика controller/reducer теперь тестируется отдельно от transport и storage seam.
 
 ## Локальное хранение подключений
@@ -132,9 +135,9 @@ cd android-companion
 ## Что пока остаётся demo-only
 
 - `Routing Xray` полностью backend-backed для `load/validate/save/apply`; для device rollout одновременно нужны актуальный backend archive и APK.
-- Controller-события уже проходят через `LogsPort`, но настоящего logs streaming, PTY transport, reconnect behavior и offline persistence пока нет.
+- Реальный Xray logs history/live transport и reconnect behavior уже подключены. PTY transport и durable offline persistence логов пока не входят в scope.
 - Большая часть разделов `Mihomo`, `Ports` и `Generator` пока остаётся placeholder-поверхностями.
 
 ## Следующий практический шаг
 
-- Этап 9: подключить logs transport/reconnect behavior.
+- Этап 10: финальная шлифовка, device smoke-tests и приемка текущего блока.

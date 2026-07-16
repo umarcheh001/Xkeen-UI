@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,6 +36,7 @@ import androidx.compose.material.icons.outlined.SettingsBackupRestore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -1018,6 +1021,103 @@ internal fun ModulePlaceholderScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
+        }
+    }
+}
+
+@Composable
+internal fun LogsWorkspaceScreen(
+    state: CompanionUiState,
+    controller: CompanionController,
+    modifier: Modifier = Modifier,
+) {
+    val logs = state.logs
+    val entries = remember(logs.entries, logs.filter) {
+        logs.entries.filter { entry ->
+            when (logs.filter) {
+                LogFilter.All -> true
+                LogFilter.Service -> entry.source.startsWith("xray-") || entry.source == "service"
+                LogFilter.Routing -> entry.source == "routing"
+                LogFilter.Errors -> entry.level == LogLevel.Error
+            }
+        }
+    }
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(WebPanelPalette.Background)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(9.dp),
+    ) {
+        TitleBlock(
+            eyebrow = "Xray transport",
+            title = "Логи Xray",
+            subtitle = logs.statusMessage,
+        )
+        CompactStatusRow(
+            items = listOf(
+                logsConnectionChip(logs.connection, logs.reconnectAttempt),
+                statusChip(if (logs.hasLoadedHistory) "история загружена" else "ждём историю"),
+            ),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            LogFilter.entries.forEach { filter ->
+                FilterChip(
+                    selected = logs.filter == filter,
+                    onClick = { controller.updateLogFilter(filter) },
+                    label = { Text(logFilterLabel(filter)) },
+                )
+            }
+        }
+        if (entries.isEmpty()) {
+            SectionCard(
+                title = "Нет записей",
+                supporting = if (logs.connection == LogsConnectionState.Connected) {
+                    "Xray ещё не записал события в доступные log-файлы."
+                } else {
+                    "История появится после подключения; экран не нужно перезапускать."
+                },
+            ) {}
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                items(entries, key = { entry -> entry.id.ifBlank { "local:${entry.time}:${entry.message}" } }) { entry ->
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = WebPanelPalette.Surface,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = entry.time,
+                                    color = WebPanelPalette.Muted,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontFamily = FontFamily.Monospace,
+                                )
+                                Text(
+                                    text = logSourceLabel(entry.source),
+                                    color = WebPanelPalette.TextBlue,
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                                StatusChip(logLevelChip(entry.level))
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = entry.message,
+                                color = if (entry.level == LogLevel.Error) WebPanelPalette.Error else WebPanelPalette.Text,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

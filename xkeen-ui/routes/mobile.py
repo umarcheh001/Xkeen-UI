@@ -7,7 +7,11 @@ they do not need to parse HTML login/setup pages or emulate browser forms.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
+import os
+import re
 from typing import Any
 
 from flask import Flask, current_app, jsonify, request, session
@@ -38,7 +42,13 @@ MOBILE_XRAY_ROUTING_VALIDATE_PATH = f"{MOBILE_API_PREFIX}/xray/routing/validate"
 MOBILE_XRAY_ROUTING_DOCUMENT_PATH = f"{MOBILE_API_PREFIX}/xray/routing/document"
 MOBILE_XRAY_ROUTING_SAVE_PATH = f"{MOBILE_API_PREFIX}/xray/routing/save"
 MOBILE_XRAY_ROUTING_APPLY_PATH = f"{MOBILE_API_PREFIX}/xray/routing/apply"
+MOBILE_LOGS_PATH = f"{MOBILE_API_PREFIX}/logs"
 _MOBILE_ROUTING_SERVICE_EXTENSION = "xkeen.mobile_routing_service"
+_MOBILE_LOG_SOURCES = {
+    "error": "xray-error",
+    "access": "xray-access",
+}
+_MOBILE_LOG_TIME_RE = re.compile(r"\b\d{4}/\d{2}/\d{2}\s+(\d{2}:\d{2}:\d{2})\b")
 
 
 def configure_mobile_routing_service(app: Flask, service: Any) -> None:
@@ -175,6 +185,141 @@ def _read_mobile_routing_validation_request() -> dict[str, Any]:
     return data
 
 
+def _mobile_xray_logs_dependencies() -> dict[str, Any]:
+    """Load existing safe Xray log-tail primitives behind the mobile contract."""
+
+    from services.xray_log_api import adjust_log_timezone, resolve_xray_log_path_for_ws
+    from services.xray_logs import read_new_lines, tail_lines_fast
+
+    return {
+        "adjust_log_timezone": adjust_log_timezone,
+        "read_new_lines": read_new_lines,
+        "resolve_path": resolve_xray_log_path_for_ws,
+        "tail_lines_fast": tail_lines_fast,
+    }
+
+
+def _mobile_log_cursor_encode(source: str, inode: int, offset: int, carry: bytes) -> str:
+    payload = {
+        "source": source,
+        "inode": int(inode),
+        "offset": int(offset),
+        "carry": base64.urlsafe_b64encode(carry).decode("ascii").rstrip("="),
+    }
+    raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _mobile_log_cursor_decode(value: str, source: str) -> dict[str, Any] | None:
+    if not value or len(value) > 4096:
+        return None
+    try:
+        padded = value + ("=" * (-len(value) % 4))
+        decoded = base64.urlsafe_b64decode(padded.encode("ascii"))
+        payload = json.loads(decoded.decode("utf-8"))
+        if not isinstance(payload, dict) or payload.get("source") != source:
+            return None
+        inode = int(payload.get("inode"))
+        offset = int(payload.get("offset"))
+        raw_carry = str(payload.get("carry") or "")
+        padded_carry = raw_carry + ("=" * (-len(raw_carry) % 4))
+        carry = base64.urlsafe_b64decode(padded_carry.encode("ascii")) if raw_carry else b""
+        if inode < 0 or offset < 0 or len(carry) > 128 * 1024:
+            return None
+        return {"inode": inode, "offset": offset, "carry": carry}
+    except (ValueError, TypeError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+
+
+def _mobile_log_level(line: str) -> str:
+    lowered = line.lower()
+    if "[error]" in lowered or " error " in lowered or "failed" in lowered:
+        return "error"
+    if "[warning]" in lowered or "[warn]" in lowered or " warning " in lowered:
+        return "warning"
+    return "info"
+
+
+def _mobile_log_entries(*, source: str, inode: int, marker: int, lines: list[str]) -> list[dict[str, str]]:
+    entries: list[dict[str, str]] = []
+    for index, raw_line in enumerate(lines):
+        message = str(raw_line or "").strip()
+        if not message:
+            continue
+        time_match = _MOBILE_LOG_TIME_RE.search(message)
+        # IDs are opaque cursor-window identities. They stay stable for a repeated snapshot and
+        # make a duplicate delivery after reconnect harmless on Android.
+        identity = f"{source}:{inode}:{marker}:{index}".encode("utf-8")
+        entries.append(
+            {
+                "id": f"{source}:{hashlib.sha256(identity).hexdigest()[:20]}",
+                "time": time_match.group(1) if time_match else "—",
+                "source": _MOBILE_LOG_SOURCES[source],
+                "level": _mobile_log_level(message),
+                "message": message[:8000],
+            }
+        )
+    return entries
+
+
+def _mobile_log_stream(*, source: str, cursor: str, limit: int) -> dict[str, Any]:
+    dependencies = _mobile_xray_logs_dependencies()
+    path = dependencies["resolve_path"](source)
+    if not path or not os.path.isfile(path):
+        return {
+            "source": source,
+            "mode": "snapshot",
+            "cursor": "",
+            "available": False,
+            "entries": [],
+        }
+    try:
+        stat = os.stat(path)
+        inode = int(getattr(stat, "st_ino", 0) or 0)
+        size = int(getattr(stat, "st_size", 0) or 0)
+    except OSError:
+        return {
+            "source": source,
+            "mode": "snapshot",
+            "cursor": "",
+            "available": False,
+            "entries": [],
+        }
+
+    previous = _mobile_log_cursor_decode(cursor, source)
+    if previous and previous["inode"] == inode and previous["offset"] <= size:
+        start_offset = previous["offset"]
+        lines, next_offset, carry = dependencies["read_new_lines"](
+            path,
+            start_offset,
+            carry=previous["carry"],
+            max_bytes=128 * 1024,
+        )
+        adjusted = dependencies["adjust_log_timezone"](lines)
+        return {
+            "source": source,
+            "mode": "append",
+            "cursor": _mobile_log_cursor_encode(source, inode, next_offset, carry),
+            "available": True,
+            "entries": _mobile_log_entries(
+                source=source,
+                inode=inode,
+                marker=start_offset,
+                lines=adjusted,
+            ),
+        }
+
+    lines = dependencies["tail_lines_fast"](path, max_lines=limit, max_bytes=256 * 1024)
+    adjusted = dependencies["adjust_log_timezone"](lines)
+    return {
+        "source": source,
+        "mode": "snapshot",
+        "cursor": _mobile_log_cursor_encode(source, inode, size, b""),
+        "available": True,
+        "entries": _mobile_log_entries(source=source, inode=inode, marker=size, lines=adjusted),
+    }
+
+
 def register_mobile_routes(app: Flask) -> None:
     """Register the stable mobile session bootstrap/login/logout endpoints."""
 
@@ -234,6 +379,30 @@ def register_mobile_routes(app: Flask) -> None:
                     "authenticated": authenticated,
                     "user": session.get("user") if authenticated else None,
                 },
+            }
+        )
+
+    @app.get(MOBILE_LOGS_PATH)
+    def mobile_logs():
+        """Authenticated Xray history plus cursor-based live follow for the native client."""
+
+        try:
+            limit = int(request.args.get("limit", 200))
+        except (TypeError, ValueError):
+            limit = 200
+        limit = min(500, max(50, limit))
+        streams = [
+            _mobile_log_stream(
+                source=source,
+                cursor=str(request.args.get(f"{source}-cursor") or ""),
+                limit=limit,
+            )
+            for source in _MOBILE_LOG_SOURCES
+        ]
+        return response(
+            {
+                "contract_version": 1,
+                "streams": streams,
             }
         )
 

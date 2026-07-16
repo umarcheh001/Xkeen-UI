@@ -1,6 +1,6 @@
 # Xkeen Mobile Companion Next Practical Step Plan
 
-Status: stages 1-7 completed, stage 8 next
+Status: stages 1-9 completed, stage 10 next
 Updated: 2026-07-16
 
 ## Зачем нужен этот план
@@ -261,6 +261,29 @@ Device follow-up 2026-07-16:
 Rollout dependency: APK этого этапа требует backend с новыми mobile routing endpoints. Старый Xkeen UI вернёт `404`, и приложение покажет инструкцию обновить backend вместо локального success.
 
 ## Этап 9. Logs transport и reconnect behavior
+
+Статус: завершено 2026-07-16
+
+Детальная точка приемки: [stage-9-closure-checklist.md](stage-9-closure-checklist.md).
+
+Что сделано:
+
+- Добавлен authenticated mobile contract `GET /api/mobile/v1/logs`: он возвращает ограниченную историю `error` и `access` Xray log-файлов и два независимых opaque cursor-а.
+- Следующие запросы с `error-cursor` / `access-cursor` отдают только новые полные строки; truncate, rotation или невалидный cursor безопасно переключают конкретный stream на новый `snapshot`.
+- Android production composition использует `WebPanelLogsTransport` через общий `CompanionHttpTransport`; экран `Логи Xray` показывает server history, live updates, source/level и локальный фильтр, а не demo entries.
+- Состояния `connecting`, `connected`, `reconnecting`, `auth required` и `disconnected` видны в logs UI и diagnostics. `401` переводит пользователя в существующий `Pair/Login` flow без продолжения reconnect.
+- Foreground владеет polling loop; `ON_STOP` отменяет transport, но сохраняет загруженную историю, cursors, фильтр и весь workspace state. При возвращении в foreground loop продолжает с cursors без ручного перезапуска экрана.
+- Reconnect использует bounded exponential backoff `1 / 2 / 4 / 8 / 15` секунд. Дубли доставок после reconnect отбрасываются по server entry id.
+- Добавлены Android tests на transport parsing, lifecycle pause, reconnect и auth-required state, а также backend contract tests на auth guard, history, append cursor и reset snapshot.
+
+Критерии закрытия:
+
+- [x] `Логи Xray` и diagnostics не зависят от demo entries.
+- [x] Временная offline ошибка сохраняет UI и переводит stream в предсказуемый `reconnecting` с backoff.
+- [x] `background -> foreground` приостанавливает только transport и возобновляет его без сброса истории/фильтра.
+- [x] Expired auth обозначается отдельно и возвращает в `Pair/Login`, без бесконечных повторов.
+- [x] Backend contract tests и Android `testDebugUnitTest` прошли 2026-07-16.
+- [ ] На реальном узле с согласованным backend/APK пройти smoke-test: history -> append -> offline -> foreground -> reconnect -> expired session.
 
 Что делаем:
 

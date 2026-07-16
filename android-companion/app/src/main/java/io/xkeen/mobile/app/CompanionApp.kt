@@ -85,11 +85,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
@@ -111,6 +114,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.xkeen.mobile.ui.theme.XkeenMobileTheme
 import io.xkeen.mobile.ui.theme.WebPanelPalette
 import kotlinx.coroutines.delay
@@ -450,6 +456,8 @@ private fun ReadyRoute(
     val isImeVisible = WindowInsets.ime.getBottom(density) > 0
     val scope = rememberCoroutineScope()
 
+    LogsTransportLifecycle(controller, state.dashboard.endpoint)
+
     LaunchedEffect(state.dashboard.endpoint) {
         controller.refreshCoreStatus()
     }
@@ -506,6 +514,46 @@ private fun ReadyRoute(
                 onDismiss = controller::dismissPendingAction,
                 onConfirm = { scope.launch { controller.confirmPendingAction() } },
             )
+        }
+    }
+}
+
+@Composable
+private fun LogsTransportLifecycle(
+    controller: CompanionController,
+    endpoint: String,
+) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var isForeground by remember(lifecycleOwner) {
+        mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
+    }
+
+    DisposableEffect(lifecycleOwner, controller) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START,
+                Lifecycle.Event.ON_RESUME,
+                -> isForeground = true
+
+                Lifecycle.Event.ON_STOP -> {
+                    isForeground = false
+                    controller.pauseLogsTransport()
+                }
+
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            controller.pauseLogsTransport()
+        }
+    }
+    LaunchedEffect(controller, endpoint, isForeground) {
+        if (isForeground) {
+            controller.runLogsTransport()
+        } else {
+            controller.pauseLogsTransport()
         }
     }
 }
@@ -1576,7 +1624,7 @@ private fun WarningBanner(message: String) {
 }
 
 @Composable
-private fun SectionCard(
+internal fun SectionCard(
     title: String,
     supporting: String? = null,
     content: @Composable ColumnScope.() -> Unit,
@@ -1607,7 +1655,7 @@ private fun SectionCard(
 }
 
 @Composable
-private fun TitleBlock(
+internal fun TitleBlock(
     eyebrow: String,
     title: String,
     subtitle: String,
@@ -1789,7 +1837,7 @@ private fun CompactActionButton(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CompactStatusRow(
+internal fun CompactStatusRow(
     items: List<StatusChipModel>,
 ) {
     FlowRow(
@@ -1846,7 +1894,7 @@ private fun RowScope.ActionGridButton(
 }
 
 @Composable
-private fun StatusChip(model: StatusChipModel) {
+internal fun StatusChip(model: StatusChipModel) {
     Surface(
         shape = RoundedCornerShape(999.dp),
         color = model.containerColor,
@@ -1860,7 +1908,7 @@ private fun StatusChip(model: StatusChipModel) {
     }
 }
 
-private data class StatusChipModel(
+internal data class StatusChipModel(
     val label: String,
     val containerColor: Color,
     val contentColor: Color,
@@ -1872,7 +1920,7 @@ private data class DialogModel(
 )
 
 @Composable
-private fun statusChip(label: String): StatusChipModel = StatusChipModel(
+internal fun statusChip(label: String): StatusChipModel = StatusChipModel(
     label = label,
     containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
     contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1973,7 +2021,7 @@ private fun capabilityLabel(capability: String): String =
         else -> capability
     }
 
-private fun logFilterLabel(filter: LogFilter): String =
+internal fun logFilterLabel(filter: LogFilter): String =
     when (filter) {
         LogFilter.All -> "Все"
         LogFilter.Service -> "Сервис"
@@ -1981,16 +2029,51 @@ private fun logFilterLabel(filter: LogFilter): String =
         LogFilter.Errors -> "Ошибки"
     }
 
-private fun logSourceLabel(source: String): String =
+internal fun logSourceLabel(source: String): String =
     when (source) {
         "service" -> "Сервис"
         "routing" -> "Маршруты"
         "auth" -> "Авторизация"
+        "xray-error" -> "Xray error"
+        "xray-access" -> "Xray access"
         else -> source
     }
 
 @Composable
-private fun logLevelChip(level: LogLevel): StatusChipModel =
+internal fun logsConnectionChip(
+    state: LogsConnectionState,
+    reconnectAttempt: Int,
+): StatusChipModel =
+    when (state) {
+        LogsConnectionState.Connected -> StatusChipModel(
+            "подключено",
+            MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.onSecondaryContainer,
+        )
+
+        LogsConnectionState.Connecting -> StatusChipModel(
+            "подключаемся",
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+
+        LogsConnectionState.Reconnecting -> StatusChipModel(
+            "переподключение ${reconnectAttempt.coerceAtLeast(1)}",
+            MaterialTheme.colorScheme.tertiaryContainer,
+            MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+
+        LogsConnectionState.AuthRequired -> StatusChipModel(
+            "нужен вход",
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer,
+        )
+
+        LogsConnectionState.Disconnected -> statusChip("приостановлено")
+    }
+
+@Composable
+internal fun logLevelChip(level: LogLevel): StatusChipModel =
     when (level) {
         LogLevel.Info -> StatusChipModel(
             "ИНФО",

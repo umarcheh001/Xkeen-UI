@@ -914,6 +914,7 @@ private fun testDependencies(
     routingValidation: RoutingValidationPort = FakeRoutingValidationPort(),
     routingWrites: RoutingWritePort? = null,
     logs: LogsPort? = null,
+    logsTransport: LogsTransportPort = FakeLogsTransportPort(),
     journal: CompanionJournalPort = FakeJournalPort(),
 ): CompanionControllerDependencies {
     val effectiveJournal = journal
@@ -924,6 +925,7 @@ private fun testDependencies(
         routingValidation = routingValidation,
         routingWrites = routingWrites ?: DemoRoutingWritePort(effectiveJournal),
         logs = logs ?: DemoLogsPort(effectiveJournal),
+        logsTransport = logsTransport,
         journal = effectiveJournal,
         xrayConfigSource = xrayConfigSource,
         coreStatusSource = coreStatusSource,
@@ -966,6 +968,13 @@ private class FakeXrayConfigSource : XrayConfigSource {
             )
         }
     }
+}
+
+private class FakeLogsTransportPort : LogsTransportPort {
+    override suspend fun read(
+        baseUrl: String,
+        cursors: Map<String, String>,
+    ): LogsTransportUpdate = LogsTransportUpdate(emptyList())
 }
 
 private class FakeRoutingValidationPort(

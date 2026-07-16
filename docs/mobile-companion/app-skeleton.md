@@ -27,7 +27,7 @@ Updated: 2026-07-16
 
 Что пока сознательно не завершено:
 
-- настоящий logs streaming, PTY transport и reconnect behavior;
+- PTY transport и durable offline persistence логов;
 - большая часть Mihomo, Ports и Generator модулей.
 
 ## Визуальное направление
@@ -148,6 +148,6 @@ Updated: 2026-07-16
 - первый editor-like модуль с server-backed Xray validate, structured diagnostics и управлением draft state;
 - persisted connections с повторным выбором и безопасным редактированием.
 
-Следующий рубеж теперь не в добавлении новых экранов как таковых, а в write-safe backend operations и real logs/terminal transport.
+Routing write/conflict и real Xray logs transport уже закрыты. Следующий рубеж — финальная приемка текущего блока и отдельный PTY/terminal transport.
 
 Если этот набор не работает удобно с телефона, остальные advanced-модули переносить рано.

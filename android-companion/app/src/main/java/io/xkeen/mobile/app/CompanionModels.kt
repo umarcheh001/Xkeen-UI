@@ -129,6 +129,18 @@ enum class LogFilter {
     Errors,
 }
 
+/**
+ * Observable state of the cursor-based Xray log transport.  A disconnected stream is not an
+ * error by itself: it is the expected state while the app is backgrounded or no session is open.
+ */
+enum class LogsConnectionState {
+    Disconnected,
+    Connecting,
+    Connected,
+    Reconnecting,
+    AuthRequired,
+}
+
 enum class RoutingMode {
     Read,
     Edit,
@@ -344,11 +356,16 @@ data class LogEntry(
     val source: String,
     val level: LogLevel,
     val message: String,
+    val id: String = "",
 )
 
 data class LogsState(
     val filter: LogFilter = LogFilter.All,
-    val entries: List<LogEntry>,
+    val entries: List<LogEntry> = emptyList(),
+    val connection: LogsConnectionState = LogsConnectionState.Disconnected,
+    val statusMessage: String = "Поток логов ожидает подключения.",
+    val reconnectAttempt: Int = 0,
+    val hasLoadedHistory: Boolean = false,
 )
 
 data class DiagnosticItem(
@@ -374,8 +391,8 @@ data class CompanionUiState(
     val workspaceSection: WorkspaceSection = WorkspaceSection.XrayRouting,
     val dashboard: DashboardState = demoDashboardState(),
     val routing: RoutingState = demoRoutingState(),
-    val logs: LogsState = demoLogsState(),
-    val diagnostics: List<DiagnosticItem> = demoDiagnostics(),
+    val logs: LogsState = LogsState(),
+    val diagnostics: List<DiagnosticItem> = defaultDiagnostics(),
     val pendingAction: PendingAction? = null,
     val serviceOperation: ServiceOperationState = ServiceOperationState(),
 )
@@ -487,8 +504,10 @@ fun demoLogsState(): LogsState = LogsState(
 )
 
 fun demoDiagnostics(): List<DiagnosticItem> = listOf(
-    DiagnosticItem("Мобильная сессия", "Активна в demo-режиме", DiagnosticSeverity.Ok),
-    DiagnosticItem("Поток логов", "Окно переподключения 30 сек", DiagnosticSeverity.Ok),
-    DiagnosticItem("Защищенное хранилище", "Пока не подключено", DiagnosticSeverity.Warning),
-    DiagnosticItem("API мобильного клиента", "Пока работает на моках", DiagnosticSeverity.Warning),
+    DiagnosticItem("Мобильная сессия", "Ожидает входа", DiagnosticSeverity.Warning),
+    DiagnosticItem("Поток логов", "Ожидает подключения к узлу", DiagnosticSeverity.Warning),
+    DiagnosticItem("Защищенное хранилище", "Готово", DiagnosticSeverity.Ok),
+    DiagnosticItem("API мобильного клиента", "Доступен после входа", DiagnosticSeverity.Ok),
 )
+
+fun defaultDiagnostics(): List<DiagnosticItem> = demoDiagnostics()

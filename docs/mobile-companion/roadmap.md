@@ -18,7 +18,7 @@ Updated: 2026-07-16
 - Этап 6 закрыт: service actions и core switch backend-backed, CSRF-protected и server-confirmed; UI имеет pending/success/failure и repeat guard.
 - Реализация и пакет этапа 7 готовы: `Routing Xray validate` использует versioned mobile endpoint, temporary-confdir Xray preflight с отключенным DAT-asset sync, structured server diagnostics и repeat/stale guard без persistent save/restart side effect. Закрытие ожидает повторного device smoke-test после согласованного обновления backend и APK.
 - Этап 8 закрыт: routing load/validate/save/apply backend-backed, server drafts и published state имеют независимые SHA-256 revisions, а конфликты и restart rollback покрыты contract tests.
-- Главные оставшиеся работы Phase 2 — реальный logs/terminal transport.
+- Этап 9 закрыт: `Логи Xray` используют authenticated history/live cursor contract, bounded reconnect и foreground lifecycle. Главная оставшаяся stream-работа Phase 2 — terminal/PTY transport и device smoke-test.
 
 ## Phase 0 - Discovery and scope freeze
 
@@ -93,9 +93,9 @@ Updated: 2026-07-16
 - Уже сделано: этап 5 закрыт с явным `Launching -> Pair/Login` fallback при отсутствии/повреждении trusted material и green Android unit suite.
 - Уже сделано: этап 6 закрыл реальные `start/stop/restart/core` POST-вызовы, server reread runtime/core state и явный action lifecycle.
 - Уже сделано: этап 7 закрыл real Xray routing validate через `POST /api/mobile/v1/xray/routing/validate`; local JSONC syntax feedback отделен от authoritative server diagnostics.
-- Еще осталось: закрыть reconnect behavior.
+- Уже сделано: real Xray logs history/live transport с `connected/reconnecting/auth required/disconnected`, bounded reconnect и lifecycle pause/resume.
 - Уже сделано: routing `save/apply` использует отдельный server draft, optimistic concurrency и server-confirmed apply/restart; HTTP `409` отображается отдельным conflict state.
-- Еще осталось: довести logs transport и terminal transport.
+- Еще осталось: terminal transport и device smoke-test logs reconnect.
 - Еще осталось: проверить подход к оберткам над open-source editor/log/terminal компонентами без ранней жесткой привязки.
 
 ### Exit criteria
@@ -118,7 +118,7 @@ Persistence данных подключения, secure storage, session flow и
 
 - Ready workspace summary slice: сводка статуса, capabilities, core/runtime indicators.
 - Готово: service actions slice — `start`, `stop`, `restart` и core switch с подтверждением, backend round-trip и server-confirmed result.
-- Logs slice: просмотр live/log history с фильтрацией и надежным reconnect behavior.
+- Готово: Logs slice — просмотр Xray history/live с фильтрацией, cursor polling и надежным reconnect behavior.
 - Готово: Routing Xray `validate` slice — selected document, raw JSONC round-trip, real Xray preflight и structured diagnostics.
 - Routing Xray дальше: controlled server `preview`, `save`, `apply` и conflict handling поверх уже работающего read/edit/validate baseline.
 - Read-only diagnostics slice там, где это повышает предсказуемость быстрых действий.

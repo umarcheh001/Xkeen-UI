@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import org.json.JSONObject
 
 internal class CompanionController(
@@ -18,6 +19,8 @@ internal class CompanionController(
      * visible validation state from [RoutingValidationState.Validating] to [RoutingValidationState.Dirty].
      */
     private var activeRoutingValidationRequest: RoutingValidationRequest? = null
+    private var logsTransportGeneration: Long = 0
+    private val logCursors = mutableMapOf<String, String>()
 
     private data class RoutingValidationRequest(
         val documentId: String,
@@ -832,6 +835,85 @@ internal class CompanionController(
         state = state.copy(logs = state.logs.copy(filter = filter))
     }
 
+    /**
+     * Starts one cursor-polling ownership generation.  Compose cancels this suspend call while
+     * the process is backgrounded; the generation also makes a late response from the old
+     * foreground harmless when a new lifecycle pass begins.
+     */
+    suspend fun runLogsTransport() {
+        if (state.phase != AppPhase.Ready) return
+        val generation = ++logsTransportGeneration
+        var reconnectAttempt = 0
+        state = state.copy(
+            logs = state.logs.copy(
+                connection = if (state.logs.hasLoadedHistory) {
+                    LogsConnectionState.Reconnecting
+                } else {
+                    LogsConnectionState.Connecting
+                },
+                statusMessage = if (state.logs.hasLoadedHistory) {
+                    "Возобновляем поток логов…"
+                } else {
+                    "Загружаем историю логов…"
+                },
+                reconnectAttempt = 0,
+            ),
+        )
+        updateLogsDiagnostic()
+
+        while (generation == logsTransportGeneration && state.phase == AppPhase.Ready) {
+            try {
+                val update = dependencies.logsTransport.read(
+                    baseUrl = state.dashboard.endpoint,
+                    cursors = logCursors.toMap(),
+                )
+                if (generation != logsTransportGeneration || state.phase != AppPhase.Ready) return
+                applyLogsTransportUpdate(update)
+                reconnectAttempt = 0
+                delay(LOGS_POLL_INTERVAL_MILLIS)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                if (generation != logsTransportGeneration || state.phase != AppPhase.Ready) return
+                if (error.isAuthenticationRequired()) {
+                    state = state.copy(
+                        logs = state.logs.copy(
+                            connection = LogsConnectionState.AuthRequired,
+                            statusMessage = "Сессия для потока логов истекла. Требуется вход.",
+                        ),
+                    )
+                    updateLogsDiagnostic()
+                    returnToLoginForExpiredSession(error)
+                    return
+                }
+                reconnectAttempt += 1
+                state = state.copy(
+                    logs = state.logs.copy(
+                        connection = LogsConnectionState.Reconnecting,
+                        statusMessage = "Поток логов временно недоступен: ${error.toCompanionLoadMessage("повторяем подключение")}",
+                        reconnectAttempt = reconnectAttempt,
+                    ),
+                )
+                updateLogsDiagnostic()
+                delay(logReconnectDelayMillis(reconnectAttempt))
+            }
+        }
+    }
+
+    /** Pause only the transport.  Buffered history and the rest of the workspace stay intact. */
+    fun pauseLogsTransport() {
+        logsTransportGeneration += 1
+        if (state.phase != AppPhase.Ready || state.logs.connection == LogsConnectionState.AuthRequired) return
+        state = state.copy(
+            logs = state.logs.copy(
+                connection = LogsConnectionState.Disconnected,
+                statusMessage = "Поток логов приостановлен, пока приложение в фоне.",
+                reconnectAttempt = 0,
+            ),
+        )
+        updateLogsDiagnostic()
+    }
+
     suspend fun disconnect() {
         val connection = selectedConnection() ?: return
         if (state.isSessionBusy || state.serviceOperation.isPending) return
@@ -855,6 +937,14 @@ internal class CompanionController(
         val eventTime = dependencies.journal.shortTime()
         val updatedConnections = state.connections.replaceConnection(result.connection)
         dependencies.connections.update(result.connection)
+        logsTransportGeneration += 1
+        logCursors.clear()
+        val newLogs = dependencies.logs.record(
+            current = LogsState(),
+            source = "auth",
+            level = LogLevel.Info,
+            message = result.logMessage,
+        )
         state = state.copy(
             phase = AppPhase.Ready,
             connections = updatedConnections,
@@ -875,7 +965,7 @@ internal class CompanionController(
                 status = "Готово",
                 severity = DiagnosticSeverity.Ok,
             ),
-            logs = recordLog("auth", LogLevel.Info, result.logMessage),
+            logs = newLogs,
             serviceOperation = ServiceOperationState(),
             pendingAction = null,
         )
@@ -906,6 +996,26 @@ internal class CompanionController(
     ) {
         val updatedConnections = state.connections.replaceConnection(result.connection)
         dependencies.connections.update(result.connection)
+        logsTransportGeneration += 1
+        logCursors.clear()
+        val closedLogs = dependencies.logs.record(
+            current = state.logs.copy(
+                connection = if (phase == AppPhase.PairLogin) {
+                    LogsConnectionState.AuthRequired
+                } else {
+                    LogsConnectionState.Disconnected
+                },
+                statusMessage = if (phase == AppPhase.PairLogin) {
+                    "Для потока логов требуется вход."
+                } else {
+                    "Поток логов отключён."
+                },
+                reconnectAttempt = 0,
+            ),
+            source = "auth",
+            level = LogLevel.Warning,
+            message = result.logMessage,
+        )
         state = state.copy(
             phase = phase,
             connections = updatedConnections,
@@ -920,7 +1030,7 @@ internal class CompanionController(
                 status = result.statusSummary,
                 severity = DiagnosticSeverity.Warning,
             ),
-            logs = recordLog("auth", LogLevel.Warning, result.logMessage),
+            logs = closedLogs,
             serviceOperation = ServiceOperationState(),
             pendingAction = null,
         )
@@ -1156,6 +1266,66 @@ internal class CompanionController(
         level = level,
         message = message,
     )
+
+    private fun applyLogsTransportUpdate(update: LogsTransportUpdate) {
+        val previousEntries = state.logs.entries
+        var entries = previousEntries
+        update.streams.forEach { stream ->
+            if (stream.cursor.isNotBlank()) {
+                logCursors[stream.source] = stream.cursor
+            } else {
+                logCursors.remove(stream.source)
+            }
+            val entryPrefix = "${stream.source}:"
+            val incoming = stream.entries
+                .asReversed()
+                .filter { entry -> entry.id.isNotBlank() }
+            entries = when (stream.mode) {
+                "snapshot" -> {
+                    val retained = entries.filterNot { entry -> entry.id.startsWith(entryPrefix) }
+                    (incoming + retained).deduplicateLogEntries()
+                }
+
+                else -> (incoming + entries).deduplicateLogEntries()
+            }
+        }
+        val unavailable = update.streams.filterNot(RemoteLogStream::available)
+        val message = when {
+            unavailable.isEmpty() -> "Поток логов подключён и обновляется автоматически."
+            unavailable.size == update.streams.size -> "Подключено, но Xray log-файлы пока недоступны."
+            else -> "Поток подключён; часть Xray log-файлов пока недоступна."
+        }
+        state = state.copy(
+            logs = state.logs.copy(
+                entries = entries.take(LOGS_ENTRY_LIMIT),
+                connection = LogsConnectionState.Connected,
+                statusMessage = message,
+                reconnectAttempt = 0,
+                hasLoadedHistory = true,
+            ),
+        )
+        updateLogsDiagnostic()
+    }
+
+    private fun updateLogsDiagnostic() {
+        val logs = state.logs
+        val severity = when (logs.connection) {
+            LogsConnectionState.Connected -> DiagnosticSeverity.Ok
+            LogsConnectionState.Connecting,
+            LogsConnectionState.Reconnecting,
+            LogsConnectionState.AuthRequired,
+            -> DiagnosticSeverity.Warning
+
+            LogsConnectionState.Disconnected -> DiagnosticSeverity.Warning
+        }
+        state = state.copy(
+            diagnostics = state.diagnostics.replaceDiagnostic(
+                label = "Поток логов",
+                status = logs.statusMessage,
+                severity = severity,
+            ),
+        )
+    }
 
     private fun selectedConnection(): Connection? =
         state.connections.firstOrNull { it.id == state.selectedConnectionId }
@@ -1405,6 +1575,29 @@ private fun Throwable.toCompanionLoadMessage(fallback: String): String =
     (this as? CompanionTransportException)?.failure?.userMessage
         ?: message?.takeIf { it.isNotBlank() }
         ?: fallback
+
+private const val LOGS_POLL_INTERVAL_MILLIS = 2_000L
+private const val LOGS_ENTRY_LIMIT = 600
+
+internal fun logReconnectDelayMillis(attempt: Int): Long =
+    when (attempt.coerceAtLeast(1)) {
+        1 -> 1_000L
+        2 -> 2_000L
+        3 -> 4_000L
+        4 -> 8_000L
+        else -> 15_000L
+    }
+
+private fun Throwable.isAuthenticationRequired(): Boolean =
+    (this as? CompanionTransportException)?.failure?.kind ==
+        CompanionTransportFailureKind.AuthenticationRequired
+
+private fun List<LogEntry>.deduplicateLogEntries(): List<LogEntry> {
+    val seenIds = mutableSetOf<String>()
+    return filter { entry ->
+        entry.id.isBlank() || seenIds.add(entry.id)
+    }
+}
 
 private fun joinRemotePath(directory: String, filename: String): String =
     if (directory.isBlank()) filename else "${directory.trimEnd('/')}/$filename"
