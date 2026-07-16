@@ -164,6 +164,13 @@ enum class RoutingWritePhase {
     Conflict,
 }
 
+enum class RoutingWorkflowStep {
+    Validate,
+    Save,
+    Apply,
+    Complete,
+}
+
 /**
  * Identifies where a routing diagnostic was produced.  Local syntax feedback is deliberately
  * kept separate from the server's Xray/preflight result so the UI never presents a client-side
@@ -283,6 +290,18 @@ data class RoutingDocument(
             .take(8)
             .takeIf(String::isNotBlank)
             ?: "r$revision"
+}
+
+fun routingWorkflowStep(
+    document: RoutingDocument,
+    validation: RoutingValidation,
+): RoutingWorkflowStep = when {
+    !document.isLoaded -> RoutingWorkflowStep.Complete
+    validation.state != RoutingValidationState.Valid &&
+        (document.hasUnsavedChanges || document.hasDraftChanges) -> RoutingWorkflowStep.Validate
+    document.hasUnsavedChanges -> RoutingWorkflowStep.Save
+    document.hasServerSavedDraft && document.hasDraftChanges -> RoutingWorkflowStep.Apply
+    else -> RoutingWorkflowStep.Complete
 }
 
 data class RoutingDiagnostic(

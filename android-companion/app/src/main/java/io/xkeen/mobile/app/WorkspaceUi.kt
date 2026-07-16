@@ -130,6 +130,10 @@ internal fun RoutingWorkspaceScreen(
     val showFind = rememberSaveable(selectedDocument.id) { mutableStateOf(false) }
     val findQuery = rememberSaveable(selectedDocument.id) { mutableStateOf("") }
     val findResult = remember(selectedDocument.id) { mutableStateOf(EditorTextSearchResult()) }
+    val workflowPrompt = rememberSaveable(selectedDocument.id) {
+        mutableStateOf<RoutingWorkflowPrompt?>(null)
+    }
+    val workflowStep = routingWorkflowStep(selectedDocument, routing.validation)
     val findFocusRequester = remember { FocusRequester() }
     val findNext: (Boolean) -> Unit = { forward ->
         findResult.value = editorView.value?.findText(findQuery.value, forward)
@@ -182,8 +186,30 @@ internal fun RoutingWorkspaceScreen(
             },
             onValidate = { scope.launch { controller.validateRouting() } },
             onRevert = controller::revertRoutingDraft,
-            onSave = { scope.launch { controller.saveRouting() } },
-            onApply = controller::requestRoutingApply,
+            onSave = {
+                if (workflowStep == RoutingWorkflowStep.Validate) {
+                    focusManager.clearFocus(force = true)
+                    workflowPrompt.value = RoutingWorkflowPrompt.ValidateBeforeSave
+                } else {
+                    scope.launch { controller.saveRouting() }
+                }
+            },
+            onApply = {
+                when (workflowStep) {
+                    RoutingWorkflowStep.Validate -> {
+                        focusManager.clearFocus(force = true)
+                        workflowPrompt.value = RoutingWorkflowPrompt.ValidateBeforeApply
+                    }
+
+                    RoutingWorkflowStep.Save -> {
+                        focusManager.clearFocus(force = true)
+                        workflowPrompt.value = RoutingWorkflowPrompt.SaveBeforeApply
+                    }
+
+                    RoutingWorkflowStep.Apply -> controller.requestRoutingApply()
+                    RoutingWorkflowStep.Complete -> Unit
+                }
+            },
         )
         Box(
             modifier = Modifier
@@ -236,6 +262,22 @@ internal fun RoutingWorkspaceScreen(
             write = routing.write,
             metrics = editorMetrics.value,
             onDismiss = { showEditorStatusDetails.value = false },
+        )
+    }
+    workflowPrompt.value?.let { prompt ->
+        RoutingWorkflowDialog(
+            prompt = prompt,
+            onDismiss = { workflowPrompt.value = null },
+            onConfirm = {
+                workflowPrompt.value = null
+                when (prompt.requiredStep) {
+                    RoutingWorkflowStep.Validate -> scope.launch { controller.validateRouting() }
+                    RoutingWorkflowStep.Save -> scope.launch { controller.saveRouting() }
+                    RoutingWorkflowStep.Apply,
+                    RoutingWorkflowStep.Complete,
+                    -> Unit
+                }
+            },
         )
     }
 }
@@ -388,6 +430,7 @@ private fun DocumentToolbar(
     onApply: () -> Unit,
 ) {
     val currentIndex = documents.indexOfFirst { it.id == document.id }.coerceAtLeast(0)
+    val workflowStep = routingWorkflowStep(document, validation)
 
     Surface(color = Color.Transparent, shadowElevation = 5.dp) {
         Row(
@@ -451,7 +494,12 @@ private fun DocumentToolbar(
                     icon = Icons.AutoMirrored.Outlined.FactCheck,
                     description = if (isValidationInFlight) "Проверка выполняется" else "Проверить",
                     onClick = onValidate,
-                    accent = isValidationInFlight,
+                    accent = isValidationInFlight || workflowStep == RoutingWorkflowStep.Validate,
+                    accentColor = if (workflowStep == RoutingWorkflowStep.Validate) {
+                        WebPanelPalette.Warning
+                    } else {
+                        WebPanelPalette.TextBlue
+                    },
                     enabled = !isValidationInFlight && !isWriteInFlight,
                 )
                 EditorToolbarButton(Icons.Outlined.SettingsBackupRestore, "Откатить", onRevert)
@@ -459,15 +507,17 @@ private fun DocumentToolbar(
                     icon = Icons.Outlined.Save,
                     description = "Сохранить",
                     onClick = onSave,
-                    accent = document.hasUnsavedChanges,
-                    enabled = !isWriteInFlight,
+                    accent = workflowStep == RoutingWorkflowStep.Save,
+                    accentColor = WebPanelPalette.Warning,
+                    enabled = !isWriteInFlight && document.hasUnsavedChanges,
                 )
                 EditorToolbarButton(
                     icon = Icons.Outlined.DoneAll,
                     description = "Применить",
                     onClick = onApply,
-                    accent = document.hasDraftChanges,
-                    enabled = !isWriteInFlight,
+                    accent = workflowStep == RoutingWorkflowStep.Apply,
+                    accentColor = WebPanelPalette.Warning,
+                    enabled = !isWriteInFlight && document.hasDraftChanges,
                 )
             }
         }
@@ -533,6 +583,149 @@ private fun SearchToolbarField(
             }
         },
     )
+}
+
+private enum class RoutingWorkflowPrompt(
+    val title: String,
+    val message: String,
+    val actionLabel: String,
+    val requiredStep: RoutingWorkflowStep,
+) {
+    ValidateBeforeSave(
+        title = "Сначала проверьте конфигурацию",
+        message = "Сохранить можно только тот черновик, который сервер Xray подтвердил для текущего текста.",
+        actionLabel = "Проверить",
+        requiredStep = RoutingWorkflowStep.Validate,
+    ),
+    ValidateBeforeApply(
+        title = "Перед применением нужна проверка",
+        message = "Текущие изменения ещё не подтверждены сервером. Выполните проверку, затем сохраните черновик.",
+        actionLabel = "Проверить",
+        requiredStep = RoutingWorkflowStep.Validate,
+    ),
+    SaveBeforeApply(
+        title = "Сначала сохраните черновик",
+        message = "Проверка уже пройдена. Сохраните подтверждённый текст на сервере, после этого его можно применить.",
+        actionLabel = "Сохранить",
+        requiredStep = RoutingWorkflowStep.Save,
+    ),
+}
+
+@Composable
+private fun RoutingWorkflowDialog(
+    prompt: RoutingWorkflowPrompt,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    XkeenDialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(13.dp),
+        ) {
+            Text(
+                text = "ПОРЯДОК ИЗМЕНЕНИЙ",
+                color = WebPanelPalette.Warning,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.7.sp,
+            )
+            Text(
+                text = prompt.title,
+                color = WebPanelPalette.TextStrong,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = prompt.message,
+                color = WebPanelPalette.Text,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(WebPanelPalette.Surface, RoundedCornerShape(14.dp))
+                    .border(
+                        1.dp,
+                        WebPanelPalette.Border.copy(alpha = 0.24f),
+                        RoundedCornerShape(14.dp),
+                    )
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                WorkflowStepRow(1, "Проверить на сервере", prompt.requiredStep, RoutingWorkflowStep.Validate)
+                WorkflowStepRow(2, "Сохранить проверенный черновик", prompt.requiredStep, RoutingWorkflowStep.Save)
+                WorkflowStepRow(3, "Применить и перезапустить Xkeen", prompt.requiredStep, RoutingWorkflowStep.Apply)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedButton(onClick = onDismiss) {
+                    Text("Отмена")
+                }
+                Spacer(Modifier.width(9.dp))
+                Button(onClick = onConfirm) {
+                    Text(prompt.actionLabel)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkflowStepRow(
+    number: Int,
+    label: String,
+    requiredStep: RoutingWorkflowStep,
+    step: RoutingWorkflowStep,
+) {
+    val isRequired = requiredStep == step
+    val isComplete = step.ordinal < requiredStep.ordinal
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .background(
+                    color = when {
+                        isComplete -> WebPanelPalette.Success.copy(alpha = 0.20f)
+                        isRequired -> WebPanelPalette.Warning.copy(alpha = 0.24f)
+                        else -> WebPanelPalette.SurfaceRaised
+                    },
+                    shape = CircleShape,
+                )
+                .border(
+                    1.dp,
+                    when {
+                        isComplete -> WebPanelPalette.Success.copy(alpha = 0.62f)
+                        isRequired -> WebPanelPalette.Warning.copy(alpha = 0.72f)
+                        else -> WebPanelPalette.Border.copy(alpha = 0.18f)
+                    },
+                    CircleShape,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = number.toString(),
+                color = when {
+                    isComplete -> WebPanelPalette.Success
+                    isRequired -> WebPanelPalette.Warning
+                    else -> WebPanelPalette.Muted
+                },
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        Text(
+            text = label,
+            color = if (isRequired) WebPanelPalette.TextStrong else WebPanelPalette.Muted,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = if (isRequired) FontWeight.Bold else FontWeight.Normal,
+        )
+    }
 }
 
 @Composable
@@ -660,10 +853,10 @@ private fun EditorToolbarButton(
     description: String,
     onClick: () -> Unit,
     accent: Boolean = false,
+    accentColor: Color = WebPanelPalette.Border,
     enabled: Boolean = true,
 ) {
     val shape = RoundedCornerShape(10.dp)
-    val accentColor = WebPanelPalette.Border
     Box(
         modifier = Modifier
             .size(34.dp)
@@ -672,7 +865,10 @@ private fun EditorToolbarButton(
             .background(
                 brush = Brush.verticalGradient(
                     if (accent) {
-                        listOf(Color(0xFF102C5E), Color(0xFF081436))
+                        listOf(
+                            accentColor.copy(alpha = 0.24f),
+                            WebPanelPalette.Surface,
+                        )
                     } else {
                         listOf(WebPanelPalette.SurfaceRaised, WebPanelPalette.Surface)
                     },
@@ -685,8 +881,8 @@ private fun EditorToolbarButton(
                     if (accent) {
                         listOf(
                             Color.White.copy(alpha = 0.12f),
-                            WebPanelPalette.Border.copy(alpha = 0.56f),
-                            WebPanelPalette.Border.copy(alpha = 0.20f),
+                            accentColor.copy(alpha = 0.68f),
+                            accentColor.copy(alpha = 0.22f),
                         )
                     } else {
                         listOf(
@@ -1193,6 +1389,7 @@ private fun editorStatusPresentation(
     validation: RoutingValidation,
     write: RoutingWriteState,
 ): EditorStatusPresentation {
+    val workflowStep = routingWorkflowStep(document, validation)
     val text = when {
         document.isLoading -> "Загрузка с Xkeen UI…"
         document.loadError != null -> document.loadError
@@ -1201,11 +1398,12 @@ private fun editorStatusPresentation(
             RoutingWritePhase.Failure,
             RoutingWritePhase.Success,
         ) -> write.message
-        validation.state in setOf(
-            RoutingValidationState.Validating,
-            RoutingValidationState.Invalid,
-            RoutingValidationState.Valid,
-        ) -> validation.displayMessage
+        validation.state == RoutingValidationState.Validating -> validation.displayMessage
+        validation.state == RoutingValidationState.Invalid -> validation.displayMessage
+        workflowStep == RoutingWorkflowStep.Validate -> "Шаг 1 из 3 · Проверьте конфигурацию"
+        workflowStep == RoutingWorkflowStep.Save -> "Шаг 2 из 3 · Сохраните проверенный черновик"
+        workflowStep == RoutingWorkflowStep.Apply -> "Шаг 3 из 3 · Примените изменения"
+        validation.state == RoutingValidationState.Valid -> validation.displayMessage
         document.hasUnsavedChanges -> "Изменения не сохранены"
         document.hasDraftChanges -> "Черновик сохранён"
         document.modifiedAtEpochSeconds != null -> if (document.usesJsonc) "server · JSONC" else "server · JSON"
@@ -1216,6 +1414,7 @@ private fun editorStatusPresentation(
         write.phase == RoutingWritePhase.Failure -> WebPanelPalette.Error
         write.phase == RoutingWritePhase.Success -> WebPanelPalette.Success
         write.isPending -> WebPanelPalette.TextBlue
+        workflowStep != RoutingWorkflowStep.Complete -> WebPanelPalette.Warning
         else -> when (validation.state) {
             RoutingValidationState.Invalid -> WebPanelPalette.Error
             RoutingValidationState.Validating -> WebPanelPalette.TextBlue
