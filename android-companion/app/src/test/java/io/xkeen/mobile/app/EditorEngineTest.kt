@@ -102,6 +102,15 @@ class EditorEngineTest {
     }
 
     @Test
+    fun internetSearchUsesSelectionOrWordAtCursor() {
+        val source = "\"domainStrategy\": \"IPIfNonMatch\""
+
+        assertEquals("domainStrategy", editorInternetSearchQuery(source, 1, 15))
+        assertEquals("IPIfNonMatch", editorInternetSearchQuery(source, source.indexOf("NonMatch"), source.indexOf("NonMatch")))
+        assertEquals("", editorInternetSearchQuery(source, source.indexOf(':'), source.indexOf(':')))
+    }
+
+    @Test
     fun documentIndexHandlesLargeRoutingDocument() {
         val source = buildString {
             repeat(100_000) { line -> append("rule-").append(line).append('\n') }

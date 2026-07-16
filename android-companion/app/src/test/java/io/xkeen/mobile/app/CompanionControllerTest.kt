@@ -1013,6 +1013,46 @@ class CompanionControllerTest {
         assertEquals(RoutingWritePhase.Success, controller.state.routing.write.phase)
         assertEquals("Applied remotely", controller.state.dashboard.lastOperation)
     }
+
+    @Test
+    fun dismissRoutingWriteResultClearsOnlySuccessfulConfirmation() {
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                routing = demoRoutingState().copy(
+                    write = RoutingWriteState(
+                        phase = RoutingWritePhase.Success,
+                        message = "Routing применён; restart xkeen подтверждён сервером.",
+                    ),
+                ),
+            ),
+            dependencies = testDependencies(),
+        )
+
+        controller.dismissRoutingWriteResult()
+
+        assertEquals(RoutingWritePhase.Idle, controller.state.routing.write.phase)
+        assertEquals("", controller.state.routing.write.message)
+    }
+
+    @Test
+    fun dismissRoutingWriteResultKeepsFailureVisible() {
+        val failure = RoutingWriteState(
+            phase = RoutingWritePhase.Failure,
+            message = "Сервер отклонил публикацию.",
+        )
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                routing = demoRoutingState().copy(write = failure),
+            ),
+            dependencies = testDependencies(),
+        )
+
+        controller.dismissRoutingWriteResult()
+
+        assertEquals(failure, controller.state.routing.write)
+    }
 }
 
 private fun testDependencies(

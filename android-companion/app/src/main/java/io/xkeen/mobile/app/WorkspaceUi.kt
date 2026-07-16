@@ -69,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import io.xkeen.mobile.ui.theme.WebPanelPalette
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -81,12 +82,19 @@ internal fun RoutingWorkspaceScreen(
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     val showDocumentPicker = rememberSaveable { mutableStateOf(false) }
+    val showEditorStatusDetails = rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(state.dashboard.endpoint, state.dashboard.availableCores) {
         controller.refreshRoutingDocuments()
     }
     LaunchedEffect(routing.selectedDocumentId) {
         controller.loadSelectedRoutingDocument()
+    }
+    LaunchedEffect(routing.write.phase, routing.write.message) {
+        if (routing.write.phase == RoutingWritePhase.Success) {
+            delay(2_500)
+            controller.dismissRoutingWriteResult()
+        }
     }
 
     val selectedDocument = routing.documents.firstOrNull {
@@ -162,6 +170,7 @@ internal fun RoutingWorkspaceScreen(
             validation = routing.validation,
             write = routing.write,
             metrics = editorMetrics.value,
+            onClick = { showEditorStatusDetails.value = true },
         )
     }
 
@@ -174,6 +183,15 @@ internal fun RoutingWorkspaceScreen(
                 controller.selectRoutingDocument(documentId)
                 showDocumentPicker.value = false
             },
+        )
+    }
+    if (showEditorStatusDetails.value) {
+        EditorStatusDetailsDialog(
+            document = selectedDocument,
+            validation = routing.validation,
+            write = routing.write,
+            metrics = editorMetrics.value,
+            onDismiss = { showEditorStatusDetails.value = false },
         )
     }
 }
@@ -976,39 +994,9 @@ private fun EditorStatusBar(
     validation: RoutingValidation,
     write: RoutingWriteState,
     metrics: EditorMetrics,
+    onClick: () -> Unit,
 ) {
-    val statusText = when {
-        document.isLoading -> "Загрузка с Xkeen UI…"
-        document.loadError != null -> document.loadError
-        write.isPending -> write.message
-        write.phase == RoutingWritePhase.Conflict -> write.message
-        write.phase == RoutingWritePhase.Failure -> write.message
-        write.phase == RoutingWritePhase.Success -> write.message
-        validation.state == RoutingValidationState.Validating -> validation.message
-        validation.state == RoutingValidationState.Invalid -> validation.message
-        validation.state == RoutingValidationState.Valid -> validation.message
-        document.hasUnsavedChanges -> "Изменения не сохранены"
-        document.hasDraftChanges -> "Черновик сохранён"
-        document.modifiedAtEpochSeconds != null -> if (document.usesJsonc) {
-            "server · JSONC"
-        } else {
-            "server · JSON"
-        }
-        else -> "${document.revisionLabel} · опубликовано"
-    }
-    val statusColor = when {
-        write.phase == RoutingWritePhase.Conflict -> WebPanelPalette.Warning
-        write.phase == RoutingWritePhase.Failure -> WebPanelPalette.Error
-        write.phase == RoutingWritePhase.Success -> WebPanelPalette.Success
-        write.isPending -> WebPanelPalette.TextBlue
-        else -> when (validation.state) {
-        RoutingValidationState.Invalid -> WebPanelPalette.Error
-        RoutingValidationState.Validating -> WebPanelPalette.TextBlue
-        RoutingValidationState.Valid -> WebPanelPalette.Success
-        RoutingValidationState.Dirty -> WebPanelPalette.Warning
-        RoutingValidationState.Idle -> WebPanelPalette.Muted
-        }
-    }
+    val presentation = editorStatusPresentation(document, validation, write)
 
     Row(
         modifier = Modifier
@@ -1024,17 +1012,18 @@ private fun EditorStatusBar(
                 ),
             )
             .border(1.dp, WebPanelPalette.Border.copy(alpha = 0.16f))
+            .clickable(onClick = onClick)
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
                 .size(7.dp)
-                .background(statusColor, CircleShape),
+                .background(presentation.color, CircleShape),
         )
         Spacer(Modifier.width(6.dp))
         Text(
-            text = statusText,
+            text = presentation.text,
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.labelMedium,
             color = WebPanelPalette.Text,
@@ -1048,6 +1037,108 @@ private fun EditorStatusBar(
             color = WebPanelPalette.Muted,
             fontFamily = FontFamily.Monospace,
             maxLines = 1,
+        )
+    }
+}
+
+private data class EditorStatusPresentation(
+    val text: String,
+    val color: Color,
+)
+
+private fun editorStatusPresentation(
+    document: RoutingDocument,
+    validation: RoutingValidation,
+    write: RoutingWriteState,
+): EditorStatusPresentation {
+    val text = when {
+        document.isLoading -> "Загрузка с Xkeen UI…"
+        document.loadError != null -> document.loadError
+        write.isPending || write.phase in setOf(
+            RoutingWritePhase.Conflict,
+            RoutingWritePhase.Failure,
+            RoutingWritePhase.Success,
+        ) -> write.message
+        validation.state in setOf(
+            RoutingValidationState.Validating,
+            RoutingValidationState.Invalid,
+            RoutingValidationState.Valid,
+        ) -> validation.message
+        document.hasUnsavedChanges -> "Изменения не сохранены"
+        document.hasDraftChanges -> "Черновик сохранён"
+        document.modifiedAtEpochSeconds != null -> if (document.usesJsonc) "server · JSONC" else "server · JSON"
+        else -> "${document.revisionLabel} · опубликовано"
+    }
+    val color = when {
+        write.phase == RoutingWritePhase.Conflict -> WebPanelPalette.Warning
+        write.phase == RoutingWritePhase.Failure -> WebPanelPalette.Error
+        write.phase == RoutingWritePhase.Success -> WebPanelPalette.Success
+        write.isPending -> WebPanelPalette.TextBlue
+        else -> when (validation.state) {
+            RoutingValidationState.Invalid -> WebPanelPalette.Error
+            RoutingValidationState.Validating -> WebPanelPalette.TextBlue
+            RoutingValidationState.Valid -> WebPanelPalette.Success
+            RoutingValidationState.Dirty -> WebPanelPalette.Warning
+            RoutingValidationState.Idle -> WebPanelPalette.Muted
+        }
+    }
+    return EditorStatusPresentation(text, color)
+}
+
+@Composable
+private fun EditorStatusDetailsDialog(
+    document: RoutingDocument,
+    validation: RoutingValidation,
+    write: RoutingWriteState,
+    metrics: EditorMetrics,
+    onDismiss: () -> Unit,
+) {
+    val presentation = editorStatusPresentation(document, validation, write)
+    XkeenDialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "СТАТУС РЕДАКТОРА",
+                color = presentation.color,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.7.sp,
+            )
+            Text(
+                text = document.title,
+                color = WebPanelPalette.TextStrong,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            StatusDetailLine("Состояние", presentation.text)
+            StatusDetailLine("Символов", metrics.characterCount.toString())
+            StatusDetailLine("Слов", metrics.wordCount.toString())
+            StatusDetailLine("Курсор", "строка ${metrics.cursor.line}, столбец ${metrics.cursor.column}")
+            StatusDetailLine("Строк", metrics.lineCount.toString())
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.End),
+            ) {
+                Text("Закрыть")
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusDetailLine(label: String, value: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = label,
+            color = WebPanelPalette.Muted,
+            style = MaterialTheme.typography.labelSmall,
+        )
+        Text(
+            text = value,
+            color = WebPanelPalette.Text,
+            style = MaterialTheme.typography.bodyMedium,
         )
     }
 }

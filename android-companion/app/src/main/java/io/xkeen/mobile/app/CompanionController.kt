@@ -410,6 +410,13 @@ internal class CompanionController(
         }
     }
 
+    /** Clears the short-lived confirmation shown after a routing save or apply succeeds. */
+    fun dismissRoutingWriteResult() {
+        if (state.routing.write.phase == RoutingWritePhase.Success) {
+            state = state.copy(routing = state.routing.copy(write = RoutingWriteState()))
+        }
+    }
+
     suspend fun confirmPendingAction() {
         when (val action = state.pendingAction) {
             is PendingAction.Service -> {

@@ -1,7 +1,9 @@
 package io.xkeen.mobile.app
 
 import android.animation.ValueAnimator
+import android.app.SearchManager
 import android.content.Context
+import android.content.Intent
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Typeface
@@ -28,6 +30,7 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.OverScroller
 import android.widget.TextView
+import android.widget.Toast
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -49,11 +52,9 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
     private val editor = SelectionAwareEditText(context)
     private val gutter = EditorGutterView(context, editor)
     private val fastScroller = NativeEditorFastScroller(context, editor)
-    private val history = EditorHistory()
     private val syntaxSpans = mutableListOf<ForegroundColorSpan>()
     private val tabStopSpans = mutableListOf<TabStopSpan.Standard>()
     private var documentIndex = EditorDocumentIndex.build("")
-    private var beforeChange: TextFieldValue? = null
     private var suppressCallbacks = false
     private var lastKnownText = ""
     private val highlightRunnable = Runnable(::applySyntaxHighlight)
@@ -106,7 +107,6 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
 
     fun setDocumentText(value: String) {
         if (value === lastKnownText || value == lastKnownText) return
-        history.clear()
         applyValue(
             value = TextFieldValue(
                 text = value,
@@ -200,17 +200,7 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
                 start: Int,
                 count: Int,
                 after: Int,
-            ) {
-                if (suppressCallbacks) return
-                val text = source?.toString().orEmpty()
-                beforeChange = TextFieldValue(
-                    text = text,
-                    selection = TextRange(
-                        editor.selectionStart.coerceIn(0, text.length),
-                        editor.selectionEnd.coerceIn(0, text.length),
-                    ),
-                )
-            }
+            ) = Unit
 
             override fun onTextChanged(
                 source: CharSequence?,
@@ -229,8 +219,6 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
                         editor.selectionEnd.coerceIn(0, updatedText.length),
                     ),
                 )
-                beforeChange?.let { previous -> history.record(previous, updated) }
-                beforeChange = null
                 lastKnownText = updatedText
                 updateDocumentIndex(updatedText)
                 ensureCompactTabStops(editable)
@@ -245,11 +233,12 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         val callback = object : ActionMode.Callback {
             override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
                 if (menu == null) return true
-                if (history.canUndo) menu.addEditorAction(EditorMenuUndo, "Отменить")
-                if (history.canRedo) menu.addEditorAction(EditorMenuRedo, "Повторить")
+                // EditText already contributes Android's own Undo/Redo actions. Adding our own
+                // versions here produced two indistinguishable “Отменить” items in this menu.
                 menu.addEditorAction(EditorMenuSelectLine, "Выделить строку")
                 menu.addEditorAction(EditorMenuDuplicateLine, "Дублировать строку")
                 menu.addEditorAction(EditorMenuGoToLine, "Перейти к строке…")
+                menu.addEditorAction(EditorMenuSearchWeb, "Поиск в интернете")
                 return true
             }
 
@@ -257,14 +246,13 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
 
             override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
                 val handled = when (item?.itemId) {
-                    EditorMenuUndo -> undo()
-                    EditorMenuRedo -> redo()
                     EditorMenuSelectLine -> selectLine()
                     EditorMenuDuplicateLine -> duplicateLine()
                     EditorMenuGoToLine -> {
                         requestGoToLine()
                         true
                     }
+                    EditorMenuSearchWeb -> searchOnWeb()
                     else -> false
                 }
                 if (handled) mode?.finish()
@@ -279,20 +267,6 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         }
     }
 
-    private fun undo(): Boolean {
-        val current = editor.currentValue()
-        val updated = history.undo(current) ?: return false
-        applyValue(updated, notifyTextChanged = true)
-        return true
-    }
-
-    private fun redo(): Boolean {
-        val current = editor.currentValue()
-        val updated = history.redo(current) ?: return false
-        applyValue(updated, notifyTextChanged = true)
-        return true
-    }
-
     private fun selectLine(): Boolean {
         val selected = selectEditorLine(editor.currentValue(), documentIndex)
         editor.setSelection(selected.selection.start, selected.selection.end)
@@ -303,8 +277,30 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         val before = editor.currentValue()
         val updated = duplicateEditorLine(before, documentIndex)
         if (updated.text == before.text) return false
-        history.record(before, updated)
         applyValue(updated, notifyTextChanged = true)
+        return true
+    }
+
+    private fun searchOnWeb(): Boolean {
+        val query = editorInternetSearchQuery(
+            source = editor.text?.toString().orEmpty(),
+            selectionStart = editor.selectionStart,
+            selectionEnd = editor.selectionEnd,
+        )
+        if (query.isBlank()) {
+            Toast.makeText(
+                context,
+                "Выделите текст или установите курсор на слово для поиска.",
+                Toast.LENGTH_SHORT,
+            ).show()
+            return true
+        }
+        val intent = Intent(Intent.ACTION_WEB_SEARCH).putExtra(SearchManager.QUERY, query)
+        if (intent.resolveActivity(context.packageManager) == null) {
+            Toast.makeText(context, "На устройстве нет приложения для интернет-поиска.", Toast.LENGTH_SHORT).show()
+            return true
+        }
+        context.startActivity(intent)
         return true
     }
 
@@ -440,15 +436,33 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         const val SyntaxHighlightLineBuffer = 24
         const val MaxFullHighlightCharacters = 80_000
         const val MaxFullHighlightLines = 3_000
-        const val EditorMenuUndo = 0x584B01
-        const val EditorMenuRedo = 0x584B02
         const val EditorMenuSelectLine = 0x584B03
         const val EditorMenuDuplicateLine = 0x584B04
         const val EditorMenuGoToLine = 0x584B05
+        const val EditorMenuSearchWeb = 0x584B06
 
         val currentLinePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     }
 }
+
+internal fun editorInternetSearchQuery(
+    source: String,
+    selectionStart: Int,
+    selectionEnd: Int,
+): String {
+    val start = minOf(selectionStart, selectionEnd).coerceIn(0, source.length)
+    val end = maxOf(selectionStart, selectionEnd).coerceIn(0, source.length)
+    if (start != end) return source.substring(start, end).trim()
+
+    var wordStart = start
+    while (wordStart > 0 && source[wordStart - 1].isEditorSearchCharacter()) wordStart--
+    var wordEnd = end
+    while (wordEnd < source.length && source[wordEnd].isEditorSearchCharacter()) wordEnd++
+    return source.substring(wordStart, wordEnd).trim()
+}
+
+private fun Char.isEditorSearchCharacter(): Boolean =
+    isLetterOrDigit() || this in setOf('_', '-', '.')
 
 private class SelectionAwareEditText(context: Context) : EditText(context) {
     var onSelectionChangedListener: (() -> Unit)? = null
