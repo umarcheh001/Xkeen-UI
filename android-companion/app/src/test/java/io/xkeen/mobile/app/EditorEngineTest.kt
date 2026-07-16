@@ -111,6 +111,24 @@ class EditorEngineTest {
     }
 
     @Test
+    fun editorSearchFindsMatchesCaseInsensitivelyAndWraps() {
+        val source = "rule RULE rule"
+
+        val first = findEditorText(source, "rule", 0, 0, forward = true)
+        assertEquals(3, first.matchCount)
+        assertEquals(1, first.selectedMatch)
+        assertEquals(TextRange(0, 4), first.range)
+
+        val next = findEditorText(source, "rule", 0, 4, forward = true)
+        assertEquals(2, next.selectedMatch)
+        assertEquals(TextRange(5, 9), next.range)
+
+        val wrappedBack = findEditorText(source, "rule", 0, 0, forward = false)
+        assertEquals(3, wrappedBack.selectedMatch)
+        assertEquals(TextRange(10, 14), wrappedBack.range)
+    }
+
+    @Test
     fun documentIndexHandlesLargeRoutingDocument() {
         val source = buildString {
             repeat(100_000) { line -> append("rule-").append(line).append('\n') }

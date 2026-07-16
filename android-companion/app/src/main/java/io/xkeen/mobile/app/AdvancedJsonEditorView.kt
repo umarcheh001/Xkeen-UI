@@ -128,6 +128,24 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         }
     }
 
+    fun findText(query: String, forward: Boolean): EditorTextSearchResult {
+        val result = findEditorText(
+            source = editor.text?.toString().orEmpty(),
+            query = query,
+            selectionStart = editor.selectionStart,
+            selectionEnd = editor.selectionEnd,
+            forward = forward,
+        )
+        val range = result.range ?: return result
+        editor.setSelection(range.start, range.end)
+        editor.post {
+            val layout = editor.layout ?: return@post
+            val visualLine = layout.getLineForOffset(range.start)
+            editor.smoothScrollToY(layout.getLineTop(visualLine))
+        }
+        return result
+    }
+
     override fun dispatchDraw(canvas: Canvas) {
         super.dispatchDraw(canvas)
         val layout = editor.layout

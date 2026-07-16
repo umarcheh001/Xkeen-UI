@@ -29,9 +29,12 @@ import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.FactCheck
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DoneAll
-import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SettingsBackupRestore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Button
@@ -52,6 +55,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -119,6 +124,19 @@ internal fun RoutingWorkspaceScreen(
             EditorDocumentIndex.build(selectedDocument.draftContent).metricsAt(0),
         )
     }
+    val editorView = remember(selectedDocument.id) { mutableStateOf<AdvancedJsonEditorView?>(null) }
+    val showFind = rememberSaveable(selectedDocument.id) { mutableStateOf(false) }
+    val findQuery = rememberSaveable(selectedDocument.id) { mutableStateOf("") }
+    val findResult = remember(selectedDocument.id) { mutableStateOf(EditorTextSearchResult()) }
+    val findFocusRequester = remember { FocusRequester() }
+    val findNext: (Boolean) -> Unit = { forward ->
+        findResult.value = editorView.value?.findText(findQuery.value, forward)
+            ?: findEditorText(selectedDocument.draftContent, findQuery.value, 0, 0, forward)
+    }
+
+    LaunchedEffect(showFind.value, selectedDocument.id) {
+        if (showFind.value) findFocusRequester.requestFocus()
+    }
 
     Column(
         modifier = modifier
@@ -136,7 +154,25 @@ internal fun RoutingWorkspaceScreen(
                 focusManager.clearFocus(force = true)
                 showDocumentPicker.value = true
             },
-            onEdit = controller::enterRoutingEditMode,
+            isFindVisible = showFind.value,
+            findQuery = findQuery.value,
+            findResult = findResult.value,
+            findFocusRequester = findFocusRequester,
+            onOpenFind = {
+                showFind.value = true
+                if (findQuery.value.isNotBlank()) findNext(true)
+            },
+            onFindQueryChange = { query ->
+                findQuery.value = query
+                findNext(true)
+            },
+            onFindPrevious = { findNext(false) },
+            onFindNext = { findNext(true) },
+            onCloseFind = {
+                showFind.value = false
+                findQuery.value = ""
+                findResult.value = EditorTextSearchResult()
+            },
             onValidate = { scope.launch { controller.validateRouting() } },
             onRevert = controller::revertRoutingDraft,
             onSave = { scope.launch { controller.saveRouting() } },
@@ -154,6 +190,7 @@ internal fun RoutingWorkspaceScreen(
                         controller.updateRoutingDraft(selectedDocument.id, value)
                     },
                     onMetricsChange = { metrics -> editorMetrics.value = metrics },
+                    onEditorReady = { view -> editorView.value = view },
                     onRetry = {
                         scope.launch { controller.loadSelectedRoutingDocument() }
                     },
@@ -241,6 +278,7 @@ private fun RoutingDocumentPage(
     document: RoutingDocument,
     onValueChange: (String) -> Unit,
     onMetricsChange: (EditorMetrics) -> Unit,
+    onEditorReady: (AdvancedJsonEditorView) -> Unit,
     onRetry: () -> Unit,
 ) {
     when {
@@ -261,6 +299,7 @@ private fun RoutingDocumentPage(
             value = document.draftContent,
             onValueChange = onValueChange,
             onMetricsChange = onMetricsChange,
+            onEditorReady = onEditorReady,
             modifier = Modifier.fillMaxSize(),
         )
     }
@@ -327,7 +366,15 @@ private fun DocumentToolbar(
     isValidationInFlight: Boolean,
     isWriteInFlight: Boolean,
     onOpenDocumentPicker: () -> Unit,
-    onEdit: () -> Unit,
+    isFindVisible: Boolean,
+    findQuery: String,
+    findResult: EditorTextSearchResult,
+    findFocusRequester: FocusRequester,
+    onOpenFind: () -> Unit,
+    onFindQueryChange: (String) -> Unit,
+    onFindPrevious: () -> Unit,
+    onFindNext: () -> Unit,
+    onCloseFind: () -> Unit,
     onValidate: () -> Unit,
     onRevert: () -> Unit,
     onSave: () -> Unit,
@@ -348,50 +395,79 @@ private fun DocumentToolbar(
                 .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .clickable(onClick = onOpenDocumentPicker)
-                    .padding(start = 9.dp, end = 5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = document.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+            if (isFindVisible) {
+                OutlinedTextField(
+                    value = findQuery,
+                    onValueChange = onFindQueryChange,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(40.dp)
+                        .focusRequester(findFocusRequester),
+                    placeholder = { Text("Поиск в файле") },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { onFindNext() }),
                 )
-                Text(
-                    text = "  ${currentIndex + 1}/${documents.size}  ▾",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = WebPanelPalette.Muted,
+                if (findQuery.isNotBlank()) {
+                    Text(
+                        text = findResult.selectedMatch?.let { "$it/${findResult.matchCount}" }
+                            ?: "0/${findResult.matchCount}",
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                        color = WebPanelPalette.Muted,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                    )
+                }
+                EditorToolbarButton(Icons.Outlined.KeyboardArrowUp, "Предыдущее совпадение", onFindPrevious)
+                EditorToolbarButton(Icons.Outlined.KeyboardArrowDown, "Следующее совпадение", onFindNext)
+                EditorToolbarButton(Icons.Outlined.Close, "Закрыть поиск", onCloseFind)
+            } else {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable(onClick = onOpenDocumentPicker)
+                        .padding(start = 9.dp, end = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = document.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = "  ${currentIndex + 1}/${documents.size}  ▾",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = WebPanelPalette.Muted,
+                    )
+                }
+                EditorToolbarButton(Icons.Outlined.Search, "Поиск в файле", onOpenFind)
+                EditorToolbarButton(
+                    icon = Icons.AutoMirrored.Outlined.FactCheck,
+                    description = if (isValidationInFlight) "Проверка выполняется" else "Проверить",
+                    onClick = onValidate,
+                    accent = isValidationInFlight,
+                    enabled = !isValidationInFlight && !isWriteInFlight,
+                )
+                EditorToolbarButton(Icons.Outlined.SettingsBackupRestore, "Откатить", onRevert)
+                EditorToolbarButton(
+                    icon = Icons.Outlined.Save,
+                    description = "Сохранить",
+                    onClick = onSave,
+                    accent = document.hasUnsavedChanges,
+                    enabled = !isWriteInFlight,
+                )
+                EditorToolbarButton(
+                    icon = Icons.Outlined.DoneAll,
+                    description = "Применить",
+                    onClick = onApply,
+                    accent = document.hasDraftChanges,
+                    enabled = !isWriteInFlight,
                 )
             }
-            EditorToolbarButton(Icons.Outlined.Edit, "Редактировать", onEdit)
-            EditorToolbarButton(
-                icon = Icons.AutoMirrored.Outlined.FactCheck,
-                description = if (isValidationInFlight) "Проверка выполняется" else "Проверить",
-                onClick = onValidate,
-                accent = isValidationInFlight,
-                enabled = !isValidationInFlight && !isWriteInFlight,
-            )
-            EditorToolbarButton(Icons.Outlined.SettingsBackupRestore, "Откатить", onRevert)
-            EditorToolbarButton(
-                icon = Icons.Outlined.Save,
-                description = "Сохранить",
-                onClick = onSave,
-                accent = document.hasUnsavedChanges,
-                enabled = !isWriteInFlight,
-            )
-            EditorToolbarButton(
-                icon = Icons.Outlined.DoneAll,
-                description = "Применить",
-                onClick = onApply,
-                accent = document.hasDraftChanges,
-                enabled = !isWriteInFlight,
-            )
         }
     }
 }
@@ -577,6 +653,7 @@ private fun JsonEditor(
     value: String,
     onValueChange: (String) -> Unit,
     onMetricsChange: (EditorMetrics) -> Unit,
+    onEditorReady: (AdvancedJsonEditorView) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val editorView = remember { mutableStateOf<AdvancedJsonEditorView?>(null) }
@@ -588,6 +665,7 @@ private fun JsonEditor(
         factory = { context ->
             AdvancedJsonEditorView(context).also { view ->
                 editorView.value = view
+                onEditorReady(view)
             }
         },
         update = { view ->

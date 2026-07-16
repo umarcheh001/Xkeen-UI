@@ -16,6 +16,45 @@ internal data class EditorMetrics(
     val cursor: EditorCursor = EditorCursor(),
 )
 
+internal data class EditorTextSearchResult(
+    val matchCount: Int = 0,
+    val selectedMatch: Int? = null,
+    val range: TextRange? = null,
+)
+
+internal fun findEditorText(
+    source: String,
+    query: String,
+    selectionStart: Int,
+    selectionEnd: Int,
+    forward: Boolean,
+): EditorTextSearchResult {
+    if (query.isEmpty() || source.isEmpty()) return EditorTextSearchResult()
+    val matches = buildList {
+        var searchFrom = 0
+        while (searchFrom <= source.length - query.length) {
+            val foundAt = source.indexOf(query, searchFrom, ignoreCase = true)
+            if (foundAt < 0) break
+            add(TextRange(foundAt, foundAt + query.length))
+            searchFrom = foundAt + query.length
+        }
+    }
+    if (matches.isEmpty()) return EditorTextSearchResult()
+
+    val start = minOf(selectionStart, selectionEnd).coerceIn(0, source.length)
+    val end = maxOf(selectionStart, selectionEnd).coerceIn(0, source.length)
+    val selectedIndex = if (forward) {
+        matches.indexOfFirst { it.start >= end }.takeIf { it >= 0 } ?: 0
+    } else {
+        matches.indexOfLast { it.end <= start }.takeIf { it >= 0 } ?: matches.lastIndex
+    }
+    return EditorTextSearchResult(
+        matchCount = matches.size,
+        selectedMatch = selectedIndex + 1,
+        range = matches[selectedIndex],
+    )
+}
+
 /**
  * A compact index shared by cursor status, line selection and go-to-line. It is rebuilt only when
  * text changes, so selection moves and fast scrolling never rescan a large routing document.
