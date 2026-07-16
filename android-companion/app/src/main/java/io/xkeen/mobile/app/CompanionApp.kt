@@ -1077,7 +1077,7 @@ private fun RoutingScreen(
 
         SectionCard(
             title = "Проверка",
-            supporting = routing.validation.message,
+            supporting = routing.validation.displayMessage,
         ) {
             CompactStatusRow(
                 items = listOf(validationChip(routing.validation.state)),

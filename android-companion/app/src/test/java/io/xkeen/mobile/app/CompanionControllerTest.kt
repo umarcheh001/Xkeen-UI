@@ -697,7 +697,7 @@ class CompanionControllerTest {
     }
 
     @Test
-    fun validateRoutingKeepsLocalSyntaxIssuesSeparateFromServerDiagnostics() = runTest {
+    fun validateRoutingPublishesOnlyServerDiagnosticsAsCanonicalResult() = runTest {
         val server = FakeRoutingValidationPort(
             RoutingServerValidation(
                 valid = false,
@@ -724,10 +724,10 @@ class CompanionControllerTest {
 
         val validation = controller.state.routing.validation
         assertEquals(RoutingValidationState.Invalid, validation.state)
-        assertEquals(1, validation.localSyntaxIssues.size)
-        assertEquals(RoutingDiagnosticSource.LocalSyntax, validation.localSyntaxIssues.single().source)
         assertEquals(1, validation.serverDiagnostics.size)
         assertEquals(RoutingDiagnosticSource.Server, validation.serverDiagnostics.single().source)
+        assertEquals(validation.serverDiagnostics, validation.diagnostics)
+        assertEquals("Ожидалась закрывающая скобка.", validation.displayMessage)
     }
 
     @Test

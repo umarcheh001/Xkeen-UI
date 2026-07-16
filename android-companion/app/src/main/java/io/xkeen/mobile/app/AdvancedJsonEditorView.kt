@@ -1,19 +1,24 @@
 package io.xkeen.mobile.app
 
 import android.animation.ValueAnimator
-import android.app.SearchManager
+import android.content.ActivityNotFoundException
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
+import android.net.Uri
 import android.os.Build
 import android.text.Editable
 import android.text.InputType
 import android.text.Layout
 import android.text.Spannable
 import android.text.TextWatcher
+import android.text.style.BackgroundColorSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.TabStopSpan
 import android.util.AttributeSet
@@ -28,12 +33,15 @@ import android.view.ViewConfiguration
 import android.view.VelocityTracker
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.OverScroller
+import android.widget.PopupWindow
 import android.widget.TextView
 import android.widget.Toast
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import io.xkeen.mobile.ui.theme.WebPanelPalette
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -53,11 +61,13 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
     private val gutter = EditorGutterView(context, editor)
     private val fastScroller = NativeEditorFastScroller(context, editor)
     private val syntaxSpans = mutableListOf<ForegroundColorSpan>()
+    private val searchSpans = mutableListOf<BackgroundColorSpan>()
     private val tabStopSpans = mutableListOf<TabStopSpan.Standard>()
     private var documentIndex = EditorDocumentIndex.build("")
     private var suppressCallbacks = false
     private var lastKnownText = ""
     private val highlightRunnable = Runnable(::applySyntaxHighlight)
+    private var editorActionsPopup: PopupWindow? = null
 
     var onTextChanged: (String) -> Unit = {}
     var onMetricsChanged: (EditorMetrics) -> Unit = {}
@@ -128,22 +138,46 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         }
     }
 
-    fun findText(query: String, forward: Boolean): EditorTextSearchResult {
+    fun findText(
+        query: String,
+        forward: Boolean,
+        restartAtSelectionStart: Boolean = false,
+    ): EditorTextSearchResult {
+        clearSearchHighlight()
+        val selectionStart = editor.selectionStart
         val result = findEditorText(
             source = editor.text?.toString().orEmpty(),
             query = query,
-            selectionStart = editor.selectionStart,
-            selectionEnd = editor.selectionEnd,
+            selectionStart = selectionStart,
+            selectionEnd = if (restartAtSelectionStart) selectionStart else editor.selectionEnd,
             forward = forward,
         )
         val range = result.range ?: return result
+        editor.editableText?.let { editable ->
+            val span = BackgroundColorSpan(JsonEditorPalette.SearchMatch.toArgb())
+            searchSpans += span
+            editable.setSpan(
+                span,
+                range.start,
+                range.end,
+                Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
+            )
+        }
         editor.setSelection(range.start, range.end)
+        editor.invalidate()
         editor.post {
             val layout = editor.layout ?: return@post
             val visualLine = layout.getLineForOffset(range.start)
             editor.smoothScrollToY(layout.getLineTop(visualLine))
         }
         return result
+    }
+
+    fun clearSearchHighlight() {
+        val editable = editor.editableText
+        searchSpans.forEach { span -> editable?.removeSpan(span) }
+        searchSpans.clear()
+        editor.invalidate()
     }
 
     override fun dispatchDraw(canvas: Canvas) {
@@ -164,6 +198,8 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
     }
 
     override fun onDetachedFromWindow() {
+        editorActionsPopup?.dismiss()
+        editorActionsPopup = null
         removeCallbacks(highlightRunnable)
         super.onDetachedFromWindow()
     }
@@ -250,32 +286,15 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
     private fun installActionMode() {
         val callback = object : ActionMode.Callback {
             override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
-                if (menu == null) return true
-                // EditText already contributes Android's own Undo/Redo actions. Adding our own
-                // versions here produced two indistinguishable “Отменить” items in this menu.
-                menu.addEditorAction(EditorMenuSelectLine, "Выделить строку")
-                menu.addEditorAction(EditorMenuDuplicateLine, "Дублировать строку")
-                menu.addEditorAction(EditorMenuGoToLine, "Перейти к строке…")
-                menu.addEditorAction(EditorMenuSearchWeb, "Поиск в интернете")
-                return true
+                editor.post(::showEditorActionsPopup)
+                // The OEM floating toolbar cannot be resized or themed consistently. The Xkeen
+                // popup below owns the same actions and leaves programmatic selections visible.
+                return false
             }
 
             override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean = false
 
-            override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
-                val handled = when (item?.itemId) {
-                    EditorMenuSelectLine -> selectLine()
-                    EditorMenuDuplicateLine -> duplicateLine()
-                    EditorMenuGoToLine -> {
-                        requestGoToLine()
-                        true
-                    }
-                    EditorMenuSearchWeb -> searchOnWeb()
-                    else -> false
-                }
-                if (handled) mode?.finish()
-                return handled
-            }
+            override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean = false
 
             override fun onDestroyActionMode(mode: ActionMode?) = Unit
         }
@@ -283,6 +302,162 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             editor.customInsertionActionModeCallback = callback
         }
+    }
+
+    private fun showEditorActionsPopup() {
+        if (!isAttachedToWindow) return
+        editorActionsPopup?.dismiss()
+
+        val hasSelection = editor.selectionStart >= 0 &&
+            editor.selectionEnd >= 0 &&
+            editor.selectionStart != editor.selectionEnd
+        val hasText = editor.text?.isNotEmpty() == true
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        val actions = listOf(
+            EditorPopupAction("Отменить") { performSystemTextAction(android.R.id.undo) },
+            EditorPopupAction("Повторить") { performSystemTextAction(android.R.id.redo) },
+            EditorPopupAction("Вырезать", hasSelection) { performSystemTextAction(android.R.id.cut) },
+            EditorPopupAction("Копировать", hasSelection) { performSystemTextAction(android.R.id.copy) },
+            EditorPopupAction("Вставить", clipboard?.hasPrimaryClip() == true) {
+                performSystemTextAction(android.R.id.paste)
+            },
+            EditorPopupAction("Поделиться", hasSelection) { performSystemTextAction(android.R.id.shareText) },
+            EditorPopupAction("Выделить всё", hasText) { performSystemTextAction(android.R.id.selectAll) },
+            EditorPopupAction("Выделить строку", hasText) {
+                editorActionsPopup?.dismiss()
+                editor.post {
+                    selectLine()
+                    editor.requestFocus()
+                }
+            },
+            EditorPopupAction("Дублировать строку", hasText) {
+                editorActionsPopup?.dismiss()
+                duplicateLine()
+            },
+            EditorPopupAction("Перейти к строке…", hasText) {
+                editorActionsPopup?.dismiss()
+                requestGoToLine()
+            },
+            EditorPopupAction("Поиск в интернете", hasSelection) {
+                editorActionsPopup?.dismiss()
+                searchOnWeb()
+            },
+        )
+
+        val content = buildEditorActionsContent(actions)
+        val availableWidth = resources.displayMetrics.widthPixels - context.dp(24f)
+        val popup = PopupWindow(
+            content,
+            minOf(availableWidth, context.dp(420f)),
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            true,
+        ).apply {
+            isOutsideTouchable = true
+            elevation = context.dp(18f).toFloat()
+            setBackgroundDrawable(
+                GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = context.dp(18f).toFloat()
+                    setColor(WebPanelPalette.BackgroundDeep.toArgb())
+                    setStroke(
+                        context.dp(1f),
+                        WebPanelPalette.AccentMiddle.copy(alpha = 0.72f).toArgb(),
+                    )
+                },
+            )
+            setOnDismissListener {
+                if (editorActionsPopup === this) editorActionsPopup = null
+            }
+        }
+        editorActionsPopup = popup
+        popup.showAtLocation(rootView, Gravity.CENTER, 0, 0)
+    }
+
+    private fun buildEditorActionsContent(actions: List<EditorPopupAction>): View {
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(context.dp(14f), context.dp(13f), context.dp(14f), context.dp(14f))
+            addView(
+                editorActionTextView(
+                    label = "ДЕЙСТВИЯ С ТЕКСТОМ",
+                    enabled = true,
+                    isHeader = true,
+                ),
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    context.dp(34f),
+                ),
+            )
+            actions.chunked(2).forEach { pair ->
+                addView(
+                    LinearLayout(context).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        pair.forEachIndexed { index, action ->
+                            addView(
+                                editorActionTextView(
+                                    label = action.label,
+                                    enabled = action.enabled,
+                                    onClick = action.onClick,
+                                ),
+                                LinearLayout.LayoutParams(0, context.dp(44f), 1f).apply {
+                                    marginStart = if (index == 0) 0 else context.dp(4f)
+                                    marginEnd = if (index == 0) context.dp(4f) else 0
+                                    bottomMargin = context.dp(8f)
+                                },
+                            )
+                        }
+                        if (pair.size == 1) {
+                            addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
+                        }
+                    },
+                    LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun editorActionTextView(
+        label: String,
+        enabled: Boolean,
+        isHeader: Boolean = false,
+        onClick: () -> Unit = {},
+    ): TextView = TextView(context).apply {
+        text = label
+        gravity = if (isHeader) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, if (isHeader) 11f else 14f)
+        setTypeface(typeface, if (isHeader) Typeface.BOLD else Typeface.NORMAL)
+        setTextColor(
+            when {
+                isHeader -> WebPanelPalette.TextBlue.toArgb()
+                enabled -> WebPanelPalette.TextStrong.toArgb()
+                else -> WebPanelPalette.Muted.copy(alpha = 0.42f).toArgb()
+            },
+        )
+        if (!isHeader) {
+            val shape = GradientDrawable().apply {
+                cornerRadius = context.dp(11f).toFloat()
+                setColor(WebPanelPalette.SurfaceRaised.toArgb())
+                setStroke(
+                    context.dp(1f),
+                    WebPanelPalette.Border.copy(alpha = if (enabled) 0.26f else 0.10f).toArgb(),
+                )
+            }
+            background = RippleDrawable(
+                ColorStateList.valueOf(WebPanelPalette.TextBlue.copy(alpha = 0.16f).toArgb()),
+                shape,
+                null,
+            )
+            isEnabled = enabled
+            setOnClickListener { onClick() }
+        }
+    }
+
+    private fun performSystemTextAction(actionId: Int) {
+        editorActionsPopup?.dismiss()
+        editor.onTextContextMenuItem(actionId)
     }
 
     private fun selectLine(): Boolean {
@@ -313,12 +488,21 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
             ).show()
             return true
         }
-        val intent = Intent(Intent.ACTION_WEB_SEARCH).putExtra(SearchManager.QUERY, query)
-        if (intent.resolveActivity(context.packageManager) == null) {
-            Toast.makeText(context, "На устройстве нет приложения для интернет-поиска.", Toast.LENGTH_SHORT).show()
-            return true
+        val searchUri = Uri.Builder()
+            .scheme("https")
+            .authority("www.google.com")
+            .appendPath("search")
+            .appendQueryParameter("q", query)
+            .build()
+        val browserIntent = Intent(Intent.ACTION_VIEW, searchUri).apply {
+            addCategory(Intent.CATEGORY_BROWSABLE)
         }
-        context.startActivity(intent)
+        val chooser = Intent.createChooser(browserIntent, "Поиск в интернете")
+        try {
+            context.startActivity(chooser)
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(context, "На устройстве нет приложения для интернет-поиска.", Toast.LENGTH_SHORT).show()
+        }
         return true
     }
 
@@ -331,6 +515,7 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         val scrollY = editor.scrollY
         suppressCallbacks = true
         try {
+            searchSpans.clear()
             tabStopSpans.clear()
             editor.setText(value.text, TextView.BufferType.EDITABLE)
             ensureCompactTabStops(editor.editableText)
@@ -454,14 +639,15 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         const val SyntaxHighlightLineBuffer = 24
         const val MaxFullHighlightCharacters = 80_000
         const val MaxFullHighlightLines = 3_000
-        const val EditorMenuSelectLine = 0x584B03
-        const val EditorMenuDuplicateLine = 0x584B04
-        const val EditorMenuGoToLine = 0x584B05
-        const val EditorMenuSearchWeb = 0x584B06
-
         val currentLinePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     }
 }
+
+private data class EditorPopupAction(
+    val label: String,
+    val enabled: Boolean = true,
+    val onClick: () -> Unit,
+)
 
 internal fun editorInternetSearchQuery(
     source: String,
@@ -775,12 +961,6 @@ private data class NativeScrollMetrics(
     val travel: Float,
     val thumbTop: Float,
 )
-
-private fun Menu.addEditorAction(id: Int, label: String) {
-    if (findItem(id) == null) {
-        add(Menu.NONE, id, Menu.NONE, label).setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-    }
-}
 
 private fun Context.dp(value: Float): Int =
     TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, resources.displayMetrics)

@@ -694,14 +694,12 @@ internal class CompanionController(
             endpoint = state.dashboard.endpoint,
         )
         activeRoutingValidationRequest = request
-        val localSyntaxIssues = collectLocalRoutingSyntaxIssues(request.draftContent)
         state = state.copy(
             routing = state.routing.copy(
                 isValidationInFlight = true,
                 validation = RoutingValidation(
                     state = RoutingValidationState.Validating,
                     message = "Проверяем ${document.title} на сервере Xkeen UI…",
-                    localSyntaxIssues = localSyntaxIssues,
                 ),
             ),
         )
@@ -727,7 +725,6 @@ internal class CompanionController(
                     validation = RoutingValidation(
                         state = finalState,
                         message = result.message,
-                        localSyntaxIssues = localSyntaxIssues,
                         serverDiagnostics = result.diagnostics,
                     ),
                 ),
@@ -754,7 +751,6 @@ internal class CompanionController(
                     validation = RoutingValidation(
                         state = RoutingValidationState.Invalid,
                         message = message,
-                        localSyntaxIssues = localSyntaxIssues,
                         serverDiagnostics = listOf(
                             RoutingDiagnostic(
                                 source = RoutingDiagnosticSource.Transport,

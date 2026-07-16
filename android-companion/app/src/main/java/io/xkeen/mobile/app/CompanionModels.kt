@@ -308,16 +308,20 @@ data class RoutingDiagnostic(
 data class RoutingValidation(
     val state: RoutingValidationState = RoutingValidationState.Idle,
     val message: String = "Откройте конфиг и выполните проверку перед применением.",
-    val localSyntaxIssues: List<RoutingDiagnostic> = emptyList(),
     val serverDiagnostics: List<RoutingDiagnostic> = emptyList(),
-    /**
-     * Supplementary non-authoritative notes. Backend validation results stay in the structured
-     * source-specific lists above so UI code never mistakes a local note for server acceptance.
-     */
+    /** Supplementary notes that never participate in the authoritative server result. */
     val details: List<String> = emptyList(),
 ) {
+    /** Only server-confirmed diagnostics are authoritative and visible to the user. */
     val diagnostics: List<RoutingDiagnostic>
-        get() = localSyntaxIssues + serverDiagnostics
+        get() = serverDiagnostics
+
+    val primaryDiagnostic: RoutingDiagnostic?
+        get() = diagnostics.firstOrNull { it.severity == RoutingDiagnosticSeverity.Error }
+            ?: diagnostics.firstOrNull()
+
+    val displayMessage: String
+        get() = primaryDiagnostic?.message?.takeIf(String::isNotBlank) ?: message
 
     val isPending: Boolean
         get() = state == RoutingValidationState.Validating

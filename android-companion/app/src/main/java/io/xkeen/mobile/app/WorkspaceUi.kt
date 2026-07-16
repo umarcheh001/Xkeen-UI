@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.TextSelectionColors
@@ -59,6 +60,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.AnnotatedString
@@ -164,11 +166,16 @@ internal fun RoutingWorkspaceScreen(
             },
             onFindQueryChange = { query ->
                 findQuery.value = query
-                findNext(true)
+                findResult.value = editorView.value?.findText(
+                    query = query,
+                    forward = true,
+                    restartAtSelectionStart = true,
+                ) ?: findEditorText(selectedDocument.draftContent, query, 0, 0, forward = true)
             },
             onFindPrevious = { findNext(false) },
             onFindNext = { findNext(true) },
             onCloseFind = {
+                editorView.value?.clearSearchHighlight()
                 showFind.value = false
                 findQuery.value = ""
                 findResult.value = EditorTextSearchResult()
@@ -396,18 +403,13 @@ private fun DocumentToolbar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (isFindVisible) {
-                OutlinedTextField(
+                SearchToolbarField(
                     value = findQuery,
                     onValueChange = onFindQueryChange,
                     modifier = Modifier
                         .weight(1f)
-                        .height(40.dp)
                         .focusRequester(findFocusRequester),
-                    placeholder = { Text("Поиск в файле") },
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyMedium,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { onFindNext() }),
+                    onSearch = onFindNext,
                 )
                 if (findQuery.isNotBlank()) {
                     Text(
@@ -470,6 +472,67 @@ private fun DocumentToolbar(
             }
         }
     }
+}
+
+@Composable
+private fun SearchToolbarField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(12.dp)
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier
+            .height(36.dp)
+            .background(
+                brush = Brush.horizontalGradient(
+                    listOf(
+                        WebPanelPalette.SurfaceRaised.copy(alpha = 0.96f),
+                        WebPanelPalette.Surface.copy(alpha = 0.96f),
+                    ),
+                ),
+                shape = shape,
+            )
+            .border(1.dp, WebPanelPalette.Border.copy(alpha = 0.30f), shape),
+        textStyle = MaterialTheme.typography.bodyMedium.copy(
+            color = WebPanelPalette.TextStrong,
+            fontFamily = FontFamily.Monospace,
+        ),
+        singleLine = true,
+        cursorBrush = SolidColor(WebPanelPalette.TextBlue),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+        decorationBox = { innerTextField ->
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Search,
+                    contentDescription = null,
+                    tint = WebPanelPalette.TextBlue.copy(alpha = 0.78f),
+                    modifier = Modifier.size(16.dp),
+                )
+                Box(modifier = Modifier.weight(1f)) {
+                    if (value.isEmpty()) {
+                        Text(
+                            text = "Поиск в файле",
+                            color = WebPanelPalette.Muted,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                        )
+                    }
+                    innerTextField()
+                }
+            }
+        },
+    )
 }
 
 @Composable
@@ -787,6 +850,7 @@ internal object JsonEditorPalette {
         handleColor = Cursor,
         backgroundColor = Color(0x501D4ED8),
     )
+    val SearchMatch = Color(0xB3345790)
 }
 
 internal fun highlightJsonc(source: String): AnnotatedString = buildAnnotatedString {
@@ -1141,7 +1205,7 @@ private fun editorStatusPresentation(
             RoutingValidationState.Validating,
             RoutingValidationState.Invalid,
             RoutingValidationState.Valid,
-        ) -> validation.message
+        ) -> validation.displayMessage
         document.hasUnsavedChanges -> "Изменения не сохранены"
         document.hasDraftChanges -> "Черновик сохранён"
         document.modifiedAtEpochSeconds != null -> if (document.usesJsonc) "server · JSONC" else "server · JSON"
@@ -1172,6 +1236,7 @@ private fun EditorStatusDetailsDialog(
     onDismiss: () -> Unit,
 ) {
     val presentation = editorStatusPresentation(document, validation, write)
+    val diagnostic = validation.primaryDiagnostic
     XkeenDialog(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -1191,9 +1256,28 @@ private fun EditorStatusDetailsDialog(
                 fontWeight = FontWeight.Bold,
             )
             StatusDetailLine("Состояние", presentation.text)
+            diagnostic?.let { item ->
+                StatusDetailLine(
+                    "Источник проверки",
+                    when (item.source) {
+                        RoutingDiagnosticSource.Server -> "Сервер Xkeen UI / Xray"
+                        RoutingDiagnosticSource.Transport -> "Соединение с сервером"
+                        RoutingDiagnosticSource.LocalSyntax -> "Локальная предварительная проверка"
+                    },
+                )
+                item.locationLabel?.let { location ->
+                    StatusDetailLine("Место ошибки", location)
+                }
+                item.code?.let { code ->
+                    StatusDetailLine("Код проверки", code)
+                }
+            }
             StatusDetailLine("Символов", metrics.characterCount.toString())
             StatusDetailLine("Слов", metrics.wordCount.toString())
-            StatusDetailLine("Курсор", "строка ${metrics.cursor.line}, столбец ${metrics.cursor.column}")
+            StatusDetailLine(
+                "Текущая позиция курсора",
+                "строка ${metrics.cursor.line}, столбец ${metrics.cursor.column}",
+            )
             StatusDetailLine("Строк", metrics.lineCount.toString())
             Button(
                 onClick = onDismiss,
