@@ -35,6 +35,23 @@ from utils.jsonc import strip_json_comments_text
 
 MOBILE_API_PREFIX = "/api/mobile/v1"
 MOBILE_XRAY_ROUTING_VALIDATE_PATH = f"{MOBILE_API_PREFIX}/xray/routing/validate"
+MOBILE_XRAY_ROUTING_DOCUMENT_PATH = f"{MOBILE_API_PREFIX}/xray/routing/document"
+MOBILE_XRAY_ROUTING_SAVE_PATH = f"{MOBILE_API_PREFIX}/xray/routing/save"
+MOBILE_XRAY_ROUTING_APPLY_PATH = f"{MOBILE_API_PREFIX}/xray/routing/apply"
+_MOBILE_ROUTING_SERVICE_EXTENSION = "xkeen.mobile_routing_service"
+
+
+def configure_mobile_routing_service(app: Flask, service: Any) -> None:
+    """Attach the write service after app composition has created restart/path dependencies."""
+
+    app.extensions[_MOBILE_ROUTING_SERVICE_EXTENSION] = service
+
+
+def _mobile_routing_service() -> Any:
+    service = current_app.extensions.get(_MOBILE_ROUTING_SERVICE_EXTENSION)
+    if service is None:
+        raise RuntimeError("mobile routing service is not configured")
+    return service
 
 
 def _mobile_xray_routing_validation_dependencies() -> dict[str, Any]:
@@ -455,6 +472,135 @@ def register_mobile_routes(app: Flask) -> None:
                         phase=phase if isinstance(phase, str) else None,
                     )
                 ],
+            }
+        )
+
+    @app.get(MOBILE_XRAY_ROUTING_DOCUMENT_PATH)
+    def mobile_xray_routing_document():
+        document = str(request.args.get("document") or "").strip()
+        if not _is_mobile_routing_document_name(document):
+            return error(
+                "invalid_document",
+                "Параметр document должен содержать имя Xray JSON/JSONC-фрагмента.",
+                400,
+            )
+        try:
+            snapshot = _mobile_routing_service().get(document)
+        except Exception:
+            current_app.logger.exception("mobile.xray_routing_document.failed")
+            return error(
+                "document_load_failed",
+                "Не удалось загрузить routing-документ с сервера.",
+                500,
+            )
+        return response({"document": snapshot.to_payload()})
+
+    def routing_write_request(*, include_content: bool) -> tuple[dict[str, Any] | None, Any | None]:
+        if not request.is_json:
+            return None, error("invalid_request", "Ожидается JSON-запрос.", 400)
+        try:
+            data = _read_mobile_routing_validation_request()
+        except PayloadTooLargeError as exc:
+            return None, error(
+                "payload_too_large",
+                "Routing-черновик превышает допустимый размер.",
+                413,
+                max_bytes=int(exc.max_bytes),
+            )
+        except ValueError:
+            return None, error("invalid_request", "Тело запроса должно быть JSON-объектом.", 400)
+
+        document = data.get("document")
+        published_revision = data.get("published_revision")
+        saved_revision = data.get("saved_revision")
+        content = data.get("content")
+        if not isinstance(document, str) or not _is_mobile_routing_document_name(document):
+            return None, error("invalid_document", "Некорректное имя routing-документа.", 400)
+        if not isinstance(published_revision, str) or not published_revision.strip():
+            return None, error("invalid_revision", "Не передана published revision.", 400)
+        if not isinstance(saved_revision, str) or not saved_revision.strip():
+            return None, error("invalid_revision", "Не передана saved revision.", 400)
+        if include_content and not isinstance(content, str):
+            return None, error("invalid_request", "Не передан текст routing-черновика.", 400)
+        return {
+            "document": document.strip(),
+            "content": content if isinstance(content, str) else None,
+            "published_revision": published_revision.strip(),
+            "saved_revision": saved_revision.strip(),
+        }, None
+
+    def routing_write_error(exc: Exception):
+        from services.mobile_routing import (
+            MobileRoutingConflict,
+            MobileRoutingOperationFailure,
+            MobileRoutingValidationFailure,
+        )
+
+        if isinstance(exc, MobileRoutingConflict):
+            return error(
+                exc.code,
+                str(exc),
+                409,
+                document=exc.snapshot.to_payload(),
+            )
+        if isinstance(exc, MobileRoutingValidationFailure):
+            return error(exc.code, str(exc), 422, details=exc.details)
+        if isinstance(exc, MobileRoutingOperationFailure):
+            status = 400 if exc.code in {"invalid_document", "nothing_to_apply"} else 500
+            details: dict[str, Any] = {}
+            if exc.snapshot is not None:
+                details["document"] = exc.snapshot.to_payload()
+            return error(exc.code, str(exc), status, **details)
+        current_app.logger.exception("mobile.xray_routing_write.failed")
+        return error(
+            "routing_write_failed",
+            "Не удалось выполнить routing-операцию на сервере.",
+            500,
+        )
+
+    @app.post(MOBILE_XRAY_ROUTING_SAVE_PATH)
+    def mobile_xray_routing_save():
+        data, request_error = routing_write_request(include_content=True)
+        if request_error is not None:
+            return request_error
+        assert data is not None
+        try:
+            snapshot = _mobile_routing_service().save(
+                document=data["document"],
+                content=data["content"],
+                expected_published_revision=data["published_revision"],
+                expected_saved_revision=data["saved_revision"],
+            )
+        except Exception as exc:
+            return routing_write_error(exc)
+        return response(
+            {
+                "saved": True,
+                "message": "Routing-черновик сохранён на сервере без применения.",
+                "document": snapshot.to_payload(),
+            }
+        )
+
+    @app.post(MOBILE_XRAY_ROUTING_APPLY_PATH)
+    def mobile_xray_routing_apply():
+        data, request_error = routing_write_request(include_content=False)
+        if request_error is not None:
+            return request_error
+        assert data is not None
+        try:
+            snapshot = _mobile_routing_service().apply(
+                document=data["document"],
+                expected_published_revision=data["published_revision"],
+                expected_saved_revision=data["saved_revision"],
+            )
+        except Exception as exc:
+            return routing_write_error(exc)
+        return response(
+            {
+                "applied": True,
+                "restarted": True,
+                "message": "Routing-конфигурация применена, перезапуск xkeen подтверждён.",
+                "document": snapshot.to_payload(),
             }
         )
 

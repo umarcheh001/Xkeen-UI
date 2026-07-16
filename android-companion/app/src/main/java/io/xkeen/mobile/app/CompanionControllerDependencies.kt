@@ -62,9 +62,9 @@ internal interface ServiceActionsPort {
 }
 
 internal interface RoutingWritePort {
-    fun save(document: RoutingDocument): RoutingSaveResult
+    suspend fun save(baseUrl: String, document: RoutingDocument): RoutingSaveResult
 
-    fun apply(document: RoutingDocument): RoutingApplyResult
+    suspend fun apply(baseUrl: String, document: RoutingDocument): RoutingApplyResult
 }
 
 internal interface LogsPort {
@@ -175,7 +175,7 @@ internal fun defaultCompanionControllerDependencies(
         session = MobileSessionPort(sessionMaterials, effectiveTransport),
         serviceActions = WebPanelServiceActionsPort(serviceTransport),
         routingValidation = WebPanelRoutingValidationPort(serviceTransport),
-        routingWrites = DemoRoutingWritePort(journal),
+        routingWrites = WebPanelRoutingWritePort(serviceTransport),
         logs = DemoLogsPort(journal),
         journal = journal,
         xrayConfigSource = WebPanelXrayConfigSource(effectiveTransport),
@@ -377,7 +377,7 @@ internal class DemoServiceActionsPort : ServiceActionsPort {
 internal class DemoRoutingWritePort(
     private val journal: CompanionJournalPort,
 ) : RoutingWritePort {
-    override fun save(document: RoutingDocument): RoutingSaveResult {
+    override suspend fun save(baseUrl: String, document: RoutingDocument): RoutingSaveResult {
         val savedAt = journal.shortTime()
         val updated = document.copy(
             savedDraftContent = document.draftContent,
@@ -398,7 +398,7 @@ internal class DemoRoutingWritePort(
         )
     }
 
-    override fun apply(document: RoutingDocument): RoutingApplyResult {
+    override suspend fun apply(baseUrl: String, document: RoutingDocument): RoutingApplyResult {
         val appliedAt = journal.shortTime()
         val updated = document.copy(
             revision = document.revision + 1,

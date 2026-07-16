@@ -18,9 +18,20 @@ internal data class XrayFragmentIndex(
 )
 
 internal data class XrayFragmentContent(
+    /** Compatibility view for callers that only need the editor text. */
     val text: String,
     val hasJsoncSidecar: Boolean,
     val usesJsoncSidecar: Boolean,
+    val publishedText: String = text,
+    val savedText: String = text,
+    val publishedRevision: String = "test:published",
+    val savedRevision: String = publishedRevision,
+    val draftBaseRevision: String = publishedRevision,
+    val hasSavedDraft: Boolean = false,
+    val publishedAt: String = "",
+    val savedAt: String = "",
+    val conflictCode: String? = null,
+    val conflictMessage: String? = null,
 )
 
 internal interface XrayConfigSource {
@@ -76,11 +87,33 @@ internal class WebPanelXrayConfigSource(
         run {
             require(filename.isXrayConfigFilename()) { "Unsupported Xray config filename" }
             val encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8.name())
-            val response = request(baseUrl, "/api/routing?file=$encoded")
+            val response = try {
+                request(baseUrl, "/api/mobile/v1/xray/routing/document?document=$encoded")
+            } catch (error: CompanionTransportException) {
+                if (error.failure.statusCode == 404) {
+                    throw XrayConfigException(
+                        "На роутере установлена версия Xkeen UI без revision API. " +
+                            "Обновите Xkeen UI для routing save/apply.",
+                        error,
+                    )
+                }
+                throw error
+            }
+            val server = parseRoutingDocumentEnvelope(response.body)
             XrayFragmentContent(
-                text = response.body,
-                hasJsoncSidecar = response.headers["x-xkeen-jsonc"] == "1",
-                usesJsoncSidecar = response.headers["x-xkeen-jsonc-using"] == "1",
+                text = server.savedContent,
+                publishedText = server.publishedContent,
+                savedText = server.savedContent,
+                hasJsoncSidecar = server.usesJsonc,
+                usesJsoncSidecar = server.usesJsonc,
+                publishedRevision = server.publishedRevision,
+                savedRevision = server.savedRevision,
+                draftBaseRevision = server.draftBaseRevision,
+                hasSavedDraft = server.hasSavedDraft,
+                publishedAt = server.publishedAt,
+                savedAt = server.savedAt,
+                conflictCode = server.conflictCode,
+                conflictMessage = server.conflictMessage,
             )
         }
 

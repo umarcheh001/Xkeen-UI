@@ -21,13 +21,12 @@ Updated: 2026-07-16
 - capability-aware нижняя навигация `Xray`, `Mihomo`, `Ports`, `Shell`, `Generator`;
 - capability-aware drawer с разделами под каждую рабочую зону;
 - read-only интеграция `GET /api/xkeen/core`;
-- read-only интеграция `GET /api/routing/fragments` и `GET /api/routing?file=...`;
-- полноэкранный `Routing Xray` editor-flow с JSON/JSONC подсветкой, номерами строк, свайпами между документами, real server-backed `validate` и действиями `edit`, `revert`, `save`, `apply`;
+- read-only список `GET /api/routing/fragments` и revision-aware document snapshot `GET /api/mobile/v1/xray/routing/document`;
+- полноэкранный `Routing Xray` editor-flow с JSON/JSONC подсветкой, номерами строк, свайпами между документами и real server-backed `validate/save/apply`;
 - интерактивные demo-поверхности `Shell -> Команды` и `Shell -> Терминал`.
 
 Что пока сознательно не завершено:
 
-- backend-backed `Routing Xray` write/apply flow;
 - настоящий logs streaming, PTY transport и reconnect behavior;
 - большая часть Mihomo, Ports и Generator модулей.
 
@@ -103,14 +102,14 @@ Updated: 2026-07-16
 - `POST /api/mobile/v1/xray/routing/validate` с real temporary-confdir Xray preflight без persistent save/restart/DAT-asset-sync side effect;
 - отдельные local syntax, server и transport diagnostics с source/severity/code/location metadata;
 - `Validating`, repeat guard и защита от позднего результата для измененного draft;
+- отдельный server draft, SHA-256 published/saved revisions и backend-backed `save/apply`;
+- отдельный conflict state для external update, stale draft и saved/published mismatch;
 - действия `edit`, `validate`, `revert`, `save`, `apply`;
-- fallback на локальные demo-данные, если backend-чтение недоступно.
 
 Что ещё не подключено:
 
 - серверный preview/diff;
-- сохранение и применение через backend write-endpoint'ы;
-- conflict detection поверх реального session/version state.
+- device rollout/smoke-test согласованной пары backend + APK для write/conflict flow.
 
 ### 4. Shell
 

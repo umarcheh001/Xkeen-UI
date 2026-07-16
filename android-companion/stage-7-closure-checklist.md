@@ -77,7 +77,7 @@ Rollout mismatch устранён на уровне поставки и диаг
        └─ offline/timeout/invalid response -> Invalid + Transport diagnostic, без ложного success
 ```
 
-`preview` больше не запускает бывшую локальную строковую эвристику. `save`/`apply` сохраняют границу этапа 8: они всё ещё используют demo `RoutingWritePort`, но не вызывают local validate как замену server round-trip.
+`preview` больше не запускает бывшую локальную строковую эвристику. На момент закрытия этапа 7 `save/apply` оставались границей этапа 8; с 2026-07-16 этот follow-up реализован через отдельный revision-aware mobile write contract.
 
 ## Checklist закрытия
 

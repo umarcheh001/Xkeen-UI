@@ -975,7 +975,7 @@ private fun RoutingScreen(
         ) {
             CompactStatusRow(
                 items = listOf(
-                    statusChip("r${selectedDocument.revision}"),
+                    statusChip(selectedDocument.revisionLabel),
                     statusChip(if (selectedDocument.hasDraftChanges) "черновик изменен" else "опубликовано"),
                     statusChip(if (selectedDocument.hasUnsavedChanges) "не сохранено" else "сохранено"),
                     statusChip(if (routing.mode == RoutingMode.Read) "чтение" else "редактирование"),
@@ -1003,13 +1003,15 @@ private fun RoutingScreen(
                         label = "Сохранить",
                         icon = Icons.Outlined.Save,
                         tone = if (selectedDocument.hasUnsavedChanges) ActionTone.Accent else ActionTone.Neutral,
-                        onClick = controller::saveRouting,
+                        onClick = { scope.launch { controller.saveRouting() } },
+                        enabled = !routing.write.isPending,
                     ),
                     GridAction(
                         label = "Применить",
                         icon = Icons.Outlined.DoneAll,
                         tone = if (selectedDocument.hasDraftChanges) ActionTone.Accent else ActionTone.Neutral,
                         onClick = controller::requestRoutingApply,
+                        enabled = !routing.write.isPending,
                     ),
                     GridAction("Откатить", Icons.Outlined.SettingsBackupRestore, onClick = controller::revertRoutingDraft),
                 ),

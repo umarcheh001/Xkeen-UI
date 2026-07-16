@@ -319,7 +319,11 @@ internal class CompanionController(
     fun requestRoutingApply() {
         val document = selectedRoutingDocument() ?: return
         when {
-            state.routing.isValidationInFlight || state.routing.validation.isPending -> return
+            state.routing.isValidationInFlight ||
+                state.routing.validation.isPending ||
+                state.routing.write.isPending -> return
+
+            state.routing.write.phase == RoutingWritePhase.Conflict -> return
 
             state.routing.validation.state != RoutingValidationState.Valid -> {
                 if (state.routing.validation.state in setOf(
@@ -348,6 +352,18 @@ internal class CompanionController(
                                 "Черновик отличается от последнего сохраненного превью.",
                                 "Если измените содержимое после сохранения, проверьте его еще раз.",
                             ),
+                        ),
+                    ),
+                )
+            }
+
+            !document.hasServerSavedDraft -> {
+                state = state.copy(
+                    routing = state.routing.copy(
+                        write = RoutingWriteState(
+                            phase = RoutingWritePhase.Failure,
+                            code = "nothing_to_apply",
+                            message = "Сначала сохраните проверенный черновик на сервере.",
                         ),
                     ),
                 )
@@ -398,6 +414,7 @@ internal class CompanionController(
                 mode = RoutingMode.Read,
                 validation = RoutingValidation(),
                 preview = null,
+                write = RoutingWriteState(),
             ),
         )
     }
@@ -526,20 +543,37 @@ internal class CompanionController(
         result.onSuccess { content ->
             val current = state.routing.documents.firstOrNull { it.id == documentId } ?: return@onSuccess
             val loaded = current.copy(
-                publishedContent = content.text,
-                draftContent = content.text,
-                savedDraftContent = content.text,
+                publishedContent = content.publishedText,
+                draftContent = content.savedText,
+                savedDraftContent = content.savedText,
+                publishedRevision = content.publishedRevision,
+                savedRevision = content.savedRevision,
+                draftBaseRevision = content.draftBaseRevision,
+                hasServerSavedDraft = content.hasSavedDraft,
+                lastSavedAt = content.savedAt.ifBlank { current.lastSavedAt },
+                lastAppliedAt = content.publishedAt.ifBlank { current.lastAppliedAt },
                 usesJsonc = content.usesJsoncSidecar,
                 isLoaded = true,
                 isLoading = false,
                 loadError = null,
             )
+            val conflict = content.conflictCode?.let { code ->
+                RoutingWriteState(
+                    phase = RoutingWritePhase.Conflict,
+                    code = code,
+                    message = content.conflictMessage
+                        ?: "Сохранённый draft расходится с опубликованной версией.",
+                )
+            } ?: RoutingWriteState()
             state = state.copy(
                 routing = state.routing.copy(
                     documents = state.routing.documents.replaceDocument(loaded),
                     loadError = null,
+                    write = conflict,
                     validation = RoutingValidation(
-                        message = if (content.usesJsoncSidecar) {
+                        message = if (content.hasSavedDraft) {
+                            "С сервера загружен сохранённый черновик. Проверьте его перед применением."
+                        } else if (content.usesJsoncSidecar) {
                             "JSONC загружен с Xkeen UI. Комментарии сохранены."
                         } else {
                             "Конфигурация загружена с Xkeen UI."
@@ -571,6 +605,11 @@ internal class CompanionController(
                     message = "Черновик изменен. Выполните проверку перед превью или применением.",
                 ),
                 preview = null,
+                write = when {
+                    state.routing.write.isPending -> state.routing.write
+                    state.routing.write.phase == RoutingWritePhase.Conflict -> state.routing.write
+                    else -> RoutingWriteState()
+                },
             ),
         )
     }
@@ -578,17 +617,25 @@ internal class CompanionController(
     fun revertRoutingDraft() {
         val document = selectedRoutingDocument() ?: return
         val reverted = document.copy(
-            draftContent = document.publishedContent,
-            savedDraftContent = document.publishedContent,
+            draftContent = document.savedDraftContent,
         )
         state = state.copy(
             routing = state.routing.copy(
                 documents = state.routing.documents.replaceDocument(reverted),
                 mode = RoutingMode.Read,
                 validation = RoutingValidation(
-                    message = "Черновик возвращен к опубликованной ревизии.",
+                    message = if (document.hasServerSavedDraft) {
+                        "Локальные изменения отменены; восстановлен сохранённый server draft."
+                    } else {
+                        "Локальные изменения отменены; восстановлена опубликованная версия."
+                    },
                 ),
                 preview = null,
+                write = if (state.routing.write.phase == RoutingWritePhase.Conflict) {
+                    state.routing.write
+                } else {
+                    RoutingWriteState()
+                },
             ),
         )
     }
@@ -719,17 +766,66 @@ internal class CompanionController(
         )
     }
 
-    fun saveRouting() {
+    suspend fun saveRouting() {
         val document = selectedRoutingDocument() ?: return
-        val result = dependencies.routingWrites.save(document)
+        if (state.routing.write.isPending || state.routing.isValidationInFlight) return
+        if (state.routing.validation.state != RoutingValidationState.Valid) {
+            state = state.copy(
+                routing = state.routing.copy(
+                    validation = state.routing.validation.copy(
+                        state = RoutingValidationState.Dirty,
+                        message = "Перед сохранением выполните server validate.",
+                    ),
+                ),
+            )
+            return
+        }
+
         state = state.copy(
             routing = state.routing.copy(
-                documents = state.routing.documents.replaceDocument(result.document),
-                validation = result.validation,
+                write = RoutingWriteState(
+                    phase = RoutingWritePhase.Saving,
+                    message = "Сохраняем проверенный draft на сервере…",
+                ),
             ),
-            dashboard = state.dashboard.copy(lastOperation = result.lastOperation),
-            logs = recordLog("routing", LogLevel.Info, result.logMessage),
         )
+        try {
+            val result = dependencies.routingWrites.save(state.dashboard.endpoint, document)
+            val current = selectedRoutingDocument() ?: return
+            val draftChangedDuringRequest = current.draftContent != document.draftContent
+            val updated = if (draftChangedDuringRequest) {
+                result.document.copy(draftContent = current.draftContent)
+            } else {
+                result.document
+            }
+            state = state.copy(
+                routing = state.routing.copy(
+                    documents = state.routing.documents.replaceDocument(updated),
+                    validation = if (draftChangedDuringRequest) {
+                        RoutingValidation(
+                            state = RoutingValidationState.Dirty,
+                            message = "Server draft сохранён, но локальный текст уже изменился. Проверьте его снова.",
+                        )
+                    } else {
+                        result.validation
+                    },
+                    write = RoutingWriteState(
+                        phase = RoutingWritePhase.Success,
+                        message = "Черновик сохранён на сервере без применения.",
+                    ),
+                ),
+                dashboard = state.dashboard.copy(
+                    lastOperation = result.lastOperation,
+                    lastError = null,
+                ),
+                logs = recordLog("routing", LogLevel.Info, result.logMessage),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            handleRoutingWriteFailure(error, document, "Не удалось сохранить routing-черновик.")
+        }
     }
 
     fun updateLogFilter(filter: LogFilter) {
@@ -959,24 +1055,94 @@ internal class CompanionController(
         )
     }
 
-    private fun applyRouting() {
+    private suspend fun applyRouting() {
         val document = selectedRoutingDocument() ?: return
-        val result = dependencies.routingWrites.apply(document)
-        val appliedAt = result.document.lastAppliedAt ?: dependencies.journal.shortTime()
+        if (state.routing.write.isPending) return
         state = state.copy(
             routing = state.routing.copy(
-                documents = state.routing.documents.replaceDocument(result.document),
-                mode = RoutingMode.Read,
-                validation = result.validation,
-                preview = result.preview,
+                write = RoutingWriteState(
+                    phase = RoutingWritePhase.Applying,
+                    message = "Применяем сохранённую revision и ждём restart xkeen…",
+                ),
+            ),
+        )
+        try {
+            val result = dependencies.routingWrites.apply(state.dashboard.endpoint, document)
+            val current = selectedRoutingDocument() ?: return
+            val draftChangedDuringRequest = current.draftContent != document.draftContent
+            val updated = if (draftChangedDuringRequest) {
+                result.document.copy(draftContent = current.draftContent)
+            } else {
+                result.document
+            }
+            val appliedAt = result.document.lastAppliedAt ?: dependencies.journal.shortTime()
+            state = state.copy(
+                routing = state.routing.copy(
+                    documents = state.routing.documents.replaceDocument(updated),
+                    mode = if (draftChangedDuringRequest) RoutingMode.Edit else RoutingMode.Read,
+                    validation = if (draftChangedDuringRequest) {
+                        RoutingValidation(
+                            state = RoutingValidationState.Dirty,
+                            message = "Сохранённая revision применена, но новый локальный текст требует проверки.",
+                        )
+                    } else {
+                        result.validation
+                    },
+                    preview = result.preview,
+                    write = RoutingWriteState(
+                        phase = RoutingWritePhase.Success,
+                        message = "Routing применён; restart xkeen подтверждён сервером.",
+                    ),
+                ),
+                dashboard = state.dashboard.copy(
+                    lastOperation = result.lastOperation,
+                    lastError = null,
+                    recentEvents = listOf(
+                        RecentEvent(appliedAt, result.eventTitle, result.eventSubtitle),
+                    ) + state.dashboard.recentEvents.take(2),
+                ),
+                logs = recordLog("routing", LogLevel.Info, result.logMessage),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            handleRoutingWriteFailure(error, document, "Не удалось применить routing-конфигурацию.")
+        }
+    }
+
+    private fun handleRoutingWriteFailure(
+        error: Exception,
+        requestDocument: RoutingDocument,
+        fallback: String,
+    ) {
+        val conflict = error as? RoutingWriteConflictException
+        val current = selectedRoutingDocument() ?: requestDocument
+        val serverDocument = conflict?.serverDocument
+        val updated = if (serverDocument != null) {
+            current.fromServer(serverDocument).copy(draftContent = current.draftContent)
+        } else {
+            current
+        }
+        val message = error.message?.takeIf(String::isNotBlank) ?: fallback
+        state = state.copy(
+            routing = state.routing.copy(
+                documents = state.routing.documents.replaceDocument(updated),
+                write = RoutingWriteState(
+                    phase = if (conflict != null) RoutingWritePhase.Conflict else RoutingWritePhase.Failure,
+                    code = conflict?.conflictCode ?: (error as? RoutingWriteException)?.code,
+                    message = message,
+                ),
             ),
             dashboard = state.dashboard.copy(
-                lastOperation = result.lastOperation,
-                recentEvents = listOf(
-                    RecentEvent(appliedAt, result.eventTitle, result.eventSubtitle),
-                ) + state.dashboard.recentEvents.take(2),
+                lastOperation = fallback,
+                lastError = message,
             ),
-            logs = recordLog("routing", LogLevel.Info, result.logMessage),
+            logs = recordLog(
+                "routing",
+                if (conflict != null) LogLevel.Warning else LogLevel.Error,
+                message,
+            ),
         )
     }
 

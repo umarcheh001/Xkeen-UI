@@ -224,6 +224,7 @@ def classify_json_request_max_bytes(path: str, env: Optional[Mapping[str, Any]] 
     if p in (
         "/api/routing",
         "/api/mobile/v1/xray/routing/validate",
+        "/api/mobile/v1/xray/routing/save",
     ):
         return get_routing_save_max_bytes(env)
 

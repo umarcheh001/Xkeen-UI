@@ -105,6 +105,7 @@ internal fun RoutingWorkspaceScreen(
             documents = routing.documents,
             validation = routing.validation,
             isValidationInFlight = routing.isValidationInFlight,
+            isWriteInFlight = routing.write.isPending,
             onOpenDocumentPicker = {
                 focusManager.clearFocus(force = true)
                 showDocumentPicker.value = true
@@ -112,7 +113,7 @@ internal fun RoutingWorkspaceScreen(
             onEdit = controller::enterRoutingEditMode,
             onValidate = { scope.launch { controller.validateRouting() } },
             onRevert = controller::revertRoutingDraft,
-            onSave = controller::saveRouting,
+            onSave = { scope.launch { controller.saveRouting() } },
             onApply = controller::requestRoutingApply,
         )
         Box(
@@ -136,10 +137,12 @@ internal fun RoutingWorkspaceScreen(
         RoutingValidationDiagnosticsPanel(
             validation = routing.validation,
             isValidationInFlight = routing.isValidationInFlight,
+            write = routing.write,
         )
         EditorStatusBar(
             document = selectedDocument,
             validation = routing.validation,
+            write = routing.write,
             metrics = editorMetrics.value,
         )
     }
@@ -246,6 +249,7 @@ private fun DocumentToolbar(
     documents: List<RoutingDocument>,
     validation: RoutingValidation,
     isValidationInFlight: Boolean,
+    isWriteInFlight: Boolean,
     onOpenDocumentPicker: () -> Unit,
     onEdit: () -> Unit,
     onValidate: () -> Unit,
@@ -295,7 +299,7 @@ private fun DocumentToolbar(
                 description = if (isValidationInFlight) "Проверка выполняется" else "Проверить",
                 onClick = onValidate,
                 accent = isValidationInFlight,
-                enabled = !isValidationInFlight,
+                enabled = !isValidationInFlight && !isWriteInFlight,
             )
             EditorToolbarButton(Icons.Outlined.SettingsBackupRestore, "Откатить", onRevert)
             EditorToolbarButton(
@@ -303,12 +307,14 @@ private fun DocumentToolbar(
                 description = "Сохранить",
                 onClick = onSave,
                 accent = document.hasUnsavedChanges,
+                enabled = !isWriteInFlight,
             )
             EditorToolbarButton(
                 icon = Icons.Outlined.DoneAll,
                 description = "Применить",
                 onClick = onApply,
                 accent = document.hasDraftChanges,
+                enabled = !isWriteInFlight,
             )
         }
     }
@@ -755,9 +761,10 @@ private fun String.jsonKeywordAt(index: Int): String? =
 private fun RoutingValidationDiagnosticsPanel(
     validation: RoutingValidation,
     isValidationInFlight: Boolean,
+    write: RoutingWriteState,
 ) {
     val diagnostics = validation.diagnostics
-    if (!isValidationInFlight && diagnostics.isEmpty()) return
+    if (!isValidationInFlight && diagnostics.isEmpty() && write.phase == RoutingWritePhase.Idle) return
 
     Column(
         modifier = Modifier
@@ -788,6 +795,52 @@ private fun RoutingValidationDiagnosticsPanel(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+        }
+        if (write.phase != RoutingWritePhase.Idle) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (write.isPending) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = WebPanelPalette.TextBlue,
+                    )
+                }
+                Text(
+                    text = when (write.phase) {
+                        RoutingWritePhase.Conflict -> "КОНФЛИКТ"
+                        RoutingWritePhase.Failure -> "ОШИБКА"
+                        RoutingWritePhase.Success -> "СЕРВЕР"
+                        RoutingWritePhase.Saving -> "SAVE"
+                        RoutingWritePhase.Applying -> "APPLY"
+                        RoutingWritePhase.Idle -> ""
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = when (write.phase) {
+                        RoutingWritePhase.Conflict -> WebPanelPalette.Warning
+                        RoutingWritePhase.Failure -> WebPanelPalette.Error
+                        RoutingWritePhase.Success -> WebPanelPalette.Success
+                        else -> WebPanelPalette.TextBlue
+                    },
+                    fontWeight = FontWeight.Bold,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = write.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = WebPanelPalette.Text,
+                    )
+                    write.code?.let { code ->
+                        Text(
+                            text = "код: $code",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = WebPanelPalette.Muted,
+                        )
+                    }
+                }
             }
         }
         if (diagnostics.isNotEmpty()) {
@@ -863,11 +916,16 @@ private fun RoutingDiagnosticRow(diagnostic: RoutingDiagnostic) {
 private fun EditorStatusBar(
     document: RoutingDocument,
     validation: RoutingValidation,
+    write: RoutingWriteState,
     metrics: EditorMetrics,
 ) {
     val statusText = when {
         document.isLoading -> "Загрузка с Xkeen UI…"
         document.loadError != null -> document.loadError
+        write.isPending -> write.message
+        write.phase == RoutingWritePhase.Conflict -> write.message
+        write.phase == RoutingWritePhase.Failure -> write.message
+        write.phase == RoutingWritePhase.Success -> write.message
         validation.state == RoutingValidationState.Validating -> validation.message
         validation.state == RoutingValidationState.Invalid -> validation.message
         validation.state == RoutingValidationState.Valid -> validation.message
@@ -878,14 +936,20 @@ private fun EditorStatusBar(
         } else {
             "server · JSON"
         }
-        else -> "r${document.revision} · опубликовано"
+        else -> "${document.revisionLabel} · опубликовано"
     }
-    val statusColor = when (validation.state) {
+    val statusColor = when {
+        write.phase == RoutingWritePhase.Conflict -> WebPanelPalette.Warning
+        write.phase == RoutingWritePhase.Failure -> WebPanelPalette.Error
+        write.phase == RoutingWritePhase.Success -> WebPanelPalette.Success
+        write.isPending -> WebPanelPalette.TextBlue
+        else -> when (validation.state) {
         RoutingValidationState.Invalid -> WebPanelPalette.Error
         RoutingValidationState.Validating -> WebPanelPalette.TextBlue
         RoutingValidationState.Valid -> WebPanelPalette.Success
         RoutingValidationState.Dirty -> WebPanelPalette.Warning
         RoutingValidationState.Idle -> WebPanelPalette.Muted
+        }
     }
 
     Row(

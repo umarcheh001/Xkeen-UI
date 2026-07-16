@@ -16,6 +16,8 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 
 Этапы 5 и 6 закрыты 2026-07-16; приемка зафиксирована в [stage-5-closure-checklist.md](stage-5-closure-checklist.md) и [stage-6-closure-checklist.md](stage-6-closure-checklist.md). Service/core actions теперь backend-backed и server-confirmed. Реализация и пакет этапа 7 готовы, но финальная отметка требует повторного smoke-test на узле после совместного обновления Xkeen UI и APK; детали находятся в [stage-7-closure-checklist.md](stage-7-closure-checklist.md).
 
+Этап 8 реализован и документирован в [stage-8-closure-checklist.md](stage-8-closure-checklist.md); финальная operational отметка требует device smoke-test согласованных backend archive и APK.
+
 ## Текущая навигация
 
 - Нижняя панель использует пользовательские вкладки `Xray`, `Mihomo`, `Ports`, `Shell`, `Generator`.
@@ -44,8 +46,9 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 
 - `GET /api/xkeen/core` загружает список установленных ядер и автоматически скрывает недоступные вкладки и drawer-секции.
 - `GET /api/routing/fragments` загружает список Xray routing-документов.
-- `GET /api/routing?file=...` загружает содержимое выбранного routing-документа.
+- `GET /api/mobile/v1/xray/routing/document?document=...` загружает единый server-authoritative snapshot выбранного routing-документа: published content/revision, сохранённый server draft и conflict metadata.
 - `POST /api/mobile/v1/xray/routing/validate` принимает raw JSONC draft выбранного документа и запускает read-only server Xray preflight; invalid draft возвращает structured diagnostics без persistent config save, restart или DAT-asset sync side effect.
+- `POST /api/mobile/v1/xray/routing/save` сохраняет проверенный draft отдельно от live Xray fragment; `POST /api/mobile/v1/xray/routing/apply` применяет exact saved revision и подтверждает restart xkeen.
 - `POST /api/xkeen/start`, `POST /api/xkeen/stop`, `POST /api/restart` и `POST /api/xkeen/core` выполняют service/core actions; после каждого принятого POST приложение сверяет результат через `GET /api/xkeen/status` и `GET /api/xkeen/core`.
 - Эти read-only запросы идут через единый `CompanionHttpTransport`: он нормализует безопасный `baseUrl`, добавляет common headers, применяет timeout и оставляет seam для session auth headers. Validate и service actions используют отдельный `90 s` transport, потому что server Xray preflight может быть долгим.
 - `401`, `403`, `428`, HTML login page, offline и timeout переводятся в типизированные app-level ошибки. `Core` отражает их в dashboard, diagnostics и logs, а `Routing Xray` — в retryable load state.
@@ -56,7 +59,7 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - `DemoCompanionController` заменен на `CompanionController`, который зависит от `CompanionControllerDependencies`, а не от жестко пришитых demo-side effects.
 - Для следующего слоя выделены отдельные порты: `ConnectionsPort`, `SessionPort`, `ServiceActionsPort`, `RoutingValidationPort`, `RoutingWritePort`, `LogsPort`; time/journal helper живет отдельно в `CompanionJournalPort`.
 - `CompanionController` больше не собирает `LogEntry` вручную: запись controller-событий идет через `LogsPort`, поэтому транспорт логов и policy хранения можно будет заменить без роста reducer-логики.
-- `ConnectionsPort`, `SessionPort`, production `ServiceActionsPort` и `WebPanelRoutingValidationPort` уже имеют реальные реализации; `RoutingWritePort` и `LogsPort` пока используют demo-адаптеры.
+- `ConnectionsPort`, `SessionPort`, `ServiceActionsPort`, `RoutingValidationPort` и `RoutingWritePort` имеют production implementations; demo-адаптер пока остаётся у `LogsPort`.
 - Логика controller/reducer теперь тестируется отдельно от transport и storage seam.
 
 ## Локальное хранение подключений
@@ -93,7 +96,9 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - Validate endpoint добавлен одновременно в backend и Android-клиент, поэтому один новый APK недостаточен: на роутере должен быть установлен актуальный `xkeen-ui-routing.tar.gz`. Старый backend отвечает `404`; приложение показывает для этого отдельный код `validation_endpoint_unavailable` и инструкцию обновить Xkeen UI.
 - Локальный JSONC syntax feedback, server Xray diagnostics и transport error хранятся отдельно. Diagnostics содержат source/severity/code/message и при наличии line/column/path/hint; active editor показывает их под текстом.
 - Во время проверки виден `Validating`, повторный tap заблокирован, а поздний ответ не может примениться к измененному или переключенному документу. `401` очищает session material выбранного узла и возвращает к `Pair/Login`.
-- `save` и `apply` уже идут через отдельный `RoutingWritePort`, но пока закрыты demo-реализацией. Реальная серверная запись еще не подключена.
+- `save` и `apply` используют production `WebPanelRoutingWritePort`. Оба запроса передают ожидаемые SHA-256 tokens для published и saved revision; внешний edit, stale draft и saved/published mismatch получают HTTP `409`, отдельный `Conflict` UI state и актуальный server snapshot.
+- `save` выполняет server preflight, но хранит draft в app-private backend state без изменения live fragment и без restart. `apply` повторяет preflight, создаёт backup snapshots, атомарно пишет clean JSON + JSONC sidecar и считается успешным только после restart confirmation; при failed restart backend восстанавливает прежние файлы.
+- После `save/apply` published/saved content, revision и timestamps принимаются только из backend response. Локальные изменения, сделанные пока запрос был in flight, не теряются и снова требуют validate.
 
 ## Техническая база
 
@@ -126,11 +131,10 @@ cd android-companion
 
 ## Что пока остаётся demo-only
 
-- `Routing Xray` читает документы и выполняет реальный backend `validate`; `save/apply` пока работают через demo `RoutingWritePort`, а не через backend.
+- `Routing Xray` полностью backend-backed для `load/validate/save/apply`; для device rollout одновременно нужны актуальный backend archive и APK.
 - Controller-события уже проходят через `LogsPort`, но настоящего logs streaming, PTY transport, reconnect behavior и offline persistence пока нет.
 - Большая часть разделов `Mihomo`, `Ports` и `Generator` пока остаётся placeholder-поверхностями.
 
 ## Следующий практический шаг
 
-- Этап 8: выполнить backend-backed `Routing Xray save/apply` с conflict handling.
-- Затем подключить logs transport/reconnect.
+- Этап 9: подключить logs transport/reconnect behavior.

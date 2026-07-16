@@ -233,16 +233,32 @@ Device follow-up 2026-07-16:
 
 ## Этап 8. Routing Xray: затем save/apply и conflict handling
 
-Что делаем:
+Статус: завершено 2026-07-16
 
-- Подключить серверное `save` и `apply` для routing-документов.
-- Добавить revision/conflict модель: внешний апдейт файла, stale draft, mismatch между saved и published состоянием.
-- После `save` и `apply` обновлять локальный document state только из backend-ответа.
+Детальная точка приемки: [stage-8-closure-checklist.md](stage-8-closure-checklist.md).
 
-Готово, когда:
+Что сделано:
 
-- `save` и `apply` больше не создают ложное локальное ощущение успеха;
-- при конфликте пользователь видит отдельное состояние, а не общую "ошибку валидации".
+- Добавлены authenticated/CSRF-protected mobile endpoints `GET /api/mobile/v1/xray/routing/document`, `POST /api/mobile/v1/xray/routing/save` и `POST /api/mobile/v1/xray/routing/apply`.
+- `document` возвращает раздельные `published` и `saved` snapshots с SHA-256 revision tokens, content/timestamps и явным `conflict`, если server draft основан на устаревшей published revision.
+- `save` повторно выполняет read-only Xray preflight и хранит проверенный draft отдельно в app-private `mobile-routing-drafts`; live Xray fragment и сервис при этом не меняются.
+- `apply` принимает только revision уже сохранённого server draft, повторяет preflight, создаёт существующие Xray backup snapshots, атомарно пишет clean JSON + JSONC sidecar и публикует success только после подтверждённого restart xkeen. При failed restart прежние файлы восстанавливаются, а draft сохраняется для повторной попытки.
+- Optimistic concurrency проверяет независимо `published_revision` и `saved_revision`: внешний апдейт live-файла, stale mobile draft и mismatch saved/published возвращаются как HTTP `409` с актуальным server snapshot.
+- Production Android composition переведена с `DemoRoutingWritePort` на `WebPanelRoutingWritePort`; локальный document state после `save/apply` обновляется только содержимым backend response.
+- Добавлен отдельный `RoutingWritePhase.Conflict`: conflict не маскируется под invalid validation, сохраняет локальный editor text, показывает server revision metadata и блокирует слепой apply.
+- Save/apply получили coroutine pending/repeat guards. Если текст меняется во время запроса, подтверждённый server snapshot сохраняется, но новый локальный текст остаётся `Dirty` и требует повторного validate.
+- Добавлены backend contract tests на save-without-apply, exact saved apply, external update, stale draft, saved/published mismatch, CSRF и rollback при failed restart; Android tests покрывают payload/parsing, typed `409`, server-only state adoption и controller conflict state.
+
+Критерии закрытия:
+
+- [x] `save` и `apply` не создают ложное локальное ощущение успеха: save подтверждает отдельный server draft, apply — запись и restart.
+- [x] Внешний апдейт, stale saved revision и mismatch saved/published выявляются backend revision model до перезаписи.
+- [x] После write локальные published/saved metadata приходят только из backend response.
+- [x] Conflict имеет отдельное пользовательское состояние с кодом и сообщением, не общую validation error.
+- [x] Backend и полный Android unit suite пройдены 2026-07-16.
+- [ ] На реальном узле установить согласованные backend archive и APK и пройти device smoke-test `load -> edit -> validate -> save -> apply`, а затем внешний конфликт.
+
+Rollout dependency: APK этого этапа требует backend с новыми mobile routing endpoints. Старый Xkeen UI вернёт `404`, и приложение покажет инструкцию обновить backend вместо локального success.
 
 ## Этап 9. Logs transport и reconnect behavior
 

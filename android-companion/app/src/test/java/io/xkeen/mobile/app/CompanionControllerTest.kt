@@ -755,7 +755,7 @@ class CompanionControllerTest {
     }
 
     @Test
-    fun saveRoutingUsesRoutingWritePortResult() {
+    fun saveRoutingUsesRoutingWritePortResult() = runTest {
         val original = demoRoutingState().documents.first()
         val updated = original.copy(
             savedDraftContent = original.draftContent + "\n// saved",
@@ -773,7 +773,15 @@ class CompanionControllerTest {
             ),
         )
         val controller = CompanionController(
-            initialState = CompanionUiState(phase = AppPhase.Ready),
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                routing = demoRoutingState().copy(
+                    validation = RoutingValidation(
+                        state = RoutingValidationState.Valid,
+                        message = "Validated",
+                    ),
+                ),
+            ),
             dependencies = testDependencies(routingWrites = routingWrites),
         )
 
@@ -784,6 +792,114 @@ class CompanionControllerTest {
         assertEquals("18:10", saved.lastSavedAt)
         assertEquals("Saved by test port", controller.state.routing.validation.message)
         assertEquals("Saved remotely", controller.state.dashboard.lastOperation)
+        assertEquals(RoutingWritePhase.Success, controller.state.routing.write.phase)
+    }
+
+    @Test
+    fun saveRoutingShowsRevisionConflictSeparatelyAndPreservesLocalDraft() = runTest {
+        val original = demoRoutingState().documents.first().copy(
+            draftContent = "// local\n{}",
+            savedDraftContent = "// old saved\n{}",
+            publishedRevision = "sha256:old-published",
+            savedRevision = "sha256:old-saved",
+        )
+        val server = RoutingServerDocument(
+            name = original.title,
+            publishedContent = "// external\n{}",
+            publishedRevision = "sha256:new-published",
+            publishedAt = "18:20",
+            usesJsonc = true,
+            savedContent = "// other client\n{}",
+            savedRevision = "sha256:new-saved",
+            draftBaseRevision = "sha256:new-published",
+            savedAt = "18:21",
+            hasSavedDraft = true,
+        )
+        val writes = FakeRoutingWritePort(
+            saveError = RoutingWriteConflictException(
+                message = "Файл изменён извне.",
+                conflictCode = "published_revision_conflict",
+                serverDocument = server,
+            ),
+        )
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                routing = demoRoutingState().copy(
+                    documents = listOf(original),
+                    selectedDocumentId = original.id,
+                    validation = RoutingValidation(state = RoutingValidationState.Valid),
+                ),
+            ),
+            dependencies = testDependencies(routingWrites = writes),
+        )
+
+        controller.saveRouting()
+
+        val current = controller.state.routing.documents.single()
+        assertEquals("// local\n{}", current.draftContent)
+        assertEquals("// external\n{}", current.publishedContent)
+        assertEquals("sha256:new-saved", current.savedRevision)
+        assertEquals(RoutingWritePhase.Conflict, controller.state.routing.write.phase)
+        assertEquals("published_revision_conflict", controller.state.routing.write.code)
+        assertEquals(RoutingValidationState.Valid, controller.state.routing.validation.state)
+    }
+
+    @Test
+    fun applyRoutingAdoptsOnlyServerConfirmedPublishedDocument() = runTest {
+        val original = demoRoutingState().documents.first().copy(
+            publishedContent = "// published\n{}",
+            savedDraftContent = "// saved\n{}",
+            draftContent = "// saved\n{}",
+            publishedRevision = "sha256:published",
+            savedRevision = "sha256:saved",
+            draftBaseRevision = "sha256:published",
+            hasServerSavedDraft = true,
+        )
+        val applied = original.copy(
+            publishedContent = original.savedDraftContent,
+            savedDraftContent = original.savedDraftContent,
+            draftContent = original.savedDraftContent,
+            publishedRevision = "sha256:applied",
+            savedRevision = "sha256:applied",
+            draftBaseRevision = "sha256:applied",
+            hasServerSavedDraft = false,
+            lastAppliedAt = "18:30",
+        )
+        val writes = FakeRoutingWritePort(
+            applyResult = RoutingApplyResult(
+                document = applied,
+                validation = RoutingValidation(
+                    state = RoutingValidationState.Valid,
+                    message = "Applied by server",
+                ),
+                preview = RoutingPreview("Applied", emptyList()),
+                lastOperation = "Applied remotely",
+                eventTitle = "Applied",
+                eventSubtitle = original.title,
+                logMessage = "Applied ${original.title}",
+            ),
+        )
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                routing = demoRoutingState().copy(
+                    documents = listOf(original),
+                    selectedDocumentId = original.id,
+                    validation = RoutingValidation(state = RoutingValidationState.Valid),
+                ),
+            ),
+            dependencies = testDependencies(routingWrites = writes),
+        )
+
+        controller.requestRoutingApply()
+        controller.confirmPendingAction()
+
+        val current = controller.state.routing.documents.single()
+        assertEquals("sha256:applied", current.publishedRevision)
+        assertFalse(current.hasServerSavedDraft)
+        assertEquals(RoutingWritePhase.Success, controller.state.routing.write.phase)
+        assertEquals("Applied remotely", controller.state.dashboard.lastOperation)
     }
 }
 
@@ -875,12 +991,15 @@ private class FakeRoutingValidationPort(
 private class FakeRoutingWritePort(
     private val saveResult: RoutingSaveResult? = null,
     private val applyResult: RoutingApplyResult? = null,
+    private val saveError: Exception? = null,
+    private val applyError: Exception? = null,
 ) : RoutingWritePort {
     var savedDocument: RoutingDocument? = null
     var appliedDocument: RoutingDocument? = null
 
-    override fun save(document: RoutingDocument): RoutingSaveResult {
+    override suspend fun save(baseUrl: String, document: RoutingDocument): RoutingSaveResult {
         savedDocument = document
+        saveError?.let { throw it }
         return saveResult ?: RoutingSaveResult(
             document = document,
             validation = RoutingValidation(state = RoutingValidationState.Valid, message = "Saved"),
@@ -889,8 +1008,9 @@ private class FakeRoutingWritePort(
         )
     }
 
-    override fun apply(document: RoutingDocument): RoutingApplyResult {
+    override suspend fun apply(baseUrl: String, document: RoutingDocument): RoutingApplyResult {
         appliedDocument = document
+        applyError?.let { throw it }
         return applyResult ?: RoutingApplyResult(
             document = document.copy(lastAppliedAt = "18:10"),
             validation = RoutingValidation(state = RoutingValidationState.Valid, message = "Applied"),

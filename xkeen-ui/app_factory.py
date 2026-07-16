@@ -606,6 +606,26 @@ def create_app(*, ws_runtime: bool = False):
         restart_xray_core=restart_xray_core,
     )
 
+    from routes.mobile import configure_mobile_routing_service
+    from routes.routing.config import _run_xray_preflight
+    from services.mobile_routing import MobileRoutingService
+    from services.routing.templates import _paths_for_routing
+
+    configure_mobile_routing_service(
+        app,
+        MobileRoutingService(
+            ui_state_dir=UI_STATE_DIR,
+            routing_file=ROUTING_FILE,
+            routing_file_raw=ROUTING_FILE_RAW,
+            xray_configs_dir=XRAY_CONFIGS_DIR,
+            xray_configs_dir_real=XRAY_CONFIGS_DIR_REAL,
+            paths_for_routing=_paths_for_routing,
+            run_preflight=_run_xray_preflight,
+            snapshot_before_overwrite=snapshot_xray_config_before_overwrite,
+            restart_xkeen=restart_xkeen,
+        ),
+    )
+
     _register_api_blueprints(app, ctx)
 
     try:

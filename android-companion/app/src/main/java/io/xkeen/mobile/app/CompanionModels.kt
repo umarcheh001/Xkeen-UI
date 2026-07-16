@@ -142,6 +142,15 @@ enum class RoutingValidationState {
     Invalid,
 }
 
+enum class RoutingWritePhase {
+    Idle,
+    Saving,
+    Applying,
+    Success,
+    Failure,
+    Conflict,
+}
+
 /**
  * Identifies where a routing diagnostic was produced.  Local syntax feedback is deliberately
  * kept separate from the server's Xray/preflight result so the UI never presents a client-side
@@ -241,6 +250,10 @@ data class RoutingDocument(
     val isLoaded: Boolean = true,
     val isLoading: Boolean = false,
     val loadError: String? = null,
+    val publishedRevision: String = "",
+    val savedRevision: String = "",
+    val draftBaseRevision: String = "",
+    val hasServerSavedDraft: Boolean = false,
 ) {
     val hasDraftChanges: Boolean
         get() = draftContent != publishedContent
@@ -250,6 +263,13 @@ data class RoutingDocument(
 
     val hasSavedPreview: Boolean
         get() = savedDraftContent != publishedContent
+
+    val revisionLabel: String
+        get() = publishedRevision
+            .substringAfter(':', publishedRevision)
+            .take(8)
+            .takeIf(String::isNotBlank)
+            ?: "r$revision"
 }
 
 data class RoutingDiagnostic(
@@ -295,6 +315,15 @@ data class RoutingPreview(
     val details: List<String>,
 )
 
+data class RoutingWriteState(
+    val phase: RoutingWritePhase = RoutingWritePhase.Idle,
+    val message: String = "",
+    val code: String? = null,
+) {
+    val isPending: Boolean
+        get() = phase == RoutingWritePhase.Saving || phase == RoutingWritePhase.Applying
+}
+
 data class RoutingState(
     val searchQuery: String = "",
     val documents: List<RoutingDocument>,
@@ -307,6 +336,7 @@ data class RoutingState(
     val isRefreshing: Boolean = false,
     val hasAttemptedRemoteLoad: Boolean = false,
     val loadError: String? = null,
+    val write: RoutingWriteState = RoutingWriteState(),
 )
 
 data class LogEntry(

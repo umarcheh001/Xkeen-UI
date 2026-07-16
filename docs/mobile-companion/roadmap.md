@@ -17,7 +17,8 @@ Updated: 2026-07-16
 - Этап 5 закрыт: real alpha session slice включает `/api/mobile/v1/bootstrap`, login и logout, `MobileSessionPort`, cookie+CSRF auth hook, server-validated trusted restore, явный `Pair/Login` fallback и обработку `401` из `Ready`; backend contract и Android unit/build verification green.
 - Этап 6 закрыт: service actions и core switch backend-backed, CSRF-protected и server-confirmed; UI имеет pending/success/failure и repeat guard.
 - Реализация и пакет этапа 7 готовы: `Routing Xray validate` использует versioned mobile endpoint, temporary-confdir Xray preflight с отключенным DAT-asset sync, structured server diagnostics и repeat/stale guard без persistent save/restart side effect. Закрытие ожидает повторного device smoke-test после согласованного обновления backend и APK.
-- Главные оставшиеся работы Phase 2 — backend-backed routing save/apply/conflict handling и реальный logs/terminal transport.
+- Этап 8 закрыт: routing load/validate/save/apply backend-backed, server drafts и published state имеют независимые SHA-256 revisions, а конфликты и restart rollback покрыты contract tests.
+- Главные оставшиеся работы Phase 2 — реальный logs/terminal transport.
 
 ## Phase 0 - Discovery and scope freeze
 
@@ -93,7 +94,8 @@ Updated: 2026-07-16
 - Уже сделано: этап 6 закрыл реальные `start/stop/restart/core` POST-вызовы, server reread runtime/core state и явный action lifecycle.
 - Уже сделано: этап 7 закрыл real Xray routing validate через `POST /api/mobile/v1/xray/routing/validate`; local JSONC syntax feedback отделен от authoritative server diagnostics.
 - Еще осталось: закрыть reconnect behavior.
-- Еще осталось: довести backend-backed routing `save/apply` с conflict handling, logs transport и terminal transport.
+- Уже сделано: routing `save/apply` использует отдельный server draft, optimistic concurrency и server-confirmed apply/restart; HTTP `409` отображается отдельным conflict state.
+- Еще осталось: довести logs transport и terminal transport.
 - Еще осталось: проверить подход к оберткам над open-source editor/log/terminal компонентами без ранней жесткой привязки.
 
 ### Exit criteria

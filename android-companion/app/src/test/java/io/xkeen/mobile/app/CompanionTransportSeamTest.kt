@@ -22,13 +22,33 @@ class CompanionTransportSeamTest {
                     headers = emptyMap(),
                     contentType = "text/html",
                 ),
-                "/api/routing?file=05_routing.json" to CompanionHttpResponse(
+                "/api/mobile/v1/xray/routing/document?document=05_routing.json" to CompanionHttpResponse(
                     statusCode = 200,
-                    body = "// from server\n{\"routing\":{\"rules\":[]}}",
-                    headers = mapOf(
-                        "x-xkeen-jsonc" to "1",
-                        "x-xkeen-jsonc-using" to "1",
-                    ),
+                    body = """
+                        {
+                          "ok": true,
+                          "data": {
+                            "document": {
+                              "document": "05_routing.json",
+                              "published": {
+                                "content": "// from server\n{\"routing\":{\"rules\":[]}}",
+                                "revision": "sha256:published",
+                                "modified_at": "2026-07-16T18:00:00Z",
+                                "uses_jsonc": true
+                              },
+                              "saved": {
+                                "content": "// from server\n{\"routing\":{\"rules\":[]}}",
+                                "revision": "sha256:published",
+                                "base_revision": "sha256:published",
+                                "saved_at": "2026-07-16T18:00:00Z",
+                                "present": false
+                              },
+                              "conflict": null
+                            }
+                          }
+                        }
+                    """.trimIndent(),
+                    headers = emptyMap(),
                     contentType = "application/json",
                 ),
             ),
@@ -60,7 +80,7 @@ class CompanionTransportSeamTest {
             listOf(
                 "/api/xkeen/core",
                 "/api/routing/fragments",
-                "/api/routing?file=05_routing.json",
+                "/api/mobile/v1/xray/routing/document?document=05_routing.json",
             ),
             transport.requests.map { it.endpoint },
         )
