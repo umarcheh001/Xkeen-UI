@@ -698,6 +698,369 @@ internal class CompanionController(
         }
     }
 
+    suspend fun refreshOutbounds(force: Boolean = false) {
+        val endpoint = state.dashboard.endpoint
+        if (endpoint.isBlank() || !state.dashboard.availableCores.hasCore("xray")) return
+        val current = state.outbounds
+        if (current.isBusy || (!force && current.hasLoaded)) return
+        state = state.copy(
+            outbounds = current.copy(
+                isLoading = true,
+                message = "Загружаем proxy-узлы с Xkeen UI…",
+                error = null,
+            ),
+        )
+        try {
+            val index = dependencies.outbounds.listFragments(endpoint)
+            val selected = current.selectedFragment.takeIf { name ->
+                index.items.any { it.name == name }
+            } ?: index.currentName.takeIf { name ->
+                index.items.any { it.name == name }
+            } ?: index.items.firstOrNull()?.name
+            if (selected.isNullOrBlank()) {
+                throw OutboundsException("Сервер не вернул ни одного файла 04_outbounds*.json.")
+            }
+            val snapshot = dependencies.outbounds.load(endpoint, selected)
+            val active = loadActiveOutboundOrNull(endpoint, selected)
+            if (state.dashboard.endpoint != endpoint) return
+            state = state.copy(
+                outbounds = state.outbounds.fromServer(index, snapshot, selected, active),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            publishOutboundsFailure(error, "Не удалось загрузить proxy-узлы.")
+        }
+    }
+
+    suspend fun selectOutboundsFragment(filename: String) {
+        val endpoint = state.dashboard.endpoint
+        val current = state.outbounds
+        if (endpoint.isBlank() || current.isBusy || current.fragments.none { it.name == filename }) return
+        state = state.copy(
+            outbounds = current.copy(
+                selectedFragment = filename,
+                isLoading = true,
+                editor = OutboundEditorState(restartAfterSave = current.editor.restartAfterSave),
+                message = "Загружаем $filename…",
+                error = null,
+            ),
+        )
+        try {
+            val snapshot = dependencies.outbounds.load(endpoint, filename)
+            val active = loadActiveOutboundOrNull(endpoint, filename)
+            if (state.dashboard.endpoint != endpoint || state.outbounds.selectedFragment != filename) return
+            state = state.copy(
+                outbounds = state.outbounds.copy(
+                    activePath = snapshot.path,
+                    nodes = snapshot.nodes.sortWithActiveFirst(active),
+                    activeNodeKey = active?.key,
+                    activeNodeTag = active?.tag,
+                    activeMessage = active?.message,
+                    isLoading = false,
+                    hasLoaded = true,
+                    message = snapshot.outboundsStatusMessage(),
+                    error = null,
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            publishOutboundsFailure(error, "Не удалось загрузить $filename.")
+        }
+    }
+
+    suspend fun pingOutbound(nodeKey: String) {
+        val endpoint = state.dashboard.endpoint
+        val current = state.outbounds
+        val node = current.nodes.firstOrNull { it.key == nodeKey } ?: return
+        if (endpoint.isBlank() || current.isLoading || current.isPingingAll || nodeKey in current.pingingNodeKeys) return
+        state = state.copy(
+            outbounds = current.copy(
+                pingingNodeKeys = current.pingingNodeKeys + nodeKey,
+                message = "Проверяем ${node.displayName}…",
+                error = null,
+            ),
+        )
+        try {
+            val latency = dependencies.outbounds.ping(endpoint, current.selectedFragment, nodeKey)
+            if (state.dashboard.endpoint != endpoint || state.outbounds.selectedFragment != current.selectedFragment) return
+            state = state.copy(
+                outbounds = state.outbounds.copy(
+                    nodes = state.outbounds.nodes.withLatency(mapOf(nodeKey to latency)),
+                    pingingNodeKeys = state.outbounds.pingingNodeKeys - nodeKey,
+                    message = latency.delayMillis?.let { "${node.displayName}: $it мс." }
+                        ?: "Проверка ${node.displayName} завершена.",
+                    error = latency.message.takeIf { latency.status == "error" },
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            publishOutboundsFailure(error, "Не удалось проверить ${node.displayName}.", nodeKey)
+        }
+    }
+
+    suspend fun pingAllOutbounds() {
+        val endpoint = state.dashboard.endpoint
+        val current = state.outbounds
+        val keys = current.nodes.map(OutboundNode::key).filter(String::isNotBlank)
+        if (endpoint.isBlank() || current.isBusy || keys.isEmpty()) return
+        state = state.copy(
+            outbounds = current.copy(
+                isPingingAll = true,
+                pingingNodeKeys = keys.toSet(),
+                message = "Проверяем задержку: ${keys.size} proxy-узлов…",
+                error = null,
+            ),
+        )
+        try {
+            val latency = dependencies.outbounds.pingAll(endpoint, current.selectedFragment, keys)
+            if (state.dashboard.endpoint != endpoint || state.outbounds.selectedFragment != current.selectedFragment) return
+            val successful = latency.values.count { it.delayMillis != null }
+            val failed = latency.values.count { it.status == "error" }
+            state = state.copy(
+                outbounds = state.outbounds.copy(
+                    nodes = state.outbounds.nodes.withLatency(latency),
+                    isPingingAll = false,
+                    pingingNodeKeys = emptySet(),
+                    message = if (failed == 0) {
+                        "Проверено proxy-узлов: $successful."
+                    } else {
+                        "Доступно $successful из ${keys.size}; ошибок: $failed."
+                    },
+                    error = null,
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            publishOutboundsFailure(error, "Не удалось проверить proxy-узлы.")
+        }
+    }
+
+    suspend fun openOutboundsEditor() {
+        val endpoint = state.dashboard.endpoint
+        val current = state.outbounds
+        val filename = current.selectedFragment
+        if (endpoint.isBlank() || filename.isBlank() || current.isBusy) return
+        if (current.nodes.size > 1) {
+            state = state.copy(
+                outbounds = current.copy(
+                    editor = OutboundEditorState(
+                        isOpen = true,
+                        error = "Этот фрагмент содержит пул из ${current.nodes.size} узлов. Single-link редактор не перезаписывает пулы.",
+                    ),
+                ),
+            )
+            return
+        }
+        state = state.copy(
+            outbounds = current.copy(
+                editor = OutboundEditorState(
+                    isOpen = true,
+                    isLoading = true,
+                    restartAfterSave = current.editor.restartAfterSave,
+                    message = "Читаем текущую proxy-ссылку…",
+                ),
+            ),
+        )
+        try {
+            val snapshot = dependencies.outbounds.loadLink(endpoint, filename)
+            if (state.dashboard.endpoint != endpoint || state.outbounds.selectedFragment != filename) return
+            val url = snapshot.url.orEmpty()
+            val customSingleNode = current.nodes.size == 1 && url.isBlank()
+            val managedFragment = snapshot.managedKind != null
+            state = state.copy(
+                outbounds = state.outbounds.copy(
+                    activePath = snapshot.path.ifBlank { state.outbounds.activePath },
+                    editor = OutboundEditorState(
+                        isOpen = true,
+                        canEdit = !customSingleNode && !managedFragment,
+                        isExistingLink = url.isNotBlank(),
+                        draftUrl = url,
+                        savedUrl = url,
+                        draftTag = snapshot.outboundTag,
+                        savedTag = snapshot.outboundTag,
+                        sourceFingerprint = snapshot.sourceFingerprint,
+                        restartAfterSave = state.outbounds.editor.restartAfterSave,
+                        preview = previewOutboundLink(url),
+                        message = if (url.isBlank() && !customSingleNode && !managedFragment) {
+                            "Добавьте новую proxy-ссылку в пустой фрагмент."
+                        } else if (customSingleNode) {
+                            null
+                        } else {
+                            "Ссылка загружена только в память редактора. Секреты не сохраняются на устройстве."
+                        },
+                        error = when {
+                            managedFragment -> "Это generated-фрагмент ${if (snapshot.managedKind == "subscription") "подписки" else "пула"}. Single-link редактор не перезаписывает управляемые фрагменты."
+                            customSingleNode -> "Текущий узел нельзя представить одной поддерживаемой ссылкой. Используйте JSON-редактор веб-панели."
+                            else -> null
+                        },
+                    ),
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            publishOutboundsEditorFailure(error, "Не удалось открыть редактор proxy-ссылки.")
+        }
+    }
+
+    fun updateOutboundDraftUrl(value: String) {
+        val editor = state.outbounds.editor
+        if (!editor.isOpen || editor.isLoading || editor.isSaving || !editor.canEdit) return
+        state = state.copy(
+            outbounds = state.outbounds.copy(
+                editor = editor.copy(
+                    draftUrl = value,
+                    preview = previewOutboundLink(value),
+                    message = null,
+                    error = null,
+                ),
+            ),
+        )
+    }
+
+    fun updateOutboundDraftTag(value: String) {
+        val editor = state.outbounds.editor
+        if (!editor.isOpen || editor.isLoading || editor.isSaving || !editor.canEdit) return
+        state = state.copy(
+            outbounds = state.outbounds.copy(
+                editor = editor.copy(draftTag = value.take(96), message = null, error = null),
+            ),
+        )
+    }
+
+    fun normalizeOutboundDraft() {
+        val editor = state.outbounds.editor
+        if (!editor.isOpen || editor.isLoading || editor.isSaving || !editor.canEdit) return
+        val normalized = normalizeOutboundLink(editor.draftUrl)
+        state = state.copy(
+            outbounds = state.outbounds.copy(
+                editor = if (normalized == null) {
+                    editor.copy(error = "Не удалось нормализовать ссылку. Проверьте формат.", message = null)
+                } else {
+                    editor.copy(
+                        draftUrl = normalized,
+                        draftTag = cleanOutboundTag(editor.draftTag),
+                        preview = previewOutboundLink(normalized),
+                        message = "Ссылка нормализована локально. На сервер она ещё не отправлена.",
+                        error = null,
+                    )
+                },
+            ),
+        )
+    }
+
+    fun updateOutboundsRestartAfterSave(enabled: Boolean) {
+        val editor = state.outbounds.editor
+        if (!editor.isOpen || editor.isSaving) return
+        state = state.copy(outbounds = state.outbounds.copy(editor = editor.copy(restartAfterSave = enabled)))
+    }
+
+    fun closeOutboundsEditor() {
+        if (state.outbounds.editor.isSaving) return
+        state = state.copy(
+            outbounds = state.outbounds.copy(
+                editor = OutboundEditorState(
+                    restartAfterSave = state.outbounds.editor.restartAfterSave,
+                ),
+            ),
+        )
+    }
+
+    suspend fun saveOutboundLink() {
+        val endpoint = state.dashboard.endpoint
+        val current = state.outbounds
+        val editor = current.editor
+        val filename = current.selectedFragment
+        if (
+            endpoint.isBlank() || filename.isBlank() || !editor.isOpen || !editor.canSave ||
+            !editor.hasChanges || current.nodes.size > 1
+        ) {
+            return
+        }
+        val normalizedTag = cleanOutboundTag(editor.draftTag)
+        state = state.copy(
+            outbounds = current.copy(
+                editor = editor.copy(
+                    isSaving = true,
+                    draftTag = normalizedTag,
+                    message = "Проверяем, не изменился ли $filename на сервере…",
+                    error = null,
+                ),
+            ),
+        )
+        try {
+            val fresh = dependencies.outbounds.loadLink(endpoint, filename)
+            if (!fresh.file.equals(filename, ignoreCase = true)) {
+                throw OutboundsException("Сервер вернул другой outbounds-фрагмент. Сохранение остановлено.")
+            }
+            if (fresh.sourceFingerprint != editor.sourceFingerprint) {
+                throw OutboundsException(
+                    "$filename изменился на сервере после открытия редактора. Закройте редактор, обновите фрагмент и повторите правку.",
+                )
+            }
+            state = state.copy(
+                outbounds = state.outbounds.copy(
+                    editor = state.outbounds.editor.copy(message = "Сохраняем ссылку в $filename…"),
+                ),
+            )
+            val result = dependencies.outbounds.saveLink(
+                baseUrl = endpoint,
+                filename = filename,
+                request = OutboundLinkSaveRequest(
+                    url = editor.draftUrl.trim(),
+                    outboundTag = normalizedTag,
+                    restart = editor.restartAfterSave,
+                ),
+            )
+            val nodes = dependencies.outbounds.load(endpoint, filename)
+            val active = loadActiveOutboundOrNull(endpoint, filename)
+            val saved = dependencies.outbounds.loadLink(endpoint, filename)
+            if (state.dashboard.endpoint != endpoint || state.outbounds.selectedFragment != filename) return
+            val restartFailed = result.restartRequested && !result.restarted
+            val message = when {
+                restartFailed -> "Proxy-ссылка сохранена, но сервер не подтвердил перезапуск Xkeen."
+                result.restarted -> "Proxy-ссылка сохранена; Xkeen перезапущен."
+                else -> "Proxy-ссылка сохранена без перезапуска Xkeen."
+            }
+            state = state.copy(
+                outbounds = state.outbounds.copy(
+                    activePath = nodes.path.ifBlank { saved.path },
+                    nodes = nodes.nodes.sortWithActiveFirst(active),
+                    activeNodeKey = active?.key,
+                    activeNodeTag = active?.tag,
+                    activeMessage = active?.message,
+                    editor = OutboundEditorState(restartAfterSave = editor.restartAfterSave),
+                    hasLoaded = true,
+                    message = message,
+                    error = message.takeIf { restartFailed },
+                ),
+                dashboard = state.dashboard.copy(
+                    lastOperation = "Сохранён proxy-фрагмент $filename",
+                    lastError = message.takeIf { restartFailed },
+                ),
+                logs = recordLog(
+                    "outbounds",
+                    if (restartFailed) LogLevel.Warning else LogLevel.Info,
+                    message,
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            publishOutboundsEditorFailure(error, "Не удалось сохранить proxy-ссылку.")
+        }
+    }
+
     suspend fun loadSelectedRoutingDocument() {
         loadRoutingDocument(state.routing.selectedDocumentId)
     }
@@ -1155,6 +1518,7 @@ internal class CompanionController(
             dashboard = workspaceDashboard,
             routing = unloadedRoutingState(),
             inbounds = unloadedInboundsState(),
+            outbounds = unloadedOutboundsState(),
             diagnostics = initialDiagnostics().replaceDiagnostic(
                 label = "Мобильная сессия",
                 status = "Готово",
@@ -1221,6 +1585,7 @@ internal class CompanionController(
             workspaceSection = WorkspaceSection.XrayRouting,
             dashboard = state.dashboard.copy(statusSummary = result.statusSummary),
             inbounds = unloadedInboundsState(),
+            outbounds = unloadedOutboundsState(),
             diagnostics = state.diagnostics.replaceDiagnostic(
                 label = "Мобильная сессия",
                 status = result.statusSummary,
@@ -1466,6 +1831,53 @@ internal class CompanionController(
         )
     }
 
+    private fun publishOutboundsFailure(
+        error: Exception,
+        fallback: String,
+        nodeKey: String? = null,
+    ) {
+        val message = error.message?.takeIf(String::isNotBlank) ?: fallback
+        state = state.copy(
+            outbounds = state.outbounds.copy(
+                isLoading = false,
+                isPingingAll = false,
+                pingingNodeKeys = nodeKey?.let { state.outbounds.pingingNodeKeys - it } ?: emptySet(),
+                message = message,
+                error = message,
+            ),
+            dashboard = state.dashboard.copy(lastError = message),
+            logs = recordLog("outbounds", LogLevel.Warning, message),
+        )
+    }
+
+    private fun publishOutboundsEditorFailure(error: Exception, fallback: String) {
+        val message = error.message?.takeIf(String::isNotBlank) ?: fallback
+        state = state.copy(
+            outbounds = state.outbounds.copy(
+                editor = state.outbounds.editor.copy(
+                    isLoading = false,
+                    isSaving = false,
+                    message = null,
+                    error = message,
+                ),
+            ),
+            dashboard = state.dashboard.copy(lastError = message),
+            logs = recordLog("outbounds", LogLevel.Warning, message),
+        )
+    }
+
+    private suspend fun loadActiveOutboundOrNull(
+        endpoint: String,
+        filename: String,
+    ): ActiveOutboundSnapshot? = try {
+        dependencies.outbounds.loadActive(endpoint, filename)
+    } catch (error: CompanionTransportException) {
+        if (error.failure.kind == CompanionTransportFailureKind.AuthenticationRequired) throw error
+        null
+    } catch (_: Exception) {
+        null
+    }
+
     private fun recordLog(
         source: String,
         level: LogLevel,
@@ -1646,6 +2058,50 @@ private fun InboundsSnapshot.inboundsStatusMessage(): String = when {
     rawMode == "custom" -> "Обнаружен пользовательский режим. Выберите пресет для применения."
     else -> "Режим не определён. Проверьте выбранный inbound-фрагмент."
 }
+
+private fun OutboundsState.fromServer(
+    index: OutboundsFragmentIndex,
+    snapshot: OutboundsSnapshot,
+    selectedFragment: String,
+    active: ActiveOutboundSnapshot?,
+): OutboundsState = copy(
+    fragments = index.items,
+    selectedFragment = selectedFragment,
+    activePath = snapshot.path.ifBlank {
+        index.directory.trimEnd('/').takeIf(String::isNotBlank)?.let { "$it/$selectedFragment" }
+            ?: selectedFragment
+    },
+    nodes = snapshot.nodes.sortWithActiveFirst(active),
+    activeNodeKey = active?.key,
+    activeNodeTag = active?.tag,
+    activeMessage = active?.message,
+    isLoading = false,
+    isPingingAll = false,
+    pingingNodeKeys = emptySet(),
+    hasLoaded = true,
+    editor = if (this.selectedFragment == selectedFragment) {
+        editor
+    } else {
+        OutboundEditorState(restartAfterSave = editor.restartAfterSave)
+    },
+    message = snapshot.outboundsStatusMessage(),
+    error = null,
+)
+
+private fun OutboundsSnapshot.outboundsStatusMessage(): String = when (nodes.size) {
+    0 -> "Proxy-узлы в выбранном фрагменте не найдены."
+    1 -> "Один proxy-узел из текущего outbounds-фрагмента."
+    else -> "Пул proxy-узлов: ${nodes.size}."
+}
+
+private fun List<OutboundNode>.sortWithActiveFirst(active: ActiveOutboundSnapshot?): List<OutboundNode> =
+    sortedByDescending { node ->
+        node.key.isNotBlank() && node.key == active?.key ||
+            node.tag.isNotBlank() && node.tag == active?.tag
+    }
+
+private fun List<OutboundNode>.withLatency(latency: Map<String, OutboundLatency>): List<OutboundNode> =
+    map { node -> latency[node.key]?.let { node.copy(latency = it) } ?: node }
 
 internal fun ConnectionDraft.canBeSaved(): Boolean {
     val normalizedUrl = baseUrl.trim()

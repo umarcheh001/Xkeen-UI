@@ -316,6 +316,7 @@ internal fun WorkspaceSectionContent(
     when (state.workspaceSection) {
         WorkspaceSection.XrayRouting -> RoutingWorkspaceScreen(state, controller, modifier)
         WorkspaceSection.XrayInbounds -> InboundsWorkspaceScreen(state, controller, modifier)
+        WorkspaceSection.XrayOutbounds -> OutboundsWorkspaceScreen(state, controller, modifier)
         WorkspaceSection.XrayLogs -> LogsWorkspaceScreen(state, controller, modifier)
         WorkspaceSection.ShellCommands,
         WorkspaceSection.ShellTerminal,

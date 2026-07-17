@@ -1,6 +1,7 @@
 package io.xkeen.mobile.app
 
 import android.animation.ValueAnimator
+import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -28,11 +29,11 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.VelocityTracker
-import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.OverScroller
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.widget.AppCompatEditText
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -177,7 +178,7 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         super.dispatchDraw(canvas)
         val layout = editor.layout
         if (layout != null && editor.selectionStart >= 0) {
-            val line = layout.getLineForOffset(editor.selectionStart.coerceAtMost(editor.text.length))
+            val line = layout.getLineForOffset(editor.selectionStart.coerceAtMost(editor.text?.length ?: 0))
             val y = editor.top + editor.totalPaddingTop + layout.getLineBottom(line) - editor.scrollY
             currentLinePaint.color = JsonEditorPalette.Cursor.copy(alpha = 0.48f).toArgb()
             canvas.drawRect(
@@ -216,7 +217,7 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
             setSingleLine(false)
             setHorizontallyScrolling(false)
             isHorizontalScrollBarEnabled = false
-            breakStrategy = Layout.BREAK_STRATEGY_SIMPLE
+            useSimpleEditorBreakStrategyCompat()
             hyphenationFrequency = Layout.HYPHENATION_FREQUENCY_NONE
             isVerticalScrollBarEnabled = false
             scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
@@ -521,7 +522,7 @@ internal fun editorInternetSearchQuery(
 private fun Char.isEditorSearchCharacter(): Boolean =
     isLetterOrDigit() || this in setOf('_', '-', '.')
 
-private class SelectionAwareEditText(context: Context) : EditText(context) {
+private class SelectionAwareEditText(context: Context) : AppCompatEditText(context) {
     var onSelectionChangedListener: (() -> Unit)? = null
     var onEditorScrollChanged: (() -> Unit)? = null
     private val flingScroller = OverScroller(context)
@@ -641,6 +642,16 @@ private class SelectionAwareEditText(context: Context) : EditText(context) {
         )
         postInvalidateOnAnimation()
     }
+}
+
+/**
+ * TextView supports the Layout constants from API 23, which includes our minSdk 28. SDK 36's
+ * IntDef names only the equivalent LineBreaker constants introduced in API 29, so keep the
+ * backwards-compatible value and isolate the lint annotation mismatch here.
+ */
+@SuppressLint("WrongConstant")
+private fun TextView.useSimpleEditorBreakStrategyCompat() {
+    breakStrategy = Layout.BREAK_STRATEGY_SIMPLE
 }
 
 private class EditorGutterView(

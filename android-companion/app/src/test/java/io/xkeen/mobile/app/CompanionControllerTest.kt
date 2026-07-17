@@ -1079,6 +1079,93 @@ class CompanionControllerTest {
         assertFalse(controller.state.inbounds.hasChanges)
         assertTrue(controller.state.inbounds.message.contains("без перезапуска"))
     }
+
+    @Test
+    fun outboundsLoadsActiveNodeAndPublishesConfirmedLatency() = runTest {
+        val port = FakeOutboundsPort()
+        val controller = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Ready),
+            dependencies = testDependencies(outbounds = port),
+        )
+
+        controller.refreshOutbounds()
+
+        val loaded = controller.state.outbounds
+        assertEquals("04_outbounds.json", loaded.selectedFragment)
+        assertEquals("node-nl", loaded.nodes.first().key)
+        assertTrue(loaded.isActive(loaded.nodes.first()))
+        assertEquals(47L, loaded.nodes.first().latency?.delayMillis)
+
+        controller.pingOutbound("node-de")
+
+        assertEquals("node-de", port.pingedKey)
+        assertEquals(61L, controller.state.outbounds.nodes.first { it.key == "node-de" }.latency?.delayMillis)
+        assertTrue(controller.state.outbounds.pingingNodeKeys.isEmpty())
+    }
+
+    @Test
+    fun outboundsEditorPreviewsNormalizesAndSafelySavesSingleLink() = runTest {
+        val port = FakeOutboundsPort(includeSecondNode = false)
+        val controller = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Ready),
+            dependencies = testDependencies(outbounds = port),
+        )
+        controller.refreshOutbounds()
+        controller.openOutboundsEditor()
+
+        controller.updateOutboundDraftUrl(
+            "trojan://secret@de.example.net:443?security=tls&type=ws&path=socket#Germany",
+        )
+        controller.updateOutboundDraftTag("my proxy/de")
+        controller.normalizeOutboundDraft()
+        controller.updateOutboundsRestartAfterSave(false)
+
+        assertTrue(controller.state.outbounds.editor.preview.isValid)
+        assertTrue(controller.state.outbounds.editor.draftUrl.contains("path=%2Fsocket"))
+        controller.saveOutboundLink()
+
+        assertEquals("my_proxy_de", port.savedLink?.outboundTag)
+        assertEquals(false, port.savedLink?.restart)
+        assertFalse(controller.state.outbounds.editor.isOpen)
+        assertTrue(controller.state.outbounds.message.contains("без перезапуска"))
+    }
+
+    @Test
+    fun outboundsEditorStopsSaveWhenServerFileChanged() = runTest {
+        val port = FakeOutboundsPort(includeSecondNode = false)
+        val controller = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Ready),
+            dependencies = testDependencies(outbounds = port),
+        )
+        controller.refreshOutbounds()
+        controller.openOutboundsEditor()
+        controller.updateOutboundDraftUrl(
+            "trojan://secret@de.example.net:443?security=tls#Germany",
+        )
+        port.sourceFingerprint = "external-change"
+
+        controller.saveOutboundLink()
+
+        assertNull(port.savedLink)
+        assertTrue(controller.state.outbounds.editor.isOpen)
+        assertTrue(controller.state.outbounds.editor.error.orEmpty().contains("изменился на сервере"))
+    }
+
+    @Test
+    fun outboundsEditorDoesNotOverwriteSingleNodeManagedSubscription() = runTest {
+        val port = FakeOutboundsPort(includeSecondNode = false, managedKind = "subscription")
+        val controller = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Ready),
+            dependencies = testDependencies(outbounds = port),
+        )
+        controller.refreshOutbounds()
+
+        controller.openOutboundsEditor()
+
+        assertTrue(controller.state.outbounds.editor.isOpen)
+        assertFalse(controller.state.outbounds.editor.canEdit)
+        assertTrue(controller.state.outbounds.editor.error.orEmpty().contains("generated-фрагмент подписки"))
+    }
 }
 
 private fun testDependencies(
@@ -1092,6 +1179,7 @@ private fun testDependencies(
     routingValidation: RoutingValidationPort = FakeRoutingValidationPort(),
     routingWrites: RoutingWritePort? = null,
     inbounds: InboundsPort = DemoInboundsPort(),
+    outbounds: OutboundsPort = DemoOutboundsPort(),
     logs: LogsPort? = null,
     logsTransport: LogsTransportPort = FakeLogsTransportPort(),
     journal: CompanionJournalPort = FakeJournalPort(),
@@ -1104,6 +1192,7 @@ private fun testDependencies(
         routingValidation = routingValidation,
         routingWrites = routingWrites ?: DemoRoutingWritePort(effectiveJournal),
         inbounds = inbounds,
+        outbounds = outbounds,
         logs = logs ?: DemoLogsPort(effectiveJournal),
         logsTransport = logsTransport,
         journal = effectiveJournal,
@@ -1147,6 +1236,95 @@ private class FakeInboundsPort : InboundsPort {
             restarted = restart,
         )
     }
+}
+
+private class FakeOutboundsPort(
+    private val includeSecondNode: Boolean = true,
+    private val managedKind: String? = null,
+) : OutboundsPort {
+    var pingedKey: String? = null
+    var savedLink: OutboundLinkSaveRequest? = null
+    var sourceFingerprint = "source-v1"
+
+    private val nodes = listOf(
+        OutboundNode(
+            key = "node-de",
+            tag = "proxy-de",
+            name = "Germany",
+            protocol = "vless",
+            transport = "xhttp",
+            security = "reality",
+            host = "de.example.net",
+            port = "443",
+            sni = "",
+            detail = "",
+        ),
+        OutboundNode(
+            key = "node-nl",
+            tag = "proxy-nl",
+            name = "Netherlands",
+            protocol = "vless",
+            transport = "xhttp",
+            security = "reality",
+            host = "nl.example.net",
+            port = "443",
+            sni = "",
+            detail = "",
+            latency = OutboundLatency("ok", 47),
+        ),
+    )
+
+    override suspend fun listFragments(baseUrl: String): OutboundsFragmentIndex =
+        OutboundsFragmentIndex(
+            directory = "/opt/etc/xray/configs",
+            currentName = "04_outbounds.json",
+            items = listOf(OutboundsFragment("04_outbounds.json")),
+        )
+
+    override suspend fun load(baseUrl: String, filename: String): OutboundsSnapshot =
+        OutboundsSnapshot(
+            filename,
+            "/opt/etc/xray/configs/$filename",
+            if (includeSecondNode) nodes else listOf(nodes.last()),
+        )
+
+    override suspend fun loadActive(baseUrl: String, filename: String): ActiveOutboundSnapshot =
+        ActiveOutboundSnapshot(true, "node-nl", "proxy-nl", "confirmed")
+
+    override suspend fun loadLink(baseUrl: String, filename: String): OutboundLinkSnapshot =
+        OutboundLinkSnapshot(
+            file = filename,
+            path = "/opt/etc/xray/configs/$filename",
+            url = "vless://00000000-0000-4000-8000-000000000000@nl.example.net:443?security=reality&pbk=public-key#Netherlands",
+            outboundTag = "proxy-nl",
+            sourceFingerprint = sourceFingerprint,
+            managedKind = managedKind,
+        )
+
+    override suspend fun saveLink(
+        baseUrl: String,
+        filename: String,
+        request: OutboundLinkSaveRequest,
+    ): OutboundLinkSaveResult {
+        savedLink = request
+        sourceFingerprint = "source-v2"
+        return OutboundLinkSaveResult(filename, request.restart, request.restart)
+    }
+
+    override suspend fun ping(
+        baseUrl: String,
+        filename: String,
+        nodeKey: String,
+    ): OutboundLatency {
+        pingedKey = nodeKey
+        return OutboundLatency("ok", 61)
+    }
+
+    override suspend fun pingAll(
+        baseUrl: String,
+        filename: String,
+        nodeKeys: List<String>,
+    ): Map<String, OutboundLatency> = nodeKeys.associateWith { OutboundLatency("ok", 55) }
 }
 
 private class FakeCoreStatusSource(

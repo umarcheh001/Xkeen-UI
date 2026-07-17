@@ -418,6 +418,104 @@ data class InboundsState(
         get() = rawServerMode != null && appliedMode == null
 }
 
+data class OutboundsFragment(
+    val name: String,
+    val sizeBytes: Long? = null,
+    val modifiedAtEpochSeconds: Long? = null,
+)
+
+data class OutboundLatency(
+    val status: String = "unknown",
+    val delayMillis: Long? = null,
+    val message: String? = null,
+)
+
+data class OutboundNode(
+    val key: String,
+    val tag: String,
+    val name: String,
+    val protocol: String,
+    val transport: String,
+    val security: String,
+    val host: String,
+    val port: String,
+    val sni: String,
+    val detail: String,
+    val subscriptionName: String? = null,
+    val latency: OutboundLatency? = null,
+) {
+    val displayName: String
+        get() = subscriptionName?.takeIf(String::isNotBlank) ?: name.ifBlank { tag.ifBlank { "proxy" } }
+
+    val endpoint: String
+        get() = listOf(host, port).filter(String::isNotBlank).joinToString(":")
+}
+
+data class OutboundPreviewField(
+    val label: String,
+    val value: String,
+)
+
+data class OutboundLinkPreview(
+    val isValid: Boolean = false,
+    val scheme: String = "",
+    val transport: String = "",
+    val security: String = "",
+    val fields: List<OutboundPreviewField> = emptyList(),
+    val errors: List<String> = emptyList(),
+    val warnings: List<String> = emptyList(),
+) {
+    val hasContent: Boolean
+        get() = scheme.isNotBlank() || fields.isNotEmpty() || errors.isNotEmpty() || warnings.isNotEmpty()
+}
+
+data class OutboundEditorState(
+    val isOpen: Boolean = false,
+    val isLoading: Boolean = false,
+    val isSaving: Boolean = false,
+    val canEdit: Boolean = false,
+    val isExistingLink: Boolean = false,
+    val draftUrl: String = "",
+    val savedUrl: String = "",
+    val draftTag: String = "proxy",
+    val savedTag: String = "proxy",
+    val sourceFingerprint: String = "",
+    val restartAfterSave: Boolean = true,
+    val preview: OutboundLinkPreview = OutboundLinkPreview(),
+    val message: String? = null,
+    val error: String? = null,
+) {
+    val hasChanges: Boolean
+        get() = draftUrl.trim() != savedUrl.trim() || draftTag.trim() != savedTag.trim()
+
+    val canSave: Boolean
+        get() = canEdit && preview.isValid && draftUrl.isNotBlank() && draftTag.isNotBlank() && !isSaving
+}
+
+data class OutboundsState(
+    val fragments: List<OutboundsFragment> = emptyList(),
+    val selectedFragment: String = "",
+    val activePath: String = "",
+    val nodes: List<OutboundNode> = emptyList(),
+    val activeNodeKey: String? = null,
+    val activeNodeTag: String? = null,
+    val activeMessage: String? = null,
+    val isLoading: Boolean = false,
+    val isPingingAll: Boolean = false,
+    val pingingNodeKeys: Set<String> = emptySet(),
+    val hasLoaded: Boolean = false,
+    val editor: OutboundEditorState = OutboundEditorState(),
+    val message: String = "Откройте раздел, чтобы загрузить proxy-узлы Xray.",
+    val error: String? = null,
+) {
+    val isBusy: Boolean
+        get() = isLoading || isPingingAll || pingingNodeKeys.isNotEmpty() || editor.isLoading || editor.isSaving
+
+    fun isActive(node: OutboundNode): Boolean =
+        node.key.isNotBlank() && node.key == activeNodeKey ||
+            node.tag.isNotBlank() && node.tag == activeNodeTag
+}
+
 data class LogEntry(
     val time: String,
     val source: String,
@@ -459,6 +557,7 @@ data class CompanionUiState(
     val dashboard: DashboardState = demoDashboardState(),
     val routing: RoutingState = demoRoutingState(),
     val inbounds: InboundsState = InboundsState(),
+    val outbounds: OutboundsState = OutboundsState(),
     val logs: LogsState = LogsState(),
     val diagnostics: List<DiagnosticItem> = initialDiagnostics(),
     val pendingAction: PendingAction? = null,
@@ -491,6 +590,10 @@ fun unloadedRoutingState(): RoutingState = RoutingState(
 
 fun unloadedInboundsState(): InboundsState = InboundsState(
     message = "Ожидаем загрузку режима inbounds с Xkeen UI…",
+)
+
+fun unloadedOutboundsState(): OutboundsState = OutboundsState(
+    message = "Ожидаем загрузку proxy-узлов с Xkeen UI…",
 )
 
 fun initialDiagnostics(): List<DiagnosticItem> = listOf(
