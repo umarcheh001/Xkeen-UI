@@ -1583,6 +1583,357 @@ internal class CompanionController(
         }
     }
 
+    suspend fun refreshXrayDatCatalog(force: Boolean = false) {
+        val endpoint = state.dashboard.endpoint
+        val current = state.xrayDat
+        if (endpoint.isBlank() || !state.dashboard.availableCores.hasCore("xray")) return
+        if (current.isLoadingCatalog || (!force && current.hasLoadedCatalog)) return
+        state = state.copy(
+            xrayDat = current.copy(
+                isLoadingCatalog = true,
+                catalogError = null,
+            ),
+        )
+        try {
+            val catalog = dependencies.xrayDat.loadCatalog(endpoint)
+            if (state.dashboard.endpoint != endpoint) return
+            val selectedKind = current.selectedKind.takeIf { kind -> catalog.files.any { it.kind == kind } }
+                ?: catalog.files.firstOrNull()?.kind
+                ?: current.selectedKind
+            val selectedFile = current.selectedFilePath.takeIf { path ->
+                catalog.files.any { it.path == path && it.kind == selectedKind }
+            } ?: catalog.files.firstOrNull { it.kind == selectedKind }?.path.orEmpty()
+            state = state.copy(
+                xrayDat = state.xrayDat.copy(
+                    files = catalog.files,
+                    selectedKind = selectedKind,
+                    selectedFilePath = selectedFile,
+                    geodatInstalled = catalog.geodatInstalled,
+                    geodatMessage = catalog.geodatMessage,
+                    tags = emptyList(),
+                    valueQuery = "",
+                    lookupMatches = null,
+                    isLookingUpValue = false,
+                    lookupError = null,
+                    selectedTag = null,
+                    items = emptyList(),
+                    isLoadingCatalog = false,
+                    hasLoadedCatalog = true,
+                    catalogError = if (catalog.files.isEmpty()) {
+                        "В /opt/etc/xray/dat не найдены GeoIP / GeoSite DAT-файлы."
+                    } else null,
+                    tagsError = null,
+                    itemsError = null,
+                ),
+            )
+            if (selectedFile.isNotBlank() && catalog.geodatInstalled != false) {
+                loadSelectedXrayDatTags()
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            state = state.copy(
+                xrayDat = state.xrayDat.copy(
+                    isLoadingCatalog = false,
+                    hasLoadedCatalog = true,
+                    catalogError = error.toCompanionLoadMessage("Не удалось загрузить каталог DAT-файлов."),
+                ),
+            )
+        }
+    }
+
+    suspend fun selectXrayDatKind(kind: XrayDatKind) {
+        val current = state.xrayDat
+        if (current.isLoadingCatalog || current.isLoadingTags || current.isLoadingItems) return
+        val file = current.files.firstOrNull { it.kind == kind }
+        state = state.copy(
+            xrayDat = current.copy(
+                selectedKind = kind,
+                selectedFilePath = file?.path.orEmpty(),
+                tags = emptyList(),
+                tagQuery = "",
+                valueQuery = "",
+                lookupMatches = null,
+                isLookingUpValue = false,
+                lookupError = null,
+                selectedTag = null,
+                items = emptyList(),
+                itemQuery = "",
+                tagsError = if (file == null) "Файлы ${kind.displayName} не найдены." else null,
+                itemsError = null,
+            ),
+        )
+        if (file != null && current.geodatInstalled != false) loadSelectedXrayDatTags()
+    }
+
+    suspend fun selectXrayDatFile(path: String) {
+        val current = state.xrayDat
+        val file = current.files.firstOrNull { it.path == path } ?: return
+        if (current.isLoadingTags || current.isLoadingItems || current.selectedFilePath == path) return
+        state = state.copy(
+            xrayDat = current.copy(
+                selectedKind = file.kind,
+                selectedFilePath = file.path,
+                tags = emptyList(),
+                tagQuery = "",
+                valueQuery = "",
+                lookupMatches = null,
+                isLookingUpValue = false,
+                lookupError = null,
+                selectedTag = null,
+                items = emptyList(),
+                itemQuery = "",
+                tagsError = null,
+                itemsError = null,
+            ),
+        )
+        if (current.geodatInstalled != false) loadSelectedXrayDatTags()
+    }
+
+    fun updateXrayDatTagQuery(value: String) {
+        if (state.xrayDat.isLoadingTags) return
+        state = state.copy(xrayDat = state.xrayDat.copy(tagQuery = value))
+    }
+
+    fun updateXrayDatValueQuery(value: String) {
+        if (state.xrayDat.isLookingUpValue) return
+        state = state.copy(
+            xrayDat = state.xrayDat.copy(
+                valueQuery = value,
+                lookupMatches = null,
+                lookupError = null,
+            ),
+        )
+    }
+
+    suspend fun lookupXrayDatValue() {
+        val endpoint = state.dashboard.endpoint
+        val current = state.xrayDat
+        val file = current.selectedFile ?: return
+        val value = current.valueQuery.trim()
+        if (value.isBlank() || current.isLookingUpValue || current.isLoadingTags) return
+        state = state.copy(
+            xrayDat = current.copy(
+                isLookingUpValue = true,
+                lookupMatches = null,
+                lookupError = null,
+            ),
+        )
+        try {
+            val result = dependencies.xrayDat.lookupValue(endpoint, file, value)
+            if (state.dashboard.endpoint != endpoint || state.xrayDat.selectedFilePath != file.path || state.xrayDat.valueQuery.trim() != value) return
+            state = state.copy(
+                xrayDat = state.xrayDat.copy(
+                    lookupMatches = result.matches,
+                    isLookingUpValue = false,
+                    lookupError = null,
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            state = state.copy(
+                xrayDat = state.xrayDat.copy(
+                    isLookingUpValue = false,
+                    lookupError = error.toCompanionLoadMessage("Не удалось найти значение в DAT-файле."),
+                ),
+            )
+        }
+    }
+
+    fun updateXrayDatItemQuery(value: String) {
+        if (state.xrayDat.isLoadingItems) return
+        state = state.copy(xrayDat = state.xrayDat.copy(itemQuery = value, itemsError = null))
+    }
+
+    suspend fun selectXrayDatTag(tag: String) {
+        val current = state.xrayDat
+        if (current.isLoadingTags || current.isLoadingItems || current.tags.none { it.name == tag }) return
+        state = state.copy(
+            xrayDat = current.copy(
+                selectedTag = tag,
+                items = emptyList(),
+                itemQuery = "",
+                itemOffset = 0,
+                itemTotal = null,
+                searchCursor = 0,
+                searchNextCursor = null,
+                searchViewed = 0,
+                searchMode = null,
+                itemsError = null,
+            ),
+        )
+        loadXrayDatItems(offset = 0)
+    }
+
+    fun closeXrayDatTag() {
+        if (state.xrayDat.isLoadingItems) return
+        state = state.copy(
+            xrayDat = state.xrayDat.copy(
+                selectedTag = null,
+                items = emptyList(),
+                itemQuery = "",
+                itemOffset = 0,
+                itemTotal = null,
+                searchCursor = 0,
+                searchNextCursor = null,
+                searchViewed = 0,
+                searchMode = null,
+                itemsError = null,
+            ),
+        )
+    }
+
+    suspend fun searchXrayDatItems() {
+        val current = state.xrayDat
+        if (current.itemQuery.isBlank()) {
+            loadXrayDatItems(offset = 0)
+            return
+        }
+        loadXrayDatSearch(cursor = 0, append = false)
+    }
+
+    suspend fun clearXrayDatItemSearch() {
+        if (state.xrayDat.isLoadingItems) return
+        state = state.copy(xrayDat = state.xrayDat.copy(itemQuery = ""))
+        loadXrayDatItems(offset = 0)
+    }
+
+    suspend fun previousXrayDatPage() {
+        val current = state.xrayDat
+        if (!current.canLoadPreviousPage || current.isLoadingItems) return
+        loadXrayDatItems((current.itemOffset - current.itemLimit).coerceAtLeast(0))
+    }
+
+    suspend fun nextXrayDatPage() {
+        val current = state.xrayDat
+        if (!current.canLoadNextPage || current.isLoadingItems) return
+        if (current.isItemSearch) {
+            current.searchNextCursor?.let { loadXrayDatSearch(it, append = true) }
+        } else {
+            loadXrayDatItems(current.itemOffset + current.itemLimit)
+        }
+    }
+
+    private suspend fun loadSelectedXrayDatTags() {
+        val endpoint = state.dashboard.endpoint
+        val file = state.xrayDat.selectedFile ?: return
+        state = state.copy(
+            xrayDat = state.xrayDat.copy(
+                isLoadingTags = true,
+                tagsError = null,
+                selectedTag = null,
+                items = emptyList(),
+                itemsError = null,
+            ),
+        )
+        try {
+            val snapshot = dependencies.xrayDat.loadTags(endpoint, file)
+            if (state.dashboard.endpoint != endpoint || state.xrayDat.selectedFilePath != file.path) return
+            state = state.copy(
+                xrayDat = state.xrayDat.copy(
+                    tags = snapshot.tags,
+                    isLoadingTags = false,
+                    tagsError = if (snapshot.tags.isEmpty()) "В файле не найдены теги." else null,
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            state = state.copy(
+                xrayDat = state.xrayDat.copy(
+                    isLoadingTags = false,
+                    tagsError = error.toCompanionLoadMessage("Не удалось прочитать теги DAT-файла."),
+                ),
+            )
+        }
+    }
+
+    private suspend fun loadXrayDatItems(offset: Int) {
+        val endpoint = state.dashboard.endpoint
+        val current = state.xrayDat
+        val file = current.selectedFile ?: return
+        val tag = current.selectedTag ?: return
+        if (current.isLoadingItems) return
+        state = state.copy(
+            xrayDat = current.copy(
+                isLoadingItems = true,
+                itemQuery = "",
+                itemsError = null,
+            ),
+        )
+        try {
+            val page = dependencies.xrayDat.loadTagPage(endpoint, file, tag, offset, current.itemLimit)
+            if (!xrayDatRequestIsCurrent(endpoint, file.path, tag)) return
+            state = state.copy(
+                xrayDat = state.xrayDat.copy(
+                    items = page.items,
+                    itemOffset = page.offset,
+                    itemLimit = page.limit,
+                    itemTotal = page.total,
+                    searchCursor = 0,
+                    searchNextCursor = null,
+                    searchViewed = 0,
+                    searchMode = null,
+                    isLoadingItems = false,
+                    itemsError = null,
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            publishXrayDatItemsFailure(error)
+        }
+    }
+
+    private suspend fun loadXrayDatSearch(cursor: Int, append: Boolean) {
+        val endpoint = state.dashboard.endpoint
+        val current = state.xrayDat
+        val file = current.selectedFile ?: return
+        val tag = current.selectedTag ?: return
+        val query = current.itemQuery.trim()
+        if (query.isBlank() || current.isLoadingItems) return
+        state = state.copy(xrayDat = current.copy(isLoadingItems = true, itemsError = null))
+        try {
+            val page = dependencies.xrayDat.searchTag(endpoint, file, tag, query, cursor, current.itemLimit)
+            if (!xrayDatRequestIsCurrent(endpoint, file.path, tag) || state.xrayDat.itemQuery.trim() != query) return
+            state = state.copy(
+                xrayDat = state.xrayDat.copy(
+                    items = if (append) state.xrayDat.items + page.items else page.items,
+                    itemOffset = 0,
+                    itemTotal = page.total,
+                    searchCursor = page.cursor,
+                    searchNextCursor = page.nextCursor,
+                    searchViewed = page.viewed,
+                    searchMode = page.mode,
+                    isLoadingItems = false,
+                    itemsError = null,
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            publishXrayDatItemsFailure(error)
+        }
+    }
+
+    private fun xrayDatRequestIsCurrent(endpoint: String, filePath: String, tag: String): Boolean =
+        state.dashboard.endpoint == endpoint && state.xrayDat.selectedFilePath == filePath && state.xrayDat.selectedTag == tag
+
+    private fun publishXrayDatItemsFailure(error: Throwable) {
+        state = state.copy(
+            xrayDat = state.xrayDat.copy(
+                isLoadingItems = false,
+                itemsError = error.toCompanionLoadMessage("Не удалось прочитать содержимое DAT-тега."),
+            ),
+        )
+    }
+
     suspend fun saveOutboundLink() {
         val endpoint = state.dashboard.endpoint
         val current = state.outbounds
@@ -2130,6 +2481,7 @@ internal class CompanionController(
             inbounds = unloadedInboundsState(),
             outbounds = unloadedOutboundsState(),
             xraySubscriptions = unloadedXraySubscriptionsState(),
+            xrayDat = unloadedXrayDatState(),
             diagnostics = initialDiagnostics().replaceDiagnostic(
                 label = "Мобильная сессия",
                 status = "Готово",
@@ -2202,6 +2554,7 @@ internal class CompanionController(
             inbounds = unloadedInboundsState(),
             outbounds = unloadedOutboundsState(),
             xraySubscriptions = unloadedXraySubscriptionsState(),
+            xrayDat = unloadedXrayDatState(),
             diagnostics = state.diagnostics.replaceDiagnostic(
                 label = "Мобильная сессия",
                 status = result.statusSummary,

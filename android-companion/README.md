@@ -44,6 +44,7 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - `Routing Xray`
 - `Подписки Xray`
 - `Прокси / Outbounds`
+- `DAT-файлы GeoIP / GeoSite`
 - `Shell -> Команды`
 - `Shell -> Терминал`
 
@@ -59,6 +60,7 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - `GET/POST /api/xray/subscriptions` загружает список подписок Xray и сохраняет новую или изменённую запись; `POST /api/xray/subscriptions/preview` получает серверный preview узлов без сохранения, записи fragment, изменения routing/observatory или restart.
 - `POST /api/xray/subscriptions/<id>/refresh` и `POST /api/xray/subscriptions/refresh-due` явно обновляют одну подписку или только просроченные; `DELETE /api/xray/subscriptions/<id>` удаляет managed fragment и безопасно пересобирает связанный runtime state.
 - `POST /api/xray/subscriptions/<id>/nodes/ping` проверяет отдельный узел подписки. Параметры restart и удаления managed-файла передаются явно, а разрушительные действия подтверждаются в приложении.
+- `GET /api/fs/list`, `GET /api/routing/dat/tags`, `GET /api/routing/dat/tag`, `GET /api/routing/dat/search` и `POST /api/routing/dat/lookup` образуют read-only мобильный DAT Explorer. Он автоматически находит GeoIP / GeoSite файлы, показывает теги, страницы элементов и серверный поиск, но не обновляет файлы и не меняет routing.
 - `GET /api/mobile/v1/logs` возвращает Xray `error`/`access` history и инкрементальные записи по per-source opaque cursor. Android пользуется этим контрактом для live logs, а не web WebSocket endpoint'ами.
 - `POST /api/xkeen/start`, `POST /api/xkeen/stop`, `POST /api/restart` и `POST /api/xkeen/core` выполняют service/core actions; после каждого принятого POST приложение сверяет результат через `GET /api/xkeen/status` и `GET /api/xkeen/core`.
 - Эти read-only запросы идут через единый `CompanionHttpTransport`: он нормализует безопасный `baseUrl`, добавляет common headers, применяет timeout и оставляет seam для session auth headers. Validate и service actions используют отдельный `90 s` transport, потому что server Xray preflight может быть долгим.
@@ -141,6 +143,12 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - Android не повторяет desktop-модальное окно и его постоянные справочные блоки. На экране остаются короткие подписи, компактные карточки и основные безопасные действия.
 - Краткие пояснения к интервалу, generated fragment, ping и влиянию удаления открываются через кнопки справки во всплывающем окне.
 - Подробная диагностика refresh, большой обзор состава fragment и редкие экспертные настройки routing/balancers остаются в веб-панели. Полная справка по workflow подписок находится в корневом `README.md` проекта.
+
+## DAT Explorer GeoIP / GeoSite
+
+- Раздел построен как компактный мобильный просмотрщик: выбор `GeoSite` / `GeoIP`, обнаруженного DAT-файла, фильтр тегов и отдельный экран содержимого выбранного тега.
+- Поиск значения проверяет домен или IP сразу по тегам выбранного файла. Внутри тега доступен серверный поиск по всему содержимому, постраничный просмотр и быстрый фильтр IPv4 / IPv6 для GeoIP.
+- Android намеренно не переносит веб-карточку управления DAT: здесь нет URL, upload/download, установки `xk-geodat`, обновления файла и вставки selector в routing. Если `xk-geodat` отсутствует, приложение показывает короткую инструкцию выполнить установку в веб-панели.
 
 ## Как открыть
 

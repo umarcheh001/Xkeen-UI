@@ -318,6 +318,7 @@ internal fun WorkspaceSectionContent(
         WorkspaceSection.XrayInbounds -> InboundsWorkspaceScreen(state, controller, modifier)
         WorkspaceSection.XrayOutbounds -> OutboundsWorkspaceScreen(state, controller, modifier)
         WorkspaceSection.XraySubscriptions -> XraySubscriptionsWorkspaceScreen(state, controller, modifier)
+        WorkspaceSection.XrayAssets -> XrayDatWorkspaceScreen(state, controller, modifier)
         WorkspaceSection.XrayLogs -> LogsWorkspaceScreen(state, controller, modifier)
         WorkspaceSection.ShellCommands,
         WorkspaceSection.ShellTerminal,
@@ -592,7 +593,7 @@ private fun workspaceSectionDescription(section: WorkspaceSection): String =
         WorkspaceSection.XraySubscriptions -> "Управление подписками, обновлением узлов и профилями Xray."
         WorkspaceSection.XrayInbounds -> "Переключение Redirect, TProxy и Hybrid с применением конфигурации."
         WorkspaceSection.XrayOutbounds -> "Прокси-ссылки, пулы, балансировщики и исходящие подключения Xray."
-        WorkspaceSection.XrayAssets -> "Обновление и проверка GeoIP, GeoSite и других DAT-файлов."
+        WorkspaceSection.XrayAssets -> "Компактный просмотр тегов и содержимого GeoIP / GeoSite DAT-файлов."
         WorkspaceSection.XrayLogs -> "Онлайн-логи access и error для активного ядра Xray."
         WorkspaceSection.MihomoRouting -> "Редактор активного routing-профиля Mihomo."
         WorkspaceSection.MihomoProfiles -> "Профили, подписки, активация и резервные копии Mihomo."

@@ -1384,6 +1384,45 @@ class CompanionControllerTest {
         assertFalse(controller.state.xraySubscriptions.editor.previewIsCurrent)
         assertFalse(controller.state.xraySubscriptions.editor.canSave)
     }
+
+    @Test
+    fun datViewerLoadsCatalogTagsItemsAndServerSearchReadOnly() = runTest {
+        val port = FakeXrayDatPort()
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                dashboard = unloadedDashboardState().copy(
+                    endpoint = "https://router.example",
+                    availableCores = listOf("Xray"),
+                ),
+            ),
+            dependencies = testDependencies(xrayDat = port),
+        )
+
+        controller.refreshXrayDatCatalog()
+
+        assertTrue(controller.state.xrayDat.hasLoadedCatalog)
+        assertEquals("geosite.dat", controller.state.xrayDat.selectedFile?.name)
+        assertEquals(listOf("DISCORD", "GITHUB"), controller.state.xrayDat.tags.map(XrayDatTag::name))
+
+        controller.selectXrayDatTag("DISCORD")
+        assertEquals("DISCORD", controller.state.xrayDat.selectedTag)
+        assertEquals("discord.com", controller.state.xrayDat.items.single().value)
+
+        controller.updateXrayDatItemQuery("app")
+        controller.searchXrayDatItems()
+        assertEquals("discordapp.com", controller.state.xrayDat.items.single().value)
+        assertTrue(controller.state.xrayDat.isItemSearch)
+
+        controller.closeXrayDatTag()
+        controller.updateXrayDatValueQuery("discord.com")
+        controller.lookupXrayDatValue()
+        assertEquals("DISCORD", controller.state.xrayDat.lookupMatches?.single()?.name)
+        assertEquals(1, port.catalogLoads)
+        assertEquals(listOf("DISCORD"), port.loadedTags)
+        assertEquals(listOf("app"), port.searchQueries)
+        assertEquals(listOf("discord.com"), port.lookupQueries)
+    }
 }
 
 private fun testDependencies(
@@ -1399,6 +1438,7 @@ private fun testDependencies(
     inbounds: InboundsPort = DemoInboundsPort(),
     outbounds: OutboundsPort = DemoOutboundsPort(),
     xraySubscriptions: XraySubscriptionsPort = DemoXraySubscriptionsPort(),
+    xrayDat: XrayDatPort = DemoXrayDatPort(),
     logs: LogsPort? = null,
     logsTransport: LogsTransportPort = FakeLogsTransportPort(),
     journal: CompanionJournalPort = FakeJournalPort(),
@@ -1413,12 +1453,87 @@ private fun testDependencies(
         inbounds = inbounds,
         outbounds = outbounds,
         xraySubscriptions = xraySubscriptions,
+        xrayDat = xrayDat,
         logs = logs ?: DemoLogsPort(effectiveJournal),
         logsTransport = logsTransport,
         journal = effectiveJournal,
         xrayConfigSource = xrayConfigSource,
         coreStatusSource = coreStatusSource,
     )
+}
+
+private class FakeXrayDatPort : XrayDatPort {
+    private val geosite = XrayDatFile(
+        XrayDatKind.GeoSite,
+        "geosite.dat",
+        "/opt/etc/xray/dat/geosite.dat",
+    )
+    private val geoip = XrayDatFile(
+        XrayDatKind.GeoIp,
+        "geoip.dat",
+        "/opt/etc/xray/dat/geoip.dat",
+    )
+    var catalogLoads = 0
+    val loadedTags = mutableListOf<String>()
+    val searchQueries = mutableListOf<String>()
+    val lookupQueries = mutableListOf<String>()
+
+    override suspend fun loadCatalog(baseUrl: String): XrayDatCatalog {
+        catalogLoads += 1
+        return XrayDatCatalog(listOf(geosite, geoip), geodatInstalled = true)
+    }
+
+    override suspend fun loadTags(baseUrl: String, file: XrayDatFile): XrayDatTagsSnapshot =
+        XrayDatTagsSnapshot(
+            file,
+            if (file.kind == XrayDatKind.GeoSite) {
+                listOf(XrayDatTag("DISCORD", 40), XrayDatTag("GITHUB", 28))
+            } else {
+                listOf(XrayDatTag("PRIVATE", 12))
+            },
+        )
+
+    override suspend fun loadTagPage(
+        baseUrl: String,
+        file: XrayDatFile,
+        tag: String,
+        offset: Int,
+        limit: Int,
+    ): XrayDatItemsPage {
+        loadedTags += tag
+        return XrayDatItemsPage(file, tag, listOf(XrayDatItem("domain", "discord.com")), offset, limit, 1)
+    }
+
+    override suspend fun searchTag(
+        baseUrl: String,
+        file: XrayDatFile,
+        tag: String,
+        query: String,
+        cursor: Int,
+        limit: Int,
+    ): XrayDatSearchPage {
+        searchQueries += query
+        return XrayDatSearchPage(
+            file = file,
+            tag = tag,
+            query = query,
+            items = listOf(XrayDatItem("domain", "discordapp.com")),
+            cursor = cursor,
+            nextCursor = null,
+            viewed = 40,
+            total = 40,
+            mode = "contains",
+        )
+    }
+
+    override suspend fun lookupValue(
+        baseUrl: String,
+        file: XrayDatFile,
+        value: String,
+    ): XrayDatLookupResult {
+        lookupQueries += value
+        return XrayDatLookupResult(file, value, listOf(XrayDatTag("DISCORD", 40)))
+    }
 }
 
 private class FakeXraySubscriptionsPort : XraySubscriptionsPort {

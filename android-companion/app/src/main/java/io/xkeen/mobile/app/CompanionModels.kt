@@ -718,6 +718,7 @@ data class CompanionUiState(
     val inbounds: InboundsState = InboundsState(),
     val outbounds: OutboundsState = OutboundsState(),
     val xraySubscriptions: XraySubscriptionsState = XraySubscriptionsState(),
+    val xrayDat: XrayDatState = XrayDatState(),
     val logs: LogsState = LogsState(),
     val diagnostics: List<DiagnosticItem> = initialDiagnostics(),
     val pendingAction: PendingAction? = null,
@@ -759,6 +760,8 @@ fun unloadedOutboundsState(): OutboundsState = OutboundsState(
 fun unloadedXraySubscriptionsState(): XraySubscriptionsState = XraySubscriptionsState(
     message = "Ожидаем загрузку подписок Xray с Xkeen UI…",
 )
+
+fun unloadedXrayDatState(): XrayDatState = XrayDatState()
 
 fun initialDiagnostics(): List<DiagnosticItem> = listOf(
     DiagnosticItem("Мобильная сессия", "Ожидает входа", DiagnosticSeverity.Warning),
