@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -20,6 +21,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -56,10 +59,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -103,12 +106,12 @@ internal fun OutboundsWorkspaceScreen(
             .fillMaxSize()
             .background(WebPanelPalette.Background),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            start = 12.dp,
-            end = 12.dp,
-            top = 11.dp,
-            bottom = 20.dp,
+            start = 10.dp,
+            end = 10.dp,
+            top = 8.dp,
+            bottom = 14.dp,
         ),
-        verticalArrangement = Arrangement.spacedBy(11.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
             TitleBlock(
@@ -144,14 +147,9 @@ internal fun OutboundsWorkspaceScreen(
 
             if (outbounds.nodes.size > 3) {
                 item {
-                    OutlinedTextField(
+                    CompactProxySearchField(
                         value = query,
                         onValueChange = { query = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        shape = RoundedCornerShape(14.dp),
-                        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                        placeholder = { Text("Найти по стране, тегу или протоколу") },
                     )
                 }
             }
@@ -172,16 +170,15 @@ internal fun OutboundsWorkspaceScreen(
         } else {
             items(filteredNodes.chunked(2), key = { row -> row.joinToString("|") { it.key } }) { row ->
                 BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                    val useGrid = maxWidth >= 360.dp
+                    val useGrid = maxWidth >= 320.dp
                     if (useGrid) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             row.forEach { node ->
                                 OutboundNodeCard(
                                     node = node,
-                                    active = outbounds.isActive(node),
                                     pinging = node.key in outbounds.pingingNodeKeys,
                                     enabled = !outbounds.isLoading && !outbounds.isPingingAll,
                                     onPing = { scope.launch { controller.pingOutbound(node.key) } },
@@ -191,11 +188,10 @@ internal fun OutboundsWorkspaceScreen(
                             if (row.size == 1) Spacer(Modifier.weight(1f))
                         }
                     } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             row.forEach { node ->
                                 OutboundNodeCard(
                                     node = node,
-                                    active = outbounds.isActive(node),
                                     pinging = node.key in outbounds.pingingNodeKeys,
                                     enabled = !outbounds.isLoading && !outbounds.isPingingAll,
                                     onPing = { scope.launch { controller.pingOutbound(node.key) } },
@@ -275,38 +271,85 @@ internal fun OutboundsWorkspaceScreen(
 }
 
 @Composable
+private fun CompactProxySearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+) {
+    val shape = RoundedCornerShape(11.dp)
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium.copy(color = WebPanelPalette.TextStrong),
+        cursorBrush = SolidColor(WebPanelPalette.Border),
+        decorationBox = { innerTextField ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 40.dp)
+                    .background(WebPanelPalette.Panel, shape)
+                    .border(1.dp, WebPanelPalette.Border.copy(alpha = 0.22f), shape)
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Search,
+                    contentDescription = null,
+                    tint = WebPanelPalette.Muted,
+                    modifier = Modifier.size(17.dp),
+                )
+                Box(modifier = Modifier.weight(1f)) {
+                    if (value.isBlank()) {
+                        Text(
+                            "Найти по стране, тегу или протоколу",
+                            color = WebPanelPalette.Muted,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    innerTextField()
+                }
+            }
+        },
+    )
+}
+
+@Composable
 private fun OutboundsFragmentSelector(
     state: OutboundsState,
     onOpen: () -> Unit,
     onRefresh: () -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         color = WebPanelPalette.Panel,
         border = BorderStroke(1.dp, WebPanelPalette.Border.copy(alpha = 0.24f)),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 11.dp, vertical = 9.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 9.dp, vertical = 7.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Row(
                     modifier = Modifier
                         .weight(1f)
                         .clickable(onClick = onOpen)
-                        .padding(vertical = 4.dp),
+                        .padding(vertical = 3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
                         Icons.Outlined.Hub,
                         contentDescription = null,
                         tint = WebPanelPalette.TextBlue,
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(16.dp),
                     )
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(6.dp))
                     Text(
                         text = state.selectedFragment.ifBlank { "04_outbounds.json" },
                         modifier = Modifier.weight(1f),
                         color = WebPanelPalette.TextStrong,
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -314,13 +357,18 @@ private fun OutboundsFragmentSelector(
                         Icons.Outlined.KeyboardArrowDown,
                         contentDescription = "Выбрать файл",
                         tint = WebPanelPalette.Muted,
+                        modifier = Modifier.size(19.dp),
                     )
                 }
-                IconButton(onClick = onRefresh, enabled = !state.isBusy) {
+                IconButton(
+                    onClick = onRefresh,
+                    enabled = !state.isBusy,
+                    modifier = Modifier.size(34.dp),
+                ) {
                     if (state.isLoading) {
                         CircularProgressIndicator(modifier = Modifier.size(17.dp), strokeWidth = 2.dp)
                     } else {
-                        Icon(Icons.Outlined.Refresh, contentDescription = "Обновить")
+                        Icon(Icons.Outlined.Refresh, contentDescription = "Обновить", modifier = Modifier.size(19.dp))
                     }
                 }
             }
@@ -343,28 +391,27 @@ private fun ProxyPoolSummary(
     state: OutboundsState,
     onPingAll: () -> Unit,
 ) {
-    val active = state.nodes.firstOrNull(state::isActive)
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         color = Color(0xFF071229),
         border = BorderStroke(1.dp, WebPanelPalette.Border.copy(alpha = 0.22f)),
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .background(WebPanelPalette.AccentDeep, RoundedCornerShape(13.dp)),
+                    .size(36.dp)
+                    .background(WebPanelPalette.AccentDeep, RoundedCornerShape(10.dp)),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = state.nodes.size.toString(),
                     color = WebPanelPalette.TextStrong,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Black,
+                    fontWeight = FontWeight.SemiBold,
                 )
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -372,37 +419,92 @@ private fun ProxyPoolSummary(
                     text = if (state.nodes.size == 1) "ОДИН ПРОКСИ" else "ПУЛ ПРОКСИ",
                     color = WebPanelPalette.Border,
                     style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.8.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.5.sp,
                 )
                 Text(
-                    text = active?.let { "Сейчас: ${it.displayName}" } ?: "Активный маршрут не определён",
+                    text = if (state.nodes.size == 1) {
+                        "Проверка задержки узла"
+                    } else {
+                        "Проверка задержки всех узлов"
+                    },
                     color = WebPanelPalette.TextStrong,
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Button(
+            CompactPoolPingButton(
                 onClick = onPingAll,
                 enabled = state.nodes.isNotEmpty() && !state.isBusy,
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-            ) {
-                if (state.isPingingAll) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(17.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
-                } else {
-                    Icon(Icons.Outlined.Bolt, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(5.dp))
-                    Text("Ping")
-                }
-            }
+                loading = state.isPingingAll,
+            )
         }
+    }
+}
+
+@Composable
+private fun CompactPoolPingButton(
+    enabled: Boolean,
+    loading: Boolean,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(10.dp)
+    val container = if (enabled) WebPanelPalette.Border else WebPanelPalette.SurfaceRaised
+    Row(
+        modifier = Modifier
+            .height(34.dp)
+            .background(container, shape)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(14.dp),
+                strokeWidth = 1.5.dp,
+                color = WebPanelPalette.Background,
+            )
+        } else {
+            Icon(
+                Icons.Outlined.Bolt,
+                contentDescription = null,
+                modifier = Modifier.size(15.dp),
+                tint = if (enabled) WebPanelPalette.Background else WebPanelPalette.Muted,
+            )
+        }
+        Text(
+            "Ping",
+            color = if (enabled) WebPanelPalette.Background else WebPanelPalette.Muted,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
+private fun CompactOutlinedAction(
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(9.dp)
+    Row(
+        modifier = Modifier
+            .height(32.dp)
+            .border(1.dp, WebPanelPalette.Muted.copy(alpha = if (enabled) 0.72f else 0.28f), shape)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            color = if (enabled) WebPanelPalette.Border else WebPanelPalette.MutedDeep,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Medium,
+        )
     }
 }
 
@@ -413,7 +515,7 @@ private fun OutboundEditorEntryCard(
 ) {
     val isPool = state.nodes.size > 1
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         color = WebPanelPalette.Panel,
         border = BorderStroke(
             1.dp,
@@ -421,16 +523,16 @@ private fun OutboundEditorEntryCard(
         ),
     ) {
         Row(
-            modifier = Modifier.padding(13.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(11.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Box(
                 modifier = Modifier
-                    .size(42.dp)
+                    .size(34.dp)
                     .background(
                         if (isPool) Color(0xFF3A2A0B) else WebPanelPalette.AccentDeep,
-                        RoundedCornerShape(12.dp),
+                        RoundedCornerShape(10.dp),
                     ),
                 contentAlignment = Alignment.Center,
             ) {
@@ -442,6 +544,7 @@ private fun OutboundEditorEntryCard(
                     },
                     contentDescription = null,
                     tint = if (isPool) WebPanelPalette.Warning else WebPanelPalette.TextBlue,
+                    modifier = Modifier.size(18.dp),
                 )
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -453,7 +556,7 @@ private fun OutboundEditorEntryCard(
                     },
                     color = WebPanelPalette.TextStrong,
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Medium,
                 )
                 Text(
                     text = if (isPool) {
@@ -465,13 +568,11 @@ private fun OutboundEditorEntryCard(
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
-            OutlinedButton(
+            CompactOutlinedAction(
                 onClick = onOpen,
                 enabled = !state.isBusy,
-                shape = RoundedCornerShape(11.dp),
-            ) {
-                Text(if (isPool) "Почему?" else if (state.nodes.isEmpty()) "Добавить" else "Править")
-            }
+                label = if (isPool) "Почему?" else if (state.nodes.isEmpty()) "Добавить" else "Править",
+            )
         }
     }
 }
@@ -775,45 +876,47 @@ private fun OutboundEditorConfirmDialog(
 @Composable
 private fun OutboundNodeCard(
     node: OutboundNode,
-    active: Boolean,
     pinging: Boolean,
     enabled: Boolean,
     onPing: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(16.dp)
-    val background = if (active) Color(0xFF173D5B) else Color(0xFF090F1D)
-    val border = if (active) Color(0xFF7DD3FC) else WebPanelPalette.Border.copy(alpha = 0.20f)
+    val shape = RoundedCornerShape(12.dp)
+    val border = WebPanelPalette.Border.copy(alpha = 0.20f)
     val latency = node.latency
     Surface(
-        modifier = modifier.heightIn(min = 166.dp),
+        modifier = modifier.height(110.dp),
         shape = shape,
-        color = background,
-        border = BorderStroke(if (active) 1.5.dp else 1.dp, border),
+        color = Color(0xFF090F1D),
+        border = BorderStroke(1.dp, border),
     ) {
         Column(
-            modifier = Modifier.padding(13.dp),
-            verticalArrangement = Arrangement.spacedBy(9.dp),
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Row(verticalAlignment = Alignment.Top) {
+            Row(
+                modifier = Modifier.height(32.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
                 Text(
                     text = outboundCountryFlag(node),
                     modifier = Modifier.padding(top = 1.dp),
-                    fontSize = 21.sp,
+                    fontSize = 15.sp,
                 )
-                Spacer(Modifier.width(7.dp))
+                Spacer(Modifier.width(5.dp))
                 Text(
                     text = node.displayName,
                     modifier = Modifier.weight(1f),
                     color = WebPanelPalette.TextStrong,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    lineHeight = 16.sp,
+                    fontWeight = FontWeight.Medium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 ProxyBadge(node.protocol.ifBlank { "proxy" }, Color(0xFF1D4E89))
                 node.transport.takeIf(String::isNotBlank)?.let { ProxyBadge(it, Color(0xFF155E75)) }
                 node.security.takeIf(String::isNotBlank)?.let { ProxyBadge(it, Color(0xFF713F12)) }
@@ -822,7 +925,7 @@ private fun OutboundNodeCard(
             Text(
                 text = node.endpoint.ifBlank { node.tag },
                 color = WebPanelPalette.Muted,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
                 fontFamily = FontFamily.Monospace,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -831,14 +934,6 @@ private fun OutboundNodeCard(
             Spacer(Modifier.weight(1f))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    if (active) {
-                        Text(
-                            "АКТИВЕН СЕЙЧАС",
-                            color = Color(0xFF7DD3FC),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
                     Text(
                         text = when {
                             pinging -> "Проверяем…"
@@ -852,24 +947,25 @@ private fun OutboundNodeCard(
                             latency?.status == "error" -> WebPanelPalette.Error
                             else -> WebPanelPalette.Muted
                         },
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
-                IconButton(
-                    onClick = onPing,
-                    enabled = enabled && !pinging,
+                Box(
                     modifier = Modifier
-                        .size(38.dp)
-                        .border(1.dp, border.copy(alpha = 0.72f), CircleShape),
+                        .size(28.dp)
+                        .border(1.dp, border.copy(alpha = 0.62f), CircleShape)
+                        .clickable(enabled = enabled && !pinging, onClick = onPing),
+                    contentAlignment = Alignment.Center,
                 ) {
                     if (pinging) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.5.dp)
                     } else {
                         Icon(
                             Icons.Outlined.Bolt,
                             contentDescription = "Проверить задержку ${node.displayName}",
-                            tint = if (active) Color(0xFFBAE6FD) else WebPanelPalette.TextBlue,
+                            tint = WebPanelPalette.TextBlue,
+                            modifier = Modifier.size(15.dp),
                         )
                     }
                 }
@@ -884,10 +980,10 @@ private fun ProxyBadge(text: String, color: Color) {
         text = text.lowercase(),
         modifier = Modifier
             .background(color.copy(alpha = 0.72f), RoundedCornerShape(999.dp))
-            .padding(horizontal = 7.dp, vertical = 3.dp),
+            .padding(horizontal = 5.dp, vertical = 2.dp),
         color = WebPanelPalette.TextBlue,
         style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.Bold,
+        fontWeight = FontWeight.Medium,
         maxLines = 1,
     )
 }
@@ -911,17 +1007,22 @@ private fun OutboundsLoadingState() {
 private fun OutboundsEmptyState(text: String) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         color = WebPanelPalette.Panel,
         border = BorderStroke(1.dp, WebPanelPalette.Border.copy(alpha = 0.16f)),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 26.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Icon(Icons.Outlined.Hub, contentDescription = null, tint = WebPanelPalette.Muted)
-            Text(text, color = WebPanelPalette.Muted, style = MaterialTheme.typography.bodyMedium)
+            Icon(
+                Icons.Outlined.Hub,
+                contentDescription = null,
+                tint = WebPanelPalette.Muted,
+                modifier = Modifier.size(20.dp),
+            )
+            Text(text, color = WebPanelPalette.Muted, style = MaterialTheme.typography.bodySmall)
         }
     }
 }

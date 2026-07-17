@@ -675,9 +675,8 @@ private fun CoreGlassButton(
         Text(
             text = activeCore,
             color = WebPanelPalette.TextStrong,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.ExtraBold,
-            lineHeight = 14.sp,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
             maxLines = 1,
         )
     }
@@ -729,8 +728,8 @@ private fun ServiceHeaderButton(
         Text(
             text = label,
             color = effectiveColor,
-            fontWeight = FontWeight.ExtraBold,
-            fontSize = 11.sp,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
             maxLines = 1,
         )
     }
@@ -861,8 +860,8 @@ private fun RowScope.WorkspaceTab(
             Text(
                 text = label,
                 color = if (isSelected) WebPanelPalette.TextStrong else WebPanelPalette.TextBlue,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 11.sp,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
             )
             Spacer(Modifier.height(1.dp))
@@ -1650,7 +1649,7 @@ internal fun TitleBlock(
     title: String,
     subtitle: String,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Text(
             text = eyebrow.uppercase(),
             style = MaterialTheme.typography.labelLarge,
