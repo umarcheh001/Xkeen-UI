@@ -1053,6 +1053,32 @@ class CompanionControllerTest {
 
         assertEquals(failure, controller.state.routing.write)
     }
+
+    @Test
+    fun inboundsLoadsServerModeAndPublishesOnlyConfirmedApplyResult() = runTest {
+        val port = FakeInboundsPort()
+        val controller = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Ready),
+            dependencies = testDependencies(inbounds = port),
+        )
+
+        controller.refreshInbounds()
+
+        assertEquals("03_inbounds.json", controller.state.inbounds.selectedFragment)
+        assertEquals(InboundsMode.Hybrid, controller.state.inbounds.appliedMode)
+        assertEquals(InboundsMode.Hybrid, controller.state.inbounds.selectedMode)
+        assertEquals("/opt/etc/xray/configs/03_inbounds.json", controller.state.inbounds.activePath)
+
+        controller.selectInboundsMode(InboundsMode.Redirect)
+        controller.updateInboundsRestartAfterApply(false)
+        controller.applyInboundsMode()
+
+        assertEquals(InboundsMode.Redirect, port.appliedMode)
+        assertEquals(false, port.restartRequested)
+        assertEquals(InboundsMode.Redirect, controller.state.inbounds.appliedMode)
+        assertFalse(controller.state.inbounds.hasChanges)
+        assertTrue(controller.state.inbounds.message.contains("без перезапуска"))
+    }
 }
 
 private fun testDependencies(
@@ -1065,6 +1091,7 @@ private fun testDependencies(
     serviceActions: ServiceActionsPort = DemoServiceActionsPort(),
     routingValidation: RoutingValidationPort = FakeRoutingValidationPort(),
     routingWrites: RoutingWritePort? = null,
+    inbounds: InboundsPort = DemoInboundsPort(),
     logs: LogsPort? = null,
     logsTransport: LogsTransportPort = FakeLogsTransportPort(),
     journal: CompanionJournalPort = FakeJournalPort(),
@@ -1076,12 +1103,50 @@ private fun testDependencies(
         serviceActions = serviceActions,
         routingValidation = routingValidation,
         routingWrites = routingWrites ?: DemoRoutingWritePort(effectiveJournal),
+        inbounds = inbounds,
         logs = logs ?: DemoLogsPort(effectiveJournal),
         logsTransport = logsTransport,
         journal = effectiveJournal,
         xrayConfigSource = xrayConfigSource,
         coreStatusSource = coreStatusSource,
     )
+}
+
+private class FakeInboundsPort : InboundsPort {
+    var appliedMode: InboundsMode? = null
+    var restartRequested: Boolean? = null
+
+    override suspend fun listFragments(baseUrl: String): InboundsFragmentIndex =
+        InboundsFragmentIndex(
+            directory = "/opt/etc/xray/configs",
+            currentName = "03_inbounds.json",
+            items = listOf(InboundsFragment("03_inbounds.json")),
+        )
+
+    override suspend fun load(baseUrl: String, filename: String): InboundsSnapshot =
+        InboundsSnapshot(
+            file = filename,
+            path = "/opt/etc/xray/configs/$filename",
+            rawMode = "mixed",
+            mode = InboundsMode.Hybrid,
+        )
+
+    override suspend fun apply(
+        baseUrl: String,
+        filename: String,
+        mode: InboundsMode,
+        restart: Boolean,
+    ): InboundsApplyResult {
+        appliedMode = mode
+        restartRequested = restart
+        return InboundsApplyResult(
+            file = filename,
+            rawMode = mode.apiValue,
+            mode = mode,
+            restartRequested = restart,
+            restarted = restart,
+        )
+    }
 }
 
 private class FakeCoreStatusSource(

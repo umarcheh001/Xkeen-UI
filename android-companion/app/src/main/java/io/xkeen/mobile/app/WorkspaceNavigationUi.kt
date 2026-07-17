@@ -315,6 +315,7 @@ internal fun WorkspaceSectionContent(
 ) {
     when (state.workspaceSection) {
         WorkspaceSection.XrayRouting -> RoutingWorkspaceScreen(state, controller, modifier)
+        WorkspaceSection.XrayInbounds -> InboundsWorkspaceScreen(state, controller, modifier)
         WorkspaceSection.XrayLogs -> LogsWorkspaceScreen(state, controller, modifier)
         WorkspaceSection.ShellCommands,
         WorkspaceSection.ShellTerminal,
@@ -587,7 +588,7 @@ private fun drawerEntries(tab: MainTab): List<WorkspaceDrawerEntry> =
 private fun workspaceSectionDescription(section: WorkspaceSection): String =
     when (section) {
         WorkspaceSection.XraySubscriptions -> "Управление подписками, обновлением узлов и профилями Xray."
-        WorkspaceSection.XrayInbounds -> "Переключение Redirect, TProxy и Mixed с применением конфигурации."
+        WorkspaceSection.XrayInbounds -> "Переключение Redirect, TProxy и Hybrid с применением конфигурации."
         WorkspaceSection.XrayOutbounds -> "Прокси-ссылки, пулы, балансировщики и исходящие подключения Xray."
         WorkspaceSection.XrayAssets -> "Обновление и проверка GeoIP, GeoSite и других DAT-файлов."
         WorkspaceSection.XrayLogs -> "Онлайн-логи access и error для активного ядра Xray."

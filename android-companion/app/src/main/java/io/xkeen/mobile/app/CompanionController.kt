@@ -536,6 +536,168 @@ internal class CompanionController(
         }
     }
 
+    suspend fun refreshInbounds(force: Boolean = false) {
+        val endpoint = state.dashboard.endpoint
+        if (endpoint.isBlank() || !state.dashboard.availableCores.hasCore("xray")) return
+        val current = state.inbounds
+        if (current.isLoading || current.isApplying || (!force && current.hasLoaded)) return
+        state = state.copy(
+            inbounds = current.copy(
+                isLoading = true,
+                message = "Загружаем режим inbounds с Xkeen UI…",
+                error = null,
+            ),
+        )
+        try {
+            val index = dependencies.inbounds.listFragments(endpoint)
+            val selected = current.selectedFragment.takeIf { name ->
+                index.items.any { it.name == name }
+            } ?: index.currentName.takeIf { name ->
+                index.items.any { it.name == name }
+            } ?: index.items.firstOrNull()?.name
+            if (selected.isNullOrBlank()) {
+                throw InboundsException("Сервер не вернул ни одного файла 03_inbounds*.json.")
+            }
+            val snapshot = dependencies.inbounds.load(endpoint, selected)
+            if (state.dashboard.endpoint != endpoint) return
+            state = state.copy(
+                inbounds = state.inbounds.fromServer(
+                    index = index,
+                    snapshot = snapshot,
+                    selectedFragment = selected,
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            publishInboundsFailure(error, "Не удалось загрузить режим inbounds.")
+        }
+    }
+
+    suspend fun selectInboundsFragment(filename: String) {
+        val endpoint = state.dashboard.endpoint
+        val current = state.inbounds
+        if (endpoint.isBlank() || current.isLoading || current.isApplying) return
+        if (current.fragments.none { it.name == filename }) return
+        state = state.copy(
+            inbounds = current.copy(
+                selectedFragment = filename,
+                isLoading = true,
+                message = "Загружаем $filename…",
+                error = null,
+            ),
+        )
+        try {
+            val snapshot = dependencies.inbounds.load(endpoint, filename)
+            if (state.dashboard.endpoint != endpoint || state.inbounds.selectedFragment != filename) return
+            val path = snapshot.path.ifBlank {
+                current.activePath.substringBeforeLast('/', "")
+                    .takeIf(String::isNotBlank)
+                    ?.let { "$it/$filename" }
+                    ?: filename
+            }
+            state = state.copy(
+                inbounds = state.inbounds.copy(
+                    activePath = path,
+                    appliedMode = snapshot.mode,
+                    selectedMode = snapshot.mode,
+                    rawServerMode = snapshot.rawMode,
+                    isLoading = false,
+                    hasLoaded = true,
+                    message = snapshot.inboundsStatusMessage(),
+                    error = null,
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            publishInboundsFailure(error, "Не удалось загрузить $filename.")
+        }
+    }
+
+    fun selectInboundsMode(mode: InboundsMode) {
+        if (state.inbounds.isLoading || state.inbounds.isApplying) return
+        state = state.copy(
+            inbounds = state.inbounds.copy(
+                selectedMode = mode,
+                message = if (mode == state.inbounds.appliedMode) {
+                    "${mode.displayName} уже активен."
+                } else {
+                    "Выбран ${mode.displayName}. Нажмите «Применить режим»."
+                },
+                error = null,
+            ),
+        )
+    }
+
+    fun updateInboundsRestartAfterApply(enabled: Boolean) {
+        if (state.inbounds.isApplying) return
+        state = state.copy(inbounds = state.inbounds.copy(restartAfterApply = enabled))
+    }
+
+    suspend fun applyInboundsMode() {
+        val endpoint = state.dashboard.endpoint
+        val current = state.inbounds
+        val mode = current.selectedMode ?: return
+        val filename = current.selectedFragment
+        if (endpoint.isBlank() || filename.isBlank() || current.isLoading || current.isApplying || !current.hasChanges) {
+            return
+        }
+        state = state.copy(
+            inbounds = current.copy(
+                isApplying = true,
+                message = if (current.restartAfterApply) {
+                    "Применяем ${mode.displayName} и перезапускаем Xkeen…"
+                } else {
+                    "Сохраняем режим ${mode.displayName}…"
+                },
+                error = null,
+            ),
+        )
+        try {
+            val result = dependencies.inbounds.apply(
+                baseUrl = endpoint,
+                filename = filename,
+                mode = mode,
+                restart = current.restartAfterApply,
+            )
+            if (state.dashboard.endpoint != endpoint || state.inbounds.selectedFragment != filename) return
+            val restartFailed = result.restartRequested && !result.restarted
+            val message = when {
+                restartFailed -> "${result.mode.displayName} сохранён, но сервер не подтвердил перезапуск Xkeen."
+                result.restarted -> "${result.mode.displayName} применён; Xkeen перезапущен."
+                else -> "${result.mode.displayName} сохранён без перезапуска Xkeen."
+            }
+            state = state.copy(
+                inbounds = state.inbounds.copy(
+                    appliedMode = result.mode,
+                    selectedMode = result.mode,
+                    rawServerMode = result.rawMode,
+                    isApplying = false,
+                    hasLoaded = true,
+                    message = message,
+                    error = message.takeIf { restartFailed },
+                ),
+                dashboard = state.dashboard.copy(
+                    lastOperation = "Режим inbounds: ${result.mode.displayName}",
+                    lastError = message.takeIf { restartFailed },
+                ),
+                logs = recordLog(
+                    "inbounds",
+                    if (restartFailed) LogLevel.Warning else LogLevel.Info,
+                    message,
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            publishInboundsFailure(error, "Не удалось применить режим inbounds.")
+        }
+    }
+
     suspend fun loadSelectedRoutingDocument() {
         loadRoutingDocument(state.routing.selectedDocumentId)
     }
@@ -992,6 +1154,7 @@ internal class CompanionController(
             sessionMessage = null,
             dashboard = workspaceDashboard,
             routing = unloadedRoutingState(),
+            inbounds = unloadedInboundsState(),
             diagnostics = initialDiagnostics().replaceDiagnostic(
                 label = "Мобильная сессия",
                 status = "Готово",
@@ -1057,6 +1220,7 @@ internal class CompanionController(
             mainTab = MainTab.Routing,
             workspaceSection = WorkspaceSection.XrayRouting,
             dashboard = state.dashboard.copy(statusSummary = result.statusSummary),
+            inbounds = unloadedInboundsState(),
             diagnostics = state.diagnostics.replaceDiagnostic(
                 label = "Мобильная сессия",
                 status = result.statusSummary,
@@ -1288,6 +1452,20 @@ internal class CompanionController(
         )
     }
 
+    private fun publishInboundsFailure(error: Exception, fallback: String) {
+        val message = error.message?.takeIf(String::isNotBlank) ?: fallback
+        state = state.copy(
+            inbounds = state.inbounds.copy(
+                isLoading = false,
+                isApplying = false,
+                message = message,
+                error = message,
+            ),
+            dashboard = state.dashboard.copy(lastError = message),
+            logs = recordLog("inbounds", LogLevel.Warning, message),
+        )
+    }
+
     private fun recordLog(
         source: String,
         level: LogLevel,
@@ -1441,6 +1619,32 @@ internal class CompanionController(
             logs = recordLog("transport", LogLevel.Warning, message),
         )
     }
+}
+
+private fun InboundsState.fromServer(
+    index: InboundsFragmentIndex,
+    snapshot: InboundsSnapshot,
+    selectedFragment: String,
+): InboundsState = copy(
+    fragments = index.items,
+    selectedFragment = selectedFragment,
+    activePath = snapshot.path.ifBlank {
+        index.directory.trimEnd('/').takeIf(String::isNotBlank)?.let { "$it/$selectedFragment" }
+            ?: selectedFragment
+    },
+    appliedMode = snapshot.mode,
+    selectedMode = snapshot.mode,
+    rawServerMode = snapshot.rawMode,
+    isLoading = false,
+    hasLoaded = true,
+    message = snapshot.inboundsStatusMessage(),
+    error = null,
+)
+
+private fun InboundsSnapshot.inboundsStatusMessage(): String = when {
+    mode != null -> "Активный режим: ${mode.displayName}."
+    rawMode == "custom" -> "Обнаружен пользовательский режим. Выберите пресет для применения."
+    else -> "Режим не определён. Проверьте выбранный inbound-фрагмент."
 }
 
 internal fun ConnectionDraft.canBeSaved(): Boolean {

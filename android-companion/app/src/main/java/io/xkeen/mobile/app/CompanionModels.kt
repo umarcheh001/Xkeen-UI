@@ -164,6 +164,22 @@ enum class RoutingWritePhase {
     Conflict,
 }
 
+enum class InboundsMode(
+    val apiValue: String,
+    val displayName: String,
+) {
+    Hybrid("mixed", "Hybrid"),
+    TProxy("tproxy", "TProxy"),
+    Redirect("redirect", "Redirect"),
+    ;
+
+    companion object {
+        fun fromApiValue(value: String?): InboundsMode? = entries.firstOrNull {
+            it.apiValue == value?.trim()?.lowercase()
+        }
+    }
+}
+
 enum class RoutingWorkflowStep {
     Validate,
     Save,
@@ -375,6 +391,33 @@ data class RoutingState(
     val write: RoutingWriteState = RoutingWriteState(),
 )
 
+data class InboundsFragment(
+    val name: String,
+    val sizeBytes: Long? = null,
+    val modifiedAtEpochSeconds: Long? = null,
+)
+
+data class InboundsState(
+    val fragments: List<InboundsFragment> = emptyList(),
+    val selectedFragment: String = "",
+    val activePath: String = "",
+    val appliedMode: InboundsMode? = null,
+    val selectedMode: InboundsMode? = null,
+    val rawServerMode: String? = null,
+    val restartAfterApply: Boolean = true,
+    val isLoading: Boolean = false,
+    val isApplying: Boolean = false,
+    val hasLoaded: Boolean = false,
+    val message: String = "Откройте раздел, чтобы загрузить режим inbounds.",
+    val error: String? = null,
+) {
+    val hasChanges: Boolean
+        get() = selectedMode != null && selectedMode != appliedMode
+
+    val isCustomMode: Boolean
+        get() = rawServerMode != null && appliedMode == null
+}
+
 data class LogEntry(
     val time: String,
     val source: String,
@@ -415,6 +458,7 @@ data class CompanionUiState(
     val workspaceSection: WorkspaceSection = WorkspaceSection.XrayRouting,
     val dashboard: DashboardState = demoDashboardState(),
     val routing: RoutingState = demoRoutingState(),
+    val inbounds: InboundsState = InboundsState(),
     val logs: LogsState = LogsState(),
     val diagnostics: List<DiagnosticItem> = initialDiagnostics(),
     val pendingAction: PendingAction? = null,
@@ -443,6 +487,10 @@ fun unloadedRoutingState(): RoutingState = RoutingState(
     documents = emptyList(),
     selectedDocumentId = "",
     validation = RoutingValidation(message = "Ожидаем список routing-конфигураций с Xkeen UI…"),
+)
+
+fun unloadedInboundsState(): InboundsState = InboundsState(
+    message = "Ожидаем загрузку режима inbounds с Xkeen UI…",
 )
 
 fun initialDiagnostics(): List<DiagnosticItem> = listOf(
