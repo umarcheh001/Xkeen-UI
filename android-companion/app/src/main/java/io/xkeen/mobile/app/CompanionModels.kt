@@ -492,6 +492,46 @@ data class OutboundEditorState(
         get() = canEdit && preview.isValid && draftUrl.isNotBlank() && draftTag.isNotBlank() && !isSaving
 }
 
+data class OutboundPoolEntryDraft(
+    val tag: String,
+    val url: String,
+    val preview: OutboundLinkPreview,
+) {
+    val isValid: Boolean
+        get() = tag.isNotBlank() && url.isNotBlank() && preview.isValid && !isReservedOutboundPoolTag(tag)
+
+    val displayName: String
+        get() = preview.fields.firstOrNull { it.label == "Название" }?.value
+            ?.takeIf(String::isNotBlank)
+            ?: preview.fields.firstOrNull { it.label == "Сервер" }?.value
+                ?.takeIf(String::isNotBlank)
+            ?: tag
+}
+
+data class OutboundPoolEditorState(
+    val isOpen: Boolean = false,
+    val isLoading: Boolean = false,
+    val isSaving: Boolean = false,
+    val canEdit: Boolean = false,
+    val input: String = "",
+    val entries: List<OutboundPoolEntryDraft> = emptyList(),
+    val sourceFingerprint: String = "",
+    val restartAfterSave: Boolean = true,
+    val replacePool: Boolean = false,
+    val message: String? = null,
+    val error: String? = null,
+) {
+    val hasDraft: Boolean
+        get() = input.isNotBlank() || entries.isNotEmpty()
+
+    val canSave: Boolean
+        get() {
+            val tags = entries.map { it.tag.lowercase() }
+            return canEdit && entries.isNotEmpty() && entries.all(OutboundPoolEntryDraft::isValid) &&
+                tags.distinct().size == tags.size && !isLoading && !isSaving
+        }
+}
+
 data class OutboundsState(
     val fragments: List<OutboundsFragment> = emptyList(),
     val selectedFragment: String = "",
@@ -505,11 +545,13 @@ data class OutboundsState(
     val pingingNodeKeys: Set<String> = emptySet(),
     val hasLoaded: Boolean = false,
     val editor: OutboundEditorState = OutboundEditorState(),
+    val poolEditor: OutboundPoolEditorState = OutboundPoolEditorState(),
     val message: String = "Откройте раздел, чтобы загрузить proxy-узлы Xray.",
     val error: String? = null,
 ) {
     val isBusy: Boolean
-        get() = isLoading || isPingingAll || pingingNodeKeys.isNotEmpty() || editor.isLoading || editor.isSaving
+        get() = isLoading || isPingingAll || pingingNodeKeys.isNotEmpty() || editor.isLoading || editor.isSaving ||
+            poolEditor.isLoading || poolEditor.isSaving
 
     fun isActive(node: OutboundNode): Boolean =
         node.key.isNotBlank() && node.key == activeNodeKey ||

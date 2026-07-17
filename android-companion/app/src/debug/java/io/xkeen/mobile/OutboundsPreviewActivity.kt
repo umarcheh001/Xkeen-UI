@@ -32,7 +32,7 @@ class OutboundsPreviewActivity : ComponentActivity() {
     }
 }
 
-private fun outboundsPreviewState(): CompanionUiState = CompanionUiState(
+internal fun outboundsPreviewState(): CompanionUiState = CompanionUiState(
     phase = AppPhase.Ready,
     mainTab = MainTab.Routing,
     workspaceSection = WorkspaceSection.XrayOutbounds,

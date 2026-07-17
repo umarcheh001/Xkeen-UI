@@ -89,6 +89,58 @@ class OutboundsPortTest {
     }
 
     @Test
+    fun savePoolSendsSelectedFileEntriesAndPoolPolicies() = runTest {
+        val transport = RecordingOutboundsTransport(
+            postResponses = ArrayDeque(
+                listOf(
+                    response(
+                        """{"ok":true,"updated":2,"file":"04_outbounds.cdn.json","replaced_pool":true,"tags":["nl_proxy","de-proxy","direct","block"],"restarted":false}""",
+                    ),
+                ),
+            ),
+        )
+        val port = WebPanelOutboundsPort(transport)
+
+        val result = port.savePool(
+            baseUrl = "https://router.lan",
+            filename = "04_outbounds.cdn.json",
+            request = OutboundPoolSaveRequest(
+                entries = listOf(
+                    OutboundPoolSaveEntry(
+                        tag = " nl proxy ",
+                        url = " vless://id@nl.example:443?security=tls ",
+                    ),
+                    OutboundPoolSaveEntry(
+                        tag = "de-proxy",
+                        url = "trojan://secret@de.example:443?security=tls",
+                    ),
+                ),
+                restart = true,
+                replacePool = true,
+                writeRaw = true,
+                sockoptMark255 = true,
+            ),
+        )
+
+        val request = transport.posts.single()
+        val body = JSONObject(request.body.orEmpty())
+        val entries = body.getJSONArray("entries")
+        assertEquals("/api/xray/outbounds/proxies?file=04_outbounds.cdn.json", request.endpoint)
+        assertEquals(2, entries.length())
+        assertEquals("nl_proxy", entries.getJSONObject(0).getString("tag"))
+        assertEquals("vless://id@nl.example:443?security=tls", entries.getJSONObject(0).getString("url"))
+        assertTrue(body.getBoolean("restart"))
+        assertTrue(body.getBoolean("replace_pool"))
+        assertTrue(body.getBoolean("write_raw"))
+        assertTrue(body.getBoolean("sockopt_mark_255"))
+        assertEquals(2, result.updated)
+        assertTrue(result.replacedPool)
+        assertEquals(listOf("nl_proxy", "de-proxy", "direct", "block"), result.tags)
+        assertTrue(result.restartRequested)
+        assertFalse(result.restarted)
+    }
+
+    @Test
     fun pingRequestsUseSelectedFragmentAndNodeKeys() = runTest {
         val transport = RecordingOutboundsTransport(
             postResponses = ArrayDeque(

@@ -743,6 +743,10 @@ internal class CompanionController(
                 selectedFragment = filename,
                 isLoading = true,
                 editor = OutboundEditorState(restartAfterSave = current.editor.restartAfterSave),
+                poolEditor = OutboundPoolEditorState(
+                    restartAfterSave = current.poolEditor.restartAfterSave,
+                    replacePool = false,
+                ),
                 message = "Загружаем $filename…",
                 error = null,
             ),
@@ -973,6 +977,235 @@ internal class CompanionController(
                 ),
             ),
         )
+    }
+
+    suspend fun openOutboundsPoolEditor() {
+        val endpoint = state.dashboard.endpoint
+        val current = state.outbounds
+        val filename = current.selectedFragment
+        if (endpoint.isBlank() || filename.isBlank() || current.isBusy) return
+        state = state.copy(
+            outbounds = current.copy(
+                poolEditor = OutboundPoolEditorState(
+                    isOpen = true,
+                    isLoading = true,
+                    restartAfterSave = current.poolEditor.restartAfterSave,
+                    replacePool = false,
+                    message = "Проверяем выбранный outbounds-фрагмент…",
+                ),
+            ),
+        )
+        try {
+            val snapshot = dependencies.outbounds.loadLink(endpoint, filename)
+            if (state.dashboard.endpoint != endpoint || state.outbounds.selectedFragment != filename) return
+            val subscriptionManaged = snapshot.managedKind == "subscription"
+            state = state.copy(
+                outbounds = state.outbounds.copy(
+                    poolEditor = state.outbounds.poolEditor.copy(
+                        isLoading = false,
+                        canEdit = !subscriptionManaged,
+                        sourceFingerprint = snapshot.sourceFingerprint,
+                        message = if (subscriptionManaged) null else {
+                            "Добавьте готовые ссылки. Текущие узлы не загружаются в черновик и сохраняются в режиме добавления."
+                        },
+                        error = if (subscriptionManaged) {
+                            "Generated-фрагмент подписки управляется сервером и не может быть перезаписан ручным пулом."
+                        } else {
+                            null
+                        },
+                    ),
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            publishOutboundsPoolEditorFailure(error, "Не удалось открыть создание proxy-пула.")
+        }
+    }
+
+    fun updateOutboundPoolInput(value: String) {
+        val editor = state.outbounds.poolEditor
+        if (!editor.isOpen || editor.isLoading || editor.isSaving || !editor.canEdit) return
+        state = state.copy(
+            outbounds = state.outbounds.copy(
+                poolEditor = editor.copy(input = value, message = null, error = null),
+            ),
+        )
+    }
+
+    fun addOutboundPoolInput() {
+        val editor = state.outbounds.poolEditor
+        if (!editor.isOpen || editor.isLoading || editor.isSaving || !editor.canEdit) return
+        val result = mergeOutboundPoolInput(editor.entries, editor.input)
+        state = state.copy(
+            outbounds = state.outbounds.copy(
+                poolEditor = if (result.addedCount == 0) {
+                    editor.copy(message = null, error = "Не найдено ни одной непустой строки со ссылкой.")
+                } else {
+                    editor.copy(
+                        input = "",
+                        entries = result.entries,
+                        message = "Добавлено или обновлено строк: ${result.addedCount}. Ссылки нормализованы локально.",
+                        error = null,
+                    )
+                },
+            ),
+        )
+    }
+
+    fun updateOutboundPoolEntryTag(index: Int, value: String) {
+        val editor = state.outbounds.poolEditor
+        if (!editor.isOpen || editor.isLoading || editor.isSaving || !editor.canEdit) return
+        val entry = editor.entries.getOrNull(index) ?: return
+        val updated = editor.entries.toMutableList().apply {
+            set(index, entry.copy(tag = sanitizeOutboundPoolTag(value)))
+        }
+        state = state.copy(
+            outbounds = state.outbounds.copy(
+                poolEditor = editor.copy(entries = updated, message = null, error = null),
+            ),
+        )
+    }
+
+    fun removeOutboundPoolEntry(index: Int) {
+        val editor = state.outbounds.poolEditor
+        if (!editor.isOpen || editor.isLoading || editor.isSaving || !editor.canEdit) return
+        if (index !in editor.entries.indices) return
+        state = state.copy(
+            outbounds = state.outbounds.copy(
+                poolEditor = editor.copy(
+                    entries = editor.entries.filterIndexed { entryIndex, _ -> entryIndex != index },
+                    message = null,
+                    error = null,
+                ),
+            ),
+        )
+    }
+
+    fun clearOutboundPoolDraft() {
+        val editor = state.outbounds.poolEditor
+        if (!editor.isOpen || editor.isLoading || editor.isSaving || !editor.canEdit) return
+        state = state.copy(
+            outbounds = state.outbounds.copy(
+                poolEditor = editor.copy(input = "", entries = emptyList(), message = null, error = null),
+            ),
+        )
+    }
+
+    fun updateOutboundPoolRestartAfterSave(enabled: Boolean) {
+        val editor = state.outbounds.poolEditor
+        if (!editor.isOpen || editor.isSaving) return
+        state = state.copy(outbounds = state.outbounds.copy(poolEditor = editor.copy(restartAfterSave = enabled)))
+    }
+
+    fun updateOutboundPoolReplaceMode(enabled: Boolean) {
+        val editor = state.outbounds.poolEditor
+        if (!editor.isOpen || editor.isSaving) return
+        state = state.copy(outbounds = state.outbounds.copy(poolEditor = editor.copy(replacePool = enabled)))
+    }
+
+    fun closeOutboundsPoolEditor() {
+        val editor = state.outbounds.poolEditor
+        if (editor.isSaving) return
+        state = state.copy(
+            outbounds = state.outbounds.copy(
+                poolEditor = OutboundPoolEditorState(
+                    restartAfterSave = editor.restartAfterSave,
+                    replacePool = false,
+                ),
+            ),
+        )
+    }
+
+    suspend fun saveOutboundPool() {
+        val endpoint = state.dashboard.endpoint
+        val current = state.outbounds
+        val editor = current.poolEditor
+        val filename = current.selectedFragment
+        if (endpoint.isBlank() || filename.isBlank() || !editor.isOpen || !editor.canSave) return
+
+        state = state.copy(
+            outbounds = current.copy(
+                poolEditor = editor.copy(
+                    isSaving = true,
+                    message = "Проверяем, не изменился ли $filename на сервере…",
+                    error = null,
+                ),
+            ),
+        )
+        try {
+            val fresh = dependencies.outbounds.loadLink(endpoint, filename)
+            if (!fresh.file.equals(filename, ignoreCase = true)) {
+                throw OutboundsException("Сервер вернул другой outbounds-фрагмент. Сохранение остановлено.")
+            }
+            if (fresh.sourceFingerprint != editor.sourceFingerprint) {
+                throw OutboundsException(
+                    "$filename изменился на сервере после открытия редактора. Закройте создание пула, обновите фрагмент и повторите.",
+                )
+            }
+            if (fresh.managedKind == "subscription") {
+                throw OutboundsException("Generated-фрагмент подписки нельзя перезаписать ручным пулом.")
+            }
+            state = state.copy(
+                outbounds = state.outbounds.copy(
+                    poolEditor = state.outbounds.poolEditor.copy(message = "Сохраняем proxy-пул в $filename…"),
+                ),
+            )
+            val result = dependencies.outbounds.savePool(
+                baseUrl = endpoint,
+                filename = filename,
+                request = OutboundPoolSaveRequest(
+                    entries = editor.entries.map { entry ->
+                        OutboundPoolSaveEntry(tag = entry.tag, url = entry.url)
+                    },
+                    restart = editor.restartAfterSave,
+                    replacePool = editor.replacePool,
+                    writeRaw = true,
+                    sockoptMark255 = false,
+                ),
+            )
+            val nodes = dependencies.outbounds.load(endpoint, filename)
+            val active = loadActiveOutboundOrNull(endpoint, filename)
+            if (state.dashboard.endpoint != endpoint || state.outbounds.selectedFragment != filename) return
+            val restartFailed = result.restartRequested && !result.restarted
+            val action = if (result.replacedPool) "заменён" else "обновлён"
+            val message = when {
+                restartFailed -> "Proxy-пул $action (${result.updated}), но сервер не подтвердил перезапуск Xkeen."
+                result.restarted -> "Proxy-пул $action (${result.updated}); Xkeen перезапущен."
+                else -> "Proxy-пул $action (${result.updated}) без перезапуска Xkeen."
+            }
+            state = state.copy(
+                outbounds = state.outbounds.copy(
+                    activePath = nodes.path,
+                    nodes = nodes.nodes.sortWithActiveFirst(active),
+                    activeNodeKey = active?.key,
+                    activeNodeTag = active?.tag,
+                    activeMessage = active?.message,
+                    poolEditor = OutboundPoolEditorState(
+                        restartAfterSave = editor.restartAfterSave,
+                        replacePool = false,
+                    ),
+                    hasLoaded = true,
+                    message = message,
+                    error = message.takeIf { restartFailed },
+                ),
+                dashboard = state.dashboard.copy(
+                    lastOperation = "Сохранён proxy-пул $filename",
+                    lastError = message.takeIf { restartFailed },
+                ),
+                logs = recordLog(
+                    "outbounds",
+                    if (restartFailed) LogLevel.Warning else LogLevel.Info,
+                    message,
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            publishOutboundsPoolEditorFailure(error, "Не удалось сохранить proxy-пул.")
+        }
     }
 
     suspend fun saveOutboundLink() {
@@ -1866,6 +2099,22 @@ internal class CompanionController(
         )
     }
 
+    private fun publishOutboundsPoolEditorFailure(error: Exception, fallback: String) {
+        val message = error.message?.takeIf(String::isNotBlank) ?: fallback
+        state = state.copy(
+            outbounds = state.outbounds.copy(
+                poolEditor = state.outbounds.poolEditor.copy(
+                    isLoading = false,
+                    isSaving = false,
+                    message = null,
+                    error = message,
+                ),
+            ),
+            dashboard = state.dashboard.copy(lastError = message),
+            logs = recordLog("outbounds", LogLevel.Warning, message),
+        )
+    }
+
     private suspend fun loadActiveOutboundOrNull(
         endpoint: String,
         filename: String,
@@ -2083,6 +2332,14 @@ private fun OutboundsState.fromServer(
         editor
     } else {
         OutboundEditorState(restartAfterSave = editor.restartAfterSave)
+    },
+    poolEditor = if (this.selectedFragment == selectedFragment) {
+        poolEditor
+    } else {
+        OutboundPoolEditorState(
+            restartAfterSave = poolEditor.restartAfterSave,
+            replacePool = false,
+        )
     },
     message = snapshot.outboundsStatusMessage(),
     error = null,

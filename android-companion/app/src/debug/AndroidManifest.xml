@@ -5,5 +5,9 @@
             android:name=".OutboundsPreviewActivity"
             android:exported="true"
             android:theme="@style/Theme.XkeenMobile" />
+        <activity
+            android:name=".OutboundsPoolPreviewActivity"
+            android:exported="true"
+            android:theme="@style/Theme.XkeenMobile" />
     </application>
 </manifest>

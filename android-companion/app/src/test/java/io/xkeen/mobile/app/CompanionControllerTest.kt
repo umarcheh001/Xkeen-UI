@@ -1166,6 +1166,74 @@ class CompanionControllerTest {
         assertFalse(controller.state.outbounds.editor.canEdit)
         assertTrue(controller.state.outbounds.editor.error.orEmpty().contains("generated-фрагмент подписки"))
     }
+
+    @Test
+    fun outboundsPoolParsesNormalizesAndSafelySavesReadyLinks() = runTest {
+        val port = FakeOutboundsPort()
+        val controller = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Ready),
+            dependencies = testDependencies(outbounds = port),
+        )
+        controller.refreshOutbounds()
+        controller.openOutboundsPoolEditor()
+        controller.updateOutboundPoolInput(
+            """
+                netherlands | vless://123e4567-e89b-12d3-a456-426614174000@nl.example.net:443?security=tls&type=ws&path=socket#NL
+                trojan://secret@de.example.net:443?security=tls#Germany
+            """.trimIndent(),
+        )
+        controller.addOutboundPoolInput()
+        controller.updateOutboundPoolRestartAfterSave(false)
+        controller.updateOutboundPoolReplaceMode(true)
+
+        val draft = controller.state.outbounds.poolEditor
+        assertEquals(2, draft.entries.size)
+        assertTrue(draft.entries.all(OutboundPoolEntryDraft::isValid))
+        assertTrue(draft.entries.first().url.contains("path=%2Fsocket"))
+        assertTrue(draft.canSave)
+
+        controller.saveOutboundPool()
+
+        assertEquals(listOf("netherlands", "Germany"), port.savedPool?.entries?.map(OutboundPoolSaveEntry::tag))
+        assertEquals(false, port.savedPool?.restart)
+        assertEquals(true, port.savedPool?.replacePool)
+        assertEquals(false, port.savedPool?.sockoptMark255)
+        assertFalse(controller.state.outbounds.poolEditor.isOpen)
+        assertTrue(controller.state.outbounds.message.contains("заменён"))
+    }
+
+    @Test
+    fun outboundsPoolStopsOnSubscriptionAndExternalFileChange() = runTest {
+        val subscriptionPort = FakeOutboundsPort(managedKind = "subscription")
+        val subscriptionController = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Ready),
+            dependencies = testDependencies(outbounds = subscriptionPort),
+        )
+        subscriptionController.refreshOutbounds()
+        subscriptionController.openOutboundsPoolEditor()
+
+        assertFalse(subscriptionController.state.outbounds.poolEditor.canEdit)
+        assertTrue(subscriptionController.state.outbounds.poolEditor.error.orEmpty().contains("подписки"))
+
+        val changedPort = FakeOutboundsPort()
+        val changedController = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Ready),
+            dependencies = testDependencies(outbounds = changedPort),
+        )
+        changedController.refreshOutbounds()
+        changedController.openOutboundsPoolEditor()
+        changedController.updateOutboundPoolInput(
+            "vless://123e4567-e89b-12d3-a456-426614174000@nl.example.net:443?security=tls#NL",
+        )
+        changedController.addOutboundPoolInput()
+        changedPort.sourceFingerprint = "external-change"
+
+        changedController.saveOutboundPool()
+
+        assertNull(changedPort.savedPool)
+        assertTrue(changedController.state.outbounds.poolEditor.isOpen)
+        assertTrue(changedController.state.outbounds.poolEditor.error.orEmpty().contains("изменился на сервере"))
+    }
 }
 
 private fun testDependencies(
@@ -1244,6 +1312,7 @@ private class FakeOutboundsPort(
 ) : OutboundsPort {
     var pingedKey: String? = null
     var savedLink: OutboundLinkSaveRequest? = null
+    var savedPool: OutboundPoolSaveRequest? = null
     var sourceFingerprint = "source-v1"
 
     private val nodes = listOf(
@@ -1309,6 +1378,23 @@ private class FakeOutboundsPort(
         savedLink = request
         sourceFingerprint = "source-v2"
         return OutboundLinkSaveResult(filename, request.restart, request.restart)
+    }
+
+    override suspend fun savePool(
+        baseUrl: String,
+        filename: String,
+        request: OutboundPoolSaveRequest,
+    ): OutboundPoolSaveResult {
+        savedPool = request
+        sourceFingerprint = "source-v2"
+        return OutboundPoolSaveResult(
+            file = filename,
+            updated = request.entries.size,
+            replacedPool = request.replacePool,
+            tags = request.entries.map(OutboundPoolSaveEntry::tag) + listOf("direct", "block"),
+            restartRequested = request.restart,
+            restarted = request.restart,
+        )
     }
 
     override suspend fun ping(

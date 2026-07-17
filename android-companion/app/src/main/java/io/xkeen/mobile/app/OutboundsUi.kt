@@ -28,11 +28,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bolt
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Visibility
@@ -83,6 +81,8 @@ internal fun OutboundsWorkspaceScreen(
     var showFragmentPicker by rememberSaveable { mutableStateOf(false) }
     var showDiscardPrompt by rememberSaveable { mutableStateOf(false) }
     var showSavePrompt by rememberSaveable { mutableStateOf(false) }
+    var showPoolDiscardPrompt by rememberSaveable { mutableStateOf(false) }
+    var showPoolSavePrompt by rememberSaveable { mutableStateOf(false) }
     val filteredNodes = remember(outbounds.nodes, query) {
         val needle = query.trim().lowercase()
         if (needle.isBlank()) outbounds.nodes else outbounds.nodes.filter { node ->
@@ -141,7 +141,8 @@ internal fun OutboundsWorkspaceScreen(
             item {
                 OutboundEditorEntryCard(
                     state = outbounds,
-                    onOpen = { scope.launch { controller.openOutboundsEditor() } },
+                    onOpenSingle = { scope.launch { controller.openOutboundsEditor() } },
+                    onOpenPool = { scope.launch { controller.openOutboundsPoolEditor() } },
                 )
             }
 
@@ -235,6 +236,27 @@ internal fun OutboundsWorkspaceScreen(
         )
     }
 
+    if (outbounds.poolEditor.isOpen) {
+        OutboundPoolEditorDialog(
+            state = outbounds,
+            onInputChange = controller::updateOutboundPoolInput,
+            onAddInput = controller::addOutboundPoolInput,
+            onClear = controller::clearOutboundPoolDraft,
+            onTagChange = controller::updateOutboundPoolEntryTag,
+            onRemove = controller::removeOutboundPoolEntry,
+            onRestartChange = controller::updateOutboundPoolRestartAfterSave,
+            onReplaceChange = controller::updateOutboundPoolReplaceMode,
+            onDismiss = {
+                if (outbounds.poolEditor.hasDraft) {
+                    showPoolDiscardPrompt = true
+                } else {
+                    controller.closeOutboundsPoolEditor()
+                }
+            },
+            onSave = { showPoolSavePrompt = true },
+        )
+    }
+
     if (showDiscardPrompt) {
         OutboundEditorConfirmDialog(
             eyebrow = "НЕСОХРАНЁННЫЕ ИЗМЕНЕНИЯ",
@@ -265,6 +287,48 @@ internal fun OutboundsWorkspaceScreen(
             onConfirm = {
                 showSavePrompt = false
                 scope.launch { controller.saveOutboundLink() }
+            },
+        )
+    }
+
+
+    if (showPoolDiscardPrompt) {
+        OutboundEditorConfirmDialog(
+            eyebrow = "НЕСОХРАНЁННЫЙ ПУЛ",
+            title = "Закрыть создание пула?",
+            message = "Добавленные ссылки находятся только в памяти приложения и будут потеряны.",
+            confirmLabel = "Закрыть без сохранения",
+            destructive = true,
+            onDismiss = { showPoolDiscardPrompt = false },
+            onConfirm = {
+                showPoolDiscardPrompt = false
+                controller.closeOutboundsPoolEditor()
+            },
+        )
+    }
+
+    if (showPoolSavePrompt) {
+        val editor = outbounds.poolEditor
+        OutboundEditorConfirmDialog(
+            eyebrow = "ЗАПИСЬ PROXY-ПУЛА",
+            title = if (editor.replacePool) "Заменить текущий пул?" else "Добавить узлы в пул?",
+            message = buildString {
+                append("${editor.entries.size} готовых ссылок будут записаны в ${outbounds.selectedFragment}. ")
+                append(
+                    if (editor.replacePool) {
+                        "Все существующие proxy-узлы будут заменены; служебные direct и block сохранятся."
+                    } else {
+                        "Совпадающие tag будут обновлены, остальные существующие узлы сохранятся."
+                    },
+                )
+                if (editor.restartAfterSave) append(" После записи Xkeen будет перезапущен.")
+            },
+            confirmLabel = if (editor.restartAfterSave) "Сохранить и перезапустить" else "Сохранить",
+            destructive = editor.replacePool,
+            onDismiss = { showPoolSavePrompt = false },
+            onConfirm = {
+                showPoolSavePrompt = false
+                scope.launch { controller.saveOutboundPool() }
             },
         )
     }
@@ -511,16 +575,14 @@ private fun CompactOutlinedAction(
 @Composable
 private fun OutboundEditorEntryCard(
     state: OutboundsState,
-    onOpen: () -> Unit,
+    onOpenSingle: () -> Unit,
+    onOpenPool: () -> Unit,
 ) {
     val isPool = state.nodes.size > 1
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = WebPanelPalette.Panel,
-        border = BorderStroke(
-            1.dp,
-            if (isPool) WebPanelPalette.Warning.copy(alpha = 0.28f) else WebPanelPalette.Border.copy(alpha = 0.18f),
-        ),
+        border = BorderStroke(1.dp, WebPanelPalette.Border.copy(alpha = 0.18f)),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
@@ -530,50 +592,409 @@ private fun OutboundEditorEntryCard(
             Box(
                 modifier = Modifier
                     .size(34.dp)
-                    .background(
-                        if (isPool) Color(0xFF3A2A0B) else WebPanelPalette.AccentDeep,
-                        RoundedCornerShape(10.dp),
-                    ),
+                    .background(WebPanelPalette.AccentDeep, RoundedCornerShape(10.dp)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = when {
-                        isPool -> Icons.Outlined.Lock
-                        state.nodes.isEmpty() -> Icons.Outlined.Add
-                        else -> Icons.Outlined.Edit
-                    },
+                    imageVector = Icons.Outlined.Hub,
                     contentDescription = null,
-                    tint = if (isPool) WebPanelPalette.Warning else WebPanelPalette.TextBlue,
+                    tint = WebPanelPalette.TextBlue,
                     modifier = Modifier.size(18.dp),
                 )
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    text = when {
-                        isPool -> "Single-link режим защищён"
-                        state.nodes.isEmpty() -> "Добавить proxy-ссылку"
-                        else -> "Редактировать proxy-ссылку"
-                    },
+                    text = "Готовые proxy-ссылки",
                     color = WebPanelPalette.TextStrong,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                 )
                 Text(
-                    text = if (isPool) {
-                        "Пул не будет перезаписан одиночной ссылкой."
-                    } else {
-                        "Preview и normalize выполняются локально до отправки на сервер."
-                    },
+                    text = if (isPool) "Добавляйте узлы или замените состав пула." else "Одна ссылка или компактный пул.",
                     color = WebPanelPalette.Muted,
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
-            CompactOutlinedAction(
-                onClick = onOpen,
-                enabled = !state.isBusy,
-                label = if (isPool) "Почему?" else if (state.nodes.isEmpty()) "Добавить" else "Править",
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                CompactOutlinedAction(
+                    onClick = onOpenSingle,
+                    enabled = !state.isBusy && !isPool,
+                    label = "Одна",
+                )
+                CompactOutlinedAction(
+                    onClick = onOpenPool,
+                    enabled = !state.isBusy,
+                    label = "Пул",
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun OutboundPoolEditorDialog(
+    state: OutboundsState,
+    onInputChange: (String) -> Unit,
+    onAddInput: () -> Unit,
+    onClear: () -> Unit,
+    onTagChange: (Int, String) -> Unit,
+    onRemove: (Int) -> Unit,
+    onRestartChange: (Boolean) -> Unit,
+    onReplaceChange: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+    onSave: () -> Unit,
+) {
+    val editor = state.poolEditor
+    var revealLinks by rememberSaveable { mutableStateOf(false) }
+    XkeenDialog(onDismissRequest = { if (!editor.isSaving) onDismiss() }) {
+        Column(
+            modifier = Modifier
+                .heightIn(max = 720.dp)
+                .verticalScroll(rememberScrollState())
+                .imePadding()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = "XRAY · ${state.selectedFragment}",
+                color = WebPanelPalette.Border,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.5.sp,
+            )
+            Text(
+                text = "Создать proxy-пул",
+                color = WebPanelPalette.TextStrong,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = "Вставьте готовые одиночные ссылки: url, tag | url или tag = url. Одна строка — один узел.",
+                color = WebPanelPalette.Muted,
+                style = MaterialTheme.typography.bodySmall,
+            )
+
+            if (editor.isLoading) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Проверяем фрагмент…", color = WebPanelPalette.Muted, style = MaterialTheme.typography.bodySmall)
+                }
+            } else if (!editor.canEdit) {
+                EditorMessageCard(
+                    message = editor.error ?: "Этот фрагмент нельзя изменить вручную.",
+                    error = true,
+                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    CompactOutlinedAction(label = "Закрыть", enabled = true, onClick = onDismiss)
+                }
+            } else {
+                OutlinedTextField(
+                    value = editor.input,
+                    onValueChange = onInputChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !editor.isSaving,
+                    minLines = 2,
+                    maxLines = 4,
+                    shape = RoundedCornerShape(11.dp),
+                    textStyle = MaterialTheme.typography.bodySmall,
+                    visualTransformation = if (revealLinks) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    placeholder = { Text("nl | vless://…\nde = trojan://…\nvmess://…", style = MaterialTheme.typography.bodySmall) },
+                    trailingIcon = {
+                        IconButton(onClick = { revealLinks = !revealLinks }) {
+                            Icon(
+                                imageVector = if (revealLinks) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                contentDescription = if (revealLinks) "Скрыть ссылки" else "Показать ссылки",
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    },
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CompactPrimaryAction(
+                        label = "Добавить",
+                        enabled = editor.input.isNotBlank() && !editor.isSaving,
+                        onClick = onAddInput,
+                    )
+                    CompactOutlinedAction(
+                        label = "Очистить",
+                        enabled = editor.hasDraft && !editor.isSaving,
+                        onClick = onClear,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = "${editor.entries.count(OutboundPoolEntryDraft::isValid)} / ${editor.entries.size}",
+                        color = if (editor.canSave) WebPanelPalette.Success else WebPanelPalette.Muted,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+
+                if (editor.entries.isEmpty()) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = WebPanelPalette.Surface,
+                        border = BorderStroke(1.dp, WebPanelPalette.Border.copy(alpha = 0.12f)),
+                    ) {
+                        Text(
+                            text = "После добавления здесь появятся компактные preview-карточки. Normalize выполняется локально.",
+                            modifier = Modifier.padding(10.dp),
+                            color = WebPanelPalette.Muted,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                } else {
+                    editor.entries.withIndex().chunked(2).forEach { row ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            row.forEach { indexed ->
+                                val entry = indexed.value
+                                val duplicateTag = editor.entries.count {
+                                    it.tag.equals(entry.tag, ignoreCase = true)
+                                } > 1
+                                OutboundPoolDraftCard(
+                                    entry = entry,
+                                    duplicateTag = duplicateTag,
+                                    enabled = !editor.isSaving,
+                                    onTagChange = { onTagChange(indexed.index, it) },
+                                    onRemove = { onRemove(indexed.index) },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            if (row.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
+
+                editor.message?.let {
+                    Text(it, color = WebPanelPalette.TextBlue, style = MaterialTheme.typography.labelSmall)
+                }
+                editor.error?.let { EditorMessageCard(it, error = true) }
+
+                OutboundPoolOptionRow(
+                    title = "Заменить текущий пул",
+                    subtitle = "Выкл.: добавить или обновить только совпадающие tag",
+                    checked = editor.replacePool,
+                    warning = true,
+                    enabled = !editor.isSaving,
+                    onCheckedChange = onReplaceChange,
+                )
+                OutboundPoolOptionRow(
+                    title = "Перезапустить Xkeen",
+                    subtitle = "Применить пул сразу после безопасной записи",
+                    checked = editor.restartAfterSave,
+                    enabled = !editor.isSaving,
+                    onCheckedChange = onRestartChange,
+                )
+
+                Text(
+                    text = "Ссылки и секреты остаются только в памяти процесса. Перед записью файл повторно проверяется на внешние изменения.",
+                    color = WebPanelPalette.MutedDeep,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                HorizontalDivider(color = WebPanelPalette.Border.copy(alpha = 0.14f))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CompactOutlinedAction(label = "Отмена", enabled = !editor.isSaving, onClick = onDismiss)
+                    CompactPrimaryAction(
+                        label = if (editor.isSaving) "Сохраняем…" else "Сохранить пул",
+                        enabled = editor.canSave,
+                        onClick = onSave,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OutboundPoolDraftCard(
+    entry: OutboundPoolEntryDraft,
+    duplicateTag: Boolean,
+    enabled: Boolean,
+    onTagChange: (String) -> Unit,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val valid = entry.isValid && !duplicateTag
+    val statusColor = if (valid) WebPanelPalette.Success else WebPanelPalette.Error
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(10.dp),
+        color = Color(0xFF071229),
+        border = BorderStroke(1.dp, statusColor.copy(alpha = 0.28f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(7.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                ProxyBadge(entry.preview.scheme.ifBlank { "?" }, Color(0xFF1D4E89))
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = if (valid) "OK" else "ОШИБКА",
+                    color = statusColor,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Box(
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clickable(enabled = enabled, onClick = onRemove),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Outlined.Close,
+                        contentDescription = "Удалить ${entry.tag}",
+                        tint = WebPanelPalette.Muted,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+            Text(
+                text = entry.displayName,
+                color = WebPanelPalette.TextStrong,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            CompactPoolTagField(value = entry.tag, enabled = enabled, onValueChange = onTagChange)
+            val endpoint = listOfNotNull(
+                entry.preview.fields.firstOrNull { it.label == "Сервер" }?.value,
+                entry.preview.fields.firstOrNull { it.label == "Порт" }?.value,
+            ).filter(String::isNotBlank).joinToString(":")
+            if (endpoint.isNotBlank()) {
+                Text(
+                    text = endpoint,
+                    color = WebPanelPalette.Muted,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            val issue = when {
+                duplicateTag -> "Tag повторяется в черновике."
+                isReservedOutboundPoolTag(entry.tag) -> "Tag зарезервирован Xray."
+                else -> entry.preview.errors.firstOrNull()
+            }
+            issue?.let { Text(it, color = WebPanelPalette.Error, style = MaterialTheme.typography.labelSmall) }
+        }
+    }
+}
+
+@Composable
+private fun CompactPoolTagField(
+    value: String,
+    enabled: Boolean,
+    onValueChange: (String) -> Unit,
+) {
+    val shape = RoundedCornerShape(8.dp)
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = Modifier.fillMaxWidth(),
+        enabled = enabled,
+        singleLine = true,
+        textStyle = MaterialTheme.typography.labelMedium.copy(
+            color = if (enabled) WebPanelPalette.Text else WebPanelPalette.Muted,
+            fontFamily = FontFamily.Monospace,
+        ),
+        cursorBrush = SolidColor(WebPanelPalette.Border),
+        decorationBox = { inner ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(28.dp)
+                    .background(WebPanelPalette.Surface, shape)
+                    .border(1.dp, WebPanelPalette.Border.copy(alpha = 0.18f), shape)
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text("tag", color = WebPanelPalette.MutedDeep, style = MaterialTheme.typography.labelSmall)
+                Box(modifier = Modifier.weight(1f)) { inner() }
+            }
+        },
+    )
+}
+
+@Composable
+private fun OutboundPoolOptionRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    enabled: Boolean,
+    warning: Boolean = false,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    val accent = if (warning && checked) WebPanelPalette.Warning else WebPanelPalette.Border
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = Color(0xFF071229),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.16f)),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = enabled) { onCheckedChange(!checked) }
+                .padding(horizontal = 9.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(
+                    title,
+                    color = if (warning && checked) WebPanelPalette.Warning else WebPanelPalette.TextStrong,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(subtitle, color = WebPanelPalette.Muted, style = MaterialTheme.typography.labelSmall)
+            }
+            Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+        }
+    }
+}
+
+@Composable
+private fun CompactPrimaryAction(
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(9.dp)
+    Row(
+        modifier = Modifier
+            .height(32.dp)
+            .background(
+                if (enabled) WebPanelPalette.Border else WebPanelPalette.SurfaceRaised,
+                shape,
+            )
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            color = if (enabled) WebPanelPalette.Background else WebPanelPalette.Muted,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Medium,
+        )
     }
 }
 

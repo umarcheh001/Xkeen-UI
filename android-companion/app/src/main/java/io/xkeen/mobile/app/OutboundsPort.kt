@@ -46,6 +46,28 @@ internal data class OutboundLinkSaveResult(
     val restarted: Boolean,
 )
 
+internal data class OutboundPoolSaveEntry(
+    val tag: String,
+    val url: String,
+)
+
+internal data class OutboundPoolSaveRequest(
+    val entries: List<OutboundPoolSaveEntry>,
+    val restart: Boolean,
+    val replacePool: Boolean,
+    val writeRaw: Boolean = true,
+    val sockoptMark255: Boolean = false,
+)
+
+internal data class OutboundPoolSaveResult(
+    val file: String,
+    val updated: Int,
+    val replacedPool: Boolean,
+    val tags: List<String>,
+    val restartRequested: Boolean,
+    val restarted: Boolean,
+)
+
 internal interface OutboundsPort {
     suspend fun listFragments(baseUrl: String): OutboundsFragmentIndex
 
@@ -60,6 +82,12 @@ internal interface OutboundsPort {
         filename: String,
         request: OutboundLinkSaveRequest,
     ): OutboundLinkSaveResult
+
+    suspend fun savePool(
+        baseUrl: String,
+        filename: String,
+        request: OutboundPoolSaveRequest,
+    ): OutboundPoolSaveResult
 
     suspend fun ping(baseUrl: String, filename: String, nodeKey: String): OutboundLatency
 
@@ -123,6 +151,38 @@ internal class WebPanelOutboundsPort(
                     .put("url", request.url.trim())
                     .put("outbound_tag", cleanOutboundTag(request.outboundTag))
                     .put("restart", request.restart)
+                    .toString(),
+            ),
+        ).body,
+        restartRequested = request.restart,
+    )
+
+    override suspend fun savePool(
+        baseUrl: String,
+        filename: String,
+        request: OutboundPoolSaveRequest,
+    ): OutboundPoolSaveResult = parseOutboundPoolSaveResult(
+        body = transport.post(
+            CompanionHttpRequest(
+                baseUrl = baseUrl,
+                endpoint = "/api/xray/outbounds/proxies?file=${filename.outboundsUrlEncoded()}",
+                body = JSONObject()
+                    .put(
+                        "entries",
+                        JSONArray().apply {
+                            request.entries.forEach { entry ->
+                                put(
+                                    JSONObject()
+                                        .put("tag", cleanOutboundTag(entry.tag))
+                                        .put("url", entry.url.trim()),
+                                )
+                            }
+                        },
+                    )
+                    .put("restart", request.restart)
+                    .put("replace_pool", request.replacePool)
+                    .put("write_raw", request.writeRaw)
+                    .put("sockopt_mark_255", request.sockoptMark255)
                     .toString(),
             ),
         ).body,
@@ -211,6 +271,19 @@ internal class DemoOutboundsPort : OutboundsPort {
         tag = cleanOutboundTag(request.outboundTag)
         return OutboundLinkSaveResult(filename, request.restart, request.restart)
     }
+
+    override suspend fun savePool(
+        baseUrl: String,
+        filename: String,
+        request: OutboundPoolSaveRequest,
+    ): OutboundPoolSaveResult = OutboundPoolSaveResult(
+        file = filename,
+        updated = request.entries.size,
+        replacedPool = request.replacePool,
+        tags = request.entries.map { cleanOutboundTag(it.tag) },
+        restartRequested = request.restart,
+        restarted = request.restart,
+    )
 
     override suspend fun ping(baseUrl: String, filename: String, nodeKey: String): OutboundLatency =
         OutboundLatency("ok", 42)
@@ -339,6 +412,32 @@ internal fun parseOutboundLinkSaveResult(
     }
     return OutboundLinkSaveResult(
         file = payload.optString("file").trim(),
+        restartRequested = restartRequested,
+        restarted = payload.optBoolean("restarted", false),
+    )
+}
+
+internal fun parseOutboundPoolSaveResult(
+    body: String,
+    restartRequested: Boolean,
+): OutboundPoolSaveResult {
+    val payload = body.outboundsJsonObject()
+    if (!payload.optBoolean("ok", false)) {
+        throw OutboundsException("Сервер не сохранил пул proxy-ссылок.")
+    }
+    val tagsJson = payload.optJSONArray("tags")
+    val tags = buildList {
+        if (tagsJson != null) {
+            for (index in 0 until tagsJson.length()) {
+                tagsJson.optString(index).trim().takeIf(String::isNotBlank)?.let(::add)
+            }
+        }
+    }
+    return OutboundPoolSaveResult(
+        file = payload.optString("file").trim(),
+        updated = payload.optInt("updated", 0),
+        replacedPool = payload.optBoolean("replaced_pool", false),
+        tags = tags,
         restartRequested = restartRequested,
         restarted = payload.optBoolean("restarted", false),
     )
