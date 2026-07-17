@@ -201,6 +201,40 @@ def create_xray_configs_blueprint(
         except Exception:
             return ""
 
+    def _outbounds_managed_kind(sel_path: str) -> str | None:
+        """Return the server-authoritative owner of an outbounds fragment.
+
+        JSONC headers are presentation metadata and can outlive the operation
+        that wrote them.  In particular, a stale subscription header must not
+        turn the normal 04_outbounds.json into a read-only fragment for mobile
+        clients.  Subscription state is the only source of truth here.
+        """
+        if not str(ui_state_dir or "").strip():
+            return None
+        selected_name = os.path.basename(_normalize_main_json_path(sel_path))
+        if not selected_name:
+            return None
+        main_name = os.path.basename(_normalize_main_json_path(OUTBOUNDS_FILE))
+        try:
+            subscriptions = list_subscriptions(ui_state_dir)
+        except Exception:
+            return None
+        for subscription in subscriptions:
+            if not isinstance(subscription, dict) or subscription.get("enabled", True) is False:
+                continue
+            output_name = os.path.basename(str(subscription.get("output_file") or "").strip())
+            if output_name and output_name == selected_name:
+                return "subscription"
+            # In subscription-only mode the subscription synchronizer owns the
+            # primary outbounds file as well and removes manual proxy nodes on
+            # the next refresh.
+            if (
+                selected_name == main_name
+                and str(subscription.get("routing_mode") or "").strip().lower() == "subscription-only"
+            ):
+                return "subscription"
+        return None
+
     def _load_outbounds_selection(file_arg: str):
         sel_path = resolve_xray_fragment_file(file_arg, kind="outbounds", default_path=OUTBOUNDS_FILE)
         sel_path = _normalize_main_json_path(sel_path)
@@ -230,6 +264,7 @@ def create_xray_configs_blueprint(
             "chosen_path": chosen_path,
             "text": text,
             "config": cfg,
+            "managed_kind": _outbounds_managed_kind(sel_path),
         }
 
     def _load_outbounds_nodes_all_fragments() -> list[dict[str, Any]]:
@@ -1184,6 +1219,8 @@ def create_xray_configs_blueprint(
             except Exception:
                 text = "{}\n"
 
+        managed_kind = _outbounds_managed_kind(sel_path)
+
         return (
             jsonify(
                 {
@@ -1196,6 +1233,7 @@ def create_xray_configs_blueprint(
                     "path": sel_path,
                     "raw_path": raw_path if raw_exists else None,
                     "using_raw": bool(chosen_path == raw_path and raw_exists),
+                    "managed_kind": managed_kind,
                 }
             ),
             200,

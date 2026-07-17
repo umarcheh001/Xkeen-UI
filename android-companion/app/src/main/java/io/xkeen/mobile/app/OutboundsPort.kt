@@ -392,13 +392,11 @@ internal fun parseOutboundLinkSnapshot(body: String): OutboundLinkSnapshot {
         url = payload.optString("url").trim().takeIf(String::isNotBlank),
         outboundTag = cleanOutboundTag(payload.optString("outbound_tag", "proxy")),
         sourceFingerprint = text.outboundsFingerprint(),
-        managedKind = when {
-            Regex("Generated\\s+by\\s+XKeen\\s+UI\\s+subscription", RegexOption.IGNORE_CASE).containsMatchIn(text) ->
-                "subscription"
-            Regex("Generated\\s+by\\s+XKeen\\s+UI\\s*\\(outbounds\\s+pool\\)", RegexOption.IGNORE_CASE).containsMatchIn(text) ->
-                "pool"
-            else -> null
-        },
+        // JSONC comments are not ownership metadata: an old generated header
+        // can remain after the main file becomes a normal editable fragment.
+        // The backend resolves ownership from its subscription state instead.
+        managedKind = payload.optString("managed_kind").trim().lowercase()
+            .takeIf { it == "subscription" },
     )
 }
 
