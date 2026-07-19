@@ -44,7 +44,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -966,7 +965,11 @@ private fun OutboundPoolOptionRow(
                 )
                 Text(subtitle, color = WebPanelPalette.Muted, style = MaterialTheme.typography.labelSmall)
             }
-            Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+            XkeenCompactSwitch(
+                checked = checked,
+                enabled = enabled,
+                onCheckedChange = onCheckedChange,
+            )
         }
     }
 }
@@ -976,6 +979,7 @@ private fun CompactPrimaryAction(
     label: String,
     enabled: Boolean,
     onClick: () -> Unit,
+    loading: Boolean = false,
 ) {
     val shape = RoundedCornerShape(9.dp)
     Row(
@@ -989,11 +993,22 @@ private fun CompactPrimaryAction(
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(13.dp),
+                strokeWidth = 1.5.dp,
+                color = WebPanelPalette.Background,
+            )
+            Spacer(Modifier.width(5.dp))
+        }
         Text(
             label,
             color = if (enabled) WebPanelPalette.Background else WebPanelPalette.Muted,
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -1127,10 +1142,10 @@ private fun OutboundLinkEditorDialog(
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         }
-                        Switch(
+                        XkeenCompactSwitch(
                             checked = editor.restartAfterSave,
-                            onCheckedChange = onRestartChange,
                             enabled = !editor.isSaving,
+                            onCheckedChange = onRestartChange,
                         )
                     }
                 }
@@ -1147,26 +1162,18 @@ private fun OutboundLinkEditorDialog(
                     horizontalArrangement = Arrangement.spacedBy(9.dp, Alignment.End),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    OutlinedButton(onClick = onDismiss, enabled = !editor.isSaving) {
-                        Text("Отмена")
-                    }
-                    OutlinedButton(
-                        onClick = onNormalize,
+                    CompactOutlinedAction(label = "Отмена", enabled = !editor.isSaving, onClick = onDismiss)
+                    CompactOutlinedAction(
+                        label = "Normalize",
                         enabled = editor.draftUrl.isNotBlank() && !editor.isSaving,
-                    ) {
-                        Text("Normalize")
-                    }
-                    Button(onClick = onSave, enabled = editor.canSave && editor.hasChanges) {
-                        if (editor.isSaving) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                            )
-                            Spacer(Modifier.width(6.dp))
-                        }
-                        Text(if (editor.isSaving) "Сохраняем" else "Сохранить")
-                    }
+                        onClick = onNormalize,
+                    )
+                    CompactPrimaryAction(
+                        label = if (editor.isSaving) "Сохраняем…" else "Сохранить",
+                        enabled = editor.canSave && editor.hasChanges,
+                        onClick = onSave,
+                        loading = editor.isSaving,
+                    )
                 }
             }
         }

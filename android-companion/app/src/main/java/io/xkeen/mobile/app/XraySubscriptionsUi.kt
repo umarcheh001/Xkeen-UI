@@ -656,7 +656,7 @@ private fun SubscriptionOptionRow(
                 Text(title, color = WebPanelPalette.TextStrong, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                 Text(subtitle, color = WebPanelPalette.Muted, style = MaterialTheme.typography.labelSmall)
             }
-            SubscriptionToggle(checked = checked, enabled = enabled)
+            SubscriptionToggle(checked = checked, enabled = enabled, onCheckedChange = onCheckedChange)
         }
     }
 }
@@ -670,25 +670,21 @@ private fun SubscriptionTinyToggle(
 ) {
     Row(modifier = Modifier.clickable(enabled = enabled) { onCheckedChange(!checked) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         Text(title, color = WebPanelPalette.TextStrong, style = MaterialTheme.typography.labelLarge)
-        SubscriptionToggle(checked, enabled)
+        SubscriptionToggle(checked, enabled, onCheckedChange)
     }
 }
 
 @Composable
-private fun SubscriptionToggle(checked: Boolean, enabled: Boolean) {
-    Box(
-        modifier = Modifier.size(width = 34.dp, height = 20.dp).background(
-            when {
-                !enabled -> WebPanelPalette.SurfaceRaised
-                checked -> WebPanelPalette.Border
-                else -> WebPanelPalette.MutedDeep.copy(alpha = 0.55f)
-            },
-            CircleShape,
-        ).padding(3.dp),
-        contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart,
-    ) {
-        Box(modifier = Modifier.size(14.dp).background(if (checked) WebPanelPalette.Background else WebPanelPalette.Muted, CircleShape))
-    }
+private fun SubscriptionToggle(
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    XkeenCompactSwitch(
+        checked = checked,
+        enabled = enabled,
+        onCheckedChange = onCheckedChange,
+    )
 }
 
 @Composable

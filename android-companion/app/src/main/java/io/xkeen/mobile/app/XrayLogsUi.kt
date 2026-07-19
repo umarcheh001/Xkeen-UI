@@ -43,7 +43,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -706,7 +705,11 @@ private fun XrayLogsSettingSwitch(
                 Text(title, color = WebPanelPalette.TextStrong, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                 Text(subtitle, color = WebPanelPalette.Muted, style = MaterialTheme.typography.labelSmall)
             }
-            Switch(checked = checked, onCheckedChange = onCheckedChange)
+            XkeenCompactSwitch(
+                checked = checked,
+                enabled = true,
+                onCheckedChange = onCheckedChange,
+            )
         }
     }
 }
