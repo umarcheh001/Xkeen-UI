@@ -185,6 +185,11 @@ internal fun defaultCompanionControllerDependencies(
         authHook = authHook,
         keeneticGatewayAuth = keeneticGatewayAuth,
     )
+    val datTransport = transport ?: HttpUrlConnectionCompanionTransport(
+        config = CompanionHttpTransportConfig(readTimeoutMillis = 35_000),
+        authHook = authHook,
+        keeneticGatewayAuth = keeneticGatewayAuth,
+    )
     return CompanionControllerDependencies(
         connections = connections,
         session = MobileSessionPort(sessionMaterials, effectiveTransport, keeneticGatewayAuth),
@@ -194,7 +199,7 @@ internal fun defaultCompanionControllerDependencies(
         inbounds = WebPanelInboundsPort(serviceTransport),
         outbounds = WebPanelOutboundsPort(serviceTransport),
         xraySubscriptions = WebPanelXraySubscriptionsPort(serviceTransport),
-        xrayDat = WebPanelXrayDatPort(serviceTransport),
+        xrayDat = WebPanelXrayDatPort(datTransport),
         logs = DemoLogsPort(journal),
         logsTransport = WebPanelLogsTransport(effectiveTransport),
         journal = journal,

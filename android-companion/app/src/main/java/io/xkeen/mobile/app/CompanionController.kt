@@ -5,7 +5,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
+
+private const val XRAY_DAT_READ_TIMEOUT_MILLIS = 35_000L
 
 internal class CompanionController(
     initialState: CompanionUiState = CompanionUiState(),
@@ -1618,6 +1621,8 @@ internal class CompanionController(
                     selectedTag = null,
                     items = emptyList(),
                     isLoadingCatalog = false,
+                    isLoadingTags = false,
+                    isLoadingItems = false,
                     hasLoadedCatalog = true,
                     catalogError = if (catalog.files.isEmpty()) {
                         "В /opt/etc/xray/dat не найдены GeoIP / GeoSite DAT-файлы."
@@ -1830,8 +1835,19 @@ internal class CompanionController(
             ),
         )
         try {
-            val snapshot = dependencies.xrayDat.loadTags(endpoint, file)
+            val snapshot = withTimeoutOrNull(XRAY_DAT_READ_TIMEOUT_MILLIS) {
+                dependencies.xrayDat.loadTags(endpoint, file)
+            }
             if (state.dashboard.endpoint != endpoint || state.xrayDat.selectedFilePath != file.path) return
+            if (snapshot == null) {
+                state = state.copy(
+                    xrayDat = state.xrayDat.copy(
+                        isLoadingTags = false,
+                        tagsError = "Чтение тегов DAT заняло слишком много времени. Повторите запрос или проверьте xk-geodat.",
+                    ),
+                )
+                return
+            }
             state = state.copy(
                 xrayDat = state.xrayDat.copy(
                     tags = snapshot.tags,
@@ -1866,8 +1882,14 @@ internal class CompanionController(
             ),
         )
         try {
-            val page = dependencies.xrayDat.loadTagPage(endpoint, file, tag, offset, current.itemLimit)
+            val page = withTimeoutOrNull(XRAY_DAT_READ_TIMEOUT_MILLIS) {
+                dependencies.xrayDat.loadTagPage(endpoint, file, tag, offset, current.itemLimit)
+            }
             if (!xrayDatRequestIsCurrent(endpoint, file.path, tag)) return
+            if (page == null) {
+                publishXrayDatItemsTimeout()
+                return
+            }
             state = state.copy(
                 xrayDat = state.xrayDat.copy(
                     items = page.items,
@@ -1899,8 +1921,14 @@ internal class CompanionController(
         if (query.isBlank() || current.isLoadingItems) return
         state = state.copy(xrayDat = current.copy(isLoadingItems = true, itemsError = null))
         try {
-            val page = dependencies.xrayDat.searchTag(endpoint, file, tag, query, cursor, current.itemLimit)
+            val page = withTimeoutOrNull(XRAY_DAT_READ_TIMEOUT_MILLIS) {
+                dependencies.xrayDat.searchTag(endpoint, file, tag, query, cursor, current.itemLimit)
+            }
             if (!xrayDatRequestIsCurrent(endpoint, file.path, tag) || state.xrayDat.itemQuery.trim() != query) return
+            if (page == null) {
+                publishXrayDatItemsTimeout()
+                return
+            }
             state = state.copy(
                 xrayDat = state.xrayDat.copy(
                     items = if (append) state.xrayDat.items + page.items else page.items,
@@ -1930,6 +1958,15 @@ internal class CompanionController(
             xrayDat = state.xrayDat.copy(
                 isLoadingItems = false,
                 itemsError = error.toCompanionLoadMessage("Не удалось прочитать содержимое DAT-тега."),
+            ),
+        )
+    }
+
+    private fun publishXrayDatItemsTimeout() {
+        state = state.copy(
+            xrayDat = state.xrayDat.copy(
+                isLoadingItems = false,
+                itemsError = "Чтение тега DAT заняло слишком много времени. Повторите запрос или проверьте xk-geodat.",
             ),
         )
     }

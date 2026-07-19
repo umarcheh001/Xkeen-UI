@@ -89,6 +89,6 @@ def _geodat_page_window() -> int:
     try:
         v = int(float(raw))
     except Exception:
-        v = 500
+        v = 200
     # keep within 50..500 (plan limit <=500)
     return max(50, min(v, 500))

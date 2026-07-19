@@ -3,9 +3,11 @@ from __future__ import annotations
 """Runner/validator helpers for xk-geodat."""
 
 import json
+import math
 import os
 import re
 import subprocess
+import time
 from typing import Any, Dict, Tuple
 
 from services.fs_common.local import _local_allowed_roots, _local_resolve
@@ -128,14 +130,22 @@ def _geodat_validate(kind: str, path: str) -> Tuple[str, str, Dict[str, Any]]:
 def _run_xk_geodat_json(argv: list[str], *, timeout_s: int) -> Any:
     """Run xk-geodat and return parsed JSON."""
 
+    total_timeout_s = max(1, int(timeout_s or 20))
+    deadline = time.monotonic() + total_timeout_s
+
     def _run(env: dict[str, str]):
+        remaining_s = deadline - time.monotonic()
+        if remaining_s <= 0:
+            raise subprocess.TimeoutExpired(argv, total_timeout_s)
         return subprocess.run(
             argv,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             env=env,
-            timeout=max(1, int(timeout_s or 20)),
+            # Retries for a crashing Go binary share one request budget.  A
+            # single DAT read must never multiply into several full timeouts.
+            timeout=max(0.1, min(float(total_timeout_s), math.ceil(remaining_s * 10) / 10)),
         )
 
     env0 = _apply_mips_safe_env(os.environ.copy())

@@ -2,7 +2,10 @@ package io.xkeen.mobile.app
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -1423,6 +1426,33 @@ class CompanionControllerTest {
         assertEquals(listOf("app"), port.searchQueries)
         assertEquals(listOf("discord.com"), port.lookupQueries)
     }
+
+    @Test
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun datViewerStopsSpinnerWhenTagReadTimesOut() = runTest {
+        val port = FakeXrayDatPort().apply { suspendTagPage = true }
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                dashboard = unloadedDashboardState().copy(
+                    endpoint = "https://router.example",
+                    availableCores = listOf("Xray"),
+                ),
+            ),
+            dependencies = testDependencies(xrayDat = port),
+        )
+
+        controller.refreshXrayDatCatalog()
+        val read = async { controller.selectXrayDatTag("DISCORD") }
+        runCurrent()
+        assertTrue(controller.state.xrayDat.isLoadingItems)
+
+        advanceTimeBy(35_000)
+        read.await()
+
+        assertFalse(controller.state.xrayDat.isLoadingItems)
+        assertTrue(controller.state.xrayDat.itemsError.orEmpty().contains("слишком много времени"))
+    }
 }
 
 private fun testDependencies(
@@ -1474,6 +1504,7 @@ private class FakeXrayDatPort : XrayDatPort {
         "/opt/etc/xray/dat/geoip.dat",
     )
     var catalogLoads = 0
+    var suspendTagPage = false
     val loadedTags = mutableListOf<String>()
     val searchQueries = mutableListOf<String>()
     val lookupQueries = mutableListOf<String>()
@@ -1501,6 +1532,7 @@ private class FakeXrayDatPort : XrayDatPort {
         limit: Int,
     ): XrayDatItemsPage {
         loadedTags += tag
+        if (suspendTagPage) awaitCancellation()
         return XrayDatItemsPage(file, tag, listOf(XrayDatItem("domain", "discord.com")), offset, limit, 1)
     }
 
