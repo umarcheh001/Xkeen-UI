@@ -669,22 +669,23 @@ private class SelectionAwareEditText(context: Context) : AppCompatEditText(conte
         val lastVisibleLine = layout.getLineForVertical((scrollY + height).coerceAtLeast(0))
         val markerCenterOffset = (paint.fontMetrics.ascent + paint.fontMetrics.descent) / 2f
         val halfSpaceWidth = paint.measureText(" ") / 2f
-        val leftBoundary = totalPaddingLeft.toFloat()
-        val rightBoundary = (width - totalPaddingRight).toFloat()
+        val leftBoundary = (scrollX + totalPaddingLeft).toFloat()
+        val rightBoundary = (scrollX + width - totalPaddingRight).toFloat()
 
         for (line in firstVisibleLine..lastVisibleLine) {
             val start = layout.getLineStart(line)
             val end = layout.getLineEnd(line).coerceAtMost(text.length)
+            // TextView applies its own scroll translation to the Canvas before onDraw. Keep
+            // marker coordinates in Layout/content space; subtracting scrollY here would move
+            // the dots twice and eventually push them outside the viewport.
             val centerY = totalPaddingTop +
                 layout.getLineBaseline(line) +
-                markerCenterOffset -
-                scrollY
+                markerCenterOffset
             for (offset in start until end) {
                 if (text[offset] != ' ') continue
                 val centerX = totalPaddingLeft +
                     layout.getPrimaryHorizontal(offset) +
-                    halfSpaceWidth -
-                    scrollX
+                    halfSpaceWidth
                 if (centerX in leftBoundary..rightBoundary) {
                     canvas.drawCircle(centerX, centerY, spaceMarkerRadius, spaceMarkerPaint)
                 }
