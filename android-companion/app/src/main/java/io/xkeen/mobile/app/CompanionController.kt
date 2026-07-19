@@ -1635,6 +1635,11 @@ internal class CompanionController(
                 loadSelectedXrayDatTags()
             }
         } catch (error: CancellationException) {
+            if (state.dashboard.endpoint == endpoint) {
+                state = state.copy(
+                    xrayDat = state.xrayDat.copy(isLoadingCatalog = false),
+                )
+            }
             throw error
         } catch (error: Exception) {
             if (returnToLoginForExpiredSession(error)) return
@@ -1736,6 +1741,15 @@ internal class CompanionController(
                 ),
             )
         } catch (error: CancellationException) {
+            if (
+                state.dashboard.endpoint == endpoint &&
+                state.xrayDat.selectedFilePath == file.path &&
+                state.xrayDat.valueQuery.trim() == value
+            ) {
+                state = state.copy(
+                    xrayDat = state.xrayDat.copy(isLookingUpValue = false),
+                )
+            }
             throw error
         } catch (error: Exception) {
             if (returnToLoginForExpiredSession(error)) return
@@ -1856,6 +1870,11 @@ internal class CompanionController(
                 ),
             )
         } catch (error: CancellationException) {
+            if (state.dashboard.endpoint == endpoint && state.xrayDat.selectedFilePath == file.path) {
+                state = state.copy(
+                    xrayDat = state.xrayDat.copy(isLoadingTags = false),
+                )
+            }
             throw error
         } catch (error: Exception) {
             if (returnToLoginForExpiredSession(error)) return
@@ -1905,6 +1924,11 @@ internal class CompanionController(
                 ),
             )
         } catch (error: CancellationException) {
+            if (xrayDatRequestIsCurrent(endpoint, file.path, tag)) {
+                state = state.copy(
+                    xrayDat = state.xrayDat.copy(isLoadingItems = false),
+                )
+            }
             throw error
         } catch (error: Exception) {
             if (returnToLoginForExpiredSession(error)) return
@@ -1943,6 +1967,11 @@ internal class CompanionController(
                 ),
             )
         } catch (error: CancellationException) {
+            if (xrayDatRequestIsCurrent(endpoint, file.path, tag)) {
+                state = state.copy(
+                    xrayDat = state.xrayDat.copy(isLoadingItems = false),
+                )
+            }
             throw error
         } catch (error: Exception) {
             if (returnToLoginForExpiredSession(error)) return

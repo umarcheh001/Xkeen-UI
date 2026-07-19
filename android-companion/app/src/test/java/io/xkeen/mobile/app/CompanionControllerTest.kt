@@ -1453,6 +1453,32 @@ class CompanionControllerTest {
         assertFalse(controller.state.xrayDat.isLoadingItems)
         assertTrue(controller.state.xrayDat.itemsError.orEmpty().contains("слишком много времени"))
     }
+
+    @Test
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun datViewerStopsSpinnerWhenTagReadIsCancelled() = runTest {
+        val port = FakeXrayDatPort().apply { suspendTagPage = true }
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                dashboard = unloadedDashboardState().copy(
+                    endpoint = "https://router.example",
+                    availableCores = listOf("Xray"),
+                ),
+            ),
+            dependencies = testDependencies(xrayDat = port),
+        )
+
+        controller.refreshXrayDatCatalog()
+        val read = launch { controller.selectXrayDatTag("DISCORD") }
+        runCurrent()
+        assertTrue(controller.state.xrayDat.isLoadingItems)
+
+        read.cancel()
+        read.join()
+
+        assertFalse(controller.state.xrayDat.isLoadingItems)
+    }
 }
 
 private fun testDependencies(

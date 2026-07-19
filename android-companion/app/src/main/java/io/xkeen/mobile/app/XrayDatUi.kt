@@ -59,6 +59,7 @@ import io.xkeen.mobile.ui.theme.WebPanelPalette
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 @Composable
@@ -106,8 +107,8 @@ internal fun XrayDatWorkspaceScreen(
             dat.isLoadingCatalog && dat.files.isEmpty() -> XrayDatCenteredLoading("Ищем DAT-файлы…")
             dat.selectedFile == null -> XrayDatEmpty("Для ${dat.selectedKind.displayName} нет доступных файлов.")
             dat.geodatInstalled == false -> XrayDatEmpty("Просмотрщик работает через xk-geodat. Установите его в веб-панели и обновите экран.")
-            dat.selectedTag == null -> XrayDatTagsPane(dat, controller)
-            else -> XrayDatItemsPane(dat, controller)
+            dat.selectedTag == null -> XrayDatTagsPane(dat, controller, scope)
+            else -> XrayDatItemsPane(dat, controller, scope)
         }
     }
 
@@ -216,8 +217,11 @@ private fun XrayDatFileSelector(file: XrayDatFile?, enabled: Boolean, onClick: (
 }
 
 @Composable
-private fun ColumnScope.XrayDatTagsPane(dat: XrayDatState, controller: CompanionController) {
-    val scope = rememberCoroutineScope()
+private fun ColumnScope.XrayDatTagsPane(
+    dat: XrayDatState,
+    controller: CompanionController,
+    scope: CoroutineScope,
+) {
     XrayDatSearchField(
         value = dat.valueQuery,
         onValueChange = controller::updateXrayDatValueQuery,
@@ -307,8 +311,11 @@ private fun XrayDatTagRow(tag: XrayDatTag, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ColumnScope.XrayDatItemsPane(dat: XrayDatState, controller: CompanionController) {
-    val scope = rememberCoroutineScope()
+private fun ColumnScope.XrayDatItemsPane(
+    dat: XrayDatState,
+    controller: CompanionController,
+    scope: CoroutineScope,
+) {
     val clipboard = LocalClipboardManager.current
     val tag = dat.selectedTag.orEmpty()
 
