@@ -111,6 +111,13 @@ class EditorEngineTest {
     }
 
     @Test
+    fun editorPasteActionAlwaysUsesPlainText() {
+        assertEquals(android.R.id.pasteAsPlainText, editorPlainTextMenuAction(android.R.id.paste))
+        assertEquals(android.R.id.pasteAsPlainText, editorPlainTextMenuAction(android.R.id.pasteAsPlainText))
+        assertEquals(android.R.id.copy, editorPlainTextMenuAction(android.R.id.copy))
+    }
+
+    @Test
     fun editorSearchFindsMatchesCaseInsensitivelyAndWraps() {
         val source = "rule RULE rule"
 

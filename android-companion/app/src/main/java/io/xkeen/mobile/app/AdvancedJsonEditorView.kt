@@ -279,6 +279,7 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         val callback = object : ActionMode.Callback {
             override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
                 if (menu == null) return true
+                menu.removeItem(android.R.id.pasteAsPlainText)
                 menu.addEditorAction(EditorMenuSelectLine, "Выделить строку")
                 menu.addEditorAction(EditorMenuDuplicateLine, "Дублировать строку")
                 menu.addEditorAction(EditorMenuGoToLine, "Перейти к строке…")
@@ -286,7 +287,11 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
                 return true
             }
 
-            override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean = false
+            override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean {
+                val hadPlainTextPaste = menu?.findItem(android.R.id.pasteAsPlainText) != null
+                menu?.removeItem(android.R.id.pasteAsPlainText)
+                return hadPlainTextPaste
+            }
 
             override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
                 if (item?.itemId == EditorMenuSelectLine) {
@@ -533,6 +538,18 @@ private class SelectionAwareEditText(context: Context) : AppCompatEditText(conte
     private var touchDownX = 0f
     private var touchDownY = 0f
     private var touchDownTime = 0L
+    private val spaceMarkerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = JsonEditorPalette.LineNumber.copy(alpha = SpaceMarkerAlpha).toArgb()
+    }
+    private val spaceMarkerRadius = context.dp(SpaceMarkerRadiusDp).toFloat()
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        drawVisibleSpaceMarkers(canvas)
+    }
+
+    override fun onTextContextMenuItem(id: Int): Boolean =
+        super.onTextContextMenuItem(editorPlainTextMenuAction(id))
 
     override fun onSelectionChanged(selStart: Int, selEnd: Int) {
         super.onSelectionChanged(selStart, selEnd)
@@ -642,6 +659,51 @@ private class SelectionAwareEditText(context: Context) : AppCompatEditText(conte
         )
         postInvalidateOnAnimation()
     }
+
+    private fun drawVisibleSpaceMarkers(canvas: Canvas) {
+        val text = text ?: return
+        val layout = layout ?: return
+        if (text.isEmpty() || layout.lineCount <= 0 || height <= 0) return
+
+        val firstVisibleLine = layout.getLineForVertical(scrollY.coerceAtLeast(0))
+        val lastVisibleLine = layout.getLineForVertical((scrollY + height).coerceAtLeast(0))
+        val markerCenterOffset = (paint.fontMetrics.ascent + paint.fontMetrics.descent) / 2f
+        val halfSpaceWidth = paint.measureText(" ") / 2f
+        val leftBoundary = totalPaddingLeft.toFloat()
+        val rightBoundary = (width - totalPaddingRight).toFloat()
+
+        for (line in firstVisibleLine..lastVisibleLine) {
+            val start = layout.getLineStart(line)
+            val end = layout.getLineEnd(line).coerceAtMost(text.length)
+            val centerY = totalPaddingTop +
+                layout.getLineBaseline(line) +
+                markerCenterOffset -
+                scrollY
+            for (offset in start until end) {
+                if (text[offset] != ' ') continue
+                val centerX = totalPaddingLeft +
+                    layout.getPrimaryHorizontal(offset) +
+                    halfSpaceWidth -
+                    scrollX
+                if (centerX in leftBoundary..rightBoundary) {
+                    canvas.drawCircle(centerX, centerY, spaceMarkerRadius, spaceMarkerPaint)
+                }
+            }
+        }
+    }
+
+    private companion object {
+        const val SpaceMarkerAlpha = 0.42f
+        const val SpaceMarkerRadiusDp = 1.05f
+    }
+}
+
+internal fun editorPlainTextMenuAction(id: Int): Int = when (id) {
+    android.R.id.paste,
+    android.R.id.pasteAsPlainText,
+    -> android.R.id.pasteAsPlainText
+
+    else -> id
 }
 
 /**
