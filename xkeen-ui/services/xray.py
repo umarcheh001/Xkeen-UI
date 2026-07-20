@@ -93,6 +93,9 @@ def restart_xray_core(
             prefer_init=True,
             settle_timeout=settle,
         )
-        if ok:
+        # control_xkeen_action manages both supported cores and can report success while
+        # Mihomo (rather than Xray) is the process that came back. Log controls are Xray-
+        # specific, so verify the requested core explicitly before confirming Start.
+        if ok and _pidof("xray"):
             return True, ("restarted" if running else "started")
         return False, "xray did not start"

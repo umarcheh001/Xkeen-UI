@@ -45,6 +45,16 @@ class XrayLogsPreviewActivity : ComponentActivity() {
                     statusMessage = "Поток логов подключён и обновляется автоматически.",
                     hasLoadedHistory = true,
                     streamAvailability = mapOf("access" to true, "error" to true),
+                    xrayLogLevel = "info",
+                    devices = listOf(
+                        io.xkeen.mobile.app.XrayLogDevice("192.168.1.42", "Galaxy-A24", "router"),
+                        io.xkeen.mobile.app.XrayLogDevice("192.168.1.83", "umar-pc", "manual"),
+                    ),
+                    hasLoadedDevices = true,
+                    destinationDomainsByIp = mapOf(
+                        "13.33.235.111" to "cdn.pecan.run",
+                        "146.75.118.214" to "cdn.pecan.run",
+                    ),
                 ),
             ),
             dependencies = dependencies,
@@ -79,8 +89,8 @@ private object PreviewLogsTransport : LogsTransportPort {
 }
 
 private val previewLogEntries = listOf(
-    previewLog("access:1", "20:14:01", "xray-access", LogLevel.Info, "accepted tcp:192.168.1.42:53844 -> api.telegram.org:443 [direct]"),
-    previewLog("access:2", "20:14:03", "xray-access", LogLevel.Info, "accepted udp:192.168.1.37:59621 -> dns.google:53 [dns-out]"),
+    previewLog("access:1", "20:14:01", "xray-access", LogLevel.Info, "from 192.168.1.83:53844 accepted tcp:13.33.235.111:443 [redirect -> cdn.pecan.run]"),
+    previewLog("access:2", "20:14:03", "xray-access", LogLevel.Info, "from 192.168.1.42:59621 accepted tcp:146.75.118.214:443 [proxy]"),
     previewLog("error:1", "20:14:05", "xray-error", LogLevel.Warning, "[Warning] transport/internet/grpc: creating connection to cdn.example.net:443"),
     previewLog("access:3", "20:14:07", "xray-access", LogLevel.Info, "accepted tcp:192.168.1.19:51002 -> github.com:443 [proxy]"),
     previewLog("error:2", "20:14:09", "xray-error", LogLevel.Error, "[Error] app/proxyman/outbound: failed to process outbound traffic > connection reset by peer"),

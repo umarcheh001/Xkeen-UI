@@ -465,7 +465,8 @@ private fun ReadyRoute(
     val orientation = LocalConfiguration.current.orientation
     val isEditorSection = state.workspaceSection == WorkspaceSection.XrayRouting ||
         state.workspaceSection == WorkspaceSection.MihomoRouting ||
-        state.workspaceSection == WorkspaceSection.PortsOverview
+        state.workspaceSection == WorkspaceSection.PortsOverview ||
+        state.workspaceSection == WorkspaceSection.XrayLogs
     var isEditorFullscreen by remember(orientation, state.workspaceSection) {
         mutableStateOf(
             isEditorSection && orientation == Configuration.ORIENTATION_LANDSCAPE,
@@ -478,6 +479,8 @@ private fun ReadyRoute(
         endpoint = state.dashboard.endpoint,
         isVisible = state.workspaceSection == WorkspaceSection.XrayLogs,
         isPausedByUser = state.logs.isPausedByUser,
+        isServerLoggingStopped = state.logs.xrayLogLevel == "none",
+        isLogControlBusy = state.logs.isXrayLogControlBusy,
         displayLimit = state.logs.displayLimit,
     )
 
@@ -558,6 +561,8 @@ private fun LogsTransportLifecycle(
     endpoint: String,
     isVisible: Boolean,
     isPausedByUser: Boolean,
+    isServerLoggingStopped: Boolean,
+    isLogControlBusy: Boolean,
     displayLimit: Int,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -586,8 +591,17 @@ private fun LogsTransportLifecycle(
             controller.pauseLogsTransport()
         }
     }
-    LaunchedEffect(controller, endpoint, isForeground, isVisible, isPausedByUser, displayLimit) {
-        if (isForeground && isVisible && !isPausedByUser) {
+    LaunchedEffect(
+        controller,
+        endpoint,
+        isForeground,
+        isVisible,
+        isPausedByUser,
+        isServerLoggingStopped,
+        isLogControlBusy,
+        displayLimit,
+    ) {
+        if (isForeground && isVisible && !isPausedByUser && !isServerLoggingStopped && !isLogControlBusy) {
             controller.runLogsTransport()
         } else {
             controller.pauseLogsTransport()

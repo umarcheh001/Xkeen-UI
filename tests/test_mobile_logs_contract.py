@@ -149,3 +149,27 @@ def test_mobile_logs_preserves_multiline_context(tmp_path, monkeypatch):
     assert entries[1]["message"] == "  transport: grpc"
     assert entries[1]["time"] == "18:03:00"
     assert entries[1]["level"] == "error"
+
+
+def test_mobile_logs_can_include_large_one_shot_domain_seed(tmp_path, monkeypatch):
+    client, error_log, _access_log = _build_client(tmp_path, monkeypatch)
+    error_log.write_text(
+        "2026/07/16 18:04:00 [Info] [12345] sniffed domain: example.com\n"
+        "2026/07/16 18:04:00 [Info] [12345] dialing tcp to tcp:203.0.113.7:443\n",
+        encoding="utf-8",
+    )
+    _login(client)
+
+    regular = client.get("/api/mobile/v1/logs").get_json()["data"]
+    seeded = client.get(
+        "/api/mobile/v1/logs",
+        query_string={"include-domain-seed": "1"},
+    ).get_json()["data"]
+
+    assert "domain_seed" not in regular
+    assert seeded["domain_seed"]["source"] == "error"
+    assert seeded["domain_seed"]["mode"] == "snapshot"
+    assert [entry["message"] for entry in seeded["domain_seed"]["entries"]] == [
+        "2026/07/16 18:04:00 [Info] [12345] sniffed domain: example.com",
+        "2026/07/16 18:04:00 [Info] [12345] dialing tcp to tcp:203.0.113.7:443",
+    ]

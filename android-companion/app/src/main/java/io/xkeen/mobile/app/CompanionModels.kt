@@ -696,6 +696,18 @@ data class LogEntry(
     val id: String = "",
 )
 
+data class XrayLogDevice(
+    val ip: String,
+    val name: String,
+    val source: String,
+    val routerName: String? = null,
+    val mac: String? = null,
+    val hostname: String? = null,
+) {
+    val isManual: Boolean
+        get() = source.equals("manual", ignoreCase = true)
+}
+
 data class LogsState(
     val filter: LogFilter = LogFilter.All,
     val streamFilter: XrayLogStreamFilter = XrayLogStreamFilter.All,
@@ -712,6 +724,19 @@ data class LogsState(
     val statusMessage: String = "Поток логов ожидает подключения.",
     val reconnectAttempt: Int = 0,
     val hasLoadedHistory: Boolean = false,
+    val xrayLogLevel: String? = null,
+    val preferredXrayLogLevel: String = "info",
+    val isXrayLogControlBusy: Boolean = false,
+    val xrayLogControlMessage: String? = null,
+    val xrayLogControlError: String? = null,
+    val devices: List<XrayLogDevice> = emptyList(),
+    val hasLoadedDevices: Boolean = false,
+    val isLoadingDevices: Boolean = false,
+    val devicesError: String? = null,
+    val routerDevicesError: String? = null,
+    val showDeviceNames: Boolean = true,
+    val showDomains: Boolean = true,
+    val destinationDomainsByIp: Map<String, String> = emptyMap(),
 )
 
 enum class MihomoConfigOperationPhase {

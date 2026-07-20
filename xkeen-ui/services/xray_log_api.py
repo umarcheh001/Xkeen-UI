@@ -201,7 +201,8 @@ def enable_logs(
     cfg["log"]["access"] = _ACCESS_LOG
     cfg["log"]["error"] = _ERROR_LOG
     cfg["log"]["loglevel"] = lvl
-    save_xray_log_config(cfg)
+    if not save_xray_log_config(cfg):
+        return False, "failed to save xray log config", lvl, False
 
     ok, detail = (True, "")
     xray_restarted = False
@@ -240,7 +241,8 @@ def disable_logs(
         cfg = {}
     cfg.setdefault("log", {})
     cfg["log"]["loglevel"] = "none"
-    save_xray_log_config(cfg)
+    if not save_xray_log_config(cfg):
+        return False, "failed to save xray log config", False
 
     ok, detail = (True, "")
     xray_restarted = False

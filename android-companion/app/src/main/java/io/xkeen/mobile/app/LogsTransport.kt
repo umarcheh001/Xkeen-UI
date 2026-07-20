@@ -18,6 +18,8 @@ internal data class RemoteLogStream(
 
 internal data class LogsTransportUpdate(
     val streams: List<RemoteLogStream>,
+    val domainHintEntries: List<LogEntry> = emptyList(),
+    val domainHintsSeeded: Boolean = false,
 )
 
 /**
@@ -31,6 +33,13 @@ internal interface LogsTransportPort {
         cursors: Map<String, String>,
         limit: Int = 200,
     ): LogsTransportUpdate
+
+    suspend fun read(
+        baseUrl: String,
+        cursors: Map<String, String>,
+        limit: Int = 200,
+        includeDomainHintsSeed: Boolean,
+    ): LogsTransportUpdate = read(baseUrl, cursors, limit)
 }
 
 internal class WebPanelLogsTransport(
@@ -40,6 +49,18 @@ internal class WebPanelLogsTransport(
         baseUrl: String,
         cursors: Map<String, String>,
         limit: Int,
+    ): LogsTransportUpdate = read(
+        baseUrl = baseUrl,
+        cursors = cursors,
+        limit = limit,
+        includeDomainHintsSeed = false,
+    )
+
+    override suspend fun read(
+        baseUrl: String,
+        cursors: Map<String, String>,
+        limit: Int,
+        includeDomainHintsSeed: Boolean,
     ): LogsTransportUpdate {
         val cursorQuery = cursors
             .filterKeys { it in mobileLogSources }
@@ -50,6 +71,7 @@ internal class WebPanelLogsTransport(
             }
         val query = buildList {
             if (limit != 200) add("limit=${limit.coerceIn(50, 500)}")
+            if (includeDomainHintsSeed) add("include-domain-seed=1")
             addAll(cursorQuery)
         }.joinToString("&")
         val response = transport.get(
@@ -58,7 +80,14 @@ internal class WebPanelLogsTransport(
                 endpoint = if (query.isBlank()) MOBILE_LOGS_PATH else "$MOBILE_LOGS_PATH?$query",
             ),
         )
-        return parseLogsTransportEnvelope(response.body)
+        val update = parseLogsTransportEnvelope(response.body)
+        // Older servers safely ignore the additive query flag. Mark the one-shot attempt as
+        // complete and continue with their ordinary error snapshot as a smaller fallback.
+        return if (includeDomainHintsSeed && !update.domainHintsSeeded) {
+            update.copy(domainHintsSeeded = true)
+        } else {
+            update
+        }
     }
 }
 
@@ -81,6 +110,7 @@ internal fun parseLogsTransportEnvelope(body: String): LogsTransportUpdate {
     }
     val streams = data.optJSONArray("streams")
         ?: throw IllegalStateException("В ответе Xkeen UI отсутствуют потоки логов.")
+    val domainSeed = data.optJSONObject("domain_seed")
     return LogsTransportUpdate(
         streams = buildList {
             for (index in 0 until streams.length()) {
@@ -98,6 +128,8 @@ internal fun parseLogsTransportEnvelope(body: String): LogsTransportUpdate {
                 )
             }
         },
+        domainHintEntries = domainSeed?.optJSONArray("entries").toLogEntries(),
+        domainHintsSeeded = domainSeed != null,
     )
 }
 

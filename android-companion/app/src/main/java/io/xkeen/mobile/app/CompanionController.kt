@@ -23,7 +23,9 @@ internal class CompanionController(
      */
     private var activeRoutingValidationRequest: RoutingValidationRequest? = null
     private var logsTransportGeneration: Long = 0
+    private var xrayLogsControlGeneration: Long = 0
     private val logCursors = mutableMapOf<String, String>()
+    private val xrayLogDomainResolver = XrayLogDomainResolver()
 
     private data class RoutingValidationRequest(
         val documentId: String,
@@ -2431,6 +2433,14 @@ internal class CompanionController(
         state = state.copy(logs = state.logs.copy(useRegex = enabled))
     }
 
+    fun setXrayLogDeviceNamesVisible(enabled: Boolean) {
+        state = state.copy(logs = state.logs.copy(showDeviceNames = enabled))
+    }
+
+    fun setXrayLogDomainsVisible(enabled: Boolean) {
+        state = state.copy(logs = state.logs.copy(showDomains = enabled))
+    }
+
     fun setXrayLogsFollowNewest(enabled: Boolean) {
         state = state.copy(logs = state.logs.copy(followNewest = enabled))
     }
@@ -2472,6 +2482,256 @@ internal class CompanionController(
             ),
         )
         updateLogsDiagnostic()
+    }
+
+    suspend fun refreshXrayLogsStatus() {
+        val endpoint = state.dashboard.endpoint
+        if (endpoint.isBlank() || state.phase != AppPhase.Ready || state.logs.isXrayLogControlBusy) return
+        val controlGeneration = xrayLogsControlGeneration
+        try {
+            val snapshot = dependencies.xrayLogsControl.loadStatus(endpoint)
+            if (
+                state.dashboard.endpoint != endpoint ||
+                state.phase != AppPhase.Ready ||
+                state.logs.isXrayLogControlBusy ||
+                controlGeneration != xrayLogsControlGeneration
+            ) {
+                return
+            }
+            val current = state.logs
+            val level = snapshot.logLevel.normalizedControllerXrayLogLevel()
+            state = state.copy(
+                logs = current.copy(
+                    xrayLogLevel = level,
+                    preferredXrayLogLevel = level.takeUnless { it == "none" }
+                        ?: current.preferredXrayLogLevel,
+                    xrayLogControlError = null,
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            if (state.dashboard.endpoint == endpoint) {
+                state = state.copy(
+                    logs = state.logs.copy(
+                        xrayLogControlError = error.toCompanionLoadMessage(
+                            "Не удалось проверить состояние логирования Xray.",
+                        ),
+                    ),
+                )
+            }
+        }
+    }
+
+    suspend fun setXrayLogsCollectionEnabled(enabled: Boolean) {
+        val endpoint = state.dashboard.endpoint
+        val previous = state.logs
+        if (endpoint.isBlank() || state.phase != AppPhase.Ready || previous.isXrayLogControlBusy) return
+        if (previous.xrayLogLevel != null && (previous.xrayLogLevel != "none") == enabled) return
+
+        val requestedLevel = previous.preferredXrayLogLevel
+            .normalizedControllerEnabledXrayLogLevel()
+            .let { level ->
+                if (enabled && previous.showDomains && level in setOf("warning", "error")) "info" else level
+            }
+        val controlGeneration = ++xrayLogsControlGeneration
+        logsTransportGeneration += 1
+        state = state.copy(
+            logs = previous.copy(
+                isXrayLogControlBusy = true,
+                xrayLogControlMessage = if (enabled) {
+                    "Включаем запись логов Xray…"
+                } else {
+                    "Полностью останавливаем запись логов Xray…"
+                },
+                xrayLogControlError = null,
+                connection = LogsConnectionState.Disconnected,
+                statusMessage = if (enabled) {
+                    "Xray применяет уровень логирования $requestedLevel."
+                } else {
+                    "Поток остановлен; Xray сохраняет последний снимок логов."
+                },
+                reconnectAttempt = 0,
+            ),
+        )
+        updateLogsDiagnostic()
+
+        try {
+            val result = if (enabled) {
+                dependencies.xrayLogsControl.enable(endpoint, requestedLevel)
+            } else {
+                dependencies.xrayLogsControl.disable(endpoint)
+            }
+            if (
+                state.dashboard.endpoint != endpoint ||
+                state.phase != AppPhase.Ready ||
+                controlGeneration != xrayLogsControlGeneration
+            ) {
+                return
+            }
+            logCursors.clear()
+            val level = result.logLevel.normalizedControllerXrayLogLevel()
+            val coreNote = if (!result.xrayRestarted && result.detail.isNotBlank()) {
+                " Ядро Xray уже остановлено."
+            } else {
+                ""
+            }
+            state = state.copy(
+                logs = state.logs.copy(
+                    xrayLogLevel = level,
+                    preferredXrayLogLevel = if (enabled) level else requestedLevel,
+                    isXrayLogControlBusy = false,
+                    xrayLogControlMessage = if (enabled) {
+                        "Логи включены · loglevel=$level.$coreNote"
+                    } else {
+                        "Логи полностью остановлены · loglevel=none.$coreNote"
+                    },
+                    xrayLogControlError = null,
+                    connection = LogsConnectionState.Disconnected,
+                    statusMessage = if (enabled) {
+                        "Логи включены; подключаем онлайн-поток…"
+                    } else {
+                        "Запись логов Xray остановлена. Последний снимок сохранён."
+                    },
+                    reconnectAttempt = 0,
+                ),
+            )
+            updateLogsDiagnostic()
+        } catch (error: CancellationException) {
+            if (state.dashboard.endpoint == endpoint && controlGeneration == xrayLogsControlGeneration) {
+                state = state.copy(
+                    logs = state.logs.copy(
+                        xrayLogLevel = previous.xrayLogLevel,
+                        preferredXrayLogLevel = previous.preferredXrayLogLevel,
+                        isXrayLogControlBusy = false,
+                        xrayLogControlMessage = null,
+                        connection = LogsConnectionState.Disconnected,
+                        statusMessage = "Операция логов прервана; состояние будет проверено заново.",
+                    ),
+                )
+                updateLogsDiagnostic()
+            }
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            if (state.dashboard.endpoint == endpoint) {
+                state = state.copy(
+                    logs = state.logs.copy(
+                        xrayLogLevel = previous.xrayLogLevel,
+                        preferredXrayLogLevel = previous.preferredXrayLogLevel,
+                        isXrayLogControlBusy = false,
+                        xrayLogControlMessage = null,
+                        xrayLogControlError = error.toCompanionLoadMessage(
+                            if (enabled) {
+                                "Не удалось включить запись логов Xray."
+                            } else {
+                                "Не удалось полностью остановить запись логов Xray."
+                            },
+                        ),
+                        connection = LogsConnectionState.Disconnected,
+                        statusMessage = "Операция логов не выполнена; восстанавливаем поток…",
+                        reconnectAttempt = 0,
+                    ),
+                )
+                updateLogsDiagnostic()
+            }
+        }
+    }
+
+    suspend fun refreshXrayLogDevices(refreshRouter: Boolean = true) {
+        val endpoint = state.dashboard.endpoint
+        if (endpoint.isBlank() || state.phase != AppPhase.Ready || state.logs.isLoadingDevices) return
+        state = state.copy(
+            logs = state.logs.copy(
+                isLoadingDevices = true,
+                devicesError = null,
+            ),
+        )
+        try {
+            val snapshot = dependencies.xrayLogsControl.loadDevices(endpoint, refreshRouter)
+            if (state.dashboard.endpoint != endpoint || state.phase != AppPhase.Ready) return
+            applyXrayLogDevicesSnapshot(snapshot)
+        } catch (error: CancellationException) {
+            if (state.dashboard.endpoint == endpoint) {
+                state = state.copy(logs = state.logs.copy(isLoadingDevices = false))
+            }
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            if (state.dashboard.endpoint == endpoint) {
+                state = state.copy(
+                    logs = state.logs.copy(
+                        isLoadingDevices = false,
+                        devicesError = error.toCompanionLoadMessage("Не удалось загрузить имена устройств."),
+                    ),
+                )
+            }
+        }
+    }
+
+    suspend fun saveXrayLogDevice(ip: String, name: String): Boolean {
+        val endpoint = state.dashboard.endpoint
+        if (endpoint.isBlank() || state.phase != AppPhase.Ready || state.logs.isLoadingDevices) return false
+        if (ip.isBlank() || name.isBlank()) {
+            state = state.copy(
+                logs = state.logs.copy(
+                    devicesError = if (ip.isBlank()) "Введите IP-адрес устройства." else "Введите имя устройства.",
+                ),
+            )
+            return false
+        }
+        state = state.copy(logs = state.logs.copy(isLoadingDevices = true, devicesError = null))
+        return try {
+            val snapshot = dependencies.xrayLogsControl.saveDevice(endpoint, ip, name)
+            if (state.dashboard.endpoint != endpoint || state.phase != AppPhase.Ready) return false
+            applyXrayLogDevicesSnapshot(snapshot)
+            true
+        } catch (error: CancellationException) {
+            if (state.dashboard.endpoint == endpoint) {
+                state = state.copy(logs = state.logs.copy(isLoadingDevices = false))
+            }
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return false
+            if (state.dashboard.endpoint == endpoint) {
+                state = state.copy(
+                    logs = state.logs.copy(
+                        isLoadingDevices = false,
+                        devicesError = error.toCompanionLoadMessage("Не удалось сохранить имя устройства."),
+                    ),
+                )
+            }
+            false
+        }
+    }
+
+    suspend fun deleteXrayLogDevice(ip: String): Boolean {
+        val endpoint = state.dashboard.endpoint
+        if (endpoint.isBlank() || state.phase != AppPhase.Ready || state.logs.isLoadingDevices) return false
+        state = state.copy(logs = state.logs.copy(isLoadingDevices = true, devicesError = null))
+        return try {
+            val snapshot = dependencies.xrayLogsControl.deleteDevice(endpoint, ip)
+            if (state.dashboard.endpoint != endpoint || state.phase != AppPhase.Ready) return false
+            applyXrayLogDevicesSnapshot(snapshot)
+            true
+        } catch (error: CancellationException) {
+            if (state.dashboard.endpoint == endpoint) {
+                state = state.copy(logs = state.logs.copy(isLoadingDevices = false))
+            }
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return false
+            if (state.dashboard.endpoint == endpoint) {
+                state = state.copy(
+                    logs = state.logs.copy(
+                        isLoadingDevices = false,
+                        devicesError = error.toCompanionLoadMessage("Не удалось удалить имя устройства."),
+                    ),
+                )
+            }
+            false
+        }
     }
 
     /** Clears only the native viewer. Server log files and their cursors are left untouched. */
@@ -2517,6 +2777,7 @@ internal class CompanionController(
                     baseUrl = state.dashboard.endpoint,
                     cursors = logCursors.toMap(),
                     limit = state.logs.displayLimit.coerceAtMost(500),
+                    includeDomainHintsSeed = "domain-hints-seed" !in logCursors,
                 )
                 if (generation != logsTransportGeneration || state.phase != AppPhase.Ready) return
                 applyLogsTransportUpdate(update)
@@ -2994,7 +3255,9 @@ internal class CompanionController(
         val updatedConnections = state.connections.replaceConnection(result.connection)
         dependencies.connections.update(result.connection)
         logsTransportGeneration += 1
+        xrayLogsControlGeneration += 1
         logCursors.clear()
+        xrayLogDomainResolver.clear()
         val newLogs = dependencies.logs.record(
             current = LogsState(),
             source = "auth",
@@ -3065,7 +3328,9 @@ internal class CompanionController(
         val updatedConnections = state.connections.replaceConnection(result.connection)
         dependencies.connections.update(result.connection)
         logsTransportGeneration += 1
+        xrayLogsControlGeneration += 1
         logCursors.clear()
+        xrayLogDomainResolver.clear()
         val closedLogs = dependencies.logs.record(
             current = state.logs.copy(
                 connection = if (phase == AppPhase.PairLogin) {
@@ -3482,6 +3747,12 @@ internal class CompanionController(
     private fun applyLogsTransportUpdate(update: LogsTransportUpdate) {
         val previousEntries = state.logs.entries
         var entries = previousEntries
+        if (update.domainHintsSeeded) {
+            logCursors["domain-hints-seed"] = "loaded"
+        }
+        val domainHints = xrayLogDomainResolver.ingest(
+            update.domainHintEntries + update.streams.flatMap(RemoteLogStream::entries),
+        )
         update.streams.forEach { stream ->
             if (stream.cursor.isNotBlank()) {
                 logCursors[stream.source] = stream.cursor
@@ -3521,9 +3792,22 @@ internal class CompanionController(
                 reconnectAttempt = 0,
                 hasLoadedHistory = true,
                 streamAvailability = availability,
+                destinationDomainsByIp = domainHints,
             ),
         )
         updateLogsDiagnostic()
+    }
+
+    private fun applyXrayLogDevicesSnapshot(snapshot: XrayLogDevicesSnapshot) {
+        state = state.copy(
+            logs = state.logs.copy(
+                devices = snapshot.devices,
+                hasLoadedDevices = true,
+                isLoadingDevices = false,
+                devicesError = null,
+                routerDevicesError = snapshot.routerError,
+            ),
+        )
     }
 
     private fun updateLogsDiagnostic() {
@@ -3963,6 +4247,12 @@ private fun Throwable.isAuthenticationRequired(): Boolean =
         CompanionTransportFailureKind.KeeneticAuthenticationRequired,
         CompanionTransportFailureKind.AuthenticationRequired,
     )
+
+private fun String.normalizedControllerXrayLogLevel(): String =
+    trim().lowercase().takeIf { it in setOf("none", "error", "warning", "info", "debug") } ?: "none"
+
+private fun String.normalizedControllerEnabledXrayLogLevel(): String =
+    normalizedControllerXrayLogLevel().takeUnless { it == "none" } ?: "info"
 
 private fun List<LogEntry>.deduplicateLogEntries(): List<LogEntry> {
     val seenIds = mutableSetOf<String>()

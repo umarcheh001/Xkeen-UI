@@ -10,10 +10,13 @@ def _install(monkeypatch, *, running, control_result):
     """
     state = {"control_calls": []}
 
-    monkeypatch.setattr(xray_svc, "_pidof", lambda name: [111] if running else [])
+    process = {"running": bool(running)}
+    monkeypatch.setattr(xray_svc, "_pidof", lambda name: [111] if process["running"] else [])
 
     def fake_control(action, **kwargs):
         state["control_calls"].append((action, kwargs))
+        if control_result:
+            process["running"] = True
         return control_result
 
     monkeypatch.setattr(xray_svc, "control_xkeen_action", fake_control)
@@ -65,6 +68,16 @@ def test_restart_reports_failure_when_core_does_not_come_back(monkeypatch):
     assert detail == "xray did not start"
 
 
+def test_start_does_not_accept_success_from_another_core(monkeypatch):
+    monkeypatch.setattr(xray_svc, "_pidof", lambda name: [])
+    monkeypatch.setattr(xray_svc, "control_xkeen_action", lambda action, **kwargs: True)
+
+    ok, detail = xray_svc.restart_xray_core(start_if_stopped=True)
+
+    assert ok is False
+    assert detail == "xray did not start"
+
+
 def test_enable_logs_forwards_start_if_stopped(monkeypatch):
     from services import xray_log_api
 
@@ -88,3 +101,23 @@ def test_call_restart_falls_back_for_zero_arg_callable():
 
     assert ok is True
     assert detail == "restarted"
+
+
+def test_log_controls_fail_before_restart_when_config_cannot_be_saved(monkeypatch):
+    from services import xray_log_api
+
+    monkeypatch.setattr(xray_log_api, "load_xray_log_config", lambda: {"log": {}})
+    monkeypatch.setattr(xray_log_api, "save_xray_log_config", lambda cfg: False)
+    restart_calls = []
+
+    enabled = xray_log_api.enable_logs(
+        "info",
+        restart_xray_core=lambda **kwargs: restart_calls.append(kwargs) or (True, "started"),
+    )
+    disabled = xray_log_api.disable_logs(
+        restart_xray_core=lambda **kwargs: restart_calls.append(kwargs) or (True, "restarted"),
+    )
+
+    assert enabled == (False, "failed to save xray log config", "info", False)
+    assert disabled == (False, "failed to save xray log config", False)
+    assert restart_calls == []

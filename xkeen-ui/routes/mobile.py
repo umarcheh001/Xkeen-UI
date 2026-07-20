@@ -270,7 +270,13 @@ def _mobile_log_entries(*, source: str, inode: int, marker: int, lines: list[str
     return entries
 
 
-def _mobile_log_stream(*, source: str, cursor: str, limit: int) -> dict[str, Any]:
+def _mobile_log_stream(
+    *,
+    source: str,
+    cursor: str,
+    limit: int,
+    snapshot_max_bytes: int = 256 * 1024,
+) -> dict[str, Any]:
     dependencies = _mobile_xray_logs_dependencies()
     path = dependencies["resolve_path"](source)
     if not path or not os.path.isfile(path):
@@ -317,7 +323,7 @@ def _mobile_log_stream(*, source: str, cursor: str, limit: int) -> dict[str, Any
             ),
         }
 
-    lines = dependencies["tail_lines_fast"](path, max_lines=limit, max_bytes=256 * 1024)
+    lines = dependencies["tail_lines_fast"](path, max_lines=limit, max_bytes=snapshot_max_bytes)
     adjusted = dependencies["adjust_log_timezone"](lines)
     return {
         "source": source,
@@ -407,12 +413,21 @@ def register_mobile_routes(app: Flask) -> None:
             )
             for source in _MOBILE_LOG_SOURCES
         ]
-        return response(
-            {
-                "contract_version": 1,
-                "streams": streams,
-            }
-        )
+        payload: dict[str, Any] = {
+            "contract_version": 1,
+            "streams": streams,
+        }
+        include_domain_seed = str(request.args.get("include-domain-seed") or "").strip().lower()
+        if include_domain_seed in {"1", "true", "yes", "on"}:
+            # Additive, one-shot history for correlating `sniffed domain` error lines with
+            # destination IPs. The ordinary mobile streams stay capped at 500/256 KiB.
+            payload["domain_seed"] = _mobile_log_stream(
+                source="error",
+                cursor="",
+                limit=5000,
+                snapshot_max_bytes=1024 * 1024,
+            )
+        return response(payload)
 
     @app.post(f"{MOBILE_API_PREFIX}/session")
     def mobile_session_login():

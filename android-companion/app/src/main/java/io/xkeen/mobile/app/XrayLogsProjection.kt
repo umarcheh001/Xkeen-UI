@@ -16,6 +16,7 @@ internal data class XrayLogsProjection(
 )
 
 internal fun LogsState.projectXrayLogs(): XrayLogsProjection {
+    val devicesByIp = devices.associateBy(XrayLogDevice::ip)
     val xrayEntries = entries.filter(LogEntry::isXrayLogEntry)
     val sourceEntries = xrayEntries.filter { entry ->
         when (streamFilter) {
@@ -58,9 +59,9 @@ internal fun LogsState.projectXrayLogs(): XrayLogsProjection {
                 regexError = "Некорректное или неподдерживаемое регулярное выражение",
             )
         }
-        { entry -> regex.matcher(entry.searchableText()).find() }
+        { entry -> regex.matcher(entry.searchableText(this, devicesByIp)).find() }
     } else {
-        { entry -> entry.searchableText().contains(query, ignoreCase = true) }
+        { entry -> entry.searchableText(this, devicesByIp).contains(query, ignoreCase = true) }
     }
 
     val matchedEntries = leveledEntries.filter(matcher)
@@ -120,7 +121,19 @@ internal fun List<LogEntry>.toXrayLogsClipboardPayload(
     )
 }
 
-private fun LogEntry.searchableText(): String = "$time $source $message"
+private fun LogEntry.searchableText(
+    logs: LogsState,
+    devicesByIp: Map<String, XrayLogDevice>,
+): String {
+    val enrichment = xrayLogInlineHints(
+        displayMessage = displayMessage(),
+        devicesByIp = devicesByIp,
+        domainsByIp = logs.destinationDomainsByIp,
+        showDeviceNames = logs.showDeviceNames,
+        showDomains = logs.showDomains,
+    ).joinToString(separator = " ") { hint -> hint.label }
+    return "$time $source $message $enrichment"
+}
 
 private fun String.regexSafetyError(): String? = when {
     length > MAX_SAFE_REGEX_LENGTH -> "Регулярное выражение слишком длинное"

@@ -169,6 +169,7 @@ internal data class CompanionControllerDependencies(
     val journal: CompanionJournalPort,
     val xrayConfigSource: XrayConfigSource,
     val coreStatusSource: CoreStatusSource,
+    val xrayLogsControl: XrayLogsControlPort = DemoXrayLogsControlPort(),
 )
 
 internal fun defaultCompanionControllerDependencies(
@@ -211,6 +212,7 @@ internal fun defaultCompanionControllerDependencies(
         journal = journal,
         xrayConfigSource = WebPanelXrayConfigSource(effectiveTransport),
         coreStatusSource = WebPanelCoreStatusSource(effectiveTransport),
+        xrayLogsControl = WebPanelXrayLogsControlPort(serviceTransport),
     )
 }
 

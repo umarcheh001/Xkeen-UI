@@ -61,6 +61,41 @@ class LogsTransportTest {
     }
 
     @Test
+    fun `web logs transport requests and parses one shot domain seed`() = runTest {
+        val seededBody = logsResponse().copy(
+            body = logsResponse().body.replace(
+                "\"streams\": [",
+                """
+                "domain_seed": {
+                  "entries": [
+                    {
+                      "id": "domain:1",
+                      "time": "18:01:01",
+                      "source": "xray-error",
+                      "level": "info",
+                      "message": "[Info] [312345] sniffed domain: example.com"
+                    }
+                  ]
+                },
+                "streams": [
+                """.trimIndent(),
+            ),
+        )
+        val transport = QueueLogsHttpTransport(listOf(seededBody))
+
+        val result = WebPanelLogsTransport(transport).read(
+            baseUrl = "https://node.lan",
+            cursors = emptyMap(),
+            limit = 200,
+            includeDomainHintsSeed = true,
+        )
+
+        assertEquals("/api/mobile/v1/logs?include-domain-seed=1", transport.requests.single().endpoint)
+        assertTrue(result.domainHintsSeeded)
+        assertEquals("domain:1", result.domainHintEntries.single().id)
+    }
+
+    @Test
     fun `controller keeps history while background pause stops polling`() = runTest {
         val http = QueueLogsHttpTransport(listOf(logsResponse()))
         val controller = CompanionController(
