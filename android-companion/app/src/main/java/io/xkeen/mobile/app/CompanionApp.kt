@@ -466,7 +466,8 @@ private fun ReadyRoute(
     val isEditorSection = state.workspaceSection == WorkspaceSection.XrayRouting ||
         state.workspaceSection == WorkspaceSection.MihomoRouting ||
         state.workspaceSection == WorkspaceSection.PortsOverview ||
-        state.workspaceSection == WorkspaceSection.XrayLogs
+        state.workspaceSection == WorkspaceSection.XrayLogs ||
+        state.workspaceSection == WorkspaceSection.ShellTerminal
     var isEditorFullscreen by remember(orientation, state.workspaceSection) {
         mutableStateOf(
             isEditorSection && orientation == Configuration.ORIENTATION_LANDSCAPE,

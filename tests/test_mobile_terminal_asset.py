@@ -40,3 +40,10 @@ def test_terminal_connection_failure_releases_the_reconnect_guard():
 
     assert "connectionRequestFailed: message =>" in html
     assert "reconnectRequested = false;" in html
+
+
+def test_terminal_uses_compact_mobile_typography():
+    html = _terminal_asset()
+
+    assert "fontSize: 12," in html
+    assert "lineHeight: 1.08," in html

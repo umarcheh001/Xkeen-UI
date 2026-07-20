@@ -349,7 +349,13 @@ internal fun WorkspaceSectionContent(
             modifier = modifier,
         )
         WorkspaceSection.ShellCommands -> ShellWorkspaceScreen(state, modifier)
-        WorkspaceSection.ShellTerminal -> TerminalWorkspaceScreen(state, controller, modifier)
+        WorkspaceSection.ShellTerminal -> TerminalWorkspaceScreen(
+            state = state,
+            controller = controller,
+            isFullscreen = isEditorFullscreen,
+            onFullscreenChange = onEditorFullscreenChange,
+            modifier = modifier,
+        )
 
         else -> ModulePlaceholderScreen(
             title = state.workspaceSection.title,
