@@ -320,9 +320,9 @@ internal fun WorkspaceSectionContent(
         WorkspaceSection.XraySubscriptions -> XraySubscriptionsWorkspaceScreen(state, controller, modifier)
         WorkspaceSection.XrayAssets -> XrayDatWorkspaceScreen(state, controller, modifier)
         WorkspaceSection.XrayLogs -> LogsWorkspaceScreen(state, controller, modifier)
-        WorkspaceSection.ShellCommands,
-        WorkspaceSection.ShellTerminal,
-        -> ShellWorkspaceScreen(state, modifier)
+        WorkspaceSection.MihomoRouting -> MihomoRoutingWorkspaceScreen(state, controller, modifier)
+        WorkspaceSection.ShellCommands -> ShellWorkspaceScreen(state, modifier)
+        WorkspaceSection.ShellTerminal -> TerminalWorkspaceScreen(state, controller, modifier)
 
         else -> ModulePlaceholderScreen(
             title = state.workspaceSection.title,

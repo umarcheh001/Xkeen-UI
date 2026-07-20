@@ -1479,6 +1479,57 @@ class CompanionControllerTest {
 
         assertFalse(controller.state.xrayDat.isLoadingItems)
     }
+
+    @Test
+    fun mihomoYamlRequiresValidationOfExactDraftBeforeSave() = runTest {
+        val port = FakeMihomoConfigPort()
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                dashboard = unloadedDashboardState().copy(
+                    endpoint = "https://router.example",
+                    availableCores = listOf("Mihomo"),
+                ),
+            ),
+            dependencies = testDependencies(mihomoConfig = port),
+        )
+
+        controller.refreshMihomoConfig()
+        controller.updateMihomoConfig("port: 7891\n")
+        controller.saveMihomoConfig(restart = false)
+        assertEquals(0, port.saveCalls)
+
+        controller.validateMihomoConfig()
+        assertTrue(controller.state.mihomoConfig.isCurrentContentValid)
+        controller.saveMihomoConfig(restart = true)
+
+        assertEquals(1, port.saveCalls)
+        assertTrue(port.lastRestart)
+        assertFalse(controller.state.mihomoConfig.hasChanges)
+    }
+
+    @Test
+    fun mihomoYamlRefusesToOverwriteExternalServerChange() = runTest {
+        val port = FakeMihomoConfigPort()
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                dashboard = unloadedDashboardState().copy(endpoint = "https://router.example"),
+            ),
+            dependencies = testDependencies(mihomoConfig = port),
+        )
+
+        controller.refreshMihomoConfig()
+        controller.updateMihomoConfig("port: 7891\n")
+        controller.validateMihomoConfig()
+        port.remoteContent = "port: 7892\n"
+        controller.saveMihomoConfig(restart = false)
+
+        assertEquals(0, port.saveCalls)
+        assertEquals(MihomoConfigOperationPhase.Failure, controller.state.mihomoConfig.operation)
+        assertTrue(controller.state.mihomoConfig.message.contains("изменился на сервере"))
+        assertEquals("port: 7891\n", controller.state.mihomoConfig.content)
+    }
 }
 
 private fun testDependencies(
@@ -1495,6 +1546,8 @@ private fun testDependencies(
     outbounds: OutboundsPort = DemoOutboundsPort(),
     xraySubscriptions: XraySubscriptionsPort = DemoXraySubscriptionsPort(),
     xrayDat: XrayDatPort = DemoXrayDatPort(),
+    mihomoConfig: MihomoConfigPort = FakeMihomoConfigPort(),
+    terminal: TerminalPort = FakeTerminalPort(),
     logs: LogsPort? = null,
     logsTransport: LogsTransportPort = FakeLogsTransportPort(),
     journal: CompanionJournalPort = FakeJournalPort(),
@@ -1510,12 +1563,42 @@ private fun testDependencies(
         outbounds = outbounds,
         xraySubscriptions = xraySubscriptions,
         xrayDat = xrayDat,
+        mihomoConfig = mihomoConfig,
+        terminal = terminal,
         logs = logs ?: DemoLogsPort(effectiveJournal),
         logsTransport = logsTransport,
         journal = effectiveJournal,
         xrayConfigSource = xrayConfigSource,
         coreStatusSource = coreStatusSource,
     )
+}
+
+private class FakeMihomoConfigPort : MihomoConfigPort {
+    var saveCalls = 0
+    var lastRestart = false
+    var remoteContent = "port: 7890\n"
+
+    override suspend fun load(baseUrl: String): MihomoConfigSnapshot = MihomoConfigSnapshot(remoteContent)
+
+    override suspend fun validate(baseUrl: String, content: String): MihomoValidationResult =
+        MihomoValidationResult(valid = true, log = "configuration test is successful")
+
+    override suspend fun save(baseUrl: String, content: String, restart: Boolean): MihomoConfigSnapshot {
+        saveCalls += 1
+        lastRestart = restart
+        remoteContent = content.trimEnd()
+        return MihomoConfigSnapshot(remoteContent, "default.yaml")
+    }
+}
+
+private class FakeTerminalPort : TerminalPort {
+    override suspend fun issueConnection(
+        baseUrl: String,
+        sessionId: String?,
+        lastSequence: Long,
+        columns: Int,
+        rows: Int,
+    ): PtyConnectionSpec = PtyConnectionSpec("wss://router.example/ws/pty?token=test")
 }
 
 private class FakeXrayDatPort : XrayDatPort {

@@ -50,6 +50,13 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
 ) : FrameLayout(context, attrs) {
+    var language: StructuredTextLanguage = StructuredTextLanguage.Jsonc
+        set(value) {
+            if (field == value) return
+            field = value
+            scheduleSyntaxHighlight(delayMillis = 0L)
+        }
+
     private var gutterWidth = context.dp(MinGutterWidthDp)
     private val fastScrollerWidth = context.dp(24f)
     private val editor = SelectionAwareEditText(context)
@@ -58,6 +65,8 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
     private val syntaxSpans = mutableListOf<ForegroundColorSpan>()
     private val searchSpans = mutableListOf<BackgroundColorSpan>()
     private val tabStopSpans = mutableListOf<TabStopSpan.Standard>()
+    private val history = EditorHistory()
+    private var valueBeforeTextChange: TextFieldValue? = null
     private var documentIndex = EditorDocumentIndex.build("")
     private var suppressCallbacks = false
     private var lastKnownText = ""
@@ -66,6 +75,12 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
     var onTextChanged: (String) -> Unit = {}
     var onMetricsChanged: (EditorMetrics) -> Unit = {}
     var onRequestGoToLine: (currentLine: Int, totalLines: Int) -> Unit = { _, _ -> }
+
+    val canUndo: Boolean
+        get() = history.canUndo
+
+    val canRedo: Boolean
+        get() = history.canRedo
 
     init {
         setWillNotDraw(false)
@@ -111,6 +126,7 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
 
     fun setDocumentText(value: String) {
         if (value === lastKnownText || value == lastKnownText) return
+        history.clear()
         applyValue(
             value = TextFieldValue(
                 text = value,
@@ -172,6 +188,18 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         searchSpans.forEach { span -> editable?.removeSpan(span) }
         searchSpans.clear()
         editor.invalidate()
+    }
+
+    fun undo(): Boolean {
+        val updated = history.undo(editor.currentValue()) ?: return false
+        applyValue(updated, notifyTextChanged = true)
+        return true
+    }
+
+    fun redo(): Boolean {
+        val updated = history.redo(editor.currentValue()) ?: return false
+        applyValue(updated, notifyTextChanged = true)
+        return true
     }
 
     override fun dispatchDraw(canvas: Canvas) {
@@ -246,7 +274,9 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
                 start: Int,
                 count: Int,
                 after: Int,
-            ) = Unit
+            ) {
+                if (!suppressCallbacks) valueBeforeTextChange = editor.currentValue()
+            }
 
             override fun onTextChanged(
                 source: CharSequence?,
@@ -265,6 +295,8 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
                         editor.selectionEnd.coerceIn(0, updatedText.length),
                     ),
                 )
+                valueBeforeTextChange?.let { before -> history.record(before, updated) }
+                valueBeforeTextChange = null
                 lastKnownText = updatedText
                 updateDocumentIndex(updatedText)
                 ensureCompactTabStops(editable)
@@ -280,6 +312,8 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
             override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
                 if (menu == null) return true
                 menu.removeItem(android.R.id.pasteAsPlainText)
+                menu.addEditorAction(EditorMenuUndo, "Отменить").isEnabled = history.canUndo
+                menu.addEditorAction(EditorMenuRedo, "Повторить").isEnabled = history.canRedo
                 menu.addEditorAction(EditorMenuSelectLine, "Выделить строку")
                 menu.addEditorAction(EditorMenuDuplicateLine, "Дублировать строку")
                 menu.addEditorAction(EditorMenuGoToLine, "Перейти к строке…")
@@ -300,6 +334,8 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
                     return handled
                 }
                 val handled = when (item?.itemId) {
+                    EditorMenuUndo -> undo()
+                    EditorMenuRedo -> redo()
                     EditorMenuDuplicateLine -> duplicateLine()
                     EditorMenuGoToLine -> {
                         requestGoToLine()
@@ -330,6 +366,7 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         val before = editor.currentValue()
         val updated = duplicateEditorLine(before, documentIndex)
         if (updated.text == before.text) return false
+        history.record(before, updated)
         applyValue(updated, notifyTextChanged = true)
         return true
     }
@@ -449,7 +486,10 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
             0..source.length
         }
 
-        val highlighted = highlightJsonc(source.substring(highlightRange.first, highlightRange.last))
+        val highlighted = highlightStructuredText(
+            source = source.substring(highlightRange.first, highlightRange.last),
+            language = language,
+        )
         editor.beginBatchEdit()
         try {
             highlighted.spanStyles.forEach { range ->
@@ -490,8 +530,8 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
     }
 
     private companion object {
-        const val EditorTextSizeSp = 15f
-        const val EditorLineHeightSp = 23f
+        const val EditorTextSizeSp = 13.5f
+        const val EditorLineHeightSp = 21f
         const val MinGutterWidthDp = 36f
         const val MaxCompactTabStops = 16
         const val SyntaxHighlightDelayMillis = 220L
@@ -503,6 +543,8 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         const val EditorMenuDuplicateLine = 0x584B04
         const val EditorMenuGoToLine = 0x584B05
         const val EditorMenuSearchWeb = 0x584B06
+        const val EditorMenuUndo = 0x584B07
+        const val EditorMenuRedo = 0x584B08
 
         val currentLinePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     }
@@ -889,11 +931,10 @@ private data class NativeScrollMetrics(
     val thumbTop: Float,
 )
 
-private fun Menu.addEditorAction(id: Int, label: String) {
-    if (findItem(id) == null) {
-        add(Menu.NONE, id, Menu.NONE, label).setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+private fun Menu.addEditorAction(id: Int, label: String): MenuItem =
+    (findItem(id) ?: add(Menu.NONE, id, Menu.NONE, label)).also {
+        it.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
     }
-}
 
 private fun Context.dp(value: Float): Int =
     TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, resources.displayMetrics)

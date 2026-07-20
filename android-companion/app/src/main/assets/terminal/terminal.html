@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src ws: wss:; img-src data:">
+  <link rel="stylesheet" href="xterm.css">
+  <style>
+    html, body, #terminal { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #01030a; }
+    body { box-sizing: border-box; padding: 5px 3px 3px 5px; }
+    .xterm { height: 100%; }
+    .xterm-viewport { scrollbar-color: #334155 #01030a; scrollbar-width: thin; }
+    /* Android WebView will not reliably open an IME for xterm's zero-sized off-screen textarea. */
+    .xterm .xterm-helper-textarea {
+      left: 0 !important; top: 0 !important; width: 2px !important; height: 2px !important;
+      z-index: 0 !important; opacity: 0.01 !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="terminal" aria-label="Терминал Xkeen"></div>
+  <script src="xterm.js"></script>
+  <script src="xterm-addon-fit.js"></script>
+  <script src="xterm-addon-search.js"></script>
+  <script>
+    (() => {
+      'use strict';
+      const terminal = new Terminal({
+        cursorBlink: true,
+        convertEol: false,
+        scrollback: 5000,
+        fontFamily: "'Roboto Mono', 'Droid Sans Mono', monospace",
+        fontSize: 13,
+        lineHeight: 1.12,
+        allowTransparency: false,
+        theme: {
+          background: '#01030a', foreground: '#d4d4d4', cursor: '#60a5fa',
+          selectionBackground: '#1d4ed880', black: '#0f172a', red: '#f87171',
+          green: '#4ade80', yellow: '#facc15', blue: '#60a5fa', magenta: '#c084fc',
+          cyan: '#22d3ee', white: '#e2e8f0', brightBlack: '#64748b'
+        }
+      });
+      const fitAddon = new FitAddon.FitAddon();
+      const searchAddon = new SearchAddon.SearchAddon();
+      terminal.loadAddon(fitAddon);
+      terminal.loadAddon(searchAddon);
+      const terminalHost = document.getElementById('terminal');
+
+      let socket = null;
+      let generation = 0;
+      let sessionId = null;
+      let lastSequence = 0;
+      let reconnectAttempt = 0;
+      let reconnectTimer = null;
+      let reconnectRequested = false;
+      let detached = false;
+      let sessionEnded = false;
+      let newSessionRequested = false;
+      let sessionPublishTimer = null;
+      let surfaceReady = false;
+      let surfaceStarting = false;
+      let surfaceStartTimer = null;
+
+      function hostHasSize() {
+        const rect = terminalHost.getBoundingClientRect();
+        return rect.width >= 40 && rect.height >= 40;
+      }
+
+      function startSurface() {
+        if (surfaceReady || surfaceStarting || detached) return;
+        clearTimeout(surfaceStartTimer);
+        if (!hostHasSize()) {
+          surfaceStartTimer = setTimeout(startSurface, 50);
+          return;
+        }
+
+        surfaceStarting = true;
+        terminal.open(terminalHost);
+        surfaceReady = true;
+        surfaceStarting = false;
+        requestAnimationFrame(() => {
+          const initialSize = dimensions();
+          terminal.writeln('\x1b[38;5;75mXkeen remote PTY\x1b[0m');
+          try { terminal.refresh(0, Math.max(0, terminal.rows - 1)); } catch (_) {}
+          try { AndroidTerminal.onReady(initialSize.cols, initialSize.rows); } catch (_) {}
+        });
+      }
+
+      function renderAndFocus(focus, publishResize) {
+        if (!surfaceReady) {
+          startSurface();
+          return;
+        }
+        requestAnimationFrame(() => {
+          const size = dimensions();
+          try { terminal.refresh(0, Math.max(0, terminal.rows - 1)); } catch (_) {}
+          if (publishResize) send({ type: 'resize', cols: size.cols, rows: size.rows });
+          if (focus) {
+            try { terminal.focus(); } catch (_) {}
+          }
+          return size;
+        });
+      }
+
+      function publishSession(immediate) {
+        clearTimeout(sessionPublishTimer);
+        const publish = () => {
+          try { AndroidTerminal.onSession(sessionId || '', lastSequence); } catch (_) {}
+        };
+        if (immediate) publish(); else sessionPublishTimer = setTimeout(publish, 750);
+      }
+
+      function dimensions() {
+        if (surfaceReady && hostHasSize()) {
+          try { fitAddon.fit(); } catch (_) {}
+        }
+        return { cols: Math.max(2, terminal.cols || 80), rows: Math.max(1, terminal.rows || 24) };
+      }
+
+      function publishState(state, message) {
+        try { AndroidTerminal.onState(String(state || ''), String(message || '')); } catch (_) {}
+      }
+
+      function send(payload) {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify(payload));
+          return true;
+        }
+        return false;
+      }
+
+      function requestConnection(delay) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(() => {
+          if (detached || (sessionEnded && !newSessionRequested) || reconnectRequested) return;
+          reconnectRequested = true;
+          const size = dimensions();
+          try {
+            AndroidTerminal.requestConnection(sessionId || '', lastSequence, size.cols, size.rows);
+          } catch (error) {
+            reconnectRequested = false;
+            publishState('error', String(error));
+          }
+        }, Math.max(0, delay || 0));
+      }
+
+      function scheduleReconnect(reason) {
+        if (detached || sessionEnded) return;
+        const delays = [1000, 2000, 4000, 8000, 15000];
+        const delay = delays[Math.min(reconnectAttempt, delays.length - 1)];
+        reconnectAttempt += 1;
+        publishState('reconnecting', `${reason || 'Соединение закрыто'}. Повтор через ${Math.ceil(delay / 1000)} с.`);
+        requestConnection(delay);
+      }
+
+      function connect(spec) {
+        detached = false;
+        sessionEnded = false;
+        newSessionRequested = false;
+        reconnectRequested = false;
+        clearTimeout(reconnectTimer);
+        const current = ++generation;
+        if (socket) {
+          try { socket.onclose = null; socket.close(); } catch (_) {}
+        }
+        if (spec.sessionId) sessionId = String(spec.sessionId);
+        if (Number.isFinite(Number(spec.lastSequence))) lastSequence = Math.max(lastSequence, Number(spec.lastSequence));
+        publishState('connecting', sessionId ? 'Восстанавливаем PTY-сессию…' : 'Открываем PTY-сессию…');
+
+        try {
+          socket = new WebSocket(String(spec.webSocketUrl));
+        } catch (error) {
+          scheduleReconnect(`WebSocket недоступен: ${error}`);
+          return;
+        }
+        socket.onopen = () => {
+          if (current !== generation) return;
+          reconnectAttempt = 0;
+          const size = dimensions();
+          send({ type: 'resize', cols: size.cols, rows: size.rows });
+          terminal.writeln('\x1b[38;5;75m[PTY] Соединение установлено\x1b[0m');
+          renderAndFocus(false);
+        };
+        socket.onmessage = (event) => {
+          if (current !== generation) return;
+          let message;
+          try { message = JSON.parse(event.data); } catch (_) { return; }
+          if (message.type === 'init') {
+            const incomingSessionId = String(message.session_id || sessionId || '');
+            if (!message.reused || (sessionId && incomingSessionId !== sessionId)) lastSequence = 0;
+            sessionId = incomingSessionId;
+            publishSession(true);
+            publishState('connected', `PTY подключён${message.shell ? ': ' + message.shell : ''}`);
+            terminal.writeln(`\x1b[38;5;75m[PTY] ${message.shell || 'shell'}${message.reused ? ' · сессия восстановлена' : ''}\x1b[0m`);
+            renderAndFocus(true);
+            if (!message.reused) {
+              // A fresh interactive ash may start before the WebSocket is attached and not repaint
+              // its prompt. A blank command is harmless and guarantees a visible prompt.
+              setTimeout(() => send({ type: 'input', data: '\r' }), 120);
+            }
+          } else if (message.type === 'output') {
+            if (typeof message.data === 'string') terminal.write(message.data);
+            lastSequence = Math.max(lastSequence, Number(message.seq) || 0);
+            publishSession(false);
+          } else if (message.type === 'exit') {
+            terminal.writeln(`\r\n[PTY завершён, код ${Number(message.code) || 0}]`);
+            sessionId = null;
+            lastSequence = 0;
+            sessionEnded = !newSessionRequested;
+            publishSession(true);
+            publishState('closed', 'PTY-сессия завершена.');
+          } else if (message.type === 'error') {
+            terminal.writeln(`\r\n[PTY] ${String(message.message || 'Ошибка терминала')}`);
+            publishState('error', String(message.message || 'Ошибка терминала'));
+          }
+        };
+        socket.onerror = () => {
+          if (current === generation) publishState('error', 'Ошибка WebSocket терминала.');
+        };
+        socket.onclose = () => {
+          if (current !== generation || detached) return;
+          socket = null;
+          if (newSessionRequested) return;
+          scheduleReconnect('Связь с PTY потеряна');
+        };
+      }
+
+      terminal.onData(data => send({ type: 'input', data }));
+      terminal.onResize(size => send({ type: 'resize', cols: size.cols, rows: size.rows }));
+      const resizeObserver = new ResizeObserver(() => {
+        if (!surfaceReady) startSurface(); else renderAndFocus(false, true);
+      });
+      resizeObserver.observe(terminalHost);
+      terminalHost.addEventListener('pointerdown', () => renderAndFocus(true));
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) renderAndFocus(false);
+      });
+
+      window.XkeenTerminal = {
+        connect,
+        reconnect: () => { sessionEnded = false; requestConnection(0); },
+        newSession: () => {
+          sessionEnded = false;
+          newSessionRequested = true;
+          if (socket && socket.readyState === WebSocket.OPEN) send({ type: 'close' });
+          sessionId = null;
+          lastSequence = 0;
+          publishSession(true);
+          terminal.reset();
+          requestConnection(120);
+        },
+        signal: name => send({ type: 'signal', name: String(name || 'INT') }),
+        input: data => send({ type: 'input', data: String(data || '') }),
+        clear: () => terminal.clear(),
+        focus: () => terminal.focus(),
+        resize: () => renderAndFocus(false, true),
+        selection: () => terminal.getSelection(),
+        paste: text => terminal.paste(String(text || '')),
+        findNext: query => searchAddon.findNext(String(query || ''), { caseSensitive: false, incremental: true }),
+        findPrevious: query => searchAddon.findPrevious(String(query || ''), { caseSensitive: false }),
+        detach: () => {
+          publishSession(true);
+          detached = true;
+          generation += 1;
+          clearTimeout(reconnectTimer);
+          if (socket) { try { socket.onclose = null; socket.close(); } catch (_) {} }
+          socket = null;
+        }
+      };
+
+      startSurface();
+    })();
+  </script>
+</body>
+</html>

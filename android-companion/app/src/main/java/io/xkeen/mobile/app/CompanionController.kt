@@ -2572,6 +2572,216 @@ internal class CompanionController(
         updateLogsDiagnostic()
     }
 
+    suspend fun refreshMihomoConfig(force: Boolean = false) {
+        val endpoint = state.dashboard.endpoint
+        val current = state.mihomoConfig
+        if (endpoint.isBlank() || current.isBusy || (!force && current.hasLoaded)) return
+        state = state.copy(
+            mihomoConfig = current.copy(
+                operation = MihomoConfigOperationPhase.Loading,
+                message = "Загружаем активный YAML-профиль Mihomo…",
+                validationLog = "",
+            ),
+        )
+        try {
+            val snapshot = dependencies.mihomoConfig.load(endpoint)
+            if (state.dashboard.endpoint != endpoint) return
+            state = state.copy(
+                mihomoConfig = MihomoConfigState(
+                    content = snapshot.content,
+                    savedContent = snapshot.content,
+                    activeProfile = snapshot.activeProfile,
+                    hasLoaded = true,
+                    operation = MihomoConfigOperationPhase.Idle,
+                    message = "Активный YAML-профиль загружен.",
+                ),
+            )
+        } catch (error: CancellationException) {
+            if (state.dashboard.endpoint == endpoint) {
+                state = state.copy(
+                    mihomoConfig = state.mihomoConfig.copy(operation = MihomoConfigOperationPhase.Idle),
+                )
+            }
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            if (state.dashboard.endpoint == endpoint) {
+                state = state.copy(
+                    mihomoConfig = state.mihomoConfig.copy(
+                        operation = MihomoConfigOperationPhase.Failure,
+                        message = error.toCompanionLoadMessage("Не удалось загрузить config.yaml Mihomo."),
+                    ),
+                )
+            }
+        }
+    }
+
+    fun updateMihomoConfig(value: String) {
+        val current = state.mihomoConfig
+        if (!current.hasLoaded || current.isBusy || value == current.content) return
+        state = state.copy(
+            mihomoConfig = current.copy(
+                content = value,
+                operation = MihomoConfigOperationPhase.Idle,
+                message = "YAML изменён. Перед сохранением проверьте его ядром Mihomo.",
+                validationLog = "",
+                validatedContent = null,
+            ),
+        )
+    }
+
+    fun revertMihomoConfig() {
+        val current = state.mihomoConfig
+        if (!current.hasLoaded || current.isBusy || !current.hasChanges) return
+        state = state.copy(
+            mihomoConfig = current.copy(
+                content = current.savedContent,
+                operation = MihomoConfigOperationPhase.Idle,
+                message = "Локальные изменения отменены.",
+                validationLog = "",
+                validatedContent = null,
+            ),
+        )
+    }
+
+    suspend fun validateMihomoConfig() {
+        val endpoint = state.dashboard.endpoint
+        val content = state.mihomoConfig.content
+        if (endpoint.isBlank() || content.isBlank() || state.mihomoConfig.isBusy) return
+        state = state.copy(
+            mihomoConfig = state.mihomoConfig.copy(
+                operation = MihomoConfigOperationPhase.Validating,
+                message = "Проверяем YAML через mihomo -t…",
+                validationLog = "",
+                validatedContent = null,
+            ),
+        )
+        try {
+            val result = dependencies.mihomoConfig.validate(endpoint, content)
+            if (state.dashboard.endpoint != endpoint || state.mihomoConfig.content != content) return
+            state = state.copy(
+                mihomoConfig = state.mihomoConfig.copy(
+                    operation = if (result.valid) {
+                        MihomoConfigOperationPhase.Success
+                    } else {
+                        MihomoConfigOperationPhase.Failure
+                    },
+                    message = if (result.valid) {
+                        "Mihomo подтвердил корректность YAML."
+                    } else {
+                        "Mihomo отклонил YAML; исправьте ошибки перед сохранением."
+                    },
+                    validationLog = result.log,
+                    validatedContent = content.takeIf { result.valid },
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            if (state.dashboard.endpoint == endpoint && state.mihomoConfig.content == content) {
+                state = state.copy(
+                    mihomoConfig = state.mihomoConfig.copy(
+                        operation = MihomoConfigOperationPhase.Failure,
+                        message = error.toCompanionLoadMessage("Не удалось проверить YAML Mihomo."),
+                    ),
+                )
+            }
+        }
+    }
+
+    suspend fun saveMihomoConfig(restart: Boolean) {
+        val endpoint = state.dashboard.endpoint
+        val content = state.mihomoConfig.content
+        val current = state.mihomoConfig
+        if (
+            endpoint.isBlank() || content.isBlank() || current.isBusy || !current.hasChanges ||
+            current.validatedContent != content
+        ) {
+            return
+        }
+        state = state.copy(
+            mihomoConfig = current.copy(
+                operation = if (restart) {
+                    MihomoConfigOperationPhase.Restarting
+                } else {
+                    MihomoConfigOperationPhase.Saving
+                },
+                message = if (restart) {
+                    "Сохраняем YAML и перезапускаем Mihomo…"
+                } else {
+                    "Сохраняем YAML с резервной копией…"
+                },
+            ),
+        )
+        try {
+            val fresh = dependencies.mihomoConfig.load(endpoint)
+            if (fresh.content != current.savedContent) {
+                throw MihomoConfigException(
+                    "config.yaml изменился на сервере после открытия. Локальная перезапись остановлена; отмените изменения и загрузите файл заново.",
+                )
+            }
+            val snapshot = dependencies.mihomoConfig.save(endpoint, content, restart)
+            if (state.dashboard.endpoint != endpoint || state.mihomoConfig.content != content) return
+            state = state.copy(
+                mihomoConfig = state.mihomoConfig.copy(
+                    content = snapshot.content,
+                    savedContent = snapshot.content,
+                    activeProfile = snapshot.activeProfile,
+                    operation = MihomoConfigOperationPhase.Success,
+                    message = if (restart) {
+                        "YAML сохранён; Mihomo перезапущен."
+                    } else {
+                        "YAML сохранён в активный профиль."
+                    },
+                    validatedContent = snapshot.content,
+                ),
+                dashboard = state.dashboard.copy(
+                    lastOperation = if (restart) "Mihomo YAML сохранён и применён" else "Mihomo YAML сохранён",
+                ),
+                logs = recordLog(
+                    source = "mihomo",
+                    level = LogLevel.Info,
+                    message = if (restart) "config.yaml сохранён и Mihomo перезапущен" else "config.yaml сохранён",
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            if (state.dashboard.endpoint == endpoint && state.mihomoConfig.content == content) {
+                state = state.copy(
+                    mihomoConfig = state.mihomoConfig.copy(
+                        operation = MihomoConfigOperationPhase.Failure,
+                        message = error.toCompanionLoadMessage("Не удалось сохранить YAML Mihomo."),
+                    ),
+                )
+            }
+        }
+    }
+
+    suspend fun issueTerminalConnection(
+        sessionId: String?,
+        lastSequence: Long,
+        columns: Int,
+        rows: Int,
+    ): PtyConnectionSpec {
+        try {
+            return dependencies.terminal.issueConnection(
+                baseUrl = state.dashboard.endpoint,
+                sessionId = sessionId,
+                lastSequence = lastSequence,
+                columns = columns,
+                rows = rows,
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            returnToLoginForExpiredSession(error)
+            throw error
+        }
+    }
+
     suspend fun disconnect() {
         val connection = selectedConnection() ?: return
         if (state.isSessionBusy || state.serviceOperation.isPending) return
@@ -2626,6 +2836,7 @@ internal class CompanionController(
             outbounds = unloadedOutboundsState(),
             xraySubscriptions = unloadedXraySubscriptionsState(),
             xrayDat = unloadedXrayDatState(),
+            mihomoConfig = unloadedMihomoConfigState(),
             diagnostics = initialDiagnostics().replaceDiagnostic(
                 label = "Мобильная сессия",
                 status = "Готово",
@@ -2699,6 +2910,7 @@ internal class CompanionController(
             outbounds = unloadedOutboundsState(),
             xraySubscriptions = unloadedXraySubscriptionsState(),
             xrayDat = unloadedXrayDatState(),
+            mihomoConfig = unloadedMihomoConfigState(),
             diagnostics = state.diagnostics.replaceDiagnostic(
                 label = "Мобильная сессия",
                 status = result.statusSummary,

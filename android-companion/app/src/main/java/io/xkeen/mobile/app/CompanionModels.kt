@@ -714,6 +714,41 @@ data class LogsState(
     val hasLoadedHistory: Boolean = false,
 )
 
+enum class MihomoConfigOperationPhase {
+    Idle,
+    Loading,
+    Validating,
+    Saving,
+    Restarting,
+    Success,
+    Failure,
+}
+
+data class MihomoConfigState(
+    val content: String = "",
+    val savedContent: String = "",
+    val activeProfile: String = "config.yaml",
+    val hasLoaded: Boolean = false,
+    val operation: MihomoConfigOperationPhase = MihomoConfigOperationPhase.Idle,
+    val message: String = "Откройте раздел, чтобы загрузить активный YAML-профиль Mihomo.",
+    val validationLog: String = "",
+    val validatedContent: String? = null,
+) {
+    val hasChanges: Boolean
+        get() = hasLoaded && content != savedContent
+
+    val isBusy: Boolean
+        get() = operation in setOf(
+            MihomoConfigOperationPhase.Loading,
+            MihomoConfigOperationPhase.Validating,
+            MihomoConfigOperationPhase.Saving,
+            MihomoConfigOperationPhase.Restarting,
+        )
+
+    val isCurrentContentValid: Boolean
+        get() = validatedContent == content
+}
+
 data class DiagnosticItem(
     val label: String,
     val status: String,
@@ -743,6 +778,7 @@ data class CompanionUiState(
     val outbounds: OutboundsState = OutboundsState(),
     val xraySubscriptions: XraySubscriptionsState = XraySubscriptionsState(),
     val xrayDat: XrayDatState = XrayDatState(),
+    val mihomoConfig: MihomoConfigState = MihomoConfigState(),
     val logs: LogsState = LogsState(),
     val diagnostics: List<DiagnosticItem> = initialDiagnostics(),
     val pendingAction: PendingAction? = null,
@@ -786,6 +822,8 @@ fun unloadedXraySubscriptionsState(): XraySubscriptionsState = XraySubscriptions
 )
 
 fun unloadedXrayDatState(): XrayDatState = XrayDatState()
+
+fun unloadedMihomoConfigState(): MihomoConfigState = MihomoConfigState()
 
 fun initialDiagnostics(): List<DiagnosticItem> = listOf(
     DiagnosticItem("Мобильная сессия", "Ожидает входа", DiagnosticSeverity.Warning),

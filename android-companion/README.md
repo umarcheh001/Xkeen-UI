@@ -42,6 +42,7 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 По факту интерактивны уже сейчас:
 
 - `Routing Xray`
+- `Роутинг Mihomo`
 - `Подписки Xray`
 - `Прокси / Outbounds`
 - `DAT-файлы GeoIP / GeoSite`
@@ -58,6 +59,8 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - `GET /api/mobile/v1/xray/routing/document?document=...` загружает единый server-authoritative snapshot выбранного routing-документа: published content/revision, сохранённый server draft и conflict metadata.
 - `POST /api/mobile/v1/xray/routing/validate` принимает raw JSONC draft выбранного документа и запускает read-only server Xray preflight; invalid draft возвращает structured diagnostics без persistent config save, restart или DAT-asset sync side effect.
 - `POST /api/mobile/v1/xray/routing/save` сохраняет проверенный draft отдельно от live Xray fragment; `POST /api/mobile/v1/xray/routing/apply` применяет exact saved revision и подтверждает restart xkeen.
+- `GET /api/mihomo-config`, `POST /api/mihomo/validate_raw`, `POST /api/mihomo/save_raw` и `POST /api/mihomo/restart_raw` образуют YAML workflow активного профиля Mihomo. Непроверенный или изменённый после проверки текст нельзя сохранить; restart требует отдельного подтверждения.
+- `POST /api/ws-token` выдаёт одноразовый токен с областью `pty`, после чего локальная xterm.js-поверхность подключается к `/ws/pty`. PTY session id сохраняется отдельно для каждого узла; новый экран заново получает buffered output, а reconnect той же поверхности продолжает replay с последнего показанного sequence.
 - `GET/POST /api/xray/subscriptions` загружает список подписок Xray и сохраняет новую или изменённую запись; `POST /api/xray/subscriptions/preview` получает серверный preview узлов без сохранения, записи fragment, изменения routing/observatory или restart.
 - `POST /api/xray/subscriptions/<id>/refresh` и `POST /api/xray/subscriptions/refresh-due` явно обновляют одну подписку или только просроченные; `DELETE /api/xray/subscriptions/<id>` удаляет managed fragment и безопасно пересобирает связанный runtime state.
 - `POST /api/xray/subscriptions/<id>/nodes/ping` проверяет отдельный узел подписки. Параметры restart и удаления managed-файла передаются явно, а разрушительные действия подтверждаются в приложении.
@@ -72,7 +75,7 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 ## Архитектурный seam
 
 - `DemoCompanionController` заменен на `CompanionController`, который зависит от `CompanionControllerDependencies`, а не от жестко пришитых demo-side effects.
-- Для следующего слоя выделены отдельные порты: `ConnectionsPort`, `SessionPort`, `ServiceActionsPort`, `RoutingValidationPort`, `RoutingWritePort`, `LogsPort`; time/journal helper живет отдельно в `CompanionJournalPort`.
+- Для backend-слоя выделены отдельные порты, включая `ConnectionsPort`, `SessionPort`, `ServiceActionsPort`, `RoutingValidationPort`, `RoutingWritePort`, `MihomoConfigPort`, `TerminalPort` и `LogsPort`; time/journal helper живет отдельно в `CompanionJournalPort`.
 - `CompanionController` больше не собирает `LogEntry` вручную: запись controller-событий идет через `LogsPort`, поэтому транспорт логов и policy хранения можно будет заменить без роста reducer-логики.
 - `ConnectionsPort`, `SessionPort`, `ServiceActionsPort`, `RoutingValidationPort`, `RoutingWritePort` и `LogsTransportPort` имеют production implementations. `LogsPort` сохраняет только локальную policy controller-событий.
 - Логика controller/reducer теперь тестируется отдельно от transport и storage seam.
@@ -115,6 +118,21 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - `save` и `apply` используют production `WebPanelRoutingWritePort`. Оба запроса передают ожидаемые SHA-256 tokens для published и saved revision; внешний edit, stale draft и saved/published mismatch получают HTTP `409`, отдельный `Conflict` UI state и актуальный server snapshot.
 - `save` выполняет server preflight, но хранит draft в app-private backend state без изменения live fragment и без restart. `apply` повторяет preflight, создаёт backup snapshots, атомарно пишет clean JSON + JSONC sidecar и считается успешным только после restart confirmation; при failed restart backend восстанавливает прежние файлы.
 - После `save/apply` published/saved content, revision и timestamps принимаются только из backend response. Локальные изменения, сделанные пока запрос был in flight, не теряются и снова требуют validate.
+
+## Роутинг Mihomo
+
+- Активный `config.yaml` редактируется той же нативной Android text surface, что и JSONC: номера строк, быстрый скролл, поиск, переход к строке, системное выделение и работа с большими файлами сохранены.
+- YAML имеет отдельную подсветку ключей, строк, чисел, boolean/null, anchors/tags и комментариев. Локальная подсветка не считается валидатором: авторитетный результат приходит только от `mihomo -t` на сервере.
+- Рабочий цикл разделён на `загрузить → изменить → проверить → сохранить` или `применить`. Любое изменение текста сбрасывает подтверждение проверки; `Применить` дополнительно подтверждает restart.
+- Полная оболочка Acode не встроена. Не переносятся Cordova/plugin runtime, файловый менеджер, marketplace, LSP и общий IDE shell.
+
+## Терминал
+
+- Экран `Shell → Терминал` использует локально упакованный xterm.js только как VT/ANSI renderer и input surface; команды выполняются на подключённом Xkeen-узле через существующий server PTY.
+- Поддерживаются resize, scrollback, поиск, очистка экрана, `Ctrl+C`, новая сессия, bounded reconnect и replay по sequence без Termux/AXS на телефоне.
+- Панель действий и строка быстрых клавиш используют те же компактные размеры, что и редактор Xray; renderer стартует только после появления ненулевого размера WebView.
+- Одноразовый WS token запрашивается через тот же authenticated/CSRF transport, что и остальные действия. WebView никогда не загружает удалённую HTML-страницу и не получает session cookie/token Xkeen UI.
+- Использованные xterm.js assets и граница заимствования описаны в [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Техническая база
 
@@ -165,7 +183,7 @@ cd android-companion
 .\gradlew.bat testDebugUnitTest assembleDebug
 ```
 
-Эта команда завершилась успешно в текущем репозитории `2026-07-16`.
+Эта команда завершилась успешно в текущем репозитории `2026-07-20`.
 
 ## Осознанно не переносим из веб-панели
 
@@ -175,10 +193,10 @@ cd android-companion
 ## За границами закрытого блока
 
 - `Routing Xray` полностью backend-backed для `load/validate/save/apply`; для device rollout одновременно нужны актуальный backend archive и APK.
-- Реальный Xray logs history/live transport и reconnect behavior уже подключены. PTY transport и durable offline persistence логов пока не входят в scope.
-- Большая часть разделов `Mihomo`, `Ports` и `Generator` пока остаётся placeholder-поверхностями.
+- Реальный Xray logs history/live transport и reconnect behavior уже подключены. PTY transport также подключён; durable offline persistence логов по-прежнему не входит в scope.
+- `Роутинг Mihomo` больше не placeholder. Остальные разделы `Mihomo`, а также большая часть `Ports` и `Generator`, пока остаются placeholder-поверхностями.
 
 ## После текущего блока
 
 - На согласованных backend archive и APK пройти device acceptance из [stage-10-closure-checklist.md](stage-10-closure-checklist.md).
-- Следующий новый product slice после acceptance: controlled PTY/terminal transport или отдельный Mihomo workflow — оба требуют отдельного mobile contract и safety scope.
+- Следующий product slice после acceptance: профили/подписки Mihomo либо общий файловый workflow для ограниченного набора конфигураций.

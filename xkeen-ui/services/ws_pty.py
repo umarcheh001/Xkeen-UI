@@ -113,6 +113,15 @@ def _pty_shell_args(shell_path: str):
     return args
 
 
+def _pty_replay_cursor(last_seq: int, reused: bool) -> int:
+    """Return the first acknowledged output sequence for this attachment."""
+    try:
+        cursor = max(0, int(last_seq or 0))
+    except (TypeError, ValueError):
+        cursor = 0
+    return cursor if reused else 0
+
+
 def _pty_preexec(slave_fd: int) -> None:
     """Ensure the spawned shell has a controlling TTY."""
     if not PTY_RUNTIME_SUPPORTED:
@@ -680,9 +689,10 @@ def handle_pty_request(
             pass
         return []
 
+    replay_from = _pty_replay_cursor(last_seq, reused)
     try:
-        if last_seq < int(replay_upto or 0):
-            chunks = sess.replay_since(last_seq)
+        if replay_from < int(replay_upto or 0):
+            chunks = sess.replay_since(replay_from)
             for s, t in chunks:
                 try:
                     if int(s) > int(replay_upto):

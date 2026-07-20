@@ -344,8 +344,9 @@ private fun RoutingDocumentPage(
             onAction = onRetry,
         )
 
-        else -> JsonEditor(
+        else -> StructuredTextEditor(
             value = document.draftContent,
+            language = StructuredTextLanguage.Jsonc,
             onValueChange = onValueChange,
             onMetricsChange = onMetricsChange,
             onEditorReady = onEditorReady,
@@ -525,7 +526,7 @@ private fun DocumentToolbar(
 }
 
 @Composable
-private fun SearchToolbarField(
+internal fun SearchToolbarField(
     value: String,
     onValueChange: (String) -> Unit,
     onSearch: () -> Unit,
@@ -848,7 +849,7 @@ private fun RoutingDocumentPickerDialog(
 }
 
 @Composable
-private fun EditorToolbarButton(
+internal fun EditorToolbarButton(
     icon: ImageVector,
     description: String,
     onClick: () -> Unit,
@@ -908,8 +909,9 @@ private fun EditorToolbarButton(
 }
 
 @Composable
-private fun JsonEditor(
+internal fun StructuredTextEditor(
     value: String,
+    language: StructuredTextLanguage,
     onValueChange: (String) -> Unit,
     onMetricsChange: (EditorMetrics) -> Unit,
     onEditorReady: (AdvancedJsonEditorView) -> Unit,
@@ -923,11 +925,13 @@ private fun JsonEditor(
     AndroidView(
         factory = { context ->
             AdvancedJsonEditorView(context).also { view ->
+                view.language = language
                 editorView.value = view
                 onEditorReady(view)
             }
         },
         update = { view ->
+            view.language = language
             view.onTextChanged = onValueChange
             view.onMetricsChanged = onMetricsChange
             view.onRequestGoToLine = { currentLine, totalLines ->
@@ -1049,6 +1053,19 @@ internal object JsonEditorPalette {
     val SearchMatch = Color(0xB3345790)
 }
 
+internal enum class StructuredTextLanguage(val label: String) {
+    Jsonc("JSON / JSONC"),
+    Yaml("YAML"),
+}
+
+internal fun highlightStructuredText(
+    source: String,
+    language: StructuredTextLanguage,
+): AnnotatedString = when (language) {
+    StructuredTextLanguage.Jsonc -> highlightJsonc(source)
+    StructuredTextLanguage.Yaml -> highlightYaml(source)
+}
+
 internal fun highlightJsonc(source: String): AnnotatedString = buildAnnotatedString {
     append(source)
     var index = 0
@@ -1125,6 +1142,150 @@ internal fun highlightJsonc(source: String): AnnotatedString = buildAnnotatedStr
 
 private fun AnnotatedString.Builder.addJsonStyle(color: Color, start: Int, end: Int) {
     addStyle(SpanStyle(color = color), start, end)
+}
+
+/**
+ * Lightweight YAML tokenization for the mobile editor. It deliberately keeps comments and quoted
+ * scalars intact and only styles plain scalars after the mapping/list punctuation has been found.
+ * Server-side Mihomo validation remains authoritative.
+ */
+internal fun highlightYaml(source: String): AnnotatedString = buildAnnotatedString {
+    append(source)
+    var lineStart = 0
+    while (lineStart <= source.length) {
+        val lineEnd = source.indexOf('\n', lineStart).takeIf { it >= 0 } ?: source.length
+        highlightYamlLine(source, lineStart, lineEnd)
+        if (lineEnd == source.length) break
+        lineStart = lineEnd + 1
+    }
+}
+
+private fun AnnotatedString.Builder.highlightYamlLine(source: String, start: Int, end: Int) {
+    var cursor = start
+    while (cursor < end && source[cursor].isWhitespace()) cursor += 1
+    if (cursor >= end) return
+
+    if (source[cursor] == '-') {
+        addJsonStyle(JsonEditorPalette.Punctuation, cursor, cursor + 1)
+        cursor += 1
+        while (cursor < end && source[cursor].isWhitespace()) cursor += 1
+    }
+
+    val commentStart = source.yamlCommentStart(cursor, end)
+    val contentEnd = commentStart.takeIf { it >= 0 } ?: end
+    if (commentStart >= 0) {
+        addJsonStyle(JsonEditorPalette.Comment, commentStart, end)
+    }
+    if (cursor >= contentEnd) return
+
+    val colon = source.yamlMappingColon(cursor, contentEnd)
+    if (colon >= 0) {
+        val keyEnd = source.trimmedEnd(cursor, colon)
+        if (keyEnd > cursor) addJsonStyle(JsonEditorPalette.Property, cursor, keyEnd)
+        addJsonStyle(JsonEditorPalette.Punctuation, colon, colon + 1)
+        cursor = colon + 1
+    }
+    while (cursor < contentEnd && source[cursor].isWhitespace()) cursor += 1
+    if (cursor >= contentEnd) return
+
+    var tokenStart = cursor
+    var quote: Char? = null
+    var escaped = false
+    while (cursor <= contentEnd) {
+        val char = source.getOrNull(cursor)
+        val atEnd = cursor == contentEnd
+        if (!atEnd && quote != null) {
+            if (!escaped && char == quote) {
+                cursor += 1
+                addJsonStyle(JsonEditorPalette.String, tokenStart, cursor)
+                tokenStart = cursor
+                quote = null
+                continue
+            }
+            escaped = quote == '"' && !escaped && char == '\\'
+            if (char != '\\') escaped = false
+            cursor += 1
+            continue
+        }
+        if (!atEnd && (char == '"' || char == '\'')) {
+            styleYamlPlainToken(source, tokenStart, cursor)
+            quote = char
+            tokenStart = cursor
+            cursor += 1
+            continue
+        }
+        if (atEnd || char?.isWhitespace() == true || char == ',' || char == '[' || char == ']' || char == '{' || char == '}') {
+            styleYamlPlainToken(source, tokenStart, cursor)
+            if (!atEnd && char != null && !char.isWhitespace()) {
+                addJsonStyle(JsonEditorPalette.Punctuation, cursor, cursor + 1)
+            }
+            cursor += 1
+            tokenStart = cursor
+            continue
+        }
+        cursor += 1
+    }
+    if (quote != null && tokenStart < contentEnd) {
+        addJsonStyle(JsonEditorPalette.String, tokenStart, contentEnd)
+    }
+}
+
+private fun AnnotatedString.Builder.styleYamlPlainToken(source: String, start: Int, end: Int) {
+    if (start >= end) return
+    val token = source.substring(start, end).trim()
+    if (token.isEmpty()) return
+    val tokenStart = start + source.substring(start, end).indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
+    val color = when {
+        token.startsWith("&") || token.startsWith("*") || token.startsWith("!") -> JsonEditorPalette.Keyword
+        token.equals("true", true) || token.equals("false", true) ||
+            token.equals("null", true) || token == "~" -> JsonEditorPalette.Keyword
+        token.toDoubleOrNull() != null -> JsonEditorPalette.Number
+        else -> JsonEditorPalette.String
+    }
+    addJsonStyle(color, tokenStart, tokenStart + token.length)
+}
+
+private fun String.yamlCommentStart(start: Int, end: Int): Int {
+    var quote: Char? = null
+    var escaped = false
+    for (index in start until end) {
+        val char = this[index]
+        if (quote != null) {
+            if (!escaped && char == quote) quote = null
+            escaped = quote == '"' && !escaped && char == '\\'
+            if (char != '\\') escaped = false
+        } else if (char == '"' || char == '\'') {
+            quote = char
+        } else if (char == '#' && (index == start || this[index - 1].isWhitespace())) {
+            return index
+        }
+    }
+    return -1
+}
+
+private fun String.yamlMappingColon(start: Int, end: Int): Int {
+    var quote: Char? = null
+    var depth = 0
+    for (index in start until end) {
+        val char = this[index]
+        if (quote != null) {
+            if (char == quote && (index == start || this[index - 1] != '\\')) quote = null
+            continue
+        }
+        when (char) {
+            '"', '\'' -> quote = char
+            '[', '{' -> depth += 1
+            ']', '}' -> depth = (depth - 1).coerceAtLeast(0)
+            ':' -> if (depth == 0 && (index + 1 == end || this[index + 1].isWhitespace())) return index
+        }
+    }
+    return -1
+}
+
+private fun String.trimmedEnd(start: Int, end: Int): Int {
+    var result = end
+    while (result > start && this[result - 1].isWhitespace()) result -= 1
+    return result
 }
 
 private fun String.jsonStringEnd(start: Int): Int {
@@ -1336,6 +1497,22 @@ private fun EditorStatusBar(
 ) {
     val presentation = editorStatusPresentation(document, validation, write)
 
+    EditorMetricsStatusBar(
+        statusText = presentation.text,
+        statusColor = presentation.color,
+        metrics = metrics,
+        onClick = onClick,
+    )
+}
+
+@Composable
+internal fun EditorMetricsStatusBar(
+    statusText: String,
+    statusColor: Color,
+    metrics: EditorMetrics,
+    onClick: () -> Unit,
+) {
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1357,11 +1534,11 @@ private fun EditorStatusBar(
         Box(
             modifier = Modifier
                 .size(7.dp)
-                .background(presentation.color, CircleShape),
+                .background(statusColor, CircleShape),
         )
         Spacer(Modifier.width(6.dp))
         Text(
-            text = presentation.text,
+            text = statusText,
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.labelMedium,
             color = WebPanelPalette.Text,
