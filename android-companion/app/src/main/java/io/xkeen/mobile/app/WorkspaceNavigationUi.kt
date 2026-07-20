@@ -328,6 +328,13 @@ internal fun WorkspaceSectionContent(
         WorkspaceSection.XraySubscriptions -> XraySubscriptionsWorkspaceScreen(state, controller, modifier)
         WorkspaceSection.XrayAssets -> XrayDatWorkspaceScreen(state, controller, modifier)
         WorkspaceSection.XrayLogs -> LogsWorkspaceScreen(state, controller, modifier)
+        WorkspaceSection.PortsOverview -> PortsWorkspaceScreen(
+            state = state,
+            controller = controller,
+            isFullscreen = isEditorFullscreen,
+            onFullscreenChange = onEditorFullscreenChange,
+            modifier = modifier,
+        )
         WorkspaceSection.MihomoRouting -> MihomoRoutingWorkspaceScreen(
             state = state,
             controller = controller,

@@ -464,7 +464,8 @@ private fun ReadyRoute(
     val isImeVisible = WindowInsets.ime.getBottom(density) > 0
     val orientation = LocalConfiguration.current.orientation
     val isEditorSection = state.workspaceSection == WorkspaceSection.XrayRouting ||
-        state.workspaceSection == WorkspaceSection.MihomoRouting
+        state.workspaceSection == WorkspaceSection.MihomoRouting ||
+        state.workspaceSection == WorkspaceSection.PortsOverview
     var isEditorFullscreen by remember(orientation, state.workspaceSection) {
         mutableStateOf(
             isEditorSection && orientation == Configuration.ORIENTATION_LANDSCAPE,

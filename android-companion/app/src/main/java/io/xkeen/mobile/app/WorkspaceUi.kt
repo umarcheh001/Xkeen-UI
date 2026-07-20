@@ -1068,15 +1068,48 @@ internal object JsonEditorPalette {
 
 internal enum class StructuredTextLanguage(val label: String) {
     Jsonc("JSON / JSONC"),
+    List("LIST"),
     Yaml("YAML"),
 }
+
+private val PortsListNumberPattern = Regex("[0-9]+(?::[0-9]+)?")
 
 internal fun highlightStructuredText(
     source: String,
     language: StructuredTextLanguage,
 ): AnnotatedString = when (language) {
     StructuredTextLanguage.Jsonc -> highlightJsonc(source)
+    StructuredTextLanguage.List -> highlightList(source)
     StructuredTextLanguage.Yaml -> highlightYaml(source)
+}
+
+internal fun highlightList(source: String): AnnotatedString = buildAnnotatedString {
+    append(source)
+    var lineStart = 0
+    while (lineStart <= source.length) {
+        val lineEnd = source.indexOf('\n', lineStart).takeIf { it >= 0 } ?: source.length
+        var contentStart = lineStart
+        while (contentStart < lineEnd && source[contentStart].isWhitespace()) contentStart += 1
+        if (contentStart < lineEnd) {
+            val commentStart = source.indexOf('#', contentStart).takeIf { it in contentStart until lineEnd }
+            val contentEnd = commentStart ?: lineEnd
+            val trimmedEnd = source.trimmedEnd(contentStart, contentEnd)
+            if (trimmedEnd > contentStart) {
+                val token = source.substring(contentStart, trimmedEnd)
+                val color = if (token.matches(PortsListNumberPattern)) {
+                    JsonEditorPalette.Number
+                } else {
+                    JsonEditorPalette.String
+                }
+                addJsonStyle(color, contentStart, trimmedEnd)
+            }
+            if (commentStart != null) {
+                addJsonStyle(JsonEditorPalette.Comment, commentStart, lineEnd)
+            }
+        }
+        if (lineEnd == source.length) break
+        lineStart = lineEnd + 1
+    }
 }
 
 internal fun highlightJsonc(source: String): AnnotatedString = buildAnnotatedString {

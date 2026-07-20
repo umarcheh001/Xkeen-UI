@@ -749,6 +749,70 @@ data class MihomoConfigState(
         get() = validatedContent == content
 }
 
+enum class PortsDocumentId(
+    val fileName: String,
+    val endpoint: String,
+    val description: String,
+    val isJson: Boolean = false,
+) {
+    PortProxying(
+        fileName = "port_proxying.lst",
+        endpoint = "/api/xkeen/port-proxying",
+        description = "Порты и диапазоны, которые нужно отправлять через прокси.",
+    ),
+    PortExclude(
+        fileName = "port_exclude.lst",
+        endpoint = "/api/xkeen/port-exclude",
+        description = "Порты, которые нужно исключить из проксирования.",
+    ),
+    IpExclude(
+        fileName = "ip_exclude.lst",
+        endpoint = "/api/xkeen/ip-exclude",
+        description = "IP и подсети, которые нужно исключить из проксирования.",
+    ),
+    XkeenConfig(
+        fileName = "xkeen.json",
+        endpoint = "/api/xkeen/config",
+        description = "Пользовательские политики портов для разных устройств.",
+        isJson = true,
+    ),
+    ;
+
+    val path: String
+        get() = "/opt/etc/xkeen/$fileName"
+}
+
+data class PortsEditorDocument(
+    val id: PortsDocumentId,
+    val content: String = "",
+    val savedContent: String = "",
+    val hasLoaded: Boolean = false,
+    val isLoading: Boolean = false,
+    val error: String? = null,
+) {
+    val hasChanges: Boolean
+        get() = hasLoaded && content != savedContent
+}
+
+data class PortsEditorState(
+    val documents: List<PortsEditorDocument> = defaultPortsEditorDocuments(),
+    val selectedId: PortsDocumentId = PortsDocumentId.PortProxying,
+    val isSaving: Boolean = false,
+    val message: String = "Откройте раздел, чтобы загрузить порты и исключения.",
+    val error: String? = null,
+) {
+    val selectedDocument: PortsEditorDocument?
+        get() = documents.firstOrNull { it.id == selectedId }
+
+    val isBusy: Boolean
+        get() = isSaving || selectedDocument?.isLoading == true
+}
+
+fun defaultPortsEditorDocuments(): List<PortsEditorDocument> =
+    PortsDocumentId.entries.map(::PortsEditorDocument)
+
+fun unloadedPortsEditorState(): PortsEditorState = PortsEditorState()
+
 data class DiagnosticItem(
     val label: String,
     val status: String,
@@ -779,6 +843,7 @@ data class CompanionUiState(
     val xraySubscriptions: XraySubscriptionsState = XraySubscriptionsState(),
     val xrayDat: XrayDatState = XrayDatState(),
     val mihomoConfig: MihomoConfigState = MihomoConfigState(),
+    val portsEditor: PortsEditorState = PortsEditorState(),
     val logs: LogsState = LogsState(),
     val diagnostics: List<DiagnosticItem> = initialDiagnostics(),
     val pendingAction: PendingAction? = null,

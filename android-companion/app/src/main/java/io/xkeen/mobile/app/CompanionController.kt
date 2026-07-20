@@ -2572,6 +2572,194 @@ internal class CompanionController(
         updateLogsDiagnostic()
     }
 
+    fun selectPortsDocument(documentId: PortsDocumentId) {
+        val current = state.portsEditor
+        if (current.isSaving || current.selectedId == documentId) return
+        state = state.copy(
+            portsEditor = current.copy(
+                selectedId = documentId,
+                message = current.documents.firstOrNull { it.id == documentId }
+                    ?.takeIf(PortsEditorDocument::hasLoaded)
+                    ?.let { "${it.id.fileName} открыт." }
+                    ?: "Загружаем ${documentId.fileName}…",
+                error = null,
+            ),
+        )
+    }
+
+    suspend fun loadSelectedPortsDocument(force: Boolean = false) {
+        val endpoint = state.dashboard.endpoint
+        val documentId = state.portsEditor.selectedId
+        val document = state.portsEditor.documents.firstOrNull { it.id == documentId } ?: return
+        if (endpoint.isBlank() || state.portsEditor.isSaving || document.isLoading) return
+        if (!force && document.hasLoaded) return
+
+        state = state.copy(
+            portsEditor = state.portsEditor.copy(
+                documents = state.portsEditor.documents.replacePortsDocument(
+                    document.copy(isLoading = true, error = null),
+                ),
+                message = "Загружаем ${documentId.fileName}…",
+                error = null,
+            ),
+        )
+        try {
+            val content = dependencies.portsEditor.load(endpoint, documentId)
+            if (state.dashboard.endpoint != endpoint) return
+            val current = state.portsEditor.documents.firstOrNull { it.id == documentId } ?: return
+            state = state.copy(
+                portsEditor = state.portsEditor.copy(
+                    documents = state.portsEditor.documents.replacePortsDocument(
+                        current.copy(
+                            content = content,
+                            savedContent = content,
+                            hasLoaded = true,
+                            isLoading = false,
+                            error = null,
+                        ),
+                    ),
+                    message = "${documentId.fileName} загружен.",
+                    error = null,
+                ),
+            )
+        } catch (error: CancellationException) {
+            val current = state.portsEditor.documents.firstOrNull { it.id == documentId }
+            if (state.dashboard.endpoint == endpoint && current != null) {
+                state = state.copy(
+                    portsEditor = state.portsEditor.copy(
+                        documents = state.portsEditor.documents.replacePortsDocument(
+                            current.copy(isLoading = false),
+                        ),
+                    ),
+                )
+            }
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            if (state.dashboard.endpoint != endpoint) return
+            val message = error.toCompanionLoadMessage("Не удалось загрузить ${documentId.fileName}.")
+            val current = state.portsEditor.documents.firstOrNull { it.id == documentId } ?: return
+            state = state.copy(
+                portsEditor = state.portsEditor.copy(
+                    documents = state.portsEditor.documents.replacePortsDocument(
+                        current.copy(isLoading = false, error = message),
+                    ),
+                    message = message,
+                    error = message,
+                ),
+            )
+        }
+    }
+
+    fun updatePortsDocument(value: String) {
+        val current = state.portsEditor
+        val document = current.selectedDocument ?: return
+        if (!document.hasLoaded || current.isBusy || value == document.content) return
+        state = state.copy(
+            portsEditor = current.copy(
+                documents = current.documents.replacePortsDocument(document.copy(content = value)),
+                message = "${document.id.fileName} изменён. Сохранение перезапустит xkeen.",
+                error = null,
+            ),
+        )
+    }
+
+    fun revertPortsDocument() {
+        val current = state.portsEditor
+        val document = current.selectedDocument ?: return
+        if (current.isBusy || !document.hasChanges) return
+        state = state.copy(
+            portsEditor = current.copy(
+                documents = current.documents.replacePortsDocument(
+                    document.copy(content = document.savedContent),
+                ),
+                message = "Локальные изменения ${document.id.fileName} отменены.",
+                error = null,
+            ),
+        )
+    }
+
+    suspend fun savePortsDocument() {
+        val endpoint = state.dashboard.endpoint
+        val current = state.portsEditor
+        val document = current.selectedDocument ?: return
+        if (endpoint.isBlank() || current.isBusy || !document.hasChanges) return
+
+        state = state.copy(
+            portsEditor = current.copy(
+                isSaving = true,
+                message = "Проверяем и сохраняем ${document.id.fileName}…",
+                error = null,
+            ),
+        )
+        try {
+            if (document.id.isJson) {
+                try {
+                    JSONObject(document.content)
+                } catch (error: Exception) {
+                    throw PortsEditorException(
+                        "xkeen.json содержит некорректный JSON. Исправьте синтаксис перед сохранением.",
+                        error,
+                    )
+                }
+            }
+            val fresh = dependencies.portsEditor.load(endpoint, document.id)
+            if (fresh != document.savedContent) {
+                throw PortsEditorException(
+                    "${document.id.fileName} изменился на сервере после открытия. " +
+                        "Локальная перезапись остановлена; отмените изменения и обновите файл с сервера.",
+                )
+            }
+            val result = dependencies.portsEditor.save(
+                baseUrl = endpoint,
+                document = document.id,
+                content = document.content,
+                restart = true,
+            )
+            if (state.dashboard.endpoint != endpoint || state.portsEditor.selectedId != document.id) return
+            val saved = document.copy(savedContent = document.content)
+            val message = if (result.restarted) {
+                "${document.id.fileName} сохранён; xkeen перезапущен."
+            } else {
+                "${document.id.fileName} сохранён, но перезапуск xkeen не подтверждён."
+            }
+            state = state.copy(
+                portsEditor = state.portsEditor.copy(
+                    documents = state.portsEditor.documents.replacePortsDocument(saved),
+                    isSaving = false,
+                    message = message,
+                    error = null,
+                ),
+                dashboard = state.dashboard.copy(
+                    lastOperation = "Сохранён ${document.id.fileName}",
+                    lastError = null,
+                ),
+                logs = recordLog(
+                    source = "ports",
+                    level = if (result.restarted) LogLevel.Info else LogLevel.Warning,
+                    message = message,
+                ),
+            )
+        } catch (error: CancellationException) {
+            if (state.dashboard.endpoint == endpoint) {
+                state = state.copy(portsEditor = state.portsEditor.copy(isSaving = false))
+            }
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            if (state.dashboard.endpoint == endpoint && state.portsEditor.selectedId == document.id) {
+                val message = error.toCompanionLoadMessage("Не удалось сохранить ${document.id.fileName}.")
+                state = state.copy(
+                    portsEditor = state.portsEditor.copy(
+                        isSaving = false,
+                        message = message,
+                        error = message,
+                    ),
+                )
+            }
+        }
+    }
+
     suspend fun refreshMihomoConfig(force: Boolean = false) {
         val endpoint = state.dashboard.endpoint
         val current = state.mihomoConfig
@@ -2837,6 +3025,7 @@ internal class CompanionController(
             xraySubscriptions = unloadedXraySubscriptionsState(),
             xrayDat = unloadedXrayDatState(),
             mihomoConfig = unloadedMihomoConfigState(),
+            portsEditor = unloadedPortsEditorState(),
             diagnostics = initialDiagnostics().replaceDiagnostic(
                 label = "Мобильная сессия",
                 status = "Готово",
@@ -2911,6 +3100,7 @@ internal class CompanionController(
             xraySubscriptions = unloadedXraySubscriptionsState(),
             xrayDat = unloadedXrayDatState(),
             mihomoConfig = unloadedMihomoConfigState(),
+            portsEditor = unloadedPortsEditorState(),
             diagnostics = state.diagnostics.replaceDiagnostic(
                 label = "Мобильная сессия",
                 status = result.statusSummary,
@@ -3713,6 +3903,12 @@ internal fun buildRoutingPreview(document: RoutingDocument): RoutingPreview {
 
 private fun List<RoutingDocument>.replaceDocument(updated: RoutingDocument): List<RoutingDocument> =
     map { document -> if (document.id == updated.id) updated else document }
+
+private fun List<PortsEditorDocument>.replacePortsDocument(
+    updated: PortsEditorDocument,
+): List<PortsEditorDocument> = map { document ->
+    if (document.id == updated.id) updated else document
+}
 
 private fun List<Connection>.replaceConnection(updated: Connection): List<Connection> =
     map { connection -> if (connection.id == updated.id) updated else connection }
