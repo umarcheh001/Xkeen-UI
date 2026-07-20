@@ -97,6 +97,15 @@ internal class XkeenTerminalWebView(
         evaluateJavascript("window.XkeenTerminal && window.XkeenTerminal.connect(${payload});", null)
     }
 
+    fun connectionRequestFailed(message: String) {
+        if (pageReady) {
+            evaluateJavascript(
+                "window.XkeenTerminal && window.XkeenTerminal.connectionRequestFailed(${JSONObject.quote(message)});",
+                null,
+            )
+        }
+    }
+
     fun reconnect() = invoke("reconnect()")
 
     fun newSession() = invoke("newSession()")

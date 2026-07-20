@@ -70,12 +70,14 @@ internal fun TerminalWorkspaceScreen(
                 val spec = controller.issueTerminalConnection(sessionId, sequence, columns, rows)
                 terminalView.value?.connect(spec)
             } catch (error: Exception) {
-                connectionState.value = "error"
-                statusMessage.value = when (error) {
+                val message = when (error) {
                     is CompanionTransportException -> error.failure.userMessage
                     else -> error.message?.takeIf(String::isNotBlank)
                         ?: "Не удалось подключить терминал."
                 }
+                connectionState.value = "error"
+                statusMessage.value = message
+                terminalView.value?.connectionRequestFailed(message)
             }
         }
     }
