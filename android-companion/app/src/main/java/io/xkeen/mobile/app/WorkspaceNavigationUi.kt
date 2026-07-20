@@ -311,16 +311,30 @@ private fun WorkspaceDrawer(
 internal fun WorkspaceSectionContent(
     state: CompanionUiState,
     controller: CompanionController,
+    isEditorFullscreen: Boolean,
+    onEditorFullscreenChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (state.workspaceSection) {
-        WorkspaceSection.XrayRouting -> RoutingWorkspaceScreen(state, controller, modifier)
+        WorkspaceSection.XrayRouting -> RoutingWorkspaceScreen(
+            state = state,
+            controller = controller,
+            isFullscreen = isEditorFullscreen,
+            onFullscreenChange = onEditorFullscreenChange,
+            modifier = modifier,
+        )
         WorkspaceSection.XrayInbounds -> InboundsWorkspaceScreen(state, controller, modifier)
         WorkspaceSection.XrayOutbounds -> OutboundsWorkspaceScreen(state, controller, modifier)
         WorkspaceSection.XraySubscriptions -> XraySubscriptionsWorkspaceScreen(state, controller, modifier)
         WorkspaceSection.XrayAssets -> XrayDatWorkspaceScreen(state, controller, modifier)
         WorkspaceSection.XrayLogs -> LogsWorkspaceScreen(state, controller, modifier)
-        WorkspaceSection.MihomoRouting -> MihomoRoutingWorkspaceScreen(state, controller, modifier)
+        WorkspaceSection.MihomoRouting -> MihomoRoutingWorkspaceScreen(
+            state = state,
+            controller = controller,
+            isFullscreen = isEditorFullscreen,
+            onFullscreenChange = onEditorFullscreenChange,
+            modifier = modifier,
+        )
         WorkspaceSection.ShellCommands -> ShellWorkspaceScreen(state, modifier)
         WorkspaceSection.ShellTerminal -> TerminalWorkspaceScreen(state, controller, modifier)
 

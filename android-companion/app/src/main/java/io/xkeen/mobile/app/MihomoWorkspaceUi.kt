@@ -10,11 +10,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.FactCheck
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DoneAll
+import androidx.compose.material.icons.outlined.Fullscreen
+import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Save
@@ -48,6 +51,8 @@ import kotlinx.coroutines.launch
 internal fun MihomoRoutingWorkspaceScreen(
     state: CompanionUiState,
     controller: CompanionController,
+    isFullscreen: Boolean,
+    onFullscreenChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val config = state.mihomoConfig
@@ -71,7 +76,8 @@ internal fun MihomoRoutingWorkspaceScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(WebPanelPalette.Background),
+            .background(WebPanelPalette.Background)
+            .imePadding(),
     ) {
         Surface(color = Color.Transparent, shadowElevation = 5.dp) {
             Row(
@@ -151,6 +157,11 @@ internal fun MihomoRoutingWorkspaceScreen(
                     EditorToolbarButton(Icons.Outlined.Search, "Поиск в YAML", onClick = {
                         showFind.value = true
                     }, enabled = config.hasLoaded)
+                    EditorToolbarButton(
+                        icon = if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
+                        description = if (isFullscreen) "Выйти из полноэкранного режима" else "Открыть редактор на весь экран",
+                        onClick = { onFullscreenChange(!isFullscreen) },
+                    )
                     EditorToolbarButton(
                         icon = Icons.AutoMirrored.Outlined.FactCheck,
                         description = "Проверить YAML через Mihomo",

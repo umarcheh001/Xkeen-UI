@@ -1,5 +1,6 @@
 package io.xkeen.mobile.app
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -102,6 +103,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -460,6 +462,14 @@ private fun ReadyRoute(
 ) {
     val density = LocalDensity.current
     val isImeVisible = WindowInsets.ime.getBottom(density) > 0
+    val orientation = LocalConfiguration.current.orientation
+    val isEditorSection = state.workspaceSection == WorkspaceSection.XrayRouting ||
+        state.workspaceSection == WorkspaceSection.MihomoRouting
+    var isEditorFullscreen by remember(orientation, state.workspaceSection) {
+        mutableStateOf(
+            isEditorSection && orientation == Configuration.ORIENTATION_LANDSCAPE,
+        )
+    }
     val scope = rememberCoroutineScope()
 
     LogsTransportLifecycle(
@@ -484,15 +494,17 @@ private fun ReadyRoute(
             modifier = Modifier.fillMaxSize(),
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
-                WorkspaceHeader(
-                    state = state,
-                    onMenu = openDrawer,
-                    onCore = openCoreDialog,
-                    onServiceAction = controller::requestServiceAction,
-                )
+                if (!isEditorFullscreen) {
+                    WorkspaceHeader(
+                        state = state,
+                        onMenu = openDrawer,
+                        onCore = openCoreDialog,
+                        onServiceAction = controller::requestServiceAction,
+                    )
+                }
             },
             bottomBar = {
-                if (!isImeVisible) {
+                if (!isEditorFullscreen && !isImeVisible) {
                     ReadyBottomBar(
                         selected = state.mainTab,
                         availableCores = state.dashboard.availableCores,
@@ -504,11 +516,20 @@ private fun ReadyRoute(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding),
+                    .padding(innerPadding)
+                    .then(
+                        if (isEditorFullscreen) {
+                            Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
+                        } else {
+                            Modifier
+                        },
+                    ),
             ) {
                 WorkspaceSectionContent(
                     state = state,
                     controller = controller,
+                    isEditorFullscreen = isEditorFullscreen,
+                    onEditorFullscreenChange = { isEditorFullscreen = it },
                     modifier = Modifier.fillMaxSize(),
                 )
 

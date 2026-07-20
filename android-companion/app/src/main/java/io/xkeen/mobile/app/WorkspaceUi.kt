@@ -32,6 +32,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.FactCheck
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DoneAll
+import androidx.compose.material.icons.outlined.Fullscreen
+import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Save
@@ -83,6 +85,8 @@ import kotlinx.coroutines.launch
 internal fun RoutingWorkspaceScreen(
     state: CompanionUiState,
     controller: CompanionController,
+    isFullscreen: Boolean,
+    onFullscreenChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val routing = state.routing
@@ -168,6 +172,8 @@ internal fun RoutingWorkspaceScreen(
                 showFind.value = true
                 if (findQuery.value.isNotBlank()) findNext(true)
             },
+            isFullscreen = isFullscreen,
+            onFullscreenChange = onFullscreenChange,
             onFindQueryChange = { query ->
                 findQuery.value = query
                 findResult.value = editorView.value?.findText(
@@ -421,6 +427,8 @@ private fun DocumentToolbar(
     findResult: EditorTextSearchResult,
     findFocusRequester: FocusRequester,
     onOpenFind: () -> Unit,
+    isFullscreen: Boolean,
+    onFullscreenChange: (Boolean) -> Unit,
     onFindQueryChange: (String) -> Unit,
     onFindPrevious: () -> Unit,
     onFindNext: () -> Unit,
@@ -491,6 +499,11 @@ private fun DocumentToolbar(
                     )
                 }
                 EditorToolbarButton(Icons.Outlined.Search, "Поиск в файле", onOpenFind)
+                EditorToolbarButton(
+                    icon = if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
+                    description = if (isFullscreen) "Выйти из полноэкранного режима" else "Открыть редактор на весь экран",
+                    onClick = { onFullscreenChange(!isFullscreen) },
+                )
                 EditorToolbarButton(
                     icon = Icons.AutoMirrored.Outlined.FactCheck,
                     description = if (isValidationInFlight) "Проверка выполняется" else "Проверить",
