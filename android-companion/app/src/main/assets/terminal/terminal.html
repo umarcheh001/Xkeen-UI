@@ -9,19 +9,24 @@
     html, body {
       width: 100%; height: 100%; min-height: 100vh;
       margin: 0; overflow: hidden; background: #01030a;
+      -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
     }
     body { padding: 0; }
     #terminal {
       position: fixed; inset: 5px 3px 3px 5px;
       width: auto; height: auto; min-width: 40px; min-height: 40px;
-      background: #01030a;
+      background: #01030a; touch-action: none;
     }
-    .xterm { width: 100%; height: 100%; }
-    .xterm-viewport { scrollbar-color: #334155 #01030a; scrollbar-width: thin; }
+    .xterm { width: 100%; height: 100%; touch-action: none; }
+    .xterm-viewport {
+      scrollbar-color: #334155 #01030a; scrollbar-width: thin;
+      overscroll-behavior: contain; touch-action: none;
+    }
     /* Android WebView will not reliably open an IME for xterm's zero-sized off-screen textarea. */
     .xterm .xterm-helper-textarea {
-      left: 0 !important; top: 0 !important; width: 2px !important; height: 2px !important;
-      z-index: 0 !important; opacity: 0.01 !important;
+      left: 0; top: 0;
+      width: 2px; height: 2px; min-width: 2px !important; min-height: 2px !important;
+      z-index: 0 !important; opacity: 0.01 !important; font-size: 16px !important;
     }
   </style>
 </head>
@@ -33,13 +38,16 @@
   <script>
     (() => {
       'use strict';
+      const TERMINAL_FONT_SIZE = 13;
+      const TERMINAL_LINE_HEIGHT = 1.12;
+      const RESIZE_SETTLE_DELAY_MS = 140;
       const terminal = new Terminal({
         cursorBlink: true,
         convertEol: false,
         scrollback: 5000,
         fontFamily: "'Roboto Mono', 'Droid Sans Mono', monospace",
-        fontSize: 12,
-        lineHeight: 1.08,
+        fontSize: TERMINAL_FONT_SIZE,
+        lineHeight: TERMINAL_LINE_HEIGHT,
         allowTransparency: false,
         theme: {
           background: '#01030a', foreground: '#d4d4d4', cursor: '#60a5fa',
@@ -70,6 +78,17 @@
       let surfaceStartTimer = null;
       const surfaceWaitStartedAt = Date.now();
       let surfaceFailurePublished = false;
+      let resizeTimer = null;
+      let resizeFrame = null;
+      let pendingResizeFocus = false;
+      let pendingResizePublish = false;
+      let lastPublishedColumns = 0;
+      let lastPublishedRows = 0;
+      let touchStartX = 0;
+      let touchStartY = 0;
+      let lastTouchY = 0;
+      let touchScrollRemainder = 0;
+      let touchScrolling = false;
 
       function hostHasSize() {
         const rect = terminalHost.getBoundingClientRect();
@@ -118,27 +137,72 @@
           surfaceStarting = false;
         }
         requestAnimationFrame(() => {
-          const initialSize = dimensions();
+          const initialSize = fitSurface(false, false, false);
           terminal.writeln('\x1b[38;5;75mXkeen remote PTY\x1b[0m');
-          try { terminal.refresh(0, Math.max(0, terminal.rows - 1)); } catch (_) {}
           try { AndroidTerminal.onReady(initialSize.cols, initialSize.rows); } catch (_) {}
         });
       }
 
-      function renderAndFocus(focus, publishResize) {
+      function currentDimensions() {
+        return { cols: Math.max(2, terminal.cols || 80), rows: Math.max(1, terminal.rows || 24) };
+      }
+
+      function publishPtyResize(size, force) {
+        if (!size) return false;
+        if (!force && size.cols === lastPublishedColumns && size.rows === lastPublishedRows) return true;
+        if (!send({ type: 'resize', cols: size.cols, rows: size.rows })) return false;
+        lastPublishedColumns = size.cols;
+        lastPublishedRows = size.rows;
+        return true;
+      }
+
+      function fitSurface(focus, publishResize, forcePublish) {
+        if (!surfaceReady) {
+          startSurface();
+          return currentDimensions();
+        }
+        const activeBuffer = terminal.buffer && terminal.buffer.active;
+        const wasAtBottom = !activeBuffer || activeBuffer.viewportY >= activeBuffer.baseY;
+        const previousViewportY = activeBuffer ? activeBuffer.viewportY : 0;
+        try { terminal.clearSelection(); } catch (_) {}
+        try {
+          if (terminal.options.fontSize !== TERMINAL_FONT_SIZE) terminal.options.fontSize = TERMINAL_FONT_SIZE;
+          if (terminal.options.lineHeight !== TERMINAL_LINE_HEIGHT) terminal.options.lineHeight = TERMINAL_LINE_HEIGHT;
+          if (hostHasSize()) fitAddon.fit();
+        } catch (_) {}
+        const size = currentDimensions();
+        try {
+          if (wasAtBottom) terminal.scrollToBottom();
+          else terminal.scrollToLine(Math.min(previousViewportY, terminal.buffer.active.baseY));
+          terminal.refresh(0, Math.max(0, terminal.rows - 1));
+        } catch (_) {}
+        if (publishResize) publishPtyResize(size, forcePublish);
+        if (focus) {
+          try { terminal.focus(); } catch (_) {}
+        }
+        return size;
+      }
+
+      function scheduleSurfaceFit(focus, publishResize, delay) {
         if (!surfaceReady) {
           startSurface();
           return;
         }
-        requestAnimationFrame(() => {
-          const size = dimensions();
-          try { terminal.refresh(0, Math.max(0, terminal.rows - 1)); } catch (_) {}
-          if (publishResize) send({ type: 'resize', cols: size.cols, rows: size.rows });
-          if (focus) {
-            try { terminal.focus(); } catch (_) {}
-          }
-          return size;
-        });
+        pendingResizeFocus = pendingResizeFocus || !!focus;
+        pendingResizePublish = pendingResizePublish || !!publishResize;
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          resizeTimer = null;
+          if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
+          resizeFrame = requestAnimationFrame(() => {
+            resizeFrame = null;
+            const shouldFocus = pendingResizeFocus;
+            const shouldPublish = pendingResizePublish;
+            pendingResizeFocus = false;
+            pendingResizePublish = false;
+            fitSurface(shouldFocus, shouldPublish, false);
+          });
+        }, Math.max(0, Number(delay) || 0));
       }
 
       function publishSession(immediate) {
@@ -147,13 +211,6 @@
           try { AndroidTerminal.onSession(sessionId || '', lastSequence); } catch (_) {}
         };
         if (immediate) publish(); else sessionPublishTimer = setTimeout(publish, 750);
-      }
-
-      function dimensions() {
-        if (surfaceReady && hostHasSize()) {
-          try { fitAddon.fit(); } catch (_) {}
-        }
-        return { cols: Math.max(2, terminal.cols || 80), rows: Math.max(1, terminal.rows || 24) };
       }
 
       function publishState(state, message) {
@@ -173,7 +230,7 @@
         reconnectTimer = setTimeout(() => {
           if (detached || (sessionEnded && !newSessionRequested) || reconnectRequested) return;
           reconnectRequested = true;
-          const size = dimensions();
+          const size = currentDimensions();
           try {
             AndroidTerminal.requestConnection(sessionId || '', lastSequence, size.cols, size.rows);
           } catch (error) {
@@ -215,10 +272,10 @@
         socket.onopen = () => {
           if (current !== generation) return;
           reconnectAttempt = 0;
-          const size = dimensions();
-          send({ type: 'resize', cols: size.cols, rows: size.rows });
+          const size = fitSurface(false, false, false);
+          publishPtyResize(size, true);
           terminal.writeln('\x1b[38;5;75m[PTY] Соединение установлено\x1b[0m');
-          renderAndFocus(false);
+          scheduleSurfaceFit(false, false, 0);
         };
         socket.onmessage = (event) => {
           if (current !== generation) return;
@@ -231,7 +288,7 @@
             publishSession(true);
             publishState('connected', `PTY подключён${message.shell ? ': ' + message.shell : ''}`);
             terminal.writeln(`\x1b[38;5;75m[PTY] ${message.shell || 'shell'}${message.reused ? ' · сессия восстановлена' : ''}\x1b[0m`);
-            renderAndFocus(true);
+            scheduleSurfaceFit(true, true, 0);
             if (!message.reused) {
               // A fresh interactive ash may start before the WebSocket is attached and not repaint
               // its prompt. A blank command is harmless and guarantees a visible prompt.
@@ -265,14 +322,62 @@
       }
 
       terminal.onData(data => send({ type: 'input', data }));
-      terminal.onResize(size => send({ type: 'resize', cols: size.cols, rows: size.rows }));
       const resizeObserver = new ResizeObserver(() => {
-        if (!surfaceReady) startSurface(); else renderAndFocus(false, true);
+        if (!surfaceReady) startSurface();
+        else scheduleSurfaceFit(false, true, RESIZE_SETTLE_DELAY_MS);
       });
       resizeObserver.observe(terminalHost);
-      terminalHost.addEventListener('pointerdown', () => renderAndFocus(true));
+      terminalHost.addEventListener('mousedown', () => {
+        try { terminal.focus(); } catch (_) {}
+      });
+      terminalHost.addEventListener('touchstart', event => {
+        if (event.touches.length !== 1) return;
+        const touch = event.touches[0];
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+        lastTouchY = touch.clientY;
+        touchScrollRemainder = 0;
+        touchScrolling = false;
+      }, { capture: true, passive: true });
+      terminalHost.addEventListener('touchmove', event => {
+        if (event.touches.length !== 1) return;
+        const touch = event.touches[0];
+        const totalX = touch.clientX - touchStartX;
+        const totalY = touch.clientY - touchStartY;
+        if (!touchScrolling && Math.abs(totalY) > 8 && Math.abs(totalY) > Math.abs(totalX) * 1.1) {
+          touchScrolling = true;
+        }
+        if (!touchScrolling) return;
+        event.preventDefault();
+        event.stopPropagation();
+        try { terminal.clearSelection(); } catch (_) {}
+        const cellHeight = Math.max(12, terminalHost.clientHeight / Math.max(1, terminal.rows));
+        touchScrollRemainder += -(touch.clientY - lastTouchY) / cellHeight;
+        const lines = Math.trunc(touchScrollRemainder);
+        if (lines !== 0) {
+          try { terminal.scrollLines(lines); } catch (_) {}
+          touchScrollRemainder -= lines;
+        }
+        lastTouchY = touch.clientY;
+      }, { capture: true, passive: false });
+      terminalHost.addEventListener('touchend', event => {
+        if (touchScrolling) {
+          event.preventDefault();
+          event.stopPropagation();
+          try { terminal.clearSelection(); } catch (_) {}
+        } else {
+          try { terminal.focus(); } catch (_) {}
+        }
+        touchScrolling = false;
+        touchScrollRemainder = 0;
+      }, { capture: true, passive: false });
+      terminalHost.addEventListener('touchcancel', () => {
+        touchScrolling = false;
+        touchScrollRemainder = 0;
+        try { terminal.clearSelection(); } catch (_) {}
+      }, { capture: true, passive: true });
       document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) renderAndFocus(false);
+        if (!document.hidden) scheduleSurfaceFit(false, true, RESIZE_SETTLE_DELAY_MS);
       });
 
       window.XkeenTerminal = {
@@ -292,7 +397,7 @@
         input: data => send({ type: 'input', data: String(data || '') }),
         clear: () => terminal.clear(),
         focus: () => terminal.focus(),
-        resize: () => renderAndFocus(false, true),
+        resize: () => scheduleSurfaceFit(false, true, RESIZE_SETTLE_DELAY_MS),
         selection: () => terminal.getSelection(),
         paste: text => terminal.paste(String(text || '')),
         findNext: query => searchAddon.findNext(String(query || ''), { caseSensitive: false, incremental: true }),
@@ -306,6 +411,8 @@
           detached = true;
           generation += 1;
           clearTimeout(reconnectTimer);
+          clearTimeout(resizeTimer);
+          if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
           if (socket) { try { socket.onclose = null; socket.close(); } catch (_) {} }
           socket = null;
         }

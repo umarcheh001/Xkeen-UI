@@ -26,9 +26,21 @@ def test_terminal_quick_keys_stay_above_the_ime():
     terminal = _source("TerminalWorkspaceUi.kt")
 
     assert ".imePadding()" in terminal
-    assert "if (!isImeVisible)" in terminal
+    assert "if (!isImeVisible) {" not in terminal
     assert terminal.index("TerminalConnectionStatus(") < terminal.index("TerminalQuickKeys(")
-    assert "imeVisible = isImeVisible" in terminal
+    assert "imeVisible = isImeVisible" not in terminal
+    assert ".height(42.dp)" in terminal
+    assert "height(if (imeVisible)" not in terminal
+
+
+def test_terminal_webview_coalesces_resize_and_leaves_touch_to_javascript() -> None:
+    webview = _source("XkeenTerminalWebView.kt")
+
+    assert "private val settledResize = Runnable" in webview
+    assert "postDelayed(settledResize, RESIZE_SETTLE_MILLIS)" in webview
+    assert "const val RESIZE_SETTLE_MILLIS = 48L" in webview
+    assert "override fun onTouchEvent" not in webview
+    assert "textZoom = 100" in webview
 
 
 def test_terminal_keeps_core_keys_visible_before_scrollable_extras():

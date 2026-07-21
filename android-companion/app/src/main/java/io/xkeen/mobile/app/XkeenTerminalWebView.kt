@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.graphics.Color
-import android.view.MotionEvent
 import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
@@ -28,6 +27,9 @@ internal class XkeenTerminalWebView(
     private var pendingConnection: PtyConnectionSpec? = null
     private val preferences = context.getSharedPreferences("xkeen_terminal_sessions", Context.MODE_PRIVATE)
     private val sessionKey = resumeKey.sha256Key()
+    private val settledResize = Runnable {
+        if (pageReady && width > 0 && height > 0) invoke("resize()")
+    }
 
     init {
         setBackgroundColor(Color.rgb(1, 3, 10))
@@ -45,6 +47,9 @@ internal class XkeenTerminalWebView(
         settings.cacheMode = WebSettings.LOAD_NO_CACHE
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         settings.setSupportZoom(false)
+        settings.builtInZoomControls = false
+        settings.displayZoomControls = false
+        settings.textZoom = 100
         isVerticalScrollBarEnabled = false
         isHorizontalScrollBarEnabled = false
         addJavascriptInterface(TerminalBridge(), BridgeName)
@@ -52,7 +57,7 @@ internal class XkeenTerminalWebView(
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 pageReady = true
-                invoke("resize()")
+                scheduleSettledResize()
                 pendingConnection?.let {
                     pendingConnection = null
                     connect(it)
@@ -67,21 +72,9 @@ internal class XkeenTerminalWebView(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         if (pageReady && w > 0 && h > 0 && (w != oldw || h != oldh)) {
-            invoke("resize()")
+            scheduleSettledResize()
         }
     }
-
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_DOWN) {
-            requestFocus()
-            focusTerminal()
-        }
-        val handled = super.onTouchEvent(event)
-        if (event.action == MotionEvent.ACTION_UP && !handled) performClick()
-        return handled
-    }
-
-    override fun performClick(): Boolean = super.performClick()
 
     fun connect(spec: PtyConnectionSpec) {
         if (!pageReady) {
@@ -160,6 +153,7 @@ internal class XkeenTerminalWebView(
         preferences.getString("${sessionKey}_id", null)?.takeIf(String::isNotBlank) to 0L
 
     fun release() {
+        removeCallbacks(settledResize)
         if (pageReady) invoke("detach()")
         removeJavascriptInterface(BridgeName)
         stopLoading()
@@ -168,6 +162,11 @@ internal class XkeenTerminalWebView(
 
     private fun invoke(expression: String) {
         if (pageReady) evaluateJavascript("window.XkeenTerminal && window.XkeenTerminal.$expression;", null)
+    }
+
+    private fun scheduleSettledResize() {
+        removeCallbacks(settledResize)
+        postDelayed(settledResize, RESIZE_SETTLE_MILLIS)
     }
 
     private inner class TerminalBridge {
@@ -215,6 +214,7 @@ internal class XkeenTerminalWebView(
     private companion object {
         const val BridgeName = "AndroidTerminal"
         const val TerminalAssetUrl = "file:///android_asset/terminal/terminal.html"
+        const val RESIZE_SETTLE_MILLIS = 48L
     }
 }
 

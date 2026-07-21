@@ -230,15 +230,12 @@ internal fun TerminalWorkspaceScreen(
                 .background(Color(0xFF01030A)),
         )
 
-        if (!isImeVisible) {
-            TerminalConnectionStatus(
-                connectionState = connectionState.value,
-                statusMessage = statusMessage.value,
-            )
-        }
+        TerminalConnectionStatus(
+            connectionState = connectionState.value,
+            statusMessage = statusMessage.value,
+        )
 
         TerminalQuickKeys(
-            imeVisible = isImeVisible,
             onInterrupt = { terminalView.value?.sendInterrupt() },
             onInput = { terminalView.value?.sendInput(it) },
         )
@@ -322,7 +319,6 @@ private fun TerminalConnectionStatus(
 
 @Composable
 private fun TerminalQuickKeys(
-    imeVisible: Boolean,
     onInterrupt: () -> Unit,
     onInput: (String) -> Unit,
 ) {
@@ -330,7 +326,7 @@ private fun TerminalQuickKeys(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(if (imeVisible) 42.dp else 38.dp)
+            .height(42.dp)
             .background(WebPanelPalette.BackgroundDeep)
             .border(1.dp, WebPanelPalette.Border.copy(alpha = 0.14f))
             .padding(horizontal = 4.dp, vertical = 3.dp)
