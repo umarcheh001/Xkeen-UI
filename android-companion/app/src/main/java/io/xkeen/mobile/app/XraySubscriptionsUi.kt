@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -26,15 +27,20 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.outlined.Visibility
@@ -86,6 +92,7 @@ internal fun XraySubscriptionsWorkspaceScreen(
     var deleteId by rememberSaveable { mutableStateOf<String?>(null) }
     var showDiscardPrompt by rememberSaveable { mutableStateOf(false) }
     var showSavePrompt by rememberSaveable { mutableStateOf(false) }
+    var showNodeCatalog by rememberSaveable { mutableStateOf(false) }
     val filtered = remember(subscriptions.items, query) {
         val needle = query.trim().lowercase()
         if (needle.isBlank()) subscriptions.items else subscriptions.items.filter { item ->
@@ -95,6 +102,9 @@ internal fun XraySubscriptionsWorkspaceScreen(
 
     LaunchedEffect(state.dashboard.endpoint) {
         controller.refreshXraySubscriptions()
+    }
+    LaunchedEffect(subscriptions.editor.isOpen) {
+        if (!subscriptions.editor.isOpen) showNodeCatalog = false
     }
 
     LazyColumn(
@@ -144,6 +154,10 @@ internal fun XraySubscriptionsWorkspaceScreen(
                     enabled = !subscriptions.isBusy,
                     onEdit = { controller.openXraySubscription(item.id) },
                     onRefresh = { scope.launch { controller.refreshXraySubscription(item.id) } },
+                    onNodes = {
+                        controller.openXraySubscription(item.id)
+                        showNodeCatalog = true
+                    },
                     onDiagnostics = { diagnosticsId = item.id },
                     onDelete = { deleteId = item.id },
                 )
@@ -159,10 +173,21 @@ internal fun XraySubscriptionsWorkspaceScreen(
             state = subscriptions,
             controller = controller,
             onAdvancedHelp = { showAdvancedHelp = true },
+            onOpenNodes = { showNodeCatalog = true },
             onDismiss = {
                 if (subscriptions.editor.hasChanges) showDiscardPrompt = true else controller.closeXraySubscriptionEditor()
             },
             onSave = { showSavePrompt = true },
+        )
+    }
+
+    if (showNodeCatalog && subscriptions.editor.isOpen) {
+        XraySubscriptionNodeCatalogDialog(
+            state = subscriptions,
+            controller = controller,
+            onDismiss = { showNodeCatalog = false },
+            onPingNode = { key -> scope.launch { controller.pingXraySubscriptionNode(key) } },
+            onPingAll = { scope.launch { controller.pingAllXraySubscriptionNodes() } },
         )
     }
 
@@ -285,6 +310,7 @@ private fun XraySubscriptionCard(
     enabled: Boolean,
     onEdit: () -> Unit,
     onRefresh: () -> Unit,
+    onNodes: () -> Unit,
     onDiagnostics: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -332,7 +358,10 @@ private fun XraySubscriptionCard(
                 if (due) Text("due", color = WebPanelPalette.Warning, style = MaterialTheme.typography.labelSmall)
             }
             Spacer(Modifier.weight(1f))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 Text(
                     subscriptionScheduleText(item, now),
                     modifier = Modifier.weight(1f),
@@ -342,6 +371,7 @@ private fun XraySubscriptionCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 SubscriptionIconAction(Icons.Outlined.Refresh, "Обновить", enabled, onRefresh, loading = refreshing)
+                SubscriptionIconAction(Icons.Outlined.Dns, "Открыть все узлы", enabled, onNodes)
                 SubscriptionIconAction(Icons.Outlined.Info, "Диагностика", true, onDiagnostics)
                 SubscriptionIconAction(Icons.Outlined.Edit, "Редактировать", enabled, onEdit)
                 SubscriptionIconAction(Icons.Outlined.Delete, "Удалить", enabled, onDelete, danger = true)
@@ -355,6 +385,7 @@ private fun XraySubscriptionEditorDialog(
     state: XraySubscriptionsState,
     controller: CompanionController,
     onAdvancedHelp: () -> Unit,
+    onOpenNodes: () -> Unit,
     onDismiss: () -> Unit,
     onSave: () -> Unit,
 ) {
@@ -363,7 +394,7 @@ private fun XraySubscriptionEditorDialog(
     val preview = editor.preview
     val scope = rememberCoroutineScope()
     var revealUrl by rememberSaveable { mutableStateOf(false) }
-    XkeenDialog(onDismissRequest = { if (!editor.isSaving && !editor.isPreviewing) onDismiss() }) {
+    XkeenDialog(onDismissRequest = { if (!editor.isSaving && !editor.isPreviewing && !editor.isPinging) onDismiss() }) {
         Column(
             modifier = Modifier.heightIn(max = 720.dp).verticalScroll(rememberScrollState()).imePadding().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp),
@@ -384,7 +415,7 @@ private fun XraySubscriptionEditorDialog(
                 label = "URL",
                 value = draft.url,
                 onValueChange = { value -> controller.updateXraySubscriptionDraft { it.copy(url = value) } },
-                enabled = !editor.isPreviewing && !editor.isSaving,
+                enabled = !editor.isPreviewing && !editor.isSaving && !editor.isPinging,
                 secure = !revealUrl,
                 minHeight = 54,
                 trailing = {
@@ -401,68 +432,58 @@ private fun XraySubscriptionEditorDialog(
                     label = "Название",
                     value = draft.name,
                     onValueChange = { value -> controller.updateXraySubscriptionDraft { it.copy(name = value) } },
-                    enabled = !editor.isPreviewing && !editor.isSaving,
+                    enabled = !editor.isPreviewing && !editor.isSaving && !editor.isPinging,
                     modifier = Modifier.weight(1f),
                 )
                 SubscriptionCompactField(
                     label = "Tag prefix",
                     value = draft.tag,
                     onValueChange = { value -> controller.updateXraySubscriptionDraft { it.copy(tag = value) } },
-                    enabled = !editor.isPreviewing && !editor.isSaving,
+                    enabled = !editor.isPreviewing && !editor.isSaving && !editor.isPinging,
                     modifier = Modifier.weight(1f),
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 SubscriptionPrimaryAction(
                     label = if (editor.isPreviewing) "Проверяем…" else "Preview",
-                    enabled = draft.validationError == null && !editor.isPreviewing && !editor.isSaving,
+                    enabled = draft.validationError == null && !editor.isPreviewing && !editor.isSaving && !editor.isPinging,
                     onClick = { scope.launch { controller.previewXraySubscription() } },
                 )
                 draft.validationError?.let {
                     Text(it, modifier = Modifier.weight(1f), color = WebPanelPalette.Error, style = MaterialTheme.typography.labelSmall)
                 } ?: Text(
-                    if (editor.previewIsCurrent) "Preview актуален" else "Без изменений на сервере",
+                    when {
+                        editor.previewIsCurrent -> "Preview актуален"
+                        editor.requiresPreview -> "Нужен новый Preview"
+                        editor.nodeCatalog.source == XraySubscriptionNodeCatalogSource.SavedSnapshot -> "Показан сохранённый список"
+                        else -> "Preview ещё не выполнялся"
+                    },
                     modifier = Modifier.weight(1f),
                     color = if (editor.previewIsCurrent) WebPanelPalette.Success else WebPanelPalette.Muted,
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
 
-            preview?.let {
-                SubscriptionPreviewSummary(preview = it, current = editor.previewIsCurrent)
-                it.nodes.withIndex().chunked(2).take(3).forEach { row ->
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        row.forEach { indexed ->
-                            val excluded = indexed.value.key in draft.excludedNodeKeys
-                            SubscriptionPreviewNodeCard(
-                                node = indexed.value,
-                                excluded = excluded,
-                                enabled = !editor.isPreviewing && !editor.isSaving,
-                                onToggle = { controller.toggleXraySubscriptionNode(indexed.value.key) },
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                        if (row.size == 1) Spacer(Modifier.weight(1f))
-                    }
-                }
-                if (it.nodes.size > 6) {
-                    Text("Ещё узлов: ${it.nodes.size - 6}. Полный список доступен после сохранения во фрагменте Outbounds.", color = WebPanelPalette.Muted, style = MaterialTheme.typography.labelSmall)
-                }
-            }
+            SubscriptionNodeCatalogEntry(
+                catalog = editor.nodeCatalog,
+                excludedCount = draft.excludedNodeKeys.count { key -> editor.nodeCatalog.nodes.any { it.key == key } },
+                previewIsCurrent = editor.previewIsCurrent,
+                onOpen = onOpenNodes,
+            )
 
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 SubscriptionCompactField(
                     label = "Интервал, ч",
                     value = draft.intervalHours,
                     onValueChange = { value -> controller.updateXraySubscriptionDraft { it.copy(intervalHours = value.filter(Char::isDigit).take(3)) } },
-                    enabled = !editor.isPreviewing && !editor.isSaving,
+                    enabled = !editor.isPreviewing && !editor.isSaving && !editor.isPinging,
                     keyboardType = KeyboardType.Number,
                     modifier = Modifier.width(94.dp),
                 )
                 preview?.profileUpdateIntervalHours?.let { hours ->
                     SubscriptionTextAction(
                         label = "Провайдер: $hours ч",
-                        enabled = !editor.isSaving,
+                        enabled = !editor.isSaving && !editor.isPinging,
                         onClick = { controller.updateXraySubscriptionDraft { it.copy(intervalHours = hours.toString()) } },
                         modifier = Modifier.align(Alignment.Bottom),
                         height = 38.dp,
@@ -472,7 +493,7 @@ private fun XraySubscriptionEditorDialog(
                 SubscriptionTinyToggle(
                     title = "Авто",
                     checked = draft.enabled,
-                    enabled = !editor.isSaving,
+                    enabled = !editor.isSaving && !editor.isPinging,
                     onCheckedChange = { value -> controller.updateXraySubscriptionDraft { it.copy(enabled = value) } },
                 )
             }
@@ -493,23 +514,23 @@ private fun XraySubscriptionEditorDialog(
             }
 
             if (editor.advancedExpanded) {
-                SubscriptionCompactField("Фильтр имени · regex", draft.nameFilter, { value -> controller.updateXraySubscriptionDraft { it.copy(nameFilter = value) } }, !editor.isSaving)
+                SubscriptionCompactField("Фильтр имени · regex", draft.nameFilter, { value -> controller.updateXraySubscriptionDraft { it.copy(nameFilter = value) } }, !editor.isSaving && !editor.isPinging)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SubscriptionCompactField("Тип · regex", draft.typeFilter, { value -> controller.updateXraySubscriptionDraft { it.copy(typeFilter = value) } }, !editor.isSaving, modifier = Modifier.weight(1f))
-                    SubscriptionCompactField("Транспорт · regex", draft.transportFilter, { value -> controller.updateXraySubscriptionDraft { it.copy(transportFilter = value) } }, !editor.isSaving, modifier = Modifier.weight(1f))
+                    SubscriptionCompactField("Тип · regex", draft.typeFilter, { value -> controller.updateXraySubscriptionDraft { it.copy(typeFilter = value) } }, !editor.isSaving && !editor.isPinging, modifier = Modifier.weight(1f))
+                    SubscriptionCompactField("Транспорт · regex", draft.transportFilter, { value -> controller.updateXraySubscriptionDraft { it.copy(transportFilter = value) } }, !editor.isSaving && !editor.isPinging, modifier = Modifier.weight(1f))
                 }
                 SubscriptionOptionRow(
                     title = "Пинг observatory",
                     subtitle = "Добавить prefix в subjectSelector",
                     checked = draft.pingEnabled,
-                    enabled = !editor.isSaving,
+                    enabled = !editor.isSaving && !editor.isPinging,
                     onCheckedChange = { value -> controller.updateXraySubscriptionDraft { it.copy(pingEnabled = value) } },
                 )
                 SubscriptionOptionRow(
                     title = "Служебный пул",
                     subtitle = "Синхронизировать leastPing routing",
                     checked = draft.routingAutoRule,
-                    enabled = !editor.isSaving,
+                    enabled = !editor.isSaving && !editor.isPinging,
                     onCheckedChange = { value -> controller.updateXraySubscriptionDraft { it.copy(routingAutoRule = value) } },
                 )
                 if (draft.routingAutoRule) {
@@ -535,7 +556,7 @@ private fun XraySubscriptionEditorDialog(
                 title = "Обновить сразу",
                 subtitle = "После сохранения скачать источник",
                 checked = editor.refreshAfterSave,
-                enabled = !editor.isSaving,
+                enabled = !editor.isSaving && !editor.isPinging,
                 onCheckedChange = controller::updateXraySubscriptionRefreshAfterSave,
             )
             if (editor.refreshAfterSave) {
@@ -543,7 +564,7 @@ private fun XraySubscriptionEditorDialog(
                     title = "Перезапустить Xkeen",
                     subtitle = "Только если конфигурация изменилась",
                     checked = editor.restartAfterMutation,
-                    enabled = !editor.isSaving,
+                    enabled = !editor.isSaving && !editor.isPinging,
                     onCheckedChange = controller::updateXraySubscriptionRestart,
                 )
             }
@@ -554,7 +575,7 @@ private fun XraySubscriptionEditorDialog(
             )
             HorizontalDivider(color = WebPanelPalette.Border.copy(alpha = 0.14f))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.End)) {
-                SubscriptionTextAction("Отмена", !editor.isSaving, onDismiss)
+                SubscriptionTextAction("Отмена", !editor.isSaving && !editor.isPinging, onDismiss)
                 SubscriptionPrimaryAction(if (editor.isSaving) "Сохраняем…" else "Сохранить", editor.canSave, onSave)
             }
         }
@@ -562,44 +583,331 @@ private fun XraySubscriptionEditorDialog(
 }
 
 @Composable
-private fun SubscriptionPreviewSummary(preview: XraySubscriptionPreview, current: Boolean) {
-    val color = if (current && preview.errors.isEmpty()) WebPanelPalette.Success else WebPanelPalette.Warning
-    Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFF071229), border = BorderStroke(1.dp, color.copy(alpha = 0.28f))) {
-        Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("${preview.count} из ${preview.sourceCount.coerceAtLeast(preview.count)} узлов", color = WebPanelPalette.TextStrong, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                Text(listOf(preview.sourceFormat, preview.fetchMode).filter(String::isNotBlank).joinToString(" · "), color = WebPanelPalette.Muted, style = MaterialTheme.typography.labelSmall)
+private fun SubscriptionNodeCatalogEntry(
+    catalog: XraySubscriptionNodeCatalog,
+    excludedCount: Int,
+    previewIsCurrent: Boolean,
+    onOpen: () -> Unit,
+) {
+    val accent = when (catalog.source) {
+        XraySubscriptionNodeCatalogSource.LivePreview -> if (previewIsCurrent) WebPanelPalette.Success else WebPanelPalette.Warning
+        XraySubscriptionNodeCatalogSource.SavedSnapshot -> WebPanelPalette.Border
+        XraySubscriptionNodeCatalogSource.None -> WebPanelPalette.Muted
+    }
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = Color(0xFF071229),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.28f)),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    if (catalog.isAvailable) "${catalog.count} из ${catalog.totalCount} узлов" else "Каталог узлов ещё не загружен",
+                    color = WebPanelPalette.TextStrong,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    when (catalog.source) {
+                        XraySubscriptionNodeCatalogSource.LivePreview -> if (previewIsCurrent) "Свежий Preview" else "Preview устарел после изменений"
+                        XraySubscriptionNodeCatalogSource.SavedSnapshot -> "Сохранённый список последнего обновления"
+                        XraySubscriptionNodeCatalogSource.None -> "Выполните Preview или обновите подписку"
+                    },
+                    color = accent,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                if (excludedCount > 0) {
+                    Text("Исключено вручную: $excludedCount", color = WebPanelPalette.Warning, style = MaterialTheme.typography.labelSmall)
+                }
             }
-            if (preview.filteredOutCount > 0) Text("скрыто ${preview.filteredOutCount}", color = WebPanelPalette.Warning, style = MaterialTheme.typography.labelSmall)
+            SubscriptionTextAction(
+                label = if (catalog.nodes.isEmpty()) "Открыть" else "Узлы · ${catalog.nodes.size}",
+                enabled = true,
+                onClick = onOpen,
+            )
+        }
+    }
+}
+
+private enum class SubscriptionNodeViewFilter(val label: String) {
+    All("Все"),
+    Active("Активные"),
+    Excluded("Скрытые"),
+    Failed("Ошибки"),
+}
+
+@Composable
+private fun XraySubscriptionNodeCatalogDialog(
+    state: XraySubscriptionsState,
+    controller: CompanionController,
+    onDismiss: () -> Unit,
+    onPingNode: (String) -> Unit,
+    onPingAll: () -> Unit,
+) {
+    val editor = state.editor
+    val draft = editor.draft
+    val catalog = editor.nodeCatalog
+    val excludedKeys = draft.excludedNodeKeys.toSet()
+    val savedRecord = state.items.firstOrNull { it.id == draft.id }
+    val pingableKeys = remember(savedRecord, excludedKeys) {
+        savedRecord?.nodes.orEmpty()
+            .filter { it.tag.isNotBlank() && it.key !in excludedKeys }
+            .map(OutboundNode::key)
+            .toSet()
+    }
+    var query by rememberSaveable(draft.id) { mutableStateOf("") }
+    var filter by rememberSaveable(draft.id) { mutableStateOf(SubscriptionNodeViewFilter.All) }
+    var selectedKeys by remember(draft.id) { mutableStateOf(emptySet<String>()) }
+    val visibleNodes = remember(catalog.nodes, excludedKeys, query, filter) {
+        val needle = query.trim().lowercase()
+        catalog.nodes.filter { node ->
+            val excluded = node.key in excludedKeys
+            val matchesQuery = needle.isBlank() || listOf(
+                node.displayName,
+                node.tag,
+                node.protocol,
+                node.transport,
+                node.security,
+                node.host,
+                node.endpoint,
+            ).any { needle in it.lowercase() }
+            val matchesFilter = when (filter) {
+                SubscriptionNodeViewFilter.All -> true
+                SubscriptionNodeViewFilter.Active -> !excluded && node.tag.isNotBlank()
+                SubscriptionNodeViewFilter.Excluded -> excluded || node.tag.isBlank()
+                SubscriptionNodeViewFilter.Failed -> node.latency?.status == "error"
+            }
+            matchesQuery && matchesFilter
+        }
+    }
+    LaunchedEffect(catalog.nodes) {
+        val available = catalog.nodes.map(OutboundNode::key).toSet()
+        selectedKeys = selectedKeys.intersect(available)
+    }
+    val selectedExcluded = selectedKeys.count(excludedKeys::contains)
+    val selectedIncluded = selectedKeys.size - selectedExcluded
+    val controlsEnabled = !editor.isPreviewing && !editor.isSaving && !editor.isPinging
+
+    XkeenDialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.96f).imePadding().padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("XRAY · NODES", color = WebPanelPalette.Border, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        draft.name.ifBlank { draft.tag.ifBlank { "Узлы подписки" } },
+                        color = WebPanelPalette.TextStrong,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                SubscriptionIconAction(Icons.Outlined.Close, "Закрыть каталог", true, onDismiss)
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Активно ${catalog.count} · всего ${catalog.totalCount} · исключено ${excludedKeys.count { key -> catalog.nodes.any { it.key == key } }}",
+                        color = WebPanelPalette.TextStrong,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        when (catalog.source) {
+                            XraySubscriptionNodeCatalogSource.LivePreview -> "Источник: свежий Preview"
+                            XraySubscriptionNodeCatalogSource.SavedSnapshot -> "Источник: последнее сохранённое обновление"
+                            XraySubscriptionNodeCatalogSource.None -> "Источник ещё не загружен"
+                        },
+                        color = WebPanelPalette.Muted,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+                SubscriptionPrimaryAction(
+                    label = if (editor.isPingingAll) "Проверяем…" else "Пинг всех",
+                    enabled = controlsEnabled && pingableKeys.isNotEmpty(),
+                    onClick = onPingAll,
+                )
+            }
+
+            SubscriptionSearchField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = "Имя, адрес, tag или протокол",
+            )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                SubscriptionNodeViewFilter.entries.forEach { item ->
+                    SubscriptionChoiceChip(
+                        label = item.label,
+                        selected = filter == item,
+                        onClick = { filter = item },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                SubscriptionTextAction(
+                    label = "Выбрать видимые (${visibleNodes.size})",
+                    enabled = controlsEnabled && visibleNodes.isNotEmpty(),
+                    onClick = { selectedKeys = selectedKeys + visibleNodes.map(OutboundNode::key) },
+                    modifier = Modifier.weight(1f),
+                )
+                SubscriptionTextAction(
+                    label = "Снять (${selectedKeys.size})",
+                    enabled = controlsEnabled && selectedKeys.isNotEmpty(),
+                    onClick = { selectedKeys = emptySet() },
+                )
+            }
+
+            if (visibleNodes.isEmpty()) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text(
+                        if (catalog.nodes.isEmpty()) "Список появится после Preview или обновления подписки." else "По текущему поиску и фильтру узлов нет.",
+                        color = WebPanelPalette.Muted,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(7.dp),
+                ) {
+                    items(visibleNodes, key = OutboundNode::key) { node ->
+                        SubscriptionCatalogNodeCard(
+                            node = node,
+                            selected = node.key in selectedKeys,
+                            excluded = node.key in excludedKeys,
+                            pinging = node.key in editor.pingingNodeKeys,
+                            canPing = controlsEnabled && node.key in pingableKeys,
+                            canMutate = controlsEnabled,
+                            onSelect = {
+                                selectedKeys = if (node.key in selectedKeys) selectedKeys - node.key else selectedKeys + node.key
+                            },
+                            onToggle = { controller.toggleXraySubscriptionNode(node.key) },
+                            onPing = { onPingNode(node.key) },
+                        )
+                    }
+                }
+            }
+
+            if (selectedKeys.isNotEmpty()) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SubscriptionTextAction(
+                        label = "Исключить ($selectedIncluded)",
+                        enabled = controlsEnabled && selectedIncluded > 0,
+                        onClick = {
+                            controller.setXraySubscriptionNodesExcluded(selectedKeys - excludedKeys, excluded = true)
+                            selectedKeys = emptySet()
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                    SubscriptionTextAction(
+                        label = "Вернуть ($selectedExcluded)",
+                        enabled = controlsEnabled && selectedExcluded > 0,
+                        onClick = {
+                            controller.setXraySubscriptionNodesExcluded(selectedKeys.intersect(excludedKeys), excluded = false)
+                            selectedKeys = emptySet()
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun SubscriptionPreviewNodeCard(
+private fun SubscriptionCatalogNodeCard(
     node: OutboundNode,
+    selected: Boolean,
     excluded: Boolean,
-    enabled: Boolean,
+    pinging: Boolean,
+    canPing: Boolean,
+    canMutate: Boolean,
+    onSelect: () -> Unit,
     onToggle: () -> Unit,
-    modifier: Modifier = Modifier,
+    onPing: () -> Unit,
 ) {
+    val unavailable = node.tag.isBlank()
+    val stateColor = when {
+        excluded -> WebPanelPalette.Warning
+        unavailable -> WebPanelPalette.Muted
+        else -> WebPanelPalette.Success
+    }
     Surface(
-        modifier = modifier.height(84.dp),
-        shape = RoundedCornerShape(10.dp),
-        color = if (excluded) WebPanelPalette.Surface.copy(alpha = 0.65f) else Color(0xFF071229),
-        border = BorderStroke(1.dp, (if (excluded) WebPanelPalette.Warning else WebPanelPalette.Border).copy(alpha = 0.22f)),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(11.dp),
+        color = if (excluded) WebPanelPalette.Surface.copy(alpha = 0.72f) else Color(0xFF071229),
+        border = BorderStroke(1.dp, (if (selected) WebPanelPalette.Border else stateColor).copy(alpha = if (selected) 0.65f else 0.24f)),
     ) {
-        Column(modifier = Modifier.padding(7.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(node.protocol.ifBlank { "proxy" }, color = WebPanelPalette.TextBlue, style = MaterialTheme.typography.labelSmall)
-                Spacer(Modifier.weight(1f))
-                Box(modifier = Modifier.size(22.dp).clickable(enabled = enabled, onClick = onToggle), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.Close, if (excluded) "Вернуть узел" else "Исключить узел", tint = if (excluded) WebPanelPalette.Warning else WebPanelPalette.Muted, modifier = Modifier.size(14.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(
+                modifier = Modifier.size(32.dp).clickable(enabled = canMutate, onClick = onSelect),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (selected) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+                    if (selected) "Снять выбор" else "Выбрать узел",
+                    tint = if (selected) WebPanelPalette.Border else WebPanelPalette.Muted,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(node.displayName, color = if (excluded) WebPanelPalette.Muted else WebPanelPalette.TextStrong, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    listOf(node.protocol.ifBlank { "proxy" }, node.transport, node.security).filter(String::isNotBlank).joinToString(" · "),
+                    color = WebPanelPalette.TextBlue,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(node.endpoint.ifBlank { node.detail.ifBlank { "Адрес не указан" } }, color = WebPanelPalette.Muted, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        when {
+                            excluded -> "Исключён вручную"
+                            unavailable -> "Не входит по фильтрам"
+                            else -> "Активен"
+                        },
+                        color = stateColor,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                    Text(
+                        when {
+                            pinging -> "Проверяем…"
+                            node.latency?.delayMillis != null -> "${node.latency.delayMillis} мс"
+                            node.latency?.status == "error" -> "Нет ответа"
+                            else -> "Не проверен"
+                        },
+                        color = when {
+                            node.latency?.delayMillis != null -> WebPanelPalette.Success
+                            node.latency?.status == "error" -> WebPanelPalette.Error
+                            else -> WebPanelPalette.Muted
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                    )
                 }
             }
-            Text(node.displayName, color = if (excluded) WebPanelPalette.Muted else WebPanelPalette.TextStrong, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.weight(1f))
-            Text(node.endpoint, color = WebPanelPalette.Muted, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                SubscriptionIconAction(Icons.Outlined.Bolt, "Проверить задержку", canPing && !pinging, onPing, loading = pinging)
+                SubscriptionIconAction(
+                    if (excluded) Icons.AutoMirrored.Outlined.Undo else Icons.Outlined.Close,
+                    if (excluded) "Вернуть узел" else "Исключить узел",
+                    canMutate,
+                    onToggle,
+                    danger = !excluded,
+                )
+            }
         }
     }
 }
@@ -696,7 +1004,11 @@ private fun SubscriptionChoiceChip(label: String, selected: Boolean, onClick: ()
 }
 
 @Composable
-private fun SubscriptionSearchField(value: String, onValueChange: (String) -> Unit) {
+private fun SubscriptionSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String = "Найти по имени или tag",
+) {
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
@@ -708,7 +1020,7 @@ private fun SubscriptionSearchField(value: String, onValueChange: (String) -> Un
             Row(modifier = Modifier.fillMaxWidth().height(38.dp).background(WebPanelPalette.Panel, RoundedCornerShape(10.dp)).border(1.dp, WebPanelPalette.Border.copy(alpha = 0.18f), RoundedCornerShape(10.dp)).padding(horizontal = 9.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Icon(Icons.Outlined.Search, null, tint = WebPanelPalette.Muted, modifier = Modifier.size(16.dp))
                 Box(modifier = Modifier.weight(1f)) {
-                    if (value.isBlank()) Text("Найти по имени или tag", color = WebPanelPalette.Muted, style = MaterialTheme.typography.bodySmall)
+                    if (value.isBlank()) Text(placeholder, color = WebPanelPalette.Muted, style = MaterialTheme.typography.bodySmall)
                     inner()
                 }
             }
@@ -733,7 +1045,7 @@ private fun SubscriptionIconAction(
         else -> WebPanelPalette.TextBlue
     }
     Box(
-        modifier = Modifier.size(28.dp).background(if (primary) WebPanelPalette.Border else Color.Transparent, RoundedCornerShape(8.dp)).border(1.dp, if (primary) Color.Transparent else tint.copy(alpha = 0.35f), RoundedCornerShape(8.dp)).clickable(enabled = enabled, onClick = onClick),
+        modifier = Modifier.size(32.dp).background(if (primary) WebPanelPalette.Border else Color.Transparent, RoundedCornerShape(9.dp)).border(1.dp, if (primary) Color.Transparent else tint.copy(alpha = 0.35f), RoundedCornerShape(9.dp)).clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         if (loading) CircularProgressIndicator(modifier = Modifier.size(13.dp), strokeWidth = 1.5.dp, color = tint)

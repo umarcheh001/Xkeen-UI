@@ -5,6 +5,7 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -179,7 +180,79 @@ class OutboundsPortTest {
         )
         val body = JSONObject(transport.posts[1].body.orEmpty())
         assertEquals(2, body.getJSONArray("node_keys").length())
-        assertFalse(body.has("async"))
+        assertTrue(body.getBoolean("async"))
+    }
+
+    @Test
+    fun bulkPingPollsAsyncJobUntilFinished() = runTest {
+        val transport = RecordingOutboundsTransport(
+            postResponses = ArrayDeque(
+                listOf(response("""{"ok":true,"async":true,"job_id":"job-42","status":"queued"}""")),
+            ),
+            getResponses = ArrayDeque(
+                listOf(
+                    response("""{"ok":true,"job_id":"job-42","status":"running"}"""),
+                    response(
+                        """{"ok":true,"job_id":"job-42","status":"finished","result":{"ok":true,"node_latency":{"node-key":{"status":"ok","delay_ms":44}}}}""",
+                    ),
+                ),
+            ),
+        )
+        val port = WebPanelOutboundsPort(transport)
+
+        val result = port.pingAll(
+            "https://router.lan",
+            "04_outbounds.json",
+            listOf("node-key"),
+        )
+
+        assertEquals(44L, result["node-key"]?.delayMillis)
+        assertEquals(2, transport.gets.size)
+        assertEquals("/api/xray/latency-jobs/job-42", transport.gets.first().endpoint)
+    }
+
+    @Test
+    fun bulkPingKeepsPartialResultsWhenTopLevelOkIsFalse() {
+        val result = parseBulkOutboundPing(
+            """
+                {"ok":false,"requested":2,"ok_count":1,"failed_count":1,
+                 "node_latency":{"node-ok":{"status":"ok","delay_ms":51}},
+                 "results":[
+                   {"ok":true,"node_key":"node-ok","entry":{"status":"ok","delay_ms":51}},
+                   {"ok":false,"node_key":"node-timeout","error":"timeout"}
+                 ]}
+            """.trimIndent(),
+        )
+
+        assertEquals(51L, result["node-ok"]?.delayMillis)
+        assertEquals("error", result["node-timeout"]?.status)
+        assertEquals("timeout", result["node-timeout"]?.message)
+    }
+
+    @Test
+    fun bulkPingKeepsStructuredAllFailureResults() {
+        val result = parseBulkOutboundPing(
+            """
+                {"ok":false,"requested":2,"ok_count":0,"failed_count":2,
+                 "node_latency":{},
+                 "results":[
+                   {"ok":false,"node_key":"node-a","entry":{"error":"connection refused"}},
+                   {"ok":false,"node_key":"node-b","error":"node not found"}
+                 ]}
+            """.trimIndent(),
+        )
+
+        assertEquals("error", result["node-a"]?.status)
+        assertEquals("connection refused", result["node-a"]?.message)
+        assertEquals("error", result["node-b"]?.status)
+        assertEquals("node not found", result["node-b"]?.message)
+    }
+
+    @Test
+    fun bulkPingRejectsUnstructuredFailure() {
+        assertThrows(OutboundsException::class.java) {
+            parseBulkOutboundPing("""{"ok":false,"error":"probe failed"}""")
+        }
     }
 }
 
@@ -192,11 +265,15 @@ private fun response(body: String) = CompanionHttpResponse(
 
 private class RecordingOutboundsTransport(
     private val postResponses: ArrayDeque<CompanionHttpResponse>,
+    private val getResponses: ArrayDeque<CompanionHttpResponse> = ArrayDeque(),
 ) : CompanionHttpTransport {
     val posts = mutableListOf<CompanionHttpRequest>()
+    val gets = mutableListOf<CompanionHttpRequest>()
 
-    override suspend fun get(request: CompanionHttpRequest): CompanionHttpResponse =
-        throw AssertionError("Unexpected GET ${request.endpoint}")
+    override suspend fun get(request: CompanionHttpRequest): CompanionHttpResponse {
+        gets += request
+        return getResponses.removeFirst()
+    }
 
     override suspend fun post(request: CompanionHttpRequest): CompanionHttpResponse {
         posts += request

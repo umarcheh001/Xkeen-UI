@@ -4769,6 +4769,35 @@ def test_build_subscription_outbounds_applies_transport_filter_and_manual_exclus
     assert stats["filtered_out_count"] == 2
 
 
+def test_build_subscription_outbounds_keeps_failed_node_tag_blank(monkeypatch):
+    from services import xray_subscriptions as subs
+
+    original_builder = subs.build_proxy_outbound_from_link
+
+    def _build(link: str, tag: str):
+        if "broken.example.com" in link:
+            raise ValueError("unsupported node settings")
+        return original_builder(link, tag)
+
+    monkeypatch.setattr(subs, "build_proxy_outbound_from_link", _build)
+
+    outbounds, errors, stats = subs.build_subscription_outbounds(
+        [
+            _vless_transport("Broken", "ws", host="broken.example.com"),
+            _vless_transport("Working", "ws", host="working.example.com"),
+        ],
+        tag_prefix="flt",
+    )
+
+    assert [item["tag"] for item in outbounds] == ["flt--Working"]
+    assert len(errors) == 1
+    assert errors[0]["tag"] == "flt--Broken"
+    broken = next(item for item in stats["nodes"] if item["name"] == "Broken")
+    working = next(item for item in stats["nodes"] if item["name"] == "Working")
+    assert broken.get("tag") in ("", None)
+    assert working["tag"] == "flt--Working"
+
+
 def test_build_subscription_outbounds_hysteria2_filter_aliases_and_name_filter():
     from services import xray_subscriptions as subs
 
@@ -4988,6 +5017,41 @@ def test_build_subscription_json_outbounds_keeps_distinct_keys_for_same_config_w
     assert [item["tag"] for item in outbounds] == ["flt--RU-Anti-06.e026"]
     assert stats["source_count"] == 2
     assert stats["filtered_out_count"] == 1
+
+
+def test_build_subscription_json_outbounds_keeps_failed_node_tag_blank(monkeypatch):
+    from services import xray_subscriptions as subs
+
+    class _BrokenOutbound(dict):
+        def __deepcopy__(self, _memo):
+            raise ValueError("cannot normalize outbound")
+
+    source = _BrokenOutbound(
+        {
+            "tag": "source",
+            "protocol": "vless",
+            "settings": {
+                "vnext": [
+                    {
+                        "address": "broken.example.com",
+                        "port": 443,
+                        "users": [{"id": "user", "encryption": "none"}],
+                    }
+                ]
+            },
+        }
+    )
+    monkeypatch.setattr(subs, "_iter_json_proxy_outbounds", lambda _obj: iter([(source, "Broken JSON")]))
+
+    outbounds, errors, stats = subs.build_subscription_json_outbounds(
+        "{}",
+        tag_prefix="flt",
+    )
+
+    assert outbounds == []
+    assert len(errors) == 1
+    assert errors[0]["tag"] == "flt--Broken_JSON"
+    assert stats["nodes"][0].get("tag") in ("", None)
 
 
 def test_refresh_subscription_keeps_long_provider_prefix_in_runtime_selectors(tmp_path: Path, monkeypatch):

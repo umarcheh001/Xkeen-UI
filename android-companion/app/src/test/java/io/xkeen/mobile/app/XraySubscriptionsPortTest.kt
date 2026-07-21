@@ -151,6 +151,55 @@ class XraySubscriptionsPortTest {
     }
 
     @Test
+    fun subscriptionBulkPingUsesAsyncJobAndKeepsPartialResults() = runTest {
+        val transport = RecordingSubscriptionsTransport(
+            getResponses = ArrayDeque(
+                listOf(
+                    response("""{"ok":true,"job_id":"job-1","status":"running"}"""),
+                    response(
+                        """{"ok":true,"job_id":"job-1","status":"finished","result":{
+                            "ok":false,"requested":2,"updated":2,"ok_count":1,"failed_count":1,
+                            "results":[
+                              {"ok":true,"node_key":"node-1","entry":{"status":"ok","delay_ms":51}},
+                              {"ok":false,"node_key":"node-2","error":"timeout"}
+                            ]
+                        }}""",
+                    ),
+                ),
+            ),
+            postResponses = ArrayDeque(
+                listOf(response("""{"ok":true,"async":true,"job_id":"job-1","status":"queued"}""")),
+            ),
+            deleteResponses = ArrayDeque(),
+        )
+        val port = WebPanelXraySubscriptionsPort(transport)
+
+        val result = port.pingNodes(
+            baseUrl = "https://router.lan",
+            id = "provider name",
+            nodeKeys = listOf("node-1", "node-2", "node-1"),
+        )
+
+        assertEquals(2, result.requested)
+        assertEquals(1, result.okCount)
+        assertEquals(1, result.failedCount)
+        assertEquals(51L, result.latencyByNodeKey["node-1"]?.delayMillis)
+        assertEquals("error", result.latencyByNodeKey["node-2"]?.status)
+        assertEquals("timeout", result.latencyByNodeKey["node-2"]?.message)
+        assertEquals(
+            "/api/xray/subscriptions/provider+name/nodes/ping-bulk",
+            transport.posts.single().endpoint,
+        )
+        val body = JSONObject(transport.posts.single().body.orEmpty())
+        assertTrue(body.getBoolean("async"))
+        assertEquals(2, body.getJSONArray("node_keys").length())
+        assertEquals(
+            listOf("/api/xray/latency-jobs/job-1", "/api/xray/latency-jobs/job-1"),
+            transport.gets.map(CompanionHttpRequest::endpoint),
+        )
+    }
+
+    @Test
     fun nullableStatusFieldsStayNullWhenBackendHasNoRefreshYet() {
         val snapshot = parseXraySubscriptionsSnapshot(
             """{"ok":true,"subscriptions":[{"id":"new","name":"New","tag":"new","url":"https://example/sub","enabled":true,"ping_enabled":true,"routing_auto_rule":true,"routing_mode":"safe-fallback","interval_hours":24,"output_file":"04_outbounds.new.json"}]}""",

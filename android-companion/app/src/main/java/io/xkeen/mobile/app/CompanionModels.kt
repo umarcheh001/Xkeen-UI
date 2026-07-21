@@ -641,13 +641,42 @@ data class XraySubscriptionDraft(
     ).joinToString("\u0000")
 }
 
+enum class XraySubscriptionNodeCatalogSource {
+    None,
+    SavedSnapshot,
+    LivePreview,
+}
+
+data class XraySubscriptionNodeCatalog(
+    val source: XraySubscriptionNodeCatalogSource = XraySubscriptionNodeCatalogSource.None,
+    val nodes: List<OutboundNode> = emptyList(),
+    val count: Int = 0,
+    val sourceCount: Int = 0,
+    val filteredOutCount: Int = 0,
+    val warnings: List<String> = emptyList(),
+    val errors: List<String> = emptyList(),
+    val sourceFormat: String = "",
+    val fetchMode: String = "",
+    val profileUpdateIntervalHours: Int? = null,
+    val updatedAtEpochSeconds: Long? = null,
+) {
+    val totalCount: Int
+        get() = maxOf(sourceCount, nodes.size, count)
+
+    val isAvailable: Boolean
+        get() = source != XraySubscriptionNodeCatalogSource.None
+}
+
 data class XraySubscriptionEditorState(
     val isOpen: Boolean = false,
     val isPreviewing: Boolean = false,
     val isSaving: Boolean = false,
+    val isPingingAll: Boolean = false,
+    val pingingNodeKeys: Set<String> = emptySet(),
     val draft: XraySubscriptionDraft = XraySubscriptionDraft(),
     val savedDraft: XraySubscriptionDraft = XraySubscriptionDraft(),
     val preview: XraySubscriptionPreview? = null,
+    val nodeCatalog: XraySubscriptionNodeCatalog = XraySubscriptionNodeCatalog(),
     val previewSignature: String = "",
     val advancedExpanded: Boolean = false,
     val refreshAfterSave: Boolean = true,
@@ -655,6 +684,9 @@ data class XraySubscriptionEditorState(
     val message: String? = null,
     val error: String? = null,
 ) {
+    val isPinging: Boolean
+        get() = isPingingAll || pingingNodeKeys.isNotEmpty()
+
     val hasChanges: Boolean
         get() = draft != savedDraft
 
@@ -668,7 +700,8 @@ data class XraySubscriptionEditorState(
         get() = draft.id.isBlank() || previewAffectingChanges
 
     val canSave: Boolean
-        get() = draft.validationError == null && !isPreviewing && !isSaving && (!requiresPreview || previewIsCurrent)
+        get() = draft.validationError == null && !isPreviewing && !isSaving && !isPinging &&
+            (!requiresPreview || previewIsCurrent)
 }
 
 data class XraySubscriptionsState(
@@ -685,7 +718,7 @@ data class XraySubscriptionsState(
 ) {
     val isBusy: Boolean
         get() = isLoading || refreshingIds.isNotEmpty() || deletingIds.isNotEmpty() || isRefreshingDue ||
-            editor.isPreviewing || editor.isSaving
+            editor.isPreviewing || editor.isSaving || editor.isPinging
 }
 
 data class LogEntry(

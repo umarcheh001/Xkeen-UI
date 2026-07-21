@@ -2178,10 +2178,10 @@ def build_subscription_outbounds(
     for idx, (link, meta, preview_idx) in enumerate(filtered_links):
         node = _clean_node_name(str(meta.get("name") or ""), f"node{idx + 1}")
         tag = _unique_tag(prefix, node, used)
-        preview_nodes[preview_idx]["tag"] = tag
         try:
             outbound = build_proxy_outbound_from_link(link, tag)
             outbounds.append(outbound)
+            preview_nodes[preview_idx]["tag"] = tag
         except Exception as exc:
             errors.append({"idx": idx, "tag": tag, "error": str(exc)})
 
@@ -2243,7 +2243,6 @@ def build_subscription_json_outbounds(
         fallback = f"node{idx + 1}"
         node = _clean_node_name(str(meta.get("name") or protocol), fallback)
         tag = _unique_tag(prefix, node, used)
-        preview_nodes[preview_idx]["tag"] = tag
         try:
             outbound = copy.deepcopy(source)
             stream_settings = outbound.get("streamSettings") if isinstance(outbound.get("streamSettings"), dict) else None
@@ -2256,6 +2255,7 @@ def build_subscription_json_outbounds(
                     xhttp_settings["mode"] = normalized_mode
             outbound["tag"] = tag
             outbounds.append(outbound)
+            preview_nodes[preview_idx]["tag"] = tag
         except Exception as exc:
             errors.append({"idx": idx, "tag": tag, "error": str(exc)})
 

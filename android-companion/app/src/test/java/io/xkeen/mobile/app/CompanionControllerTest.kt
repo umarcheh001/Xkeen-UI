@@ -1389,6 +1389,86 @@ class CompanionControllerTest {
     }
 
     @Test
+    fun existingXraySubscriptionOpensWithFullSavedNodeCatalog() = runTest {
+        val port = FakeXraySubscriptionsPort()
+        val controller = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Ready),
+            dependencies = testDependencies(xraySubscriptions = port),
+        )
+
+        controller.refreshXraySubscriptions()
+        controller.openXraySubscription("provider")
+
+        val editor = controller.state.xraySubscriptions.editor
+        assertEquals(XraySubscriptionNodeCatalogSource.SavedSnapshot, editor.nodeCatalog.source)
+        assertEquals(listOf("node-1", "node-2"), editor.nodeCatalog.nodes.map(OutboundNode::key))
+        assertNull(editor.preview)
+        assertFalse(editor.requiresPreview)
+    }
+
+    @Test
+    fun bulkNodeExclusionRequiresPreviewAndEnablesRefreshAfterSave() = runTest {
+        val port = FakeXraySubscriptionsPort()
+        val controller = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Ready),
+            dependencies = testDependencies(xraySubscriptions = port),
+        )
+        controller.refreshXraySubscriptions()
+        controller.openXraySubscription("provider")
+
+        controller.setXraySubscriptionNodesExcluded(setOf("node-1", "node-2"), excluded = true)
+
+        val editor = controller.state.xraySubscriptions.editor
+        assertEquals(listOf("node-1", "node-2"), editor.draft.excludedNodeKeys)
+        assertTrue(editor.refreshAfterSave)
+        assertTrue(editor.requiresPreview)
+        assertFalse(editor.canSave)
+    }
+
+    @Test
+    fun subscriptionBulkPingKeepsPartialResultsAndClearsBusyState() = runTest {
+        val port = FakeXraySubscriptionsPort()
+        val controller = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Ready),
+            dependencies = testDependencies(xraySubscriptions = port),
+        )
+        controller.refreshXraySubscriptions()
+        controller.openXraySubscription("provider")
+
+        controller.pingAllXraySubscriptionNodes()
+
+        val editor = controller.state.xraySubscriptions.editor
+        assertEquals(listOf("node-1", "node-2"), port.pingedKeys)
+        assertEquals(44L, editor.nodeCatalog.nodes.first { it.key == "node-1" }.latency?.delayMillis)
+        assertEquals("error", editor.nodeCatalog.nodes.first { it.key == "node-2" }.latency?.status)
+        assertTrue(editor.message.orEmpty().contains("Доступно 1 из 2"))
+        assertFalse(editor.isPinging)
+    }
+
+    @Test
+    fun cancellingSubscriptionBulkPingAlwaysClearsBusyState() = runTest {
+        val port = FakeXraySubscriptionsPort().apply {
+            pingStarted = CompletableDeferred()
+            pingGate = CompletableDeferred()
+        }
+        val controller = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Ready),
+            dependencies = testDependencies(xraySubscriptions = port),
+        )
+        controller.refreshXraySubscriptions()
+        controller.openXraySubscription("provider")
+
+        val job = launch { controller.pingAllXraySubscriptionNodes() }
+        port.pingStarted?.await()
+        assertTrue(controller.state.xraySubscriptions.editor.isPingingAll)
+        job.cancel()
+        job.join()
+
+        assertFalse(controller.state.xraySubscriptions.editor.isPinging)
+        assertTrue(controller.state.xraySubscriptions.editor.pingingNodeKeys.isEmpty())
+    }
+
+    @Test
     fun datViewerLoadsCatalogTagsItemsAndServerSearchReadOnly() = runTest {
         val port = FakeXrayDatPort()
         val controller = CompanionController(
@@ -1693,9 +1773,30 @@ private class FakeXraySubscriptionsPort : XraySubscriptionsPort {
         sockoptMark255 = false,
         intervalHours = 24,
         outputFile = "04_outbounds.provider.json",
+        lastOk = true,
+        lastUpdateEpochSeconds = 100,
+        lastCount = 2,
+        sourceCount = 2,
+        nodes = listOf(
+            subscriptionTestNode("node-1", "provider--one", "Amsterdam"),
+            subscriptionTestNode("node-2", "provider--two", "Frankfurt"),
+        ),
     )
     var saved: XraySubscriptionSaveRequest? = null
     var refreshedId: String? = null
+    var pingedKeys: List<String> = emptyList()
+    var pingStarted: CompletableDeferred<Unit>? = null
+    var pingGate: CompletableDeferred<Unit>? = null
+    var pingResult = XraySubscriptionNodePingResult(
+        requested = 2,
+        updated = 2,
+        okCount = 1,
+        failedCount = 1,
+        latencyByNodeKey = mapOf(
+            "node-1" to OutboundLatency("ok", 44),
+            "node-2" to OutboundLatency("error", message = "timeout"),
+        ),
+    )
 
     override suspend fun list(baseUrl: String): XraySubscriptionsSnapshot =
         XraySubscriptionsSnapshot(listOf(record))
@@ -1768,6 +1869,24 @@ private class FakeXraySubscriptionsPort : XraySubscriptionsPort {
     override suspend fun refreshDue(baseUrl: String, restart: Boolean): XraySubscriptionsDueResult =
         XraySubscriptionsDueResult(0, 0, emptyList())
 
+    override suspend fun pingNodes(
+        baseUrl: String,
+        id: String,
+        nodeKeys: List<String>,
+    ): XraySubscriptionNodePingResult {
+        pingedKeys = nodeKeys
+        pingStarted?.complete(Unit)
+        pingGate?.await()
+        val latency = pingResult.latencyByNodeKey.filterKeys { it in nodeKeys }
+        return pingResult.copy(
+            requested = nodeKeys.size,
+            updated = latency.size,
+            okCount = latency.values.count { it.delayMillis != null },
+            failedCount = latency.values.count { it.status == "error" },
+            latencyByNodeKey = latency,
+        )
+    }
+
     override suspend fun delete(
         baseUrl: String,
         id: String,
@@ -1775,6 +1894,19 @@ private class FakeXraySubscriptionsPort : XraySubscriptionsPort {
         removeFile: Boolean,
     ): XraySubscriptionMutationResult = XraySubscriptionMutationResult(ok = true, id = id, changed = true)
 }
+
+private fun subscriptionTestNode(key: String, tag: String, name: String): OutboundNode = OutboundNode(
+    key = key,
+    tag = tag,
+    name = name,
+    protocol = "vless",
+    transport = "xhttp",
+    security = "reality",
+    host = "$key.example.net",
+    port = "443",
+    sni = "",
+    detail = "",
+)
 
 private class FakeInboundsPort : InboundsPort {
     var appliedMode: InboundsMode? = null

@@ -1311,8 +1311,13 @@ internal class CompanionController(
                     isOpen = true,
                     draft = draft,
                     savedDraft = draft,
+                    nodeCatalog = record.toSubscriptionNodeCatalog(),
                     refreshAfterSave = false,
-                    message = "Настройки загружены. Полный URL показывается только в редакторе.",
+                    message = if (record.nodes.isEmpty()) {
+                        "Настройки загружены. Список узлов появится после первого обновления или Preview."
+                    } else {
+                        "Загружен сохранённый список: ${record.nodes.size} узлов. Preview обновит его с сервера."
+                    },
                 ),
             ),
         )
@@ -1320,7 +1325,7 @@ internal class CompanionController(
 
     fun updateXraySubscriptionDraft(transform: (XraySubscriptionDraft) -> XraySubscriptionDraft) {
         val editor = state.xraySubscriptions.editor
-        if (!editor.isOpen || editor.isPreviewing || editor.isSaving) return
+        if (!editor.isOpen || editor.isPreviewing || editor.isSaving || editor.isPinging) return
         state = state.copy(
             xraySubscriptions = state.xraySubscriptions.copy(
                 editor = editor.copy(
@@ -1334,7 +1339,7 @@ internal class CompanionController(
 
     fun toggleXraySubscriptionAdvanced() {
         val editor = state.xraySubscriptions.editor
-        if (!editor.isOpen || editor.isPreviewing || editor.isSaving) return
+        if (!editor.isOpen || editor.isPreviewing || editor.isSaving || editor.isPinging) return
         state = state.copy(
             xraySubscriptions = state.xraySubscriptions.copy(
                 editor = editor.copy(advancedExpanded = !editor.advancedExpanded),
@@ -1344,7 +1349,7 @@ internal class CompanionController(
 
     fun updateXraySubscriptionRefreshAfterSave(enabled: Boolean) {
         val editor = state.xraySubscriptions.editor
-        if (!editor.isOpen || editor.isSaving) return
+        if (!editor.isOpen || editor.isSaving || editor.isPinging) return
         state = state.copy(
             xraySubscriptions = state.xraySubscriptions.copy(editor = editor.copy(refreshAfterSave = enabled)),
         )
@@ -1352,7 +1357,7 @@ internal class CompanionController(
 
     fun updateXraySubscriptionRestart(enabled: Boolean) {
         val editor = state.xraySubscriptions.editor
-        if (!editor.isOpen || editor.isSaving) return
+        if (!editor.isOpen || editor.isSaving || editor.isPinging) return
         state = state.copy(
             xraySubscriptions = state.xraySubscriptions.copy(editor = editor.copy(restartAfterMutation = enabled)),
         )
@@ -1360,15 +1365,30 @@ internal class CompanionController(
 
     fun toggleXraySubscriptionNode(nodeKey: String) {
         val editor = state.xraySubscriptions.editor
-        if (!editor.isOpen || editor.isPreviewing || editor.isSaving || nodeKey.isBlank()) return
-        val excluded = editor.draft.excludedNodeKeys.toMutableSet().apply {
-            if (!add(nodeKey)) remove(nodeKey)
-        }
+        val excluded = nodeKey !in editor.draft.excludedNodeKeys
+        setXraySubscriptionNodesExcluded(setOf(nodeKey), excluded)
+    }
+
+    fun setXraySubscriptionNodesExcluded(nodeKeys: Set<String>, excluded: Boolean) {
+        val editor = state.xraySubscriptions.editor
+        if (!editor.isOpen || editor.isPreviewing || editor.isSaving || editor.isPinging) return
+        val availableKeys = editor.nodeCatalog.nodes.map(OutboundNode::key).filter(String::isNotBlank).toSet()
+        val targets = nodeKeys.map(String::trim).filter { it.isNotBlank() && it in availableKeys }.toSet()
+        if (targets.isEmpty()) return
+        val nextExcluded = editor.draft.excludedNodeKeys.toMutableSet().apply {
+            if (excluded) addAll(targets) else removeAll(targets)
+        }.toList().sorted()
+        if (nextExcluded == editor.draft.excludedNodeKeys) return
         state = state.copy(
             xraySubscriptions = state.xraySubscriptions.copy(
                 editor = editor.copy(
-                    draft = editor.draft.copy(excludedNodeKeys = excluded.sorted()),
-                    message = "Состав изменён. Повторите preview перед сохранением.",
+                    draft = editor.draft.copy(excludedNodeKeys = nextExcluded),
+                    refreshAfterSave = true,
+                    message = if (excluded) {
+                        "Выбрано для исключения: ${targets.size}. Повторите Preview, затем сохраните и примените изменения."
+                    } else {
+                        "Возвращено узлов: ${targets.size}. Повторите Preview, затем сохраните и примените изменения."
+                    },
                     error = null,
                 ),
             ),
@@ -1376,7 +1396,7 @@ internal class CompanionController(
     }
 
     fun closeXraySubscriptionEditor() {
-        if (state.xraySubscriptions.editor.isSaving) return
+        if (state.xraySubscriptions.editor.isSaving || state.xraySubscriptions.editor.isPinging) return
         state = state.copy(
             xraySubscriptions = state.xraySubscriptions.copy(editor = XraySubscriptionEditorState()),
         )
@@ -1386,7 +1406,10 @@ internal class CompanionController(
         val endpoint = state.dashboard.endpoint
         val editor = state.xraySubscriptions.editor
         val draft = editor.draft
-        if (endpoint.isBlank() || !editor.isOpen || editor.isPreviewing || editor.isSaving || draft.validationError != null) return
+        if (
+            endpoint.isBlank() || !editor.isOpen || editor.isPreviewing || editor.isSaving || editor.isPinging ||
+            draft.validationError != null
+        ) return
         state = state.copy(
             xraySubscriptions = state.xraySubscriptions.copy(
                 editor = editor.copy(isPreviewing = true, message = "Проверяем подписку без сохранения…", error = null),
@@ -1395,11 +1418,15 @@ internal class CompanionController(
         try {
             val preview = dependencies.xraySubscriptions.preview(endpoint, draft.toSubscriptionSaveRequest())
             if (state.dashboard.endpoint != endpoint || state.xraySubscriptions.editor.draft != draft) return
+            val previewWithLatency = preview.copy(
+                nodes = preview.nodes.withPreservedLatencyFrom(editor.nodeCatalog.nodes),
+            )
             state = state.copy(
                 xraySubscriptions = state.xraySubscriptions.copy(
                     editor = state.xraySubscriptions.editor.copy(
                         isPreviewing = false,
-                        preview = preview,
+                        preview = previewWithLatency,
+                        nodeCatalog = previewWithLatency.toSubscriptionNodeCatalog(),
                         previewSignature = draft.previewSignature(),
                         message = "Preview: ${preview.count} из ${preview.sourceCount.coerceAtLeast(preview.count)} узлов.",
                         error = null,
@@ -1411,6 +1438,112 @@ internal class CompanionController(
         } catch (error: Exception) {
             if (returnToLoginForExpiredSession(error)) return
             publishXraySubscriptionEditorFailure(error, "Не удалось получить preview подписки.")
+        }
+    }
+
+    suspend fun pingXraySubscriptionNode(nodeKey: String) {
+        pingXraySubscriptionNodes(setOf(nodeKey), pingAll = false)
+    }
+
+    suspend fun pingAllXraySubscriptionNodes() {
+        val current = state.xraySubscriptions
+        val editor = current.editor
+        val record = current.items.firstOrNull { it.id == editor.draft.id } ?: return
+        val excluded = editor.draft.excludedNodeKeys.toSet()
+        val keys = record.nodes.asSequence()
+            .filter { it.tag.isNotBlank() && it.key !in excluded }
+            .map(OutboundNode::key)
+            .filter(String::isNotBlank)
+            .toSet()
+        pingXraySubscriptionNodes(keys, pingAll = true)
+    }
+
+    private suspend fun pingXraySubscriptionNodes(nodeKeys: Set<String>, pingAll: Boolean) {
+        val endpoint = state.dashboard.endpoint
+        val current = state.xraySubscriptions
+        val editor = current.editor
+        val subscriptionId = editor.draft.id
+        val record = current.items.firstOrNull { it.id == subscriptionId } ?: return
+        val savedActiveKeys = record.nodes.asSequence()
+            .filter { it.tag.isNotBlank() }
+            .map(OutboundNode::key)
+            .filter(String::isNotBlank)
+            .toSet()
+        val excluded = editor.draft.excludedNodeKeys.toSet()
+        val keys = nodeKeys.map(String::trim)
+            .filter { it.isNotBlank() && it in savedActiveKeys && it !in excluded }
+            .distinct()
+        if (
+            endpoint.isBlank() || subscriptionId.isBlank() || !editor.isOpen || editor.isPreviewing ||
+            editor.isSaving || editor.isPinging || keys.isEmpty()
+        ) return
+
+        state = state.copy(
+            xraySubscriptions = current.copy(
+                editor = editor.copy(
+                    isPingingAll = pingAll,
+                    pingingNodeKeys = keys.toSet(),
+                    message = if (pingAll) {
+                        "Проверяем задержку ${keys.size} узлов в фоне…"
+                    } else {
+                        "Проверяем задержку узла…"
+                    },
+                    error = null,
+                ),
+            ),
+        )
+        try {
+            val result = dependencies.xraySubscriptions.pingNodes(endpoint, subscriptionId, keys)
+            if (
+                state.dashboard.endpoint != endpoint ||
+                state.xraySubscriptions.editor.draft.id != subscriptionId
+            ) return
+            val message = when {
+                result.failedCount <= 0 -> "Проверено узлов: ${result.okCount}."
+                else -> "Доступно ${result.okCount} из ${result.requested}; без ответа: ${result.failedCount}."
+            }
+            val latest = state.xraySubscriptions
+            val latestEditor = latest.editor
+            state = state.copy(
+                xraySubscriptions = latest.copy(
+                    items = latest.items.map { item ->
+                        if (item.id == subscriptionId) {
+                            item.copy(nodes = item.nodes.withLatency(result.latencyByNodeKey))
+                        } else {
+                            item
+                        }
+                    },
+                    editor = latestEditor.copy(
+                        preview = latestEditor.preview?.copy(
+                            nodes = latestEditor.preview.nodes.withLatency(result.latencyByNodeKey),
+                        ),
+                        nodeCatalog = latestEditor.nodeCatalog.copy(
+                            nodes = latestEditor.nodeCatalog.nodes.withLatency(result.latencyByNodeKey),
+                        ),
+                        message = message,
+                        error = null,
+                    ),
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            publishXraySubscriptionEditorFailure(error, "Не удалось проверить задержку узлов подписки.")
+        } finally {
+            val latest = state.xraySubscriptions.editor
+            if (
+                state.dashboard.endpoint == endpoint && latest.isOpen && latest.draft.id == subscriptionId
+            ) {
+                state = state.copy(
+                    xraySubscriptions = state.xraySubscriptions.copy(
+                        editor = latest.copy(
+                            isPingingAll = false,
+                            pingingNodeKeys = latest.pingingNodeKeys - keys.toSet(),
+                        ),
+                    ),
+                )
+            }
         }
     }
 
@@ -4011,6 +4144,35 @@ private fun XraySubscriptionRecord.toSubscriptionDraft(): XraySubscriptionDraft 
     intervalHours = intervalHours.toString(),
 )
 
+private fun XraySubscriptionRecord.toSubscriptionNodeCatalog(): XraySubscriptionNodeCatalog =
+    XraySubscriptionNodeCatalog(
+        source = XraySubscriptionNodeCatalogSource.SavedSnapshot,
+        nodes = nodes,
+        count = lastCount,
+        sourceCount = sourceCount,
+        filteredOutCount = filteredOutCount,
+        warnings = warnings,
+        errors = errors,
+        sourceFormat = sourceFormat.orEmpty(),
+        fetchMode = fetchMode.orEmpty(),
+        profileUpdateIntervalHours = profileUpdateIntervalHours,
+        updatedAtEpochSeconds = lastUpdateEpochSeconds,
+    )
+
+private fun XraySubscriptionPreview.toSubscriptionNodeCatalog(): XraySubscriptionNodeCatalog =
+    XraySubscriptionNodeCatalog(
+        source = XraySubscriptionNodeCatalogSource.LivePreview,
+        nodes = nodes,
+        count = count,
+        sourceCount = sourceCount,
+        filteredOutCount = filteredOutCount,
+        warnings = warnings,
+        errors = errors,
+        sourceFormat = sourceFormat,
+        fetchMode = fetchMode,
+        profileUpdateIntervalHours = profileUpdateIntervalHours,
+    )
+
 private fun XraySubscriptionDraft.toSubscriptionSaveRequest(): XraySubscriptionSaveRequest =
     XraySubscriptionSaveRequest(
         id = id,
@@ -4038,6 +4200,11 @@ private fun List<OutboundNode>.sortWithActiveFirst(active: ActiveOutboundSnapsho
 
 private fun List<OutboundNode>.withLatency(latency: Map<String, OutboundLatency>): List<OutboundNode> =
     map { node -> latency[node.key]?.let { node.copy(latency = it) } ?: node }
+
+private fun List<OutboundNode>.withPreservedLatencyFrom(previous: List<OutboundNode>): List<OutboundNode> {
+    val latency = previous.mapNotNull { node -> node.latency?.let { node.key to it } }.toMap()
+    return withLatency(latency)
+}
 
 internal fun ConnectionDraft.canBeSaved(): Boolean {
     val normalizedUrl = baseUrl.trim()

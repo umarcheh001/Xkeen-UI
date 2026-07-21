@@ -2,8 +2,13 @@ package io.xkeen.mobile.app
 
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
+
+private const val SUBSCRIPTION_LATENCY_JOB_MAX_POLLS = 240
+private const val SUBSCRIPTION_LATENCY_JOB_INITIAL_DELAY_MILLIS = 450L
+private const val SUBSCRIPTION_LATENCY_JOB_MAX_DELAY_MILLIS = 1_500L
 
 data class XraySubscriptionRoutingBalancer(
     val tag: String,
@@ -109,6 +114,14 @@ internal data class XraySubscriptionsDueResult(
     val results: List<XraySubscriptionMutationResult>,
 )
 
+internal data class XraySubscriptionNodePingResult(
+    val requested: Int,
+    val updated: Int,
+    val okCount: Int,
+    val failedCount: Int,
+    val latencyByNodeKey: Map<String, OutboundLatency>,
+)
+
 internal interface XraySubscriptionsPort {
     suspend fun list(baseUrl: String): XraySubscriptionsSnapshot
 
@@ -119,6 +132,12 @@ internal interface XraySubscriptionsPort {
     suspend fun refresh(baseUrl: String, id: String, restart: Boolean): XraySubscriptionMutationResult
 
     suspend fun refreshDue(baseUrl: String, restart: Boolean): XraySubscriptionsDueResult
+
+    suspend fun pingNodes(
+        baseUrl: String,
+        id: String,
+        nodeKeys: List<String>,
+    ): XraySubscriptionNodePingResult
 
     suspend fun delete(
         baseUrl: String,
@@ -191,6 +210,27 @@ internal class WebPanelXraySubscriptionsPort(
         ).body,
     )
 
+    override suspend fun pingNodes(
+        baseUrl: String,
+        id: String,
+        nodeKeys: List<String>,
+    ): XraySubscriptionNodePingResult {
+        val keys = nodeKeys.map(String::trim).filter(String::isNotBlank).distinct()
+        if (keys.isEmpty()) throw XraySubscriptionsException("Не выбраны узлы для проверки задержки.")
+        val response = transport.post(
+            CompanionHttpRequest(
+                baseUrl = baseUrl,
+                endpoint = "/api/xray/subscriptions/${id.subscriptionUrlEncoded()}/nodes/ping-bulk",
+                body = JSONObject()
+                    .put("node_keys", JSONArray(keys))
+                    .put("timeout_s", 8)
+                    .put("async", true)
+                    .toString(),
+            ),
+        ).body
+        return parseXraySubscriptionNodePingResult(awaitSubscriptionLatencyJob(baseUrl, response))
+    }
+
     override suspend fun delete(
         baseUrl: String,
         id: String,
@@ -205,6 +245,36 @@ internal class WebPanelXraySubscriptionsPort(
             ),
         ).body,
     )
+
+    private suspend fun awaitSubscriptionLatencyJob(baseUrl: String, initialBody: String): String {
+        val initial = initialBody.subscriptionJsonObject()
+        val jobId = initial.optString("job_id").trim().ifBlank { initial.optString("jobId").trim() }
+        if (jobId.isBlank()) return initialBody
+
+        var pollDelayMillis = SUBSCRIPTION_LATENCY_JOB_INITIAL_DELAY_MILLIS
+        repeat(SUBSCRIPTION_LATENCY_JOB_MAX_POLLS) {
+            val payload = transport.get(
+                CompanionHttpRequest(
+                    baseUrl = baseUrl,
+                    endpoint = "/api/xray/latency-jobs/${jobId.subscriptionUrlEncoded()}",
+                ),
+            ).body.subscriptionJsonObject()
+            when (payload.optString("status").trim().lowercase()) {
+                "finished" -> return payload.optJSONObject("result")?.toString()
+                    ?: throw XraySubscriptionsException("Фоновая проверка завершилась без результата.")
+
+                "error" -> throw XraySubscriptionsException(
+                    payload.optString("error").trim().ifBlank { "Фоновая проверка задержки завершилась с ошибкой." },
+                )
+
+                "queued", "running" -> Unit
+                else -> throw XraySubscriptionsException("Сервер вернул неизвестное состояние проверки задержки.")
+            }
+            delay(pollDelayMillis)
+            pollDelayMillis = (pollDelayMillis * 5 / 4).coerceAtMost(SUBSCRIPTION_LATENCY_JOB_MAX_DELAY_MILLIS)
+        }
+        throw XraySubscriptionsException("Сервер слишком долго проверяет задержку узлов.")
+    }
 }
 
 internal class DemoXraySubscriptionsPort : XraySubscriptionsPort {
@@ -296,6 +366,21 @@ internal class DemoXraySubscriptionsPort : XraySubscriptionsPort {
     override suspend fun refreshDue(baseUrl: String, restart: Boolean): XraySubscriptionsDueResult {
         val results = subscriptions.filter { it.enabled }.map { refresh(baseUrl, it.id, restart) }
         return XraySubscriptionsDueResult(results.size, results.count { it.ok }, results)
+    }
+
+    override suspend fun pingNodes(
+        baseUrl: String,
+        id: String,
+        nodeKeys: List<String>,
+    ): XraySubscriptionNodePingResult {
+        val keys = nodeKeys.map(String::trim).filter(String::isNotBlank).distinct()
+        return XraySubscriptionNodePingResult(
+            requested = keys.size,
+            updated = keys.size,
+            okCount = keys.size,
+            failedCount = 0,
+            latencyByNodeKey = keys.associateWith { OutboundLatency(status = "ok", delayMillis = 42) },
+        )
     }
 
     override suspend fun delete(
@@ -412,6 +497,39 @@ internal fun parseXraySubscriptionsDueResult(body: String): XraySubscriptionsDue
     )
 }
 
+internal fun parseXraySubscriptionNodePingResult(body: String): XraySubscriptionNodePingResult {
+    val payload = body.subscriptionJsonObject()
+    val latency = buildMap {
+        payload.optJSONObject("node_latency")?.let { entries ->
+            val keys = entries.keys()
+            while (keys.hasNext()) {
+                val key = keys.next().trim()
+                val entry = entries.optJSONObject(key) ?: continue
+                if (key.isNotBlank()) put(key, parseSubscriptionLatency(entry))
+            }
+        }
+        payload.optJSONArray("results").subscriptionObjects().forEach { item ->
+            val key = item.optString("node_key").trim()
+            if (key.isBlank()) return@forEach
+            val entry = item.optJSONObject("entry") ?: item
+            put(key, parseSubscriptionLatency(entry))
+        }
+    }
+    val requested = payload.optInt("requested", latency.size).coerceAtLeast(latency.size)
+    val okCount = payload.optInt("ok_count", latency.values.count { it.delayMillis != null })
+    val failedCount = payload.optInt(
+        "failed_count",
+        (requested - okCount).coerceAtLeast(latency.values.count { it.status == "error" }),
+    )
+    return XraySubscriptionNodePingResult(
+        requested = requested,
+        updated = payload.optInt("updated", latency.size),
+        okCount = okCount,
+        failedCount = failedCount,
+        latencyByNodeKey = latency,
+    )
+}
+
 private fun parseXraySubscriptionRecord(payload: JSONObject): XraySubscriptionRecord {
     val latency = payload.optJSONObject("node_latency")
     return XraySubscriptionRecord(
@@ -474,7 +592,11 @@ private fun parseSubscriptionNodes(nodes: JSONArray?, latency: JSONObject?): Lis
 
 private fun parseSubscriptionLatency(payload: JSONObject): OutboundLatency = OutboundLatency(
     status = payload.optString("status").trim().ifBlank {
-        if (payload.has("delay_ms") && !payload.isNull("delay_ms")) "ok" else "unknown"
+        when {
+            payload.has("delay_ms") && !payload.isNull("delay_ms") -> "ok"
+            payload.optString("error").isNotBlank() -> "error"
+            else -> "unknown"
+        }
     },
     delayMillis = payload.subscriptionOptLong("delay_ms"),
     message = payload.optString("error").trim().takeIf(String::isNotBlank),

@@ -216,8 +216,10 @@ def create_xray_subscriptions_blueprint(
                 exc=exc,
                 log_tag="xray_subscriptions.node_ping_failed",
             )
-        status = 200 if result.get("ok") else 400
-        return jsonify(result), status
+        # A completed connectivity probe is a successful API operation even when
+        # the target itself is unreachable. Validation and lookup failures are
+        # still handled above as 4xx responses.
+        return jsonify(result), 200
 
     @bp.post("/api/xray/subscriptions/<string:sub_id>/nodes/ping-bulk")
     def api_probe_xray_subscription_nodes(sub_id: str):

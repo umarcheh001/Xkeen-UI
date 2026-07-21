@@ -3,8 +3,14 @@ package io.xkeen.mobile.app
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
+
+private const val OUTBOUNDS_LATENCY_JOB_TIMEOUT_MILLIS = 300_000L
+private const val OUTBOUNDS_LATENCY_JOB_INITIAL_POLL_MILLIS = 600L
+private const val OUTBOUNDS_LATENCY_JOB_MAX_POLL_MILLIS = 1_600L
 
 internal data class OutboundsFragmentIndex(
     val directory: String,
@@ -207,18 +213,65 @@ internal class WebPanelOutboundsPort(
         baseUrl: String,
         filename: String,
         nodeKeys: List<String>,
-    ): Map<String, OutboundLatency> = parseBulkOutboundPing(
-        transport.post(
+    ): Map<String, OutboundLatency> {
+        val initialPayload = transport.post(
             CompanionHttpRequest(
                 baseUrl = baseUrl,
                 endpoint = "/api/xray/outbounds/nodes/ping-bulk?file=${filename.outboundsUrlEncoded()}",
                 body = JSONObject()
                     .put("node_keys", JSONArray(nodeKeys))
                     .put("timeout_s", 8)
+                    .put("async", true)
                     .toString(),
             ),
-        ).body,
-    )
+        ).body.outboundsJsonObject()
+        val jobId = initialPayload.optString("job_id")
+            .ifBlank { initialPayload.optString("jobId") }
+            .trim()
+        val resultPayload = if (jobId.isBlank()) {
+            // Older servers can ignore the async flag and return the completed
+            // probe directly, so retain that response as a compatibility path.
+            initialPayload
+        } else {
+            waitForOutboundLatencyJob(baseUrl, jobId)
+        }
+        return parseBulkOutboundPing(resultPayload.toString())
+    }
+
+    private suspend fun waitForOutboundLatencyJob(
+        baseUrl: String,
+        jobId: String,
+    ): JSONObject {
+        val result = withTimeoutOrNull(OUTBOUNDS_LATENCY_JOB_TIMEOUT_MILLIS) {
+            var pollDelayMillis = OUTBOUNDS_LATENCY_JOB_INITIAL_POLL_MILLIS
+            while (true) {
+                val payload = transport.get(
+                    CompanionHttpRequest(
+                        baseUrl = baseUrl,
+                        endpoint = "/api/xray/latency-jobs/${jobId.outboundsUrlEncoded()}",
+                    ),
+                ).body.outboundsJsonObject()
+                when (payload.optString("status").trim().lowercase()) {
+                    "finished" -> return@withTimeoutOrNull payload.optJSONObject("result")
+                        ?: throw OutboundsException("Xkeen UI завершил фоновую проверку без результата.")
+
+                    "error" -> throw OutboundsException(
+                        payload.optString("error").trim()
+                            .ifBlank { "Фоновая проверка задержки proxy-узлов завершилась с ошибкой." },
+                    )
+
+                    "queued", "running", "" -> Unit
+                    else -> throw OutboundsException("Сервер вернул неизвестное состояние фоновой проверки.")
+                }
+                delay(pollDelayMillis)
+                pollDelayMillis = (pollDelayMillis * 5 / 4)
+                    .coerceAtMost(OUTBOUNDS_LATENCY_JOB_MAX_POLL_MILLIS)
+            }
+            @Suppress("UNREACHABLE_CODE")
+            error("unreachable")
+        }
+        return result ?: throw OutboundsException("Истекло время ожидания фоновой проверки задержки proxy-узлов.")
+    }
 }
 
 internal class DemoOutboundsPort : OutboundsPort {
@@ -453,20 +506,30 @@ internal fun parseSingleOutboundPing(body: String): OutboundLatency {
 
 internal fun parseBulkOutboundPing(body: String): Map<String, OutboundLatency> {
     val payload = body.outboundsJsonObject()
-    if (!payload.optBoolean("ok", false)) {
-        throw OutboundsException("Сервер не проверил задержку proxy-узлов.")
-    }
-    val direct = parseOutboundLatencyMap(payload.optJSONObject("node_latency"))
-    if (direct.isNotEmpty()) return direct
-    val results = payload.optJSONArray("results") ?: return emptyMap()
-    return buildMap {
+    val parsed = parseOutboundLatencyMap(payload.optJSONObject("node_latency")).toMutableMap()
+    val results = payload.optJSONArray("results")
+    if (results != null) {
         for (index in 0 until results.length()) {
             val result = results.optJSONObject(index) ?: continue
             val key = result.optString("node_key").trim()
-            val entry = result.optJSONObject("entry") ?: result
-            if (key.isNotBlank()) put(key, parseOutboundLatency(entry))
+            if (key.isBlank()) continue
+            val entry = result.optJSONObject("entry")
+            parsed[key] = when {
+                entry != null -> parseOutboundLatency(entry)
+                result.optString("error").trim().isNotBlank() -> OutboundLatency(
+                    status = "error",
+                    delayMillis = null,
+                    message = result.optString("error").trim(),
+                )
+
+                else -> parseOutboundLatency(result)
+            }
         }
     }
+    if (!payload.optBoolean("ok", false) && parsed.isEmpty()) {
+        throw OutboundsException("Сервер не проверил задержку proxy-узлов.")
+    }
+    return parsed
 }
 
 private fun parseOutboundLatencyMap(payload: JSONObject?): Map<String, OutboundLatency> = buildMap {
@@ -481,7 +544,11 @@ private fun parseOutboundLatencyMap(payload: JSONObject?): Map<String, OutboundL
 
 private fun parseOutboundLatency(payload: JSONObject): OutboundLatency = OutboundLatency(
     status = payload.optString("status").trim().ifBlank {
-        if (payload.has("delay_ms") && !payload.isNull("delay_ms")) "ok" else "unknown"
+        when {
+            payload.has("delay_ms") && !payload.isNull("delay_ms") -> "ok"
+            payload.optString("error").trim().isNotBlank() -> "error"
+            else -> "unknown"
+        }
     },
     delayMillis = payload.outboundsOptLongOrNull("delay_ms"),
     message = payload.optString("error").trim().takeIf(String::isNotBlank),
