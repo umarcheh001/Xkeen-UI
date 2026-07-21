@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -774,11 +776,17 @@ private fun XraySubscriptionNodeCatalogDialog(
                     )
                 }
             } else {
-                LazyColumn(
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(7.dp),
+                    horizontalArrangement = Arrangement.spacedBy(7.dp),
                 ) {
-                    items(visibleNodes, key = OutboundNode::key) { node ->
+                    items(
+                        count = visibleNodes.size,
+                        key = { index -> visibleNodes[index].key },
+                    ) { index ->
+                        val node = visibleNodes[index]
                         SubscriptionCatalogNodeCard(
                             node = node,
                             selected = node.key in selectedKeys,
@@ -840,65 +848,95 @@ private fun SubscriptionCatalogNodeCard(
         unavailable -> WebPanelPalette.Muted
         else -> WebPanelPalette.Success
     }
+    val stateLabel = when {
+        excluded -> "Исключён вручную"
+        unavailable -> "Не входит по фильтрам"
+        else -> "Активен"
+    }
+    val latencyLabel = when {
+        pinging -> "Проверяем…"
+        node.latency?.delayMillis != null -> "${node.latency.delayMillis} мс"
+        node.latency?.status == "error" -> "Нет ответа"
+        else -> "Не проверен"
+    }
+    val latencyColor = when {
+        node.latency?.delayMillis != null -> WebPanelPalette.Success
+        node.latency?.status == "error" -> WebPanelPalette.Error
+        else -> WebPanelPalette.Muted
+    }
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().height(116.dp),
         shape = RoundedCornerShape(11.dp),
         color = if (excluded) WebPanelPalette.Surface.copy(alpha = 0.72f) else Color(0xFF071229),
         border = BorderStroke(1.dp, (if (selected) WebPanelPalette.Border else stateColor).copy(alpha = if (selected) 0.65f else 0.24f)),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Column(
+            modifier = Modifier.fillMaxSize().padding(7.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Box(
-                modifier = Modifier.size(32.dp).clickable(enabled = canMutate, onClick = onSelect),
-                contentAlignment = Alignment.Center,
+            Row(
+                modifier = Modifier.height(30.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Icon(
-                    if (selected) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
-                    if (selected) "Снять выбор" else "Выбрать узел",
-                    tint = if (selected) WebPanelPalette.Border else WebPanelPalette.Muted,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(node.displayName, color = if (excluded) WebPanelPalette.Muted else WebPanelPalette.TextStrong, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Box(
+                    modifier = Modifier.size(28.dp).clickable(enabled = canMutate, onClick = onSelect),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        if (selected) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+                        if (selected) "Снять выбор" else "Выбрать узел",
+                        tint = if (selected) WebPanelPalette.Border else WebPanelPalette.Muted,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
                 Text(
-                    listOf(node.protocol.ifBlank { "proxy" }, node.transport, node.security).filter(String::isNotBlank).joinToString(" · "),
-                    color = WebPanelPalette.TextBlue,
-                    style = MaterialTheme.typography.labelSmall,
+                    node.displayName,
+                    modifier = Modifier.weight(1f),
+                    color = if (excluded) WebPanelPalette.Muted else WebPanelPalette.TextStrong,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(node.endpoint.ifBlank { node.detail.ifBlank { "Адрес не указан" } }, color = WebPanelPalette.Muted, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+            }
+            Text(
+                listOf(node.protocol.ifBlank { "proxy" }, node.transport, node.security).filter(String::isNotBlank).joinToString(" · "),
+                color = WebPanelPalette.TextBlue,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                node.endpoint.ifBlank { node.detail.ifBlank { "Адрес не указан" } },
+                color = WebPanelPalette.Muted,
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.weight(1f))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        when {
-                            excluded -> "Исключён вручную"
-                            unavailable -> "Не входит по фильтрам"
-                            else -> "Активен"
-                        },
+                        stateLabel,
                         color = stateColor,
                         style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        when {
-                            pinging -> "Проверяем…"
-                            node.latency?.delayMillis != null -> "${node.latency.delayMillis} мс"
-                            node.latency?.status == "error" -> "Нет ответа"
-                            else -> "Не проверен"
-                        },
-                        color = when {
-                            node.latency?.delayMillis != null -> WebPanelPalette.Success
-                            node.latency?.status == "error" -> WebPanelPalette.Error
-                            else -> WebPanelPalette.Muted
-                        },
+                        latencyLabel,
+                        color = latencyColor,
                         style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 SubscriptionIconAction(Icons.Outlined.Bolt, "Проверить задержку", canPing && !pinging, onPing, loading = pinging)
                 SubscriptionIconAction(
                     if (excluded) Icons.AutoMirrored.Outlined.Undo else Icons.Outlined.Close,
