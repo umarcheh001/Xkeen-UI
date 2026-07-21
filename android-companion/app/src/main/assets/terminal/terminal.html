@@ -7,26 +7,30 @@
   <link rel="stylesheet" href="xterm.css">
   <style>
     html, body {
-      width: 100%; height: 100%; min-height: 100vh;
+      width: 100%; height: 100%; min-height: 0;
       margin: 0; overflow: hidden; background: #01030a;
-      -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+      -webkit-text-size-adjust: none; text-size-adjust: none;
     }
     body { padding: 0; }
     #terminal {
+      /* WebView may first lay out this document while its Compose AndroidView has zero height.
+         A fixed surface follows the visual viewport when the real size arrives; an absolute
+         surface remains trapped in the resulting zero-height body and collapses to 40px. */
       position: fixed; inset: 5px 3px 3px 5px;
       width: auto; height: auto; min-width: 40px; min-height: 40px;
-      background: #01030a; touch-action: none;
+      background: #01030a; touch-action: pan-y;
     }
-    .xterm { width: 100%; height: 100%; touch-action: none; }
+    .xterm { width: 100%; height: 100%; touch-action: pan-y; }
     .xterm-viewport {
       scrollbar-color: #334155 #01030a; scrollbar-width: thin;
-      overscroll-behavior: contain; touch-action: none;
+      overscroll-behavior: contain; touch-action: pan-y;
+      -webkit-overflow-scrolling: touch;
     }
     /* Android WebView will not reliably open an IME for xterm's zero-sized off-screen textarea. */
     .xterm .xterm-helper-textarea {
-      left: 0; top: 0;
-      width: 2px; height: 2px; min-width: 2px !important; min-height: 2px !important;
+      min-width: 1px !important; min-height: 1px !important;
       z-index: 0 !important; opacity: 0.01 !important; font-size: 16px !important;
+      pointer-events: none;
     }
   </style>
 </head>
@@ -38,16 +42,21 @@
   <script>
     (() => {
       'use strict';
-      const TERMINAL_FONT_SIZE = 13;
-      const TERMINAL_LINE_HEIGHT = 1.12;
-      const RESIZE_SETTLE_DELAY_MS = 140;
+      const TERMINAL_FONT_SIZE = 14;
+      const TERMINAL_LINE_HEIGHT = 1.18;
+      const RESIZE_SETTLE_DELAY_MS = 96;
       const terminal = new Terminal({
         cursorBlink: true,
         convertEol: false,
-        scrollback: 5000,
-        fontFamily: "'Roboto Mono', 'Droid Sans Mono', monospace",
+        scrollback: 10000,
+        scrollOnUserInput: true,
+        scrollSensitivity: 1.5,
+        fontFamily: "monospace",
         fontSize: TERMINAL_FONT_SIZE,
         lineHeight: TERMINAL_LINE_HEIGHT,
+        fontWeight: "normal",
+        fontWeightBold: "bold",
+        letterSpacing: 0,
         allowTransparency: false,
         theme: {
           background: '#01030a', foreground: '#d4d4d4', cursor: '#60a5fa',
@@ -75,20 +84,15 @@
       let sessionPublishTimer = null;
       let surfaceReady = false;
       let surfaceStarting = false;
+      let fontsReady = false;
       let surfaceStartTimer = null;
       const surfaceWaitStartedAt = Date.now();
       let surfaceFailurePublished = false;
       let resizeTimer = null;
       let resizeFrame = null;
-      let pendingResizeFocus = false;
       let pendingResizePublish = false;
       let lastPublishedColumns = 0;
       let lastPublishedRows = 0;
-      let touchStartX = 0;
-      let touchStartY = 0;
-      let lastTouchY = 0;
-      let touchScrollRemainder = 0;
-      let touchScrolling = false;
 
       function hostHasSize() {
         const rect = terminalHost.getBoundingClientRect();
@@ -98,9 +102,8 @@
       function recoverHostGeometry() {
         if (hostHasSize()) return true;
 
-        // Android WebView can retain the zero-height percentage layout calculated while the
-        // view was detached even though window.innerHeight is already valid. A fixed host is
-        // resolved against the visual viewport and bypasses the collapsed html/body chain.
+        // A fixed host is resolved against the WebView visual viewport even when the initial
+        // percentage-height containing block was calculated while AndroidView was detached.
         terminalHost.style.position = 'fixed';
         terminalHost.style.inset = '5px 3px 3px 5px';
         terminalHost.style.width = 'auto';
@@ -110,8 +113,23 @@
         return hostHasSize();
       }
 
+      function configureInputMethod() {
+        const textarea = terminalHost.querySelector('.xterm-helper-textarea');
+        if (!textarea) return;
+        textarea.setAttribute('autocapitalize', 'none');
+        textarea.setAttribute('autocomplete', 'off');
+        textarea.setAttribute('autocorrect', 'off');
+        textarea.setAttribute('spellcheck', 'false');
+        textarea.setAttribute('enterkeyhint', 'enter');
+      }
+
+      function refreshVisibleRows() {
+        if (!surfaceReady) return;
+        try { terminal.refresh(0, Math.max(0, terminal.rows - 1)); } catch (_) {}
+      }
+
       function startSurface() {
-        if (surfaceReady || surfaceStarting || detached) return;
+        if (!fontsReady || surfaceReady || surfaceStarting || detached) return;
         clearTimeout(surfaceStartTimer);
         if (!hostHasSize() && !recoverHostGeometry()) {
           if (!surfaceFailurePublished && Date.now() - surfaceWaitStartedAt >= 4000) {
@@ -129,6 +147,7 @@
         surfaceStarting = true;
         try {
           terminal.open(terminalHost);
+          configureInputMethod();
           surfaceReady = true;
         } catch (error) {
           publishState('error', `Не удалось запустить терминал: ${String(error)}`);
@@ -137,7 +156,8 @@
           surfaceStarting = false;
         }
         requestAnimationFrame(() => {
-          const initialSize = fitSurface(false, false, false);
+          const initialSize = fitSurface(false, false);
+          refreshVisibleRows();
           terminal.writeln('\x1b[38;5;75mXkeen remote PTY\x1b[0m');
           try { AndroidTerminal.onReady(initialSize.cols, initialSize.rows); } catch (_) {}
         });
@@ -156,39 +176,55 @@
         return true;
       }
 
-      function fitSurface(focus, publishResize, forcePublish) {
+      function proposedDimensions() {
+        if (!hostHasSize()) return null;
+        try {
+          const proposed = fitAddon.proposeDimensions();
+          if (!proposed) return null;
+          const cols = Math.max(2, Math.floor(Number(proposed.cols) || 0));
+          const rows = Math.max(1, Math.floor(Number(proposed.rows) || 0));
+          return cols > 1 && rows > 0 ? { cols, rows } : null;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function fitSurface(publishResize, forcePublish) {
         if (!surfaceReady) {
           startSurface();
           return currentDimensions();
         }
-        const activeBuffer = terminal.buffer && terminal.buffer.active;
-        const wasAtBottom = !activeBuffer || activeBuffer.viewportY >= activeBuffer.baseY;
-        const previousViewportY = activeBuffer ? activeBuffer.viewportY : 0;
-        try { terminal.clearSelection(); } catch (_) {}
-        try {
-          if (terminal.options.fontSize !== TERMINAL_FONT_SIZE) terminal.options.fontSize = TERMINAL_FONT_SIZE;
-          if (terminal.options.lineHeight !== TERMINAL_LINE_HEIGHT) terminal.options.lineHeight = TERMINAL_LINE_HEIGHT;
-          if (hostHasSize()) fitAddon.fit();
-        } catch (_) {}
-        const size = currentDimensions();
-        try {
-          if (wasAtBottom) terminal.scrollToBottom();
-          else terminal.scrollToLine(Math.min(previousViewportY, terminal.buffer.active.baseY));
-          terminal.refresh(0, Math.max(0, terminal.rows - 1));
-        } catch (_) {}
-        if (publishResize) publishPtyResize(size, forcePublish);
-        if (focus) {
-          try { terminal.focus(); } catch (_) {}
+        const proposed = proposedDimensions();
+        if (proposed && (proposed.cols !== terminal.cols || proposed.rows !== terminal.rows)) {
+          const activeBuffer = terminal.buffer && terminal.buffer.active;
+          const wasAtBottom = !activeBuffer || activeBuffer.viewportY >= activeBuffer.baseY;
+          const distanceFromBottom = activeBuffer
+            ? Math.max(0, activeBuffer.baseY - activeBuffer.viewportY)
+            : 0;
+          // FitAddon clears the old renderer frame before resizing, which avoids stale canvas
+          // pixels when Android animates the IME and the WebView changes height.
+          try { fitAddon.fit(); } catch (_) {}
+          try {
+            if (wasAtBottom) terminal.scrollToBottom();
+            else terminal.scrollToLine(
+              Math.max(0, terminal.buffer.active.baseY - distanceFromBottom)
+            );
+          } catch (_) {}
+          // Vendor WebViews can briefly composite stale xterm tiles after the IME resizes the
+          // AndroidView. Redraw now and once more on the next frame after the new rows settle.
+          refreshVisibleRows();
+          requestAnimationFrame(refreshVisibleRows);
         }
+        const size = currentDimensions();
+        if (publishResize) publishPtyResize(size, forcePublish);
         return size;
       }
 
-      function scheduleSurfaceFit(focus, publishResize, delay) {
+      function scheduleSurfaceFit(publishResize, delay) {
         if (!surfaceReady) {
           startSurface();
           return;
         }
-        pendingResizeFocus = pendingResizeFocus || !!focus;
         pendingResizePublish = pendingResizePublish || !!publishResize;
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
@@ -196,11 +232,9 @@
           if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
           resizeFrame = requestAnimationFrame(() => {
             resizeFrame = null;
-            const shouldFocus = pendingResizeFocus;
             const shouldPublish = pendingResizePublish;
-            pendingResizeFocus = false;
             pendingResizePublish = false;
-            fitSurface(shouldFocus, shouldPublish, false);
+            fitSurface(shouldPublish, false);
           });
         }, Math.max(0, Number(delay) || 0));
       }
@@ -272,10 +306,10 @@
         socket.onopen = () => {
           if (current !== generation) return;
           reconnectAttempt = 0;
-          const size = fitSurface(false, false, false);
+          const size = fitSurface(false, false);
           publishPtyResize(size, true);
           terminal.writeln('\x1b[38;5;75m[PTY] Соединение установлено\x1b[0m');
-          scheduleSurfaceFit(false, false, 0);
+          scheduleSurfaceFit(false, 0);
         };
         socket.onmessage = (event) => {
           if (current !== generation) return;
@@ -288,7 +322,7 @@
             publishSession(true);
             publishState('connected', `PTY подключён${message.shell ? ': ' + message.shell : ''}`);
             terminal.writeln(`\x1b[38;5;75m[PTY] ${message.shell || 'shell'}${message.reused ? ' · сессия восстановлена' : ''}\x1b[0m`);
-            scheduleSurfaceFit(true, true, 0);
+            scheduleSurfaceFit(true, 0);
             if (!message.reused) {
               // A fresh interactive ash may start before the WebSocket is attached and not repaint
               // its prompt. A blank command is harmless and guarantees a visible prompt.
@@ -324,60 +358,17 @@
       terminal.onData(data => send({ type: 'input', data }));
       const resizeObserver = new ResizeObserver(() => {
         if (!surfaceReady) startSurface();
-        else scheduleSurfaceFit(false, true, RESIZE_SETTLE_DELAY_MS);
+        else scheduleSurfaceFit(true, RESIZE_SETTLE_DELAY_MS);
       });
       resizeObserver.observe(terminalHost);
       terminalHost.addEventListener('mousedown', () => {
         try { terminal.focus(); } catch (_) {}
       });
-      terminalHost.addEventListener('touchstart', event => {
-        if (event.touches.length !== 1) return;
-        const touch = event.touches[0];
-        touchStartX = touch.clientX;
-        touchStartY = touch.clientY;
-        lastTouchY = touch.clientY;
-        touchScrollRemainder = 0;
-        touchScrolling = false;
-      }, { capture: true, passive: true });
-      terminalHost.addEventListener('touchmove', event => {
-        if (event.touches.length !== 1) return;
-        const touch = event.touches[0];
-        const totalX = touch.clientX - touchStartX;
-        const totalY = touch.clientY - touchStartY;
-        if (!touchScrolling && Math.abs(totalY) > 8 && Math.abs(totalY) > Math.abs(totalX) * 1.1) {
-          touchScrolling = true;
-        }
-        if (!touchScrolling) return;
-        event.preventDefault();
-        event.stopPropagation();
-        try { terminal.clearSelection(); } catch (_) {}
-        const cellHeight = Math.max(12, terminalHost.clientHeight / Math.max(1, terminal.rows));
-        touchScrollRemainder += -(touch.clientY - lastTouchY) / cellHeight;
-        const lines = Math.trunc(touchScrollRemainder);
-        if (lines !== 0) {
-          try { terminal.scrollLines(lines); } catch (_) {}
-          touchScrollRemainder -= lines;
-        }
-        lastTouchY = touch.clientY;
-      }, { capture: true, passive: false });
-      terminalHost.addEventListener('touchend', event => {
-        if (touchScrolling) {
-          event.preventDefault();
-          event.stopPropagation();
-          try { terminal.clearSelection(); } catch (_) {}
-        } else {
-          try { terminal.focus(); } catch (_) {}
-        }
-        touchScrolling = false;
-        touchScrollRemainder = 0;
-      }, { capture: true, passive: false });
-      terminalHost.addEventListener('touchcancel', () => {
-        touchScrolling = false;
-        touchScrollRemainder = 0;
-        try { terminal.clearSelection(); } catch (_) {}
-      }, { capture: true, passive: true });
+      terminalHost.addEventListener('click', () => {
+        try { terminal.focus(); } catch (_) {}
+      }, { passive: true });
       document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) scheduleSurfaceFit(false, true, RESIZE_SETTLE_DELAY_MS);
+        if (!document.hidden) scheduleSurfaceFit(true, RESIZE_SETTLE_DELAY_MS);
       });
 
       window.XkeenTerminal = {
@@ -397,7 +388,6 @@
         input: data => send({ type: 'input', data: String(data || '') }),
         clear: () => terminal.clear(),
         focus: () => terminal.focus(),
-        resize: () => scheduleSurfaceFit(false, true, RESIZE_SETTLE_DELAY_MS),
         selection: () => terminal.getSelection(),
         paste: text => terminal.paste(String(text || '')),
         findNext: query => searchAddon.findNext(String(query || ''), { caseSensitive: false, incremental: true }),
@@ -418,7 +408,12 @@
         }
       };
 
-      startSurface();
+      Promise.resolve(document.fonts ? document.fonts.ready : undefined)
+        .catch(() => undefined)
+        .then(() => {
+          fontsReady = true;
+          startSurface();
+        });
     })();
   </script>
 </body>

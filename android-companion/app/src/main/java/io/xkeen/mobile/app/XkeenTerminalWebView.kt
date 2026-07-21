@@ -5,7 +5,11 @@ import android.content.Context
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.graphics.Color
+import android.graphics.Rect
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
+import android.view.inputmethod.InputMethodManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -13,6 +17,7 @@ import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.core.content.edit
 import org.json.JSONObject
+import java.lang.ref.WeakReference
 
 @SuppressLint("SetJavaScriptEnabled", "ViewConstructor")
 internal class XkeenTerminalWebView(
@@ -27,15 +32,17 @@ internal class XkeenTerminalWebView(
     private var pendingConnection: PtyConnectionSpec? = null
     private val preferences = context.getSharedPreferences("xkeen_terminal_sessions", Context.MODE_PRIVATE)
     private val sessionKey = resumeKey.sha256Key()
-    private val settledResize = Runnable {
-        if (pageReady && width > 0 && height > 0) invoke("resize()")
-    }
+    private val inputMethodManager = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+    private var touchDownX = 0f
+    private var touchDownY = 0f
+    private var touchMoved = false
+    private var routingWindowTouch = false
 
     init {
+        activeTouchTarget = WeakReference(this)
         setBackgroundColor(Color.rgb(1, 3, 10))
-        // Some vendor WebView/GPU combinations keep xterm's DOM layer black until a later
-        // invalidation. The software layer is deterministic and fast enough for the router PTY.
-        setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+        isClickable = true
         isFocusable = true
         isFocusableInTouchMode = true
         overScrollMode = View.OVER_SCROLL_NEVER
@@ -57,7 +64,6 @@ internal class XkeenTerminalWebView(
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 pageReady = true
-                scheduleSettledResize()
                 pendingConnection?.let {
                     pendingConnection = null
                     connect(it)
@@ -69,11 +75,48 @@ internal class XkeenTerminalWebView(
         loadUrl(TerminalAssetUrl)
     }
 
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        super.onSizeChanged(w, h, oldw, oldh)
-        if (pageReady && w > 0 && h > 0 && (w != oldw || h != oldh)) {
-            scheduleSettledResize()
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        activeTouchTarget = WeakReference(this)
+    }
+
+    override fun onDetachedFromWindow() {
+        routingWindowTouch = false
+        super.onDetachedFromWindow()
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        var focusAfterDispatch = false
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                requestFocusFromTouch()
+                touchDownX = event.x
+                touchDownY = event.y
+                touchMoved = false
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                if (
+                    kotlin.math.abs(event.x - touchDownX) > touchSlop ||
+                    kotlin.math.abs(event.y - touchDownY) > touchSlop
+                ) {
+                    touchMoved = true
+                }
+            }
+
+            MotionEvent.ACTION_UP -> {
+                focusAfterDispatch = !touchMoved &&
+                    kotlin.math.abs(event.x - touchDownX) <= touchSlop &&
+                    kotlin.math.abs(event.y - touchDownY) <= touchSlop
+                touchMoved = false
+            }
+
+            MotionEvent.ACTION_CANCEL -> touchMoved = false
         }
+        // WebView/xterm receives the complete gesture first, preserving native kinetic scroll.
+        val handled = super.onTouchEvent(event)
+        if (focusAfterDispatch) focusTerminalFromTouch()
+        return handled
     }
 
     fun connect(spec: PtyConnectionSpec) {
@@ -153,7 +196,7 @@ internal class XkeenTerminalWebView(
         preferences.getString("${sessionKey}_id", null)?.takeIf(String::isNotBlank) to 0L
 
     fun release() {
-        removeCallbacks(settledResize)
+        routingWindowTouch = false
         if (pageReady) invoke("detach()")
         removeJavascriptInterface(BridgeName)
         stopLoading()
@@ -164,15 +207,49 @@ internal class XkeenTerminalWebView(
         if (pageReady) evaluateJavascript("window.XkeenTerminal && window.XkeenTerminal.$expression;", null)
     }
 
-    private fun scheduleSettledResize() {
-        removeCallbacks(settledResize)
-        postDelayed(settledResize, RESIZE_SETTLE_MILLIS)
+    private fun focusTerminalFromTouch() {
+        if (!pageReady) return
+        evaluateJavascript("window.XkeenTerminal && window.XkeenTerminal.focus();") {
+            post { inputMethodManager.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT) }
+        }
+    }
+
+    private fun routeWindowTouch(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            val visibleBounds = Rect()
+            routingWindowTouch = isShown &&
+                getGlobalVisibleRect(visibleBounds) &&
+                visibleBounds.contains(event.rawX.toInt(), event.rawY.toInt())
+        }
+        if (!routingWindowTouch) return false
+
+        val location = IntArray(2)
+        getLocationOnScreen(location)
+        val localEvent = MotionEvent.obtain(event)
+        localEvent.offsetLocation(
+            event.rawX - event.x - location[0],
+            event.rawY - event.y - location[1],
+        )
+        try {
+            dispatchTouchEvent(localEvent)
+        } finally {
+            localEvent.recycle()
+        }
+        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+            routingWindowTouch = false
+        }
+        return true
     }
 
     private inner class TerminalBridge {
         @JavascriptInterface
         fun onReady(columns: Int, rows: Int) {
-            post { onTerminalReady(columns, rows) }
+            post {
+                // The xterm canvas and font metrics now exist. Invalidate this hardware-backed
+                // WebView once for vendor renderers that defer its first composed frame.
+                this@XkeenTerminalWebView.postInvalidateOnAnimation()
+                onTerminalReady(columns, rows)
+            }
         }
 
         @JavascriptInterface
@@ -211,10 +288,19 @@ internal class XkeenTerminalWebView(
         }
     }
 
-    private companion object {
-        const val BridgeName = "AndroidTerminal"
-        const val TerminalAssetUrl = "file:///android_asset/terminal/terminal.html"
-        const val RESIZE_SETTLE_MILLIS = 48L
+    companion object {
+        private var activeTouchTarget = WeakReference<XkeenTerminalWebView>(null)
+        private var touchRoutingEnabled = false
+
+        internal fun setTouchRoutingEnabled(enabled: Boolean) {
+            touchRoutingEnabled = enabled
+        }
+
+        internal fun routeTouchFromActivity(event: MotionEvent): Boolean =
+            touchRoutingEnabled && activeTouchTarget.get()?.routeWindowTouch(event) == true
+
+        private const val BridgeName = "AndroidTerminal"
+        private const val TerminalAssetUrl = "file:///android_asset/terminal/terminal.html"
     }
 }
 

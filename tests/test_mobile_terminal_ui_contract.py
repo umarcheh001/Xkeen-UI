@@ -33,14 +33,33 @@ def test_terminal_quick_keys_stay_above_the_ime():
     assert "height(if (imeVisible)" not in terminal
 
 
-def test_terminal_webview_coalesces_resize_and_leaves_touch_to_javascript() -> None:
+def test_terminal_webview_leaves_resize_and_scroll_gestures_to_xterm() -> None:
     webview = _source("XkeenTerminalWebView.kt")
+    activity = (APP_ROOT.parent / "MainActivity.kt").read_text(encoding="utf-8")
+    terminal = _source("TerminalWorkspaceUi.kt")
 
-    assert "private val settledResize = Runnable" in webview
-    assert "postDelayed(settledResize, RESIZE_SETTLE_MILLIS)" in webview
-    assert "const val RESIZE_SETTLE_MILLIS = 48L" in webview
-    assert "override fun onTouchEvent" not in webview
+    assert "private val settledResize = Runnable" not in webview
+    assert "scheduleSettledResize" not in webview
+    assert "override fun onSizeChanged" not in webview
+    assert "setLayerType" not in webview
+    assert "postInvalidateOnAnimation()" in webview
+    assert "override fun onTouchEvent(event: MotionEvent): Boolean" in webview
+    assert "requestFocusFromTouch()" in webview
+    assert "val handled = super.onTouchEvent(event)" in webview
+    assert "if (focusAfterDispatch) focusTerminalFromTouch()" in webview
+    assert "ViewConfiguration.get(context).scaledTouchSlop" in webview
+    assert "inputMethodManager.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)" in webview
+    assert "inputMethodManager.restartInput(this)" not in webview
+    assert "isClickable = true" in webview
     assert "textZoom = 100" in webview
+    assert "activeTouchTarget = WeakReference(this)" in webview
+    assert "getGlobalVisibleRect(visibleBounds)" in webview
+    assert "dispatchTouchEvent(localEvent)" in webview
+    assert "touchRoutingEnabled && activeTouchTarget.get()?.routeWindowTouch(event)" in webview
+    assert "XkeenTerminalWebView.setTouchRoutingEnabled(true)" in terminal
+    assert "XkeenTerminalWebView.setTouchRoutingEnabled(false)" in terminal
+    assert "override fun dispatchTouchEvent(event: MotionEvent): Boolean" in activity
+    assert "XkeenTerminalWebView.routeTouchFromActivity(event)" in activity
 
 
 def test_terminal_keeps_core_keys_visible_before_scrollable_extras():
