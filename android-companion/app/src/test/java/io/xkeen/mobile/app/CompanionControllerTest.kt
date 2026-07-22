@@ -1771,6 +1771,31 @@ class CompanionControllerTest {
         // The fake config has no proxy-groups, so stale UI selections are not sent to the server.
         assertTrue(nodePort.request?.groups.isNullOrEmpty())
     }
+
+    @Test
+    fun closingMihomoNodeReturnsToEditorWithoutChangingDraft() = runTest {
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                dashboard = unloadedDashboardState().copy(
+                    endpoint = "https://router.example",
+                    availableCores = listOf("Mihomo"),
+                ),
+                mainTab = MainTab.Home,
+                workspaceSection = WorkspaceSection.MihomoNode,
+            ),
+            dependencies = testDependencies(),
+        )
+
+        controller.refreshMihomoConfig()
+        controller.updateMihomoConfig("port: 7891\n")
+        controller.updateMihomoNodeSource("vless://mobile")
+        controller.closeMihomoNodeWorkspace()
+
+        assertEquals(WorkspaceSection.MihomoRouting, controller.state.workspaceSection)
+        assertEquals("port: 7891\n", controller.state.mihomoConfig.content)
+        assertEquals("vless://mobile", controller.state.mihomoNode.source)
+    }
 }
 
 private fun testDependencies(

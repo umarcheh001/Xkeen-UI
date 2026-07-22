@@ -1,5 +1,11 @@
 package io.xkeen.mobile.app
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -7,6 +13,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,8 +30,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,8 +48,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -59,6 +73,8 @@ internal fun MihomoNodeWorkspaceScreen(
     val node = state.mihomoNode
     val groups = remember(config.content) { mihomoProxyGroupNames(config.content) }
     val scope = rememberCoroutineScope()
+    var sourceTypeExpanded by rememberSaveable { mutableStateOf(false) }
+    var groupsExpanded by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(state.dashboard.endpoint) {
         controller.refreshMihomoConfig()
@@ -135,43 +151,28 @@ internal fun MihomoNodeWorkspaceScreen(
                         .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFF071229),
-                        border = BorderStroke(1.dp, WebPanelPalette.Border.copy(alpha = 0.18f)),
+                    NodeCollapsibleSection(
+                        title = "Тип источника",
+                        summary = node.mode.displayName,
+                        expanded = sourceTypeExpanded,
+                        enabled = !node.isImporting,
+                        onExpandedChange = { sourceTypeExpanded = it },
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(11.dp),
-                            horizontalArrangement = Arrangement.spacedBy(9.dp),
-                            verticalAlignment = Alignment.Top,
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(7.dp),
                         ) {
-                            Icon(Icons.Outlined.Info, null, tint = WebPanelPalette.TextBlue, modifier = Modifier.size(18.dp))
-                            Text(
-                                "Отдельного YAML preview здесь нет. Источник будет преобразован в черновик, после чего приложение откроет редактор и выделит вставленный блок.",
-                                modifier = Modifier.weight(1f),
-                                color = WebPanelPalette.Muted,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                    }
-
-                    Text(
-                        "ТИП ИСТОЧНИКА",
-                        color = WebPanelPalette.Border,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(7.dp),
-                    ) {
-                        MihomoNodeImportMode.entries.forEach { mode ->
-                            FilterChip(
-                                selected = node.mode == mode,
-                                onClick = { controller.selectMihomoNodeMode(mode) },
-                                enabled = !node.isImporting,
-                                label = { Text(mode.displayName, maxLines = 1) },
-                            )
+                            MihomoNodeImportMode.entries.forEach { mode ->
+                                FilterChip(
+                                    selected = node.mode == mode,
+                                    onClick = {
+                                        controller.selectMihomoNodeMode(mode)
+                                        sourceTypeExpanded = false
+                                    },
+                                    enabled = !node.isImporting,
+                                    label = { Text(mode.displayName, maxLines = 1) },
+                                )
+                            }
                         }
                     }
 
@@ -242,26 +243,23 @@ internal fun MihomoNodeWorkspaceScreen(
                         }
                     }
 
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = WebPanelPalette.Panel,
-                        border = BorderStroke(1.dp, WebPanelPalette.Border.copy(alpha = 0.18f)),
+                    NodeCollapsibleSection(
+                        title = "Добавить в группы",
+                        summary = if (groups.isEmpty()) {
+                            "В config.yaml группы не найдены"
+                        } else {
+                            "Выбрано ${node.selectedGroups.count { it in groups }} из ${groups.size}"
+                        },
+                        expanded = groupsExpanded,
+                        enabled = groups.isNotEmpty() && !node.isImporting,
+                        onExpandedChange = { groupsExpanded = it },
                     ) {
-                        Column(modifier = Modifier.fillMaxWidth().padding(11.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        "Добавить в группы",
-                                        color = WebPanelPalette.TextStrong,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                    Text(
-                                        if (groups.isEmpty()) "В config.yaml группы не найдены" else "Выбрано ${node.selectedGroups.count { it in groups }} из ${groups.size}",
-                                        color = WebPanelPalette.Muted,
-                                        style = MaterialTheme.typography.labelSmall,
-                                    )
-                                }
+                        if (groups.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
                                 NodeGroupAction("Все", groups.isNotEmpty() && !node.isImporting) {
                                     controller.setAllMihomoNodeGroups(groups, selected = true)
                                 }
@@ -270,32 +268,30 @@ internal fun MihomoNodeWorkspaceScreen(
                                     controller.setAllMihomoNodeGroups(groups, selected = false)
                                 }
                             }
-                            if (groups.isNotEmpty()) {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(vertical = 7.dp),
-                                    color = WebPanelPalette.Border.copy(alpha = 0.14f),
-                                )
-                                groups.forEach { group ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable(enabled = !node.isImporting) { controller.toggleMihomoNodeGroup(group) }
-                                            .padding(vertical = 2.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Checkbox(
-                                            checked = group in node.selectedGroups,
-                                            onCheckedChange = { controller.toggleMihomoNodeGroup(group) },
-                                            enabled = !node.isImporting,
-                                        )
-                                        Text(
-                                            group,
-                                            color = WebPanelPalette.Text,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 7.dp),
+                                color = WebPanelPalette.Border.copy(alpha = 0.14f),
+                            )
+                            groups.forEach { group ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable(enabled = !node.isImporting) { controller.toggleMihomoNodeGroup(group) }
+                                        .padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Checkbox(
+                                        checked = group in node.selectedGroups,
+                                        onCheckedChange = { controller.toggleMihomoNodeGroup(group) },
+                                        enabled = !node.isImporting,
+                                    )
+                                    Text(
+                                        group,
+                                        color = WebPanelPalette.Text,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
                                 }
                             }
                         }
@@ -315,27 +311,117 @@ internal fun MihomoNodeWorkspaceScreen(
                         )
                 }
 
-                Surface(
-                    color = WebPanelPalette.BackgroundDeep,
-                    border = BorderStroke(1.dp, WebPanelPalette.Border.copy(alpha = 0.14f)),
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(WebPanelPalette.Background)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
                 ) {
-                    Button(
-                        onClick = { scope.launch { controller.importMihomoNodeDraft() } },
-                        enabled = node.source.isNotBlank() && !node.isImporting && !config.isBusy,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp),
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = WebPanelPalette.Panel,
+                        border = BorderStroke(1.dp, WebPanelPalette.Border.copy(alpha = 0.22f)),
+                        shadowElevation = 5.dp,
                     ) {
-                        if (node.isImporting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(17.dp),
-                                strokeWidth = 2.dp,
-                                color = WebPanelPalette.TextStrong,
-                            )
-                            Spacer(Modifier.width(8.dp))
-                        } else {
-                            Icon(Icons.Outlined.AutoFixHigh, null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(7.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            OutlinedButton(
+                                onClick = controller::closeMihomoNodeWorkspace,
+                                enabled = !node.isImporting,
+                                modifier = Modifier.weight(0.36f).height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp),
+                            ) {
+                                Icon(Icons.Outlined.Close, null, modifier = Modifier.size(17.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Отмена", maxLines = 1)
+                            }
+                            Button(
+                                onClick = { scope.launch { controller.importMihomoNodeDraft() } },
+                                enabled = node.source.isNotBlank() && !node.isImporting && !config.isBusy,
+                                modifier = Modifier.weight(0.64f).height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp),
+                            ) {
+                                if (node.isImporting) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(17.dp),
+                                        strokeWidth = 2.dp,
+                                        color = WebPanelPalette.TextStrong,
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                } else {
+                                    Icon(Icons.Outlined.AutoFixHigh, null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                }
+                                Text(if (node.isImporting) "Добавляем…" else "Добавить в редактор", maxLines = 1)
+                            }
                         }
-                        Text(if (node.isImporting) "Добавляем…" else "Добавить в редактор")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NodeCollapsibleSection(
+    title: String,
+    summary: String,
+    expanded: Boolean,
+    enabled: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = WebPanelPalette.Panel,
+        border = BorderStroke(1.dp, WebPanelPalette.Border.copy(alpha = 0.22f)),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = enabled) { onExpandedChange(!expanded) }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Text(
+                        title,
+                        color = WebPanelPalette.TextStrong,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        summary,
+                        color = WebPanelPalette.Muted,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Icon(
+                    if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+                    contentDescription = if (expanded) "Свернуть" else "Развернуть",
+                    tint = if (enabled) WebPanelPalette.Muted else WebPanelPalette.MutedDeep,
+                    modifier = Modifier.size(21.dp),
+                )
+            }
+            AnimatedVisibility(
+                visible = expanded,
+                enter = fadeIn(animationSpec = tween(140)) + expandVertically(animationSpec = tween(180)),
+                exit = fadeOut(animationSpec = tween(110)) + shrinkVertically(animationSpec = tween(160)),
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    HorizontalDivider(color = WebPanelPalette.Border.copy(alpha = 0.14f))
+                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 8.dp)) {
+                        content()
                     }
                 }
             }

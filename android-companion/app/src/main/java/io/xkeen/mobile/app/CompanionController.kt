@@ -3583,6 +3583,14 @@ internal class CompanionController(
         )
     }
 
+    fun closeMihomoNodeWorkspace() {
+        if (state.mihomoNode.isImporting) return
+        state = state.copy(
+            mainTab = MainTab.Home,
+            workspaceSection = WorkspaceSection.MihomoRouting,
+        )
+    }
+
     fun selectMihomoNodeMode(mode: MihomoNodeImportMode) {
         val current = state.mihomoNode
         if (current.isImporting || mode == current.mode) return
