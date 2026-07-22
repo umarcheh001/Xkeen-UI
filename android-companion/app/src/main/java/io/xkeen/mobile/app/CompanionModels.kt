@@ -808,6 +808,34 @@ data class MihomoNodeState(
     val lastInsertedNames: List<String> = emptyList(),
 )
 
+enum class MihomoHwidOperationPhase {
+    Idle,
+    LoadingDevice,
+    Probing,
+    Applying,
+}
+
+data class MihomoHwidState(
+    val subscriptionUrl: String = "",
+    val providerName: String = "",
+    val ignoreTls: Boolean = false,
+    val device: MihomoHwidDeviceInfo? = null,
+    val deviceLoaded: Boolean = false,
+    val deviceError: String? = null,
+    val probe: MihomoHwidProbeResult? = null,
+    val previewYaml: String = "",
+    val operation: MihomoHwidOperationPhase = MihomoHwidOperationPhase.Idle,
+    val message: String = "Вставьте URL premium-подписки и проверьте привязку HWID.",
+    val error: String? = null,
+    val lastAppliedName: String? = null,
+) {
+    val isBusy: Boolean
+        get() = operation != MihomoHwidOperationPhase.Idle
+
+    val isReady: Boolean
+        get() = probe != null && previewYaml.isNotBlank() && error == null
+}
+
 data class MihomoTemplatesState(
     val templates: List<MihomoTemplate> = emptyList(),
     val selectedName: String? = null,
@@ -921,6 +949,7 @@ data class CompanionUiState(
     val mihomoConfig: MihomoConfigState = MihomoConfigState(),
     val mihomoTemplates: MihomoTemplatesState = MihomoTemplatesState(),
     val mihomoNode: MihomoNodeState = MihomoNodeState(),
+    val mihomoHwid: MihomoHwidState = MihomoHwidState(),
     val portsEditor: PortsEditorState = PortsEditorState(),
     val logs: LogsState = LogsState(),
     val diagnostics: List<DiagnosticItem> = initialDiagnostics(),
@@ -969,6 +998,8 @@ fun unloadedXrayDatState(): XrayDatState = XrayDatState()
 fun unloadedMihomoConfigState(): MihomoConfigState = MihomoConfigState()
 
 fun unloadedMihomoNodeState(): MihomoNodeState = MihomoNodeState()
+
+fun unloadedMihomoHwidState(): MihomoHwidState = MihomoHwidState()
 
 fun initialDiagnostics(): List<DiagnosticItem> = listOf(
     DiagnosticItem("Мобильная сессия", "Ожидает входа", DiagnosticSeverity.Warning),

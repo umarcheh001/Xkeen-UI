@@ -441,6 +441,11 @@ internal class CompanionController(
 
             WorkspaceSection.MihomoTemplates -> refreshMihomoTemplates(force = true)
 
+            WorkspaceSection.MihomoHwid -> {
+                if (!state.mihomoConfig.hasChanges) refreshMihomoConfig(force = true)
+                refreshMihomoHwidDevice(force = true)
+            }
+
             WorkspaceSection.PortsOverview -> {
                 if (state.portsEditor.selectedDocument?.hasChanges != true) {
                     loadSelectedPortsDocument(force = true)
@@ -3756,6 +3761,346 @@ internal class CompanionController(
         }
     }
 
+    suspend fun refreshMihomoHwidDevice(force: Boolean = false) {
+        val endpoint = state.dashboard.endpoint
+        val current = state.mihomoHwid
+        if (
+            endpoint.isBlank() || current.operation in setOf(
+                MihomoHwidOperationPhase.Probing,
+                MihomoHwidOperationPhase.Applying,
+            ) || (!force && current.deviceLoaded)
+        ) {
+            return
+        }
+        state = state.copy(
+            mihomoHwid = current.copy(
+                operation = MihomoHwidOperationPhase.LoadingDevice,
+                deviceError = null,
+            ),
+        )
+        try {
+            val device = dependencies.mihomoHwid.loadDevice(endpoint)
+            if (state.dashboard.endpoint != endpoint) return
+            state = state.copy(
+                mihomoHwid = state.mihomoHwid.copy(
+                    device = device,
+                    deviceLoaded = true,
+                    operation = MihomoHwidOperationPhase.Idle,
+                    message = if (device.hwid.isBlank()) {
+                        "Роутер не сообщил HWID. Проверьте ENV-настройку перед добавлением подписки."
+                    } else {
+                        "Идентификатор устройства получен. Можно проверять подписку."
+                    },
+                    deviceError = null,
+                ),
+            )
+        } catch (error: CancellationException) {
+            if (state.dashboard.endpoint == endpoint) {
+                state = state.copy(
+                    mihomoHwid = state.mihomoHwid.copy(operation = MihomoHwidOperationPhase.Idle),
+                )
+            }
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            if (state.dashboard.endpoint == endpoint) {
+                val message = error.toCompanionLoadMessage("Не удалось получить HWID устройства.")
+                state = state.copy(
+                    mihomoHwid = state.mihomoHwid.copy(
+                        deviceLoaded = true,
+                        operation = MihomoHwidOperationPhase.Idle,
+                        deviceError = message,
+                    ),
+                )
+            }
+        }
+    }
+
+    fun updateMihomoHwidUrl(value: String) {
+        val current = state.mihomoHwid
+        if (current.isBusy || value == current.subscriptionUrl) return
+        state = state.copy(
+            mihomoHwid = current.copy(
+                subscriptionUrl = value,
+                probe = null,
+                previewYaml = "",
+                message = "Ссылка изменена — выполните проверку заново.",
+                error = null,
+                lastAppliedName = null,
+            ),
+        )
+    }
+
+    fun updateMihomoHwidProviderName(value: String) {
+        val current = state.mihomoHwid
+        if (current.isBusy || value == current.providerName) return
+        val preview = if (current.probe != null) {
+            runCatching {
+                buildMihomoHwidProviderSnippet(
+                    baseUrl = state.dashboard.endpoint,
+                    providerName = value,
+                    subscriptionUrl = current.subscriptionUrl,
+                    insecure = current.ignoreTls,
+                )
+            }.getOrDefault("")
+        } else {
+            ""
+        }
+        state = state.copy(
+            mihomoHwid = current.copy(
+                providerName = value,
+                previewYaml = preview,
+                message = if (current.probe != null && preview.isBlank()) {
+                    "Укажите имя provider для подготовки YAML."
+                } else {
+                    current.message
+                },
+                error = null,
+                lastAppliedName = null,
+            ),
+        )
+    }
+
+    fun updateMihomoHwidIgnoreTls(enabled: Boolean) {
+        val current = state.mihomoHwid
+        if (current.isBusy || enabled == current.ignoreTls) return
+        state = state.copy(
+            mihomoHwid = current.copy(
+                ignoreTls = enabled,
+                probe = null,
+                previewYaml = "",
+                message = "TLS-режим изменён — выполните проверку заново.",
+                error = null,
+                lastAppliedName = null,
+            ),
+        )
+    }
+
+    fun closeMihomoHwidWorkspace() {
+        if (state.mihomoHwid.isBusy) return
+        state = state.copy(
+            mainTab = MainTab.Home,
+            workspaceSection = WorkspaceSection.MihomoRouting,
+        )
+    }
+
+    suspend fun probeMihomoHwidSubscription() {
+        val endpoint = state.dashboard.endpoint
+        val current = state.mihomoHwid
+        val url = current.subscriptionUrl.trim()
+        if (endpoint.isBlank() || current.isBusy) return
+        if (!url.startsWith("https://", ignoreCase = true) && !url.startsWith("http://", ignoreCase = true)) {
+            val message = "Введите полный HTTP(S) URL HWID-подписки."
+            state = state.copy(mihomoHwid = current.copy(message = message, error = message))
+            return
+        }
+        state = state.copy(
+            mihomoHwid = current.copy(
+                operation = MihomoHwidOperationPhase.Probing,
+                probe = null,
+                previewYaml = "",
+                message = "Проверяем ссылку с HWID-заголовками…",
+                error = null,
+                lastAppliedName = null,
+            ),
+        )
+        try {
+            var device = current.device
+            var deviceError = current.deviceError
+            if (device == null) {
+                try {
+                    device = dependencies.mihomoHwid.loadDevice(endpoint)
+                    deviceError = null
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    deviceError = error.toCompanionLoadMessage("Диагностика устройства временно недоступна.")
+                }
+            }
+            val result = dependencies.mihomoHwid.probe(endpoint, url, current.ignoreTls)
+            if (state.dashboard.endpoint != endpoint) return
+            val latest = state.mihomoHwid
+            if (latest.subscriptionUrl.trim() != url || latest.ignoreTls != current.ignoreTls) return
+            val name = latest.providerName.trim().ifBlank { result.suggestedName.orEmpty() }
+            val preview = buildMihomoHwidProviderSnippet(
+                baseUrl = endpoint,
+                providerName = name,
+                subscriptionUrl = url,
+                insecure = latest.ignoreTls,
+            )
+            val nameError = if (preview.isBlank()) "Не удалось подобрать имя provider — укажите его вручную." else null
+            val message = when {
+                nameError != null -> nameError
+                result.hasNodes == false && result.regularProviderHasNodes == true ->
+                    "С HWID подписка вернула 0 узлов, а без HWID узлы доступны. Возможно, нужна обычная подписка."
+                result.hasNodes == false -> "Ссылка отвечает, но HWID-provider вернул 0 узлов. Проверьте привязку устройства."
+                result.nodeCount != null -> "Проверка пройдена: найдено узлов — ${result.nodeCount}."
+                else -> "Проверка пройдена. Provider готов к добавлению."
+            }
+            state = state.copy(
+                mihomoHwid = latest.copy(
+                    providerName = name,
+                    device = device,
+                    deviceLoaded = device != null || latest.deviceLoaded,
+                    deviceError = deviceError,
+                    probe = result,
+                    previewYaml = preview,
+                    operation = MihomoHwidOperationPhase.Idle,
+                    message = message,
+                    error = nameError,
+                ),
+            )
+        } catch (error: CancellationException) {
+            if (state.dashboard.endpoint == endpoint) {
+                state = state.copy(
+                    mihomoHwid = state.mihomoHwid.copy(operation = MihomoHwidOperationPhase.Idle),
+                )
+            }
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            if (state.dashboard.endpoint == endpoint) {
+                val message = error.toCompanionLoadMessage("Не удалось проверить HWID-подписку.")
+                state = state.copy(
+                    mihomoHwid = state.mihomoHwid.copy(
+                        operation = MihomoHwidOperationPhase.Idle,
+                        message = message,
+                        error = message,
+                    ),
+                )
+            }
+        }
+    }
+
+    fun insertMihomoHwidIntoDraft() {
+        val hwid = state.mihomoHwid
+        val config = state.mihomoConfig
+        if (hwid.isBusy || !hwid.isReady || !config.hasLoaded || config.isBusy) return
+        try {
+            val name = sanitizeMihomoHwidProviderName(hwid.providerName)
+            val patch = insertMihomoHwidProvider(config.content, name, hwid.previewYaml)
+            val message = "HWID-provider $name добавлен в черновик. Проверьте YAML перед сохранением."
+            state = state.copy(
+                mainTab = MainTab.Home,
+                workspaceSection = WorkspaceSection.MihomoRouting,
+                mihomoConfig = config.copy(
+                    content = patch.content,
+                    operation = MihomoConfigOperationPhase.Idle,
+                    message = message,
+                    validationLog = "",
+                    validatedContent = null,
+                    editorHighlight = MihomoEditorHighlight(
+                        start = patch.start,
+                        end = patch.end,
+                        token = System.nanoTime(),
+                    ),
+                ),
+                mihomoHwid = hwid.copy(
+                    message = message,
+                    error = null,
+                    lastAppliedName = name,
+                ),
+                logs = recordLog(
+                    source = "mihomo",
+                    level = LogLevel.Info,
+                    message = "HWID-provider $name добавлен в черновик config.yaml",
+                ),
+            )
+        } catch (error: Exception) {
+            val message = error.message?.takeIf(String::isNotBlank) ?: "Не удалось вставить HWID-provider в config.yaml."
+            state = state.copy(mihomoHwid = hwid.copy(message = message, error = message))
+        }
+    }
+
+    suspend fun applyMihomoHwidAndRestart() {
+        val endpoint = state.dashboard.endpoint
+        val hwid = state.mihomoHwid
+        val config = state.mihomoConfig
+        if (endpoint.isBlank() || hwid.isBusy || !hwid.isReady || config.isBusy) return
+        if (config.hasChanges) {
+            val message = "В редакторе есть несохранённые изменения. Сначала вставьте provider в черновик и примените общий YAML."
+            state = state.copy(mihomoHwid = hwid.copy(message = message, error = message))
+            return
+        }
+        val name = sanitizeMihomoHwidProviderName(hwid.providerName)
+        state = state.copy(
+            mihomoHwid = hwid.copy(
+                operation = MihomoHwidOperationPhase.Applying,
+                message = "Добавляем provider и ставим перезапуск xkeen в очередь…",
+                error = null,
+            ),
+        )
+        try {
+            val result = dependencies.mihomoHwid.applyAndRestart(
+                baseUrl = endpoint,
+                url = hwid.subscriptionUrl,
+                providerName = name,
+                insecure = hwid.ignoreTls,
+            )
+            val freshConfig = try {
+                dependencies.mihomoConfig.load(endpoint)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                null
+            }
+            if (state.dashboard.endpoint != endpoint) return
+            val message = if (result.restartQueued) {
+                "HWID-provider ${result.providerName} применён; перезапуск xkeen поставлен в очередь."
+            } else {
+                "HWID-provider ${result.providerName} применён."
+            }
+            state = state.copy(
+                mainTab = MainTab.Home,
+                workspaceSection = WorkspaceSection.MihomoRouting,
+                mihomoConfig = freshConfig?.let { snapshot ->
+                    MihomoConfigState(
+                        content = snapshot.content,
+                        savedContent = snapshot.content,
+                        activeProfile = snapshot.activeProfile,
+                        hasLoaded = true,
+                        operation = MihomoConfigOperationPhase.Success,
+                        message = message,
+                    )
+                } ?: unloadedMihomoConfigState().copy(message = "$message Обновляем config.yaml…"),
+                mihomoHwid = state.mihomoHwid.copy(
+                    operation = MihomoHwidOperationPhase.Idle,
+                    message = message,
+                    error = null,
+                    lastAppliedName = result.providerName,
+                ),
+                dashboard = state.dashboard.copy(
+                    lastOperation = "Применён HWID-provider ${result.providerName}",
+                    lastError = null,
+                ),
+                logs = recordLog(
+                    source = "mihomo",
+                    level = LogLevel.Info,
+                    message = message,
+                ),
+            )
+        } catch (error: CancellationException) {
+            if (state.dashboard.endpoint == endpoint) {
+                state = state.copy(
+                    mihomoHwid = state.mihomoHwid.copy(operation = MihomoHwidOperationPhase.Idle),
+                )
+            }
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            if (state.dashboard.endpoint == endpoint) {
+                val message = error.toCompanionLoadMessage("Не удалось применить HWID-подписку.")
+                state = state.copy(
+                    mihomoHwid = state.mihomoHwid.copy(
+                        operation = MihomoHwidOperationPhase.Idle,
+                        message = message,
+                        error = message,
+                    ),
+                )
+            }
+        }
+    }
+
     fun consumeMihomoEditorHighlight(token: Long) {
         val current = state.mihomoConfig
         if (current.editorHighlight?.token != token) return
@@ -3844,6 +4189,7 @@ internal class CompanionController(
             mihomoConfig = unloadedMihomoConfigState(),
             mihomoTemplates = unloadedMihomoTemplatesState(),
             mihomoNode = unloadedMihomoNodeState(),
+            mihomoHwid = unloadedMihomoHwidState(),
             portsEditor = unloadedPortsEditorState(),
             diagnostics = initialDiagnostics().replaceDiagnostic(
                 label = "Мобильная сессия",
@@ -3925,6 +4271,7 @@ internal class CompanionController(
             mihomoConfig = unloadedMihomoConfigState(),
             mihomoTemplates = unloadedMihomoTemplatesState(),
             mihomoNode = unloadedMihomoNodeState(),
+            mihomoHwid = unloadedMihomoHwidState(),
             portsEditor = unloadedPortsEditorState(),
             diagnostics = state.diagnostics.replaceDiagnostic(
                 label = "Мобильная сессия",

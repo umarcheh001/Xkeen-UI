@@ -1796,6 +1796,74 @@ class CompanionControllerTest {
         assertEquals("port: 7891\n", controller.state.mihomoConfig.content)
         assertEquals("vless://mobile", controller.state.mihomoNode.source)
     }
+
+    @Test
+    fun mihomoHwidProbeBuildsPreviewAndInsertsProviderIntoCurrentDraft() = runTest {
+        val hwidPort = FakeMihomoHwidPort()
+        val yaml = "proxy-providers: {}\nproxy-groups:\n  - name: Main\n"
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                dashboard = unloadedDashboardState().copy(
+                    endpoint = "https://router.example:8443",
+                    availableCores = listOf("Mihomo"),
+                ),
+                mainTab = MainTab.Home,
+                workspaceSection = WorkspaceSection.MihomoHwid,
+                mihomoConfig = MihomoConfigState(
+                    content = yaml,
+                    savedContent = yaml,
+                    hasLoaded = true,
+                ),
+            ),
+            dependencies = testDependencies(mihomoHwid = hwidPort),
+        )
+
+        controller.updateMihomoHwidUrl("https://provider.example/sub")
+        controller.probeMihomoHwidSubscription()
+
+        assertEquals("Premium_Mobile", controller.state.mihomoHwid.providerName)
+        assertTrue(controller.state.mihomoHwid.previewYaml.contains("127.0.0.1:8443"))
+        assertEquals(8, controller.state.mihomoHwid.probe?.nodeCount)
+
+        controller.insertMihomoHwidIntoDraft()
+
+        assertEquals(WorkspaceSection.MihomoRouting, controller.state.workspaceSection)
+        assertTrue(controller.state.mihomoConfig.hasChanges)
+        assertTrue(controller.state.mihomoConfig.content.contains("  Premium_Mobile:"))
+        assertTrue(controller.state.mihomoConfig.content.contains("\nproxy-groups:\n"))
+        assertTrue(controller.state.mihomoConfig.editorHighlight != null)
+        assertEquals(0, hwidPort.applyCalls)
+    }
+
+    @Test
+    fun mihomoHwidDirectApplyProtectsUnsavedEditorDraft() = runTest {
+        val hwidPort = FakeMihomoHwidPort()
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                dashboard = unloadedDashboardState().copy(
+                    endpoint = "https://router.example",
+                    availableCores = listOf("Mihomo"),
+                ),
+                mainTab = MainTab.Home,
+                workspaceSection = WorkspaceSection.MihomoHwid,
+                mihomoConfig = MihomoConfigState(
+                    content = "port: 7891\n",
+                    savedContent = "port: 7890\n",
+                    hasLoaded = true,
+                ),
+                mihomoHwid = readyMihomoHwidState(),
+            ),
+            dependencies = testDependencies(mihomoHwid = hwidPort),
+        )
+
+        controller.applyMihomoHwidAndRestart()
+
+        assertEquals(0, hwidPort.applyCalls)
+        assertTrue(controller.state.mihomoHwid.error.orEmpty().contains("несохранённые изменения"))
+        assertEquals("port: 7891\n", controller.state.mihomoConfig.content)
+    }
 }
 
 private fun testDependencies(
@@ -1815,6 +1883,7 @@ private fun testDependencies(
     mihomoConfig: MihomoConfigPort = FakeMihomoConfigPort(),
     mihomoTemplates: MihomoTemplatesPort = DemoMihomoTemplatesPort(),
     mihomoNode: MihomoNodePort = DemoMihomoNodePort(),
+    mihomoHwid: MihomoHwidPort = DemoMihomoHwidPort(),
     portsEditor: PortsEditorPort = DemoPortsEditorPort(),
     terminal: TerminalPort = FakeTerminalPort(),
     logs: LogsPort? = null,
@@ -1835,6 +1904,7 @@ private fun testDependencies(
         mihomoConfig = mihomoConfig,
         mihomoTemplates = mihomoTemplates,
         mihomoNode = mihomoNode,
+        mihomoHwid = mihomoHwid,
         portsEditor = portsEditor,
         terminal = terminal,
         logs = logs ?: DemoLogsPort(effectiveJournal),
@@ -1892,6 +1962,68 @@ private class FakeMihomoNodePort : MihomoNodePort {
         )
     }
 }
+
+private class FakeMihomoHwidPort : MihomoHwidPort {
+    var applyCalls = 0
+
+    override suspend fun loadDevice(baseUrl: String): MihomoHwidDeviceInfo = MihomoHwidDeviceInfo(
+        hwid = "AABBCCDDEEFF",
+        source = "mac",
+        format = "mac12",
+        mac = "aa:bb:cc:dd:ee:ff",
+        macHwid = "AABBCCDDEEFF",
+        hasManualOverride = false,
+        matchesRouterMac = true,
+        overrideDiffersFromRouter = false,
+        deviceModel = "Keenetic",
+        osRelease = "4.3",
+        mihomoVersion = "1.19.25",
+        userAgent = "ClashMeta/1.19.25; mihomo/1.19.25",
+        headers = mapOf("x-hwid" to "AABBCCDDEEFF"),
+        warning = null,
+    )
+
+    override suspend fun probe(baseUrl: String, url: String, insecure: Boolean): MihomoHwidProbeResult =
+        testMihomoHwidProbe()
+
+    override suspend fun applyAndRestart(
+        baseUrl: String,
+        url: String,
+        providerName: String,
+        insecure: Boolean,
+    ): MihomoHwidApplyResult {
+        applyCalls += 1
+        return MihomoHwidApplyResult(providerName, "config.yaml", true, "job-1")
+    }
+}
+
+private fun testMihomoHwidProbe() = MihomoHwidProbeResult(
+    profileTitle = "Premium Mobile",
+    suggestedName = "Premium_Mobile",
+    httpStatus = 200,
+    method = "HEAD",
+    timingMillis = 42,
+    resolvedUrl = "https://provider.example/sub",
+    headersUsed = mapOf("x-hwid" to "AABBCCDDEEFF"),
+    responseHeaders = mapOf("x-hwid-active" to "true"),
+    deviceLimitSummary = "1/3",
+    nodeCount = 8,
+    hasNodes = true,
+    regularProviderHasNodes = null,
+    placeholderReason = null,
+    providerAcceptedHwid = null,
+    warnings = emptyList(),
+    noHeadersRequired = false,
+)
+
+private fun readyMihomoHwidState() = MihomoHwidState(
+    subscriptionUrl = "https://provider.example/sub",
+    providerName = "Premium_Mobile",
+    device = null,
+    deviceLoaded = true,
+    probe = testMihomoHwidProbe(),
+    previewYaml = "  Premium_Mobile:\n    type: http\n",
+)
 
 private class FakeTerminalPort : TerminalPort {
     override suspend fun issueConnection(
