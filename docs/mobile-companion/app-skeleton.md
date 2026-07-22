@@ -23,7 +23,7 @@ Updated: 2026-07-22
 - read-only интеграция `GET /api/xkeen/core`;
 - read-only список `GET /api/routing/fragments` и revision-aware document snapshot `GET /api/mobile/v1/xray/routing/document`;
 - полноэкранный `Routing Xray` editor-flow с JSON/JSONC подсветкой, номерами строк, свайпами между документами и real server-backed `validate/save/apply`;
-- интерактивные demo-поверхности `Shell -> Команды` и `Shell -> Терминал`.
+- рабочие поверхности `Shell -> Журнал` и `Shell -> Терминал`.
 
 Что пока сознательно не завершено:
 
@@ -63,9 +63,9 @@ Updated: 2026-07-22
 Контекстный drawer сейчас раскладывается так:
 
 - `Xray`: `Роутинг Xray`, `Подписки Xray`, `Режим Inbounds`, `Прокси / Outbounds`, `DAT-файлы GeoIP / GeoSite`, `Логи Xray`
-- `Mihomo`: `Роутинг Mihomo`, `Профили и подписки`, `Прокси-провайдеры`, `Группы прокси`, `Правила Mihomo`, `Шаблоны`, `Узел`, `HWID`, `Zashboard UI`
-- `Ports`: `Порты и исключения`, `Порты Xray`, `Порты Mihomo`, `Исключения маршрутизации`
-- `Shell`: `Команды`, `Терминал`, `История команд`
+- `Mihomo`: `Роутинг Mihomo`, `Шаблоны`, `Узел`, `HWID`, `Zashboard UI`
+- `Ports`: `Порты и исключения`
+- `Shell`: `Журнал`, `Терминал`
 
 Подключения и авторизация по-прежнему живут как отдельный onboarding до входа в `Ready`.
 

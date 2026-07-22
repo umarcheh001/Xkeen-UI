@@ -24,23 +24,16 @@ import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
 import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
-import androidx.compose.material.icons.automirrored.outlined.Rule
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.Dashboard
-import androidx.compose.material.icons.outlined.DataObject
 import androidx.compose.material.icons.outlined.Devices
-import androidx.compose.material.icons.outlined.Dns
-import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.SettingsInputComponent
 import androidx.compose.material.icons.outlined.Subscriptions
-import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.Terminal
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -350,7 +343,7 @@ internal fun WorkspaceSectionContent(
             onFullscreenChange = onEditorFullscreenChange,
             modifier = modifier,
         )
-        WorkspaceSection.ShellCommands -> ShellWorkspaceScreen(state, modifier)
+        WorkspaceSection.ShellJournal -> ShellWorkspaceScreen(state, modifier)
         WorkspaceSection.ShellTerminal -> TerminalWorkspaceScreen(
             state = state,
             controller = controller,
@@ -595,10 +588,6 @@ private fun drawerEntries(tab: MainTab): List<WorkspaceDrawerEntry> =
 
         MainTab.Home -> listOf(
             WorkspaceDrawerEntry(WorkspaceSection.MihomoRouting, Icons.Outlined.AccountTree),
-            WorkspaceDrawerEntry(WorkspaceSection.MihomoProfiles, Icons.Outlined.Folder),
-            WorkspaceDrawerEntry(WorkspaceSection.MihomoProviders, Icons.Outlined.Dns),
-            WorkspaceDrawerEntry(WorkspaceSection.MihomoGroups, Icons.Outlined.Hub),
-            WorkspaceDrawerEntry(WorkspaceSection.MihomoRules, Icons.AutoMirrored.Outlined.Rule),
             WorkspaceDrawerEntry(WorkspaceSection.MihomoTemplates, Icons.AutoMirrored.Outlined.Article),
             WorkspaceDrawerEntry(WorkspaceSection.MihomoNode, Icons.Outlined.Hub),
             WorkspaceDrawerEntry(WorkspaceSection.MihomoHwid, Icons.Outlined.Devices),
@@ -607,15 +596,11 @@ private fun drawerEntries(tab: MainTab): List<WorkspaceDrawerEntry> =
 
         MainTab.Logs -> listOf(
             WorkspaceDrawerEntry(WorkspaceSection.PortsOverview, Icons.Outlined.Lan),
-            WorkspaceDrawerEntry(WorkspaceSection.PortsXray, Icons.Outlined.DataObject),
-            WorkspaceDrawerEntry(WorkspaceSection.PortsMihomo, Icons.Outlined.SwapHoriz),
-            WorkspaceDrawerEntry(WorkspaceSection.RoutingExclusions, Icons.Outlined.Tune),
         )
 
         MainTab.More -> listOf(
-            WorkspaceDrawerEntry(WorkspaceSection.ShellCommands, Icons.AutoMirrored.Outlined.List),
+            WorkspaceDrawerEntry(WorkspaceSection.ShellJournal, Icons.AutoMirrored.Outlined.List),
             WorkspaceDrawerEntry(WorkspaceSection.ShellTerminal, Icons.Outlined.Terminal),
-            WorkspaceDrawerEntry(WorkspaceSection.ShellHistory, Icons.Outlined.History),
         )
 
     }
@@ -628,21 +613,13 @@ private fun workspaceSectionDescription(section: WorkspaceSection): String =
         WorkspaceSection.XrayAssets -> "Компактный просмотр тегов и содержимого GeoIP / GeoSite DAT-файлов."
         WorkspaceSection.XrayLogs -> "Онлайн-логи access и error для активного ядра Xray."
         WorkspaceSection.MihomoRouting -> "Редактор активного routing-профиля Mihomo."
-        WorkspaceSection.MihomoProfiles -> "Профили, подписки, активация и резервные копии Mihomo."
-        WorkspaceSection.MihomoProviders -> "Управление proxy-providers и обновлением источников."
-        WorkspaceSection.MihomoGroups -> "Группы прокси, стратегии выбора и проверки доступности."
-        WorkspaceSection.MihomoRules -> "Правила, rule-providers и порядок маршрутизации Mihomo."
         WorkspaceSection.MihomoTemplates -> "Выбор и управление шаблонами конфигурации Mihomo."
         WorkspaceSection.MihomoNode -> "Добавление и настройка узла Mihomo."
         WorkspaceSection.MihomoHwid -> "Настройка HWID для конфигурации Mihomo."
         WorkspaceSection.MihomoZashboardUi -> "Установка и управление веб-интерфейсом Zashboard UI."
         WorkspaceSection.PortsOverview -> "Общие порты xkeen и исключения для локальной сети."
-        WorkspaceSection.PortsXray -> "Inbounds и системные порты конфигурации Xray."
-        WorkspaceSection.PortsMihomo -> "Порты контроллера и входящих подключений Mihomo."
-        WorkspaceSection.RoutingExclusions -> "Адреса и сети, которые должны обходить прокси."
-        WorkspaceSection.ShellHistory -> "Недавние команды и повторный запуск сохранённых операций."
         WorkspaceSection.XrayRouting,
-        WorkspaceSection.ShellCommands,
+        WorkspaceSection.ShellJournal,
         WorkspaceSection.ShellTerminal,
         -> ""
     }

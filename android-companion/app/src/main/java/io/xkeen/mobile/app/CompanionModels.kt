@@ -35,21 +35,13 @@ enum class WorkspaceSection(
     XrayAssets(MainTab.Routing, "DAT-файлы GeoIP / GeoSite"),
     XrayLogs(MainTab.Routing, "Логи Xray"),
     MihomoRouting(MainTab.Home, "Роутинг Mihomo"),
-    MihomoProfiles(MainTab.Home, "Профили и подписки"),
-    MihomoProviders(MainTab.Home, "Прокси-провайдеры"),
-    MihomoGroups(MainTab.Home, "Группы прокси"),
-    MihomoRules(MainTab.Home, "Правила Mihomo"),
     MihomoTemplates(MainTab.Home, "Шаблоны"),
     MihomoNode(MainTab.Home, "Узел"),
     MihomoHwid(MainTab.Home, "HWID"),
     MihomoZashboardUi(MainTab.Home, "Zashboard UI"),
     PortsOverview(MainTab.Logs, "Порты и исключения"),
-    PortsXray(MainTab.Logs, "Порты Xray"),
-    PortsMihomo(MainTab.Logs, "Порты Mihomo"),
-    RoutingExclusions(MainTab.Logs, "Исключения маршрутизации"),
-    ShellCommands(MainTab.More, "Команды"),
+    ShellJournal(MainTab.More, "Журнал"),
     ShellTerminal(MainTab.More, "Терминал"),
-    ShellHistory(MainTab.More, "История команд"),
 }
 
 internal fun WorkspaceSection.isAvailableFor(availableCores: List<String>): Boolean =
@@ -60,26 +52,18 @@ internal fun WorkspaceSection.isAvailableFor(availableCores: List<String>): Bool
         WorkspaceSection.XrayOutbounds,
         WorkspaceSection.XrayAssets,
         WorkspaceSection.XrayLogs,
-        WorkspaceSection.PortsXray,
         -> availableCores.hasCore("xray")
 
         WorkspaceSection.MihomoRouting,
-        WorkspaceSection.MihomoProfiles,
-        WorkspaceSection.MihomoProviders,
-        WorkspaceSection.MihomoGroups,
-        WorkspaceSection.MihomoRules,
         WorkspaceSection.MihomoTemplates,
         WorkspaceSection.MihomoNode,
         WorkspaceSection.MihomoHwid,
         WorkspaceSection.MihomoZashboardUi,
-        WorkspaceSection.PortsMihomo,
         -> availableCores.hasCore("mihomo")
 
         WorkspaceSection.PortsOverview,
-        WorkspaceSection.RoutingExclusions,
-        WorkspaceSection.ShellCommands,
+        WorkspaceSection.ShellJournal,
         WorkspaceSection.ShellTerminal,
-        WorkspaceSection.ShellHistory,
         -> true
     }
 
@@ -91,7 +75,7 @@ fun MainTab.defaultWorkspaceSection(): WorkspaceSection =
         MainTab.Routing -> WorkspaceSection.XrayRouting
         MainTab.Home -> WorkspaceSection.MihomoRouting
         MainTab.Logs -> WorkspaceSection.PortsOverview
-        MainTab.More -> WorkspaceSection.ShellCommands
+        MainTab.More -> WorkspaceSection.ShellJournal
     }
 
 enum class ConnectionStatus {

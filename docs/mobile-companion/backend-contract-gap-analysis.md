@@ -38,7 +38,7 @@ Updated: 2026-07-16
 | Service control | `GET /api/xkeen/status`, `GET /api/xkeen/core`, `GET /api/cores/status`, `GET /api/cores/versions`, `GET /api/cores/updates`, `POST /api/xkeen/start`, `POST /api/xkeen/stop`, `POST /api/xkeen/core`, `POST /api/restart`, `POST /api/restart-xkeen` | Quick actions уже используются Android-клиентом через единый port и server reread | Сохранить compatibility adapter; позже обернуть в агрегированный ready summary/action contract с operation semantics |
 | Logs and streams | mobile `GET /api/mobile/v1/logs`; legacy `GET /api/xray-logs`, `GET /api/xray-logs/status`, `GET /api/restart-log`, WebSocket surfaces | Xray history/live закрыты cursor polling contract'ом; terminal/web streams остаются web-oriented | Сохранить mobile logs contract; отдельно проектировать PTY/terminal и при необходимости persistent log archive |
 | Xray routing workflows | `GET /api/routing/fragments`, mobile `document/validate/save/apply` и existing Xray preflight/backup/restart services | Первый editor-like mobile модуль полностью backend-backed; server draft и published state разделены revision tokens | Сохранить write/conflict contract; при необходимости добавить отдельный server preview/diff use case |
-| Mihomo workflows | Группы `/api/mihomo/profiles*`, `/api/mihomo/subscriptions*`, `/api/mihomo/backups*` и точечные utility endpoints | Полезная логика есть, но слишком широкая поверхность | Для V1 выделить quick profile/status actions, затем отдельными slices переносить `Routing Mihomo`, `Шаблоны`, `Узел`, `HWID` и `Zashboard UI`; генератор не переносить |
+| Mihomo workflows | Routing endpoints и точечные utility endpoints | Полезная логика есть, но слишком широкая поверхность | Отдельными slices переносить `Routing Mihomo`, `Шаблоны`, `Узел`, `HWID` и `Zashboard UI`; профили, подписки, бэкапы и генератор не переносить |
 | Backups | `GET /api/backups`, `POST /api/backup`, `POST /api/restore`, `POST /api/delete-backup` и related endpoints | Полезно, но рискованно для мобильного UX | Перенести в V1.1 или пускать в V1 только после отдельного safety gate |
 | UI settings | `GET/PATCH /api/ui-settings` | Ограниченно полезно | Использовать только если реально нужен мобильный app-level toggle |
 | Advanced config editors | `GET/POST /api/inbounds`, `GET/POST /api/outbounds`, другие Xray/Mihomo editor endpoints | Не подходит для прямого mobile parity, но важно для расширения | Не переносить как raw editor parity; строить отдельные mobile editor flows, начиная с `Routing Xray`, затем routing-related Mihomo сценариями |
@@ -189,8 +189,6 @@ Updated: 2026-07-16
 
 ### Expansion endpoints after V1
 
-- `GET /api/mobile/v1/mihomo/profiles`
-- `POST /api/mobile/v1/mihomo/profiles/activate`
 - `GET /api/mobile/v1/mihomo/routing/cards`
 - `GET /api/mobile/v1/mihomo/routing/documents/{id}`
 - `POST /api/mobile/v1/mihomo/routing/validate`

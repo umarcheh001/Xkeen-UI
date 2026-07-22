@@ -165,7 +165,7 @@ Persistence данных подключения, secure storage, session flow, s
 - Подготовить release notes и user-facing onboarding.
 - Финализировать app settings, about и diagnostics surfaces.
 - Сформировать V1.1 backlog на основе реального использования.
-- Решить, какие Mihomo status/profile сценарии действительно нужны как следующий компактный mobile slice.
+- Выбрать следующий компактный mobile slice среди `Шаблоны`, `Узел`, `HWID` и `Zashboard UI`; профили и бэкапы Mihomo оставить в веб-панели.
 - Зафиксировать пост-релизные backend улучшения, если они остались за рамками MVP.
 
 ### Exit criteria

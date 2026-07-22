@@ -440,10 +440,10 @@ class CompanionControllerTest {
         assertEquals(MainTab.Home, controller.state.mainTab)
         assertEquals(WorkspaceSection.MihomoRouting, controller.state.workspaceSection)
 
-        controller.selectWorkspaceSection(WorkspaceSection.MihomoProviders)
+        controller.selectWorkspaceSection(WorkspaceSection.MihomoTemplates)
 
         assertEquals(MainTab.Home, controller.state.mainTab)
-        assertEquals(WorkspaceSection.MihomoProviders, controller.state.workspaceSection)
+        assertEquals(WorkspaceSection.MihomoTemplates, controller.state.workspaceSection)
     }
 
     @Test
@@ -611,7 +611,7 @@ class CompanionControllerTest {
         assertTrue(WorkspaceSection.MihomoZashboardUi.isAvailableFor(controller.state.dashboard.availableCores))
 
         controller.selectTab(MainTab.Routing)
-        controller.selectWorkspaceSection(WorkspaceSection.PortsXray)
+        controller.selectWorkspaceSection(WorkspaceSection.XrayOutbounds)
 
         assertEquals(MainTab.Home, controller.state.mainTab)
         assertEquals(WorkspaceSection.MihomoRouting, controller.state.workspaceSection)
@@ -642,8 +642,7 @@ class CompanionControllerTest {
         assertFalse(WorkspaceSection.MihomoNode.isAvailableFor(controller.state.dashboard.availableCores))
         assertFalse(WorkspaceSection.MihomoHwid.isAvailableFor(controller.state.dashboard.availableCores))
         assertFalse(WorkspaceSection.MihomoZashboardUi.isAvailableFor(controller.state.dashboard.availableCores))
-        assertFalse(WorkspaceSection.PortsMihomo.isAvailableFor(controller.state.dashboard.availableCores))
-        assertTrue(WorkspaceSection.PortsXray.isAvailableFor(controller.state.dashboard.availableCores))
+        assertTrue(WorkspaceSection.PortsOverview.isAvailableFor(controller.state.dashboard.availableCores))
     }
 
     @Test
