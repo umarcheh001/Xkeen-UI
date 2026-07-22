@@ -7,7 +7,7 @@ Updated: 2026-07-16
 
 Определить, какие части текущего backend surface уже пригодны для Android companion, а где нам нужен отдельный mobile contract вместо прямого использования web-oriented API.
 
-Важно: mobile roadmap теперь включает не только quick-control сценарии, но и постепенный перенос части сложных web-поверхностей. Первый глубокий модуль начинается с `Routing Xray`, затем идут `Routing Mihomo`, отдельные сценарии `Mihomo Generator`, partial `DevTools`, а позже и controlled `Commands`/`Files`. Значит, контракт нужно проектировать так, чтобы он не упирался только в стартовый MVP.
+Важно: mobile roadmap теперь включает не только quick-control сценарии, но и постепенный перенос части сложных web-поверхностей. Первый глубокий модуль начинается с `Routing Xray`, затем идут `Routing Mihomo`, отдельные Mihomo-инструменты, partial `DevTools`, а позже и controlled `Commands`/`Files`. `Mihomo Generator` в Android не переносится.
 
 ## Краткий вывод
 
@@ -17,7 +17,7 @@ Updated: 2026-07-16
 
 ## Практический статус на 2026-07-16
 
-Этот gap analysis теперь опирается на уже существующий Android baseline в `android-companion/`. На стороне клиента уже есть рабочий Compose shell с фазами `Launching`, `Connections`, `Pair/Login`, `Ready`, capability-aware вкладками `Xray`, `Mihomo`, `Ports`, `Shell`, `Generator` и контекстными drawer-разделами.
+Этот gap analysis теперь опирается на уже существующий Android baseline в `android-companion/`. На стороне клиента уже есть рабочий Compose shell с фазами `Launching`, `Connections`, `Pair/Login`, `Ready`, capability-aware вкладками `Xray`, `Mihomo`, `Ports`, `Shell` и контекстными drawer-разделами.
 
 Клиент больше не является demo-only: подключены auth/session bootstrap, `GET /api/xkeen/core`, `GET /api/routing/fragments`, revision-aware `GET /api/mobile/v1/xray/routing/document`, real service actions, полный routing `validate/save/apply` и `GET /api/mobile/v1/logs`. После service write Android перечитывает runtime state. После routing write Android принимает published/saved document state только из backend response; independent SHA-256 revisions защищают внешний edit и stale server draft. Logs используют отдельный cursor-based mobile contract; terminal пока не опирается на полноценный mobile contract.
 
@@ -38,7 +38,7 @@ Updated: 2026-07-16
 | Service control | `GET /api/xkeen/status`, `GET /api/xkeen/core`, `GET /api/cores/status`, `GET /api/cores/versions`, `GET /api/cores/updates`, `POST /api/xkeen/start`, `POST /api/xkeen/stop`, `POST /api/xkeen/core`, `POST /api/restart`, `POST /api/restart-xkeen` | Quick actions уже используются Android-клиентом через единый port и server reread | Сохранить compatibility adapter; позже обернуть в агрегированный ready summary/action contract с operation semantics |
 | Logs and streams | mobile `GET /api/mobile/v1/logs`; legacy `GET /api/xray-logs`, `GET /api/xray-logs/status`, `GET /api/restart-log`, WebSocket surfaces | Xray history/live закрыты cursor polling contract'ом; terminal/web streams остаются web-oriented | Сохранить mobile logs contract; отдельно проектировать PTY/terminal и при необходимости persistent log archive |
 | Xray routing workflows | `GET /api/routing/fragments`, mobile `document/validate/save/apply` и existing Xray preflight/backup/restart services | Первый editor-like mobile модуль полностью backend-backed; server draft и published state разделены revision tokens | Сохранить write/conflict contract; при необходимости добавить отдельный server preview/diff use case |
-| Mihomo workflows | Группы `/api/mihomo/profiles*`, `/api/mihomo/subscriptions*`, `/api/mihomo/generate*`, `/api/mihomo/backups*` | Полезная логика есть, но слишком широкая поверхность | Для V1 выделить quick profile/status actions, затем отдельными slices переносить `Routing Mihomo` и части `Mihomo Generator` |
+| Mihomo workflows | Группы `/api/mihomo/profiles*`, `/api/mihomo/subscriptions*`, `/api/mihomo/backups*` и точечные utility endpoints | Полезная логика есть, но слишком широкая поверхность | Для V1 выделить quick profile/status actions, затем отдельными slices переносить `Routing Mihomo`, `Шаблоны`, `Узел`, `HWID` и `Zashboard UI`; генератор не переносить |
 | Backups | `GET /api/backups`, `POST /api/backup`, `POST /api/restore`, `POST /api/delete-backup` и related endpoints | Полезно, но рискованно для мобильного UX | Перенести в V1.1 или пускать в V1 только после отдельного safety gate |
 | UI settings | `GET/PATCH /api/ui-settings` | Ограниченно полезно | Использовать только если реально нужен мобильный app-level toggle |
 | Advanced config editors | `GET/POST /api/inbounds`, `GET/POST /api/outbounds`, другие Xray/Mihomo editor endpoints | Не подходит для прямого mobile parity, но важно для расширения | Не переносить как raw editor parity; строить отдельные mobile editor flows, начиная с `Routing Xray`, затем routing-related Mihomo сценариями |
@@ -105,7 +105,7 @@ Updated: 2026-07-16
 
 ### 6. Editor semantics gap
 
-Если в приложении появляется `Routing Xray`, а затем `Routing Mihomo` и части `Mihomo Generator`, нам недостаточно просто "отдать файл и принять файл обратно". Первый stateful validate slice уже реализован, но мобильному редактору всё ещё нужны server preview, conflict detection и apply semantics.
+Если в приложении появляется `Routing Xray`, а затем `Routing Mihomo`, нам недостаточно просто "отдать файл и принять файл обратно". Первый stateful validate slice уже реализован, но мобильному редактору всё ещё нужны server preview, conflict detection и apply semantics.
 
 Что нужно:
 
@@ -132,7 +132,7 @@ Updated: 2026-07-16
 
 Что нужно:
 
-- Capability flags уровня `routingEditor`, `mihomoGenerator`, `devtoolsPartial`, `terminal`, `files`.
+- Capability flags уровня `routingEditor`, `mihomoTemplates`, `mihomoNode`, `mihomoHwid`, `zashboardUi`, `devtoolsPartial`, `terminal`, `files`.
 - Разделение read/write/execute permission levels.
 - Возможность backend-side отключать целые advanced surfaces для конкретной инсталляции.
 
@@ -196,8 +196,6 @@ Updated: 2026-07-16
 - `POST /api/mobile/v1/mihomo/routing/validate`
 - `POST /api/mobile/v1/mihomo/routing/preview`
 - `PUT /api/mobile/v1/mihomo/routing/documents/{id}`
-- `GET /api/mobile/v1/mihomo/generator/state`
-- `POST /api/mobile/v1/mihomo/generator/actions`
 - `GET /api/mobile/v1/devtools/summary`
 - `GET /api/mobile/v1/devtools/operations/recent`
 - `POST /api/mobile/v1/terminal/sessions`

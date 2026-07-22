@@ -605,6 +605,10 @@ class CompanionControllerTest {
         assertEquals("Mihomo", controller.state.dashboard.activeCore)
         assertEquals(MainTab.Home, controller.state.mainTab)
         assertEquals(WorkspaceSection.MihomoRouting, controller.state.workspaceSection)
+        assertTrue(WorkspaceSection.MihomoTemplates.isAvailableFor(controller.state.dashboard.availableCores))
+        assertTrue(WorkspaceSection.MihomoNode.isAvailableFor(controller.state.dashboard.availableCores))
+        assertTrue(WorkspaceSection.MihomoHwid.isAvailableFor(controller.state.dashboard.availableCores))
+        assertTrue(WorkspaceSection.MihomoZashboardUi.isAvailableFor(controller.state.dashboard.availableCores))
 
         controller.selectTab(MainTab.Routing)
         controller.selectWorkspaceSection(WorkspaceSection.PortsXray)
@@ -618,8 +622,8 @@ class CompanionControllerTest {
         val controller = CompanionController(
             initialState = CompanionUiState(
                 phase = AppPhase.Ready,
-                mainTab = MainTab.Generator,
-                workspaceSection = WorkspaceSection.GeneratorTemplates,
+                mainTab = MainTab.Home,
+                workspaceSection = WorkspaceSection.MihomoZashboardUi,
             ),
             dependencies = testDependencies(
                 coreStatusSource = FakeCoreStatusSource(
@@ -633,8 +637,11 @@ class CompanionControllerTest {
         assertEquals(MainTab.Routing, controller.state.mainTab)
         assertEquals(WorkspaceSection.XrayRouting, controller.state.workspaceSection)
         assertFalse(MainTab.Home.isAvailableFor(controller.state.dashboard.availableCores))
-        assertFalse(MainTab.Generator.isAvailableFor(controller.state.dashboard.availableCores))
         assertFalse(WorkspaceSection.MihomoRouting.isAvailableFor(controller.state.dashboard.availableCores))
+        assertFalse(WorkspaceSection.MihomoTemplates.isAvailableFor(controller.state.dashboard.availableCores))
+        assertFalse(WorkspaceSection.MihomoNode.isAvailableFor(controller.state.dashboard.availableCores))
+        assertFalse(WorkspaceSection.MihomoHwid.isAvailableFor(controller.state.dashboard.availableCores))
+        assertFalse(WorkspaceSection.MihomoZashboardUi.isAvailableFor(controller.state.dashboard.availableCores))
         assertFalse(WorkspaceSection.PortsMihomo.isAvailableFor(controller.state.dashboard.availableCores))
         assertTrue(WorkspaceSection.PortsXray.isAvailableFor(controller.state.dashboard.availableCores))
     }

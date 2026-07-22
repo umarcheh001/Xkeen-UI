@@ -10,7 +10,7 @@ Updated: 2026-07-16
 - `Phase 0` по сути закрыла стартовую документацию, screen map и compact-mobile guardrails.
 - `Phase 2` идет фактически: в репозитории есть `android-companion/` с рабочим Compose baseline и экранным циклом `Launching -> Connections -> Pair/Login -> Ready`.
 - Android-клиент подтвержденно собирается командой `.\gradlew.bat testDebugUnitTest assembleDebug`.
-- В `Ready` workspace уже есть capability-aware нижняя навигация `Xray`, `Mihomo`, `Ports`, `Shell`, `Generator` и контекстные drawer-разделы.
+- В `Ready` workspace уже есть capability-aware нижняя навигация `Xray`, `Mihomo`, `Ports`, `Shell` и контекстные drawer-разделы.
 - Уже подключены первые read-only backend flows: `GET /api/xkeen/core`, `GET /api/routing/fragments`, `GET /api/routing?file=...`; они используют единый transport с `baseUrl` normalization, timeout, common headers/auth hook и typed error states для `401/403/428`, login HTML, offline и timeout.
 - Уже подключен app-private persistence списка узлов, базового metadata и последнего выбранного подключения; cold start больше не зависит от demo-списка.
 - Уже подключен per-connection secure storage session material: AES-GCM payload с ключом Android Keystore, encrypted trusted-restore marker и очистка выбранного record при logout. Обычный `Configured` node не является trusted session.
@@ -34,7 +34,7 @@ Updated: 2026-07-16
 - Разобрать текущий backend surface и выделить mobile-specific contract.
 - Выбрать направление auth/pairing.
 - Согласовать список high-risk actions, требующих дополнительных подтверждений.
-- Утвердить порядок переноса сложных модулей: сначала `Routing Xray`, затем `Routing Mihomo`, `Mihomo Generator`, partial `DevTools`, `Commands`, `Files`.
+- Утвердить порядок переноса сложных модулей: сначала `Routing Xray`, затем `Routing Mihomo`, точечные Mihomo-инструменты, partial `DevTools`, `Commands`, `Files`. `Mihomo Generator` остаётся только в веб-панели.
 - Провести первичный аудит community/open-source библиотек и зафиксировать license/security критерии.
 - Зафиксировать acceptance criteria для V1.
 
@@ -83,7 +83,7 @@ Updated: 2026-07-16
 - Уже сделано: зафиксированы компактные UI-паттерны: icon buttons, короткие labels, плотные списки, отсутствие растянутых pill-кнопок.
 - Уже сделано: добавлен connection setup screen с ручным добавлением инстанса.
 - Уже сделано: подготовлены базовые loading/state surfaces, lifecycle `Launching -> Connections -> Pair/Login -> Ready` и capability-aware shell.
-- Уже сделано: в `Ready` используются нижние вкладки `Xray`, `Mihomo`, `Ports`, `Shell`, `Generator`, а содержимое drawer зависит от доступных core/capabilities.
+- Уже сделано: в `Ready` используются нижние вкладки `Xray`, `Mihomo`, `Ports`, `Shell`, а содержимое drawer зависит от доступных core/capabilities.
 - Уже сделано: заложена pluggable-структура под дальнейшие module slices, включая рабочий `Routing Xray` read/edit baseline и demo shell surfaces.
 - Уже сделано: подключены первые backend reads для active core и Xray routing documents.
 - Уже сделано: реализовано локальное хранение списка подключений, последнего выбора и базового metadata с безопасным редактированием.
@@ -186,11 +186,11 @@ Persistence данных подключения, secure storage, session flow, s
 - Добавить read-only routing state, затем `validate`, `preview`, `save`, `apply`.
 - Определить, где достаточно code editor, а где нужны guided editor controls.
 
-### Wave 6B - Mihomo Generator
+### Wave 6B - Mihomo utilities
 
-- Выделить самые ценные сценарии генератора и перенести их как отдельные экраны/карточки.
-- Поддержать preview/generate/apply flows без полного клонирования desktop layout.
-- Переиспользовать community/open-source tooling для editor/diff/preview, где это экономит время.
+- Развивать отдельными мобильными срезами `Шаблоны`, `Узел`, `HWID` и `Zashboard UI`.
+- Для каждого среза отдельно определить безопасные preview/apply semantics и backend contract.
+- Не переносить `Mihomo Generator` и не клонировать его desktop layout.
 
 ### Wave 6C - Partial DevTools
 

@@ -1,7 +1,7 @@
 # Xkeen-UI Mobile Companion App Skeleton
 
 Status: implementation baseline active
-Updated: 2026-07-16
+Updated: 2026-07-22
 
 ## Зачем нужен этот документ
 
@@ -18,7 +18,7 @@ Updated: 2026-07-16
 - `Pair/Login` как отдельная фаза приложения;
 - Реальный alpha session flow: `/api/mobile/v1/bootstrap`, login/logout, Keystore-only cookie+CSRF storage, server-validated restore в `Ready` и explicit fallback в `Pair/Login` для отсутствующей, истекшей или невалидной сессии;
 - `Ready`-workspace с компактной верхней панелью, confirm-based server-backed `start` / `stop` / `restart` и кнопкой `Core`;
-- capability-aware нижняя навигация `Xray`, `Mihomo`, `Ports`, `Shell`, `Generator`;
+- capability-aware нижняя навигация `Xray`, `Mihomo`, `Ports`, `Shell`;
 - capability-aware drawer с разделами под каждую рабочую зону;
 - read-only интеграция `GET /api/xkeen/core`;
 - read-only список `GET /api/routing/fragments` и revision-aware document snapshot `GET /api/mobile/v1/xray/routing/document`;
@@ -28,7 +28,7 @@ Updated: 2026-07-16
 Что пока сознательно не завершено:
 
 - PTY transport и durable offline persistence логов;
-- большая часть Mihomo, Ports и Generator модулей.
+- большая часть Mihomo и Ports модулей.
 
 ## Визуальное направление
 
@@ -59,15 +59,13 @@ Updated: 2026-07-16
 - `Mihomo`, если доступен Mihomo
 - `Ports`, всегда
 - `Shell`, всегда
-- `Generator`, если доступен Mihomo
 
 Контекстный drawer сейчас раскладывается так:
 
 - `Xray`: `Роутинг Xray`, `Подписки Xray`, `Режим Inbounds`, `Прокси / Outbounds`, `DAT-файлы GeoIP / GeoSite`, `Логи Xray`
-- `Mihomo`: `Роутинг Mihomo`, `Профили и подписки`, `Прокси-провайдеры`, `Группы прокси`, `Правила Mihomo`, `Генератор Mihomo`
+- `Mihomo`: `Роутинг Mihomo`, `Профили и подписки`, `Прокси-провайдеры`, `Группы прокси`, `Правила Mihomo`, `Шаблоны`, `Узел`, `HWID`, `Zashboard UI`
 - `Ports`: `Порты и исключения`, `Порты Xray`, `Порты Mihomo`, `Исключения маршрутизации`
 - `Shell`: `Команды`, `Терминал`, `История команд`
-- `Generator`: `Генератор Mihomo`, `Профили генератора`, `Шаблоны`
 
 Подключения и авторизация по-прежнему живут как отдельный onboarding до входа в `Ready`.
 
@@ -117,11 +115,12 @@ Updated: 2026-07-16
 - Они помогают проверить плотность и ритм будущих command-like сценариев.
 - Это ещё не полноценный PTY contract и не production-ready shell transport.
 
-### 5. Mihomo / Ports / Generator
+### 5. Mihomo / Ports
 
 - Эти зоны уже присутствуют в навигации как capability-aware slices.
 - Сейчас они в основном выступают как placeholder-контракт для следующих модулей.
 - Их наличие важно, потому что архитектура уже тестирует не один экран, а расширяемый workspace под разные ядра и сценарии.
+- `Mihomo Generator` сознательно не входит в мобильный workspace и остаётся только в веб-панели.
 
 ## Базовые состояния приложения
 

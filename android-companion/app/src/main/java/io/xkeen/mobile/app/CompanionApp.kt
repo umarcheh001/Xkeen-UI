@@ -1033,9 +1033,6 @@ private fun ReadyBottomBar(
                 }
                 WorkspaceTab(MainTab.Logs, selected, onSelected, "Ports")
                 WorkspaceTab(MainTab.More, selected, onSelected, "Shell")
-                if (availableCores.hasCore("mihomo")) {
-                    WorkspaceTab(MainTab.Generator, selected, onSelected, "Generator")
-                }
             }
         }
     }
@@ -1084,7 +1081,7 @@ private fun RowScope.WorkspaceTab(
     }
     Box(
         modifier = Modifier
-            .weight(if (tab == MainTab.Generator) 1.35f else 1f)
+            .weight(1f)
             .fillMaxHeight()
             .then(if (isSelected) Modifier.shadow(5.dp, shape) else Modifier)
             .background(tabBackground, shape)

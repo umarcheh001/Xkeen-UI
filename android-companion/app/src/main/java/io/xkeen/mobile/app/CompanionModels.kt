@@ -12,15 +12,12 @@ enum class MainTab {
     Home,
     Logs,
     More,
-    Generator,
 }
 
 internal fun MainTab.isAvailableFor(availableCores: List<String>): Boolean =
     when (this) {
         MainTab.Routing -> availableCores.hasCore("xray")
-        MainTab.Home,
-        MainTab.Generator,
-        -> availableCores.hasCore("mihomo")
+        MainTab.Home -> availableCores.hasCore("mihomo")
 
         MainTab.Logs,
         MainTab.More,
@@ -42,6 +39,10 @@ enum class WorkspaceSection(
     MihomoProviders(MainTab.Home, "Прокси-провайдеры"),
     MihomoGroups(MainTab.Home, "Группы прокси"),
     MihomoRules(MainTab.Home, "Правила Mihomo"),
+    MihomoTemplates(MainTab.Home, "Шаблоны"),
+    MihomoNode(MainTab.Home, "Узел"),
+    MihomoHwid(MainTab.Home, "HWID"),
+    MihomoZashboardUi(MainTab.Home, "Zashboard UI"),
     PortsOverview(MainTab.Logs, "Порты и исключения"),
     PortsXray(MainTab.Logs, "Порты Xray"),
     PortsMihomo(MainTab.Logs, "Порты Mihomo"),
@@ -49,9 +50,6 @@ enum class WorkspaceSection(
     ShellCommands(MainTab.More, "Команды"),
     ShellTerminal(MainTab.More, "Терминал"),
     ShellHistory(MainTab.More, "История команд"),
-    MihomoGenerator(MainTab.Generator, "Генератор Mihomo"),
-    GeneratorProfiles(MainTab.Generator, "Профили генератора"),
-    GeneratorTemplates(MainTab.Generator, "Шаблоны"),
 }
 
 internal fun WorkspaceSection.isAvailableFor(availableCores: List<String>): Boolean =
@@ -70,10 +68,11 @@ internal fun WorkspaceSection.isAvailableFor(availableCores: List<String>): Bool
         WorkspaceSection.MihomoProviders,
         WorkspaceSection.MihomoGroups,
         WorkspaceSection.MihomoRules,
+        WorkspaceSection.MihomoTemplates,
+        WorkspaceSection.MihomoNode,
+        WorkspaceSection.MihomoHwid,
+        WorkspaceSection.MihomoZashboardUi,
         WorkspaceSection.PortsMihomo,
-        WorkspaceSection.MihomoGenerator,
-        WorkspaceSection.GeneratorProfiles,
-        WorkspaceSection.GeneratorTemplates,
         -> availableCores.hasCore("mihomo")
 
         WorkspaceSection.PortsOverview,
@@ -93,7 +92,6 @@ fun MainTab.defaultWorkspaceSection(): WorkspaceSection =
         MainTab.Home -> WorkspaceSection.MihomoRouting
         MainTab.Logs -> WorkspaceSection.PortsOverview
         MainTab.More -> WorkspaceSection.ShellCommands
-        MainTab.Generator -> WorkspaceSection.MihomoGenerator
     }
 
 enum class ConnectionStatus {

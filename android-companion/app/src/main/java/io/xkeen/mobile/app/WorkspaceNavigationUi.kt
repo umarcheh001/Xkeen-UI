@@ -26,8 +26,8 @@ import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.automirrored.outlined.Rule
 import androidx.compose.material.icons.outlined.AccountTree
-import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.DataObject
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Dns
@@ -580,7 +580,6 @@ private fun drawerContextTitle(tab: MainTab): String =
         MainTab.Home -> "Mihomo"
         MainTab.Logs -> "Ports"
         MainTab.More -> "Shell"
-        MainTab.Generator -> "Generator"
     }
 
 private fun drawerEntries(tab: MainTab): List<WorkspaceDrawerEntry> =
@@ -600,7 +599,10 @@ private fun drawerEntries(tab: MainTab): List<WorkspaceDrawerEntry> =
             WorkspaceDrawerEntry(WorkspaceSection.MihomoProviders, Icons.Outlined.Dns),
             WorkspaceDrawerEntry(WorkspaceSection.MihomoGroups, Icons.Outlined.Hub),
             WorkspaceDrawerEntry(WorkspaceSection.MihomoRules, Icons.AutoMirrored.Outlined.Rule),
-            WorkspaceDrawerEntry(WorkspaceSection.MihomoGenerator, Icons.Outlined.AutoAwesome),
+            WorkspaceDrawerEntry(WorkspaceSection.MihomoTemplates, Icons.AutoMirrored.Outlined.Article),
+            WorkspaceDrawerEntry(WorkspaceSection.MihomoNode, Icons.Outlined.Hub),
+            WorkspaceDrawerEntry(WorkspaceSection.MihomoHwid, Icons.Outlined.Devices),
+            WorkspaceDrawerEntry(WorkspaceSection.MihomoZashboardUi, Icons.Outlined.Dashboard),
         )
 
         MainTab.Logs -> listOf(
@@ -616,11 +618,6 @@ private fun drawerEntries(tab: MainTab): List<WorkspaceDrawerEntry> =
             WorkspaceDrawerEntry(WorkspaceSection.ShellHistory, Icons.Outlined.History),
         )
 
-        MainTab.Generator -> listOf(
-            WorkspaceDrawerEntry(WorkspaceSection.MihomoGenerator, Icons.Outlined.AutoAwesome),
-            WorkspaceDrawerEntry(WorkspaceSection.GeneratorProfiles, Icons.Outlined.Folder),
-            WorkspaceDrawerEntry(WorkspaceSection.GeneratorTemplates, Icons.AutoMirrored.Outlined.Article),
-        )
     }
 
 private fun workspaceSectionDescription(section: WorkspaceSection): String =
@@ -635,14 +632,15 @@ private fun workspaceSectionDescription(section: WorkspaceSection): String =
         WorkspaceSection.MihomoProviders -> "Управление proxy-providers и обновлением источников."
         WorkspaceSection.MihomoGroups -> "Группы прокси, стратегии выбора и проверки доступности."
         WorkspaceSection.MihomoRules -> "Правила, rule-providers и порядок маршрутизации Mihomo."
+        WorkspaceSection.MihomoTemplates -> "Выбор и управление шаблонами конфигурации Mihomo."
+        WorkspaceSection.MihomoNode -> "Добавление и настройка узла Mihomo."
+        WorkspaceSection.MihomoHwid -> "Настройка HWID для конфигурации Mihomo."
+        WorkspaceSection.MihomoZashboardUi -> "Установка и управление веб-интерфейсом Zashboard UI."
         WorkspaceSection.PortsOverview -> "Общие порты xkeen и исключения для локальной сети."
         WorkspaceSection.PortsXray -> "Inbounds и системные порты конфигурации Xray."
         WorkspaceSection.PortsMihomo -> "Порты контроллера и входящих подключений Mihomo."
         WorkspaceSection.RoutingExclusions -> "Адреса и сети, которые должны обходить прокси."
         WorkspaceSection.ShellHistory -> "Недавние команды и повторный запуск сохранённых операций."
-        WorkspaceSection.MihomoGenerator -> "Мастер сборки конфигурации Mihomo из профиля и шаблона."
-        WorkspaceSection.GeneratorProfiles -> "Сохранённые исходные профили генератора."
-        WorkspaceSection.GeneratorTemplates -> "Шаблоны секций и параметры итоговой конфигурации."
         WorkspaceSection.XrayRouting,
         WorkspaceSection.ShellCommands,
         WorkspaceSection.ShellTerminal,
