@@ -696,7 +696,11 @@ private fun XraySubscriptionNodeCatalogDialog(
 
     XkeenDialog(onDismissRequest = onDismiss) {
         Column(
-            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.96f).imePadding().padding(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.90f)
+                .imePadding()
+                .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
