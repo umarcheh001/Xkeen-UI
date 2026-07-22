@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -23,12 +24,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
 import androidx.compose.material.icons.automirrored.outlined.List
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.SettingsInputComponent
@@ -63,16 +67,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.xkeen.mobile.BuildConfig
 import io.xkeen.mobile.ui.theme.WebPanelPalette
 import kotlinx.coroutines.launch
 
 private val DrawerAccent = WebPanelPalette.Panel
 private val DrawerSelection = WebPanelPalette.Accent
 private val CoreBlue = WebPanelPalette.Accent
+private const val DevelopmentRepositoryUrl = "https://github.com/umarcheh001/Xkeen-UI"
 
 private data class WorkspaceDrawerEntry(
     val section: WorkspaceSection,
@@ -116,13 +123,6 @@ internal fun WorkspaceNavigationFrame(
                     } else {
                         controller.selectWorkspaceSection(section)
                         closeDrawer()
-                    }
-                },
-                onCore = {
-                    closeDrawer {
-                        if (!state.serviceOperation.isPending && !state.isWorkspaceRefreshing) {
-                            showCoreDialog = true
-                        }
                     }
                 },
                 onConnections = { closeDrawer(controller::openConnections) },
@@ -180,7 +180,6 @@ private fun FocusManager.clearEditorFocus() {
 private fun WorkspaceDrawer(
     state: CompanionUiState,
     onSectionSelected: (WorkspaceSection) -> Unit,
-    onCore: () -> Unit,
     onConnections: () -> Unit,
 ) {
     val entries = remember(state.mainTab, state.dashboard.availableCores) {
@@ -189,6 +188,7 @@ private fun WorkspaceDrawer(
         }
     }
     val contextTitle = drawerContextTitle(state.mainTab)
+    val uriHandler = LocalUriHandler.current
 
     ModalDrawerSheet(
         modifier = Modifier
@@ -226,17 +226,6 @@ private fun WorkspaceDrawer(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Surface(
-                color = WebPanelPalette.SurfaceRaised.copy(alpha = 0.88f),
-                shape = RoundedCornerShape(999.dp),
-            ) {
-                Text(
-                    text = "Активное ядро · ${state.dashboard.activeCore}",
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    color = WebPanelPalette.TextBlue,
-                    style = MaterialTheme.typography.labelMedium,
-                )
-            }
         }
 
         Column(
@@ -276,14 +265,6 @@ private fun WorkspaceDrawer(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
             NavigationDrawerItem(
-                label = { Text("Core · ${state.dashboard.activeCore}", fontWeight = FontWeight.Bold) },
-                selected = false,
-                onClick = onCore,
-                icon = { Icon(Icons.Outlined.Memory, contentDescription = null) },
-                badge = { Text("Сменить") },
-                shape = RoundedCornerShape(10.dp),
-            )
-            NavigationDrawerItem(
                 label = { Text("Подключения") },
                 selected = false,
                 onClick = onConnections,
@@ -292,26 +273,91 @@ private fun WorkspaceDrawer(
             )
         }
 
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(9.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.ExitToApp,
-                contentDescription = null,
-                tint = WebPanelPalette.Muted,
-                modifier = Modifier.size(18.dp),
-            )
-            Text(
-                text = state.dashboard.endpoint,
-                color = WebPanelPalette.Muted,
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            HorizontalDivider(color = WebPanelPalette.Border.copy(alpha = 0.18f))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Info,
+                    contentDescription = null,
+                    tint = WebPanelPalette.Muted,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(
+                    text = "Версия приложения",
+                    modifier = Modifier.weight(1f),
+                    color = WebPanelPalette.Muted,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Text(
+                    text = BuildConfig.VERSION_NAME,
+                    color = WebPanelPalette.Text,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { uriHandler.openUri(DevelopmentRepositoryUrl) }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Code,
+                    contentDescription = null,
+                    tint = WebPanelPalette.TextBlue,
+                    modifier = Modifier.size(18.dp),
+                )
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Text(
+                        text = "Xkeen-UI на GitHub",
+                        color = WebPanelPalette.TextBlue,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = "Разработка и исходный код",
+                        color = WebPanelPalette.Muted,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                    contentDescription = "Открыть GitHub",
+                    tint = WebPanelPalette.Muted,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.ExitToApp,
+                    contentDescription = null,
+                    tint = WebPanelPalette.MutedDeep,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(
+                    text = state.dashboard.endpoint,
+                    color = WebPanelPalette.MutedDeep,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

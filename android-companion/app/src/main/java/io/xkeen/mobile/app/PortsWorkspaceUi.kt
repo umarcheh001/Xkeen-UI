@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,7 +26,6 @@ import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Save
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SettingsBackupRestore
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -152,64 +150,50 @@ internal fun PortsWorkspaceScreen(
                         findResult.value = EditorTextSearchResult()
                     })
                 } else {
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable(enabled = !ports.isSaving) { showPicker.value = true }
-                            .padding(start = 9.dp, end = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                    val currentIndex = ports.documents.indexOfFirst { it.id == document.id }.coerceAtLeast(0)
+                    PersistentEditorToolbarContent(
+                        layoutId = EditorToolbarLayoutId.Ports,
+                        title = document.id.fileName,
+                        detail = "${currentIndex + 1}/${ports.documents.size}",
+                        onTitleClick = { showPicker.value = true },
+                        titleEnabled = !ports.isSaving,
+                        editor = editorView.value,
+                        editorMetrics = metrics.value,
+                        editorActionsEnabled = document.hasLoaded && !ports.isBusy,
+                        searchDescription = "Поиск в файле",
+                        onSearchClick = { showFind.value = true },
+                        searchEnabled = document.hasLoaded,
                     ) {
-                        Text(
-                            text = document.id.fileName,
-                            color = WebPanelPalette.TextStrong,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                        EditorToolbarButton(
+                            icon = if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
+                            description = if (isFullscreen) {
+                                "Выйти из полноэкранного режима"
+                            } else {
+                                "Открыть редактор на весь экран"
+                            },
+                            onClick = { onFullscreenChange(!isFullscreen) },
                         )
-                        val currentIndex = ports.documents.indexOfFirst { it.id == document.id }.coerceAtLeast(0)
-                        Text(
-                            text = "  ${currentIndex + 1}/${ports.documents.size}  ▾",
-                            color = WebPanelPalette.Muted,
-                            style = MaterialTheme.typography.labelMedium,
+                        EditorToolbarButton(
+                            Icons.Outlined.SettingsBackupRestore,
+                            "Откатить локальные изменения",
+                            controller::revertPortsDocument,
+                            enabled = document.hasChanges && !ports.isBusy,
+                        )
+                        EditorToolbarButton(
+                            Icons.Outlined.Refresh,
+                            "Обновить файл с сервера",
+                            onClick = { scope.launch { controller.loadSelectedPortsDocument(force = true) } },
+                            enabled = document.hasLoaded && !document.hasChanges && !ports.isBusy,
+                        )
+                        EditorToolbarButton(
+                            icon = Icons.Outlined.Save,
+                            description = "Сохранить и перезапустить xkeen",
+                            onClick = { confirmSave.value = true },
+                            accent = document.hasChanges,
+                            accentColor = WebPanelPalette.Warning,
+                            enabled = document.hasChanges && !ports.isBusy,
                         )
                     }
-                    EditorToolbarButton(
-                        Icons.Outlined.Search,
-                        "Поиск в файле",
-                        onClick = { showFind.value = true },
-                        enabled = document.hasLoaded,
-                    )
-                    EditorToolbarButton(
-                        icon = if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
-                        description = if (isFullscreen) {
-                            "Выйти из полноэкранного режима"
-                        } else {
-                            "Открыть редактор на весь экран"
-                        },
-                        onClick = { onFullscreenChange(!isFullscreen) },
-                    )
-                    EditorToolbarButton(
-                        Icons.Outlined.SettingsBackupRestore,
-                        "Откатить локальные изменения",
-                        controller::revertPortsDocument,
-                        enabled = document.hasChanges && !ports.isBusy,
-                    )
-                    EditorToolbarButton(
-                        Icons.Outlined.Refresh,
-                        "Обновить файл с сервера",
-                        onClick = { scope.launch { controller.loadSelectedPortsDocument(force = true) } },
-                        enabled = document.hasLoaded && !document.hasChanges && !ports.isBusy,
-                    )
-                    EditorToolbarButton(
-                        icon = Icons.Outlined.Save,
-                        description = "Сохранить и перезапустить xkeen",
-                        onClick = { confirmSave.value = true },
-                        accent = document.hasChanges,
-                        accentColor = WebPanelPalette.Warning,
-                        enabled = document.hasChanges && !ports.isBusy,
-                    )
                 }
             }
         }

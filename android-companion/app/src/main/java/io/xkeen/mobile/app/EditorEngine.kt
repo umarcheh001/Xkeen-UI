@@ -14,6 +14,9 @@ internal data class EditorMetrics(
     val wordCount: Int = 0,
     val lineCount: Int = 1,
     val cursor: EditorCursor = EditorCursor(),
+    val selectionLength: Int = 0,
+    val canUndo: Boolean = false,
+    val canRedo: Boolean = false,
 )
 
 internal data class EditorTextSearchResult(

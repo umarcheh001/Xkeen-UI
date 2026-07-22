@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,7 +20,6 @@ import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Save
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SettingsBackupRestore
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -139,70 +137,59 @@ internal fun MihomoRoutingWorkspaceScreen(
                         findResult.value = EditorTextSearchResult()
                     })
                 } else {
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .padding(start = 9.dp, end = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                    PersistentEditorToolbarContent(
+                        layoutId = EditorToolbarLayoutId.MihomoConfig,
+                        title = config.activeProfile,
+                        detail = "YAML",
+                        onTitleClick = null,
+                        editor = editorView.value,
+                        editorMetrics = metrics.value,
+                        editorActionsEnabled = config.hasLoaded && !config.isBusy,
+                        searchDescription = "Поиск в YAML",
+                        onSearchClick = { showFind.value = true },
+                        searchEnabled = config.hasLoaded,
                     ) {
-                        Text(
-                            text = config.activeProfile,
-                            color = WebPanelPalette.TextStrong,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                        EditorToolbarButton(
+                            icon = if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
+                            description = if (isFullscreen) "Выйти из полноэкранного режима" else "Открыть редактор на весь экран",
+                            onClick = { onFullscreenChange(!isFullscreen) },
                         )
-                        Text(
-                            text = "  YAML",
-                            color = WebPanelPalette.Muted,
-                            style = MaterialTheme.typography.labelMedium,
+                        EditorToolbarButton(
+                            icon = Icons.AutoMirrored.Outlined.FactCheck,
+                            description = "Проверить YAML через Mihomo",
+                            onClick = { scope.launch { controller.validateMihomoConfig() } },
+                            accent = config.operation == MihomoConfigOperationPhase.Validating ||
+                                (config.hasChanges && !config.isCurrentContentValid),
+                            accentColor = if (config.hasChanges && !config.isCurrentContentValid) {
+                                WebPanelPalette.Warning
+                            } else {
+                                WebPanelPalette.TextBlue
+                            },
+                            enabled = config.hasLoaded && !config.isBusy,
+                        )
+                        EditorToolbarButton(
+                            Icons.Outlined.SettingsBackupRestore,
+                            "Откатить локальные изменения",
+                            controller::revertMihomoConfig,
+                            enabled = config.hasChanges && !config.isBusy,
+                        )
+                        EditorToolbarButton(
+                            icon = Icons.Outlined.Save,
+                            description = "Сохранить проверенный YAML",
+                            onClick = { scope.launch { controller.saveMihomoConfig(restart = false) } },
+                            accent = config.hasChanges && config.isCurrentContentValid,
+                            accentColor = WebPanelPalette.Warning,
+                            enabled = config.hasChanges && config.isCurrentContentValid && !config.isBusy,
+                        )
+                        EditorToolbarButton(
+                            icon = Icons.Outlined.DoneAll,
+                            description = "Применить YAML и перезапустить Mihomo",
+                            onClick = { confirmRestart.value = true },
+                            accent = config.hasChanges && config.isCurrentContentValid,
+                            accentColor = WebPanelPalette.Warning,
+                            enabled = config.hasChanges && config.isCurrentContentValid && !config.isBusy,
                         )
                     }
-                    EditorToolbarButton(Icons.Outlined.Search, "Поиск в YAML", onClick = {
-                        showFind.value = true
-                    }, enabled = config.hasLoaded)
-                    EditorToolbarButton(
-                        icon = if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
-                        description = if (isFullscreen) "Выйти из полноэкранного режима" else "Открыть редактор на весь экран",
-                        onClick = { onFullscreenChange(!isFullscreen) },
-                    )
-                    EditorToolbarButton(
-                        icon = Icons.AutoMirrored.Outlined.FactCheck,
-                        description = "Проверить YAML через Mihomo",
-                        onClick = { scope.launch { controller.validateMihomoConfig() } },
-                        accent = config.operation == MihomoConfigOperationPhase.Validating ||
-                            (config.hasChanges && !config.isCurrentContentValid),
-                        accentColor = if (config.hasChanges && !config.isCurrentContentValid) {
-                            WebPanelPalette.Warning
-                        } else {
-                            WebPanelPalette.TextBlue
-                        },
-                        enabled = config.hasLoaded && !config.isBusy,
-                    )
-                    EditorToolbarButton(
-                        Icons.Outlined.SettingsBackupRestore,
-                        "Откатить локальные изменения",
-                        controller::revertMihomoConfig,
-                        enabled = config.hasChanges && !config.isBusy,
-                    )
-                    EditorToolbarButton(
-                        icon = Icons.Outlined.Save,
-                        description = "Сохранить проверенный YAML",
-                        onClick = { scope.launch { controller.saveMihomoConfig(restart = false) } },
-                        accent = config.hasChanges && config.isCurrentContentValid,
-                        accentColor = WebPanelPalette.Warning,
-                        enabled = config.hasChanges && config.isCurrentContentValid && !config.isBusy,
-                    )
-                    EditorToolbarButton(
-                        icon = Icons.Outlined.DoneAll,
-                        description = "Применить YAML и перезапустить Mihomo",
-                        onClick = { confirmRestart.value = true },
-                        accent = config.hasChanges && config.isCurrentContentValid,
-                        accentColor = WebPanelPalette.Warning,
-                        enabled = config.hasChanges && config.isCurrentContentValid && !config.isBusy,
-                    )
                 }
             }
         }

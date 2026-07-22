@@ -118,6 +118,25 @@ class EditorEngineTest {
     }
 
     @Test
+    fun documentToolbarTitleResizeUsesScreenDensityAndSafeBounds() {
+        assertEquals(114f, resizedDocumentTitleWidth(164f, dragDeltaPx = -100f, density = 2f), 0.001f)
+        assertEquals(72f, resizedDocumentTitleWidth(80f, dragDeltaPx = -100f, density = 2f), 0.001f)
+        assertEquals(260f, resizedDocumentTitleWidth(250f, dragDeltaPx = 100f, density = 2f), 0.001f)
+    }
+
+    @Test
+    fun persistedToolbarLayoutRejectsInvalidWidthAndScrollOffset() {
+        assertEquals(
+            EditorToolbarLayout(titleWidthDp = 164f, scrollOffsetPx = 0),
+            EditorToolbarLayout(titleWidthDp = Float.NaN, scrollOffsetPx = -50).normalized(),
+        )
+        assertEquals(
+            EditorToolbarLayout(titleWidthDp = 260f, scrollOffsetPx = 40),
+            EditorToolbarLayout(titleWidthDp = 900f, scrollOffsetPx = 40).normalized(),
+        )
+    }
+
+    @Test
     fun editorSearchFindsMatchesCaseInsensitivelyAndWraps() {
         val source = "rule RULE rule"
 

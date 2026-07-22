@@ -160,6 +160,8 @@ internal fun RoutingWorkspaceScreen(
             validation = routing.validation,
             isValidationInFlight = routing.isValidationInFlight,
             isWriteInFlight = routing.write.isPending,
+            editor = editorView.value,
+            editorMetrics = editorMetrics.value,
             onOpenDocumentPicker = {
                 focusManager.clearFocus(force = true)
                 showDocumentPicker.value = true
@@ -421,6 +423,8 @@ private fun DocumentToolbar(
     validation: RoutingValidation,
     isValidationInFlight: Boolean,
     isWriteInFlight: Boolean,
+    editor: AdvancedJsonEditorView?,
+    editorMetrics: EditorMetrics,
     onOpenDocumentPicker: () -> Unit,
     isFindVisible: Boolean,
     findQuery: String,
@@ -477,62 +481,54 @@ private fun DocumentToolbar(
                 EditorToolbarButton(Icons.Outlined.KeyboardArrowDown, "Следующее совпадение", onFindNext)
                 EditorToolbarButton(Icons.Outlined.Close, "Закрыть поиск", onCloseFind)
             } else {
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clickable(onClick = onOpenDocumentPicker)
-                        .padding(start = 9.dp, end = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                PersistentEditorToolbarContent(
+                    layoutId = EditorToolbarLayoutId.XrayRouting,
+                    title = document.title,
+                    detail = "${currentIndex + 1}/${documents.size}",
+                    onTitleClick = onOpenDocumentPicker,
+                    titleEnabled = !isWriteInFlight,
+                    editor = editor,
+                    editorMetrics = editorMetrics,
+                    editorActionsEnabled = !isValidationInFlight && !isWriteInFlight,
+                    searchDescription = "Поиск в файле",
+                    onSearchClick = onOpenFind,
+                    searchEnabled = editor != null,
                 ) {
-                    Text(
-                        text = document.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    EditorToolbarButton(
+                        icon = if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
+                        description = if (isFullscreen) "Выйти из полноэкранного режима" else "Открыть редактор на весь экран",
+                        onClick = { onFullscreenChange(!isFullscreen) },
                     )
-                    Text(
-                        text = "  ${currentIndex + 1}/${documents.size}  ▾",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = WebPanelPalette.Muted,
+                    EditorToolbarButton(
+                        icon = Icons.AutoMirrored.Outlined.FactCheck,
+                        description = if (isValidationInFlight) "Проверка выполняется" else "Проверить",
+                        onClick = onValidate,
+                        accent = isValidationInFlight || workflowStep == RoutingWorkflowStep.Validate,
+                        accentColor = if (workflowStep == RoutingWorkflowStep.Validate) {
+                            WebPanelPalette.Warning
+                        } else {
+                            WebPanelPalette.TextBlue
+                        },
+                        enabled = !isValidationInFlight && !isWriteInFlight,
+                    )
+                    EditorToolbarButton(Icons.Outlined.SettingsBackupRestore, "Откатить", onRevert)
+                    EditorToolbarButton(
+                        icon = Icons.Outlined.Save,
+                        description = "Сохранить",
+                        onClick = onSave,
+                        accent = workflowStep == RoutingWorkflowStep.Save,
+                        accentColor = WebPanelPalette.Warning,
+                        enabled = !isWriteInFlight && document.hasUnsavedChanges,
+                    )
+                    EditorToolbarButton(
+                        icon = Icons.Outlined.DoneAll,
+                        description = "Применить",
+                        onClick = onApply,
+                        accent = workflowStep == RoutingWorkflowStep.Apply,
+                        accentColor = WebPanelPalette.Warning,
+                        enabled = !isWriteInFlight && document.hasDraftChanges,
                     )
                 }
-                EditorToolbarButton(Icons.Outlined.Search, "Поиск в файле", onOpenFind)
-                EditorToolbarButton(
-                    icon = if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
-                    description = if (isFullscreen) "Выйти из полноэкранного режима" else "Открыть редактор на весь экран",
-                    onClick = { onFullscreenChange(!isFullscreen) },
-                )
-                EditorToolbarButton(
-                    icon = Icons.AutoMirrored.Outlined.FactCheck,
-                    description = if (isValidationInFlight) "Проверка выполняется" else "Проверить",
-                    onClick = onValidate,
-                    accent = isValidationInFlight || workflowStep == RoutingWorkflowStep.Validate,
-                    accentColor = if (workflowStep == RoutingWorkflowStep.Validate) {
-                        WebPanelPalette.Warning
-                    } else {
-                        WebPanelPalette.TextBlue
-                    },
-                    enabled = !isValidationInFlight && !isWriteInFlight,
-                )
-                EditorToolbarButton(Icons.Outlined.SettingsBackupRestore, "Откатить", onRevert)
-                EditorToolbarButton(
-                    icon = Icons.Outlined.Save,
-                    description = "Сохранить",
-                    onClick = onSave,
-                    accent = workflowStep == RoutingWorkflowStep.Save,
-                    accentColor = WebPanelPalette.Warning,
-                    enabled = !isWriteInFlight && document.hasUnsavedChanges,
-                )
-                EditorToolbarButton(
-                    icon = Icons.Outlined.DoneAll,
-                    description = "Применить",
-                    onClick = onApply,
-                    accent = workflowStep == RoutingWorkflowStep.Apply,
-                    accentColor = WebPanelPalette.Warning,
-                    enabled = !isWriteInFlight && document.hasDraftChanges,
-                )
             }
         }
     }
@@ -869,10 +865,11 @@ internal fun EditorToolbarButton(
     accent: Boolean = false,
     accentColor: Color = WebPanelPalette.Border,
     enabled: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(10.dp)
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(34.dp)
             .padding(2.dp)
             .shadow(if (accent) 4.dp else 2.dp, shape)

@@ -219,15 +219,23 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
 
     fun undo(): Boolean {
         val updated = history.undo(editor.currentValue()) ?: return false
+        editor.requestFocus()
         applyValue(updated, notifyTextChanged = true)
         return true
     }
 
     fun redo(): Boolean {
         val updated = history.redo(editor.currentValue()) ?: return false
+        editor.requestFocus()
         applyValue(updated, notifyTextChanged = true)
         return true
     }
+
+    fun cutSelection(): Boolean = performTextContextMenuAction(android.R.id.cut)
+
+    fun copySelection(): Boolean = performTextContextMenuAction(android.R.id.copy)
+
+    fun pasteClipboard(): Boolean = performTextContextMenuAction(android.R.id.paste)
 
     override fun dispatchDraw(canvas: Canvas) {
         super.dispatchDraw(canvas)
@@ -436,6 +444,11 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         onRequestGoToLine(currentLine, documentIndex.lineCount)
     }
 
+    private fun performTextContextMenuAction(actionId: Int): Boolean {
+        editor.requestFocus()
+        return editor.onTextContextMenuItem(actionId)
+    }
+
     private fun applyValue(value: TextFieldValue, notifyTextChanged: Boolean) {
         val scrollY = editor.scrollY
         suppressCallbacks = true
@@ -461,7 +474,15 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
     }
 
     private fun notifyMetrics() {
-        onMetricsChanged(documentIndex.metricsAt(editor.selectionEnd.coerceAtLeast(0)))
+        val selectionStart = editor.selectionStart.coerceAtLeast(0)
+        val selectionEnd = editor.selectionEnd.coerceAtLeast(0)
+        onMetricsChanged(
+            documentIndex.metricsAt(selectionEnd).copy(
+                selectionLength = maxOf(selectionStart, selectionEnd) - minOf(selectionStart, selectionEnd),
+                canUndo = history.canUndo,
+                canRedo = history.canRedo,
+            ),
+        )
     }
 
     private fun updateDocumentIndex(source: String) {
