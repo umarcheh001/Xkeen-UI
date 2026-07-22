@@ -1715,6 +1715,27 @@ class CompanionControllerTest {
         assertTrue(controller.state.mihomoConfig.hasChanges)
         assertFalse(controller.state.mihomoConfig.isCurrentContentValid)
     }
+
+    @Test
+    fun mihomoTemplatePreviewCanBeClosedWithoutChangingEditor() = runTest {
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                dashboard = unloadedDashboardState().copy(endpoint = "https://router.example"),
+            ),
+            dependencies = testDependencies(mihomoTemplates = FakeMihomoTemplatesPort()),
+        )
+
+        controller.refreshMihomoConfig()
+        controller.refreshMihomoTemplates()
+        controller.loadMihomoTemplate("mobile.yaml")
+        controller.closeMihomoTemplatePreview()
+
+        assertNull(controller.state.mihomoTemplates.selectedName)
+        assertEquals("", controller.state.mihomoTemplates.selectedContent)
+        assertEquals("port: 7890\n", controller.state.mihomoConfig.content)
+        assertFalse(controller.state.mihomoConfig.hasChanges)
+    }
 }
 
 private fun testDependencies(

@@ -29,10 +29,18 @@ class MihomoTemplatesPortTest {
     }
 
     @Test
-    fun zashboardUrlUsesCurrentXkeenBasePath() {
+    fun zashboardUrlUsesDirectMihomoControllerPort() {
         assertEquals(
-            "https://router.example/mihomo_panel/ui/",
+            "http://router.example:9090/ui",
             mihomoZashboardUrl("https://router.example/xkeen/"),
+        )
+    }
+
+    @Test
+    fun zashboardUrlMatchesDefaultRouterAddress() {
+        assertEquals(
+            "http://192.168.1.1:9090/ui",
+            mihomoZashboardUrl("http://192.168.1.1:8088"),
         )
     }
 }

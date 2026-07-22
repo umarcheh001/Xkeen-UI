@@ -10,13 +10,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Article
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -175,6 +179,7 @@ internal fun MihomoTemplatesWorkspaceScreen(
                                     controller.loadMihomoTemplate(template.name, force = selected)
                                 }
                             },
+                            onClose = controller::closeMihomoTemplatePreview,
                             onApply = { applyTemplateName.value = template.name },
                         )
                     }
@@ -249,6 +254,7 @@ private fun MihomoTemplateCard(
     selectedContent: String,
     isBusy: Boolean,
     onSelect: () -> Unit,
+    onClose: () -> Unit,
     onApply: () -> Unit,
 ) {
     val shape = RoundedCornerShape(12.dp)
@@ -286,19 +292,31 @@ private fun MihomoTemplateCard(
                     color = if (selected) WebPanelPalette.Success else WebPanelPalette.Muted,
                     style = MaterialTheme.typography.labelSmall,
                 )
+                if (selected) {
+                    IconButton(
+                        onClick = onClose,
+                        enabled = !isBusy,
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            Icons.Outlined.Close,
+                            contentDescription = "Закрыть просмотр шаблона",
+                        )
+                    }
+                }
             }
             if (selected) {
                 Text(
                     text = selectedContent.ifEmpty { "Пустой YAML-шаблон" },
                     modifier = Modifier
                         .fillMaxWidth()
+                        .heightIn(max = 360.dp)
                         .background(WebPanelPalette.BackgroundDeep, RoundedCornerShape(8.dp))
+                        .verticalScroll(rememberScrollState())
                         .padding(10.dp),
                     color = WebPanelPalette.Text,
                     fontFamily = FontFamily.Monospace,
                     style = MaterialTheme.typography.bodySmall,
-                    maxLines = 14,
-                    overflow = TextOverflow.Ellipsis,
                 )
                 Button(
                     onClick = onApply,

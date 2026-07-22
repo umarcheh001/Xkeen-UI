@@ -9,7 +9,7 @@ import java.net.URI
 
 internal fun mihomoZashboardUrl(baseUrl: String): String {
     val base = normalizeCompanionBaseUrl(baseUrl)
-    return URI(base.scheme, null, base.host, base.port, "/mihomo_panel/ui/", null, null).toString()
+    return URI("http", null, base.host, 9090, "/ui", null, null).toString()
 }
 
 internal fun openMihomoZashboardInBrowser(context: Context, baseUrl: String) {

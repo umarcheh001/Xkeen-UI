@@ -188,7 +188,7 @@ Persistence данных подключения, secure storage, session flow, s
 
 ### Wave 6B - Mihomo utilities
 
-- Готово: `Шаблоны` перенесены поверх web endpoints, а `Zashboard UI` открывается по same-origin URL в системном браузере.
+- Готово: `Шаблоны` перенесены поверх web endpoints, а `Zashboard UI` открывается по прямому адресу Mihomo `http://<адрес Xkeen-узла>:9090/ui` в системном браузере.
 - Развивать следующими отдельными мобильными срезами `Узел` и `HWID`.
 - Для каждого среза отдельно определить безопасные preview/apply semantics и backend contract.
 - Не переносить `Mihomo Generator` и не клонировать его desktop layout.

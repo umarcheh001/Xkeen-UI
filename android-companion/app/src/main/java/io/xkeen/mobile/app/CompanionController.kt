@@ -3518,6 +3518,19 @@ internal class CompanionController(
         }
     }
 
+    fun closeMihomoTemplatePreview() {
+        val templates = state.mihomoTemplates
+        if (templates.isBusy || templates.selectedName == null) return
+        state = state.copy(
+            mihomoTemplates = templates.copy(
+                selectedName = null,
+                selectedContent = "",
+                message = "Просмотр шаблона закрыт.",
+                error = null,
+            ),
+        )
+    }
+
     fun applySelectedMihomoTemplateToEditor() {
         val templates = state.mihomoTemplates
         val name = templates.selectedName ?: return
