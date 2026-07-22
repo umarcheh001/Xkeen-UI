@@ -160,6 +160,79 @@ class CompanionControllerTest {
     }
 
     @Test
+    fun manualWorkspaceRefreshReloadsRuntimeAndVisibleServerContent() = runTest {
+        lateinit var controller: CompanionController
+        val source = FakeXrayConfigSource()
+        var runtimeLoads = 0
+        val serviceActions = object : ServiceActionsPort by DemoServiceActionsPort() {
+            override suspend fun load(baseUrl: String): ConfirmedServiceSnapshot {
+                runtimeLoads += 1
+                assertTrue(controller.state.isWorkspaceRefreshing)
+                return ConfirmedServiceSnapshot(
+                    serviceState = ServiceState.Running,
+                    activeCore = "Mihomo",
+                    availableCores = listOf("Xray", "Mihomo"),
+                )
+            }
+        }
+        controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                workspaceSection = WorkspaceSection.XrayRouting,
+                dashboard = demoDashboardState().copy(
+                    serviceState = ServiceState.Stopped,
+                    activeCore = "Xray",
+                ),
+                routing = demoRoutingState(),
+            ),
+            dependencies = testDependencies(
+                serviceActions = serviceActions,
+                xrayConfigSource = source,
+            ),
+        )
+
+        controller.refreshWorkspaceFromServer()
+
+        assertEquals(1, runtimeLoads)
+        assertEquals(ServiceState.Running, controller.state.dashboard.serviceState)
+        assertEquals("Mihomo", controller.state.dashboard.activeCore)
+        assertEquals(listOf("05_routing.json"), source.loadedFiles)
+        assertEquals("remote:05_routing.json", controller.state.routing.selectedDocumentId)
+        assertFalse(controller.state.isWorkspaceRefreshing)
+    }
+
+    @Test
+    fun manualWorkspaceRefreshPreservesLocalRoutingDraft() = runTest {
+        val source = FakeXrayConfigSource()
+        val routing = demoRoutingState()
+        val selected = routing.documents.first { it.id == routing.selectedDocumentId }
+        val localDraft = selected.draftContent + "\n// local mobile edit"
+        val dirtyRouting = routing.copy(
+            documents = routing.documents.map { document ->
+                if (document.id == selected.id) document.copy(draftContent = localDraft) else document
+            },
+        )
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                workspaceSection = WorkspaceSection.XrayRouting,
+                dashboard = demoDashboardState(),
+                routing = dirtyRouting,
+            ),
+            dependencies = testDependencies(xrayConfigSource = source),
+        )
+
+        controller.refreshWorkspaceFromServer()
+
+        assertTrue(source.loadedFiles.isEmpty())
+        assertEquals(
+            localDraft,
+            controller.state.routing.documents.first { it.id == selected.id }.draftContent,
+        )
+        assertFalse(controller.state.isWorkspaceRefreshing)
+    }
+
+    @Test
     fun editingConnectionKeepsStableIdAndMetadata() {
         val original = Connection(
             id = "stable-id",

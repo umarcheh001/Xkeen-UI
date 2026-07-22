@@ -118,7 +118,9 @@ internal fun WorkspaceNavigationFrame(
                 },
                 onCore = {
                     closeDrawer {
-                        if (!state.serviceOperation.isPending) showCoreDialog = true
+                        if (!state.serviceOperation.isPending && !state.isWorkspaceRefreshing) {
+                            showCoreDialog = true
+                        }
                     }
                 },
                 onConnections = { closeDrawer(controller::openConnections) },
@@ -132,7 +134,7 @@ internal fun WorkspaceNavigationFrame(
             },
             {
                 focusManager.clearEditorFocus()
-                if (!state.serviceOperation.isPending) {
+                if (!state.serviceOperation.isPending && !state.isWorkspaceRefreshing) {
                     showCoreDialog = true
                 }
             },

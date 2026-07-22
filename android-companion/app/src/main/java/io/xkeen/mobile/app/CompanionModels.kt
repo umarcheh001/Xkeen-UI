@@ -891,6 +891,7 @@ data class CompanionUiState(
     val keeneticLoginForm: LoginForm = LoginForm(),
     val isKeeneticAuthRequired: Boolean = false,
     val isSessionBusy: Boolean = false,
+    val isWorkspaceRefreshing: Boolean = false,
     val sessionMessage: String? = null,
     val mainTab: MainTab = MainTab.Routing,
     val workspaceSection: WorkspaceSection = WorkspaceSection.XrayRouting,

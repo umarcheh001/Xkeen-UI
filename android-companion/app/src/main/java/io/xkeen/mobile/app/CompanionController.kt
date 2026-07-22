@@ -281,7 +281,7 @@ internal class CompanionController(
     }
 
     suspend fun switchCore(core: String) {
-        if (state.serviceOperation.isPending) return
+        if (state.serviceOperation.isPending || state.isWorkspaceRefreshing) return
         val selectedCore = state.dashboard.availableCores.firstOrNull {
             it.equals(core, ignoreCase = true)
         } ?: return
@@ -359,13 +359,11 @@ internal class CompanionController(
     }
 
     /** Loads the only runtime state shown after opening a real mobile session. */
-    suspend fun refreshWorkspaceSnapshot() {
+    suspend fun refreshWorkspaceSnapshot(): Boolean {
         val endpoint = state.dashboard.endpoint
-        if (endpoint.isBlank()) return
-        val result = runCatching {
-            dependencies.serviceActions.load(endpoint)
-        }
-        result.onSuccess { snapshot ->
+        if (endpoint.isBlank()) return false
+        return try {
+            val snapshot = dependencies.serviceActions.load(endpoint)
             applyConfirmedServiceSnapshot(snapshot)
             state = state.copy(
                 dashboard = state.dashboard.copy(
@@ -373,16 +371,86 @@ internal class CompanionController(
                     lastError = null,
                 ),
             )
-        }
-        result.onFailure { error ->
+            true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
             if (!returnToLoginForExpiredSession(error)) {
                 applyCoreStatusLoadFailure(error)
             }
+            false
+        }
+    }
+
+    /** Refreshes confirmed runtime state and the server-backed data visible on the current screen. */
+    suspend fun refreshWorkspaceFromServer() {
+        val endpoint = state.dashboard.endpoint
+        if (
+            endpoint.isBlank() ||
+            state.phase != AppPhase.Ready ||
+            state.isSessionBusy ||
+            state.isWorkspaceRefreshing ||
+            state.serviceOperation.isPending
+        ) {
+            return
+        }
+
+        state = state.copy(isWorkspaceRefreshing = true)
+        try {
+            val runtimeRefreshed = refreshWorkspaceSnapshot()
+            if (runtimeRefreshed && state.phase == AppPhase.Ready && state.dashboard.endpoint == endpoint) {
+                refreshVisibleWorkspaceContent()
+            }
+        } finally {
+            state = state.copy(isWorkspaceRefreshing = false)
+        }
+    }
+
+    private suspend fun refreshVisibleWorkspaceContent() {
+        when (state.workspaceSection) {
+            WorkspaceSection.XrayRouting -> {
+                val selected = state.routing.documents.firstOrNull {
+                    it.id == state.routing.selectedDocumentId
+                }
+                if (selected?.hasDraftChanges != true) {
+                    refreshRoutingDocuments(force = true)
+                }
+            }
+
+            WorkspaceSection.XrayInbounds -> {
+                if (!state.inbounds.hasChanges) refreshInbounds(force = true)
+            }
+
+            WorkspaceSection.XrayOutbounds -> {
+                if (!state.outbounds.editor.isOpen && !state.outbounds.poolEditor.isOpen) {
+                    refreshOutbounds(force = true)
+                }
+            }
+
+            WorkspaceSection.XraySubscriptions -> {
+                if (!state.xraySubscriptions.editor.isOpen) {
+                    refreshXraySubscriptions(force = true)
+                }
+            }
+
+            WorkspaceSection.XrayAssets -> refreshXrayDatCatalog(force = true)
+            WorkspaceSection.XrayLogs -> refreshXrayLogsStatus()
+            WorkspaceSection.MihomoRouting -> {
+                if (!state.mihomoConfig.hasChanges) refreshMihomoConfig(force = true)
+            }
+
+            WorkspaceSection.PortsOverview -> {
+                if (state.portsEditor.selectedDocument?.hasChanges != true) {
+                    loadSelectedPortsDocument(force = true)
+                }
+            }
+
+            else -> Unit
         }
     }
 
     fun requestServiceAction(action: ServiceAction) {
-        if (state.serviceOperation.isPending || state.pendingAction != null) return
+        if (state.serviceOperation.isPending || state.isWorkspaceRefreshing || state.pendingAction != null) return
         state = state.copy(pendingAction = PendingAction.Service(action))
     }
 
@@ -3413,6 +3481,7 @@ internal class CompanionController(
             keeneticLoginForm = state.keeneticLoginForm.copy(password = ""),
             isKeeneticAuthRequired = false,
             isSessionBusy = false,
+            isWorkspaceRefreshing = false,
             sessionMessage = null,
             dashboard = workspaceDashboard,
             routing = unloadedRoutingState(),
@@ -3442,6 +3511,7 @@ internal class CompanionController(
             keeneticLoginForm = state.keeneticLoginForm.copy(password = ""),
             isKeeneticAuthRequired = false,
             isSessionBusy = false,
+            isWorkspaceRefreshing = false,
             sessionMessage = result.message,
             dashboard = state.dashboard.copy(statusSummary = result.statusSummary),
             diagnostics = state.diagnostics.replaceDiagnostic(
@@ -3489,6 +3559,7 @@ internal class CompanionController(
             keeneticLoginForm = state.keeneticLoginForm.copy(password = ""),
             isKeeneticAuthRequired = false,
             isSessionBusy = false,
+            isWorkspaceRefreshing = false,
             sessionMessage = message,
             mainTab = MainTab.Routing,
             workspaceSection = WorkspaceSection.XrayRouting,

@@ -1,6 +1,12 @@
 package io.xkeen.mobile.app
 
 import android.content.res.Configuration
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -100,10 +106,13 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -504,6 +513,9 @@ private fun ReadyRoute(
                         state = state,
                         onMenu = openDrawer,
                         onCore = openCoreDialog,
+                        onRefresh = {
+                            scope.launch { controller.refreshWorkspaceFromServer() }
+                        },
                         onServiceAction = controller::requestServiceAction,
                     )
                 }
@@ -615,6 +627,7 @@ private fun WorkspaceHeader(
     state: CompanionUiState,
     onMenu: () -> Unit,
     onCore: () -> Unit,
+    onRefresh: () -> Unit,
     onServiceAction: (ServiceAction) -> Unit,
 ) {
     Surface(color = Color.Transparent, shadowElevation = 8.dp) {
@@ -638,8 +651,16 @@ private fun WorkspaceHeader(
             Spacer(Modifier.width(6.dp))
             CoreGlassButton(
                 activeCore = state.dashboard.activeCore,
+                serviceState = state.dashboard.serviceState,
+                operation = state.serviceOperation,
                 onClick = onCore,
-                enabled = !state.serviceOperation.isPending,
+                enabled = !state.serviceOperation.isPending && !state.isWorkspaceRefreshing,
+            )
+            Spacer(Modifier.width(5.dp))
+            GlassRefreshButton(
+                isRefreshing = state.isWorkspaceRefreshing,
+                onClick = onRefresh,
+                enabled = !state.serviceOperation.isPending && !state.isSessionBusy,
             )
             Spacer(Modifier.weight(1f))
             Spacer(Modifier.width(5.dp))
@@ -647,21 +668,21 @@ private fun WorkspaceHeader(
                 label = "Start",
                 color = WebPanelPalette.Success,
                 onClick = { onServiceAction(ServiceAction.Start) },
-                enabled = !state.serviceOperation.isPending,
+                enabled = !state.serviceOperation.isPending && !state.isWorkspaceRefreshing,
             )
             Spacer(Modifier.width(4.dp))
             ServiceHeaderButton(
                 label = "Stop",
                 color = WebPanelPalette.Error,
                 onClick = { onServiceAction(ServiceAction.Stop) },
-                enabled = !state.serviceOperation.isPending,
+                enabled = !state.serviceOperation.isPending && !state.isWorkspaceRefreshing,
             )
             Spacer(Modifier.width(4.dp))
             ServiceHeaderButton(
                 label = "Restart",
                 color = WebPanelPalette.Warning,
                 onClick = { onServiceAction(ServiceAction.Restart) },
-                enabled = !state.serviceOperation.isPending,
+                enabled = !state.serviceOperation.isPending && !state.isWorkspaceRefreshing,
             )
         }
     }
@@ -703,12 +724,81 @@ private fun GlassMenuButton(onClick: () -> Unit) {
 }
 
 @Composable
+private fun GlassRefreshButton(
+    isRefreshing: Boolean,
+    onClick: () -> Unit,
+    enabled: Boolean,
+) {
+    val canClick = enabled && !isRefreshing
+    val shape = RoundedCornerShape(12.dp)
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .shadow(3.dp, shape)
+            .background(
+                brush = Brush.verticalGradient(
+                    listOf(WebPanelPalette.SurfaceRaised, WebPanelPalette.Surface),
+                ),
+                shape = shape,
+            )
+            .border(
+                width = 1.dp,
+                color = WebPanelPalette.Border.copy(alpha = if (canClick) 0.30f else 0.14f),
+                shape = shape,
+            )
+            .clickable(enabled = canClick, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        RefreshStatusIcon(
+            isRefreshing = isRefreshing,
+            tint = if (enabled) WebPanelPalette.TextBlue else WebPanelPalette.Muted,
+        )
+    }
+}
+
+@Composable
+private fun RefreshStatusIcon(
+    isRefreshing: Boolean,
+    tint: Color,
+) {
+    if (isRefreshing) {
+        val transition = rememberInfiniteTransition(label = "workspace-refresh")
+        val rotation by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 850, easing = LinearEasing),
+            ),
+            label = "workspace-refresh-rotation",
+        )
+        Icon(
+            imageVector = Icons.Outlined.Refresh,
+            contentDescription = "Обновление данных с сервера",
+            tint = tint,
+            modifier = Modifier
+                .size(18.dp)
+                .graphicsLayer { rotationZ = rotation },
+        )
+    } else {
+        Icon(
+            imageVector = Icons.Outlined.Refresh,
+            contentDescription = "Обновить данные с сервера",
+            tint = tint,
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+@Composable
 private fun CoreGlassButton(
     activeCore: String,
+    serviceState: ServiceState,
+    operation: ServiceOperationState,
     onClick: () -> Unit,
     enabled: Boolean,
 ) {
     val shape = RoundedCornerShape(12.dp)
+    val indicator = coreServiceIndicator(serviceState, operation)
     Row(
         modifier = Modifier
             .height(34.dp)
@@ -724,22 +814,109 @@ private fun CoreGlassButton(
             )
             .border(1.dp, WebPanelPalette.Border.copy(alpha = 0.32f), shape)
             .clickable(enabled = enabled, onClick = onClick)
+            .semantics { stateDescription = indicator.description }
             .padding(horizontal = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(
-            imageVector = Icons.Outlined.Memory,
-            contentDescription = null,
-            tint = WebPanelPalette.Border,
-            modifier = Modifier.size(17.dp),
-        )
+        CoreServiceStatusIcon(indicator)
         Text(
             text = activeCore,
             color = WebPanelPalette.TextStrong,
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
+        )
+    }
+}
+
+internal enum class CoreServiceIndicatorTone {
+    Running,
+    Stopped,
+    Busy,
+}
+
+internal data class CoreServiceIndicator(
+    val tone: CoreServiceIndicatorTone,
+    val description: String,
+)
+
+internal fun coreServiceIndicator(
+    serviceState: ServiceState,
+    operation: ServiceOperationState,
+): CoreServiceIndicator {
+    if (operation.isPending) {
+        val description = when {
+            operation.targetCore != null -> "Переключение ядра на ${operation.targetCore}"
+            operation.action == ServiceAction.Start -> "Запуск сервиса"
+            operation.action == ServiceAction.Stop -> "Остановка сервиса"
+            operation.action == ServiceAction.Restart -> "Перезапуск сервиса"
+            else -> "Выполняется операция с сервисом"
+        }
+        return CoreServiceIndicator(CoreServiceIndicatorTone.Busy, description)
+    }
+
+    return when (serviceState) {
+        ServiceState.Running -> CoreServiceIndicator(
+            CoreServiceIndicatorTone.Running,
+            "Сервис работает",
+        )
+
+        ServiceState.Stopped -> CoreServiceIndicator(
+            CoreServiceIndicatorTone.Stopped,
+            "Сервис остановлен",
+        )
+
+        ServiceState.Restarting -> CoreServiceIndicator(
+            CoreServiceIndicatorTone.Busy,
+            "Сервис перезапускается",
+        )
+
+        ServiceState.Unknown -> CoreServiceIndicator(
+            CoreServiceIndicatorTone.Busy,
+            "Статус сервиса уточняется",
+        )
+    }
+}
+
+@Composable
+private fun CoreServiceStatusIcon(indicator: CoreServiceIndicator) {
+    val color = when (indicator.tone) {
+        CoreServiceIndicatorTone.Running -> WebPanelPalette.Success
+        CoreServiceIndicatorTone.Stopped -> WebPanelPalette.Error
+        CoreServiceIndicatorTone.Busy -> WebPanelPalette.Warning
+    }
+
+    if (indicator.tone == CoreServiceIndicatorTone.Running) {
+        val transition = rememberInfiniteTransition(label = "core-service-status")
+        val pulse by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 500),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "core-service-running-pulse",
+        )
+        Icon(
+            imageVector = Icons.Outlined.Memory,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier
+                .size(17.dp)
+                .graphicsLayer {
+                    val scale = 1f + (pulse * 0.25f)
+                    scaleX = scale
+                    scaleY = scale
+                    alpha = 1f - (pulse * 0.3f)
+                },
+        )
+    } else {
+        Icon(
+            imageVector = Icons.Outlined.Memory,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(17.dp),
         )
     }
 }
