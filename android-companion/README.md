@@ -42,6 +42,8 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 
 - `Routing Xray`
 - `Роутинг Mihomo`
+- `Шаблоны Mihomo`
+- `Zashboard UI` (системный браузер)
 - `Подписки Xray`
 - `Прокси / Outbounds`
 - `DAT-файлы GeoIP / GeoSite`
@@ -59,6 +61,7 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - `POST /api/mobile/v1/xray/routing/validate` принимает raw JSONC draft выбранного документа и запускает read-only server Xray preflight; invalid draft возвращает structured diagnostics без persistent config save, restart или DAT-asset sync side effect.
 - `POST /api/mobile/v1/xray/routing/save` сохраняет проверенный draft отдельно от live Xray fragment; `POST /api/mobile/v1/xray/routing/apply` применяет exact saved revision и подтверждает restart xkeen.
 - `GET /api/mihomo-config`, `POST /api/mihomo/validate_raw`, `POST /api/mihomo/save_raw` и `POST /api/mihomo/restart_raw` образуют YAML workflow активного профиля Mihomo. Непроверенный или изменённый после проверки текст нельзя сохранить; restart требует отдельного подтверждения.
+- `GET /api/mihomo-templates` и `GET /api/mihomo-template` загружают список YAML-шаблонов и показывают preview. Загрузка шаблона меняет только мобильный draft; серверный `config.yaml` меняется лишь через обычный validate/save workflow.
 - `POST /api/ws-token` выдаёт одноразовый токен с областью `pty`, после чего локальная xterm.js-поверхность подключается к `/ws/pty`. PTY session id сохраняется отдельно для каждого узла; новый экран заново получает buffered output, а reconnect той же поверхности продолжает replay с последнего показанного sequence.
 - `GET/POST /api/xray/subscriptions` загружает список подписок Xray и сохраняет новую или изменённую запись; `POST /api/xray/subscriptions/preview` получает серверный preview узлов без сохранения, записи fragment, изменения routing/observatory или restart.
 - `POST /api/xray/subscriptions/<id>/refresh` и `POST /api/xray/subscriptions/refresh-due` явно обновляют одну подписку или только просроченные; `DELETE /api/xray/subscriptions/<id>` удаляет managed fragment и безопасно пересобирает связанный runtime state.
@@ -125,6 +128,12 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - Отдельной команды форматирования YAML в мобильном редакторе пока нет.
 - Рабочий цикл разделён на `загрузить → изменить → проверить → сохранить` или `применить`. Любое изменение текста сбрасывает подтверждение проверки; `Применить` дополнительно подтверждает restart.
 - Полная оболочка Acode не встроена. Не переносятся Cordova/plugin runtime, файловый менеджер, marketplace, LSP и общий IDE shell.
+
+## Шаблоны и Zashboard UI
+
+- Раздел `Шаблоны` показывает YAML-файлы из `/opt/etc/mihomo/templates`, загружает выбранный шаблон для preview и передаёт его в редактор `config.yaml` только после подтверждения.
+- Создание, переименование и удаление шаблонов не добавлены в мобильный экран: актуальная веб-поверхность предоставляет выбор существующего шаблона, а backend не имеет delete endpoint.
+- Пункт `Zashboard UI` не создаёт внутренний WebView: он открывает системный браузер по same-origin адресу `<Xkeen UI>/mihomo_panel/ui/`. Сессия браузера отделена от защищённой сессии приложения, поэтому браузер при необходимости самостоятельно запросит вход.
 
 ## Терминал
 
@@ -196,7 +205,7 @@ cd android-companion
 
 - `Routing Xray` полностью backend-backed для `load/validate/save/apply`; для device rollout одновременно нужны актуальный backend archive и APK.
 - Реальный Xray logs history/live transport и reconnect behavior уже подключены. PTY transport также подключён; durable offline persistence логов по-прежнему не входит в scope.
-- `Роутинг Mihomo` больше не placeholder. Остальные разделы `Mihomo`, включая `Шаблоны`, `Узел`, `HWID` и `Zashboard UI`, а также большая часть `Ports`, пока остаются placeholder-поверхностями.
+- `Роутинг Mihomo` и `Шаблоны` backend-backed, а `Zashboard UI` работает как внешнее браузерное действие. Из разделов Mihomo заглушками пока остаются только `Узел` и `HWID`.
 
 ## После текущего блока
 

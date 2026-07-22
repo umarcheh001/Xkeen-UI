@@ -789,6 +789,20 @@ data class MihomoConfigState(
         get() = validatedContent == content
 }
 
+data class MihomoTemplatesState(
+    val templates: List<MihomoTemplate> = emptyList(),
+    val selectedName: String? = null,
+    val selectedContent: String = "",
+    val hasLoaded: Boolean = false,
+    val isLoadingList: Boolean = false,
+    val isLoadingTemplate: Boolean = false,
+    val message: String = "Откройте раздел, чтобы загрузить шаблоны Mihomo.",
+    val error: String? = null,
+) {
+    val isBusy: Boolean
+        get() = isLoadingList || isLoadingTemplate
+}
+
 enum class PortsDocumentId(
     val fileName: String,
     val endpoint: String,
@@ -853,6 +867,8 @@ fun defaultPortsEditorDocuments(): List<PortsEditorDocument> =
 
 fun unloadedPortsEditorState(): PortsEditorState = PortsEditorState()
 
+fun unloadedMihomoTemplatesState(): MihomoTemplatesState = MihomoTemplatesState()
+
 data class DiagnosticItem(
     val label: String,
     val status: String,
@@ -884,6 +900,7 @@ data class CompanionUiState(
     val xraySubscriptions: XraySubscriptionsState = XraySubscriptionsState(),
     val xrayDat: XrayDatState = XrayDatState(),
     val mihomoConfig: MihomoConfigState = MihomoConfigState(),
+    val mihomoTemplates: MihomoTemplatesState = MihomoTemplatesState(),
     val portsEditor: PortsEditorState = PortsEditorState(),
     val logs: LogsState = LogsState(),
     val diagnostics: List<DiagnosticItem> = initialDiagnostics(),

@@ -439,6 +439,8 @@ internal class CompanionController(
                 if (!state.mihomoConfig.hasChanges) refreshMihomoConfig(force = true)
             }
 
+            WorkspaceSection.MihomoTemplates -> refreshMihomoTemplates(force = true)
+
             WorkspaceSection.PortsOverview -> {
                 if (state.portsEditor.selectedDocument?.hasChanges != true) {
                     loadSelectedPortsDocument(force = true)
@@ -3410,6 +3412,147 @@ internal class CompanionController(
         }
     }
 
+    suspend fun refreshMihomoTemplates(force: Boolean = false) {
+        val endpoint = state.dashboard.endpoint
+        val current = state.mihomoTemplates
+        if (endpoint.isBlank() || current.isBusy || (!force && current.hasLoaded)) return
+        state = state.copy(
+            mihomoTemplates = current.copy(
+                isLoadingList = true,
+                message = "Загружаем шаблоны Mihomo…",
+                error = null,
+            ),
+        )
+        try {
+            val templates = dependencies.mihomoTemplates.list(endpoint)
+            if (state.dashboard.endpoint != endpoint) return
+            val selectedName = state.mihomoTemplates.selectedName?.takeIf { selected ->
+                templates.any { it.name == selected }
+            }
+            state = state.copy(
+                mihomoTemplates = state.mihomoTemplates.copy(
+                    templates = templates,
+                    selectedName = selectedName,
+                    selectedContent = state.mihomoTemplates.selectedContent.takeIf {
+                        selectedName != null
+                    }.orEmpty(),
+                    hasLoaded = true,
+                    isLoadingList = false,
+                    message = if (templates.isEmpty()) {
+                        "Шаблоны Mihomo не найдены."
+                    } else {
+                        "Загружено шаблонов: ${templates.size}."
+                    },
+                    error = null,
+                ),
+            )
+        } catch (error: CancellationException) {
+            if (state.dashboard.endpoint == endpoint) {
+                state = state.copy(
+                    mihomoTemplates = state.mihomoTemplates.copy(isLoadingList = false),
+                )
+            }
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            if (state.dashboard.endpoint == endpoint) {
+                val message = error.toCompanionLoadMessage("Не удалось загрузить шаблоны Mihomo.")
+                state = state.copy(
+                    mihomoTemplates = state.mihomoTemplates.copy(
+                        isLoadingList = false,
+                        message = message,
+                        error = message,
+                    ),
+                )
+            }
+        }
+    }
+
+    suspend fun loadMihomoTemplate(name: String, force: Boolean = false) {
+        val endpoint = state.dashboard.endpoint
+        val current = state.mihomoTemplates
+        if (
+            endpoint.isBlank() || name.isBlank() || current.isBusy ||
+            (!force && current.selectedName == name)
+        ) {
+            return
+        }
+        state = state.copy(
+            mihomoTemplates = current.copy(
+                isLoadingTemplate = true,
+                message = "Загружаем шаблон $name…",
+                error = null,
+            ),
+        )
+        try {
+            val content = dependencies.mihomoTemplates.load(endpoint, name)
+            if (state.dashboard.endpoint != endpoint) return
+            state = state.copy(
+                mihomoTemplates = state.mihomoTemplates.copy(
+                    selectedName = name,
+                    selectedContent = content,
+                    isLoadingTemplate = false,
+                    message = "Шаблон $name загружен для просмотра.",
+                    error = null,
+                ),
+            )
+        } catch (error: CancellationException) {
+            if (state.dashboard.endpoint == endpoint) {
+                state = state.copy(
+                    mihomoTemplates = state.mihomoTemplates.copy(isLoadingTemplate = false),
+                )
+            }
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            if (state.dashboard.endpoint == endpoint) {
+                val message = error.toCompanionLoadMessage("Не удалось загрузить шаблон $name.")
+                state = state.copy(
+                    mihomoTemplates = state.mihomoTemplates.copy(
+                        isLoadingTemplate = false,
+                        message = message,
+                        error = message,
+                    ),
+                )
+            }
+        }
+    }
+
+    fun applySelectedMihomoTemplateToEditor() {
+        val templates = state.mihomoTemplates
+        val name = templates.selectedName ?: return
+        val config = state.mihomoConfig
+        if (!config.hasLoaded || config.isBusy || templates.isBusy) {
+            state = state.copy(
+                mihomoTemplates = templates.copy(
+                    message = "Сначала дождитесь загрузки активного config.yaml.",
+                    error = "Активный config.yaml ещё не загружен.",
+                ),
+            )
+            return
+        }
+        state = state.copy(
+            mainTab = MainTab.Home,
+            workspaceSection = WorkspaceSection.MihomoRouting,
+            mihomoConfig = config.copy(
+                content = templates.selectedContent,
+                operation = MihomoConfigOperationPhase.Idle,
+                message = "Шаблон $name загружен в редактор. Проверьте YAML перед сохранением.",
+                validationLog = "",
+                validatedContent = null,
+            ),
+            mihomoTemplates = templates.copy(
+                message = "Шаблон $name передан в редактор config.yaml.",
+                error = null,
+            ),
+            logs = recordLog(
+                source = "mihomo",
+                level = LogLevel.Info,
+                message = "Шаблон $name загружен в редактор config.yaml",
+            ),
+        )
+    }
+
     suspend fun issueTerminalConnection(
         sessionId: String?,
         lastSequence: Long,
@@ -3490,6 +3633,7 @@ internal class CompanionController(
             xraySubscriptions = unloadedXraySubscriptionsState(),
             xrayDat = unloadedXrayDatState(),
             mihomoConfig = unloadedMihomoConfigState(),
+            mihomoTemplates = unloadedMihomoTemplatesState(),
             portsEditor = unloadedPortsEditorState(),
             diagnostics = initialDiagnostics().replaceDiagnostic(
                 label = "Мобильная сессия",
@@ -3569,6 +3713,7 @@ internal class CompanionController(
             xraySubscriptions = unloadedXraySubscriptionsState(),
             xrayDat = unloadedXrayDatState(),
             mihomoConfig = unloadedMihomoConfigState(),
+            mihomoTemplates = unloadedMihomoTemplatesState(),
             portsEditor = unloadedPortsEditorState(),
             diagnostics = state.diagnostics.replaceDiagnostic(
                 label = "Мобильная сессия",

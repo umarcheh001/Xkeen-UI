@@ -62,6 +62,7 @@ import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -76,6 +77,7 @@ private val CoreBlue = WebPanelPalette.Accent
 private data class WorkspaceDrawerEntry(
     val section: WorkspaceSection,
     val icon: ImageVector,
+    val opensExternally: Boolean = false,
 )
 
 @Composable
@@ -90,6 +92,7 @@ internal fun WorkspaceNavigationFrame(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
     var showCoreDialog by rememberSaveable { mutableStateOf(false) }
 
     fun closeDrawer(afterClose: (() -> Unit)? = null) {
@@ -106,8 +109,14 @@ internal fun WorkspaceNavigationFrame(
             WorkspaceDrawer(
                 state = state,
                 onSectionSelected = { section ->
-                    controller.selectWorkspaceSection(section)
-                    closeDrawer()
+                    if (section == WorkspaceSection.MihomoZashboardUi) {
+                        closeDrawer {
+                            openMihomoZashboardInBrowser(context, state.dashboard.endpoint)
+                        }
+                    } else {
+                        controller.selectWorkspaceSection(section)
+                        closeDrawer()
+                    }
                 },
                 onCore = {
                     closeDrawer {
@@ -249,6 +258,11 @@ private fun WorkspaceDrawer(
                     selected = selected,
                     onClick = { onSectionSelected(entry.section) },
                     icon = { Icon(entry.icon, contentDescription = null) },
+                    badge = if (entry.opensExternally) {
+                        { Text("Браузер") }
+                    } else {
+                        null
+                    },
                     colors = NavigationDrawerItemDefaults.colors(
                         selectedContainerColor = DrawerSelection,
                         selectedIconColor = WebPanelPalette.TextStrong,
@@ -341,6 +355,11 @@ internal fun WorkspaceSectionContent(
             controller = controller,
             isFullscreen = isEditorFullscreen,
             onFullscreenChange = onEditorFullscreenChange,
+            modifier = modifier,
+        )
+        WorkspaceSection.MihomoTemplates -> MihomoTemplatesWorkspaceScreen(
+            state = state,
+            controller = controller,
             modifier = modifier,
         )
         WorkspaceSection.ShellJournal -> ShellWorkspaceScreen(state, modifier)
@@ -591,7 +610,11 @@ private fun drawerEntries(tab: MainTab): List<WorkspaceDrawerEntry> =
             WorkspaceDrawerEntry(WorkspaceSection.MihomoTemplates, Icons.AutoMirrored.Outlined.Article),
             WorkspaceDrawerEntry(WorkspaceSection.MihomoNode, Icons.Outlined.Hub),
             WorkspaceDrawerEntry(WorkspaceSection.MihomoHwid, Icons.Outlined.Devices),
-            WorkspaceDrawerEntry(WorkspaceSection.MihomoZashboardUi, Icons.Outlined.Dashboard),
+            WorkspaceDrawerEntry(
+                WorkspaceSection.MihomoZashboardUi,
+                Icons.Outlined.Dashboard,
+                opensExternally = true,
+            ),
         )
 
         MainTab.Logs -> listOf(
@@ -616,7 +639,7 @@ private fun workspaceSectionDescription(section: WorkspaceSection): String =
         WorkspaceSection.MihomoTemplates -> "Выбор и управление шаблонами конфигурации Mihomo."
         WorkspaceSection.MihomoNode -> "Добавление и настройка узла Mihomo."
         WorkspaceSection.MihomoHwid -> "Настройка HWID для конфигурации Mihomo."
-        WorkspaceSection.MihomoZashboardUi -> "Установка и управление веб-интерфейсом Zashboard UI."
+        WorkspaceSection.MihomoZashboardUi -> "Открыть Zashboard UI в системном браузере."
         WorkspaceSection.PortsOverview -> "Общие порты xkeen и исключения для локальной сети."
         WorkspaceSection.XrayRouting,
         WorkspaceSection.ShellJournal,

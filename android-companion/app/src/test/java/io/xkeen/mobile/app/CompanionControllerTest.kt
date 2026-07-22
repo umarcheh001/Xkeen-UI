@@ -1689,6 +1689,32 @@ class CompanionControllerTest {
         assertTrue(controller.state.mihomoConfig.message.contains("изменился на сервере"))
         assertEquals("port: 7891\n", controller.state.mihomoConfig.content)
     }
+
+    @Test
+    fun mihomoTemplateLoadsIntoEditorWithoutChangingServerBaseline() = runTest {
+        val templates = FakeMihomoTemplatesPort()
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                dashboard = unloadedDashboardState().copy(
+                    endpoint = "https://router.example",
+                    availableCores = listOf("Mihomo"),
+                ),
+            ),
+            dependencies = testDependencies(mihomoTemplates = templates),
+        )
+
+        controller.refreshMihomoConfig()
+        controller.refreshMihomoTemplates()
+        controller.loadMihomoTemplate("mobile.yaml")
+        controller.applySelectedMihomoTemplateToEditor()
+
+        assertEquals(WorkspaceSection.MihomoRouting, controller.state.workspaceSection)
+        assertEquals("mode: global\n", controller.state.mihomoConfig.content)
+        assertEquals("port: 7890\n", controller.state.mihomoConfig.savedContent)
+        assertTrue(controller.state.mihomoConfig.hasChanges)
+        assertFalse(controller.state.mihomoConfig.isCurrentContentValid)
+    }
 }
 
 private fun testDependencies(
@@ -1706,6 +1732,7 @@ private fun testDependencies(
     xraySubscriptions: XraySubscriptionsPort = DemoXraySubscriptionsPort(),
     xrayDat: XrayDatPort = DemoXrayDatPort(),
     mihomoConfig: MihomoConfigPort = FakeMihomoConfigPort(),
+    mihomoTemplates: MihomoTemplatesPort = DemoMihomoTemplatesPort(),
     portsEditor: PortsEditorPort = DemoPortsEditorPort(),
     terminal: TerminalPort = FakeTerminalPort(),
     logs: LogsPort? = null,
@@ -1724,6 +1751,7 @@ private fun testDependencies(
         xraySubscriptions = xraySubscriptions,
         xrayDat = xrayDat,
         mihomoConfig = mihomoConfig,
+        mihomoTemplates = mihomoTemplates,
         portsEditor = portsEditor,
         terminal = terminal,
         logs = logs ?: DemoLogsPort(effectiveJournal),
@@ -1750,6 +1778,15 @@ private class FakeMihomoConfigPort : MihomoConfigPort {
         remoteContent = content.trimEnd()
         return MihomoConfigSnapshot(remoteContent, "default.yaml")
     }
+}
+
+private class FakeMihomoTemplatesPort : MihomoTemplatesPort {
+    private val content = linkedMapOf("mobile.yaml" to "mode: global\n")
+
+    override suspend fun list(baseUrl: String): List<MihomoTemplate> =
+        content.keys.map(::MihomoTemplate)
+
+    override suspend fun load(baseUrl: String, name: String): String = content.getValue(name)
 }
 
 private class FakeTerminalPort : TerminalPort {
