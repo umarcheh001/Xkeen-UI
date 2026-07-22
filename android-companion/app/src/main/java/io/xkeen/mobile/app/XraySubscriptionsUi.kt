@@ -855,14 +855,21 @@ private fun SubscriptionCatalogNodeCard(
     }
     val latencyLabel = when {
         pinging -> "Проверяем…"
+        node.latency?.status.equals("error", ignoreCase = true) -> "Нет ответа"
         node.latency?.delayMillis != null -> "${node.latency.delayMillis} мс"
-        node.latency?.status == "error" -> "Нет ответа"
         else -> "Не проверен"
     }
-    val latencyColor = when {
-        node.latency?.delayMillis != null -> WebPanelPalette.Success
-        node.latency?.status == "error" -> WebPanelPalette.Error
-        else -> WebPanelPalette.Muted
+    val latencyColor = when (subscriptionLatencyTone(pinging, node.latency)) {
+        SubscriptionLatencyTone.Pending,
+        SubscriptionLatencyTone.Moderate,
+        -> WebPanelPalette.Warning
+
+        SubscriptionLatencyTone.Fast -> WebPanelPalette.Success
+        SubscriptionLatencyTone.Slow,
+        SubscriptionLatencyTone.Error,
+        -> WebPanelPalette.Error
+
+        SubscriptionLatencyTone.Unknown -> WebPanelPalette.Muted
     }
     Surface(
         modifier = Modifier.fillMaxWidth().height(116.dp),
@@ -919,7 +926,6 @@ private fun SubscriptionCatalogNodeCard(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -937,16 +943,51 @@ private fun SubscriptionCatalogNodeCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                SubscriptionIconAction(Icons.Outlined.Bolt, "Проверить задержку", canPing && !pinging, onPing, loading = pinging)
+                SubscriptionIconAction(
+                    Icons.Outlined.Bolt,
+                    "Проверить задержку",
+                    canPing && !pinging,
+                    onPing,
+                    loading = pinging,
+                    size = 28.dp,
+                    iconSize = 14.dp,
+                )
+                Spacer(Modifier.width(9.dp))
                 SubscriptionIconAction(
                     if (excluded) Icons.AutoMirrored.Outlined.Undo else Icons.Outlined.Close,
                     if (excluded) "Вернуть узел" else "Исключить узел",
                     canMutate,
                     onToggle,
                     danger = !excluded,
+                    size = 28.dp,
+                    iconSize = 14.dp,
                 )
             }
         }
+    }
+}
+
+internal enum class SubscriptionLatencyTone {
+    Pending,
+    Fast,
+    Moderate,
+    Slow,
+    Error,
+    Unknown,
+}
+
+internal fun subscriptionLatencyTone(
+    pinging: Boolean,
+    latency: OutboundLatency?,
+): SubscriptionLatencyTone {
+    val delayMillis = latency?.delayMillis
+    return when {
+        pinging -> SubscriptionLatencyTone.Pending
+        latency?.status.equals("error", ignoreCase = true) -> SubscriptionLatencyTone.Error
+        delayMillis == null || delayMillis < 0 -> SubscriptionLatencyTone.Unknown
+        delayMillis < 120 -> SubscriptionLatencyTone.Fast
+        delayMillis < 300 -> SubscriptionLatencyTone.Moderate
+        else -> SubscriptionLatencyTone.Slow
     }
 }
 
@@ -1075,6 +1116,8 @@ private fun SubscriptionIconAction(
     primary: Boolean = false,
     danger: Boolean = false,
     loading: Boolean = false,
+    size: Dp = 32.dp,
+    iconSize: Dp = 15.dp,
 ) {
     val tint = when {
         !enabled -> WebPanelPalette.MutedDeep
@@ -1083,11 +1126,11 @@ private fun SubscriptionIconAction(
         else -> WebPanelPalette.TextBlue
     }
     Box(
-        modifier = Modifier.size(32.dp).background(if (primary) WebPanelPalette.Border else Color.Transparent, RoundedCornerShape(9.dp)).border(1.dp, if (primary) Color.Transparent else tint.copy(alpha = 0.35f), RoundedCornerShape(9.dp)).clickable(enabled = enabled, onClick = onClick),
+        modifier = Modifier.size(size).background(if (primary) WebPanelPalette.Border else Color.Transparent, RoundedCornerShape(9.dp)).border(1.dp, if (primary) Color.Transparent else tint.copy(alpha = 0.35f), RoundedCornerShape(9.dp)).clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         if (loading) CircularProgressIndicator(modifier = Modifier.size(13.dp), strokeWidth = 1.5.dp, color = tint)
-        else Icon(icon, description, tint = tint, modifier = Modifier.size(15.dp))
+        else Icon(icon, description, tint = tint, modifier = Modifier.size(iconSize))
     }
 }
 
