@@ -764,6 +764,12 @@ enum class MihomoConfigOperationPhase {
     Failure,
 }
 
+data class MihomoEditorHighlight(
+    val start: Int,
+    val end: Int,
+    val token: Long,
+)
+
 data class MihomoConfigState(
     val content: String = "",
     val savedContent: String = "",
@@ -773,6 +779,7 @@ data class MihomoConfigState(
     val message: String = "Откройте раздел, чтобы загрузить активный YAML-профиль Mihomo.",
     val validationLog: String = "",
     val validatedContent: String? = null,
+    val editorHighlight: MihomoEditorHighlight? = null,
 ) {
     val hasChanges: Boolean
         get() = hasLoaded && content != savedContent
@@ -788,6 +795,18 @@ data class MihomoConfigState(
     val isCurrentContentValid: Boolean
         get() = validatedContent == content
 }
+
+data class MihomoNodeState(
+    val source: String = "",
+    val mode: MihomoNodeImportMode = MihomoNodeImportMode.Auto,
+    val selectedGroups: Set<String> = emptySet(),
+    val autoUpdateSubscriptions: Boolean = true,
+    val subscriptionIntervalHours: Int = 24,
+    val isImporting: Boolean = false,
+    val message: String = "Добавьте ссылку узла, подписку или конфигурацию.",
+    val error: String? = null,
+    val lastInsertedNames: List<String> = emptyList(),
+)
 
 data class MihomoTemplatesState(
     val templates: List<MihomoTemplate> = emptyList(),
@@ -901,6 +920,7 @@ data class CompanionUiState(
     val xrayDat: XrayDatState = XrayDatState(),
     val mihomoConfig: MihomoConfigState = MihomoConfigState(),
     val mihomoTemplates: MihomoTemplatesState = MihomoTemplatesState(),
+    val mihomoNode: MihomoNodeState = MihomoNodeState(),
     val portsEditor: PortsEditorState = PortsEditorState(),
     val logs: LogsState = LogsState(),
     val diagnostics: List<DiagnosticItem> = initialDiagnostics(),
@@ -947,6 +967,8 @@ fun unloadedXraySubscriptionsState(): XraySubscriptionsState = XraySubscriptions
 fun unloadedXrayDatState(): XrayDatState = XrayDatState()
 
 fun unloadedMihomoConfigState(): MihomoConfigState = MihomoConfigState()
+
+fun unloadedMihomoNodeState(): MihomoNodeState = MihomoNodeState()
 
 fun initialDiagnostics(): List<DiagnosticItem> = listOf(
     DiagnosticItem("Мобильная сессия", "Ожидает входа", DiagnosticSeverity.Warning),

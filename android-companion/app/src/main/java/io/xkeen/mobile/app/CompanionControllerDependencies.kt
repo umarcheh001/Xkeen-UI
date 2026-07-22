@@ -171,6 +171,7 @@ internal data class CompanionControllerDependencies(
     val xrayConfigSource: XrayConfigSource,
     val coreStatusSource: CoreStatusSource,
     val xrayLogsControl: XrayLogsControlPort = DemoXrayLogsControlPort(),
+    val mihomoNode: MihomoNodePort = DemoMihomoNodePort(),
 )
 
 internal fun defaultCompanionControllerDependencies(
@@ -215,6 +216,7 @@ internal fun defaultCompanionControllerDependencies(
         xrayConfigSource = WebPanelXrayConfigSource(effectiveTransport),
         coreStatusSource = WebPanelCoreStatusSource(effectiveTransport),
         xrayLogsControl = WebPanelXrayLogsControlPort(serviceTransport),
+        mihomoNode = WebPanelMihomoNodePort(serviceTransport),
     )
 }
 

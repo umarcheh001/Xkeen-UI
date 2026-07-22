@@ -362,6 +362,11 @@ internal fun WorkspaceSectionContent(
             controller = controller,
             modifier = modifier,
         )
+        WorkspaceSection.MihomoNode -> MihomoNodeWorkspaceScreen(
+            state = state,
+            controller = controller,
+            modifier = modifier,
+        )
         WorkspaceSection.ShellJournal -> ShellWorkspaceScreen(state, modifier)
         WorkspaceSection.ShellTerminal -> TerminalWorkspaceScreen(
             state = state,

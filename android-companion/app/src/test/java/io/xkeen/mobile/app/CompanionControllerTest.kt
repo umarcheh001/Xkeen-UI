@@ -1736,6 +1736,41 @@ class CompanionControllerTest {
         assertEquals("port: 7890\n", controller.state.mihomoConfig.content)
         assertFalse(controller.state.mihomoConfig.hasChanges)
     }
+
+    @Test
+    fun mihomoNodeImportUpdatesDraftAndOpensHighlightedEditor() = runTest {
+        val nodePort = FakeMihomoNodePort()
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                dashboard = unloadedDashboardState().copy(
+                    endpoint = "https://router.example",
+                    availableCores = listOf("Mihomo"),
+                ),
+            ),
+            dependencies = testDependencies(mihomoNode = nodePort),
+        )
+
+        controller.refreshMihomoConfig()
+        controller.updateMihomoNodeSource("vless://mobile")
+        controller.selectMihomoNodeMode(MihomoNodeImportMode.Proxy)
+        controller.toggleMihomoNodeGroup("Main")
+        controller.importMihomoNodeDraft()
+
+        assertEquals(WorkspaceSection.MihomoRouting, controller.state.workspaceSection)
+        assertEquals("port: 7890\nproxies:\n  - name: Mobile\n", controller.state.mihomoConfig.content)
+        assertEquals("port: 7890\n", controller.state.mihomoConfig.savedContent)
+        assertTrue(controller.state.mihomoConfig.hasChanges)
+        assertEquals(12, controller.state.mihomoConfig.editorHighlight?.start)
+        assertEquals(42, controller.state.mihomoConfig.editorHighlight?.end)
+        assertEquals("", controller.state.mihomoNode.source)
+        assertEquals(listOf("Mobile"), controller.state.mihomoNode.lastInsertedNames)
+        assertEquals(MihomoNodeImportMode.Proxy, nodePort.request?.mode)
+        assertTrue(nodePort.request?.autoUpdateSubscriptions == true)
+        assertEquals(24, nodePort.request?.intervalHours)
+        // The fake config has no proxy-groups, so stale UI selections are not sent to the server.
+        assertTrue(nodePort.request?.groups.isNullOrEmpty())
+    }
 }
 
 private fun testDependencies(
@@ -1754,6 +1789,7 @@ private fun testDependencies(
     xrayDat: XrayDatPort = DemoXrayDatPort(),
     mihomoConfig: MihomoConfigPort = FakeMihomoConfigPort(),
     mihomoTemplates: MihomoTemplatesPort = DemoMihomoTemplatesPort(),
+    mihomoNode: MihomoNodePort = DemoMihomoNodePort(),
     portsEditor: PortsEditorPort = DemoPortsEditorPort(),
     terminal: TerminalPort = FakeTerminalPort(),
     logs: LogsPort? = null,
@@ -1773,6 +1809,7 @@ private fun testDependencies(
         xrayDat = xrayDat,
         mihomoConfig = mihomoConfig,
         mihomoTemplates = mihomoTemplates,
+        mihomoNode = mihomoNode,
         portsEditor = portsEditor,
         terminal = terminal,
         logs = logs ?: DemoLogsPort(effectiveJournal),
@@ -1808,6 +1845,27 @@ private class FakeMihomoTemplatesPort : MihomoTemplatesPort {
         content.keys.map(::MihomoTemplate)
 
     override suspend fun load(baseUrl: String, name: String): String = content.getValue(name)
+}
+
+private class FakeMihomoNodePort : MihomoNodePort {
+    var request: MihomoNodeImportRequest? = null
+
+    override suspend fun importDraft(
+        baseUrl: String,
+        request: MihomoNodeImportRequest,
+    ): MihomoNodeImportResult {
+        this.request = request
+        return MihomoNodeImportResult(
+            content = "port: 7890\nproxies:\n  - name: Mobile\n",
+            insertedNames = listOf("Mobile"),
+            insertedKind = "proxy",
+            skippedCount = 0,
+            highlightStart = 12,
+            highlightEnd = 42,
+            registeredSubscriptions = 0,
+            subscriptionWarning = null,
+        )
+    }
 }
 
 private class FakeTerminalPort : TerminalPort {

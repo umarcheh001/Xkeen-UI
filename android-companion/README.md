@@ -135,6 +135,13 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - Создание, переименование и удаление шаблонов не добавлены в мобильный экран: актуальная веб-поверхность предоставляет выбор существующего шаблона, а backend не имеет delete endpoint.
 - Пункт `Zashboard UI` не создаёт внутренний WebView: он открывает системный браузер напрямую на Mihomo-порту `http://<адрес Xkeen-узла>:9090/ui` (для стандартного адреса роутера — `http://192.168.1.1:9090/ui`).
 
+## Узел Mihomo
+
+- Нативный экран `Узел` принимает VLESS/Trojan/VMess/Shadowsocks/Hysteria2, HTTP(S)/Happ-подписки, WireGuard/AmneziaWG, OpenVPN и Tailscale. Тип можно выбрать явно или оставить `Авто`.
+- Отдельного YAML preview нет: `POST /api/mihomo/node/import-draft` патчит только текущий мобильный черновик, после чего приложение открывает редактор `config.yaml`, прокручивает его к добавленному блоку и временно выделяет этот диапазон.
+- Узлы можно включить в выбранные `proxy-groups`. Xray JSON-подписки при согласии пользователя регистрируются для автообновления с выбранным интервалом; обычные Clash/Mihomo-подписки добавляются как `proxy-provider`, включая HWID-aware adapter при необходимости.
+- Импорт не сохраняет `config.yaml` и не перезапускает Mihomo. Пользователь проверяет выделенный фрагмент, запускает `mihomo -t` и отдельно сохраняет или применяет YAML в разделе `Роутинг Mihomo`.
+
 ## Терминал
 
 - Экран `Shell → Терминал` использует локально упакованный xterm.js только как VT/ANSI renderer и input surface; команды выполняются на подключённом Xkeen-узле через существующий server PTY.
@@ -205,7 +212,7 @@ cd android-companion
 
 - `Routing Xray` полностью backend-backed для `load/validate/save/apply`; для device rollout одновременно нужны актуальный backend archive и APK.
 - Реальный Xray logs history/live transport и reconnect behavior уже подключены. PTY transport также подключён; durable offline persistence логов по-прежнему не входит в scope.
-- `Роутинг Mihomo` и `Шаблоны` backend-backed, а `Zashboard UI` работает как внешнее браузерное действие. Из разделов Mihomo заглушками пока остаются только `Узел` и `HWID`.
+- `Роутинг Mihomo`, `Шаблоны` и нативный импорт `Узел` backend-backed, а `Zashboard UI` работает как внешнее браузерное действие. Из разделов Mihomo заглушкой пока остаётся только `HWID`.
 
 ## После текущего блока
 

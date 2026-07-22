@@ -165,7 +165,7 @@ Persistence данных подключения, secure storage, session flow, s
 - Подготовить release notes и user-facing onboarding.
 - Финализировать app settings, about и diagnostics surfaces.
 - Сформировать V1.1 backlog на основе реального использования.
-- Выбрать следующий компактный mobile slice между `Узел` и `HWID`; `Шаблоны` и внешнее открытие `Zashboard UI` уже реализованы, а профили и бэкапы Mihomo остаются в веб-панели.
+- Выбрать следующим компактным mobile slice `HWID`; `Шаблоны`, нативный импорт `Узел` и внешнее открытие `Zashboard UI` уже реализованы, а профили и бэкапы Mihomo остаются в веб-панели.
 - Зафиксировать пост-релизные backend улучшения, если они остались за рамками MVP.
 
 ### Exit criteria
@@ -188,8 +188,8 @@ Persistence данных подключения, secure storage, session flow, s
 
 ### Wave 6B - Mihomo utilities
 
-- Готово: `Шаблоны` перенесены поверх web endpoints, а `Zashboard UI` открывается по прямому адресу Mihomo `http://<адрес Xkeen-узла>:9090/ui` в системном браузере.
-- Развивать следующими отдельными мобильными срезами `Узел` и `HWID`.
+- Готово: `Шаблоны` перенесены поверх web endpoints, `Узел` получил нативный draft-import без дублирующего YAML preview, а `Zashboard UI` открывается по прямому адресу Mihomo `http://<адрес Xkeen-узла>:9090/ui` в системном браузере.
+- Развивать следующим отдельным мобильным срезом `HWID`.
 - Для каждого среза отдельно определить безопасные preview/apply semantics и backend contract.
 - Не переносить `Mihomo Generator` и не клонировать его desktop layout.
 

@@ -64,6 +64,7 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
     private val fastScroller = NativeEditorFastScroller(context, editor)
     private val syntaxSpans = mutableListOf<ForegroundColorSpan>()
     private val searchSpans = mutableListOf<BackgroundColorSpan>()
+    private val importedSpans = mutableListOf<BackgroundColorSpan>()
     private val tabStopSpans = mutableListOf<TabStopSpan.Standard>()
     private val history = EditorHistory()
     private var valueBeforeTextChange: TextFieldValue? = null
@@ -190,6 +191,32 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         editor.invalidate()
     }
 
+    fun highlightImportedRange(start: Int, end: Int) {
+        clearImportedHighlight()
+        val editable = editor.editableText ?: return
+        val safeStart = start.coerceIn(0, editable.length)
+        val safeEnd = end.coerceIn(safeStart, editable.length)
+        if (safeStart >= safeEnd) return
+        val span = BackgroundColorSpan(JsonEditorPalette.InsertedHighlight.toArgb())
+        importedSpans += span
+        editable.setSpan(span, safeStart, safeEnd, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        editor.requestFocus()
+        editor.setSelection(safeStart, safeEnd)
+        editor.invalidate()
+        editor.post {
+            val layout = editor.layout ?: return@post
+            val visualLine = layout.getLineForOffset(safeStart)
+            editor.smoothScrollToY(layout.getLineTop(visualLine))
+        }
+    }
+
+    private fun clearImportedHighlight() {
+        val editable = editor.editableText
+        importedSpans.forEach { span -> editable?.removeSpan(span) }
+        importedSpans.clear()
+        editor.invalidate()
+    }
+
     fun undo(): Boolean {
         val updated = history.undo(editor.currentValue()) ?: return false
         applyValue(updated, notifyTextChanged = true)
@@ -287,6 +314,7 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
 
             override fun afterTextChanged(editable: Editable?) {
                 if (suppressCallbacks || editable == null) return
+                clearImportedHighlight()
                 val updatedText = editable.toString()
                 val updated = TextFieldValue(
                     text = updatedText,
@@ -413,6 +441,7 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         suppressCallbacks = true
         try {
             searchSpans.clear()
+            importedSpans.clear()
             tabStopSpans.clear()
             editor.setText(value.text, TextView.BufferType.EDITABLE)
             ensureCompactTabStops(editor.editableText)

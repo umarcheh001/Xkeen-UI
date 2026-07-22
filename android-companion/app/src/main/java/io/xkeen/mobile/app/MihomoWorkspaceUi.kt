@@ -72,6 +72,12 @@ internal fun MihomoRoutingWorkspaceScreen(
     LaunchedEffect(showFind.value) {
         if (showFind.value) findFocusRequester.requestFocus()
     }
+    LaunchedEffect(config.editorHighlight?.token, editorView.value) {
+        val highlight = config.editorHighlight ?: return@LaunchedEffect
+        val editor = editorView.value ?: return@LaunchedEffect
+        editor.highlightImportedRange(highlight.start, highlight.end)
+        controller.consumeMihomoEditorHighlight(highlight.token)
+    }
 
     Column(
         modifier = modifier

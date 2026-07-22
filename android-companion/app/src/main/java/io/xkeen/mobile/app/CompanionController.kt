@@ -3278,6 +3278,7 @@ internal class CompanionController(
                 message = "YAML изменён. Перед сохранением проверьте его ядром Mihomo.",
                 validationLog = "",
                 validatedContent = null,
+                editorHighlight = null,
             ),
         )
     }
@@ -3292,6 +3293,7 @@ internal class CompanionController(
                 message = "Локальные изменения отменены.",
                 validationLog = "",
                 validatedContent = null,
+                editorHighlight = null,
             ),
         )
     }
@@ -3387,6 +3389,7 @@ internal class CompanionController(
                         "YAML сохранён в активный профиль."
                     },
                     validatedContent = snapshot.content,
+                    editorHighlight = null,
                 ),
                 dashboard = state.dashboard.copy(
                     lastOperation = if (restart) "Mihomo YAML сохранён и применён" else "Mihomo YAML сохранён",
@@ -3553,6 +3556,7 @@ internal class CompanionController(
                 message = "Шаблон $name загружен в редактор. Проверьте YAML перед сохранением.",
                 validationLog = "",
                 validatedContent = null,
+                editorHighlight = null,
             ),
             mihomoTemplates = templates.copy(
                 message = "Шаблон $name передан в редактор config.yaml.",
@@ -3564,6 +3568,190 @@ internal class CompanionController(
                 message = "Шаблон $name загружен в редактор config.yaml",
             ),
         )
+    }
+
+    fun updateMihomoNodeSource(value: String) {
+        val current = state.mihomoNode
+        if (current.isImporting || value == current.source) return
+        state = state.copy(
+            mihomoNode = current.copy(
+                source = value,
+                message = "Источник готов к добавлению в черновик config.yaml.",
+                error = null,
+                lastInsertedNames = emptyList(),
+            ),
+        )
+    }
+
+    fun selectMihomoNodeMode(mode: MihomoNodeImportMode) {
+        val current = state.mihomoNode
+        if (current.isImporting || mode == current.mode) return
+        state = state.copy(
+            mihomoNode = current.copy(
+                mode = mode,
+                message = "Выбран тип: ${mode.displayName}.",
+                error = null,
+                lastInsertedNames = emptyList(),
+            ),
+        )
+    }
+
+    fun toggleMihomoNodeGroup(name: String) {
+        val cleanName = name.trim()
+        val current = state.mihomoNode
+        if (current.isImporting || cleanName.isBlank()) return
+        val groups = current.selectedGroups.toMutableSet()
+        if (!groups.add(cleanName)) groups.remove(cleanName)
+        state = state.copy(mihomoNode = current.copy(selectedGroups = groups, error = null))
+    }
+
+    fun setAllMihomoNodeGroups(names: List<String>, selected: Boolean) {
+        val current = state.mihomoNode
+        if (current.isImporting) return
+        state = state.copy(
+            mihomoNode = current.copy(
+                selectedGroups = if (selected) names.map(String::trim).filter(String::isNotBlank).toSet() else emptySet(),
+                error = null,
+            ),
+        )
+    }
+
+    fun updateMihomoNodeAutoUpdate(enabled: Boolean) {
+        val current = state.mihomoNode
+        if (current.isImporting || current.autoUpdateSubscriptions == enabled) return
+        state = state.copy(
+            mihomoNode = current.copy(
+                autoUpdateSubscriptions = enabled,
+                error = null,
+            ),
+        )
+    }
+
+    fun updateMihomoNodeInterval(hours: Int) {
+        val current = state.mihomoNode
+        val safeHours = hours.coerceIn(1, 168)
+        if (current.isImporting || current.subscriptionIntervalHours == safeHours) return
+        state = state.copy(
+            mihomoNode = current.copy(
+                subscriptionIntervalHours = safeHours,
+                error = null,
+            ),
+        )
+    }
+
+    suspend fun importMihomoNodeDraft() {
+        val endpoint = state.dashboard.endpoint
+        val node = state.mihomoNode
+        val config = state.mihomoConfig
+        if (endpoint.isBlank() || node.isImporting || config.isBusy) return
+        if (!config.hasLoaded || config.content.isBlank()) {
+            val message = "Сначала загрузите активный config.yaml Mihomo."
+            state = state.copy(mihomoNode = node.copy(message = message, error = message))
+            return
+        }
+        if (node.source.isBlank()) {
+            val message = "Вставьте ссылку узла, подписку или конфигурацию."
+            state = state.copy(mihomoNode = node.copy(message = message, error = message))
+            return
+        }
+        state = state.copy(
+            mihomoNode = node.copy(
+                isImporting = true,
+                message = "Разбираем источник и обновляем черновик…",
+                error = null,
+            ),
+        )
+        try {
+            val result = dependencies.mihomoNode.importDraft(
+                endpoint,
+                MihomoNodeImportRequest(
+                    content = config.content,
+                    source = node.source,
+                    mode = node.mode,
+                    groups = node.selectedGroups.filter { it in mihomoProxyGroupNames(config.content) }.sorted(),
+                    autoUpdateSubscriptions = node.autoUpdateSubscriptions,
+                    intervalHours = node.subscriptionIntervalHours,
+                ),
+            )
+            if (state.dashboard.endpoint != endpoint) return
+            if (state.mihomoConfig.content != config.content) {
+                state = state.copy(
+                    mihomoNode = state.mihomoNode.copy(
+                        isImporting = false,
+                        message = "Черновик config.yaml изменился во время импорта. Повторите добавление узла.",
+                        error = "Результат импорта не применён к изменившемуся черновику.",
+                    ),
+                )
+                return
+            }
+            val names = result.insertedNames
+            val count = names.size
+            val skipped = result.skippedCount.takeIf { it > 0 }?.let { " Пропущено: $it." }.orEmpty()
+            val baseMessage = if (result.insertedKind == "provider") {
+                "Источник добавлен в proxy-providers. Проверьте выделенный фрагмент.$skipped"
+            } else if (result.insertedKind == "mixed") {
+                "Добавлено элементов: $count. Проверьте выделенный фрагмент.$skipped"
+            } else {
+                "Добавлено узлов: $count. Проверьте выделенный фрагмент.$skipped"
+            }
+            val refreshMessage = when {
+                !result.subscriptionWarning.isNullOrBlank() -> " Автообновление не сохранено: ${result.subscriptionWarning}"
+                result.registeredSubscriptions > 0 -> " Автообновление подписок: ${result.registeredSubscriptions}."
+                else -> ""
+            }
+            val message = baseMessage + refreshMessage
+            state = state.copy(
+                mainTab = MainTab.Home,
+                workspaceSection = WorkspaceSection.MihomoRouting,
+                mihomoConfig = config.copy(
+                    content = result.content,
+                    operation = MihomoConfigOperationPhase.Idle,
+                    message = message,
+                    validationLog = "",
+                    validatedContent = null,
+                    editorHighlight = MihomoEditorHighlight(
+                        start = result.highlightStart,
+                        end = result.highlightEnd,
+                        token = System.nanoTime(),
+                    ),
+                ),
+                mihomoNode = state.mihomoNode.copy(
+                    source = "",
+                    isImporting = false,
+                    message = message,
+                    error = null,
+                    lastInsertedNames = names,
+                ),
+                logs = recordLog(
+                    source = "mihomo",
+                    level = LogLevel.Info,
+                    message = "Узел Mihomo добавлен в черновик config.yaml: ${names.joinToString()}",
+                ),
+            )
+        } catch (error: CancellationException) {
+            if (state.dashboard.endpoint == endpoint) {
+                state = state.copy(mihomoNode = state.mihomoNode.copy(isImporting = false))
+            }
+            throw error
+        } catch (error: Exception) {
+            if (returnToLoginForExpiredSession(error)) return
+            if (state.dashboard.endpoint == endpoint) {
+                val message = error.toCompanionLoadMessage("Не удалось добавить узел Mihomo.")
+                state = state.copy(
+                    mihomoNode = state.mihomoNode.copy(
+                        isImporting = false,
+                        message = message,
+                        error = message,
+                    ),
+                )
+            }
+        }
+    }
+
+    fun consumeMihomoEditorHighlight(token: Long) {
+        val current = state.mihomoConfig
+        if (current.editorHighlight?.token != token) return
+        state = state.copy(mihomoConfig = current.copy(editorHighlight = null))
     }
 
     suspend fun issueTerminalConnection(
@@ -3647,6 +3835,7 @@ internal class CompanionController(
             xrayDat = unloadedXrayDatState(),
             mihomoConfig = unloadedMihomoConfigState(),
             mihomoTemplates = unloadedMihomoTemplatesState(),
+            mihomoNode = unloadedMihomoNodeState(),
             portsEditor = unloadedPortsEditorState(),
             diagnostics = initialDiagnostics().replaceDiagnostic(
                 label = "Мобильная сессия",
@@ -3727,6 +3916,7 @@ internal class CompanionController(
             xrayDat = unloadedXrayDatState(),
             mihomoConfig = unloadedMihomoConfigState(),
             mihomoTemplates = unloadedMihomoTemplatesState(),
+            mihomoNode = unloadedMihomoNodeState(),
             portsEditor = unloadedPortsEditorState(),
             diagnostics = state.diagnostics.replaceDiagnostic(
                 label = "Мобильная сессия",

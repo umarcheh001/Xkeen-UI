@@ -1064,6 +1064,7 @@ internal object JsonEditorPalette {
         backgroundColor = Color(0x501D4ED8),
     )
     val SearchMatch = Color(0xB3345790)
+    val InsertedHighlight = Color(0xA12E5F48)
 }
 
 internal enum class StructuredTextLanguage(val label: String) {

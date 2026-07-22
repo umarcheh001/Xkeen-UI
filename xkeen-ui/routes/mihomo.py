@@ -12,6 +12,7 @@ Endpoints:
  - GET  /api/mihomo-template
  - POST /api/mihomo-template
  - POST /api/mihomo/provider/probe
+ - POST /api/mihomo/node/import-draft
  - GET  /mihomo/provider.yaml
  - GET  /mihomo/hwid/provider.yaml
  - POST /api/mihomo/hwid/apply
@@ -58,6 +59,7 @@ from mihomo_server_core import (
 )
 from services.mihomo_proxy_parsers import parse_wireguard
 from services.mihomo_proxy_parsers import parse_openvpn, parse_tailscale
+from services.mihomo_node_import import build_mihomo_node_draft
 from services.mihomo_proxy_config import (
     apply_proxy_insert,
     rename_proxy_in_config,
@@ -1895,6 +1897,174 @@ def create_mihomo_blueprint(
                 exc=e,
                 status=400,
             )
+
+    @bp.post("/api/mihomo/node/import-draft")
+    def api_mihomo_node_import_draft():
+        """Parse node material and return a patched config draft without saving it."""
+        guard = _patch_guard()
+        if guard is not None:
+            return guard
+
+        data = request.get_json(silent=True) or {}
+        content = _norm_text(data.get("content") or data.get("config") or "")
+        source = _norm_text(data.get("source") or data.get("input") or data.get("text") or "")
+        mode = str(data.get("mode") or "auto").strip().lower()
+        groups = _norm_groups(data.get("groups") or [])
+        auto_update_subscriptions = bool(data.get("auto_update_subscriptions", False))
+        try:
+            interval_hours = max(1, min(int(data.get("interval_hours", 24)), 168))
+        except Exception:
+            interval_hours = 24
+        parsed_xray_sources = []
+
+        if request.content_length is None:
+            total = len(content) + len(source) + sum(len(group) for group in groups)
+            if total > _PATCH_MAX_BYTES:
+                return _api_error("payload too large", 413, ok=False)
+
+        def parse_xray_subscription(url: str, existing_names):
+            body, _headers = _xray_fetch_subscription_body(url)
+            try:
+                proxies, skipped = _xray_convert_subscription_text(
+                    body,
+                    existing_names=list(existing_names),
+                )
+            except ValueError:
+                return None
+            if not proxies:
+                raise ValueError("В подписке не найдено поддерживаемых узлов.")
+            parsed_xray_sources.append((url, list(proxies)))
+            return proxies, len(skipped or [])
+
+        def provider_target(url: str):
+            policy = _mihomo_provider_url_policy()
+            reason = _mihomo_provider_policy_block_reason(url, policy)
+            if reason:
+                raise ValueError(f"URL подписки заблокирован: {reason}")
+
+            ordinary_adapter = (
+                f"http://127.0.0.1:{_ui_loopback_port()}/mihomo/provider.yaml?"
+                + urllib.parse.urlencode({"url": url, "insecure": "0"})
+            )
+            try:
+                probe = _mh_hwid_probe_subscription_safe(
+                    url,
+                    headers={},
+                    insecure=False,
+                    timeout=8.0,
+                    prefer="head_then_range_get",
+                    policy=policy,
+                )
+            except Exception:
+                return ordinary_adapter
+            if not isinstance(probe, dict) or probe.get("ok") is not True:
+                return ordinary_adapter
+
+            current_summary: Dict[str, Any] | None = None
+            direct_headers = _mihomo_provider_direct_headers()
+            if direct_headers:
+                try:
+                    payload, meta = _mh_hwid_fetch_provider_payload(
+                        url,
+                        headers=direct_headers,
+                        insecure=False,
+                        timeout=8.0,
+                        policy=policy,
+                    )
+                    current_summary = _mihomo_provider_payload_summary(payload, meta)
+                    if current_summary.get("has_nodes"):
+                        return url, direct_headers
+                except Exception:
+                    current_summary = None
+
+            markers = dict(probe.get("hwid_response_headers") or {})
+            if current_summary:
+                markers.update(current_summary.get("hwid_response_headers") or {})
+            needs_hwid = _mihomo_hwid_headers_suggest_required(markers) or bool(
+                current_summary and current_summary.get("hwid_placeholder_provider")
+            )
+            if needs_hwid:
+                try:
+                    device = _mh_hwid_get_device_info()
+                    payload, meta = _mh_hwid_fetch_provider_payload(
+                        url,
+                        headers=device.get("headers") or {},
+                        insecure=False,
+                        timeout=8.0,
+                        policy=_mihomo_hwid_url_policy(),
+                    )
+                    hwid_summary = _mihomo_provider_payload_summary(payload, meta)
+                    current_count = int((current_summary or {}).get("node_count") or 0)
+                    if hwid_summary.get("has_nodes") and int(hwid_summary.get("node_count") or 0) > current_count:
+                        return (
+                            f"http://127.0.0.1:{_ui_loopback_port()}/mihomo/hwid/provider.yaml?"
+                            + urllib.parse.urlencode({"url": url, "insecure": "0"})
+                        )
+                except Exception:
+                    pass
+            return ordinary_adapter
+
+        try:
+            result = build_mihomo_node_draft(
+                content=content,
+                source=source,
+                mode=mode,
+                groups=groups,
+                xray_subscription_parser=parse_xray_subscription,
+                provider_url_factory=provider_target,
+            )
+        except ValueError as exc:
+            return _mihomo_error(
+                str(exc) or "Не удалось добавить узел Mihomo.",
+                status=400,
+                code="mihomo_node_import_invalid",
+            )
+        except Exception as exc:
+            return _mihomo_exception(
+                "Не удалось разобрать или добавить узел Mihomo.",
+                code="mihomo_node_import_failed",
+                hint="Проверьте ссылку, тип импорта и доступность подписки.",
+                exc=exc,
+                status=400,
+            )
+
+        registered_subscriptions = 0
+        subscription_warning = ""
+        if auto_update_subscriptions and parsed_xray_sources:
+            for url, proxies in parsed_xray_sources:
+                try:
+                    _mh_sub_sync_imported_xray_subscription(
+                        ui_state_dir,
+                        url=url,
+                        config_text=result.content,
+                        proxy_yamls=[proxy.yaml for proxy in proxies],
+                        groups=groups,
+                        interval_hours=interval_hours,
+                        refresh_parser="xray-json",
+                    )
+                    registered_subscriptions += 1
+                except Exception as exc:
+                    subscription_warning = str(exc or "Не удалось сохранить автообновление подписки.")
+                    current_app.logger.warning(
+                        "mihomo.node_import.subscription_register_failed: %s",
+                        subscription_warning,
+                    )
+
+        return jsonify(
+            {
+                "ok": True,
+                "content": result.content,
+                "inserted_names": list(result.inserted_names),
+                "inserted_kind": result.inserted_kind,
+                "skipped_count": result.skipped_count,
+                "registered_subscriptions": registered_subscriptions,
+                "subscription_warning": subscription_warning,
+                "highlight": {
+                    "start": result.highlight_start,
+                    "end": result.highlight_end,
+                },
+            }
+        ), 200
 
     @bp.get("/api/mihomo/subscriptions")
     def api_mihomo_subscriptions_list():
