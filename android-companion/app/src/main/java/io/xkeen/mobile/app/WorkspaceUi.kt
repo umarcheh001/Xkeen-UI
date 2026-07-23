@@ -354,6 +354,7 @@ private fun RoutingDocumentPage(
 
         else -> StructuredTextEditor(
             value = document.draftContent,
+            baselineValue = document.savedDraftContent,
             language = StructuredTextLanguage.Jsonc,
             onValueChange = onValueChange,
             onMetricsChange = onMetricsChange,
@@ -921,6 +922,7 @@ internal fun EditorToolbarButton(
 @Composable
 internal fun StructuredTextEditor(
     value: String,
+    baselineValue: String,
     language: StructuredTextLanguage,
     onValueChange: (String) -> Unit,
     onMetricsChange: (EditorMetrics) -> Unit,
@@ -949,6 +951,7 @@ internal fun StructuredTextEditor(
                 requestedLineCount.value = totalLines
                 showGoToLine.value = true
             }
+            view.setChangeBaseline(baselineValue)
             view.setDocumentText(value)
         },
         modifier = modifier
@@ -1062,6 +1065,8 @@ internal object JsonEditorPalette {
     )
     val SearchMatch = Color(0xB3345790)
     val InsertedHighlight = Color(0xA12E5F48)
+    val ModifiedLine = Color(0x1AFFB74D)
+    val ModifiedLineMarker = Color(0xD9FFB74D)
 }
 
 internal enum class StructuredTextLanguage(val label: String) {

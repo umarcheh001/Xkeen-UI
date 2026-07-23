@@ -224,6 +224,7 @@ internal fun PortsWorkspaceScreen(
                 else -> key(document.id) {
                     StructuredTextEditor(
                         value = document.content,
+                        baselineValue = document.savedContent,
                         language = if (document.id.isJson) {
                             StructuredTextLanguage.Jsonc
                         } else {

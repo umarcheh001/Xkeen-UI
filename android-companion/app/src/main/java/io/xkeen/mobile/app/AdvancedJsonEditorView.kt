@@ -71,7 +71,10 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
     private var documentIndex = EditorDocumentIndex.build("")
     private var suppressCallbacks = false
     private var lastKnownText = ""
+    private var changeBaseline = ""
+    private var changedLineRanges = emptyList<IntRange>()
     private val highlightRunnable = Runnable(::applySyntaxHighlight)
+    private val changeHighlightRunnable = Runnable(::applyChangeHighlight)
 
     var onTextChanged: (String) -> Unit = {}
     var onMetricsChanged: (EditorMetrics) -> Unit = {}
@@ -135,6 +138,12 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
             ),
             notifyTextChanged = false,
         )
+    }
+
+    fun setChangeBaseline(value: String) {
+        if (value == changeBaseline) return
+        changeBaseline = value
+        scheduleChangeHighlight(delayMillis = 0L)
     }
 
     fun goToLine(line: Int) {
@@ -256,6 +265,7 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         removeCallbacks(highlightRunnable)
+        removeCallbacks(changeHighlightRunnable)
         super.onDetachedFromWindow()
     }
 
@@ -339,6 +349,7 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
                 onTextChanged(updatedText)
                 notifyMetrics()
                 scheduleSyntaxHighlight(delayMillis = SyntaxHighlightDelayMillis)
+                scheduleChangeHighlight(delayMillis = ChangeHighlightDelayMillis)
             }
         })
     }
@@ -471,6 +482,7 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         if (notifyTextChanged) onTextChanged(value.text)
         notifyMetrics()
         scheduleSyntaxHighlight(delayMillis = 0L)
+        scheduleChangeHighlight(delayMillis = 0L)
     }
 
     private fun notifyMetrics() {
@@ -487,6 +499,7 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
 
     private fun updateDocumentIndex(source: String) {
         documentIndex = EditorDocumentIndex.build(source)
+        editor.documentIndex = documentIndex
         gutter.documentIndex = documentIndex
         val wantedWidth = gutter.requiredWidth()
         if (wantedWidth == gutterWidth) return
@@ -520,6 +533,19 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
     private fun scheduleSyntaxHighlight(delayMillis: Long) {
         removeCallbacks(highlightRunnable)
         postDelayed(highlightRunnable, delayMillis)
+    }
+
+    private fun scheduleChangeHighlight(delayMillis: Long) {
+        removeCallbacks(changeHighlightRunnable)
+        postDelayed(changeHighlightRunnable, delayMillis)
+    }
+
+    private fun applyChangeHighlight() {
+        val source = lastKnownText.takeIf { it.length == editor.length() }
+            ?: editor.text?.toString().orEmpty()
+        changedLineRanges = editorChangedLineRanges(changeBaseline, source)
+        editor.changedLineRanges = changedLineRanges
+        gutter.changedLineRanges = changedLineRanges
     }
 
     private fun applySyntaxHighlight() {
@@ -585,6 +611,7 @@ internal class AdvancedJsonEditorView @JvmOverloads constructor(
         const val MinGutterWidthDp = 36f
         const val MaxCompactTabStops = 16
         const val SyntaxHighlightDelayMillis = 220L
+        const val ChangeHighlightDelayMillis = 160L
         const val VisibleSyntaxHighlightDelayMillis = 90L
         const val SyntaxHighlightLineBuffer = 24
         const val MaxFullHighlightCharacters = 80_000
@@ -630,12 +657,23 @@ private class SelectionAwareEditText(context: Context) : AppCompatEditText(conte
     private var touchDownX = 0f
     private var touchDownY = 0f
     private var touchDownTime = 0L
+    var changedLineRanges: List<IntRange> = emptyList()
+        set(value) {
+            if (field == value) return
+            field = value
+            invalidate()
+        }
+    var documentIndex: EditorDocumentIndex = EditorDocumentIndex.build("")
     private val spaceMarkerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = JsonEditorPalette.LineNumber.copy(alpha = SpaceMarkerAlpha).toArgb()
     }
     private val spaceMarkerRadius = context.dp(SpaceMarkerRadiusDp).toFloat()
+    private val changedLinePaint = Paint().apply {
+        color = JsonEditorPalette.ModifiedLine.toArgb()
+    }
 
     override fun onDraw(canvas: Canvas) {
+        drawVisibleChangedLines(canvas)
         super.onDraw(canvas)
         drawVisibleSpaceMarkers(canvas)
     }
@@ -785,6 +823,26 @@ private class SelectionAwareEditText(context: Context) : AppCompatEditText(conte
         }
     }
 
+    private fun drawVisibleChangedLines(canvas: Canvas) {
+        if (changedLineRanges.isEmpty()) return
+        val layout = layout ?: return
+        if (layout.lineCount <= 0 || height <= 0) return
+
+        val firstVisibleLine = layout.getLineForVertical(scrollY.coerceAtLeast(0))
+        val lastVisibleLine = layout.getLineForVertical((scrollY + height).coerceAtLeast(0))
+        for (visualLine in firstVisibleLine..lastVisibleLine) {
+            val logicalLine = documentIndex.cursorAt(layout.getLineStart(visualLine)).line
+            if (!changedLineRanges.containsEditorLine(logicalLine)) continue
+            canvas.drawRect(
+                scrollX.toFloat(),
+                (totalPaddingTop + layout.getLineTop(visualLine)).toFloat(),
+                (scrollX + width).toFloat(),
+                (totalPaddingTop + layout.getLineBottom(visualLine)).toFloat(),
+                changedLinePaint,
+            )
+        }
+    }
+
     private companion object {
         const val SpaceMarkerAlpha = 0.42f
         const val SpaceMarkerRadiusDp = 1.05f
@@ -818,6 +876,12 @@ private class EditorGutterView(
             field = value
             invalidate()
         }
+    var changedLineRanges: List<IntRange> = emptyList()
+        set(value) {
+            if (field == value) return
+            field = value
+            invalidate()
+        }
 
     private val numberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = JsonEditorPalette.LineNumber.toArgb()
@@ -828,6 +892,9 @@ private class EditorGutterView(
     private val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = JsonEditorPalette.IndentGuide.toArgb()
         strokeWidth = context.dp(1f).toFloat()
+    }
+    private val changedLinePaint = Paint().apply {
+        color = JsonEditorPalette.ModifiedLineMarker.toArgb()
     }
 
     init {
@@ -855,6 +922,17 @@ private class EditorGutterView(
         for (visualLine in firstVisualLine..lastVisualLine) {
             val lineStart = layout.getLineStart(visualLine)
             val logicalLine = documentIndex.cursorAt(lineStart).line
+            if (changedLineRanges.containsEditorLine(logicalLine)) {
+                val top = editor.totalPaddingTop + layout.getLineTop(visualLine) - editor.scrollY
+                val bottom = editor.totalPaddingTop + layout.getLineBottom(visualLine) - editor.scrollY
+                canvas.drawRect(
+                    0f,
+                    top.toFloat(),
+                    context.dp(3f).toFloat(),
+                    bottom.toFloat(),
+                    changedLinePaint,
+                )
+            }
             if (documentIndex.offsetForLine(logicalLine) != lineStart) continue
             numberPaint.color = if (logicalLine == selectedLogicalLine) {
                 JsonEditorPalette.Cursor.toArgb()
@@ -868,6 +946,14 @@ private class EditorGutterView(
         }
         canvas.drawLine(width - 1f, 0f, width - 1f, height.toFloat(), dividerPaint)
     }
+}
+
+private fun List<IntRange>.containsEditorLine(line: Int): Boolean {
+    for (range in this) {
+        if (line < range.first) return false
+        if (line <= range.last) return true
+    }
+    return false
 }
 
 private class NativeEditorFastScroller(

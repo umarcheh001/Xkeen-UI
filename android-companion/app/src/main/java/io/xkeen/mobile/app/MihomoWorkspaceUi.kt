@@ -214,6 +214,7 @@ internal fun MihomoRoutingWorkspaceScreen(
 
                 else -> StructuredTextEditor(
                     value = config.content,
+                    baselineValue = config.savedContent,
                     language = StructuredTextLanguage.Yaml,
                     onValueChange = controller::updateMihomoConfig,
                     onMetricsChange = { metrics.value = it },

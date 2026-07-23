@@ -155,6 +155,39 @@ class EditorEngineTest {
     }
 
     @Test
+    fun changedLineRangesTrackSeparateEditsAgainstSavedContent() {
+        val saved = "one\ntwo\nthree\nfour"
+        val edited = "one\nTWO\nthree\nFOUR"
+
+        assertEquals(listOf(2..2, 4..4), editorChangedLineRanges(saved, edited))
+        assertEquals(emptyList<IntRange>(), editorChangedLineRanges(saved, saved))
+    }
+
+    @Test
+    fun changedLineRangesDoNotMarkUnchangedLinesShiftedByInsertion() {
+        val saved = "alpha\ngamma\nomega"
+        val edited = "alpha\nbeta\ngamma\nomega"
+
+        assertEquals(listOf(2..2), editorChangedLineRanges(saved, edited))
+    }
+
+    @Test
+    fun changedLineRangesAnchorDeletedContentToNearestRemainingLine() {
+        assertEquals(
+            listOf(2..2),
+            editorChangedLineRanges("alpha\nbeta\ngamma", "alpha\ngamma"),
+        )
+        assertEquals(
+            listOf(1..1),
+            editorChangedLineRanges("alpha\nbeta", "alpha"),
+        )
+        assertEquals(
+            listOf(1..1),
+            editorChangedLineRanges("alpha", ""),
+        )
+    }
+
+    @Test
     fun documentIndexHandlesLargeRoutingDocument() {
         val source = buildString {
             repeat(100_000) { line -> append("rule-").append(line).append('\n') }
