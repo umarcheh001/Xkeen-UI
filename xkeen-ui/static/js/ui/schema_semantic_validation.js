@@ -1517,14 +1517,19 @@ export function validateXrayRoutingSemantics(data, options = {}) {
       }));
     }
 
-    inboundTagList.forEach((tag, inboundIndex) => {
-      if (!inboundTags.length || inboundTags.includes(tag)) return;
-      const available = previewNames(inboundTags);
-      pushDiagnostic(diagnostics, createJsonDiagnostic(`${rulePointer}/inboundTag/${inboundIndex}`, `${quoteRuleLabel(ruleTag, index)} ссылается на inboundTag "${tag}", но такого inbound нет.${available ? ` Сейчас доступны: ${available}.` : ''}`, {
-        source: 'xray-semantic',
-        code: 'inbound-tag-missing',
-      }));
-    });
+    // inboundTag is an OR-selector: a rule remains valid as long as at least one
+    // listed inbound exists. This is important for shared routing fragments that
+    // intentionally cover alternative modes such as ["redirect", "tproxy"].
+    const hasKnownInboundAlternative = inboundTagList.some((tag) => inboundTags.includes(tag));
+    if (inboundTags.length && inboundTagList.length && !hasKnownInboundAlternative) {
+      inboundTagList.forEach((tag, inboundIndex) => {
+        const available = previewNames(inboundTags);
+        pushDiagnostic(diagnostics, createJsonDiagnostic(`${rulePointer}/inboundTag/${inboundIndex}`, `${quoteRuleLabel(ruleTag, index)} ссылается на inboundTag "${tag}", но такого inbound нет.${available ? ` Сейчас доступны: ${available}.` : ''}`, {
+          source: 'xray-semantic',
+          code: 'inbound-tag-missing',
+        }));
+      });
+    }
   });
 
   detectPrivateIpRuleOrdering(rules, shape.rulesPointer, diagnostics);

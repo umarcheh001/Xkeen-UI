@@ -448,6 +448,77 @@ console.log(JSON.stringify(result.map((item) => ({
     assert "/routing/rules/0/inboundTag/0" not in pointers
 
 
+def test_xray_semantic_validation_accepts_available_inbound_tag_alternative():
+    script = """
+import { validateXrayRoutingSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const result = validateXrayRoutingSemantics({
+  routing: {
+    rules: [
+      {
+        inboundTag: ['redirect', 'tproxy'],
+        outboundTag: 'direct'
+      }
+    ]
+  }
+}, {
+  knownInboundTags: ['tproxy'],
+  knownOutboundTags: ['direct']
+});
+
+console.log(JSON.stringify(result.map((item) => ({
+  pointer: item.pointer || '',
+  code: item.code || '',
+  message: item.message || '',
+}))));
+"""
+
+    payload = _run_node_json(script)
+
+    assert not any(
+        str(item["code"]) == "inbound-tag-missing"
+        for item in payload
+    )
+
+
+def test_xray_semantic_validation_reports_when_all_inbound_tag_alternatives_are_missing():
+    script = """
+import { validateXrayRoutingSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const result = validateXrayRoutingSemantics({
+  routing: {
+    rules: [
+      {
+        inboundTag: ['redirect', 'dokodemo-in'],
+        outboundTag: 'direct'
+      }
+    ]
+  }
+}, {
+  knownInboundTags: ['tproxy'],
+  knownOutboundTags: ['direct']
+});
+
+console.log(JSON.stringify(result.map((item) => ({
+  pointer: item.pointer || '',
+  code: item.code || '',
+  message: item.message || '',
+}))));
+"""
+
+    payload = _run_node_json(script)
+    missing_pointers = {
+        str(item["pointer"])
+        for item in payload
+        if str(item["code"]) == "inbound-tag-missing"
+    }
+
+    assert missing_pointers == {
+        "/routing/rules/0/inboundTag/0",
+        "/routing/rules/0/inboundTag/1",
+    }
+
+
 def test_xray_semantic_validation_reports_protocol_specific_settings_gaps():
     script = """
 import { validateXrayConfigSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
