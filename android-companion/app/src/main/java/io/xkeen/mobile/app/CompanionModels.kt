@@ -7,6 +7,42 @@ enum class AppPhase {
     Ready,
 }
 
+/** State of the optional GitHub release update flow. */
+enum class AppUpdatePhase {
+    Idle,
+    Checking,
+    UpToDate,
+    Available,
+    Downloading,
+    ReadyToInstall,
+    Error,
+}
+
+data class AppUpdateRelease(
+    val tagName: String,
+    val version: String,
+    val title: String,
+    val notes: String,
+    val releaseUrl: String,
+    val apkUrl: String,
+    val apkName: String,
+    val apkSizeBytes: Long,
+    val publishedAt: String,
+    val isPrerelease: Boolean,
+    val checksumUrl: String? = null,
+)
+
+data class AppUpdateState(
+    val phase: AppUpdatePhase = AppUpdatePhase.Idle,
+    val currentVersion: String = "",
+    val release: AppUpdateRelease? = null,
+    val progressPercent: Int = 0,
+    val downloadedBytes: Long = 0,
+    val totalBytes: Long = 0,
+    val checkedAt: String? = null,
+    val error: String? = null,
+)
+
 enum class MainTab {
     Routing,
     Home,
@@ -958,6 +994,7 @@ data class CompanionUiState(
     val diagnostics: List<DiagnosticItem> = initialDiagnostics(),
     val pendingAction: PendingAction? = null,
     val serviceOperation: ServiceOperationState = ServiceOperationState(),
+    val appUpdate: AppUpdateState = AppUpdateState(),
 )
 
 /**

@@ -2,7 +2,7 @@
 
 Android companion-приложение для Xkeen-UI. Каталог `android-companion/` уже является рабочим implementation baseline, а не пустым skeleton: проект собирается, проходит unit tests и содержит живой Compose shell с частичной backend-интеграцией.
 
-## Текущее состояние на 2026-07-22
+## Текущее состояние на 2026-07-25
 
 - Приложение проходит через фазы `Launching`, `Connections`, `Pair/Login` и `Ready`.
 - На `Launching` приложение загружает из app-private storage список узлов, их базовый metadata state и последний выбранный узел; trusted material выбранного узла проверяется server bootstrap до открытия `Ready`.
@@ -14,6 +14,7 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - `Ready`-состояние построено как capability-aware workspace с компактной верхней панелью, отдельной кнопкой `Core` и безопасными действиями `start`, `stop`, `restart` через confirm dialog.
 - `start`, `stop`, `restart` и смена `Core` выполняются реальным `WebPanelServiceActionsPort`; успех показывается только после повторного чтения runtime/core state с сервера.
 - Подтверждение service/core action использует bounded polling: переходный snapshot во время перезапуска (в частности `stopped / Xray` при Mihomo → Xray) не считается немедленной ошибкой. Клиент ждёт server-confirmed целевое состояние до 15 секунд, не подменяя его локальным success.
+- Проверка обновления Xkeen Mobile запускается независимо от подключения к роутеру. Доступный APK показывается в workspace и на экране подключений, загружается только с разрешённых HTTPS-адресов GitHub, проверяется по SHA-256, package name, `versionName`, возрастающему `versionCode` и signing certificate, после чего передаётся системному установщику Android.
 
 Этапы 5 и 6 закрыты 2026-07-16; приемка зафиксирована в [stage-5-closure-checklist.md](stage-5-closure-checklist.md) и [stage-6-closure-checklist.md](stage-6-closure-checklist.md). Service/core actions теперь backend-backed и server-confirmed. Реализация и пакет этапа 7 готовы, но финальная отметка требует повторного smoke-test на узле после совместного обновления Xkeen UI и APK; детали находятся в [stage-7-closure-checklist.md](stage-7-closure-checklist.md).
 
@@ -158,7 +159,23 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - `targetSdk 36`
 - `minSdk 28`
 - Java/Kotlin target `17`
-- Версия приложения `0.2.1`
+- Версия приложения `0.3.0-beta.1` (`versionCode 5`)
+
+## Обновление приложения через GitHub Releases
+
+Приложение использует публичный GitHub Releases API репозитория и не передаёт туда сессию Xkeen UI, пароли или данные роутера. Для обновления подходят только недрафтовые релизы со следующей парой assets:
+
+- `xkeen-mobile-<version>.apk` и `xkeen-mobile-<version>.apk.sha256` — предпочтительный вариант;
+- либо совместимая пара `xkeen-mobile-beta.apk` и `xkeen-mobile-beta.apk.sha256`, если строка release notes с `Android` содержит semver мобильной версии.
+
+Перед публикацией следующей версии обязательно:
+
+1. увеличить и `versionName`, и `versionCode` в `app/build.gradle.kts`;
+2. подписать APK тем же ключом, что предыдущую опубликованную версию — Android не установит APK с другим ключом поверх существующего приложения;
+3. создать GitHub Release обычным workflow панели;
+4. запустить `Publish Android beta` для этого тега.
+
+Workflow требует repository secrets `XKEEN_ANDROID_KEYSTORE_BASE64`, `XKEEN_ANDROID_KEYSTORE_PASSWORD`, `XKEEN_ANDROID_KEY_ALIAS` и `XKEEN_ANDROID_KEY_PASSWORD`. В первый secret помещается base64 исходного keystore без переносов строк. Signing material не должен добавляться в git. Опубликованный `v2.5.0` APK подписан текущим beta-ключом с SHA-256 fingerprint `05819dce865a15d3df466de8efc4733e03d8f6d9beb7c42bf5e1ab9d43b26abc`; для бесшовного обновления workflow должен использовать именно этот ключ (или совместимую Android signing lineage).
 
 ## Прокси / Outbounds
 

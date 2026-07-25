@@ -1,5 +1,6 @@
 package io.xkeen.mobile.app
 
+import android.content.Context
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.security.SecureRandom
@@ -174,6 +175,7 @@ internal data class CompanionControllerDependencies(
     val mihomoNode: MihomoNodePort = DemoMihomoNodePort(),
     val mihomoHwid: MihomoHwidPort = DemoMihomoHwidPort(),
     val xrayLogsPreferences: XrayLogsPreferencesPort = InMemoryXrayLogsPreferencesPort(),
+    val appUpdate: AppUpdatePort = InMemoryAppUpdatePort(),
 )
 
 internal fun defaultCompanionControllerDependencies(
@@ -181,6 +183,8 @@ internal fun defaultCompanionControllerDependencies(
     sessionMaterials: SessionMaterialStore = InMemorySessionMaterialStore(),
     transport: CompanionHttpTransport? = null,
     xrayLogsPreferences: XrayLogsPreferencesPort = InMemoryXrayLogsPreferencesPort(),
+    appContext: Context? = null,
+    appUpdate: AppUpdatePort? = null,
 ): CompanionControllerDependencies {
     val journal = SystemCompanionJournalPort()
     val authHook = SessionMaterialAuthHook(connections, sessionMaterials)
@@ -222,6 +226,7 @@ internal fun defaultCompanionControllerDependencies(
         mihomoNode = WebPanelMihomoNodePort(serviceTransport),
         mihomoHwid = WebPanelMihomoHwidPort(serviceTransport),
         xrayLogsPreferences = xrayLogsPreferences,
+        appUpdate = appUpdate ?: appContext?.let(::GitHubAppUpdatePort) ?: InMemoryAppUpdatePort(),
     )
 }
 

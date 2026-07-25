@@ -1,0 +1,122 @@
+name: Publish Android beta
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing GitHub Release tag (for example v2.6.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-android-beta-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Require Android signing secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.XKEEN_ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.XKEEN_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.XKEEN_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.XKEEN_ANDROID_KEY_PASSWORD }}
+        run: |
+          for value in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [[ -z "${!value}" ]]; then
+              echo "Required Android signing secret is missing: $value" >&2
+              exit 1
+            fi
+          done
+
+      - name: Restore signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.XKEEN_ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/xkeen-mobile-release.jks"
+          chmod 600 "$RUNNER_TEMP/xkeen-mobile-release.jks"
+
+      - name: Test, lint and build signed APK
+        working-directory: android-companion
+        env:
+          XKEEN_ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/xkeen-mobile-release.jks
+          XKEEN_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.XKEEN_ANDROID_KEYSTORE_PASSWORD }}
+          XKEEN_ANDROID_KEY_ALIAS: ${{ secrets.XKEEN_ANDROID_KEY_ALIAS }}
+          XKEEN_ANDROID_KEY_PASSWORD: ${{ secrets.XKEEN_ANDROID_KEY_PASSWORD }}
+        run: ./gradlew testDebugUnitTest lintRelease assembleRelease --no-daemon --console=plain
+
+      - name: Verify APK signing identity
+        env:
+          EXPECTED_SIGNER_SHA256: 05819dce865a15d3df466de8efc4733e03d8f6d9beb7c42bf5e1ab9d43b26abc
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n1)"
+          if [[ -z "$APKSIGNER" ]]; then
+            echo "Android apksigner was not found" >&2
+            exit 1
+          fi
+          APK=android-companion/app/build/outputs/apk/release/app-release.apk
+          "$APKSIGNER" verify "$APK"
+          ACTUAL_SIGNER_SHA256="$("$APKSIGNER" verify --print-certs "$APK" \
+            | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n1)"
+          if [[ "$ACTUAL_SIGNER_SHA256" != "$EXPECTED_SIGNER_SHA256" ]]; then
+            echo "APK signer does not match the published Android beta" >&2
+            exit 1
+          fi
+
+      - name: Prepare versioned release assets
+        id: mobile
+        run: |
+          VERSION="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' android-companion/app/build.gradle.kts | head -n1)"
+          VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\)/\1/p' android-companion/app/build.gradle.kts | head -n1)"
+          if [[ -z "$VERSION" || -z "$VERSION_CODE" ]]; then
+            echo "Could not read Android versionName/versionCode" >&2
+            exit 1
+          fi
+          mkdir -p dist-mobile
+          cp android-companion/app/build/outputs/apk/release/app-release.apk \
+            "dist-mobile/xkeen-mobile-$VERSION.apk"
+          cp "dist-mobile/xkeen-mobile-$VERSION.apk" dist-mobile/xkeen-mobile-beta.apk
+          sha256sum "dist-mobile/xkeen-mobile-$VERSION.apk" \
+            > "dist-mobile/xkeen-mobile-$VERSION.apk.sha256"
+          sha256sum dist-mobile/xkeen-mobile-beta.apk \
+            > dist-mobile/xkeen-mobile-beta.apk.sha256
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: xkeen-mobile-${{ steps.mobile.outputs.version }}
+          path: dist-mobile/
+          if-no-files-found: error
+
+      - name: Upload APK to existing GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          VERSION: ${{ steps.mobile.outputs.version }}
+        run: |
+          gh release view "$TAG" >/dev/null
+          gh release upload "$TAG" \
+            "dist-mobile/xkeen-mobile-$VERSION.apk" \
+            "dist-mobile/xkeen-mobile-$VERSION.apk.sha256" \
+            dist-mobile/xkeen-mobile-beta.apk \
+            dist-mobile/xkeen-mobile-beta.apk.sha256 \
+            --clobber

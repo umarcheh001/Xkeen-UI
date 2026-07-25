@@ -53,3 +53,8 @@ e2e/.auth/
 .gobin/
 go-check.*/
 xray_geo_probe/
+
+# Android signing material must never enter the repository.
+*.jks
+*.keystore
+android-companion/signing.properties

@@ -29,6 +29,8 @@
 
 Beta APK публикуется в [GitHub Releases](https://github.com/umarcheh001/Xkeen-UI/releases) как `xkeen-mobile-beta.apk`. Для корректной работы используйте приложение вместе с актуальной версией панели.
 
+Приложение также само проверяет GitHub Releases при запуске. Перед открытием системного установщика оно требует парный `.sha256`, проверяет контрольную сумму, package/version APK и тот же Android signing certificate. Проверка доступна и до входа в роутер — на экране подключений. Android может один раз попросить разрешить установку из Xkeen Mobile.
+
 Установка через ADB:
 
 ```sh

@@ -91,9 +91,11 @@ private data class WorkspaceDrawerEntry(
 internal fun WorkspaceNavigationFrame(
     state: CompanionUiState,
     controller: CompanionController,
+    onAppUpdate: () -> Unit,
     content: @Composable (
         openDrawer: () -> Unit,
         openCoreDialog: () -> Unit,
+        openAppUpdateDialog: () -> Unit,
     ) -> Unit,
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -126,6 +128,7 @@ internal fun WorkspaceNavigationFrame(
                     }
                 },
                 onConnections = { closeDrawer(controller::openConnections) },
+                onAppUpdate = { closeDrawer(onAppUpdate) },
             )
         },
     ) {
@@ -139,6 +142,10 @@ internal fun WorkspaceNavigationFrame(
                 if (!state.serviceOperation.isPending && !state.isWorkspaceRefreshing) {
                     showCoreDialog = true
                 }
+            },
+            {
+                focusManager.clearEditorFocus()
+                onAppUpdate()
             },
         )
     }
@@ -170,6 +177,7 @@ internal fun WorkspaceNavigationFrame(
             },
         )
     }
+
 }
 
 private fun FocusManager.clearEditorFocus() {
@@ -181,6 +189,7 @@ private fun WorkspaceDrawer(
     state: CompanionUiState,
     onSectionSelected: (WorkspaceSection) -> Unit,
     onConnections: () -> Unit,
+    onAppUpdate: () -> Unit,
 ) {
     val entries = remember(state.mainTab, state.dashboard.availableCores) {
         drawerEntries(state.mainTab).filter { entry ->
@@ -304,6 +313,58 @@ private fun WorkspaceDrawer(
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onAppUpdate)
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
+                if (state.appUpdate.phase in setOf(AppUpdatePhase.Checking, AppUpdatePhase.Downloading)) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = WebPanelPalette.TextBlue,
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Outlined.CloudDownload,
+                        contentDescription = null,
+                        tint = when (state.appUpdate.phase) {
+                            AppUpdatePhase.Available,
+                            AppUpdatePhase.ReadyToInstall,
+                            -> WebPanelPalette.Success
+                            AppUpdatePhase.Error -> WebPanelPalette.Warning
+                            else -> WebPanelPalette.TextBlue
+                        },
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Text(
+                        text = "Обновление приложения",
+                        color = WebPanelPalette.Text,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = when (state.appUpdate.phase) {
+                            AppUpdatePhase.Idle -> "Проверить GitHub Releases"
+                            AppUpdatePhase.Checking -> "Проверяем GitHub…"
+                            AppUpdatePhase.UpToDate -> "Установлена последняя версия"
+                            AppUpdatePhase.Available -> "Доступна ${state.appUpdate.release?.version.orEmpty()}"
+                            AppUpdatePhase.Downloading -> "Загрузка · ${state.appUpdate.progressPercent}%"
+                            AppUpdatePhase.ReadyToInstall -> "APK готов к установке"
+                            AppUpdatePhase.Error -> state.appUpdate.error ?: "Проверка не удалась"
+                        },
+                        color = WebPanelPalette.Muted,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             Row(
                 modifier = Modifier

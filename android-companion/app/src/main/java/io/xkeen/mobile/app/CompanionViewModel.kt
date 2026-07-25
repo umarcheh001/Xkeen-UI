@@ -13,6 +13,7 @@ internal class CompanionViewModel(application: Application) : AndroidViewModel(a
             connections = persistedConnectionsPort(application),
             sessionMaterials = secureSessionMaterialStore(application),
             xrayLogsPreferences = persistedXrayLogsPreferencesPort(application),
+            appContext = application,
         ),
     )
 }

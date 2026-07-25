@@ -3,8 +3,13 @@ package io.xkeen.mobile.app
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import io.xkeen.mobile.BuildConfig
+import kotlin.coroutines.ContinuationInterceptor
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 
@@ -16,6 +21,9 @@ internal class CompanionController(
 ) {
     var state by mutableStateOf(
         initialState.copy(
+            appUpdate = initialState.appUpdate.copy(
+                currentVersion = initialState.appUpdate.currentVersion.ifBlank { BuildConfig.VERSION_NAME },
+            ),
             logs = dependencies.xrayLogsPreferences.load()
                 ?.let(initialState.logs::withXrayLogsPreferences)
                 ?: initialState.logs,
@@ -32,6 +40,7 @@ internal class CompanionController(
     private var xrayLogsControlGeneration: Long = 0
     private val logCursors = mutableMapOf<String, String>()
     private val xrayLogDomainResolver = XrayLogDomainResolver()
+    private var downloadedUpdate: AppUpdateDownload? = null
 
     private data class RoutingValidationRequest(
         val documentId: String,
@@ -39,6 +48,140 @@ internal class CompanionController(
         val connectionId: String?,
         val endpoint: String,
     )
+
+    suspend fun checkForAppUpdate() {
+        val current = state.appUpdate.currentVersion.ifBlank { BuildConfig.VERSION_NAME }
+        if (state.appUpdate.phase == AppUpdatePhase.Checking ||
+            state.appUpdate.phase == AppUpdatePhase.Downloading
+        ) return
+
+        downloadedUpdate = null
+        state = state.copy(
+            appUpdate = state.appUpdate.copy(
+                phase = AppUpdatePhase.Checking,
+                currentVersion = current,
+                release = null,
+                error = null,
+                progressPercent = 0,
+                downloadedBytes = 0,
+                totalBytes = 0,
+            ),
+        )
+        try {
+            when (val result = dependencies.appUpdate.check(current)) {
+                AppUpdateCheckResult.UpToDate -> state = state.copy(
+                    appUpdate = state.appUpdate.copy(
+                        phase = AppUpdatePhase.UpToDate,
+                        release = null,
+                        checkedAt = dependencies.journal.shortTime(),
+                        error = null,
+                    ),
+                )
+
+                is AppUpdateCheckResult.Available -> state = state.copy(
+                    appUpdate = state.appUpdate.copy(
+                        phase = AppUpdatePhase.Available,
+                        release = result.release,
+                        checkedAt = dependencies.journal.shortTime(),
+                        error = null,
+                    ),
+                )
+
+                is AppUpdateCheckResult.Unavailable -> state = state.copy(
+                    appUpdate = state.appUpdate.copy(
+                        phase = AppUpdatePhase.Error,
+                        checkedAt = dependencies.journal.shortTime(),
+                        error = result.message,
+                    ),
+                )
+            }
+        } catch (error: CancellationException) {
+            state = state.copy(appUpdate = state.appUpdate.copy(phase = AppUpdatePhase.Idle))
+            throw error
+        } catch (error: Exception) {
+            state = state.copy(
+                appUpdate = state.appUpdate.copy(
+                    phase = AppUpdatePhase.Error,
+                    checkedAt = dependencies.journal.shortTime(),
+                    error = error.message?.takeIf(String::isNotBlank)
+                        ?: "Не удалось проверить обновления",
+                ),
+            )
+        }
+    }
+
+    suspend fun downloadAppUpdate() {
+        val release = state.appUpdate.release ?: return
+        if (state.appUpdate.phase == AppUpdatePhase.Downloading) return
+        val callerDispatcher = currentCoroutineContext()[ContinuationInterceptor]
+            ?: EmptyCoroutineContext
+        downloadedUpdate = null
+        state = state.copy(
+            appUpdate = state.appUpdate.copy(
+                phase = AppUpdatePhase.Downloading,
+                progressPercent = 0,
+                downloadedBytes = 0,
+                totalBytes = release.apkSizeBytes,
+                error = null,
+            ),
+        )
+        try {
+            val download = dependencies.appUpdate.download(release) { downloaded, total ->
+                withContext(callerDispatcher) {
+                    if (state.appUpdate.phase == AppUpdatePhase.Downloading &&
+                        state.appUpdate.release?.tagName == release.tagName
+                    ) {
+                        val effectiveTotal = total.takeIf { it > 0 } ?: release.apkSizeBytes
+                        state = state.copy(
+                            appUpdate = state.appUpdate.copy(
+                                downloadedBytes = downloaded,
+                                totalBytes = effectiveTotal,
+                                progressPercent = if (effectiveTotal > 0) {
+                                    ((downloaded * 100L) / effectiveTotal).toInt().coerceIn(0, 100)
+                                } else {
+                                    0
+                                },
+                            ),
+                        )
+                    }
+                }
+            }
+            downloadedUpdate = download
+            state = state.copy(
+                appUpdate = state.appUpdate.copy(
+                    phase = AppUpdatePhase.ReadyToInstall,
+                    progressPercent = 100,
+                    downloadedBytes = download.file.length(),
+                    totalBytes = download.file.length(),
+                    error = null,
+                ),
+            )
+        } catch (error: CancellationException) {
+            state = state.copy(appUpdate = state.appUpdate.copy(phase = AppUpdatePhase.Available))
+            throw error
+        } catch (error: Exception) {
+            state = state.copy(
+                appUpdate = state.appUpdate.copy(
+                    phase = AppUpdatePhase.Error,
+                    error = error.message?.takeIf(String::isNotBlank) ?: "Не удалось скачать APK",
+                ),
+            )
+        }
+    }
+
+    fun installAppUpdate(): AppUpdateInstallResult {
+        val download = downloadedUpdate ?: return AppUpdateInstallResult.Failed
+        val result = dependencies.appUpdate.install(download)
+        if (result == AppUpdateInstallResult.Failed) {
+            state = state.copy(
+                appUpdate = state.appUpdate.copy(
+                    phase = AppUpdatePhase.Error,
+                    error = "Не удалось открыть системный установщик APK",
+                ),
+            )
+        }
+        return result
+    }
 
     suspend fun finishLaunch() {
         if (state.phase != AppPhase.Launching) return

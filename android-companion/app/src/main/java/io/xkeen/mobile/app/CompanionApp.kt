@@ -48,6 +48,7 @@ import androidx.compose.material.icons.automirrored.outlined.FactCheck
 import androidx.compose.material.icons.automirrored.outlined.Subject
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Edit
@@ -81,6 +82,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -111,6 +113,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
@@ -129,23 +132,51 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.xkeen.mobile.ui.theme.XkeenMobileTheme
 import io.xkeen.mobile.ui.theme.WebPanelPalette
+import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
 internal fun CompanionApp(controller: CompanionController) {
     val state = controller.state
+    val scope = rememberCoroutineScope()
+    var showAppUpdateDialog by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(controller) {
+        if (controller.state.appUpdate.phase == AppUpdatePhase.Idle) {
+            controller.checkForAppUpdate()
+        }
+    }
 
     XkeenMobileTheme(darkTheme = true) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background,
-        ) {
-            when (state.phase) {
-                AppPhase.Launching -> LaunchRoute(controller)
-                AppPhase.Connections -> ConnectionsRoute(state, controller)
-                AppPhase.PairLogin -> PairLoginRoute(state, controller)
-                AppPhase.Ready -> ReadyRoute(state, controller)
+        Box(modifier = Modifier.fillMaxSize()) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background,
+            ) {
+                when (state.phase) {
+                    AppPhase.Launching -> LaunchRoute(controller)
+                    AppPhase.Connections -> ConnectionsRoute(
+                        state = state,
+                        controller = controller,
+                        onAppUpdate = { showAppUpdateDialog = true },
+                    )
+                    AppPhase.PairLogin -> PairLoginRoute(state, controller)
+                    AppPhase.Ready -> ReadyRoute(
+                        state = state,
+                        controller = controller,
+                        onAppUpdate = { showAppUpdateDialog = true },
+                    )
+                }
+            }
+            if (showAppUpdateDialog) {
+                AppUpdateDialog(
+                    update = state.appUpdate,
+                    onDismiss = { showAppUpdateDialog = false },
+                    onCheck = { scope.launch { controller.checkForAppUpdate() } },
+                    onDownload = { scope.launch { controller.downloadAppUpdate() } },
+                    onInstall = controller::installAppUpdate,
+                )
             }
         }
     }
@@ -215,6 +246,7 @@ private fun LaunchRoute(controller: CompanionController) {
 private fun ConnectionsRoute(
     state: CompanionUiState,
     controller: CompanionController,
+    onAppUpdate: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -298,6 +330,8 @@ private fun ConnectionsRoute(
                 }
             }
         }
+
+        AppUpdateAccessCard(update = state.appUpdate, onClick = onAppUpdate)
     }
 }
 
@@ -468,6 +502,7 @@ private fun PairLoginRoute(
 private fun ReadyRoute(
     state: CompanionUiState,
     controller: CompanionController,
+    onAppUpdate: () -> Unit,
 ) {
     val density = LocalDensity.current
     val isImeVisible = WindowInsets.ime.getBottom(density) > 0
@@ -503,7 +538,7 @@ private fun ReadyRoute(
             controller.dismissServiceOperationResult()
         }
     }
-    WorkspaceNavigationFrame(state, controller) { openDrawer, openCoreDialog ->
+    WorkspaceNavigationFrame(state, controller, onAppUpdate) { openDrawer, openCoreDialog, openAppUpdateDialog ->
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -557,6 +592,14 @@ private fun ReadyRoute(
                         .align(Alignment.TopCenter)
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                 )
+
+                AppUpdateBar(
+                    update = state.appUpdate,
+                    onClick = openAppUpdateDialog,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                )
             }
 
             PendingActionDialog(
@@ -564,6 +607,7 @@ private fun ReadyRoute(
                 onDismiss = controller::dismissPendingAction,
                 onConfirm = { scope.launch { controller.confirmPendingAction() } },
             )
+
         }
     }
 }
@@ -1741,6 +1785,354 @@ private fun DiagnosticRow(item: DiagnosticItem) {
 }
 
 @Composable
+private fun AppUpdateBar(
+    update: AppUpdateState,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (update.phase !in setOf(
+            AppUpdatePhase.Available,
+            AppUpdatePhase.Downloading,
+            AppUpdatePhase.ReadyToInstall,
+        )
+    ) return
+
+    val release = update.release ?: return
+    val isReady = update.phase == AppUpdatePhase.ReadyToInstall
+    val container = if (isReady) {
+        Brush.horizontalGradient(
+            listOf(Color(0xFF0F766E), Color(0xFF0891B2), WebPanelPalette.AccentDeep),
+        )
+    } else {
+        Brush.horizontalGradient(
+            listOf(WebPanelPalette.AccentDeep, WebPanelPalette.AccentMiddle, Color(0xFF2563EB)),
+        )
+    }
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(10.dp, RoundedCornerShape(15.dp))
+            .clickable(onClick = onClick),
+        color = Color.Transparent,
+        shape = RoundedCornerShape(15.dp),
+    ) {
+        Column(modifier = Modifier.background(container)) {
+            if (update.phase == AppUpdatePhase.Downloading) {
+                LinearProgressIndicator(
+                    progress = { update.progressPercent / 100f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp),
+                    color = Color.White,
+                    trackColor = Color.White.copy(alpha = 0.20f),
+                )
+            }
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(11.dp),
+            ) {
+                if (update.phase == AppUpdatePhase.Downloading) {
+                    CircularProgressIndicator(
+                        progress = { update.progressPercent / 100f },
+                        modifier = Modifier.size(25.dp),
+                        color = Color.White,
+                        trackColor = Color.White.copy(alpha = 0.24f),
+                        strokeWidth = 2.5.dp,
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (isReady) Icons.Outlined.DoneAll else Icons.Outlined.CloudDownload,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(25.dp),
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = when (update.phase) {
+                            AppUpdatePhase.Downloading -> "Загружаем Xkeen Mobile…"
+                            AppUpdatePhase.ReadyToInstall -> "Обновление готово к установке"
+                            else -> "Доступен Xkeen Mobile ${release.version}"
+                        },
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = when (update.phase) {
+                            AppUpdatePhase.Downloading -> if (update.totalBytes > 0) {
+                                "${update.progressPercent}% · ${formatUpdateBytes(update.downloadedBytes)} из ${formatUpdateBytes(update.totalBytes)}"
+                            } else {
+                                formatUpdateBytes(update.downloadedBytes)
+                            }
+                            AppUpdatePhase.ReadyToInstall -> "Нажмите, чтобы открыть системный установщик"
+                            else -> "Что нового и безопасная загрузка с GitHub"
+                        },
+                        color = Color.White.copy(alpha = 0.84f),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Text(
+                    text = when (update.phase) {
+                        AppUpdatePhase.Downloading -> "${update.progressPercent}%"
+                        AppUpdatePhase.ReadyToInstall -> "УСТАНОВИТЬ"
+                        else -> "ОБНОВИТЬ"
+                    },
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppUpdateAccessCard(
+    update: AppUpdateState,
+    onClick: () -> Unit,
+) {
+    SectionCard(
+        title = "Обновление Xkeen Mobile",
+        supporting = when (update.phase) {
+            AppUpdatePhase.Idle -> "Проверка APK в GitHub Releases ещё не выполнялась."
+            AppUpdatePhase.Checking -> "Проверяем GitHub Releases…"
+            AppUpdatePhase.UpToDate -> "Установлена последняя доступная версия ${update.currentVersion}."
+            AppUpdatePhase.Available -> "Доступна версия ${update.release?.version.orEmpty()}."
+            AppUpdatePhase.Downloading -> "Загружаем APK: ${update.progressPercent}%."
+            AppUpdatePhase.ReadyToInstall -> "APK проверен и готов к системной установке."
+            AppUpdatePhase.Error -> update.error ?: "Не удалось проверить обновление."
+        },
+    ) {
+        CompactActionButton(
+            label = when (update.phase) {
+                AppUpdatePhase.Checking -> "Проверяем"
+                AppUpdatePhase.Available -> "Открыть обновление"
+                AppUpdatePhase.Downloading -> "Загрузка ${update.progressPercent}%"
+                AppUpdatePhase.ReadyToInstall -> "Установить"
+                else -> "Проверить обновление"
+            },
+            icon = Icons.Outlined.CloudDownload,
+            onClick = onClick,
+            enabled = update.phase != AppUpdatePhase.Checking,
+        )
+    }
+}
+
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
+internal fun AppUpdateDialog(
+    update: AppUpdateState,
+    onDismiss: () -> Unit,
+    onCheck: () -> Unit,
+    onDownload: () -> Unit,
+    onInstall: () -> AppUpdateInstallResult,
+) {
+    val uriHandler = LocalUriHandler.current
+    val release = update.release
+    var permissionHint by remember(update.phase, release?.tagName) { mutableStateOf(false) }
+
+    XkeenDialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Surface(
+                    color = WebPanelPalette.Accent.copy(alpha = 0.20f),
+                    shape = RoundedCornerShape(14.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.CloudDownload,
+                        contentDescription = null,
+                        tint = WebPanelPalette.TextBlue,
+                        modifier = Modifier.padding(11.dp),
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "XKEEN MOBILE UPDATE",
+                        color = WebPanelPalette.TextBlue,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.7.sp,
+                    )
+                    Text(
+                        text = release?.let { "Версия ${it.version}" } ?: "Обновление приложения",
+                        color = WebPanelPalette.TextStrong,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "Установлена ${update.currentVersion}",
+                        color = WebPanelPalette.Muted,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Outlined.Close, contentDescription = "Закрыть")
+                }
+            }
+
+            if (release != null) {
+                Surface(
+                    shape = RoundedCornerShape(13.dp),
+                    color = WebPanelPalette.Surface.copy(alpha = 0.82f),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(13.dp),
+                        verticalArrangement = Arrangement.spacedBy(7.dp),
+                    ) {
+                        Text(
+                            text = release.title,
+                            color = WebPanelPalette.TextStrong,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = release.notes.ifBlank { "Описание изменений для этого релиза не добавлено." },
+                            modifier = Modifier
+                                .heightIn(max = 210.dp)
+                                .verticalScroll(rememberScrollState()),
+                            color = WebPanelPalette.Text,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(7.dp),
+                            verticalArrangement = Arrangement.spacedBy(7.dp),
+                        ) {
+                            StatusChip(
+                                statusChip(
+                                    if (release.isPrerelease || '-' in release.version) {
+                                        "Beta / pre-release"
+                                    } else {
+                                        "Stable release"
+                                    },
+                                ),
+                            )
+                            if (release.apkSizeBytes > 0) {
+                                StatusChip(statusChip(formatUpdateBytes(release.apkSizeBytes)))
+                            }
+                            StatusChip(statusChip("GitHub"))
+                            StatusChip(statusChip("SHA-256"))
+                        }
+                    }
+                }
+            }
+
+            when (update.phase) {
+                AppUpdatePhase.Checking -> UpdateProgressBlock("Проверяем последние релизы GitHub…")
+                AppUpdatePhase.Downloading -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Text(
+                            text = if (update.totalBytes > 0) {
+                                "Загружено ${formatUpdateBytes(update.downloadedBytes)} из ${formatUpdateBytes(update.totalBytes)}"
+                            } else {
+                                "Загружено ${formatUpdateBytes(update.downloadedBytes)}"
+                            },
+                            color = WebPanelPalette.Muted,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        LinearProgressIndicator(
+                            progress = { update.progressPercent / 100f },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+                AppUpdatePhase.Error -> WarningBanner(
+                    update.error ?: "Операция обновления не выполнена",
+                )
+                AppUpdatePhase.UpToDate -> Text(
+                    text = "У вас уже установлена последняя доступная версия.",
+                    color = WebPanelPalette.Success,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                AppUpdatePhase.ReadyToInstall -> Text(
+                    text = if (permissionHint) {
+                        "Разрешите установку из этого источника в настройках Android, затем вернитесь и нажмите «Установить» ещё раз."
+                    } else {
+                        "APK загружен во внутренний кэш и готов к передаче системному установщику Android."
+                    },
+                    color = if (permissionHint) WebPanelPalette.Warning else WebPanelPalette.Success,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                else -> Unit
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (release?.releaseUrl?.isNotBlank() == true) {
+                    TextButton(onClick = { uriHandler.openUri(release.releaseUrl) }) {
+                        Text("GitHub")
+                    }
+                    Spacer(Modifier.weight(1f))
+                }
+                when (update.phase) {
+                    AppUpdatePhase.Available,
+                    -> Button(onClick = onDownload) {
+                        Icon(Icons.Outlined.CloudDownload, contentDescription = null)
+                        Spacer(Modifier.width(7.dp))
+                        Text("Скачать APK")
+                    }
+                    AppUpdatePhase.ReadyToInstall -> Button(
+                        onClick = {
+                            permissionHint = onInstall() == AppUpdateInstallResult.PermissionRequired
+                        },
+                    ) {
+                        Icon(Icons.Outlined.DoneAll, contentDescription = null)
+                        Spacer(Modifier.width(7.dp))
+                        Text("Установить")
+                    }
+                    AppUpdatePhase.Error -> Button(
+                        onClick = if (release != null) onDownload else onCheck,
+                    ) {
+                        Icon(Icons.Outlined.Refresh, contentDescription = null)
+                        Spacer(Modifier.width(7.dp))
+                        Text(if (release != null) "Повторить загрузку" else "Проверить снова")
+                    }
+                    AppUpdatePhase.Checking,
+                    AppUpdatePhase.Downloading,
+                    -> TextButton(onClick = onDismiss) { Text("Скрыть") }
+                    else -> Button(onClick = onCheck) {
+                        Icon(Icons.Outlined.Refresh, contentDescription = null)
+                        Spacer(Modifier.width(7.dp))
+                        Text("Проверить снова")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdateProgressBlock(message: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        Text(message, color = WebPanelPalette.Muted, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+private fun formatUpdateBytes(bytes: Long): String = when {
+    bytes >= 1024L * 1024L -> String.format(Locale.ROOT, "%.1f МБ", bytes / (1024.0 * 1024.0))
+    bytes >= 1024L -> String.format(Locale.ROOT, "%.1f КБ", bytes / 1024.0)
+    else -> "$bytes Б"
+}
+
+@Composable
 private fun ServiceOperationBanner(
     operation: ServiceOperationState,
     onDismiss: () -> Unit,
@@ -2372,6 +2764,7 @@ private fun ReadyPreview() {
         ReadyRoute(
             state = CompanionUiState(phase = AppPhase.Ready),
             controller = CompanionController(CompanionUiState(phase = AppPhase.Ready)),
+            onAppUpdate = {},
         )
     }
 }
