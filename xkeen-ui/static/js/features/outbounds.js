@@ -7492,6 +7492,7 @@ let outboundsModuleApi = null;
         const migratedCount = Number(data.routing_migrated_rules || 0);
         const revertedCount = Number(data.routing_reverted_rules || 0);
         const skippedCount = Number(data.routing_skipped_rules || 0);
+        const migratedExclusions = Number(data.manual_exclusions_migrated || 0);
         const routingModeNote = data.routing_mode === SUB_ROUTING_MODE_SUBSCRIPTION_ONLY
           ? (migratedCount > 0
             ? ` · только подписка: перенесено в pool ${migratedCount}`
@@ -7504,12 +7505,15 @@ let outboundsModuleApi = null;
               ? ` · безопасно: возвращено в vless ${revertedCount}`
               : '');
         const routingSkippedNote = skippedCount > 0 ? ` · пропущено ручных vless-правил: ${skippedCount}` : '';
+        const migratedExclusionsNote = migratedExclusions > 0
+          ? ` · перенесено ручных исключений: ${migratedExclusions}`
+          : '';
         const changeParts = [
           fileChanged ? 'файл обновлён' : '',
           observatoryChanged ? 'observatory обновлён' : '',
           routingChanged ? 'routing обновлён' : '',
         ].filter(Boolean);
-        const msg = `Готово: ${Number(data.count || 0)} outbound` + filterNote + (changeParts.length ? (' · ' + changeParts.join(' · ')) : ' · без изменений');
+        const msg = `Готово: ${Number(data.count || 0)} outbound` + filterNote + (changeParts.length ? (' · ' + changeParts.join(' · ')) : ' · без изменений') + migratedExclusionsNote;
         const fileNote = data.output_file ? (' · ' + String(data.output_file)) : '';
         const warningStatusNote = warningList.length ? ` · предупреждение: ${warningList[0]}` : '';
         subsSetStatus(msg + fileNote + routingNote + routingModeNote + routingSkippedNote + warningStatusNote, false, true);

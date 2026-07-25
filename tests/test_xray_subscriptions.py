@@ -5019,6 +5019,86 @@ def test_build_subscription_json_outbounds_keeps_distinct_keys_for_same_config_w
     assert stats["filtered_out_count"] == 1
 
 
+def test_build_subscription_json_outbounds_keeps_node_key_when_provider_rotates_tag_reality_fingerprint_and_uuid():
+    from services import xray_subscriptions as subs
+
+    def _body(tag: str, fingerprint: str, user_id: str, sni: str) -> str:
+        return json.dumps(
+            [
+                {
+                    "remarks": "FREE WhatsApp & Telegram",
+                    "outbounds": [
+                        {
+                            "tag": tag,
+                            "protocol": "vless",
+                            "settings": {
+                                "vnext": [
+                                    {
+                                        "address": "95.163.211.21",
+                                        "port": 443,
+                                        "users": [{"id": user_id, "encryption": "none"}],
+                                    }
+                                ]
+                            },
+                            "streamSettings": {
+                                "network": "tcp",
+                                "security": "reality",
+                                "realitySettings": {
+                                    "serverName": sni,
+                                    "publicKey": "pubkey",
+                                    "shortId": "short",
+                                    "fingerprint": fingerprint,
+                                },
+                            },
+                        }
+                    ],
+                }
+            ]
+        )
+
+    first, first_errors, first_stats = subs.build_subscription_json_outbounds(
+        _body("provider-tag-1", "chrome", "uuid-1", "abuse.sellflow.org"),
+        tag_prefix="pecan",
+    )
+    second, second_errors, second_stats = subs.build_subscription_json_outbounds(
+        _body("provider-tag-2", "firefox", "uuid-2", "at.sellflow.org"),
+        tag_prefix="pecan",
+    )
+
+    assert first_errors == second_errors == []
+    assert first and second
+    assert first_stats["nodes"][0]["key"] == second_stats["nodes"][0]["key"]
+    assert first[0]["tag"] == second[0]["tag"] == "pecan--FREE_WhatsApp_Telegram"
+
+
+def test_remap_subscription_excluded_keys_migrates_legacy_json_key_by_node_identity():
+    from services import xray_subscriptions as subs
+
+    previous = [
+        {
+            "key": "legacy-provider-hash",
+            "name": "FREE WhatsApp & Telegram",
+            "protocol": "vless",
+            "transport": "tcp",
+            "security": "reality",
+            "host": "95.163.211.21",
+            "port": 443,
+            "sni": "abuse.sellflow.org",
+            "detail": "sni=abuse.sellflow.org",
+        }
+    ]
+    current = [dict(previous[0], key="stable-node-key")]
+
+    remapped, migrated = subs._remap_subscription_excluded_keys(
+        previous,
+        ["legacy-provider-hash"],
+        current,
+    )
+
+    assert remapped == ["stable-node-key"]
+    assert migrated == 1
+
+
 def test_build_subscription_json_outbounds_keeps_failed_node_tag_blank(monkeypatch):
     from services import xray_subscriptions as subs
 

@@ -1781,7 +1781,10 @@ def _node_fingerprint(value: Any) -> str:
     return hashlib.sha1(raw).hexdigest()[:16]
 
 
-VOLATILE_LINK_QUERY_KEYS = {"sid", "spx"}
+# Subscription providers commonly rotate per-device credentials and Reality
+# camouflage values without changing the user-facing node.  They must remain
+# in the generated outbound, but should not invalidate a manual exclusion.
+VOLATILE_LINK_QUERY_KEYS = {"sid", "spx", "sni", "fp", "pbk"}
 
 
 def _stable_link_fingerprint_payload(raw: str, protocol: str, name: str) -> str:
@@ -1978,18 +1981,67 @@ def _json_outbound_node_meta(source: Dict[str, Any], name_hint: str, index: int)
         ]
     )
 
+    # Provider JSON often changes the generated outbound tag on every request
+    # (and some providers rotate Xray's client fingerprint as well).  Neither
+    # value identifies the server the user is curating, so including them in
+    # the node key makes a saved manual exclusion stop matching after refresh.
+    # Keep the full outbound in the generated file, but derive the UI key from
+    # a copy with those volatile fields removed.
     try:
+        identity_source = copy.deepcopy(source)
+        identity_source.pop("tag", None)
+        identity_reality = (
+            identity_source.get("streamSettings", {}).get("realitySettings")
+            if isinstance(identity_source.get("streamSettings"), dict)
+            else None
+        )
+        if isinstance(identity_reality, dict):
+            for volatile_key in ("fingerprint", "serverName", "server_name", "publicKey", "public_key", "shortId", "short_id", "spiderX", "spider_x"):
+                identity_reality.pop(volatile_key, None)
+        for tls_key in ("tlsSettings", "tls_settings"):
+            identity_tls = (
+                identity_source.get("streamSettings", {}).get(tls_key)
+                if isinstance(identity_source.get("streamSettings"), dict)
+                else None
+            )
+            if isinstance(identity_tls, dict):
+                identity_tls.pop("serverName", None)
+                identity_tls.pop("server_name", None)
+        identity_settings = identity_source.get("settings")
+        if isinstance(identity_settings, dict):
+            # Per-device subscriptions may rotate UUID/password credentials
+            # while keeping the same endpoint and profile.  Credentials are
+            # needed in the generated outbound, but are not useful as the
+            # identity of a node the user manually excluded.
+            for collection_name in ("vnext", "servers"):
+                collection = identity_settings.get(collection_name)
+                if not isinstance(collection, list):
+                    continue
+                for server in collection:
+                    if not isinstance(server, dict):
+                        continue
+                    users = server.get("users")
+                    if isinstance(users, list):
+                        for user in users:
+                            if isinstance(user, dict):
+                                user.pop("id", None)
+                                user.pop("email", None)
+                    server.pop("password", None)
+                    server.pop("email", None)
         fingerprint_payload = json.dumps(
             {
                 "name": name,
-                "source": source,
+                "source": identity_source,
             },
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
         )
     except Exception:
-        fingerprint_payload = f"{protocol}|{name}|{host}|{port}|{transport}|{security}"
+        # Keep malformed/custom dict-like objects usable.  The endpoint fields
+        # are already normalized above and are a safer fallback than the
+        # provider's volatile tag.
+        fingerprint_payload = f"{protocol}|{name}|{host}|{port}|{transport}|{security}|{sni}|{detail}"
 
     return {
         "key": _node_fingerprint(fingerprint_payload),
@@ -2327,6 +2379,87 @@ def _subscription_node_key_by_tag(nodes: Iterable[Any]) -> Dict[str, str]:
         if key and tag and tag not in out:
             out[tag] = key
     return out
+
+
+def _subscription_node_identity(node: Any) -> Tuple[str, ...]:
+    """Return the stable, user-visible identity used to migrate old keys.
+
+    Older releases hashed the complete JSON outbound, including provider tags
+    and volatile Reality fingerprints.  The current key deliberately omits
+    those fields, but existing state can still contain the old hash.  The
+    normalized metadata retained in ``last_nodes`` is enough to carry such an
+    exclusion forward when the endpoint itself did not change.
+    """
+
+    item = node if isinstance(node, dict) else {}
+    detail_parts = [
+        part.strip()
+        for part in str(item.get("detail") or "").split(" · ")
+        if part.strip() and not part.strip().lower().startswith("sni=")
+    ]
+    return tuple(
+        (
+            " · ".join(detail_parts).lower()
+            if field == "detail"
+            else str(item.get(field) or "").strip().lower()
+            if field not in {"port", "sni"}
+            else str(item.get(field) or "").strip()
+        )
+        for field in (
+            "name",
+            "protocol",
+            "transport",
+            "security",
+            "host",
+            "port",
+            "detail",
+        )
+    )
+
+
+def _remap_subscription_excluded_keys(
+    previous_nodes: Iterable[Any],
+    excluded_node_keys: Iterable[Any],
+    current_nodes: Iterable[Any],
+) -> Tuple[List[str], int]:
+    """Migrate exclusions written by the pre-stable JSON node key algorithm."""
+
+    previous_by_key = {
+        str(node.get("key") or "").strip(): _subscription_node_identity(node)
+        for node in previous_nodes
+        if isinstance(node, dict) and str(node.get("key") or "").strip()
+    }
+    current_by_identity: Dict[Tuple[str, ...], List[str]] = {}
+    current_keys: set[str] = set()
+    for node in current_nodes:
+        if not isinstance(node, dict):
+            continue
+        key = str(node.get("key") or "").strip()
+        if not key:
+            continue
+        current_keys.add(key)
+        current_by_identity.setdefault(_subscription_node_identity(node), []).append(key)
+
+    migrated = 0
+    result: List[str] = []
+    seen: set[str] = set()
+    for raw_key in excluded_node_keys:
+        key = str(raw_key or "").strip()
+        if not key:
+            continue
+        replacement = key
+        if key not in current_keys:
+            candidates = current_by_identity.get(previous_by_key.get(key, ()), [])
+            # Ambiguous duplicate outbounds are intentionally left untouched;
+            # silently excluding the wrong duplicate is worse than asking the
+            # user to select it once again.
+            if len(candidates) == 1:
+                replacement = candidates[0]
+                migrated += 1
+        if replacement not in seen:
+            seen.add(replacement)
+            result.append(replacement)
+    return result, migrated
 
 
 def _subscription_generated_baselines(outbounds: List[Dict[str, Any]], nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -4999,6 +5132,7 @@ def refresh_subscription(
         "source_format": "",
         "manual_edits_preserved": 0,
         "manual_exclusions_added": 0,
+        "manual_exclusions_migrated": 0,
     }
     now_ts = _now()
     source_count = 0
@@ -5040,6 +5174,24 @@ def refresh_subscription(
         source_count = int(stats.get("source_count") or 0)
         filtered_out_count = int(stats.get("filtered_out_count") or 0)
         preview_nodes = _normalize_last_nodes(stats.get("nodes"))
+        # State created before stable JSON node keys were introduced stores a
+        # hash of the provider's complete outbound.  Carry those exclusions to
+        # the new key when the normalized endpoint metadata still identifies
+        # the same node, then rebuild once with the migrated keys applied.
+        previous_nodes = _normalize_last_nodes(sub.get("last_nodes"))
+        migrated_excluded_keys, migrated_count = _remap_subscription_excluded_keys(
+            previous_nodes,
+            excluded_node_keys,
+            preview_nodes,
+        )
+        if migrated_count and migrated_excluded_keys != excluded_node_keys:
+            excluded_node_keys = migrated_excluded_keys
+            sub["excluded_node_keys"] = excluded_node_keys
+            result["manual_exclusions_migrated"] = migrated_count
+            source_format, outbounds, errors, stats = _build_with_exclusions(excluded_node_keys)
+            source_count = int(stats.get("source_count") or 0)
+            filtered_out_count = int(stats.get("filtered_out_count") or 0)
+            preview_nodes = _normalize_last_nodes(stats.get("nodes"))
         landing_page_message = _subscription_html_landing_message(body, headers)
         if landing_page_message and source_count <= 0:
             raise RuntimeError(landing_page_message)
