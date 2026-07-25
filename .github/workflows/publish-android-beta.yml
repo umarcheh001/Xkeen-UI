@@ -82,9 +82,11 @@ jobs:
           APK=android-companion/app/build/outputs/apk/release/app-release.apk
           "$APKSIGNER" verify "$APK"
           ACTUAL_SIGNER_SHA256="$("$APKSIGNER" verify --print-certs "$APK" \
-            | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n1)"
+            | sed -n 's/^.*certificate SHA-256 digest: //p' | head -n1)"
           if [[ "$ACTUAL_SIGNER_SHA256" != "$EXPECTED_SIGNER_SHA256" ]]; then
             echo "APK signer does not match the published Android beta" >&2
+            echo "Expected: $EXPECTED_SIGNER_SHA256" >&2
+            echo "Actual:   ${ACTUAL_SIGNER_SHA256:-not found}" >&2
             exit 1
           fi
 
