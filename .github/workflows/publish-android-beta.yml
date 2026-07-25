@@ -1,18 +1,26 @@
 name: Publish Android beta
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
-      tag:
-        description: Existing GitHub Release tag (for example v2.6.0)
+      ref:
+        description: Git ref to build (branch, tag or commit)
         required: true
+        default: main
+        type: string
+      tag:
+        description: Existing GitHub Release tag; leave empty to validate only
+        required: false
         type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: publish-android-beta-${{ inputs.tag }}
+  group: publish-android-beta-${{ github.event_name }}-${{ github.ref_name }}-${{ inputs.tag || 'automatic' }}
   cancel-in-progress: false
 
 jobs:
@@ -23,7 +31,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -107,10 +115,27 @@ jobs:
           path: dist-mobile/
           if-no-files-found: error
 
-      - name: Upload APK to existing GitHub Release
+      - name: Wait for GitHub Release created by the archive workflow
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          for attempt in $(seq 1 60); do
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              exit 0
+            fi
+            echo "Waiting for GitHub Release $TAG ($attempt/60)"
+            sleep 15
+          done
+          echo "GitHub Release $TAG was not created within 15 minutes" >&2
+          exit 1
+
+      - name: Upload APK to GitHub Release
+        if: github.event_name == 'push' || inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
           VERSION: ${{ steps.mobile.outputs.version }}
         run: |
           gh release view "$TAG" >/dev/null

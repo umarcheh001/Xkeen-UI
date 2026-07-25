@@ -172,10 +172,12 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 
 1. увеличить и `versionName`, и `versionCode` в `app/build.gradle.kts`;
 2. подписать APK тем же ключом, что предыдущую опубликованную версию — Android не установит APK с другим ключом поверх существующего приложения;
-3. создать GitHub Release обычным workflow панели;
-4. запустить `Publish Android beta` для этого тега.
+3. создать и отправить новый `v*`-тег. `Build user archive` создаст GitHub Release, а `Publish Android beta` автоматически дождётся его и добавит подписанный APK с checksum;
+4. если автоматический запуск требуется повторить, вручную запустить `Publish Android beta`, указав один и тот же тег в полях `ref` и `tag`.
 
 Workflow требует repository secrets `XKEEN_ANDROID_KEYSTORE_BASE64`, `XKEEN_ANDROID_KEYSTORE_PASSWORD`, `XKEEN_ANDROID_KEY_ALIAS` и `XKEEN_ANDROID_KEY_PASSWORD`. В первый secret помещается base64 исходного keystore без переносов строк. Signing material не должен добавляться в git. Опубликованный `v2.5.0` APK подписан текущим beta-ключом с SHA-256 fingerprint `05819dce865a15d3df466de8efc4733e03d8f6d9beb7c42bf5e1ab9d43b26abc`; для бесшовного обновления workflow должен использовать именно этот ключ (или совместимую Android signing lineage).
+
+Для проверки secrets и release-сборки без изменения GitHub Releases workflow можно запустить вручную с `ref=main` и пустым `tag`: подписанный APK останется только в workflow artifact.
 
 ## Прокси / Outbounds
 
