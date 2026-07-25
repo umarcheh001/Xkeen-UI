@@ -1968,8 +1968,8 @@ internal fun AppUpdateDialog(
                         text = release?.let { "Версия ${it.version}" } ?: "Обновление приложения",
                         color = WebPanelPalette.TextStrong,
                         style = MaterialTheme.typography.titleLarge.copy(
-                            fontSize = 20.sp,
-                            lineHeight = 24.sp,
+                            fontSize = 17.sp,
+                            lineHeight = 21.sp,
                         ),
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -2071,12 +2071,15 @@ internal fun AppUpdateDialog(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = onDismiss) {
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                ) {
                     Text("Отмена")
                 }
-                Spacer(Modifier.weight(1f))
                 if (release?.releaseUrl?.isNotBlank() == true) {
                     TextButton(onClick = { uriHandler.openUri(release.releaseUrl) }) {
                         Text("GitHub")
@@ -2084,7 +2087,10 @@ internal fun AppUpdateDialog(
                 }
                 when (update.phase) {
                     AppUpdatePhase.Available,
-                    -> Button(onClick = onDownload) {
+                    -> Button(
+                        onClick = onDownload,
+                        modifier = Modifier.weight(1f),
+                    ) {
                         Icon(Icons.Outlined.CloudDownload, contentDescription = null)
                         Spacer(Modifier.width(7.dp))
                         Text("Скачать APK")
@@ -2093,6 +2099,7 @@ internal fun AppUpdateDialog(
                         onClick = {
                             permissionHint = onInstall() == AppUpdateInstallResult.PermissionRequired
                         },
+                        modifier = Modifier.weight(1f),
                     ) {
                         Icon(Icons.Outlined.DoneAll, contentDescription = null)
                         Spacer(Modifier.width(7.dp))
@@ -2100,18 +2107,22 @@ internal fun AppUpdateDialog(
                     }
                     AppUpdatePhase.Error -> Button(
                         onClick = if (release != null) onDownload else onCheck,
+                        modifier = Modifier.weight(1f),
                     ) {
                         Icon(Icons.Outlined.Refresh, contentDescription = null)
                         Spacer(Modifier.width(7.dp))
-                        Text(if (release != null) "Повторить загрузку" else "Проверить снова")
+                        Text(if (release != null) "Повторить загрузку" else "Проверить")
                     }
                     AppUpdatePhase.Checking,
                     AppUpdatePhase.Downloading,
                     -> Unit
-                    else -> Button(onClick = onCheck) {
+                    else -> Button(
+                        onClick = onCheck,
+                        modifier = Modifier.weight(1f),
+                    ) {
                         Icon(Icons.Outlined.Refresh, contentDescription = null)
                         Spacer(Modifier.width(7.dp))
-                        Text("Проверить снова")
+                        Text("Проверить")
                     }
                 }
             }
