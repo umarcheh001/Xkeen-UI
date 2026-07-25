@@ -23,8 +23,8 @@ android {
         applicationId = "io.xkeen.mobile"
         minSdk = 28
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.3.0-beta.1"
+        versionCode = 6
+        versionName = "0.3.0-beta.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
