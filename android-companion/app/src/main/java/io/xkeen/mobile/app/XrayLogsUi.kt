@@ -212,10 +212,15 @@ internal fun LogsWorkspaceScreen(
             logs = logs,
             onSelect = controller::updateXrayLogStreamFilter,
         )
-        XrayLogsLevelSelector(
-            selected = logs.levelFilter,
-            onSelect = controller::updateXrayLogLevelFilter,
-        )
+        // Xray loglevel is a severity threshold for error.log. access.log is
+        // a request journal, so showing level chips in its isolated view would
+        // imply a filter that intentionally has no effect.
+        if (logs.streamFilter != XrayLogStreamFilter.Access) {
+            XrayLogsLevelSelector(
+                selected = logs.levelFilter,
+                onSelect = controller::updateXrayLogLevelFilter,
+            )
+        }
         XrayLogsMetaRow(
             shown = projection.entries.size,
             total = projection.totalXrayEntries,
@@ -619,7 +624,9 @@ private fun XrayLogsNotice(logs: LogsState) {
 private fun ColumnScope.XrayLogsEmptyState(logs: LogsState, regexError: String?) {
     val message = when {
         regexError != null -> "Исправьте выражение, чтобы продолжить поиск."
-        logs.searchQuery.isNotBlank() || logs.levelFilter != XrayLogLevelFilter.All -> "По текущему фильтру записей нет."
+        logs.searchQuery.isNotBlank() ||
+            (logs.streamFilter != XrayLogStreamFilter.Access && logs.levelFilter != XrayLogLevelFilter.All) ->
+            "По текущему фильтру записей нет."
         logs.streamFilter == XrayLogStreamFilter.Access && logs.streamAvailability["access"] == false -> "access.log недоступен или ещё не создан."
         logs.streamFilter == XrayLogStreamFilter.Error && logs.streamAvailability["error"] == false -> "error.log недоступен или ещё не создан."
         logs.streamFilter == XrayLogStreamFilter.All &&
@@ -717,12 +724,14 @@ private fun XrayLogEntryRow(
                         )
                     }
                     Spacer(Modifier.weight(1f))
-                    Text(
-                        text = severityLabel,
-                        color = severity,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    if (!entry.isXrayAccessLogEntry()) {
+                        Text(
+                            text = severityLabel,
+                            color = severity,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                 }
                 Text(
                     text = enrichedXrayLogMessage(

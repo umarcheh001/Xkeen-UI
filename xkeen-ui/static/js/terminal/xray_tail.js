@@ -91,20 +91,18 @@ import {
   function getSelectedLevel() {
     const select = byId('terminal-xraylogs-level');
     const value = (select && select.value) ? String(select.value).toLowerCase() : 'warning';
-    if (value === 'info' || value === 'debug' || value === 'warning') return value;
+    if (value === 'info' || value === 'debug' || value === 'warning' || value === 'error') return value;
     return 'warning';
   }
 
-  function maybeWarnAccessOnVerbose(level) {
-    try {
-      const normalized = String(level || '').toLowerCase();
-      if (normalized !== 'info' && normalized !== 'debug') return;
-      const fileSel = byId('terminal-xraylogs-file');
-      const current = String((fileSel && fileSel.value) || '').toLowerCase();
-      if (current === 'access') {
-        toast('Подсказка: при info/debug обычно полезнее error.log, но оставляю access.log как выбрано.', false);
-      }
-    } catch (error) {}
+  function syncLevelUiForSelectedFile() {
+    const levelSel = byId('terminal-xraylogs-level');
+    if (!levelSel) return;
+    const isError = getSelectedFile() === 'error';
+    levelSel.disabled = !isError;
+    levelSel.title = isError
+      ? 'Порог уровня error.log'
+      : 'Уровни не применяются к access.log';
   }
 
   async function resolveLogPath(kind) {
@@ -131,12 +129,20 @@ import {
     }
   }
 
-  async function ensureLoggingEnabled(desiredLevel) {
+  async function ensureLoggingEnabled(desiredLevel, options) {
+    const opts = options || {};
     const want = String(desiredLevel || 'warning').toLowerCase();
-    const target = (want === 'info' || want === 'debug' || want === 'warning') ? want : 'warning';
+    const target = (want === 'info' || want === 'debug' || want === 'warning' || want === 'error') ? want : 'warning';
 
     const status = await getLogStatus();
     const current = String((status && status.loglevel) || 'none').toLowerCase();
+    // The selector describes error.log only.  When tailing access.log, retain
+    // any active Xray level instead of restarting the core to match a disabled
+    // control.  If logging is off, `target` remains the required config value
+    // used to start collection, but it is not an access-log filter.
+    if (opts.preserveActiveLevel && (current === 'debug' || current === 'info' || current === 'warning' || current === 'error')) {
+      return { ok: true, loglevel: current, changed: false };
+    }
     if (current && current !== 'none' && current === target) {
       return { ok: true, loglevel: current, changed: false };
     }
@@ -242,10 +248,10 @@ import {
   async function start() {
     hideMenu();
 
+    const kind = getSelectedFile();
     const desiredLevel = getSelectedLevel();
-    maybeWarnAccessOnVerbose(desiredLevel);
 
-    const enabled = await ensureLoggingEnabled(desiredLevel);
+    const enabled = await ensureLoggingEnabled(desiredLevel, { preserveActiveLevel: kind === 'access' });
     if (!enabled.ok) {
       toast('Не удалось включить логи Xray (01_log.json).', true);
     }
@@ -261,7 +267,6 @@ import {
       await stopViewerAndSettle({ force: true, quiet: true });
     }
 
-    const kind = getSelectedFile();
     const path = await resolveLogPath(kind);
     const cmd = buildTailCommand(path);
 
@@ -320,6 +325,7 @@ import {
   }
 
   function onFileChange() {
+    syncLevelUiForSelectedFile();
     restartSoon();
   }
 
@@ -356,6 +362,8 @@ import {
     const fileSel = byId('terminal-xraylogs-file');
     const levelSel = byId('terminal-xraylogs-level');
 
+    syncLevelUiForSelectedFile();
+
     if (startBtn) on(startBtn, 'click', () => { void start(); });
     if (stopBtn) on(stopBtn, 'click', () => { stopTail(); });
     if (disableBtn) on(disableBtn, 'click', () => { void disableLogs(); });
@@ -364,12 +372,11 @@ import {
     if (levelSel) {
       void getLogStatus().then((status) => {
         const level = String((status && status.loglevel) || '').toLowerCase();
-        if (level === 'warning' || level === 'info' || level === 'debug') {
+        if (level === 'warning' || level === 'info' || level === 'debug' || level === 'error') {
           levelSel.value = level;
         }
       });
       on(levelSel, 'change', () => {
-        maybeWarnAccessOnVerbose(getSelectedLevel());
         restartSoon();
       });
     }

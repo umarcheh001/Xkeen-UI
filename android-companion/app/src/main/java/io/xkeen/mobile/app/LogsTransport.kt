@@ -120,7 +120,13 @@ internal fun parseLogsTransportEnvelope(body: String): LogsTransportUpdate {
                 add(
                     RemoteLogStream(
                         source = source,
-                        entries = item.optJSONArray("entries").toLogEntries(),
+                        entries = item.optJSONArray("entries").toLogEntries(
+                            defaultSource = if (source.equals("access", ignoreCase = true)) {
+                                "xray-access"
+                            } else {
+                                "xray-error"
+                            },
+                        ),
                         cursor = item.optString("cursor").trim(),
                         mode = item.optString("mode", "append").trim().ifBlank { "append" },
                         available = item.optBoolean("available", false),
@@ -133,25 +139,42 @@ internal fun parseLogsTransportEnvelope(body: String): LogsTransportUpdate {
     )
 }
 
-private fun JSONArray?.toLogEntries(): List<LogEntry> {
+private fun JSONArray?.toLogEntries(defaultSource: String = "xray"): List<LogEntry> {
     if (this == null) return emptyList()
     return buildList {
+        var previousLevel = LogLevel.Info
         for (index in 0 until length()) {
             val item = optJSONObject(index) ?: continue
             val message = item.optString("message").trimEnd()
             if (message.isBlank()) continue
+            val source = item.optString("source").trim().ifBlank { defaultSource }
+            val isAccess = source.equals("xray-access", ignoreCase = true) ||
+                source.equals("access", ignoreCase = true)
+            val rawLevel = item.optString("level")
+            val isContinuation = message.firstOrNull()?.isWhitespace() == true
+            // Xray access.log has no logger severity. Keep a neutral value even when the
+            // payload happens to contain words such as "ERROR" or "failed"; the viewer also
+            // bypasses level thresholds for this stream.
+            val level = if (isAccess) {
+                LogLevel.Info
+            } else if (isContinuation && rawLevel.isBlank() && !xrayLevelMarkerRegex.containsMatchIn(message)) {
+                // Continuation records belong to the preceding physical Xray record. Older
+                // servers omitted the inherited level, so retain it here instead of inspecting
+                // arbitrary payload words on the continuation line.
+                previousLevel
+            } else {
+                parseXrayLogLevel(rawLevel = rawLevel, message = message)
+            }
+            if (!isContinuation && !isAccess) previousLevel = level
             add(
                 LogEntry(
                     id = item.optString("id").trim(),
                     time = item.optString("time").trim().ifBlank { "—" },
-                    source = item.optString("source").trim().ifBlank { "xray" },
+                    source = source,
                     // The mobile endpoint normally sends a normalized level, but older
                     // servers only exposed the raw Xray line. Re-run the semantic detector
-                    // here so [Debug] (and failures wrapped in [Info]) remain filterable.
-                    level = parseXrayLogLevel(
-                        rawLevel = item.optString("level"),
-                        message = message,
-                    ),
+                    // here so marker severity remains authoritative on every client.
+                    level = level,
                     message = message,
                 ),
             )
@@ -163,9 +186,10 @@ private fun JSONArray?.toLogEntries(): List<LogEntry> {
  * Converts the server level plus the line itself into the level used by the Xray viewer.
  *
  * Xray often prefixes a record with `[Info]` while the actual operation failed later in the
- * message (`stream ERROR`, `failed`, ...). Error/warning signals therefore take precedence over
- * the logger marker, matching the web viewer and keeping the level filter useful for error.log.
- * `trace` is treated as DEBUG because Xray's public loglevel vocabulary starts at debug.
+ * message (`stream ERROR`, `failed`, ...). The logger marker is the source of truth: payload
+ * words must never override it. If a legacy/unstructured record has no marker, use the server
+ * level when available and retain a narrow keyword fallback for compatibility. `trace` is
+ * treated as DEBUG because Xray's public loglevel vocabulary starts at debug.
  */
 internal fun parseXrayLogLevel(rawLevel: String?, message: String): LogLevel {
     val lower = message.lowercase()
@@ -176,10 +200,10 @@ internal fun parseXrayLogLevel(rawLevel: String?, message: String): LogLevel {
         ?.lowercase()
     val rawToken = rawLevel.normalizedXrayLevelToken()
     return when {
-        xrayErrorSignalRegex.containsMatchIn(lower) -> LogLevel.Error
-        xrayWarningSignalRegex.containsMatchIn(lower) -> LogLevel.Warning
         markerToken != null -> markerToken.toLogLevelValue()
         rawToken != null -> rawToken.toLogLevelValue()
+        xrayErrorSignalRegex.containsMatchIn(lower) -> LogLevel.Error
+        xrayWarningSignalRegex.containsMatchIn(lower) -> LogLevel.Warning
         else -> LogLevel.Info
     }
 }

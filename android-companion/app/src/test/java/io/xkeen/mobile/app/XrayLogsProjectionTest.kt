@@ -7,6 +7,29 @@ import org.junit.Test
 
 class XrayLogsProjectionTest {
     @Test
+    fun `level filters are cumulative thresholds for error log`() {
+        val entries = listOf(
+            LogEntry("18:00:01", "xray-error", LogLevel.Debug, "2026/07/16 18:00:01 debug", "debug"),
+            LogEntry("18:00:02", "xray-error", LogLevel.Info, "2026/07/16 18:00:02 info", "info"),
+            LogEntry("18:00:03", "xray-error", LogLevel.Warning, "2026/07/16 18:00:03 warning", "warning"),
+            LogEntry("18:00:04", "xray-error", LogLevel.Error, "2026/07/16 18:00:04 error", "error"),
+            // The level is deliberately noisy: access.log must not participate in the threshold.
+            LogEntry("18:00:05", "xray-access", LogLevel.Error, "2026/07/16 18:00:05 accepted tcp", "access"),
+        )
+
+        fun ids(filter: XrayLogLevelFilter, stream: XrayLogStreamFilter = XrayLogStreamFilter.All) =
+            LogsState(entries = entries, streamFilter = stream, levelFilter = filter)
+                .projectXrayLogs().entries.map(LogEntry::id)
+
+        assertEquals(listOf("debug", "info", "warning", "error", "access"), ids(XrayLogLevelFilter.All))
+        assertEquals(listOf("debug", "info", "warning", "error", "access"), ids(XrayLogLevelFilter.Debug))
+        assertEquals(listOf("info", "warning", "error", "access"), ids(XrayLogLevelFilter.Info))
+        assertEquals(listOf("warning", "error", "access"), ids(XrayLogLevelFilter.Warning))
+        assertEquals(listOf("error", "access"), ids(XrayLogLevelFilter.Error))
+        assertEquals(listOf("access"), ids(XrayLogLevelFilter.Error, XrayLogStreamFilter.Access))
+    }
+
+    @Test
     fun `projection keeps only Xray entries and merges streams chronologically`() {
         val projection = LogsState(entries = sampleEntries).projectXrayLogs()
 

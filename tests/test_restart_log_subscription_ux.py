@@ -63,7 +63,7 @@ def test_restart_log_formats_subscription_refresh_entries_and_polls_for_updates(
     assert "grid-template-columns: max-content max-content minmax(0, max-content);" in styles_src
     assert "box-sizing: border-box;" in styles_src
     assert "scrollbar-color" in styles_src
-    assert ".log-card .log-line-success" in styles_src
+    assert ".log-card .restart-log-line.log-line-success" in styles_src
 
 
 def test_restart_log_details_toggle_resolves_panel_inside_clicked_log_container():

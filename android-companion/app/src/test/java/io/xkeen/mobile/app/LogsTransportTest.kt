@@ -13,6 +13,93 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class LogsTransportTest {
     @Test
+    fun `xray marker wins over payload words and raw server level`() {
+        assertEquals(
+            LogLevel.Info,
+            parseXrayLogLevel(
+                rawLevel = "error",
+                message = "2026/07/16 18:05:00 [Info] outbound failed with stream ERROR",
+            ),
+        )
+        assertEquals(
+            LogLevel.Warning,
+            parseXrayLogLevel(
+                rawLevel = "error",
+                message = "2026/07/16 18:05:01 [Warning] retry failed",
+            ),
+        )
+        assertEquals(
+            LogLevel.Debug,
+            parseXrayLogLevel(
+                rawLevel = "error",
+                message = "2026/07/16 18:05:02 [Debug] route lookup failed",
+            ),
+        )
+        assertEquals(
+            LogLevel.Error,
+            parseXrayLogLevel(rawLevel = "", message = "unmarked request failed"),
+        )
+    }
+
+    @Test
+    fun `access entries remain neutral and continuation inherits preceding error level`() {
+        val body =
+            """
+            {
+              "ok": true,
+              "data": {
+                "streams": [
+                  {
+                    "source": "error",
+                    "mode": "snapshot",
+                    "cursor": "next-error",
+                    "available": true,
+                    "entries": [
+                      {
+                        "id": "error:1",
+                        "time": "18:01:03",
+                        "source": "xray-error",
+                        "level": "error",
+                        "message": "2026/07/16 18:01:03 [Info] failed with stream ERROR"
+                      },
+                      {
+                        "id": "error:2",
+                        "time": "18:01:03",
+                        "source": "xray-error",
+                        "level": "",
+                        "message": "  continuation ERROR"
+                      }
+                    ]
+                  },
+                  {
+                    "source": "access",
+                    "mode": "snapshot",
+                    "cursor": "next-access",
+                    "available": true,
+                    "entries": [
+                      {
+                        "id": "access:1",
+                        "time": "18:01:04",
+                        "source": "xray-access",
+                        "level": "error",
+                        "message": "accepted tcp destination failed ERROR"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+            """.trimIndent()
+        val result = parseLogsTransportEnvelope(body)
+        val errorEntries = result.streams.first { it.source == "error" }.entries
+        val accessEntries = result.streams.first { it.source == "access" }.entries
+
+        assertEquals(LogLevel.Info, errorEntries[0].level)
+        assertEquals(LogLevel.Info, errorEntries[1].level)
+        assertEquals(LogLevel.Info, accessEntries.single().level)
+    }
+
+    @Test
     fun `inactive logs screen does not claim that missing history was preserved`() {
         val controller = CompanionController(
             initialState = CompanionUiState(phase = AppPhase.Ready),

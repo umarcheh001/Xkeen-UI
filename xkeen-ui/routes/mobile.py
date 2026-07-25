@@ -50,6 +50,31 @@ _MOBILE_LOG_SOURCES = {
 }
 _MOBILE_LOG_TIME_RE = re.compile(r"\b\d{4}/\d{2}/\d{2}\s+(\d{2}:\d{2}:\d{2})\b")
 
+# Xray writes the record severity in a marker (normally ``[Info]``) near the
+# beginning of an error-log line.  The message payload is free-form and often
+# contains words such as ``failed`` or ``ERROR`` even when the record was
+# intentionally emitted with ``errors.LogInfo``.  Keep marker parsing in one
+# place so the mobile contract does not accidentally turn those payload words
+# into a different severity.
+_MOBILE_LOG_LEVEL_MARKER_RE = re.compile(
+    r"(?:\[(debug|trace|info|warning|warn|error|fatal|panic)\]"
+    r"|\blevel\s*[:=]\s*(debug|trace|info|warning|warn|error|fatal|panic)\b)",
+    re.IGNORECASE,
+)
+_MOBILE_LOG_ERROR_SIGNAL_RE = re.compile(r"\b(?:error|fail(?:ed|ure)?|fatal|panic)\b", re.IGNORECASE)
+_MOBILE_LOG_WARNING_SIGNAL_RE = re.compile(r"\b(?:warning|warn)\b", re.IGNORECASE)
+
+
+def _mobile_normalize_log_level(token: str) -> str:
+    normalized = str(token or "").strip().lower()
+    if normalized in {"debug", "trace"}:
+        return "debug"
+    if normalized in {"warning", "warn"}:
+        return "warning"
+    if normalized in {"error", "fatal", "panic"}:
+        return "error"
+    return "info"
+
 
 def configure_mobile_routing_service(app: Flask, service: Any) -> None:
     """Attach the write service after app composition has created restart/path dependencies."""
@@ -231,11 +256,39 @@ def _mobile_log_cursor_decode(value: str, source: str) -> dict[str, Any] | None:
         return None
 
 
-def _mobile_log_level(line: str) -> str:
-    lowered = line.lower()
-    if "[error]" in lowered or " error " in lowered or "failed" in lowered:
+def _mobile_log_level(line: str, source: str = "error") -> str:
+    """Return the semantic level of one Xray log record.
+
+    An Xray error-log record has two different kinds of text: the logger
+    severity marker and an arbitrary payload.  The marker is authoritative;
+    payload words (``failed``, ``ERROR``, ...) are only a compatibility
+    fallback for old/unmarked records.  Access logs do not carry Xray logger
+    severity at all, so their level remains the neutral ``info`` value and no
+    payload heuristic is applied.
+
+    ``source`` is intentionally optional for callers that used the old helper
+    signature.  The mobile stream passes it explicitly so an access line such
+    as ``accepted ... error=...`` cannot become an error entry.
+    """
+
+    normalized_source = str(source or "").strip().lower()
+    if normalized_source in {"access", "access.log", "xray-access"}:
+        return "info"
+
+    text = str(line or "")
+    marker = _MOBILE_LOG_LEVEL_MARKER_RE.search(text)
+    if marker:
+        # The regex has two alternative capture groups.  The first marker in
+        # the line wins, regardless of words later in the payload.
+        token = next((group for group in marker.groups() if group), "info")
+        return _mobile_normalize_log_level(token)
+
+    lowered = text.lower()
+    # Some historical Xray lines have no explicit marker.  Preserve a narrow
+    # fallback for those records, but never let it override a real marker.
+    if _MOBILE_LOG_ERROR_SIGNAL_RE.search(lowered):
         return "error"
-    if "[warning]" in lowered or "[warn]" in lowered or " warning " in lowered:
+    if _MOBILE_LOG_WARNING_SIGNAL_RE.search(lowered):
         return "warning"
     return "info"
 
@@ -250,7 +303,11 @@ def _mobile_log_entries(*, source: str, inode: int, marker: int, lines: list[str
             continue
         time_match = _MOBILE_LOG_TIME_RE.search(message)
         entry_time = time_match.group(1) if time_match else previous_time if message[:1].isspace() else "—"
-        entry_level = previous_level if not time_match and message[:1].isspace() else _mobile_log_level(message)
+        entry_level = (
+            previous_level
+            if not time_match and message[:1].isspace()
+            else _mobile_log_level(message, source=source)
+        )
         if time_match:
             previous_time = entry_time
         if not message[:1].isspace():

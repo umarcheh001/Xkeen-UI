@@ -117,6 +117,45 @@ def test_mobile_logs_returns_history_and_incremental_cursor_updates(tmp_path, mo
     assert appended_stream["cursor"] != error_stream["cursor"]
 
 
+def test_mobile_log_levels_use_xray_marker_before_payload_words(tmp_path, monkeypatch):
+    client, error_log, access_log = _build_client(tmp_path, monkeypatch)
+    error_log.write_text(
+        "2026/07/16 18:05:00 [Info] app/proxyman/outbound: failed to process stream ERROR\n"
+        "2026/07/16 18:05:01 [Debug] app/dispatcher: route lookup failed\n"
+        "2026/07/16 18:05:02 level=Warning transport: connection failed\n"
+        "  continuation ERROR\n",
+        encoding="utf-8",
+    )
+    access_log.write_text(
+        "2026/07/16 18:05:03 accepted tcp:client -> destination:443 error=none failed=false\n",
+        encoding="utf-8",
+    )
+    _login(client)
+
+    payload = client.get("/api/mobile/v1/logs").get_json()
+    error_entries = _stream(payload, "error")["entries"]
+    access_entries = _stream(payload, "access")["entries"]
+
+    assert [entry["level"] for entry in error_entries] == ["info", "debug", "warning", "warning"]
+    assert access_entries[0]["level"] == "info"
+
+
+def test_mobile_access_log_payload_does_not_get_error_or_warning_severity(tmp_path, monkeypatch):
+    client, _error_log, access_log = _build_client(tmp_path, monkeypatch)
+    access_log.write_text(
+        "2026/07/16 18:06:00 accepted tcp:client -> destination:443 failed ERROR warning\n"
+        "  payload continuation failed\n",
+        encoding="utf-8",
+    )
+    _login(client)
+
+    entries = _stream(client.get("/api/mobile/v1/logs").get_json(), "access")["entries"]
+
+    # access.log has no Xray logger severity. Keep the neutral API value so
+    # clients can bypass the error-log threshold for this stream.
+    assert [entry["level"] for entry in entries] == ["info", "info"]
+
+
 def test_mobile_logs_resets_to_snapshot_after_rotation_or_invalid_cursor(tmp_path, monkeypatch):
     client, error_log, _access_log = _build_client(tmp_path, monkeypatch)
     _login(client)

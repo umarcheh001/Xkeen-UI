@@ -25,15 +25,10 @@ internal fun LogsState.projectXrayLogs(): XrayLogsProjection {
             XrayLogStreamFilter.Error -> entry.source.equals("xray-error", ignoreCase = true)
         }
     }
-    val leveledEntries = sourceEntries.filter { entry ->
-        when (levelFilter) {
-            XrayLogLevelFilter.All -> true
-            XrayLogLevelFilter.Debug -> entry.level == LogLevel.Debug
-            XrayLogLevelFilter.Info -> entry.level == LogLevel.Info
-            XrayLogLevelFilter.Warning -> entry.level == LogLevel.Warning
-            XrayLogLevelFilter.Error -> entry.level == LogLevel.Error
-        }
-    }
+    // Level thresholds describe error.log only. access.log is a request journal and does not
+    // carry Xray logger severity; keep those rows visible even when a warning/error threshold is
+    // selected (including in the combined "All" stream view).
+    val leveledEntries = sourceEntries.filter { entry -> entry.matchesXrayLogLevelFilter(levelFilter) }
 
     val query = searchQuery.trim()
     if (query.isBlank()) {
@@ -87,6 +82,21 @@ internal fun LogEntry.displayMessage(): String =
 
 internal fun LogEntry.isXrayLogEntry(): Boolean =
     source.equals("xray", ignoreCase = true) || source.startsWith("xray-", ignoreCase = true)
+
+internal fun LogEntry.isXrayAccessLogEntry(): Boolean =
+    source.equals("xray-access", ignoreCase = true) || source.equals("access", ignoreCase = true)
+
+internal fun LogEntry.matchesXrayLogLevelFilter(filter: XrayLogLevelFilter): Boolean {
+    if (isXrayAccessLogEntry()) return true
+    val minimum = when (filter) {
+        XrayLogLevelFilter.All -> null
+        XrayLogLevelFilter.Debug -> LogLevel.Debug
+        XrayLogLevelFilter.Info -> LogLevel.Info
+        XrayLogLevelFilter.Warning -> LogLevel.Warning
+        XrayLogLevelFilter.Error -> LogLevel.Error
+    }
+    return minimum == null || level.ordinal >= minimum.ordinal
+}
 
 internal fun LogEntry.xrayViewerIdentity(): String =
     id.ifBlank { "$source:$time:${message.hashCode()}" }

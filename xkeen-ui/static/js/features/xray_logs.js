@@ -128,7 +128,7 @@ let xrayLogsModuleApi = null;
   let _wsClosingManually = false;
   let _streaming = false; // live stream (auto-update) state
 
-  const ALLOWED_LOGLEVELS = ['warning', 'info', 'debug', 'error'];
+  const ALLOWED_LOGLEVELS = ['debug', 'info', 'warning', 'error'];
 
   let _activeLogLevel = 'none'; // last known active loglevel from /api/xray-logs/status
   let _applyLevelTimer = null;
@@ -2813,7 +2813,11 @@ let xrayLogsModuleApi = null;
     const clean = normalizeLogLine(line);
     if (!clean || !String(clean).trim()) return '';
 
-    const cls = getXrayLogLineClass(clean);
+    // access.log is a request journal and has no Xray severity marker.  Its
+    // payload may still contain words such as "error" or "failed", so do not
+    // assign an error-log row class while this stream is selected.  Token
+    // highlighting below remains available for those payload words.
+    const cls = _isErrorFileName(_currentFile) ? getXrayLogLineClass(clean) : 'log-line';
     const destinationTokens = buildXrayDestinationIpTokenLookup(clean);
     let processed = escapeHtml(clean);
 

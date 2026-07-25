@@ -6215,23 +6215,28 @@ html:not([data-theme="light"]) .log-card.xk-restart-log-card .restart-log-summar
   user-select: none;
 }
 
-.log-card .log-line-info {
+.log-card .restart-log-line.log-line-info,
+.log-card .restart-log-terminal-entry.log-line-info {
   color: color-mix(in srgb, var(--sem-info, #93c5fd) 80%, white 20%);
 }
 
-.log-card .log-line-warning {
+.log-card .restart-log-line.log-line-warning,
+.log-card .restart-log-terminal-entry.log-line-warning {
   color: color-mix(in srgb, var(--sem-warning, #fbbf24) 82%, white 18%);
 }
 
-.log-card .log-line-success {
+.log-card .restart-log-line.log-line-success,
+.log-card .restart-log-terminal-entry.log-line-success {
   color: color-mix(in srgb, var(--sem-success, #4ade80) 82%, white 18%);
 }
 
-.log-card .log-line-error {
+.log-card .restart-log-line.log-line-error,
+.log-card .restart-log-terminal-entry.log-line-error {
   color: color-mix(in srgb, var(--sem-error, #f87171) 82%, white 18%);
 }
 
-.log-card .log-line-debug {
+.log-card .restart-log-line.log-line-debug,
+.log-card .restart-log-terminal-entry.log-line-debug {
   color: color-mix(in srgb, var(--sem-debug, #a1a1aa) 82%, white 18%);
   opacity: 0.9;
 }
