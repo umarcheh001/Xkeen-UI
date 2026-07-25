@@ -100,6 +100,8 @@ enum class ServiceOperationPhase {
 }
 
 enum class LogLevel {
+    /** Most verbose Xray level. Kept first so severity ordering is explicit in the UI. */
+    Debug,
     Info,
     Warning,
     Error,
@@ -122,6 +124,7 @@ enum class XrayLogStreamFilter {
 /** Minimum visual slice selected by the user; it never changes server-side logging. */
 enum class XrayLogLevelFilter {
     All,
+    Debug,
     Info,
     Warning,
     Error,

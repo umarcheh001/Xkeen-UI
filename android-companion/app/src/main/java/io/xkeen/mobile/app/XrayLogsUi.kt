@@ -448,6 +448,7 @@ private fun XrayLogsLevelSelector(
     Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         XrayLogLevelFilter.entries.forEach { filter ->
             val color = when (filter) {
+                XrayLogLevelFilter.Debug -> XrayLogDebugColor
                 XrayLogLevelFilter.Info -> WebPanelPalette.Border
                 XrayLogLevelFilter.Warning -> WebPanelPalette.Warning
                 XrayLogLevelFilter.Error -> WebPanelPalette.Error
@@ -456,6 +457,7 @@ private fun XrayLogsLevelSelector(
             XrayLogsLevelChip(
                 label = when (filter) {
                     XrayLogLevelFilter.All -> "ВСЕ"
+                    XrayLogLevelFilter.Debug -> "DEBUG"
                     XrayLogLevelFilter.Info -> "INFO"
                     XrayLogLevelFilter.Warning -> "WARN"
                     XrayLogLevelFilter.Error -> "ERROR"
@@ -662,6 +664,12 @@ private fun XrayLogEntryRow(
 ) {
     var expanded by rememberSaveable(entry.id, entry.message) { mutableStateOf(false) }
     val severity = xrayLogLevelColor(entry.level)
+    val sourceLabel = xrayLogSourceLabel(entry.source)
+    val severityLabel = xrayLogLevelLabel(entry.level)
+    // The stream and severity used to render the same "ERROR" token side by side for
+    // error.log failures. Keep the stream marker when it adds information (ACCESS/INFO,
+    // ERROR/WARN, ...), but omit it when it would be an exact duplicate of the severity.
+    val showSourceLabel = shouldShowXrayLogSourceLabel(entry)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -695,16 +703,22 @@ private fun XrayLogEntryRow(
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = FontFamily.Monospace,
                     )
-                    Spacer(Modifier.width(7.dp))
-                    Text(
-                        text = if (entry.source.equals("xray-access", true)) "ACCESS" else "ERROR",
-                        color = if (entry.source.equals("xray-access", true)) WebPanelPalette.TextBlue else WebPanelPalette.Warning,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    if (showSourceLabel) {
+                        Spacer(Modifier.width(7.dp))
+                        Text(
+                            text = sourceLabel,
+                            color = if (sourceLabel == "ACCESS") {
+                                WebPanelPalette.TextBlue
+                            } else {
+                                WebPanelPalette.Warning
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                     Spacer(Modifier.weight(1f))
                     Text(
-                        text = xrayLogLevelLabel(entry.level),
+                        text = severityLabel,
                         color = severity,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
@@ -1331,17 +1345,27 @@ private fun xrayLogsConnectionLabel(logs: LogsState): String = when {
     else -> "ожидает подключения"
 }
 
+private val XrayLogDebugColor = Color(0xFFC084FC)
+
 private fun xrayLogLevelColor(level: LogLevel): Color = when (level) {
+    LogLevel.Debug -> XrayLogDebugColor
     LogLevel.Info -> WebPanelPalette.Border
     LogLevel.Warning -> WebPanelPalette.Warning
     LogLevel.Error -> WebPanelPalette.Error
 }
 
-private fun xrayLogLevelLabel(level: LogLevel): String = when (level) {
+internal fun xrayLogLevelLabel(level: LogLevel): String = when (level) {
+    LogLevel.Debug -> "DEBUG"
     LogLevel.Info -> "INFO"
     LogLevel.Warning -> "WARN"
     LogLevel.Error -> "ERROR"
 }
+
+internal fun xrayLogSourceLabel(source: String): String =
+    if (source.equals("xray-access", ignoreCase = true)) "ACCESS" else "ERROR"
+
+internal fun shouldShowXrayLogSourceLabel(entry: LogEntry): Boolean =
+    xrayLogSourceLabel(entry.source) != xrayLogLevelLabel(entry.level)
 
 private fun enrichedXrayLogMessage(
     entry: LogEntry,

@@ -145,7 +145,13 @@ private fun JSONArray?.toLogEntries(): List<LogEntry> {
                     id = item.optString("id").trim(),
                     time = item.optString("time").trim().ifBlank { "—" },
                     source = item.optString("source").trim().ifBlank { "xray" },
-                    level = item.optString("level").toLogLevel(),
+                    // The mobile endpoint normally sends a normalized level, but older
+                    // servers only exposed the raw Xray line. Re-run the semantic detector
+                    // here so [Debug] (and failures wrapped in [Info]) remain filterable.
+                    level = parseXrayLogLevel(
+                        rawLevel = item.optString("level"),
+                        message = message,
+                    ),
                     message = message,
                 ),
             )
@@ -153,9 +159,61 @@ private fun JSONArray?.toLogEntries(): List<LogEntry> {
     }
 }
 
-private fun String?.toLogLevel(): LogLevel =
-    when (this?.trim()?.lowercase()) {
-        "error" -> LogLevel.Error
-        "warning", "warn" -> LogLevel.Warning
+/**
+ * Converts the server level plus the line itself into the level used by the Xray viewer.
+ *
+ * Xray often prefixes a record with `[Info]` while the actual operation failed later in the
+ * message (`stream ERROR`, `failed`, ...). Error/warning signals therefore take precedence over
+ * the logger marker, matching the web viewer and keeping the level filter useful for error.log.
+ * `trace` is treated as DEBUG because Xray's public loglevel vocabulary starts at debug.
+ */
+internal fun parseXrayLogLevel(rawLevel: String?, message: String): LogLevel {
+    val lower = message.lowercase()
+    val marker = xrayLevelMarkerRegex.find(message)
+    val markerToken = marker?.groupValues
+        ?.drop(1)
+        ?.firstOrNull(String::isNotBlank)
+        ?.lowercase()
+    val rawToken = rawLevel.normalizedXrayLevelToken()
+    return when {
+        xrayErrorSignalRegex.containsMatchIn(lower) -> LogLevel.Error
+        xrayWarningSignalRegex.containsMatchIn(lower) -> LogLevel.Warning
+        markerToken != null -> markerToken.toLogLevelValue()
+        rawToken != null -> rawToken.toLogLevelValue()
         else -> LogLevel.Info
     }
+}
+
+private fun String?.normalizedXrayLevelToken(): String? =
+    this?.trim()?.lowercase()?.takeIf { it in XRAY_LEVEL_TOKENS }
+
+private fun String.toLogLevelValue(): LogLevel = when (this) {
+    "debug", "trace" -> LogLevel.Debug
+    "warning", "warn" -> LogLevel.Warning
+    "error", "fatal", "panic" -> LogLevel.Error
+    else -> LogLevel.Info
+}
+
+private val XRAY_LEVEL_TOKENS = setOf(
+    "debug",
+    "trace",
+    "info",
+    "warning",
+    "warn",
+    "error",
+    "fatal",
+    "panic",
+)
+
+private val xrayErrorSignalRegex = Regex(
+    "\\b(?:error|fail(?:ed|ure)?|fatal|panic)\\b",
+    RegexOption.IGNORE_CASE,
+)
+private val xrayWarningSignalRegex = Regex(
+    "\\b(?:warning|warn)\\b",
+    RegexOption.IGNORE_CASE,
+)
+private val xrayLevelMarkerRegex = Regex(
+    "(?:\\[(debug|trace|info|warning|warn|error|fatal|panic)]|\\blevel\\s*[:=]\\s*(debug|trace|info|warning|warn|error|fatal|panic)\\b)",
+    RegexOption.IGNORE_CASE,
+)

@@ -28,6 +28,7 @@ internal fun LogsState.projectXrayLogs(): XrayLogsProjection {
     val leveledEntries = sourceEntries.filter { entry ->
         when (levelFilter) {
             XrayLogLevelFilter.All -> true
+            XrayLogLevelFilter.Debug -> entry.level == LogLevel.Debug
             XrayLogLevelFilter.Info -> entry.level == LogLevel.Info
             XrayLogLevelFilter.Warning -> entry.level == LogLevel.Warning
             XrayLogLevelFilter.Error -> entry.level == LogLevel.Error

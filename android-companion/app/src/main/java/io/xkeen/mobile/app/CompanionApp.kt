@@ -2302,6 +2302,12 @@ internal fun logsConnectionChip(
 @Composable
 internal fun logLevelChip(level: LogLevel): StatusChipModel =
     when (level) {
+        LogLevel.Debug -> StatusChipModel(
+            "ОТЛАДКА",
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+
         LogLevel.Info -> StatusChipModel(
             "ИНФО",
             MaterialTheme.colorScheme.secondaryContainer,

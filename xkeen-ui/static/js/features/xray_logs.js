@@ -1,4 +1,7 @@
-import { getXrayLogLineClass } from './xray_log_line_class.js';
+import {
+  getXrayLogLineClass,
+  shouldKeepXrayLogLineForLevel,
+} from './xray_log_line_class.js';
 import {
   collectXrayLogDestinationIpPorts,
   collectXrayLogDomainCandidates,
@@ -1156,7 +1159,7 @@ let xrayLogsModuleApi = null;
     let entries = rawEntries.slice();
 
     if (levelFilter) {
-      entries = entries.filter((entry) => shouldKeepLineForLevel(entry.line, levelFilter));
+      entries = entries.filter((entry) => shouldKeepXrayLogLineForLevel(entry.line, levelFilter));
     }
     const levelCount = entries.length;
 
@@ -2806,27 +2809,6 @@ let xrayLogsModuleApi = null;
 
 
 
-  // Detect Xray log level for view-side filtering.
-  // We prefer exact markers like [Info]/[Debug]/[Warning]/[Error].
-  function detectXrayLogLevel(line) {
-    const s = String(line || '');
-    let m = s.match(/\[(debug|info|warning|error)\]/i);
-    if (m && m[1]) return String(m[1]).toLowerCase();
-    m = s.match(/\blevel=(debug|info|warning|error)\b/i);
-    if (m && m[1]) return String(m[1]).toLowerCase();
-    return '';
-  }
-
-  const LOGLEVEL_ORDER = { debug: 0, info: 1, warning: 2, error: 3 };
-
-  function shouldIncludeLineByLevel(line, threshold) {
-    const th = String(threshold || '').toLowerCase();
-    if (!(th in LOGLEVEL_ORDER)) return true;
-    const lvl = detectXrayLogLevel(line);
-    if (!lvl || !(lvl in LOGLEVEL_ORDER)) return true; // unknown lines: keep
-    return LOGLEVEL_ORDER[lvl] >= LOGLEVEL_ORDER[th];
-  }
-
   function parseXrayLogLine(line, idx) {
     const clean = normalizeLogLine(line);
     if (!clean || !String(clean).trim()) return '';
@@ -2953,29 +2935,6 @@ let xrayLogsModuleApi = null;
     const dataIdx = (idx === undefined || idx === null) ? '' : (' data-idx="' + String(idx) + '"');
     return '<span class="' + cls + '"' + dataIdx + '>' + processed + '</span>';
   }
-  // ---------- View filtering by Xray log level ----------
-
-  const XRAY_LEVEL_ORDER = { debug: 0, info: 1, warning: 2, error: 3 };
-
-  function detectXrayLevel(line) {
-    const s = String(line || '');
-    // Primary: Xray format uses [Info]/[Warning]/[Error]/[Debug]
-    let m = s.match(/\[(debug|info|warning|error)\]/i);
-    if (m && m[1]) return String(m[1]).toLowerCase();
-    // Secondary: sometimes logs contain level=info etc
-    m = s.match(/\blevel=(debug|info|warning|error)\b/i);
-    if (m && m[1]) return String(m[1]).toLowerCase();
-    return '';
-  }
-
-  function shouldKeepLineForLevel(line, threshold) {
-    const thr = String(threshold || '').toLowerCase();
-    if (!thr || !(thr in XRAY_LEVEL_ORDER)) return true;
-    const lvl = detectXrayLevel(line);
-    if (!lvl || !(lvl in XRAY_LEVEL_ORDER)) return true; // unknown -> keep
-    return XRAY_LEVEL_ORDER[lvl] >= XRAY_LEVEL_ORDER[thr];
-  }
-
   function applyXrayLogFilterToOutput() {
   const outputEl = $('xray-log-output');
   if (!outputEl) return;
@@ -3009,7 +2968,7 @@ let xrayLogsModuleApi = null;
   let entries = src.map((line, idx) => ({ idx, line: normalizeLogLine(line) }));
 
   if (levelFilter) {
-    entries = entries.filter((e) => shouldKeepLineForLevel(e.line, levelFilter));
+    entries = entries.filter((e) => shouldKeepXrayLogLineForLevel(e.line, levelFilter));
   }
 
   const filtered = groups.length
