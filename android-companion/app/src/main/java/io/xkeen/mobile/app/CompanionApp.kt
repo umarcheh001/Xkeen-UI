@@ -91,7 +91,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -166,6 +165,7 @@ internal fun CompanionApp(controller: CompanionController) {
                         state = state,
                         controller = controller,
                         onAppUpdate = { showAppUpdateDialog = true },
+                        isAppUpdateDialogVisible = showAppUpdateDialog,
                     )
                 }
             }
@@ -503,6 +503,7 @@ private fun ReadyRoute(
     state: CompanionUiState,
     controller: CompanionController,
     onAppUpdate: () -> Unit,
+    isAppUpdateDialogVisible: Boolean,
 ) {
     val density = LocalDensity.current
     val isImeVisible = WindowInsets.ime.getBottom(density) > 0
@@ -593,13 +594,15 @@ private fun ReadyRoute(
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                 )
 
-                AppUpdateBar(
-                    update = state.appUpdate,
-                    onClick = openAppUpdateDialog,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(horizontal = 8.dp, vertical = 8.dp),
-                )
+                if (!isAppUpdateDialogVisible) {
+                    AppUpdateBar(
+                        update = state.appUpdate,
+                        onClick = openAppUpdateDialog,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                    )
+                }
             }
 
             PendingActionDialog(
@@ -2078,11 +2081,14 @@ internal fun AppUpdateDialog(
                     onClick = onDismiss,
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("Отмена")
+                    UpdateDialogActionLabel("Отмена")
                 }
                 if (release?.releaseUrl?.isNotBlank() == true) {
-                    TextButton(onClick = { uriHandler.openUri(release.releaseUrl) }) {
-                        Text("GitHub")
+                    OutlinedButton(
+                        onClick = { uriHandler.openUri(release.releaseUrl) },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        UpdateDialogActionLabel("GitHub")
                     }
                 }
                 when (update.phase) {
@@ -2091,9 +2097,7 @@ internal fun AppUpdateDialog(
                         onClick = onDownload,
                         modifier = Modifier.weight(1f),
                     ) {
-                        Icon(Icons.Outlined.CloudDownload, contentDescription = null)
-                        Spacer(Modifier.width(7.dp))
-                        Text("Скачать APK")
+                        UpdateDialogActionLabel("Скачать")
                     }
                     AppUpdatePhase.ReadyToInstall -> Button(
                         onClick = {
@@ -2101,17 +2105,13 @@ internal fun AppUpdateDialog(
                         },
                         modifier = Modifier.weight(1f),
                     ) {
-                        Icon(Icons.Outlined.DoneAll, contentDescription = null)
-                        Spacer(Modifier.width(7.dp))
-                        Text("Установить")
+                        UpdateDialogActionLabel("Установить")
                     }
                     AppUpdatePhase.Error -> Button(
                         onClick = if (release != null) onDownload else onCheck,
                         modifier = Modifier.weight(1f),
                     ) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = null)
-                        Spacer(Modifier.width(7.dp))
-                        Text(if (release != null) "Повторить загрузку" else "Проверить")
+                        UpdateDialogActionLabel(if (release != null) "Повторить" else "Проверить")
                     }
                     AppUpdatePhase.Checking,
                     AppUpdatePhase.Downloading,
@@ -2120,14 +2120,23 @@ internal fun AppUpdateDialog(
                         onClick = onCheck,
                         modifier = Modifier.weight(1f),
                     ) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = null)
-                        Spacer(Modifier.width(7.dp))
-                        Text("Проверить")
+                        UpdateDialogActionLabel("Проверить")
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun UpdateDialogActionLabel(text: String) {
+    Text(
+        text = text,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis,
+        style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.sp),
+    )
 }
 
 @Composable
@@ -2781,6 +2790,7 @@ private fun ReadyPreview() {
             state = CompanionUiState(phase = AppPhase.Ready),
             controller = CompanionController(CompanionUiState(phase = AppPhase.Ready)),
             onAppUpdate = {},
+            isAppUpdateDialogVisible = false,
         )
     }
 }
