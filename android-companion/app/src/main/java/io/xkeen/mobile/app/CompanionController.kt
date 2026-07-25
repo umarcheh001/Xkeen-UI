@@ -14,7 +14,13 @@ internal class CompanionController(
     initialState: CompanionUiState = CompanionUiState(),
     private val dependencies: CompanionControllerDependencies = defaultCompanionControllerDependencies(),
 ) {
-    var state by mutableStateOf(initialState)
+    var state by mutableStateOf(
+        initialState.copy(
+            logs = dependencies.xrayLogsPreferences.load()
+                ?.let(initialState.logs::withXrayLogsPreferences)
+                ?: initialState.logs,
+        ),
+    )
         private set
 
     /**
@@ -2626,35 +2632,52 @@ internal class CompanionController(
     }
 
     fun updateXrayLogStreamFilter(filter: XrayLogStreamFilter) {
+        if (state.logs.streamFilter == filter) return
         state = state.copy(logs = state.logs.copy(streamFilter = filter))
+        persistXrayLogsPreferences()
     }
 
     fun updateXrayLogLevelFilter(filter: XrayLogLevelFilter) {
+        if (state.logs.levelFilter == filter) return
         state = state.copy(logs = state.logs.copy(levelFilter = filter))
+        persistXrayLogsPreferences()
     }
 
     fun updateXrayLogSearchQuery(value: String) {
-        state = state.copy(logs = state.logs.copy(searchQuery = value.take(LOGS_SEARCH_LIMIT)))
+        val normalized = value.take(LOGS_SEARCH_LIMIT)
+        if (state.logs.searchQuery == normalized) return
+        state = state.copy(logs = state.logs.copy(searchQuery = normalized))
+        persistXrayLogsPreferences()
     }
 
     fun setXrayLogRegexEnabled(enabled: Boolean) {
+        if (state.logs.useRegex == enabled) return
         state = state.copy(logs = state.logs.copy(useRegex = enabled))
+        persistXrayLogsPreferences()
     }
 
     fun setXrayLogDeviceNamesVisible(enabled: Boolean) {
+        if (state.logs.showDeviceNames == enabled) return
         state = state.copy(logs = state.logs.copy(showDeviceNames = enabled))
+        persistXrayLogsPreferences()
     }
 
     fun setXrayLogDomainsVisible(enabled: Boolean) {
+        if (state.logs.showDomains == enabled) return
         state = state.copy(logs = state.logs.copy(showDomains = enabled))
+        persistXrayLogsPreferences()
     }
 
     fun setXrayLogsFollowNewest(enabled: Boolean) {
+        if (state.logs.followNewest == enabled) return
         state = state.copy(logs = state.logs.copy(followNewest = enabled))
+        persistXrayLogsPreferences()
     }
 
     fun setXrayLogsCompactRows(enabled: Boolean) {
+        if (state.logs.compactRows == enabled) return
         state = state.copy(logs = state.logs.copy(compactRows = enabled))
+        persistXrayLogsPreferences()
     }
 
     fun updateXrayLogsDisplayLimit(limit: Int) {
@@ -2671,6 +2694,7 @@ internal class CompanionController(
                 entries = current.entries.cappedLogsBuffer(normalized),
             ),
         )
+        persistXrayLogsPreferences()
     }
 
     fun setXrayLogsPausedByUser(paused: Boolean) {
@@ -2689,7 +2713,12 @@ internal class CompanionController(
                 reconnectAttempt = 0,
             ),
         )
+        persistXrayLogsPreferences()
         updateLogsDiagnostic()
+    }
+
+    private fun persistXrayLogsPreferences() {
+        dependencies.xrayLogsPreferences.save(state.logs.toXrayLogsPreferences())
     }
 
     suspend fun refreshXrayLogsStatus() {
@@ -4156,12 +4185,13 @@ internal class CompanionController(
         xrayLogsControlGeneration += 1
         logCursors.clear()
         xrayLogDomainResolver.clear()
+        val xrayLogsPreferences = state.logs.toXrayLogsPreferences()
         val newLogs = dependencies.logs.record(
-            current = LogsState(),
+            current = LogsState().withXrayLogsPreferences(xrayLogsPreferences),
             source = "auth",
             level = LogLevel.Info,
             message = result.logMessage,
-        )
+        ).withXrayLogsPreferences(xrayLogsPreferences)
         val workspaceDashboard = unloadedDashboardState().copy(
             instanceLabel = result.connection.name,
             endpoint = result.connection.baseUrl,

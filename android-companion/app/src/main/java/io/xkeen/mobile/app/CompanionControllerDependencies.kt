@@ -173,12 +173,14 @@ internal data class CompanionControllerDependencies(
     val xrayLogsControl: XrayLogsControlPort = DemoXrayLogsControlPort(),
     val mihomoNode: MihomoNodePort = DemoMihomoNodePort(),
     val mihomoHwid: MihomoHwidPort = DemoMihomoHwidPort(),
+    val xrayLogsPreferences: XrayLogsPreferencesPort = InMemoryXrayLogsPreferencesPort(),
 )
 
 internal fun defaultCompanionControllerDependencies(
     connections: ConnectionsPort = InMemoryConnectionsPort(),
     sessionMaterials: SessionMaterialStore = InMemorySessionMaterialStore(),
     transport: CompanionHttpTransport? = null,
+    xrayLogsPreferences: XrayLogsPreferencesPort = InMemoryXrayLogsPreferencesPort(),
 ): CompanionControllerDependencies {
     val journal = SystemCompanionJournalPort()
     val authHook = SessionMaterialAuthHook(connections, sessionMaterials)
@@ -219,6 +221,7 @@ internal fun defaultCompanionControllerDependencies(
         xrayLogsControl = WebPanelXrayLogsControlPort(serviceTransport),
         mihomoNode = WebPanelMihomoNodePort(serviceTransport),
         mihomoHwid = WebPanelMihomoHwidPort(serviceTransport),
+        xrayLogsPreferences = xrayLogsPreferences,
     )
 }
 

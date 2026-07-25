@@ -8,6 +8,11 @@ import org.junit.Test
 
 class XrayLogsProjectionTest {
     @Test
+    fun `access stream is selected for a new log viewer`() {
+        assertEquals(XrayLogStreamFilter.Access, LogsState().streamFilter)
+    }
+
+    @Test
     fun `jump to newest button is shown only while scrolled away from followed tail`() {
         assertFalse(shouldShowXrayLogsJumpToNewest(followNewest = true, canScrollForward = true))
         assertFalse(shouldShowXrayLogsJumpToNewest(followNewest = false, canScrollForward = false))
@@ -39,7 +44,10 @@ class XrayLogsProjectionTest {
 
     @Test
     fun `projection keeps only Xray entries and merges streams chronologically`() {
-        val projection = LogsState(entries = sampleEntries).projectXrayLogs()
+        val projection = LogsState(
+            entries = sampleEntries,
+            streamFilter = XrayLogStreamFilter.All,
+        ).projectXrayLogs()
 
         assertEquals(4, projection.totalXrayEntries)
         assertEquals(
@@ -98,7 +106,10 @@ class XrayLogsProjectionTest {
             LogEntry("23:59:59", "xray-error", LogLevel.Error, "2026/07/16 23:59:59 previous day", "error:1"),
         )
 
-        val projection = LogsState(entries = entries).projectXrayLogs()
+        val projection = LogsState(
+            entries = entries,
+            streamFilter = XrayLogStreamFilter.All,
+        ).projectXrayLogs()
 
         assertEquals(listOf("previous day", "next day"), projection.entries.map(LogEntry::displayMessage))
     }
@@ -131,6 +142,7 @@ class XrayLogsProjectionTest {
 
         val projection = LogsState(
             entries = entries,
+            streamFilter = XrayLogStreamFilter.Error,
             levelFilter = XrayLogLevelFilter.Error,
         ).projectXrayLogs()
 

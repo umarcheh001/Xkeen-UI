@@ -17,6 +17,92 @@ import org.junit.Test
 
 class CompanionControllerTest {
     @Test
+    fun xrayLogViewerPreferencesSurviveControllerRecreation() {
+        val preferences = InMemoryXrayLogsPreferencesPort()
+        val firstController = CompanionController(
+            dependencies = testDependencies(xrayLogsPreferences = preferences),
+        )
+
+        firstController.updateXrayLogStreamFilter(XrayLogStreamFilter.Error)
+        firstController.updateXrayLogLevelFilter(XrayLogLevelFilter.Warning)
+        firstController.updateXrayLogSearchQuery("timeout")
+        firstController.setXrayLogRegexEnabled(true)
+        firstController.updateXrayLogsDisplayLimit(400)
+        firstController.setXrayLogsCompactRows(false)
+        firstController.setXrayLogsFollowNewest(false)
+        firstController.setXrayLogsPausedByUser(true)
+        firstController.setXrayLogDeviceNamesVisible(false)
+        firstController.setXrayLogDomainsVisible(false)
+
+        val restored = CompanionController(
+            dependencies = testDependencies(xrayLogsPreferences = preferences),
+        ).state.logs
+
+        assertEquals(XrayLogStreamFilter.Error, restored.streamFilter)
+        assertEquals(XrayLogLevelFilter.Warning, restored.levelFilter)
+        assertEquals("timeout", restored.searchQuery)
+        assertTrue(restored.useRegex)
+        assertEquals(400, restored.displayLimit)
+        assertFalse(restored.compactRows)
+        assertFalse(restored.followNewest)
+        assertTrue(restored.isPausedByUser)
+        assertFalse(restored.showDeviceNames)
+        assertFalse(restored.showDomains)
+    }
+
+    @Test
+    fun restoredSessionKeepsXrayLogViewerPreferences() = runTest {
+        val selected = Connection(
+            id = "trusted-node",
+            name = "Доверенный узел",
+            baseUrl = "https://trusted.lan:8443",
+            status = ConnectionStatus.Configured,
+            lastSeen = "Готово",
+        )
+        val preferences = InMemoryXrayLogsPreferencesPort(
+            XrayLogsPreferences(
+                streamFilter = XrayLogStreamFilter.All,
+                levelFilter = XrayLogLevelFilter.Error,
+                displayLimit = 200,
+                compactRows = false,
+            ),
+        )
+        val controller = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Launching),
+            dependencies = testDependencies(
+                connections = InMemoryConnectionsPort(
+                    StoredConnections(
+                        connections = listOf(selected),
+                        selectedConnectionId = selected.id,
+                    ),
+                ),
+                session = object : SessionPort by DemoSessionPort() {
+                    override suspend fun restore(connection: Connection): SessionRestoreResult =
+                        SessionRestoreResult.Open(
+                            SessionOpenResult(
+                                connection = connection,
+                                statusSummary = "Готово",
+                                lastOperation = "Сессия восстановлена",
+                                eventTitle = "Сессия восстановлена",
+                                eventSubtitle = "Авторизован: admin",
+                                logMessage = "Сессия подтверждена",
+                            ),
+                        )
+                },
+                xrayLogsPreferences = preferences,
+            ),
+        )
+
+        controller.finishLaunch()
+
+        assertEquals(AppPhase.Ready, controller.state.phase)
+        assertEquals(XrayLogStreamFilter.All, controller.state.logs.streamFilter)
+        assertEquals(XrayLogLevelFilter.Error, controller.state.logs.levelFilter)
+        assertEquals(200, controller.state.logs.displayLimit)
+        assertFalse(controller.state.logs.compactRows)
+    }
+
+    @Test
     fun finishLaunchWithoutTrustedMaterialOpensPairLoginForLastSelectedConnection() = runTest {
         val selected = Connection(
             id = "saved-node",
@@ -1889,6 +1975,7 @@ private fun testDependencies(
     logs: LogsPort? = null,
     logsTransport: LogsTransportPort = FakeLogsTransportPort(),
     journal: CompanionJournalPort = FakeJournalPort(),
+    xrayLogsPreferences: XrayLogsPreferencesPort = InMemoryXrayLogsPreferencesPort(),
 ): CompanionControllerDependencies {
     val effectiveJournal = journal
     return CompanionControllerDependencies(
@@ -1912,6 +1999,7 @@ private fun testDependencies(
         journal = effectiveJournal,
         xrayConfigSource = xrayConfigSource,
         coreStatusSource = coreStatusSource,
+        xrayLogsPreferences = xrayLogsPreferences,
     )
 }
 

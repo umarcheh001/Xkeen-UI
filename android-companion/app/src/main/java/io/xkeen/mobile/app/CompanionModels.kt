@@ -728,7 +728,7 @@ data class XrayLogDevice(
 
 data class LogsState(
     val filter: LogFilter = LogFilter.All,
-    val streamFilter: XrayLogStreamFilter = XrayLogStreamFilter.All,
+    val streamFilter: XrayLogStreamFilter = XrayLogStreamFilter.Access,
     val levelFilter: XrayLogLevelFilter = XrayLogLevelFilter.All,
     val searchQuery: String = "",
     val useRegex: Boolean = false,
