@@ -1967,17 +1967,20 @@ internal fun AppUpdateDialog(
                     Text(
                         text = release?.let { "Версия ${it.version}" } ?: "Обновление приложения",
                         color = WebPanelPalette.TextStrong,
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontSize = 20.sp,
+                            lineHeight = 24.sp,
+                        ),
                         fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = "Установлена ${update.currentVersion}",
                         color = WebPanelPalette.Muted,
                         style = MaterialTheme.typography.bodySmall,
                     )
-                }
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Outlined.Close, contentDescription = "Закрыть")
                 }
             }
 
@@ -2068,14 +2071,16 @@ internal fun AppUpdateDialog(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                TextButton(onClick = onDismiss) {
+                    Text("Отмена")
+                }
+                Spacer(Modifier.weight(1f))
                 if (release?.releaseUrl?.isNotBlank() == true) {
                     TextButton(onClick = { uriHandler.openUri(release.releaseUrl) }) {
                         Text("GitHub")
                     }
-                    Spacer(Modifier.weight(1f))
                 }
                 when (update.phase) {
                     AppUpdatePhase.Available,
@@ -2102,7 +2107,7 @@ internal fun AppUpdateDialog(
                     }
                     AppUpdatePhase.Checking,
                     AppUpdatePhase.Downloading,
-                    -> TextButton(onClick = onDismiss) { Text("Скрыть") }
+                    -> Unit
                     else -> Button(onClick = onCheck) {
                         Icon(Icons.Outlined.Refresh, contentDescription = null)
                         Spacer(Modifier.width(7.dp))
