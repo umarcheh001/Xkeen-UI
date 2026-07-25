@@ -37,6 +37,7 @@ import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FullscreenExit
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Refresh
@@ -52,6 +53,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -107,6 +109,14 @@ internal fun LogsWorkspaceScreen(
     var copiedCount by rememberSaveable { mutableStateOf<Int?>(null) }
     var lastSeenTailId by rememberSaveable { mutableStateOf<String?>(null) }
     var appliedFilterSignature by rememberSaveable { mutableStateOf(filterSignature) }
+    val showJumpToNewest by remember(listState, logs.followNewest) {
+        derivedStateOf {
+            shouldShowXrayLogsJumpToNewest(
+                followNewest = logs.followNewest,
+                canScrollForward = listState.canScrollForward,
+            )
+        }
+    }
 
     LaunchedEffect(
         logs.entries,
@@ -227,9 +237,6 @@ internal fun LogsWorkspaceScreen(
             unseen = projection.entries.unseenXrayEntriesAfter(lastSeenTailId),
             copiedCount = copiedCount,
             followNewest = logs.followNewest,
-            onJumpToNewest = {
-                controller.setXrayLogsFollowNewest(true)
-            },
         )
 
         XrayLogsNotice(logs = logs)
@@ -237,25 +244,37 @@ internal fun LogsWorkspaceScreen(
         if (projection.entries.isEmpty()) {
             XrayLogsEmptyState(logs, projection.regexError)
         } else {
-            LazyColumn(
-                state = listState,
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                itemsIndexed(
-                    items = projection.entries,
-                    key = { index, entry -> entry.viewerKey(index) },
-                ) { index, entry ->
-                    XrayLogEntryRow(
-                        entry = entry,
-                        ordinal = index + 1,
-                        compact = logs.compactRows,
-                        devicesByIp = devicesByIp,
-                        domainsByIp = logs.destinationDomainsByIp,
-                        showDeviceNames = logs.showDeviceNames,
-                        showDomains = logs.showDomains,
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    itemsIndexed(
+                        items = projection.entries,
+                        key = { index, entry -> entry.viewerKey(index) },
+                    ) { index, entry ->
+                        XrayLogEntryRow(
+                            entry = entry,
+                            ordinal = index + 1,
+                            compact = logs.compactRows,
+                            devicesByIp = devicesByIp,
+                            domainsByIp = logs.destinationDomainsByIp,
+                            showDeviceNames = logs.showDeviceNames,
+                            showDomains = logs.showDomains,
+                        )
+                    }
+                }
+                if (showJumpToNewest) {
+                    XrayLogsJumpToNewestButton(
+                        onClick = { controller.setXrayLogsFollowNewest(true) },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(10.dp),
                     )
                 }
             }
@@ -547,7 +566,6 @@ private fun XrayLogsMetaRow(
     unseen: Int,
     copiedCount: Int?,
     followNewest: Boolean,
-    onJumpToNewest: () -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
@@ -560,23 +578,46 @@ private fun XrayLogsMetaRow(
             color = if (copiedCount != null) WebPanelPalette.Success else WebPanelPalette.Muted,
             style = MaterialTheme.typography.labelSmall,
         )
-        Text(
-            text = if (followNewest) {
-                "авто · в конец"
-            } else if (unseen > 0) {
-                "$unseen новых · в конец"
-            } else {
-                "перейти в конец"
-            },
-            modifier = Modifier
-                .clickable(enabled = !followNewest, onClick = onJumpToNewest)
-                .padding(horizontal = 3.dp, vertical = 2.dp),
-            color = if (followNewest) WebPanelPalette.Success else WebPanelPalette.TextBlue,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Medium,
-        )
+        if (followNewest || unseen > 0) {
+            Text(
+                text = if (followNewest) "авто" else "$unseen новых",
+                modifier = Modifier.padding(horizontal = 3.dp, vertical = 2.dp),
+                color = if (followNewest) WebPanelPalette.Success else WebPanelPalette.TextBlue,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+            )
+        }
     }
 }
+
+@Composable
+private fun XrayLogsJumpToNewestButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.size(38.dp),
+        shape = CircleShape,
+        color = WebPanelPalette.SurfaceRaised.copy(alpha = 0.82f),
+        contentColor = WebPanelPalette.TextBlue,
+        border = BorderStroke(1.dp, WebPanelPalette.Border.copy(alpha = 0.32f)),
+        shadowElevation = 5.dp,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = Icons.Outlined.KeyboardArrowDown,
+                contentDescription = "Перейти к новым логам",
+                modifier = Modifier.size(22.dp),
+            )
+        }
+    }
+}
+
+internal fun shouldShowXrayLogsJumpToNewest(
+    followNewest: Boolean,
+    canScrollForward: Boolean,
+): Boolean = !followNewest && canScrollForward
 
 @Composable
 private fun XrayLogsNotice(logs: LogsState) {

@@ -1,11 +1,19 @@
 package io.xkeen.mobile.app
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class XrayLogsProjectionTest {
+    @Test
+    fun `jump to newest button is shown only while scrolled away from followed tail`() {
+        assertFalse(shouldShowXrayLogsJumpToNewest(followNewest = true, canScrollForward = true))
+        assertFalse(shouldShowXrayLogsJumpToNewest(followNewest = false, canScrollForward = false))
+        assertTrue(shouldShowXrayLogsJumpToNewest(followNewest = false, canScrollForward = true))
+    }
+
     @Test
     fun `level filters are cumulative thresholds for error log`() {
         val entries = listOf(
