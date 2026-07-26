@@ -4855,6 +4855,28 @@ def test_build_subscription_outbounds_applies_transport_filter_and_manual_exclus
     assert stats["filtered_out_count"] == 2
 
 
+def test_build_subscription_outbounds_deduplicates_rotating_link_variants():
+    from services import xray_subscriptions as subs
+
+    first = _vless_reality("FREE WhatsApp & Telegram", sid="1111111111111111")
+    second = _vless_reality("FREE WhatsApp & Telegram", sid="2222222222222222")
+    distinct = _vless_reality("FREE WhatsApp & Telegram", sid="3333333333333333").replace(
+        "user@example.com", "user@other.example.com"
+    )
+
+    outbounds, errors, stats = subs.build_subscription_outbounds(
+        [first, second, distinct],
+        tag_prefix="pecan",
+    )
+
+    assert errors == []
+    assert stats["source_count"] == 2
+    assert stats["filtered_out_count"] == 0
+    assert len(outbounds) == 2
+    assert len(stats["nodes"]) == 2
+    assert stats["nodes"][0]["key"] != stats["nodes"][1]["key"]
+
+
 def test_build_subscription_outbounds_keeps_failed_node_tag_blank(monkeypatch):
     from services import xray_subscriptions as subs
 
@@ -5155,6 +5177,216 @@ def test_build_subscription_json_outbounds_keeps_node_key_when_provider_rotates_
     assert first and second
     assert first_stats["nodes"][0]["key"] == second_stats["nodes"][0]["key"]
     assert first[0]["tag"] == second[0]["tag"] == "pecan--FREE_WhatsApp_Telegram"
+
+
+def test_build_subscription_json_outbounds_keeps_first_duplicate_name_like_happ():
+    from services import xray_subscriptions as subs
+
+    def _node(host: str, transport: str, security: str) -> dict:
+        stream_settings = {
+            "network": transport,
+            "security": security,
+        }
+        if transport == "xhttp":
+            stream_settings["xhttpSettings"] = {"path": "/api/v2/"}
+        return {
+            "remarks": "FREE WhatsApp & Telegram",
+            "outbounds": [
+                {
+                    "tag": "provider-generated-tag",
+                    "protocol": "vless",
+                    "settings": {
+                        "vnext": [
+                            {
+                                "address": host,
+                                "port": 443,
+                                "users": [{"id": "user", "encryption": "none"}],
+                            }
+                        ]
+                    },
+                    "streamSettings": stream_settings,
+                }
+            ],
+        }
+
+    body = json.dumps(
+        [
+            _node("stable.example.com", "xhttp", "tls"),
+            _node("rotating-a.example.com", "raw", "reality"),
+            _node("rotating-b.example.com", "tcp", "reality"),
+        ]
+    )
+
+    outbounds, errors, stats = subs.build_subscription_json_outbounds(
+        body,
+        tag_prefix="pecan",
+    )
+
+    assert errors == []
+    assert stats["source_count"] == 1
+    assert stats["filtered_out_count"] == 0
+    assert len(stats["nodes"]) == 1
+    assert stats["nodes"][0]["host"] == "stable.example.com"
+    assert [item["settings"]["vnext"][0]["address"] for item in outbounds] == ["stable.example.com"]
+
+    stable_key = stats["nodes"][0]["key"]
+    outbounds, errors, stats = subs.build_subscription_json_outbounds(
+        body,
+        tag_prefix="pecan",
+        excluded_node_keys=[stable_key],
+    )
+
+    assert errors == []
+    assert outbounds == []
+    assert stats["source_count"] == 1
+    assert stats["filtered_out_count"] == 1
+    assert len(stats["nodes"]) == 1
+
+
+def test_build_subscription_json_outbounds_deduplicates_profile_fallbacks_and_keeps_exclusion_stable():
+    from services import xray_subscriptions as subs
+
+    def _outbound(tag: str, host: str, user_id: str) -> dict:
+        return {
+            "tag": tag,
+            "protocol": "vless",
+            "settings": {
+                "vnext": [
+                    {
+                        "address": host,
+                        "port": 443,
+                        "users": [{"id": user_id, "encryption": "none"}],
+                    }
+                ]
+            },
+            "streamSettings": {
+                "network": "xhttp",
+                "security": "tls",
+                "xhttpSettings": {"path": "/api/v2/"},
+            },
+        }
+
+    def _body(free_hosts: list[str]) -> str:
+        return json.dumps(
+            [
+                {
+                    "remarks": "FREE WhatsApp & Telegram",
+                    "outbounds": [
+                        _outbound(f"proxy-{idx}", host, f"free-{idx}")
+                        for idx, host in enumerate(free_hosts, 1)
+                    ],
+                },
+                {
+                    "remarks": "Germany 01",
+                    "outbounds": [_outbound("proxy", "de.example.com", "de-user")],
+                },
+            ]
+        )
+
+    first, first_errors, first_stats = subs.build_subscription_json_outbounds(
+        _body(["free-a.example.com", "free-b.example.com", "free-c.example.com"]),
+        tag_prefix="pecan",
+    )
+
+    assert first_errors == []
+    assert first_stats["source_count"] == 2
+    assert len(first) == 2
+    assert [item["tag"] for item in first] == [
+        "pecan--FREE_WhatsApp_Telegram",
+        "pecan--Germany_01",
+    ]
+
+    free_key = next(item["key"] for item in first_stats["nodes"] if item["name"] == "FREE WhatsApp & Telegram")
+
+    second, second_errors, second_stats = subs.build_subscription_json_outbounds(
+        _body(["free-c.example.com", "free-b.example.com", "free-d.example.com"]),
+        tag_prefix="pecan",
+        excluded_node_keys=[free_key],
+    )
+
+    assert second_errors == []
+    assert second_stats["source_count"] == 2
+    assert second_stats["filtered_out_count"] == 1
+    assert [item["tag"] for item in second] == ["pecan--Germany_01"]
+    second_free = next(item for item in second_stats["nodes"] if item["name"] == "FREE WhatsApp & Telegram")
+    assert second_free["key"] == free_key
+
+
+def test_remap_subscription_excluded_keys_maps_legacy_duplicate_json_profile_by_name():
+    from services import xray_subscriptions as subs
+
+    previous = [
+        {
+            "key": "legacy-free-fallback-1",
+            "name": "FREE WhatsApp & Telegram",
+            "protocol": "vless",
+            "source_format": "xray-json",
+            "host": "free-a.example.com",
+        },
+        {
+            "key": "legacy-free-fallback-2",
+            "name": "FREE WhatsApp & Telegram",
+            "protocol": "vless",
+            "source_format": "xray-json",
+            "host": "free-b.example.com",
+        },
+    ]
+    current = [
+        {
+            "key": "stable-free-profile",
+            "name": "FREE WhatsApp & Telegram",
+            "protocol": "vless",
+            "source_format": "xray-json",
+            "host": "free-c.example.com",
+        }
+    ]
+
+    remapped, migrated = subs._remap_subscription_excluded_keys(
+        previous,
+        ["legacy-free-fallback-2"],
+        current,
+    )
+
+    assert remapped == ["stable-free-profile"]
+    assert migrated == 1
+
+
+def test_normalize_state_expands_exclusion_to_legacy_json_profile_fallbacks():
+    from services import xray_subscriptions as subs
+
+    state = subs._normalize_state(
+        {
+            "subscriptions": [
+                {
+                    "id": "legacy",
+                    "url": "https://example.com/sub",
+                    "excluded_node_keys": ["legacy-free-2"],
+                    "last_nodes": [
+                        {
+                            "key": "legacy-free-1",
+                            "name": "FREE WhatsApp & Telegram",
+                            "source_format": "xray-json",
+                        },
+                        {
+                            "key": "legacy-free-2",
+                            "name": "FREE WhatsApp & Telegram",
+                            "source_format": "xray-json",
+                        },
+                        {
+                            "key": "other-link",
+                            "name": "FREE WhatsApp & Telegram",
+                            "source_format": "links",
+                        },
+                    ],
+                }
+            ]
+        }
+    )
+
+    assert state["subscriptions"][0]["excluded_node_keys"] == [
+        "legacy-free-2",
+        "legacy-free-1",
+    ]
 
 
 def test_remap_subscription_excluded_keys_migrates_legacy_json_key_by_node_identity():

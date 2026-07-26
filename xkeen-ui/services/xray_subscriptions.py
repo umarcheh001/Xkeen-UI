@@ -333,6 +333,51 @@ def _clean_string_list(value: Any) -> List[str]:
     return out
 
 
+def _expand_json_profile_exclusions(
+    excluded_node_keys: Iterable[Any],
+    nodes: Iterable[Any],
+) -> List[str]:
+    """Apply an exclusion to every legacy fallback of one JSON profile.
+
+    Before profile-level JSON de-duplication was introduced, ``last_nodes``
+    could contain several fallback outbounds with the same ``remarks`` and
+    different keys.  If the user excluded just one of those rows, the other
+    rows stayed visible until the next refresh.  Preserve that intent while
+    old state is still around; link subscriptions deliberately remain
+    endpoint-specific.
+    """
+    excluded = _clean_string_list(excluded_node_keys)
+    if not excluded:
+        return excluded
+    node_list = [item for item in nodes if isinstance(item, dict)]
+    by_key = {
+        str(item.get("key") or "").strip(): item
+        for item in node_list
+        if str(item.get("key") or "").strip()
+    }
+    profile_names = {
+        _logical_json_node_name(item.get("name"))
+        for key in excluded
+        for item in [by_key.get(key)]
+        if item and str(item.get("source_format") or "").strip().lower() == "xray-json"
+        and _logical_json_node_name(item.get("name"))
+    }
+    if not profile_names:
+        return excluded
+    out = list(excluded)
+    seen = set(out)
+    for item in node_list:
+        if str(item.get("source_format") or "").strip().lower() != "xray-json":
+            continue
+        if _logical_json_node_name(item.get("name")) not in profile_names:
+            continue
+        key = str(item.get("key") or "").strip()
+        if key and key not in seen:
+            seen.add(key)
+            out.append(key)
+    return out
+
+
 def _read_string_list_value(data: Any, keys: tuple[str, ...]) -> List[str]:
     if not isinstance(data, dict):
         return []
@@ -723,6 +768,7 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
         last_nodes = _normalize_last_nodes(
             item.get("last_nodes") if "last_nodes" in item else item.get("lastNodes")
         )
+        excluded_node_keys = _expand_json_profile_exclusions(excluded_node_keys, last_nodes)
         last_generated_outbounds = _normalize_generated_outbound_baselines(
             item.get("last_generated_outbounds")
             if "last_generated_outbounds" in item
@@ -1801,6 +1847,37 @@ def _node_fingerprint(value: Any) -> str:
     return hashlib.sha1(raw).hexdigest()[:16]
 
 
+def _logical_json_node_name(value: Any) -> str:
+    """Return the provider-facing identity used for JSON node de-duplication.
+
+    HAPP-style JSON subscriptions identify profiles by ``remarks``.  Some
+    providers nevertheless emit several generated outbounds with the same
+    remarks (usually alternate endpoints of one profile).  Treating every
+    generated outbound as a separate UI node makes a manually excluded profile
+    return under a new key on the next refresh.
+    """
+
+    return re.sub(r"\s+", " ", str(value or "").strip()).casefold()
+
+
+def _json_profile_identity_name(source: Dict[str, Any], name: Any) -> str:
+    """Return a profile name only when it came from a JSON profile wrapper.
+
+    A bare Xray outbound uses its own ``tag`` as the name.  Such arrays may
+    legitimately contain several ``proxy`` outbounds, so they must retain the
+    detailed endpoint fingerprint instead of being mistaken for one profile.
+    Nested provider profiles have a parent ``remarks``/``name`` and normally a
+    generated outbound tag (``proxy-1``), which gives us a reliable distinction
+    without changing the existing iterator contract.
+    """
+
+    logical_name = _logical_json_node_name(name)
+    if not logical_name:
+        return ""
+    source_tag = _logical_json_node_name(source.get("tag"))
+    return "" if source_tag and source_tag == logical_name else logical_name
+
+
 # Subscription providers commonly rotate per-device credentials and Reality
 # camouflage values without changing the user-facing node.  They must remain
 # in the generated outbound, but should not invalidate a manual exclusion.
@@ -2063,8 +2140,19 @@ def _json_outbound_node_meta(source: Dict[str, Any], name_hint: str, index: int)
         # provider's volatile tag.
         fingerprint_payload = f"{protocol}|{name}|{host}|{port}|{transport}|{security}|{sni}|{detail}"
 
+    # A JSON profile may contain several fallback outbounds.  HAPP exposes the
+    # profile once, so its exclusion/latency key must not depend on whichever
+    # fallback happened to be first (or on a rotated endpoint).  Keep the
+    # detailed source fingerprint as a fallback for nameless custom objects.
+    logical_name = _json_profile_identity_name(source, name)
+    node_key = (
+        _node_fingerprint("xray-json-profile|" + logical_name)
+        if logical_name
+        else _node_fingerprint(fingerprint_payload)
+    )
+
     return {
-        "key": _node_fingerprint(fingerprint_payload),
+        "key": node_key,
         "name": name,
         "protocol": protocol,
         "transport": transport,
@@ -2222,7 +2310,22 @@ def build_subscription_outbounds(
     type_pattern = _compile_regex_filter(type_filter, "фильтра типа")
     transport_pattern = _compile_regex_filter(transport_filter, "фильтра транспорта")
     excluded_keys = {str(item or "").strip() for item in (excluded_node_keys or []) if str(item or "").strip()}
-    candidates = [(link, _link_node_meta(link, idx)) for idx, link in enumerate(links or [])]
+    # A provider may emit the same logical link more than once (most often
+    # after rotating volatile Reality query parameters such as ``sid``/``spx``).
+    # ``_link_node_meta`` deliberately removes those parameters from the
+    # stable key so manual exclusions survive a refresh; use that same key to
+    # avoid generating duplicate outbounds in the first place.  Distinct
+    # endpoints or names retain their own keys and remain valid separate nodes.
+    candidates: List[Tuple[str, Dict[str, Any]]] = []
+    seen_node_keys: set[str] = set()
+    for idx, link in enumerate(links or []):
+        meta = _link_node_meta(link, idx)
+        key = str(meta.get("key") or "").strip()
+        if key and key in seen_node_keys:
+            continue
+        if key:
+            seen_node_keys.add(key)
+        candidates.append((link, meta))
     source_count = len(candidates)
     filtered_links: List[Tuple[str, Dict[str, Any], int]] = []
     preview_nodes: List[Dict[str, Any]] = []
@@ -2282,10 +2385,16 @@ def build_subscription_json_outbounds(
     type_pattern = _compile_regex_filter(type_filter, "фильтра типа")
     transport_pattern = _compile_regex_filter(transport_filter, "фильтра транспорта")
     excluded_keys = {str(item or "").strip() for item in (excluded_node_keys or []) if str(item or "").strip()}
-    candidates = [
-        (source, _json_outbound_node_meta(source, name_hint, idx))
-        for idx, (source, name_hint) in enumerate(_iter_json_proxy_outbounds(obj))
-    ]
+    candidates: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
+    seen_logical_names: set[str] = set()
+    for idx, (source, name_hint) in enumerate(_iter_json_proxy_outbounds(obj)):
+        meta = _json_outbound_node_meta(source, name_hint, idx)
+        logical_name = _json_profile_identity_name(source, meta.get("name"))
+        if logical_name and logical_name in seen_logical_names:
+            continue
+        if logical_name:
+            seen_logical_names.add(logical_name)
+        candidates.append((source, meta))
     source_count = len(candidates)
     filtered_candidates: List[Tuple[Dict[str, Any], Dict[str, Any], int]] = []
     preview_nodes: List[Dict[str, Any]] = []
@@ -2450,6 +2559,7 @@ def _remap_subscription_excluded_keys(
         if isinstance(node, dict) and str(node.get("key") or "").strip()
     }
     current_by_identity: Dict[Tuple[str, ...], List[str]] = {}
+    current_by_logical_name: Dict[str, List[str]] = {}
     current_keys: set[str] = set()
     for node in current_nodes:
         if not isinstance(node, dict):
@@ -2459,6 +2569,15 @@ def _remap_subscription_excluded_keys(
             continue
         current_keys.add(key)
         current_by_identity.setdefault(_subscription_node_identity(node), []).append(key)
+        logical_name = _logical_json_node_name(node.get("name"))
+        if logical_name:
+            current_by_logical_name.setdefault(logical_name, []).append(key)
+
+    previous_by_key_node = {
+        str(node.get("key") or "").strip(): node
+        for node in previous_nodes
+        if isinstance(node, dict) and str(node.get("key") or "").strip()
+    }
 
     migrated = 0
     result: List[str] = []
@@ -2470,6 +2589,19 @@ def _remap_subscription_excluded_keys(
         replacement = key
         if key not in current_keys:
             candidates = current_by_identity.get(previous_by_key.get(key, ()), [])
+            if not candidates:
+                # JSON profiles can expose several fallback outbounds under
+                # one ``remarks`` value.  Older state may have stored a key
+                # for any of those fallbacks, while the current parser keeps
+                # only one logical profile.  The name match is intentionally
+                # accepted only when it resolves to one current node; link
+                # subscriptions with genuinely distinct same-name nodes stay
+                # ambiguous and retain their old exclusion key.
+                previous_node = previous_by_key_node.get(key) or {}
+                previous_name = _logical_json_node_name(previous_node.get("name"))
+                name_candidates = current_by_logical_name.get(previous_name, [])
+                if len(name_candidates) == 1:
+                    candidates = name_candidates
             # Ambiguous duplicate outbounds are intentionally left untouched;
             # silently excluding the wrong duplicate is worse than asking the
             # user to select it once again.
