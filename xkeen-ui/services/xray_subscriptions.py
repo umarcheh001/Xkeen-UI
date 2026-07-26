@@ -26,7 +26,7 @@ import urllib.request
 from typing import Any, Callable, Dict, Iterable, List, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
-from services import happ_links
+from services import happ_links, happ_payloads
 from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.url_policy import URLPolicy, env_flag, is_url_allowed
 from services.xray_config_files import OUTBOUNDS_FILE, ROUTING_FILE, ensure_xray_jsonc_dir, jsonc_path_for
@@ -1159,7 +1159,10 @@ def _resolve_happ_subscription_source(
     if not happ_links.is_happ_deep_link(url_s):
         if not happ_links.looks_like_html_landing(body_text, content_type=content_type):
             return None
-        if not happ_links.extract_happ_links(body_text):
+        if not (
+            happ_links.extract_happ_links(body_text)
+            or happ_links.extract_happ_links_from_url(url_s)
+        ):
             return None
     resolved = happ_links.resolve_source(url_s, body=body_text, content_type=content_type)
     if not resolved:
@@ -1209,6 +1212,14 @@ def fetch_subscription_body(
         raise RuntimeError("happ_helper_empty")
 
     body, headers = _fetch_subscription_body_once(url_s, request_headers=request_headers)
+    try:
+        decrypted_body = happ_payloads.decrypt_subscription_body(url_s, body, headers)
+    except happ_payloads.HappPayloadError as exc:
+        raise RuntimeError("happ_payload_decrypt_failed") from exc
+    if decrypted_body is not None:
+        body = decrypted_body
+        headers = {str(k).lower(): str(v) for k, v in (headers or {}).items()}
+        headers[happ_payloads.HAPP_PAYLOAD_DECRYPTED_HEADER] = "1"
     try:
         resolved = _resolve_happ_subscription_source(
             url_s,
@@ -1365,6 +1376,11 @@ def _happ_helper_error_message(reason: Any) -> str:
         )
     if code == "happ_helper_timeout":
         return "Happ helper не ответил вовремя."
+    if code == "happ_payload_decrypt_failed":
+        return (
+            "Сервер Happ вернул зашифрованную подписку, но панель не смогла проверить её AES-GCM тег. "
+            "Проверьте, что URL содержит актуальный параметр key и что ответ не был изменён по пути."
+        )
     if code.startswith("happ_decryptor_missing:"):
         return "Не найден исполняемый файл внешнего Happ decryptor."
     if code.startswith("happ_helper_missing:"):
@@ -1508,7 +1524,11 @@ def fetch_subscription_body_for_xray(url: str) -> Tuple[str, Dict[str, str], Dic
         body, headers = fetch_subscription_body(url)
     except RuntimeError as exc:
         reason = str(exc or "").strip()
-        if reason.startswith("happ_helper_") or reason.startswith("happ_decryptor_"):
+        if (
+            reason.startswith("happ_helper_")
+            or reason.startswith("happ_decryptor_")
+            or reason.startswith("happ_payload_")
+        ):
             raise ValueError(_happ_helper_error_message(reason)) from exc
         direct_fetch_error = exc
     except Exception as exc:

@@ -12,7 +12,7 @@ import sys
 import urllib.error
 import urllib.request
 from typing import Any, Dict, List
-from urllib.parse import quote, urlparse
+from urllib.parse import parse_qsl, quote, unquote, urlparse
 from pathlib import Path
 
 
@@ -266,6 +266,44 @@ def extract_happ_links(text: Any) -> List[str]:
         if link and link not in seen:
             seen.add(link)
             out.append(link)
+    return out
+
+
+def extract_happ_links_from_url(value: Any) -> List[str]:
+    """Extract Happ deep-links embedded in a connector/landing URL.
+
+    A number of mobile-only connectors (for example
+    ``connector.masquerade.run/mobile.html``) keep the actual ``happ://``
+    link in a URL query parameter instead of rendering it into the returned
+    HTML document.  Query values are percent-decoded by ``parse_qsl``; we
+    still run ``unquote`` once more because some connectors double-encode the
+    value before putting it into ``link``.
+    """
+
+    raw = str(value or "").strip()
+    if not raw or not _is_http_url(raw):
+        return []
+
+    try:
+        pairs = parse_qsl(urlparse(raw).query, keep_blank_values=True)
+    except Exception:
+        return []
+
+    out: List[str] = []
+    seen: set[str] = set()
+    # ``link`` is the connector convention; accepting the other common names
+    # makes this useful for equivalent mobile landing pages without treating
+    # arbitrary query values as subscriptions.
+    keys = {"link", "url", "uri", "target", "import"}
+    for key, raw_value in pairs:
+        if str(key or "").strip().lower() not in keys:
+            continue
+        candidate = unquote(str(raw_value or "").strip()).strip()
+        if not is_happ_deep_link(candidate):
+            continue
+        if candidate not in seen:
+            seen.add(candidate)
+            out.append(candidate)
     return out
 
 
@@ -528,13 +566,19 @@ def resolve_source(url: str, *, body: Any = None, content_type: Any = None) -> D
         candidates.append(raw_url)
     else:
         links = extract_happ_links(body)
+        # Mobile connector pages commonly put the deep-link in the source
+        # URL (``?link=happ%3A%2F%2Fcrypt4%2F...``) and return a static HTML
+        # shell with no literal ``happ://`` text.  Discover those candidates
+        # before falling back to the regular landing-page body scan.
+        url_links = extract_happ_links_from_url(raw_url)
         incy_targets = extract_incy_import_urls(body)
         if _is_http_url(raw_url):
             helper_inputs.append(raw_url)
         for target in incy_targets:
             if _is_http_url(target):
                 helper_inputs.append(target.strip())
-        if links:
+        if links or url_links:
+            candidates.extend(url_links)
             candidates.extend(links)
         elif incy_targets:
             for target in incy_targets:
@@ -597,7 +641,7 @@ def resolve_source(url: str, *, body: Any = None, content_type: Any = None) -> D
             return parsed
         raise RuntimeError("happ_decryptor_not_configured")
 
-    if helper_configured():
+    if helper_configured() and candidates and _is_http_url(candidates[0]):
         parsed = run_helper(candidates[0])
         parsed["via"] = "helper"
         parsed["candidate"] = candidates[0]

@@ -5530,9 +5530,9 @@ let outboundsModuleApi = null;
                       </div>
                     </label>
                     <div class="xk-sub-wide xk-sub-url-row">
-                      <label class="xk-sub-url-field" data-tooltip="HTTP(S) URL подписки или Happ deep-link. Поддерживаются share-ссылки, base64 и Xray JSON outbounds.">
+                      <label class="xk-sub-url-field" data-tooltip="HTTP(S) URL подписки (включая mobile connector URL) или Happ deep-link. Поддерживаются share-ссылки, base64 и Xray JSON outbounds.">
                         <span class="xk-pool-fieldlabel">URL</span>
-                        <input id="outbounds-subscriptions-url" class="xray-log-filter" type="text" inputmode="url" placeholder="https://... или happ://crypt..." title="URL подписки" data-tooltip="Вставь HTTP(S) URL подписки или Happ deep-link. Панель скачает nodes и создаст отдельный outbounds-фрагмент.">
+                        <input id="outbounds-subscriptions-url" class="xray-log-filter" type="text" inputmode="url" placeholder="https://... (включая connector) или happ://crypt..." title="URL подписки" data-tooltip="Вставь HTTP(S) URL подписки, mobile connector URL или Happ deep-link. Панель сама извлечёт вложенный happ://crypt... и зашифрованное тело подписки.">
                         <span id="outbounds-subscriptions-url-note" class="xk-sub-field-note" hidden></span>
                       </label>
                       <div class="xk-sub-url-action">

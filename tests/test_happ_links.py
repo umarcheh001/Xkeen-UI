@@ -36,6 +36,34 @@ def test_normalize_helper_output_supports_decrypted_url_json():
     assert parsed == {"kind": "url", "value": "https://example.com/sub", "headers": {}}
 
 
+def test_extract_happ_links_from_connector_query_url():
+    encoded = "happ%3A%2F%2Fcrypt4%2Fdemo-token"
+    source = f"https://connector.example/mobile.html?link={encoded}&cb=c2"
+
+    assert happ_links.extract_happ_links_from_url(source) == ["happ://crypt4/demo-token"]
+
+
+def test_resolve_source_uses_happ_link_embedded_in_http_connector_url(monkeypatch):
+    calls = []
+
+    def fake_run_decryptor(value):
+        calls.append(value)
+        return {"kind": "text", "value": "vless://resolved@example.com:443"}
+
+    monkeypatch.setattr(happ_links, "helper_configured", lambda: False)
+    monkeypatch.setattr(happ_links, "decryptor_configured", lambda: True)
+    monkeypatch.setattr(happ_links, "run_decryptor", fake_run_decryptor)
+
+    resolved = happ_links.resolve_source(
+        "https://connector.example/mobile.html?link=happ%3A%2F%2Fcrypt4%2Fdemo-token"
+    )
+
+    assert resolved["kind"] == "text"
+    assert resolved["via"] == "decryptor"
+    assert resolved["candidate"] == "happ://crypt4/demo-token"
+    assert calls == ["happ://crypt4/demo-token"]
+
+
 def test_remote_decryptor_template_url_supports_encoded_and_raw_tokens():
     built = happ_links._remote_decryptor_template_url(
         "https://example.com/p/?u=%LINK_ENCODED%&raw=%LINK%",

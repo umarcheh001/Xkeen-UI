@@ -86,6 +86,92 @@ def test_fetch_subscription_body_resolves_happ_landing_via_helper(monkeypatch):
     assert headers["x-xkeen-happ-link"] == "happ://crypt5/demo-token"
 
 
+def test_fetch_subscription_body_resolves_happ_connector_query_via_decryptor(monkeypatch):
+    from services import xray_subscriptions as subs
+
+    source = "https://connector.example/mobile.html?link=happ%3A%2F%2Fcrypt4%2Fdemo-token"
+    html = "<!DOCTYPE html><html><body><div>Поиск программы</div></body></html>"
+
+    monkeypatch.setattr(
+        subs,
+        "_fetch_subscription_body_once",
+        lambda _url, request_headers=None: (html, {"content-type": "text/html; charset=utf-8"}),
+    )
+    monkeypatch.setattr(
+        subs.happ_links,
+        "resolve_source",
+        lambda url, **kwargs: {
+            "kind": "text",
+            "value": _vless("Connector Node"),
+            "headers": {},
+            "via": "decryptor",
+            "candidate": "happ://crypt4/demo-token",
+        },
+    )
+
+    body, headers = subs.fetch_subscription_body(source)
+
+    assert _vless("Connector Node") in body
+    assert headers["x-xkeen-happ-resolved"] == "decryptor"
+    assert headers["x-xkeen-happ-link"] == "happ://crypt4/demo-token"
+
+
+def test_fetch_subscription_body_decrypts_happ_sender_payload(monkeypatch):
+    from services import xray_subscriptions as subs
+
+    body = "lGLnl/+7sfNVtjrk7UjH3D1zZqgxZr2x4IjSjbVKAKoorFYcJdbCmkd6KJ8PnQ=="
+    tag = "mgbbH9BPh+/tJkyUZDfhfQ=="
+    url = "https://sender.example/subscription?key=key08"
+
+    monkeypatch.setattr(
+        subs,
+        "_fetch_subscription_body_once",
+        lambda _url, request_headers=None: (
+            body,
+            {"content-type": "application/octet-stream", "encrypt-tag": tag},
+        ),
+    )
+
+    plaintext, headers = subs.fetch_subscription_body(url)
+
+    assert plaintext == "vless://user@example.com:443?security=tls#Happ"
+    assert headers["x-xkeen-happ-payload-decrypted"] == "1"
+
+
+def test_fetch_subscription_body_resolves_connector_and_decrypts_nested_sender(monkeypatch):
+    from services import xray_subscriptions as subs
+
+    source = "https://connector.example/mobile.html?link=happ%3A%2F%2Fcrypt4%2Fdemo-token"
+    target = "https://sender.example/subscription?key=key08"
+    encrypted = "lGLnl/+7sfNVtjrk7UjH3D1zZqgxZr2x4IjSjbVKAKoorFYcJdbCmkd6KJ8PnQ=="
+    tag = "mgbbH9BPh+/tJkyUZDfhfQ=="
+
+    def fake_fetch(url, request_headers=None):
+        if url == source:
+            return "<!DOCTYPE html><html><body>mobile connector</body></html>", {"content-type": "text/html"}
+        assert url == target
+        return encrypted, {"content-type": "application/octet-stream", "encrypt-tag": tag}
+
+    monkeypatch.setattr(subs, "_fetch_subscription_body_once", fake_fetch)
+    monkeypatch.setattr(
+        subs.happ_links,
+        "resolve_source",
+        lambda url, **kwargs: {
+            "kind": "url",
+            "value": target,
+            "headers": {},
+            "via": "decryptor",
+            "candidate": "happ://crypt4/demo-token",
+        },
+    )
+
+    plaintext, headers = subs.fetch_subscription_body(source)
+
+    assert plaintext == "vless://user@example.com:443?security=tls#Happ"
+    assert headers["x-xkeen-happ-resolved"] == "decryptor"
+    assert headers["x-xkeen-happ-payload-decrypted"] == "1"
+
+
 def test_preview_subscription_accepts_happ_landing_when_helper_returns_links(monkeypatch):
     from services import xray_subscriptions as subs
 
