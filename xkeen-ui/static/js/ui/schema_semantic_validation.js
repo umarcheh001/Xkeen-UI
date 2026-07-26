@@ -402,15 +402,15 @@ function validateMihomoProxyCompat(target, proxies) {
       : [];
 
     const networkBlocks = [
-      ['ws-opts', 'ws'],
-      ['grpc-opts', 'grpc'],
-      ['h2-opts', 'h2'],
-      ['xhttp-opts', 'xhttp'],
+      ['ws-opts', ['ws'], 'ws'],
+      ['grpc-opts', ['grpc'], 'grpc'],
+      ['h2-opts', ['h2', 'http'], 'h2` или `http'],
+      ['xhttp-opts', ['xhttp'], 'xhttp'],
     ];
-    networkBlocks.forEach(([field, expected]) => {
+    networkBlocks.forEach(([field, allowed, expectedLabel]) => {
       if (!isPlainObject(proxy[field])) return;
-      if (network && network === expected) return;
-      pushDiagnostic(target, createYamlDiagnostic(path.concat(field), `Блок \`${field}\` имеет смысл только при \`network: ${expected}\`. Сейчас указано \`${network || 'tcp'}\`.`, {
+      if (network && allowed.includes(network)) return;
+      pushDiagnostic(target, createYamlDiagnostic(path.concat(field), `Блок \`${field}\` имеет смысл только при \`network: ${expectedLabel}\`. Сейчас указано \`${network || 'tcp'}\`.`, {
         source: 'mihomo-semantic',
         code: `proxy-network-${field}`,
       }));
@@ -449,9 +449,11 @@ function validateMihomoProxyCompat(target, proxies) {
     }
 
     if (flow === 'xtls-rprx-vision' && (network === 'grpc' || network === 'xhttp')) {
-      pushDiagnostic(target, createYamlDiagnostic(path.concat('flow'), `Flow \`xtls-rprx-vision\` не сочетается с \`network: ${network}\`. Для Vision обычно оставляют raw TCP/TLS/REALITY без gRPC/XHTTP.`, {
+      pushDiagnostic(target, createYamlDiagnostic(path.concat('flow'), `Flow \`xtls-rprx-vision\` с \`network: ${network}\` требует проверки возможностей конкретной версии ядра и VLESS Encryption. Без VLESS Encryption для Vision обычно оставляют RAW+TLS/REALITY.`, {
+        severity: 'suggestion',
         source: 'mihomo-semantic',
         code: 'proxy-flow-network-incompatible',
+        hint: 'Это подсказка совместимости, а не безусловная ошибка конфигурации.',
       }));
     }
 
@@ -1285,25 +1287,29 @@ function validateXrayStreamSettingsItem(item, pointer, role, diagnostics) {
   const streamSettings = item.streamSettings;
   const protocol = cleanName(item.protocol);
   const security = cleanName(streamSettings.security) || 'none';
-  const network = cleanName(streamSettings.network) || 'tcp';
+  const transportField = cleanName(streamSettings.method) ? 'method' : 'network';
+  const configuredTransport = cleanName(streamSettings[transportField]) || 'raw';
+  const network = ({
+    raw: 'raw',
+    tcp: 'raw',
+    xhttp: 'xhttp',
+    splithttp: 'xhttp',
+    mkcp: 'kcp',
+    kcp: 'kcp',
+    websocket: 'ws',
+    ws: 'ws',
+  })[configuredTransport.toLowerCase()] || configuredTransport.toLowerCase();
   const hasReality = isPlainObject(streamSettings.realitySettings);
   const hasTls = isPlainObject(streamSettings.tlsSettings);
   const flowValues = collectXrayFlowValues(item, role);
   const itemLabel = cleanName(item.tag) || `${role}[${pointer}]`;
 
   if (network === 'grpc') {
-    pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/streamSettings/network`, `${role === 'outbound' ? 'Outbound' : 'Inbound'} "${itemLabel}" использует устаревший transport gRPC. Для новых конфигов Xray обычно лучше перейти на XHTTP (\`network: xhttp\`), если сервер поддерживает этот transport.`, {
+    pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/streamSettings/${transportField}`, `${role === 'outbound' ? 'Outbound' : 'Inbound'} "${itemLabel}" использует устаревший transport gRPC. Для новых конфигов Xray обычно лучше перейти на XHTTP, если сервер поддерживает этот transport.`, {
       severity: 'warning',
       source: 'xray-semantic',
       code: `${role}-stream-network-grpc-deprecated`,
       hint: 'Если сервер поддерживает XHTTP, замените `streamSettings.network` на `xhttp` и перенесите transport-specific поля в `xhttpSettings`.',
-    }));
-  }
-
-  if ((security === 'reality' || hasReality) && protocol && protocol !== 'vless') {
-    pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/streamSettings/${hasReality ? 'realitySettings' : 'security'}`, `${role === 'outbound' ? 'Outbound' : 'Inbound'} "${itemLabel}" использует REALITY, но протокол сейчас \`${protocol}\`. Reality обычно ожидает \`protocol: vless\`.`, {
-      source: 'xray-semantic',
-      code: `${role}-reality-protocol-incompatible`,
     }));
   }
 
@@ -1322,10 +1328,10 @@ function validateXrayStreamSettingsItem(item, pointer, role, diagnostics) {
 
   if (role === 'outbound' && (security === 'reality' || hasReality)) {
     const realitySettings = isPlainObject(streamSettings.realitySettings) ? streamSettings.realitySettings : {};
-    if (!cleanName(realitySettings.publicKey)) {
-      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/streamSettings/realitySettings`, `Outbound "${itemLabel}" использует REALITY, но в \`realitySettings\` не указан \`publicKey\`. Без публичного ключа клиент не сможет собрать рабочее соединение.`, {
+    if (!cleanName(realitySettings.password) && !cleanName(realitySettings.publicKey)) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/streamSettings/realitySettings`, `Outbound "${itemLabel}" использует REALITY, но в \`realitySettings\` не указан клиентский credential: актуальное поле \`password\` или его legacy-алиас \`publicKey\`. Без него клиент не сможет собрать рабочее соединение.`, {
         source: 'xray-semantic',
-        code: 'outbound-reality-public-key-missing',
+        code: 'outbound-reality-password-missing',
       }));
     }
     if (!cleanName(realitySettings.serverName)) {
@@ -1357,21 +1363,27 @@ function validateXrayStreamSettingsItem(item, pointer, role, diagnostics) {
   if (role === 'outbound') {
     const muxEnabled = !!(item && item.mux && item.mux.enabled === true);
     if (muxEnabled && (network === 'grpc' || network === 'xhttp')) {
-      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/mux/enabled`, `Outbound "${itemLabel}" включает mux вместе с \`network: ${network}\`. Для gRPC/XHTTP mux обычно не поддерживается и даёт ложное ощущение ускорения.`, {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/mux/enabled`, `Outbound "${itemLabel}" включает mux вместе с HTTP-мультиплексирующим transport \`${configuredTransport}\`. Это может быть избыточно и не всегда ускоряет соединение.`, {
+        severity: 'suggestion',
         source: 'xray-semantic',
-        code: 'outbound-mux-network-incompatible',
+        code: 'outbound-mux-transport-redundant',
+        hint: 'Конфигурация допустима; сравните задержку и стабильность с `mux.enabled: false` на вашем сервере.',
       }));
     }
     if (muxEnabled && flowValues.includes('xtls-rprx-vision')) {
-      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/mux/enabled`, `Outbound "${itemLabel}" включает mux, но в настройках есть \`flow: xtls-rprx-vision\`. Vision ожидает отдельный поток и плохо сочетается с mux.`, {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/mux/enabled`, `Outbound "${itemLabel}" включает mux вместе с \`flow: xtls-rprx-vision\`. Такой режим поддерживается, но его производительность зависит от профиля трафика.`, {
+        severity: 'suggestion',
         source: 'xray-semantic',
-        code: 'outbound-flow-mux-incompatible',
+        code: 'outbound-flow-mux-performance-hint',
+        hint: 'Это не ошибка конфигурации. Mux уменьшает число рукопожатий, но на загрузках и speed-test может снижать скорость.',
       }));
     }
     if (flowValues.includes('xtls-rprx-vision') && (network === 'grpc' || network === 'xhttp')) {
-      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/streamSettings/network`, `Outbound "${itemLabel}" использует \`flow: xtls-rprx-vision\` вместе с \`network: ${network}\`. Такой набор обычно конфликтует: для Vision чаще оставляют raw TCP/TLS/REALITY без gRPC/XHTTP.`, {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/streamSettings/${transportField}`, `Outbound "${itemLabel}" использует \`flow: xtls-rprx-vision\` вместе с transport \`${configuredTransport}\`. Без VLESS Encryption Vision обычно применяют с RAW+TLS/REALITY.`, {
+        severity: 'suggestion',
         source: 'xray-semantic',
         code: 'outbound-flow-network-incompatible',
+        hint: 'Это подсказка совместимости: VLESS Encryption и версия ядра могут делать такое сочетание допустимым.',
       }));
     }
   }

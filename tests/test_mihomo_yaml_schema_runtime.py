@@ -140,6 +140,66 @@ def test_mihomo_yaml_schema_runtime_accepts_documented_vless_tls_reality_fields(
     assert result["diagnostics"] == []
 
 
+def test_mihomo_yaml_schema_runtime_accepts_raw_transport_and_lowercase_ios_fingerprint():
+    result = _run_mihomo_yaml_schema(
+        "\n".join([
+            "proxies:",
+            "  - name: reality-raw",
+            "    type: vless",
+            "    server: 192.0.2.10",
+            "    port: 443",
+            "    uuid: 11111111-1111-1111-1111-111111111111",
+            "    flow: xtls-rprx-vision",
+            "    network: raw",
+            "    tls: true",
+            "    servername: example.com",
+            "    client-fingerprint: ios",
+            "    reality-opts:",
+            "      public-key: z7ObaBEwG9lXYX2JPQsFNWIXcH25ywpLIf4_g9LqSX4",
+            "      short-id: 2c7282bf6de028b8",
+            "",
+        ])
+    )
+
+    assert result["ok"] is True
+    assert result["parseOk"] is True
+    assert result["diagnostics"] == []
+
+
+def test_mihomo_semantic_validation_accepts_http_alias_for_h2_opts():
+    if shutil.which("node") is None:
+        pytest.skip("node is not available in this environment")
+
+    script = """
+import { validateMihomoConfigSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+const result = validateMihomoConfigSemantics({
+  proxies: [{
+    name: 'h2-node',
+    type: 'vless',
+    server: 'edge.example.com',
+    port: 443,
+    uuid: '11111111-1111-1111-1111-111111111111',
+    network: 'http',
+    tls: true,
+    'h2-opts': { host: ['edge.example.com'], path: '/' }
+  }]
+});
+console.log(JSON.stringify(result));
+"""
+    completed = subprocess.run(
+        ["node", "--input-type=module"],
+        input=script,
+        capture_output=True,
+        cwd=str(ROOT),
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    diagnostics = json.loads(completed.stdout.strip())
+    assert not any(item.get("code") == "proxy-network-h2-opts" for item in diagnostics)
+
+
 def test_mihomo_yaml_schema_runtime_accepts_openvpn_auth_user_pass_proxy():
     result = _run_mihomo_yaml_schema(
         "\n".join([

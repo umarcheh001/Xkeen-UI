@@ -684,6 +684,118 @@ def test_outbounds_schema_linter_requires_matching_network_for_xhttp_settings():
     assert any('"xhttp"' in message for message in messages)
 
 
+def test_outbounds_schema_accepts_raw_reality_password_alias():
+    messages = _run_linter_messages(
+        "\n".join([
+            "{",
+            '  "outbounds": [',
+            "    {",
+            '      "protocol": "vless",',
+            '      "tag": "reality-raw",',
+            '      "settings": {',
+            '        "vnext": [{',
+            '          "address": "192.0.2.10",',
+            '          "port": 443,',
+            '          "users": [{ "id": "11111111-1111-1111-1111-111111111111", "encryption": "none" }]',
+            "        }]",
+            "      },",
+            '      "streamSettings": {',
+            '        "network": "raw",',
+            '        "security": "reality",',
+            '        "realitySettings": {',
+            '          "fingerprint": "firefox",',
+            '          "password": "A-client-held-reality-credential",',
+            '          "serverName": "example.com",',
+            '          "shortId": "2efb3ac227e39e8e"',
+            "        }",
+            "      }",
+            "    }",
+            "  ]",
+            "}",
+            "",
+        ]),
+        schema_path="./xkeen-ui/static/schemas/xray-outbounds.schema.json",
+    )
+
+    assert messages == []
+
+
+def test_outbounds_schema_accepts_current_method_for_xhttp_settings():
+    messages = _run_linter_messages(
+        "\n".join([
+            "{",
+            '  "outbounds": [',
+            "    {",
+            '      "protocol": "vless",',
+            '      "settings": {',
+            '        "address": "edge.example.com",',
+            '        "port": 443,',
+            '        "id": "11111111-1111-1111-1111-111111111111",',
+            '        "encryption": "none"',
+            "      },",
+            '      "streamSettings": {',
+            '        "method": "xhttp",',
+            '        "security": "tls",',
+            '        "tlsSettings": { "serverName": "edge.example.com" },',
+            '        "xhttpSettings": { "path": "/gateway", "mode": "stream-up" }',
+            "      }",
+            "    }",
+            "  ]",
+            "}",
+            "",
+        ]),
+        schema_path="./xkeen-ui/static/schemas/xray-outbounds.schema.json",
+    )
+
+    assert messages == []
+
+
+def test_xray_schema_accepts_current_tls_reality_and_top_level_fields():
+    messages = _run_linter_messages(
+        "\n".join([
+            "{",
+            '  "env": { "XRAY_LOCATION_ASSET": "/opt/share/xray" },',
+            '  "geodata": { "loader": "standard" },',
+            '  "version": { "min": "25.8.3", "max": "" },',
+            '  "inbounds": [{',
+            '    "listen": "127.0.0.1", "port": 1080, "protocol": "tunnel", "settings": {},',
+            '    "streamSettings": { "method": "raw", "security": "tls", "tlsSettings": {',
+            '      "fingerprint": "HelloChrome_106_Shuffle",',
+            '      "verifyPeerCertByName": "edge.example.com",',
+            '      "pinnedPeerCertSha256": "0123456789abcdef",',
+            '      "curvePreferences": ["X25519MLKEM768"],',
+            '      "echSockopt": {}',
+            "    }}",
+            "  }],",
+            '  "outbounds": [{',
+            '    "protocol": "vless",',
+            '    "settings": {',
+            '      "address": "edge.example.com",',
+            '      "port": 443,',
+            '      "id": "11111111-1111-1111-1111-111111111111",',
+            '      "encryption": "none"',
+            "    },",
+            '    "streamSettings": {',
+            '      "method": "raw",',
+            '      "security": "reality",',
+            '      "realitySettings": {',
+            '        "serverName": "edge.example.com",',
+            '        "password": "client-held-credential",',
+            '        "shortId": "",',
+            '        "mldsa65Verify": "verification-key",',
+            '        "limitFallbackUpload": { "afterBytes": 0, "bytesPerSec": 0, "burstBytesPerSec": 0 }',
+            "      }",
+            "    }",
+            "  }]",
+            "}",
+            "",
+        ]),
+        schema_path="./xkeen-ui/static/schemas/xray-config.schema.json",
+    )
+
+    assert messages == []
+
+
 def test_outbounds_schema_linter_requires_tls_security_for_tls_settings():
     messages = _run_linter_messages(
         "\n".join([

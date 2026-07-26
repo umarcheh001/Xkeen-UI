@@ -186,7 +186,8 @@
     },
     "global-client-fingerprint": {
       "type": "string",
-      "enum": ["chrome", "firefox", "safari", "iOS", "android", "edge", "360", "qq", "random", "randomized"],
+      "enum": ["none", "chrome", "firefox", "safari", "ios", "iOS", "android", "edge", "360", "qq", "random", "randomized", "chrome120", "firefox120", "safari16", "chrome_psk", "chrome_psk_shuffle", "chrome_padding_psk_shuffle", "chrome_pq", "chrome_pq_psk"],
+      "deprecatedValues": ["iOS", "chrome120", "firefox120", "safari16", "chrome_psk", "chrome_psk_shuffle", "chrome_padding_psk_shuffle", "chrome_pq", "chrome_pq_psk"],
       "description": "Глобальный TLS ClientHello fingerprint (uTLS). Маскирует TLS-подпись клиента под популярный браузер — помогает против DPI. Обычно `chrome` или `randomized`."
     },
     "global-ua": {
@@ -832,18 +833,19 @@
         },
         "client-fingerprint": {
           "type": "string",
-          "enum": ["chrome", "firefox", "safari", "iOS", "android", "edge", "360", "qq", "random", "randomized"],
-          "description": "uTLS ClientHello fingerprint. Маскирует клиентский TLS под популярный браузер. Для reality — обязательно (`chrome`/`firefox`/`randomized`)."
+          "enum": ["none", "chrome", "firefox", "safari", "ios", "iOS", "android", "edge", "360", "qq", "random", "randomized", "chrome120", "firefox120", "safari16", "chrome_psk", "chrome_psk_shuffle", "chrome_padding_psk_shuffle", "chrome_pq", "chrome_pq_psk"],
+          "deprecatedValues": ["iOS", "chrome120", "firefox120", "safari16", "chrome_psk", "chrome_psk_shuffle", "chrome_padding_psk_shuffle", "chrome_pq", "chrome_pq_psk"],
+          "description": "uTLS ClientHello fingerprint. Исходники Mihomo используют `ios` в нижнем регистре; документированное написание `iOS` сохранено как compatibility-вариант. Для reality обычно указывают `chrome`, `firefox`, `ios` или `random`."
         },
         "network": {
           "type": "string",
-          "enum": ["ws", "grpc", "h2", "http", "tcp", "xhttp"],
-          "description": "Транспортный протокол поверх TCP/TLS. `tcp` — простой TCP (дефолт), `ws` — WebSocket (часто с CDN), `xhttp` — современный HTTP-based (рекомендуется вместо gRPC), `grpc` — устарел, `h2`/`http` — HTTP/2.",
+          "enum": ["raw", "tcp", "ws", "grpc", "h2", "http", "xhttp"],
+          "description": "Транспортный протокол поверх TCP/TLS. `raw` и `tcp` выбирают обычный TCP (так же Mihomo обрабатывает отсутствующее/иное значение); `ws` — WebSocket, `xhttp` — современный HTTP-based transport, `grpc` — gRPC, `h2`/`http` — HTTP/2.",
           "x-ui-explain": "Это способ, которым прокси маскирует или упаковывает трафик поверх базового TCP/TLS-соединения.",
           "x-ui-use-case": "Меняют, когда сервер работает не на чистом TCP, а через CDN, WebSocket, XHTTP или другой transport.",
           "x-ui-example": "\"network\": \"xhttp\"",
           "x-ui-warning": "Значение здесь должно совпадать с тем, как настроен сервер, а transport-опции ниже должны соответствовать выбранной сети.",
-          "examples": ["tcp", "ws", "xhttp", "grpc"]
+          "examples": ["raw", "tcp", "ws", "xhttp", "grpc"]
         },
         "udp": {
           "type": "boolean",

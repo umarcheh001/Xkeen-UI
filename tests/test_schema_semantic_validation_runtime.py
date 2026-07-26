@@ -361,7 +361,7 @@ console.log(JSON.stringify(result.map((item) => ({
     assert "/routing/balancers/0/selector/0" in pointers
     assert "/routing/balancers/0/fallbackTag" in pointers
     assert "/routing/balancers/0/strategy/type" in pointers
-    assert "outbound-mux-network-incompatible" in codes
+    assert "outbound-mux-transport-redundant" in codes
     assert "outbound-flow-network-incompatible" in codes
     assert any("ghost-upstream" in message for message in messages)
     assert any("leastPing" in message for message in messages)
@@ -662,7 +662,7 @@ console.log(JSON.stringify(result.map((item) => ({
     assert not messages
 
 
-def test_xray_semantic_validation_uses_compact_vless_flow_for_mux_and_network_checks():
+def test_xray_semantic_validation_treats_mux_vision_as_performance_hint():
     script = """
 import { validateXrayConfigSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
 
@@ -707,11 +707,52 @@ console.log(JSON.stringify(result.map((item) => ({
     messages = [str(item["message"]) for item in payload]
     pointers = [str(item["pointer"]) for item in payload]
 
-    assert "outbound-flow-mux-incompatible" in codes
+    by_code = {str(item["code"]): item for item in payload}
+    assert "outbound-flow-mux-performance-hint" in codes
     assert "outbound-flow-network-incompatible" in codes
     assert "/outbounds/0/mux/enabled" in pointers
     assert "/outbounds/0/streamSettings/network" in pointers
     assert any("flow: xtls-rprx-vision" in message for message in messages)
+    assert by_code["outbound-flow-mux-performance-hint"]["severity"] == "info"
+    assert by_code["outbound-flow-network-incompatible"]["severity"] == "info"
+
+
+def test_xray_semantic_validation_accepts_reality_password_and_non_vless_protocol():
+    script = """
+import { validateXrayConfigSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const result = validateXrayConfigSemantics({
+  outbounds: [{
+    tag: 'trojan-reality',
+    protocol: 'trojan',
+    settings: {
+      servers: [{ address: 'edge.example.com', port: 443, password: 'secret' }]
+    },
+    streamSettings: {
+      method: 'raw',
+      security: 'reality',
+      realitySettings: {
+        password: 'A-client-held-reality-credential',
+        serverName: 'example.com',
+        shortId: '2efb3ac227e39e8e',
+        fingerprint: 'firefox'
+      }
+    }
+  }]
+}, { kind: 'xray-outbounds' });
+
+console.log(JSON.stringify(result.map((item) => ({
+  pointer: item.pointer || '',
+  severity: item.severity || '',
+  code: item.code || '',
+  message: item.message || '',
+}))));
+"""
+
+    payload = _run_node_json(script)
+    codes = [str(item["code"]) for item in payload]
+    assert "outbound-reality-password-missing" not in codes
+    assert "outbound-reality-protocol-incompatible" not in codes
 
 
 def test_mihomo_semantic_validation_reports_proxy_group_cycles():
@@ -758,7 +799,8 @@ const result = validateMihomoConfigSemantics({
       password: 'secret',
       tls: true,
       alterId: 0,
-      flow: 'xtls-rprx-vision'
+      flow: 'xtls-rprx-vision',
+      network: 'xhttp'
     }
   ]
 });
@@ -777,8 +819,10 @@ console.log(JSON.stringify(result.map((item) => ({
 
     assert "proxy-type-alterid" in by_code
     assert "proxy-type-flow" in by_code
+    assert "proxy-flow-network-incompatible" in by_code
     assert by_code["proxy-type-alterid"]["severity"] == "info"
     assert by_code["proxy-type-flow"]["severity"] == "info"
+    assert by_code["proxy-flow-network-incompatible"]["severity"] == "info"
     assert "можно просто удалить" in str(by_code["proxy-type-alterid"]["hint"])
     assert "VLESS Reality / TLS-сценариев" in str(by_code["proxy-type-flow"]["hint"])
 

@@ -1,6 +1,16 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "definitions": {
+    "realityFallbackRateLimit": {
+      "type": "object",
+      "description": "Ограничение скорости неавторизованных REALITY fallback-соединений.",
+      "properties": {
+        "afterBytes": { "type": "integer", "minimum": 0, "default": 0 },
+        "bytesPerSec": { "type": "integer", "minimum": 0, "default": 0 },
+        "burstBytesPerSec": { "type": "integer", "minimum": 0, "default": 0 }
+      },
+      "additionalProperties": false
+    },
     "routingRule": {
       "type": "object",
       "description": "Правило маршрутизации",
@@ -282,36 +292,49 @@
     "streamSettings": {
       "type": "object",
       "description": "Настройки транспорта для inbound/outbound. Задаёт тип сети (network) и слой безопасности (security).",
-      "x-ui-explain": "Это блок, который описывает, как именно Xray устанавливает соединение: по какому транспорту (`network`) и с какой защитой (`security`).",
+      "x-ui-explain": "Это блок, который описывает, как именно Xray устанавливает соединение: по какому транспорту (`method`; старое имя — `network`) и с какой защитой (`security`).",
       "x-ui-use-case": "Меняйте его, когда сервер работает не на чистом TCP, а через WebSocket, XHTTP, REALITY, CDN или другой transport/security stack.",
       "x-ui-example": "\"streamSettings\": { \"network\": \"xhttp\", \"security\": \"tls\", \"tlsSettings\": { \"serverName\": \"edge.example.com\" } }",
       "x-ui-warning": "Transport- и security-подблоки жёстко связаны: `tlsSettings` требует `security: tls`, `realitySettings` — `security: reality`, а `xhttpSettings` — `network: xhttp`.",
       "properties": {
+        "method": {
+          "type": "string",
+          "description": "Актуальное имя поля транспорта Xray. Канонические значения: `raw`, `xhttp`, `mkcp`, `grpc`, `websocket`, `httpupgrade`, `hysteria`; legacy-алиасы также принимает core.",
+          "enum": [
+            "raw", "tcp", "xhttp", "splithttp", "mkcp", "kcp", "grpc", "websocket", "ws", "httpupgrade", "hysteria"
+          ],
+          "deprecatedValues": ["tcp", "splithttp", "kcp", "ws", "grpc"],
+          "default": "raw"
+        },
         "network": {
           "type": "string",
-          "description": "Тип транспорта. `tcp` — простой TCP (дефолт для большинства протоколов); `ws` — WebSocket (часто через CDN); `xhttp` — современный HTTP-based транспорт (рекомендуется вместо gRPC); `httpupgrade` — HTTP Upgrade; `quic` — QUIC поверх UDP; `kcp` — mKCP (UDP-based).",
+          "description": "Legacy-имя поля транспорта, всё ещё принимаемое Xray. `raw`/`tcp` — прямой TCP/UDP transport; `ws`/`websocket`, `kcp`/`mkcp` и `xhttp`/`splithttp` — совместимые пары имён.",
           "enum": [
+            "raw",
             "tcp",
+            "mkcp",
             "kcp",
+            "websocket",
             "ws",
             "http",
             "quic",
             "grpc",
             "httpupgrade",
             "splithttp",
+            "hysteria",
             "xhttp"
           ],
           "deprecatedValues": [
             "grpc"
           ],
           "deprecationMessage": "Transport gRPC устарел в актуальных версиях Xray; по возможности используйте XHTTP (stream-up H2).",
-          "default": "tcp"
+          "default": "raw"
         },
         "security": {
           "type": "string",
-          "description": "Слой безопасности: `none` — без шифрования (только для локальных inbound'ов); `tls` — стандартный TLS (требует `tlsSettings`); `reality` — VLESS Reality (требует `realitySettings` и protocol=`vless`).",
+          "description": "Слой transport security: `none`, стандартный `tls` или `reality`. REALITY требует `realitySettings` и совместимый transport (RAW/XHTTP/gRPC в актуальном Xray), но не ограничен только VLESS.",
           "x-ui-explain": "Это уровень шифрования и маскировки поверх выбранного транспорта.",
-          "x-ui-use-case": "`tls` подходит для обычных HTTPS-подобных соединений, `reality` — для VLESS Reality, `none` — в основном для локальных inbound-сценариев.",
+          "x-ui-use-case": "`tls` подходит для обычных HTTPS-подобных соединений, `reality` — для REALITY-compatible protocol/transport сочетаний, `none` — в основном для локальных inbound-сценариев.",
           "x-ui-example": "\"security\": \"tls\"",
           "x-ui-warning": "Если выбрали `tls` или `reality`, не забудьте добавить соответствующий блок настроек ниже.",
           "enum": [
@@ -354,8 +377,8 @@
             },
             "fingerprint": {
               "type": "string",
-              "description": "Имитируемый TLS fingerprint браузера. `chrome` — безопасный default; `random`/`randomized` — случайный/ротируемый.",
-              "enum": [
+              "description": "uTLS ClientHello fingerprint. Помимо коротких имён браузеров Xray принимает нативные Hello*-имена uTLS.",
+              "examples": [
                 "chrome",
                 "firefox",
                 "safari",
@@ -366,6 +389,7 @@
                 "qq",
                 "random",
                 "randomized",
+                "HelloChrome_106_Shuffle",
                 ""
               ]
             },
@@ -381,6 +405,10 @@
               "default": false,
               "description": "Не доверять системным корневым сертификатам. Оставьте `false`, если не используете собственный CA."
             },
+            "verifyPeerCertByName": { "type": "string" },
+            "enableSessionResumption": { "type": "boolean", "default": false },
+            "cipherSuites": { "type": "string" },
+            "pinnedPeerCertSha256": { "type": "string" },
             "pinnedPeerCertificateChainSha256": {
               "type": "array",
               "description": "SHA-256 pinning всей цепочки сертификатов сервера (в base64). Редко нужно.",
@@ -388,6 +416,11 @@
                 "type": "string"
               }
             },
+            "curvePreferences": { "type": "array", "items": { "type": "string" } },
+            "masterKeyLog": { "type": "string" },
+            "echServerKeys": { "type": "string" },
+            "echConfigList": { "type": "string" },
+            "echSockopt": { "type": "object" },
             "minVersion": {
               "type": "string",
               "description": "Минимальная версия TLS (например `1.2`, `1.3`).",
@@ -412,11 +445,11 @@
         },
         "realitySettings": {
           "type": "object",
-          "description": "Настройки VLESS Reality — современная замена TLS для обхода блокировок. Применимо только если `security = \"reality\"` и `protocol = \"vless\"`.",
+          "description": "Настройки REALITY transport security. Применимо при `security = \"reality\"`; поддерживаемые сочетания protocol/transport зависят от версии Xray.",
           "x-ui-explain": "Это параметры REALITY-маскировки: ключи, SNI-кандидат и short-id, по которым клиент и сервер узнают друг друга.",
-          "x-ui-use-case": "Используется для VLESS Reality, когда соединение должно выглядеть как обычный TLS-трафик к популярному сайту.",
-          "x-ui-example": "{ \"serverName\": \"www.microsoft.com\", \"publicKey\": \"<server-public-key>\", \"shortIds\": [\"6ba85179e30d4fc2\"] }",
-          "x-ui-warning": "Не путайте роли: на клиенте обычно нужен `publicKey`, на сервере — `privateKey`; также `serverName` и `shortIds` должны совпадать с серверной настройкой.",
+          "x-ui-use-case": "Используется для REALITY transport security, когда соединение должно выглядеть как обычный TLS-трафик к целевому сайту.",
+          "x-ui-example": "{ \"serverName\": \"www.microsoft.com\", \"password\": \"<server-public-key>\", \"shortId\": \"6ba85179e30d4fc2\" }",
+          "x-ui-warning": "На клиенте актуальный Xray использует `password` (старое имя `publicKey` остаётся алиасом), на сервере — `privateKey`; `serverName` и short-id должны совпадать с серверной настройкой.",
           "properties": {
             "show": {
               "type": "boolean",
@@ -433,6 +466,13 @@
                 "edge.example.com:443",
                 "www.microsoft.com:443"
               ]
+            },
+            "target": {
+              "type": [
+                "string",
+                "integer"
+              ],
+              "description": "Актуальное имя серверной цели REALITY; `dest` сохранён core как legacy-алиас."
             },
             "xver": {
               "type": "integer",
@@ -459,9 +499,13 @@
               "type": "string",
               "description": "Приватный ключ Reality (только на сервере). НЕ публиковать — генерируется парой с `publicKey` командой `xray x25519`."
             },
+            "password": {
+              "type": "string",
+              "description": "Актуальное имя клиентского REALITY credential: публичный ключ, соответствующий privateKey сервера."
+            },
             "publicKey": {
               "type": "string",
-              "description": "Публичный ключ Reality (только на клиенте). Получается от сервера."
+              "description": "Legacy-алиас поля `password`, принимаемый Xray для совместимости."
             },
             "shortIds": {
               "type": "array",
@@ -473,6 +517,14 @@
                   "6ba85179e30d4fc2"
                 ]
               }
+            },
+            "mldsa65Seed": {
+              "type": "string",
+              "description": "Серверный seed ML-DSA-65 для дополнительной постквантовой подписи сертификата."
+            },
+            "shortId": {
+              "type": "string",
+              "description": "Один из `shortIds`, разрешённых на сервере. Может быть пустой строкой; непустое значение должно быть hex-строкой чётной длины до 16 символов."
             },
             "fingerprint": {
               "type": "string",
@@ -488,6 +540,10 @@
               "examples": [
                 "edge.example.com"
               ]
+            },
+            "mldsa65Verify": {
+              "type": "string",
+              "description": "Клиентский публичный ключ проверки подписи ML-DSA-65."
             },
             "spiderX": {
               "type": "string",
@@ -508,12 +564,18 @@
             "maxTimeDiff": {
               "type": "integer",
               "description": "Максимальное отклонение времени клиента от сервера (мс). Защищает от replay-атак."
-            }
+            },
+            "limitFallbackUpload": { "$ref": "#/definitions/realityFallbackRateLimit" },
+            "limitFallbackDownload": { "$ref": "#/definitions/realityFallbackRateLimit" }
           }
+        },
+        "rawSettings": {
+          "type": "object",
+          "description": "Настройки актуального RAW-транспорта; legacy-имя этого же блока — `tcpSettings`."
         },
         "tcpSettings": {
           "type": "object",
-          "description": "Настройки TCP-транспорта. Обычно оставьте пустым объектом — менять нужно только для HTTP-mimicry (header.type = http)."
+          "description": "Legacy-алиас `rawSettings`, всё ещё принимаемый Xray."
         },
         "kcpSettings": {
           "type": "object",
@@ -636,7 +698,7 @@
         },
         "xhttpSettings": {
           "type": "object",
-          "description": "Настройки XHTTP-транспорта. Применимо только если `network = \"xhttp\"`.",
+          "description": "Настройки XHTTP-транспорта. Применимо при `method: \"xhttp\"` или legacy `network: \"xhttp\"`/`\"splithttp\"`.",
           "x-ui-explain": "Это настройки современного HTTP-based транспорта XHTTP, который в новых Xray-конфигах обычно приходит на смену gRPC.",
           "x-ui-use-case": "Нужен, когда сервер настроен на XHTTP и вы хотите браузероподобный transport для CDN или современных VLESS/TLS-сценариев.",
           "x-ui-example": "{ \"path\": \"/gateway\", \"mode\": \"stream-up\" }",
@@ -790,14 +852,16 @@
             ]
           },
           "then": {
-            "required": [
-              "network"
-            ],
-            "properties": {
-              "network": {
-                "const": "ws"
+            "anyOf": [
+              {
+                "required": ["method"],
+                "properties": { "method": { "enum": ["websocket", "ws"] } }
+              },
+              {
+                "required": ["network"],
+                "properties": { "network": { "enum": ["ws", "websocket"] } }
               }
-            }
+            ]
           }
         },
         {
@@ -824,14 +888,16 @@
             ]
           },
           "then": {
-            "required": [
-              "network"
-            ],
-            "properties": {
-              "network": {
-                "const": "grpc"
+            "anyOf": [
+              {
+                "required": ["method"],
+                "properties": { "method": { "const": "grpc" } }
+              },
+              {
+                "required": ["network"],
+                "properties": { "network": { "const": "grpc" } }
               }
-            }
+            ]
           }
         },
         {
@@ -841,14 +907,16 @@
             ]
           },
           "then": {
-            "required": [
-              "network"
-            ],
-            "properties": {
-              "network": {
-                "const": "httpupgrade"
+            "anyOf": [
+              {
+                "required": ["method"],
+                "properties": { "method": { "const": "httpupgrade" } }
+              },
+              {
+                "required": ["network"],
+                "properties": { "network": { "const": "httpupgrade" } }
               }
-            }
+            ]
           }
         },
         {
@@ -858,14 +926,16 @@
             ]
           },
           "then": {
-            "required": [
-              "network"
-            ],
-            "properties": {
-              "network": {
-                "const": "xhttp"
+            "anyOf": [
+              {
+                "required": ["method"],
+                "properties": { "method": { "enum": ["xhttp", "splithttp"] } }
+              },
+              {
+                "required": ["network"],
+                "properties": { "network": { "enum": ["xhttp", "splithttp"] } }
               }
-            }
+            ]
           }
         }
       ]
@@ -946,13 +1016,18 @@
         "protocol": {
           "type": "string",
           "enum": [
+            "tunnel",
             "dokodemo-door",
             "http",
+            "shadowsocks",
+            "mixed",
             "socks",
-            "vmess",
             "vless",
+            "vmess",
             "trojan",
-            "shadowsocks"
+            "wireguard",
+            "hysteria",
+            "tun"
           ],
           "description": "Тип входящего протокола. `dokodemo-door` — прозрачный прокси (tproxy/redirect) для роутера, `socks`/`http` — локальные прокси для клиентов LAN, `vless`/`vmess`/`trojan`/`shadowsocks` — туннелируемые протоколы для удалённых клиентов."
         },
@@ -1086,8 +1161,10 @@
         "protocol": {
           "type": "string",
           "enum": [
+            "block",
             "blackhole",
             "dns",
+            "direct",
             "freedom",
             "http",
             "socks",
@@ -1095,6 +1172,7 @@
             "vless",
             "shadowsocks",
             "trojan",
+            "hysteria",
             "wireguard",
             "loopback"
           ],
