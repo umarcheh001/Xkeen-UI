@@ -209,7 +209,6 @@ def test_stage0_closure_is_reflected_in_documentation():
     ):
         assert fragment in contract
     for fragment in (
-        "**Этап 0 закрыт 28 июля 2026 года; Этапы 1–7 не начаты",
         "### Этап 0. Зафиксировать контракт и матрицу состояний — закрыт",
         "Критерий завершения: **выполнен**",
         "panel-operator-stage0-inventory.json",

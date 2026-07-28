@@ -2,7 +2,7 @@
 
 Дата аудита: 28 июля 2026 года.
 
-Статус выполнения: **Этап 0 закрыт 28 июля 2026 года; Этапы 1–7 не начаты в рамках этого плана.** Контракт, state matrix и baseline зафиксированы в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md), канонический snapshot — в [`panel-operator-stage0-inventory.json`](panel-operator-stage0-inventory.json).
+Статус выполнения: **Этапы 0–1 закрыты 28 июля 2026 года; Этапы 2–7 не начаты в рамках этого плана.** Контракт, state matrix и baseline Этапа 0 зафиксированы в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md), канонический snapshot — в [`panel-operator-stage0-inventory.json`](panel-operator-stage0-inventory.json). Система scoped-примитивов и проверки Этапа 1 зафиксированы в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md).
 
 ## Цель и границы
 
@@ -159,19 +159,19 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 
 Критерий завершения: **выполнен**. Воспроизводимая карта экранов/состояний и тесты scoped/last-loaded контракта находятся в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md). Этап повторно открывается только при нарушении зафиксированного контракта, а не при плановой работе следующих этапов.
 
-### Этап 1. Уплотнить scoped-слой в систему примитивов
+### Этап 1. Уплотнить scoped-слой в систему примитивов — закрыт
 
-Задачи:
+Выполнено 28 июля 2026 года:
 
-- реорганизовать существующий файл по слоям: tokens → reset → shell → primitives → workspaces → modals → themes → responsive;
-- свести повторные селекторы, особенно header, modal, file manager, terminal и settings;
-- применять низкую специфичность через `:where(body.panel-page)` для базовых примитивов, а `!important` оставлять только на границе с legacy cascade;
-- ввести единые примитивы `surface`, `section`, `data-row`, `field`, `action-bar`, `button`, `icon-button`, `status`, `tag`, `segmented-control`, `empty-state` существующими классами/атрибутами без изменения JS-контрактов;
-- нейтрализовать legacy `::before/::after`, gradient, glow и lift-transform у panel chrome;
-- закрепить геометрию: control 32 px, compact 28 px, touch target на mobile не меньше 40 px; радиус controls 5–6 px, surfaces 9–12 px;
-- оставить `999px` только у физических переключателей, progress/spinner и точечных status dots.
+- [x] `panel-operator.css` реорганизован в каноническом порядке tokens → reset → shell → primitives → workspaces → modals → themes → responsive; после responsive нет добавочного слоя исправлений;
+- [x] повторные selector definitions сокращены и сведены через `:is(...)`/`:where(...)`, в том числе для header, modal frame, file manager, terminal и settings;
+- [x] базовые примитивы используют `:where(body.panel-page)`, а усиление специфичности и `!important` ограничено явно прокомментированной границей с замороженным legacy cascade;
+- [x] существующие классы и атрибуты собраны в примитивы `surface`, `section`, `data-row`, `field`, `action-bar`, `button`, `icon-button`, `status`, `tag`, `segmented-control`, `empty-state`; DOM/JS-контракт не менялся;
+- [x] legacy `::before/::after`, computed gradients, цветные glow и lift-transform нейтрализованы у panel chrome;
+- [x] закреплены control 32 px, compact 28 px, mobile touch target не меньше 40 px, радиусы controls 5–6 px и surfaces 9–12 px;
+- [x] единственный `999px` в scoped-файле относится к физическому `.fm-toggle-slider`; обычные controls, statuses, tags и data rows используют конечные радиусы.
 
-Критерий завершения: на chrome панели нет вычисленных градиентов и цветных glow; один тип компонента имеет одинаковую геометрию во всех экранах.
+Критерий завершения: **выполнен**. Chromium-contract проходит в dark/light для всех шести top-level views, запрещает computed gradients, цветные blur-glow и lift-transform и проверяет общую геометрию representative primitives на desktop/mobile. Статический контракт и команды проверки описаны в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md). Этап повторно открывается только при нарушении этого контракта.
 
 ### Этап 2. Шапка, навигация и рабочая сетка
 
