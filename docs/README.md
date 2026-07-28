@@ -12,13 +12,19 @@
 - `frontend-build-workflow.md` — актуальный install/build/verify workflow и связь с CI/archive workflows.
 - `adr/0001-frontend-esm-bootstrap.md` — архитектурное решение про build-managed ESM bootstrap.
 
+## Активные инициативы
+
+- `panel-operator-redesign-completion-plan.md` — план завершения переезда панели на Operator Console; Этап 0 закрыт, Этапы 1–7 остаются открытыми.
+
 ## Недавние закрытые инициативы
 
 - `top-level-navigation-plan.md` — итог по уже закрытому переводу всех five canonical entrypoints с document navigation на in-app navigation и фиксация финального five-route runtime contract.
+- `panel-operator-stage0-contract.md` — закрытый Этап 0 редизайна Operator Console: presentation ownership, матрица views/accordions/editors/modals, DOM freeze и dark/light visual baseline.
 
 ## Сгенерированные артефакты
 
 - `frontend-page-inventory.json` — snapshot page inventory, который должен оставаться синхронным с `scripts/generate_frontend_inventory.py`.
+- `panel-operator-stage0-inventory.json` — machine-readable snapshot контракта Operator Console; пересобирается `scripts/generate_panel_operator_inventory.py` и содержит hashes baseline-снимков.
 
 ## Когда обновлять документацию
 
