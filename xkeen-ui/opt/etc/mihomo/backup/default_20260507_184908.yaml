@@ -1,0 +1,718 @@
+# Enabled rule-group packages: AI, Blocked, CDN, Discord, GitHub, Google, Meta, QUIC, Reddit, Spotify, Steam, Telegram, Twitch, Twitter, YouTube
+#######################################################################################################
+# Описание:
+# Веб-интерфейс доступен по адресу http://192.168.1.1:9090/ui (192.168.1.1 = IP роутера). 
+# После добавления сервера и запуска mihomo необходимо зайти в веб-интерфейс и выбрать нужное подключение для селекторов.
+# Группа "Заблок. сервисы" содержит список доменов большинства заблокированных ресурсов.
+# Остальные группы YouTube/Discord и тд имеют приоритет над группой "Заблок. сервисы". 
+#######################################################################################################
+# Для работы Discord требуется проксировать порты XKeen: 80,443,2000:2300,8443,19200:19400,50000:50030
+# Для работы Whatsapp/Telegram требуется проксировать порты Xkeen: 80,443,596:599,1400,3478,5222
+#######################################################################################################
+
+log-level: silent
+allow-lan: true
+redir-port: 5000
+tproxy-port: 5001
+find-process-mode: off
+unified-delay: true
+external-controller: 0.0.0.0:9090
+external-ui: zashboard
+external-ui-url: https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip
+profile: { store-selected: true }
+
+sniffer:
+  enable: true
+  sniff:
+    HTTP:
+    TLS:
+
+anchors:
+  a1: &domain { type: http, format: mrs, behavior: domain, interval: 86400 }
+  a2: &ipcidr { type: http, format: mrs, behavior: ipcidr, interval: 86400 }
+  a3: &classical { type: http, format: text, behavior: classical, interval: 86400 }
+  a4: &inline { type: inline, behavior: classical }
+
+#############################################################################################
+# Пример VLESS подключения БЕЗ использования подписки (РАСКОММЕНТИРОВАТЬ ДЛЯ ИСПОЛЬЗОВАНИЯ) #
+#############################################################################################
+#proxies:
+
+proxies:
+  - name: 🇩🇪-XXX-Germany.98.1016
+    type: vless
+    server: 195.133.25.89
+    port: 443
+    uuid: ac100003-1fc1-11f1-9b09-024279501016
+    encryption: ""
+    network: xhttp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: cdn-mow-98.uiu.fyi
+    client-fingerprint: random
+    alpn: [h2, http/1.1]
+    xhttp-opts:
+      path: /api/v2/
+      host: cdn-mow-98.uiu.fyi
+      mode: auto
+
+  - name: 🇸🇪-YYY-Sweden.e026
+    type: vless
+    server: 103.88.240.173
+    port: 443
+    uuid: 06ef7e6c-5fbf-4c26-ae8d-7c8f24b0e026
+    encryption: ""
+    network: xhttp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: cdn-spb-01.uiu.fyi
+    client-fingerprint: random
+    alpn: [h2, http/1.1]
+    xhttp-opts:
+      path: /api/v2/
+      host: cdn-spb-01.uiu.fyi
+      mode: auto
+
+  - name: 🇳🇱-YYY-Netherlands.0005
+    type: vless
+    server: 176.124.210.220
+    port: 443
+    uuid: f649d537-df73-11f0-b453-0242ac100005
+    encryption: ""
+    network: xhttp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: cdn-spb-13.uiu.fyi
+    client-fingerprint: random
+    alpn: [h2, http/1.1]
+    xhttp-opts:
+      path: /api/v2/
+      host: cdn-spb-13.uiu.fyi
+      mode: auto
+
+  - name: 🇺🇸-XXX-New-York.6f10
+    type: vless
+    server: 72.56.12.240
+    port: 443
+    uuid: ac100002-eb6f-11f0-8d36-024281d56f10
+    encryption: ""
+    network: xhttp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: cdn-mow-81.uiu.fyi
+    client-fingerprint: random
+    alpn: [h2, http/1.1]
+    xhttp-opts:
+      path: /api/v2/
+      host: cdn-mow-81.uiu.fyi
+      mode: auto
+
+  - name: 🇪🇸-XXX-Spain.94da
+    type: vless
+    server: 72.56.244.88
+    port: 443
+    uuid: ac100002-eb6f-11f0-8d36-0242bcd894da
+    encryption: ""
+    network: xhttp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: cdn-mow-71.uiu.fyi
+    client-fingerprint: random
+    alpn: [h2, http/1.1]
+    xhttp-opts:
+      path: /api/v2/
+      host: cdn-mow-71.uiu.fyi
+      mode: auto
+
+  - name: 🇮🇳-XXX-India.0b95
+    type: vless
+    server: 72.56.6.163
+    port: 443
+    uuid: ac100003-2633-11f1-b302-02425cc60b95
+    encryption: ""
+    network: xhttp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: cdn-mow-100.uiu.fyi
+    client-fingerprint: random
+    alpn: [h2, http/1.1]
+    xhttp-opts:
+      path: /api/v2/
+      host: cdn-mow-100.uiu.fyi
+      mode: auto
+
+  - name: 🇹🇷️-XXX-Turkey.0e5d
+    type: vless
+    server: 5.42.120.157
+    port: 443
+    uuid: ac100003-3213-11f1-b302-02424c610e5d
+    encryption: ""
+    network: xhttp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: cdn-mow-101.uiu.fyi
+    client-fingerprint: random
+    alpn: [h2, http/1.1]
+    xhttp-opts:
+      path: /api/v2/
+      host: cdn-mow-101.uiu.fyi
+      mode: auto
+
+  - name: 🇰🇿-ZZZ-Kazakhstan.af40
+    type: vless
+    server: 82.97.207.21
+    port: 443
+    uuid: ac100003-262b-11f1-b302-024238f3af40
+    encryption: ""
+    network: xhttp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: cdn-nsk-01.uiu.fyi
+    client-fingerprint: random
+    alpn: [h2, http/1.1]
+    xhttp-opts:
+      path: /api/v2/
+      host: cdn-nsk-01.uiu.fyi
+      mode: auto
+
+  - name: 🇰🇿-ZZZ-Kazakhstan-02.a361
+    type: vless
+    server: 82.97.207.242
+    port: 443
+    uuid: ac100002-45be-11f1-8f3a-0242b784a361
+    encryption: ""
+    network: xhttp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: cdn-nsk-02.uiu.fyi
+    client-fingerprint: random
+    alpn: [h2, http/1.1]
+    xhttp-opts:
+      path: /api/v2/
+      host: cdn-nsk-02.uiu.fyi
+      mode: auto
+
+  - name: 🇩🇪-Germany.0005
+    type: vless
+    server: germany-05.ptu.ink
+    port: 443
+    uuid: 908232a7-e2ae-11f0-b453-0242ac100005
+    flow: xtls-rprx-vision
+    encryption: ""
+    network: tcp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: www.microsoft.com
+    reality-opts:
+      public-key: z7ObaBEwG9lXYX2JPQsFNWIXcH25ywpLIf4_g9LgSX4
+      short-id: 2c7282bf6de028b8
+      support-x25519mlkem768: true
+    client-fingerprint: random
+
+  - name: 🇮🇱-Israel.940f
+    type: vless
+    server: 31.133.100.247
+    port: 443
+    uuid: 4436bfad-c186-4824-97f8-93fc8b54940f
+    flow: xtls-rprx-vision
+    encryption: ""
+    network: tcp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: www.microsoft.com
+    reality-opts:
+      public-key: 1Zy9xb7yfBbRyDoi6z7sI_OuCv1mP5Fw5bkc3wmw3l4
+      short-id: 9ea866c4046b2b99
+      support-x25519mlkem768: true
+    client-fingerprint: random
+
+  - name: 🏳️-FREE-WhatsApp-Telegram-02
+    type: vless
+    server: 45.139.27.63
+    port: 443
+    uuid: 7fc953d6-ae75-46fb-a970-10b57d513487
+    encryption: ""
+    network: xhttp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: emerge-01.uiu.fyi
+    client-fingerprint: chrome
+    alpn: [h2]
+    xhttp-opts:
+      path: /api/v2/
+      host: emerge-01.uiu.fyi
+      mode: auto
+
+  - name: 🏳🇷🇺️-Анти-«Белые-списки»-00.59b7
+    type: vless
+    server: 217.16.29.11
+    port: 443
+    uuid: ac100003-2e6a-11f1-b302-0242feea59b7
+    encryption: ""
+    network: xhttp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: bonus00-01.uiu.fyi
+    client-fingerprint: random
+    alpn: [h2, http/1.1]
+    xhttp-opts:
+      path: /api/v2/
+      host: bonus00-01.uiu.fyi
+      mode: auto
+
+  - name: 🏳🇷🇺️-Анти-«Белые-списки»-00-03.1f07
+    type: vless
+    server: 92.38.153.243
+    port: 443
+    uuid: ac100002-4881-11f1-8f3a-0242b1a21f07
+    encryption: ""
+    network: xhttp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: bonus00-03.uiu.fyi
+    client-fingerprint: random
+    alpn: [h2, http/1.1]
+    xhttp-opts:
+      path: /api/v2/
+      host: bonus00-03.uiu.fyi
+      mode: auto
+
+  - name: 🏳🇷🇺️-Анти-«Белые-списки»-00.d1e0
+    type: vless
+    server: 161.104.106.163
+    port: 443
+    uuid: ac100003-2e6b-11f1-b302-0242b2dcd1e0
+    flow: xtls-rprx-vision
+    encryption: ""
+    network: tcp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: m.vk.ru
+    reality-opts:
+      public-key: YPVByHy6WrxiAa29rHHMH0hElo1TbcCN3fDPy-H6QD0
+      short-id: ef5faf85cd8b59dd
+      support-x25519mlkem768: true
+    client-fingerprint: random
+
+  - name: 🏳🇷🇺️-Анти-«Белые-списки»-20.70ce
+    type: vless
+    server: 217.16.21.70
+    port: 443
+    uuid: ac100003-2d72-11f1-b302-02423c3a70ce
+    encryption: ""
+    network: xhttp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: bonus20-01.uiu.fyi
+    client-fingerprint: random
+    alpn: [h2, http/1.1]
+    xhttp-opts:
+      path: /api/v2/
+      host: bonus20-01.uiu.fyi
+      mode: auto
+
+  - name: 🏳🇷🇺️-Анти-«Белые-списки»-00.dc85
+    type: vless
+    server: 217.16.31.242
+    port: 443
+    uuid: ac100003-2e6c-11f1-b302-02426d68dc85
+    encryption: ""
+    network: xhttp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: bonus66-01.uiu.fyi
+    client-fingerprint: random
+    alpn: [h2, http/1.1]
+    xhttp-opts:
+      path: /api/v2/
+      host: bonus66-01.uiu.fyi
+      mode: auto
+
+  - name: 🏳🇷🇺️-Анти-«Белые-списки»-77.dd07
+    type: vless
+    server: 94.126.205.255
+    port: 443
+    uuid: ac100002-48b7-11f1-8f3a-0242c79add07
+    encryption: ""
+    network: xhttp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: bonus77-01.uiu.fyi
+    client-fingerprint: random
+    alpn: [h2, http/1.1]
+    xhttp-opts:
+      path: /api/v2/
+      host: bonus77-01.uiu.fyi
+      mode: auto
+
+  - name: 🏳🇷🇺️-Анти-«Белые-списки»-78.12a4
+    type: vless
+    server: 185.14.46.76
+    port: 443
+    uuid: ac100003-2fb8-11f1-b302-024293e912a4
+    flow: xtls-rprx-vision
+    encryption: ""
+    network: tcp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: m.vk.ru
+    reality-opts:
+      public-key: Jiy73RG9MTrVDz71rQgbQgvYIREP56MctN8S___yKjE
+      short-id: 49bfd8a90671d448
+      support-x25519mlkem768: true
+    client-fingerprint: random
+
+  - name: 🏳🇷🇺️-Анти-«Белые-списки»-96.37e9
+    type: vless
+    server: 92.38.156.161
+    port: 443
+    uuid: ac100003-315a-11f1-b302-0242099e37e9
+    flow: xtls-rprx-vision
+    encryption: ""
+    network: tcp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: m.vk.ru
+    reality-opts:
+      public-key: pEOBnxhngP86ti7xH6x2Rj5ddGik3SSiQm_LA4esPis
+      short-id: b5be4ceb50ceef4b
+      support-x25519mlkem768: true
+    client-fingerprint: random
+
+  - name: 🏳🇷🇺️-Анти-«Белые-списки»-98.49bd
+    type: vless
+    server: 212.92.101.231
+    port: 443
+    uuid: ac100002-45bc-11f1-8f3a-024298af49bd
+    encryption: ""
+    network: xhttp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: bonus98-01.uiu.fyi
+    client-fingerprint: random
+    alpn: [h2, http/1.1]
+    xhttp-opts:
+      path: /api/v2/
+      host: bonus98-01.uiu.fyi
+      mode: auto
+
+  - name: 🏳🇷🇺️-Анти-«Белые-списки»-70
+    type: vless
+    server: 93.77.167.35
+    port: 443
+    uuid: 2bdf5db2-da78-4b5a-8a1f-8deb6c9b00df
+    encryption: ""
+    network: xhttp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: vk.com
+    reality-opts:
+      public-key: pxnzbJKyXFslwW8ZUNp04hP8BnBC7vpgvKhLpdwZvUk
+      short-id: 1a5cdc31a8649874
+      support-x25519mlkem768: true
+    client-fingerprint: chrome
+    xhttp-opts:
+      path: /
+      host: vk.com
+
+  - name: 🏳🇷🇺️-Анти-«Белые-списки»-71
+    type: vless
+    server: 84.201.167.209
+    port: 443
+    uuid: 769d6219-be8b-400d-9dd7-bbec4cca3593
+    flow: xtls-rprx-vision
+    encryption: ""
+    network: tcp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: ads.x5.ru
+    reality-opts:
+      public-key: geOjHdhY2ZDsIiK92ZByYkOVmq6Jr9B_P2hgQuR-8S8
+      short-id: fb66
+      support-x25519mlkem768: true
+    client-fingerprint: chrome
+
+  - name: 🏳🇷🇺️-Анти-«Белые-списки»-72
+    type: vless
+    server: 51.250.15.205
+    port: 443
+    uuid: 769d6219-be8b-400d-9dd7-bbec4cca3593
+    flow: xtls-rprx-vision
+    encryption: ""
+    network: tcp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: ads.x5.ru
+    reality-opts:
+      public-key: W79JZgWJdz5LZ3ZplqNDCzvb9G4YKEIZIJZb_c7Ddjc
+      short-id: 2094160d4e94f289
+      support-x25519mlkem768: true
+    client-fingerprint: qq
+
+  - name: 🏳🇷🇺️-Анти-«Белые-списки»-73
+    type: vless
+    server: 90.156.218.67
+    port: 443
+    uuid: cf5718f5-c0f3-4b63-8fbf-1de69c1299c5
+    flow: xtls-rprx-vision
+    encryption: ""
+    network: tcp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: sun2-11.userapi.com
+    reality-opts:
+      public-key: qB_eMu3ZO_wGITnyIqJ7Kt39-h9oHFnHlQQEqA-r3VA
+      short-id: ''
+      support-x25519mlkem768: true
+    client-fingerprint: chrome
+
+  - name: 🏳🇷🇺️-Анти-«Белые-списки»-74
+    type: vless
+    server: 158.160.250.161
+    port: 443
+    uuid: 616f5216-aaf1-4983-8c79-7ee9b2dfdf02
+    flow: xtls-rprx-vision
+    encryption: ""
+    network: tcp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: www.apple.com
+    reality-opts:
+      public-key: z9dOqH2pEKYk8V7opl4npiUUSXzj6yRHDYj9Xl95znY
+      short-id: b99e82f6d99f6e
+      support-x25519mlkem768: true
+    client-fingerprint: chrome
+
+  - name: 🏳🇷🇺️-Анти-«Белые-списки»-06.e026
+    type: vless
+    server: 103.88.240.173
+    port: 443
+    uuid: 06ef7e6c-5fbf-4c26-ae8d-7c8f24b0e026
+    encryption: ""
+    network: xhttp
+    udp: true
+    packet-encoding: xudp
+    tls: true
+    tfo: true
+    servername: cdn-spb-01.uiu.fyi
+    client-fingerprint: random
+    alpn: [h2, http/1.1]
+    xhttp-opts:
+      path: /api/v2/
+      host: cdn-spb-01.uiu.fyi
+      mode: auto
+
+proxy-providers: {}
+proxy-groups:
+  - name: Заблок. сервисы
+    type: select
+    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Reject.png
+    include-all: true
+
+  - name: YouTube
+    type: select
+    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/YouTube.png
+    include-all: true
+    proxies: [Заблок. сервисы, DIRECT]
+
+  - name: Discord
+    type: select
+    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Discord.png
+    include-all: true
+    proxies: [Заблок. сервисы, DIRECT]
+
+  - name: Twitch
+    type: select
+    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Twitch.png
+    include-all: true
+    proxies: [DIRECT, Заблок. сервисы]
+
+  - name: Reddit
+    type: select
+    icon: https://www.redditstatic.com/shreddit/assets/favicon/192x192.png
+    include-all: true
+    proxies: [DIRECT, Заблок. сервисы]
+
+  - name: Meta
+    type: select
+    icon: https://github.com/zxc-rv/assets/raw/main/group-icons/meta.png
+    include-all: true
+    proxies: [Заблок. сервисы, DIRECT]
+
+  - name: Spotify
+    type: select
+    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Spotify.png
+    include-all: true
+    exclude-filter: 🇷🇺
+    proxies: [Заблок. сервисы, DIRECT]
+
+  - name: Telegram
+    type: select
+    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Telegram.png
+    include-all: true
+    proxies: [Заблок. сервисы, DIRECT]
+
+  - name: Steam
+    type: select
+    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Steam.png
+    include-all: true
+    proxies: [DIRECT, Заблок. сервисы]
+
+  - name: CDN
+    type: select
+    icon: https://www.svgrepo.com/show/396567/globe-with-meridians.svg
+    include-all: true
+    proxies: [Заблок. сервисы, PASS]
+  
+  - name: Google
+    type: select
+    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Google_Search.png
+    include-all: true
+    proxies: [PASS, Заблок. сервисы]
+
+  - name: GitHub
+    type: select
+    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/GitHub.png
+    include-all: true
+    proxies: [PASS, Заблок. сервисы]
+
+  - name: AI
+    type: select
+    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Bot.png
+    include-all: true
+    exclude-filter: 🇷🇺
+    proxies: [Заблок. сервисы]
+
+  - name: Twitter
+    type: select
+    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Twitter.png
+    include-all: true
+    proxies: [Заблок. сервисы, DIRECT]
+
+rule-providers:
+  adlist@domain: { <<: *domain, url: https://github.com/zxc-rv/ad-filter/releases/latest/download/adlist.mrs }
+  akamai@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/akamai.mrs }
+  akamai@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/akamai@ipcidr.mrs }
+  amazon@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/amazon.mrs }
+  amazon@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/amazon@ipcidr.mrs }
+  category-ai@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ai-!cn.mrs }
+  cdn77@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/cdn77@ipcidr.mrs }
+  category-ru@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ru.mrs }
+  cloudflare@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cloudflare.mrs }
+  cloudflare@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/cloudflare@ipcidr.mrs }
+  digitalocean@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/digitalocean.mrs }
+  digitalocean@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/digitalocean@ipcidr.mrs }
+  discord@classical: { <<: *classical, url: https://github.com/zxc-rv/assets/raw/main/rules/discord.list }
+  fastly@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/fastly.mrs }
+  fastly@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/fastly@ipcidr.mrs }
+  gcore@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/gcore@ipcidr.mrs }
+  github@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/github.mrs }
+  google@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/google.mrs }
+  google@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/google@ipcidr.mrs }
+  hetzner@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/hetzner.mrs }
+  hetzner@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/hetzner@ipcidr.mrs }
+  meta@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/meta.mrs }
+  meta@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/meta@ipcidr.mrs }
+  oracle@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/oracle.mrs }
+  oracle@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/oracle@ipcidr.mrs }
+  ovh@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/ovh@ipcidr.mrs }
+  reddit@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/reddit.mrs }
+  refilter@domain: { <<: *domain, url: https://github.com/legiz-ru/mihomo-rule-sets/raw/main/re-filter/domain-rule.mrs }
+  scaleway@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/scaleway@ipcidr.mrs }
+  spotify@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/spotify.mrs }
+  steam@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/steam.mrs }
+  telegram@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/telegram.mrs }
+  telegram@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/telegram@ipcidr.mrs }
+  twitch@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/twitch.mrs }
+  twitter@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/twitter.mrs }
+  vultr@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/vultr@ipcidr.mrs }
+  youtube@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/youtube.mrs }
+  user@classical: # СВОИ ПРАВИЛА
+    type: inline
+    behavior: classical
+    payload: # Типы правил и примеры: https://wiki.metacubex.one/ru/config/rules/
+      - DOMAIN-SUFFIX,2ip.io
+
+rules:
+  - RULE-SET,adlist@domain,REJECT # Блокировка рекламы
+  - AND,((DST-PORT,443),(NETWORK,UDP)),REJECT # Блокировка QUIC
+  - OR,((DOMAIN-SUFFIX,gql.twitch.tv),(DOMAIN-SUFFIX,usher.ttvnw.net)),Заблок. сервисы # Разблокировка высокого качества на Twitch.tv (может вызвать рекламу)
+  - RULE-SET,category-ai@domain,AI
+  - RULE-SET,steam@domain,Steam
+  - RULE-SET,spotify@domain,Spotify
+  - RULE-SET,reddit@domain,Reddit
+  - RULE-SET,youtube@domain,YouTube
+  - RULE-SET,twitch@domain,Twitch
+  - RULE-SET,twitter@domain,Twitter
+  - RULE-SET,discord@classical,Discord
+  - OR,((RULE-SET,meta@domain),(RULE-SET,meta@ipcidr,no-resolve)),Meta
+  - OR,((RULE-SET,telegram@domain),(RULE-SET,telegram@ipcidr,no-resolve)),Telegram
+  - OR,((RULE-SET,refilter@domain),(RULE-SET,user@classical)),Заблок. сервисы
+  - RULE-SET,github@domain,GitHub
+  - OR,((RULE-SET,google@domain),(RULE-SET,google@ipcidr)),Google
+  - RULE-SET,category-ru@domain,DIRECT
+  - OR,((RULE-SET,amazon@domain),(RULE-SET,amazon@ipcidr)),CDN
+  - OR,((RULE-SET,akamai@domain),(RULE-SET,akamai@ipcidr)),CDN
+  - OR,((RULE-SET,cloudflare@domain),(RULE-SET,cloudflare@ipcidr)),CDN
+  - OR,((RULE-SET,digitalocean@domain),(RULE-SET,digitalocean@ipcidr)),CDN
+  - OR,((RULE-SET,fastly@domain),(RULE-SET,fastly@ipcidr)),CDN
+  - OR,((RULE-SET,oracle@domain),(RULE-SET,oracle@ipcidr)),CDN
+  - OR,((RULE-SET,hetzner@domain),(RULE-SET,hetzner@ipcidr)),CDN
+  - RULE-SET,scaleway@ipcidr,CDN
+  - RULE-SET,ovh@ipcidr,CDN
+  - RULE-SET,vultr@ipcidr,CDN
+  - RULE-SET,gcore@ipcidr,CDN
+  - RULE-SET,cdn77@ipcidr,CDN
+  - MATCH,DIRECT

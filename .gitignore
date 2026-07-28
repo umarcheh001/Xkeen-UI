@@ -57,4 +57,5 @@ xray_geo_probe/
 # Android signing material must never enter the repository.
 *.jks
 *.keystore
+*.p12
 android-companion/signing.properties
