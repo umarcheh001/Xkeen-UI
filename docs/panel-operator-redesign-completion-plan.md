@@ -2,7 +2,7 @@
 
 Дата аудита: 28 июля 2026 года.
 
-Статус выполнения: **Этапы 0–1 закрыты 28 июля 2026 года; Этапы 2–7 не начаты в рамках этого плана.** Контракт, state matrix и baseline Этапа 0 зафиксированы в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md), канонический snapshot — в [`panel-operator-stage0-inventory.json`](panel-operator-stage0-inventory.json). Система scoped-примитивов и проверки Этапа 1 зафиксированы в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md).
+Статус выполнения: **Этапы 0–2 закрыты 28 июля 2026 года; Этапы 3–7 не начаты в рамках этого плана.** Контракт, state matrix и baseline Этапа 0 зафиксированы в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md), канонический snapshot — в [`panel-operator-stage0-inventory.json`](panel-operator-stage0-inventory.json). Система scoped-примитивов и проверки Этапа 1 зафиксированы в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md), контракт шапки, navigation rail и editor-first grid Этапа 2 — в [`panel-operator-stage2-shell-grid.md`](panel-operator-stage2-shell-grid.md).
 
 ## Цель и границы
 
@@ -173,19 +173,20 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 
 Критерий завершения: **выполнен**. Chromium-contract проходит в dark/light для всех шести top-level views, запрещает computed gradients, цветные blur-glow и lift-transform и проверяет общую геометрию representative primitives на desktop/mobile. Статический контракт и команды проверки описаны в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md). Этап повторно открывается только при нарушении этого контракта.
 
-### Этап 2. Шапка, навигация и рабочая сетка
+### Этап 2. Шапка, навигация и рабочая сетка — закрыт
 
-Задачи:
+Выполнено 28 июля 2026 года:
 
-- собрать шапку в две компактные зоны: branding/service/core и global actions;
-- убрать стеклянные псевдоэлементы и индивидуальную синюю/красную подсветку обычных header actions;
-- оставить indigo только активной навигации и одному primary action текущего контекста; destructive показывать красным только при реальном риске;
-- привести top tabs к компактному content rail с ясным active/focus state;
-- выровнять service controls и auto-restart без третьей декоративной панели;
-- завершить desktop grid «основная рабочая область + inspector» и tablet/mobile перестроение;
-- проверить, что editor получает максимум полезной высоты при viewport 720 px.
+- [x] шапка собрана в две прямые зоны `identity` (branding/service/core) и `global-actions`; существующие runtime nodes и hooks сохранены;
+- [x] ordinary header actions используют одну нейтральную поверхность без постоянной синей/красной подсветки, theme icon также нейтрален; danger появляется только у risk-hover;
+- [x] indigo-иерархия закреплена за active navigation и primary save action текущего редактора;
+- [x] top tabs приведены к compact content rail с 2 px active marker, отдельным `:focus-visible`, доступным именем и внутренним horizontal scroll;
+- [x] service controls, routing focus и auto-restart выровнены одной плоской command row без третьей декоративной панели;
+- [x] desktop grid сохраняет workspace + inspector до 1180 px, после чего editor-first перестраивается в одну колонку; mobile сохраняет 40 px touch targets;
+- [x] dark/light Chromium-matrix охватывает 1920 × 1080, 1440 × 900, 1280 × 720, 1024 × 768, 390 × 844 и 360 × 800 без page overflow;
+- [x] при 1280 × 720 полная шапка занимает 128 px, editor host начинается не ниже 250 px и оставляет не менее 460 px видимой высоты.
 
-Критерий завершения: шапка и сетка одинаково читаются в обеих темах, не дают overflow и не конкурируют с редактором по контрасту.
+Критерий завершения: **выполнен**. Шапка и сетка одинаково читаются в обеих темах, не дают page overflow и не конкурируют с редактором по контрасту или площади. Статический и Chromium-контракты описаны в [`panel-operator-stage2-shell-grid.md`](panel-operator-stage2-shell-grid.md). Этап повторно открывается только при нарушении этого контракта.
 
 ### Этап 3. Инспектор Routing и компактные data rows
 

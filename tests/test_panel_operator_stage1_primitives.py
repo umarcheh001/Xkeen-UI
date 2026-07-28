@@ -157,11 +157,13 @@ def test_stage1_selector_layer_is_denser_than_the_entry_baseline():
     assert unique <= 720
     assert duplicate_selectors <= 135
     assert duplicate_instances <= 180
+    # The Stage 1 document is a closure snapshot. Later stages may compact the
+    # same canonical layer further without rewriting that historical result.
     for documented_metric in (
-        f"selector definitions: 932 → {definitions}",
-        f"unique selectors: 725 → {unique}",
-        f"selectors с повторным определением: 155 → {duplicate_selectors}",
-        f"дополнительные повторные instances: 207 → {duplicate_instances}",
+        "selector definitions: 932 → 893",
+        "unique selectors: 725 → 716",
+        "selectors с повторным определением: 155 → 132",
+        "дополнительные повторные instances: 207 → 177",
     ):
         assert documented_metric in contract
 
@@ -172,7 +174,6 @@ def test_stage1_closure_is_reflected_in_documentation():
     index = DOCS_INDEX.read_text(encoding="utf-8")
 
     for fragment in (
-        "Этапы 0–1 закрыты 28 июля 2026 года; Этапы 2–7 не начаты",
         "### Этап 1. Уплотнить scoped-слой в систему примитивов — закрыт",
         "Критерий завершения: **выполнен**",
         "panel-operator-stage1-primitives.md",
@@ -191,4 +192,3 @@ def test_stage1_closure_is_reflected_in_documentation():
         assert fragment in contract
 
     assert "panel-operator-stage1-primitives.md" in index
-    assert "Этапы 0–1 закрыты, Этапы 2–7 остаются открытыми" in index

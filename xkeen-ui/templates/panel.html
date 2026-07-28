@@ -66,7 +66,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260728d') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260728e') }}">
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -77,55 +77,57 @@
   <div class="container container-wide">
     <header class="panel-header panel-header-shell" data-xk-shell="panel-header">
       <div class="header-main panel-header-shell-main">
-        <div class="header-title-group panel-shell-brand" data-xk-shell-group="brand">
-          <div class="panel-shell-branding">
-            <img id="xk-brand-logo" class="xk-brand-logo hidden" alt="Logo" />
-            <h1 id="xk-brand-title" data-xk-brand-title>Xkeen UI</h1>
+        <div class="panel-shell-identity" data-xk-shell-zone="identity">
+          <div class="header-title-group panel-shell-brand" data-xk-shell-group="brand">
+            <div class="panel-shell-branding">
+              <img id="xk-brand-logo" class="xk-brand-logo hidden" alt="Logo" />
+              <h1 id="xk-brand-title" data-xk-brand-title>Xkeen UI</h1>
+            </div>
+            <div class="panel-shell-status" data-xk-shell-slot="status" aria-live="polite">
+              <span
+                id="xkeen-service-lamp"
+                class="service-status-lamp"
+                data-state="pending"
+                title="Проверка статуса..."
+              ></span>
+              <span id="xkeen-service-text" class="service-status-text">
+                Проверка статуса...
+              </span>
+            </div>
           </div>
-          <div class="panel-shell-status" data-xk-shell-slot="status" aria-live="polite">
-            <span
-              id="xkeen-service-lamp"
-              class="service-status-lamp"
-              data-state="pending"
-              title="Проверка статуса..."
-            ></span>
-            <span id="xkeen-service-text" class="service-status-text">
-              Проверка статуса...
-            </span>
+
+          <div class="header-center panel-shell-center" data-xk-shell-group="service">
+            <div class="panel-shell-core" data-xk-shell-slot="core">
+              <button
+                id="xkeen-core-text"
+                type="button"
+                class="service-core-text{% if not multi_core %} hidden{% endif %}"
+                data-loading="true"
+                aria-busy="true"
+                {% if not multi_core %}aria-hidden="true" tabindex="-1"{% endif %}
+              >Ядро</button>
+            </div>
+
+            {% if has_xray %}
+            <div class="panel-shell-badges" data-xk-shell-slot="badges">
+              <!-- Notice: global Xray logging is enabled (loglevel!=none) -->
+              <span
+                id="xray-logs-badge"
+                class="xray-logs-badge"
+                data-state="off"
+                data-live="off"
+                title="Логи Xray выключены"
+                aria-label="Логи Xray выключены"
+              >
+                <span class="xray-logs-badge__glyph" aria-hidden="true"></span>
+                <span class="xray-logs-badge__dot" aria-hidden="true"></span>
+              </span>
+            </div>
+            {% endif %}
           </div>
         </div>
 
-        <div class="header-center panel-shell-center" data-xk-shell-group="service">
-          <div class="panel-shell-core" data-xk-shell-slot="core">
-            <button
-              id="xkeen-core-text"
-              type="button"
-              class="service-core-text{% if not multi_core %} hidden{% endif %}"
-              data-loading="true"
-              aria-busy="true"
-              {% if not multi_core %}aria-hidden="true" tabindex="-1"{% endif %}
-            >Ядро</button>
-          </div>
-
-          {% if has_xray %}
-          <div class="panel-shell-badges" data-xk-shell-slot="badges">
-            <!-- Notice: global Xray logging is enabled (loglevel!=none) -->
-            <span
-              id="xray-logs-badge"
-              class="xray-logs-badge"
-              data-state="off"
-              data-live="off"
-              title="Логи Xray выключены"
-              aria-label="Логи Xray выключены"
-            >
-              <span class="xray-logs-badge__glyph" aria-hidden="true"></span>
-              <span class="xray-logs-badge__dot" aria-hidden="true"></span>
-            </span>
-          </div>
-          {% endif %}
-        </div>
-
-        <div class="header-right panel-shell-right" data-xk-shell-group="actions">
+        <div class="header-right panel-shell-right" data-xk-shell-zone="global-actions" data-xk-shell-group="actions">
           <div class="panel-shell-summary" data-xk-shell-slot="summary">
 
             <div
@@ -201,7 +203,7 @@
         </div>
       </div>
 
-<div class="top-tabs header-tabs">
+      <div class="top-tabs header-tabs" role="navigation" aria-label="Разделы панели">
         {% if has_xray %}
         <button class="top-tab-btn xk-top-tab xk-top-tab-routing active" data-view="routing" data-xk-section="routing">
           Роутинг Xray
