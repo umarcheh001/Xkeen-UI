@@ -144,7 +144,10 @@ M.sanitizeModelForExport = function (model) {
       btn.setAttribute('data-tooltip', tip);
       btn.setAttribute('aria-label', label);
     } else {
-      btn.textContent = dirty ? '💾 Применить в JSON *' : '💾 Применить в JSON';
+      btn.classList.toggle('is-dirty', dirty);
+      btn.textContent = dirty ? 'Применить в JSON · есть изменения' : 'Применить в JSON';
+      btn.setAttribute('data-tooltip', tip);
+      btn.setAttribute('aria-label', label);
     }
   }
 

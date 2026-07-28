@@ -66,7 +66,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260728h') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260728j') }}">
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -772,7 +772,7 @@
                 <button id="routing-forced-rules-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Принудительные правила (обход балансировщика): домены/IP → конкретный outbound" aria-label="Принудительные правила">🔒</button>
                 <button id="routing-balancer-add-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Добавить балансировщик" aria-label="Добавить балансировщик">⚖️</button>
                 <button id="routing-rules-add-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Добавить правило" aria-label="Добавить правило">📜</button>
-                <button id="routing-rules-apply-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Применить изменения в JSON‑редактор (с сохранением JSONC‑комментариев, best effort)" aria-label="Применить в JSON">💾</button>
+                <button id="routing-rules-apply-btn" class="btn-primary btn-icon routing-rules-apply-primary" type="button" data-tooltip="Применить изменения в JSON‑редактор (с сохранением JSONC‑комментариев, best effort)" aria-label="Применить в JSON">💾</button>
                 <button id="routing-rules-reload-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Перезагрузить из JSON-редактора" aria-label="Перезагрузить из JSON">↺</button>
               </div>
             </div>

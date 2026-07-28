@@ -18,7 +18,7 @@ def test_stage2_header_has_two_zones_without_replacing_runtime_nodes():
     assert 'data-xk-shell-zone="identity"' in template
     assert 'data-xk-shell-zone="global-actions"' in template
     assert 'class="top-tabs header-tabs" role="navigation" aria-label="Разделы панели"' in template
-    assert "filename='panel-operator.css', v='20260728h'" in template
+    assert "filename='panel-operator.css', v='20260728j'" in template
 
     identity_start = template.index('class="panel-shell-identity"')
     actions_start = template.index('data-xk-shell-zone="global-actions"')
@@ -81,7 +81,7 @@ def test_stage2_closure_is_reflected_in_documentation():
     index = DOCS_INDEX.read_text(encoding="utf-8")
 
     for fragment in (
-        "Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 начат: задача «Порты» закрыта 28 июля 2026 года",
+        "Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля 2026 года",
         "### Этап 2. Шапка, навигация и рабочая сетка — закрыт",
         "Критерий завершения: **выполнен**",
         "panel-operator-stage2-shell-grid.md",
@@ -99,5 +99,5 @@ def test_stage2_closure_is_reflected_in_documentation():
     ):
         assert fragment in contract
 
-    assert "Этапы 0–3 закрыты, Этап 4 в работе: задача «Порты» закрыта" in index
+    assert "Этапы 0–3 закрыты, Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты" in index
     assert "panel-operator-stage2-shell-grid.md" in index

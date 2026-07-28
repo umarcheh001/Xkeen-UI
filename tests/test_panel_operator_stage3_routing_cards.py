@@ -118,9 +118,9 @@ def test_stage3_closure_is_reflected_in_documentation():
     contract = CONTRACT_DOC.read_text(encoding="utf-8")
     index = DOCS_INDEX.read_text(encoding="utf-8")
 
-    assert "filename='panel-operator.css', v='20260728h'" in template
+    assert "filename='panel-operator.css', v='20260728j'" in template
     for fragment in (
-        "Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 начат: задача «Порты» закрыта 28 июля 2026 года",
+        "Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля 2026 года",
         "### Этап 3. Пересобрать routing cards и operational blocks — закрыт",
         "Критерий завершения: **выполнен**",
         "panel-operator-stage3-routing-cards.md",
@@ -138,5 +138,5 @@ def test_stage3_closure_is_reflected_in_documentation():
     ):
         assert fragment in contract
 
-    assert "Этапы 0–3 закрыты, Этап 4 в работе: задача «Порты» закрыта" in index
+    assert "Этапы 0–3 закрыты, Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты" in index
     assert "panel-operator-stage3-routing-cards.md" in index

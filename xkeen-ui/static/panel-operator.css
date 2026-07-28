@@ -25,6 +25,8 @@ body.panel-page {
   --op-text-strong: #f7f7f9;
   --op-muted: #969da9;
   --op-faint: #6e7581;
+  --op-data-muted: #b1b7c2;
+  --op-data-faint: #8b93a0;
   --op-accent: #7477e8;
   --op-accent-hover: #8588f2;
   --op-accent-soft: rgba(116, 119, 232, 0.14);
@@ -290,10 +292,7 @@ body.panel-page hr {
   background: var(--op-border);
 }
 
-body.panel-page h1,
-body.panel-page h2,
-body.panel-page h3,
-body.panel-page h4 {
+body.panel-page :is(h1, h2, h3, h4) {
   color: var(--op-text-strong);
   font-family: inherit;
   text-shadow: none;
@@ -342,18 +341,20 @@ body.panel-page .panel-shell-identity {
   min-width: 0;
 }
 
-body.panel-page .header-title-group,
-body.panel-page .header-center,
-body.panel-page .header-right,
-body.panel-page .header-actions,
-body.panel-page .panel-shell-branding,
-body.panel-page .panel-shell-status,
-body.panel-page .panel-shell-core,
-body.panel-page .panel-shell-badges,
-body.panel-page .panel-shell-summary,
-body.panel-page .panel-shell-actions,
-body.panel-page .panel-shell-actions-primary,
-body.panel-page .panel-shell-actions-secondary {
+body.panel-page :is(
+  .header-title-group,
+  .header-center,
+  .header-right,
+  .header-actions,
+  .panel-shell-branding,
+  .panel-shell-status,
+  .panel-shell-core,
+  .panel-shell-badges,
+  .panel-shell-summary,
+  .panel-shell-actions,
+  .panel-shell-actions-primary,
+  .panel-shell-actions-secondary
+) {
   min-width: 0;
   width: auto;
   gap: 7px;
@@ -366,15 +367,17 @@ body.panel-page .header-title-group {
   flex-wrap: nowrap;
 }
 
-body.panel-page .panel-shell-branding,
-body.panel-page .panel-shell-status,
-body.panel-page .panel-shell-core,
-body.panel-page .panel-shell-badges,
-body.panel-page .panel-shell-summary,
-body.panel-page .header-actions,
-body.panel-page .panel-shell-actions,
-body.panel-page .panel-shell-actions-primary,
-body.panel-page .panel-shell-actions-secondary {
+body.panel-page :is(
+  .panel-shell-branding,
+  .panel-shell-status,
+  .panel-shell-core,
+  .panel-shell-badges,
+  .panel-shell-summary,
+  .header-actions,
+  .panel-shell-actions,
+  .panel-shell-actions-primary,
+  .panel-shell-actions-secondary
+) {
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
@@ -545,11 +548,7 @@ body.panel-page header .theme-toggle-btn.xk-header-btn-theme:hover {
   color: var(--op-text) !important;
 }
 
-body.panel-page header .xk-header-btn.xk-header-btn-ui,
-body.panel-page header .xk-header-btn.xk-header-btn-devtools,
-body.panel-page header .xk-header-btn.xk-header-btn-logout,
-body.panel-page header .theme-toggle-btn.xk-header-btn-theme,
-html:is([data-theme="dark"], [data-theme="light"]) body.panel-page header :is(
+body.panel-page header :is(
   .xk-header-btn-ui,
   .xk-header-btn-devtools,
   .xk-header-btn-logout,
@@ -707,15 +706,11 @@ body.panel-page .xkeen-ctrl-btn:hover {
   color: var(--op-text) !important;
 }
 
-body.panel-page .xkeen-ctrl-btn.xkeen-ctrl-btn-start,
-body.panel-page .xkeen-ctrl-btn.xkeen-ctrl-btn-stop,
-body.panel-page .xkeen-ctrl-btn.xkeen-ctrl-btn-restart,
-html[data-theme="dark"] body.panel-page .xkeen-ctrl-btn.xkeen-ctrl-btn-start,
-html[data-theme="dark"] body.panel-page .xkeen-ctrl-btn.xkeen-ctrl-btn-stop,
-html[data-theme="dark"] body.panel-page .xkeen-ctrl-btn.xkeen-ctrl-btn-restart,
-html[data-theme="light"] body.panel-page .xkeen-ctrl-btn.xkeen-ctrl-btn-start,
-html[data-theme="light"] body.panel-page .xkeen-ctrl-btn.xkeen-ctrl-btn-stop,
-html[data-theme="light"] body.panel-page .xkeen-ctrl-btn.xkeen-ctrl-btn-restart {
+body.panel-page :is(
+  .xkeen-ctrl-btn.xkeen-ctrl-btn-start,
+  .xkeen-ctrl-btn.xkeen-ctrl-btn-stop,
+  .xkeen-ctrl-btn.xkeen-ctrl-btn-restart
+) {
   border-color: var(--op-border) !important;
   background: var(--op-surface) !important;
   color: var(--op-muted) !important;
@@ -1178,11 +1173,7 @@ html[data-theme="light"] body.panel-page #view-mihomo > .card:first-child {
   box-shadow: var(--op-shadow) !important;
 }
 
-body.panel-page .commands-header,
-body.panel-page .log-header-row,
-body.panel-page .fm-header,
-body.panel-page .xkeen-mini-head,
-html[data-theme="light"] body.panel-page .commands-header {
+body.panel-page :is(.commands-header, .log-header-row, .fm-header, .xkeen-mini-head) {
   min-height: 32px;
   margin: 0;
   color: var(--op-text);
@@ -1199,11 +1190,13 @@ body.panel-page .commands-header {
   box-shadow: none !important;
 }
 
-body.panel-page .commands-header h2,
-body.panel-page .commands-header h3,
-body.panel-page .log-header-row h2,
-body.panel-page .fm-header h2,
-body.panel-page .routing-side-card .commands-header h2 {
+body.panel-page :is(
+  .commands-header h2,
+  .commands-header h3,
+  .log-header-row h2,
+  .fm-header h2,
+  .routing-side-card .commands-header h2
+) {
   margin: 0;
   color: var(--op-text-strong) !important;
   font-size: calc(12px * var(--xk-font-scale, 1));
@@ -1277,12 +1270,14 @@ body.panel-page .routing-side-card .xk-fragment-row {
   padding: 0 0 9px;
 }
 
-body.panel-page .routing-side-card code,
-body.panel-page .routing-side-card .xk-card-desc,
-body.panel-page .routing-side-card .status,
-body.panel-page .routing-side-card .hint,
-body.panel-page .routing-side-card .xk-sub-muted,
-body.panel-page .routing-side-card .terminal-menu-title {
+body.panel-page .routing-side-card :is(
+  code,
+  .xk-card-desc,
+  .status,
+  .hint,
+  .xk-sub-muted,
+  .terminal-menu-title
+) {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -1376,14 +1371,14 @@ body.panel-page textarea::placeholder {
   opacity: 1;
 }
 
-body.panel-page input:focus,
-body.panel-page select:focus,
-body.panel-page textarea:focus,
-body.panel-page button:focus-visible,
-body.panel-page a:focus-visible,
-body.panel-page [role="button"]:focus-visible,
-html[data-theme="light"] body.panel-page input:focus,
-html[data-theme="light"] body.panel-page select:focus {
+body.panel-page :is(
+  input:focus,
+  select:focus,
+  textarea:focus,
+  button:focus-visible,
+  a:focus-visible,
+  [role="button"]:focus-visible
+) {
   border-color: var(--op-accent-border) !important;
   outline: 2px solid var(--op-accent-soft) !important;
   outline-offset: 1px;
@@ -1460,14 +1455,11 @@ html:is([data-theme="dark"], [data-theme="light"]) body.panel-page :is(
   max-height: var(--op-control-compact-h) !important;
 }
 
-body.panel-page #routing-save-btn,
-body.panel-page #mihomo-save-btn,
-body.panel-page .xk-save-btn-primary,
-body.panel-page .modal-actions .btn-primary,
-body.panel-page #json-editor-save-btn,
-html:is([data-theme="dark"], [data-theme="light"]) body.panel-page :is(
+body.panel-page :is(
   #routing-save-btn,
   #mihomo-save-btn,
+  .xk-save-btn-primary,
+  .modal-actions .btn-primary,
   #json-editor-save-btn
 ) {
   border-color: var(--op-accent) !important;
@@ -1485,9 +1477,7 @@ body.panel-page #json-editor-save-btn:hover {
   color: #fff !important;
 }
 
-body.panel-page button[disabled],
-body.panel-page .btn-secondary[disabled],
-body.panel-page .terminal-tool-btn[disabled] {
+body.panel-page :is(button[disabled], .btn-secondary[disabled], .terminal-tool-btn[disabled]) {
   opacity: 0.42;
   cursor: not-allowed;
 }
@@ -1531,12 +1521,14 @@ body.panel-page .xk-mihomo-topbar .xk-mihomo-toolbararea {
   width: 100%;
 }
 
-body.panel-page .xk-routing-fileline,
-body.panel-page .xk-routing-toolbararea,
-body.panel-page .xk-mihomo-toolbararea,
-body.panel-page .xk-routing-toolbarhost,
-body.panel-page .xk-mihomo-toolbarhost,
-body.panel-page .xkeen-cm-toolbar {
+body.panel-page :is(
+  .xk-routing-fileline,
+  .xk-routing-toolbararea,
+  .xk-mihomo-toolbararea,
+  .xk-routing-toolbarhost,
+  .xk-mihomo-toolbarhost,
+  .xkeen-cm-toolbar
+) {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -1587,19 +1579,19 @@ body.panel-page .xk-btn-icon {
   height: 15px;
 }
 
-body.panel-page .xkeen-cm6-host,
-body.panel-page .xkeen-cm6-host .cm-editor,
-body.panel-page .CodeMirror,
-body.panel-page .xk-monaco-editor,
-body.panel-page #routing-editor,
-body.panel-page #mihomo-editor {
+body.panel-page :is(
+  .xkeen-cm6-host,
+  .xkeen-cm6-host .cm-editor,
+  .CodeMirror,
+  .xk-monaco-editor,
+  #routing-editor,
+  #mihomo-editor
+) {
   border-radius: var(--op-radius) !important;
   box-shadow: none !important;
 }
 
-body.panel-page .xkeen-cm6-host .cm-editor,
-body.panel-page .CodeMirror,
-body.panel-page .xk-monaco-editor {
+body.panel-page :is(.xkeen-cm6-host .cm-editor, .CodeMirror, .xk-monaco-editor) {
   border: 1px solid var(--op-border-strong) !important;
 }
 
@@ -1681,50 +1673,513 @@ body.panel-page .status {
 }
 
 /* Data sections, cards and tables become flat, scan-friendly records. */
-body.panel-page .routing-rules-card,
-body.panel-page .commands-card,
-body.panel-page .fm-card {
+body.panel-page :is(.routing-rules-card, .commands-card, .fm-card) {
   overflow: hidden;
 }
 
-body.panel-page .routing-rules-toolbar,
-body.panel-page .routing-rules-config,
-body.panel-page .xk-mihomo-vault-head,
-body.panel-page .xk-mihomo-backups-toolbar,
-body.panel-page .commands-hero,
-body.panel-page .commands-status-row,
-body.panel-page .fm-panel-bar,
-body.panel-page .fm-footer {
+body.panel-page :is(
+  .routing-rules-toolbar,
+  .routing-rules-config,
+  .xk-mihomo-vault-head,
+  .xk-mihomo-backups-toolbar,
+  .commands-hero,
+  .commands-status-row,
+  .fm-panel-bar,
+  .fm-footer
+) {
   border-color: var(--op-border) !important;
   background: var(--op-surface-2) !important;
   box-shadow: none !important;
 }
 
-body.panel-page .routing-rule-card,
-body.panel-page .routing-balancer-card,
-body.panel-page .routing-scenario-option,
-body.panel-page .xk-mihomo-vault-card,
-body.panel-page .xk-sub-panel,
-body.panel-page .xkeen-mini-editor,
-body.panel-page .command-group,
-body.panel-page .core-pill,
-body.panel-page .fm-panel,
-html[data-theme="light"] body.panel-page .xk-mihomo-vault-card,
-html[data-theme="light"] body.panel-page .command-group {
+body.panel-page :is(
+  .routing-rule-card,
+  .routing-balancer-card,
+  .routing-scenario-option,
+  .xk-mihomo-vault-card,
+  .xk-sub-panel,
+  .xkeen-mini-editor,
+  .command-group,
+  .core-pill,
+  .fm-panel
+) {
   border: 1px solid var(--op-border) !important;
   border-radius: var(--op-radius) !important;
   background: var(--op-surface) !important;
   box-shadow: none !important;
 }
 
-body.panel-page .routing-rule-card:hover,
-body.panel-page .routing-balancer-card:hover,
-body.panel-page .routing-scenario-option:hover,
-body.panel-page .command-group:hover,
-body.panel-page .fm-row:hover {
+body.panel-page :is(
+  .routing-rule-card,
+  .routing-balancer-card,
+  .routing-scenario-option,
+  .command-group,
+  .fm-row
+):hover {
   border-color: var(--op-border-strong) !important;
   background: var(--op-surface-2) !important;
   transform: none !important;
+}
+
+/* Stage 4 routing rules: one record list, dense summary columns and a neutral
+ * editor flow. Target/state colour is limited to the record marker. */
+body.panel-page #routing-rules-body {
+  color: var(--op-text);
+  padding: 0 10px 10px;
+}
+
+body.panel-page #routing-rules-body * {
+  accent-color: var(--op-accent);
+  background-image: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+body.panel-page #routing-rules-body :is(.routing-rules-toolbar, .routing-rules-config) {
+  gap: 8px;
+  margin-inline: -10px;
+  padding: 8px 10px;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+}
+
+body.panel-page .routing-rule-grid {
+  display: block;
+  margin-top: 10px;
+  overflow: hidden;
+  border: 1px solid var(--op-border);
+  border-bottom: 0;
+  border-radius: var(--op-radius);
+  background: var(--op-surface);
+}
+
+body.panel-page .routing-rule-card {
+  --routing-record-tone: var(--op-accent);
+  position: relative;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-left: 2px solid var(--routing-record-tone) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: background-color 120ms ease;
+}
+
+body.panel-page .routing-rule-card:is(:hover, [data-open="1"]) {
+  border-color: var(--op-border) !important;
+  border-left-color: var(--routing-record-tone) !important;
+  background: var(--op-surface-2) !important;
+}
+
+body.panel-page .routing-rule-card:is(.is-target-balancer, .is-target-direct) {
+  --routing-record-tone: var(--op-success);
+}
+
+body.panel-page .routing-rule-card.is-target-block {
+  --routing-record-tone: var(--op-danger);
+}
+
+body.panel-page .routing-rule-card.is-disabled {
+  --routing-record-tone: var(--op-warning);
+  opacity: 1;
+  background: var(--op-warning-soft) !important;
+}
+
+body.panel-page .routing-rule-card::before,
+body.panel-page .routing-rule-card::after {
+  content: none !important;
+  display: none !important;
+}
+
+body.panel-page .routing-rule-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 7px 8px;
+}
+
+body.panel-page .routing-rule-main {
+  display: grid;
+  grid-template-columns: minmax(250px, 1.15fr) minmax(150px, 0.7fr) minmax(200px, 1fr);
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+body.panel-page #routing-rules-body :is(
+  .routing-rule-title,
+  .routing-rule-meta,
+  .routing-rule-summary,
+  .routing-rule-cond-badges
+) {
+  min-width: 0;
+  gap: 5px;
+  flex-wrap: nowrap;
+}
+
+body.panel-page #routing-rules-body :is(
+  .routing-rule-badge,
+  .routing-rule-index,
+  .routing-rule-handle,
+  .routing-rule-disabled-status-chip,
+  .routing-rule-remove-field,
+  .routing-help-btn,
+  .routing-help-tip,
+  .routing-chip,
+  .routing-selector-chip,
+  .routing-selector-more-btn,
+  .routing-selector-prefix-hint
+) {
+  min-height: 22px;
+  padding: 2px 6px;
+  border: 0 !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: transparent !important;
+  color: var(--op-data-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 590;
+}
+
+body.panel-page #routing-rules-body .routing-rule-badge.is-target {
+  color: var(--routing-record-tone) !important;
+  font-weight: 650;
+}
+
+body.panel-page .routing-rule-summary {
+  overflow: hidden;
+  color: var(--op-data-muted) !important;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page .routing-rule-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+body.panel-page #routing-rules-body .routing-rule-actions :is(button, .btn-icon) {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #routing-rules-body .routing-rule-actions .routing-rule-toggle {
+  width: auto;
+  min-width: 70px;
+  padding-inline: 8px !important;
+  border-color: var(--op-border) !important;
+  background: var(--op-surface) !important;
+  color: var(--op-data-muted) !important;
+}
+
+body.panel-page .routing-rule-body {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--op-border);
+  background: var(--op-surface) !important;
+}
+
+body.panel-page .routing-rule-form {
+  display: grid;
+  gap: 0;
+}
+
+body.panel-page #routing-rules-body :is(
+  .routing-rule-target,
+  .routing-rule-field[data-field-key],
+  .routing-rule-add-field,
+  .routing-rule-disabled-status,
+  .routing-observatory-warning
+) {
+  margin: 0;
+  padding: 7px 0;
+  border: 0 !important;
+  border-top: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+body.panel-page #routing-rules-body :is(.routing-rule-key, .routing-rule-target-label, .routing-rule-add-field-label) {
+  color: var(--op-data-muted) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  letter-spacing: 0.025em;
+}
+
+body.panel-page #routing-rules-body .routing-rule-target-row:has(input[type="radio"]:checked) {
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-2) !important;
+}
+
+body.panel-page #routing-rules-body :is(
+  .routing-chip-editor,
+  .routing-selector-chipfield,
+  .routing-selector-panel,
+  .routing-json-pre
+) {
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-text) !important;
+}
+
+body.panel-page #routing-rules-body :is(
+  .routing-chip-editor:focus-within,
+  .routing-selector-chipfield:focus-within,
+  .routing-selector-mode-btn.is-active,
+  .routing-strategy-chip.is-active,
+  .routing-selector-item.is-selected,
+  .routing-selector-item:hover
+) {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-text) !important;
+  outline: 0 !important;
+}
+
+/* Stage 4 balancers: a compact summary record owns disclosure; editable
+ * fields exist only in the open body and share the single apply action above. */
+body.panel-page .routing-balancers {
+  margin: 10px 0 0;
+}
+
+body.panel-page .routing-balancers-title {
+  margin: 0 0 5px;
+  color: var(--op-data-muted) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-weight: 650;
+}
+
+body.panel-page .routing-balancers-grid {
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--op-border);
+  border-bottom: 0;
+  border-radius: var(--op-radius);
+  background: var(--op-surface);
+}
+
+body.panel-page .routing-balancer-card {
+  margin: 0;
+  padding: 0;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+body.panel-page .routing-balancer-card:is(:hover, [data-open="1"]) {
+  border-color: var(--op-border) !important;
+  background: var(--op-surface-2) !important;
+}
+
+body.panel-page .routing-balancer-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 7px 8px;
+  border: 0 !important;
+}
+
+body.panel-page .routing-balancer-titleblock {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.45fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 14px;
+  min-width: 0;
+}
+
+body.panel-page :is(.routing-balancer-title, .routing-balancer-summary) {
+  min-width: 0;
+  color: var(--op-text) !important;
+}
+
+body.panel-page .routing-balancer-summary {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow: hidden;
+  color: var(--op-data-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  white-space: nowrap;
+}
+
+body.panel-page .routing-balancer-summary-item + .routing-balancer-summary-item::before {
+  content: "·";
+  margin: 0 7px;
+  color: var(--op-data-faint);
+}
+
+body.panel-page .routing-balancer-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+body.panel-page #routing-rules-body .routing-balancer-actions :is(button, .btn-icon) {
+  width: auto;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 8px !important;
+  border-radius: var(--op-control-radius) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .routing-balancer-body {
+  margin: 0;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--op-border);
+  background: var(--op-surface) !important;
+}
+
+body.panel-page .routing-balancer-form {
+  gap: 0;
+}
+
+body.panel-page #routing-rules-body .routing-balancer-form > .routing-rule-field {
+  grid-template-columns: minmax(112px, 132px) minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  margin: 0;
+  padding: 0 0 9px;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+body.panel-page #routing-rules-body .routing-balancer-form > .routing-rule-field + .routing-rule-field {
+  padding-top: 9px;
+  border-top: 1px solid var(--op-border) !important;
+}
+
+body.panel-page #routing-rules-body .routing-balancer-form :is(.routing-rule-input, .routing-selector-chipfield) {
+  min-height: var(--op-control-h);
+  color: var(--op-text) !important;
+}
+
+body.panel-page #routing-rules-body :is(.routing-rule-input, .routing-selector-entry)::placeholder {
+  color: var(--op-data-faint) !important;
+  opacity: 1;
+}
+
+body.panel-page #routing-rules-body :is(.routing-selector-chipfield, .routing-chip-editor) {
+  max-height: 92px;
+  overflow-y: auto;
+}
+
+body.panel-page #routing-rules-body .routing-selector-chip {
+  gap: 4px;
+  color: var(--op-data-muted) !important;
+}
+
+body.panel-page #routing-rules-body :is(.routing-selector-chip-x, .routing-rule-remove-field) {
+  display: inline-grid;
+  place-items: center;
+  width: 22px !important;
+  min-width: 22px !important;
+  max-width: 22px !important;
+  height: 22px !important;
+  min-height: 22px !important;
+  max-height: 22px !important;
+  flex: 0 0 22px;
+  padding: 0 !important;
+  border: 1px solid var(--op-border) !important;
+  border-radius: 50% !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-data-muted) !important;
+  line-height: 1 !important;
+}
+
+body.panel-page #routing-rules-body :is(.routing-selector-chip-x, .routing-rule-remove-field):hover {
+  border-color: var(--op-danger) !important;
+  color: var(--op-danger) !important;
+}
+
+body.panel-page #routing-rules-body .routing-balancer-actions .routing-balancer-del-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 28px !important;
+  min-width: 28px !important;
+  max-width: 28px !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  max-height: 28px !important;
+  padding: 0 !important;
+  border: 1px solid var(--op-border) !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  color: var(--op-data-muted) !important;
+}
+
+body.panel-page #routing-rules-body .routing-balancer-actions .routing-balancer-del-btn:hover {
+  border-color: var(--op-danger) !important;
+  background: var(--op-danger-soft) !important;
+  color: var(--op-danger) !important;
+}
+
+body.panel-page .routing-selector-more-btn {
+  cursor: pointer;
+  color: var(--op-accent-hover) !important;
+}
+
+body.panel-page .routing-balancer-editor-note {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--op-border);
+  color: var(--op-data-muted);
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #routing-rules-apply-btn {
+  width: var(--op-control-h) !important;
+  min-width: var(--op-control-h) !important;
+  max-width: var(--op-control-h) !important;
+  height: var(--op-control-h) !important;
+  min-height: var(--op-control-h) !important;
+  max-height: var(--op-control-h) !important;
+  padding: 0 !important;
+  border-color: var(--op-accent) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-accent) !important;
+  color: #fff !important;
+}
+
+body.panel-page #routing-rules-body .routing-rules-actions :is(.btn-icon, #routing-rules-apply-btn) {
+  width: var(--op-control-h) !important;
+  min-width: var(--op-control-h) !important;
+  max-width: var(--op-control-h) !important;
+  height: var(--op-control-h) !important;
+  min-height: var(--op-control-h) !important;
+  max-height: var(--op-control-h) !important;
+  padding: 0 !important;
+}
+
+body.panel-page #routing-rules-body :is(
+  .routing-rules-summary,
+  .routing-selector-count,
+  .routing-selector-entry,
+  .routing-balancer-actions .btn-secondary,
+  .routing-rules-actions .btn-secondary
+) {
+  color: var(--op-data-muted) !important;
 }
 
 body.panel-page .command-group {
@@ -2206,12 +2661,7 @@ html[data-theme="light"] body.panel-page .fm-panel-active .fm-panel-bar {
   background: var(--op-surface-2) !important;
 }
 
-body.panel-page .fm-target-select,
-body.panel-page .fm-bookmarks-select,
-body.panel-page .fm-bookmarks-btn,
-html[data-theme="light"] body.panel-page .fm-target-select,
-html[data-theme="light"] body.panel-page .fm-bookmarks-select,
-html[data-theme="light"] body.panel-page .fm-bookmarks-btn {
+body.panel-page :is(.fm-target-select, .fm-bookmarks-select, .fm-bookmarks-btn) {
   width: 32px;
   min-width: 32px;
   max-width: 32px;
@@ -3869,6 +4319,8 @@ html[data-theme="light"] body.panel-page {
   --op-text-strong: #17191e;
   --op-muted: #6e7480;
   --op-faint: #9298a3;
+  --op-data-muted: #59616d;
+  --op-data-faint: #767e8a;
   --op-accent: #5b5fc7;
   --op-accent-hover: #4d51b7;
   --op-accent-soft: rgba(91, 95, 199, 0.1);
@@ -3982,6 +4434,43 @@ body.panel-page .footer {
   body.panel-page #ui-settings-modal .xk-ui-settings-nav {
     border-right: 0;
     border-bottom: 1px solid var(--op-border);
+  }
+
+  body.panel-page .routing-rule-head,
+  body.panel-page .routing-balancer-head {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  body.panel-page .routing-rule-main {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  body.panel-page .routing-rule-actions {
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  body.panel-page .routing-balancer-titleblock {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+  }
+
+  body.panel-page #routing-rules-body .routing-balancer-form > .routing-rule-field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  body.panel-page .routing-balancer-summary {
+    overflow-x: auto;
+  }
+
+  body.panel-page .routing-balancer-actions {
+    width: 100%;
+    overflow-x: auto;
   }
 }
 

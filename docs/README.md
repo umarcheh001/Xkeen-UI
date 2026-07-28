@@ -14,7 +14,7 @@
 
 ## Активные инициативы
 
-- `panel-operator-redesign-completion-plan.md` — план завершения переезда панели на Operator Console; Этапы 0–3 закрыты, Этап 4 в работе: задача «Порты» закрыта, остальные задачи Этапа 4 и Этапы 5–7 открыты.
+- `panel-operator-redesign-completion-plan.md` — план завершения переезда панели на Operator Console; Этапы 0–3 закрыты, Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты, остальные задачи Этапа 4 и Этапы 5–7 открыты.
 
 ## Недавние закрытые инициативы
 
@@ -24,6 +24,8 @@
 - `panel-operator-stage2-shell-grid.md` — закрытый Этап 2 редизайна Operator Console: двухзонная шапка, navigation rail, service command row, editor-first grid и responsive dark/light Chromium-contract.
 - `panel-operator-stage3-routing-cards.md` — закрытый Этап 3 редизайна Operator Console: единый accordion/state contract routing inspector, плоские operational blocks и пятиколоночные proxy rows.
 - `panel-operator-stage4-ports.md` — закрытая задача «Порты» Этапа 4: естественная высота карточек, ограниченные min/max редакторов и единый footer row для status/save.
+- `panel-operator-stage4-routing-rules.md` — закрытая задача «Routing rules» Этапа 4: единый record list, summary columns и сохранённые drag/open/disabled/target states.
+- `panel-operator-stage4-balancers.md` — закрытая задача «Balancers» Этапа 4: collapsed summary, progressive disclosure selector и один primary apply на секцию.
 
 ## Сгенерированные артефакты
 

@@ -204,6 +204,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       } else if (ctx.kind === 'balancer') {
         if (ctx.isNew) {
           m.balancers.push(obj);
+          if (S._balOpenSet) S._balOpenSet.add(obj);
         } else {
           const prev = m.balancers[ctx.idx];
           const prevTag = prev && prev.tag ? String(prev.tag).trim() : '';

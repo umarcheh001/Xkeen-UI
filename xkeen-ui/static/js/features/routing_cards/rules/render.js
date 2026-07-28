@@ -1007,10 +1007,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     return await p;
   }
 
-function updateBalancerTitleDom(bal, titleEl, idx) {
+  function updateBalancerTitleDom(bal, titleEl, idx) {
     if (!titleEl) return;
     const tag = bal && bal.tag ? String(bal.tag) : `balancer#${Number(idx) + 1}`;
-    titleEl.textContent = `Балансировщик: ${tag}`;
+    titleEl.textContent = tag;
   }
 
   function updateBalancerBadgesDom(bal, refs) {
@@ -1023,20 +1023,20 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
         : '';
 
       if (refs.fallbackBadge) {
-        refs.fallbackBadge.textContent = fb ? `fallback: ${fb}` : 'fallback: —';
+        refs.fallbackBadge.textContent = fb ? `fallback ${fb}` : 'без fallback';
       }
       if (refs.selectorBadge) {
-        refs.selectorBadge.textContent = `selector: ${selN}`;
+        refs.selectorBadge.textContent = `selector ${selN}`;
       }
       if (refs.strategyBadge) {
-        refs.strategyBadge.textContent = stType ? `strategy: ${stType}` : 'strategy: —';
+        refs.strategyBadge.textContent = stType ? `strategy ${stType}` : 'strategy default';
       }
     } catch (e) {}
   }
 
   function buildBalancerForm(bal, idx, onChanged) {
     const form = document.createElement('div');
-    form.className = 'routing-rule-form';
+    form.className = 'routing-rule-form routing-balancer-form';
 
     // tag
     let _lastBalancerTag = String(bal && bal.tag ? bal.tag : '').trim();
@@ -1222,11 +1222,15 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       return true;
     }
 
+    let chipsExpanded = false;
+    const compactChipLimit = 4;
+
     function renderChips() {
       // keep input as last child
       const sel = getSelected();
       chipField.innerHTML = '';
-      sel.forEach((tag) => {
+      const visible = chipsExpanded ? sel : sel.slice(0, compactChipLimit);
+      visible.forEach((tag) => {
         const chip = document.createElement('span');
         chip.className = 'routing-selector-chip' + (isMissingTag(tag) ? ' is-missing' : '');
         const t = document.createElement('span');
@@ -1255,7 +1259,24 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
         chipField.appendChild(chip);
       });
 
+      if (sel.length > compactChipLimit) {
+        const more = document.createElement('button');
+        more.type = 'button';
+        more.className = 'routing-selector-more-btn';
+        more.textContent = chipsExpanded ? 'Свернуть' : `Ещё ${sel.length - compactChipLimit}`;
+        more.setAttribute('aria-expanded', chipsExpanded ? 'true' : 'false');
+        more.setAttribute('aria-label', chipsExpanded ? 'Свернуть список selector' : 'Показать все значения selector');
+        more.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          chipsExpanded = !chipsExpanded;
+          renderChips();
+        });
+        chipField.appendChild(more);
+      }
+
       chipField.appendChild(entry);
+      chipField.dataset.expanded = chipsExpanded ? '1' : '0';
     }
 
     function renderPanel(query) {
@@ -1707,6 +1728,11 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
     try { extraTa.classList.add('routing-balancer-json-ta'); } catch (e) {}
     form.appendChild(buildField('extra (JSON)', extraTa, 'balancer.extra'));
 
+    const editorNote = document.createElement('div');
+    editorNote.className = 'routing-balancer-editor-note';
+    editorNote.textContent = 'Правки синхронизируются с рабочей моделью. Общая команда «Применить в JSON» находится над списком.';
+    form.appendChild(editorNote);
+
     requestAnimationFrame(() => {
       try {
         form.querySelectorAll('.routing-rule-textarea').forEach((ta) => autoResizeTextarea(ta));
@@ -1752,12 +1778,10 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
 
     m.balancers.forEach((b, idx) => {
       const card = document.createElement('div');
-      card.className = 'routing-balancer-card';
+      card.className = 'routing-balancer-card routing-balancer-record';
       card.dataset.idx = String(idx);
-
-      // UI parity: balancer card shows the form by default (as on the reference screenshot).
-      // We keep data-open=1 so existing CSS won't hide the body.
-      card.dataset.open = '1';
+      const isOpen = !!(S._balOpenSet && S._balOpenSet.has(b));
+      card.dataset.open = isOpen ? '1' : '0';
 
       const head = document.createElement('div');
       head.className = 'routing-balancer-head';
@@ -1770,16 +1794,16 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       updateBalancerTitleDom(b || {}, title, idx);
 
       const meta = document.createElement('div');
-      meta.className = 'routing-rule-meta routing-balancer-meta';
+      meta.className = 'routing-balancer-meta routing-balancer-summary';
 
       const fbBadge = document.createElement('span');
-      fbBadge.className = 'routing-rule-badge';
+      fbBadge.className = 'routing-balancer-summary-item';
 
       const stBadge = document.createElement('span');
-      stBadge.className = 'routing-rule-badge';
+      stBadge.className = 'routing-balancer-summary-item';
 
       const selBadge = document.createElement('span');
-      selBadge.className = 'routing-rule-badge';
+      selBadge.className = 'routing-balancer-summary-item';
 
       meta.appendChild(fbBadge);
       meta.appendChild(stBadge);
@@ -1820,6 +1844,23 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       });
 
       actions.appendChild(infoBtn);
+
+      const toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      toggleBtn.className = 'btn-secondary routing-balancer-toggle-btn';
+      toggleBtn.textContent = isOpen ? 'Свернуть' : 'Редактировать';
+      toggleBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      toggleBtn.setAttribute('aria-controls', `routing-balancer-editor-${idx}`);
+      toggleBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!S._balOpenSet) S._balOpenSet = new Set();
+        if (S._balOpenSet.has(b)) S._balOpenSet.delete(b);
+        else S._balOpenSet.add(b);
+        renderBalancers();
+      });
+
+      actions.appendChild(toggleBtn);
       actions.appendChild(moreBtn);
 
       // Delete balancer
@@ -1865,6 +1906,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       // Body (details)
       const body = document.createElement('div');
       body.className = 'routing-balancer-body';
+      body.id = `routing-balancer-editor-${idx}`;
 
       const onChanged = () => {
         markDirty(true);
@@ -1874,8 +1916,10 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
         requestAutoSync({ wait: 450 });
       };
 
-      const form = buildBalancerForm(b || {}, idx, onChanged);
-      body.appendChild(form);
+      if (isOpen) {
+        const form = buildBalancerForm(b || {}, idx, onChanged);
+        body.appendChild(form);
+      }
       card.appendChild(body);
 
       list.appendChild(card);
@@ -2187,7 +2231,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       const sum = summarizeRule(rule);
 
       const card = document.createElement('div');
-      card.className = 'routing-rule-card' + (dragEnabled ? ' is-draggable' : '');
+      card.className = 'routing-rule-card routing-rule-record' + (dragEnabled ? ' is-draggable' : '');
       const isOpen = S._openSet.has(rule);
 
       card.dataset.idx = String(idx);
@@ -2426,7 +2470,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       const sum = summarizeRule(safeRule);
 
       const card = document.createElement('div');
-      card.className = 'routing-rule-card is-disabled';
+      card.className = 'routing-rule-card routing-rule-record is-disabled';
       card.dataset.disabled = '1';
       card.dataset.open = '1';
       applyRuleTargetTone(card, sum);

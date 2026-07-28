@@ -2,7 +2,7 @@
 
 Дата аудита: 28 июля 2026 года.
 
-Статус выполнения: **Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 начат: задача «Порты» закрыта 28 июля 2026 года, остальные задачи Этапа 4 и Этапы 5–7 остаются открыты.** Контракт, state matrix и baseline Этапа 0 зафиксированы в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md), канонический snapshot — в [`panel-operator-stage0-inventory.json`](panel-operator-stage0-inventory.json). Система scoped-примитивов и проверки Этапа 1 зафиксированы в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md), контракт шапки, navigation rail и editor-first grid Этапа 2 — в [`panel-operator-stage2-shell-grid.md`](panel-operator-stage2-shell-grid.md), единый accordion/data-row/state contract инспектора Routing Этапа 3 — в [`panel-operator-stage3-routing-cards.md`](panel-operator-stage3-routing-cards.md), контракт задачи «Порты» Этапа 4 — в [`panel-operator-stage4-ports.md`](panel-operator-stage4-ports.md).
+Статус выполнения: **Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля 2026 года, остальные задачи Этапа 4 и Этапы 5–7 остаются открыты.** Контракт, state matrix и baseline Этапа 0 зафиксированы в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md), канонический snapshot — в [`panel-operator-stage0-inventory.json`](panel-operator-stage0-inventory.json). Система scoped-примитивов и проверки Этапа 1 зафиксированы в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md), контракт шапки, navigation rail и editor-first grid Этапа 2 — в [`panel-operator-stage2-shell-grid.md`](panel-operator-stage2-shell-grid.md), единый accordion/data-row/state contract инспектора Routing Этапа 3 — в [`panel-operator-stage3-routing-cards.md`](panel-operator-stage3-routing-cards.md). Контракты закрытых задач Этапа 4: [`panel-operator-stage4-ports.md`](panel-operator-stage4-ports.md), [`panel-operator-stage4-routing-rules.md`](panel-operator-stage4-routing-rules.md) и [`panel-operator-stage4-balancers.md`](panel-operator-stage4-balancers.md).
 
 ## Цель и границы
 
@@ -209,11 +209,11 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 Выполнено 28 июля 2026 года:
 
 - [x] **Порты:** legacy fixed height перекрыт в scoped workspace-слое, карточки больше не растягиваются до единой высоты, редакторы списков/IP/policy получили диапазоны 156–220 / 168–240 / 220–320 px, status и компактный save собраны в общий footer row. Контракт: [`panel-operator-stage4-ports.md`](panel-operator-stage4-ports.md).
+- [x] **Routing rules:** двухколоночные cards заменены единым вертикальным record list с постоянными summary-колонками; drag/drop, open/closed, disabled и target states сохранены, semantic color ограничен marker/state; primary Apply приведён к размеру соседних icon-actions. Контракт: [`panel-operator-stage4-routing-rules.md`](panel-operator-stage4-routing-rules.md).
+- [x] **Balancers:** summary отделён от формы через disclosure на существующем `_balOpenSet`, selector ограничен первыми четырьмя chips с `Ещё N`, поля получили раздельный вертикальный ритм, secondary text стал контрастнее, delete-controls закреплены круглыми, а единственный compact primary apply принадлежит всей секции. Контракт: [`panel-operator-stage4-balancers.md`](panel-operator-stage4-balancers.md).
 
 Осталось:
 
-- [ ] **Routing rules:** заменить двухколоночные cards на плотные records, сохранить drag/drop, open/closed, disabled и target states;
-- [ ] **Balancers:** отделить summary от редактируемых полей, сократить tag cloud, оставить один primary save/apply;
 - [ ] **Commands:** убрать command capsules и повторный prefix, использовать строковую модель с предсказуемым action;
 - [ ] **Logs:** унифицировать filters, counters, detail и error states;
 - [ ] **Files:** завершить toolbar, table rows, selection/focus/drag/drop и empty states;
