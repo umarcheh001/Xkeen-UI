@@ -1540,6 +1540,1033 @@ body.panel-page #ui-settings-modal .xk-ui-settings-nav-btn.is-active {
   color: var(--op-accent-hover) !important;
 }
 
+/* Inspector records: remove the remaining "premium card" treatment from the
+ * operational sidebar. The selected row is a state, not a second card. */
+body.panel-page .routing-side-card .inbounds-modes,
+body.panel-page .routing-side-card .routing-scenario-options {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-sm);
+  background: var(--op-surface);
+}
+
+body.panel-page .routing-side-card .mode-item,
+html[data-theme="light"] body.panel-page .routing-side-card .mode-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 9px;
+  min-height: 0;
+  margin: 0;
+  padding: 9px 10px;
+  border: 0 !important;
+  border-top: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body.panel-page .routing-side-card .mode-item:first-child {
+  border-top: 0 !important;
+}
+
+body.panel-page .routing-side-card .mode-item::before,
+body.panel-page .routing-side-card .mode-item::after {
+  content: none !important;
+  display: none !important;
+}
+
+body.panel-page .routing-side-card .mode-item:hover {
+  background: var(--op-surface-2) !important;
+}
+
+body.panel-page .routing-side-card .mode-item:has(input:checked),
+body.panel-page .routing-side-card--inbounds .mode-item:has(input:checked),
+body.panel-page .routing-side-card--scenario .routing-scenario-option:has(input:checked),
+html[data-theme="light"] body.panel-page .routing-side-card--inbounds .mode-item:has(input:checked),
+html[data-theme="light"] body.panel-page .routing-side-card--scenario .routing-scenario-option:has(input:checked) {
+  border-color: var(--op-border) !important;
+  background: var(--op-accent-soft) !important;
+  box-shadow: inset 2px 0 0 var(--op-accent) !important;
+  transform: none !important;
+}
+
+body.panel-page .routing-side-card .mode-item input,
+body.panel-page .routing-side-card--inbounds .mode-item input,
+body.panel-page .routing-side-card--scenario .routing-scenario-option input {
+  width: 13px;
+  height: 13px;
+  margin: 3px 0 0;
+  accent-color: var(--op-accent);
+  filter: none !important;
+}
+
+body.panel-page .routing-side-card .mode-item strong,
+body.panel-page .routing-side-card .mode-item:has(input:checked) strong,
+body.panel-page .routing-side-card--scenario .routing-scenario-option:has(input:checked) strong,
+html[data-theme="light"] body.panel-page .routing-side-card .mode-item strong,
+html[data-theme="light"] body.panel-page .routing-side-card--scenario .routing-scenario-option:has(input:checked) strong {
+  color: var(--op-text-strong) !important;
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  font-weight: 650;
+}
+
+body.panel-page .routing-side-card .mode-item small,
+body.panel-page .routing-side-card .mode-item:has(input:checked) small,
+body.panel-page .routing-side-card--scenario .routing-scenario-option:has(input:checked) small,
+body.panel-page .routing-side-card--scenario .routing-scenario-option code,
+body.panel-page .routing-side-card--scenario .routing-scenario-option:has(input:checked) code,
+html[data-theme="light"] body.panel-page .routing-side-card .mode-item small {
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  line-height: 1.42;
+}
+
+body.panel-page .routing-side-card .xk-fragment-row,
+html[data-theme="light"] body.panel-page .routing-side-card .xk-fragment-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0 0 8px;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .routing-side-card .xk-fragment-select,
+body.panel-page .routing-side-card .xk-fragment-select select {
+  width: 100%;
+  min-width: 0;
+}
+
+/* The selector is the visible source of truth. Runtime-facing path copy stays
+ * in the DOM, but no longer repeats the selected filename below it. */
+body.panel-page .routing-side-card--inbounds #inbounds-body > .xk-card-desc,
+body.panel-page .routing-side-card--outbounds #outbounds-body > .xk-card-desc,
+body.panel-page .outbounds-fragment-summary-file {
+  display: none !important;
+}
+
+body.panel-page .routing-side-card .xk-mini-switch,
+html[data-theme="light"] body.panel-page .routing-side-card .xk-mini-switch {
+  width: 100%;
+  min-height: 34px;
+  margin: 8px 0 0;
+  padding: 7px 0;
+  border: 0 !important;
+  border-top: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .routing-side-card .xk-actions-inline {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--op-border);
+}
+
+body.panel-page .routing-side-card .xk-actions-inline > button {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+body.panel-page .routing-side-card--scenario #routing-scenario-badge,
+html[data-theme="light"] body.panel-page .routing-side-card--scenario #routing-scenario-badge {
+  min-width: 0;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--op-accent-border) !important;
+  border-radius: 5px !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent-hover) !important;
+  box-shadow: none !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .routing-scenario-help-row {
+  margin: 0 0 8px;
+}
+
+body.panel-page .routing-scenario-actions {
+  margin-top: 8px;
+}
+
+body.panel-page .routing-scenario-status,
+html[data-theme="light"] body.panel-page .routing-scenario-status {
+  margin-top: 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-editor) !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .outbounds-fragment-summary,
+html[data-theme="light"] body.panel-page .outbounds-fragment-summary {
+  margin: 0 0 8px;
+  padding: 0 0 8px;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .outbounds-fragment-summary-title {
+  color: var(--op-text-strong) !important;
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .outbounds-fragment-count,
+body.panel-page .outbounds-fragment-tags code {
+  border-color: var(--op-border) !important;
+  border-radius: 4px !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .routing-side-card .xk-outbounds-node-panel,
+body.panel-page .routing-side-card .xk-sub-node-panel,
+html[data-theme="light"] body.panel-page .routing-side-card .xk-outbounds-node-panel {
+  margin: 0 0 8px;
+  padding: 0 !important;
+  overflow: hidden;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .routing-side-card .xk-sub-panelhead {
+  align-items: center;
+  gap: 6px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--op-border);
+}
+
+/* "Servers" + "Nodes of current fragment" expressed the same hierarchy twice. */
+body.panel-page .routing-side-card .xk-sub-panelhead .xk-pool-kicker {
+  display: none !important;
+}
+
+body.panel-page .routing-side-card .xk-sub-node-list,
+html[data-theme="light"] body.panel-page .routing-side-card .xk-sub-node-list {
+  display: block;
+  min-height: 0;
+  max-height: min(36vh, 320px);
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .routing-side-card .xk-sub-node-item,
+body.panel-page .routing-side-card .xk-outbounds-node-item,
+html[data-theme="light"] body.panel-page .routing-side-card .xk-sub-node-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  min-height: 0;
+  margin: 0;
+  padding: 8px 9px;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body.panel-page .routing-side-card .xk-sub-node-item:last-child {
+  border-bottom: 0 !important;
+}
+
+body.panel-page .routing-side-card .xk-sub-node-item:hover {
+  background: var(--op-surface-2) !important;
+}
+
+body.panel-page .routing-side-card .xk-sub-node-name {
+  color: var(--op-text-strong) !important;
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .routing-side-card .xk-sub-node-main {
+  gap: 4px;
+}
+
+body.panel-page .routing-side-card .xk-sub-node-meta {
+  gap: 4px;
+}
+
+body.panel-page .routing-side-card .xk-sub-node-pill,
+body.panel-page .routing-side-card .xk-sub-node-latency,
+body.panel-page .routing-side-card .xk-pool-summary {
+  border: 1px solid var(--op-border) !important;
+  border-radius: 4px !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .routing-side-card .xk-sub-node-endpoint,
+body.panel-page .routing-side-card .xk-sub-node-detail {
+  color: var(--op-muted) !important;
+}
+
+body.panel-page .routing-side-card .xk-sub-node-state.is-enabled {
+  color: var(--op-success) !important;
+  font-weight: 600;
+}
+
+/* Modal frame: one predictable shell shared by old and new feature dialogs. */
+body.panel-page .modal-content,
+body.panel-page .xk-ui-settings-modal-content,
+html[data-theme="light"] body.panel-page .modal-content {
+  padding: 0 !important;
+  overflow: hidden;
+  background-image: none !important;
+}
+
+body.panel-page .modal-header,
+body.panel-page .xk-ui-settings-header,
+html[data-theme="light"] body.panel-page .modal-header {
+  flex: 0 0 auto;
+  min-height: 50px;
+  margin: 0 !important;
+  padding: 9px 12px !important;
+  border-bottom: 1px solid var(--op-border) !important;
+}
+
+body.panel-page .modal-body,
+body.panel-page .xk-ui-settings-body {
+  margin: 0 !important;
+  padding: 12px !important;
+  background: var(--op-surface) !important;
+}
+
+body.panel-page .modal-actions,
+body.panel-page .xk-ui-settings-footer,
+html[data-theme="light"] body.panel-page .modal-actions {
+  flex: 0 0 auto;
+  min-height: 50px;
+  margin: 0 !important;
+  padding: 9px 12px !important;
+  border-top: 1px solid var(--op-border) !important;
+}
+
+body.panel-page .modal-title {
+  font-size: calc(14px * var(--xk-font-scale, 1));
+  font-weight: 670;
+  letter-spacing: -0.01em !important;
+}
+
+body.panel-page .modal-description,
+body.panel-page .modal-hint {
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  line-height: 1.45;
+}
+
+body.panel-page .modal-close,
+html[data-theme="light"] body.panel-page .modal-close {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--op-radius-sm) !important;
+  transform: none !important;
+}
+
+/* Complex feature dialogs use a single divided workbench. Their historical
+ * panels remain in the DOM as layout columns, but stop looking like cards
+ * nested inside another card. */
+body.panel-page .modal :is(
+  .xk-gen-grid2,
+  .xk-pool-grid,
+  .xk-mi-grid,
+  .xk-pt-workgrid,
+  .xk-hw-grid,
+  .xk-sub-grid,
+  .xk-mihomo-validation-grid,
+  .xk-hw-compare-grid
+) {
+  gap: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .modal :is(
+  .xk-gen-panel,
+  .xk-pool-panel,
+  .xk-mi-panel,
+  .xk-pt-panel,
+  .xk-hw-panel,
+  .xk-sub-panel,
+  .xk-mihomo-validation-panel,
+  .xk-hw-compare
+) {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body.panel-page .modal :is(
+  .xk-gen-panel,
+  .xk-pool-panel,
+  .xk-mi-panel,
+  .xk-pt-panel,
+  .xk-hw-panel,
+  .xk-sub-panel,
+  .xk-mihomo-validation-panel,
+  .xk-hw-compare
+) + :is(
+  .xk-gen-panel,
+  .xk-pool-panel,
+  .xk-mi-panel,
+  .xk-pt-panel,
+  .xk-hw-panel,
+  .xk-sub-panel,
+  .xk-mihomo-validation-panel,
+  .xk-hw-compare
+) {
+  border-left: 1px solid var(--op-border) !important;
+}
+
+body.panel-page .modal :is(
+  .xk-gen-lead,
+  .xk-pool-lead,
+  .xk-pt-lead,
+  .xk-mihomo-validation-lead,
+  .xk-sub-brief
+) {
+  margin: 0 0 10px !important;
+  padding: 0 0 10px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .modal :is(
+  .xk-gen-advanced-card,
+  .xk-gen-credentials-card,
+  .xk-mi-groups-card,
+  .xk-mi-refresh-card,
+  .xk-pool-replace-card,
+  .xk-pt-card,
+  .xk-hw-diag-card,
+  .xk-sub-balancers,
+  .xk-sub-diagnostics
+) {
+  margin: 0 !important;
+  padding: 10px 0 !important;
+  border: 0 !important;
+  border-top: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .modal :is(
+  .xk-gen-lead-icon,
+  .xk-pool-lead-icon,
+  .xk-pt-lead-icon,
+  .xk-mihomo-validation-lead-icon
+) {
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-accent-hover) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .modal :is(
+  .xk-gen-kicker,
+  .xk-pool-kicker,
+  .xk-pt-kicker,
+  .xk-hw-kicker,
+  .xk-mihomo-validation-kicker,
+  .xk-sub-kicker
+) {
+  color: var(--op-muted) !important;
+  letter-spacing: 0.04em !important;
+  text-transform: none !important;
+}
+
+body.panel-page .modal .xk-sub-list-panel {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .modal .xk-sub-update-note {
+  padding: 6px 0 6px 10px;
+  border: 0 !important;
+  border-left: 2px solid var(--op-accent) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .modal .xk-sub-update-title {
+  color: var(--op-text) !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+body.panel-page .modal .xk-sub-balancer-check {
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .modal .xk-sub-node-list,
+body.panel-page .modal .xk-sub-tablewrap,
+body.panel-page .modal .xk-pool-tablewrap,
+body.panel-page .modal .xk-mihomo-validation-log-shell {
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-editor) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .modal .xk-sub-node-item,
+html[data-theme="light"] body.panel-page .modal .xk-sub-node-item {
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* Core selector: two compact data rows; no logo plaque, marketing eyebrow or
+ * restart pill. These nodes stay available to runtime and accessibility APIs. */
+body.panel-page #core-modal .xk-core-modal-content,
+html[data-theme="light"] body.panel-page #core-modal .xk-core-modal-content {
+  width: min(94vw, 460px);
+  max-width: 460px;
+  max-height: min(88dvh, 560px);
+  padding: 0 !important;
+  border-radius: var(--op-radius-lg) !important;
+  background: var(--op-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--op-shadow-float) !important;
+}
+
+body.panel-page #core-modal .xk-core-title-icon,
+body.panel-page #core-modal .xk-core-kicker,
+body.panel-page #core-modal .xk-core-lead {
+  display: none !important;
+}
+
+body.panel-page #core-modal .xk-core-titleline {
+  display: block;
+}
+
+body.panel-page #core-modal .xk-core-modal-body {
+  gap: 0;
+  padding: 6px 12px !important;
+}
+
+body.panel-page #core-modal .xk-core-engine-list {
+  display: block;
+  width: 100%;
+  margin: 0;
+  border-top: 1px solid var(--op-border);
+}
+
+body.panel-page #core-modal .xk-core-engine-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  margin: 0;
+  padding: 0 4px;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body.panel-page #core-modal .xk-core-engine-row:hover:not(.is-disabled),
+body.panel-page #core-modal .xk-core-engine-row.active,
+html[data-theme="light"] body.panel-page #core-modal .xk-core-engine-row:hover:not(.is-disabled),
+html[data-theme="light"] body.panel-page #core-modal .xk-core-engine-row.active {
+  border-color: var(--op-border) !important;
+  background: var(--op-surface-2) !important;
+  background-image: none !important;
+  box-shadow: inset 2px 0 0 var(--op-accent) !important;
+  transform: none !important;
+}
+
+body.panel-page #core-modal .xk-core-option,
+body.panel-page #core-modal .xk-core-option:hover:not([disabled]),
+body.panel-page #core-modal .xk-core-option.active,
+body.panel-page #core-modal .xk-core-option.is-current:not(.active),
+html[data-theme="light"] body.panel-page #core-modal .xk-core-option {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 47px;
+  padding: 0 4px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+  text-align: left;
+  transform: none !important;
+}
+
+body.panel-page #core-modal .xk-core-option::before,
+body.panel-page #core-modal .xk-core-option::after {
+  content: none !important;
+  display: none !important;
+}
+
+body.panel-page #core-modal .xk-core-option:hover:not([disabled]) {
+  color: var(--op-text-strong) !important;
+}
+
+body.panel-page #core-modal .xk-core-option.active {
+  box-shadow: inset 2px 0 0 var(--op-accent) !important;
+}
+
+body.panel-page #core-modal .xk-core-option-title,
+html[data-theme="light"] body.panel-page #core-modal .xk-core-option-title {
+  color: inherit !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  font-weight: 650;
+}
+
+body.panel-page #core-modal .xk-core-option-state,
+html[data-theme="light"] body.panel-page #core-modal .xk-core-option-state {
+  min-height: 24px;
+  padding: 0 7px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: 4px !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(9.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #core-modal .xk-core-status,
+html[data-theme="light"] body.panel-page #core-modal .xk-core-status {
+  min-height: 0;
+  margin: 8px 0 2px;
+  padding: 7px 9px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-editor) !important;
+  background-image: none !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #core-modal .xk-core-modal-actions {
+  justify-content: flex-end;
+}
+
+body.panel-page #core-modal .xk-core-actions-row {
+  gap: 6px;
+  margin-left: auto;
+}
+
+body.panel-page #core-modal .xk-core-actions-row > button {
+  min-width: 96px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: var(--op-radius-sm) !important;
+}
+
+/* DAT Explorer: a compact divided master/detail workspace. */
+body.panel-page #routing-dat-contents-modal .xk-dat-modal-content,
+html[data-theme="light"] body.panel-page #routing-dat-contents-modal .xk-dat-modal-content {
+  width: min(94vw, 1120px);
+  max-width: 1120px;
+  height: min(82dvh, 760px);
+  max-height: min(82dvh, 760px);
+  padding: 0 !important;
+  border-radius: var(--op-radius-lg) !important;
+  background: var(--op-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--op-shadow-float) !important;
+}
+
+body.panel-page #routing-dat-contents-modal .xk-dat-modal-kicker {
+  display: none !important;
+}
+
+body.panel-page #routing-dat-contents-modal .xk-dat-modal-body {
+  gap: 8px;
+  padding: 10px 12px !important;
+}
+
+body.panel-page #routing-dat-contents-modal .xk-dat-head,
+html[data-theme="light"] body.panel-page #routing-dat-contents-modal .xk-dat-head {
+  gap: 8px;
+  margin: 0;
+  padding: 5px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface-2) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-contents-kind,
+body.panel-page #routing-dat-contents-modal .dat-contents-path,
+html[data-theme="light"] body.panel-page #routing-dat-contents-modal .dat-contents-kind,
+html[data-theme="light"] body.panel-page #routing-dat-contents-modal .dat-contents-path {
+  min-height: 28px;
+  padding: 5px 8px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: 5px !important;
+  background: var(--op-surface) !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #routing-dat-contents-modal .dat-contents-kind {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent-hover) !important;
+}
+
+body.panel-page #routing-dat-contents-modal .xk-dat-controls {
+  gap: 5px;
+}
+
+body.panel-page #routing-dat-contents-modal .xk-dat-controls .btn-secondary {
+  min-height: 28px;
+  border-radius: 5px !important;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-contents-layout {
+  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+  gap: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius);
+  background: var(--op-surface);
+}
+
+body.panel-page #routing-dat-contents-modal .dat-contents-tags,
+body.panel-page #routing-dat-contents-modal .dat-contents-items,
+html[data-theme="light"] body.panel-page #routing-dat-contents-modal .dat-contents-tags,
+html[data-theme="light"] body.panel-page #routing-dat-contents-modal .dat-contents-items {
+  gap: 7px;
+  padding: 9px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-contents-items {
+  border-left: 1px solid var(--op-border) !important;
+}
+
+body.panel-page #routing-dat-contents-modal .routing-dat-input,
+body.panel-page #routing-dat-contents-modal .dat-contents-select,
+html[data-theme="light"] body.panel-page #routing-dat-contents-modal .routing-dat-input,
+html[data-theme="light"] body.panel-page #routing-dat-contents-modal .dat-contents-select {
+  min-height: 32px;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-contents-routingbar,
+html[data-theme="light"] body.panel-page #routing-dat-contents-modal .dat-contents-routingbar {
+  gap: 6px;
+  margin: 0;
+  padding: 7px 0;
+  border: 0 !important;
+  border-top: 1px solid var(--op-border) !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-contents-search-mode,
+body.panel-page #routing-dat-contents-modal .dat-contents-ipfilter,
+html[data-theme="light"] body.panel-page #routing-dat-contents-modal .dat-contents-search-mode,
+html[data-theme="light"] body.panel-page #routing-dat-contents-modal .dat-contents-ipfilter {
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface-2) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-contents-search-mode .btn-secondary,
+body.panel-page #routing-dat-contents-modal .dat-contents-ipfilter .btn-secondary {
+  min-height: 26px;
+  padding: 0 8px;
+  border: 0 !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-contents-search-mode .btn-secondary.is-active,
+body.panel-page #routing-dat-contents-modal .dat-contents-ipfilter .btn-secondary.is-active {
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent-hover) !important;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-contents-tags-list,
+body.panel-page #routing-dat-contents-modal .dat-contents-items-list,
+html[data-theme="light"] body.panel-page #routing-dat-contents-modal .dat-contents-tags-list,
+html[data-theme="light"] body.panel-page #routing-dat-contents-modal .dat-contents-items-list {
+  padding: 5px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-editor) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-tag-row,
+body.panel-page #routing-dat-contents-modal .dat-item-row {
+  border-radius: 0 !important;
+  border-color: var(--op-border) !important;
+  background: transparent !important;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-tag-main.btn-secondary,
+body.panel-page #routing-dat-contents-modal .dat-tag-copy.btn-secondary {
+  border-radius: 4px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Missing helper/data is a compact empty state, not two viewport-high blanks. */
+body.panel-page #routing-dat-contents-modal:has(#routing-dat-contents-tags-status.error) .xk-dat-modal-content {
+  height: auto;
+  max-height: min(88dvh, 660px);
+}
+
+body.panel-page #routing-dat-contents-modal:has(#routing-dat-contents-tags-status.error) .dat-contents-layout {
+  min-height: 260px;
+}
+
+body.panel-page #routing-dat-contents-modal:has(#routing-dat-contents-tags-status.error) .dat-contents-tags-list,
+body.panel-page #routing-dat-contents-modal:has(#routing-dat-contents-tags-status.error) .dat-contents-items-list {
+  min-height: 130px;
+  max-height: 180px;
+}
+
+/* Settings are one scan-friendly list. Section and item wrappers still exist
+ * for JS rendering, but visual grouping comes from dividers and typography. */
+body.panel-page #ui-settings-modal .xk-ui-settings-modal-content,
+html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-modal-content {
+  width: min(94vw, 920px);
+  max-width: 920px;
+  height: min(84dvh, 760px);
+  max-height: min(84dvh, 760px);
+  background: var(--op-surface) !important;
+  background-image: none !important;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-header .modal-title {
+  font-size: calc(17px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-shell {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius);
+  background: var(--op-surface);
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-nav {
+  gap: 2px;
+  padding: 7px;
+  border-right: 1px solid var(--op-border);
+  background: var(--op-surface-2);
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-nav-btn,
+html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-nav-btn {
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0 !important;
+  border-radius: 5px !important;
+  background: transparent !important;
+  color: var(--op-muted) !important;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-nav-btn:hover {
+  background: var(--op-surface-3) !important;
+  color: var(--op-text) !important;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-nav-btn.is-active,
+html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-nav-btn.is-active {
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent-hover) !important;
+  box-shadow: inset 2px 0 0 var(--op-accent) !important;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-sections {
+  padding: 0 12px 12px;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-section,
+html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-section {
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-section-head {
+  padding: 11px 0 9px;
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-section-kicker {
+  display: none;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-section-title {
+  color: var(--op-text-strong) !important;
+  font-size: calc(13px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-section-description {
+  margin-top: 2px;
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-items {
+  gap: 0;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-item,
+html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-item {
+  min-height: 54px;
+  padding: 9px 0;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-item-copy strong {
+  color: var(--op-text) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-item-copy small,
+body.panel-page #ui-settings-modal .xk-ui-settings-item-meta {
+  color: var(--op-muted) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+}
+
+@media (max-width: 820px) {
+  body.panel-page #routing-dat-contents-modal .xk-dat-modal-content,
+  body.panel-page #ui-settings-modal .xk-ui-settings-modal-content {
+    width: calc(100vw - 14px);
+    height: calc(100dvh - 14px);
+    max-height: calc(100dvh - 14px);
+  }
+
+  body.panel-page #routing-dat-contents-modal .dat-contents-layout {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  body.panel-page #routing-dat-contents-modal .dat-contents-items {
+    border-top: 1px solid var(--op-border) !important;
+    border-left: 0 !important;
+  }
+
+  body.panel-page #routing-dat-contents-modal .dat-contents-tags-list,
+  body.panel-page #routing-dat-contents-modal .dat-contents-items-list {
+    min-height: 170px;
+    max-height: 30dvh;
+  }
+
+  body.panel-page .modal :is(
+    .xk-gen-panel,
+    .xk-pool-panel,
+    .xk-mi-panel,
+    .xk-pt-panel,
+    .xk-hw-panel,
+    .xk-sub-panel,
+    .xk-mihomo-validation-panel,
+    .xk-hw-compare
+  ) + :is(
+    .xk-gen-panel,
+    .xk-pool-panel,
+    .xk-mi-panel,
+    .xk-pt-panel,
+    .xk-hw-panel,
+    .xk-sub-panel,
+    .xk-mihomo-validation-panel,
+    .xk-hw-compare
+  ) {
+    border-top: 1px solid var(--op-border) !important;
+    border-left: 0 !important;
+  }
+
+  body.panel-page #ui-settings-modal .xk-ui-settings-shell {
+    border: 0;
+    border-radius: 0;
+  }
+
+  body.panel-page #ui-settings-modal .xk-ui-settings-nav {
+    border-right: 0;
+    border-bottom: 1px solid var(--op-border);
+  }
+}
+
 /* Status is semantic, never decorative. */
 body.panel-page .success,
 body.panel-page .is-success,
