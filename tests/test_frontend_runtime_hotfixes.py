@@ -831,7 +831,7 @@ def test_xray_stream_network_schema_marks_grpc_as_deprecated():
     outbounds_src = Path('xkeen-ui/static/js/features/outbounds.js').read_text(encoding='utf-8')
     assert 'function subsDeprecatedTransportNote' in outbounds_src
     assert 'Array.isArray(data.warnings)' in outbounds_src
-    assert 'xk-sub-node-pill-warning' in outbounds_src
+    assert "deprecatedTransportNote ? 'is-warning' : ''" in outbounds_src
 
 
 def test_monaco_schema_runtime_sanitizes_deprecated_value_metadata():

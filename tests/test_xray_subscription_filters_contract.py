@@ -137,7 +137,7 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     assert "activeStatus: 'outbounds-active-node-status'" in outbounds_src
     assert "function refreshOutboundsActive(visible, opts) {" in outbounds_src
     assert "/api/xray/outbounds/active" in outbounds_src
-    assert "xk-sub-node-pill-active-route" in outbounds_src
+    assert "xk-sub-node-state is-enabled ${isActiveRoute ? 'is-active-route' : ''}" in outbounds_src
     assert "is-active-route" in outbounds_src
     assert "const renderedNodes = nodes" in outbounds_src
     assert "if (a.active !== b.active) return a.active ? -1 : 1;" in outbounds_src
