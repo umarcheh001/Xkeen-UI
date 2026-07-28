@@ -32,12 +32,18 @@ def test_stage4_routing_rules_use_one_record_list_and_neutral_editor_flow():
         "body.panel-page .routing-rule-card.is-disabled {",
         "body.panel-page .routing-rule-card.is-target-block {",
         "body.panel-page .routing-rule-card:is(.is-target-balancer, .is-target-direct) {",
+        "body.panel-page .routing-rule-card.is-pointer-ghost {",
+        "body.panel-page .routing-rule-card.is-pointer-ghost * {",
+        ":is(#routing-rules-body, .routing-rule-card.is-pointer-ghost)",
+        "body.panel-page #routing-rules-body .routing-rule-placeholder {",
         ".routing-rule-field[data-field-key]",
         ".routing-chip",
         ".routing-selector-chipfield:focus-within",
         "body.panel-page #routing-rules-body .routing-balancer-form > .routing-rule-field {",
         "grid-template-columns: minmax(112px, 132px) minmax(0, 1fr);",
-        "body.panel-page #routing-rules-body :is(.routing-selector-chip-x, .routing-rule-remove-field) {",
+        ".routing-chip-remove,",
+        ".routing-selector-chip-x,",
+        ".routing-rule-remove-field",
         "border-radius: 50% !important;",
         "body.panel-page #routing-rules-body .routing-balancer-actions .routing-balancer-del-btn {",
         "body.panel-page #routing-rules-apply-btn {",
@@ -111,7 +117,7 @@ def test_stage4_routing_section_has_one_primary_apply_action():
     rules_end = template.index('<!-- Сворачиваемый блок routing -->', rules_start)
     rules_markup = template[rules_start:rules_end]
 
-    assert "filename='panel-operator.css', v='20260728l'" in template
+    assert "filename='panel-operator.css', v='20260729b'" in template
     assert 'id="routing-rules-apply-btn" class="btn-primary btn-icon routing-rules-apply-primary"' in rules_markup
     assert rules_markup.count("btn-primary") == 1
     assert ">💾</button>" in rules_markup

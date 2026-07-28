@@ -1823,6 +1823,25 @@ body.panel-page .routing-rule-card::after {
   display: none !important;
 }
 
+/* Pointer DnD moves the real record under <body>, outside #routing-rules-body.
+ * Keep that temporary ghost inside the operator visual contract instead of
+ * letting the legacy routing-card cascade reappear while it is being dragged. */
+body.panel-page .routing-rule-card.is-pointer-ghost {
+  overflow: hidden;
+  border: 1px solid var(--op-accent-border) !important;
+  border-left: 2px solid var(--routing-record-tone) !important;
+  border-radius: 0 !important;
+  background: var(--op-surface) !important;
+  opacity: 0.96;
+  box-shadow: var(--op-shadow) !important;
+}
+
+body.panel-page .routing-rule-card.is-pointer-ghost * {
+  background-image: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
 body.panel-page .routing-rule-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1851,7 +1870,7 @@ body.panel-page #routing-rules-body :is(
   flex-wrap: nowrap;
 }
 
-body.panel-page #routing-rules-body :is(
+body.panel-page :is(#routing-rules-body, .routing-rule-card.is-pointer-ghost) :is(
   .routing-rule-badge,
   .routing-rule-index,
   .routing-rule-handle,
@@ -1875,7 +1894,7 @@ body.panel-page #routing-rules-body :is(
   font-weight: 590;
 }
 
-body.panel-page #routing-rules-body .routing-rule-badge.is-target {
+body.panel-page :is(#routing-rules-body, .routing-rule-card.is-pointer-ghost) .routing-rule-badge.is-target {
   color: var(--routing-record-tone) !important;
   font-weight: 650;
 }
@@ -1897,7 +1916,7 @@ body.panel-page .routing-rule-actions {
   white-space: nowrap;
 }
 
-body.panel-page #routing-rules-body .routing-rule-actions :is(button, .btn-icon) {
+body.panel-page :is(#routing-rules-body, .routing-rule-card.is-pointer-ghost) .routing-rule-actions :is(button, .btn-icon) {
   width: 28px;
   min-width: 28px;
   height: 28px;
@@ -1906,7 +1925,7 @@ body.panel-page #routing-rules-body .routing-rule-actions :is(button, .btn-icon)
   font-size: calc(11px * var(--xk-font-scale, 1));
 }
 
-body.panel-page #routing-rules-body .routing-rule-actions .routing-rule-toggle {
+body.panel-page :is(#routing-rules-body, .routing-rule-card.is-pointer-ghost) .routing-rule-actions .routing-rule-toggle {
   width: auto;
   min-width: 70px;
   padding-inline: 8px !important;
@@ -1979,6 +1998,24 @@ body.panel-page #routing-rules-body :is(
   background: var(--op-accent-soft) !important;
   color: var(--op-text) !important;
   outline: 0 !important;
+}
+
+body.panel-page #routing-rules-body .routing-rule-placeholder {
+  margin: 0;
+  padding: 0 10px;
+  border: 0 !important;
+  border-bottom: 1px dashed var(--op-accent-border) !important;
+  border-left: 2px solid var(--op-accent) !important;
+  border-radius: 0 !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent-hover) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 590;
+}
+
+body.panel-page #routing-rules-body .routing-rule-placeholder::before {
+  content: none !important;
+  display: none !important;
 }
 
 /* Stage 4 balancers: a compact summary record owns disclosure; editable
@@ -2118,7 +2155,11 @@ body.panel-page #routing-rules-body .routing-selector-chip {
   color: var(--op-data-muted) !important;
 }
 
-body.panel-page #routing-rules-body :is(.routing-selector-chip-x, .routing-rule-remove-field) {
+body.panel-page #routing-rules-body :is(
+  .routing-chip-remove,
+  .routing-selector-chip-x,
+  .routing-rule-remove-field
+) {
   display: inline-grid;
   place-items: center;
   width: 22px !important;
@@ -2136,8 +2177,13 @@ body.panel-page #routing-rules-body :is(.routing-selector-chip-x, .routing-rule-
   line-height: 1 !important;
 }
 
-body.panel-page #routing-rules-body :is(.routing-selector-chip-x, .routing-rule-remove-field):hover {
+body.panel-page #routing-rules-body :is(
+  .routing-chip-remove,
+  .routing-selector-chip-x,
+  .routing-rule-remove-field
+):hover {
   border-color: var(--op-danger) !important;
+  background: var(--op-danger-soft) !important;
   color: var(--op-danger) !important;
 }
 

@@ -235,6 +235,26 @@ test.describe('Operator Console Stage 4 routing data screens', () => {
       expect(markerColors[0]).not.toBe(markerColors[1]);
       expect(markerColors[1]).not.toBe(markerColors[2]);
 
+      await cards.nth(2).locator('.routing-rule-toggle').click();
+      await expect(cards.nth(2).locator('.routing-rule-form')).toBeVisible();
+      const ruleDeleteGeometry = await cards.nth(2).evaluate((record) => {
+        const chipDelete = record.querySelector('.routing-chip-remove');
+        const fieldDelete = record.querySelector('.routing-rule-remove-field');
+        const geometry = (node) => {
+          if (!node) return null;
+          const rect = node.getBoundingClientRect();
+          const style = getComputedStyle(node);
+          return { width: rect.width, height: rect.height, radius: style.borderRadius };
+        };
+        return {
+          chipDelete: geometry(chipDelete),
+          fieldDelete: geometry(fieldDelete),
+        };
+      });
+      expect(ruleDeleteGeometry.chipDelete).toEqual({ width: 22, height: 22, radius: '50%' });
+      expect(ruleDeleteGeometry.fieldDelete).toEqual({ width: 22, height: 22, radius: '50%' });
+      await cards.nth(2).locator('.routing-rule-toggle').click();
+
       await expect(cards.nth(0)).toHaveAttribute('data-open', '0');
       await expect(cards.nth(0).locator('.routing-rule-form')).toHaveCount(0);
       await cards.nth(0).locator('.routing-rule-toggle').click();
@@ -361,6 +381,38 @@ test.describe('Operator Console Stage 4 routing data screens', () => {
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 + 10, { steps: 2 });
+
+    const dragGeometry = await page.evaluate(() => {
+      const ghost = document.querySelector('body > .routing-rule-card.is-pointer-ghost');
+      const placeholder = document.querySelector('#routing-rules-list > .routing-rule-placeholder');
+      const badge = ghost?.querySelector('.routing-rule-badge');
+      const action = ghost?.querySelector('.routing-rule-actions button');
+      const read = (node) => node ? getComputedStyle(node) : null;
+      const ghostStyle = read(ghost);
+      const placeholderStyle = read(placeholder);
+      const badgeStyle = read(badge);
+      const actionRect = action?.getBoundingClientRect();
+      return {
+        ghost: ghostStyle ? {
+          radius: ghostStyle.borderRadius,
+          backgroundImage: ghostStyle.backgroundImage,
+        } : null,
+        placeholder: placeholderStyle ? {
+          radius: placeholderStyle.borderRadius,
+          backgroundImage: placeholderStyle.backgroundImage,
+        } : null,
+        badge: badgeStyle ? {
+          backgroundImage: badgeStyle.backgroundImage,
+          boxShadow: badgeStyle.boxShadow,
+        } : null,
+        action: actionRect ? { width: actionRect.width, height: actionRect.height } : null,
+      };
+    });
+    expect(dragGeometry.ghost).toEqual({ radius: '0px', backgroundImage: 'none' });
+    expect(dragGeometry.placeholder).toEqual({ radius: '0px', backgroundImage: 'none' });
+    expect(dragGeometry.badge).toEqual({ backgroundImage: 'none', boxShadow: 'none' });
+    expect(dragGeometry.action).toEqual({ width: 70, height: 28 });
+
     await page.mouse.move(target.x + target.width / 4, target.y + 4, { steps: 8 });
     await page.mouse.up();
 
