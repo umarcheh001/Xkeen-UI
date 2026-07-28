@@ -237,6 +237,16 @@ export function ensureScreenStyles(snapshot) {
   const doc = getDocumentRef();
   if (!hostState || !doc || !snapshot || !Array.isArray(snapshot.styles)) return;
 
+  // The first screen is rendered by the server, so its stylesheets already
+  // live in <head> before the SPA host is created. Seed the registry from the
+  // real document before importing another screen. Otherwise shared assets
+  // such as styles.css are appended a second time after page-specific CSS and
+  // silently win the cascade when the user navigates back.
+  Array.from(doc.head ? doc.head.querySelectorAll('link[rel="stylesheet"], style') : []).forEach((node) => {
+    const key = buildStyleKey(node);
+    if (key) hostState.styleKeys.add(key);
+  });
+
   snapshot.styles.forEach((node) => {
     if (!node) return;
     const key = buildStyleKey(node);

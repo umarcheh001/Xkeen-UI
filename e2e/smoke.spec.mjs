@@ -39,6 +39,73 @@ test('panel shell renders top-level navigation', async ({ page }) => {
 });
 
 
+test('panel navigation style survives generator and DevTools round trips', async ({ page }) => {
+  await page.goto('/');
+
+  const panelTabs = page.locator('.top-tabs.header-tabs');
+  const routingTab = page.locator('.top-tabs.header-tabs .top-tab-btn').first();
+  await expect(panelTabs).toBeVisible();
+  await expect(page.locator('body')).toHaveClass(/\bpanel-page\b/);
+
+  const initialStylesheetCount = await page.locator('link[rel="stylesheet"]').evaluateAll((links) => (
+    links.filter((link) => new URL(link.href).pathname.endsWith('/static/styles.css')).length
+  ));
+  const initialTabStyle = await routingTab.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return {
+      borderRadius: style.borderRadius,
+      minHeight: style.minHeight,
+    };
+  });
+
+  await page.locator('#top-tab-mihomo-generator').click();
+  await expect(page).toHaveURL(/\/mihomo_generator$/);
+  await expect(page.locator('body')).toHaveClass(/\bmihomo-generator-page\b/);
+  await page.getByRole('link', { name: /назад/i }).click();
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator('body')).toHaveClass(/\bpanel-page\b/);
+  await expect(panelTabs).toBeVisible();
+
+  const restoredStylesheetCount = await page.locator('link[rel="stylesheet"]').evaluateAll((links) => (
+    links.filter((link) => new URL(link.href).pathname.endsWith('/static/styles.css')).length
+  ));
+  const restoredTabStyle = await routingTab.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return {
+      borderRadius: style.borderRadius,
+      minHeight: style.minHeight,
+    };
+  });
+
+  expect(restoredStylesheetCount).toBe(initialStylesheetCount);
+  expect(restoredTabStyle).toEqual(initialTabStyle);
+
+  await page.locator('.panel-header .xk-header-btn-devtools').click();
+  await expect(page).toHaveURL(/\/devtools$/);
+  await expect(page.locator('body')).toHaveClass(/\bdevtools-page\b/);
+  await page.locator('.dt-header-btn-back').click();
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator('body')).toHaveClass(/\bpanel-page\b/);
+  await expect(panelTabs).toBeVisible();
+
+  const devtoolsRoundTripStylesheetCount = await page.locator('link[rel="stylesheet"]').evaluateAll((links) => (
+    links.filter((link) => new URL(link.href).pathname.endsWith('/static/styles.css')).length
+  ));
+  const devtoolsRoundTripTabStyle = await routingTab.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return {
+      borderRadius: style.borderRadius,
+      minHeight: style.minHeight,
+    };
+  });
+
+  expect(devtoolsRoundTripStylesheetCount).toBe(initialStylesheetCount);
+  expect(devtoolsRoundTripTabStyle).toEqual(initialTabStyle);
+});
+
+
 test('devtools page renders update and env sections', async ({ page }) => {
   await page.goto('/devtools');
 

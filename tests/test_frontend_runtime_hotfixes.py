@@ -309,6 +309,8 @@ def test_top_level_navigation_controls_use_shared_helper_contract():
     assert "mihomo_generator: '/mihomo_generator'" in registry
     assert 'export function ensureTopLevelScreenMount()' in host
     assert 'export async function fetchTopLevelScreenSnapshot(name, route)' in host
+    assert "doc.head.querySelectorAll('link[rel=\"stylesheet\"], style')" in host
+    assert 'if (key) hostState.styleKeys.add(key);' in host
     assert 'export function registerPanelTopLevelScreen()' in panel_screen
     assert "fetchTopLevelScreenSnapshot('panel', '/')" in panel_screen
     assert 'export function registerBackupsTopLevelScreen()' in backups_screen
