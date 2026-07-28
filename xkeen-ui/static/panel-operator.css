@@ -74,13 +74,8 @@ body.panel-page .container-wide {
 }
 
 body.panel-page .container-wide::before,
-body.panel-page .container-wide::after,
-body.panel-page .panel-header::before,
-body.panel-page .panel-header::after,
-body.panel-page .card::before,
-body.panel-page .card::after,
-body.panel-page .top-tabs::before,
-body.panel-page .top-tabs::after,
+body.panel-page :is(.container-wide, .panel-header, .card, .top-tabs)::after,
+body.panel-page :is(.panel-header, .card, .top-tabs)::before,
 body.panel-page .header-actions .xk-header-btn::after,
 body.panel-page .header-actions .theme-toggle-btn::after {
   content: none !important;
@@ -320,8 +315,7 @@ body.panel-page :is(code, pre, textarea) {
   -webkit-backdrop-filter: none !important;
 }
 
-body.panel-page .header-main,
-body.panel-page .panel-header-shell-main {
+body.panel-page :is(.header-main, .panel-header-shell-main) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -1797,6 +1791,24 @@ body.panel-page .routing-rule-card {
   transition: background-color 120ms ease;
 }
 
+body.panel-page .routing-rule-card.is-pointer-ghost {
+  overflow: hidden;
+  border: 1px solid var(--op-accent-border) !important;
+  border-left: 2px solid var(--routing-record-tone) !important;
+  border-radius: 0 !important;
+  background: var(--op-surface) !important;
+  background-image: none !important;
+  opacity: 0.96;
+  box-shadow: var(--op-shadow) !important;
+  text-shadow: none !important;
+}
+
+body.panel-page .routing-rule-card.is-pointer-ghost * {
+  background-image: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
 body.panel-page .routing-rule-card:is(:hover, [data-open="1"]) {
   border-color: var(--op-border) !important;
   border-left-color: var(--routing-record-tone) !important;
@@ -1818,30 +1830,14 @@ body.panel-page .routing-rule-card.is-disabled {
 }
 
 body.panel-page .routing-rule-card::before,
-body.panel-page .routing-rule-card::after {
+body.panel-page .routing-rule-card::after,
+body.panel-page #routing-rules-body .routing-rule-placeholder::before {
   content: none !important;
   display: none !important;
 }
 
 /* Pointer DnD moves the real record under <body>, outside #routing-rules-body.
- * Keep that temporary ghost inside the operator visual contract instead of
- * letting the legacy routing-card cascade reappear while it is being dragged. */
-body.panel-page .routing-rule-card.is-pointer-ghost {
-  overflow: hidden;
-  border: 1px solid var(--op-accent-border) !important;
-  border-left: 2px solid var(--routing-record-tone) !important;
-  border-radius: 0 !important;
-  background: var(--op-surface) !important;
-  opacity: 0.96;
-  box-shadow: var(--op-shadow) !important;
-}
-
-body.panel-page .routing-rule-card.is-pointer-ghost * {
-  background-image: none !important;
-  box-shadow: none !important;
-  text-shadow: none !important;
-}
-
+ * Ghost-specific overrides stay alongside the base record contract above. */
 body.panel-page .routing-rule-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -2011,11 +2007,6 @@ body.panel-page #routing-rules-body .routing-rule-placeholder {
   color: var(--op-accent-hover) !important;
   font-size: calc(10.5px * var(--xk-font-scale, 1));
   font-weight: 590;
-}
-
-body.panel-page #routing-rules-body .routing-rule-placeholder::before {
-  content: none !important;
-  display: none !important;
 }
 
 /* Stage 4 balancers: a compact summary record owns disclosure; editable
@@ -2203,7 +2194,12 @@ body.panel-page #routing-rules-body .routing-balancer-actions .routing-balancer-
   color: var(--op-data-muted) !important;
 }
 
-body.panel-page #routing-rules-body .routing-balancer-actions .routing-balancer-del-btn:hover {
+body.panel-page #routing-rules-body :is(
+  .routing-chip-remove,
+  .routing-selector-chip-x,
+  .routing-rule-remove-field,
+  .routing-balancer-actions .routing-balancer-del-btn
+):hover {
   border-color: var(--op-danger) !important;
   background: var(--op-danger-soft) !important;
   color: var(--op-danger) !important;
@@ -4552,8 +4548,7 @@ body.panel-page .footer {
     border-radius: var(--op-radius) !important;
   }
 
-  body.panel-page .header-main,
-  body.panel-page .panel-header-shell-main {
+  body.panel-page :is(.header-main, .panel-header-shell-main) {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto;
