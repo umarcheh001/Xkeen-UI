@@ -62,6 +62,41 @@ test('ports workspace uses dense editor rows instead of pill actions', async ({ 
   await capture(page, 'panel-operator-ports-desktop.png');
 });
 
+test('ports and Xray logs keep a standard gap before the operation journal', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('xkeen-theme', 'dark'));
+  await page.goto('/');
+
+  const workspaces = [
+    {
+      tab: 'xkeen',
+      view: '#view-xkeen',
+      primary: '#view-xkeen > .commands-card',
+      journal: '#view-xkeen > .xk-xkeen-log-card',
+    },
+    {
+      tab: 'xray-logs',
+      view: '#view-xray-logs',
+      primary: '#view-xray-logs > .log-card:not(.xk-restart-log-card)',
+      journal: '#view-xray-logs > .xk-xray-logs-log-card',
+    },
+  ];
+
+  for (const workspace of workspaces) {
+    await page.locator(`.top-tab-btn[data-view="${workspace.tab}"]`).click();
+    await expect(page.locator(workspace.view)).toBeVisible();
+
+    const gap = await page.evaluate(({ primary, journal }) => {
+      const primaryRect = document.querySelector(primary).getBoundingClientRect();
+      const journalRect = document.querySelector(journal).getBoundingClientRect();
+      return journalRect.top - primaryRect.bottom;
+    }, workspace);
+
+    expect(gap).toBeGreaterThanOrEqual(9.5);
+    expect(gap).toBeLessThanOrEqual(10.5);
+    await capture(page, `panel-operator-${workspace.tab}-journal-spacing.png`);
+  }
+});
+
 test('help links render as compact data rows', async ({ page }) => {
   await page.goto('/');
   await page.locator('#routing-help-header').click();

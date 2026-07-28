@@ -66,7 +66,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260728f') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260728h') }}">
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -1211,7 +1211,7 @@
           <p>Файлы из каталога <code>/opt/etc/xkeen</code>:</p>
 
           <div class="xkeen-files-grid">
-            <div class="xkeen-mini-editor">
+            <div class="xkeen-mini-editor xkeen-mini-editor--port-list">
               <div class="xkeen-mini-head">
                 <h3>port_proxying.lst</h3>
                 <p class="small xk-card-desc">
@@ -1223,13 +1223,15 @@
                         spellcheck="false"
                         rows="8"
                         placeholder="Например:\n80\n443\n596:599\nКаждая строка — порт или диапазон портов."></textarea>
-              <div class="actions">
-                <button id="port-proxying-save-btn" data-tooltip="Сохранить список port_proxying.lst.">💾 Сохранить port_proxying.lst</button>
+              <div class="xkeen-mini-footer">
+                <div id="port-proxying-status" class="status" role="status" aria-live="polite"></div>
+                <div class="actions">
+                  <button id="port-proxying-save-btn" aria-label="Сохранить port_proxying.lst" data-tooltip="Сохранить список port_proxying.lst.">Сохранить</button>
+                </div>
               </div>
-              <div id="port-proxying-status" class="status"></div>
             </div>
 
-            <div class="xkeen-mini-editor">
+            <div class="xkeen-mini-editor xkeen-mini-editor--port-list">
               <div class="xkeen-mini-head">
                 <h3>port_exclude.lst</h3>
                 <p class="small xk-card-desc">
@@ -1243,13 +1245,15 @@
                         spellcheck="false"
                         rows="8"
                         placeholder="Порты для исключения из проксирования.\nНапример:\n22\n25\n80:89"></textarea>
-              <div class="actions">
-                <button id="port-exclude-save-btn" data-tooltip="Сохранить список port_exclude.lst.">💾 Сохранить port_exclude.lst</button>
+              <div class="xkeen-mini-footer">
+                <div id="port-exclude-status" class="status" role="status" aria-live="polite"></div>
+                <div class="actions">
+                  <button id="port-exclude-save-btn" aria-label="Сохранить port_exclude.lst" data-tooltip="Сохранить список port_exclude.lst.">Сохранить</button>
+                </div>
               </div>
-              <div id="port-exclude-status" class="status"></div>
             </div>
 
-            <div class="xkeen-mini-editor">
+            <div class="xkeen-mini-editor xkeen-mini-editor--ip-list">
               <div class="xkeen-mini-head">
                 <h3>ip_exclude.lst</h3>
                 <p class="small xk-card-desc">
@@ -1261,13 +1265,15 @@
                         spellcheck="false"
                         rows="8"
                         placeholder="Например:\n192.168.0.0/16\n2001:db8::/32"></textarea>
-              <div class="actions">
-                <button id="ip-exclude-save-btn" data-tooltip="Сохранить список ip_exclude.lst.">💾 Сохранить ip_exclude.lst</button>
+              <div class="xkeen-mini-footer">
+                <div id="ip-exclude-status" class="status" role="status" aria-live="polite"></div>
+                <div class="actions">
+                  <button id="ip-exclude-save-btn" aria-label="Сохранить ip_exclude.lst" data-tooltip="Сохранить список ip_exclude.lst.">Сохранить</button>
+                </div>
               </div>
-              <div id="ip-exclude-status" class="status"></div>
             </div>
 
-            <div class="xkeen-mini-editor">
+            <div class="xkeen-mini-editor xkeen-mini-editor--policy">
               <div class="xkeen-mini-head">
                 <h3>xkeen.json</h3>
                 <p class="small xk-card-desc">
@@ -1281,10 +1287,12 @@
                         spellcheck="false"
                         rows="8"
                         placeholder="{\n  \"example\": true\n}\n"></textarea>
-              <div class="actions">
-                <button id="xkeen-config-save-btn" data-tooltip="Сохранить файл xkeen.json.">💾 Сохранить xkeen.json</button>
+              <div class="xkeen-mini-footer">
+                <div id="xkeen-config-status" class="status" role="status" aria-live="polite"></div>
+                <div class="actions">
+                  <button id="xkeen-config-save-btn" aria-label="Сохранить xkeen.json" data-tooltip="Сохранить файл xkeen.json.">Сохранить</button>
+                </div>
               </div>
-              <div id="xkeen-config-status" class="status"></div>
             </div>
           </div>
         </div>

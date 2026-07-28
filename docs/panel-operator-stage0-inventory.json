@@ -1444,7 +1444,7 @@
       {
         "index": 21,
         "locator": "#view-commands",
-        "line": 1310,
+        "line": 1318,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -1457,7 +1457,7 @@
       {
         "index": 22,
         "locator": "#terminal-open-shell-btn",
-        "line": 1320,
+        "line": 1328,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -1470,7 +1470,7 @@
       {
         "index": 23,
         "locator": "#terminal-open-pty-btn",
-        "line": 1321,
+        "line": 1329,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -1483,7 +1483,7 @@
       {
         "index": 24,
         "locator": "#core-xray-latest",
-        "line": 1333,
+        "line": 1341,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -1496,7 +1496,7 @@
       {
         "index": 25,
         "locator": "#core-xray-prerelease",
-        "line": 1334,
+        "line": 1342,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -1509,7 +1509,7 @@
       {
         "index": 26,
         "locator": "#core-xray-prerelease-update-btn",
-        "line": 1335,
+        "line": 1343,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -1522,7 +1522,7 @@
       {
         "index": 27,
         "locator": "#core-xray-update-btn",
-        "line": 1336,
+        "line": 1344,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -1535,7 +1535,7 @@
       {
         "index": 28,
         "locator": "#core-mihomo-latest",
-        "line": 1343,
+        "line": 1351,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -1548,7 +1548,7 @@
       {
         "index": 29,
         "locator": "#core-mihomo-prerelease",
-        "line": 1344,
+        "line": 1352,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -1561,7 +1561,7 @@
       {
         "index": 30,
         "locator": "#core-mihomo-prerelease-update-btn",
-        "line": 1345,
+        "line": 1353,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -1574,7 +1574,7 @@
       {
         "index": 31,
         "locator": "#core-mihomo-update-btn",
-        "line": 1346,
+        "line": 1354,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -1587,7 +1587,7 @@
       {
         "index": 32,
         "locator": "#view-files",
-        "line": 1481,
+        "line": 1489,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -1600,7 +1600,7 @@
       {
         "index": 33,
         "locator": "#fm-volumes-btn",
-        "line": 1486,
+        "line": 1494,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -1613,7 +1613,7 @@
       {
         "index": 34,
         "locator": "#fm-disabled-note",
-        "line": 1492,
+        "line": 1500,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -1625,8 +1625,8 @@
       },
       {
         "index": 35,
-        "locator": "button.btn-secondary.fm-disconnect-btn@L1513",
-        "line": 1513,
+        "locator": "button.btn-secondary.fm-disconnect-btn@L1521",
+        "line": 1521,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -1638,8 +1638,8 @@
       },
       {
         "index": 36,
-        "locator": "button.btn-secondary.fm-disconnect-btn@L1533",
-        "line": 1533,
+        "locator": "button.btn-secondary.fm-disconnect-btn@L1541",
+        "line": 1541,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -1652,7 +1652,7 @@
       {
         "index": 37,
         "locator": "#view-xray-logs",
-        "line": 1573,
+        "line": 1581,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -1664,8 +1664,8 @@
       },
       {
         "index": 38,
-        "locator": "span.small@L1651",
-        "line": 1651,
+        "locator": "span.small@L1659",
+        "line": 1659,
         "kind": "presentation-geometry",
         "source": "opacity:0.85;",
         "declarations": [
@@ -1677,8 +1677,8 @@
       },
       {
         "index": 39,
-        "locator": "div.modal-content@L1688",
-        "line": 1688,
+        "locator": "div.modal-content@L1696",
+        "line": 1696,
         "kind": "presentation-geometry",
         "source": "max-width: 980px;",
         "declarations": [
@@ -1691,7 +1691,7 @@
       {
         "index": 40,
         "locator": "#xray-context-output",
-        "line": 1694,
+        "line": 1702,
         "kind": "presentation-geometry",
         "source": "max-height:60vh; overflow:auto;",
         "declarations": [
@@ -1708,7 +1708,7 @@
       {
         "index": 41,
         "locator": "#terminal-overlay",
-        "line": 1729,
+        "line": 1737,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -1720,8 +1720,8 @@
       },
       {
         "index": 42,
-        "locator": "div.modal-content@L1971",
-        "line": 1971,
+        "locator": "div.modal-content@L1979",
+        "line": 1979,
         "kind": "presentation-geometry",
         "source": "max-width: 760px;",
         "declarations": [
@@ -1734,7 +1734,7 @@
       {
         "index": 43,
         "locator": "#inbounds-apply-extras-hint",
-        "line": 1986,
+        "line": 1994,
         "kind": "presentation-geometry",
         "source": "margin: 6px 0 12px 34px;",
         "declarations": [
@@ -1747,7 +1747,7 @@
       {
         "index": 44,
         "locator": "#inbounds-apply-socks-row",
-        "line": 1994,
+        "line": 2002,
         "kind": "mixed-state-and-presentation",
         "source": "display:none; margin: 8px 0 0 34px;",
         "declarations": [
@@ -1763,8 +1763,8 @@
       },
       {
         "index": 45,
-        "locator": "div@L1995",
-        "line": 1995,
+        "locator": "div@L2003",
+        "line": 2003,
         "kind": "presentation-geometry",
         "source": "display:flex; gap: 12px; align-items:flex-start; flex-wrap: wrap;",
         "declarations": [
@@ -1788,8 +1788,8 @@
       },
       {
         "index": 46,
-        "locator": "label.routing-rule-field@L1996",
-        "line": 1996,
+        "locator": "label.routing-rule-field@L2004",
+        "line": 2004,
         "kind": "presentation-geometry",
         "source": "margin:0; min-width: 220px;",
         "declarations": [
@@ -1805,8 +1805,8 @@
       },
       {
         "index": 47,
-        "locator": "div.modal-hint@L2000",
-        "line": 2000,
+        "locator": "div.modal-hint@L2008",
+        "line": 2008,
         "kind": "presentation-geometry",
         "source": "margin-top: 2px; max-width: 420px;",
         "declarations": [
@@ -1823,7 +1823,7 @@
       {
         "index": 48,
         "locator": "#inbounds-apply-warn",
-        "line": 2006,
+        "line": 2014,
         "kind": "mixed-state-and-presentation",
         "source": "display:none; margin-top: 10px; color: var(--warning, #f59e0b);",
         "declarations": [
@@ -1844,7 +1844,7 @@
       {
         "index": 49,
         "locator": "#inbounds-apply-error",
-        "line": 2008,
+        "line": 2016,
         "kind": "mixed-state-and-presentation",
         "source": "display:none; margin-top: 10px; color: var(--danger, #ef4444);",
         "declarations": [
@@ -1864,8 +1864,8 @@
       },
       {
         "index": 50,
-        "locator": "div.modal-content@L2023",
-        "line": 2023,
+        "locator": "div.modal-content@L2031",
+        "line": 2031,
         "kind": "presentation-geometry",
         "source": "max-width: 980px;",
         "declarations": [
@@ -1877,8 +1877,8 @@
       },
       {
         "index": 51,
-        "locator": "div.terminal-menu-title@L2030",
-        "line": 2030,
+        "locator": "div.terminal-menu-title@L2038",
+        "line": 2038,
         "kind": "presentation-geometry",
         "source": "margin:0 0 8px;",
         "declarations": [
@@ -1890,8 +1890,8 @@
       },
       {
         "index": 52,
-        "locator": "div.xk-balancer-help-details@L2057",
-        "line": 2057,
+        "locator": "div.xk-balancer-help-details@L2065",
+        "line": 2065,
         "kind": "presentation-geometry",
         "source": "margin: 10px 0 12px; padding: 10px 12px;",
         "declarations": [
@@ -1907,8 +1907,8 @@
       },
       {
         "index": 53,
-        "locator": "div.modal-hint@L2059",
-        "line": 2059,
+        "locator": "div.modal-hint@L2067",
+        "line": 2067,
         "kind": "presentation-geometry",
         "source": "margin: 6px 0 8px;",
         "declarations": [
@@ -1920,8 +1920,8 @@
       },
       {
         "index": 54,
-        "locator": "div.modal-hint@L2068",
-        "line": 2068,
+        "locator": "div.modal-hint@L2076",
+        "line": 2076,
         "kind": "presentation-geometry",
         "source": "margin: 0 0 12px;",
         "declarations": [
@@ -1933,8 +1933,8 @@
       },
       {
         "index": 55,
-        "locator": "div.modal-hint@L2099",
-        "line": 2099,
+        "locator": "div.modal-hint@L2107",
+        "line": 2107,
         "kind": "presentation-geometry",
         "source": "margin-top: 10px;",
         "declarations": [
@@ -1946,8 +1946,8 @@
       },
       {
         "index": 56,
-        "locator": "div.xk-balancer-help-callout@L2102",
-        "line": 2102,
+        "locator": "div.xk-balancer-help-callout@L2110",
+        "line": 2110,
         "kind": "presentation-geometry",
         "source": "margin-top: 10px;",
         "declarations": [
@@ -1959,8 +1959,8 @@
       },
       {
         "index": 57,
-        "locator": "div.xk-balancer-help-callout@L2136",
-        "line": 2136,
+        "locator": "div.xk-balancer-help-callout@L2144",
+        "line": 2144,
         "kind": "presentation-geometry",
         "source": "margin-top: 10px;",
         "declarations": [
@@ -1972,8 +1972,8 @@
       },
       {
         "index": 58,
-        "locator": "div.xk-balancer-help-callout@L2190",
-        "line": 2190,
+        "locator": "div.xk-balancer-help-callout@L2198",
+        "line": 2198,
         "kind": "presentation-geometry",
         "source": "margin-top:10px;",
         "declarations": [
@@ -1985,8 +1985,8 @@
       },
       {
         "index": 59,
-        "locator": "div.modal-hint@L2210",
-        "line": 2210,
+        "locator": "div.modal-hint@L2218",
+        "line": 2218,
         "kind": "presentation-geometry",
         "source": "margin-top: 8px;",
         "declarations": [
@@ -1998,8 +1998,8 @@
       },
       {
         "index": 60,
-        "locator": "div.modal-actions@L2276",
-        "line": 2276,
+        "locator": "div.modal-actions@L2284",
+        "line": 2284,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -2011,8 +2011,8 @@
       },
       {
         "index": 61,
-        "locator": "div.modal-content@L2284",
-        "line": 2284,
+        "locator": "div.modal-content@L2292",
+        "line": 2292,
         "kind": "presentation-geometry",
         "source": "max-width: 980px;",
         "declarations": [
@@ -2024,8 +2024,8 @@
       },
       {
         "index": 62,
-        "locator": "div@L2290",
-        "line": 2290,
+        "locator": "div@L2298",
+        "line": 2298,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom: 10px;",
         "declarations": [
@@ -2054,7 +2054,7 @@
       {
         "index": 63,
         "locator": "#xray-snapshot-meta",
-        "line": 2291,
+        "line": 2299,
         "kind": "presentation-geometry",
         "source": "margin:0;",
         "declarations": [
@@ -2067,7 +2067,7 @@
       {
         "index": 64,
         "locator": "#xray-snapshot-engine",
-        "line": 2292,
+        "line": 2300,
         "kind": "presentation-geometry",
         "source": "margin-top: 2px;",
         "declarations": [
@@ -2080,7 +2080,7 @@
       {
         "index": 65,
         "locator": "#xray-snapshot-status",
-        "line": 2302,
+        "line": 2310,
         "kind": "presentation-geometry",
         "source": "margin-top: 10px;",
         "declarations": [
@@ -2092,8 +2092,8 @@
       },
       {
         "index": 66,
-        "locator": "div.modal-actions@L2304",
-        "line": 2304,
+        "locator": "div.modal-actions@L2312",
+        "line": 2312,
         "kind": "presentation-geometry",
         "source": "justify-content: space-between;",
         "declarations": [
@@ -2105,8 +2105,8 @@
       },
       {
         "index": 67,
-        "locator": "div@L2306",
-        "line": 2306,
+        "locator": "div@L2314",
+        "line": 2314,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:10px;",
         "declarations": [
@@ -2122,8 +2122,8 @@
       },
       {
         "index": 68,
-        "locator": "div.modal-content@L2314",
-        "line": 2314,
+        "locator": "div.modal-content@L2322",
+        "line": 2322,
         "kind": "presentation-geometry",
         "source": "max-width: 860px;",
         "declarations": [
@@ -2135,8 +2135,8 @@
       },
       {
         "index": 69,
-        "locator": "p.modal-description@L2320",
-        "line": 2320,
+        "locator": "p.modal-description@L2328",
+        "line": 2328,
         "kind": "presentation-geometry",
         "source": "margin-bottom: 12px;",
         "declarations": [
@@ -2148,8 +2148,8 @@
       },
       {
         "index": 70,
-        "locator": "div@L2329",
-        "line": 2329,
+        "locator": "div@L2337",
+        "line": 2337,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:flex-start; justify-content:space-between; gap:10px;",
         "declarations": [
@@ -2174,7 +2174,7 @@
       {
         "index": 71,
         "locator": "#routing-template-status",
-        "line": 2348,
+        "line": 2356,
         "kind": "presentation-geometry",
         "source": "margin-top: 10px;",
         "declarations": [
@@ -2186,8 +2186,8 @@
       },
       {
         "index": 72,
-        "locator": "div.modal-actions@L2350",
-        "line": 2350,
+        "locator": "div.modal-actions@L2358",
+        "line": 2358,
         "kind": "presentation-geometry",
         "source": "justify-content: space-between;",
         "declarations": [
@@ -2199,8 +2199,8 @@
       },
       {
         "index": 73,
-        "locator": "div@L2351",
-        "line": 2351,
+        "locator": "div@L2359",
+        "line": 2359,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:10px; flex-wrap: wrap;",
         "declarations": [
@@ -2220,8 +2220,8 @@
       },
       {
         "index": 74,
-        "locator": "div@L2357",
-        "line": 2357,
+        "locator": "div@L2365",
+        "line": 2365,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:10px;",
         "declarations": [
@@ -2237,8 +2237,8 @@
       },
       {
         "index": 75,
-        "locator": "div.modal-content@L2367",
-        "line": 2367,
+        "locator": "div.modal-content@L2375",
+        "line": 2375,
         "kind": "presentation-geometry",
         "source": "max-width: 560px;",
         "declarations": [
@@ -2250,8 +2250,8 @@
       },
       {
         "index": 76,
-        "locator": "p.modal-description@L2373",
-        "line": 2373,
+        "locator": "p.modal-description@L2381",
+        "line": 2381,
         "kind": "presentation-geometry",
         "source": "margin-bottom: 10px;",
         "declarations": [
@@ -2264,7 +2264,7 @@
       {
         "index": 77,
         "locator": "#routing-template-save-status",
-        "line": 2392,
+        "line": 2400,
         "kind": "presentation-geometry",
         "source": "margin-top: 10px;",
         "declarations": [
@@ -2276,8 +2276,8 @@
       },
       {
         "index": 78,
-        "locator": "div.modal-content@L2403",
-        "line": 2403,
+        "locator": "div.modal-content@L2411",
+        "line": 2411,
         "kind": "presentation-geometry",
         "source": "max-width: 860px;",
         "declarations": [
@@ -2289,8 +2289,8 @@
       },
       {
         "index": 79,
-        "locator": "div@L2406",
-        "line": 2406,
+        "locator": "div@L2414",
+        "line": 2414,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; gap:10px;",
         "declarations": [
@@ -2310,8 +2310,8 @@
       },
       {
         "index": 80,
-        "locator": "p.modal-description@L2418",
-        "line": 2418,
+        "locator": "p.modal-description@L2426",
+        "line": 2426,
         "kind": "presentation-geometry",
         "source": "margin-bottom: 10px;",
         "declarations": [
@@ -2324,7 +2324,7 @@
       {
         "index": 81,
         "locator": "#routing-template-edit-status",
-        "line": 2446,
+        "line": 2454,
         "kind": "presentation-geometry",
         "source": "margin-top: 10px;",
         "declarations": [
@@ -2336,8 +2336,8 @@
       },
       {
         "index": 82,
-        "locator": "p.modal-description@L2466",
-        "line": 2466,
+        "locator": "p.modal-description@L2474",
+        "line": 2474,
         "kind": "presentation-geometry",
         "source": "margin:0;",
         "declarations": [
@@ -2349,8 +2349,8 @@
       },
       {
         "index": 83,
-        "locator": "div.terminal-menu-title@L2478",
-        "line": 2478,
+        "locator": "div.terminal-menu-title@L2486",
+        "line": 2486,
         "kind": "presentation-geometry",
         "source": "margin:0;",
         "declarations": [
@@ -2363,7 +2363,7 @@
       {
         "index": 84,
         "locator": "#outbounds-gen-cred-trojan",
-        "line": 2546,
+        "line": 2554,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -2376,7 +2376,7 @@
       {
         "index": 85,
         "locator": "#outbounds-gen-cred-vmess",
-        "line": 2551,
+        "line": 2559,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -2389,7 +2389,7 @@
       {
         "index": 86,
         "locator": "#outbounds-gen-cred-ss",
-        "line": 2556,
+        "line": 2564,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -2402,7 +2402,7 @@
       {
         "index": 87,
         "locator": "#outbounds-gen-cred-ss-pass",
-        "line": 2567,
+        "line": 2575,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -2415,7 +2415,7 @@
       {
         "index": 88,
         "locator": "#outbounds-gen-cred-hy2",
-        "line": 2572,
+        "line": 2580,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -2427,8 +2427,8 @@
       },
       {
         "index": 89,
-        "locator": "div.terminal-menu-title@L2584",
-        "line": 2584,
+        "locator": "div.terminal-menu-title@L2592",
+        "line": 2592,
         "kind": "presentation-geometry",
         "source": "margin:0;",
         "declarations": [
@@ -2441,7 +2441,7 @@
       {
         "index": 90,
         "locator": "#outbounds-gen-field-ss-plugin",
-        "line": 2658,
+        "line": 2666,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -2454,7 +2454,7 @@
       {
         "index": 91,
         "locator": "#outbounds-gen-field-hy2-insecure",
-        "line": 2663,
+        "line": 2671,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -2467,7 +2467,7 @@
       {
         "index": 92,
         "locator": "#outbounds-gen-field-hy2-obfs",
-        "line": 2671,
+        "line": 2679,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -2480,7 +2480,7 @@
       {
         "index": 93,
         "locator": "#outbounds-gen-field-hy2-obfspwd",
-        "line": 2679,
+        "line": 2687,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -2493,7 +2493,7 @@
       {
         "index": 94,
         "locator": "#outbounds-gen-field-hy2-pinsha256",
-        "line": 2684,
+        "line": 2692,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -2505,8 +2505,8 @@
       },
       {
         "index": 95,
-        "locator": "p.modal-description@L2734",
-        "line": 2734,
+        "locator": "p.modal-description@L2742",
+        "line": 2742,
         "kind": "presentation-geometry",
         "source": "margin:0;",
         "declarations": [
@@ -2518,8 +2518,8 @@
       },
       {
         "index": 96,
-        "locator": "div.terminal-menu-title@L2746",
-        "line": 2746,
+        "locator": "div.terminal-menu-title@L2754",
+        "line": 2754,
         "kind": "presentation-geometry",
         "source": "margin:0;",
         "declarations": [
@@ -2531,19 +2531,6 @@
       },
       {
         "index": 97,
-        "locator": "div.terminal-menu-title@L2773",
-        "line": 2773,
-        "kind": "presentation-geometry",
-        "source": "margin:0;",
-        "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          }
-        ]
-      },
-      {
-        "index": 98,
         "locator": "div.terminal-menu-title@L2781",
         "line": 2781,
         "kind": "presentation-geometry",
@@ -2556,9 +2543,22 @@
         ]
       },
       {
+        "index": 98,
+        "locator": "div.terminal-menu-title@L2789",
+        "line": 2789,
+        "kind": "presentation-geometry",
+        "source": "margin:0;",
+        "declarations": [
+          {
+            "property": "margin",
+            "value": "0"
+          }
+        ]
+      },
+      {
         "index": 99,
         "locator": "#outbounds-pool-status",
-        "line": 2784,
+        "line": 2792,
         "kind": "presentation-geometry",
         "source": "margin:0;",
         "declarations": [
@@ -2570,8 +2570,8 @@
       },
       {
         "index": 100,
-        "locator": "div.xk-card-desc@L2869",
-        "line": 2869,
+        "locator": "div.xk-card-desc@L2877",
+        "line": 2877,
         "kind": "presentation-geometry",
         "source": "opacity:0.75;",
         "declarations": [
@@ -2583,8 +2583,8 @@
       },
       {
         "index": 101,
-        "locator": "div.modal-content.xk-pt-modal@L2928",
-        "line": 2928,
+        "locator": "div.modal-content.xk-pt-modal@L2936",
+        "line": 2936,
         "kind": "presentation-geometry",
         "source": "max-width: 1040px;",
         "declarations": [
@@ -2597,7 +2597,7 @@
       {
         "index": 102,
         "locator": "#mihomo-proxy-tools-no-proxies",
-        "line": 2973,
+        "line": 2981,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -2609,8 +2609,8 @@
       },
       {
         "index": 103,
-        "locator": "div.modal-content.xk-hw-modal@L3067",
-        "line": 3067,
+        "locator": "div.modal-content.xk-hw-modal@L3075",
+        "line": 3075,
         "kind": "presentation-geometry",
         "source": "max-width: 1020px;",
         "declarations": [
@@ -2622,8 +2622,8 @@
       },
       {
         "index": 104,
-        "locator": "div.modal-content@L3228",
-        "line": 3228,
+        "locator": "div.modal-content@L3236",
+        "line": 3236,
         "kind": "presentation-geometry",
         "source": "max-width: 720px;",
         "declarations": [
@@ -2635,8 +2635,8 @@
       },
       {
         "index": 105,
-        "locator": "p.modal-hint@L3235",
-        "line": 3235,
+        "locator": "p.modal-hint@L3243",
+        "line": 3243,
         "kind": "presentation-geometry",
         "source": "margin:8px 0 0; opacity:0.75; font-size: 0.85rem;",
         "declarations": [
@@ -2656,8 +2656,8 @@
       },
       {
         "index": 106,
-        "locator": "div.modal-content@L3249",
-        "line": 3249,
+        "locator": "div.modal-content@L3257",
+        "line": 3257,
         "kind": "presentation-geometry",
         "source": "max-width: 980px;",
         "declarations": [
@@ -2669,8 +2669,8 @@
       },
       {
         "index": 107,
-        "locator": "div@L3251",
-        "line": 3251,
+        "locator": "div@L3259",
+        "line": 3259,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column; gap:2px;",
         "declarations": [
@@ -2691,7 +2691,7 @@
       {
         "index": 108,
         "locator": "#fm-editor-subtitle",
-        "line": 3253,
+        "line": 3261,
         "kind": "presentation-geometry",
         "source": "margin:0; font-size: 0.82rem; opacity:0.75;",
         "declarations": [
@@ -2711,8 +2711,8 @@
       },
       {
         "index": 109,
-        "locator": "div@L3255",
-        "line": 3255,
+        "locator": "div@L3263",
+        "line": 3263,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; gap:10px;",
         "declarations": [
@@ -2733,7 +2733,7 @@
       {
         "index": 110,
         "locator": "#fm-editor-warning",
-        "line": 3267,
+        "line": 3275,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -2746,7 +2746,7 @@
       {
         "index": 111,
         "locator": "#fm-editor-error",
-        "line": 3268,
+        "line": 3276,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -2758,8 +2758,8 @@
       },
       {
         "index": 112,
-        "locator": "div@L3273",
-        "line": 3273,
+        "locator": "div@L3281",
+        "line": 3281,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center;",
         "declarations": [
@@ -2779,8 +2779,8 @@
       },
       {
         "index": 113,
-        "locator": "div@L3276",
-        "line": 3276,
+        "locator": "div@L3284",
+        "line": 3284,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center;",
         "declarations": [
@@ -2801,7 +2801,7 @@
       {
         "index": 114,
         "locator": "#github-catalog-status",
-        "line": 3311,
+        "line": 3319,
         "kind": "presentation-geometry",
         "source": "margin-top:0;",
         "declarations": [
@@ -2814,7 +2814,7 @@
       {
         "index": 115,
         "locator": "#github-catalog-error",
-        "line": 3312,
+        "line": 3320,
         "kind": "mixed-state-and-presentation",
         "source": "display:none; margin-top:0;",
         "declarations": [
@@ -2830,8 +2830,8 @@
       },
       {
         "index": 116,
-        "locator": "div@L3317",
-        "line": 3317,
+        "locator": "div@L3325",
+        "line": 3325,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -2855,8 +2855,8 @@
       },
       {
         "index": 117,
-        "locator": "div@L3322",
-        "line": 3322,
+        "locator": "div@L3330",
+        "line": 3330,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center;",
         "declarations": [
@@ -2877,7 +2877,7 @@
       {
         "index": 118,
         "locator": "#routing-dat-contents-ipfilter",
-        "line": 3536,
+        "line": 3544,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -2890,7 +2890,7 @@
       {
         "index": 119,
         "locator": "#routing-dat-contents-search-items-more",
-        "line": 3542,
+        "line": 3550,
         "kind": "state-visibility-hook",
         "source": "display:none",
         "declarations": [
@@ -2902,8 +2902,8 @@
       },
       {
         "index": 120,
-        "locator": "div.modal-actions.xk-dat-modal-actions@L3550",
-        "line": 3550,
+        "locator": "div.modal-actions.xk-dat-modal-actions@L3558",
+        "line": 3558,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -2916,7 +2916,7 @@
       {
         "index": 121,
         "locator": "#mihomo-validation-summary-wrap",
-        "line": 3592,
+        "line": 3600,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -2929,7 +2929,7 @@
       {
         "index": 122,
         "locator": "#mihomo-validation-explain-wrap",
-        "line": 3597,
+        "line": 3605,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -2942,7 +2942,7 @@
       {
         "index": 123,
         "locator": "#mihomo-validation-side-panel",
-        "line": 3604,
+        "line": 3612,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -2955,7 +2955,7 @@
       {
         "index": 124,
         "locator": "#mihomo-validation-log-wrap",
-        "line": 3605,
+        "line": 3613,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -2967,8 +2967,8 @@
       },
       {
         "index": 125,
-        "locator": "div@L3631",
-        "line": 3631,
+        "locator": "div@L3639",
+        "line": 3639,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;",
         "declarations": [
@@ -2993,7 +2993,7 @@
       {
         "index": 126,
         "locator": "#ssh-profiles-list",
-        "line": 3638,
+        "line": 3646,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column; gap:8px;",
         "declarations": [
@@ -3013,8 +3013,8 @@
       },
       {
         "index": 127,
-        "locator": "hr@L3640",
-        "line": 3640,
+        "locator": "hr@L3648",
+        "line": 3648,
         "kind": "presentation-geometry",
         "source": "border:0; border-top:1px solid #334155; margin:12px 0;",
         "declarations": [
@@ -3034,8 +3034,8 @@
       },
       {
         "index": 128,
-        "locator": "div@L3642",
-        "line": 3642,
+        "locator": "div@L3650",
+        "line": 3650,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column; gap:8px;",
         "declarations": [
@@ -3055,8 +3055,8 @@
       },
       {
         "index": 129,
-        "locator": "label@L3643",
-        "line": 3643,
+        "locator": "label@L3651",
+        "line": 3651,
         "kind": "presentation-geometry",
         "source": "opacity:.85;",
         "declarations": [
@@ -3069,7 +3069,7 @@
       {
         "index": 130,
         "locator": "#ssh-command-preview",
-        "line": 3644,
+        "line": 3652,
         "kind": "presentation-geometry",
         "source": "width:100%;",
         "declarations": [
@@ -3081,8 +3081,8 @@
       },
       {
         "index": 131,
-        "locator": "div@L3645",
-        "line": 3645,
+        "locator": "div@L3653",
+        "line": 3653,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;",
         "declarations": [
@@ -3106,8 +3106,8 @@
       },
       {
         "index": 132,
-        "locator": "div.modal-content@L3656",
-        "line": 3656,
+        "locator": "div.modal-content@L3664",
+        "line": 3664,
         "kind": "presentation-geometry",
         "source": "max-width:640px;",
         "declarations": [
@@ -3119,8 +3119,8 @@
       },
       {
         "index": 133,
-        "locator": "div@L3687",
-        "line": 3687,
+        "locator": "div@L3695",
+        "line": 3695,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; justify-content:flex-end;",
         "declarations": [
@@ -3140,8 +3140,8 @@
       },
       {
         "index": 134,
-        "locator": "div.modal-content@L3697",
-        "line": 3697,
+        "locator": "div.modal-content@L3705",
+        "line": 3705,
         "kind": "presentation-geometry",
         "source": "max-width:420px;",
         "declarations": [
@@ -3154,7 +3154,7 @@
       {
         "index": 135,
         "locator": "#ssh-confirm-text",
-        "line": 3703,
+        "line": 3711,
         "kind": "presentation-geometry",
         "source": "white-space:pre-wrap;",
         "declarations": [
@@ -3166,8 +3166,8 @@
       },
       {
         "index": 136,
-        "locator": "div.modal-actions@L3705",
-        "line": 3705,
+        "locator": "div.modal-actions@L3713",
+        "line": 3713,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -3179,8 +3179,8 @@
       },
       {
         "index": 137,
-        "locator": "div.modal-content@L3713",
-        "line": 3713,
+        "locator": "div.modal-content@L3721",
+        "line": 3721,
         "kind": "presentation-geometry",
         "source": "max-width:760px;",
         "declarations": [
@@ -3192,8 +3192,8 @@
       },
       {
         "index": 138,
-        "locator": "div.modal-body@L3718",
-        "line": 3718,
+        "locator": "div.modal-body@L3726",
+        "line": 3726,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column; gap:10px;",
         "declarations": [
@@ -3214,7 +3214,7 @@
       {
         "index": 139,
         "locator": "#ssh-transfer-help",
-        "line": 3719,
+        "line": 3727,
         "kind": "presentation-geometry",
         "source": "opacity:.85;",
         "declarations": [
@@ -3227,7 +3227,7 @@
       {
         "index": 140,
         "locator": "#ssh-transfer-text",
-        "line": 3720,
+        "line": 3728,
         "kind": "presentation-geometry",
         "source": "min-height:280px;",
         "declarations": [
@@ -3239,8 +3239,8 @@
       },
       {
         "index": 141,
-        "locator": "div@L3725",
-        "line": 3725,
+        "locator": "div@L3733",
+        "line": 3733,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; justify-content:flex-end;",
         "declarations": [
@@ -3260,8 +3260,8 @@
       },
       {
         "index": 142,
-        "locator": "div.modal-content@L3735",
-        "line": 3735,
+        "locator": "div.modal-content@L3743",
+        "line": 3743,
         "kind": "presentation-geometry",
         "source": "max-width:560px;",
         "declarations": [
@@ -3273,8 +3273,8 @@
       },
       {
         "index": 143,
-        "locator": "div@L3744",
-        "line": 3744,
+        "locator": "div@L3752",
+        "line": 3752,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center;",
         "declarations": [
@@ -3295,7 +3295,7 @@
       {
         "index": 144,
         "locator": "#fm-conn-profile",
-        "line": 3745,
+        "line": 3753,
         "kind": "presentation-geometry",
         "source": "flex:1;",
         "declarations": [
@@ -3308,7 +3308,7 @@
       {
         "index": 145,
         "locator": "#fm-key-file-label",
-        "line": 3776,
+        "line": 3784,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3321,7 +3321,7 @@
       {
         "index": 146,
         "locator": "#fm-key-file",
-        "line": 3777,
+        "line": 3785,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3334,7 +3334,7 @@
       {
         "index": 147,
         "locator": "#fm-key-path-label",
-        "line": 3779,
+        "line": 3787,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3347,7 +3347,7 @@
       {
         "index": 148,
         "locator": "#fm-key-path",
-        "line": 3780,
+        "line": 3788,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3360,7 +3360,7 @@
       {
         "index": 149,
         "locator": "#fm-passphrase-label",
-        "line": 3782,
+        "line": 3790,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3373,7 +3373,7 @@
       {
         "index": 150,
         "locator": "#fm-passphrase",
-        "line": 3783,
+        "line": 3791,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3385,8 +3385,8 @@
       },
       {
         "index": 151,
-        "locator": "div@L3786",
-        "line": 3786,
+        "locator": "div@L3794",
+        "line": 3794,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center;",
         "declarations": [
@@ -3407,7 +3407,7 @@
       {
         "index": 152,
         "locator": "#fm-hostkey-policy",
-        "line": 3787,
+        "line": 3795,
         "kind": "presentation-geometry",
         "source": "flex:1;",
         "declarations": [
@@ -3420,7 +3420,7 @@
       {
         "index": 153,
         "locator": "#fm-hostkey-row",
-        "line": 3796,
+        "line": 3804,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center;",
         "declarations": [
@@ -3441,7 +3441,7 @@
       {
         "index": 154,
         "locator": "#fm-hostkey-fp",
-        "line": 3797,
+        "line": 3805,
         "kind": "presentation-geometry",
         "source": "margin:0; padding:8px 10px; opacity:.85; flex:1;",
         "declarations": [
@@ -3465,8 +3465,8 @@
       },
       {
         "index": 155,
-        "locator": "div@L3815",
-        "line": 3815,
+        "locator": "div@L3823",
+        "line": 3823,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; gap:10px;",
         "declarations": [
@@ -3486,8 +3486,8 @@
       },
       {
         "index": 156,
-        "locator": "span@L3817",
-        "line": 3817,
+        "locator": "span@L3825",
+        "line": 3825,
         "kind": "presentation-geometry",
         "source": "opacity:.85;",
         "declarations": [
@@ -3500,7 +3500,7 @@
       {
         "index": 157,
         "locator": "#fm-connect-warn",
-        "line": 3821,
+        "line": 3829,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3512,8 +3512,8 @@
       },
       {
         "index": 158,
-        "locator": "div.modal-actions@L3823",
-        "line": 3823,
+        "locator": "div.modal-actions@L3831",
+        "line": 3831,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -3525,8 +3525,8 @@
       },
       {
         "index": 159,
-        "locator": "div.modal-content@L3833",
-        "line": 3833,
+        "locator": "div.modal-content@L3841",
+        "line": 3841,
         "kind": "presentation-geometry",
         "source": "max-width:760px;",
         "declarations": [
@@ -3539,7 +3539,7 @@
       {
         "index": 160,
         "locator": "#fm-knownhosts-path",
-        "line": 3839,
+        "line": 3847,
         "kind": "presentation-geometry",
         "source": "margin:0 0 10px 0; padding:8px 10px; opacity:.85;",
         "declarations": [
@@ -3559,8 +3559,8 @@
       },
       {
         "index": 161,
-        "locator": "div.form-row@L3841",
-        "line": 3841,
+        "locator": "div.form-row@L3849",
+        "line": 3849,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:0 0 10px 0;",
         "declarations": [
@@ -3588,8 +3588,8 @@
       },
       {
         "index": 162,
-        "locator": "label@L3842",
-        "line": 3842,
+        "locator": "label@L3850",
+        "line": 3850,
         "kind": "presentation-geometry",
         "source": "min-width:170px;",
         "declarations": [
@@ -3602,7 +3602,7 @@
       {
         "index": 163,
         "locator": "#fm-knownhosts-remove-host",
-        "line": 3843,
+        "line": 3851,
         "kind": "presentation-geometry",
         "source": "flex:1; min-width:260px;",
         "declarations": [
@@ -3618,8 +3618,8 @@
       },
       {
         "index": 164,
-        "locator": "div@L3847",
-        "line": 3847,
+        "locator": "div@L3855",
+        "line": 3855,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; justify-content:flex-end; margin-bottom:10px; flex-wrap:wrap;",
         "declarations": [
@@ -3648,7 +3648,7 @@
       {
         "index": 165,
         "locator": "#fm-knownhosts-hashed-hint",
-        "line": 3852,
+        "line": 3860,
         "kind": "mixed-state-and-presentation",
         "source": "display:none; margin:0 0 10px 0; opacity:.75;",
         "declarations": [
@@ -3669,7 +3669,7 @@
       {
         "index": 166,
         "locator": "#fm-knownhosts-body",
-        "line": 3853,
+        "line": 3861,
         "kind": "presentation-geometry",
         "source": "max-height:380px; overflow:auto;",
         "declarations": [
@@ -3685,8 +3685,8 @@
       },
       {
         "index": 167,
-        "locator": "div.status@L3854",
-        "line": 3854,
+        "locator": "div.status@L3862",
+        "line": 3862,
         "kind": "presentation-geometry",
         "source": "margin-top:10px; opacity:.75;",
         "declarations": [
@@ -3702,8 +3702,8 @@
       },
       {
         "index": 168,
-        "locator": "div.modal-actions@L3856",
-        "line": 3856,
+        "locator": "div.modal-actions@L3864",
+        "line": 3864,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -3715,8 +3715,8 @@
       },
       {
         "index": 169,
-        "locator": "div.modal-content@L3864",
-        "line": 3864,
+        "locator": "div.modal-content@L3872",
+        "line": 3872,
         "kind": "presentation-geometry",
         "source": "max-width:560px;",
         "declarations": [
@@ -3729,7 +3729,7 @@
       {
         "index": 170,
         "locator": "#fm-create-dest",
-        "line": 3875,
+        "line": 3883,
         "kind": "presentation-geometry",
         "source": "margin:0; padding:8px 10px;",
         "declarations": [
@@ -3745,8 +3745,8 @@
       },
       {
         "index": 171,
-        "locator": "label@L3878",
-        "line": 3878,
+        "locator": "label@L3886",
+        "line": 3886,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center;",
         "declarations": [
@@ -3767,7 +3767,7 @@
       {
         "index": 172,
         "locator": "#fm-create-createonly-row",
-        "line": 3884,
+        "line": 3892,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center;",
         "declarations": [
@@ -3787,8 +3787,8 @@
       },
       {
         "index": 173,
-        "locator": "div.modal-actions@L3891",
-        "line": 3891,
+        "locator": "div.modal-actions@L3899",
+        "line": 3899,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -3800,8 +3800,8 @@
       },
       {
         "index": 174,
-        "locator": "div.modal-content@L3901",
-        "line": 3901,
+        "locator": "div.modal-content@L3909",
+        "line": 3909,
         "kind": "presentation-geometry",
         "source": "max-width:560px;",
         "declarations": [
@@ -3814,7 +3814,7 @@
       {
         "index": 175,
         "locator": "#fm-rename-src",
-        "line": 3912,
+        "line": 3920,
         "kind": "presentation-geometry",
         "source": "margin:0; padding:8px 10px;",
         "declarations": [
@@ -3830,8 +3830,8 @@
       },
       {
         "index": 176,
-        "locator": "div.status@L3914",
-        "line": 3914,
+        "locator": "div.status@L3922",
+        "line": 3922,
         "kind": "presentation-geometry",
         "source": "margin-top:10px; opacity:.8;",
         "declarations": [
@@ -3847,8 +3847,8 @@
       },
       {
         "index": 177,
-        "locator": "div.modal-actions@L3917",
-        "line": 3917,
+        "locator": "div.modal-actions@L3925",
+        "line": 3925,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -3860,8 +3860,8 @@
       },
       {
         "index": 178,
-        "locator": "div.modal-content@L3926",
-        "line": 3926,
+        "locator": "div.modal-content@L3934",
+        "line": 3934,
         "kind": "presentation-geometry",
         "source": "max-width:680px;",
         "declarations": [
@@ -3873,8 +3873,8 @@
       },
       {
         "index": 179,
-        "locator": "div.fm-form-grid@L3932",
-        "line": 3932,
+        "locator": "div.fm-form-grid@L3940",
+        "line": 3940,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 160px 1fr;",
         "declarations": [
@@ -3887,7 +3887,7 @@
       {
         "index": 180,
         "locator": "#fm-archive-src",
-        "line": 3934,
+        "line": 3942,
         "kind": "presentation-geometry",
         "source": "margin:0; padding:8px 10px;",
         "declarations": [
@@ -3904,7 +3904,7 @@
       {
         "index": 181,
         "locator": "#fm-archive-list",
-        "line": 3937,
+        "line": 3945,
         "kind": "presentation-geometry",
         "source": "margin:0; max-height:180px;",
         "declarations": [
@@ -3921,7 +3921,7 @@
       {
         "index": 182,
         "locator": "#fm-archive-format",
-        "line": 3943,
+        "line": 3951,
         "kind": "presentation-geometry",
         "source": "max-width:220px;",
         "declarations": [
@@ -3933,8 +3933,8 @@
       },
       {
         "index": 183,
-        "locator": "label@L3949",
-        "line": 3949,
+        "locator": "label@L3957",
+        "line": 3957,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center;",
         "declarations": [
@@ -3954,8 +3954,8 @@
       },
       {
         "index": 184,
-        "locator": "div.modal-actions@L3956",
-        "line": 3956,
+        "locator": "div.modal-actions@L3964",
+        "line": 3964,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -3967,8 +3967,8 @@
       },
       {
         "index": 185,
-        "locator": "div.modal-content@L3965",
-        "line": 3965,
+        "locator": "div.modal-content@L3973",
+        "line": 3973,
         "kind": "presentation-geometry",
         "source": "max-width:680px;",
         "declarations": [
@@ -3980,8 +3980,8 @@
       },
       {
         "index": 186,
-        "locator": "div.fm-form-grid@L3971",
-        "line": 3971,
+        "locator": "div.fm-form-grid@L3979",
+        "line": 3979,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 160px 1fr;",
         "declarations": [
@@ -3994,7 +3994,7 @@
       {
         "index": 187,
         "locator": "#fm-extract-archive",
-        "line": 3973,
+        "line": 3981,
         "kind": "presentation-geometry",
         "source": "margin:0; padding:8px 10px;",
         "declarations": [
@@ -4010,8 +4010,8 @@
       },
       {
         "index": 188,
-        "locator": "div@L3979",
-        "line": 3979,
+        "locator": "div@L3987",
+        "line": 3987,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -4036,7 +4036,7 @@
       {
         "index": 189,
         "locator": "#fm-extract-dest-here-btn",
-        "line": 3980,
+        "line": 3988,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -4053,7 +4053,7 @@
       {
         "index": 190,
         "locator": "#fm-extract-dest-other-btn",
-        "line": 3981,
+        "line": 3989,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -4070,7 +4070,7 @@
       {
         "index": 191,
         "locator": "#fm-extract-dest-pick-btn",
-        "line": 3982,
+        "line": 3990,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -4086,8 +4086,8 @@
       },
       {
         "index": 192,
-        "locator": "span@L3983",
-        "line": 3983,
+        "locator": "span@L3991",
+        "line": 3991,
         "kind": "presentation-geometry",
         "source": "opacity:.7; font-size:12px;",
         "declarations": [
@@ -4103,8 +4103,8 @@
       },
       {
         "index": 193,
-        "locator": "label@L3987",
-        "line": 3987,
+        "locator": "label@L3995",
+        "line": 3995,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center;",
         "declarations": [
@@ -4124,8 +4124,8 @@
       },
       {
         "index": 194,
-        "locator": "label@L3993",
-        "line": 3993,
+        "locator": "label@L4001",
+        "line": 4001,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center;",
         "declarations": [
@@ -4145,8 +4145,8 @@
       },
       {
         "index": 195,
-        "locator": "label@L3999",
-        "line": 3999,
+        "locator": "label@L4007",
+        "line": 4007,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center;",
         "declarations": [
@@ -4166,8 +4166,8 @@
       },
       {
         "index": 196,
-        "locator": "label@L4005",
-        "line": 4005,
+        "locator": "label@L4013",
+        "line": 4013,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center;",
         "declarations": [
@@ -4187,8 +4187,8 @@
       },
       {
         "index": 197,
-        "locator": "div.status@L4010",
-        "line": 4010,
+        "locator": "div.status@L4018",
+        "line": 4018,
         "kind": "presentation-geometry",
         "source": "margin-top:10px; opacity:.75;",
         "declarations": [
@@ -4204,8 +4204,8 @@
       },
       {
         "index": 198,
-        "locator": "div.modal-actions@L4013",
-        "line": 4013,
+        "locator": "div.modal-actions@L4021",
+        "line": 4021,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -4217,8 +4217,8 @@
       },
       {
         "index": 199,
-        "locator": "div.modal-content@L4022",
-        "line": 4022,
+        "locator": "div.modal-content@L4030",
+        "line": 4030,
         "kind": "presentation-geometry",
         "source": "max-width:780px;",
         "declarations": [
@@ -4230,8 +4230,8 @@
       },
       {
         "index": 200,
-        "locator": "div@L4028",
-        "line": 4028,
+        "locator": "div@L4036",
+        "line": 4036,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px;",
         "declarations": [
@@ -4260,7 +4260,7 @@
       {
         "index": 201,
         "locator": "#fm-folder-picker-up-btn",
-        "line": 4029,
+        "line": 4037,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -4277,7 +4277,7 @@
       {
         "index": 202,
         "locator": "#fm-folder-picker-home-btn",
-        "line": 4030,
+        "line": 4038,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -4294,7 +4294,7 @@
       {
         "index": 203,
         "locator": "#fm-folder-picker-path",
-        "line": 4031,
+        "line": 4039,
         "kind": "presentation-geometry",
         "source": "flex:1; min-width:220px;",
         "declarations": [
@@ -4311,7 +4311,7 @@
       {
         "index": 204,
         "locator": "#fm-folder-picker-status",
-        "line": 4033,
+        "line": 4041,
         "kind": "presentation-geometry",
         "source": "margin:0 0 10px 0; padding:6px 10px; opacity:.85;",
         "declarations": [
@@ -4332,7 +4332,7 @@
       {
         "index": 205,
         "locator": "#fm-folder-picker-list",
-        "line": 4034,
+        "line": 4042,
         "kind": "presentation-geometry",
         "source": "margin:0; max-height:420px; overflow:auto; padding:0;",
         "declarations": [
@@ -4356,8 +4356,8 @@
       },
       {
         "index": 206,
-        "locator": "div.modal-actions@L4037",
-        "line": 4037,
+        "locator": "div.modal-actions@L4045",
+        "line": 4045,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -4369,8 +4369,8 @@
       },
       {
         "index": 207,
-        "locator": "div.modal-content@L4046",
-        "line": 4046,
+        "locator": "div.modal-content@L4054",
+        "line": 4054,
         "kind": "presentation-geometry",
         "source": "max-width:860px;",
         "declarations": [
@@ -4382,8 +4382,8 @@
       },
       {
         "index": 208,
-        "locator": "div.fm-form-grid@L4052",
-        "line": 4052,
+        "locator": "div.fm-form-grid@L4060",
+        "line": 4060,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 120px 1fr;",
         "declarations": [
@@ -4396,7 +4396,7 @@
       {
         "index": 209,
         "locator": "#fm-archive-list-path",
-        "line": 4054,
+        "line": 4062,
         "kind": "presentation-geometry",
         "source": "margin:0; padding:8px 10px;",
         "declarations": [
@@ -4412,8 +4412,8 @@
       },
       {
         "index": 210,
-        "locator": "div@L4058",
-        "line": 4058,
+        "locator": "div@L4066",
+        "line": 4066,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center; margin:0 0 6px 0;",
         "declarations": [
@@ -4438,7 +4438,7 @@
       {
         "index": 211,
         "locator": "#fm-archive-list-filter",
-        "line": 4059,
+        "line": 4067,
         "kind": "presentation-geometry",
         "source": "flex:1; min-width:200px;",
         "declarations": [
@@ -4455,7 +4455,7 @@
       {
         "index": 212,
         "locator": "#fm-archive-list-body",
-        "line": 4063,
+        "line": 4071,
         "kind": "presentation-geometry",
         "source": "margin:0; max-height:420px; overflow:auto; padding:0;",
         "declarations": [
@@ -4480,7 +4480,7 @@
       {
         "index": 213,
         "locator": "#fm-archive-list-meta",
-        "line": 4067,
+        "line": 4075,
         "kind": "presentation-geometry",
         "source": "margin:0; padding:6px 10px; opacity:.8;",
         "declarations": [
@@ -4500,8 +4500,8 @@
       },
       {
         "index": 214,
-        "locator": "div.modal-actions@L4071",
-        "line": 4071,
+        "locator": "div.modal-actions@L4079",
+        "line": 4079,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end; gap:10px;",
         "declarations": [
@@ -4517,8 +4517,8 @@
       },
       {
         "index": 215,
-        "locator": "div.modal-content@L4082",
-        "line": 4082,
+        "locator": "div.modal-content@L4090",
+        "line": 4090,
         "kind": "presentation-geometry",
         "source": "max-width:560px;",
         "declarations": [
@@ -4530,8 +4530,8 @@
       },
       {
         "index": 216,
-        "locator": "div.status@L4093",
-        "line": 4093,
+        "locator": "div.status@L4101",
+        "line": 4101,
         "kind": "presentation-geometry",
         "source": "margin:0; padding:8px 10px;",
         "declarations": [
@@ -4547,8 +4547,8 @@
       },
       {
         "index": 217,
-        "locator": "div.modal-actions@L4097",
-        "line": 4097,
+        "locator": "div.modal-actions@L4105",
+        "line": 4105,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -4560,8 +4560,8 @@
       },
       {
         "index": 218,
-        "locator": "div.modal-content@L4106",
-        "line": 4106,
+        "locator": "div.modal-content@L4114",
+        "line": 4114,
         "kind": "presentation-geometry",
         "source": "max-width:720px;",
         "declarations": [
@@ -4573,8 +4573,8 @@
       },
       {
         "index": 219,
-        "locator": "div@L4108",
-        "line": 4108,
+        "locator": "div@L4116",
+        "line": 4116,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column; gap:2px;",
         "declarations": [
@@ -4595,7 +4595,7 @@
       {
         "index": 220,
         "locator": "#fm-props-modal-meta",
-        "line": 4110,
+        "line": 4118,
         "kind": "presentation-geometry",
         "source": "margin:0; padding:0; background:transparent; border:none; opacity:.75; font-size:0.82rem;",
         "declarations": [
@@ -4627,8 +4627,8 @@
       },
       {
         "index": 221,
-        "locator": "div.modal-actions@L4117",
-        "line": 4117,
+        "locator": "div.modal-actions@L4125",
+        "line": 4125,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -4640,8 +4640,8 @@
       },
       {
         "index": 222,
-        "locator": "div.modal-content@L4125",
-        "line": 4125,
+        "locator": "div.modal-content@L4133",
+        "line": 4133,
         "kind": "presentation-geometry",
         "source": "max-width:760px;",
         "declarations": [
@@ -4653,8 +4653,8 @@
       },
       {
         "index": 223,
-        "locator": "div@L4127",
-        "line": 4127,
+        "locator": "div@L4135",
+        "line": 4135,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column; gap:2px;",
         "declarations": [
@@ -4675,7 +4675,7 @@
       {
         "index": 224,
         "locator": "#fm-hash-meta",
-        "line": 4129,
+        "line": 4137,
         "kind": "presentation-geometry",
         "source": "margin:0; padding:0; background:transparent; border:none; opacity:.75; font-size:0.82rem;",
         "declarations": [
@@ -4707,8 +4707,8 @@
       },
       {
         "index": 225,
-        "locator": "div.fm-form-grid@L4134",
-        "line": 4134,
+        "locator": "div.fm-form-grid@L4142",
+        "line": 4142,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 120px 1fr auto; align-items:center;",
         "declarations": [
@@ -4724,8 +4724,8 @@
       },
       {
         "index": 226,
-        "locator": "div.modal-actions@L4149",
-        "line": 4149,
+        "locator": "div.modal-actions@L4157",
+        "line": 4157,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -4737,8 +4737,8 @@
       },
       {
         "index": 227,
-        "locator": "div.modal-content@L4157",
-        "line": 4157,
+        "locator": "div.modal-content@L4165",
+        "line": 4165,
         "kind": "presentation-geometry",
         "source": "max-width:620px;",
         "declarations": [
@@ -4750,8 +4750,8 @@
       },
       {
         "index": 228,
-        "locator": "div.fm-form-grid@L4163",
-        "line": 4163,
+        "locator": "div.fm-form-grid@L4171",
+        "line": 4171,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 160px 1fr;",
         "declarations": [
@@ -4764,7 +4764,7 @@
       {
         "index": 229,
         "locator": "#fm-chmod-src",
-        "line": 4165,
+        "line": 4173,
         "kind": "presentation-geometry",
         "source": "margin:0; padding:8px 10px;",
         "declarations": [
@@ -4781,7 +4781,7 @@
       {
         "index": 230,
         "locator": "#fm-chmod-list",
-        "line": 4168,
+        "line": 4176,
         "kind": "presentation-geometry",
         "source": "margin:0; max-height:160px;",
         "declarations": [
@@ -4797,8 +4797,8 @@
       },
       {
         "index": 231,
-        "locator": "div.status@L4174",
-        "line": 4174,
+        "locator": "div.status@L4182",
+        "line": 4182,
         "kind": "presentation-geometry",
         "source": "margin:0; opacity:.8;",
         "declarations": [
@@ -4814,8 +4814,8 @@
       },
       {
         "index": 232,
-        "locator": "div.modal-actions@L4201",
-        "line": 4201,
+        "locator": "div.modal-actions@L4209",
+        "line": 4209,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -4827,8 +4827,8 @@
       },
       {
         "index": 233,
-        "locator": "div.modal-content@L4210",
-        "line": 4210,
+        "locator": "div.modal-content@L4218",
+        "line": 4218,
         "kind": "presentation-geometry",
         "source": "max-width:620px;",
         "declarations": [
@@ -4840,8 +4840,8 @@
       },
       {
         "index": 234,
-        "locator": "div.fm-form-grid@L4216",
-        "line": 4216,
+        "locator": "div.fm-form-grid@L4224",
+        "line": 4224,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 160px 1fr;",
         "declarations": [
@@ -4854,7 +4854,7 @@
       {
         "index": 235,
         "locator": "#fm-chown-src",
-        "line": 4218,
+        "line": 4226,
         "kind": "presentation-geometry",
         "source": "margin:0; padding:8px 10px;",
         "declarations": [
@@ -4871,7 +4871,7 @@
       {
         "index": 236,
         "locator": "#fm-chown-list",
-        "line": 4221,
+        "line": 4229,
         "kind": "presentation-geometry",
         "source": "margin:0; max-height:160px;",
         "declarations": [
@@ -4887,8 +4887,8 @@
       },
       {
         "index": 237,
-        "locator": "div.status@L4230",
-        "line": 4230,
+        "locator": "div.status@L4238",
+        "line": 4238,
         "kind": "presentation-geometry",
         "source": "margin:0; opacity:.8;",
         "declarations": [
@@ -4904,8 +4904,8 @@
       },
       {
         "index": 238,
-        "locator": "div.modal-actions@L4234",
-        "line": 4234,
+        "locator": "div.modal-actions@L4242",
+        "line": 4242,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -4917,8 +4917,8 @@
       },
       {
         "index": 239,
-        "locator": "div.modal-content@L4244",
-        "line": 4244,
+        "locator": "div.modal-content@L4252",
+        "line": 4252,
         "kind": "presentation-geometry",
         "source": "max-width:620px;",
         "declarations": [
@@ -4931,7 +4931,7 @@
       {
         "index": 240,
         "locator": "#fm-dropop-text",
-        "line": 4250,
+        "line": 4258,
         "kind": "presentation-geometry",
         "source": "margin:0 0 10px 0;",
         "declarations": [
@@ -4944,7 +4944,7 @@
       {
         "index": 241,
         "locator": "#fm-dropop-list",
-        "line": 4251,
+        "line": 4259,
         "kind": "presentation-geometry",
         "source": "margin:0;",
         "declarations": [
@@ -4956,8 +4956,8 @@
       },
       {
         "index": 242,
-        "locator": "div.status@L4252",
-        "line": 4252,
+        "locator": "div.status@L4260",
+        "line": 4260,
         "kind": "presentation-geometry",
         "source": "margin-top:10px; opacity:.8;",
         "declarations": [
@@ -4973,8 +4973,8 @@
       },
       {
         "index": 243,
-        "locator": "div.modal-actions@L4254",
-        "line": 4254,
+        "locator": "div.modal-actions@L4262",
+        "line": 4262,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -4986,8 +4986,8 @@
       },
       {
         "index": 244,
-        "locator": "div.modal-content@L4264",
-        "line": 4264,
+        "locator": "div.modal-content@L4272",
+        "line": 4272,
         "kind": "presentation-geometry",
         "source": "max-width:760px;",
         "declarations": [
@@ -4999,8 +4999,8 @@
       },
       {
         "index": 245,
-        "locator": "label@L4272",
-        "line": 4272,
+        "locator": "label@L4280",
+        "line": 4280,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center;",
         "declarations": [
@@ -5020,8 +5020,8 @@
       },
       {
         "index": 246,
-        "locator": "span@L4273",
-        "line": 4273,
+        "locator": "span@L4281",
+        "line": 4281,
         "kind": "presentation-geometry",
         "source": "opacity:.85;",
         "declarations": [
@@ -5034,7 +5034,7 @@
       {
         "index": 247,
         "locator": "#fm-conflicts-default",
-        "line": 4274,
+        "line": 4282,
         "kind": "presentation-geometry",
         "source": "max-width:220px;",
         "declarations": [
@@ -5046,8 +5046,8 @@
       },
       {
         "index": 248,
-        "locator": "div.modal-actions@L4282",
-        "line": 4282,
+        "locator": "div.modal-actions@L4290",
+        "line": 4290,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5059,8 +5059,8 @@
       },
       {
         "index": 249,
-        "locator": "div.modal-content@L4291",
-        "line": 4291,
+        "locator": "div.modal-content@L4299",
+        "line": 4299,
         "kind": "presentation-geometry",
         "source": "max-width:860px;",
         "declarations": [
@@ -5072,8 +5072,8 @@
       },
       {
         "index": 250,
-        "locator": "div.status@L4297",
-        "line": 4297,
+        "locator": "div.status@L4305",
+        "line": 4305,
         "kind": "presentation-geometry",
         "source": "margin:0 0 8px 0; opacity:.9;",
         "declarations": [
@@ -5090,7 +5090,7 @@
       {
         "index": 251,
         "locator": "#fm-bookmarks-error",
-        "line": 4301,
+        "line": 4309,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5102,8 +5102,8 @@
       },
       {
         "index": 252,
-        "locator": "div.modal-actions@L4303",
-        "line": 4303,
+        "locator": "div.modal-actions@L4311",
+        "line": 4311,
         "kind": "presentation-geometry",
         "source": "justify-content:space-between; gap:10px; flex-wrap:wrap;",
         "declarations": [
@@ -5123,8 +5123,8 @@
       },
       {
         "index": 253,
-        "locator": "div@L4304",
-        "line": 4304,
+        "locator": "div@L4312",
+        "line": 4312,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; flex-wrap:wrap;",
         "declarations": [
@@ -5144,8 +5144,8 @@
       },
       {
         "index": 254,
-        "locator": "div@L4309",
-        "line": 4309,
+        "locator": "div@L4317",
+        "line": 4317,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;",
         "declarations": [
@@ -5169,8 +5169,8 @@
       },
       {
         "index": 255,
-        "locator": "div.modal-content@L4319",
-        "line": 4319,
+        "locator": "div.modal-content@L4327",
+        "line": 4327,
         "kind": "presentation-geometry",
         "source": "max-width:560px;",
         "declarations": [
@@ -5183,7 +5183,7 @@
       {
         "index": 256,
         "locator": "#fm-download-multi-desc",
-        "line": 4325,
+        "line": 4333,
         "kind": "presentation-geometry",
         "source": "margin:0 0 10px 0; opacity:.9;",
         "declarations": [
@@ -5199,8 +5199,8 @@
       },
       {
         "index": 257,
-        "locator": "div@L4327",
-        "line": 4327,
+        "locator": "div@L4335",
+        "line": 4335,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column; gap:10px;",
         "declarations": [
@@ -5220,57 +5220,6 @@
       },
       {
         "index": 258,
-        "locator": "label@L4328",
-        "line": 4328,
-        "kind": "presentation-geometry",
-        "source": "display:flex; gap:10px; align-items:flex-start;",
-        "declarations": [
-          {
-            "property": "display",
-            "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "10px"
-          },
-          {
-            "property": "align-items",
-            "value": "flex-start"
-          }
-        ]
-      },
-      {
-        "index": 259,
-        "locator": "div@L4331",
-        "line": 4331,
-        "kind": "presentation-geometry",
-        "source": "font-weight:600;",
-        "declarations": [
-          {
-            "property": "font-weight",
-            "value": "600"
-          }
-        ]
-      },
-      {
-        "index": 260,
-        "locator": "div@L4332",
-        "line": 4332,
-        "kind": "presentation-geometry",
-        "source": "font-size:12px; opacity:.8;",
-        "declarations": [
-          {
-            "property": "font-size",
-            "value": "12px"
-          },
-          {
-            "property": "opacity",
-            "value": ".8"
-          }
-        ]
-      },
-      {
-        "index": 261,
         "locator": "label@L4336",
         "line": 4336,
         "kind": "presentation-geometry",
@@ -5291,7 +5240,7 @@
         ]
       },
       {
-        "index": 262,
+        "index": 259,
         "locator": "div@L4339",
         "line": 4339,
         "kind": "presentation-geometry",
@@ -5304,8 +5253,8 @@
         ]
       },
       {
-        "index": 263,
-        "locator": "#fm-download-multi-queue-hint",
+        "index": 260,
+        "locator": "div@L4340",
         "line": 4340,
         "kind": "presentation-geometry",
         "source": "font-size:12px; opacity:.8;",
@@ -5321,9 +5270,60 @@
         ]
       },
       {
+        "index": 261,
+        "locator": "label@L4344",
+        "line": 4344,
+        "kind": "presentation-geometry",
+        "source": "display:flex; gap:10px; align-items:flex-start;",
+        "declarations": [
+          {
+            "property": "display",
+            "value": "flex"
+          },
+          {
+            "property": "gap",
+            "value": "10px"
+          },
+          {
+            "property": "align-items",
+            "value": "flex-start"
+          }
+        ]
+      },
+      {
+        "index": 262,
+        "locator": "div@L4347",
+        "line": 4347,
+        "kind": "presentation-geometry",
+        "source": "font-weight:600;",
+        "declarations": [
+          {
+            "property": "font-weight",
+            "value": "600"
+          }
+        ]
+      },
+      {
+        "index": 263,
+        "locator": "#fm-download-multi-queue-hint",
+        "line": 4348,
+        "kind": "presentation-geometry",
+        "source": "font-size:12px; opacity:.8;",
+        "declarations": [
+          {
+            "property": "font-size",
+            "value": "12px"
+          },
+          {
+            "property": "opacity",
+            "value": ".8"
+          }
+        ]
+      },
+      {
         "index": 264,
-        "locator": "label@L4345",
-        "line": 4345,
+        "locator": "label@L4353",
+        "line": 4353,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center; margin-top:12px;",
         "declarations": [
@@ -5347,8 +5347,8 @@
       },
       {
         "index": 265,
-        "locator": "span@L4347",
-        "line": 4347,
+        "locator": "span@L4355",
+        "line": 4355,
         "kind": "presentation-geometry",
         "source": "font-size:12px; opacity:.9;",
         "declarations": [
@@ -5364,8 +5364,8 @@
       },
       {
         "index": 266,
-        "locator": "div.modal-actions@L4350",
-        "line": 4350,
+        "locator": "div.modal-actions@L4358",
+        "line": 4358,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end; gap:10px;",
         "declarations": [
@@ -5381,8 +5381,8 @@
       },
       {
         "index": 267,
-        "locator": "div.modal-content@L4359",
-        "line": 4359,
+        "locator": "div.modal-content@L4367",
+        "line": 4367,
         "kind": "presentation-geometry",
         "source": "max-width:620px;",
         "declarations": [
@@ -5394,8 +5394,8 @@
       },
       {
         "index": 268,
-        "locator": "div.modal-actions@L4371",
-        "line": 4371,
+        "locator": "div.modal-actions@L4379",
+        "line": 4379,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5407,8 +5407,8 @@
       },
       {
         "index": 269,
-        "locator": "div.modal-content@L4380",
-        "line": 4380,
+        "locator": "div.modal-content@L4388",
+        "line": 4388,
         "kind": "presentation-geometry",
         "source": "max-width:760px;",
         "declarations": [
@@ -5420,8 +5420,8 @@
       },
       {
         "index": 270,
-        "locator": "div@L4386",
-        "line": 4386,
+        "locator": "div@L4394",
+        "line": 4394,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:8px;",
         "declarations": [
@@ -5453,8 +5453,8 @@
       },
       {
         "index": 271,
-        "locator": "div@L4387",
-        "line": 4387,
+        "locator": "div@L4395",
+        "line": 4395,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -5478,8 +5478,8 @@
       },
       {
         "index": 272,
-        "locator": "label@L4388",
-        "line": 4388,
+        "locator": "label@L4396",
+        "line": 4396,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; gap:6px; opacity:.9;",
         "declarations": [
@@ -5503,8 +5503,8 @@
       },
       {
         "index": 273,
-        "locator": "span@L4389",
-        "line": 4389,
+        "locator": "span@L4397",
+        "line": 4397,
         "kind": "presentation-geometry",
         "source": "font-size:12px;",
         "declarations": [
@@ -5517,7 +5517,7 @@
       {
         "index": 274,
         "locator": "#fm-ops-filter",
-        "line": 4390,
+        "line": 4398,
         "kind": "presentation-geometry",
         "source": "height:32px;",
         "declarations": [
@@ -5529,8 +5529,8 @@
       },
       {
         "index": 275,
-        "locator": "div@L4398",
-        "line": 4398,
+        "locator": "div@L4406",
+        "line": 4406,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;",
         "declarations": [
@@ -5555,7 +5555,7 @@
       {
         "index": 276,
         "locator": "#fm-ops-summary",
-        "line": 4403,
+        "line": 4411,
         "kind": "presentation-geometry",
         "source": "font-size:12px; opacity:.85; margin:6px 0 10px 0;",
         "declarations": [
@@ -5575,8 +5575,8 @@
       },
       {
         "index": 277,
-        "locator": "div.modal-content@L4411",
-        "line": 4411,
+        "locator": "div.modal-content@L4419",
+        "line": 4419,
         "kind": "presentation-geometry",
         "source": "max-width:920px;",
         "declarations": [
@@ -5588,8 +5588,8 @@
       },
       {
         "index": 278,
-        "locator": "div@L4417",
-        "line": 4417,
+        "locator": "div@L4425",
+        "line": 4425,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:10px;",
         "declarations": [
@@ -5621,8 +5621,8 @@
       },
       {
         "index": 279,
-        "locator": "div@L4418",
-        "line": 4418,
+        "locator": "div@L4426",
+        "line": 4426,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -5647,7 +5647,7 @@
       {
         "index": 280,
         "locator": "#fm-volumes-spinner",
-        "line": 4420,
+        "line": 4428,
         "kind": "presentation-geometry",
         "source": "opacity:.85;",
         "declarations": [
@@ -5660,7 +5660,7 @@
       {
         "index": 281,
         "locator": "#fm-volumes-summary",
-        "line": 4422,
+        "line": 4430,
         "kind": "presentation-geometry",
         "source": "font-size:12px; opacity:.85;",
         "declarations": [
@@ -5676,8 +5676,8 @@
       },
       {
         "index": 282,
-        "locator": "div.status@L4426",
-        "line": 4426,
+        "locator": "div.status@L4434",
+        "line": 4434,
         "kind": "presentation-geometry",
         "source": "margin-top:10px; opacity:.75;",
         "declarations": [
@@ -5693,8 +5693,8 @@
       },
       {
         "index": 283,
-        "locator": "div.modal-content@L4433",
-        "line": 4433,
+        "locator": "div.modal-content@L4441",
+        "line": 4441,
         "kind": "presentation-geometry",
         "source": "max-width:780px;",
         "declarations": [
@@ -5706,8 +5706,8 @@
       },
       {
         "index": 284,
-        "locator": "div.modal-actions@L4491",
-        "line": 4491,
+        "locator": "div.modal-actions@L4499",
+        "line": 4499,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -7473,37 +7473,37 @@
         "value": "Сохранить файл xkeen.json."
       },
       {
-        "locator": "button.btn-secondary.log-btn.restart-log-filter-btn@L1298",
+        "locator": "button.btn-secondary.log-btn.restart-log-filter-btn@L1306",
         "name": "data-xk-restart-log-filter",
         "value": "all"
       },
       {
-        "locator": "button.btn-secondary.log-btn.restart-log-filter-btn@L1299",
+        "locator": "button.btn-secondary.log-btn.restart-log-filter-btn@L1307",
         "name": "data-xk-restart-log-filter",
         "value": "errors"
       },
       {
-        "locator": "button.btn-secondary.log-btn@L1300",
+        "locator": "button.btn-secondary.log-btn@L1308",
         "name": "data-xk-restart-log-action",
         "value": "refresh"
       },
       {
-        "locator": "button.btn-secondary.log-btn@L1301",
+        "locator": "button.btn-secondary.log-btn@L1309",
         "name": "data-xk-restart-log-action",
         "value": "clear"
       },
       {
-        "locator": "button.btn-secondary.log-btn@L1302",
+        "locator": "button.btn-secondary.log-btn@L1310",
         "name": "data-xk-restart-log-action",
         "value": "copy"
       },
       {
-        "locator": "div.restart-log-summary@L1305",
+        "locator": "div.restart-log-summary@L1313",
         "name": "data-xk-restart-log-summary",
         "value": "1"
       },
       {
-        "locator": "pre.log-block@L1306",
+        "locator": "pre.log-block@L1314",
         "name": "data-xk-restart-log",
         "value": "1"
       },
@@ -7573,142 +7573,142 @@
         "value": "Запустить обновление Mihomo (xkeen -um) через терминал."
       },
       {
-        "locator": "div.command-group{%.if._tone@L1359",
+        "locator": "div.command-group{%.if._tone@L1367",
         "name": "data-tone",
         "value": "{{ _tone or 'neutral' }}"
       },
       {
-        "locator": "button.command-item@L1369",
+        "locator": "button.command-item@L1377",
         "name": "data-flag",
         "value": "{{ cmd.flag }}"
       },
       {
-        "locator": "button.command-item@L1369",
+        "locator": "button.command-item@L1377",
         "name": "data-label",
         "value": "xkeen {{ cmd.flag }}"
       },
       {
-        "locator": "button.command-item@L1369",
+        "locator": "button.command-item@L1377",
         "name": "data-tooltip",
         "value": "{{ cmd.desc }}"
       },
       {
-        "locator": "div.command-group.tone-info@L1383",
+        "locator": "div.command-group.tone-info@L1391",
         "name": "data-tone",
         "value": "info"
       },
       {
-        "locator": "button.command-item@L1390",
+        "locator": "button.command-item@L1398",
         "name": "data-flag",
         "value": "__sysmon_full"
       },
       {
-        "locator": "button.command-item@L1390",
+        "locator": "button.command-item@L1398",
         "name": "data-label",
         "value": "sysmon --full"
       },
       {
-        "locator": "button.command-item@L1390",
+        "locator": "button.command-item@L1398",
         "name": "data-tooltip",
         "value": "Мониторинг (расширенно): сеть/DNS/HTTPS/conntrack/ошибки интерфейсов/логи"
       },
       {
-        "locator": "button.command-item@L1400",
+        "locator": "button.command-item@L1408",
         "name": "data-flag",
         "value": "__entware_backup"
       },
       {
-        "locator": "button.command-item@L1400",
+        "locator": "button.command-item@L1408",
         "name": "data-label",
         "value": "entware-backup"
       },
       {
-        "locator": "button.command-item@L1400",
+        "locator": "button.command-item@L1408",
         "name": "data-tooltip",
         "value": "Создать tar.gz-бэкап Entware (/opt) на выбранный накопитель"
       },
       {
-        "locator": "button.command-item@L1410",
+        "locator": "button.command-item@L1418",
         "name": "data-flag",
         "value": "__storage_dashboard"
       },
       {
-        "locator": "button.command-item@L1410",
+        "locator": "button.command-item@L1418",
         "name": "data-label",
         "value": "storage-dashboard"
       },
       {
-        "locator": "button.command-item@L1410",
+        "locator": "button.command-item@L1418",
         "name": "data-tooltip",
         "value": "Дашборд хранилища: разделы, размеры, тип FS, использование, swap"
       },
       {
-        "locator": "button.command-item@L1420",
+        "locator": "button.command-item@L1428",
         "name": "data-flag",
         "value": "__device_lock_detector"
       },
       {
-        "locator": "button.command-item@L1420",
+        "locator": "button.command-item@L1428",
         "name": "data-label",
         "value": "device-locks"
       },
       {
-        "locator": "button.command-item@L1420",
+        "locator": "button.command-item@L1428",
         "name": "data-tooltip",
         "value": "Детектор блокировок: какие процессы удерживают диски"
       },
       {
-        "locator": "button.command-item@L1430",
+        "locator": "button.command-item@L1438",
         "name": "data-flag",
         "value": "__memory_check"
       },
       {
-        "locator": "button.command-item@L1430",
+        "locator": "button.command-item@L1438",
         "name": "data-label",
         "value": "memory-check"
       },
       {
-        "locator": "button.command-item@L1430",
+        "locator": "button.command-item@L1438",
         "name": "data-tooltip",
         "value": "Диагностика памяти: RAM, swap, буферы, предупреждения, топ процессов"
       },
       {
-        "locator": "button.command-item@L1440",
+        "locator": "button.command-item@L1448",
         "name": "data-flag",
         "value": "__version_check"
       },
       {
-        "locator": "button.command-item@L1440",
+        "locator": "button.command-item@L1448",
         "name": "data-label",
         "value": "version-check"
       },
       {
-        "locator": "button.command-item@L1440",
+        "locator": "button.command-item@L1448",
         "name": "data-tooltip",
         "value": "Проверка версий: xkeen, xkeen-ui, xray, mihomo — сравнение с GitHub"
       },
       {
-        "locator": "button.command-item@L1450",
+        "locator": "button.command-item@L1458",
         "name": "data-flag",
         "value": "__backup_monitor"
       },
       {
-        "locator": "button.command-item@L1450",
+        "locator": "button.command-item@L1458",
         "name": "data-label",
         "value": "backup-monitor"
       },
       {
-        "locator": "button.command-item@L1450",
+        "locator": "button.command-item@L1458",
         "name": "data-tooltip",
         "value": "Монитор бэкапов: список архивов, валидация, статус последнего бэкапа"
       },
       {
-        "locator": "button.btn-secondary.log-btn.restart-log-filter-btn@L1469",
+        "locator": "button.btn-secondary.log-btn.restart-log-filter-btn@L1477",
         "name": "data-xk-restart-log-filter",
         "value": "all"
       },
       {
-        "locator": "button.btn-secondary.log-btn.restart-log-filter-btn@L1470",
+        "locator": "button.btn-secondary.log-btn.restart-log-filter-btn@L1478",
         "name": "data-xk-restart-log-filter",
         "value": "errors"
       },
@@ -7728,7 +7728,7 @@
         "value": "copy"
       },
       {
-        "locator": "div.restart-log-summary@L1476",
+        "locator": "div.restart-log-summary@L1484",
         "name": "data-xk-restart-log-summary",
         "value": "1"
       },
@@ -7748,62 +7748,62 @@
         "value": "1"
       },
       {
-        "locator": "div.fm-panel@L1506",
+        "locator": "div.fm-panel@L1514",
         "name": "data-side",
         "value": "left"
       },
       {
-        "locator": "option@L1510",
+        "locator": "option@L1518",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "button.btn-secondary.fm-connect-btn@L1512",
+        "locator": "button.btn-secondary.fm-connect-btn@L1520",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "button.btn-secondary.fm-disconnect-btn@L1513",
+        "locator": "button.btn-secondary.fm-disconnect-btn@L1521",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "div.fm-panel@L1526",
+        "locator": "div.fm-panel@L1534",
         "name": "data-side",
         "value": "right"
       },
       {
-        "locator": "option@L1530",
+        "locator": "option@L1538",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "button.btn-secondary.fm-connect-btn@L1532",
+        "locator": "button.btn-secondary.fm-connect-btn@L1540",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "button.btn-secondary.fm-disconnect-btn@L1533",
+        "locator": "button.btn-secondary.fm-disconnect-btn@L1541",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "span@L1559",
+        "locator": "span@L1567",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "span@L1560",
+        "locator": "span@L1568",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "span@L1561",
+        "locator": "span@L1569",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "span@L1562",
+        "locator": "span@L1570",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
@@ -7818,42 +7818,42 @@
         "value": "unknown"
       },
       {
-        "locator": "button.btn-secondary.log-btn.restart-log-filter-btn@L1674",
+        "locator": "button.btn-secondary.log-btn.restart-log-filter-btn@L1682",
         "name": "data-xk-restart-log-filter",
         "value": "all"
       },
       {
-        "locator": "button.btn-secondary.log-btn.restart-log-filter-btn@L1675",
+        "locator": "button.btn-secondary.log-btn.restart-log-filter-btn@L1683",
         "name": "data-xk-restart-log-filter",
         "value": "errors"
       },
       {
-        "locator": "button.btn-secondary.log-btn@L1676",
+        "locator": "button.btn-secondary.log-btn@L1684",
         "name": "data-xk-restart-log-action",
         "value": "refresh"
       },
       {
-        "locator": "button.btn-secondary.log-btn@L1677",
+        "locator": "button.btn-secondary.log-btn@L1685",
         "name": "data-xk-restart-log-action",
         "value": "clear"
       },
       {
-        "locator": "button.btn-secondary.log-btn@L1678",
+        "locator": "button.btn-secondary.log-btn@L1686",
         "name": "data-xk-restart-log-action",
         "value": "copy"
       },
       {
-        "locator": "div.restart-log-summary@L1681",
+        "locator": "div.restart-log-summary@L1689",
         "name": "data-xk-restart-log-summary",
         "value": "1"
       },
       {
-        "locator": "pre.log-block@L1682",
+        "locator": "pre.log-block@L1690",
         "name": "data-xk-restart-log",
         "value": "1"
       },
       {
-        "locator": "div.modal-content.xray-devices-modal-content@L1705",
+        "locator": "div.modal-content.xray-devices-modal-content@L1713",
         "name": "data-modal-key",
         "value": "xray-log-devices"
       },
@@ -7863,57 +7863,57 @@
         "value": "stopped"
       },
       {
-        "locator": "div.terminal-menu-section@L1742",
+        "locator": "div.terminal-menu-section@L1750",
         "name": "data-collapsible",
         "value": "1"
       },
       {
-        "locator": "div.terminal-menu-section@L1742",
+        "locator": "div.terminal-menu-section@L1750",
         "name": "data-section",
         "value": "session"
       },
       {
-        "locator": "div.terminal-menu-section@L1754",
+        "locator": "div.terminal-menu-section@L1762",
         "name": "data-collapsible",
         "value": "1"
       },
       {
-        "locator": "div.terminal-menu-section@L1754",
+        "locator": "div.terminal-menu-section@L1762",
         "name": "data-section",
         "value": "signals"
       },
       {
-        "locator": "button.terminal-signals-item.terminal-pty-only@L1758",
+        "locator": "button.terminal-signals-item.terminal-pty-only@L1766",
         "name": "data-terminal-signal",
         "value": "INT"
       },
       {
-        "locator": "button.terminal-signals-item.terminal-pty-only@L1759",
+        "locator": "button.terminal-signals-item.terminal-pty-only@L1767",
         "name": "data-terminal-signal",
         "value": "TERM"
       },
       {
-        "locator": "button.terminal-signals-item.terminal-pty-only@L1760",
+        "locator": "button.terminal-signals-item.terminal-pty-only@L1768",
         "name": "data-terminal-signal",
         "value": "HUP"
       },
       {
-        "locator": "button.terminal-signals-item.terminal-tool-btn-danger.terminal-pty-only@L1761",
+        "locator": "button.terminal-signals-item.terminal-tool-btn-danger.terminal-pty-only@L1769",
         "name": "data-terminal-signal",
         "value": "KILL"
       },
       {
-        "locator": "button.terminal-signals-item.terminal-pty-only@L1762",
+        "locator": "button.terminal-signals-item.terminal-pty-only@L1770",
         "name": "data-terminal-signal",
         "value": "QUIT"
       },
       {
-        "locator": "div.terminal-menu-section@L1767",
+        "locator": "div.terminal-menu-section@L1775",
         "name": "data-collapsible",
         "value": "1"
       },
       {
-        "locator": "div.terminal-menu-section@L1767",
+        "locator": "div.terminal-menu-section@L1775",
         "name": "data-section",
         "value": "tools"
       },
@@ -7933,67 +7933,67 @@
         "value": "0"
       },
       {
-        "locator": "button.core-option.xk-core-option@L1929",
+        "locator": "button.core-option.xk-core-option@L1937",
         "name": "data-core",
         "value": "xray"
       },
       {
-        "locator": "button.core-option.xk-core-option@L1935",
+        "locator": "button.core-option.xk-core-option@L1943",
         "name": "data-core",
         "value": "mihomo"
       },
       {
-        "locator": "div.modal-content@L1971",
+        "locator": "div.modal-content@L1979",
         "name": "data-modal-key",
         "value": "inbounds-apply"
       },
       {
-        "locator": "div.modal-content@L2023",
+        "locator": "div.modal-content@L2031",
         "name": "data-modal-key",
         "value": "routing-balancer-help"
       },
       {
-        "locator": "a@L2031",
+        "locator": "a@L2039",
         "name": "data-help-target",
         "value": "xk-bhelp-what"
       },
       {
-        "locator": "a@L2032",
+        "locator": "a@L2040",
         "name": "data-help-target",
         "value": "xk-bhelp-quickstart"
       },
       {
-        "locator": "a@L2033",
+        "locator": "a@L2041",
         "name": "data-help-target",
         "value": "xk-bhelp-manual"
       },
       {
-        "locator": "a@L2034",
+        "locator": "a@L2042",
         "name": "data-help-target",
         "value": "xk-bhelp-subscriptions"
       },
       {
-        "locator": "a@L2035",
+        "locator": "a@L2043",
         "name": "data-help-target",
         "value": "xk-bhelp-balancer"
       },
       {
-        "locator": "a@L2036",
+        "locator": "a@L2044",
         "name": "data-help-target",
         "value": "xk-bhelp-rules"
       },
       {
-        "locator": "a@L2037",
+        "locator": "a@L2045",
         "name": "data-help-target",
         "value": "xk-bhelp-forced"
       },
       {
-        "locator": "a@L2038",
+        "locator": "a@L2046",
         "name": "data-help-target",
         "value": "xk-bhelp-troubles"
       },
       {
-        "locator": "div.modal-content@L2284",
+        "locator": "div.modal-content@L2292",
         "name": "data-modal-key",
         "value": "xray-snapshot-preview"
       },
@@ -8008,7 +8008,7 @@
         "value": "Скопировать текст снимка в буфер обмена"
       },
       {
-        "locator": "div.modal-content@L2314",
+        "locator": "div.modal-content@L2322",
         "name": "data-modal-key",
         "value": "routing-templates"
       },
@@ -8043,12 +8043,12 @@
         "value": "Заменить текст в редакторе выбранным шаблоном"
       },
       {
-        "locator": "div.modal-content@L2367",
+        "locator": "div.modal-content@L2375",
         "name": "data-modal-key",
         "value": "routing-template-save"
       },
       {
-        "locator": "div.modal-content@L2403",
+        "locator": "div.modal-content@L2411",
         "name": "data-modal-key",
         "value": "routing-template-edit"
       },
@@ -8063,7 +8063,7 @@
         "value": "outbounds-generator-premium-v1"
       },
       {
-        "locator": "div.modal-content.xk-gen-modal@L2456",
+        "locator": "div.modal-content.xk-gen-modal@L2464",
         "name": "data-modal-key",
         "value": "outbounds-generator-premium-v1-content"
       },
@@ -8093,7 +8093,7 @@
         "value": "outbounds-pool-premium-v2"
       },
       {
-        "locator": "div.modal-content@L2724",
+        "locator": "div.modal-content@L2732",
         "name": "data-modal-key",
         "value": "outbounds-pool-premium-v2-content"
       },
@@ -8108,7 +8108,7 @@
         "value": "Количество строк, подготовленных к сохранению"
       },
       {
-        "locator": "div.modal-content.xk-mi-modal@L2823",
+        "locator": "div.modal-content.xk-mi-modal@L2831",
         "name": "data-modal-key",
         "value": "mihomo-import"
       },
@@ -8143,7 +8143,7 @@
         "value": "Вставить YAML в config.yaml (proxies / proxy-providers) и закрыть окно."
       },
       {
-        "locator": "div.modal-content.xk-pt-modal@L2928",
+        "locator": "div.modal-content.xk-pt-modal@L2936",
         "name": "data-modal-key",
         "value": "mihomo-proxy-tools"
       },
@@ -8168,7 +8168,7 @@
         "value": "Заменить выбранный proxy block на подготовленный YAML."
       },
       {
-        "locator": "div.modal-content.xk-hw-modal@L3067",
+        "locator": "div.modal-content.xk-hw-modal@L3075",
         "name": "data-modal-key",
         "value": "mihomo-hwid"
       },
@@ -8218,16 +8218,6 @@
         "value": "Выбор движка редактора: CodeMirror или Monaco (общая настройка)"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L3345",
-        "name": "data-copy",
-        "value": "UQBm03wCEyD99CkEjjrfbtk08WrlgKqfyQGoueAwvhMEYV7L"
-      },
-      {
-        "locator": "button.donate-address.xk-tooltip@L3345",
-        "name": "data-tooltip",
-        "value": "Копировать"
-      },
-      {
         "locator": "button.donate-address.xk-tooltip@L3353",
         "name": "data-copy",
         "value": "UQBm03wCEyD99CkEjjrfbtk08WrlgKqfyQGoueAwvhMEYV7L"
@@ -8239,21 +8229,31 @@
       },
       {
         "locator": "button.donate-address.xk-tooltip@L3361",
+        "name": "data-copy",
+        "value": "UQBm03wCEyD99CkEjjrfbtk08WrlgKqfyQGoueAwvhMEYV7L"
+      },
+      {
+        "locator": "button.donate-address.xk-tooltip@L3361",
+        "name": "data-tooltip",
+        "value": "Копировать"
+      },
+      {
+        "locator": "button.donate-address.xk-tooltip@L3369",
         "name": "data-copy",
         "value": "bc1quhqk7l53vgmm9djyfktl6sflcvk83wgw0zqka6"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L3361",
+        "locator": "button.donate-address.xk-tooltip@L3369",
         "name": "data-tooltip",
         "value": "Копировать"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L3369",
+        "locator": "button.donate-address.xk-tooltip@L3377",
         "name": "data-copy",
         "value": "0x8BA4b535ef7C990B96bc982083f9bFB392134F5e"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L3369",
+        "locator": "button.donate-address.xk-tooltip@L3377",
         "name": "data-tooltip",
         "value": "Копировать"
       },
@@ -8263,7 +8263,7 @@
         "value": "#ui-settings-nav-btn-editor"
       },
       {
-        "locator": "div.modal-content.xk-ui-settings-modal-content@L3388",
+        "locator": "div.modal-content.xk-ui-settings-modal-content@L3396",
         "name": "data-modal-key",
         "value": "ui-settings"
       },
@@ -8373,7 +8373,7 @@
         "value": "mihomo-validation"
       },
       {
-        "locator": "button.modal-close@L3574",
+        "locator": "button.modal-close@L3582",
         "name": "data-dismiss",
         "value": "mihomo-validation"
       },
@@ -8383,7 +8383,7 @@
         "value": "0"
       },
       {
-        "locator": "button.btn-primary@L3617",
+        "locator": "button.btn-primary@L3625",
         "name": "data-dismiss",
         "value": "mihomo-validation"
       },
@@ -8393,47 +8393,47 @@
         "value": "Удалить hostkey для этого host (запись из known_hosts)"
       },
       {
-        "locator": "div.status@L4252",
+        "locator": "div.status@L4260",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L4463",
+        "locator": "li@L4471",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L4464",
+        "locator": "li@L4472",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L4466",
+        "locator": "li@L4474",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L4467",
+        "locator": "li@L4475",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L4468",
+        "locator": "li@L4476",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L4483",
+        "locator": "li@L4491",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L4484",
+        "locator": "li@L4492",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L4485",
+        "locator": "li@L4493",
         "name": "data-fm-lite-hide",
         "value": "1"
       }

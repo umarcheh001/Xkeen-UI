@@ -1783,6 +1783,119 @@ body.panel-page tbody tr:hover {
   background: var(--op-surface-2) !important;
 }
 
+/* Ports and exclusions: natural cards, bounded editors and one compact footer. */
+body.panel-page #view-xkeen .xkeen-files-grid {
+  align-items: start;
+  gap: 10px;
+}
+
+body.panel-page #view-xkeen .xkeen-mini-editor {
+  --xk-mini-editor-min: 156px;
+  --xk-mini-editor-height: clamp(156px, 20dvh, 220px);
+  --xk-mini-editor-max: 220px;
+  align-self: start;
+  display: grid;
+  grid-template-rows: auto auto auto;
+  align-content: start;
+  gap: 0;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 10px;
+}
+
+body.panel-page #view-xkeen .xkeen-mini-editor--ip-list {
+  --xk-mini-editor-min: 168px;
+  --xk-mini-editor-height: clamp(168px, 22dvh, 240px);
+  --xk-mini-editor-max: 240px;
+}
+
+body.panel-page #view-xkeen .xkeen-mini-editor--policy {
+  --xk-mini-editor-min: 220px;
+  --xk-mini-editor-height: clamp(220px, 28dvh, 320px);
+  --xk-mini-editor-max: 320px;
+}
+
+body.panel-page #view-xkeen .xkeen-mini-head {
+  min-height: 0;
+  margin: 0;
+}
+
+body.panel-page #view-xkeen .xkeen-mini-head h3 {
+  margin: 0 0 4px;
+  color: var(--op-text-strong);
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  font-weight: 660;
+}
+
+body.panel-page #view-xkeen .xkeen-mini-head .xk-card-desc {
+  display: block;
+  margin: 0 0 8px;
+  overflow: visible;
+  line-height: 1.4;
+  -webkit-line-clamp: unset;
+}
+
+body.panel-page #view-xkeen .xkeen-mini-editor :is(
+  .xkeen-textarea,
+  .CodeMirror,
+  .xkeen-cm6-host
+) {
+  width: 100%;
+  height: var(--xk-mini-editor-height) !important;
+  min-height: var(--xk-mini-editor-min) !important;
+  max-height: var(--xk-mini-editor-max) !important;
+  flex: none;
+}
+
+body.panel-page #view-xkeen .xkeen-mini-editor .xkeen-textarea {
+  resize: vertical;
+}
+
+body.panel-page #view-xkeen .xkeen-mini-editor :is(
+  .CodeMirror-scroll,
+  .xkeen-cm6-host .cm-editor,
+  .xkeen-cm6-host .cm-scroller
+) {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+}
+
+body.panel-page #view-xkeen .xkeen-mini-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 40px;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--op-border);
+}
+
+body.panel-page #view-xkeen .xkeen-mini-footer .status {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 18px;
+  margin: 0;
+  overflow: hidden;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page #view-xkeen .xkeen-mini-footer .actions {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+}
+
+body.panel-page #view-xkeen .xkeen-mini-footer .actions > button {
+  width: auto;
+  min-width: 88px;
+  flex: 0 0 auto;
+  padding-inline: 10px;
+}
+
 /* Commands: sections and rows, without repeated product pills or tone cards. */
 body.panel-page #view-commands .commands-card {
   padding: 10px;
@@ -1928,6 +2041,13 @@ body.panel-page #view-commands .command-item-prefix {
 /* Logs are terminal-like records, with restrained status color. */
 body.panel-page .log-card {
   margin-top: 0;
+}
+
+/* These workspaces stack the operation journal directly after their primary
+ * card, without the grid/flex gap used by Routing and the other sections. */
+body.panel-page #view-xkeen > .xk-xkeen-log-card,
+body.panel-page #view-xray-logs > .xk-xray-logs-log-card {
+  margin-top: 10px;
 }
 
 body.panel-page .log-header-row {

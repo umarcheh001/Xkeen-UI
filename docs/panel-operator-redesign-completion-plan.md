@@ -2,7 +2,7 @@
 
 Дата аудита: 28 июля 2026 года.
 
-Статус выполнения: **Этапы 0–3 закрыты 28 июля 2026 года; Этапы 4–7 не начаты в рамках этого плана.** Контракт, state matrix и baseline Этапа 0 зафиксированы в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md), канонический snapshot — в [`panel-operator-stage0-inventory.json`](panel-operator-stage0-inventory.json). Система scoped-примитивов и проверки Этапа 1 зафиксированы в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md), контракт шапки, navigation rail и editor-first grid Этапа 2 — в [`panel-operator-stage2-shell-grid.md`](panel-operator-stage2-shell-grid.md), единый accordion/data-row/state contract инспектора Routing Этапа 3 — в [`panel-operator-stage3-routing-cards.md`](panel-operator-stage3-routing-cards.md).
+Статус выполнения: **Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 начат: задача «Порты» закрыта 28 июля 2026 года, остальные задачи Этапа 4 и Этапы 5–7 остаются открыты.** Контракт, state matrix и baseline Этапа 0 зафиксированы в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md), канонический snapshot — в [`panel-operator-stage0-inventory.json`](panel-operator-stage0-inventory.json). Система scoped-примитивов и проверки Этапа 1 зафиксированы в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md), контракт шапки, navigation rail и editor-first grid Этапа 2 — в [`panel-operator-stage2-shell-grid.md`](panel-operator-stage2-shell-grid.md), единый accordion/data-row/state contract инспектора Routing Этапа 3 — в [`panel-operator-stage3-routing-cards.md`](panel-operator-stage3-routing-cards.md), контракт задачи «Порты» Этапа 4 — в [`panel-operator-stage4-ports.md`](panel-operator-stage4-ports.md).
 
 ## Цель и границы
 
@@ -204,20 +204,23 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 
 Критерий завершения: **выполнен**. Открытие любого accordion сохраняет один визуальный язык, а operational information сканируется сверху вниз без capsule-сетки. Контракт и команды проверки описаны в [`panel-operator-stage3-routing-cards.md`](panel-operator-stage3-routing-cards.md). Этап повторно открывается только при нарушении этого контракта.
 
-### Этап 4. Формы, таблицы и data-heavy экраны
+### Этап 4. Формы, таблицы и data-heavy экраны — в работе
 
-Задачи:
+Выполнено 28 июля 2026 года:
 
-- **Порты:** убрать legacy fixed height, дать каждому editor адекватный min/max, перенести save/status в компактный footer row;
-- **Routing rules:** заменить двухколоночные cards на плотные records, сохранить drag/drop, open/closed, disabled и target states;
-- **Balancers:** отделить summary от редактируемых полей, сократить tag cloud, оставить один primary save/apply;
-- **Commands:** убрать command capsules и повторный prefix, использовать строковую модель с предсказуемым action;
-- **Logs:** унифицировать filters, counters, detail и error states;
-- **Files:** завершить toolbar, table rows, selection/focus/drag/drop и empty states;
-- **Mihomo profiles/generator:** применить те же table/form/action primitives;
-- выровнять labels, hints, validation и units в формах подписок; advanced fields показывать progressive disclosure.
+- [x] **Порты:** legacy fixed height перекрыт в scoped workspace-слое, карточки больше не растягиваются до единой высоты, редакторы списков/IP/policy получили диапазоны 156–220 / 168–240 / 220–320 px, status и компактный save собраны в общий footer row. Контракт: [`panel-operator-stage4-ports.md`](panel-operator-stage4-ports.md).
 
-Критерий завершения: нет больших пустых областей, созданных фиксированной высотой; формы имеют один flow и один главный action; данные без визуальной составляющей не показаны плитками.
+Осталось:
+
+- [ ] **Routing rules:** заменить двухколоночные cards на плотные records, сохранить drag/drop, open/closed, disabled и target states;
+- [ ] **Balancers:** отделить summary от редактируемых полей, сократить tag cloud, оставить один primary save/apply;
+- [ ] **Commands:** убрать command capsules и повторный prefix, использовать строковую модель с предсказуемым action;
+- [ ] **Logs:** унифицировать filters, counters, detail и error states;
+- [ ] **Files:** завершить toolbar, table rows, selection/focus/drag/drop и empty states;
+- [ ] **Mihomo profiles/generator:** применить те же table/form/action primitives;
+- [ ] выровнять labels, hints, validation и units в формах подписок; advanced fields показывать progressive disclosure.
+
+Критерий завершения Этапа 4: нет больших пустых областей, созданных фиксированной высотой; формы имеют один flow и один главный action; данные без визуальной составляющей не показаны плитками. Общий критерий пока не выполнен: следующие задачи этапа остаются открытыми.
 
 ### Этап 5. Редакторы и модальные семейства
 
