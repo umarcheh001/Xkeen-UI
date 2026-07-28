@@ -48,6 +48,44 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
   const wireCollapse = (RC.collapse && typeof RC.collapse.wireCollapse === 'function') ? RC.collapse.wireCollapse : function () {};
 
+  function setDatControlBusy(control, busy) {
+    if (!control) return;
+    const active = !!busy;
+    try { control.disabled = active; } catch (e) {}
+    try { control.setAttribute('aria-busy', active ? 'true' : 'false'); } catch (e) {}
+  }
+
+  function setDatStatus(status, text, state, tooltip) {
+    if (!status) return;
+    const nextState = String(state || 'idle');
+    status.textContent = String(text || '');
+    try { status.dataset.state = nextState; } catch (e) {}
+    try {
+      status.classList.remove('is-ok', 'is-warn', 'is-bad', 'is-loading');
+      if (nextState === 'ok') status.classList.add('is-ok');
+      else if (nextState === 'warning') status.classList.add('is-warn');
+      else if (nextState === 'error') status.classList.add('is-bad');
+      else if (nextState === 'loading') status.classList.add('is-loading');
+    } catch (e) {}
+    try { status.setAttribute('aria-busy', nextState === 'loading' ? 'true' : 'false'); } catch (e) {}
+    try {
+      if (tooltip) status.setAttribute('data-tooltip', String(tooltip));
+      else status.removeAttribute('data-tooltip');
+    } catch (e) {}
+  }
+
+  function setDatMetaState(meta, state) {
+    if (!meta) return;
+    const nextState = String(state || 'idle');
+    try { meta.dataset.state = nextState; } catch (e) {}
+    try {
+      meta.classList.remove('is-ok', 'is-warn', 'is-bad');
+      if (nextState === 'ok') meta.classList.add('is-ok');
+      else if (nextState === 'warning') meta.classList.add('is-warn');
+      else if (nextState === 'error') meta.classList.add('is-bad');
+    } catch (e) {}
+  }
+
   function safeKind(kind) {
     return (String(kind || '').toLowerCase() === 'geoip') ? 'geoip' : 'geosite';
   }
@@ -289,7 +327,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const status = $(IDS.datStatus);
     const metaSite = $(IDS.datGeositeMeta);
     const metaIp = $(IDS.datGeoipMeta);
-    if (status) status.textContent = 'Загрузка…';
+    const refreshBtn = $(IDS.datRefresh);
+    setDatControlBusy(refreshBtn, true);
+    setDatStatus(status, 'Загрузка…', 'loading');
 
     const prefs = loadPrefs();
     syncDatCurrentFileLabels(prefs);
@@ -346,11 +386,13 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
             el.textContent = base;
             try { el.removeAttribute('data-tooltip'); } catch (e) {}
           }
+          setDatMetaState(el, err === 'forbidden' ? 'error' : 'warning');
           return;
         }
         const size = fmtSize(it.size);
         const mt = fmtTime(it.mtime);
         el.textContent = `${size}${mt ? ' • ' + mt : ''}`;
+        setDatMetaState(el, 'ok');
       }
 
       renderMeta(pSite, metaSite, (rSite && rSite.candidates) ? rSite.candidates : []);
@@ -363,28 +405,46 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         const installed = !!(gs && (gs.installed === true || (gs.ok === true && gs.installed)));
         const plat = (gs && gs.platform) ? gs.platform : null;
 
-        // Disable release install on unsupported platforms
+        const unsupported = !!(plat && plat.supported === false);
+
+        // Release install is unavailable on unsupported platforms; content
+        // actions are unavailable until xk-geodat is installed.
         try {
           const btnMain = $(IDS.datGeodatInstall);
-          if (btnMain && plat && plat.supported === false) btnMain.disabled = true;
+          if (btnMain) {
+            btnMain.disabled = unsupported;
+            btnMain.setAttribute('aria-disabled', unsupported ? 'true' : 'false');
+          }
+          [$(IDS.datGeositeContent), $(IDS.datGeoipContent)].forEach((button) => {
+            if (!button) return;
+            button.disabled = !installed;
+            button.setAttribute('aria-disabled', installed ? 'false' : 'true');
+          });
         } catch (e) {}
-
-        status.textContent = installed ? 'OK • xk-geodat: ✓' : 'OK • xk-geodat: ✕';
 
         let tip = installed
           ? 'xk-geodat установлен (просмотр содержимого DAT доступен)'
           : 'xk-geodat не установлен (нажмите «xk-geodat» для установки)';
-        if (!installed && plat && plat.supported === false) {
+        if (!installed && unsupported) {
           const note = String(plat.note || '').trim();
           if (note) tip = note;
         } else if (!installed && gs && gs.reason) {
           tip += "\\nПричина: " + String(gs.reason);
         }
-        status.setAttribute('data-tooltip', tip);
+        setDatStatus(
+          status,
+          installed ? 'OK • xk-geodat: ✓' : (unsupported ? 'Недоступно • xk-geodat' : 'OK • xk-geodat: ✕'),
+          installed ? 'ok' : 'warning',
+          tip,
+        );
       }
     } catch (e) {
-      if (status) status.textContent = 'Ошибка';
+      setDatStatus(status, 'Ошибка', 'error');
+      setDatMetaState(metaSite, 'error');
+      setDatMetaState(metaIp, 'error');
       toast('DAT: не удалось получить статусы: ' + String(e && e.message ? e.message : e), true);
+    } finally {
+      setDatControlBusy(refreshBtn, false);
     }
   }
 

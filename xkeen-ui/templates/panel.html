@@ -66,7 +66,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260728e') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260728f') }}">
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -296,7 +296,7 @@
                     </details>
                     <input id="routing-dat-geodat-install-file" type="file" style="display:none" />
                   </div>
-                  <div id="routing-dat-status" class="status"></div>
+                  <div id="routing-dat-status" class="status" role="status" aria-live="polite" data-state="idle"></div>
                 </div>
 
                 <div class="routing-dat-grid">
@@ -383,7 +383,7 @@
 
     <!-- Inbounds mode -->
     <section class="card routing-side-card routing-side-card--inbounds">
-      <div class="commands-header" id="inbounds-header" role="button" tabindex="0">
+      <div class="commands-header" id="inbounds-header" role="button" tabindex="0" aria-controls="inbounds-body" aria-expanded="false">
         <h2>Входящие подключения</h2>
         <span id="inbounds-arrow">▼</span>
       </div>
@@ -440,7 +440,7 @@
         <button id="inbounds-restore-auto-btn" class="btn-icon" aria-label="Restore" data-tooltip="Восстановить inbounds из автобэкапа.">⏪</button>
       </div>
 
-	      <div id="inbounds-status" class="status"></div>
+	      <div id="inbounds-status" class="status" role="status" aria-live="polite"></div>
 	      </div>
 	    </section>
 
@@ -498,13 +498,13 @@
 	          <button id="routing-scenario-apply-btn" class="btn-secondary btn-compact" type="button"
 	                  data-tooltip="Применить выбранный сценарий к текущему routing-файлу и сохранить его.">Применить</button>
 	        </div>
-	        <div id="routing-scenario-status" class="routing-scenario-status" aria-live="polite"></div>
+	        <div id="routing-scenario-status" class="routing-scenario-status" role="status" aria-live="polite"></div>
 	      </div>
 	    </section>
 
 	    <!-- Outbounds VLESS editor -->
 	    <section class="card routing-side-card routing-side-card--outbounds">
-      <div class="commands-header" id="outbounds-header" role="button" tabindex="0">
+      <div class="commands-header" id="outbounds-header" role="button" tabindex="0" aria-controls="outbounds-body" aria-expanded="false">
         <h2>Прокси-серверы</h2>
         <span id="outbounds-arrow">▼</span>
       </div>
@@ -528,7 +528,7 @@
             <div class="xk-pool-kicker">Серверы</div>
             <div class="terminal-menu-title" style="margin:0;">Узлы текущего proxy-фрагмента</div>
             <div id="outbounds-nodes-caption" class="xk-sub-muted">Список появится после загрузки proxy-фрагмента.</div>
-              <div id="outbounds-active-node-status" class="xk-outbounds-active-status is-unknown hidden" aria-live="polite"></div>
+              <div id="outbounds-active-node-status" class="xk-outbounds-active-status is-unknown hidden" role="status" aria-live="polite"></div>
           </div>
           <div class="xk-sub-nodes-head-actions">
             <button type="button" id="outbounds-nodes-pingall" class="btn-secondary btn-compact xk-sub-icon-btn" title="Пинг всех узлов" data-tooltip="Проверить задержку всех proxy-узлов в текущем 04_outbounds-фрагменте." aria-label="Пинг всех узлов" disabled>
@@ -635,7 +635,7 @@
         <button id="outbounds-restore-auto-btn" class="btn-icon" aria-label="Restore" data-tooltip="Восстановить outbounds из автобэкапа.">⏪</button>
       </div>
 
-      <div id="outbounds-status" class="status"></div>
+      <div id="outbounds-status" class="status" role="status" aria-live="polite"></div>
       </div>
     </section>
 
@@ -647,7 +647,7 @@
       </div>
 
       <div id="routing-backups-body" style="display:none;">
-        <p>Каталог бэкапов: <code>{{ backup_dir }}</code></p>
+        <p class="routing-backups-path xk-card-desc">Каталог бэкапов: <code>{{ backup_dir }}</code></p>
 
 
         <div class="xk-backups-toolbar">
@@ -672,7 +672,7 @@
           </tbody>
         </table>
 
-        <div id="backups-status" class="status"></div>
+        <div id="backups-status" class="status" role="status" aria-live="polite"></div>
 
         <div class="hint xk-card-desc">
           <a href="/backups" data-xk-top-nav="1">Открыть страницу истории бэкапов →</a>

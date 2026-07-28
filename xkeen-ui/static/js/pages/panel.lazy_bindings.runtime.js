@@ -707,6 +707,36 @@ export function wirePanelLazyFeatureClicks() {
     }
   }, true);
 
+  document.addEventListener('keydown', (event) => {
+    const keyName = String(event && event.key || '');
+    if (keyName !== 'Enter' && keyName !== ' ') return;
+    const raw = event && event.target && typeof event.target.closest === 'function' ? event.target : null;
+    if (!raw) return;
+
+    const inboundsHeader = raw.closest('#inbounds-header');
+    if (inboundsHeader && !isPanelLazyFeatureReady('inbounds')) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const configShell = getConfigShellApi();
+      if (!configShell) return;
+      Promise.resolve(activateInboundsConfigView({ reason: 'keyboard-interaction' })).then((ready) => {
+        if (ready) replayDeferredClick(inboundsHeader);
+      });
+      return;
+    }
+
+    const outboundsHeader = raw.closest('#outbounds-header');
+    if (outboundsHeader && !isPanelLazyFeatureReady('outbounds')) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const configShell = getConfigShellApi();
+      if (!configShell) return;
+      Promise.resolve(activateOutboundsConfigView({ reason: 'keyboard-interaction' })).then((ready) => {
+        if (ready) replayDeferredClick(outboundsHeader);
+      });
+    }
+  }, true);
+
   document.addEventListener('change', (event) => {
     const raw = event && event.target && typeof event.target.closest === 'function' ? event.target : null;
     if (!raw) return;

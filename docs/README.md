@@ -14,7 +14,7 @@
 
 ## Активные инициативы
 
-- `panel-operator-redesign-completion-plan.md` — план завершения переезда панели на Operator Console; Этапы 0–2 закрыты, Этапы 3–7 остаются открытыми.
+- `panel-operator-redesign-completion-plan.md` — план завершения переезда панели на Operator Console; Этапы 0–3 закрыты, Этапы 4–7 остаются открытыми.
 
 ## Недавние закрытые инициативы
 
@@ -22,6 +22,7 @@
 - `panel-operator-stage0-contract.md` — закрытый Этап 0 редизайна Operator Console: presentation ownership, матрица views/accordions/editors/modals, DOM freeze и dark/light visual baseline.
 - `panel-operator-stage1-primitives.md` — закрытый Этап 1 редизайна Operator Console: канонические слои scoped CSS, mapping примитивов, legacy boundary, геометрия controls/surfaces и dark/light Chromium-contract.
 - `panel-operator-stage2-shell-grid.md` — закрытый Этап 2 редизайна Operator Console: двухзонная шапка, navigation rail, service command row, editor-first grid и responsive dark/light Chromium-contract.
+- `panel-operator-stage3-routing-cards.md` — закрытый Этап 3 редизайна Operator Console: единый accordion/state contract routing inspector, плоские operational blocks и пятиколоночные proxy rows.
 
 ## Сгенерированные артефакты
 

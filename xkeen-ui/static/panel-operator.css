@@ -308,8 +308,7 @@ body.panel-page textarea {
 /* ==========================================================================
  * 3. SHELL
  * ========================================================================== */
-body.panel-page .panel-header,
-html[data-theme="light"] body.panel-page .panel-header {
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .panel-header {
   position: relative;
   z-index: 20;
   display: flex;
@@ -500,8 +499,7 @@ body.panel-page .panel-header .header-actions .theme-toggle-btn .theme-toggle-te
   display: none;
 }
 
-body.panel-page .panel-header .header-actions .theme-toggle-btn .theme-toggle-icon,
-html[data-theme="light"] body.panel-page .panel-header .header-actions .theme-toggle-btn .theme-toggle-icon {
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .panel-header .header-actions .theme-toggle-btn .theme-toggle-icon {
   width: 15px;
   height: 15px;
   border: 0;
@@ -586,8 +584,7 @@ body.panel-page .last-load-chip {
 }
 
 /* Primary navigation behaves like a content rail, not a row of cards. */
-body.panel-page .top-tabs.header-tabs,
-html[data-theme="light"] body.panel-page .top-tabs.header-tabs {
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .top-tabs.header-tabs {
   display: flex;
   align-items: center;
   justify-content: flex-start !important;
@@ -662,8 +659,7 @@ body.panel-page .top-tabs.header-tabs .top-tab-btn:focus-visible {
 }
 
 /* Service and workspace controls share a single restrained command row. */
-body.panel-page .xkeen-ctrl-row,
-html[data-theme="light"] body.panel-page .xkeen-ctrl-row {
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .xkeen-ctrl-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -960,6 +956,7 @@ body.panel-page .dt-switch-label {
   .log-header-actions,
   .fm-header-actions,
   .fm-footer-actions,
+  .xk-backups-toolbar,
   .terminal-toolbar,
   .terminal-footer
 ) {
@@ -1019,7 +1016,7 @@ body.panel-page .dt-switch-label {
   transform: none !important;
 }
 
-:where(body.panel-page) .routing-side-card .links a:hover {
+:where(body.panel-page) .routing-side-card .links a:is(:hover, :focus-visible) {
   background-color: var(--op-surface-3) !important;
   color: var(--op-text-strong) !important;
 }
@@ -1238,8 +1235,7 @@ body.panel-page .commands-header:hover > span:last-child {
 }
 
 /* Inspector is a list of compact rows, not floating cards inside cards. */
-body.panel-page .routing-side-card,
-html[data-theme="light"] body.panel-page .routing-side-card {
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .routing-side-card {
   padding: 0 !important;
   border-radius: var(--op-radius) !important;
   background: var(--op-surface) !important;
@@ -1249,6 +1245,11 @@ html[data-theme="light"] body.panel-page .routing-side-card {
 body.panel-page .routing-side-card > .commands-header {
   min-height: 42px;
   padding: 7px 9px 7px 12px;
+  cursor: pointer;
+}
+
+body.panel-page .routing-side-card > .commands-header:is(:hover, :focus-visible, [aria-expanded="true"]) {
+  background: var(--op-surface-2) !important;
 }
 
 body.panel-page .routing-side-card > [id$="-body"] {
@@ -1258,13 +1259,14 @@ body.panel-page .routing-side-card > [id$="-body"] {
   background: var(--op-surface-2);
 }
 
-body.panel-page .routing-side-card .xk-fragment-row,
-body.panel-page .routing-side-card #outbounds-body .outbounds-hints,
-body.panel-page .routing-scenario-options,
-body.panel-page .routing-dat-item,
-body.panel-page .outbounds-url-row,
-body.panel-page .outbounds-parse-box,
-html[data-theme="light"] body.panel-page .routing-dat-item {
+:is(body.panel-page, html[data-theme="light"] body.panel-page) :is(
+  .routing-side-card .xk-fragment-row,
+  .routing-side-card #outbounds-body .outbounds-hints,
+  .routing-scenario-options,
+  .routing-dat-item,
+  .outbounds-url-row,
+  .outbounds-parse-box
+) {
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
@@ -1296,6 +1298,23 @@ body.panel-page .routing-dat-grid {
   display: block;
 }
 
+body.panel-page .routing-dat-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page .routing-dat-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
 body.panel-page .routing-dat-item {
   padding: 10px 0;
   border-top: 1px solid var(--op-border) !important;
@@ -1308,6 +1327,20 @@ body.panel-page .routing-dat-item:first-child {
 
 body.panel-page .routing-dat-file {
   display: none !important;
+}
+
+body.panel-page :is(.routing-dat-meta, #routing-dat-status) {
+  margin: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  line-height: 1.35;
+  text-align: right;
+  white-space: normal;
 }
 
 /* Keep the duplicate active filename available to runtime code, but not visual. */
@@ -1579,28 +1612,65 @@ body.panel-page .routing-editor-meta {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 5px;
-  margin: 7px 0 0;
+  gap: 0;
+  min-height: 28px;
+  margin: 6px 0 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--op-border);
 }
 
-body.panel-page .routing-editor-badge,
-html[data-theme="light"] body.panel-page .routing-editor-badge {
-  min-height: 23px;
-  padding: 0 7px;
-  border: 1px solid var(--op-border) !important;
-  border-radius: 5px !important;
-  background: var(--op-surface-2) !important;
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .routing-editor-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
   color: var(--op-muted) !important;
   box-shadow: none !important;
-  font-size: calc(9.5px * var(--xk-font-scale, 1));
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
   font-weight: 590;
 }
 
-body.panel-page .routing-editor-badge.is-ok,
-body.panel-page .routing-editor-badge.success {
-  border-color: rgba(77, 182, 139, 0.28) !important;
-  background: var(--op-success-soft) !important;
+body.panel-page .routing-editor-badge + .routing-editor-badge::before {
+  content: "·";
+  margin: 0 7px;
+  color: var(--op-faint);
+}
+
+body.panel-page :is(
+  .routing-editor-badge.is-ok,
+  .routing-editor-badge.success,
+  .routing-dat-meta.is-ok,
+  #routing-dat-status.is-ok,
+  .routing-side-card .status.success,
+  .routing-scenario-status.is-success
+) {
+  border-color: transparent !important;
+  background: transparent !important;
   color: var(--op-success) !important;
+}
+
+body.panel-page :is(
+  .routing-editor-badge.is-bad,
+  .routing-editor-badge.error,
+  .routing-dat-meta.is-bad,
+  #routing-dat-status.is-bad,
+  .routing-side-card .status.error,
+  .routing-scenario-status.is-error
+) {
+  color: var(--op-danger) !important;
+}
+
+body.panel-page :is(
+  .routing-editor-badge.is-warn,
+  .routing-dat-meta.is-warn,
+  #routing-dat-status.is-warn,
+  .routing-side-card .status.warning,
+  .routing-scenario-status.is-warning
+) {
+  color: var(--op-warning) !important;
 }
 
 body.panel-page #routing-status,
@@ -2576,8 +2646,7 @@ body.panel-page .routing-side-card .routing-scenario-options {
   background: var(--op-surface);
 }
 
-body.panel-page .routing-side-card .mode-item,
-html[data-theme="light"] body.panel-page .routing-side-card .mode-item {
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .routing-side-card .mode-item {
   position: relative;
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
@@ -2649,8 +2718,7 @@ html[data-theme="light"] body.panel-page .routing-side-card .mode-item small {
   line-height: 1.42;
 }
 
-body.panel-page .routing-side-card .xk-fragment-row,
-html[data-theme="light"] body.panel-page .routing-side-card .xk-fragment-row {
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .routing-side-card .xk-fragment-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
@@ -2677,8 +2745,7 @@ body.panel-page .outbounds-fragment-summary-file {
   display: none !important;
 }
 
-body.panel-page .routing-side-card .xk-mini-switch,
-html[data-theme="light"] body.panel-page .routing-side-card .xk-mini-switch {
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .routing-side-card .xk-mini-switch {
   width: 100%;
   min-height: 34px;
   margin: 8px 0 0;
@@ -2704,8 +2771,7 @@ body.panel-page .routing-side-card .xk-actions-inline > button {
   min-width: 0;
 }
 
-body.panel-page .routing-side-card--scenario #routing-scenario-badge,
-html[data-theme="light"] body.panel-page .routing-side-card--scenario #routing-scenario-badge {
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .routing-side-card--scenario #routing-scenario-badge {
   min-width: 0;
   height: 24px;
   padding: 0 8px;
@@ -2725,20 +2791,51 @@ body.panel-page .routing-scenario-actions {
   margin-top: 8px;
 }
 
-body.panel-page .routing-scenario-status,
-html[data-theme="light"] body.panel-page .routing-scenario-status {
+body.panel-page .routing-side-card :is(
+  .status,
+  .routing-scenario-status,
+  .xk-outbounds-active-status
+) {
   margin-top: 8px;
-  padding: 7px 9px;
-  border: 1px solid var(--op-border) !important;
-  border-radius: var(--op-radius-sm) !important;
-  background: var(--op-editor) !important;
+  padding: 8px 0 0;
+  border: 0 !important;
+  border-top: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
   color: var(--op-muted) !important;
   box-shadow: none !important;
   font-size: calc(10.5px * var(--xk-font-scale, 1));
+  line-height: 1.35;
 }
 
-body.panel-page .outbounds-fragment-summary,
-html[data-theme="light"] body.panel-page .outbounds-fragment-summary {
+body.panel-page .routing-dat-toolbar #routing-dat-status {
+  margin: 0;
+  padding: 0;
+  border-top: 0 !important;
+}
+
+body.panel-page .routing-side-card--backups :is(
+  .routing-backups-path,
+  .xk-backups-toolbar
+) {
+  margin: 0;
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page .routing-side-card--backups #backups-table {
+  width: 100%;
+  margin: 0;
+  border: 0 !important;
+  border-collapse: collapse;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  table-layout: fixed;
+}
+
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .outbounds-fragment-summary {
   margin: 0 0 8px;
   padding: 0 0 8px;
   border: 0 !important;
@@ -2762,9 +2859,10 @@ body.panel-page .outbounds-fragment-tags code {
   box-shadow: none !important;
 }
 
-body.panel-page .routing-side-card .xk-outbounds-node-panel,
-body.panel-page .routing-side-card .xk-sub-node-panel,
-html[data-theme="light"] body.panel-page .routing-side-card .xk-outbounds-node-panel {
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .routing-side-card :is(
+  .xk-outbounds-node-panel,
+  .xk-sub-node-panel
+) {
   margin: 0 0 8px;
   padding: 0 !important;
   overflow: hidden;
@@ -2786,8 +2884,7 @@ body.panel-page .routing-side-card .xk-sub-panelhead .xk-pool-kicker {
   display: none !important;
 }
 
-body.panel-page .routing-side-card .xk-sub-node-list,
-html[data-theme="light"] body.panel-page .routing-side-card .xk-sub-node-list {
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .routing-side-card .xk-sub-node-list {
   display: block;
   min-height: 0;
   max-height: min(36vh, 320px);
@@ -2799,15 +2896,23 @@ html[data-theme="light"] body.panel-page .routing-side-card .xk-sub-node-list {
   box-shadow: none !important;
 }
 
-body.panel-page .routing-side-card .xk-sub-node-item,
-body.panel-page .routing-side-card .xk-outbounds-node-item,
-html[data-theme="light"] body.panel-page .routing-side-card .xk-sub-node-item {
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .routing-side-card :is(
+  .xk-sub-node-item,
+  .xk-outbounds-node-item
+) {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  grid-template-columns:
+    minmax(90px, 1.25fr)
+    minmax(72px, 0.85fr)
+    minmax(88px, 1fr)
+    auto
+    32px;
+  gap: 6px;
+  align-items: center;
   min-height: 0;
   margin: 0;
-  padding: 8px 9px;
+  padding: 7px 8px;
+  overflow: hidden;
   border: 0 !important;
   border-bottom: 1px solid var(--op-border) !important;
   border-radius: 0 !important;
@@ -2824,37 +2929,101 @@ body.panel-page .routing-side-card .xk-sub-node-item:hover {
   background: var(--op-surface-2) !important;
 }
 
+body.panel-page .routing-side-card .xk-sub-node-item.is-active-route {
+  box-shadow: inset 2px 0 0 var(--op-warning) !important;
+}
+
 body.panel-page .routing-side-card .xk-sub-node-name {
+  align-items: center;
+  min-width: 0;
   color: var(--op-text-strong) !important;
   font-size: calc(11.5px * var(--xk-font-scale, 1));
 }
 
-body.panel-page .routing-side-card .xk-sub-node-main {
-  gap: 4px;
+body.panel-page .routing-side-card :is(.xk-sub-node-main, .xk-sub-node-side) {
+  display: contents;
 }
 
 body.panel-page .routing-side-card .xk-sub-node-meta {
+  align-items: center;
+  min-width: 0;
   gap: 4px;
+}
+
+body.panel-page .routing-side-card .xk-sub-node-protocol {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+body.panel-page .routing-side-card .xk-sub-node-protocol-text {
+  display: block;
+  overflow: hidden;
+  color: var(--op-muted);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page .routing-side-card .xk-sub-node-protocol-text.is-warning {
+  color: var(--op-warning);
+}
+
+body.panel-page .routing-side-card .xk-sub-node-endpoint-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+body.panel-page .routing-side-card .xk-sub-node-health-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 48px;
+}
+
+body.panel-page .routing-side-card .xk-sub-node-actions {
+  justify-content: flex-end;
+  min-width: 32px;
 }
 
 body.panel-page .routing-side-card .xk-sub-node-pill,
 body.panel-page .routing-side-card .xk-sub-node-latency,
 body.panel-page .routing-side-card .xk-pool-summary {
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow: hidden;
   border: 1px solid var(--op-border) !important;
   border-radius: 4px !important;
   background: var(--op-surface-2) !important;
   color: var(--op-muted) !important;
   box-shadow: none !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 body.panel-page .routing-side-card .xk-sub-node-endpoint,
 body.panel-page .routing-side-card .xk-sub-node-detail {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
   color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 body.panel-page .routing-side-card .xk-sub-node-state.is-enabled {
   color: var(--op-success) !important;
   font-weight: 600;
+}
+
+body.panel-page .routing-side-card .xk-sub-node-state.is-disabled {
+  color: var(--op-warning) !important;
 }
 
 /* ==========================================================================
@@ -4239,6 +4408,16 @@ body.panel-page .footer {
   body.panel-page .panel-shell-actions-primary,
   body.panel-page .panel-shell-actions-secondary {
     gap: 2px;
+  }
+
+  body.panel-page .routing-side-card .xk-sub-node-item {
+    grid-template-columns:
+      minmax(56px, 1.2fr)
+      minmax(52px, 0.8fr)
+      minmax(60px, 1fr)
+      minmax(48px, auto)
+      40px;
+    row-gap: 4px;
   }
 
   body.panel-page .routing-dat-actions-inline {

@@ -6695,7 +6695,7 @@
       "xray-snapshot-status",
       "xray-snapshot-title"
     ],
-    "data_attribute_count": 347,
+    "data_attribute_count": 348,
     "data_attributes": [
       {
         "locator": "header.panel-header.panel-header-shell@L78",
@@ -6946,6 +6946,11 @@
         "locator": "summary.xk-card-help-trigger@L286",
         "name": "data-tooltip",
         "value": "О DAT-файлах"
+      },
+      {
+        "locator": "#routing-dat-status",
+        "name": "data-state",
+        "value": "idle"
       },
       {
         "locator": "div.routing-dat-item@L303",
@@ -9587,7 +9592,8 @@
         "xkeen-ui/static/js/pages/config_shell.shared.js"
       ],
       "inbounds-header": [
-        "xkeen-ui/static/js/features/inbounds.js"
+        "xkeen-ui/static/js/features/inbounds.js",
+        "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
       ],
       "inbounds-open-editor-btn": [
         "xkeen-ui/static/js/features/inbounds.js"
@@ -10273,7 +10279,8 @@
         "xkeen-ui/static/js/features/outbounds.js"
       ],
       "outbounds-header": [
-        "xkeen-ui/static/js/features/outbounds.js"
+        "xkeen-ui/static/js/features/outbounds.js",
+        "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
       ],
       "outbounds-nodes-caption": [
         "xkeen-ui/static/js/features/outbounds.js"

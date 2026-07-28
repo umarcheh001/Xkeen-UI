@@ -2,7 +2,7 @@
 
 Дата аудита: 28 июля 2026 года.
 
-Статус выполнения: **Этапы 0–2 закрыты 28 июля 2026 года; Этапы 3–7 не начаты в рамках этого плана.** Контракт, state matrix и baseline Этапа 0 зафиксированы в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md), канонический snapshot — в [`panel-operator-stage0-inventory.json`](panel-operator-stage0-inventory.json). Система scoped-примитивов и проверки Этапа 1 зафиксированы в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md), контракт шапки, navigation rail и editor-first grid Этапа 2 — в [`panel-operator-stage2-shell-grid.md`](panel-operator-stage2-shell-grid.md).
+Статус выполнения: **Этапы 0–3 закрыты 28 июля 2026 года; Этапы 4–7 не начаты в рамках этого плана.** Контракт, state matrix и baseline Этапа 0 зафиксированы в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md), канонический snapshot — в [`panel-operator-stage0-inventory.json`](panel-operator-stage0-inventory.json). Система scoped-примитивов и проверки Этапа 1 зафиксированы в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md), контракт шапки, navigation rail и editor-first grid Этапа 2 — в [`panel-operator-stage2-shell-grid.md`](panel-operator-stage2-shell-grid.md), единый accordion/data-row/state contract инспектора Routing Этапа 3 — в [`panel-operator-stage3-routing-cards.md`](panel-operator-stage3-routing-cards.md).
 
 ## Цель и границы
 
@@ -91,7 +91,7 @@
 
 ### Экраны, которым нужен отдельный проход
 
-- **Routing Xray:** shell уже близок к направлению, но inspector links, GeoDAT actions, outbounds nodes, статусы редактора и журналы ещё используют разные языки компонентов.
+- **Routing Xray:** shell и inspector приведены к общим accordion/data-row/state primitives; отдельный проход всё ещё нужен routing rules, журналам и сложным формам следующих этапов.
 - **Routing Mihomo:** перенести тот же editor/workbench contract, не создавать отдельный набор геометрии.
 - **Порты и исключения:** убрать фиксированное выравнивание высот карточек; высоту редактора определять содержимым в заданных min/max пределах; save сделать обычным action-row.
 - **Команды:** заменить сетку capsule-команд на компактные строки/ячейки с названием команды, назначением и действием; не повторять префикс XKeen в каждой строке.
@@ -188,19 +188,21 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 
 Критерий завершения: **выполнен**. Шапка и сетка одинаково читаются в обеих темах, не дают page overflow и не конкурируют с редактором по контрасту или площади. Статический и Chromium-контракты описаны в [`panel-operator-stage2-shell-grid.md`](panel-operator-stage2-shell-grid.md). Этап повторно открывается только при нарушении этого контракта.
 
-### Этап 3. Инспектор Routing и компактные data rows
+### Этап 3. Пересобрать routing cards и operational blocks — закрыт
 
-Задачи:
+Выполнено 28 июля 2026 года:
 
-- привести GeoIP/GeoSite, inbounds, scenario, outbounds, backups и help к одному accordion contract;
-- заменить help link pills на строки с разделителями и одним hover/focus state;
-- унифицировать disabled/loading/OK/error состояния GeoDAT controls;
-- выстроить outbounds nodes как строки с колонками name/protocol/endpoint/latency/action;
-- убрать «карточку внутри карточки» в scenario options, backups и subscription fragments;
-- проверить уже скрытые повторы имени файла и описаний: runtime nodes остаются attached и hidden;
-- унифицировать status/meta строки под редактором, не превращая каждую в отдельный badge.
+- [x] GeoIP/GeoSite, inbounds, scenario, outbounds, backups и help используют единый accordion contract: один header/body pattern, `aria-controls`, синхронный `aria-expanded`, Enter/Space и одинаковый expanded surface;
+- [x] help pills заменены плоскими строками с разделителями и единым hover/focus state;
+- [x] GeoDAT controls получили явные disabled/loading/OK/warning/error states, `aria-busy`, live status и восстановление исходного disabled-state после операции;
+- [x] outbounds nodes собраны в пять колонок name/protocol/endpoint/latency+state/action; полное имя узла и runtime hooks сохранены;
+- [x] scenario options, backups table, subscription fragments и GeoDAT records больше не выглядят вложенными карточками;
+- [x] повторы активного файла и вспомогательные runtime nodes остаются attached и скрываются только presentation-слоем;
+- [x] status/meta строки используют общий плоский primitive и semantic color только для состояния;
+- [x] selector layer уплотнён до 885 definitions / 720 unique и остаётся внутри канонической секции workspaces без добавочного блока после responsive;
+- [x] статический и Chromium-контракты проверяют обе темы, keyboard accordion flow, GeoDAT busy/state flow, пять колонок proxy row и отсутствие horizontal overflow на 390 px.
 
-Критерий завершения: открытие любого accordion не меняет визуальный язык; информация сканируется сверху вниз без capsule-сетки.
+Критерий завершения: **выполнен**. Открытие любого accordion сохраняет один визуальный язык, а operational information сканируется сверху вниз без capsule-сетки. Контракт и команды проверки описаны в [`panel-operator-stage3-routing-cards.md`](panel-operator-stage3-routing-cards.md). Этап повторно открывается только при нарушении этого контракта.
 
 ### Этап 4. Формы, таблицы и data-heavy экраны
 

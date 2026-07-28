@@ -23,6 +23,37 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   const toast = (typeof C.toast === 'function') ? C.toast : function () {};
   const confirmModal = (typeof C.confirmModal === 'function') ? C.confirmModal : async () => true;
 
+  function setDatActionBusy(control, busy) {
+    if (!control) return;
+    const active = !!busy;
+    try {
+      if (active) {
+        control.dataset.xkDisabledBeforeBusy = control.disabled ? '1' : '0';
+        control.disabled = true;
+      } else {
+        control.disabled = control.dataset.xkDisabledBeforeBusy === '1';
+        delete control.dataset.xkDisabledBeforeBusy;
+      }
+    } catch (e) {}
+    try { control.setAttribute('aria-busy', active ? 'true' : 'false'); } catch (e) {}
+  }
+
+  function setDatOperationStatus(text, state) {
+    const status = $(IDS.datStatus);
+    if (!status) return;
+    const nextState = String(state || 'idle');
+    status.textContent = String(text || '');
+    try { status.dataset.state = nextState; } catch (e) {}
+    try {
+      status.classList.remove('is-ok', 'is-warn', 'is-bad', 'is-loading');
+      if (nextState === 'ok') status.classList.add('is-ok');
+      else if (nextState === 'warning') status.classList.add('is-warn');
+      else if (nextState === 'error') status.classList.add('is-bad');
+      else if (nextState === 'loading') status.classList.add('is-loading');
+    } catch (e) {}
+    try { status.setAttribute('aria-busy', nextState === 'loading' ? 'true' : 'false'); } catch (e) {}
+  }
+
   const prefsMod = (DAT && DAT.prefs) ? DAT.prefs : {};
   const normalizePath = (typeof prefsMod.normalizePath === 'function')
     ? prefsMod.normalizePath
@@ -163,8 +194,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
     const btnMain = $(IDS.datGeodatInstall);
     const btnFile = $(IDS.datGeodatInstallFileBtn);
-    try { if (btnMain) btnMain.disabled = true; } catch (e) {}
-    try { if (btnFile) btnFile.disabled = true; } catch (e) {}
+    setDatActionBusy(btnMain, true);
+    setDatActionBusy(btnFile, true);
+    setDatOperationStatus('Установка xk-geodat…', 'loading');
 
     try {
       if (XK && XK.ui && typeof XK.ui.showGlobalXkeenSpinner === 'function') {
@@ -214,6 +246,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         if (hint) msg += ' ' + hint;
         if (reason && (!hint || hint.indexOf(reason) === -1)) msg += ' Причина: ' + reason;
         toast(msg, true);
+        setDatOperationStatus('xk-geodat не установлен', 'warning');
       }
 
       // Let card refresh if available.
@@ -224,6 +257,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
       return data;
     } catch (e) {
+      setDatOperationStatus('Ошибка установки xk-geodat', 'error');
       toast('xk-geodat: ошибка установки: ' + String(e && e.message ? e.message : e), true);
       return { ok: false, error: String(e && e.message ? e.message : e) };
     } finally {
@@ -232,8 +266,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
           XK.ui.hideGlobalXkeenSpinner();
         }
       } catch (e) {}
-      try { if (btnMain) btnMain.disabled = false; } catch (e) {}
-      try { if (btnFile) btnFile.disabled = false; } catch (e) {}
+      setDatActionBusy(btnMain, false);
+      setDatActionBusy(btnFile, false);
     }
   }
 
@@ -262,6 +296,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       });
       if (!ok) return;
 
+      const uploadBtn = $(k === 'geosite' ? IDS.datGeositeUpload : IDS.datGeoipUpload);
+      setDatActionBusy(uploadBtn, true);
+      setDatOperationStatus(`Загрузка ${k}…`, 'loading');
       try {
         let r = await upload(path, file, false);
         if (r.resp && r.resp.status === 409) {
@@ -286,7 +323,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
           if (refresh) refresh();
         } catch (e) {}
       } catch (e) {
+        setDatOperationStatus(`Ошибка загрузки ${k}`, 'error');
         toast('Upload failed: ' + String(e && e.message ? e.message : e), true);
+      } finally {
+        setDatActionBusy(uploadBtn, false);
       }
     };
 
@@ -326,6 +366,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     });
     if (!ok) return;
 
+    const updateBtn = $(k === 'geosite' ? IDS.datGeositeUpdate : IDS.datGeoipUpdate);
+    setDatActionBusy(updateBtn, true);
+    setDatOperationStatus(`Обновление ${k}…`, 'loading');
     try {
       await update(k, url, path);
       toast('DAT обновлён: ' + path, false);
@@ -334,7 +377,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         if (refresh) refresh();
       } catch (e) {}
     } catch (e) {
+      setDatOperationStatus(`Ошибка обновления ${k}`, 'error');
       toast('Update failed: ' + String(e && e.message ? e.message : e), true);
+    } finally {
+      setDatActionBusy(updateBtn, false);
     }
   }
 

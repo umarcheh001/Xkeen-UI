@@ -57,6 +57,21 @@ let inboundsModuleApi = null;
       return document.getElementById(id);
     }
 
+    function setInboundsStatus(statusEl, message, tone) {
+      if (!statusEl) return;
+      const kind = String(tone || 'info').trim().toLowerCase();
+      const state = kind === 'success' ? 'ok' : (kind === 'loading' ? 'loading' : (kind === 'warning' || kind === 'error' ? kind : ''));
+      try { statusEl.textContent = String(message || ''); } catch (e) {}
+      try {
+        statusEl.classList.toggle('success', kind === 'success');
+        statusEl.classList.toggle('warning', kind === 'warning');
+        statusEl.classList.toggle('error', kind === 'error');
+        if (state) statusEl.dataset.state = state;
+        else delete statusEl.dataset.state;
+        statusEl.setAttribute('aria-busy', kind === 'loading' ? 'true' : 'false');
+      } catch (e2) {}
+    }
+
     function getConfigShellApi() {
       return getXkeenUiConfigShellApi();
     }
@@ -395,15 +410,39 @@ let inboundsModuleApi = null;
       if (!header) return;
       if (header.dataset && header.dataset.xkeenWiredHeader === '1') return;
 
-      header.addEventListener('click', (e) => {
+      const activate = (e) => {
         // allow clicking on buttons inside header without toggling
         const target = e.target;
         if (target && (target.closest && target.closest('button, a, input, label, select, textarea'))) return;
         e.preventDefault();
         handler();
+      };
+
+      header.addEventListener('click', activate);
+      header.addEventListener('keydown', (e) => {
+        const key = String(e && e.key || '');
+        if (key !== 'Enter' && key !== ' ') return;
+        activate(e);
       });
 
       if (header.dataset) header.dataset.xkeenWiredHeader = '1';
+    }
+
+    function applyCollapseState(open) {
+      const header = $('inbounds-header');
+      const body = $('inbounds-body');
+      const arrow = $('inbounds-arrow');
+      if (!body || !arrow) return;
+
+      const expanded = !!open;
+      body.style.display = expanded ? 'block' : 'none';
+      arrow.textContent = expanded ? '▲' : '▼';
+      try {
+        if (header) {
+          header.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+          if (header.dataset) header.dataset.xkCollapseOpen = expanded ? '1' : '0';
+        }
+      } catch (e) {}
     }
 
     function setCollapsedFromStorage() {
@@ -422,8 +461,7 @@ let inboundsModuleApi = null;
         // ignore
       }
 
-      body.style.display = open ? 'block' : 'none';
-      arrow.textContent = open ? '▲' : '▼';
+      applyCollapseState(open);
     }
 
     function toggleCard() {
@@ -432,8 +470,7 @@ let inboundsModuleApi = null;
       if (!body || !arrow) return;
 
       const willOpen = body.style.display === 'none';
-      body.style.display = willOpen ? 'block' : 'none';
-      arrow.textContent = willOpen ? '▲' : '▼';
+      applyCollapseState(willOpen);
 
       try {
         if (window.localStorage) {
@@ -781,7 +818,7 @@ let inboundsModuleApi = null;
         const url = file ? ('/api/inbounds?file=' + encodeURIComponent(file)) : '/api/inbounds';
         const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) {
-          if (statusEl && !silent) statusEl.textContent = 'Не удалось загрузить inbounds.';
+          if (statusEl && !silent) setInboundsStatus(statusEl, 'Не удалось загрузить inbounds.', 'error');
           return;
         }
         const data = await res.json().catch(() => ({}));
@@ -809,15 +846,15 @@ let inboundsModuleApi = null;
         if (statusEl && !silent) {
           const extrasShort = formatExtrasShort(lastExtrasTags);
           if (mode === 'custom') {
-            statusEl.textContent = extrasShort
+            setInboundsStatus(statusEl, extrasShort
               ? ('Обнаружен пользовательский конфиг (не совпадает с пресетами). Пользовательские секции: ' + extrasShort + '.')
-              : 'Обнаружен пользовательский конфиг (не совпадает с пресетами).';
+              : 'Обнаружен пользовательский конфиг (не совпадает с пресетами).', 'warning');
           } else if (mode) {
-            statusEl.textContent = extrasShort
+            setInboundsStatus(statusEl, extrasShort
               ? ('Текущий режим: ' + mode + '. Есть пользовательские секции: ' + extrasShort + '.')
-              : ('Текущий режим: ' + mode);
+              : ('Текущий режим: ' + mode), extrasShort ? 'warning' : 'info');
           } else {
-            statusEl.textContent = 'Режим не определён (файл отсутствует или повреждён).';
+            setInboundsStatus(statusEl, 'Режим не определён (файл отсутствует или повреждён).', 'warning');
           }
         }
 
@@ -829,7 +866,7 @@ let inboundsModuleApi = null;
         } catch (e) {}
       } catch (e) {
         console.error(e);
-        if (statusEl && !silent) statusEl.textContent = 'Ошибка загрузки inbounds.';
+        if (statusEl && !silent) setInboundsStatus(statusEl, 'Ошибка загрузки inbounds.', 'error');
       } finally {
         publishLifecycleState({ loading: false, initialized: true }, 'inbounds-load-finished');
       }
@@ -850,7 +887,7 @@ let inboundsModuleApi = null;
           if (restart) {
             // avoid redundant restarts when user clicks the already active mode
             if (currentMode === r.value && !autoSaveInFlight) {
-              if (statusEl) statusEl.textContent = 'Текущий режим: ' + currentMode;
+              if (statusEl) setInboundsStatus(statusEl, 'Текущий режим: ' + currentMode, 'info');
               try { syncDirtyState(false); } catch (e) {}
               return;
             }
@@ -867,7 +904,7 @@ let inboundsModuleApi = null;
 
           // If autorestart is disabled: only mark selection as pending.
           if (statusEl) {
-            statusEl.textContent = 'Выбрано: ' + r.value + '. Нажмите "Save inbounds" чтобы применить.';
+            setInboundsStatus(statusEl, 'Выбрано: ' + r.value + '. Нажмите "Save inbounds" чтобы применить.', 'warning');
           }
           try { syncDirtyState(); } catch (e) {}
         });
@@ -884,7 +921,7 @@ let inboundsModuleApi = null;
       let streamedRestart = false;
       try {
         if (!selected) {
-          if (statusEl) statusEl.textContent = 'Выбери режим перед сохранением.';
+          if (statusEl) setInboundsStatus(statusEl, 'Выбери режим перед сохранением.', 'warning');
           return;
         }
 
@@ -904,7 +941,7 @@ let inboundsModuleApi = null;
             config: lastConfig,
           });
           if (!opts) {
-            if (statusEl) statusEl.textContent = 'Отменено.';
+            if (statusEl) setInboundsStatus(statusEl, 'Отменено.', 'info');
             // Revert selection to the last known backend mode when user cancels.
             setModeRadio(currentMode);
             try { syncDirtyState(false); } catch (e) {}
@@ -930,7 +967,7 @@ let inboundsModuleApi = null;
 
           if (res.ok && data && data.ok) {
             let msg = 'Режим сохранён: ' + (data.mode || mode) + '.';
-            if (statusEl) statusEl.textContent = msg;
+            if (statusEl) setInboundsStatus(statusEl, msg, 'success');
 
             // keep currentMode in sync
             currentMode = (data && data.mode) ? data.mode : mode;
@@ -954,12 +991,12 @@ let inboundsModuleApi = null;
 
             if (restart && jobId) {
               streamedRestart = true;
-              if (statusEl) statusEl.textContent = 'Режим сохранён. Перезапуск xkeen...';
+              if (statusEl) setInboundsStatus(statusEl, 'Режим сохранён. Перезапуск xkeen...', 'loading');
               const result = await streamRestartJob(jobId, 'xkeen -restart (job)...\n');
               const ok = !!(result && result.ok);
               if (ok) {
                 msg = 'Режим сохранён: ' + (data.mode || mode) + '. xkeen перезапущен.';
-                if (statusEl) statusEl.textContent = msg;
+                if (statusEl) setInboundsStatus(statusEl, msg, 'success');
                 try { toastXkeen(msg, 'success'); } catch (e) {}
               } else {
                 const err = (result && (result.error || result.message)) ? String(result.error || result.message) : '';
@@ -972,7 +1009,7 @@ let inboundsModuleApi = null;
                   try { restartLog.append('\n' + detail + '\n'); } catch (e) {}
                 }
                 msg = 'Режим сохранён, но перезапуск xkeen завершился с ошибкой.';
-                if (statusEl) statusEl.textContent = msg;
+                if (statusEl) setInboundsStatus(statusEl, msg, 'warning');
                 try { toastXkeen(msg, 'error'); } catch (e2) {}
               }
             } else {
@@ -980,13 +1017,13 @@ let inboundsModuleApi = null;
             }
           } else {
             const msg = 'Save error: ' + ((data && data.error) || res.status);
-            if (statusEl) statusEl.textContent = msg;
+            if (statusEl) setInboundsStatus(statusEl, msg, 'error');
             try { if (typeof showToast === 'function') showToast(msg, true); } catch (e) {}
           }
         } catch (e) {
           console.error(e);
           const msg = 'Ошибка сохранения режима inbounds.';
-          if (statusEl) statusEl.textContent = msg;
+          if (statusEl) setInboundsStatus(statusEl, msg, 'error');
           try { if (typeof showToast === 'function') showToast(msg, true); } catch (e2) {}
         } finally {
           if (!streamedRestart) {
@@ -1023,7 +1060,7 @@ let inboundsModuleApi = null;
 
         if (res.ok && data && data.ok) {
           const msg = 'Бэкап ' + fileLabel + ' создан: ' + (data.filename || '');
-          if (statusEl) statusEl.textContent = msg;
+          if (statusEl) setInboundsStatus(statusEl, msg, 'success');
           if (backupsStatusEl) backupsStatusEl.textContent = '';
           try { if (typeof showToast === 'function') showToast(msg, false); } catch (e) {}
           try {
@@ -1035,13 +1072,13 @@ let inboundsModuleApi = null;
           } catch (e) {}
         } else {
           const msg = 'Ошибка создания бэкапа ' + fileLabel + ': ' + ((data && data.error) || 'неизвестная ошибка');
-          if (statusEl) statusEl.textContent = msg;
+          if (statusEl) setInboundsStatus(statusEl, msg, 'error');
           try { if (typeof showToast === 'function') showToast(msg, true); } catch (e) {}
         }
       } catch (e) {
         console.error(e);
         const msg = 'Ошибка создания бэкапа ' + fileLabel + '.';
-        if (statusEl) statusEl.textContent = msg;
+        if (statusEl) setInboundsStatus(statusEl, msg, 'error');
         try { if (typeof showToast === 'function') showToast(msg, true); } catch (e2) {}
       }
     }

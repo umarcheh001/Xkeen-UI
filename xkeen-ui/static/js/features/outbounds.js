@@ -77,6 +77,21 @@ let outboundsModuleApi = null;
       return document.getElementById(id);
     }
 
+    function setOutboundsStatus(statusEl, message, tone) {
+      if (!statusEl) return;
+      const kind = String(tone || 'info').trim().toLowerCase();
+      const state = kind === 'success' ? 'ok' : (kind === 'loading' ? 'loading' : (kind === 'warning' || kind === 'error' ? kind : ''));
+      try { statusEl.textContent = String(message || ''); } catch (e) {}
+      try {
+        statusEl.classList.toggle('success', kind === 'success');
+        statusEl.classList.toggle('warning', kind === 'warning');
+        statusEl.classList.toggle('error', kind === 'error');
+        if (state) statusEl.dataset.state = state;
+        else delete statusEl.dataset.state;
+        statusEl.setAttribute('aria-busy', kind === 'loading' ? 'true' : 'false');
+      } catch (e2) {}
+    }
+
     function latencyJobSleep(ms) {
       return new Promise((resolve) => {
         try { setTimeout(resolve, Math.max(0, Number(ms) || 0)); } catch (e) { resolve(); }
@@ -1081,6 +1096,7 @@ let outboundsModuleApi = null;
         const protocol = escapeHtml(String(node && node.protocol ? node.protocol : ''));
         const transport = escapeHtml(String(node && node.transport ? node.transport : ''));
         const security = escapeHtml(String(node && node.security ? node.security : ''));
+        const protocolSummary = [protocol, transport, security].filter(Boolean).join(' · ') || '—';
         const host = escapeHtml(String(node && node.host ? node.host : ''));
         const port = escapeHtml(String(node && (node.port || node.port === 0) ? node.port : ''));
         const detail = escapeHtml(String(node && node.detail ? node.detail : ''));
@@ -1098,26 +1114,24 @@ let outboundsModuleApi = null;
           : subsNodeLatencyTooltip(latencyEntry, pingBusy, canPing));
         const latencyClass = showRuntimeActiveInsteadOfFail ? 'is-active-route' : subsNodeLatencyTone(latencyEntry, pingBusy, canPing);
         const activeTooltip = isActiveRoute ? escapeHtml(outboundsActiveRuntimeText()) : '';
-        const activePill = isActiveRoute
-          ? '<span class="xk-sub-node-pill xk-sub-node-pill-active-route">сейчас</span>'
-          : '';
         const finalStateLabel = isActiveRoute ? 'сейчас' : stateLabel;
         rows.push(`
           <div class="xk-sub-node-item xk-outbounds-node-item is-enabled ${isActiveRoute ? 'is-active-route' : ''}" data-node-key="${key}" ${activeTooltip ? `title="${activeTooltip}"` : ''}>
             <div class="xk-sub-node-main">
               <div class="xk-sub-node-name">${countryBadge}<span class="xk-sub-node-title-text">${name}</span></div>
-              <div class="xk-sub-node-meta">
-                ${protocol ? `<span class="xk-sub-node-pill">${protocol}</span>` : ''}
-                ${transport ? `<span class="xk-sub-node-pill xk-sub-node-pill-transport">${transport}</span>` : ''}
-                ${security ? `<span class="xk-sub-node-pill xk-sub-node-pill-security">${security}</span>` : ''}
-                ${activePill}
-                ${endpoint ? `<span class="xk-sub-node-endpoint">${endpoint}</span>` : ''}
+              <div class="xk-sub-node-meta xk-sub-node-protocol" aria-label="Протокол" data-tooltip="${protocolSummary}">
+                <span class="xk-sub-node-protocol-text">${protocolSummary}</span>
               </div>
-              ${detail ? `<div class="xk-sub-node-detail">${detail}</div>` : ''}
+              <div class="xk-sub-node-endpoint-cell" aria-label="Endpoint">
+                ${endpoint ? `<span class="xk-sub-node-endpoint">${endpoint}</span>` : '<span class="xk-sub-node-endpoint">—</span>'}
+                ${detail ? `<span class="xk-sub-node-detail">${detail}</span>` : ''}
+              </div>
             </div>
             <div class="xk-sub-node-side">
-              <div class="xk-sub-node-latency ${latencyClass}" data-tooltip="${latencyTooltip}">${latencyLabel}</div>
-              <div class="xk-sub-node-state is-enabled ${isActiveRoute ? 'is-active-route' : ''}">${finalStateLabel}</div>
+              <div class="xk-sub-node-health-cell">
+                <div class="xk-sub-node-latency ${latencyClass}" data-tooltip="${latencyTooltip}">${latencyLabel}</div>
+                <div class="xk-sub-node-state is-enabled ${isActiveRoute ? 'is-active-route' : ''}">${finalStateLabel}</div>
+              </div>
               <div class="xk-sub-node-actions">
                 <button type="button" class="btn-secondary btn-compact xk-sub-node-ping xk-outbounds-node-ping ${pingBusy ? 'is-busy' : ''}" data-node-key="${key}" title="Проверить задержку" data-tooltip="${escapeHtml(canPing ? 'Проверить задержку этого proxy-узла.' : 'Узел нельзя проверить: не найден tag.')}" aria-label="Проверить задержку" ${canPing ? '' : 'disabled'}>
                   <span class="xk-sub-icon-glyph" aria-hidden="true">⏱</span>
@@ -1164,7 +1178,7 @@ let outboundsModuleApi = null;
       _outboundsNodePingState[pendingKey] = true;
       try { outboundsRenderNodeList(); } catch (e) {}
       const statusEl = $('outbounds-status');
-      if (statusEl) statusEl.textContent = 'Проверяю задержку proxy-узла…';
+      if (statusEl) setOutboundsStatus(statusEl, 'Проверяю задержку proxy-узла…', 'loading');
       try {
         const res = await fetch(outboundsNodesApiUrl('/ping'), {
           method: 'POST',
@@ -1175,20 +1189,20 @@ let outboundsModuleApi = null;
         if (data && data.entry) _outboundsNodeLatency[key] = data.entry;
         if (!res.ok || !data || data.ok === false) {
           const msg = String((data && (data.error || data.message)) || 'Не удалось проверить задержку proxy-узла.');
-          if (statusEl) statusEl.textContent = msg;
+          if (statusEl) setOutboundsStatus(statusEl, msg, 'error');
           try { toastXkeen(msg, 'error'); } catch (e2) {}
           return false;
         }
         const delay = Number(data.delay_ms || (data.entry && data.entry.delay_ms));
         if (statusEl) {
-          statusEl.textContent = Number.isFinite(delay) && delay >= 0
+          setOutboundsStatus(statusEl, Number.isFinite(delay) && delay >= 0
             ? `Задержка proxy-узла: ${Math.round(delay)} ms.`
-            : 'Проверка proxy-узла завершена.';
+            : 'Проверка proxy-узла завершена.', 'success');
         }
         return true;
       } catch (e) {
         const msg = 'Ошибка проверки задержки: ' + String(e && e.message ? e.message : e);
-        if (statusEl) statusEl.textContent = msg;
+        if (statusEl) setOutboundsStatus(statusEl, msg, 'error');
         try { toastXkeen(msg, 'error'); } catch (e2) {}
         return false;
       } finally {
@@ -1203,7 +1217,7 @@ let outboundsModuleApi = null;
         .filter((node) => node && node.key && node.tag);
       const statusEl = $('outbounds-status');
       if (!nodes.length) {
-        if (statusEl) statusEl.textContent = 'В текущем outbounds-фрагменте нет proxy-узлов для проверки.';
+        if (statusEl) setOutboundsStatus(statusEl, 'В текущем outbounds-фрагменте нет proxy-узлов для проверки.', 'warning');
         return false;
       }
 
@@ -1212,7 +1226,7 @@ let outboundsModuleApi = null;
       pendingKeys.forEach((key) => { _outboundsNodePingState[key] = true; });
       outboundsUpdatePingAllBtnState();
       try { outboundsRenderNodeList(); } catch (e) {}
-      if (statusEl) statusEl.textContent = `Проверяю задержку: ${nodes.length} proxy-узлов…`;
+      if (statusEl) setOutboundsStatus(statusEl, `Проверяю задержку: ${nodes.length} proxy-узлов…`, 'loading');
 
       try {
         const data = await postLatencyProbe(outboundsNodesApiUrl('/ping-bulk'), {
@@ -1222,7 +1236,7 @@ let outboundsModuleApi = null;
           onPoll: (job) => {
             const status = String(job && job.status || '').trim();
             if (statusEl && (status === 'queued' || status === 'running')) {
-              statusEl.textContent = `Проверяю задержку в фоне: ${nodes.length} proxy-узлов…`;
+              setOutboundsStatus(statusEl, `Проверяю задержку в фоне: ${nodes.length} proxy-узлов…`, 'loading');
             }
           },
         });
@@ -1239,14 +1253,14 @@ let outboundsModuleApi = null;
         const failed = Number(data.failed_count || 0);
         const total = Number(data.requested || nodes.length);
         if (statusEl) {
-          statusEl.textContent = failed <= 0
+          setOutboundsStatus(statusEl, failed <= 0
             ? `Проверено proxy-узлов: ${ok}.`
-            : `Проверено ${ok} из ${total}, ошибок: ${failed}.`;
+            : `Проверено ${ok} из ${total}, ошибок: ${failed}.`, failed <= 0 ? 'success' : 'warning');
         }
         return failed <= 0;
       } catch (e) {
         const msg = 'Ошибка массовой проверки задержки: ' + String(e && e.message ? e.message : e);
-        if (statusEl) statusEl.textContent = msg;
+        if (statusEl) setOutboundsStatus(statusEl, msg, 'error');
         try { toastXkeen(msg, 'error'); } catch (e2) {}
         return false;
       } finally {
@@ -1400,11 +1414,18 @@ let outboundsModuleApi = null;
       if (!header) return;
       if (header.dataset && header.dataset.xkeenWiredHeader === '1') return;
 
-      header.addEventListener('click', (e) => {
+      const activate = (e) => {
         const target = e.target;
         if (target && (target.closest && target.closest('button, a, input, label, select, textarea'))) return;
         e.preventDefault();
         handler();
+      };
+
+      header.addEventListener('click', activate);
+      header.addEventListener('keydown', (e) => {
+        const key = String(e && e.key || '');
+        if (key !== 'Enter' && key !== ' ') return;
+        activate(e);
       });
 
       if (header.dataset) header.dataset.xkeenWiredHeader = '1';
@@ -1704,13 +1725,7 @@ let outboundsModuleApi = null;
 
     function nodeDisplayNameWithCountry(node, fallback) {
       const raw = String((node && (node.name || node.tag)) || fallback || 'node').trim() || String(fallback || 'node');
-      const info = nodeCountryFlagInfo(node);
-      let name = stripLeadingFlagTokens(raw);
-      if (info && info.code) {
-        name = stripLeadingCountryCode(name, info.code);
-      }
-      name = String(name || '').replace(/^[\s._:-]+/, '').trim();
-      return name || raw;
+      return raw;
     }
 
     const COUNTRY_FLAG_SVG = Object.freeze({
@@ -2557,13 +2572,13 @@ let outboundsModuleApi = null;
       const secSel = $('outbounds-security');
       if (!input) return;
       if (isOutboundsSummaryFragmentMode()) {
-        if (statusEl) statusEl.textContent = 'Фрагмент со списком прокси нельзя нормализовать как одну ссылку. Откройте JSON-редактор, «Пул прокси» или «Подписки».';
+        if (statusEl) setOutboundsStatus(statusEl, 'Фрагмент со списком прокси нельзя нормализовать как одну ссылку. Откройте JSON-редактор, «Пул прокси» или «Подписки».', 'warning');
         return;
       }
 
       const raw = String(input.value || '').trim();
       if (!raw) {
-        if (statusEl) statusEl.textContent = 'Вставь ссылку, чтобы нормализовать.';
+        if (statusEl) setOutboundsStatus(statusEl, 'Вставь ссылку, чтобы нормализовать.', 'warning');
         try { if (typeof showToast === 'function') showToast('Ссылка пустая.', true); } catch (e) {}
         return;
       }
@@ -2580,7 +2595,7 @@ let outboundsModuleApi = null;
 
       if (!normalized) {
         const msg = 'Не удалось нормализовать ссылку (проверь формат).';
-        if (statusEl) statusEl.textContent = msg;
+        if (statusEl) setOutboundsStatus(statusEl, msg, 'error');
         try { if (typeof showToast === 'function') showToast(msg, true); } catch (e) {}
         return;
       }
@@ -2589,7 +2604,7 @@ let outboundsModuleApi = null;
       try { updateHintsFromUrl(normalized); } catch (e) {}
       try { validateAndUpdateUI(); } catch (e) {}
       const msg = 'Ссылка нормализована.';
-      if (statusEl) statusEl.textContent = msg;
+      if (statusEl) setOutboundsStatus(statusEl, msg, 'success');
       try { if (typeof showToast === 'function') showToast(msg, false); } catch (e) {}
     }
 
@@ -2669,8 +2684,24 @@ let outboundsModuleApi = null;
         // ignore
       }
 
-      body.style.display = open ? 'block' : 'none';
-      arrow.textContent = open ? '▲' : '▼';
+      applyCollapseState(open);
+    }
+
+    function applyCollapseState(open) {
+      const header = $('outbounds-header');
+      const body = $('outbounds-body');
+      const arrow = $('outbounds-arrow');
+      if (!body || !arrow) return;
+
+      const expanded = !!open;
+      body.style.display = expanded ? 'block' : 'none';
+      arrow.textContent = expanded ? '▲' : '▼';
+      try {
+        if (header) {
+          header.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+          if (header.dataset) header.dataset.xkCollapseOpen = expanded ? '1' : '0';
+        }
+      } catch (e) {}
     }
 
     function toggleCard() {
@@ -2679,15 +2710,13 @@ let outboundsModuleApi = null;
       if (!body || !arrow) return;
 
       const willOpen = body.style.display === 'none';
-      body.style.display = willOpen ? 'block' : 'none';
+      applyCollapseState(willOpen);
       if (willOpen) {
         scheduleOutboundsNodeListLayout();
         try { refreshOutboundsActive(true, { fragment: getActiveFragment() || '' }); } catch (e) {}
       } else {
         outboundsClearActivePoll();
       }
-      arrow.textContent = willOpen ? '▲' : '▼';
-
       try {
         if (window.localStorage) {
           localStorage.setItem('xkeen_outbounds_open', willOpen ? '1' : '0');
@@ -2711,7 +2740,7 @@ let outboundsModuleApi = null;
         const res = await fetch(url, { cache: 'no-store' });
         if (!isCurrentOutboundsFragmentRequest(requestFragment, loadSeq, 'load')) return;
         if (!res.ok) {
-          if (statusEl) statusEl.textContent = 'Не удалось загрузить outbounds.';
+          if (statusEl) setOutboundsStatus(statusEl, 'Не удалось загрузить outbounds.', 'error');
           return;
         }
         const data = await res.json().catch(() => ({}));
@@ -2732,7 +2761,7 @@ let outboundsModuleApi = null;
             initialized: true,
           }, 'outbounds-load-subscription-fragment');
           if (statusEl) {
-            statusEl.textContent = `Подписочный фрагмент загружен: ${summary.proxies.length} прокси. Для правок используйте «Подписки» или JSON-редактор.`;
+            setOutboundsStatus(statusEl, `Подписочный фрагмент загружен: ${summary.proxies.length} прокси. Для правок используйте «Подписки» или JSON-редактор.`, 'success');
           }
           try {
             if (typeof updateLastActivity === 'function') {
@@ -2754,7 +2783,7 @@ let outboundsModuleApi = null;
             initialized: true,
           }, 'outbounds-load-pool-fragment');
           if (statusEl) {
-            statusEl.textContent = `Пул прокси загружен: ${summary.proxies.length} прокси. Для правок используйте «Пул прокси» или JSON-редактор.`;
+            setOutboundsStatus(statusEl, `Пул прокси загружен: ${summary.proxies.length} прокси. Для правок используйте «Пул прокси» или JSON-редактор.`, 'success');
           }
           try {
             if (typeof updateLastActivity === 'function') {
@@ -2779,7 +2808,7 @@ let outboundsModuleApi = null;
             currentValue: String(getCurrentUrl() || _savedUrl || ''),
             initialized: true,
           }, 'outbounds-load-success');
-          if (statusEl) statusEl.textContent = 'Текущая ссылка загружена.';
+          if (statusEl) setOutboundsStatus(statusEl, 'Текущая ссылка загружена.', 'success');
           try {
             if (typeof updateLastActivity === 'function') {
               const fp = getXkeenFilePath('outbounds', '');
@@ -2792,7 +2821,7 @@ let outboundsModuleApi = null;
           input.value = '';
           setOutboundTag('proxy');
           try { await refreshOutboundsNodes(false, { fragment: requestFragment }); } catch (e) {}
-          if (statusEl) statusEl.textContent = 'Файл outbounds отсутствует или не содержит прокси-конфиг.';
+          if (statusEl) setOutboundsStatus(statusEl, 'Файл outbounds отсутствует или не содержит прокси-конфиг.', 'warning');
           updateHintsFromUrl('');
           validateAndUpdateUI();
           publishLifecycleState({
@@ -2809,7 +2838,7 @@ let outboundsModuleApi = null;
         }
       } catch (e) {
         console.error(e);
-        if (isCurrentOutboundsFragmentRequest(requestFragment, loadSeq, 'load') && statusEl) statusEl.textContent = 'Ошибка загрузки outbounds.';
+        if (isCurrentOutboundsFragmentRequest(requestFragment, loadSeq, 'load') && statusEl) setOutboundsStatus(statusEl, 'Ошибка загрузки outbounds.', 'error');
       } finally {
         if (isCurrentOutboundsFragmentRequest(requestFragment, loadSeq, 'load')) {
           publishLifecycleState({ loading: false, initialized: true }, 'outbounds-load-finished');
@@ -2822,7 +2851,7 @@ let outboundsModuleApi = null;
       const input = $('outbounds-url');
       if (!input) return;
       if (isOutboundsSummaryFragmentMode()) {
-        if (statusEl) statusEl.textContent = 'Фрагмент со списком прокси не сохраняется через single-link форму. Используйте «Пул прокси», «Подписки» или JSON-редактор.';
+        if (statusEl) setOutboundsStatus(statusEl, 'Фрагмент со списком прокси не сохраняется через single-link форму. Используйте «Пул прокси», «Подписки» или JSON-редактор.', 'warning');
         return;
       }
 
@@ -2832,7 +2861,7 @@ let outboundsModuleApi = null;
         const url = String(input.value || '').trim();
         const outboundTag = getCurrentOutboundTag();
         if (!url) {
-          if (statusEl) statusEl.textContent = 'Введи ссылку прокси (vless / trojan / vmess / ss).';
+          if (statusEl) setOutboundsStatus(statusEl, 'Введи ссылку прокси (vless / trojan / vmess / ss).', 'warning');
           return;
         }
 
@@ -2841,7 +2870,7 @@ let outboundsModuleApi = null;
           const parsed = parseProxyUrl(url);
           renderParsePreview(parsed);
           if (!parsed.ok) {
-            if (statusEl) statusEl.textContent = 'Ссылка содержит ошибки — исправь и попробуй снова.';
+            if (statusEl) setOutboundsStatus(statusEl, 'Ссылка содержит ошибки — исправь и попробуй снова.', 'error');
             input.classList.add('xk-invalid');
             return;
           }
@@ -2868,7 +2897,7 @@ let outboundsModuleApi = null;
 
           if (res.ok && data && data.ok) {
             let msg = 'Outbounds сохранены.';
-            if (statusEl) statusEl.textContent = msg;
+            if (statusEl) setOutboundsStatus(statusEl, msg, 'success');
             _savedUrl = url;
             _savedOutboundTag = outboundTag;
             try { await refreshFragmentsList({ notify: false }); } catch (e) {}
@@ -2890,12 +2919,12 @@ let outboundsModuleApi = null;
 
             if (restart && jobId) {
               streamedRestart = true;
-              if (statusEl) statusEl.textContent = 'Outbounds сохранены. Перезапуск xkeen...';
+              if (statusEl) setOutboundsStatus(statusEl, 'Outbounds сохранены. Перезапуск xkeen...', 'loading');
               const result = await streamRestartJob(jobId, 'xkeen -restart (job)...\n');
               const ok = !!(result && result.ok);
               if (ok) {
                 msg = 'Outbounds сохранены и xkeen перезапущен.';
-                if (statusEl) statusEl.textContent = msg;
+                if (statusEl) setOutboundsStatus(statusEl, msg, 'success');
                 try { toastXkeen(msg, 'success'); } catch (e) {}
               } else {
                 const err = (result && (result.error || result.message)) ? String(result.error || result.message) : '';
@@ -2908,7 +2937,7 @@ let outboundsModuleApi = null;
                   try { restartLog.append('\n' + detail + '\n'); } catch (e) {}
                 }
                 msg = 'Outbounds сохранены, но перезапуск xkeen завершился с ошибкой.';
-                if (statusEl) statusEl.textContent = msg;
+                if (statusEl) setOutboundsStatus(statusEl, msg, 'warning');
                 try { toastXkeen(msg, 'error'); } catch (e2) {}
               }
             } else {
@@ -2916,13 +2945,13 @@ let outboundsModuleApi = null;
             }
           } else {
             const msg = 'Save error: ' + ((data && data.error) || res.status);
-            if (statusEl) statusEl.textContent = msg;
+            if (statusEl) setOutboundsStatus(statusEl, msg, 'error');
             try { if (typeof showToast === 'function') showToast(msg, true); } catch (e) {}
           }
         } catch (e) {
           console.error(e);
           const msg = 'Failed to save outbounds.';
-          if (statusEl) statusEl.textContent = msg;
+          if (statusEl) setOutboundsStatus(statusEl, msg, 'error');
           try { if (typeof showToast === 'function') showToast(msg, true); } catch (e2) {}
         } finally {
           if (!streamedRestart) {
@@ -2959,7 +2988,7 @@ let outboundsModuleApi = null;
 
         if (res.ok && data && data.ok) {
           const msg = 'Бэкап ' + fileLabel + ' создан: ' + (data.filename || '');
-          if (statusEl) statusEl.textContent = msg;
+          if (statusEl) setOutboundsStatus(statusEl, msg, 'success');
           if (backupsStatusEl) backupsStatusEl.textContent = '';
           try { if (typeof showToast === 'function') showToast(msg, false); } catch (e) {}
           try {
@@ -2971,13 +3000,13 @@ let outboundsModuleApi = null;
           } catch (e) {}
         } else {
           const msg = 'Ошибка создания бэкапа ' + fileLabel + ': ' + ((data && data.error) || 'неизвестная ошибка');
-          if (statusEl) statusEl.textContent = msg;
+          if (statusEl) setOutboundsStatus(statusEl, msg, 'error');
           try { if (typeof showToast === 'function') showToast(msg, true); } catch (e) {}
         }
       } catch (e) {
         console.error(e);
         const msg = 'Ошибка создания бэкапа ' + fileLabel + '.';
-        if (statusEl) statusEl.textContent = msg;
+        if (statusEl) setOutboundsStatus(statusEl, msg, 'error');
         try { if (typeof showToast === 'function') showToast(msg, true); } catch (e2) {}
       }
     }
@@ -6879,6 +6908,9 @@ let outboundsModuleApi = null;
         const detail = escapeHtml(String(node && node.detail ? node.detail : ''));
         const deprecatedTransportNote = subsDeprecatedTransportNote(node && node.transport, enabled);
         const deprecatedTransportNoteHtml = escapeHtml(deprecatedTransportNote);
+        const protocolSummary = [protocol, transport, security, deprecatedTransportNote ? 'deprecated' : '']
+          .filter(Boolean)
+          .join(' · ') || '—';
         const endpoint = [host, port].filter(Boolean).join(':');
         const connectionSummary = [endpoint, detail].filter(Boolean).join(' · ');
         const connectionSummaryHtml = escapeHtml(connectionSummary);
@@ -6904,17 +6936,19 @@ let outboundsModuleApi = null;
           <div class="xk-sub-node-item ${enabled ? 'is-enabled' : 'is-disabled'}" data-node-key="${key}">
             <div class="xk-sub-node-main">
               <div class="xk-sub-node-name">${countryBadge}<span class="xk-sub-node-title-text">${name}</span></div>
-              <div class="xk-sub-node-meta">
-                ${protocol ? `<span class="xk-sub-node-pill">${protocol}</span>` : ''}
-                ${transport ? `<span class="xk-sub-node-pill xk-sub-node-pill-transport">${transport}</span>` : ''}
-                ${security ? `<span class="xk-sub-node-pill xk-sub-node-pill-security">${security}</span>` : ''}
-                ${deprecatedTransportNote ? `<span class="xk-sub-node-pill xk-sub-node-pill-warning" data-tooltip="${deprecatedTransportNoteHtml}">deprecated</span>` : ''}
+              <div class="xk-sub-node-meta xk-sub-node-protocol" aria-label="Протокол" ${deprecatedTransportNote ? `data-tooltip="${deprecatedTransportNoteHtml}"` : `data-tooltip="${protocolSummary}"`}>
+                <span class="xk-sub-node-protocol-text ${deprecatedTransportNote ? 'is-warning' : ''}">${protocolSummary}</span>
               </div>
-              ${connectionSummary ? `<div class="xk-sub-node-detail" data-tooltip="${connectionSummaryHtml}">${connectionSummaryHtml}</div>` : ''}
+              <div class="xk-sub-node-endpoint-cell" aria-label="Endpoint" ${connectionSummary ? `data-tooltip="${connectionSummaryHtml}"` : ''}>
+                ${endpoint ? `<span class="xk-sub-node-endpoint">${endpoint}</span>` : '<span class="xk-sub-node-endpoint">—</span>'}
+                ${detail ? `<span class="xk-sub-node-detail">${detail}</span>` : ''}
+              </div>
             </div>
             <div class="xk-sub-node-side">
-              <div class="xk-sub-node-latency ${latencyClass}" data-tooltip="${latencyTooltip}">${latencyLabel}</div>
-              <div class="xk-sub-node-state ${enabled ? 'is-enabled' : 'is-disabled'}">${reasonLabel}</div>
+              <div class="xk-sub-node-health-cell">
+                <div class="xk-sub-node-latency ${latencyClass}" data-tooltip="${latencyTooltip}">${latencyLabel}</div>
+                <div class="xk-sub-node-state ${enabled ? 'is-enabled' : 'is-disabled'}">${reasonLabel}</div>
+              </div>
               <div class="xk-sub-node-actions">
                 <button type="button" class="btn-secondary btn-compact xk-sub-node-ping ${pingBusy ? 'is-busy' : ''}" data-node-key="${key}" data-node-tag="${escapeHtml(nodeTag)}" title="Проверить задержку" data-tooltip="${escapeHtml(canPing ? 'Проверить задержку узла через текущий generated fragment.' : 'Этот узел сейчас не входит в generated fragment, поэтому проверка недоступна.')}" aria-label="Проверить задержку" ${canPing ? '' : 'disabled'}>
                   <span class="xk-sub-icon-glyph" aria-hidden="true">⏱</span>
