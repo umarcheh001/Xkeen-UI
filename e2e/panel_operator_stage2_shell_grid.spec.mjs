@@ -176,5 +176,51 @@ test.describe('Operator Console Stage 2 shell and workspace contract', () => {
       expect(navState.marker).not.toBe('rgba(0, 0, 0, 0)');
       expect(navState.markerHeight).toBe('2px');
     });
+
+    test(`service and routing focus controls stay flat and restrained in ${theme}`, async ({ page }) => {
+      await openPanel(page, theme, { width: 1280, height: 720 });
+
+      const styles = await page.evaluate(() => {
+        const read = (selector) => {
+          const node = document.querySelector(selector);
+          const style = getComputedStyle(node);
+          const before = getComputedStyle(node, '::before');
+          return {
+            background: style.backgroundColor,
+            image: style.backgroundImage,
+            border: style.borderColor,
+            color: style.color,
+            shadow: style.boxShadow,
+            beforeContent: before.content,
+            beforeDisplay: before.display,
+          };
+        };
+        return {
+          service: [
+            read('#xkeen-start-btn'),
+            read('#xkeen-stop-btn'),
+            read('#xkeen-restart-btn'),
+          ],
+          gui: read('#routing-focus-gui-btn'),
+          raw: read('#routing-focus-raw-btn'),
+          activeFocus: document.querySelector('.routing-focus-btn[aria-pressed="true"]')?.id || '',
+        };
+      });
+
+      expect(new Set(styles.service.map((style) => JSON.stringify(style))).size).toBe(1);
+      expect(styles.service[0].image).toBe('none');
+      expect(styles.service[0].shadow).toBe('none');
+      expect(styles.service[0].beforeContent).toBe('none');
+      expect(styles.service[0].beforeDisplay).toBe('none');
+
+      const focusStyles = [styles.gui, styles.raw];
+      for (const style of focusStyles) {
+        expect(style.image).toBe('none');
+        expect(style.shadow).toBe('none');
+      }
+      expect(styles.activeFocus).not.toBe('');
+      const inactiveFocus = styles.activeFocus === 'routing-focus-gui-btn' ? styles.raw : styles.gui;
+      expect(inactiveFocus.background).toBe('rgba(0, 0, 0, 0)');
+    });
   }
 });

@@ -18,7 +18,7 @@ def test_stage2_header_has_two_zones_without_replacing_runtime_nodes():
     assert 'data-xk-shell-zone="identity"' in template
     assert 'data-xk-shell-zone="global-actions"' in template
     assert 'class="top-tabs header-tabs" role="navigation" aria-label="Разделы панели"' in template
-    assert "filename='panel-operator.css', v='20260728j'" in template
+    assert "filename='panel-operator.css', v='20260728k'" in template
 
     identity_start = template.index('class="panel-shell-identity"')
     actions_start = template.index('data-xk-shell-zone="global-actions"')
@@ -73,6 +73,25 @@ def test_stage2_shell_and_grid_rules_live_in_canonical_sections():
     assert "@media (max-width: 720px)" in responsive
     assert "grid-template-columns: minmax(0, 1fr);" in responsive
     assert "final fixes" not in responsive.lower()
+
+
+def test_stage2_command_row_overrides_coloured_legacy_theme_buttons():
+    css = OPERATOR_CSS.read_text(encoding="utf-8")
+    shell = css[css.index("* 3. SHELL"):css.index("* 4. PRIMITIVES")]
+
+    for fragment in (
+        'html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .xkeen-ctrl-btn.xkeen-ctrl-btn-start',
+        'html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .xkeen-ctrl-btn.xkeen-ctrl-btn-stop',
+        'html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .xkeen-ctrl-btn.xkeen-ctrl-btn-restart',
+        'html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .routing-focus-btn.routing-focus-btn-gui',
+        'html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .routing-focus-btn.routing-focus-btn-raw',
+        "content: none !important;",
+        "background: var(--op-surface) !important;",
+        "background: transparent !important;",
+        "background: var(--op-accent-soft) !important;",
+        "box-shadow: none !important;",
+    ):
+        assert fragment in shell
 
 
 def test_stage2_closure_is_reflected_in_documentation():

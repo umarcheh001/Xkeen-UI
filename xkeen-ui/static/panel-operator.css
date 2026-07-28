@@ -706,27 +706,42 @@ body.panel-page .xkeen-ctrl-btn:hover {
   color: var(--op-text) !important;
 }
 
-body.panel-page :is(
-  .xkeen-ctrl-btn.xkeen-ctrl-btn-start,
-  .xkeen-ctrl-btn.xkeen-ctrl-btn-stop,
-  .xkeen-ctrl-btn.xkeen-ctrl-btn-restart
-) {
+/* Match the late legacy theme selectors explicitly. The previous consolidation
+ * dropped their theme qualifier, so styles.css could restore its old
+ * green/red/amber glass buttons even though this file is loaded last. */
+html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .xkeen-ctrl-btn.xkeen-ctrl-btn-start,
+html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .xkeen-ctrl-btn.xkeen-ctrl-btn-stop,
+html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .xkeen-ctrl-btn.xkeen-ctrl-btn-restart {
   border-color: var(--op-border) !important;
   background: var(--op-surface) !important;
   color: var(--op-muted) !important;
   box-shadow: none !important;
 }
 
-body.panel-page .xkeen-ctrl-btn-start:hover {
+html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .xkeen-ctrl-btn::before {
+  content: none !important;
+  display: none !important;
+}
+
+html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .xkeen-ctrl-btn.xkeen-ctrl-btn-start:hover {
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-3) !important;
   color: var(--op-success) !important;
+  box-shadow: none !important;
 }
 
-body.panel-page .xkeen-ctrl-btn-stop:hover {
+html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .xkeen-ctrl-btn.xkeen-ctrl-btn-stop:hover {
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-3) !important;
   color: var(--op-danger) !important;
+  box-shadow: none !important;
 }
 
-body.panel-page .xkeen-ctrl-btn-restart:hover {
+html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .xkeen-ctrl-btn.xkeen-ctrl-btn-restart:hover {
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-3) !important;
   color: var(--op-text) !important;
+  box-shadow: none !important;
 }
 
 body.panel-page .routing-focus-switch,
@@ -743,8 +758,8 @@ html[data-theme="light"] body.panel-page .routing-focus-switch {
   box-shadow: none !important;
 }
 
-body.panel-page .routing-focus-btn,
-html[data-theme="light"] body.panel-page .routing-focus-btn {
+html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .routing-focus-btn.routing-focus-btn-gui,
+html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .routing-focus-btn.routing-focus-btn-raw {
   min-width: 40px;
   min-height: 22px;
   padding: 0 8px;
@@ -757,11 +772,14 @@ html[data-theme="light"] body.panel-page .routing-focus-btn {
   font-weight: 650;
 }
 
-body.panel-page .routing-focus-btn[aria-pressed="true"],
-body.panel-page .routing-focus-btn.is-active,
-html[data-theme="light"] body.panel-page .routing-focus-btn[aria-pressed="true"] {
+html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .routing-focus-btn.routing-focus-btn-gui[aria-pressed="true"],
+html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .routing-focus-btn.routing-focus-btn-raw[aria-pressed="true"],
+html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .routing-focus-btn.routing-focus-btn-gui.is-active,
+html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .routing-focus-btn.routing-focus-btn-raw.is-active {
+  border-color: transparent !important;
   background: var(--op-accent-soft) !important;
   color: var(--op-accent-hover) !important;
+  box-shadow: none !important;
 }
 
 /* The GUI/RAW buttons already express the state; keep duplicate copy in the DOM. */
