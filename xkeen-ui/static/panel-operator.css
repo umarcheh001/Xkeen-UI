@@ -271,9 +271,7 @@ html:is([data-theme="dark"], [data-theme="light"]) body.panel-page #terminal-ove
   text-shadow: none !important;
 }
 
-body.panel-page *,
-body.panel-page *::before,
-body.panel-page *::after {
+body.panel-page :is(*, *::before, *::after) {
   box-sizing: border-box;
 }
 
@@ -298,9 +296,7 @@ body.panel-page :is(h1, h2, h3, h4) {
   text-shadow: none;
 }
 
-body.panel-page code,
-body.panel-page pre,
-body.panel-page textarea {
+body.panel-page :is(code, pre, textarea) {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
@@ -414,8 +410,7 @@ body.panel-page .service-status-lamp {
   box-shadow: none !important;
 }
 
-body.panel-page .service-status-text,
-body.panel-page .last-load-chip__text {
+body.panel-page :is(.service-status-text, .last-load-chip__text) {
   max-width: min(28vw, 280px);
   overflow: hidden;
   color: var(--op-muted);
@@ -512,8 +507,7 @@ body.panel-page .panel-header .header-actions .theme-toggle-btn .theme-toggle-te
   box-shadow: none !important;
 }
 
-body.panel-page .panel-shell-summary:empty,
-body.panel-page .panel-shell-summary:has(> .hidden:only-child) {
+body.panel-page .panel-shell-summary:is(:empty, :has(> .hidden:only-child)) {
   display: none;
 }
 
@@ -1410,8 +1404,7 @@ html:is([data-theme="dark"], [data-theme="light"]) body.panel-page :is(
   outline: none;
 }
 
-body.panel-page input::placeholder,
-body.panel-page textarea::placeholder {
+body.panel-page :is(input, textarea)::placeholder {
   color: var(--op-faint) !important;
   opacity: 1;
 }
@@ -1430,10 +1423,7 @@ body.panel-page :is(
   box-shadow: none !important;
 }
 
-body.panel-page label,
-body.panel-page .routing-dat-field > span,
-body.panel-page .routing-rule-key,
-body.panel-page .small {
+body.panel-page :is(label, .routing-dat-field > span, .routing-rule-key, .small) {
   color: var(--op-muted);
 }
 
@@ -1448,10 +1438,7 @@ body.panel-page .routing-rule-key {
   font-weight: 620;
 }
 
-body.panel-page button,
-body.panel-page input,
-body.panel-page select,
-body.panel-page textarea {
+body.panel-page :is(button, input, select, textarea) {
   font-family: inherit;
 }
 
@@ -1607,9 +1594,7 @@ body.panel-page .xk-editor-engine-select {
   min-width: 106px;
 }
 
-body.panel-page .xk-icon-btn,
-body.panel-page .xkeen-cm-tool,
-body.panel-page .btn-icon {
+body.panel-page :is(.xk-icon-btn, .xkeen-cm-tool, .btn-icon) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1710,9 +1695,7 @@ body.panel-page :is(
   color: var(--op-warning) !important;
 }
 
-body.panel-page #routing-status,
-body.panel-page #mihomo-status,
-body.panel-page .status {
+body.panel-page :is(#routing-status, #mihomo-status, .status) {
   color: var(--op-muted);
   font-size: calc(10.5px * var(--xk-font-scale, 1));
 }
@@ -2237,10 +2220,7 @@ body.panel-page .command-group:first-child {
   border-top: 0 !important;
 }
 
-body.panel-page .command-group-head,
-body.panel-page .command-row,
-body.panel-page .fm-row,
-body.panel-page table tr {
+body.panel-page :is(.command-group-head, .command-row, .fm-row, table tr) {
   border-color: var(--op-border) !important;
   background: transparent !important;
   box-shadow: none !important;
@@ -2721,9 +2701,7 @@ body.panel-page :is(.fm-target-select, .fm-bookmarks-select, .fm-bookmarks-btn) 
   transform: none !important;
 }
 
-body.panel-page .fm-target-select:hover,
-body.panel-page .fm-bookmarks-select:hover,
-body.panel-page .fm-bookmarks-btn:hover {
+body.panel-page :is(.fm-target-select, .fm-bookmarks-select, .fm-bookmarks-btn):hover {
   border-color: var(--op-border-strong) !important;
   background: var(--op-surface-3) !important;
   color: var(--op-text) !important;
@@ -2744,10 +2722,7 @@ body.panel-page .fm-filter-wrap {
   flex-basis: clamp(120px, 18vw, 220px);
 }
 
-body.panel-page .fm-root-btn,
-body.panel-page .fm-up-btn,
-body.panel-page .fm-refresh-btn,
-body.panel-page .fm-filter-clear-btn {
+body.panel-page :is(.fm-root-btn, .fm-up-btn, .fm-refresh-btn, .fm-filter-clear-btn) {
   width: 30px;
   min-width: 30px;
   height: 30px;
@@ -3005,8 +2980,7 @@ body.panel-page .terminal-header-left > span:first-child {
   letter-spacing: -0.01em;
 }
 
-body.panel-page .terminal-conn-lamp,
-body.panel-page .terminal-uptime {
+body.panel-page :is(.terminal-conn-lamp, .terminal-uptime) {
   margin-left: 0;
 }
 
@@ -3022,9 +2996,7 @@ body.panel-page .terminal-toolbar {
   flex-wrap: nowrap;
 }
 
-body.panel-page .terminal-toolbar > .terminal-tool-btn,
-body.panel-page .terminal-close,
-body.panel-page .terminal-search-btn {
+body.panel-page :is(.terminal-toolbar > .terminal-tool-btn, .terminal-close, .terminal-search-btn) {
   display: inline-grid;
   place-items: center;
   width: 30px;
