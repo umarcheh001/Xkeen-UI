@@ -79,6 +79,114 @@ async function collectLayout(page) {
 
 
 test.describe('Operator Console Stage 2 shell and workspace contract', () => {
+  test('DevTools container modes size and centre the redesigned panel', async ({ page }) => {
+    await openPanel(page, 'dark', { width: 1920, height: 1080 });
+
+    const expectedWidths = {
+      fixed: 960,
+      fluid: 1600,
+      max: 1920,
+    };
+
+    for (const [mode, expectedWidth] of Object.entries(expectedWidths)) {
+      await page.evaluate((nextMode) => {
+        const key = 'xkeen-layout-v1';
+        let prefs = {};
+        try { prefs = JSON.parse(localStorage.getItem(key) || '{}'); } catch (error) {}
+        const next = { ...prefs, container: nextMode };
+        localStorage.setItem(key, JSON.stringify(next));
+        document.documentElement.dataset.xkContainer = nextMode;
+        document.documentElement.style.setProperty(
+          '--xk-container-max-width',
+          nextMode === 'fixed' ? '960px' : nextMode === 'fluid' ? 'min(1600px, 96vw)' : '100%',
+        );
+      }, mode);
+      await settleResponsiveLayout(page);
+      const result = await page.evaluate(() => {
+        const node = document.querySelector('.container.container-wide');
+        const box = node.getBoundingClientRect();
+        const shellMain = document.querySelector('.panel-header-shell-main');
+        const serviceRow = document.querySelector('.xkeen-ctrl-row');
+        const rect = (selector) => {
+          const element = document.querySelector(selector);
+          const elementBox = element?.getBoundingClientRect();
+          return elementBox ? {
+            x: elementBox.x,
+            y: elementBox.y,
+            width: elementBox.width,
+            right: elementBox.right,
+          } : null;
+        };
+        return {
+          container: {
+            x: box.x,
+            width: box.width,
+            right: box.right,
+            maxWidth: getComputedStyle(node).maxWidth,
+          },
+          pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          shellOverflow: shellMain.scrollWidth - shellMain.clientWidth,
+          serviceOverflow: serviceRow.scrollWidth - serviceRow.clientWidth,
+          editorColumn: rect('.routing-col-center'),
+          inspector: rect('.layout-side.routing-side'),
+        };
+      });
+      const { container } = result;
+
+      expect(container.width, mode).toBeCloseTo(expectedWidth, 0);
+      expect(container.x, mode).toBeCloseTo((1920 - expectedWidth) / 2, 0);
+      expect(container.right, mode).toBeLessThanOrEqual(1920 + 0.5);
+      expect(result.pageOverflow, mode).toBeLessThanOrEqual(1);
+      expect(result.shellOverflow, mode).toBeLessThanOrEqual(1);
+      expect(result.serviceOverflow, mode).toBeLessThanOrEqual(1);
+
+      if (mode === 'fixed') {
+        expect(result.editorColumn.x).toBeCloseTo(result.inspector.x, 0);
+        expect(result.editorColumn.y).toBeLessThan(result.inspector.y);
+      } else {
+        expect(result.editorColumn.y).toBeCloseTo(result.inspector.y, 0);
+        expect(result.editorColumn.right).toBeLessThan(result.inspector.x);
+      }
+    }
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    for (const mode of Object.keys(expectedWidths)) {
+      await page.evaluate((nextMode) => {
+        const key = 'xkeen-layout-v1';
+        let prefs = {};
+        try { prefs = JSON.parse(localStorage.getItem(key) || '{}'); } catch (error) {}
+        const next = { ...prefs, container: nextMode };
+        localStorage.setItem(key, JSON.stringify(next));
+        document.documentElement.dataset.xkContainer = nextMode;
+        document.documentElement.style.setProperty(
+          '--xk-container-max-width',
+          nextMode === 'fixed' ? '960px' : nextMode === 'fluid' ? 'min(1600px, 96vw)' : '100%',
+        );
+      }, mode);
+      await settleResponsiveLayout(page);
+      const layout = await collectLayout(page);
+      expect(layout.header.x, mode).toBeGreaterThanOrEqual(0);
+      expect(layout.header.right, mode).toBeLessThanOrEqual(390 + 0.5);
+      expect(layout.pageOverflow, mode).toBeLessThanOrEqual(1);
+      expect(layout.editorColumn.x, mode).toBeCloseTo(layout.inspector.x, 0);
+      expect(layout.editorColumn.y, mode).toBeLessThan(layout.inspector.y);
+      const sideGridColumns = await page.locator('.routing-side-grid').evaluate(
+        (node) => getComputedStyle(node).gridTemplateColumns,
+      );
+      expect(sideGridColumns.trim().split(/\s+/), mode).toHaveLength(1);
+    }
+
+    await page.evaluate(() => {
+      const key = 'xkeen-layout-v1';
+      let prefs = {};
+      try { prefs = JSON.parse(localStorage.getItem(key) || '{}'); } catch (error) {}
+      localStorage.setItem(key, JSON.stringify({ ...prefs, container: 'max' }));
+      document.documentElement.dataset.xkContainer = 'max';
+      document.documentElement.style.setProperty('--xk-container-max-width', '100%');
+    });
+    await page.setViewportSize(viewports[0]);
+  });
+
   for (const theme of ['dark', 'light']) {
     test(`shell and grid stay readable without page overflow in ${theme}`, async ({ page }) => {
       await openPanel(page, theme);

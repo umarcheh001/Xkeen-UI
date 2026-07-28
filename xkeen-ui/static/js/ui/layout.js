@@ -21,7 +21,9 @@
     cardDescScale: 1,
     hideUnused: false,
     // fixed | fluid | max
-    container: 'fluid',
+    // The redesigned panel is full-width by default. The narrower modes stay
+    // available for users who prefer a denser, centred workspace.
+    container: 'max',
     // Tab ordering is persisted as stable keys (see tabKey())
     tabOrder: [],
     tabFav: [],
@@ -113,7 +115,7 @@
     try {
       let mw = 'min(1600px, 96vw)';
       if (p.container === 'fixed') mw = '960px';
-      else if (p.container === 'max') mw = '98vw';
+      else if (p.container === 'max') mw = '100%';
       root.style.setProperty('--xk-container-max-width', mw);
     } catch (e) {}
 

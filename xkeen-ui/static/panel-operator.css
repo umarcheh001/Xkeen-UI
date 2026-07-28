@@ -68,7 +68,7 @@ body.panel-page {
 body.panel-page .container-wide {
   box-sizing: border-box;
   width: 100%;
-  max-width: none !important;
+  max-width: var(--xk-container-max-width, 100%) !important;
   margin: 0 auto;
   padding: clamp(10px, 1vw, 18px) clamp(10px, 1.2vw, 22px) 24px;
 }
@@ -1166,6 +1166,33 @@ body.panel-page .routing-side-grid {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* A fixed 960px container can live inside a much wider viewport, so viewport
+ * media queries alone cannot detect that the workspace itself is narrow. */
+html[data-xk-container="fixed"] body.panel-page .layout-2col.routing-layout {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-areas:
+    "routing-center"
+    "routing-side" !important;
+}
+
+html[data-xk-container="fixed"] body.panel-page .routing-col-center,
+html[data-xk-container="fixed"] body.panel-page .layout-side.routing-side {
+  grid-column: 1;
+}
+
+html[data-xk-container="fixed"] body.panel-page .routing-col-center {
+  grid-row: 1;
+}
+
+html[data-xk-container="fixed"] body.panel-page .layout-side.routing-side {
+  grid-row: 2;
+}
+
+html[data-xk-container="fixed"] body.panel-page .routing-side-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 body.panel-page .card,
@@ -4668,7 +4695,8 @@ body.panel-page .footer {
     gap: 7px;
   }
 
-  body.panel-page .routing-side-grid {
+  body.panel-page .routing-side-grid,
+  html[data-xk-container="fixed"] body.panel-page .routing-side-grid {
     grid-template-columns: minmax(0, 1fr);
     gap: 6px;
   }

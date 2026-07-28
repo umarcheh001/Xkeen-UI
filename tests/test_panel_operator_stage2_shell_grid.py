@@ -18,7 +18,7 @@ def test_stage2_header_has_two_zones_without_replacing_runtime_nodes():
     assert 'data-xk-shell-zone="identity"' in template
     assert 'data-xk-shell-zone="global-actions"' in template
     assert 'class="top-tabs header-tabs" role="navigation" aria-label="Разделы панели"' in template
-    assert "filename='panel-operator.css', v='20260728k'" in template
+    assert "filename='panel-operator.css', v='20260728l'" in template
 
     identity_start = template.index('class="panel-shell-identity"')
     actions_start = template.index('data-xk-shell-zone="global-actions"')
@@ -65,6 +65,8 @@ def test_stage2_shell_and_grid_rules_live_in_canonical_sections():
         "grid-template-columns: minmax(0, 1fr) clamp(420px, 24vw, 600px) !important;",
         'grid-template-areas: "routing-center routing-side" !important;',
         "min-height: 0;",
+        'html[data-xk-container="fixed"] body.panel-page .layout-2col.routing-layout',
+        'html[data-xk-container="fixed"] body.panel-page .routing-side-grid',
     ):
         assert fragment in workspaces
 
@@ -73,6 +75,17 @@ def test_stage2_shell_and_grid_rules_live_in_canonical_sections():
     assert "@media (max-width: 720px)" in responsive
     assert "grid-template-columns: minmax(0, 1fr);" in responsive
     assert "final fixes" not in responsive.lower()
+
+
+def test_stage2_container_width_respects_layout_preferences():
+    css = OPERATOR_CSS.read_text(encoding="utf-8")
+
+    container = css[
+        css.index("body.panel-page .container-wide {") :
+        css.index("body.panel-page .container-wide::before")
+    ]
+    assert "max-width: var(--xk-container-max-width, 100%) !important;" in container
+    assert "max-width: none !important;" not in container
 
 
 def test_stage2_command_row_overrides_coloured_legacy_theme_buttons():
