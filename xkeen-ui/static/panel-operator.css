@@ -3412,7 +3412,9 @@ body.panel-page .fm-card,
 html[data-theme="light"] body.panel-page .fm-card {
   height: clamp(460px, 64dvh, 680px);
   min-height: 420px;
-  max-height: min(78dvh, 760px);
+  /* Custom resize may intentionally exceed the viewport; the surrounding
+   * document scrolls and the bottom grip remains reusable. */
+  max-height: none;
   padding: 0;
   overflow: hidden;
   background: var(--op-surface) !important;
@@ -3431,6 +3433,16 @@ body.panel-page .fm-footer-actions {
   align-items: center;
   gap: 5px;
   min-width: 0;
+}
+
+body.panel-page .fm-toolbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--op-border-strong) transparent;
+}
+
+body.panel-page .fm-toolbar:focus-within {
+  position: relative;
+  z-index: 2;
 }
 
 body.panel-page .fm-header-actions > *,
@@ -3483,21 +3495,29 @@ body.panel-page .fm-panel,
 html[data-theme="light"] body.panel-page .fm-panel {
   min-width: 0;
   overflow: hidden;
-  border: 0 !important;
+  border: 1px solid var(--op-border) !important;
   border-radius: 0 !important;
   background: var(--op-editor) !important;
   box-shadow: none !important;
 }
 
 body.panel-page .fm-panel + .fm-panel {
-  border-left: 1px solid var(--op-border) !important;
+  border-left: 1px solid var(--op-border-strong) !important;
 }
 
 body.panel-page .fm-panel-active,
 html[data-theme="light"] body.panel-page .fm-panel-active {
-  border-color: var(--op-border) !important;
-  background: var(--op-editor) !important;
-  box-shadow: inset 2px 0 0 var(--op-accent) !important;
+  border-color: color-mix(in srgb, var(--op-accent) 24%, var(--op-border-strong)) !important;
+  background: color-mix(in srgb, var(--op-accent) 2%, var(--op-editor)) !important;
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--op-accent) 34%, var(--op-border-strong)) !important;
+}
+
+body.panel-page .fm-panel[data-active="false"] {
+  --fm-row-state-accent: var(--op-border-strong);
+}
+
+body.panel-page .fm-panel[data-active="true"] {
+  --fm-row-state-accent: var(--op-accent);
 }
 
 body.panel-page .fm-panel-bar,
@@ -3515,7 +3535,8 @@ html[data-theme="light"] body.panel-page .fm-panel-active .fm-panel-bar {
 
 body.panel-page .fm-panel-active .fm-panel-bar,
 html[data-theme="light"] body.panel-page .fm-panel-active .fm-panel-bar {
-  background: var(--op-surface-2) !important;
+  border-bottom-color: color-mix(in srgb, var(--op-accent) 22%, var(--op-border)) !important;
+  background: color-mix(in srgb, var(--op-accent) 4%, var(--op-surface)) !important;
 }
 
 body.panel-page :is(.fm-target-select, .fm-bookmarks-select, .fm-bookmarks-btn) {
@@ -3546,7 +3567,7 @@ body.panel-page .fm-filter-input {
   padding: 0 8px;
   border-radius: 5px !important;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-size: calc(13px * var(--xk-font-scale, 1));
 }
 
 body.panel-page .fm-filter-wrap {
@@ -3572,27 +3593,41 @@ html[data-theme="light"] body.panel-page .fm-panel-active .fm-list {
   scrollbar-color: var(--op-border-strong) transparent;
 }
 
+body.panel-page .fm-panel-active .fm-list,
+html[data-theme="light"] body.panel-page .fm-panel-active .fm-list {
+  background: color-mix(in srgb, var(--op-accent) 1.5%, var(--op-editor)) !important;
+}
+
+body.panel-page .fm-list:focus-visible {
+  outline: 1px solid var(--op-accent-border) !important;
+  outline-offset: -1px;
+}
+
+body.panel-page .fm-list[aria-busy="true"] {
+  cursor: progress;
+}
+
 body.panel-page .fm-row,
 body.panel-page .fm-panel.is-trash .fm-row {
-  min-height: 32px;
+  min-height: 36px;
   gap: 8px;
-  padding: 5px 9px;
+  padding: 6px 10px;
   border: 0 !important;
   border-bottom: 1px solid var(--op-border) !important;
   border-radius: 0 !important;
   background: transparent !important;
   color: var(--op-text);
-  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-size: calc(13px * var(--xk-font-scale, 1));
   font-variant-numeric: tabular-nums;
 }
 
 body.panel-page .fm-row-header,
 html[data-theme="light"] body.panel-page .fm-row-header,
 html[data-theme="light"] body.panel-page .fm-panel-active .fm-row-header {
-  min-height: 32px;
+  min-height: 34px;
   background: var(--op-surface) !important;
   color: var(--op-muted) !important;
-  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-size: calc(12px * var(--xk-font-scale, 1));
   font-weight: 620;
   letter-spacing: 0;
   opacity: 1;
@@ -3601,6 +3636,12 @@ html[data-theme="light"] body.panel-page .fm-panel-active .fm-row-header {
 body.panel-page .fm-row-header .fm-sort-cell:hover {
   color: var(--op-text);
   text-decoration: none;
+}
+
+body.panel-page .fm-row-header .fm-sort-cell:focus-visible {
+  outline: 1px solid var(--op-accent-border);
+  outline-offset: 2px;
+  color: var(--op-text-strong);
 }
 
 body.panel-page .fm-row:not(.fm-row-header):hover,
@@ -3613,23 +3654,110 @@ body.panel-page .fm-row[aria-selected="true"],
 html[data-theme="light"] body.panel-page .fm-row.is-selected,
 html[data-theme="light"] body.panel-page .fm-panel-active .fm-row.is-selected {
   background: var(--op-accent-soft) !important;
+  box-shadow: inset 2px 0 0 var(--fm-row-state-accent, var(--op-accent)) !important;
 }
 
 body.panel-page .fm-row.is-focused {
   outline: 0 !important;
-  box-shadow: inset 2px 0 0 var(--op-accent) !important;
+  box-shadow: inset 0 0 0 1px var(--op-accent-border) !important;
+}
+
+body.panel-page .fm-row.is-selected.is-focused {
+  box-shadow:
+    inset 2px 0 0 var(--op-accent),
+    inset 0 0 0 1px var(--op-accent-border) !important;
+}
+
+body.panel-page .fm-row[draggable="true"].is-dragging {
+  opacity: 0.5;
+  background: var(--op-surface-3) !important;
+}
+
+body.panel-page .fm-list.is-drop-target {
+  outline: 1px solid var(--op-accent) !important;
+  outline-offset: -2px;
+  background: var(--op-accent-soft) !important;
+}
+
+body.panel-page .fm-list.is-drop-target::after {
+  content: attr(data-drop-effect) " · отпустить в текущую папку";
+  position: sticky;
+  bottom: 8px;
+  display: block;
+  width: max-content;
+  max-width: calc(100% - 16px);
+  margin: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--op-accent-border);
+  border-radius: var(--op-control-radius);
+  background: var(--op-surface-2);
+  color: var(--op-text-strong);
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  pointer-events: none;
+}
+
+body.panel-page .fm-row.is-drop-target {
+  outline: 1px solid var(--op-accent) !important;
+  outline-offset: -1px;
+  background: var(--op-accent-soft) !important;
 }
 
 body.panel-page .fm-check-input {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   accent-color: var(--op-accent);
 }
 
 body.panel-page .fm-ico {
-  width: 16px;
+  width: 18px;
   filter: saturate(0.35);
   opacity: 0.78;
+}
+
+body.panel-page .fm-panel-state {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 3px;
+  margin: 10px;
+  padding: 10px 12px;
+  border: 0 !important;
+  border-left: 2px solid var(--op-border-strong) !important;
+  border-radius: 0 !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted);
+  box-shadow: none !important;
+}
+
+body.panel-page .fm-panel-state-title,
+body.panel-page .fm-panel-error-title {
+  margin: 0;
+  color: var(--op-text-strong);
+  font-weight: 650;
+}
+
+body.panel-page .fm-panel-state-detail,
+body.panel-page .fm-panel-error-msg,
+body.panel-page .fm-panel-error-hint {
+  margin: 0;
+  color: var(--op-muted);
+  line-height: 1.4;
+}
+
+body.panel-page .fm-panel-error {
+  border-left-color: var(--op-danger) !important;
+  background: var(--op-danger-soft) !important;
+}
+
+body.panel-page .fm-empty[data-state="filtered-empty"] {
+  border-left-color: var(--op-accent) !important;
+}
+
+body.panel-page .fm-empty-action,
+body.panel-page .fm-panel-error-retry {
+  min-height: 28px;
+  margin-top: 5px;
+  padding: 4px 8px;
 }
 
 /* Shortcuts duplicate the context menu and the dedicated help dialog. */
@@ -3760,9 +3888,15 @@ body.panel-page .fm-busy-box {
 }
 
 body.panel-page .fm-resize-handle-left::before,
-body.panel-page .fm-resize-handle-right::before {
+body.panel-page .fm-resize-handle-right::before,
+body.panel-page .fm-resize-handle-bottom::before {
   border-color: var(--op-faint);
   opacity: 0.55;
+}
+
+body.panel-page .fm-resize-handle-bottom:hover::before {
+  border-color: var(--op-accent-border);
+  opacity: 0.9;
 }
 
 /* Terminal: the output is the workspace; chrome is a quiet frame around it. */

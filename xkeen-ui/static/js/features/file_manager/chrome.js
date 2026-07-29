@@ -100,6 +100,9 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
   const GEOM = {
     minW: 520,
     minH: 420,
+    // The manager stays in document flow, so a tall workspace can use page
+    // scroll. The previous 90vh cap made the bottom grip stop near 760px.
+    maxH: 4096,
   };
 
   let geomTouched = false;
@@ -166,7 +169,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
     if (!Number.isFinite(w) || !Number.isFinite(h)) return null;
 
     const maxW = Math.max(GEOM.minW, Math.round(window.innerWidth * 0.98));
-    const maxH = Math.max(GEOM.minH, Math.round(window.innerHeight * 0.90));
+    const maxH = Math.max(GEOM.minH, GEOM.maxH);
     if (w < GEOM.minW) w = GEOM.minW;
     if (h < GEOM.minH) h = GEOM.minH;
     if (Number.isFinite(maxW) && maxW > 0 && w > maxW) w = maxW;
@@ -275,7 +278,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
     } catch (e) {}
   }
 
-  // -------------------------- bottom corner resize handles --------------------------
+  // -------------------------- bottom/corner resize handles --------------------------
   function wireResizeHandles() {
     const card = cardEl();
     if (!card) return;
@@ -283,6 +286,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
     const handles = [
       { side: 'left', className: 'fm-resize-handle-left', cursor: 'nesw-resize' },
       { side: 'right', className: 'fm-resize-handle-right', cursor: 'nwse-resize' },
+      { side: 'bottom', className: 'fm-resize-handle-bottom', cursor: 'ns-resize' },
     ];
 
     handles.forEach((cfg) => {
@@ -349,7 +353,9 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
           const dx = ev.clientX - startX;
           const dy = ev.clientY - startY;
 
-          let w = cfg.side === 'left' ? (startW - dx) : (startW + dx);
+          let w = cfg.side === 'bottom'
+            ? startW
+            : (cfg.side === 'left' ? (startW - dx) : (startW + dx));
           let h = startH + dy;
           let shiftX = startShiftX;
           if (cfg.side === 'left') {

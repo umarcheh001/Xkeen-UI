@@ -107,6 +107,17 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
     } catch (e) {}
   }
 
+  function setPanelState(pd, state) {
+    const next = String(state || 'ready');
+    try { if (pd && pd.root && pd.root.dataset) pd.root.dataset.state = next; } catch (e) {}
+    try {
+      if (pd && pd.list) {
+        pd.list.dataset.state = next;
+        pd.list.setAttribute('aria-busy', next === 'loading' ? 'true' : 'false');
+      }
+    } catch (e) {}
+  }
+
   // Trash root is provided by backend (trash_root). Keep a sane default for older builds.
   // Keenetic mounts: /tmp/mnt may contain both UUID-like mount folders and
   // user-friendly label symlinks. The *backend* is responsible for returning
@@ -201,6 +212,22 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
     const list = pd.list;
     if (!list) return;
 
+    if (p.loading) {
+      list.innerHTML = '';
+      const loading = document.createElement('div');
+      loading.className = 'fm-panel-state fm-loading';
+      loading.setAttribute('role', 'status');
+      loading.dataset.state = 'loading';
+      loading.innerHTML = [
+        '<div class="fm-panel-state-title">Загрузка папки…</div>',
+        '<div class="fm-panel-state-detail">Получаем список файлов.</div>',
+      ].join('');
+      list.appendChild(loading);
+      list.removeAttribute('aria-activedescendant');
+      setPanelState(pd, 'loading');
+      return;
+    }
+
     // Panel-level error (unified UX): show a compact inline block with Retry.
     const pErr = (() => { try { return p && p.error ? p.error : null; } catch (e) { return null; } })();
     if (pErr && (pErr.message || pErr.hint)) {
@@ -214,7 +241,9 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       try { list.innerHTML = ''; } catch (e) {}
 
       const box = document.createElement('div');
-      box.className = 'fm-panel-error';
+      box.className = 'fm-panel-state fm-panel-error';
+      box.setAttribute('role', 'alert');
+      box.dataset.state = 'error';
       const msg = esc(pErr.message || 'Ошибка');
       const hint = pErr.hint ? esc(pErr.hint) : '';
       const retryable = !!pErr.retryable;
@@ -226,6 +255,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       ].join('');
 
       list.appendChild(box);
+      setPanelState(pd, 'error');
 
       if (retryable) {
         const btn = qs('.fm-panel-error-retry', box);
@@ -256,14 +286,15 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
     // header row (sortable columns)
     const header = document.createElement('div');
     header.className = 'fm-row fm-row-header';
+    header.setAttribute('role', 'row');
     const showTrashFrom = (FM.bookmarks && typeof FM.bookmarks.isTrashPanel === 'function' ? !!FM.bookmarks.isTrashPanel(p) : false);
     header.innerHTML = [
-      '<div class="fm-cell fm-check"></div>',
-      '<div class="fm-cell fm-name fm-sort-cell" data-sort="name">Имя <span class="fm-sort-ind" aria-hidden="true"></span></div>',
-      ...(showTrashFrom ? ['<div class="fm-cell fm-from" title="Откуда удалено">Откуда удалено</div>'] : []),
-      '<div class="fm-cell fm-size fm-sort-cell" data-sort="size">Размер <span class="fm-sort-ind" aria-hidden="true"></span></div>',
-      '<div class="fm-cell fm-perm fm-sort-cell" data-sort="perm">Права <span class="fm-sort-ind" aria-hidden="true"></span></div>',
-      '<div class="fm-cell fm-mtime fm-sort-cell" data-sort="mtime">Изм. <span class="fm-sort-ind" aria-hidden="true"></span></div>',
+      '<div class="fm-cell fm-check" role="columnheader"></div>',
+      '<div class="fm-cell fm-name fm-sort-cell" role="columnheader" data-sort="name">Имя <span class="fm-sort-ind" aria-hidden="true"></span></div>',
+      ...(showTrashFrom ? ['<div class="fm-cell fm-from" role="columnheader" title="Откуда удалено">Откуда удалено</div>'] : []),
+      '<div class="fm-cell fm-size fm-sort-cell" role="columnheader" data-sort="size">Размер <span class="fm-sort-ind" aria-hidden="true"></span></div>',
+      '<div class="fm-cell fm-perm fm-sort-cell" role="columnheader" data-sort="perm">Права <span class="fm-sort-ind" aria-hidden="true"></span></div>',
+      '<div class="fm-cell fm-mtime fm-sort-cell" role="columnheader" data-sort="mtime">Изм. <span class="fm-sort-ind" aria-hidden="true"></span></div>',
     ].join('');
 
     const updateHeaderSortUi = () => {
@@ -276,6 +307,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
           const k = String(c.dataset.sort || '');
           const active = (k === key);
           c.classList.toggle('is-sort-active', active);
+          c.setAttribute('aria-sort', active ? (dir === 'desc' ? 'descending' : 'ascending') : 'none');
           const sp = qs('.fm-sort-ind', c);
           if (sp) sp.textContent = active ? ind : '';
         });
@@ -302,20 +334,32 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       try { R.renderPanel('left'); } catch (e2) {}
       try { R.renderPanel('right'); } catch (e2) {}
     });
+    header.addEventListener('keydown', (e) => {
+      if (!e || (e.key !== 'Enter' && e.key !== ' ')) return;
+      const cell = e.target && e.target.closest ? e.target.closest('.fm-sort-cell') : null;
+      if (!cell) return;
+      e.preventDefault();
+      cell.click();
+    });
+    qsa('.fm-sort-cell', header).forEach((cell) => {
+      cell.tabIndex = 0;
+      cell.setAttribute('aria-label', `Сортировать: ${String(cell.textContent || '').trim()}`);
+    });
 
     const tmpMntRoot = isTmpMntRoot(p);
     const items = visibleSortedItems(side);
     updateHeaderSortUi();
 
-    const buildRow = (it) => {
+    const buildRow = (it, itemIndex) => {
       const row = document.createElement('div');
       const name = safeName(it && it.name);
       const type = String((it && it.type) || '');
       const linkDir = !!(it && it.link_dir);
       const isDir = type === 'dir' || (type === 'link' && linkDir);
       row.className = 'fm-row' + (isDir ? ' is-dir' : '');
-      row.setAttribute('role', 'option');
+      row.setAttribute('role', 'row');
       row.tabIndex = -1;
+      row.id = `fm-${side}-option-${Number(itemIndex || 0)}`;
       row.dataset.name = name;
       row.dataset.type = type;
       row.setAttribute('draggable', isLiteMode() ? 'false' : 'true');
@@ -323,6 +367,9 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       const selected = !!(p.selected && typeof p.selected.has === 'function' ? p.selected.has(name) : false);
       if (selected) row.classList.add('is-selected');
       if (focusName && focusName === name) row.classList.add('is-focused');
+      row.setAttribute('aria-selected', selected ? 'true' : 'false');
+      row.setAttribute('aria-posinset', String(Number(itemIndex || 0) + 1));
+      row.setAttribute('aria-setsize', String(items.length));
 
       const size = isDir ? 'DIR' : fmtSize(it && it.size);
       const perm = safeName(it && it.perm);
@@ -337,12 +384,12 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
           ? (linkDir ? (isDiskLabel ? '💽' : '📁') : '🔗')
           : '📄');
       row.innerHTML = `
-        <div class="fm-cell fm-check"><input type="checkbox" class="fm-check-input" aria-label="Выбрать" /></div>
-        <div class="fm-cell fm-name"><span class="fm-ico">${ico}</span><span class="fm-name-text"></span></div>
+        <div class="fm-cell fm-check" role="gridcell"><input type="checkbox" class="fm-check-input" aria-label="Выбрать" /></div>
+        <div class="fm-cell fm-name" role="gridcell"><span class="fm-ico">${ico}</span><span class="fm-name-text"></span></div>
         ${fromCell}
-        <div class="fm-cell fm-size">${size}</div>
-        <div class="fm-cell fm-perm">${perm ? perm : ''}</div>
-        <div class="fm-cell fm-mtime">${mtime}</div>
+        <div class="fm-cell fm-size" role="gridcell">${size}</div>
+        <div class="fm-cell fm-perm" role="gridcell">${perm ? perm : ''}</div>
+        <div class="fm-cell fm-mtime" role="gridcell">${mtime}</div>
       `;
       try {
         const t = qs('.fm-name-text', row);
@@ -354,21 +401,75 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
           if (ft) ft.textContent = trashFrom || '';
           const fc = qs('.fm-cell.fm-from', row);
           if (fc) fc.title = trashFrom || '';
+          if (fc) fc.setAttribute('role', 'gridcell');
         } catch (e) {}
       }
-      try { const cb = qs('.fm-check-input', row); if (cb) cb.checked = !!selected; } catch (e) {}
+      try {
+        const cb = qs('.fm-check-input', row);
+        if (cb) {
+          cb.checked = !!selected;
+          cb.setAttribute('aria-label', `Выбрать ${name}`);
+        }
+      } catch (e) {}
       return row;
     };
 
     list.innerHTML = '';
     list.appendChild(header);
 
+    if (!items.length) {
+      const empty = document.createElement('div');
+      const hasFilter = !!String(p.filter || '').trim();
+      const remoteDisconnected = p.target === 'remote' && !p.sid;
+      empty.className = 'fm-panel-state fm-empty';
+      empty.setAttribute('role', 'status');
+      empty.dataset.state = hasFilter ? 'filtered-empty' : (remoteDisconnected ? 'disconnected' : 'empty');
+
+      const title = hasFilter
+        ? 'Ничего не найдено'
+        : (remoteDisconnected ? 'Удалённый источник не подключён' : 'Папка пуста');
+      const detail = hasFilter
+        ? `Нет файлов по фильтру «${String(p.filter || '').trim()}».`
+        : (remoteDisconnected ? 'Выберите подключение, чтобы показать файлы.' : 'Здесь пока нет файлов и папок.');
+
+      const titleEl = document.createElement('div');
+      titleEl.className = 'fm-panel-state-title';
+      titleEl.textContent = title;
+      const detailEl = document.createElement('div');
+      detailEl.className = 'fm-panel-state-detail';
+      detailEl.textContent = detail;
+      empty.appendChild(titleEl);
+      empty.appendChild(detailEl);
+
+      if (hasFilter) {
+        const clear = document.createElement('button');
+        clear.type = 'button';
+        clear.className = 'btn-secondary fm-empty-action';
+        clear.textContent = 'Сбросить фильтр';
+        clear.addEventListener('click', () => {
+          p.filter = '';
+          try { if (pd.filterInput) pd.filterInput.value = ''; } catch (e) {}
+          R.renderPanel(side);
+          try { if (pd.filterInput) pd.filterInput.focus(); } catch (e) {}
+        });
+        empty.appendChild(clear);
+      }
+
+      list.appendChild(empty);
+      list.removeAttribute('aria-activedescendant');
+      setPanelState(pd, remoteDisconnected ? 'disconnected' : 'empty');
+      try { if (FM.status && typeof FM.status.updateFooterStatus === 'function') FM.status.updateFooterStatus(); } catch (e) {}
+      return;
+    }
+
+    setPanelState(pd, 'ready');
+
     // Large directories: incremental/batched render to avoid freezing the UI.
     const BIG = 1000;
     const BATCH = 250;
     if (!items || items.length <= BIG) {
       const frag = document.createDocumentFragment();
-      (items || []).forEach((it) => frag.appendChild(buildRow(it)));
+      (items || []).forEach((it, index) => frag.appendChild(buildRow(it, index)));
       list.appendChild(frag);
     } else {
       let idx = 0;
@@ -376,7 +477,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
         if (Number(S.renderToken[side] || 0) !== myToken) return;
         const frag = document.createDocumentFragment();
         for (let i = 0; i < BATCH && idx < items.length; i += 1, idx += 1) {
-          frag.appendChild(buildRow(items[idx]));
+          frag.appendChild(buildRow(items[idx], idx));
         }
         list.appendChild(frag);
         if (idx < items.length) {
@@ -385,7 +486,12 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
           // Ensure focus row visible
           try {
             const f = qs('.fm-row.is-focused', list);
-            if (f && typeof f.scrollIntoView === 'function') f.scrollIntoView({ block: 'nearest' });
+            if (f) {
+              list.setAttribute('aria-activedescendant', f.id);
+              if (typeof f.scrollIntoView === 'function') f.scrollIntoView({ block: 'nearest' });
+            } else {
+              list.removeAttribute('aria-activedescendant');
+            }
           } catch (e) {}
         }
       };
@@ -397,7 +503,12 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
     // Ensure focus row visible
     try {
       const f = qs('.fm-row.is-focused', list);
-      if (f && typeof f.scrollIntoView === 'function') f.scrollIntoView({ block: 'nearest' });
+      if (f) {
+        list.setAttribute('aria-activedescendant', f.id);
+        if (typeof f.scrollIntoView === 'function') f.scrollIntoView({ block: 'nearest' });
+      } else {
+        list.removeAttribute('aria-activedescendant');
+      }
     } catch (e) {}
 
     // Footer status: selected count/size + free space (best-effort)
@@ -426,11 +537,18 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       const isSel = !!(selected && selected.has(name));
       try { row.classList.toggle('is-selected', isSel); } catch (e) {}
       try { row.classList.toggle('is-focused', !!focusName && focusName === name); } catch (e) {}
+      try { row.setAttribute('aria-selected', isSel ? 'true' : 'false'); } catch (e) {}
       try {
         const cb = qs('.fm-check-input', row);
         if (cb) cb.checked = isSel;
       } catch (e) {}
     }
+
+    try {
+      const focused = qs('.fm-row.is-focused', list);
+      if (focused && focused.id) list.setAttribute('aria-activedescendant', focused.id);
+      else list.removeAttribute('aria-activedescendant');
+    } catch (e) {}
 
     try { if (FM.status && typeof FM.status.updateFooterStatus === 'function') FM.status.updateFooterStatus(); } catch (e) {}
   };

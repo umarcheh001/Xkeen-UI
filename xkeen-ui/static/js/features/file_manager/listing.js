@@ -117,6 +117,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
     // Remote requires session
     if (p.target === 'remote' && !p.sid) {
       _clearPanelError(side);
+      p.loading = false;
       p.items = [];
       try { p.selected && typeof p.selected.clear === 'function' && p.selected.clear(); } catch (e) {}
       p.focusName = '';
@@ -133,8 +134,16 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       return `/api/fs/list?target=remote&sid=${encodeURIComponent(p.sid)}&path=${encodeURIComponent(desired || def)}`;
     })();
 
-    // Loading state
-    try { pd.list && pd.list.classList.add('is-loading'); } catch (e) {}
+    // Loading state is explicit for both sighted and assistive-technology users.
+    try {
+      p.loading = true;
+      if (pd.root && pd.root.dataset) pd.root.dataset.state = 'loading';
+      if (pd.list) {
+        pd.list.classList.add('is-loading');
+        pd.list.setAttribute('aria-busy', 'true');
+      }
+    } catch (e) {}
+    _renderPanel(side);
 
     let data = null;
     try {
@@ -154,7 +163,14 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
         data = j;
       }
     } catch (err) {
-      try { pd.list && pd.list.classList.remove('is-loading'); } catch (e2) {}
+      try {
+        p.loading = false;
+        if (pd.root && pd.root.dataset) pd.root.dataset.state = 'error';
+        if (pd.list) {
+          pd.list.classList.remove('is-loading');
+          pd.list.setAttribute('aria-busy', 'false');
+        }
+      } catch (e2) {}
 
       const ae = (() => {
         try { if (E && typeof E.normalize === 'function') return E.normalize(err, { action: 'list', side }); } catch (e3) {}
@@ -178,7 +194,13 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       return false;
     }
 
-    try { pd.list && pd.list.classList.remove('is-loading'); } catch (e) {}
+    try {
+      p.loading = false;
+      if (pd.list) {
+        pd.list.classList.remove('is-loading');
+        pd.list.setAttribute('aria-busy', 'false');
+      }
+    } catch (e) {}
 
     // Success: clear panel error
     _clearPanelError(side);

@@ -66,7 +66,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260729i') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260729n') }}">
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -1527,10 +1527,10 @@
 </div>
 
 <div id="view-files" class="view-section" style="display:none;" data-xk-section="files">
-  <section class="card fm-card">
+  <section class="card fm-card" aria-labelledby="fm-title" data-fm-workspace="1">
     <div class="fm-header">
-      <h2>Файловый менеджер</h2>
-      <div class="fm-header-actions">
+      <h2 id="fm-title">Файловый менеджер</h2>
+      <div class="fm-header-actions fm-toolbar" role="toolbar" aria-label="Действия файлового менеджера">
         <button type="button" class="btn-secondary" id="fm-volumes-btn" style="display:none;" title="USB-диски/разделы: список и Mount/Unmount">💽 Диски</button>
         <button type="button" class="btn-secondary" id="fm-ops-btn" data-fm-lite-hide="1" title="Операции с файлами (копировать, переместить, удалить, архивы и т.д.)">🧾 Операции</button>
       </div>
@@ -1551,9 +1551,9 @@
     </div>
 
     <div class="fm-two" id="fm-root">
-      <div class="fm-panel" data-side="left">
-        <div class="fm-panel-bar">
-          <select class="fm-target-select" aria-label="Target" title="local / remote">
+      <div class="fm-panel" data-side="left" data-state="loading">
+        <div class="fm-panel-bar fm-toolbar" role="toolbar" aria-label="Навигация левой панели">
+          <select class="fm-target-select" aria-label="Источник левой панели" title="Локальный или удалённый источник">
             <option value="local">L</option>
             <option value="remote" data-fm-lite-hide="1">R</option>
           </select>
@@ -1568,12 +1568,12 @@
             <button type="button" class="btn-secondary fm-filter-clear-btn hidden" title="Очистить фильтр">✖</button>
           </div>
         </div>
-        <div class="fm-list" tabindex="0" role="listbox" aria-label="Left panel"></div>
+        <div class="fm-list" tabindex="0" role="grid" aria-multiselectable="true" aria-label="Файлы левой панели" aria-busy="true"></div>
       </div>
 
-      <div class="fm-panel" data-side="right">
-        <div class="fm-panel-bar">
-          <select class="fm-target-select" aria-label="Target" title="local / remote">
+      <div class="fm-panel" data-side="right" data-state="loading">
+        <div class="fm-panel-bar fm-toolbar" role="toolbar" aria-label="Навигация правой панели">
+          <select class="fm-target-select" aria-label="Источник правой панели" title="Локальный или удалённый источник">
             <option value="local">L</option>
             <option value="remote" data-fm-lite-hide="1">R</option>
           </select>
@@ -1588,7 +1588,7 @@
             <button type="button" class="btn-secondary fm-filter-clear-btn hidden" title="Очистить фильтр">✖</button>
           </div>
         </div>
-        <div class="fm-list" tabindex="0" role="listbox" aria-label="Right panel"></div>
+        <div class="fm-list" tabindex="0" role="grid" aria-multiselectable="true" aria-label="Файлы правой панели" aria-busy="true"></div>
       </div>
     </div>
     <div class="fm-hints">
@@ -1613,7 +1613,7 @@
 
     <div class="fm-footer">
       <button type="button" class="btn-secondary fm-help-btn" id="fm-help-btn" title="Справка (F1)" aria-label="Справка">❓ Справка</button>
-      <div class="fm-footer-actions" aria-label="File manager actions"></div>
+      <div class="fm-footer-actions fm-toolbar" role="toolbar" aria-label="Операции с файлами"></div>
     </div>
   </section>
 </div>

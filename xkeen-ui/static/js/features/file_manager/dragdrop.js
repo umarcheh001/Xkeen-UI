@@ -227,13 +227,27 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
     if (!root) return;
     try { qsa('.fm-list.is-drop-target', root).forEach((n) => n.classList.remove('is-drop-target')); } catch (e) {}
     try { qsa('.fm-row.is-drop-target', root).forEach((n) => n.classList.remove('is-drop-target')); } catch (e) {}
+    try { qsa('.fm-list[data-drop-state]', root).forEach((n) => { delete n.dataset.dropState; delete n.dataset.dropEffect; }); } catch (e) {}
+    try { qsa('.fm-row[data-drop-state]', root).forEach((n) => { delete n.dataset.dropState; }); } catch (e) {}
+    try { qsa('.fm-row.is-dragging', root).forEach((n) => n.classList.remove('is-dragging')); } catch (e) {}
   }
 
-  function setDropUi(pd, overRow) {
-    clearDropUi();
-    try { pd && pd.list && pd.list.classList.add('is-drop-target'); } catch (e) {}
+  function setDropUi(pd, overRow, effect) {
+    const root = el('fm-root');
+    try { qsa('.fm-list.is-drop-target', root).forEach((n) => n.classList.remove('is-drop-target')); } catch (e) {}
+    try { qsa('.fm-row.is-drop-target', root).forEach((n) => n.classList.remove('is-drop-target')); } catch (e) {}
+    try { qsa('.fm-list[data-drop-state]', root).forEach((n) => { delete n.dataset.dropState; delete n.dataset.dropEffect; }); } catch (e) {}
+    try { qsa('.fm-row[data-drop-state]', root).forEach((n) => { delete n.dataset.dropState; }); } catch (e) {}
+    try {
+      if (pd && pd.list) {
+        pd.list.classList.add('is-drop-target');
+        pd.list.dataset.dropState = overRow ? 'directory' : 'panel';
+        pd.list.dataset.dropEffect = String(effect || 'copy') === 'move' ? 'Переместить' : 'Копировать';
+      }
+    } catch (e) {}
     if (overRow && overRow.classList && overRow.classList.contains('is-dir')) {
       try { overRow.classList.add('is-drop-target'); } catch (e) {}
+      try { overRow.dataset.dropState = 'target'; } catch (e) {}
     }
   }
 
@@ -289,6 +303,16 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
 
     const defaultOp = e.ctrlKey ? 'copy' : 'move';
 
+    // Dropping back onto the same directory is a cancelled drag, not an
+    // operation. Do this before opening the Move/Copy chooser so releasing a
+    // file in its original panel never produces a pointless confirmation.
+    const sameLocalDir = (srcTarget === 'local' && dstPanel.target === 'local'
+      && _trimSlashes(String(srcCwd || '')) === _trimSlashes(String(dstPath || '')));
+    const sameRemoteDir = (srcTarget === 'remote' && dstPanel.target === 'remote'
+      && String(srcSid || '') === String(dstPanel.sid || '')
+      && normRemotePath(String(srcCwd || '')) === normRemotePath(String(dstPath || '')));
+    if (sameLocalDir || sameRemoteDir) return;
+
     // Ask user what to do (Move or Copy) — this is more reliable than Ctrl on some browsers/devices.
     const srcLabel = _panelLabel(srcSide, srcTarget, srcSid, srcCwd);
     const dstLabel = _panelLabel(dstSide, dstPanel.target, (dstPanel.target === 'remote') ? dstPanel.sid : '', dstPath);
@@ -299,20 +323,6 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
     }
     if (!chosenOp) return;
     const op = String(chosenOp || defaultOp);
-
-    // Safety: prevent pointless move/copy into the same folder when dropping onto panel background.
-    try {
-      const sameLocalDir = (srcTarget === 'local' && dstPanel.target === 'local'
-        && _trimSlashes(String(srcCwd || '')) === _trimSlashes(String(dstPath || '')));
-      const sameRemoteDir = (srcTarget === 'remote' && dstPanel.target === 'remote'
-        && String(srcSid || '') === String(dstPanel.sid || '')
-        && normRemotePath(String(srcCwd || '')) === normRemotePath(String(dstPath || '')));
-      if (sameLocalDir || sameRemoteDir) {
-        if (op === 'move') toast('Источник и назначение совпадают (move — нечего делать)', 'info');
-        else toast('Копирование в тот же каталог через Drag&Drop не поддерживается. Выберите другой каталог назначения или используйте F5.', 'info');
-        return;
-      }
-    } catch (e2) {}
 
     const payload = {
       op,
@@ -386,10 +396,17 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       try { e.dataTransfer.setData('text/x-xkeen-fm', JSON.stringify(payload)); } catch (e2) {}
       try { e.dataTransfer.setData('text/plain', 'xkeen-fm:' + JSON.stringify(payload)); } catch (e2) {}
       try { setActiveSide(side); } catch (e2) {}
+      try {
+        qsa('.fm-row[data-name]', pd.list).forEach((candidate) => {
+          candidate.classList.toggle('is-dragging', names.includes(String(candidate.dataset.name || '')));
+        });
+        pd.list.dataset.dragCount = String(names.length);
+      } catch (e2) {}
     });
 
     pd.list.addEventListener('dragend', () => {
       clearDropUi();
+      try { delete pd.list.dataset.dragCount; } catch (e) {}
     });
 
     pd.list.addEventListener('dragover', (e) => {
@@ -398,6 +415,9 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       // OS file upload drop
       if (hasFiles(e.dataTransfer)) {
         e.preventDefault();
+        try { e.dataTransfer.dropEffect = 'copy'; } catch (e2) {}
+        const overRow = e.target && e.target.closest ? e.target.closest('.fm-row.is-dir[data-name]') : null;
+        setDropUi(pd, overRow, 'copy');
         return;
       }
 
@@ -407,7 +427,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       try { e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : 'move'; } catch (e2) {}
 
       const overRow = e.target && e.target.closest ? e.target.closest('.fm-row.is-dir[data-name]') : null;
-      setDropUi(pd, overRow);
+      setDropUi(pd, overRow, e.ctrlKey ? 'copy' : 'move');
     });
 
     pd.list.addEventListener('dragleave', (e) => {
@@ -434,6 +454,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       // OS file drop -> upload into this panel (XHR progress).
       if (!hasFiles(e.dataTransfer)) return;
       e.preventDefault();
+      clearDropUi();
       const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
       if (!files.length) return;
       try {

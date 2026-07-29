@@ -251,6 +251,8 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       const d = panelDom(s);
       if (!d) return;
       try { d.root.classList.toggle('fm-panel-active', s === side); } catch (e) {}
+      try { d.root.dataset.active = s === side ? 'true' : 'false'; } catch (e) {}
+      try { d.list.setAttribute('aria-label', `Файлы ${s === 'left' ? 'левой' : 'правой'} панели${s === side ? ', активная панель' : ''}`); } catch (e) {}
     });
 
     try { updateFmFooterNavButtons(); } catch (e) {}
