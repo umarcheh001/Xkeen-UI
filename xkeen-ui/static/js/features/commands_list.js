@@ -162,28 +162,46 @@ let commandsListModuleApi = null;
     items.forEach((el) => {
       el.addEventListener('click', async () => {
         const flag = el.getAttribute('data-flag');
-        const label = el.getAttribute('data-label') || ('xkeen ' + flag);
+        // Presentation exposes one stable string model. Keep data-label as a
+        // compatibility fallback for older injected command rows.
+        const label = el.getAttribute('data-command')
+          || el.getAttribute('data-label')
+          || ('xkeen ' + flag);
+        const action = el.getAttribute('data-action') || 'run';
+        if (action !== 'run') return;
         if (!flag) return;
 
-        // Prefer PTY only on devices that explicitly support it.
+        const actionNode = el.querySelector('.command-item-action');
+        const previousAction = actionNode ? actionNode.textContent : '';
+        el.classList.add('loading');
+        el.setAttribute('aria-busy', 'true');
+        if (actionNode) actionNode.textContent = 'Выполняется…';
+
         try {
-          const ptyOk = await detectPtyCapability();
-          if (ptyOk) {
-            await openPtyAndRun(label);
-            return;
-          }
-        } catch (e0) {}
-
-        // No WS => keep old: open terminal with suggested command (does not auto-execute).
-        if (hasTerminalApi()) {
+          // Prefer PTY only on devices that explicitly support it.
           try {
-            await Promise.resolve(openXkeenTerminal({ cmd: label, mode: 'xkeen' }));
-            clampTerminalViewportSoon();
-            return;
-          } catch (e) {}
-        }
+            const ptyOk = await detectPtyCapability();
+            if (ptyOk) {
+              await openPtyAndRun(label);
+              return;
+            }
+          } catch (e0) {}
 
-        try { toastXkeen('Терминал недоступен.', 'error'); } catch (e) {}
+          // No WS => keep old: open terminal with suggested command (does not auto-execute).
+          if (hasTerminalApi()) {
+            try {
+              await Promise.resolve(openXkeenTerminal({ cmd: label, mode: 'xkeen' }));
+              clampTerminalViewportSoon();
+              return;
+            } catch (e) {}
+          }
+
+          try { toastXkeen('Терминал недоступен.', 'error'); } catch (e) {}
+        } finally {
+          el.classList.remove('loading');
+          el.removeAttribute('aria-busy');
+          if (actionNode) actionNode.textContent = previousAction || 'Выполнить';
+        }
       });
     });
   };

@@ -1378,9 +1378,14 @@
                     class="command-item"
                     data-flag="{{ cmd.flag }}"
                     data-label="xkeen {{ cmd.flag }}"
+                    data-command="xkeen {{ cmd.flag }}"
+                    data-action="run"
+                    aria-label="Выполнить xkeen {{ cmd.flag }}"
                     data-tooltip="{{ cmd.desc }}">
               <span class="command-item-prefix">xkeen</span>
               <code>{{ cmd.flag }}</code>
+              <span class="command-item-desc">{{ cmd.desc }}</span>
+              <span class="command-item-action">Выполнить</span>
             </button>
           </li>
         {% endfor %}
@@ -1399,9 +1404,14 @@
                   class="command-item"
                   data-flag="__sysmon_full"
                   data-label="sysmon --full"
+                  data-command="sysmon --full"
+                  data-action="run"
+                  aria-label="Выполнить sysmon --full"
                   data-tooltip="Мониторинг (расширенно): сеть/DNS/HTTPS/conntrack/ошибки интерфейсов/логи">
             <span class="command-item-prefix">panel</span>
             <code>sysmon --full</code>
+            <span class="command-item-desc">Расширенный мониторинг сети, DNS, HTTPS, conntrack, интерфейсов и логов</span>
+            <span class="command-item-action">Выполнить</span>
           </button>
         </li>
         <li class="command-item-wrap">
@@ -1409,9 +1419,14 @@
                   class="command-item"
                   data-flag="__entware_backup"
                   data-label="entware-backup"
+                  data-command="entware-backup"
+                  data-action="run"
+                  aria-label="Выполнить entware-backup"
                   data-tooltip="Создать tar.gz-бэкап Entware (/opt) на выбранный накопитель">
             <span class="command-item-prefix">panel</span>
             <code>entware-backup</code>
+            <span class="command-item-desc">Создать tar.gz-бэкап Entware (/opt) на выбранный накопитель</span>
+            <span class="command-item-action">Выполнить</span>
           </button>
         </li>
         <li class="command-item-wrap">
@@ -1419,9 +1434,14 @@
                   class="command-item"
                   data-flag="__storage_dashboard"
                   data-label="storage-dashboard"
+                  data-command="storage-dashboard"
+                  data-action="run"
+                  aria-label="Выполнить storage-dashboard"
                   data-tooltip="Дашборд хранилища: разделы, размеры, тип FS, использование, swap">
             <span class="command-item-prefix">panel</span>
             <code>storage-dashboard</code>
+            <span class="command-item-desc">Показать разделы, размеры, тип FS, использование и swap</span>
+            <span class="command-item-action">Выполнить</span>
           </button>
         </li>
         <li class="command-item-wrap">
@@ -1429,9 +1449,14 @@
                   class="command-item"
                   data-flag="__device_lock_detector"
                   data-label="device-locks"
+                  data-command="device-locks"
+                  data-action="run"
+                  aria-label="Выполнить device-locks"
                   data-tooltip="Детектор блокировок: какие процессы удерживают диски">
             <span class="command-item-prefix">panel</span>
             <code>device-locks</code>
+            <span class="command-item-desc">Найти процессы, которые удерживают диски</span>
+            <span class="command-item-action">Выполнить</span>
           </button>
         </li>
         <li class="command-item-wrap">
@@ -1439,9 +1464,14 @@
                   class="command-item"
                   data-flag="__memory_check"
                   data-label="memory-check"
+                  data-command="memory-check"
+                  data-action="run"
+                  aria-label="Выполнить memory-check"
                   data-tooltip="Диагностика памяти: RAM, swap, буферы, предупреждения, топ процессов">
             <span class="command-item-prefix">panel</span>
             <code>memory-check</code>
+            <span class="command-item-desc">Проверить RAM, swap, буферы, предупреждения и топ процессов</span>
+            <span class="command-item-action">Выполнить</span>
           </button>
         </li>
         <li class="command-item-wrap">
@@ -1449,9 +1479,14 @@
                   class="command-item"
                   data-flag="__version_check"
                   data-label="version-check"
+                  data-command="version-check"
+                  data-action="run"
+                  aria-label="Выполнить version-check"
                   data-tooltip="Проверка версий: xkeen, xkeen-ui, xray, mihomo — сравнение с GitHub">
             <span class="command-item-prefix">panel</span>
             <code>version-check</code>
+            <span class="command-item-desc">Сравнить версии XKeen, UI, Xray и Mihomo с GitHub</span>
+            <span class="command-item-action">Выполнить</span>
           </button>
         </li>
         <li class="command-item-wrap">
@@ -1459,9 +1494,14 @@
                   class="command-item"
                   data-flag="__backup_monitor"
                   data-label="backup-monitor"
+                  data-command="backup-monitor"
+                  data-action="run"
+                  aria-label="Выполнить backup-monitor"
                   data-tooltip="Монитор бэкапов: список архивов, валидация, статус последнего бэкапа">
             <span class="command-item-prefix">panel</span>
             <code>backup-monitor</code>
+            <span class="command-item-desc">Показать архивы, валидацию и статус последнего бэкапа</span>
+            <span class="command-item-action">Выполнить</span>
           </button>
         </li>
       </ul>

@@ -2416,7 +2416,9 @@ body.panel-page #view-xkeen .xkeen-mini-footer .actions > button {
   padding-inline: 10px;
 }
 
-/* Commands: sections and rows, without repeated product pills or tone cards. */
+/* Commands: compact multi-column data rows with a stable command / purpose / action
+ * model. Product prefixes remain attached as runtime-compatible nodes but are
+ * removed from the visual flow so the command name is never repeated. */
 body.panel-page #view-commands .commands-card {
   padding: 10px;
 }
@@ -2478,12 +2480,15 @@ html[data-theme="light"] body.panel-page #view-commands .commands-status-row .co
 }
 
 body.panel-page #view-commands #commands-body {
-  column-gap: 18px;
+  column-count: 3;
+  column-gap: 16px;
 }
 
 body.panel-page #view-commands #commands-body .command-group,
 body.panel-page #view-commands #commands-body .command-group + .command-group,
 html[data-theme="light"] body.panel-page #view-commands #commands-body .command-group {
+  display: inline-block;
+  width: 100%;
   margin: 0 0 6px;
   padding: 10px 0 8px;
   overflow: visible;
@@ -2492,6 +2497,9 @@ html[data-theme="light"] body.panel-page #view-commands #commands-body .command-
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
+  break-inside: avoid-column;
+  -webkit-column-break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 body.panel-page #view-commands #commands-body .command-group::before,
@@ -2533,29 +2541,73 @@ html[data-theme="light"] body.panel-page #view-commands .command-group-count {
 }
 
 body.panel-page #view-commands .command-list {
-  gap: 5px;
+  display: block;
+  border-top: 1px solid var(--op-border);
 }
 
 body.panel-page #view-commands .command-item,
 html[data-theme="light"] body.panel-page #view-commands .command-item {
-  min-height: 32px;
-  padding: 5px 9px;
-  border: 1px solid var(--op-border) !important;
-  border-radius: var(--op-radius-sm) !important;
-  background: var(--op-surface-2) !important;
+  display: grid;
+  grid-template-columns: minmax(112px, 0.4fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 7px 8px;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
   color: var(--op-text) !important;
   box-shadow: none !important;
   transform: none !important;
+  text-align: left;
+  white-space: normal;
 }
 
 body.panel-page #view-commands .command-item:hover {
-  border-color: var(--op-accent-border) !important;
-  background: var(--op-accent-soft) !important;
+  background: var(--op-surface-2) !important;
   color: var(--op-text-strong) !important;
 }
 
 body.panel-page #view-commands .command-item-prefix {
   display: none !important;
+}
+
+body.panel-page #view-commands .command-item code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--op-text-strong) !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page #view-commands .command-item-desc {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--op-data-muted) !important;
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page #view-commands .command-item-action {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 74px;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-sm);
+  background: var(--op-surface-2);
+  color: var(--op-text);
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  white-space: nowrap;
 }
 
 /* Logs are terminal-like records, with restrained status color. */
@@ -4437,6 +4489,11 @@ body.panel-page .footer {
 }
 
 @media (max-width: 820px) {
+  body.panel-page #view-commands #commands-body {
+    column-count: 2;
+    column-gap: 12px;
+  }
+
   body.panel-page #routing-dat-contents-modal .xk-dat-modal-content,
   body.panel-page #ui-settings-modal .xk-ui-settings-modal-content {
     width: calc(100vw - 14px);
@@ -4528,6 +4585,12 @@ body.panel-page .footer {
   body.panel-page .routing-balancer-actions {
     width: 100%;
     overflow-x: auto;
+  }
+
+  body.panel-page #view-commands .command-item,
+  html[data-theme="light"] body.panel-page #view-commands .command-item {
+    grid-template-columns: minmax(92px, 0.38fr) minmax(0, 1fr) auto;
+    gap: 8px;
   }
 }
 
@@ -4715,6 +4778,37 @@ body.panel-page .footer {
   body.panel-page .card {
     padding: 8px;
     border-radius: var(--op-radius) !important;
+  }
+
+  body.panel-page #view-commands #commands-body {
+    column-count: 1;
+    column-gap: 0;
+  }
+
+  body.panel-page #view-commands .command-item,
+  html[data-theme="light"] body.panel-page #view-commands .command-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 3px 8px;
+    padding-block: 7px;
+  }
+
+  body.panel-page #view-commands .command-item code {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  body.panel-page #view-commands .command-item-desc {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  body.panel-page #view-commands .command-item-action {
+    grid-column: 2;
+    grid-row: 1;
+    min-height: 30px;
   }
 
   body.panel-page .routing-side-card {
