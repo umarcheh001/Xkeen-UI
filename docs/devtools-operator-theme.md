@@ -32,17 +32,21 @@ DevTools переведён со старой blue-glass темы на тот ж
 
 - шапка стала компактной плоской surface с нейтральными действиями;
 - Tools/Logs собраны в navigation rail с 2 px active marker;
-- рабочая сетка использует компактную левую колонку 300–360 px и растущий ENV workspace;
+- шапка и navigation rail соединены в одну поверхность без разрыва на нижних углах header;
+- рабочая сетка использует расширенную левую колонку 400–440 px и растущий ENV workspace;
 - service controls больше не имеют постоянной зелёной/красной/жёлтой заливки;
 - collapsible cards используют один header/body contract без цветных glyph-карточек;
 - ENV groups стали плоскими data rows, категория больше не задаёт отдельную палитру;
 - ENV table имеет sticky header и собственный scroll-region.
+- колонка действий ENV резервирует место под `Save` / `Unset` и выравнивает их вправо под group count, поэтому кнопки не выходят за границу и не проваливаются внутрь строки;
 
 ## Экран Logs и модалы
 
 - log list использует neutral/hover/active row states;
 - toolbar и filters собраны из общих action/field primitives;
+- контрол интервала автообновления использует нейтральную поверхность вместо синей legacy-плашки;
 - log canvas остаётся главным объектом и использует `--op-editor`;
+- portal-tooltips явно связаны с Operator tokens и больше не наследуют старую синюю тему;
 - ENV help, confirm и log context используют общий flat modal frame;
 - на mobile модалы становятся fullscreen, header/body/footer остаются в рабочем потоке.
 

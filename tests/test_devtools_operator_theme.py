@@ -9,6 +9,8 @@ LEGACY_CSS = ROOT / "xkeen-ui/static/devtools.css"
 PLAN = ROOT / "docs/panel-operator-redesign-completion-plan.md"
 DOC = ROOT / "docs/devtools-operator-theme.md"
 INDEX = ROOT / "docs/README.md"
+THEME_BOOTSTRAP = ROOT / "xkeen-ui/templates/_top_level_host_theme_bootstrap.html"
+PANEL_TEMPLATE = ROOT / "xkeen-ui/templates/panel.html"
 
 
 def test_devtools_operator_stylesheet_is_isolated_and_loaded_last():
@@ -78,7 +80,11 @@ def test_devtools_operator_layer_covers_shell_tools_env_logs_modals_and_mobile()
     ):
         assert anchor in css
 
-    assert "grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);" in css
+    assert "grid-template-columns: minmax(400px, 440px) minmax(0, 1fr);" in css
+    assert "#xk-tooltip-portal .xk-tooltip-bubble" in css
+    assert "#dt-env-card thead th:nth-child(4) { width: 156px; }" in css
+    assert "text-align: right;" in css
+    assert ".dt-log-interval" in css
     assert "max-height: calc(100vh - 210px);" in css
     assert "min-width: 760px;" in css
     assert "min-height: 100dvh;" in css
@@ -101,3 +107,15 @@ def test_devtools_operator_migration_is_documented():
     assert "Статус: **закрыт 29 июля 2026 года**." in doc
     assert "## Автоматические проверки" in doc
     assert "devtools-operator-theme.md" in index
+
+
+def test_devtools_back_navigation_has_operator_first_paint_guard():
+    bootstrap = THEME_BOOTSTRAP.read_text(encoding="utf-8")
+    panel = PANEL_TEMPLATE.read_text(encoding="utf-8")
+
+    assert "document.referrer" in bootstrap
+    assert "(location.pathname || '') === '/'" in bootstrap
+    assert "xk-panel-operator-pending" in bootstrap
+    assert "xk-panel-operator-paint-guard" in bootstrap
+    assert "classList.remove('xk-panel-operator-pending')" in panel
+    assert "getElementById('xk-panel-operator-paint-guard')?.remove()" in panel

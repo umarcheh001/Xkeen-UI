@@ -34,6 +34,7 @@ async function readOperatorGeometry(page) {
       headerRadius: style('.dt-page-header').borderRadius,
       cardRadius: style('#dt-service-card').borderRadius,
       groupRadius: style('.dt-env-group-toggle').borderRadius,
+      toolsColumns: style('.dt-tools-layout').gridTemplateColumns,
       envScrollOverflow: document.querySelector('.dt-env-scroll').scrollWidth - document.querySelector('.dt-env-scroll').clientWidth,
       bodyBackground: style('body').backgroundImage,
       gradients: representatives.filter((selector) => style(selector).backgroundImage !== 'none'),
@@ -54,9 +55,12 @@ test.describe('DevTools Operator Console theme', () => {
       expect(geometry.lastStylesheet).toContain('/static/devtools-operator.css');
       expect(geometry.pageOverflow).toBeLessThanOrEqual(1);
       expect(geometry.headerHeight).toBeLessThanOrEqual(54);
-      expect(geometry.headerRadius).toBe('12px');
+      expect(geometry.headerRadius).toBe('12px 12px 0px 0px');
       expect(geometry.cardRadius).toBe('9px');
       expect(geometry.groupRadius).toBe('6px');
+      const [sideWidth] = geometry.toolsColumns.split(' ').map(Number.parseFloat);
+      expect(sideWidth).toBeGreaterThanOrEqual(400);
+      expect(sideWidth).toBeLessThanOrEqual(440);
       expect(geometry.bodyBackground).toBe('none');
       expect(geometry.gradients).toEqual([]);
       expect(geometry.backdropFilters).toEqual([]);
@@ -79,6 +83,8 @@ test.describe('DevTools Operator Console theme', () => {
         viewBackgroundImage: getComputedStyle(view).backgroundImage,
         cardBackgroundImage: getComputedStyle(card).backgroundImage,
         viewRadius: getComputedStyle(view).borderRadius,
+        intervalBackground: getComputedStyle(document.querySelector('.dt-log-interval')).backgroundColor,
+        intervalRadius: getComputedStyle(document.querySelector('.dt-log-interval')).borderRadius,
       };
     });
 
@@ -87,6 +93,43 @@ test.describe('DevTools Operator Console theme', () => {
     expect(geometry.viewBackgroundImage).toBe('none');
     expect(geometry.cardBackgroundImage).toBe('none');
     expect(geometry.viewRadius).toBe('9px');
+    expect(geometry.intervalBackground).toBe('rgba(0, 0, 0, 0)');
+    expect(geometry.intervalRadius).toBe('6px');
+  });
+
+  test('ENV actions and portal tooltips stay inside operator chrome', async ({ page }) => {
+    await openDevtools(page, 'dark', { width: 1440, height: 900 });
+
+    const firstGroup = page.locator('.dt-env-group-toggle').first();
+    if ((await firstGroup.getAttribute('aria-expanded')) !== 'true') {
+      await firstGroup.click();
+    }
+    await expect(page.locator('.dt-env-row').first()).toBeVisible();
+
+    const actionGeometry = await page.locator('.dt-env-row').first().evaluate((row) => {
+      const cell = row.querySelector('td:nth-child(4)');
+      const buttons = Array.from(cell.querySelectorAll('button'));
+      const cellRect = cell.getBoundingClientRect();
+      return {
+        cellRight: cellRect.right,
+        lastButtonRight: buttons.at(-1).getBoundingClientRect().right,
+        tableRight: row.closest('table').getBoundingClientRect().right,
+        actionTextAlign: getComputedStyle(cell).textAlign,
+      };
+    });
+    expect(actionGeometry.lastButtonRight).toBeLessThanOrEqual(actionGeometry.cellRight + 1);
+    expect(actionGeometry.lastButtonRight).toBeLessThanOrEqual(actionGeometry.tableRight + 1);
+    expect(actionGeometry.cellRight - actionGeometry.lastButtonRight).toBeLessThanOrEqual(8);
+    expect(actionGeometry.actionTextAlign).toBe('right');
+
+    const interval = page.locator('.dt-log-interval');
+    await page.locator('#dt-tab-btn-logs').click();
+    await interval.hover();
+    const tooltip = page.locator('#xk-tooltip-portal .xk-tooltip-bubble');
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toHaveCSS('background-color', 'rgb(32, 37, 45)');
+    await expect(tooltip).toHaveCSS('border-radius', '6px');
+    await expect(tooltip).toHaveCSS('backdrop-filter', 'none');
   });
 
   test('mobile contains the ENV table in its own scroller', async ({ page }) => {
@@ -96,6 +139,6 @@ test.describe('DevTools Operator Console theme', () => {
     expect(geometry.pageOverflow).toBeLessThanOrEqual(1);
     expect(geometry.envScrollOverflow).toBeGreaterThan(0);
     await expect(page.locator('.dt-env-scroll')).toHaveCSS('overflow-x', 'auto');
-    await expect(page.locator('.dt-page-header')).toHaveCSS('border-radius', '9px');
+    await expect(page.locator('.dt-page-header')).toHaveCSS('border-radius', '9px 9px 0px 0px');
   });
 });

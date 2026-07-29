@@ -43,6 +43,15 @@ body.devtools-page {
   --op-control-compact-h: 28px;
   --op-touch-target: 40px;
 
+  /* Global tooltip runtime is shared with the main panel and mounts its
+     portal directly under <body>. Bridge it explicitly so DevTools cannot
+     fall back to the retired navy/blue tooltip palette. */
+  --xk-tooltip-bg: var(--op-surface-3);
+  --xk-tooltip-text: var(--op-text);
+  --xk-tooltip-border: var(--op-border-strong);
+  --xk-tooltip-shadow: rgba(0, 0, 0, 0.34);
+  --xk-tooltip-backdrop: none;
+
   /* Bridge runtime-created legacy components onto the Operator palette. */
   --page-bg: var(--op-bg);
   --card-bg: var(--op-surface);
@@ -184,6 +193,25 @@ body.devtools-page :is(h1, h2, h3, h4) {
   text-shadow: none !important;
 }
 
+body.devtools-page #xk-tooltip-portal .xk-tooltip-bubble {
+  padding: 7px 9px;
+  border: 1px solid var(--op-border-strong) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-text) !important;
+  box-shadow: var(--op-shadow-float) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+body.devtools-page #xk-tooltip-portal .xk-tooltip-arrow {
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-3) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
 body.devtools-page :is(code, pre, textarea) {
   font-family: var(--xk-mono-font-family, "SFMono-Regular", Consolas, "Liberation Mono", monospace);
 }
@@ -211,7 +239,7 @@ body.devtools-page .dt-page-header {
   padding: 0;
   overflow: visible;
   border: 1px solid var(--op-border) !important;
-  border-radius: var(--op-radius-lg) !important;
+  border-radius: var(--op-radius-lg) var(--op-radius-lg) 0 0 !important;
   background: var(--op-surface) !important;
   box-shadow: var(--op-shadow) !important;
 }
@@ -585,7 +613,7 @@ body.devtools-page .view-section {
 }
 
 body.devtools-page .dt-tools-layout {
-  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  grid-template-columns: minmax(400px, 440px) minmax(0, 1fr);
   gap: 9px;
   align-items: start;
 }
@@ -803,7 +831,7 @@ body.devtools-page #dt-env-card thead th {
 body.devtools-page #dt-env-card thead th:nth-child(1) { width: 28%; }
 body.devtools-page #dt-env-card thead th:nth-child(2) { width: 21%; }
 body.devtools-page #dt-env-card thead th:nth-child(3) { width: auto; }
-body.devtools-page #dt-env-card thead th:nth-child(4) { width: 112px; }
+body.devtools-page #dt-env-card thead th:nth-child(4) { width: 156px; }
 
 body.devtools-page #dt-env-card tbody :is(th, td) {
   padding: 7px 10px;
@@ -812,6 +840,27 @@ body.devtools-page #dt-env-card tbody :is(th, td) {
   color: var(--op-text);
   font-size: calc(11px * var(--xk-font-scale, 1));
   vertical-align: middle;
+}
+
+/* Runtime creates both ENV actions in the last fixed-layout table column.
+   Reserve their real width and neutralize the legacy inline minimum so the
+   buttons stay inside the scroll surface instead of spilling through its
+   right edge. */
+body.devtools-page #dt-env-card tbody tr.dt-env-row td:nth-child(4) {
+  width: 156px;
+  min-width: 0 !important;
+  padding-inline: 7px;
+  white-space: nowrap;
+  text-align: right;
+}
+
+body.devtools-page #dt-env-card tbody tr.dt-env-row td:nth-child(4) > button {
+  min-width: 0;
+  padding-inline: 8px;
+}
+
+body.devtools-page #dt-env-card tbody tr.dt-env-row td:nth-child(4) > .btn-danger {
+  margin-left: 4px !important;
 }
 
 body.devtools-page #dt-env-card tbody tr:last-child td {
@@ -946,6 +995,32 @@ body.devtools-page :is(.dt-log-topbar, .dt-log-controls) {
   border-radius: var(--op-radius);
   background: var(--op-surface-2) !important;
   box-shadow: none !important;
+}
+
+body.devtools-page .dt-log-interval {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: var(--op-control-compact-h);
+  padding: 3px 4px 3px 7px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: transparent !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+}
+
+body.devtools-page .dt-log-interval-label {
+  color: var(--op-muted) !important;
+  opacity: 1;
+}
+
+body.devtools-page .dt-log-interval .xray-log-select {
+  min-height: 22px;
+  padding: 2px 22px 2px 6px;
+  border-color: var(--op-border) !important;
+  background-color: var(--op-bg) !important;
+  color: var(--op-text) !important;
 }
 
 body.devtools-page :is(.dt-log-view, .dt-update-log, #dt-log-context-body) {
@@ -1098,7 +1173,7 @@ html[data-theme="light"] body.devtools-page {
   }
 
   body.devtools-page .dt-page-header {
-    border-radius: var(--op-radius) !important;
+    border-radius: var(--op-radius) var(--op-radius) 0 0 !important;
   }
 
   body.devtools-page .dt-page-header-bar {

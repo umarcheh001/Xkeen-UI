@@ -20,5 +20,20 @@
     }
     document.documentElement.setAttribute('data-theme', theme);
     document.documentElement.style.colorScheme = theme;
+
+    // The main panel still loads its historical blue compatibility stylesheet
+    // before the late Operator override. Cover only that short first-paint
+    // window when arriving from DevTools; the guard is removed by a tiny
+    // inline script after the final stylesheet tag in panel.html.
+    try {
+      var isPanelPath = (location.pathname || '') === '/' || /\/panel(?:\/|$)/.test(location.pathname || '');
+      if (/\/devtools(?:[?#]|$)/.test(document.referrer || '') && isPanelPath) {
+        document.documentElement.classList.add('xk-panel-operator-pending');
+        var guard = document.createElement('style');
+        guard.id = 'xk-panel-operator-paint-guard';
+        guard.textContent = 'html.xk-panel-operator-pending::after{content:"";position:fixed;inset:0;z-index:2147483647;background:#0d0f13;pointer-events:none}html[data-theme="light"].xk-panel-operator-pending::after{background:#f1f2f5}';
+        document.head.appendChild(guard);
+      }
+    } catch (e3) {}
   })();
 </script>
