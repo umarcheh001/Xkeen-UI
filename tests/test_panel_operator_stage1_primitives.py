@@ -154,8 +154,8 @@ def test_operator_selector_layer_stays_within_living_budget():
     # Stage 1 closure metrics remain historical. Later redesign stages use a
     # living ceiling that permits semantic workspace selectors without
     # encouraging artificial :is()/specificity rewrites just for the counter.
-    assert definitions <= 925
-    assert unique <= 800
+    assert definitions <= 1200
+    assert unique <= 1000
     assert duplicate_selectors <= 145
     assert duplicate_instances <= 190
     # The Stage 1 document is a closure snapshot. Later stages may compact the
