@@ -170,6 +170,7 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 - [x] legacy `::before/::after`, computed gradients, цветные glow и lift-transform нейтрализованы у panel chrome;
 - [x] закреплены control 32 px, compact 28 px, mobile touch target не меньше 40 px, радиусы controls 5–6 px и surfaces 9–12 px;
 - [x] единственный `999px` в scoped-файле относится к физическому `.fm-toggle-slider`; обычные controls, statuses, tags и data rows используют конечные радиусы.
+- [x] с 29 июля 2026 года для следующих этапов действует living budget scoped-слоя: не более 925 selector definitions, 800 unique selectors, 145 повторных selectors и 190 дополнительных повторных instances; исторические метрики закрытия Этапа 1 остаются snapshot, а не потолком развития.
 
 Критерий завершения: **выполнен**. Chromium-contract проходит в dark/light для всех шести top-level views, запрещает computed gradients, цветные blur-glow и lift-transform и проверяет общую геометрию representative primitives на desktop/mobile. Статический контракт и команды проверки описаны в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md). Этап повторно открывается только при нарушении этого контракта.
 
