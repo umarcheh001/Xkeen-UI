@@ -632,7 +632,12 @@ body.panel-page .top-tabs.header-tabs .top-tab-btn:hover {
 
 body.panel-page .top-tabs.header-tabs .top-tab-btn.active {
   color: var(--op-text-strong) !important;
-  background: var(--op-accent-soft) !important;
+  background: transparent !important;
+}
+
+body.panel-page .top-tabs.header-tabs .top-tab-btn.active::before {
+  content: none !important;
+  display: none !important;
 }
 
 body.panel-page .top-tabs.header-tabs .top-tab-btn.active::after {
@@ -643,6 +648,10 @@ body.panel-page .top-tabs.header-tabs .top-tab-btn:focus-visible {
   background: var(--op-accent-soft) !important;
   outline-color: var(--op-accent) !important;
   outline-offset: -3px;
+}
+
+body.panel-page .top-tabs.header-tabs .top-tab-btn.active:focus-visible {
+  background: transparent !important;
 }
 
 /* Service and workspace controls share a single restrained command row. */
