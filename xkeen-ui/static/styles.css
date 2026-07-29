@@ -10389,6 +10389,8 @@ html[data-theme="light"] .xk-sub-draft-badge {
   flex: 0 0 auto;
   max-height: none;
   overflow: visible;
+  grid-auto-rows: 1fr;
+  align-items: stretch;
 }
 
 .xk-outbounds-node-panel {
@@ -10582,6 +10584,8 @@ html[data-theme="light"] .xk-sub-draft-badge {
 
 #outbounds-subscriptions-nodes-list .xk-sub-node-item {
   gap: 10px;
+  align-self: stretch;
+  height: 100%;
   padding: 10px 11px 9px;
   border-radius: 12px;
 }
