@@ -66,7 +66,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260729n') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260729p') }}">
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -1114,25 +1114,27 @@
                 <p class="xk-card-desc">Сохранить текущий текст редактора как отдельный профиль Mihomo.</p>
               </div>
               <div class="xk-mihomo-profile-create-row">
-                <label class="xk-mihomo-profile-field" for="mihomo-new-profile-name">
-                  <span class="xk-op-field-label">Имя профиля</span>
-                  <input id="mihomo-new-profile-name"
-                         class="xkeen-input xk-mihomo-profile-input"
-                         type="text"
-                         autocomplete="off"
-                         aria-required="true"
-                         aria-invalid="false"
-                         aria-describedby="mihomo-new-profile-name-hint mihomo-new-profile-name-error"
-                         placeholder="Например, home">
+                <div class="xk-mihomo-profile-field">
+                  <label class="xk-op-field-label" for="mihomo-new-profile-name">Имя профиля</label>
+                  <div class="xk-mihomo-profile-control-row">
+                    <input id="mihomo-new-profile-name"
+                           class="xkeen-input xk-mihomo-profile-input"
+                           type="text"
+                           autocomplete="off"
+                           aria-required="true"
+                           aria-invalid="false"
+                           aria-describedby="mihomo-new-profile-name-hint mihomo-new-profile-name-error"
+                           placeholder="Например, home">
+                    <button id="mihomo-save-profile-btn"
+                            class="btn-secondary xk-mihomo-profile-save-btn"
+                            type="submit"
+                            title="Сохранить текущий config.yaml как профиль">
+                      💾 Сохранить
+                    </button>
+                  </div>
                   <span id="mihomo-new-profile-name-hint" class="xk-op-field-hint">Без расширения <code>.yaml</code>.</span>
                   <span id="mihomo-new-profile-name-error" class="xk-op-field-error" role="alert" hidden>Введите имя профиля.</span>
-                </label>
-                <button id="mihomo-save-profile-btn"
-                        class="btn-secondary xk-mihomo-profile-save-btn"
-                        type="submit"
-                        title="Сохранить текущий config.yaml как профиль">
-                  💾 Сохранить
-                </button>
+                </div>
               </div>
             </form>
           </section>

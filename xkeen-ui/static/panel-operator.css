@@ -4693,7 +4693,7 @@ body.panel-page .xk-mihomo-vault-table--profiles td:nth-child(2) {
 
 body.panel-page .xk-mihomo-vault-table--profiles th:nth-child(3),
 body.panel-page .xk-mihomo-vault-table--profiles td:nth-child(3) {
-  width: 164px;
+  width: 224px;
 }
 
 body.panel-page .xk-mihomo-vault-table--backups th:nth-child(1),
@@ -4776,6 +4776,17 @@ body.panel-page .xk-mihomo-row-actions {
   flex-wrap: nowrap;
 }
 
+body.panel-page .xk-mihomo-vault-table--profiles .xk-mihomo-row-actions {
+  display: grid;
+  grid-template-columns: var(--op-control-compact-h) minmax(132px, 1fr) var(--op-control-compact-h);
+  width: 100%;
+}
+
+body.panel-page .xk-mihomo-vault-table--profiles .xk-mihomo-mini-btn[data-action="activate"] {
+  width: 100%;
+  min-width: 0;
+}
+
 body.panel-page .xk-mihomo-mini-btn {
   min-height: var(--op-control-compact-h);
   padding: 0 9px;
@@ -4809,23 +4820,34 @@ body.panel-page .xk-mihomo-profile-create {
   align-items: end;
   margin: 0 !important;
   padding: 10px 12px;
+  border: 0 !important;
   border-top: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
   background: var(--op-surface) !important;
 }
 
 body.panel-page .xk-mihomo-profile-create-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px;
-  align-items: end;
+  display: block;
 }
 
 body.panel-page .xk-mihomo-profile-field {
   min-width: 0;
 }
 
+body.panel-page .xk-mihomo-profile-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+body.panel-page .xk-mihomo-profile-input {
+  margin: 0 !important;
+}
+
 body.panel-page .xk-mihomo-profile-save-btn {
-  margin: 0 0 20px;
+  align-self: center;
+  margin: 0 !important;
 }
 
 body.panel-page .xk-mihomo-backups-toolbar {
@@ -4859,6 +4881,7 @@ body.panel-page .xk-mihomo-backups-active-pill {
 }
 
 body.panel-page .xk-mihomo-backups-clean {
+  align-items: center;
   gap: 6px;
 }
 
@@ -4867,10 +4890,12 @@ body.panel-page .xk-mihomo-backups-clean-input {
   min-width: 48px;
   height: var(--op-control-compact-h);
   min-height: var(--op-control-compact-h);
+  margin: 0 !important;
   padding: 0 6px;
 }
 
 body.panel-page .xk-mihomo-backups-clean-btn {
+  align-self: center;
   width: var(--op-control-compact-h);
   min-width: var(--op-control-compact-h);
   height: var(--op-control-compact-h);
