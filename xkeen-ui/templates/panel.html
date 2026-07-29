@@ -1096,7 +1096,7 @@
             </div>
 
             <div class="xk-mihomo-vault-table-shell xk-mihomo-vault-table-shell--profiles">
-              <table class="xkeen-table xk-mihomo-vault-table xk-mihomo-vault-table--profiles">
+              <table class="xkeen-table xk-mihomo-vault-table xk-mihomo-vault-table--profiles" aria-label="Профили Mihomo">
                 <thead>
                   <tr>
                     <th>Профиль</th>
@@ -1108,24 +1108,33 @@
               </table>
             </div>
 
-            <div class="xk-mihomo-profile-create">
+            <form class="xk-mihomo-profile-create" id="mihomo-profile-create-form">
               <div class="xk-mihomo-profile-create-copy">
                 <h5>Новый профиль из редактора</h5>
                 <p class="xk-card-desc">Сохранить текущий текст редактора как отдельный профиль Mihomo.</p>
               </div>
               <div class="xk-mihomo-profile-create-row">
-                <input id="mihomo-new-profile-name"
-                       class="xkeen-input xk-mihomo-profile-input"
-                       type="text"
-                       placeholder="Имя профиля (без .yaml)">
+                <label class="xk-mihomo-profile-field" for="mihomo-new-profile-name">
+                  <span class="xk-op-field-label">Имя профиля</span>
+                  <input id="mihomo-new-profile-name"
+                         class="xkeen-input xk-mihomo-profile-input"
+                         type="text"
+                         autocomplete="off"
+                         aria-required="true"
+                         aria-invalid="false"
+                         aria-describedby="mihomo-new-profile-name-hint mihomo-new-profile-name-error"
+                         placeholder="Например, home">
+                  <span id="mihomo-new-profile-name-hint" class="xk-op-field-hint">Без расширения <code>.yaml</code>.</span>
+                  <span id="mihomo-new-profile-name-error" class="xk-op-field-error" role="alert" hidden>Введите имя профиля.</span>
+                </label>
                 <button id="mihomo-save-profile-btn"
                         class="btn-secondary xk-mihomo-profile-save-btn"
-                        type="button"
+                        type="submit"
                         title="Сохранить текущий config.yaml как профиль">
                   💾 Сохранить
                 </button>
               </div>
-            </div>
+            </form>
           </section>
 
           <section class="xk-mihomo-vault-card xk-mihomo-vault-card--backups">
@@ -1166,7 +1175,7 @@
             </div>
 
             <div class="xk-mihomo-vault-table-shell xk-mihomo-vault-table-shell--backups">
-              <table class="xkeen-table xk-mihomo-vault-table xk-mihomo-vault-table--backups">
+              <table class="xkeen-table xk-mihomo-vault-table xk-mihomo-vault-table--backups" aria-label="Бэкапы Mihomo">
                 <thead>
                   <tr>
                     <th>Файл</th>
@@ -2964,11 +2973,11 @@ https://..."></textarea>
         </div>
         <div class="modal-actions xk-mi-footer">
           <div class="xk-mi-footer-actions">
-            <button type="button" id="mihomo-import-parse-btn" class="xk-mi-primary-action" data-tooltip="Преобразовать ссылку в YAML и показать результат.">✨ Преобразовать</button>
-            <button type="button" id="mihomo-import-parse-static-btn" class="btn-compact xk-mi-primary-action" data-tooltip="Скачать подписку через доступные заголовки и вставить найденные узлы как статические proxies.">В proxies</button>
-            <button type="button" id="mihomo-import-insert-btn" class="btn-primary xk-mi-primary-action" data-tooltip="Вставить YAML в config.yaml (proxies / proxy-providers) и закрыть окно." disabled>✅ Вставить в конфиг</button>
+            <button type="button" id="mihomo-import-parse-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Преобразовать ссылку в YAML и показать результат.">Преобразовать</button>
+            <button type="button" id="mihomo-import-parse-static-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Скачать подписку через доступные заголовки и вставить найденные узлы как статические proxies.">В proxies</button>
+            <button type="button" id="mihomo-import-insert-btn" class="btn-primary btn-compact xk-mi-primary-action" data-tooltip="Вставить YAML в config.yaml (proxies / proxy-providers) и закрыть окно." disabled>Вставить в конфиг</button>
           </div>
-          <button type="button" id="mihomo-import-cancel-btn" class="btn-compact">Отмена</button>
+          <button type="button" id="mihomo-import-cancel-btn" class="btn-secondary btn-compact">Отмена</button>
         </div>
       </div>
     </div>
@@ -3121,8 +3130,8 @@ https://..."></textarea>
             <span class="xk-hw-kicker">Mihomo · Premium HWID subscription</span>
             <span class="modal-title">HWID‑подписка</span>
             <p class="xk-hw-subtitle">
-              Аккуратно добавляет <b>proxy-provider</b> с HWID‑заголовками в <code>config.yaml</code>.
-              Сначала проверь ссылку, посмотри итоговый YAML, затем либо вставь provider в редактор, либо сразу примени и поставь рестарт в очередь.
+              Добавляет <b>proxy-provider</b> с HWID‑заголовками в <code>config.yaml</code>.
+              Проверь ссылку и preview, затем вставь provider или примени его с рестартом.
             </p>
           </div>
           <button type="button" class="modal-close" id="mihomo-hwid-close-btn" title="Закрыть">×</button>
@@ -3265,11 +3274,11 @@ https://..."></textarea>
 
         <div class="modal-actions xk-hw-footer">
           <div class="xk-hw-footer-actions">
-            <button type="button" id="mihomo-hwid-probe-btn" class="xk-hw-secondary-btn" data-tooltip="Проверить ссылку, собрать HWID-заголовки и показать YAML preview.">🔎 Проверить</button>
-            <button type="button" id="mihomo-hwid-insert-btn" class="btn-primary xk-hw-primary-btn" data-tooltip="Вставить proxy-provider в config.yaml редактора и закрыть окно." disabled>✅ Вставить в конфиг</button>
-            <button type="button" id="mihomo-hwid-apply-restart-btn" class="btn-primary xk-hw-primary-btn" data-tooltip="Сервер сохранит config.yaml и поставит рестарт в очередь." disabled>🚀 Применить + рестарт</button>
+            <button type="button" id="mihomo-hwid-probe-btn" class="btn-secondary btn-compact xk-hw-secondary-btn" data-tooltip="Проверить ссылку, собрать HWID-заголовки и показать YAML preview.">Проверить</button>
+            <button type="button" id="mihomo-hwid-insert-btn" class="btn-primary btn-compact xk-hw-primary-btn" data-tooltip="Вставить proxy-provider в config.yaml редактора и закрыть окно." disabled>Вставить в конфиг</button>
+            <button type="button" id="mihomo-hwid-apply-restart-btn" class="btn-primary btn-compact xk-hw-primary-btn" data-tooltip="Сервер сохранит config.yaml и поставит рестарт в очередь." disabled>Применить + рестарт</button>
           </div>
-          <button type="button" id="mihomo-hwid-cancel-btn" class="btn-compact">Отмена</button>
+          <button type="button" id="mihomo-hwid-cancel-btn" class="btn-secondary btn-compact">Отмена</button>
         </div>
       </div>
     </div>

@@ -5073,6 +5073,16 @@ let outboundsModuleApi = null;
       if (!el) return;
       try { el.classList.toggle('is-invalid', !!invalid); } catch (e) {}
       try { el.setAttribute('aria-invalid', invalid ? 'true' : 'false'); } catch (e2) {}
+      try {
+        const noteId = {
+          [SUB_IDS.url]: SUB_IDS.urlNote,
+          [SUB_IDS.interval]: SUB_IDS.intervalNote,
+          [SUB_IDS.nameFilter]: SUB_IDS.nameFilterNote,
+          [SUB_IDS.typeFilter]: SUB_IDS.typeFilterNote,
+          [SUB_IDS.transportFilter]: SUB_IDS.transportFilterNote,
+        }[inputId];
+        if (noteId) $(noteId).setAttribute('role', invalid ? 'alert' : 'status');
+      } catch (e3) {}
     }
 
     function subsSetFieldNote(noteId, message, kind) {
@@ -5343,6 +5353,25 @@ let outboundsModuleApi = null;
 
       try { subsApplySubscriptionCopy(formState); } catch (e6) {}
 
+      const advanced = $(SUB_IDS.form) && $(SUB_IDS.form).querySelector('.xk-sub-advanced');
+      if (advanced) {
+        const activeAdvanced = [
+          formState.name_filter,
+          formState.type_filter,
+          formState.transport_filter,
+          ...(Array.isArray(formState.routing_balancer_tags) ? formState.routing_balancer_tags : []),
+        ].filter((value) => String(value || '').trim()).length;
+        const summary = advanced.querySelector('.xk-sub-advanced-summary');
+        if (summary) {
+          summary.textContent = activeAdvanced
+            ? `Изменено настроек: ${activeAdvanced}`
+            : 'Фильтры, маршрутизация и служебные параметры';
+        }
+        if (validation.errors.nameFilter || validation.errors.typeFilter || validation.errors.transportFilter) {
+          advanced.open = true;
+        }
+      }
+
       const saveBtn = $(SUB_IDS.save);
       if (saveBtn) {
         saveBtn.disabled = !validation.valid || _subscriptionSaveBusy;
@@ -5540,18 +5569,19 @@ let outboundsModuleApi = null;
                     <input id="outbounds-subscriptions-excluded-keys" type="hidden">
                     <label class="xk-sub-span-5" data-tooltip="Короткое имя подписки в списке. Можно оставить пустым: при сохранении панель сгенерирует его автоматически.">
                       <span class="xk-pool-fieldlabel">Название</span>
-                      <input id="outbounds-subscriptions-name" class="xray-log-filter" type="text" placeholder="My subscription" title="Название подписки" data-tooltip="Короткое имя подписки в списке. Если оставить поле пустым, имя будет сгенерировано автоматически при сохранении.">
+                      <input id="outbounds-subscriptions-name" class="xray-log-filter" type="text" placeholder="My subscription" title="Название подписки" aria-describedby="outbounds-subscriptions-name-note" data-tooltip="Короткое имя подписки в списке. Если оставить поле пустым, имя будет сгенерировано автоматически при сохранении.">
                       <span id="outbounds-subscriptions-name-note" class="xk-sub-field-note" hidden></span>
                     </label>
                     <label class="xk-sub-span-4" data-tooltip="Префикс для generated outbound tags, например sub--node. Xray использует его в selector и subjectSelector по prefix-match: значение sub найдёт generated tags вида sub--node. Можно оставить пустым: при сохранении панель сгенерирует его автоматически.">
                       <span class="xk-pool-fieldlabel">Tag prefix</span>
-                      <input id="outbounds-subscriptions-tag" class="xray-log-filter" type="text" placeholder="sub" title="Tag prefix" data-tooltip="Префикс для generated outbound tags. Xray использует его в selector и subjectSelector по prefix-match: значение sub найдёт generated tags вида sub--node. Если оставить поле пустым, префикс будет сгенерирован автоматически при сохранении.">
+                      <input id="outbounds-subscriptions-tag" class="xray-log-filter" type="text" placeholder="sub" title="Tag prefix" aria-describedby="outbounds-subscriptions-tag-note" data-tooltip="Префикс для generated outbound tags. Xray использует его в selector и subjectSelector по prefix-match: значение sub найдёт generated tags вида sub--node. Если оставить поле пустым, префикс будет сгенерирован автоматически при сохранении.">
                       <span id="outbounds-subscriptions-tag-note" class="xk-sub-field-note" hidden></span>
                     </label>
                     <label class="xk-sub-span-3 xk-sub-interval-field" data-tooltip="Локальный интервал автообновления. По умолчанию 24 часа; серверный profile-update-interval показывается как рекомендация и не перезаписывает это поле.">
-                      <span class="xk-pool-fieldlabel">Обновлять, ч</span>
+                      <span class="xk-pool-fieldlabel">Интервал обновления</span>
                       <div class="xk-sub-interval-inline">
-                        <input id="outbounds-subscriptions-interval" class="xray-log-filter" type="number" min="1" max="168" step="1" value="${SUB_DEFAULT_INTERVAL_HOURS}" title="Интервал обновления" data-tooltip="Как часто панель будет обновлять подписку: от 1 до 168 часов. Рекомендация провайдера не меняет выбранное значение.">
+                        <input id="outbounds-subscriptions-interval" class="xray-log-filter" type="number" min="1" max="168" step="1" value="${SUB_DEFAULT_INTERVAL_HOURS}" title="Интервал обновления" aria-describedby="outbounds-subscriptions-interval-unit outbounds-subscriptions-interval-note" data-tooltip="Как часто панель будет обновлять подписку: от 1 до 168 часов. Рекомендация провайдера не меняет выбранное значение.">
+                        <span id="outbounds-subscriptions-interval-unit" class="xk-op-unit">ч</span>
                         <button type="button" id="outbounds-subscriptions-interval-apply-btn" class="btn-secondary btn-compact xk-sub-interval-apply" hidden></button>
                       </div>
                       <div class="xk-sub-interval-meta">
@@ -5560,8 +5590,8 @@ let outboundsModuleApi = null;
                     </label>
                     <div class="xk-sub-wide xk-sub-url-row">
                       <label class="xk-sub-url-field" data-tooltip="HTTP(S) URL подписки (включая mobile connector URL) или Happ deep-link. Поддерживаются share-ссылки, base64 и Xray JSON outbounds.">
-                        <span class="xk-pool-fieldlabel">URL</span>
-                        <input id="outbounds-subscriptions-url" class="xray-log-filter" type="text" inputmode="url" placeholder="https://... (включая connector) или happ://crypt..." title="URL подписки" data-tooltip="Вставь HTTP(S) URL подписки, mobile connector URL или Happ deep-link. Панель сама извлечёт вложенный happ://crypt... и зашифрованное тело подписки.">
+                        <span class="xk-pool-fieldlabel">URL подписки <span class="xk-op-required" aria-hidden="true">*</span></span>
+                        <input id="outbounds-subscriptions-url" class="xray-log-filter" type="text" inputmode="url" required aria-required="true" aria-describedby="outbounds-subscriptions-url-note" placeholder="https://... (включая connector) или happ://crypt..." title="URL подписки" data-tooltip="Вставь HTTP(S) URL подписки, mobile connector URL или Happ deep-link. Панель сама извлечёт вложенный happ://crypt... и зашифрованное тело подписки.">
                         <span id="outbounds-subscriptions-url-note" class="xk-sub-field-note" hidden></span>
                       </label>
                       <div class="xk-sub-url-action">
@@ -5573,19 +5603,25 @@ let outboundsModuleApi = null;
                         </div>
                       </div>
                     </div>
+                    <details class="xk-sub-advanced xk-sub-wide">
+                      <summary><span>Дополнительные настройки</span><span class="xk-sub-advanced-summary">Фильтры, маршрутизация и служебные параметры</span></summary>
+                      <div class="xk-sub-advanced-grid">
                     <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Regex по имени ноды из подписки. Например: Germany|Netherlands|SG. Пусто — без фильтра.">
-                      <span class="xk-pool-fieldlabel">Имя</span>
-                      <input id="outbounds-subscriptions-name-filter" class="xray-log-filter" type="text" placeholder="Germany|Netherlands|SG" title="Фильтр имени" data-tooltip="Оставить только ноды, чьё имя совпадает с regex. Например: Germany|Netherlands|SG.">
+                      <span class="xk-pool-fieldlabel">Фильтр по имени</span>
+                      <input id="outbounds-subscriptions-name-filter" class="xray-log-filter" type="text" placeholder="Germany|Netherlands|SG" title="Фильтр имени" aria-describedby="outbounds-subscriptions-name-filter-note" data-tooltip="Оставить только ноды, чьё имя совпадает с regex. Например: Germany|Netherlands|SG.">
+                      <span class="xk-sub-field-hint">Regex; пусто — все имена.</span>
                       <span id="outbounds-subscriptions-name-filter-note" class="xk-sub-field-note" hidden></span>
                     </label>
                     <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Regex по типу прокси/протоколу. Например: vless|trojan|vmess. Пусто — без фильтра.">
-                      <span class="xk-pool-fieldlabel">Тип</span>
-                      <input id="outbounds-subscriptions-type-filter" class="xray-log-filter" type="text" placeholder="vless|trojan|vmess" title="Фильтр типа" data-tooltip="Оставить только указанные типы нод. Например: vless|trojan|vmess|ss|hy2.">
+                      <span class="xk-pool-fieldlabel">Фильтр по типу</span>
+                      <input id="outbounds-subscriptions-type-filter" class="xray-log-filter" type="text" placeholder="vless|trojan|vmess" title="Фильтр типа" aria-describedby="outbounds-subscriptions-type-filter-note" data-tooltip="Оставить только указанные типы нод. Например: vless|trojan|vmess|ss|hy2.">
+                      <span class="xk-sub-field-hint">Regex; пусто — все протоколы.</span>
                       <span id="outbounds-subscriptions-type-filter-note" class="xk-sub-field-note" hidden></span>
                     </label>
                     <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Regex по транспорту. Например: ws|grpc|tcp|xhttp. Пусто — без фильтра.">
-                      <span class="xk-pool-fieldlabel">Транспорт</span>
-                      <input id="outbounds-subscriptions-transport-filter" class="xray-log-filter" type="text" placeholder="ws|grpc|tcp|xhttp" title="Фильтр транспорта" data-tooltip="Оставить только ноды с нужным transport/network. Например: ws|grpc|tcp|xhttp|quic.">
+                      <span class="xk-pool-fieldlabel">Фильтр по транспорту</span>
+                      <input id="outbounds-subscriptions-transport-filter" class="xray-log-filter" type="text" placeholder="ws|grpc|tcp|xhttp" title="Фильтр транспорта" aria-describedby="outbounds-subscriptions-transport-filter-note" data-tooltip="Оставить только ноды с нужным transport/network. Например: ws|grpc|tcp|xhttp|quic.">
+                      <span class="xk-sub-field-hint">Regex; пусто — все транспорты.</span>
                       <span id="outbounds-subscriptions-transport-filter-note" class="xk-sub-field-note" hidden></span>
                     </label>
                     <div class="xk-sub-controls">
@@ -5613,6 +5649,8 @@ let outboundsModuleApi = null;
                       </div>
                       <div id="outbounds-subscriptions-routing-balancers" class="xk-sub-balancers-list"></div>
                     </div>
+                      </div>
+                    </details>
                   </form>
                 </section>
 

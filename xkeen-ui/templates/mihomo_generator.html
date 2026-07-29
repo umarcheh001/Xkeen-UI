@@ -1946,8 +1946,11 @@
     }
 
   </style>
+  {# Shared Operator Console primitives are loaded last. The page keeps its
+     runtime hooks while the late layer flattens legacy generator chrome. #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260729n') }}">
 </head>
-<body class="mihomo-generator-page">
+<body class="panel-page mihomo-generator-page">
   {% set top_level_spinner_text = 'Применяем изменения и перезапускаем xkeen…' %}
   {% include '_top_level_global_spinner.html' %}
 
@@ -2035,21 +2038,23 @@
               <div class="generator-section-badge">proxy-providers</div>
             </div>
 
-            <div class="generator-field-card">
-              <label for="profileSelect">Профиль</label>
+            <div class="generator-field-card xk-op-field">
+              <label class="xk-op-field-label" for="profileSelect">Профиль</label>
               <select id="profileSelect">
                 <option value="router_custom">Роутер (кастомные провайдеры)</option>
                 <option value="router_zkeen">Роутер (базы ZKeen)</option>
               </select>
             </div>
 
-            <div class="generator-field-card">
-              <label>Подписки (proxy-providers)</label>
+            <div class="generator-field-card xk-op-field">
+              <div class="xk-op-field-label">Подписки</div>
               <div id="subscriptionsList" class="subscriptions-list"></div>
-              <button type="button" id="addSubscriptionBtn" class="btn btn-ghost btn-xs" data-tooltip="Добавить новую подписку (proxy-provider).">
-                + Добавить подписку
-              </button>
-              <div class="hint xk-card-desc">
+              <div class="generator-action-row xk-op-action-row">
+                <button type="button" id="addSubscriptionBtn" class="btn btn-ghost btn-xs" data-tooltip="Добавить новую подписку (proxy-provider).">
+                  Добавить подписку
+                </button>
+              </div>
+              <div class="hint xk-card-desc xk-op-field-hint">
                 Подписки будут заполнены в proxy-providers как: proxy-sub, proxy-sub-2, proxy-sub-3, ...
                 Если подписок больше 5 — дополнительные proxy-providers будут добавлены автоматически.
               </div>
@@ -2081,10 +2086,10 @@
               <div class="generator-section-badge">rules / groups</div>
             </div>
 
-            <div class="generator-field-card">
-              <label for="defaultGroupsInput">Группы по умолчанию для узлов</label>
+            <div class="generator-field-card xk-op-field">
+              <label class="xk-op-field-label" for="defaultGroupsInput">Группы по умолчанию для узлов</label>
               <input id="defaultGroupsInput" type="text" value="Заблок. сервисы" placeholder="Заблок. сервисы,YouTube">
-              <div class="hint xk-card-desc">
+              <div class="hint xk-card-desc xk-op-field-hint">
                 Если у узла не заданы свои группы, будут использованы эти.
               </div>
             </div>

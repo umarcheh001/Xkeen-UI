@@ -1700,9 +1700,17 @@ function initEngineToggle() {
           const row = document.createElement("div");
           row.className = "subscription-row";
 
+          const field = document.createElement("label");
+          field.className = "subscription-field xk-op-field";
+          const label = document.createElement("span");
+          label.className = "xk-op-field-label";
+          label.textContent = "URL подписки";
           const input = document.createElement("input");
           input.type = "text";
+          input.inputMode = "url";
           input.placeholder = "https://example.com/sub";
+          input.setAttribute("aria-label", "URL подписки");
+          input.setAttribute("aria-invalid", "false");
           input.value = value || "";
           row._xrayLastInputValue = getSubscriptionInputValue(input);
 
@@ -1728,6 +1736,8 @@ function initEngineToggle() {
           btn.type = "button";
           btn.className = "btn btn-ghost btn-xs";
           btn.textContent = "✕";
+          btn.title = "Удалить подписку";
+          btn.setAttribute("aria-label", "Удалить подписку");
           btn.onclick = () => {
             clearXrayProbeTimer(input);
             subscriptionsList.removeChild(row);
@@ -1737,7 +1747,9 @@ function initEngineToggle() {
             schedulePreview();
           };
 
-          row.appendChild(input);
+          field.appendChild(label);
+          field.appendChild(input);
+          row.appendChild(field);
           row.appendChild(btn);
           return row;
         }

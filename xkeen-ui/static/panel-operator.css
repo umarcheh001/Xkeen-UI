@@ -4579,6 +4579,719 @@ body.panel-page .routing-side-card .xk-sub-node-state.is-disabled {
   color: var(--op-warning) !important;
 }
 
+/* Stage 4 Mihomo profiles/generator and subscription forms: the same flat
+ * fields, data tables and action rows used by the rest of the console. */
+body.panel-page :is(.xk-op-field-label, .xk-pool-fieldlabel) {
+  display: block;
+  min-height: 18px;
+  margin: 0 0 5px !important;
+  color: var(--op-text) !important;
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  font-weight: 620;
+  line-height: 1.35;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+body.panel-page :is(.xk-op-field-hint, .xk-op-field-error, .xk-sub-field-hint, .xk-sub-field-note) {
+  display: block;
+  min-height: 16px;
+  margin-top: 4px;
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  line-height: 1.4;
+}
+
+body.panel-page .xk-op-field-error[hidden] {
+  display: none !important;
+}
+
+body.panel-page :is(.xk-op-field-error, .xk-sub-field-note.is-error, .xk-op-required) {
+  color: var(--op-danger) !important;
+}
+
+body.panel-page :is(.xk-sub-field-note.is-auto, .xk-sub-field-note.is-info) {
+  color: var(--op-data-muted) !important;
+}
+
+body.panel-page :is(input, select, textarea).is-invalid,
+body.panel-page :is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--op-danger) !important;
+  box-shadow: 0 0 0 1px var(--op-danger-soft) !important;
+}
+
+body.panel-page .xk-op-unit {
+  flex: 0 0 auto;
+  color: var(--op-muted);
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-variant-numeric: tabular-nums;
+}
+
+body.panel-page .xk-mihomo-vault-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 12px !important;
+}
+
+body.panel-page .xk-mihomo-vault-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+body.panel-page .xk-mihomo-vault-card::before {
+  content: none !important;
+}
+
+body.panel-page .xk-mihomo-vault-head {
+  min-height: 52px;
+  margin: 0 !important;
+  padding: 10px 12px;
+  align-items: center;
+  border-bottom: 1px solid var(--op-border) !important;
+  background: var(--op-surface-2) !important;
+}
+
+body.panel-page .xk-mihomo-vault-head h4,
+body.panel-page .xk-mihomo-profile-create h5 {
+  margin: 0;
+  color: var(--op-text-strong);
+  font-size: calc(13px * var(--xk-font-scale, 1));
+  letter-spacing: 0;
+}
+
+body.panel-page .xk-mihomo-vault-head .xk-card-desc,
+body.panel-page .xk-mihomo-profile-create .xk-card-desc {
+  margin: 2px 0 0;
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .xk-mihomo-vault-table-shell {
+  width: 100%;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--op-surface) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .xk-mihomo-vault-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+body.panel-page .xk-mihomo-vault-table--profiles th:nth-child(1),
+body.panel-page .xk-mihomo-vault-table--profiles td:nth-child(1) {
+  width: auto;
+}
+
+body.panel-page .xk-mihomo-vault-table--profiles th:nth-child(2),
+body.panel-page .xk-mihomo-vault-table--profiles td:nth-child(2) {
+  width: 116px;
+}
+
+body.panel-page .xk-mihomo-vault-table--profiles th:nth-child(3),
+body.panel-page .xk-mihomo-vault-table--profiles td:nth-child(3) {
+  width: 164px;
+}
+
+body.panel-page .xk-mihomo-vault-table--backups th:nth-child(1),
+body.panel-page .xk-mihomo-vault-table--backups td:nth-child(1) {
+  width: auto;
+}
+
+body.panel-page .xk-mihomo-vault-table--backups th:nth-child(2),
+body.panel-page .xk-mihomo-vault-table--backups td:nth-child(2) {
+  width: 122px;
+}
+
+body.panel-page .xk-mihomo-vault-table--backups th:nth-child(3),
+body.panel-page .xk-mihomo-vault-table--backups td:nth-child(3) {
+  width: 152px;
+}
+
+body.panel-page .xk-mihomo-vault-table--backups th:nth-child(4),
+body.panel-page .xk-mihomo-vault-table--backups td:nth-child(4) {
+  width: 108px;
+}
+
+body.panel-page .xk-mihomo-vault-table :is(th, td) {
+  height: 36px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--op-border) !important;
+  background: transparent !important;
+  color: var(--op-text) !important;
+  vertical-align: middle;
+}
+
+body.panel-page .xk-mihomo-vault-table tbody tr:last-child td {
+  border-bottom: 0 !important;
+}
+
+body.panel-page .xk-mihomo-vault-table thead th {
+  background: var(--op-editor) !important;
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 620;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  backdrop-filter: none !important;
+}
+
+body.panel-page .xk-mihomo-vault-table tbody tr:hover {
+  background: var(--op-surface-2) !important;
+}
+
+body.panel-page :is(.xk-mihomo-name-pill, .xk-mihomo-created-at) {
+  min-height: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .xk-mihomo-name-pill--scroll {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page .xk-mihomo-row-badge {
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .xk-mihomo-row-actions {
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+body.panel-page .xk-mihomo-mini-btn {
+  min-height: var(--op-control-compact-h);
+  padding: 0 9px;
+  border-radius: var(--op-control-radius) !important;
+  border-color: var(--op-border) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .xk-mihomo-mini-btn--icon {
+  width: var(--op-control-compact-h);
+  min-width: var(--op-control-compact-h);
+  padding: 0;
+}
+
+body.panel-page .xk-mihomo-mini-btn--primary:not([disabled]) {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent) !important;
+  color: #fff !important;
+}
+
+body.panel-page .xk-mihomo-mini-btn--danger:not([disabled]) {
+  color: var(--op-danger) !important;
+}
+
+body.panel-page .xk-mihomo-profile-create {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(220px, 1.3fr);
+  gap: 12px;
+  align-items: end;
+  margin: 0 !important;
+  padding: 10px 12px;
+  border-top: 1px solid var(--op-border) !important;
+  background: var(--op-surface) !important;
+}
+
+body.panel-page .xk-mihomo-profile-create-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: end;
+}
+
+body.panel-page .xk-mihomo-profile-field {
+  min-width: 0;
+}
+
+body.panel-page .xk-mihomo-profile-save-btn {
+  margin: 0 0 20px;
+}
+
+body.panel-page .xk-mihomo-backups-toolbar {
+  margin: 0 !important;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--op-border) !important;
+}
+
+body.panel-page .xk-mihomo-backups-filter,
+body.panel-page .xk-mihomo-backups-clean {
+  min-height: var(--op-control-compact-h);
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .xk-mihomo-backups-filter {
+  color: var(--op-text) !important;
+}
+
+body.panel-page .xk-mihomo-backups-active-pill {
+  min-height: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--op-success) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .xk-mihomo-backups-clean {
+  gap: 6px;
+}
+
+body.panel-page .xk-mihomo-backups-clean-input {
+  width: 48px;
+  min-width: 48px;
+  height: var(--op-control-compact-h);
+  min-height: var(--op-control-compact-h);
+  padding: 0 6px;
+}
+
+body.panel-page .xk-mihomo-backups-clean-btn {
+  width: var(--op-control-compact-h);
+  min-width: var(--op-control-compact-h);
+  height: var(--op-control-compact-h);
+  min-height: var(--op-control-compact-h);
+  padding: 0;
+  border-radius: var(--op-control-radius) !important;
+}
+
+body.panel-page .xk-mihomo-backups-clean-label {
+  gap: 5px;
+}
+
+body.panel-page .xk-mihomo-backups-hint {
+  margin: 0 !important;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--op-border);
+  background: var(--op-surface) !important;
+}
+
+body.panel-page.mihomo-generator-page .generator-layout {
+  gap: 12px;
+}
+
+body.panel-page.mihomo-generator-page :is(.generator-card, .generator-section-panel, .generator-field-card, .generator-rule-groups-card, .generator-action-block, .generator-preview-shell, .generator-statusbar) {
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page .generator-card {
+  padding: 12px !important;
+}
+
+body.panel-page.mihomo-generator-page .generator-card::before {
+  content: none !important;
+}
+
+body.panel-page.mihomo-generator-page .generator-sections {
+  gap: 10px;
+}
+
+body.panel-page.mihomo-generator-page .generator-section-panel {
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+body.panel-page.mihomo-generator-page .generator-section-head {
+  min-height: 48px;
+  margin: 0 !important;
+  padding: 9px 11px;
+  align-items: center;
+  border-bottom: 1px solid var(--op-border);
+  background: var(--op-surface-2) !important;
+}
+
+body.panel-page.mihomo-generator-page .generator-section-title {
+  color: var(--op-text-strong) !important;
+  font-size: calc(13px * var(--xk-font-scale, 1));
+}
+
+body.panel-page.mihomo-generator-page :is(.generator-head-pill, .generator-section-badge, .proxy-header-type) {
+  min-height: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page.mihomo-generator-page :is(.generator-field-card, .generator-rule-groups-card, .generator-action-block) {
+  margin: 0 !important;
+  padding: 10px 11px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+}
+
+body.panel-page.mihomo-generator-page .generator-section-panel > :last-child {
+  border-bottom: 0 !important;
+}
+
+body.panel-page.mihomo-generator-page .subscription-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: end;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page.mihomo-generator-page .subscription-row:last-child {
+  border-bottom: 0;
+}
+
+body.panel-page.mihomo-generator-page .subscription-field {
+  min-width: 0;
+}
+
+body.panel-page.mihomo-generator-page .xk-op-action-row {
+  justify-content: flex-start;
+  margin-top: 7px;
+}
+
+body.panel-page.mihomo-generator-page .proxy-card {
+  padding: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page .proxy-header {
+  min-height: 38px;
+  margin: 0 !important;
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--op-border);
+  background: var(--op-surface-2) !important;
+}
+
+body.panel-page.mihomo-generator-page .proxy-body {
+  padding: 9px;
+}
+
+body.panel-page :is(.proxy-advanced, .bulk-import-advanced, .xk-sub-advanced) {
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page :is(.proxy-advanced, .bulk-import-advanced, .xk-sub-advanced) > summary {
+  min-height: var(--op-control-h);
+  padding: 6px 9px;
+  color: var(--op-text) !important;
+  background: var(--op-surface-2) !important;
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  font-weight: 620;
+}
+
+body.panel-page .xk-sub-advanced {
+  grid-column: 1 / -1;
+  overflow: hidden;
+}
+
+body.panel-page .xk-sub-advanced > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+body.panel-page .xk-sub-advanced-summary {
+  color: var(--op-muted);
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 450;
+}
+
+body.panel-page .xk-sub-advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px;
+  border-top: 1px solid var(--op-border);
+}
+
+body.panel-page .xk-sub-interval-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+body.panel-page .xk-sub-interval-field .xk-sub-interval-inline .xray-log-filter {
+  min-width: 0;
+  width: 100%;
+}
+
+body.panel-page .xk-sub-form > label,
+body.panel-page .xk-sub-advanced-grid > label {
+  min-width: 0;
+}
+
+body.panel-page .xk-sub-url-actions {
+  justify-content: flex-end;
+}
+
+body.panel-page .xk-sub-url-preview {
+  width: auto !important;
+  min-width: 0 !important;
+  padding: 0 9px !important;
+  border-radius: var(--op-control-radius) !important;
+}
+
+/* The generator is a separate route, but it is still an Operator workspace.
+ * Neutralise the legacy blue-glass header/lead and make the editor the only
+ * growing region instead of letting the page become a tall two-column poster. */
+body.panel-page.mihomo-generator-page {
+  background: var(--op-bg) !important;
+  color: var(--op-text) !important;
+}
+
+body.panel-page.mihomo-generator-page .container.container-wide {
+  width: min(calc(100% - 28px), 1680px) !important;
+  max-width: 1680px !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+}
+
+body.panel-page.mihomo-generator-page .container.container-wide > header.generator-page-header {
+  min-height: 52px;
+  margin: 12px 0 !important;
+  padding: 9px 12px !important;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+body.panel-page.mihomo-generator-page .generator-page-header::before {
+  content: none !important;
+}
+
+body.panel-page.mihomo-generator-page .generator-header-title h1 {
+  color: var(--op-text-strong) !important;
+  font-size: clamp(19px, 2vw, 26px) !important;
+  letter-spacing: -0.025em !important;
+}
+
+html[data-theme] body.panel-page.mihomo-generator-page header.generator-page-header .header-actions .xk-header-btn,
+html[data-theme] body.panel-page.mihomo-generator-page header.generator-page-header .header-actions .theme-toggle-btn.xk-header-btn-theme {
+  min-height: var(--op-control-compact-h) !important;
+  padding: 0 10px !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background-color: var(--op-surface-2) !important;
+  background-image: none !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transform: none !important;
+}
+
+body.panel-page.mihomo-generator-page .xk-header-btn::before,
+body.panel-page.mihomo-generator-page .theme-toggle-btn.xk-header-btn-theme::before {
+  content: none !important;
+}
+
+html[data-theme] body.panel-page.mihomo-generator-page header.generator-page-header .header-actions .xk-header-btn-logout:hover {
+  border-color: var(--op-danger) !important;
+  background-color: var(--op-danger-soft) !important;
+  color: var(--op-danger) !important;
+}
+
+body.panel-page.mihomo-generator-page .generator-layout {
+  grid-template-columns: minmax(340px, 0.86fr) minmax(0, 1.54fr);
+  gap: 12px;
+  min-height: calc(100dvh - 104px);
+  align-items: stretch;
+}
+
+body.panel-page.mihomo-generator-page :is(.generator-card, .generator-card--source, .generator-card--preview) {
+  min-height: 0;
+  height: calc(100dvh - 104px) !important;
+  max-height: calc(100dvh - 104px) !important;
+  padding: 10px !important;
+  overflow: auto;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page .generator-card--preview {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+body.panel-page.mihomo-generator-page .xk-gen-lead {
+  min-height: 54px;
+  margin: 0 0 10px !important;
+  padding: 9px 10px !important;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface-2) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page .xk-gen-lead-icon {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-accent-hover) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page :is(.xk-gen-kicker, .generator-head-pill, .generator-section-badge) {
+  color: var(--op-muted) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  letter-spacing: 0.04em !important;
+  text-transform: none !important;
+}
+
+body.panel-page.mihomo-generator-page .xk-gen-lead-title {
+  color: var(--op-text-strong) !important;
+  font-size: calc(16px * var(--xk-font-scale, 1));
+  line-height: 1.2;
+}
+
+body.panel-page.mihomo-generator-page :is(.xk-gen-panel, .generator-section-panel, .generator-preview-shell) {
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page .generator-section-panel {
+  padding: 0 !important;
+}
+
+body.panel-page.mihomo-generator-page .generator-section-head {
+  min-height: 42px;
+  margin: 0 !important;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--op-border);
+  background: var(--op-surface-2) !important;
+}
+
+body.panel-page.mihomo-generator-page .generator-section-title {
+  color: var(--op-text-strong) !important;
+  font-size: calc(12.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page.mihomo-generator-page :is(.generator-field-card, .generator-rule-groups-card, .generator-action-block) {
+  margin: 0 !important;
+  padding: 9px 10px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: var(--op-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page .generator-section-panel > :last-child {
+  border-bottom: 0 !important;
+}
+
+body.panel-page.mihomo-generator-page :is(.generator-checkbox-meta, .rule-group-item) {
+  border-radius: var(--op-control-radius) !important;
+  background: transparent !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page .generator-preview-shell {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding: 10px !important;
+}
+
+body.panel-page.mihomo-generator-page #previewMonaco,
+body.panel-page.mihomo-generator-page .generator-card--preview .CodeMirror {
+  flex: 1 1 auto;
+  height: auto !important;
+  min-height: 0 !important;
+  border-radius: var(--op-radius-sm) !important;
+}
+
+body.panel-page.mihomo-generator-page .generator-preview-hint {
+  margin: 7px 0 0;
+  color: var(--op-muted) !important;
+}
+
+body.panel-page.mihomo-generator-page .generator-statusbar,
+body.panel-page.mihomo-generator-page .validation-log-panel {
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface-2) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page .generator-statusbar {
+  margin-top: 8px;
+  padding: 7px 9px;
+}
+
+body.panel-page.mihomo-generator-page .validation-log-panel {
+  flex: 0 0 auto;
+  max-height: 94px;
+  margin-top: 10px;
+  padding: 7px 9px 8px;
+}
+
+body.panel-page.mihomo-generator-page .validation-log {
+  min-height: 24px;
+  max-height: 38px;
+  overflow: auto;
+}
+
 /* ==========================================================================
  * 6. MODALS
  * ========================================================================== */
@@ -4667,6 +5380,205 @@ html[data-theme="light"] body.panel-page .modal-close {
 
 body.panel-page .modal-close:hover {
   color: var(--op-text) !important;
+}
+
+/* Mihomo import/HWID are workbenches, not full-height canvases. Their preview
+ * editors need a readable minimum, but must not turn an empty preview into
+ * hundreds of pixels of dead space. */
+body.panel-page #mihomo-import-modal .modal-content,
+body.panel-page #mihomo-hwid-modal .modal-content {
+  width: min(96vw, 1160px) !important;
+  max-width: 1160px !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: calc(100dvh - 36px) !important;
+}
+
+body.panel-page :is(#mihomo-import-modal, #mihomo-hwid-modal) .modal-body {
+  flex: 0 1 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: calc(100dvh - 156px) !important;
+  overflow: auto !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-grid,
+body.panel-page #mihomo-hwid-modal .xk-hw-grid {
+  flex: 0 1 auto;
+  height: auto !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-preview-wrap,
+body.panel-page #mihomo-hwid-modal .xk-hw-preview-wrap {
+  flex: 0 0 auto;
+  height: clamp(240px, 36dvh, 360px) !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-panel,
+body.panel-page #mihomo-hwid-modal .xk-hw-panel {
+  min-height: 0;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-panel--controls,
+body.panel-page #mihomo-hwid-modal .xk-hw-panel--controls {
+  overflow: auto;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-section-head > :first-child,
+body.panel-page #mihomo-hwid-modal .xk-hw-section-head > :first-child {
+  min-width: 0;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-inline-actions {
+  flex-wrap: nowrap;
+}
+
+body.panel-page :is(#mihomo-import-modal, #mihomo-hwid-modal) .modal-actions {
+  gap: 8px;
+}
+
+body.panel-page :is(#mihomo-import-modal, #mihomo-hwid-modal) .modal-actions :is(button, .btn-primary, .btn-secondary) {
+  height: var(--op-control-h) !important;
+  min-height: var(--op-control-h) !important;
+  max-height: var(--op-control-h) !important;
+  padding: 0 11px;
+  border-radius: var(--op-control-radius) !important;
+}
+
+body.panel-page :is(#mihomo-import-modal, #mihomo-hwid-modal) .modal-actions :is(button[disabled], .btn-primary[disabled], .btn-secondary[disabled]) {
+  opacity: 0.52;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-footer-actions,
+body.panel-page #mihomo-hwid-modal .xk-hw-footer-actions {
+  gap: 6px;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-footer-actions,
+body.panel-page #mihomo-hwid-modal .xk-hw-footer-actions {
+  flex-wrap: wrap;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-subtitle {
+  max-width: 100ch;
+  color: var(--op-muted) !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  line-height: 1.4;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-section-toggle {
+  min-height: var(--op-control-h);
+  padding: 0 10px;
+  border-radius: var(--op-control-radius) !important;
+  letter-spacing: 0 !important;
+}
+
+/* Bulk import belongs to the same compact modal family. The old generator
+ * reserved a 760px canvas even when only the source textarea was visible. */
+body.panel-page.mihomo-generator-page #bulkImportModal .modal-content {
+  width: min(94vw, 900px) !important;
+  max-width: 900px !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: calc(100dvh - 32px) !important;
+  padding: 0 !important;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--op-shadow-float) !important;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-modal-header {
+  min-height: 50px;
+  margin: 0 !important;
+  padding: 9px 12px !important;
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal :is(.bulk-import-modal-kicker, .bulk-import-chip, .bulk-import-check) {
+  border-radius: var(--op-control-radius) !important;
+  border-color: var(--op-border) !important;
+  background: var(--op-surface-2) !important;
+  background-image: none !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-modal-kicker {
+  padding: 3px 7px;
+  color: var(--op-muted) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  letter-spacing: 0.04em;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-modal-body {
+  height: auto !important;
+  max-height: calc(100dvh - 144px) !important;
+  padding: 12px !important;
+  overflow: auto !important;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-panel {
+  gap: 9px;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-textarea {
+  min-height: 112px;
+  height: 132px;
+  max-height: 220px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-editor) !important;
+  background-image: none !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-option-row {
+  gap: 6px;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-check {
+  min-height: var(--op-control-compact-h);
+  padding: 0 8px;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal :is(.bulk-import-advanced, .bulk-import-card, .bulk-import-summary) {
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface-2) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-advanced > summary {
+  padding: 7px 9px;
+  color: var(--op-text) !important;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-card {
+  padding: 9px;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-summary {
+  padding: 8px 9px;
+  color: var(--op-muted) !important;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-actions {
+  min-height: 50px;
+  margin: 0 !important;
+  padding: 9px 12px !important;
+  border-top: 1px solid var(--op-border);
+  background: var(--op-surface) !important;
 }
 
 /* Complex feature dialogs use a single divided workbench. Their historical
@@ -5350,6 +6262,10 @@ body.panel-page .footer {
 /* Tablet: keep the editor first and move the inspector below it before either
  * workspace becomes too narrow to scan comfortably. */
 @media (max-width: 1180px) {
+  body.panel-page .xk-mihomo-vault-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   body.panel-page .layout-2col.routing-layout {
     grid-template-columns: minmax(0, 1fr) !important;
     grid-template-areas:
@@ -5377,7 +6293,83 @@ body.panel-page .footer {
   }
 }
 
+@media (max-width: 1000px) {
+  body.panel-page.mihomo-generator-page .generator-layout {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  body.panel-page.mihomo-generator-page :is(.generator-card, .generator-card--source, .generator-card--preview) {
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  body.panel-page.mihomo-generator-page .generator-card--source {
+    overflow: visible;
+  }
+
+  body.panel-page.mihomo-generator-page .generator-card--preview {
+    min-height: min(760px, calc(100dvh - 28px));
+  }
+
+  body.panel-page.mihomo-generator-page #previewMonaco,
+  body.panel-page.mihomo-generator-page .generator-card--preview .CodeMirror {
+    min-height: 480px !important;
+  }
+}
+
 @media (max-width: 820px) {
+  body.panel-page.mihomo-generator-page .container.container-wide {
+    width: calc(100% - 14px) !important;
+  }
+
+  body.panel-page.mihomo-generator-page .container.container-wide > header.generator-page-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  body.panel-page.mihomo-generator-page .generator-header-actions-row,
+  body.panel-page.mihomo-generator-page .generator-header-actions-row .header-actions {
+    justify-content: flex-start;
+  }
+
+  body.panel-page.mihomo-generator-page .generator-card--preview {
+    min-height: min(680px, calc(100dvh - 14px));
+  }
+
+  body.panel-page.mihomo-generator-page #previewMonaco,
+  body.panel-page.mihomo-generator-page .generator-card--preview .CodeMirror {
+    min-height: 380px !important;
+  }
+
+  body.panel-page.mihomo-generator-page #bulkImportModal .modal-content {
+    width: calc(100vw - 12px) !important;
+    max-height: calc(100dvh - 12px) !important;
+  }
+
+  body.panel-page .xk-mihomo-profile-create,
+  body.panel-page .xk-mihomo-profile-create-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.panel-page .xk-mihomo-profile-save-btn {
+    width: 100%;
+    margin: 0;
+  }
+
+  body.panel-page .xk-sub-advanced-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.panel-page .xk-sub-advanced-grid > :is(.xk-sub-span-3, .xk-sub-span-4, .xk-sub-span-5, .xk-sub-wide, .xk-sub-controls, .xk-sub-balancers) {
+    grid-column: 1 / -1;
+  }
+
+  body.panel-page .xk-sub-advanced > summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   body.panel-page #view-commands #commands-body {
     column-count: 2;
     column-gap: 12px;

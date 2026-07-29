@@ -14,7 +14,7 @@
 
 ## Активные инициативы
 
-- `panel-operator-redesign-completion-plan.md` — план завершения переезда панели на Operator Console; Этапы 0–3 закрыты, Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля, «Commands», «Logs» и «Files» закрыты 29 июля, остальные задачи Этапа 4 и Этапы 5–7 открыты.
+- `panel-operator-redesign-completion-plan.md` — план завершения переезда панели на Operator Console; Этапы 0–4 закрыты, Этапы 5–7 открыты. История статуса: Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля; Этапы 0–3 закрыты 28 июля, а Этап 4 закрыт 29 июля после последовательного закрытия остальных data-heavy задач.
 
 ## Недавние закрытые инициативы
 
@@ -29,6 +29,7 @@
 - `panel-operator-stage4-commands.md` — закрытая задача «Commands» Этапа 4: строки команда/назначение/action без визуального prefix и capsule-сетки.
 - `panel-operator-stage4-logs.md` — закрытая задача «Logs» Этапа 4: единые filters, structured counters, detail disclosure и inline error states при доминирующей terminal surface.
 - `panel-operator-stage4-files.md` — закрытая задача «Files» Этапа 4: toolbar regions, доступные table rows, раздельные selection/focus states, явный drag/drop feedback и единые inline states.
+- `panel-operator-stage4-mihomo-forms.md` — закрытые задачи «Mihomo profiles/generator» и «Формы подписок» Этапа 4: общие table/form/action primitives, согласованные labels/hints/validation/units и progressive disclosure advanced-полей.
 
 ## Сгенерированные артефакты
 

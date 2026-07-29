@@ -2922,13 +2922,10 @@ let mihomoPanelModuleApi = null;
 
   function buildMihomoScrollingNamePill(text) {
     const safe = escapeHtml(text || '');
-    return (
-      '<span class="xk-mihomo-name-pill xk-mihomo-name-pill--scroll" title="' + safe + '">' +
-        '<span class="backup-filename-marquee" title="' + safe + '">' +
-          '<span class="backup-filename-marquee-inner">' + safe + '</span>' +
-        '</span>' +
-      '</span>'
-    );
+    // Long filenames are data, not a ticker. The old marquee started every
+    // row with a large left padding, so fast scans often showed only a clipped
+    // prefix. Keep the full value in the title and use a stable ellipsis.
+    return '<span class="xk-mihomo-name-pill xk-mihomo-name-pill--scroll" title="' + safe + '">' + safe + '</span>';
   }
 
   function parseBackupFilename(filename) {
@@ -3081,8 +3078,13 @@ let mihomoPanelModuleApi = null;
 
   MP.createProfileFromEditor = async function createProfileFromEditor() {
     const nameInput = $(IDS.newProfileName);
+    const nameError = $('mihomo-new-profile-name-error');
     const name = String((nameInput && nameInput.value) || '').trim();
     const cfg = String(getEditorText() || '').trim();
+    try {
+      if (nameInput) nameInput.setAttribute('aria-invalid', name ? 'false' : 'true');
+      if (nameError) nameError.hidden = !!name;
+    } catch (e) {}
     if (!name || !cfg) {
       setStatus('Имя профиля и config.yaml не должны быть пустыми.', true);
       return false;
@@ -3486,6 +3488,24 @@ let mihomoPanelModuleApi = null;
       });
 
       wireButton(IDS.saveProfileBtn, () => MP.createProfileFromEditor());
+      const profileCreateForm = $('mihomo-profile-create-form');
+      if (profileCreateForm && (!profileCreateForm.dataset || profileCreateForm.dataset.xkeenWired !== '1')) {
+        profileCreateForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          MP.createProfileFromEditor();
+        });
+        if (profileCreateForm.dataset) profileCreateForm.dataset.xkeenWired = '1';
+      }
+      const profileNameInput = $(IDS.newProfileName);
+      if (profileNameInput && (!profileNameInput.dataset || profileNameInput.dataset.xkeenValidationWired !== '1')) {
+        profileNameInput.addEventListener('input', () => {
+          const valid = !!String(profileNameInput.value || '').trim();
+          profileNameInput.setAttribute('aria-invalid', valid ? 'false' : 'true');
+          const errorNote = $('mihomo-new-profile-name-error');
+          if (errorNote) errorNote.hidden = valid;
+        });
+        if (profileNameInput.dataset) profileNameInput.dataset.xkeenValidationWired = '1';
+      }
       wireButton(IDS.backupsCleanBtn, () => MP.cleanBackups());
 
       const filter = $(IDS.backupsActiveOnly);

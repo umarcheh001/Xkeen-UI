@@ -70,7 +70,9 @@ let mihomoHwidSubModuleApi = null;
   };
 
   const COLLAPSE_PREFS = Object.freeze({
-    diag: { key: 'xkeen.mihomo.hwid.diag.open.v1', defaultOpen: false },
+    // Reset the old expanded preference: diagnostics are useful on demand,
+    // but must not consume the modal workbench by default.
+    diag: { key: 'xkeen.mihomo.hwid.diag.open.v2', defaultOpen: false },
     compare: { key: 'xkeen.mihomo.hwid.compare.open.v1', defaultOpen: false },
   });
 
