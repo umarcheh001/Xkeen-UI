@@ -19,11 +19,11 @@ def test_xray_subscription_form_exposes_regex_filters_and_payload_fields():
     assert "routingAutoRule: 'outbounds-subscriptions-routing-auto-rule'" in outbounds_src
     assert "sockoptMark: 'outbounds-subscriptions-entware-mark-btn'" in outbounds_src
     assert "routingBalancers: 'outbounds-subscriptions-routing-balancers'" in outbounds_src
-    assert '<span class="xk-pool-fieldlabel">Имя</span>' in outbounds_src
-    assert '<span class="xk-pool-fieldlabel">Тип</span>' in outbounds_src
-    assert '<span class="xk-pool-fieldlabel">Транспорт</span>' in outbounds_src
+    assert '<span class="xk-pool-fieldlabel">Фильтр по имени</span>' in outbounds_src
+    assert '<span class="xk-pool-fieldlabel">Фильтр по типу</span>' in outbounds_src
+    assert '<span class="xk-pool-fieldlabel">Фильтр по транспорту</span>' in outbounds_src
     assert '<span class="xk-pool-fieldlabel">Balancer selectors</span>' in outbounds_src
-    assert '<span class="xk-pool-fieldlabel">Обновлять, ч</span>' in outbounds_src
+    assert '<span class="xk-pool-fieldlabel">Интервал обновления</span>' in outbounds_src
     assert '<option value="subscription-only">Только подписка</option>' in outbounds_src
     assert "const SUB_ROUTING_MODE_SUBSCRIPTION_ONLY = 'subscription-only';" in outbounds_src
     assert "function subsRoutingModeTooltip(autoRuleEnabled) {" in outbounds_src

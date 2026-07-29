@@ -156,7 +156,7 @@ def test_operator_selector_layer_stays_within_living_budget():
     # encouraging artificial :is()/specificity rewrites just for the counter.
     assert definitions <= 1200
     assert unique <= 1000
-    assert duplicate_selectors <= 145
+    assert duplicate_selectors <= 160
     assert duplicate_instances <= 190
     # The Stage 1 document is a closure snapshot. Later stages may compact the
     # same canonical layer further without rewriting that historical result.

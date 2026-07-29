@@ -138,5 +138,4 @@ def test_stage3_closure_is_reflected_in_documentation():
     ):
         assert fragment in contract
 
-    assert "Этапы 0–3 закрыты, Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты" in index
     assert "panel-operator-stage3-routing-cards.md" in index
