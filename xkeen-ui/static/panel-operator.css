@@ -18,7 +18,9 @@ body.panel-page {
   --op-surface: #14171c;
   --op-surface-2: #1a1e25;
   --op-surface-3: #20252d;
-  --op-editor: #0b0d11;
+  /* Editors use the same canvas as the panel workspace instead of the nearly
+   * black surface inherited from the retired blue-glass theme. */
+  --op-editor: #0d0f13;
   --op-border: #2a2f38;
   --op-border-strong: #3a414d;
   --op-text: #e8eaf0;
@@ -62,6 +64,20 @@ body.panel-page {
   --xk-monaco-widget-shadow: rgba(0, 0, 0, 0.34);
   --xk-monaco-input-bg: #14171c;
   --xk-monaco-disabled: #6e7581;
+  --xk-monaco-hover-bg: #1a1e25;
+  --xk-monaco-hover-text: #e8eaf0;
+  --xk-monaco-hover-title: #f7f7f9;
+  --xk-monaco-hover-muted: #969da9;
+  --xk-monaco-hover-border: #3a414d;
+  --xk-monaco-hover-shadow: rgba(0, 0, 0, 0.34);
+  --xk-monaco-hover-code-bg: #14171c;
+  /* Shared JSON Schema hover typography. CM6 is the visual reference; Monaco
+   * consumes these exact values instead of its legacy heavier hover styles. */
+  --op-schema-hover-font: var(--xk-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  --op-schema-hover-size: calc(14px * var(--xk-font-scale, 1));
+  --op-schema-hover-weight: 400;
+  --op-schema-hover-line-height: 1.55;
+  --op-schema-hover-color: var(--op-text);
   color-scheme: dark;
   min-height: 100vh;
   margin: 0;
@@ -1629,6 +1645,34 @@ body.panel-page :is(.xkeen-cm6-host .cm-editor, .CodeMirror, .xk-monaco-editor) 
   border: 1px solid var(--op-border-strong) !important;
 }
 
+/* One neutral workspace canvas for Monaco, CodeMirror 6 and the legacy
+ * textarea fallback. Monaco's own canvas color is supplied by its theme in
+ * monaco_shared.js; these rules cover hosts, gutters and CM surfaces. */
+body.panel-page :is(
+  .xkeen-cm6-host,
+  .xkeen-cm6-host .cm-editor,
+  .xkeen-cm6-host .cm-scroller,
+  .xkeen-cm6-host .cm-gutters,
+  .CodeMirror,
+  .CodeMirror-scroll,
+  .CodeMirror-gutters,
+  .xk-monaco-editor,
+  textarea#routing-editor,
+  textarea#json-editor-textarea,
+  .xkeen-textarea,
+  .routing-json-textarea
+) {
+  background: var(--op-editor) !important;
+  background-color: var(--op-editor) !important;
+  background-image: none !important;
+}
+
+body.panel-page .xkeen-cm6-host {
+  --xk-cm-bg: var(--op-editor);
+  --xk-cm-gutter-bg: var(--op-editor);
+  --xk-cm-surface: var(--op-editor);
+}
+
 /* Editor overflow menus are flat operator surfaces, not legacy blue glass
  * cards. Keep the same contract for Xray and Mihomo. */
 body.panel-page :is(.xk-routing-menu-panel, .xk-mihomo-menu-panel) {
@@ -1748,6 +1792,59 @@ body.panel-page .quick-input-widget :is(.monaco-inputbox, .monaco-inputbox input
   box-shadow: none !important;
 }
 
+/* JSON Schema hovers are Monaco overflow widgets. Replace the old navy glass
+ * card and make its dense monospace copy easier to read than Monaco's default. */
+body.panel-page :is(.workbench-hover-container, .monaco-resizable-hover, .monaco-editor-hover, .monaco-hover, .monaco-hover.workbench-hover) {
+  --vscode-editorHoverWidget-background: var(--xk-monaco-hover-bg);
+  --vscode-editorHoverWidget-foreground: var(--xk-monaco-hover-text);
+  --vscode-editorHoverWidget-border: var(--xk-monaco-hover-border);
+  border-color: var(--xk-monaco-hover-border) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--xk-monaco-hover-bg) !important;
+  background-color: var(--xk-monaco-hover-bg) !important;
+  color: var(--xk-monaco-hover-text) !important;
+  box-shadow: var(--op-shadow-float) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+body.panel-page :is(.monaco-editor-hover, .monaco-hover) :is(
+  .hover-contents,
+  .markdown-hover,
+  .hover-row,
+  .hover-row-contents,
+  p,
+  code,
+  pre,
+  span
+) {
+  color: var(--op-schema-hover-color) !important;
+  font-family: var(--op-schema-hover-font) !important;
+  font-size: var(--op-schema-hover-size) !important;
+  font-weight: var(--op-schema-hover-weight) !important;
+  line-height: var(--op-schema-hover-line-height) !important;
+}
+
+body.panel-page :is(.monaco-editor-hover, .monaco-hover) .markdown-hover p:first-child {
+  color: var(--op-schema-hover-color) !important;
+  font-weight: var(--op-schema-hover-weight) !important;
+  opacity: 0.74;
+}
+
+body.panel-page :is(.monaco-editor-hover, .monaco-hover) .markdown-hover strong {
+  color: inherit !important;
+  font-weight: inherit !important;
+}
+
+body.panel-page :is(.monaco-editor-hover, .monaco-hover) .markdown-hover :is(em, .hover-contents-secondary) {
+  color: var(--xk-monaco-hover-muted) !important;
+}
+
+body.panel-page :is(.monaco-editor-hover, .monaco-hover) .markdown-hover pre {
+  border-color: var(--op-border) !important;
+  background: var(--xk-monaco-hover-code-bg) !important;
+}
+
 /* Monaco uses a shared XKeen context menu rather than its native portal on
  * the panel. Neutralize its older navy surface and restore distinct rows. */
 body.panel-page .xk-routing-monaco-menu {
@@ -1799,6 +1896,81 @@ body.panel-page .xk-routing-monaco-menu-sep {
 body.panel-page .xkeen-cm6-host {
   --xk-cm-editor-border: var(--op-border-strong);
   --xk-cm-editor-shadow: none;
+  --xk-cm-popup-bg: var(--op-surface-2);
+  --xk-cm-popup-fg: var(--op-text);
+  --xk-cm-popup-border: var(--op-border-strong);
+  --xk-cm-popup-shadow: rgba(0, 0, 0, 0.34);
+}
+
+/* CodeMirror 6 schema hover/tooltips are also rendered as floating surfaces.
+ * Override the old navy popup tokens at the panel boundary so CM and Monaco
+ * use the same neutral operator treatment. */
+body.panel-page :is(.cm-tooltip, .cm-tooltip.cm-tooltip-hover, .cm-tooltip.cm-tooltip-lint) {
+  box-sizing: border-box;
+  border: 1px solid var(--op-border-strong) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface-2) !important;
+  background-color: var(--op-surface-2) !important;
+  color: var(--op-text) !important;
+  box-shadow: var(--op-shadow-float) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+body.panel-page :is(.cm-tooltip, .cm-tooltip.cm-tooltip-hover, .cm-tooltip.cm-tooltip-lint) :is(
+  .cm6-json-schema-hover,
+  .cm-diagnostic,
+  .cm-diagnosticText,
+  .cm-diagnosticSource,
+  p,
+  li,
+  code,
+  strong,
+  span
+) {
+  color: var(--op-schema-hover-color) !important;
+  font-family: var(--op-schema-hover-font) !important;
+  font-size: var(--op-schema-hover-size) !important;
+  font-weight: var(--op-schema-hover-weight) !important;
+  line-height: var(--op-schema-hover-line-height) !important;
+}
+
+body.panel-page .cm6-json-schema-hover {
+  background: transparent !important;
+  color: var(--op-schema-hover-color) !important;
+  font-family: var(--op-schema-hover-font) !important;
+}
+
+body.panel-page .cm6-json-schema-hover :is(strong, b, h1, h2, h3) {
+  color: var(--op-text-strong) !important;
+}
+
+body.panel-page .cm6-json-schema-hover :is(em, .cm-hover-muted, .hover-contents-secondary) {
+  color: var(--op-muted) !important;
+}
+
+body.panel-page .cm6-json-schema-hover code {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .cm6-json-schema-hover pre {
+  border-color: var(--op-border) !important;
+  background: var(--op-surface) !important;
+  color: var(--op-text) !important;
+}
+
+body.panel-page .cm6-json-schema-hover pre code {
+  background: transparent !important;
+}
+
+body.panel-page :is(.cm-tooltip-arrow, .cm-tooltip-arrow:before, .cm-tooltip-arrow:after) {
+  border-top-color: var(--op-border-strong) !important;
+  border-bottom-color: var(--op-border-strong) !important;
 }
 
 body.panel-page .routing-editor-meta {
@@ -4988,7 +5160,7 @@ html[data-theme="light"] body.panel-page {
   --op-surface: #ffffff;
   --op-surface-2: #f7f7f9;
   --op-surface-3: #eceef2;
-  --op-editor: #ffffff;
+  --op-editor: #f1f2f5;
   --op-border: #d9dce3;
   --op-border-strong: #c1c6d0;
   --op-text: #30333a;
@@ -5021,6 +5193,13 @@ html[data-theme="light"] body.panel-page {
   --xk-monaco-widget-shadow: rgba(25, 28, 35, 0.14);
   --xk-monaco-input-bg: #ffffff;
   --xk-monaco-disabled: #9298a3;
+  --xk-monaco-hover-bg: #f7f7f9;
+  --xk-monaco-hover-text: #30333a;
+  --xk-monaco-hover-title: #17191e;
+  --xk-monaco-hover-muted: #6e7480;
+  --xk-monaco-hover-border: #c1c6d0;
+  --xk-monaco-hover-shadow: rgba(25, 28, 35, 0.14);
+  --xk-monaco-hover-code-bg: #ffffff;
   color-scheme: light;
 }
 

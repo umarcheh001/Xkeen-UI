@@ -566,6 +566,18 @@ import {
     return fallback;
   }
 
+  function _getPanelCssVar(name, fallback) {
+    try {
+      const body = document.body;
+      if (body && body.classList && body.classList.contains('panel-page')) {
+        const value = getComputedStyle(body).getPropertyValue(name);
+        const normalized = (value || '').toString().trim();
+        if (normalized) return normalized;
+      }
+    } catch (e) {}
+    return _getCssVar(name, fallback);
+  }
+
   function _getThemeName() {
     try {
       const t = document.documentElement.getAttribute('data-theme');
@@ -640,16 +652,17 @@ import {
         };
 
     return {
-      accent: isActive ? _getCssVar('--accent', fallback.accent) : fallback.accent,
-      modalBg: isActive ? _getCssVar('--xk-monaco-widget-bg', fallback.modalBg) : fallback.modalBg,
-      modalText: isActive ? _getCssVar('--xk-monaco-widget-text', fallback.modalText) : fallback.modalText,
-      modalMuted: isActive ? _getCssVar('--xk-monaco-widget-muted', fallback.modalMuted) : fallback.modalMuted,
-      modalBorder: isActive ? _getCssVar('--xk-monaco-widget-border', fallback.modalBorder) : fallback.modalBorder,
-      shadow: isActive ? _getCssVar('--xk-monaco-widget-shadow', fallback.shadow) : fallback.shadow,
-      inputBg: isActive ? _getCssVar('--xk-monaco-input-bg', fallback.inputBg) : fallback.inputBg,
-      inputPlaceholder: isActive ? _getCssVar('--xk-monaco-widget-muted', fallback.inputPlaceholder) : fallback.inputPlaceholder,
-      listFocus: isActive ? _getCssVar('--xk-monaco-widget-hover', fallback.listFocus) : fallback.listFocus,
-      listHover: isActive ? _getCssVar('--xk-monaco-widget-hover', fallback.listHover) : fallback.listHover,
+      accent: isActive ? _getPanelCssVar('--op-accent', _getCssVar('--accent', fallback.accent)) : fallback.accent,
+      editorBg: isActive ? _getPanelCssVar('--op-editor', isLight ? '#ffffff' : '#01030a') : (isLight ? '#ffffff' : '#01030a'),
+      modalBg: isActive ? _getPanelCssVar('--xk-monaco-widget-bg', fallback.modalBg) : fallback.modalBg,
+      modalText: isActive ? _getPanelCssVar('--xk-monaco-widget-text', fallback.modalText) : fallback.modalText,
+      modalMuted: isActive ? _getPanelCssVar('--xk-monaco-widget-muted', fallback.modalMuted) : fallback.modalMuted,
+      modalBorder: isActive ? _getPanelCssVar('--xk-monaco-widget-border', fallback.modalBorder) : fallback.modalBorder,
+      shadow: isActive ? _getPanelCssVar('--xk-monaco-widget-shadow', fallback.shadow) : fallback.shadow,
+      inputBg: isActive ? _getPanelCssVar('--xk-monaco-input-bg', fallback.inputBg) : fallback.inputBg,
+      inputPlaceholder: isActive ? _getPanelCssVar('--xk-monaco-widget-muted', fallback.inputPlaceholder) : fallback.inputPlaceholder,
+      listFocus: isActive ? _getPanelCssVar('--xk-monaco-widget-hover', fallback.listFocus) : fallback.listFocus,
+      listHover: isActive ? _getPanelCssVar('--xk-monaco-widget-hover', fallback.listHover) : fallback.listHover,
       countBadgeBg: fallback.countBadgeBg,
       countBadgeFg: fallback.countBadgeFg,
       peekTitleBg: isActive ? _getCssVar('--xk-monaco-problem-header-bg', fallback.peekTitleBg) : fallback.peekTitleBg,
@@ -680,7 +693,7 @@ import {
         inherit: true,
         rules: [],
         colors: {
-          'editor.background': '#01030a',
+          'editor.background': darkUi.editorBg,
           'editor.foreground': '#e5e7eb',
           'editorLineNumber.foreground': '#64748b',
           'editorLineNumber.activeForeground': '#e5e7eb',
@@ -690,7 +703,7 @@ import {
           'editorIndentGuide.background1': '#172033',
           'editorIndentGuide.activeBackground1': '#2a3a56',
           'editorRuler.foreground': '#0b1020',
-          'editorGutter.background': '#01030a',
+          'editorGutter.background': darkUi.editorBg,
           'editorWhitespace.foreground': '#334155',
           'editorWidget.background': darkUi.modalBg,
           'editorWidget.foreground': darkUi.modalText,
@@ -788,7 +801,7 @@ import {
         inherit: true,
         rules: [],
         colors: {
-          'editor.background': '#ffffff',
+          'editor.background': lightUi.editorBg,
           'editor.foreground': '#111827',
           'editorLineNumber.foreground': '#94a3b8',
           'editorLineNumber.activeForeground': '#111827',
@@ -798,7 +811,7 @@ import {
           'editorIndentGuide.background1': '#e5e7eb',
           'editorIndentGuide.activeBackground1': '#cbd5e1',
           'editorRuler.foreground': '#e5e7eb',
-          'editorGutter.background': '#ffffff',
+          'editorGutter.background': lightUi.editorBg,
           'editorWhitespace.foreground': '#cbd5e1',
           'editorWidget.background': lightUi.modalBg,
           'editorWidget.foreground': lightUi.modalText,
@@ -1024,7 +1037,9 @@ import {
   function _typographyOpts() {
     // Keep typography consistent with CodeMirror in our panel.
     const scale = _getCssVarNum('--xk-font-scale', 1);
-    const fontSize = Math.max(12, Math.round(16 * scale));
+    // Monaco's glyphs render a touch smaller than CM6 at the same CSS size;
+    // keep its operator-console baseline one pixel larger for parity.
+    const fontSize = Math.max(13, Math.round(17 * scale));
     const lineHeight = Math.max(18, Math.round(fontSize * 1.45));
     const fontFamily = _getCssVar(
       '--xk-mono-font-family',
