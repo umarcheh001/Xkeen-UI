@@ -274,6 +274,7 @@ test.describe('Operator Console Stage 2 shell and workspace contract', () => {
           focusVisible: node.matches(':focus-visible'),
           outlineStyle: style.outlineStyle,
           outlineWidth: style.outlineWidth,
+          shadow: style.boxShadow,
           marker: marker.backgroundColor,
           markerHeight: marker.height,
         };
@@ -281,6 +282,7 @@ test.describe('Operator Console Stage 2 shell and workspace contract', () => {
       expect(navState.focusVisible).toBe(true);
       expect(navState.outlineStyle).not.toBe('none');
       expect(Number.parseFloat(navState.outlineWidth)).toBeGreaterThanOrEqual(2);
+      expect(navState.shadow).toBe('none');
       expect(navState.marker).not.toBe('rgba(0, 0, 0, 0)');
       expect(navState.markerHeight).toBe('2px');
     });

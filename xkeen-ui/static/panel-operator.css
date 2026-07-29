@@ -659,6 +659,7 @@ body.panel-page .top-tabs.header-tabs .top-tab-btn:hover {
 body.panel-page .top-tabs.header-tabs .top-tab-btn.active {
   color: var(--op-text-strong) !important;
   background: transparent !important;
+  box-shadow: none !important;
 }
 
 body.panel-page .top-tabs.header-tabs .top-tab-btn.active::after {
