@@ -5690,8 +5690,8 @@
     ]
   },
   "dom_contract": {
-    "id_count": 971,
-    "unique_id_count": 971,
+    "id_count": 972,
+    "unique_id_count": 972,
     "duplicate_ids": [],
     "ids": [
       "backups-clear-snapshots-btn",
@@ -5960,6 +5960,7 @@
       "fm-rename-src",
       "fm-rename-title",
       "fm-root",
+      "fm-title",
       "fm-tls-verify",
       "fm-upload-conflict-close-btn",
       "fm-upload-conflict-message",
@@ -6666,7 +6667,7 @@
       "xray-snapshot-status",
       "xray-snapshot-title"
     ],
-    "data_attribute_count": 365,
+    "data_attribute_count": 368,
     "data_attributes": [
       {
         "locator": "header.panel-header.panel-header-shell@L78",
@@ -7794,6 +7795,11 @@
         "value": "files"
       },
       {
+        "locator": "section.card.fm-card@L1530",
+        "name": "data-fm-workspace",
+        "value": "1"
+      },
+      {
         "locator": "#fm-ops-btn",
         "name": "data-fm-lite-hide",
         "value": "1"
@@ -7802,6 +7808,11 @@
         "locator": "div.fm-panel@L1554",
         "name": "data-side",
         "value": "left"
+      },
+      {
+        "locator": "div.fm-panel@L1554",
+        "name": "data-state",
+        "value": "loading"
       },
       {
         "locator": "option@L1558",
@@ -7822,6 +7833,11 @@
         "locator": "div.fm-panel@L1574",
         "name": "data-side",
         "value": "right"
+      },
+      {
+        "locator": "div.fm-panel@L1574",
+        "name": "data-state",
+        "value": "loading"
       },
       {
         "locator": "option@L1578",
