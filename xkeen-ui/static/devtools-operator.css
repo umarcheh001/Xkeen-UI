@@ -1,0 +1,1230 @@
+/*
+ * XKeen DevTools — Operator Console
+ *
+ * Late-loaded, presentation-only bridge from the retired blue-glass DevTools
+ * theme to the same flat graphite/indigo system as the main panel. Runtime
+ * hooks remain in devtools.html and the legacy component stylesheet.
+ *
+ * Canonical order: tokens -> legacy boundary -> shell -> primitives ->
+ * workspaces -> modals -> light theme -> responsive.
+ */
+
+/* ========================================================================== 
+ * 1. TOKENS
+ * ========================================================================== */
+body.devtools-page {
+  --op-bg: #0d0f13;
+  --op-surface: #14171c;
+  --op-surface-2: #1a1e25;
+  --op-surface-3: #20252d;
+  --op-editor: #0d0f13;
+  --op-border: #2a2f38;
+  --op-border-strong: #3a414d;
+  --op-text: #e8eaf0;
+  --op-text-strong: #f7f7f9;
+  --op-muted: #969da9;
+  --op-faint: #6e7581;
+  --op-accent: #7477e8;
+  --op-accent-hover: #8588f2;
+  --op-accent-soft: rgba(116, 119, 232, 0.14);
+  --op-accent-border: rgba(133, 136, 242, 0.42);
+  --op-success: #4db68b;
+  --op-success-soft: rgba(77, 182, 139, 0.12);
+  --op-warning: #d7a650;
+  --op-warning-soft: rgba(215, 166, 80, 0.12);
+  --op-danger: #df727b;
+  --op-danger-soft: rgba(223, 114, 123, 0.12);
+  --op-radius-sm: 6px;
+  --op-radius: 9px;
+  --op-radius-lg: 12px;
+  --op-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+  --op-shadow-float: 0 14px 36px rgba(0, 0, 0, 0.34);
+  --op-control-h: 32px;
+  --op-control-compact-h: 28px;
+  --op-touch-target: 40px;
+
+  /* Bridge runtime-created legacy components onto the Operator palette. */
+  --page-bg: var(--op-bg);
+  --card-bg: var(--op-surface);
+  --modal-bg: var(--op-surface);
+  --modal-border: var(--op-border);
+  --modal-text: var(--op-text);
+  --modal-muted: var(--op-muted);
+  --border: var(--op-border);
+  --text: var(--op-text);
+  --muted: var(--op-muted);
+  --accent: var(--op-accent);
+  --header-btn-bg: var(--op-surface-2);
+  --header-btn-border: var(--op-border);
+  --header-btn-text: var(--op-muted);
+  --header-btn-hover-bg: var(--op-surface-3);
+  --header-btn-hover-border: var(--op-border-strong);
+  --header-btn-hover-text: var(--op-text);
+  --header-tab-bg: transparent;
+  --header-tab-border: transparent;
+  --header-tab-text: var(--op-muted);
+  --header-tab-active-bg: var(--op-accent);
+  --header-tab-active-text: var(--op-text-strong);
+  --editor-btn-bg: var(--op-surface-2);
+  --editor-btn-border: var(--op-border);
+  --editor-btn-text: var(--op-muted);
+  --editor-btn-hover-bg: var(--op-surface-3);
+  --editor-btn-hover-border: var(--op-border-strong);
+  --editor-btn-hover-text: var(--op-text);
+  --sem-info: var(--op-accent-hover);
+  --sem-success: var(--op-success);
+  --sem-warning: var(--op-warning);
+  --sem-error: var(--op-danger);
+
+  min-height: 100vh;
+  margin: 0;
+  background: var(--op-bg) !important;
+  color: var(--op-text);
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: calc(13px * var(--xk-font-scale, 1));
+  line-height: 1.42;
+}
+
+/* ========================================================================== 
+ * 2. LEGACY BOUNDARY
+ * ========================================================================== */
+body.devtools-page,
+body.devtools-page *,
+body.devtools-page *::before,
+body.devtools-page *::after {
+  box-sizing: border-box;
+}
+
+body.devtools-page::before,
+body.devtools-page .dt-page-header::before,
+body.devtools-page .dt-page-header::after,
+body.devtools-page .card::before,
+body.devtools-page .card::after,
+body.devtools-page .dt-tabs::before,
+body.devtools-page .dt-tabs::after,
+body.devtools-page .dt-top-tab::before,
+body.devtools-page .dt-top-tab::after,
+body.devtools-page .dt-header-btn::before,
+body.devtools-page .dt-header-btn::after,
+body.devtools-page .dt-tools-left > :is(section, details) > h2::before,
+body.devtools-page .dt-tools-left > details > summary h2::before {
+  content: none !important;
+  display: none !important;
+}
+
+:where(body.devtools-page) :where(
+  .dt-page-header,
+  .dt-page-header *,
+  .dt-tabs,
+  .dt-top-tab,
+  .dt-tools-left,
+  .card,
+  details,
+  summary,
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea,
+  .dt-btn-like,
+  .dt-switch,
+  .dt-log-item,
+  .dt-log-menu-panel,
+  .dt-env-group-toggle,
+  .dt-env-group-icon,
+  .dt-env-group-count,
+  .dt-log-topbar,
+  .dt-log-controls,
+  .dt-log-view,
+  .dt-update-log,
+  .modal-content,
+  .modal-header,
+  .modal-actions
+) {
+  background-image: none !important;
+  filter: none !important;
+  text-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+:where(body.devtools-page) :where(
+  button,
+  [role="button"],
+  .dt-btn-like,
+  .dt-log-item,
+  .dt-env-group-toggle
+),
+:where(body.devtools-page) :where(
+  button,
+  [role="button"],
+  .dt-btn-like,
+  .dt-log-item,
+  .dt-env-group-toggle
+)::before,
+:where(body.devtools-page) :where(
+  button,
+  [role="button"],
+  .dt-btn-like,
+  .dt-log-item,
+  .dt-env-group-toggle
+)::after {
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body.devtools-page ::selection {
+  background: rgba(116, 119, 232, 0.28);
+}
+
+body.devtools-page :is(h1, h2, h3, h4) {
+  color: var(--op-text-strong) !important;
+  font-family: inherit;
+  text-shadow: none !important;
+}
+
+body.devtools-page :is(code, pre, textarea) {
+  font-family: var(--xk-mono-font-family, "SFMono-Regular", Consolas, "Liberation Mono", monospace);
+}
+
+body.devtools-page .small,
+body.devtools-page :is(.dt-k, .dt-sub, .dt-logging-label, .dt-switch-label, .dt-page-header p) {
+  color: var(--op-muted) !important;
+}
+
+/* ========================================================================== 
+ * 3. SHELL
+ * ========================================================================== */
+body.devtools-page .dt-container {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: var(--xk-container-max-width, 100%) !important;
+  margin: 0 auto;
+  padding: clamp(10px, 1vw, 18px) clamp(10px, 1.2vw, 22px) 24px;
+}
+
+body.devtools-page .dt-page-header {
+  position: relative;
+  margin: 0 0 0;
+  padding: 0;
+  overflow: visible;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-lg) !important;
+  background: var(--op-surface) !important;
+  box-shadow: var(--op-shadow) !important;
+}
+
+body.devtools-page .dt-page-header-bar {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center !important;
+  gap: 14px;
+  min-height: 50px;
+  margin: 0 !important;
+  padding: 8px 12px;
+}
+
+body.devtools-page .dt-page-title-group {
+  min-width: 0;
+}
+
+body.devtools-page .dt-page-header h1 {
+  margin: 0;
+  color: var(--op-text-strong) !important;
+  font-size: calc(19px * var(--xk-font-scale, 1));
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+}
+
+body.devtools-page .header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+body.devtools-page header.dt-page-header .header-actions :is(
+  .dt-header-btn,
+  .theme-toggle-btn.dt-header-btn-theme.theme-toggle-header
+) {
+  position: relative;
+  isolation: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 9px;
+  overflow: visible;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 600;
+  transform: none !important;
+}
+
+body.devtools-page header.dt-page-header .header-actions :is(
+  .dt-header-btn,
+  .theme-toggle-btn.dt-header-btn-theme.theme-toggle-header
+):hover {
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-text) !important;
+  text-decoration: none;
+}
+
+body.devtools-page header.dt-page-header .header-actions .dt-header-btn-logout:hover {
+  border-color: color-mix(in srgb, var(--op-danger) 52%, var(--op-border));
+  background: var(--op-danger-soft) !important;
+  color: var(--op-danger) !important;
+}
+
+body.devtools-page .xk-global-header-activity {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-sm);
+  background: var(--op-surface-2);
+  box-shadow: none;
+}
+
+body.devtools-page .dt-tabs {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-height: 34px;
+  margin: 0 0 9px;
+  padding: 0 8px;
+  gap: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--op-border);
+  border-top: 0;
+  border-radius: 0 0 var(--op-radius) var(--op-radius);
+  background: var(--op-surface) !important;
+  box-shadow: var(--op-shadow) !important;
+  scrollbar-width: none;
+}
+
+body.devtools-page .dt-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+body.devtools-page .top-tabs.dt-tabs .dt-top-tab {
+  position: relative;
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 86px;
+  min-height: 34px;
+  padding: 0 10px;
+  overflow: visible;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 600;
+}
+
+body.devtools-page .top-tabs.dt-tabs .dt-top-tab:hover {
+  background: var(--op-surface-2) !important;
+  color: var(--op-text) !important;
+}
+
+body.devtools-page .top-tabs.dt-tabs .dt-top-tab.active {
+  background: transparent !important;
+  color: var(--op-text-strong) !important;
+  box-shadow: inset 0 -2px 0 var(--op-accent) !important;
+}
+
+/* ========================================================================== 
+ * 4. PRIMITIVES
+ * ========================================================================== */
+body.devtools-page :is(
+  button,
+  .btn-link,
+  .btn-secondary,
+  .btn-danger,
+  .dt-btn-like,
+  .dt-chip-btn,
+  .dt-log-menu > summary
+) {
+  min-height: var(--op-control-h);
+  padding: 0 10px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  font: inherit;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 600;
+  line-height: 1;
+  transform: none !important;
+}
+
+body.devtools-page :is(
+  button,
+  .btn-link,
+  .btn-secondary,
+  .btn-danger,
+  .dt-btn-like,
+  .dt-chip-btn,
+  .dt-log-menu > summary
+):hover {
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-text) !important;
+  transform: none !important;
+}
+
+body.devtools-page :is(button, .btn-link, .dt-btn-like):focus-visible,
+body.devtools-page :is(input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--op-accent) !important;
+  outline-offset: 2px;
+  box-shadow: none !important;
+}
+
+body.devtools-page :is(button, .btn-link, .dt-btn-like):disabled {
+  border-color: var(--op-border) !important;
+  background: var(--op-surface) !important;
+  color: var(--op-faint) !important;
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+body.devtools-page :is(.btn-danger, #dt-ui-prefs-resetall, #dt-log-clear):hover {
+  border-color: color-mix(in srgb, var(--op-danger) 52%, var(--op-border)) !important;
+  background: var(--op-danger-soft) !important;
+  color: var(--op-danger) !important;
+}
+
+body.devtools-page #dt-update-run:not(:disabled),
+body.devtools-page #dt-env-help-ok-btn,
+body.devtools-page #dt-log-context-ok-btn {
+  border-color: var(--op-accent) !important;
+  background: var(--op-accent) !important;
+  color: #fff !important;
+}
+
+body.devtools-page #dt-update-run:not(:disabled):hover,
+body.devtools-page #dt-env-help-ok-btn:hover,
+body.devtools-page #dt-log-context-ok-btn:hover {
+  border-color: var(--op-accent-hover) !important;
+  background: var(--op-accent-hover) !important;
+  color: #fff !important;
+}
+
+body.devtools-page :is(
+  .dt-pill-field,
+  .dt-env-input,
+  .dt-env-search,
+  .xray-log-select,
+  .xray-log-filter,
+  .dt-log-lines-input,
+  .dt-codearea,
+  .dt-help-search-input
+) {
+  min-width: 0;
+  min-height: var(--op-control-h);
+  padding: 6px 9px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-bg) !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+}
+
+body.devtools-page :is(
+  .dt-pill-field,
+  .dt-env-input,
+  .dt-env-search,
+  .xray-log-select,
+  .xray-log-filter,
+  .dt-log-lines-input,
+  .dt-codearea,
+  .dt-help-search-input
+):focus {
+  outline: 0;
+  border-color: var(--op-accent-border) !important;
+  box-shadow: 0 0 0 2px var(--op-accent-soft) !important;
+}
+
+body.devtools-page select option,
+body.devtools-page select optgroup {
+  background: var(--op-surface-2);
+  color: var(--op-text);
+}
+
+body.devtools-page :is(.dt-badge, .dt-pill, .dt-custom-css-badge, .dt-log-badge, .dt-log-stats) {
+  min-height: 22px;
+  padding: 2px 7px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 600;
+}
+
+body.devtools-page :is(.dt-badge-ok, .dt-pill-ok) {
+  border-color: color-mix(in srgb, var(--op-success) 38%, var(--op-border)) !important;
+  background: var(--op-success-soft) !important;
+  color: var(--op-success) !important;
+}
+
+body.devtools-page :is(.dt-badge-warn, .dt-pill-warn) {
+  border-color: color-mix(in srgb, var(--op-warning) 38%, var(--op-border)) !important;
+  background: var(--op-warning-soft) !important;
+  color: var(--op-warning) !important;
+}
+
+body.devtools-page .dt-pill-bad {
+  border-color: color-mix(in srgb, var(--op-danger) 38%, var(--op-border)) !important;
+  background: var(--op-danger-soft) !important;
+  color: var(--op-danger) !important;
+}
+
+body.devtools-page :is(.status, .dt-alert) {
+  min-height: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-sm);
+  background: var(--op-surface-2);
+  color: var(--op-muted);
+  box-shadow: none;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+}
+
+body.devtools-page :is(.status.ok, .dt-alert.ok) {
+  border-color: color-mix(in srgb, var(--op-success) 38%, var(--op-border));
+  background: var(--op-success-soft);
+  color: var(--op-success);
+}
+
+body.devtools-page :is(.status.warn, .dt-alert.warn) {
+  border-color: color-mix(in srgb, var(--op-warning) 38%, var(--op-border));
+  background: var(--op-warning-soft);
+  color: var(--op-warning);
+}
+
+body.devtools-page :is(.status.bad, .dt-alert.bad) {
+  border-color: color-mix(in srgb, var(--op-danger) 38%, var(--op-border));
+  background: var(--op-danger-soft);
+  color: var(--op-danger);
+}
+
+body.devtools-page .dt-switch {
+  min-height: var(--op-control-compact-h);
+  padding: 3px 7px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: transparent !important;
+  color: var(--op-muted);
+}
+
+body.devtools-page .dt-switch-slider {
+  width: 30px;
+  height: 16px;
+  border: 1px solid var(--op-border-strong);
+  border-radius: 999px;
+  background: var(--op-surface-3) !important;
+  box-shadow: none !important;
+}
+
+body.devtools-page .dt-switch-slider::after {
+  top: 1px;
+  left: 1px;
+  width: 12px;
+  height: 12px;
+  background: var(--op-muted) !important;
+  box-shadow: none;
+}
+
+body.devtools-page .dt-switch input:checked + .dt-switch-slider {
+  border-color: var(--op-accent);
+  background: var(--op-accent) !important;
+}
+
+body.devtools-page .dt-switch input:checked + .dt-switch-slider::after {
+  background: #fff !important;
+  transform: translateX(14px) !important;
+}
+
+body.devtools-page :is(.dt-progress, .dt-theme-slider input[type="range"]) {
+  box-shadow: none;
+}
+
+body.devtools-page .dt-progress {
+  height: 6px;
+  border: 1px solid var(--op-border);
+  border-radius: 3px;
+  background: var(--op-surface-3);
+}
+
+body.devtools-page .dt-progress-bar {
+  background: var(--op-accent);
+}
+
+/* ========================================================================== 
+ * 5. WORKSPACES
+ * ========================================================================== */
+body.devtools-page .view-section {
+  margin-top: 0;
+}
+
+body.devtools-page .dt-tools-layout {
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+}
+
+body.devtools-page :is(.dt-tools-left, .dt-tools-right, .dt-logs-main, .dt-logs-sidebar) {
+  min-width: 0;
+}
+
+body.devtools-page .dt-tools-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.devtools-page :is(.card, details.dt-collapsible, details.dt-update-log-box) {
+  position: relative;
+  margin: 0;
+  padding: 11px 12px;
+  overflow: visible;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface) !important;
+  box-shadow: var(--op-shadow) !important;
+}
+
+body.devtools-page .dt-tools-left > :is(.card, details.card),
+body.devtools-page .dt-tools-right > .card,
+body.devtools-page .dt-logs-card {
+  border-color: var(--op-border) !important;
+  background: var(--op-surface) !important;
+}
+
+body.devtools-page .card h2,
+body.devtools-page details.dt-collapsible > summary h2 {
+  margin: 0 !important;
+  color: var(--op-text-strong) !important;
+  font-size: calc(13px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+body.devtools-page details.dt-collapsible {
+  padding: 0;
+}
+
+body.devtools-page details.dt-collapsible > summary {
+  min-height: 40px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent !important;
+}
+
+body.devtools-page details.dt-collapsible[open] > summary,
+body.devtools-page details.dt-update-log-box[open] > summary {
+  border-bottom: 1px solid var(--op-border);
+  border-radius: var(--op-radius) var(--op-radius) 0 0;
+}
+
+body.devtools-page .dt-collapsible-icon {
+  color: var(--op-faint);
+  font-size: calc(12px * var(--xk-font-scale, 1));
+}
+
+body.devtools-page .dt-collapsible-body {
+  margin-top: 0;
+  padding: 10px 11px 11px;
+}
+
+body.devtools-page #dt-service-card {
+  padding: 11px 12px;
+}
+
+body.devtools-page #dt-service-card h2 {
+  margin-bottom: 9px !important;
+}
+
+body.devtools-page .dt-service-actions {
+  gap: 5px;
+}
+
+body.devtools-page .dt-service-actions button.dt-ui-action,
+body.devtools-page .dt-service-actions-secondary button {
+  min-height: var(--op-control-compact-h);
+  padding: 0 7px;
+  border-color: var(--op-border) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+}
+
+body.devtools-page .dt-service-actions button.dt-ui-action:not(:disabled):hover,
+body.devtools-page .dt-service-actions-secondary button:hover {
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-text) !important;
+}
+
+body.devtools-page .dt-service-actions-secondary {
+  margin-top: 5px;
+}
+
+body.devtools-page #dt-service-card :is(.status, p) {
+  margin-top: 7px !important;
+  margin-bottom: 0;
+}
+
+body.devtools-page .dt-update-actions,
+body.devtools-page .dt-actions-grid,
+body.devtools-page .dt-logging-actions {
+  gap: 5px;
+}
+
+body.devtools-page .dt-actions-grid {
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+}
+
+body.devtools-page .dt-logging-grid {
+  gap: 8px;
+}
+
+body.devtools-page .dt-logging-field {
+  gap: 4px;
+}
+
+body.devtools-page .dt-theme-group,
+body.devtools-page .dt-tab-item,
+body.devtools-page .dt-codearea,
+body.devtools-page .dt-branding-preview {
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface-2) !important;
+  box-shadow: none !important;
+}
+
+body.devtools-page .dt-tab-list {
+  gap: 4px;
+}
+
+body.devtools-page .dt-tab-item {
+  min-height: 34px;
+  padding: 5px 8px;
+}
+
+body.devtools-page .dt-tab-item.is-fav {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+}
+
+body.devtools-page .dt-tab-star {
+  min-height: 26px;
+  padding: 0 7px;
+  border-radius: var(--op-radius-sm) !important;
+}
+
+body.devtools-page #dt-env-card {
+  min-height: calc(100vh - 113px);
+  padding: 11px 12px 12px;
+}
+
+body.devtools-page .dt-env-head {
+  align-items: center;
+  gap: 8px 12px;
+}
+
+body.devtools-page .dt-env-head-actions {
+  gap: 5px;
+}
+
+body.devtools-page .dt-env-search-wrap {
+  gap: 4px;
+}
+
+body.devtools-page .dt-env-search-clear {
+  width: var(--op-control-h);
+  min-width: var(--op-control-h);
+  padding: 0;
+}
+
+body.devtools-page .dt-env-scroll {
+  max-height: calc(100vh - 210px);
+  overflow: auto;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius);
+  background: var(--op-bg) !important;
+}
+
+body.devtools-page #dt-env-card table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  background: transparent !important;
+}
+
+body.devtools-page #dt-env-card thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 34px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--op-border);
+  background: var(--op-surface) !important;
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  text-align: left;
+}
+
+body.devtools-page #dt-env-card thead th:nth-child(1) { width: 28%; }
+body.devtools-page #dt-env-card thead th:nth-child(2) { width: 21%; }
+body.devtools-page #dt-env-card thead th:nth-child(3) { width: auto; }
+body.devtools-page #dt-env-card thead th:nth-child(4) { width: 112px; }
+
+body.devtools-page #dt-env-card tbody :is(th, td) {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--op-border);
+  background: transparent !important;
+  color: var(--op-text);
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  vertical-align: middle;
+}
+
+body.devtools-page #dt-env-card tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+body.devtools-page #dt-env-card tbody tr.dt-env-row:hover td {
+  background: var(--op-surface-2) !important;
+}
+
+body.devtools-page #dt-env-card tbody tr.dt-env-group-row td {
+  padding: 6px 8px;
+  background: var(--op-surface) !important;
+}
+
+body.devtools-page .dt-env-group-toggle {
+  --dt-env-group-accent: var(--op-accent);
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  width: 100%;
+  min-height: 40px;
+  padding: 5px 7px;
+  gap: 8px;
+  border: 1px solid transparent !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: transparent !important;
+  color: var(--op-text) !important;
+}
+
+body.devtools-page .dt-env-group-toggle:hover,
+body.devtools-page .dt-env-group-toggle[aria-expanded="true"] {
+  border-color: var(--op-border) !important;
+  background: var(--op-surface-2) !important;
+}
+
+body.devtools-page .dt-env-group-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--op-border-strong) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: transparent !important;
+  color: var(--op-muted) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+}
+
+body.devtools-page .dt-env-group-text {
+  gap: 0;
+}
+
+body.devtools-page .dt-env-group-text strong {
+  color: var(--op-text-strong);
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  font-weight: 650;
+}
+
+body.devtools-page .dt-env-group-desc {
+  color: var(--op-muted) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+}
+
+body.devtools-page .dt-env-group-count {
+  min-height: 22px;
+  padding: 2px 7px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+}
+
+body.devtools-page .dt-env-inline-examples {
+  border-top-color: var(--op-border);
+}
+
+body.devtools-page :is(.dt-env-inline-example-link, .dt-env-inline-example-fill) {
+  color: var(--op-accent-hover) !important;
+}
+
+/* Logs */
+body.devtools-page .dt-logs-card {
+  min-height: calc(100vh - 113px);
+}
+
+body.devtools-page .dt-logs-layout {
+  grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
+  gap: 9px;
+}
+
+body.devtools-page .dt-logs-sidebar {
+  padding: 9px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius);
+  background: var(--op-bg) !important;
+  box-shadow: none !important;
+}
+
+body.devtools-page .dt-log-list {
+  gap: 3px;
+}
+
+body.devtools-page .dt-log-item {
+  min-height: 42px;
+  padding: 6px 8px;
+  border: 1px solid transparent !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: transparent !important;
+}
+
+body.devtools-page .dt-log-item:hover {
+  border-color: var(--op-border) !important;
+  background: var(--op-surface-2) !important;
+}
+
+body.devtools-page .dt-log-item.active {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+  box-shadow: none !important;
+}
+
+body.devtools-page .dt-log-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--op-success);
+  box-shadow: none;
+}
+
+body.devtools-page :is(.dt-log-topbar, .dt-log-controls) {
+  padding: 7px 8px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius);
+  background: var(--op-surface-2) !important;
+  box-shadow: none !important;
+}
+
+body.devtools-page :is(.dt-log-view, .dt-update-log, #dt-log-context-body) {
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-editor) !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+}
+
+body.devtools-page .dt-log-view {
+  min-height: calc(100vh - 290px);
+}
+
+body.devtools-page .dt-log-menu-panel,
+body.devtools-page .dt-log-line-menu {
+  padding: 7px;
+  border: 1px solid var(--op-border-strong) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface-2) !important;
+  box-shadow: var(--op-shadow-float) !important;
+}
+
+/* ========================================================================== 
+ * 6. MODALS
+ * ========================================================================== */
+body.devtools-page .modal {
+  padding: 18px;
+  background: rgba(6, 7, 10, 0.68) !important;
+  backdrop-filter: none !important;
+}
+
+body.devtools-page .modal-content {
+  overflow: hidden;
+  border: 1px solid var(--op-border-strong) !important;
+  border-radius: var(--op-radius-lg) !important;
+  background: var(--op-surface) !important;
+  color: var(--op-text);
+  box-shadow: var(--op-shadow-float) !important;
+}
+
+body.devtools-page .modal-header {
+  min-height: 48px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--op-border);
+  background: var(--op-surface) !important;
+}
+
+body.devtools-page .modal-title {
+  color: var(--op-text-strong);
+  font-size: calc(13px * var(--xk-font-scale, 1));
+  font-weight: 650;
+}
+
+body.devtools-page .modal-body {
+  padding: 12px;
+  background: var(--op-bg);
+  color: var(--op-text);
+}
+
+body.devtools-page .modal-actions {
+  min-height: 48px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--op-border);
+  background: var(--op-surface) !important;
+}
+
+body.devtools-page .modal-close {
+  width: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+}
+
+body.devtools-page .dt-env-help-table-wrap {
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius);
+}
+
+body.devtools-page .dt-env-help-table :is(th, td) {
+  padding: 8px 10px;
+  border-bottom-color: var(--op-border);
+}
+
+body.devtools-page .dt-env-help-table thead th {
+  background: var(--op-surface-2) !important;
+}
+
+/* ========================================================================== 
+ * 7. LIGHT THEME — token overrides only
+ * ========================================================================== */
+html[data-theme="light"] body.devtools-page {
+  --op-bg: #f1f2f5;
+  --op-surface: #ffffff;
+  --op-surface-2: #f7f7f9;
+  --op-surface-3: #eceef2;
+  --op-editor: #f1f2f5;
+  --op-border: #d9dce3;
+  --op-border-strong: #c1c6d0;
+  --op-text: #30333a;
+  --op-text-strong: #17191e;
+  --op-muted: #6e7480;
+  --op-faint: #9298a3;
+  --op-accent: #5b5fc7;
+  --op-accent-hover: #4d51b7;
+  --op-accent-soft: rgba(91, 95, 199, 0.1);
+  --op-accent-border: rgba(91, 95, 199, 0.34);
+  --op-success: #2c8966;
+  --op-success-soft: rgba(44, 137, 102, 0.1);
+  --op-warning: #9d6a12;
+  --op-warning-soft: rgba(157, 106, 18, 0.1);
+  --op-danger: #bd4f5a;
+  --op-danger-soft: rgba(189, 79, 90, 0.09);
+  --op-shadow: 0 1px 2px rgba(25, 28, 35, 0.06);
+  --op-shadow-float: 0 14px 36px rgba(25, 28, 35, 0.14);
+  background: var(--op-bg) !important;
+  color-scheme: light;
+}
+
+/* ========================================================================== 
+ * 8. RESPONSIVE
+ * ========================================================================== */
+@media (max-width: 1180px) {
+  body.devtools-page .dt-tools-layout,
+  body.devtools-page .dt-logs-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.devtools-page #dt-env-card,
+  body.devtools-page .dt-logs-card {
+    min-height: 0;
+  }
+
+  body.devtools-page .dt-env-scroll {
+    max-height: min(68vh, 720px);
+  }
+
+  body.devtools-page .dt-log-view {
+    min-height: 420px;
+  }
+}
+
+@media (max-width: 720px) {
+  body.devtools-page {
+    font-size: calc(12.5px * var(--xk-font-scale, 1));
+  }
+
+  body.devtools-page .dt-container {
+    padding: 7px 7px 16px;
+  }
+
+  body.devtools-page .dt-page-header {
+    border-radius: var(--op-radius) !important;
+  }
+
+  body.devtools-page .dt-page-header-bar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+    min-height: 0;
+    padding: 7px 8px;
+  }
+
+  body.devtools-page .dt-page-header h1 {
+    font-size: calc(16px * var(--xk-font-scale, 1));
+  }
+
+  body.devtools-page .header-actions {
+    justify-content: flex-start;
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  body.devtools-page .header-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  body.devtools-page .header-actions > * {
+    flex: 0 0 auto;
+  }
+
+  body.devtools-page .dt-tabs {
+    margin-bottom: 7px;
+    padding: 0 4px;
+  }
+
+  body.devtools-page .top-tabs.dt-tabs .dt-top-tab {
+    min-height: 38px;
+    min-width: 82px;
+  }
+
+  body.devtools-page :is(
+    button,
+    .btn-link,
+    .btn-secondary,
+    .btn-danger,
+    .dt-btn-like,
+    .dt-chip-btn,
+    .dt-log-menu > summary
+  ) {
+    min-height: var(--op-touch-target);
+  }
+
+  body.devtools-page .dt-switch {
+    min-height: var(--op-touch-target);
+  }
+
+  body.devtools-page :is(.card, #dt-service-card) {
+    padding: 10px;
+  }
+
+  body.devtools-page details.dt-collapsible {
+    padding: 0;
+  }
+
+  body.devtools-page details.dt-collapsible > summary {
+    min-height: var(--op-touch-target);
+    padding: 0 10px;
+  }
+
+  body.devtools-page .dt-collapsible-body {
+    padding: 9px 10px 10px;
+  }
+
+  body.devtools-page .dt-env-head {
+    align-items: stretch;
+  }
+
+  body.devtools-page .dt-env-head-actions,
+  body.devtools-page .dt-env-search-wrap {
+    width: 100%;
+    min-width: 0;
+  }
+
+  body.devtools-page .dt-env-head-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  body.devtools-page .dt-env-scroll {
+    max-height: 68vh;
+  }
+
+  body.devtools-page #dt-env-card table {
+    min-width: 760px;
+  }
+
+  body.devtools-page .dt-log-view {
+    min-height: 50vh;
+  }
+
+  body.devtools-page .modal {
+    align-items: stretch !important;
+    padding: 0 !important;
+  }
+
+  body.devtools-page .modal-content {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 100dvh;
+    max-height: 100dvh !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  body.devtools-page .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.devtools-page *,
+  body.devtools-page *::before,
+  body.devtools-page *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -8,6 +8,8 @@
 
 Корректировка перед продолжением Этапа 4 (29 июля 2026 года): overflow-меню редакторов Xray/Mihomo и body-level Monaco context/action/command-palette portals переведены со старых blue-glass surfaces на нейтральные `--op-*` surfaces. Меню Mihomo теперь раскрывается внутрь viewport, а fullscreen-toolbar использует body portal с placeholder-восстановлением и фиксируется у правого safe-area края; контракт проверяет `tests/test_panel_operator_editor_menus.py`.
 
+Параллельный проход: DevTools — закрыт 29 июля 2026 года. Отдельная страница `/devtools`, ранее не входившая в выполненные этапы основной панели, переведена со старой blue-glass темы на общий Operator Console contract: те же dark/light `--op-*` tokens, flat shell/cards/data rows/log canvas/modals, indigo active/focus и responsive breakpoints 1180/720 px. Runtime/API/DOM hooks не менялись; исторический `devtools.css` сохранён как compatibility layer, а scoped `devtools-operator.css` подключён последним. Контракт: [`devtools-operator-theme.md`](devtools-operator-theme.md).
+
 ## Цель и границы
 
 Цель — закончить визуальный переезд основной панели XKeen в спокойную операторскую консоль: графитовые поверхности, один indigo-акцент, компактная навигация, строки данных вместо вложенных карточек и редактор как главный рабочий объект.
