@@ -75,7 +75,7 @@ body.panel-page .container-wide {
 
 body.panel-page .container-wide::before,
 body.panel-page :is(.container-wide, .panel-header, .card, .top-tabs)::after,
-body.panel-page :is(.panel-header, .card, .top-tabs)::before,
+body.panel-page :is(.panel-header, .card, .top-tabs, .top-tab-btn.active)::before,
 body.panel-page .header-actions .xk-header-btn::after,
 body.panel-page .header-actions .theme-toggle-btn::after {
   content: none !important;
@@ -635,23 +635,14 @@ body.panel-page .top-tabs.header-tabs .top-tab-btn.active {
   background: transparent !important;
 }
 
-body.panel-page .top-tabs.header-tabs .top-tab-btn.active::before {
-  content: none !important;
-  display: none !important;
-}
-
 body.panel-page .top-tabs.header-tabs .top-tab-btn.active::after {
   background: var(--op-accent);
 }
 
 body.panel-page .top-tabs.header-tabs .top-tab-btn:focus-visible {
-  background: var(--op-accent-soft) !important;
+  background: transparent !important;
   outline-color: var(--op-accent) !important;
   outline-offset: -3px;
-}
-
-body.panel-page .top-tabs.header-tabs .top-tab-btn.active:focus-visible {
-  background: transparent !important;
 }
 
 /* Service and workspace controls share a single restrained command row. */
