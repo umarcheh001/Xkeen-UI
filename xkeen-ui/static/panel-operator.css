@@ -1628,7 +1628,7 @@ body.panel-page .routing-editor-meta {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0;
+  gap: 6px 12px;
   min-height: 28px;
   margin: 6px 0 0;
   padding-top: 6px;
@@ -1650,9 +1650,7 @@ body.panel-page .routing-editor-meta {
 }
 
 body.panel-page .routing-editor-badge + .routing-editor-badge::before {
-  content: "·";
-  margin: 0 7px;
-  color: var(--op-faint);
+  content: none;
 }
 
 body.panel-page :is(
