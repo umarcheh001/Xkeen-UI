@@ -1015,11 +1015,13 @@ let xrayLogsModuleApi = null;
     const model = buildXrayLogStatusModel(runtimeState);
     el.textContent = String(model.message || '');
     el.dataset.phase = String(model.phase || 'idle');
+    el.dataset.tone = String(model.tone || 'muted');
     el.dataset.transport = String(model.transport || '');
     el.dataset.file = String(model.fileLabel || '');
 
     try {
       el.classList.toggle('error', model.tone === 'error');
+      el.classList.toggle('is-warning', model.tone === 'warning');
     } catch (e) {}
   }
 
@@ -1123,15 +1125,38 @@ let xrayLogsModuleApi = null;
     const lines = Array.isArray(runtime.lastLines) ? runtime.lastLines.length : 0;
     const max = runtime.maxLines || DEFAULT_MAX_LINES;
     const transport = readXrayLogTransportLabel(runtime);
-    const parts = [lines + '/' + max];
+    const parts = [
+      '<span class="xk-log-counter" data-kind="lines">' +
+        '<span class="xk-log-counter-label">Строки</span>' +
+        '<span class="xk-log-counter-value">' + String(lines) + ' / ' + String(max) + '</span>' +
+      '</span>',
+    ];
 
-    if (transport) parts.push(transport);
+    if (transport) {
+      parts.push(
+        '<span class="xk-log-counter" data-kind="transport">' +
+          '<span class="xk-log-counter-label">Транспорт</span>' +
+          '<span class="xk-log-counter-value">' + escapeHtml(transport) + '</span>' +
+        '</span>'
+      );
+    }
     if (runtime.paused) {
       const pending = Math.max(0, parseInt(runtime.pendingCount || 0, 10) || 0);
-      parts.push(pending ? ('+' + pending + ' в очереди') : 'буферизация');
+      parts.push(
+        '<span class="xk-log-counter" data-kind="pending">' +
+          '<span class="xk-log-counter-label">Очередь</span>' +
+          '<span class="xk-log-counter-value">' + (pending ? ('+' + String(pending)) : 'буфер') + '</span>' +
+        '</span>'
+      );
     }
 
-    el.textContent = parts.join(' • ');
+    el.innerHTML = parts.join('');
+    el.setAttribute(
+      'aria-label',
+      'Строки: ' + String(lines) + ' из ' + String(max) +
+        (transport ? ('. Транспорт: ' + transport) : '') +
+        (runtime.paused ? ('. Очередь: ' + String(Math.max(0, parseInt(runtime.pendingCount || 0, 10) || 0))) : '')
+    );
   }
 
   function buildXrayLogFilterGroups(rawFilter) {
@@ -1190,6 +1215,14 @@ let xrayLogsModuleApi = null;
     const filterText = String(snapshot.filterText || '').trim();
 
     if (snapshot.entries.length) return null;
+
+    if (uiStatus.phase === 'error' || uiStatus.tone === 'error') {
+      return {
+        tone: 'error',
+        title: 'Не удалось получить строки лога',
+        detail: String(uiStatus.message || ('Проверьте доступ к ' + fileLabel + ' и повторите просмотр.')),
+      };
+    }
 
     if (snapshot.rawCount > 0 && snapshot.levelCount === 0 && snapshot.levelFilter) {
       return {
@@ -4567,17 +4600,26 @@ function openXrayContextModal(idx, radius) {
   const end = Math.min(src.length, center + r + 1);
 
   const lines = [];
+  const rows = [];
   for (let i = start; i < end; i++) {
     const mark = i === center ? '▶ ' : '  ';
-    lines.push(mark + normalizeLogLine(src[i] || ''));
+    const line = mark + normalizeLogLine(src[i] || '');
+    lines.push(line);
+    rows.push(
+      '<span class="xray-context-line' + (i === center ? ' is-focus' : '') + '"' +
+        (i === center ? ' data-context-focus="1"' : '') + '>' +
+        escapeHtml(line) +
+      '</span>'
+    );
   }
 
   if (title) {
     const file = _currentFile || 'access';
-    title.textContent = `Xray ${file}.log — контекст (±${r})`;
+    title.textContent = `Контекст ${file}.log · ±${r} строк`;
   }
 
-  out.textContent = lines.join('\n');
+  out.innerHTML = rows.join('');
+  out.dataset.copyText = lines.join('\n');
   try {
     openXkeenModal(modal, 'xray_logs_context', true);
   } catch (e) {}
@@ -4594,7 +4636,7 @@ function closeXrayContextModal() {
 function copyXrayContextModal() {
   const out = $('xray-context-output');
   if (!out) return;
-  const text = out.textContent || '';
+  const text = String(out.dataset.copyText || out.textContent || '');
   if (!text.trim()) return;
   copyToClipboard(text, 'Контекст скопирован');
 }

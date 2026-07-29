@@ -2611,6 +2611,14 @@ body.panel-page #view-commands .command-item-action {
 }
 
 /* Logs are terminal-like records, with restrained status color. */
+/* Logs keep their terminal surface dominant. Source selectors, text search and
+ * runtime controls use the same flat field/action rhythm; counters, detail
+ * disclosure and failures remain rows instead of capsule/card fragments. */
+body.panel-page :is(.log-card, #xray-context-modal) {
+  --op-log-control: var(--op-surface-2);
+  --op-log-hover: var(--op-surface-3);
+}
+
 body.panel-page .log-card {
   margin-top: 0;
 }
@@ -2629,6 +2637,8 @@ body.panel-page .log-header-row {
   gap: 10px;
   min-height: 34px;
   margin: 0 0 7px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--op-border);
 }
 
 body.panel-page .log-header-actions {
@@ -2637,6 +2647,180 @@ body.panel-page .log-header-actions {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 4px;
+}
+
+body.panel-page #view-xray-logs .xray-log-select,
+body.panel-page #view-xray-logs .xray-log-filter,
+body.panel-page #view-xray-logs .dt-log-lines-input,
+body.panel-page #view-xray-logs .restart-log-search-input {
+  min-height: var(--op-control-h);
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background-color: var(--op-log-control) !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #view-xray-logs :is(.xray-log-select, .xray-log-filter, .dt-log-lines-input, .restart-log-search-input):focus {
+  border-color: var(--op-accent-border) !important;
+  outline: 2px solid var(--op-accent-soft) !important;
+  outline-offset: 0;
+  box-shadow: none !important;
+}
+
+body.panel-page #view-xray-logs .xk-log-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--op-control-h);
+  gap: 4px;
+  margin: 0;
+  padding: 0 0 7px;
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page #view-xray-logs .xk-log-filter-bar #xray-log-filter-clear {
+  width: var(--op-control-h);
+  min-width: var(--op-control-h);
+  padding: 0;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+}
+
+body.panel-page #view-xray-logs .xray-log-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page #view-xray-logs :is(.dt-switch, .dt-log-interval) {
+  min-height: var(--op-control-h);
+  padding: 0 8px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-log-control) !important;
+  color: var(--op-data-muted) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #view-xray-logs .dt-switch-slider {
+  width: 28px;
+  height: 16px;
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-3) !important;
+}
+
+body.panel-page #view-xray-logs .dt-switch-slider::after {
+  width: 12px;
+  height: 12px;
+  background: var(--op-data-muted) !important;
+}
+
+body.panel-page #view-xray-logs .dt-switch input:checked + .dt-switch-slider {
+  border-color: var(--op-accent) !important;
+  background: var(--op-accent) !important;
+}
+
+body.panel-page #view-xray-logs .dt-switch input:checked + .dt-switch-slider::after {
+  background: #fff !important;
+  transform: translateX(12px) !important;
+}
+
+body.panel-page #view-xray-logs .dt-log-interval .xray-log-select {
+  min-height: 24px;
+  padding-block: 0;
+  border: 0 !important;
+  background-color: transparent !important;
+  outline: 0 !important;
+}
+
+body.panel-page #view-xray-logs .dt-log-menu {
+  position: relative;
+}
+
+body.panel-page #view-xray-logs .dt-log-menu[open] > summary {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #view-xray-logs .dt-log-menu-panel,
+body.panel-page .xray-line-menu {
+  padding: 5px;
+  border: 1px solid var(--op-border-strong) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-text) !important;
+  box-shadow: var(--op-shadow-float) !important;
+}
+
+body.panel-page #view-xray-logs .dt-log-menu-panel .dt-log-btn,
+body.panel-page .xray-line-menu .dt-log-btn {
+  justify-content: flex-start;
+  width: 100%;
+  border-color: transparent !important;
+  background: transparent !important;
+  text-align: left;
+}
+
+body.panel-page #view-xray-logs .xk-log-counters {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  margin-left: auto;
+  min-width: 0;
+}
+
+body.panel-page #view-xray-logs :is(.xray-log-mode, .dt-log-stats) {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-height: var(--op-control-h);
+  margin: 0;
+  padding: 0 8px;
+  border: 0 !important;
+  border-left: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--op-data-muted) !important;
+  box-shadow: none !important;
+  opacity: 1;
+}
+
+body.panel-page #view-xray-logs .xray-log-mode::before {
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  box-shadow: none !important;
+}
+
+body.panel-page #view-xray-logs .dt-log-stats {
+  padding: 0;
+}
+
+body.panel-page #view-xray-logs .xk-log-counter {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  gap: 5px;
+  min-height: var(--op-control-h);
+  padding: 7px 8px 0;
+  border-left: 1px solid var(--op-border);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+body.panel-page #view-xray-logs .xk-log-counter-label {
+  color: var(--op-data-faint);
+  font-size: calc(9.5px * var(--xk-font-scale, 1));
+  font-weight: 560;
+}
+
+body.panel-page #view-xray-logs .xk-log-counter-value {
+  color: var(--op-text);
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 650;
 }
 
 body.panel-page .log-card .log-block,
@@ -2651,8 +2835,11 @@ html[data-theme="light"] body.panel-page .restart-log-summary {
 }
 
 body.panel-page .restart-log-summary {
-  margin: 0 0 7px;
-  padding: 7px 9px;
+  margin: 0;
+  padding: 7px 0;
+  border-width: 0 0 1px !important;
+  border-radius: 0 !important;
+  background: transparent !important;
 }
 
 body.panel-page .log-card .log-block {
@@ -2660,10 +2847,213 @@ body.panel-page .log-card .log-block {
   line-height: 1.48;
 }
 
+body.panel-page #view-xray-logs .xray-log-block {
+  margin-top: 7px;
+}
+
+body.panel-page #view-xray-logs .restart-log-search {
+  min-width: 160px;
+  max-width: 260px;
+}
+
+body.panel-page #view-xray-logs .restart-log-search-input {
+  padding: 0 28px 0 27px;
+}
+
+body.panel-page #view-xray-logs .restart-log-search-clear {
+  right: 4px;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  color: var(--op-data-muted);
+}
+
 body.panel-page .restart-log-filter-btn[aria-pressed="true"] {
   border-color: var(--op-accent-border) !important;
   background: var(--op-accent-soft) !important;
   color: var(--op-accent-hover) !important;
+}
+
+body.panel-page #view-xray-logs :is(.restart-log-summary-label, .restart-log-meta, .restart-log-detail-label) {
+  color: var(--op-data-muted) !important;
+}
+
+body.panel-page #view-xray-logs .restart-log-summary-value {
+  color: var(--op-text) !important;
+}
+
+body.panel-page #view-xray-logs :is(.restart-log-pill, .restart-log-level) {
+  min-height: 22px;
+  padding: 2px 6px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: 4px !important;
+  background: var(--op-surface-2) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #view-xray-logs .restart-log-details-toggle {
+  min-height: 26px;
+  margin-left: 8px;
+  padding: 0 7px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: 4px !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-data-muted) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #view-xray-logs .restart-log-details-toggle[aria-expanded="true"] {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent-hover) !important;
+}
+
+body.panel-page #view-xray-logs .restart-log-details {
+  grid-template-columns: minmax(112px, max-content) minmax(0, 1fr);
+  gap: 0;
+  margin: 7px 0 2px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #view-xray-logs .restart-log-detail-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  gap: 10px;
+  min-height: 30px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page #view-xray-logs .restart-log-detail-value {
+  color: var(--op-text) !important;
+}
+
+body.panel-page #view-xray-logs .restart-log-preflight-open {
+  grid-column: 1 / -1;
+  justify-self: start;
+  min-height: 30px;
+  margin: 7px;
+  padding: 0 9px;
+  border: 1px solid rgba(223, 114, 123, 0.4) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-danger-soft) !important;
+  color: var(--op-danger) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #view-xray-logs .restart-log-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px;
+  color: var(--op-muted) !important;
+  white-space: normal;
+}
+
+body.panel-page #view-xray-logs .restart-log-empty.is-error {
+  border-left: 2px solid var(--op-danger);
+  background: var(--op-danger-soft);
+  color: var(--op-danger) !important;
+}
+
+body.panel-page #view-xray-logs .restart-log-empty-title {
+  color: inherit;
+  font-weight: 680;
+}
+
+body.panel-page #view-xray-logs .restart-log-empty-detail {
+  color: var(--op-data-muted);
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #view-xray-logs .xk-log-state,
+body.panel-page #view-xray-logs .xray-log-domain-hint {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  gap: 8px;
+  margin-top: 7px;
+  padding: 6px 8px;
+  border: 0 !important;
+  border-left: 2px solid var(--op-border-strong) !important;
+  border-radius: 0 !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-data-muted) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #view-xray-logs .xk-log-state[data-tone="warning"] {
+  border-left-color: var(--op-warning) !important;
+  background: var(--op-warning-soft) !important;
+  color: var(--op-warning) !important;
+}
+
+body.panel-page #view-xray-logs .xk-log-state[data-tone="error"] {
+  border-left-color: var(--op-danger) !important;
+  background: var(--op-danger-soft) !important;
+  color: var(--op-danger) !important;
+}
+
+body.panel-page #view-xray-logs .xray-log-block [data-empty-state] {
+  display: block;
+  max-width: 720px;
+  color: var(--op-data-muted) !important;
+  white-space: normal;
+}
+
+body.panel-page #view-xray-logs .xray-log-block [data-empty-state="title"] {
+  margin-bottom: 4px;
+  color: var(--op-text) !important;
+  font-weight: 680;
+}
+
+body.panel-page #view-xray-logs .xray-log-block .log-line-error[data-empty-state="title"] {
+  color: var(--op-danger) !important;
+}
+
+body.panel-page #xray-context-modal .xray-context-modal-content {
+  display: flex;
+  flex-direction: column;
+  width: min(980px, calc(100vw - 36px));
+  max-width: 980px;
+  max-height: min(78dvh, 760px);
+}
+
+body.panel-page #xray-context-modal .modal-body {
+  min-height: 0;
+  overflow: hidden;
+}
+
+body.panel-page #xray-context-output {
+  max-height: 60dvh;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-editor) !important;
+  color: var(--op-text) !important;
+}
+
+body.panel-page #xray-context-output .xray-context-line {
+  display: block;
+  min-width: max-content;
+  padding: 3px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--op-border) 55%, transparent);
+  white-space: pre;
+}
+
+body.panel-page #xray-context-output .xray-context-line.is-focus {
+  background: var(--op-accent-soft);
+  box-shadow: inset 2px 0 0 var(--op-accent) !important;
+  color: var(--op-text-strong);
 }
 
 /* File manager: one dual-pane workspace. Toolbars, data and actions are
@@ -4778,6 +5168,70 @@ body.panel-page .footer {
   body.panel-page .card {
     padding: 8px;
     border-radius: var(--op-radius) !important;
+  }
+
+  body.panel-page #view-xray-logs .log-header-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  body.panel-page #view-xray-logs .log-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  body.panel-page #view-xray-logs .xray-log-controls {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  body.panel-page #view-xray-logs .xk-log-counters {
+    flex: 0 0 auto;
+    margin-left: 4px;
+  }
+
+  body.panel-page #view-xray-logs :is(.xray-log-mode, .dt-log-stats) {
+    min-height: var(--op-touch-target);
+  }
+
+  body.panel-page #view-xray-logs .xk-log-counter {
+    min-height: var(--op-touch-target);
+    padding-top: 10px;
+  }
+
+  body.panel-page #view-xray-logs .xray-log-block {
+    min-height: 300px !important;
+    height: clamp(300px, 52dvh, 420px);
+  }
+
+  body.panel-page #view-xray-logs .xk-xray-logs-log-card .log-header-actions {
+    display: grid;
+    grid-template-columns: minmax(160px, 1fr) repeat(5, auto);
+    overflow-x: auto;
+  }
+
+  body.panel-page #view-xray-logs .restart-log-search {
+    width: 100%;
+    min-width: 160px;
+  }
+
+  body.panel-page #view-xray-logs .restart-log-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.panel-page #view-xray-logs .restart-log-detail-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  body.panel-page #xray-context-modal .xray-context-modal-content {
+    width: calc(100vw - 14px);
+    max-height: calc(100dvh - 14px);
   }
 
   body.panel-page #view-commands #commands-body {

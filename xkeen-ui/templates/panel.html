@@ -1619,17 +1619,18 @@
 </div>
 
     <div id="view-xray-logs" class="view-section" style="display:none;" data-xk-section="xray-logs">
-      <section class="card log-card">
+      <section class="card log-card xk-logs-live-card" aria-labelledby="xray-logs-title">
         <div class="log-header-row">
-          <h2>Логи Xray онлайн <span id="xray-log-lamp" class="xray-log-lamp" data-state="unknown" title="Статус логов Xray неизвестен"></span></h2>
-          <div class="log-header-actions">
-            <select id="xray-log-file" class="xray-log-select">
+          <h2 id="xray-logs-title">Логи Xray онлайн <span id="xray-log-lamp" class="xray-log-lamp" data-state="unknown" title="Статус логов Xray неизвестен"></span></h2>
+          <div class="log-header-actions" aria-label="Источник и действия журнала">
+            <select id="xray-log-file" class="xray-log-select" aria-label="Файл лога">
               <option value="access" selected>access.log</option>
               <option value="error">error.log</option>
             </select>
             <select
               id="xray-log-level"
               class="xray-log-select"
+              aria-label="Уровень логирования"
               title="Уровень логирования Xray (loglevel) для error.log. Это минимальный уровень: debug включает info/warning/error, info включает warning/error и т.д. При смене уровня, если логи уже включены, уровень применяется сразу. Также используется как фильтр отображения в окне."
             >
               <option value="debug">debug</option>
@@ -1647,7 +1648,7 @@
             <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-fullscreen" title="Полный экран" aria-label="Полный экран">⛶</button>
           </div>
         </div>
-        <div class="log-filter-row">
+        <div class="log-filter-row xk-log-filter-bar" role="search" aria-label="Фильтр логов Xray">
           <input
             id="xray-log-filter"
             type="text"
@@ -1664,7 +1665,7 @@
             ✖
           </button>
         </div>
-        <div class="dt-log-controls xray-log-controls" aria-label="Управление логами Xray">
+        <div class="dt-log-controls xray-log-controls xk-log-control-bar" aria-label="Управление логами Xray">
           <label class="dt-switch" title="Онлайн-режим: автообновление новых строк.">
             <input id="xray-log-live" type="checkbox" />
             <span class="dt-switch-slider" aria-hidden="true"></span>
@@ -1705,13 +1706,15 @@
 </div>
           </details>
 
-          <span class="small xray-log-mode" id="xray-log-mode" aria-live="polite">Вручную</span>
-          <span class="small dt-log-stats" id="xray-log-stats" aria-live="polite"></span>
+          <div class="xk-log-counters" aria-label="Состояние и счётчики журнала">
+            <span class="small xray-log-mode" id="xray-log-mode" aria-live="polite">Вручную</span>
+            <span class="small dt-log-stats" id="xray-log-stats" aria-live="polite"></span>
+          </div>
         </div>
 
-        <pre id="xray-log-output" class="log-block xray-log-block"></pre>
+        <pre id="xray-log-output" class="log-block xray-log-block" aria-label="Строки лога Xray" tabindex="0"></pre>
         <div id="xray-log-domain-hint" class="status xray-log-domain-hint hidden" role="status"></div>
-        <div id="xray-log-status" class="status"></div>
+        <div id="xray-log-status" class="status xk-log-state" role="status" aria-live="polite"></div>
       </section>
 
       <!-- Restart log (Xray logs online) -->
@@ -1732,17 +1735,17 @@
     </div>
 
     <!-- Xray log: context modal -->
-    <div id="xray-context-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Контекст строки лога Xray">
-      <div class="modal-content" style="max-width: 980px;">
+    <div id="xray-context-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="xray-context-title">
+      <div class="modal-content xray-context-modal-content" data-modal-key="xray-log-context">
         <div class="modal-header">
-          <span class="modal-title" id="xray-context-title">Xray log context</span>
-          <button type="button" class="modal-close" id="xray-context-close-btn" title="Закрыть">×</button>
+          <span class="modal-title" id="xray-context-title">Контекст строки Xray</span>
+          <button type="button" class="modal-close" id="xray-context-close-btn" title="Закрыть" aria-label="Закрыть">×</button>
         </div>
         <div class="modal-body">
-          <pre id="xray-context-output" class="log-block" style="max-height:60vh; overflow:auto;"></pre>
+          <pre id="xray-context-output" class="log-block" aria-label="Контекст выбранной строки" tabindex="0"></pre>
         </div>
         <div class="modal-actions">
-          <button type="button" class="btn-secondary" id="xray-context-copy-btn" title="Скопировать контекст">📋 Copy</button>
+          <button type="button" class="btn-secondary" id="xray-context-copy-btn" title="Скопировать контекст">Скопировать</button>
           <button type="button" class="btn-secondary" id="xray-context-close-btn2" title="Закрыть">Закрыть</button>
         </div>
       </div>

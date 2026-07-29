@@ -2,7 +2,7 @@
 
 Дата аудита: 28 июля 2026 года.
 
-Статус выполнения: **Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля 2026 года; задача «Commands» закрыта 29 июля 2026 года; остальные задачи Этапа 4 и Этапы 5–7 остаются открыты.** Контракт, state matrix и baseline Этапа 0 зафиксированы в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md), канонический snapshot — в [`panel-operator-stage0-inventory.json`](panel-operator-stage0-inventory.json). Система scoped-примитивов и проверки Этапа 1 зафиксированы в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md), контракт шапки, navigation rail и editor-first grid Этапа 2 — в [`panel-operator-stage2-shell-grid.md`](panel-operator-stage2-shell-grid.md), единый accordion/data-row/state contract инспектора Routing Этапа 3 — в [`panel-operator-stage3-routing-cards.md`](panel-operator-stage3-routing-cards.md). Контракты закрытых задач Этапа 4: [`panel-operator-stage4-ports.md`](panel-operator-stage4-ports.md), [`panel-operator-stage4-routing-rules.md`](panel-operator-stage4-routing-rules.md), [`panel-operator-stage4-balancers.md`](panel-operator-stage4-balancers.md) и [`panel-operator-stage4-commands.md`](panel-operator-stage4-commands.md).
+Статус выполнения: **Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля 2026 года; задача «Commands» закрыта 29 июля 2026 года; задача «Logs» закрыта 29 июля 2026 года; остальные задачи Этапа 4 и Этапы 5–7 остаются открыты.** Контракт, state matrix и baseline Этапа 0 зафиксированы в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md), канонический snapshot — в [`panel-operator-stage0-inventory.json`](panel-operator-stage0-inventory.json). Система scoped-примитивов и проверки Этапа 1 зафиксированы в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md), контракт шапки, navigation rail и editor-first grid Этапа 2 — в [`panel-operator-stage2-shell-grid.md`](panel-operator-stage2-shell-grid.md), единый accordion/data-row/state contract инспектора Routing Этапа 3 — в [`panel-operator-stage3-routing-cards.md`](panel-operator-stage3-routing-cards.md). Контракты закрытых задач Этапа 4: [`panel-operator-stage4-ports.md`](panel-operator-stage4-ports.md), [`panel-operator-stage4-routing-rules.md`](panel-operator-stage4-routing-rules.md), [`panel-operator-stage4-balancers.md`](panel-operator-stage4-balancers.md), [`panel-operator-stage4-commands.md`](panel-operator-stage4-commands.md) и [`panel-operator-stage4-logs.md`](panel-operator-stage4-logs.md).
 
 ## Цель и границы
 
@@ -26,7 +26,7 @@
 - `styles.css`: 33 402 строки, 878 упоминаний градиентов, 661 декларация `box-shadow`, 202 радиуса `999px` и 455 `!important`;
 - `panel-operator.css`: 3 779 строк, 0 градиентов, 104 декларации `box-shadow` (включая сбросы), 733 `!important`;
 - эвристический статический подсчёт находит 762 разных селектора нового слоя, из них 162 встречаются более одного раза;
-- `panel.html`: 4 496 строк, 50 модальных окон и 284 inline-атрибута `style`; часть inline-стилей является контрактом видимости, но часть всё ещё задаёт геометрию и мешает общей адаптивной системе.
+- `panel.html`: 4 496 строк, 50 модальных окон и 282 inline-атрибута `style`; часть inline-стилей является контрактом видимости, но часть всё ещё задаёт геометрию и мешает общей адаптивной системе.
 
 Следовательно, завершать миграцию нужно не очередным блоком в конце CSS, а уплотнением и переиспользованием уже подключённого scoped-слоя.
 
@@ -152,9 +152,9 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 
 - [x] `panel-operator.css` сохранён последним; статический и Chromium guard запрещают потерю scope/порядка, а `styles.css` объявлен закрытым для новых panel redesign rules;
 - [x] `scripts/generate_panel_operator_inventory.py` фиксирует 6 top-level views, 12 accordion/collapsible contracts, 8 editor engine selectors и все 50 modal IDs;
-- [x] все 284 inline-style разделены на 63 state/visibility hooks, 215 presentation/geometry attributes и 6 mixed attributes;
+- [x] все 282 inline-style разделены на 63 state/visibility hooks, 213 presentation/geometry attributes и 6 mixed attributes;
 - [x] сняты 12 baseline PNG: dark/light для 1920 × 1080, 1440 × 900, 1280 × 720, 1024 × 768, 390 × 844 и 360 × 800;
-- [x] DOM-contract зафиксировал 970 уникальных `id`, 345 `data-*`, 156 hidden runtime IDs и mapping 942 JS-referenced handler anchors;
+- [x] DOM-contract зафиксировал 971 уникальный `id`, 365 `data-*`, 156 hidden runtime IDs и mapping 942 JS-referenced handler anchors;
 - [x] `tests/test_panel_operator_stage0_contract.py` и `e2e/panel_operator_contract.spec.mjs` проверяют snapshot, ownership, hidden runtime nodes и критичные runtime handlers.
 
 Критерий завершения: **выполнен**. Воспроизводимая карта экранов/состояний и тесты scoped/last-loaded контракта находятся в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md). Этап повторно открывается только при нарушении зафиксированного контракта, а не при плановой работе следующих этапов.
@@ -207,16 +207,16 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 
 ### Этап 4. Формы, таблицы и data-heavy экраны — в работе
 
-Выполнено 28 июля 2026 года:
+Выполнено 28–29 июля 2026 года:
 
 - [x] **Порты:** legacy fixed height перекрыт в scoped workspace-слое, карточки больше не растягиваются до единой высоты, редакторы списков/IP/policy получили диапазоны 156–220 / 168–240 / 220–320 px, status и компактный save собраны в общий footer row. Контракт: [`panel-operator-stage4-ports.md`](panel-operator-stage4-ports.md).
 - [x] **Routing rules:** двухколоночные cards заменены единым вертикальным record list с постоянными summary-колонками; drag/drop, open/closed, disabled и target states сохранены, semantic color ограничен marker/state; primary Apply приведён к размеру соседних icon-actions. Контракт: [`panel-operator-stage4-routing-rules.md`](panel-operator-stage4-routing-rules.md).
 - [x] **Balancers:** summary отделён от формы через disclosure на существующем `_balOpenSet`, selector ограничен первыми четырьмя chips с `Ещё N`, поля получили раздельный вертикальный ритм, secondary text стал контрастнее, delete-controls закреплены круглыми, а единственный compact primary apply принадлежит всей секции. Контракт: [`panel-operator-stage4-balancers.md`](panel-operator-stage4-balancers.md).
 - [x] **Commands:** capsule-сетка заменена компактными строками «команда → назначение → Выполнить» в адаптивных 3/2/1 колонках групп, повторный prefix скрыт presentation-слоем, а запуск использует явный `data-action="run"`. Контракт: [`panel-operator-stage4-commands.md`](panel-operator-stage4-commands.md).
+- [x] **Logs:** filters и runtime controls собраны в плоские action rows, counters структурированы как label/value data, detail использует disclosure/table rows, а empty/warning/error состояния онлайн-лога и журнала операций приведены к единому inline-state контракту. Контракт: [`panel-operator-stage4-logs.md`](panel-operator-stage4-logs.md).
 
 Осталось:
 
-- [ ] **Logs:** унифицировать filters, counters, detail и error states;
 - [ ] **Files:** завершить toolbar, table rows, selection/focus/drag/drop и empty states;
 - [ ] **Mihomo profiles/generator:** применить те же table/form/action primitives;
 - [ ] выровнять labels, hints, validation и units в формах подписок; advanced fields показывать progressive disclosure.

@@ -24,9 +24,9 @@
 | Editor engine selectors | 8 |
 | Editor engines | CodeMirror, Monaco |
 | Modal IDs | 50 |
-| Inline `style` attributes | 284 |
-| Уникальные DOM IDs | 970 из 970 |
-| `data-*` attributes | 345 |
+| Inline `style` attributes | 282 |
+| Уникальные DOM IDs | 971 из 971 |
+| `data-*` attributes | 365 |
 | Изначально скрытые runtime nodes с ID | 156 |
 | DOM IDs со статической ссылкой из JS | 942 |
 | Dark/light viewport baselines | 12 |
@@ -105,19 +105,19 @@ Route-action `Mihomo Генератор` и modal-action `Поддержать` 
 
 ## Классификация inline-style
 
-Все 284 атрибута классифицированы по декларациям, а не только по наличию слова `display`:
+Все 282 атрибута классифицированы по декларациям, а не только по наличию слова `display`:
 
 | Категория атрибута | Количество | Правило миграции |
 | --- | ---: | --- |
 | State/visibility hook | 63 | оставить inline как runtime-контракт |
-| Presentation/geometry | 215 | переносить в scoped CSS на соответствующих этапах |
+| Presentation/geometry | 213 | переносить в scoped CSS на соответствующих этапах |
 | Mixed state + presentation | 6 | сначала разделить; inline оставить только state/visibility |
 
-Всего зафиксировано 496 деклараций: 69 state/visibility и 427 presentation/geometry. К state/visibility относятся только исходные `display: none` и `visibility: hidden/collapse`; `display: flex/grid`, размеры, отступы, цвет, opacity и типографика относятся к presentation/geometry.
+Всего зафиксировано 493 декларации: 69 state/visibility и 424 presentation/geometry. К state/visibility относятся только исходные `display: none` и `visibility: hidden/collapse`; `display: flex/grid`, размеры, отступы, цвет, opacity и типографика относятся к presentation/geometry.
 
 ## DOM и handler freeze
 
-Snapshot хранит полный список из 970 уникальных `id`, 345 экземпляров `data-*`, 156 изначально скрытых ID и mapping 942 DOM-якорей на JS-файлы, где они упоминаются. Это позволяет сравнивать контракт до и после каждого следующего этапа.
+Snapshot хранит полный список из 971 уникального `id`, 365 экземпляров `data-*`, 156 изначально скрытых ID и mapping 942 DOM-якорей на JS-файлы, где они упоминаются. Это позволяет сравнивать контракт до и после каждого следующего этапа.
 
 Особо защищены визуально скрытые, но runtime-доступные повторы:
 

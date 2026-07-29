@@ -1302,7 +1302,15 @@ let restartLogModuleApi = null;
     const emptyText = normalizeRestartLogSearchQuery(RL._query)
       ? 'Совпадений нет.'
       : (RL._filter === 'errors' ? 'Ошибок нет.' : 'Журнал пуст.');
-    el.innerHTML = html || `<span class="log-line restart-log-empty">${emptyText}</span>`;
+    const rawState = String(rawText || '').trim();
+    const loadError = /^(?:Не удалось загрузить журнал|Ошибка загрузки журнала)\.?$/i.test(rawState);
+    el.dataset.state = loadError ? 'error' : (html ? 'ready' : 'empty');
+    el.innerHTML = loadError ? [
+      `<span class="log-line restart-log-empty${loadError ? ' is-error' : ''}" role="${loadError ? 'alert' : 'status'}">`,
+      `<span class="restart-log-empty-title">${safeEscapeHtml(loadError ? 'Не удалось загрузить журнал' : emptyText)}</span>`,
+      loadError ? '<span class="restart-log-empty-detail">Проверьте связь с панелью и нажмите «Обновить».</span>' : '',
+      '</span>',
+    ].join('') : (html || `<span class="log-line restart-log-empty" role="status"><span class="restart-log-empty-title">${safeEscapeHtml(emptyText)}</span></span>`);
     if (stickToBottom) scrollRestartLogToBottom(el);
     else updateRestartLogScrollButton(el);
   }
