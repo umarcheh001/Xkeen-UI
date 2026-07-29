@@ -52,6 +52,16 @@ body.panel-page {
   --xk-tooltip-border: #3b424e;
   --xk-tooltip-shadow: rgba(0, 0, 0, 0.32);
   --xk-tooltip-backdrop: none;
+  /* Monaco renders menus and the command palette in portals attached directly
+   * to body, so the Operator layer must publish its neutral tokens here. */
+  --xk-monaco-widget-bg: #1a1e25;
+  --xk-monaco-widget-text: #e8eaf0;
+  --xk-monaco-widget-muted: #969da9;
+  --xk-monaco-widget-border: #3a414d;
+  --xk-monaco-widget-hover: #2a3039;
+  --xk-monaco-widget-shadow: rgba(0, 0, 0, 0.34);
+  --xk-monaco-input-bg: #14171c;
+  --xk-monaco-disabled: #6e7581;
   color-scheme: dark;
   min-height: 100vh;
   margin: 0;
@@ -1617,6 +1627,173 @@ body.panel-page :is(
 
 body.panel-page :is(.xkeen-cm6-host .cm-editor, .CodeMirror, .xk-monaco-editor) {
   border: 1px solid var(--op-border-strong) !important;
+}
+
+/* Editor overflow menus are flat operator surfaces, not legacy blue glass
+ * cards. Keep the same contract for Xray and Mihomo. */
+body.panel-page :is(.xk-routing-menu-panel, .xk-mihomo-menu-panel) {
+  width: min(332px, calc(100vw - 24px));
+  min-width: min(252px, calc(100vw - 24px));
+  max-width: min(332px, calc(100vw - 24px));
+  max-height: min(70dvh, 620px);
+  padding: 10px;
+  gap: 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid var(--op-border-strong) !important;
+  border-radius: var(--op-radius-lg) !important;
+  background: var(--op-surface) !important;
+  box-shadow: var(--op-shadow-float) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+body.panel-page .xk-mihomo-menu .xk-mihomo-menu-panel {
+  right: auto;
+  left: 0;
+}
+
+/* The Mihomo Monaco host is portalled to body in fullscreen. Keep the small
+ * toolbar inside the viewport regardless of its previous page position. */
+body.panel-page > .xk-monaco-editor.is-fullscreen + .xkeen-cm-toolbar.is-fullscreen,
+body.panel-page > .xkeen-cm-toolbar.is-fullscreen {
+  top: max(10px, env(safe-area-inset-top)) !important;
+  right: max(10px, env(safe-area-inset-right)) !important;
+  left: auto !important;
+  width: auto !important;
+  max-width: calc(100vw - 20px) !important;
+  margin: 0 !important;
+}
+
+body.panel-page :is(.xk-routing-menu-panel, .xk-mihomo-menu-panel) .terminal-menu-section {
+  gap: 6px;
+  padding: 9px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface-2) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page :is(.xk-routing-menu-panel, .xk-mihomo-menu-panel) .terminal-menu-title {
+  color: var(--op-data-faint) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+body.panel-page :is(.xk-routing-menu-panel, .xk-mihomo-menu-panel) .terminal-menu-sep {
+  margin: 1px 0;
+  background: var(--op-border) !important;
+}
+
+body.panel-page :is(.xk-routing-menu-panel, .xk-mihomo-menu-panel) code {
+  color: var(--op-text) !important;
+}
+
+body.panel-page :is(.xk-routing-menu-panel, .xk-mihomo-menu-panel) :is(.terminal-tool-btn, .dt-switch, .xray-log-select) {
+  min-height: var(--op-control-h);
+  padding: 6px 9px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-data-muted) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+body.panel-page :is(.xk-routing-menu-panel, .xk-mihomo-menu-panel) :is(.terminal-tool-btn, .dt-switch, .xray-log-select):hover {
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-text) !important;
+  transform: none !important;
+}
+
+/* Monaco context menus, action widgets and quick input are body-level portals.
+ * The body scope keeps this override isolated from Monaco on other pages. */
+body.panel-page :is(.context-view.monaco-menu-container, .context-view .action-widget, .quick-input-widget),
+body.panel-page :is(.context-view .action-widget .actionList, .context-view .action-widget .monaco-list, .context-view .action-widget .monaco-list-rows, .context-view .monaco-menu, .context-view.monaco-menu-container .monaco-menu),
+body.panel-page .quick-input-widget :is(.quick-input-titlebar, .quick-input-header, .quick-input-list, .monaco-list, .monaco-list-rows, .monaco-scrollable-element) {
+  background: var(--op-surface-2) !important;
+  background-color: var(--op-surface-2) !important;
+  color: var(--op-text) !important;
+  border-color: var(--op-border-strong) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  opacity: 1 !important;
+}
+
+body.panel-page :is(.context-view.monaco-menu-container, .context-view .action-widget, .quick-input-widget) {
+  border: 1px solid var(--op-border-strong) !important;
+  border-radius: var(--op-radius) !important;
+  box-shadow: var(--op-shadow-float) !important;
+}
+
+body.panel-page :is(.context-view .action-widget .monaco-list-row, .context-view .monaco-menu .action-item, .quick-input-widget .monaco-list-row) {
+  background: transparent !important;
+  color: var(--op-text) !important;
+}
+
+body.panel-page :is(.context-view .action-widget .monaco-list-row.focused, .context-view .action-widget .monaco-list-row.selected, .context-view .action-widget .monaco-list-row:hover, .context-view .monaco-menu .action-item.focused, .context-view .monaco-menu .action-item:hover, .quick-input-widget .monaco-list-row.focused, .quick-input-widget .monaco-list-row.selected, .quick-input-widget .monaco-list-row:hover) {
+  background: var(--op-surface-3) !important;
+  color: var(--op-text-strong) !important;
+  outline-color: transparent !important;
+}
+
+body.panel-page .quick-input-widget :is(.monaco-inputbox, .monaco-inputbox input, .monaco-inputbox textarea) {
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface) !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+}
+
+/* Monaco uses a shared XKeen context menu rather than its native portal on
+ * the panel. Neutralize its older navy surface and restore distinct rows. */
+body.panel-page .xk-routing-monaco-menu {
+  min-width: 290px;
+  padding: 7px;
+  border: 1px solid var(--op-border-strong) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface) !important;
+  box-shadow: var(--op-shadow-float) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+body.panel-page .xk-routing-monaco-menu-item {
+  min-height: 34px;
+  margin: 3px 0;
+  padding: 7px 10px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-data-muted) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body.panel-page .xk-routing-monaco-menu-item:is(:hover, :focus-visible) {
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-text-strong) !important;
+  outline: none !important;
+}
+
+body.panel-page .xk-routing-monaco-menu-item[disabled] {
+  border-color: color-mix(in srgb, var(--op-border) 64%, transparent) !important;
+  background: color-mix(in srgb, var(--op-surface-2) 72%, transparent) !important;
+  color: var(--op-faint) !important;
+  opacity: 0.66;
+}
+
+body.panel-page .xk-routing-monaco-menu-shortcut {
+  color: var(--op-data-faint) !important;
+}
+
+body.panel-page .xk-routing-monaco-menu-sep {
+  margin: 6px 2px;
+  background: var(--op-border-strong) !important;
 }
 
 body.panel-page .xkeen-cm6-host {
@@ -4836,6 +5013,14 @@ html[data-theme="light"] body.panel-page {
   --xk-tooltip-text: #ffffff;
   --xk-tooltip-border: #454a54;
   --xk-tooltip-shadow: rgba(25, 28, 35, 0.2);
+  --xk-monaco-widget-bg: #f7f7f9;
+  --xk-monaco-widget-text: #30333a;
+  --xk-monaco-widget-muted: #6e7480;
+  --xk-monaco-widget-border: #c1c6d0;
+  --xk-monaco-widget-hover: #eceef2;
+  --xk-monaco-widget-shadow: rgba(25, 28, 35, 0.14);
+  --xk-monaco-input-bg: #ffffff;
+  --xk-monaco-disabled: #9298a3;
   color-scheme: light;
 }
 

@@ -356,6 +356,7 @@
       active: false,
       parent: null,
       next: null,
+      placeholder: null,
     });
     const next = !!active;
 
@@ -364,6 +365,8 @@
       st.parent = toolbar.parentNode || null;
       st.next = toolbar.nextSibling || null;
       try {
+        st.placeholder = document.createComment('xk-editor-toolbar-fs');
+        if (st.parent) st.parent.insertBefore(st.placeholder, st.next);
         document.body.appendChild(toolbar);
         st.active = true;
         return true;
@@ -374,11 +377,14 @@
 
     if (!st.active) return false;
 
-    const savedParent = st.parent && document.body.contains(st.parent) ? st.parent : null;
+    const placeholderParent = st.placeholder && st.placeholder.parentNode ? st.placeholder.parentNode : null;
+    const savedParent = placeholderParent || (st.parent && document.body.contains(st.parent) ? st.parent : null);
     const fallback = fallbackParent && document.body.contains(fallbackParent) ? fallbackParent : null;
     const parent = savedParent || fallback;
     try {
-      if (parent) {
+      if (placeholderParent) {
+        placeholderParent.replaceChild(toolbar, st.placeholder);
+      } else if (parent) {
         const before = st.next && st.next.parentNode === parent ? st.next : null;
         parent.insertBefore(toolbar, before);
       }
@@ -389,6 +395,7 @@
     st.active = false;
     st.parent = null;
     st.next = null;
+    st.placeholder = null;
     return true;
   }
 
