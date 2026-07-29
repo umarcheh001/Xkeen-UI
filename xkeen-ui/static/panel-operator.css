@@ -3232,27 +3232,28 @@ body.panel-page #view-xray-logs .restart-log-summary-value {
   color: var(--op-text) !important;
 }
 
-body.panel-page #view-xray-logs :is(.restart-log-pill, .restart-log-level) {
-  min-height: 22px;
+body.panel-page .xk-restart-log-card :is(.restart-log-pill, .restart-log-level, .restart-log-details-toggle) {
+  box-sizing: border-box;
+  height: 22px !important;
+  min-height: 22px !important;
+  max-height: 22px !important;
   padding: 2px 6px;
-  border: 1px solid var(--op-border) !important;
-  border-radius: 4px !important;
-  background: var(--op-surface-2) !important;
-  box-shadow: none !important;
-}
-
-body.panel-page #view-xray-logs .restart-log-details-toggle {
-  min-height: 26px;
-  margin-left: 8px;
-  padding: 0 7px;
   border: 1px solid var(--op-border) !important;
   border-radius: 4px !important;
   background: var(--op-surface-2) !important;
   color: var(--op-data-muted) !important;
   box-shadow: none !important;
+  line-height: 1.2;
 }
 
-body.panel-page #view-xray-logs .restart-log-details-toggle[aria-expanded="true"] {
+body.panel-page .xk-restart-log-card .restart-log-details-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+}
+
+body.panel-page .xk-restart-log-card .restart-log-details-toggle[aria-expanded="true"] {
   border-color: var(--op-accent-border) !important;
   background: var(--op-accent-soft) !important;
   color: var(--op-accent-hover) !important;

@@ -65,6 +65,14 @@ def test_logs_operator_layer_unifies_filters_counters_details_and_states():
     for legacy in ("linear-gradient(", "transform: translateY", "border-radius: 999"):
         assert legacy not in stage
 
+    shared_compact = stage.split(
+        "body.panel-page .xk-restart-log-card :is(.restart-log-pill, .restart-log-level, .restart-log-details-toggle) {", 1
+    )[1].split("}", 1)[0]
+    assert "height: 22px !important;" in shared_compact
+    assert "min-height: 22px !important;" in shared_compact
+    assert "max-height: 22px !important;" in shared_compact
+    assert "padding: 2px 6px;" in shared_compact
+
 
 def test_logs_runtime_renders_structured_counters_detail_focus_and_error_states():
     xray = XRAY_LOGS.read_text(encoding="utf-8")
