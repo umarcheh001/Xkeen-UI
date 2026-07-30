@@ -176,7 +176,7 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 - [x] legacy `::before/::after`, computed gradients, цветные glow и lift-transform нейтрализованы у panel chrome;
 - [x] закреплены control 32 px, compact 28 px, mobile touch target не меньше 40 px, радиусы controls 5–6 px и surfaces 9–12 px;
 - [x] единственный `999px` в scoped-файле относится к физическому `.fm-toggle-slider`; обычные controls, statuses, tags и data rows используют конечные радиусы.
-- [x] с 29 июля 2026 года для следующих этапов действует living budget scoped-слоя: после закрытия Logs потолки definitions/unique расширены до 1200/1000, а лимиты повторов сохранены на 145 повторных selectors и 190 дополнительных instances; исторические метрики закрытия Этапа 1 остаются snapshot, а не потолком развития.
+- [x] с 30 июля 2026 года абсолютные потолки definitions/unique заменены масштабируемым quality guardrail: общие количества учитываются как телеметрия, а доли selectors с повторным определением и дополнительных repeated instances ограничены 20%; исторические метрики закрытия Этапа 1 остаются snapshot, а новый экран с семантическими selectors не расходует искусственный лимит.
 
 Критерий завершения: **выполнен**. Chromium-contract проходит в dark/light для всех шести top-level views, запрещает computed gradients, цветные blur-glow и lift-transform и проверяет общую геометрию representative primitives на desktop/mobile. Статический контракт и команды проверки описаны в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md). Этап повторно открывается только при нарушении этого контракта.
 
@@ -235,6 +235,94 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 Финальная настройка active pane «Files» 29 июля 2026 года: accent-компонент рамки снижен до 24%, marker — до 2 px, дополнительный внутренний контур удалён, а подложки toolbar/list дополнительно приглушены.
 
 Критерий завершения Этапа 4 выполнен: нет больших пустых областей, созданных фиксированной высотой; формы имеют один flow и один главный action; данные без визуальной составляющей не показаны плитками. **Этап 4 закрыт 29 июля 2026 года.**
+
+## Сквозной поток I. Иконки действий: Tabler Icons → минимальный SVG sprite → `xk-action-icon`
+
+Статус на 30 июля 2026 года: **инфраструктура и пилот Routing Xray закрыты; миграция остальных экранов панели открыта.** Этот поток идёт параллельно Этапам 5–7 и не меняет маршруты, API, обработчики, `id`, `data-*` или смысл действий. Источник — локально закреплённый пакет `@tabler/icons`; в production не допускаются CDN, runtime-загрузка пакета или отдельный полный набор SVG.
+
+### Контракт и границы
+
+- приложение использует семантические XKeen-имена (`save`, `refresh`, `trash`), а соответствие конкретным Tabler assets хранится только в `scripts/generate_operator_icon_sprite.py`;
+- `npm run icons:operator` детерминированно создаёт только используемые `<symbol>` в `xkeen-ui/static/icons/operator.svg` и копирует MIT-лицензию; ручное редактирование generated sprite запрещено;
+- статическая и динамическая разметка используют один контракт: `<svg class="xk-action-icon" aria-hidden="true" focusable="false"><use ...></use></svg>`; для JS применяются `XKeen.ui.operatorIcons.html/set`, без копирования inline SVG path в feature-модули;
+- базовая геометрия — Tabler outline grid 24 × 24, визуальный размер 16 px, `fill: none`, `stroke: currentColor`, единые linecap/linejoin; размер меняется только у документированных lead/decorative вариантов;
+- цвет принадлежит состоянию control (`default/hover/focus/active/disabled/danger`), а не самой иконке; постоянные разноцветные emoji, glow, gradients и декоративные цветные SVG не возвращаются;
+- icon-only control обязан сохранить доступное имя через `aria-label`/связанный label и tooltip; декоративная иконка всегда скрыта от accessibility tree; иконка с текстом не дублирует текст для screen reader;
+- замена касается только action/navigation/status glyphs. Флаги, логотипы сервисов, контентные изображения и semantic state marks мигрируют только после отдельной проверки смысла, а не автоматически;
+- sprite и helper загружаются локально и должны работать в router/offline-сборке по существующему `/static/` пути.
+
+### I0. Инфраструктура и воспроизводимая сборка — закрыт
+
+- [x] закрепить `@tabler/icons` в `package.json` и lockfile;
+- [x] добавить локальный генератор allowlist-sprite и npm-команду `icons:operator`;
+- [x] включить генерацию sprite в `frontend:build` до Vite build;
+- [x] хранить рядом с артефактом лицензию Tabler Icons и LF-детерминированный output;
+- [x] добавить общий JS helper и scoped CSS-контракт `.xk-action-icon`;
+- [x] добавить статический тест совпадения generated/committed sprite, наличия лицензии и базовых stroke-правил.
+
+Критерий завершения: чистый checkout после `npm ci` воспроизводит byte-equivalent sprite; production-архив содержит sprite и лицензию; frontend verify не требует сети после установки зависимостей.
+
+### I1. Пилот Routing Xray — закрыт
+
+- [x] заменить emoji и разрозненные текстовые glyphs в статических action controls Routing Xray;
+- [x] перевести динамические действия outbounds, routing rules, Quick Balancer и Forced Rules Wizard на общий helper;
+- [x] сохранить подписи, `title`, `aria-label`, disabled/loading/danger states и существующие обработчики;
+- [x] проверить отсутствие emoji actions в `#view-routing` статическим контрактом;
+- [x] проверить центрирование иконок в icon-only controls и пары «иконка + подпись» в компактных actions.
+
+Критерий завершения: в Routing Xray нет action-emoji или feature-local inline SVG; статические и JS-создаваемые кнопки используют один sprite/contract и не меняют функциональное поведение.
+
+### I2. Routing Mihomo и связанные формы
+
+- [ ] составить inventory статических и динамических действий `#view-mihomo`, профилей, generator, import/proxy/HWID и subscription rows;
+- [ ] утвердить semantic mapping до замены, переиспользуя существующие XKeen-имена и добавляя в allowlist только реально используемые symbols;
+- [ ] мигрировать toolbar, row actions, empty/error actions и modal actions без изменения runtime hooks;
+- [ ] удалить emoji/text-glyph fallbacks из соответствующих render-функций;
+- [ ] проверить отдельный route Mihomo generator и попадание его иконок в локальный архив.
+
+Критерий завершения: Routing Mihomo и его связанные формы используют тот же sprite/helper/CSS contract, не создавая второго icon API или отдельного sprite.
+
+### I3. Остальные top-level views основной панели
+
+- [ ] пройти по inventory экраны «Порты», «Команды», «Логи» и «Файлы»: toolbar, row actions, pagination, refresh/upload/download, move/copy/edit/delete и empty-state actions;
+- [ ] мигрировать header/global actions и top navigation только после проверки узнаваемости и доступного имени каждого icon-only control;
+- [ ] унифицировать loading/retry/success/warning/error glyphs, сохранив semantic color на уровне state-контейнера;
+- [ ] исключить дубли: одно действие не должно иметь разные пиктограммы в разных top-level views;
+- [ ] добавить статический guard для action-emoji и недопустимых inline SVG во всех top-level views.
+
+Критерий завершения: все основные рабочие экраны панели используют один semantic icon dictionary; legacy glyphs остаются только в явно задокументированных content/status исключениях.
+
+### I4. Модальные семейства, редакторы и настройки
+
+- [ ] включить icon inventory всех 50 modal IDs в существующий modal inventory;
+- [ ] мигрировать editor/workbench toolbars, help drawer, confirm/compact forms, master/detail и file-manager dialogs партиями вместе с Этапом 5;
+- [ ] привести close/back/more/help/save/cancel/danger actions к одному значению и порядку, не заменяя ясный текст иконкой ради компактности;
+- [ ] мигрировать UI settings, core selector, DAT Explorer, terminal и остальные поздние modal states;
+- [ ] отдельно проверить body-portal controls и динамически создаваемые кнопки после open/close/reopen.
+
+Критерий завершения: каждый modal ID имеет проверенный icon state в loaded/empty/error/narrow режимах; icon-only используется только там, где действие остаётся однозначным и имеет accessible name.
+
+### I5. Доступность, темы, responsive и visual regression
+
+- [ ] проверить dark/light для default/hover/focus-visible/active/disabled/loading/danger без захардкоженного цвета внутри SVG;
+- [ ] обеспечить touch target не менее 40 px на mobile при сохранении 16 px glyph и отсутствие обрезания на 125%/150% zoom;
+- [ ] проверить forced-colors/high-contrast и `currentColor`, keyboard navigation, tooltip по hover/focus и отсутствие лишних accessibility-tree nodes;
+- [ ] добавить Chromium assertions для размера, stroke/fill, выравнивания, accessible name и отсутствия overflow;
+- [ ] принять visual snapshots representative controls во всех top-level views и четырёх modal families на desktop/mobile;
+- [ ] проверить производительность и отсутствие лишних запросов/404 на low-end router/MIPS профиле.
+
+Критерий завершения: пиктограммы одинаково читаются в обеих темах и всех breakpoint/zoom состояниях, не являются единственным носителем смысла и не ухудшают keyboard/screen-reader flow.
+
+### I6. Финальная очистка и защита контракта
+
+- [ ] удалить оставшиеся presentation emoji, Unicode-action glyphs, feature-local icon CSS и дублирующие inline SVG после подтверждения inventory;
+- [ ] удалить неиспользуемые symbols из allowlist и подтвердить, что sprite остаётся минимальным;
+- [ ] зафиксировать machine-readable inventory: semantic name → Tabler asset → места использования → тип control → accessible label;
+- [ ] добавить CI guard: sprite воспроизводим, лицензия присутствует, все `<use>` ссылаются на существующий symbol, неизвестные имена запрещены;
+- [ ] прогнать `frontend:verify`, icon contracts, полный функциональный E2E и router archive smoke;
+- [ ] обновить cache-buster только при изменении sprite/helper и пересобрать финальный `xkeen-ui-routing.tar.gz`.
+
+Критерий полного завершения потока: все action/navigation glyphs основной панели и её modal families учтены inventory, используют локальный минимальный sprite и единый `xk-action-icon` contract; исключения перечислены явно; отсутствуют action-emoji, битые references, внешние icon requests и недоступные icon-only controls; полные проверки и архив для роутера зелёные.
 
 ### Этап 5. Редакторы и модальные семейства
 
@@ -303,6 +391,7 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 - в `styles.css` больше не добавляются panel-specific redesign rules;
 - все top-level views и все 50 modal IDs прошли inventory;
 - у обычных buttons, links и data rows нет pill-геометрии, градиентов, бликов и цветных glow;
+- все action/navigation glyphs используют локальный минимальный Tabler sprite и единый `xk-action-icon` contract; action-emoji и недоступные icon-only controls отсутствуют;
 - indigo используется для focus/active и единственного primary action, semantic colors — только для состояния/риска;
 - editors являются главным визуальным центром и не имеют необоснованной пустой высоты;
 - строки данных не оформлены как вложенные карточки;
@@ -318,6 +407,7 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 3. Header/navigation/workspace grid.
 4. Routing inspector и data rows.
 5. Ports/rules/commands/logs/files/Mihomo forms and tables.
+   - Сквозной icon-поток: I0–I1 уже закрыты; I2–I4 выполнять вместе с соответствующими экранами, I5–I6 — перед финальным visual/E2E gate.
 6. Editor modal и help drawer.
 7. Остальные modal families.
 8. Themes/responsive/accessibility.
