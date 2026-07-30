@@ -6019,13 +6019,14 @@ body.panel-page #core-modal .xk-core-actions-row > button {
   border-radius: var(--op-radius-sm) !important;
 }
 
-/* DAT Explorer: a compact divided master/detail workspace. */
+/* DAT Explorer: a divided master/detail workspace. The tag index is a real
+ * navigation pane, not a stack of miniature legacy buttons and badges. */
 body.panel-page #routing-dat-contents-modal .xk-dat-modal-content,
 html[data-theme="light"] body.panel-page #routing-dat-contents-modal .xk-dat-modal-content {
-  width: min(94vw, 1120px);
-  max-width: 1120px;
-  height: min(82dvh, 760px);
-  max-height: min(82dvh, 760px);
+  width: min(96vw, 1240px);
+  max-width: 1240px;
+  height: min(86dvh, 820px);
+  max-height: min(86dvh, 820px);
   padding: 0 !important;
   border-radius: var(--op-radius-lg) !important;
   background: var(--op-surface) !important;
@@ -6033,11 +6034,20 @@ html[data-theme="light"] body.panel-page #routing-dat-contents-modal .xk-dat-mod
   box-shadow: var(--op-shadow-float) !important;
 }
 
+body.panel-page #routing-dat-contents-modal.xk-dat-modal-shell,
+html[data-theme="light"] body.panel-page #routing-dat-contents-modal.xk-dat-modal-shell {
+  background: rgba(5, 6, 9, 0.7) !important;
+  backdrop-filter: blur(5px) !important;
+  -webkit-backdrop-filter: blur(5px) !important;
+}
+
 body.panel-page #routing-dat-contents-modal .xk-dat-modal-kicker {
   display: none !important;
 }
 
 body.panel-page #routing-dat-contents-modal .xk-dat-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
   gap: 8px;
   padding: 10px 12px !important;
 }
@@ -6058,20 +6068,21 @@ body.panel-page #routing-dat-contents-modal .dat-contents-kind,
 body.panel-page #routing-dat-contents-modal .dat-contents-path,
 html[data-theme="light"] body.panel-page #routing-dat-contents-modal .dat-contents-kind,
 html[data-theme="light"] body.panel-page #routing-dat-contents-modal .dat-contents-path {
-  min-height: 28px;
-  padding: 5px 8px;
-  border: 1px solid var(--op-border) !important;
-  border-radius: 5px !important;
-  background: var(--op-surface) !important;
+  min-height: 26px;
+  padding: 4px 7px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
   color: var(--op-muted) !important;
   box-shadow: none !important;
   font-size: calc(10.5px * var(--xk-font-scale, 1));
 }
 
 body.panel-page #routing-dat-contents-modal .dat-contents-kind {
-  border-color: var(--op-accent-border) !important;
+  border-left: 2px solid var(--op-accent) !important;
   background: var(--op-accent-soft) !important;
   color: var(--op-accent-hover) !important;
+  font-weight: 650;
 }
 
 body.panel-page #routing-dat-contents-modal .xk-dat-controls {
@@ -6079,12 +6090,12 @@ body.panel-page #routing-dat-contents-modal .xk-dat-controls {
 }
 
 body.panel-page #routing-dat-contents-modal .xk-dat-controls .btn-secondary {
-  min-height: 28px;
+  min-height: 30px;
   border-radius: 5px !important;
 }
 
 body.panel-page #routing-dat-contents-modal .dat-contents-layout {
-  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+  grid-template-columns: minmax(360px, 420px) minmax(0, 1fr);
   gap: 0;
   margin: 0;
   overflow: hidden;
@@ -6097,8 +6108,8 @@ body.panel-page #routing-dat-contents-modal .dat-contents-tags,
 body.panel-page #routing-dat-contents-modal .dat-contents-items,
 html[data-theme="light"] body.panel-page #routing-dat-contents-modal .dat-contents-tags,
 html[data-theme="light"] body.panel-page #routing-dat-contents-modal .dat-contents-items {
-  gap: 7px;
-  padding: 9px;
+  gap: 9px;
+  padding: 11px;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
@@ -6119,6 +6130,35 @@ html[data-theme="light"] body.panel-page #routing-dat-contents-modal .dat-conten
   background: var(--op-surface-2) !important;
   color: var(--op-text) !important;
   box-shadow: none !important;
+}
+
+/* The frozen feature-local sheet styles every secondary action in this modal
+ * as blue glass. Re-state the shared Operator button contract at the modal
+ * boundary so hover, disabled and light-theme variants cannot leak through. */
+body.panel-page #routing-dat-contents-modal .btn-secondary,
+html[data-theme="light"] body.panel-page #routing-dat-contents-modal .btn-secondary {
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
+  background-image: none !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body.panel-page #routing-dat-contents-modal .btn-secondary:hover:not([disabled]) {
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-text-strong) !important;
+  transform: none !important;
+}
+
+body.panel-page #routing-dat-contents-modal .btn-secondary[disabled] {
+  border-color: var(--op-border) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-faint) !important;
+  box-shadow: none !important;
+  opacity: 0.58;
 }
 
 body.panel-page #routing-dat-contents-modal .dat-contents-routingbar,
@@ -6162,11 +6202,64 @@ body.panel-page #routing-dat-contents-modal .dat-contents-ipfilter .btn-secondar
   color: var(--op-accent-hover) !important;
 }
 
+body.panel-page #routing-dat-contents-modal .dat-contents-selected {
+  gap: 7px;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-contents-selected-label,
+body.panel-page #routing-dat-contents-modal .dat-contents-routing-label,
+body.panel-page #routing-dat-contents-modal .dat-contents-page-info,
+body.panel-page #routing-dat-contents-modal .dat-contents-status {
+  color: var(--op-muted) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #routing-dat-contents-modal #routing-dat-contents-selected-tag {
+  min-height: 26px;
+  padding: 4px 7px;
+  border: 0 !important;
+  border-left: 2px solid var(--op-accent) !important;
+  border-radius: 0 !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-text-strong) !important;
+  box-shadow: none !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #routing-dat-contents-modal .dat-contents-used-badge {
+  min-height: 24px;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--op-success) 42%, var(--op-border)) !important;
+  border-radius: 4px !important;
+  background: var(--op-success-soft) !important;
+  color: var(--op-success) !important;
+  box-shadow: none !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 650;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-contents-pager-inline {
+  gap: 4px;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-contents-pager-inline .btn-secondary,
+body.panel-page #routing-dat-contents-modal .dat-contents-toolbar > .btn-secondary {
+  width: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+}
+
 body.panel-page #routing-dat-contents-modal .dat-contents-tags-list,
 body.panel-page #routing-dat-contents-modal .dat-contents-items-list,
 html[data-theme="light"] body.panel-page #routing-dat-contents-modal .dat-contents-tags-list,
 html[data-theme="light"] body.panel-page #routing-dat-contents-modal .dat-contents-items-list {
-  padding: 5px;
+  padding: 4px;
   border: 1px solid var(--op-border) !important;
   border-radius: var(--op-radius-sm) !important;
   background: var(--op-editor) !important;
@@ -6180,11 +6273,120 @@ body.panel-page #routing-dat-contents-modal .dat-item-row {
   background: transparent !important;
 }
 
-body.panel-page #routing-dat-contents-modal .dat-tag-main.btn-secondary,
+body.panel-page #routing-dat-contents-modal .dat-tag-row {
+  gap: 6px;
+  min-height: 34px;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid transparent !important;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-tag-row:hover {
+  background: var(--op-surface-2) !important;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-tag-row.is-active {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+  box-shadow: inset 2px 0 0 var(--op-accent) !important;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-tag-main.btn-secondary {
+  justify-content: flex-start;
+  min-height: 28px;
+  padding: 0 6px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+  color: var(--op-text) !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-tag-main.btn-secondary:hover {
+  background: transparent !important;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-tag-count {
+  min-width: 38px;
+  padding: 0 5px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--op-data-muted) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-tag-used {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--op-border-strong) !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  opacity: 1;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-tag-used.is-on,
+body.panel-page #routing-dat-contents-modal .dat-tag-row.is-used .dat-tag-used {
+  border-color: var(--op-success) !important;
+  background: var(--op-success) !important;
+  box-shadow: 0 0 0 2px var(--op-success-soft) !important;
+}
+
 body.panel-page #routing-dat-contents-modal .dat-tag-copy.btn-secondary {
+  width: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
   border-radius: 4px !important;
   background: transparent !important;
   box-shadow: none !important;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-tag-copy.btn-secondary:hover {
+  background: var(--op-surface-3) !important;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-tag-group-head {
+  min-height: 28px;
+  margin: 6px 2px 2px;
+  padding: 0 5px;
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page #routing-dat-contents-modal .dat-tag-group-title {
+  color: var(--op-muted) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  letter-spacing: 0.08em;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-tag-group-count {
+  min-width: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--op-data-muted) !important;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-item-row {
+  grid-template-columns: 88px minmax(0, 1fr);
+  min-height: 34px;
+  padding: 7px 9px;
+}
+
+body.panel-page #routing-dat-contents-modal .dat-item-type {
+  color: var(--op-accent-hover) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #routing-dat-contents-modal .dat-item-value {
+  color: var(--op-text) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
 }
 
 /* Missing helper/data is a compact empty state, not two viewport-high blanks. */
