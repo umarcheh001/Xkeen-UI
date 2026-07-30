@@ -126,7 +126,7 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
 
     assert 'id="outbounds-nodes-panel"' in template_src
     assert 'id="outbounds-nodes-pingall"' in template_src
-    assert '<span class="xk-sub-icon-glyph xk-sub-pingall-glyph" aria-hidden="true">⏱</span>' in template_src
+    assert "op_icon('ping', 'xk-sub-icon-glyph xk-sub-pingall-glyph')" in template_src
     assert '<span class="xk-sub-pingall-spinner" aria-hidden="true"></span>' in template_src
     assert '<span class="xk-visually-hidden">Проверить задержку всех proxy-узлов</span>' in template_src
     assert 'id="outbounds-nodes-list"' in template_src

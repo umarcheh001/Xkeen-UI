@@ -11,6 +11,7 @@ import {
   syncXkeenBodyScrollLock,
   toastXkeen,
 } from './xkeen_runtime.js';
+import { iconHtml } from '../ui/operator_icons.js';
 
 let outboundsModuleApi = null;
 
@@ -1134,7 +1135,7 @@ let outboundsModuleApi = null;
               </div>
               <div class="xk-sub-node-actions">
                 <button type="button" class="btn-secondary btn-compact xk-sub-node-ping xk-outbounds-node-ping ${pingBusy ? 'is-busy' : ''}" data-node-key="${key}" title="Проверить задержку" data-tooltip="${escapeHtml(canPing ? 'Проверить задержку этого proxy-узла.' : 'Узел нельзя проверить: не найден tag.')}" aria-label="Проверить задержку" ${canPing ? '' : 'disabled'}>
-                  <span class="xk-sub-icon-glyph" aria-hidden="true">⏱</span>
+                  ${iconHtml('ping', 'xk-sub-icon-glyph')}
                 </button>
               </div>
             </div>
@@ -5710,7 +5711,7 @@ let outboundsModuleApi = null;
                   <div class="xk-sub-nodes-head-actions">
                     <button type="button" id="outbounds-subscriptions-nodes-show-hidden" class="btn-secondary btn-compact xk-sub-show-hidden-btn" title="Показать скрытые узлы" data-tooltip="Показать узлы, которые сейчас скрыты фильтрами или исключены кнопкой ×. Нажми ещё раз, чтобы снова скрыть их." hidden>Показать скрытые</button>
                     <button type="button" id="outbounds-subscriptions-nodes-pingall" class="btn-secondary btn-compact xk-sub-icon-btn" title="Пинг всех узлов" data-tooltip="Запустить проверку задержки для всех активных узлов, входящих в generated fragment." aria-label="Пинг всех узлов" disabled>
-                      <span class="xk-sub-icon-glyph xk-sub-pingall-glyph" aria-hidden="true">⏱</span>
+                      ${iconHtml('ping', 'xk-sub-icon-glyph xk-sub-pingall-glyph')}
                       <span class="xk-sub-pingall-spinner" aria-hidden="true"></span>
                       <span class="xk-visually-hidden">Запустить проверку задержки для всех активных узлов</span>
                     </button>
@@ -6969,7 +6970,7 @@ let outboundsModuleApi = null;
         const toggleClass = manualExcluded
           ? 'btn-secondary btn-compact xk-sub-node-toggle xk-sub-node-toggle-restore'
           : 'btn-danger btn-compact xk-sub-node-toggle';
-        const toggleIcon = manualExcluded ? '↺' : '×';
+        const toggleIcon = manualExcluded ? iconHtml('restore') : iconHtml('x');
         rows.push(`
           <div class="xk-sub-node-item ${enabled ? 'is-enabled' : 'is-disabled'}" data-node-key="${key}">
             <div class="xk-sub-node-main">
@@ -6989,7 +6990,7 @@ let outboundsModuleApi = null;
               </div>
               <div class="xk-sub-node-actions">
                 <button type="button" class="btn-secondary btn-compact xk-sub-node-ping ${pingBusy ? 'is-busy' : ''}" data-node-key="${key}" data-node-tag="${escapeHtml(nodeTag)}" title="Проверить задержку" data-tooltip="${escapeHtml(canPing ? 'Проверить задержку узла через текущий generated fragment.' : 'Этот узел сейчас не входит в generated fragment, поэтому проверка недоступна.')}" aria-label="Проверить задержку" ${canPing ? '' : 'disabled'}>
-                  <span class="xk-sub-icon-glyph" aria-hidden="true">⏱</span>
+                  ${iconHtml('ping', 'xk-sub-icon-glyph')}
                 </button>
                 <button type="button" class="${toggleClass}" data-node-key="${key}" data-node-action="${manualExcluded ? 'include' : 'exclude'}" title="${escapeHtml(toggleTitle)}" data-tooltip="${escapeHtml(toggleTooltip)}" aria-label="${escapeHtml(toggleTitle)}">
                   ${toggleIcon}

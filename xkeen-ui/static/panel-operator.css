@@ -1630,6 +1630,67 @@ body.panel-page .xk-btn-icon {
   height: 15px;
 }
 
+/* Operator icon contract: a single monochrome 24px-grid SVG language for
+ * static templates and JS-rendered controls. Color belongs to button state. */
+body.panel-page .xk-action-icon {
+  display: block;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+body.panel-page :is(.btn-icon, .icon-only, .xk-icon-btn, .xk-sub-icon-btn) .xk-action-icon {
+  margin: auto;
+}
+
+body.panel-page .xk-action-label {
+  min-width: 0;
+}
+
+body.panel-page .terminal-tool-btn:has(.xk-action-label) {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+body.panel-page #routing-rules-refresh-btn:has(.xk-action-label) {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+body.panel-page .xk-card-help-icon.xk-action-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+body.panel-page .xk-qb-lead-icon .xk-action-icon {
+  width: 22px;
+  height: 22px;
+  margin: auto;
+}
+
+body.panel-page :is(.xk-btn-inline-glyph, .xk-forced-wizard-lead-icon) .xk-action-icon,
+body.panel-page .xk-btn-inline-glyph.xk-action-icon {
+  width: 16px;
+  height: 16px;
+}
+
+body.panel-page .routing-rule-drag-handle .xk-action-icon {
+  width: 15px;
+  height: 15px;
+}
+
 body.panel-page :is(
   .xkeen-cm6-host,
   .xkeen-cm6-host .cm-editor,
@@ -4459,6 +4520,14 @@ body.panel-page .routing-side-card .xk-sub-panelhead .xk-pool-kicker {
   box-shadow: none !important;
 }
 
+/* Proxy rows need enough vertical rhythm for their status and country glyphs.
+ * Grow the viewport with them so the expanded card still shows roughly the
+ * same number of servers as the previous compact treatment. */
+:is(body.panel-page, html[data-theme="light"] body.panel-page)
+  .routing-side-card--outbounds .xk-outbounds-node-list {
+  max-height: min(44vh, 400px);
+}
+
 :is(body.panel-page, html[data-theme="light"] body.panel-page) .routing-side-card :is(
   .xk-sub-node-item,
   .xk-outbounds-node-item
@@ -4482,6 +4551,20 @@ body.panel-page .routing-side-card .xk-sub-panelhead .xk-pool-kicker {
   background: transparent !important;
   box-shadow: none !important;
   transform: none !important;
+}
+
+:is(body.panel-page, html[data-theme="light"] body.panel-page)
+  .routing-side-card--outbounds .xk-outbounds-node-item {
+  min-height: 46px;
+  padding-block: 9px;
+}
+
+:is(body.panel-page, html[data-theme="light"] body.panel-page)
+  .routing-side-card--outbounds .xk-sub-node-country.is-globe {
+  width: 18px;
+  height: 18px;
+  margin-top: 0;
+  aspect-ratio: 1;
 }
 
 body.panel-page .routing-side-card .xk-sub-node-item:last-child {

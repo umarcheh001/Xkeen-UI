@@ -117,10 +117,10 @@ def test_stage4_routing_section_has_one_primary_apply_action():
     rules_end = template.index('<!-- Сворачиваемый блок routing -->', rules_start)
     rules_markup = template[rules_start:rules_end]
 
-    assert "filename='panel-operator.css', v='20260729q'" in template
+    assert "filename='panel-operator.css', v='20260730b'" in template
     assert 'id="routing-rules-apply-btn" class="btn-primary btn-icon routing-rules-apply-primary"' in rules_markup
     assert rules_markup.count("btn-primary") == 1
-    assert ">💾</button>" in rules_markup
+    assert "op_icon('save')" in rules_markup
     assert "btn.classList && btn.classList.contains('btn-icon')" in model
     assert "btn.classList.toggle('is-dirty', dirty);" in model
 

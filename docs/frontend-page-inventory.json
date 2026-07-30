@@ -540,6 +540,14 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/ui/operator_icons.js",
+          "globals": [
+            "XKeen.ui",
+            "XKeen.ui.operatorIcons"
+          ],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/ui/modal.js",
           "globals": [
             "XKeen.ui",
@@ -822,6 +830,7 @@
         "XKeen.core.dom",
         "XKeen.core.storage",
         "XKeen.ui.sharedPrimitives",
+        "XKeen.ui.operatorIcons",
         "XKeen.ui.applyTheme",
         "XKeen.ui.initThemeToggle",
         "XKeen.ui.syncThemeToggleButtons",

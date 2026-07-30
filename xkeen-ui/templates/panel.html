@@ -1,4 +1,7 @@
 <!doctype html>
+{% macro op_icon(name, class_name='') -%}
+<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260730a') }}#xk-{{ name }}"></use></svg>
+{%- endmacro %}
 <html lang="ru">
 <head>
   <meta charset="utf-8">
@@ -66,7 +69,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260729q') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260730b') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -279,15 +282,15 @@
               <div id="routing-dat-body" style="display:none;">
                 <div class="routing-dat-toolbar">
                   <div class="routing-dat-toolbar-left">
-                    <button id="routing-dat-refresh-btn" class="btn-secondary btn-icon" type="button" aria-label="Обновить статусы" data-tooltip="Проверить наличие DAT-файлов и обновить информацию о размере/дате.">⟳</button>
+                    <button id="routing-dat-refresh-btn" class="btn-secondary btn-icon" type="button" aria-label="Обновить статусы" data-tooltip="Проверить наличие DAT-файлов и обновить информацию о размере/дате.">{{ op_icon('refresh') }}</button>
                     <button id="routing-dat-geodat-install-btn" class="btn-secondary btn-compact" type="button" data-tooltip="Установить/обновить xk-geodat (включит просмотр содержимого DAT и добавление тегов в правила).">xk-geodat</button>
-                    <button id="routing-dat-geodat-install-file-btn" class="btn-secondary btn-icon" type="button" aria-label="Установить xk-geodat из файла" data-tooltip="Установить xk-geodat из файла (если вы тестируете до релиза или ставите свой бинарник).">⬆︎</button>
+                    <button id="routing-dat-geodat-install-file-btn" class="btn-secondary btn-icon" type="button" aria-label="Установить xk-geodat из файла" data-tooltip="Установить xk-geodat из файла (если вы тестируете до релиза или ставите свой бинарник).">{{ op_icon('upload') }}</button>
                     <details class="xk-card-help-popover routing-dat-help-popover">
                       <summary class="xk-card-help-trigger"
                                aria-label="Подсказка по DAT-файлам"
                                title="О DAT-файлах"
                                data-tooltip="О DAT-файлах">
-                        <span class="xk-card-help-icon" aria-hidden="true">?</span>
+                        {{ op_icon('help', 'xk-card-help-icon') }}
                       </summary>
                       <div class="xk-card-help-panel">
                         Хранилища <code>GeoIP</code> и <code>GeoSite</code> используются правилами <code>geoip:</code> и <code>geosite:</code>.
@@ -318,7 +321,7 @@
                       <span>Имя файла</span>
                       <div class="routing-dat-combo" data-kind="geosite">
                         <input id="routing-dat-geosite-name" class="routing-dat-input" type="text" list="routing-dat-geosite-name-list" placeholder="geosite.dat">
-                        <button id="routing-dat-geosite-browse" class="btn-secondary btn-icon routing-dat-combo-btn" type="button" aria-label="Обнаруженные DAT" data-tooltip="Показать найденные .dat в папке.">▼</button>
+                        <button id="routing-dat-geosite-browse" class="btn-secondary btn-icon routing-dat-combo-btn" type="button" aria-label="Обнаруженные DAT" data-tooltip="Показать найденные .dat в папке.">{{ op_icon('chevron-down') }}</button>
                         <div id="routing-dat-geosite-found" class="routing-dat-found" data-tooltip="Найденные DAT в папке. Клик по строке подставит имя файла.">—</div>
                       </div>
                       <datalist id="routing-dat-geosite-name-list"></datalist>
@@ -332,10 +335,10 @@
                     <input id="routing-dat-geosite-file" type="file" accept=".dat" style="display:none">
 
                     <div class="actions xk-actions-inline routing-dat-actions-inline">
-                      <button id="routing-dat-geosite-upload-btn" class="btn-icon" type="button" aria-label="Загрузить" data-tooltip="Загрузить DAT-файл с компьютера и сохранить по указанному пути.">⬆️</button>
-                      <button id="routing-dat-geosite-update-btn" class="btn-icon" type="button" aria-label="Обновить" data-tooltip="Скачать DAT по URL и заменить текущий файл (с подтверждением).">🔗</button>
-                      <button id="routing-dat-geosite-download-btn" class="btn-icon" type="button" aria-label="Скачать" data-tooltip="Скачать текущий локальный DAT-файл.">⬇️</button>
-                      <button id="routing-dat-geosite-content-btn" class="btn-icon" type="button" aria-label="Содержимое" data-tooltip="Открыть просмотр тегов/содержимого GeoSite (поиск + копирование geosite:TAG).">🔎</button>
+                      <button id="routing-dat-geosite-upload-btn" class="btn-icon" type="button" aria-label="Загрузить" data-tooltip="Загрузить DAT-файл с компьютера и сохранить по указанному пути.">{{ op_icon('upload') }}</button>
+                      <button id="routing-dat-geosite-update-btn" class="btn-icon" type="button" aria-label="Обновить" data-tooltip="Скачать DAT по URL и заменить текущий файл (с подтверждением).">{{ op_icon('download') }}</button>
+                      <button id="routing-dat-geosite-download-btn" class="btn-icon" type="button" aria-label="Скачать" data-tooltip="Скачать текущий локальный DAT-файл.">{{ op_icon('download') }}</button>
+                      <button id="routing-dat-geosite-content-btn" class="btn-icon" type="button" aria-label="Содержимое" data-tooltip="Открыть просмотр тегов/содержимого GeoSite (поиск + копирование geosite:TAG).">{{ op_icon('catalog') }}</button>
                     </div>
                   </div>
 
@@ -357,7 +360,7 @@
                       <span>Имя файла</span>
                       <div class="routing-dat-combo" data-kind="geoip">
                         <input id="routing-dat-geoip-name" class="routing-dat-input" type="text" list="routing-dat-geoip-name-list" placeholder="geoip.dat">
-                        <button id="routing-dat-geoip-browse" class="btn-secondary btn-icon routing-dat-combo-btn" type="button" aria-label="Обнаруженные DAT" data-tooltip="Показать найденные .dat в папке.">▼</button>
+                        <button id="routing-dat-geoip-browse" class="btn-secondary btn-icon routing-dat-combo-btn" type="button" aria-label="Обнаруженные DAT" data-tooltip="Показать найденные .dat в папке.">{{ op_icon('chevron-down') }}</button>
                         <div id="routing-dat-geoip-found" class="routing-dat-found" data-tooltip="Найденные DAT в папке. Клик по строке подставит имя файла.">—</div>
                       </div>
                       <datalist id="routing-dat-geoip-name-list"></datalist>
@@ -371,10 +374,10 @@
                     <input id="routing-dat-geoip-file" type="file" accept=".dat" style="display:none">
 
                     <div class="actions xk-actions-inline routing-dat-actions-inline">
-                      <button id="routing-dat-geoip-upload-btn" class="btn-icon" type="button" aria-label="Загрузить" data-tooltip="Загрузить DAT-файл с компьютера и сохранить по указанному пути.">⬆️</button>
-                      <button id="routing-dat-geoip-update-btn" class="btn-icon" type="button" aria-label="Обновить" data-tooltip="Скачать DAT по URL и заменить текущий файл (с подтверждением).">🔗</button>
-                      <button id="routing-dat-geoip-download-btn" class="btn-icon" type="button" aria-label="Скачать" data-tooltip="Скачать текущий локальный DAT-файл.">⬇️</button>
-                      <button id="routing-dat-geoip-content-btn" class="btn-icon" type="button" aria-label="Содержимое" data-tooltip="Открыть просмотр тегов/содержимого GeoIP (поиск + копирование geoip:TAG).">🔎</button>
+                      <button id="routing-dat-geoip-upload-btn" class="btn-icon" type="button" aria-label="Загрузить" data-tooltip="Загрузить DAT-файл с компьютера и сохранить по указанному пути.">{{ op_icon('upload') }}</button>
+                      <button id="routing-dat-geoip-update-btn" class="btn-icon" type="button" aria-label="Обновить" data-tooltip="Скачать DAT по URL и заменить текущий файл (с подтверждением).">{{ op_icon('download') }}</button>
+                      <button id="routing-dat-geoip-download-btn" class="btn-icon" type="button" aria-label="Скачать" data-tooltip="Скачать текущий локальный DAT-файл.">{{ op_icon('download') }}</button>
+                      <button id="routing-dat-geoip-content-btn" class="btn-icon" type="button" aria-label="Содержимое" data-tooltip="Открыть просмотр тегов/содержимого GeoIP (поиск + копирование geoip:TAG).">{{ op_icon('catalog') }}</button>
                     </div>
                   </div>
                 </div>
@@ -397,7 +400,7 @@
                   data-tooltip="Выбор файла inbounds для редактирования"
                   aria-label="Файл inbounds"></select>
         </label>
-        <button id="inbounds-fragment-refresh-btn" type="button" class="btn-icon btn-secondary" data-tooltip="Обновить список файлов inbounds из /opt/etc/xray/configs/">↻</button>
+        <button id="inbounds-fragment-refresh-btn" type="button" class="btn-icon btn-secondary" aria-label="Обновить список файлов" data-tooltip="Обновить список файлов inbounds из /opt/etc/xray/configs/">{{ op_icon('refresh') }}</button>
       </div>
       <p class="xk-card-desc">Активный фрагмент: <code id="inbounds-file-code">{{ inbounds_file }}</code></p>
 
@@ -434,10 +437,10 @@
       </label>
 
       <div class="actions xk-actions-inline">
-        <button id="inbounds-open-editor-btn" class="btn-icon" aria-label="Редактор" data-tooltip="Открыть {{ inbounds_name|e }} в редакторе JSON.">📝</button>
-        <button id="inbounds-save-btn" class="btn-icon btn-primary" aria-label="Сохранить" data-tooltip="Сохранить {{ inbounds_name|e }}.">💾</button>
-        <button id="inbounds-backup-btn" class="btn-icon" aria-label="Backup" data-tooltip="Сделать бэкап {{ inbounds_name|e }}.">📦</button>
-        <button id="inbounds-restore-auto-btn" class="btn-icon" aria-label="Restore" data-tooltip="Восстановить inbounds из автобэкапа.">⏪</button>
+        <button id="inbounds-open-editor-btn" class="btn-icon" aria-label="Редактор" data-tooltip="Открыть {{ inbounds_name|e }} в редакторе JSON.">{{ op_icon('edit') }}</button>
+        <button id="inbounds-save-btn" class="btn-icon btn-primary" aria-label="Сохранить" data-tooltip="Сохранить {{ inbounds_name|e }}.">{{ op_icon('save') }}</button>
+        <button id="inbounds-backup-btn" class="btn-icon" aria-label="Backup" data-tooltip="Сделать бэкап {{ inbounds_name|e }}.">{{ op_icon('archive') }}</button>
+        <button id="inbounds-restore-auto-btn" class="btn-icon" aria-label="Restore" data-tooltip="Восстановить inbounds из автобэкапа.">{{ op_icon('restore') }}</button>
       </div>
 
 	      <div id="inbounds-status" class="status" role="status" aria-live="polite"></div>
@@ -459,7 +462,7 @@
 	                     aria-label="Справка по сценарию маршрутизации"
 	                     title="О сценарии маршрутизации"
 	                     data-tooltip="О сценарии маршрутизации">
-	              <span class="xk-card-help-icon" aria-hidden="true">?</span>
+	              {{ op_icon('help', 'xk-card-help-icon') }}
 	              <span class="xk-card-help-label">Как это работает</span>
 	            </summary>
 	            <div class="xk-card-help-panel routing-scenario-help-panel">
@@ -518,7 +521,7 @@
                   data-tooltip="Выбор файла outbounds для редактирования"
                   aria-label="Файл outbounds"></select>
         </label>
-        <button id="outbounds-fragment-refresh-btn" type="button" class="btn-icon btn-secondary" data-tooltip="Обновить список файлов outbounds из /opt/etc/xray/configs/">↻</button>
+        <button id="outbounds-fragment-refresh-btn" type="button" class="btn-icon btn-secondary" aria-label="Обновить список файлов" data-tooltip="Обновить список файлов outbounds из /opt/etc/xray/configs/">{{ op_icon('refresh') }}</button>
       </div>
       <p class="xk-card-desc">Активный фрагмент: <code id="outbounds-file-code">{{ outbounds_file }}</code></p>
       <div id="outbounds-fragment-summary" class="outbounds-fragment-summary hidden" aria-live="polite"></div>
@@ -532,7 +535,7 @@
           </div>
           <div class="xk-sub-nodes-head-actions">
             <button type="button" id="outbounds-nodes-pingall" class="btn-secondary btn-compact xk-sub-icon-btn" title="Пинг всех узлов" data-tooltip="Проверить задержку всех proxy-узлов в текущем 04_outbounds-фрагменте." aria-label="Пинг всех узлов" disabled>
-              <span class="xk-sub-icon-glyph xk-sub-pingall-glyph" aria-hidden="true">⏱</span>
+              {{ op_icon('ping', 'xk-sub-icon-glyph xk-sub-pingall-glyph') }}
               <span class="xk-sub-pingall-spinner" aria-hidden="true"></span>
               <span class="xk-visually-hidden">Проверить задержку всех proxy-узлов</span>
             </button>
@@ -584,7 +587,7 @@
           <summary class="outbounds-help-trigger"
                    aria-label="Подсказка по ссылке прокси"
                    title="Что вставлять в это поле"
-                   data-tooltip="Подсказка по ссылке прокси">?</summary>
+                   data-tooltip="Подсказка по ссылке прокси">{{ op_icon('help') }}</summary>
           <div class="outbounds-help-panel">
             Укажи ссылку прокси <code>vless / trojan / vmess / ss / hy2</code>,
             на основе которой будет собран конфиг <code>{{ outbounds_name|e }}</code>.
@@ -605,7 +608,7 @@
             <input id="outbounds-tag" type="text" value="proxy" placeholder="proxy">
           </div>
         </details>
-        <button type="button" id="outbounds-entware-mark-btn" class="xk-entware-mark-toggle" aria-label="Entware mark 255" aria-pressed="false" title="Добавлять sockopt.mark=255 для проксирования Entware" data-tooltip="Добавлять sockopt.mark=255 для проксирования Entware.">↯</button>
+        <button type="button" id="outbounds-entware-mark-btn" class="xk-entware-mark-toggle" aria-label="Entware mark 255" aria-pressed="false" title="Добавлять sockopt.mark=255 для проксирования Entware" data-tooltip="Добавлять sockopt.mark=255 для проксирования Entware.">{{ op_icon('bolt') }}</button>
       </div>
 
       <!-- Parsed preview + validation (client-side) -->
@@ -625,14 +628,14 @@
       </div>
 
       <div class="actions xk-actions-inline">
-        <button id="outbounds-open-editor-btn" class="btn-icon" aria-label="Редактор" data-tooltip="Открыть {{ outbounds_name|e }} в редакторе JSON.">📝</button>
-        <button id="outbounds-normalize-btn" class="btn-icon" aria-label="Нормализовать" data-tooltip="Нормализовать ссылку: дефолты, алиасы, порядок параметров.">✨</button>
-        <button id="outbounds-build-btn" class="btn-icon" aria-label="Собрать" data-tooltip="Открыть мини-генератор и собрать ссылку из подсказок (protocol/type/security).">🧩</button>
-        <button id="outbounds-pool-btn" class="btn-icon" aria-label="Пул" data-tooltip="Пул прокси (несколько ссылок) — удобно для балансировщика.">🧱</button>
-        <button id="outbounds-subscriptions-btn" class="btn-icon" aria-label="Подписки" data-tooltip="Подписки: автообновление outbounds и observatory-пинг.">🔄</button>
-        <button id="outbounds-save-btn" class="btn-icon btn-primary" aria-label="Сохранить" data-tooltip="Распарсить ссылку и сохранить как outbounds для Xray.">💾</button>
-        <button id="outbounds-backup-btn" class="btn-icon" aria-label="Backup" data-tooltip="Сделать бэкап {{ outbounds_name|e }}.">📦</button>
-        <button id="outbounds-restore-auto-btn" class="btn-icon" aria-label="Restore" data-tooltip="Восстановить outbounds из автобэкапа.">⏪</button>
+        <button id="outbounds-open-editor-btn" class="btn-icon" aria-label="Редактор" data-tooltip="Открыть {{ outbounds_name|e }} в редакторе JSON.">{{ op_icon('edit') }}</button>
+        <button id="outbounds-normalize-btn" class="btn-icon" aria-label="Нормализовать" data-tooltip="Нормализовать ссылку: дефолты, алиасы, порядок параметров.">{{ op_icon('normalize') }}</button>
+        <button id="outbounds-build-btn" class="btn-icon" aria-label="Собрать" data-tooltip="Открыть мини-генератор и собрать ссылку из подсказок (protocol/type/security).">{{ op_icon('tools') }}</button>
+        <button id="outbounds-pool-btn" class="btn-icon" aria-label="Пул" data-tooltip="Пул прокси (несколько ссылок) — удобно для балансировщика.">{{ op_icon('pool') }}</button>
+        <button id="outbounds-subscriptions-btn" class="btn-icon" aria-label="Подписки" data-tooltip="Подписки: автообновление outbounds и observatory-пинг.">{{ op_icon('subscriptions') }}</button>
+        <button id="outbounds-save-btn" class="btn-icon btn-primary" aria-label="Сохранить" data-tooltip="Распарсить ссылку и сохранить как outbounds для Xray.">{{ op_icon('save') }}</button>
+        <button id="outbounds-backup-btn" class="btn-icon" aria-label="Backup" data-tooltip="Сделать бэкап {{ outbounds_name|e }}.">{{ op_icon('archive') }}</button>
+        <button id="outbounds-restore-auto-btn" class="btn-icon" aria-label="Restore" data-tooltip="Восстановить outbounds из автобэкапа.">{{ op_icon('restore') }}</button>
       </div>
 
       <div id="outbounds-status" class="status" role="status" aria-live="polite"></div>
@@ -684,7 +687,7 @@
                      aria-label="Подсказка по снимкам Xray"
                      title="О снимках Xray"
                      data-tooltip="О снимках Xray">
-              <span class="xk-card-help-icon" aria-hidden="true">?</span>
+              {{ op_icon('help', 'xk-card-help-icon') }}
             </summary>
             <div class="xk-card-help-panel">
               Сюда попадают <b>snapshots</b> — rollback-копии <b>предыдущего</b> состояния каждого Xray-файла.
@@ -718,7 +721,7 @@
                      aria-label="Подсказка по JSONC-комментариям и применению"
                      title="О JSONC и применении"
                      data-tooltip="О JSONC и применении">
-              <span class="xk-card-help-icon" aria-hidden="true">?</span>
+              {{ op_icon('help', 'xk-card-help-icon') }}
             </summary>
             <div class="xk-card-help-panel">
               <p><b>JSONC-комментарии:</b> карточки «Правила / Балансировщики» сначала пытаются применить изменения точечно и сохранить комментарии рядом с элементами.</p>
@@ -750,7 +753,7 @@
               </div>
               <div class="routing-rules-controls">
                 <input type="search" id="routing-rules-filter" class="routing-rules-filter" placeholder="Фильтр по тегам / типам / значениям">
-                <button id="routing-rules-refresh-btn" class="btn-secondary" type="button">⟳ Обновить</button>
+                <button id="routing-rules-refresh-btn" class="btn-secondary" type="button">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
               </div>
             </div>
 
@@ -767,13 +770,13 @@
                 </label>
               </div>
               <div class="routing-rules-actions">
-                <button id="routing-balancer-quick-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Быстрый старт: leastPing + observatory + сохранить+рестарт" aria-label="Быстрый старт балансировщика">⚡</button>
-                <button id="routing-balancer-help-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Справка по балансировщикам" aria-label="Справка по балансировщикам">❓</button>
-                <button id="routing-forced-rules-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Принудительные правила (обход балансировщика): домены/IP → конкретный outbound" aria-label="Принудительные правила">🔒</button>
-                <button id="routing-balancer-add-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Добавить балансировщик" aria-label="Добавить балансировщик">⚖️</button>
-                <button id="routing-rules-add-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Добавить правило" aria-label="Добавить правило">📜</button>
-                <button id="routing-rules-apply-btn" class="btn-primary btn-icon routing-rules-apply-primary" type="button" data-tooltip="Применить изменения в JSON‑редактор (с сохранением JSONC‑комментариев, best effort)" aria-label="Применить в JSON">💾</button>
-                <button id="routing-rules-reload-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Перезагрузить из JSON-редактора" aria-label="Перезагрузить из JSON">↺</button>
+                <button id="routing-balancer-quick-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Быстрый старт: leastPing + observatory + сохранить+рестарт" aria-label="Быстрый старт балансировщика">{{ op_icon('quick-start') }}</button>
+                <button id="routing-balancer-help-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Справка по балансировщикам" aria-label="Справка по балансировщикам">{{ op_icon('help') }}</button>
+                <button id="routing-forced-rules-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Принудительные правила (обход балансировщика): домены/IP → конкретный outbound" aria-label="Принудительные правила">{{ op_icon('lock') }}</button>
+                <button id="routing-balancer-add-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Добавить балансировщик" aria-label="Добавить балансировщик">{{ op_icon('add-balancer') }}</button>
+                <button id="routing-rules-add-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Добавить правило" aria-label="Добавить правило">{{ op_icon('add-rule') }}</button>
+                <button id="routing-rules-apply-btn" class="btn-primary btn-icon routing-rules-apply-primary" type="button" data-tooltip="Применить изменения в JSON‑редактор (с сохранением JSONC‑комментариев, best effort)" aria-label="Применить в JSON">{{ op_icon('save') }}</button>
+                <button id="routing-rules-reload-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Перезагрузить из JSON-редактора" aria-label="Перезагрузить из JSON">{{ op_icon('reload') }}</button>
               </div>
             </div>
 
@@ -825,11 +828,7 @@
                   data-tooltip="Сохранить текущий файл (routing.json или выбранный фрагмент)."
                   aria-label="Сохранить файл"
                 >
-                  <svg class="xk-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path d="M7 3h10l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                    <path d="M17 3v6H7V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    <path d="M7 21v-8h10v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                  </svg>
+                  {{ op_icon('save') }}
                 </button>
 
                 <button
@@ -840,14 +839,11 @@
                   aria-label="Откатить изменения"
                   disabled
                 >
-                  <svg class="xk-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path d="M9 10H4V5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M4 10a8 8 0 1 1 2.35 5.65" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
+                  {{ op_icon('restore') }}
                 </button>
 
                 <details class="dt-log-menu xk-routing-menu">
-                  <summary class="terminal-tool-btn xk-routing-menu-trigger" data-tooltip="Меню" aria-label="Меню">⋯</summary>
+                  <summary class="terminal-tool-btn xk-routing-menu-trigger" data-tooltip="Меню" aria-label="Меню">{{ op_icon('more') }}</summary>
 
                   <div class="dt-log-menu-panel xk-routing-menu-panel">
                     <div class="terminal-menu-section" aria-label="Файл">
@@ -857,7 +853,7 @@
                       <button id="routing-fragment-refresh-btn"
                               type="button"
                               class="terminal-tool-btn"
-                              data-tooltip="Обновить список файлов роутинга из /opt/etc/xray/configs/">↻ Обновить список</button>
+                              data-tooltip="Обновить список файлов роутинга из /opt/etc/xray/configs/">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить список</span></button>
 
                     </div>
 
@@ -867,19 +863,19 @@
                       <div class="terminal-menu-title">Действия</div>
 
                       <button id="routing-format-btn" type="button" class="terminal-tool-btn"
-                              data-tooltip="Отформатировать JSON (красивые отступы).">✨ Форматировать JSON</button>
+                              data-tooltip="Отформатировать JSON (красивые отступы).">{{ op_icon('format') }}<span class="xk-action-label">Форматировать JSON</span></button>
                       <button id="routing-backup-btn" type="button" class="terminal-tool-btn"
-                              data-tooltip="Создать бэкап файла: {{ routing_name|e }}">📦 Бэкап</button>
+                              data-tooltip="Создать бэкап файла: {{ routing_name|e }}">{{ op_icon('archive') }}<span class="xk-action-label">Бэкап</span></button>
                       <button id="routing-restore-auto-btn" type="button" class="terminal-tool-btn"
-                              data-tooltip="Восстановить авто-бэкап файла: {{ routing_name|e }}">⏪ Авто-бэкап</button>
+                              data-tooltip="Восстановить авто-бэкап файла: {{ routing_name|e }}">{{ op_icon('restore') }}<span class="xk-action-label">Авто-бэкап</span></button>
 
                       <button id="routing-export-local-btn" type="button" class="terminal-tool-btn"
-                              data-tooltip="Скачать текущий файл из редактора на компьютер.">⬇️ Экспорт</button>
+                              data-tooltip="Скачать текущий файл из редактора на компьютер.">{{ op_icon('export') }}<span class="xk-action-label">Экспорт</span></button>
                       <button id="routing-import-local-btn" type="button" class="terminal-tool-btn"
-                              data-tooltip="Загрузить файл в редактор (без автосохранения).">⬆️ Импорт</button>
+                              data-tooltip="Загрузить файл в редактор (без автосохранения).">{{ op_icon('import') }}<span class="xk-action-label">Импорт</span></button>
 
                       <button id="routing-import-template-btn" type="button" class="terminal-tool-btn xk-only-routing"
-                              data-tooltip="Импортировать готовый шаблон роутинга (заменит текст в редакторе, без автосохранения).">🧩 Шаблоны</button>
+                              data-tooltip="Импортировать готовый шаблон роутинга (заменит текст в редакторе, без автосохранения).">{{ op_icon('template') }}<span class="xk-action-label">Шаблоны</span></button>
                     </div>
 
                     <div class="terminal-menu-sep xk-only-routing" role="separator" aria-hidden="true"></div>
@@ -887,9 +883,9 @@
                     <div class="terminal-menu-section xk-only-routing" aria-label="GitHub">
                       <div class="terminal-menu-title">GitHub</div>
                       <button id="github-export-btn" type="button" class="terminal-tool-btn"
-                              data-tooltip="Выгрузить текущий routing.json в GitHub‑каталог конфигов.">⬆️ Выгрузить в репозитарий</button>
+                              data-tooltip="Выгрузить текущий routing.json в GitHub‑каталог конфигов.">{{ op_icon('github') }}<span class="xk-action-label">Выгрузить в репозитарий</span></button>
                       <button id="github-open-catalog-btn" type="button" class="terminal-tool-btn"
-                              data-tooltip="Открыть каталог конфигураций (GitHub).">📂 Каталог конфигураций</button>
+                              data-tooltip="Открыть каталог конфигураций (GitHub).">{{ op_icon('catalog') }}<span class="xk-action-label">Каталог конфигураций</span></button>
                     </div>
                   </div>
                 </details>

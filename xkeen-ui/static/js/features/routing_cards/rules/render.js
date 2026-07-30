@@ -1,5 +1,6 @@
 import { isXkeenMipsRuntime } from '../../xkeen_runtime.js';
 import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
+import { setIcon } from '../../../ui/operator_icons.js';
 
 /*
   routing_cards/rules/render.js
@@ -1165,7 +1166,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const refreshBtn = document.createElement('button');
     refreshBtn.type = 'button';
     refreshBtn.className = 'btn-secondary btn-icon routing-selector-refresh-btn';
-    refreshBtn.textContent = '↻';
+    setIcon(refreshBtn, 'refresh');
     refreshBtn.setAttribute('data-tooltip', 'Обновить список outbound tags');
     refreshBtn.setAttribute('aria-label', 'Обновить список outbound tags');
 
@@ -1174,7 +1175,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
     const prefixHint = document.createElement('span');
     prefixHint.className = 'routing-selector-prefix-hint';
-    prefixHint.textContent = 'ⓘ';
+    setIcon(prefixHint, 'info');
     prefixHint.setAttribute('tabindex', '0');
     prefixHint.setAttribute('role', 'note');
     prefixHint.setAttribute('data-tooltip', 'selector — это префиксы тегов outbound. Например "vless-" выберет все outbounds, чьи tag начинаются с vless-. Можно указывать и полный tag для точного выбора.');
@@ -1539,7 +1540,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const obsRefreshBtn = document.createElement('button');
     obsRefreshBtn.type = 'button';
     obsRefreshBtn.className = 'btn-secondary btn-icon';
-    obsRefreshBtn.textContent = '⟳';
+    setIcon(obsRefreshBtn, 'refresh');
     obsRefreshBtn.setAttribute('data-tooltip', 'Проверить наличие observatory ещё раз');
 
     const obsCreateBtn = document.createElement('button');
@@ -1867,7 +1868,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
       delBtn.className = 'btn-danger btn-icon routing-balancer-del-btn';
-      delBtn.textContent = '🗑';
+      setIcon(delBtn, 'trash');
       delBtn.setAttribute('title', 'Удалить балансировщик');
       delBtn.setAttribute('aria-label', 'Удалить балансировщик');
       delBtn.addEventListener('click', async (e) => {
@@ -2259,7 +2260,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         handle.setAttribute('aria-label', 'Перетащить');
         handle.setAttribute('role', 'button');
         handle.tabIndex = 0;
-        handle.textContent = '⠿';
+        setIcon(handle, 'drag');
         title.appendChild(handle);
       }
 
@@ -2330,7 +2331,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       const editBtn = document.createElement('button');
       editBtn.type = 'button';
       editBtn.className = 'btn-secondary btn-icon';
-      editBtn.textContent = '✏️';
+      setIcon(editBtn, 'edit');
       editBtn.setAttribute('title', 'Открыть правило в JSON-редакторе');
       editBtn.setAttribute('aria-label', 'Открыть правило в JSON-редакторе');
       editBtn.addEventListener('click', () => {
@@ -2354,7 +2355,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       const upBtn = document.createElement('button');
       upBtn.type = 'button';
       upBtn.className = 'btn-secondary btn-icon';
-      upBtn.textContent = '⬆';
+      setIcon(upBtn, 'move-up');
       upBtn.setAttribute('title', 'Переместить правило вверх');
       upBtn.setAttribute('aria-label', 'Переместить правило вверх');
       upBtn.disabled = idx <= 0;
@@ -2371,7 +2372,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       const downBtn = document.createElement('button');
       downBtn.type = 'button';
       downBtn.className = 'btn-secondary btn-icon';
-      downBtn.textContent = '⬇';
+      setIcon(downBtn, 'move-down');
       downBtn.setAttribute('title', 'Переместить правило вниз');
       downBtn.setAttribute('aria-label', 'Переместить правило вниз');
       downBtn.disabled = idx >= m.rules.length - 1;
@@ -2388,7 +2389,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       const dupBtn = document.createElement('button');
       dupBtn.type = 'button';
       dupBtn.className = 'btn-secondary btn-icon';
-      dupBtn.textContent = '📄';
+      setIcon(dupBtn, 'duplicate');
       dupBtn.setAttribute('title', 'Дублировать правило');
       dupBtn.setAttribute('aria-label', 'Дублировать правило');
       dupBtn.addEventListener('click', () => {
@@ -2403,7 +2404,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
       delBtn.className = 'btn-danger btn-icon';
-      delBtn.textContent = '🗑';
+      setIcon(delBtn, 'trash');
       delBtn.setAttribute('title', 'Удалить правило');
       delBtn.setAttribute('aria-label', 'Удалить правило');
       delBtn.addEventListener('click', async () => {

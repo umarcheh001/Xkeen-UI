@@ -1,6 +1,7 @@
 import { getRoutingApi } from '../../routing.js';
 
 import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
+import { iconHtml } from '../../../ui/operator_icons.js';
 
 /*
   routing_cards/rules/quick_balancer.js
@@ -76,7 +77,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
           </div>
           <div class="modal-body">
             <div class="xk-qb-lead">
-              <div class="xk-qb-lead-icon">⚡</div>
+              <div class="xk-qb-lead-icon">${iconHtml('quick-start')}</div>
               <div class="xk-qb-lead-text">
                 <div class="xk-qb-lead-title">leastPing + observatory + готовое правило маршрутизации</div>
                 <p class="modal-description" style="margin:0;">
@@ -146,7 +147,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
                     <div class="terminal-menu-title" style="margin:0;">Пул тегов для selector / subjectSelector</div>
                   </div>
                   <button type="button" class="btn-secondary btn-compact xk-qb-refresh-btn" id="routing-balancer-quick-refresh-tags-btn" data-tooltip="Взять теги из 04_outbounds.json и исключить служебные outbound">
-                    <span class="xk-btn-inline-glyph" aria-hidden="true">⟳</span>
+                    ${iconHtml('refresh', 'xk-btn-inline-glyph')}
                     <span>Обновить</span>
                   </button>
                 </div>
@@ -174,11 +175,11 @@ tag2
             </div>
             <div class="xk-qb-footer-actions">
               <button type="button" class="btn-secondary btn-compact xk-qb-footer-btn" id="routing-balancer-quick-dry-btn" data-tooltip="Только обновить карточки и JSON-редактор, без сохранения и рестарта.">
-                <span class="xk-btn-inline-glyph" aria-hidden="true">✓</span>
+                ${iconHtml('check', 'xk-btn-inline-glyph')}
                 <span>Только применить</span>
               </button>
               <button type="button" class="btn-danger btn-compact xk-qb-footer-btn xk-qb-primary-action" id="routing-balancer-quick-run-btn">
-                <span class="xk-btn-inline-glyph" aria-hidden="true">⟳</span>
+                ${iconHtml('restart', 'xk-btn-inline-glyph')}
                 <span>Применить + Рестарт</span>
               </button>
             </div>

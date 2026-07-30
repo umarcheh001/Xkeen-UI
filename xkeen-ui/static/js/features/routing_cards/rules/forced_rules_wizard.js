@@ -1,6 +1,7 @@
 import { getRoutingApi } from '../../routing.js';
 
 import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
+import { iconHtml } from '../../../ui/operator_icons.js';
 
 /*
   routing_cards/rules/forced_rules_wizard.js
@@ -73,7 +74,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
           </div>
           <div class="modal-body">
             <div class="xk-forced-wizard-lead">
-              <div class="xk-forced-wizard-lead-icon">⇄</div>
+              <div class="xk-forced-wizard-lead-icon">${iconHtml('transfer')}</div>
               <div class="xk-forced-wizard-lead-text">
                 <div class="xk-forced-wizard-lead-title">Домены и IP → конкретный outbound</div>
                 <p class="modal-description" style="margin:0;">
@@ -186,8 +187,8 @@ geoip:private"></textarea>
           <div class="modal-actions xk-forced-wizard-footer">
             <button type="button" class="btn-compact" id="routing-forced-rules-cancel-btn">Отмена</button>
             <div class="xk-forced-wizard-footer-actions">
-              <button type="button" class="btn-secondary btn-compact xk-forced-primary-action" id="routing-forced-rules-dry-btn" data-tooltip="Только применить изменения в редакторе без сохранения и рестарта"><span class="xk-btn-inline-glyph" aria-hidden="true">✓</span><span>Только применить</span></button>
-              <button type="button" class="btn-danger btn-compact xk-forced-primary-action" id="routing-forced-rules-run-btn"><span class="xk-btn-inline-glyph" aria-hidden="true">⟳</span><span>Применить + Рестарт</span></button>
+              <button type="button" class="btn-secondary btn-compact xk-forced-primary-action" id="routing-forced-rules-dry-btn" data-tooltip="Только применить изменения в редакторе без сохранения и рестарта">${iconHtml('check', 'xk-btn-inline-glyph')}<span>Только применить</span></button>
+              <button type="button" class="btn-danger btn-compact xk-forced-primary-action" id="routing-forced-rules-run-btn">${iconHtml('restart', 'xk-btn-inline-glyph')}<span>Применить + Рестарт</span></button>
             </div>
           </div>
         </div>

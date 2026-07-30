@@ -36,6 +36,8 @@ def test_frontend_build_toolchain_files_exist_and_are_wired_up():
 
     frontend_build_script = scripts.get('frontend:build') or ''
     assert scripts.get('frontend:vendor') == 'node scripts/run_python.mjs scripts/sync_frontend_vendor.py'
+    assert scripts.get('icons:operator') == 'node scripts/run_python.mjs scripts/generate_operator_icon_sprite.py'
+    assert 'npm run icons:operator' in frontend_build_script
     assert 'scripts/sync_frontend_vendor.py' in frontend_build_script
     assert 'node scripts/run_python.mjs' in frontend_build_script
     assert 'vite build --config vite.config.mjs' in frontend_build_script
@@ -43,6 +45,7 @@ def test_frontend_build_toolchain_files_exist_and_are_wired_up():
     assert scripts.get('frontend:verify:static') == 'node scripts/verify_frontend_build.mjs'
     assert scripts.get('frontend:verify') == 'npm run frontend:build && npm run frontend:verify:static'
     assert dev_dependencies.get('vite') == '8.0.3'
+    assert dev_dependencies.get('@tabler/icons') == '^3.46.0'
 
     config_text = VITE_CONFIG.read_text(encoding='utf-8')
     assert "manifest: '.vite/manifest.build.json'" in config_text
