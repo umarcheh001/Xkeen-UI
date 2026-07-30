@@ -2854,6 +2854,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/vendor/monaco_github_themes.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/vendor/codemirror_json_schema.js",
           "globals": [],
           "lazy_features": []
