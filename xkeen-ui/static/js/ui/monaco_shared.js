@@ -1,5 +1,9 @@
 import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
 import {
+  GITHUB_DARK_TOKEN_RULES,
+  GITHUB_LIGHT_TOKEN_RULES,
+} from '../vendor/monaco_github_themes.js';
+import {
   buildJsonSchemaHoverInfo,
   buildJsoncPointerMap,
   findDiagnosticMapping,
@@ -548,6 +552,58 @@ import {
     }
   }
 
+  function _collectYamlAliasSigilDecorations(monaco, model) {
+    const decorations = [];
+    try {
+      if (!monaco || !monaco.Range || !model || typeof model.getLineCount !== 'function') return decorations;
+      for (let lineNumber = 1; lineNumber <= model.getLineCount(); lineNumber += 1) {
+        const line = String(model.getLineContent(lineNumber) || '');
+        let quote = '';
+        let escaped = false;
+        for (let index = 0; index < line.length; index += 1) {
+          const char = line[index];
+          if (quote) {
+            if (escaped) escaped = false;
+            else if (char === '\\' && quote === '"') escaped = true;
+            else if (char === quote) quote = '';
+            continue;
+          }
+          if (char === '"' || char === "'") { quote = char; continue; }
+          if (char === '#') break;
+          if (char !== '*') continue;
+          const previous = index > 0 ? line[index - 1] : '';
+          const next = line[index + 1] || '';
+          if ((index === 0 || /[\s:\[\{,]/.test(previous)) && next && !/[\s,\]\}#]/.test(next)) {
+            decorations.push({
+              range: new monaco.Range(lineNumber, index + 1, lineNumber, index + 2),
+              options: { inlineClassName: 'xk-monaco-yaml-alias-sigil' },
+            });
+          }
+        }
+      }
+    } catch (e) {}
+    return decorations;
+  }
+
+  function _installYamlAliasSigilDecorations(monaco, editor, model, language) {
+    if (String(language || '').toLowerCase() !== 'yaml' || !editor || !model) return () => {};
+    let collection = null;
+    const refresh = () => {
+      try {
+        const decorations = _collectYamlAliasSigilDecorations(monaco, model);
+        if (!collection && typeof editor.createDecorationsCollection === 'function') collection = editor.createDecorationsCollection();
+        if (collection && typeof collection.set === 'function') collection.set(decorations);
+      } catch (e) {}
+    };
+    refresh();
+    let changeListener = null;
+    try { changeListener = model.onDidChangeContent(refresh); } catch (e) {}
+    return () => {
+      try { if (changeListener && typeof changeListener.dispose === 'function') changeListener.dispose(); } catch (e) {}
+      try { if (collection && typeof collection.clear === 'function') collection.clear(); } catch (e) {}
+    };
+  }
+
   function _getCssVar(name, fallback) {
     try {
       const v = getComputedStyle(document.documentElement).getPropertyValue(name);
@@ -687,11 +743,12 @@ import {
       const darkUi = _getWidgetPalette('dark');
       const lightUi = _getWidgetPalette('light');
 
-      // Keep colors close to our panel cards, but a touch deeper for editor focus.
+      // GitHub Dark/Light supply token syntax only. Surfaces, widgets, and
+      // focus states remain bound to the Operator Console CSS tokens below.
       monaco.editor.defineTheme('xkeen-dark', {
         base: 'vs-dark',
         inherit: true,
-        rules: [],
+        rules: GITHUB_DARK_TOKEN_RULES,
         colors: {
           'editor.background': darkUi.editorBg,
           'editor.foreground': '#e5e7eb',
@@ -799,7 +856,7 @@ import {
       monaco.editor.defineTheme('xkeen-light', {
         base: 'vs',
         inherit: true,
-        rules: [],
+        rules: GITHUB_LIGHT_TOKEN_RULES,
         colors: {
           'editor.background': lightUi.editorBg,
           'editor.foreground': '#111827',
@@ -2420,10 +2477,12 @@ import {
       model = editor && typeof editor.getModel === 'function' ? editor.getModel() : model;
 
       // Apply language to the model explicitly (Monaco may ignore unknown option fields).
+      let cleanupYamlAliasSigils = () => {};
       try {
         if (model && monaco.editor && monaco.editor.setModelLanguage && language && language !== 'plaintext') {
           monaco.editor.setModelLanguage(model, runtimeLanguage);
         }
+        cleanupYamlAliasSigils = _installYamlAliasSigilDecorations(monaco, editor, model, language);
         if (model) _setModelYamlAssist(model, (language === 'yaml' && o.yamlAssist) ? o.yamlAssist : null);
         if (model) _setModelSnippetProvider(model, o.snippetProvider || null);
         if (model) _setModelQuickFixProvider(model, o.quickFixProvider || null);
@@ -2530,6 +2589,7 @@ import {
           if (editor && typeof editor.onDidDispose === 'function') {
             editor.onDidDispose(() => {
               try { unsubscribeUiSettings(); } catch (e2) {}
+              try { cleanupYamlAliasSigils(); } catch (e2a) {}
               try { if (model) _setModelYamlAssist(model, null); } catch (e3) {}
               try { if (model) _setModelSnippetProvider(model, null); } catch (e3b) {}
               try { if (model) _setModelQuickFixProvider(model, null); } catch (e3c) {}
@@ -2554,6 +2614,7 @@ import {
       try {
         if (editor && typeof editor.onDidDispose === 'function') {
           editor.onDidDispose(() => {
+          try { cleanupYamlAliasSigils(); } catch (e1a) {}
           try { if (model) _setModelYamlAssist(model, null); } catch (e2) {}
           try { if (model) _setModelSnippetProvider(model, null); } catch (e2b) {}
           try { if (model) _setModelQuickFixProvider(model, null); } catch (e2c) {}

@@ -1642,6 +1642,15 @@ body.panel-page :is(
   box-shadow: none !important;
 }
 
+/* Monaco YAML aliases: retain a distinct visual sigil for references such as *domain. */
+body.panel-page .monaco-editor .xk-monaco-yaml-alias-sigil {
+  color: #79c0ff !important;
+}
+
+html[data-theme="light"] body.panel-page .monaco-editor .xk-monaco-yaml-alias-sigil {
+  color: #0969da !important;
+}
+
 body.panel-page :is(.xkeen-cm6-host .cm-editor, .CodeMirror, .xk-monaco-editor) {
   border: 1px solid var(--op-border-strong) !important;
 }
