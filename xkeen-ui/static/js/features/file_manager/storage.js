@@ -1,4 +1,5 @@
 import { getFileManagerNamespace } from '../file_manager_namespace.js';
+import { iconHtml } from '../../ui/operator_icons.js';
 
 (() => {
   'use strict';
@@ -182,7 +183,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       if (sum) sum.textContent = 'Не удалось загрузить список.';
       toast('Не удалось получить список USB-разделов', 'error');
       const box = el('fm-volumes-list');
-      if (box) box.innerHTML = '<div class="error">Ошибка загрузки</div>';
+      if (box) box.innerHTML = `<div class="error">${iconHtml('alert')}Ошибка загрузки</div>`;
     } finally {
       // If refresh() started the busy state, it is responsible for stopping it.
       if (!wasBusy && !keepBusy) _setBusy(false);

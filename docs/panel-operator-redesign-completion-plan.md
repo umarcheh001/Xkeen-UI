@@ -238,7 +238,7 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 
 ## Сквозной поток I. Иконки действий: Tabler Icons → минимальный SVG sprite → `xk-action-icon`
 
-Статус на 31 июля 2026 года: **I0–I2 закрыты; миграция остальных экранов панели открыта.** Этот поток идёт параллельно Этапам 5–7 и не меняет маршруты, API, обработчики, `id`, `data-*` или смысл действий. Источник — локально закреплённый пакет `@tabler/icons`; в production не допускаются CDN, runtime-загрузка пакета или отдельный полный набор SVG.
+Статус на 31 июля 2026 года: **I0–I3 закрыты; миграция modal families и настроек (I4) остаётся открытой.** Этот поток идёт параллельно Этапам 5–7 и не меняет маршруты, API, обработчики, `id`, `data-*` или смысл действий. Источник — локально закреплённый пакет `@tabler/icons`; в production не допускаются CDN, runtime-загрузка пакета или отдельный полный набор SVG.
 
 ### Контракт и границы
 
@@ -284,15 +284,17 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 
 Критерий завершения: Routing Mihomo и его связанные формы используют тот же sprite/helper/CSS contract, не создавая второго icon API или отдельного sprite.
 
-### I3. Остальные top-level views основной панели
+### I3. Остальные top-level views основной панели — закрыт
 
-- [ ] пройти по inventory экраны «Порты», «Команды», «Логи» и «Файлы»: toolbar, row actions, pagination, refresh/upload/download, move/copy/edit/delete и empty-state actions;
-- [ ] мигрировать header/global actions и top navigation только после проверки узнаваемости и доступного имени каждого icon-only control;
-- [ ] унифицировать loading/retry/success/warning/error glyphs, сохранив semantic color на уровне state-контейнера;
-- [ ] исключить дубли: одно действие не должно иметь разные пиктограммы в разных top-level views;
-- [ ] добавить статический guard для action-emoji и недопустимых inline SVG во всех top-level views.
+- [x] провести inventory «Портов», «Команд», «Логов» и «Файлов»: static toolbar, динамические row/context actions, refresh/upload/download, move/copy/edit/delete, fullscreen и empty/error actions;
+- [x] мигрировать header/global actions и top navigation только после проверки узнаваемости и доступного имени каждого icon-only control;
+- [x] унифицировать loading/retry/success/warning/error glyphs: иконка описывает действие или фазу, semantic color остаётся у state-контейнера;
+- [x] исключить дубли: одинаковые действия используют одно semantic XKeen-имя вне зависимости от top-level view;
+- [x] добавить статический guard для action-emoji и недопустимых inline SVG во всех закрываемых top-level views.
 
-Критерий завершения: все основные рабочие экраны панели используют один semantic icon dictionary; legacy glyphs остаются только в явно задокументированных content/status исключениях.
+Закрытие I3 зафиксировано в [`panel-operator-icon-i3-top-level-views.md`](panel-operator-icon-i3-top-level-views.md).
+
+Критерий завершения: **выполнен**. Все основные рабочие экраны панели используют один semantic icon dictionary; legacy glyphs оставлены только для явно документированных content/status исключений и modal families следующего этапа.
 
 ### I4. Модальные семейства, редакторы и настройки
 

@@ -1,4 +1,5 @@
 import { getFileManagerNamespace } from '../file_manager_namespace.js';
+import { iconHtml } from '../../ui/operator_icons.js';
 
 (() => {
   'use strict';
@@ -775,7 +776,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
         row.tabIndex = -1;
         row.dataset.name = name;
         row.dataset.up = isUp ? '1' : '0';
-        row.innerHTML = `<div class="fm-cell fm-name"><span class="fm-ico">${isUp ? '↩' : '📁'}</span><span class="fm-name-text"></span></div>`;
+        row.innerHTML = `<div class="fm-cell fm-name"><span class="fm-ico">${iconHtml(isUp ? 'back' : 'open')}</span><span class="fm-name-text"></span></div>`;
         try {
           const t = qs('.fm-name-text', row);
           if (t) t.textContent = name;

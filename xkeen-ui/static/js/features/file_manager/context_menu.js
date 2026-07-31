@@ -1,4 +1,5 @@
 import { getFileManagerNamespace } from '../file_manager_namespace.js';
+import { iconHtml } from '../../ui/operator_icons.js';
 
 (() => {
   'use strict';
@@ -131,11 +132,28 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
     return d;
   }
 
+  const ACTION_ICONS = Object.freeze({
+    open: 'open', download: 'download', upload: 'upload', refresh: 'refresh',
+    copy: 'duplicate', move: 'transfer', delete: 'trash', rename: 'edit',
+    restore: 'restore', mkdir: 'folder-add', touch: 'file-add',
+    terminal_here: 'terminal', compare: 'compare', props: 'info',
+    checksum: 'validate', chmod: 'permissions', chown: 'owner',
+    archive_create: 'archive', archive_list: 'catalog', archive_extract: 'restore',
+    copy_path: 'duplicate', up: 'move-up', select_all: 'check', invert_sel: 'check', mask_sel: 'search',
+  });
+
   function _ctxBtn(label, action, kbd) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'fm-context-item';
     b.dataset.action = String(action || '');
+    const icon = ACTION_ICONS[String(action || '')];
+    if (icon) {
+      const glyph = document.createElement('span');
+      glyph.className = 'fm-context-icon';
+      glyph.innerHTML = iconHtml(icon);
+      b.appendChild(glyph);
+    }
     const left = document.createElement('span');
     left.className = 'fm-context-label';
     left.textContent = String(label || '');

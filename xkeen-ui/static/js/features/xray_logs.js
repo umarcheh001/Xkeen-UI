@@ -18,6 +18,7 @@ import {
   syncXkeenBodyScrollLock,
   toastXkeen,
 } from './xkeen_runtime.js';
+import { iconHtml } from '../ui/operator_icons.js';
 
 let xrayLogsModuleApi = null;
 
@@ -1092,7 +1093,7 @@ let xrayLogsModuleApi = null;
 
     if (!runtime.streaming) {
       btn.disabled = true;
-      btn.textContent = '⏸ Пауза';
+      btn.innerHTML = `${iconHtml('pause')}<span class="xk-action-label">Пауза</span>`;
       btn.title = 'Пауза доступна только в онлайн-режиме.';
       btn.dataset.state = 'off';
       syncTooltipText(btn, btn.getAttribute('title') || '');
@@ -1103,14 +1104,14 @@ let xrayLogsModuleApi = null;
 
     if (runtime.paused) {
       const pending = Math.max(0, parseInt(runtime.pendingCount || 0, 10) || 0);
-      btn.textContent = pending ? `▶ Продолжить (+${pending})` : '▶ Продолжить';
+      btn.innerHTML = `${iconHtml('play')}<span class="xk-action-label">${pending ? `Продолжить (+${pending})` : 'Продолжить'}</span>`;
       btn.title = 'Возобновить обновление экрана (накопленные строки будут показаны).';
       btn.dataset.state = 'on';
       syncTooltipText(btn, btn.getAttribute('title') || '');
       return;
     }
 
-    btn.textContent = '⏸ Пауза';
+    btn.innerHTML = `${iconHtml('pause')}<span class="xk-action-label">Пауза</span>`;
     btn.title = 'Пауза: заморозить вывод (строки продолжают собираться).';
     btn.dataset.state = 'off';
     syncTooltipText(btn, btn.getAttribute('title') || '');
@@ -2512,11 +2513,11 @@ let xrayLogsModuleApi = null;
     const btn = $('xray-log-fullscreen');
     if (!btn) return;
     if (_isFullscreen) {
-      btn.textContent = '🗗';
+      btn.innerHTML = iconHtml('fullscreen-exit');
       btn.title = 'Восстановить';
       btn.setAttribute('aria-label', 'Восстановить');
     } else {
-      btn.textContent = '⛶';
+      btn.innerHTML = iconHtml('fullscreen');
       btn.title = 'Полный экран';
       btn.setAttribute('aria-label', 'Полный экран');
     }
@@ -4103,7 +4104,7 @@ function updatePauseButton() {
 
   if (!_streaming) {
     btn.disabled = true;
-    btn.textContent = '⏸ Пауза';
+    btn.innerHTML = `${iconHtml('pause')}<span class="xk-action-label">Пауза</span>`;
     btn.title = 'Пауза доступна только в онлайн-режиме.';
     btn.dataset.state = 'off';
     return;
@@ -4113,11 +4114,11 @@ function updatePauseButton() {
 
   if (_paused) {
     const n = Math.max(0, parseInt(_pendingCount || 0, 10) || 0);
-    btn.textContent = n ? `▶ Продолжить (+${n})` : '▶ Продолжить';
+    btn.innerHTML = `${iconHtml('play')}<span class="xk-action-label">${n ? `Продолжить (+${n})` : 'Продолжить'}</span>`;
     btn.title = 'Возобновить обновление экрана (накопленные строки будут показаны).';
     btn.dataset.state = 'on';
   } else {
-    btn.textContent = '⏸ Пауза';
+    btn.innerHTML = `${iconHtml('pause')}<span class="xk-action-label">Пауза</span>`;
     btn.title = 'Пауза: заморозить вывод (строки продолжают собираться).';
     btn.dataset.state = 'off';
   }

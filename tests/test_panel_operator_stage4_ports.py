@@ -24,7 +24,8 @@ def test_stage4_ports_preserve_runtime_hooks_in_compact_footers():
     view = template[template.index('id="view-xkeen"') : template.index('id="view-commands"')]
 
     assert view.count('class="xkeen-mini-footer"') == 4
-    assert view.count('>Сохранить</button>') == 4
+    assert view.count("op_icon('save')") == 4
+    assert view.count('class="xk-action-label">Сохранить</span>') == 4
     assert view.count('role="status" aria-live="polite"') == 4
     assert view.count('xkeen-mini-editor--port-list') == 2
     assert view.count('xkeen-mini-editor--ip-list') == 1

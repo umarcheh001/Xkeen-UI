@@ -1,4 +1,5 @@
 import { getFileManagerNamespace } from '../file_manager_namespace.js';
+import { iconHtml } from '../../ui/operator_icons.js';
 
 (() => {
   'use strict';
@@ -165,7 +166,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       addBtn = document.createElement('button');
       addBtn.type = 'button';
       addBtn.className = 'fm-bookmarks-btn fm-bookmarks-add';
-      addBtn.textContent = '⭐';
+      addBtn.innerHTML = iconHtml('add-node');
       addBtn.title = 'Добавить текущую папку в избранное';
       addBtn.setAttribute('aria-label', 'Добавить в избранное');
       addBtn.addEventListener('click', (e) => {
@@ -186,7 +187,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       editBtn = document.createElement('button');
       editBtn.type = 'button';
       editBtn.className = 'fm-bookmarks-btn fm-bookmarks-edit';
-      editBtn.textContent = '⚙';
+      editBtn.innerHTML = iconHtml('settings');
       editBtn.title = 'Управление избранным';
       editBtn.setAttribute('aria-label', 'Управление избранным');
       editBtn.addEventListener('click', (e) => {
@@ -381,7 +382,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
         const up = document.createElement('button');
         up.type = 'button';
         up.className = 'btn-secondary fm-bm-mini';
-        up.textContent = '↑';
+        up.innerHTML = iconHtml('move-up');
         up.title = 'Вверх';
         up.disabled = idx === 0;
         up.addEventListener('click', (e) => {
@@ -397,7 +398,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
         const down = document.createElement('button');
         down.type = 'button';
         down.className = 'btn-secondary fm-bm-mini';
-        down.textContent = '↓';
+        down.innerHTML = iconHtml('move-down');
         down.title = 'Вниз';
         down.disabled = idx >= rows.length - 1;
         down.addEventListener('click', (e) => {
@@ -413,7 +414,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
         const del = document.createElement('button');
         del.type = 'button';
         del.className = 'btn-secondary fm-bm-mini';
-        del.textContent = '✖';
+        del.innerHTML = iconHtml('trash');
         del.title = 'Удалить';
         del.addEventListener('click', (e) => {
           e.preventDefault();

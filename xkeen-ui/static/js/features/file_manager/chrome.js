@@ -1,4 +1,5 @@
 import { getFileManagerNamespace } from '../file_manager_namespace.js';
+import { iconHtml } from '../../ui/operator_icons.js';
 
 (() => {
   'use strict';
@@ -59,11 +60,11 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
     const btn = el('fm-fullscreen-btn');
     if (!btn) return;
     if (isFs) {
-      btn.textContent = '🗗';
+      btn.innerHTML = iconHtml('fullscreen-exit');
       btn.title = 'Восстановить';
       btn.setAttribute('aria-label', 'Восстановить');
     } else {
-      btn.textContent = '⛶';
+      btn.innerHTML = iconHtml('fullscreen');
       btn.title = 'Полный экран';
       btn.setAttribute('aria-label', 'Полный экран');
     }

@@ -6581,6 +6581,40 @@ body.panel-page .footer {
   font-size: calc(10px * var(--xk-font-scale, 1));
 }
 
+/* I3 top-level icon controls: all glyphs use the shared local sprite; text and
+ * tooltips remain the accessible source of meaning. */
+body.panel-page :is(.fm-toolbar, .fm-footer-actions, .fm-context-item, .log-header-actions, .dt-log-controls, .xk-header-btn) > .xk-action-icon,
+body.panel-page :is(.fm-toolbar, .fm-footer-actions, .fm-context-item, .log-header-actions, .dt-log-controls, .xk-header-btn) .xk-action-icon {
+  flex: 0 0 auto;
+}
+
+body.panel-page .fm-context-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: currentColor;
+}
+
+body.panel-page .fm-context-item {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+
+body.panel-page :is(.fm-panel-error-retry, .fm-empty-action, .fm-header-actions > button, .fm-footer-actions > button, #xray-log-pause) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+body.panel-page :is(.fm-panel-error-retry, .fm-empty-action) .xk-action-icon {
+  width: 14px;
+  height: 14px;
+}
+
 /* ==========================================================================
  * 8. RESPONSIVE
  * ========================================================================== */

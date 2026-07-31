@@ -1,4 +1,5 @@
 import { getFileManagerNamespace } from '../file_manager_namespace.js';
+import { iconHtml } from '../../ui/operator_icons.js';
 
 (() => {
   'use strict';
@@ -425,7 +426,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       fsBtn.type = 'button';
       fsBtn.className = 'btn-secondary';
       fsBtn.id = 'fm-fullscreen-btn';
-      fsBtn.textContent = '⛶';
+      fsBtn.innerHTML = iconHtml('fullscreen');
       fsBtn.title = 'Полный экран';
       fsBtn.setAttribute('aria-label', 'Полный экран');
       fsBtn.addEventListener('click', (e) => {
@@ -482,7 +483,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       b.className = 'btn-secondary';
       b.id = 'fm-terminal-here-btn';
       b.dataset.fmLiteHide = '1';
-      b.textContent = '⌨ Terminal here';
+      b.innerHTML = `${iconHtml('terminal')}<span class="xk-action-label">Terminal here</span>`;
       b.title = 'Открыть терминал в текущей папке (PTY)';
       b.setAttribute('aria-label', 'Открыть терминал в текущей папке');
       b.addEventListener('click', async (e) => {
@@ -515,7 +516,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       b.type = 'button';
       b.className = 'btn-secondary hidden';
       b.id = 'fm-clear-trash-active-btn';
-      b.textContent = '🧹 Очистить корзину';
+      b.innerHTML = `${iconHtml('clear')}<span class="xk-action-label">Очистить корзину</span>`;
       b.title = 'Очистить корзину (активная панель)';
       b.setAttribute('aria-label', 'Очистить корзину');
       b.addEventListener('click', async (e) => {
@@ -541,7 +542,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       b.type = 'button';
       b.className = 'btn-secondary';
       b.id = 'fm-mkdir-btn';
-      b.textContent = '➕ Папка';
+      b.innerHTML = `${iconHtml('folder-add')}<span class="xk-action-label">Папка</span>`;
       b.title = 'Создать папку в активной панели';
       b.addEventListener('click', (e) => {
         try { e.preventDefault(); } catch (e2) {}
@@ -559,7 +560,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       b.type = 'button';
       b.className = 'btn-secondary';
       b.id = 'fm-touch-btn';
-      b.textContent = '➕ Файл';
+      b.innerHTML = `${iconHtml('file-add')}<span class="xk-action-label">Файл</span>`;
       b.title = 'Создать пустой файл в активной панели';
       b.addEventListener('click', (e) => {
         try { e.preventDefault(); } catch (e2) {}
@@ -578,14 +579,14 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
     upBtn.type = 'button';
     upBtn.className = 'btn-secondary';
     upBtn.id = 'fm-upload-btn';
-    upBtn.textContent = '⬆ Upload';
+    upBtn.innerHTML = `${iconHtml('upload')}<span class="xk-action-label">Upload</span>`;
     upBtn.title = 'Загрузить файлы в активную панель';
 
     const downBtn = document.createElement('button');
     downBtn.type = 'button';
     downBtn.className = 'btn-secondary';
     downBtn.id = 'fm-download-btn';
-    downBtn.textContent = '⬇ Download';
+    downBtn.innerHTML = `${iconHtml('download')}<span class="xk-action-label">Download</span>`;
     downBtn.title = 'Скачать выбранные файлы/папки (ZIP)';
 
     const fileInput = document.createElement('input');

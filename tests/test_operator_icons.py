@@ -17,6 +17,27 @@ OUTBOUNDS = ROOT / "xkeen-ui/static/js/features/outbounds.js"
 RULE_RENDER = ROOT / "xkeen-ui/static/js/features/routing_cards/rules/render.js"
 QUICK_BALANCER = ROOT / "xkeen-ui/static/js/features/routing_cards/rules/quick_balancer.js"
 FORCED_RULES = ROOT / "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js"
+FILE_MANAGER_WIRE = ROOT / "xkeen-ui/static/js/features/file_manager/wire.js"
+FILE_MANAGER_RENDER = ROOT / "xkeen-ui/static/js/features/file_manager/render.js"
+FILE_MANAGER_CONTEXT = ROOT / "xkeen-ui/static/js/features/file_manager/context_menu.js"
+FILE_MANAGER_CHROME = ROOT / "xkeen-ui/static/js/features/file_manager/chrome.js"
+FILE_MANAGER_BOOKMARKS = ROOT / "xkeen-ui/static/js/features/file_manager/bookmarks.js"
+XRAY_LOGS = ROOT / "xkeen-ui/static/js/features/xray_logs.js"
+RESTART_LOG = ROOT / "xkeen-ui/static/js/features/restart_log.js"
+THEME = ROOT / "xkeen-ui/static/js/ui/theme.js"
+FILE_MANAGER_ACTIONS = ROOT / "xkeen-ui/static/js/features/file_manager/actions.js"
+FILE_MANAGER_EDITOR = ROOT / "xkeen-ui/static/js/features/file_manager/editor.js"
+FILE_MANAGER_STORAGE = ROOT / "xkeen-ui/static/js/features/file_manager/storage.js"
+
+
+def header_markup() -> str:
+    template = TEMPLATE.read_text(encoding="utf-8")
+    return template[template.index('<header ') : template.index('<div id="view-routing"')]
+
+
+def top_level_markup() -> str:
+    template = TEMPLATE.read_text(encoding="utf-8")
+    return template[template.index('<div id="view-xkeen"') : template.index('<!-- Xray log: context modal -->')]
 
 
 def routing_markup() -> str:
@@ -141,3 +162,67 @@ def test_mihomo_routing_and_related_forms_use_operator_sprite_contract():
 
     assert "\u00d7</button>" not in related_forms
     assert "\u00d7</button>" not in generator
+
+
+def test_other_top_level_views_share_semantic_operator_icon_dictionary():
+    markup = top_level_markup()
+    sources = {
+        "file_wire": FILE_MANAGER_WIRE.read_text(encoding="utf-8"),
+        "file_render": FILE_MANAGER_RENDER.read_text(encoding="utf-8"),
+        "file_context": FILE_MANAGER_CONTEXT.read_text(encoding="utf-8"),
+        "file_chrome": FILE_MANAGER_CHROME.read_text(encoding="utf-8"),
+        "file_bookmarks": FILE_MANAGER_BOOKMARKS.read_text(encoding="utf-8"),
+        "logs": XRAY_LOGS.read_text(encoding="utf-8"),
+        "restart_log": RESTART_LOG.read_text(encoding="utf-8"),
+        "theme": THEME.read_text(encoding="utf-8"),
+        "file_actions": FILE_MANAGER_ACTIONS.read_text(encoding="utf-8"),
+        "file_editor": FILE_MANAGER_EDITOR.read_text(encoding="utf-8"),
+        "file_storage": FILE_MANAGER_STORAGE.read_text(encoding="utf-8"),
+    }
+    header = header_markup()
+    assert "op_icon('sun', 'theme-toggle-icon')" in header
+    assert "op_icon('settings')" in header
+
+    for name in (
+        "storage", "list-details", "home", "move-up", "refresh", "close", "help",
+        "search", "play", "stop", "clear", "trash", "duplicate", "devices",
+        "fullscreen", "pause", "more",
+    ):
+        assert f"op_icon('{name}')" in markup
+
+    for fragment in (
+        "iconHtml('fullscreen')", "iconHtml('fullscreen-exit')", "iconHtml('terminal')",
+        "iconHtml('folder-add')", "iconHtml('file-add')", "iconHtml('upload')",
+        "iconHtml('download')", "iconHtml('refresh')", "ACTION_ICONS",
+        "iconHtml('pause')", "iconHtml('play')", "iconHtml(icon, 'theme-toggle-icon')",
+    ):
+        assert any(fragment in source for source in sources.values()), fragment
+
+    assert "setIcon" not in sources["file_wire"]
+    assert "const ACTION_ICONS" in sources["file_context"]
+
+
+def test_top_level_action_controls_have_no_emoji_or_feature_local_svg():
+    markup = top_level_markup()
+    header = header_markup()
+    emoji = re.compile(r"[\U0001F300-\U0001FAFF]")
+    for scope in (header, markup):
+        for control in re.findall(r"<(?:button|summary)\b[^>]*>.*?</(?:button|summary)>", scope, flags=re.DOTALL):
+            assert not emoji.search(control), control
+            assert "<path" not in control and "<svg" not in control, control
+
+    action_sources = (
+        FILE_MANAGER_WIRE,
+        FILE_MANAGER_RENDER,
+        FILE_MANAGER_CONTEXT,
+        FILE_MANAGER_CHROME,
+        FILE_MANAGER_BOOKMARKS,
+        FILE_MANAGER_ACTIONS,
+        FILE_MANAGER_EDITOR,
+        FILE_MANAGER_STORAGE,
+        XRAY_LOGS,
+        RESTART_LOG,
+    )
+    for path in action_sources:
+        text = path.read_text(encoding="utf-8")
+        assert "<path" not in text and "<svg" not in text, path

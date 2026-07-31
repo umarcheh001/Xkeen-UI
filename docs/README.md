@@ -31,6 +31,8 @@
 - `panel-operator-stage4-logs.md` — закрытая задача «Logs» Этапа 4: единые filters, structured counters, detail disclosure и inline error states при доминирующей terminal surface.
 - `panel-operator-stage4-files.md` — закрытая задача «Files» Этапа 4: toolbar regions, доступные table rows, раздельные selection/focus states, явный drag/drop feedback и единые inline states.
 - `panel-operator-stage4-mihomo-forms.md` — закрытые задачи «Mihomo profiles/generator» и «Формы подписок» Этапа 4: общие table/form/action primitives, согласованные labels/hints/validation/units и progressive disclosure advanced-полей.
+- `panel-operator-icon-i2-mihomo.md` — закрытый I2 сквозного icon-потока: Routing Mihomo, generator и связанные формы используют общий локальный Tabler sprite.
+- `panel-operator-icon-i3-top-level-views.md` — закрытый I3 сквозного icon-потока: top-level views панели, header/global actions и файлы используют один semantic icon dictionary с static guard.
 
 ## Сгенерированные артефакты
 

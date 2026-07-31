@@ -1,4 +1,6 @@
 // Theme toggle (moved out of main.js)
+import { iconHtml } from './operator_icons.js';
+
 (() => {
   window.XKeen = window.XKeen || {};
   const XKeen = window.XKeen;
@@ -85,12 +87,12 @@
 
     const next = theme === 'light' ? 'light' : 'dark';
     const isLight = next === 'light';
-    const icon = isLight ? '☾' : '☀';
+    const icon = isLight ? 'moon' : 'sun';
     const label = isLight ? 'Тёмная тема' : 'Светлая тема';
 
     btn.dataset.theme = next;
     btn.innerHTML = `
-      <span class="theme-toggle-icon">${icon}</span>
+      ${iconHtml(icon, 'theme-toggle-icon')}
       <span class="theme-toggle-text">${label}</span>
     `;
     return true;

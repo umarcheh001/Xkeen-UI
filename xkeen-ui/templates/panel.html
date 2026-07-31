@@ -1,6 +1,6 @@
 <!doctype html>
 {% macro op_icon(name, class_name='') -%}
-<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260731c') }}#xk-{{ name }}"></use></svg>
+<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260731d') }}#xk-{{ name }}"></use></svg>
 {%- endmacro %}
 <html lang="ru">
 <head>
@@ -161,14 +161,14 @@
                 id="theme-toggle-btn"
                 class="theme-toggle-btn theme-toggle-header xk-header-btn xk-header-btn-theme"
                 aria-label="Переключить тему"
-              ><span class="theme-toggle-icon" aria-hidden="true">☀</span><span class="theme-toggle-text">Светлая тема</span></button>
+              >{{ op_icon('sun', 'theme-toggle-icon') }}<span class="theme-toggle-text">Светлая тема</span></button>
 
               <button
                 type="button"
                 id="ui-settings-open-btn"
                 class="service-core-text xk-header-btn xk-header-btn-ui"
                 title="UI settings"
-              >⚙ UI</button>
+              >{{ op_icon('settings') }}<span class="xk-action-label">UI</span></button>
 
               <a
                 href="{{ url_for('devtools_page') }}"
@@ -921,9 +921,9 @@
             <div class="log-header-actions">
               <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="all" aria-pressed="true">Все</button>
               <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="errors" aria-pressed="false">Ошибки</button>
-              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="refresh">Обновить</button>
-              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="clear">Очистить</button>
-              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="copy">Копировать</button>
+              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="refresh">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
+              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="clear">{{ op_icon('clear') }}<span class="xk-action-label">Очистить</span></button>
+              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="copy">{{ op_icon('duplicate') }}<span class="xk-action-label">Копировать</span></button>
             </div>
           </div>
           <div class="restart-log-summary" data-xk-restart-log-summary="1" hidden></div>
@@ -1191,9 +1191,9 @@
       <div class="log-header-actions">
         <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="all" aria-pressed="true">Все</button>
         <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="errors" aria-pressed="false">Ошибки</button>
-        <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="refresh">Обновить</button>
-        <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="clear">Очистить</button>
-        <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="copy">Копировать</button>
+        <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="refresh">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
+        <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="clear">{{ op_icon('clear') }}<span class="xk-action-label">Очистить</span></button>
+        <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="copy">{{ op_icon('duplicate') }}<span class="xk-action-label">Копировать</span></button>
       </div>
     </div>
     <div class="restart-log-summary" data-xk-restart-log-summary="1" hidden></div>
@@ -1226,7 +1226,7 @@
               <div class="xkeen-mini-footer">
                 <div id="port-proxying-status" class="status" role="status" aria-live="polite"></div>
                 <div class="actions">
-                  <button id="port-proxying-save-btn" aria-label="Сохранить port_proxying.lst" data-tooltip="Сохранить список port_proxying.lst.">Сохранить</button>
+                  <button id="port-proxying-save-btn" aria-label="Сохранить port_proxying.lst" data-tooltip="Сохранить список port_proxying.lst.">{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
                 </div>
               </div>
             </div>
@@ -1248,7 +1248,7 @@
               <div class="xkeen-mini-footer">
                 <div id="port-exclude-status" class="status" role="status" aria-live="polite"></div>
                 <div class="actions">
-                  <button id="port-exclude-save-btn" aria-label="Сохранить port_exclude.lst" data-tooltip="Сохранить список port_exclude.lst.">Сохранить</button>
+                  <button id="port-exclude-save-btn" aria-label="Сохранить port_exclude.lst" data-tooltip="Сохранить список port_exclude.lst.">{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
                 </div>
               </div>
             </div>
@@ -1268,7 +1268,7 @@
               <div class="xkeen-mini-footer">
                 <div id="ip-exclude-status" class="status" role="status" aria-live="polite"></div>
                 <div class="actions">
-                  <button id="ip-exclude-save-btn" aria-label="Сохранить ip_exclude.lst" data-tooltip="Сохранить список ip_exclude.lst.">Сохранить</button>
+                  <button id="ip-exclude-save-btn" aria-label="Сохранить ip_exclude.lst" data-tooltip="Сохранить список ip_exclude.lst.">{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
                 </div>
               </div>
             </div>
@@ -1290,7 +1290,7 @@
               <div class="xkeen-mini-footer">
                 <div id="xkeen-config-status" class="status" role="status" aria-live="polite"></div>
                 <div class="actions">
-                  <button id="xkeen-config-save-btn" aria-label="Сохранить xkeen.json" data-tooltip="Сохранить файл xkeen.json.">Сохранить</button>
+                  <button id="xkeen-config-save-btn" aria-label="Сохранить xkeen.json" data-tooltip="Сохранить файл xkeen.json.">{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
                 </div>
               </div>
             </div>
@@ -1305,9 +1305,9 @@
             <div class="log-header-actions">
               <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="all" aria-pressed="true">Все</button>
               <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="errors" aria-pressed="false">Ошибки</button>
-              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="refresh">Обновить</button>
-              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="clear">Очистить</button>
-              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="copy">Копировать</button>
+              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="refresh">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
+              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="clear">{{ op_icon('clear') }}<span class="xk-action-label">Очистить</span></button>
+              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="copy">{{ op_icon('duplicate') }}<span class="xk-action-label">Копировать</span></button>
             </div>
           </div>
           <div class="restart-log-summary" data-xk-restart-log-summary="1" hidden></div>
@@ -1325,8 +1325,8 @@
           {% set __xk_commands_is_mips = is_mips %}
           {% set is_mips = not terminal_supports_pty %}
           <h2>Команды</h2>
-          <button type="button" class="btn-secondary commands-title-action" id="terminal-open-shell-btn" {% if not is_mips %}style="display:none;"{% endif %} data-tooltip="Открыть терминал (обычный режим).">Открыть терминал</button>
-          <button type="button" class="btn-secondary btn-interactive-shell commands-title-action" id="terminal-open-pty-btn" {% if is_mips %}style="display:none;"{% endif %} title="Интерактивная оболочка (PTY)" data-tooltip="Открыть интерактивную оболочку (PTY).">Interactive Shell</button>
+          <button type="button" class="btn-secondary commands-title-action" id="terminal-open-shell-btn" {% if not is_mips %}style="display:none;"{% endif %} data-tooltip="Открыть терминал (обычный режим).">{{ op_icon('terminal') }}<span class="xk-action-label">Открыть терминал</span></button>
+          <button type="button" class="btn-secondary btn-interactive-shell commands-title-action" id="terminal-open-pty-btn" {% if is_mips %}style="display:none;"{% endif %} title="Интерактивная оболочка (PTY)" data-tooltip="Открыть интерактивную оболочку (PTY).">{{ op_icon('terminal') }}<span class="xk-action-label">Interactive Shell</span></button>
         </div>
       </div>
     </div>
@@ -1355,7 +1355,7 @@
       </div>
       {% endif %}
 
-      <button type="button" class="btn-secondary btn-mini" id="cores-check-btn" title="Проверить обновления (с кэшем)">Проверить обновления</button>
+      <button type="button" class="btn-secondary btn-mini" id="cores-check-btn" title="Проверить обновления (с кэшем)">{{ op_icon('refresh') }}<span class="xk-action-label">Проверить обновления</span></button>
       <span class="cores-checked-at" id="cores-checked-at"></span>
     </div>
   </div>
@@ -1516,9 +1516,9 @@
         <div class="log-header-actions">
           <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="all" aria-pressed="true">Все</button>
           <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="errors" aria-pressed="false">Ошибки</button>
-          <button type="button" class="btn-secondary log-btn" id="restart-log-refresh-btn" data-xk-restart-log-action="refresh">Обновить</button>
-          <button type="button" class="btn-secondary log-btn" id="restart-log-clear-btn" data-xk-restart-log-action="clear">Очистить</button>
-          <button type="button" class="btn-secondary log-btn" id="restart-log-copy-btn" data-xk-restart-log-action="copy">Копировать</button>
+          <button type="button" class="btn-secondary log-btn" id="restart-log-refresh-btn" data-xk-restart-log-action="refresh">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
+          <button type="button" class="btn-secondary log-btn" id="restart-log-clear-btn" data-xk-restart-log-action="clear">{{ op_icon('clear') }}<span class="xk-action-label">Очистить</span></button>
+          <button type="button" class="btn-secondary log-btn" id="restart-log-copy-btn" data-xk-restart-log-action="copy">{{ op_icon('duplicate') }}<span class="xk-action-label">Копировать</span></button>
         </div>
       </div>
       <div class="restart-log-summary" data-xk-restart-log-summary="1" hidden></div>
@@ -1531,8 +1531,8 @@
     <div class="fm-header">
       <h2 id="fm-title">Файловый менеджер</h2>
       <div class="fm-header-actions fm-toolbar" role="toolbar" aria-label="Действия файлового менеджера">
-        <button type="button" class="btn-secondary" id="fm-volumes-btn" style="display:none;" title="USB-диски/разделы: список и Mount/Unmount">💽 Диски</button>
-        <button type="button" class="btn-secondary" id="fm-ops-btn" data-fm-lite-hide="1" title="Операции с файлами (копировать, переместить, удалить, архивы и т.д.)">🧾 Операции</button>
+        <button type="button" class="btn-secondary" id="fm-volumes-btn" style="display:none;" title="USB-диски/разделы: список и Mount/Unmount">{{ op_icon('storage') }}<span class="xk-action-label">Диски</span></button>
+        <button type="button" class="btn-secondary" id="fm-ops-btn" data-fm-lite-hide="1" title="Операции с файлами (копировать, переместить, удалить, архивы и т.д.)">{{ op_icon('list-details') }}<span class="xk-action-label">Операции</span></button>
       </div>
     </div>
 
@@ -1560,12 +1560,12 @@
           <button type="button" class="btn-secondary fm-connect-btn" data-fm-lite-hide="1" title="Подключиться к удалённому хосту (SFTP)">Connect…</button>
           <button type="button" class="btn-secondary fm-disconnect-btn" data-fm-lite-hide="1" title="Отключиться от удалённого хоста" style="display:none;">Disconnect</button>
           <input class="fm-path-input" spellcheck="false" placeholder="/opt/var" title="Путь текущей папки (Enter — перейти)" />
-          <button type="button" class="btn-secondary fm-root-btn" title="В корень (FTP) / домой (SFTP)" aria-label="В корень или домой">⌂</button>
-          <button type="button" class="btn-secondary fm-up-btn" title="Вверх" aria-label="Вверх">↑</button>
-          <button type="button" class="btn-secondary fm-refresh-btn" title="Обновить">⟳</button>
+          <button type="button" class="btn-secondary fm-root-btn" title="В корень (FTP) / домой (SFTP)" aria-label="В корень или домой">{{ op_icon('home') }}</button>
+          <button type="button" class="btn-secondary fm-up-btn" title="Вверх" aria-label="Вверх">{{ op_icon('move-up') }}</button>
+          <button type="button" class="btn-secondary fm-refresh-btn" title="Обновить">{{ op_icon('refresh') }}</button>
           <div class="fm-filter-wrap">
             <input class="terminal-input fm-filter-input" type="text" placeholder="Фильтр…" title="Фильтр по имени в текущей папке" autocomplete="off" spellcheck="false" />
-            <button type="button" class="btn-secondary fm-filter-clear-btn hidden" title="Очистить фильтр">✖</button>
+            <button type="button" class="btn-secondary fm-filter-clear-btn hidden" title="Очистить фильтр">{{ op_icon('close') }}</button>
           </div>
         </div>
         <div class="fm-list" tabindex="0" role="grid" aria-multiselectable="true" aria-label="Файлы левой панели" aria-busy="true"></div>
@@ -1580,12 +1580,12 @@
           <button type="button" class="btn-secondary fm-connect-btn" data-fm-lite-hide="1" title="Подключиться к удалённому хосту (SFTP)">Connect…</button>
           <button type="button" class="btn-secondary fm-disconnect-btn" data-fm-lite-hide="1" title="Отключиться от удалённого хоста" style="display:none;">Disconnect</button>
           <input class="fm-path-input" spellcheck="false" placeholder="/opt/var" title="Путь текущей папки (Enter — перейти)" />
-          <button type="button" class="btn-secondary fm-root-btn" title="В корень (FTP) / домой (SFTP)" aria-label="В корень или домой">⌂</button>
-          <button type="button" class="btn-secondary fm-up-btn" title="Вверх" aria-label="Вверх">↑</button>
-          <button type="button" class="btn-secondary fm-refresh-btn" title="Обновить">⟳</button>
+          <button type="button" class="btn-secondary fm-root-btn" title="В корень (FTP) / домой (SFTP)" aria-label="В корень или домой">{{ op_icon('home') }}</button>
+          <button type="button" class="btn-secondary fm-up-btn" title="Вверх" aria-label="Вверх">{{ op_icon('move-up') }}</button>
+          <button type="button" class="btn-secondary fm-refresh-btn" title="Обновить">{{ op_icon('refresh') }}</button>
           <div class="fm-filter-wrap">
             <input class="terminal-input fm-filter-input" type="text" placeholder="Фильтр…" title="Фильтр по имени в текущей папке" autocomplete="off" spellcheck="false" />
-            <button type="button" class="btn-secondary fm-filter-clear-btn hidden" title="Очистить фильтр">✖</button>
+            <button type="button" class="btn-secondary fm-filter-clear-btn hidden" title="Очистить фильтр">{{ op_icon('close') }}</button>
           </div>
         </div>
         <div class="fm-list" tabindex="0" role="grid" aria-multiselectable="true" aria-label="Файлы правой панели" aria-busy="true"></div>
@@ -1612,7 +1612,7 @@
     </div>
 
     <div class="fm-footer">
-      <button type="button" class="btn-secondary fm-help-btn" id="fm-help-btn" title="Справка (F1)" aria-label="Справка">❓ Справка</button>
+      <button type="button" class="btn-secondary fm-help-btn" id="fm-help-btn" title="Справка (F1)" aria-label="Справка">{{ op_icon('help') }}<span class="xk-action-label">Справка</span></button>
       <div class="fm-footer-actions fm-toolbar" role="toolbar" aria-label="Операции с файлами"></div>
     </div>
   </section>
@@ -1638,14 +1638,14 @@
               <option value="warning" selected>warning</option>
               <option value="error">error</option>
             </select>
-            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-view-btn" title="Просмотреть логи" aria-label="Просмотреть логи">🔍</button>
-            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-enable-btn" title="Включить логи" aria-label="Включить логи">▶</button>
-            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-disable-btn" title="Остановить логи" aria-label="Остановить логи">⏹</button>
-            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-clear-screen-btn" title="Очистить журнал" aria-label="Очистить журнал">🧹</button>
-            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-clear-files-btn" title="Очистить логфайлы" aria-label="Очистить логфайлы">🗑</button>
-            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-copy-btn" title="Скопировать" aria-label="Скопировать">📋</button>
-            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-devices-btn" title="Имена устройств" aria-label="Имена устройств">👥</button>
-            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-fullscreen" title="Полный экран" aria-label="Полный экран">⛶</button>
+            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-view-btn" title="Просмотреть логи" aria-label="Просмотреть логи">{{ op_icon('search') }}</button>
+            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-enable-btn" title="Включить логи" aria-label="Включить логи">{{ op_icon('play') }}</button>
+            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-disable-btn" title="Остановить логи" aria-label="Остановить логи">{{ op_icon('stop') }}</button>
+            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-clear-screen-btn" title="Очистить журнал" aria-label="Очистить журнал">{{ op_icon('clear') }}</button>
+            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-clear-files-btn" title="Очистить логфайлы" aria-label="Очистить логфайлы">{{ op_icon('trash') }}</button>
+            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-copy-btn" title="Скопировать" aria-label="Скопировать">{{ op_icon('duplicate') }}</button>
+            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-devices-btn" title="Имена устройств" aria-label="Имена устройств">{{ op_icon('devices') }}</button>
+            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-fullscreen" title="Полный экран" aria-label="Полный экран">{{ op_icon('fullscreen') }}</button>
           </div>
         </div>
         <div class="log-filter-row xk-log-filter-bar" role="search" aria-label="Фильтр логов Xray">
@@ -1689,12 +1689,12 @@
             <span class="dt-switch-label">В конец</span>
           </label>
 
-          <button type="button" id="xray-log-pause" class="btn-secondary dt-log-btn" title="Пауза: заморозить вывод (строки продолжают собираться)." aria-label="Пауза">⏸ Пауза</button>
+          <button type="button" id="xray-log-pause" class="btn-secondary dt-log-btn" title="Пауза: заморозить вывод (строки продолжают собираться)." aria-label="Пауза">{{ op_icon('pause') }}<span class="xk-action-label">Пауза</span></button>
 
           <button type="button" id="xray-log-scroll-bottom" class="btn-secondary dt-log-btn xray-log-scroll-btn" title="Прокрутить к последним показанным строкам." aria-label="Прокрутить к последним строкам лога" hidden>К последним</button>
 
           <details class="dt-log-menu" id="xray-log-more">
-            <summary class="btn-secondary dt-log-btn" title="Дополнительно" aria-label="Дополнительно">⋯</summary>
+            <summary class="btn-secondary dt-log-btn" title="Дополнительно" aria-label="Дополнительно">{{ op_icon('more') }}</summary>
             <div class="dt-log-menu-panel" role="menu" aria-label="Дополнительные действия">
   <div class="dt-log-menu-row" aria-label="Окно логов">
     <span class="small" style="opacity:0.85;">Строк</span>
@@ -1724,9 +1724,9 @@
           <div class="log-header-actions">
             <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="all" aria-pressed="true">Все</button>
             <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="errors" aria-pressed="false">Ошибки</button>
-            <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="refresh">Обновить</button>
-            <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="clear">Очистить</button>
-            <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="copy">Копировать</button>
+            <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="refresh">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
+            <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="clear">{{ op_icon('clear') }}<span class="xk-action-label">Очистить</span></button>
+            <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="copy">{{ op_icon('duplicate') }}<span class="xk-action-label">Копировать</span></button>
           </div>
         </div>
         <div class="restart-log-summary" data-xk-restart-log-summary="1" hidden></div>
@@ -1760,7 +1760,7 @@
         </div>
         <div class="modal-body xray-devices-body">
           <div class="xray-devices-toolbar">
-            <button type="button" class="btn-secondary" id="xray-devices-refresh-btn">⟳ Обновить</button>
+            <button type="button" class="btn-secondary" id="xray-devices-refresh-btn">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
             <span id="xray-devices-summary" class="small xray-devices-summary"></span>
           </div>
           <div class="xray-devices-form" aria-label="Ручное имя устройства">
@@ -4447,8 +4447,8 @@ https://..."></textarea>
           </label>
         </div>
         <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
-          <button type="button" class="btn-secondary" id="fm-ops-clear-btn">🧹 Очистить историю</button>
-          <button type="button" class="btn-secondary" id="fm-ops-refresh-btn">⟳ Обновить</button>
+          <button type="button" class="btn-secondary" id="fm-ops-clear-btn">{{ op_icon('clear') }}<span class="xk-action-label">Очистить историю</span></button>
+          <button type="button" class="btn-secondary" id="fm-ops-refresh-btn">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
         </div>
       </div>
       <div id="fm-ops-summary" style="font-size:12px; opacity:.85; margin:6px 0 10px 0;"></div>
@@ -4467,8 +4467,8 @@ https://..."></textarea>
     <div class="modal-body">
       <div style="display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:10px;">
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <button type="button" class="btn-secondary" id="fm-volumes-refresh-btn">⟳ Обновить</button>
-          <span id="fm-volumes-spinner" class="hidden" style="opacity:.85;">⏳</span>
+          <button type="button" class="btn-secondary" id="fm-volumes-refresh-btn">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
+          <span id="fm-volumes-spinner" class="hidden" style="opacity:.85;">{{ op_icon('loading') }}</span>
         </div>
         <div id="fm-volumes-summary" style="font-size:12px; opacity:.85;"></div>
       </div>

@@ -1,4 +1,5 @@
 import { getFileManagerNamespace } from '../file_manager_namespace.js';
+import { iconHtml } from '../../ui/operator_icons.js';
 import {
   attachXkeenEditorToolbar,
   getXkeenEditorToolbarDefaultItems,
@@ -676,7 +677,7 @@ import {
       try { btn.dataset.actionId = 'fs_any'; } catch (e) {}
       try { btn.dataset.tip = 'Фулскрин (Esc)'; } catch (e) {}
       const toolbarIcons = getXkeenEditorToolbarIcons();
-      btn.innerHTML = toolbarIcons && toolbarIcons.fullscreen ? toolbarIcons.fullscreen : '⛶';
+      btn.innerHTML = toolbarIcons && toolbarIcons.fullscreen ? toolbarIcons.fullscreen : iconHtml('fullscreen');
       btn.addEventListener('click', () => {
         try { toggleEditorFullscreen(STATE.cm, els()); } catch (e) {}
       });

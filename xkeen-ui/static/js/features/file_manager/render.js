@@ -1,4 +1,5 @@
 import { getFileManagerNamespace } from '../file_manager_namespace.js';
+import { iconHtml } from '../../ui/operator_icons.js';
 
 (() => {
   'use strict';
@@ -198,9 +199,9 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
         show(pd.rootBtn);
         const rp = String(p.rproto || '').toLowerCase();
         const isFtp = (rp === 'ftp' || rp === 'ftps');
-        const label = isFtp ? '/' : '⌂';
+        const label = isFtp ? '/' : iconHtml('home');
         const title = isFtp ? 'В корень (/)' : 'В домашнюю (~)';
-        try { pd.rootBtn.textContent = label; } catch (e) {}
+        try { pd.rootBtn.innerHTML = label; } catch (e) {}
         try { pd.rootBtn.title = title; } catch (e) {}
         try { pd.rootBtn.setAttribute('aria-label', title); } catch (e) {}
       } else {
@@ -251,7 +252,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
         '<div class="fm-panel-error-title">Ошибка</div>',
         `<div class="fm-panel-error-msg">${msg}</div>`,
         hint ? `<div class="fm-panel-error-hint">${hint}</div>` : '',
-        retryable ? '<button type="button" class="btn-secondary fm-panel-error-retry">Повторить</button>' : '',
+        retryable ? `<button type="button" class="btn-secondary fm-panel-error-retry">${iconHtml('refresh')}<span class="xk-action-label">Повторить</span></button>` : '',
       ].join('');
 
       list.appendChild(box);
@@ -379,6 +380,8 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
         ? '<div class="fm-cell fm-from"><span class="fm-from-text"></span></div>'
         : '';
       const isDiskLabel = tmpMntRoot && type === 'link' && linkDir;
+      // Content-type marks are documented I3 exceptions: they distinguish
+      // folders, devices, links and files inside the data grid, not actions.
       const ico = (type === 'dir') ? '📁'
         : (type === 'link'
           ? (linkDir ? (isDiskLabel ? '💽' : '📁') : '🔗')
@@ -445,7 +448,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
         const clear = document.createElement('button');
         clear.type = 'button';
         clear.className = 'btn-secondary fm-empty-action';
-        clear.textContent = 'Сбросить фильтр';
+        clear.innerHTML = `${iconHtml('close')}<span class="xk-action-label">Сбросить фильтр</span>`;
         clear.addEventListener('click', () => {
           p.filter = '';
           try { if (pd.filterInput) pd.filterInput.value = ''; } catch (e) {}

@@ -1,5 +1,6 @@
 import { getXrayLogLineClass } from './xray_log_line_class.js';
 import { ansiToXkeenHtml, escapeXkeenHtml, getXkeenCommandJobApi, getXkeenUiApi, syncXkeenBodyScrollLock, toastXkeen } from './xkeen_runtime.js';
+import { iconHtml } from '../ui/operator_icons.js';
 
 let restartLogModuleApi = null;
 
@@ -1783,7 +1784,7 @@ let restartLogModuleApi = null;
       btn.setAttribute('data-xk-restart-log-action', 'fullscreen');
       btn.setAttribute('title', 'Полный экран');
       btn.setAttribute('aria-label', 'Полный экран');
-      btn.textContent = '⛶';
+      btn.innerHTML = iconHtml('fullscreen');
       insertRestartLogButton(actions, btn, null);
     } catch (error) {}
   }
@@ -1808,7 +1809,7 @@ let restartLogModuleApi = null;
       document.querySelectorAll('[data-xk-restart-log-action="fullscreen"]').forEach((btn) => {
         const card = getRestartLogCard(btn);
         const active = !!(card && card.classList && card.classList.contains('is-fullscreen'));
-        btn.textContent = active ? '🗗' : '⛶';
+        btn.innerHTML = iconHtml(active ? 'fullscreen-exit' : 'fullscreen');
         btn.setAttribute('title', active ? 'Восстановить' : 'Полный экран');
         btn.setAttribute('aria-label', active ? 'Восстановить' : 'Полный экран');
       });
