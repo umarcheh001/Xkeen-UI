@@ -1,0 +1,241 @@
+/*
+ * XKeen authentication — Operator Console entry surface
+ *
+ * This stylesheet is deliberately isolated from the panel.  Login and setup
+ * are top-level routes, so they must not depend on the legacy blue-glass
+ * defaults in styles.css or on body.panel-page.
+ */
+
+body.auth-page {
+  --op-bg: #0d0f13;
+  --op-surface: #14171c;
+  --op-surface-2: #1a1e25;
+  --op-border: #2a2f38;
+  --op-border-strong: #3a414d;
+  --op-text: #e8eaf0;
+  --op-text-strong: #f7f7f9;
+  --op-muted: #969da9;
+  --op-accent: #7477e8;
+  --op-accent-hover: #8588f2;
+  --op-accent-soft: rgba(116, 119, 232, 0.14);
+  --op-accent-border: rgba(133, 136, 242, 0.42);
+  --op-danger: #df727b;
+  --op-danger-soft: rgba(223, 114, 123, 0.12);
+  --op-info: #72a6d9;
+  --op-info-soft: rgba(114, 166, 217, 0.12);
+  --op-radius: 9px;
+  --op-control-radius: 6px;
+  --op-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
+  color-scheme: dark;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0;
+  background: var(--op-bg) !important;
+  color: var(--op-text);
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: calc(14px * var(--xk-font-scale, 1));
+  line-height: 1.45;
+}
+
+body.auth-page .auth-wrap {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 24px;
+}
+
+body.auth-page .auth-card {
+  box-sizing: border-box;
+  width: min(100%, 420px);
+  margin: 0;
+  padding: 28px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius);
+  background: var(--op-surface) !important;
+  box-shadow: var(--op-shadow);
+}
+
+body.auth-page .auth-card.auth-card--setup {
+  width: min(100%, 520px);
+}
+
+body.auth-page .auth-title {
+  margin: 0 0 4px;
+  color: var(--op-text-strong);
+  font-size: calc(22px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+body.auth-page .auth-sub {
+  margin: 0 0 22px;
+  color: var(--op-muted) !important;
+  font-size: calc(14px * var(--xk-font-scale, 1));
+  line-height: 1.45;
+}
+
+body.auth-page .auth-row {
+  display: grid;
+  gap: 7px;
+  margin: 0 0 16px;
+}
+
+body.auth-page .auth-row label {
+  color: var(--op-text);
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  font-weight: 550;
+}
+
+body.auth-page .auth-row input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-control-radius);
+  outline: none;
+  background: var(--op-surface-2);
+  color: var(--op-text-strong);
+  font: inherit;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+body.auth-page .auth-row input:hover {
+  border-color: var(--op-border-strong);
+}
+
+body.auth-page .auth-row input:focus-visible {
+  border-color: var(--op-accent);
+  box-shadow: 0 0 0 3px var(--op-accent-soft);
+}
+
+body.auth-page .auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+body.auth-page .auth-btn {
+  min-height: 36px;
+  padding: 8px 14px;
+  border: 1px solid var(--op-accent);
+  border-radius: var(--op-control-radius);
+  background: var(--op-accent) !important;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  line-height: 1;
+  transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+body.auth-page .auth-btn:hover {
+  border-color: var(--op-accent-hover);
+  background: var(--op-accent-hover) !important;
+  filter: none;
+}
+
+body.auth-page .auth-btn:focus-visible,
+body.auth-page .auth-actions a:focus-visible {
+  outline: 2px solid var(--op-accent);
+  outline-offset: 2px;
+}
+
+body.auth-page .auth-actions a {
+  color: var(--op-accent-hover);
+  font-size: calc(13px * var(--xk-font-scale, 1));
+  text-underline-offset: 3px;
+}
+
+body.auth-page .auth-actions a:hover {
+  color: var(--op-text-strong);
+}
+
+body.auth-page .auth-error,
+body.auth-page .auth-hint {
+  margin-top: 18px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--op-control-radius);
+  font-size: calc(13px * var(--xk-font-scale, 1));
+  line-height: 1.45;
+}
+
+body.auth-page .auth-error {
+  border-color: rgba(223, 114, 123, 0.42);
+  background: var(--op-danger-soft);
+  color: #f0b7bc;
+}
+
+body.auth-page .auth-hint {
+  border-color: rgba(114, 166, 217, 0.35);
+  background: var(--op-info-soft);
+  color: var(--op-text);
+}
+
+body.auth-page .auth-hint strong {
+  color: var(--op-text-strong);
+}
+
+body.auth-page .auth-hint ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+html[data-theme="light"] body.auth-page {
+  --op-bg: #f1f2f5;
+  --op-surface: #ffffff;
+  --op-surface-2: #f7f7f9;
+  --op-border: #d8dbe2;
+  --op-border-strong: #c3c8d2;
+  --op-text: #2c3038;
+  --op-text-strong: #171a20;
+  --op-muted: #666d79;
+  --op-accent: #5b5fc7;
+  --op-accent-hover: #4d51b2;
+  --op-accent-soft: rgba(91, 95, 199, 0.14);
+  --op-danger: #bd5861;
+  --op-danger-soft: rgba(189, 88, 97, 0.1);
+  --op-info: #457eaf;
+  --op-info-soft: rgba(69, 126, 175, 0.1);
+  --op-shadow: 0 14px 34px rgba(23, 26, 32, 0.1);
+  color-scheme: light;
+}
+
+html[data-theme="light"] body.auth-page .auth-error {
+  color: #962f39;
+}
+
+@media (max-width: 480px) {
+  body.auth-page .auth-wrap {
+    place-items: start center;
+    padding: 16px;
+  }
+
+  body.auth-page .auth-card,
+  body.auth-page .auth-card.auth-card--setup {
+    padding: 22px 18px;
+  }
+
+  body.auth-page .auth-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  body.auth-page .auth-btn {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.auth-page .auth-row input,
+  body.auth-page .auth-btn {
+    transition: none;
+  }
+}

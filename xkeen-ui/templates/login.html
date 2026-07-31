@@ -9,7 +9,7 @@
   <!-- Apply typography prefs ASAP (stored in localStorage) -->
   <script src="{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}"></script>
   <!-- Apply layout prefs ASAP (stored in localStorage) -->
-  <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101c') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260731a') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/xk_brand.js', v='20260104a') }}"></script>
 
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
@@ -17,7 +17,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
   <link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#0d0f13">
   <script>
     (function () {
       var theme = 'light';
@@ -40,25 +40,15 @@
       }
       document.documentElement.setAttribute('data-theme', theme);
       document.documentElement.style.colorScheme = theme;
+      var themeColor = document.querySelector('meta[name="theme-color"]');
+      if (themeColor) themeColor.content = theme === 'light' ? '#f1f2f5' : '#0d0f13';
     })();
   </script>
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260609b') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260609b') }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
-<style>
-    .auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
-    .auth-card { width: 100%; max-width: 420px; }
-    .auth-title { margin: 0 0 6px; font-size: calc(22px * var(--xk-font-scale)); }
-    .auth-sub { margin: 0 0 16px; color: #9ca3af; font-size: calc(13px * var(--xk-font-scale)); }
-    .auth-row { display: grid; gap: 8px; margin: 12px 0; }
-    .auth-row label { font-size: calc(12px * var(--xk-font-scale)); color: #9ca3af; }
-    .auth-row input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937; background: #0b1220; color: #e5e7eb; }
-    .auth-actions { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-top: 14px; }
-    .auth-btn { border: 1px solid #1f2937; background: linear-gradient(135deg, #1d4ed8, #2563eb); color: white; padding: 10px 14px; border-radius: 10px; cursor: pointer; }
-    .auth-btn:hover { filter: brightness(1.05); }
-    .auth-error { margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid #ef444466; background: rgba(239, 68, 68, 0.12); color: #fecaca; font-size: calc(13px * var(--xk-font-scale)); }
-  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='auth-operator.css', v='20260731a') }}">
 </head>
-<body>
+<body class="auth-page">
   <div class="auth-wrap">
     <div class="card auth-card">
       <h1 class="auth-title">Вход в Xkeen UI</h1>

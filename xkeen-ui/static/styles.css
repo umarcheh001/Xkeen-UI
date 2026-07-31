@@ -1378,7 +1378,7 @@ a:hover {
 
 /* DevTools (and other wide pages): use most of the screen width */
 .container-wide {
-  max-width: var(--xk-container-max-width, min(1600px, 96vw));
+  max-width: var(--xk-container-max-width, min(1680px, calc(100vw - 28px)));
 }
 
 /* --------------------------------------------------------------

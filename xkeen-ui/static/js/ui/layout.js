@@ -113,7 +113,10 @@
 
     // CSS variables (for container widths)
     try {
-      let mw = 'min(1600px, 96vw)';
+      // Keep the constrained option aligned with the Mihomo Generator
+      // workbench: it is wide enough for editor-first screens while retaining
+      // a deliberate margin instead of becoming the edge-to-edge "max" mode.
+      let mw = 'min(1680px, calc(100vw - 28px))';
       if (p.container === 'fixed') mw = '960px';
       else if (p.container === 'max') mw = '100%';
       root.style.setProperty('--xk-container-max-width', mw);
