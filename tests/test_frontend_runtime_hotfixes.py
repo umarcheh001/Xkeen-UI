@@ -400,7 +400,7 @@ def test_xray_live_logs_card_uses_russian_visible_labels():
     assert '<span class="dt-switch-label">Онлайн</span>' in logs_panel
     assert '<span class="dt-log-interval-label">каждые</span>' in logs_panel
     assert '<span class="dt-switch-label">В конец</span>' in logs_panel
-    assert '⏸ Пауза' in logs_panel
+    assert "{{ op_icon('pause') }}<span class=\"xk-action-label\">Пауза</span>" in logs_panel
     assert 'К последним' in logs_panel
     assert 'Скопировать выделенное' in logs_panel
     assert 'Загрузить ещё' in logs_panel
@@ -408,7 +408,7 @@ def test_xray_live_logs_card_uses_russian_visible_labels():
     assert "{ key: 'view:xray-logs', label: 'Логи Xray онлайн' }" in layout_prefs
     assert "label = 'Вручную / В конец';" in xray_logs
     assert "label = 'Онлайн / В конец';" in xray_logs
-    assert "btn.textContent = '⏸ Пауза';" in xray_logs
+    assert "btn.innerHTML = `${iconHtml('pause')}<span class=\"xk-action-label\">Пауза</span>`;" in xray_logs
     assert 'Copy selection' not in logs_panel
     assert 'Load more' not in logs_panel
     assert '>Manual<' not in logs_panel
