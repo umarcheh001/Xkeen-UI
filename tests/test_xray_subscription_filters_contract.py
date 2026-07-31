@@ -355,8 +355,8 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "resetBtn.classList.add('xk-sub-head-chip');" in outbounds_src
     assert "saveBtn.classList.add('xk-sub-head-chip', 'is-primary');" in outbounds_src
     assert "xk-sub-head-chip-glyph" in outbounds_src
-    assert "&#8634;" in outbounds_src
-    assert "&#128190;" in outbounds_src
+    assert "resetBtn.innerHTML = iconHtml('restore'" in outbounds_src
+    assert "saveBtn.innerHTML = iconHtml('save'" in outbounds_src
     assert '<div class="xk-sub-url-actions">' in outbounds_src
     assert 'title="Очистить форму"' in outbounds_src
     assert 'title="Сохранить настройки"' in outbounds_src

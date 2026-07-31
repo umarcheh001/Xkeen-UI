@@ -364,6 +364,14 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/ui/operator_icons.js",
+          "globals": [
+            "XKeen.ui",
+            "XKeen.ui.operatorIcons"
+          ],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/features/routing_cards_namespace.js",
           "globals": [],
           "lazy_features": []
@@ -536,14 +544,6 @@
             "XKeen.ui.confirm",
             "XKeen.ui.modal",
             "XKeen.ui.sharedPrimitives"
-          ],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/ui/operator_icons.js",
-          "globals": [
-            "XKeen.ui",
-            "XKeen.ui.operatorIcons"
           ],
           "lazy_features": []
         },
@@ -783,6 +783,7 @@
         "XKeen.debug",
         "XKeen.debug.terminal",
         "XKeen.ui.cm6Runtime",
+        "XKeen.ui.operatorIcons",
         "XKeen.monacoLoader",
         "XKeen.ui.monacoShared",
         "XKeen.ui.editorEngine",
@@ -830,7 +831,6 @@
         "XKeen.core.dom",
         "XKeen.core.storage",
         "XKeen.ui.sharedPrimitives",
-        "XKeen.ui.operatorIcons",
         "XKeen.ui.applyTheme",
         "XKeen.ui.initThemeToggle",
         "XKeen.ui.syncThemeToggleButtons",
@@ -3009,6 +3009,14 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/ui/operator_icons.js",
+          "globals": [
+            "XKeen.ui",
+            "XKeen.ui.operatorIcons"
+          ],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/pages/top_level_nav.shared.js",
           "globals": [],
           "lazy_features": []
@@ -3150,6 +3158,7 @@
         "XKeen.ui.showGlobalXkeenSpinner",
         "XKeen.ui.hideGlobalXkeenSpinner",
         "XKeen.ui.showXrayPreflightError",
+        "XKeen.ui.operatorIcons",
         "XKeen.pageConfig"
       ],
       "all_bootstrap_lazy_features": [],
