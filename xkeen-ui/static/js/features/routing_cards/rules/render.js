@@ -2318,8 +2318,8 @@ import { setIcon } from '../../../ui/operator_icons.js';
 
       const toggleBtn = document.createElement('button');
       toggleBtn.type = 'button';
-      toggleBtn.className = 'routing-rule-toggle';
-      toggleBtn.textContent = isOpen ? 'Свернуть' : 'Детали';
+      toggleBtn.className = 'routing-rule-toggle btn-secondary btn-icon';
+      setIcon(toggleBtn, isOpen ? 'chevron-down' : 'more');
       toggleBtn.setAttribute('title', isOpen ? 'Свернуть форму правила' : 'Развернуть форму правила');
       toggleBtn.setAttribute('aria-label', isOpen ? 'Свернуть форму правила' : 'Развернуть форму правила');
       toggleBtn.addEventListener('click', () => {
@@ -2350,40 +2350,6 @@ import { setIcon } from '../../../ui/operator_icons.js';
           : false;
         if (!ok) return;
         try { renderAll(); } catch (e) {}
-      });
-
-      const upBtn = document.createElement('button');
-      upBtn.type = 'button';
-      upBtn.className = 'btn-secondary btn-icon';
-      setIcon(upBtn, 'move-up');
-      upBtn.setAttribute('title', 'Переместить правило вверх');
-      upBtn.setAttribute('aria-label', 'Переместить правило вверх');
-      upBtn.disabled = idx <= 0;
-      upBtn.addEventListener('click', () => {
-        if (idx <= 0) return;
-        if (moveRuleToIndex(idx, idx - 1)) {
-          markDirty(true);
-          renderAll();
-          pulseRuleCardByIdx(idx - 1);
-          requestAutoSync({ immediate: true });
-        }
-      });
-
-      const downBtn = document.createElement('button');
-      downBtn.type = 'button';
-      downBtn.className = 'btn-secondary btn-icon';
-      setIcon(downBtn, 'move-down');
-      downBtn.setAttribute('title', 'Переместить правило вниз');
-      downBtn.setAttribute('aria-label', 'Переместить правило вниз');
-      downBtn.disabled = idx >= m.rules.length - 1;
-      downBtn.addEventListener('click', () => {
-        if (idx >= m.rules.length - 1) return;
-        if (moveRuleToIndex(idx, idx + 1)) {
-          markDirty(true);
-          renderAll();
-          pulseRuleCardByIdx(idx + 1);
-          requestAutoSync({ immediate: true });
-        }
       });
 
       const dupBtn = document.createElement('button');
@@ -2424,13 +2390,13 @@ import { setIcon } from '../../../ui/operator_icons.js';
         requestAutoSync({ immediate: true });
       });
 
-      // Order: Details -> JSON -> Comment -> Duplicate -> Move -> Delete
+      // Reordering uses the dedicated drag handle, so duplicate move controls
+      // do not consume horizontal space in dense rule records.
+      // Order: Details -> JSON -> Comment -> Duplicate -> Delete
       actions.appendChild(toggleBtn);
       actions.appendChild(editBtn);
       actions.appendChild(commentBtn);
       actions.appendChild(dupBtn);
-      actions.appendChild(upBtn);
-      actions.appendChild(downBtn);
       actions.appendChild(delBtn);
 
       head.appendChild(main);

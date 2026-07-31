@@ -18,7 +18,7 @@ def test_stage2_header_has_two_zones_without_replacing_runtime_nodes():
     assert 'data-xk-shell-zone="identity"' in template
     assert 'data-xk-shell-zone="global-actions"' in template
     assert 'class="top-tabs header-tabs" role="navigation" aria-label="Разделы панели"' in template
-    assert "filename='panel-operator.css', v='20260730c'" in template
+    assert "filename='panel-operator.css', v='20260731a'" in template
 
     identity_start = template.index('class="panel-shell-identity"')
     actions_start = template.index('data-xk-shell-zone="global-actions"')
@@ -62,7 +62,7 @@ def test_stage2_shell_and_grid_rules_live_in_canonical_sections():
         assert fragment in shell
 
     for fragment in (
-        "grid-template-columns: minmax(0, 1fr) clamp(420px, 24vw, 600px) !important;",
+        "grid-template-columns: minmax(0, 1fr) clamp(380px, 21vw, 500px) !important;",
         'grid-template-areas: "routing-center routing-side" !important;',
         "min-height: 0;",
         'html[data-xk-container="fixed"] body.panel-page .layout-2col.routing-layout',

@@ -1152,7 +1152,9 @@ body.panel-page .view-section {
 
 body.panel-page .layout-2col.routing-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(420px, 24vw, 600px) !important;
+  /* Keep the inspector compact so the routing-record summary has enough
+   * horizontal room to remain readable when the Rules accordion is open. */
+  grid-template-columns: minmax(0, 1fr) clamp(380px, 21vw, 500px) !important;
   grid-template-areas: "routing-center routing-side" !important;
   align-items: start;
   gap: 12px;
@@ -2340,9 +2342,9 @@ body.panel-page :is(#routing-rules-body, .routing-rule-card.is-pointer-ghost) .r
 }
 
 body.panel-page :is(#routing-rules-body, .routing-rule-card.is-pointer-ghost) .routing-rule-actions .routing-rule-toggle {
-  width: auto;
-  min-width: 70px;
-  padding-inline: 8px !important;
+  width: 28px;
+  min-width: 28px;
+  padding: 0 !important;
   border-color: var(--op-border) !important;
   background: var(--op-surface) !important;
   color: var(--op-data-muted) !important;

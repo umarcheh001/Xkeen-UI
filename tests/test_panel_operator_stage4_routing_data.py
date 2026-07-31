@@ -76,8 +76,12 @@ def test_stage4_rule_runtime_states_and_actions_are_preserved():
         "S._openSet.has(rule)",
         "routing-rule-toggle",
         "routing-rule-comment-btn",
+        "setIcon(toggleBtn, isOpen ? 'chevron-down' : 'more');",
     ):
         assert fragment in source
+
+    assert "setIcon(upBtn, 'move-up')" not in source
+    assert "setIcon(downBtn, 'move-down')" not in source
 
     for fragment in (
         "listEl.addEventListener('pointerdown', onPointerDown);",
@@ -117,7 +121,7 @@ def test_stage4_routing_section_has_one_primary_apply_action():
     rules_end = template.index('<!-- Сворачиваемый блок routing -->', rules_start)
     rules_markup = template[rules_start:rules_end]
 
-    assert "filename='panel-operator.css', v='20260730c'" in template
+    assert "filename='panel-operator.css', v='20260731a'" in template
     assert 'id="routing-rules-apply-btn" class="btn-primary btn-icon routing-rules-apply-primary"' in rules_markup
     assert rules_markup.count("btn-primary") == 1
     assert "op_icon('save')" in rules_markup
