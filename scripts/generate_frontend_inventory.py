@@ -302,7 +302,7 @@ def main() -> int:
 
     json_out = args.json_out or (generator.docs_root / "frontend-page-inventory.json")
     json_out.parent.mkdir(parents=True, exist_ok=True)
-    json_out.write_text(rendered, encoding="utf-8")
+    json_out.write_text(rendered, encoding="utf-8", newline="\n")
     return 0
 
 

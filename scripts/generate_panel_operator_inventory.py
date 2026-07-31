@@ -589,7 +589,7 @@ def main() -> int:
         print(rendered, end="")
     output = args.json_out or (generator.root / "docs/panel-operator-stage0-inventory.json")
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(rendered, encoding="utf-8")
+    output.write_text(rendered, encoding="utf-8", newline="\n")
     return 0
 
 
