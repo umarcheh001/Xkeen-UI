@@ -109,6 +109,34 @@ test.describe('Operator Console Stage 4 files', () => {
     });
   }
 
+  test('bookmark actions use centered Operator icons without presentation emoji', async ({ page }) => {
+    await openFiles(page, 'dark', { width: 1440, height: 900 });
+    const controls = page.locator('.fm-panel[data-side="left"] .fm-panel-bar');
+    await expect(controls.locator('.fm-bookmarks-control .xk-action-icon')).toBeVisible();
+    await expect(controls.locator('.fm-bookmarks-add .xk-action-icon')).toBeVisible();
+    await expect(controls.locator('.fm-bookmarks-edit .xk-action-icon')).toBeVisible();
+
+    const geometry = await controls.locator('.fm-bookmarks-control').evaluate((control) => {
+      const icon = control.querySelector('.xk-action-icon');
+      const outer = control.getBoundingClientRect();
+      const inner = icon.getBoundingClientRect();
+      return {
+        deltaX: Math.abs((inner.left + inner.width / 2) - (outer.left + outer.width / 2)),
+        deltaY: Math.abs((inner.top + inner.height / 2) - (outer.top + outer.height / 2)),
+      };
+    });
+    expect(geometry.deltaX).toBeLessThanOrEqual(1);
+    expect(geometry.deltaY).toBeLessThanOrEqual(1);
+
+    await controls.locator('.fm-bookmarks-edit').click();
+    const modal = page.locator('#fm-bookmarks-modal');
+    await expect(modal).toBeVisible();
+    await expect(modal.locator('.modal-close .xk-action-icon')).toBeVisible();
+    await expect(modal.locator('#fm-bookmarks-add-current-btn .xk-action-icon')).toBeVisible();
+    await expect(modal).not.toContainText('⭐');
+    await expect(modal).not.toContainText('📌');
+  });
+
   test('selection and keyboard focus remain distinct and accessible', async ({ page }) => {
     await openFiles(page, 'dark', { width: 1440, height: 900 });
     const list = page.locator('.fm-panel[data-side="left"] .fm-list');

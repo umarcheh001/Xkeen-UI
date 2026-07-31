@@ -17,6 +17,7 @@ ICONS = {
     "add-rule": "list-details",
     "archive": "archive",
     "back": "arrow-left",
+    "bookmark": "bookmark",
     "catalog": "folder-open",
     "chevron-down": "chevron-down",
     "download": "download",

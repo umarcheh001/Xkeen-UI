@@ -1,6 +1,6 @@
 <!doctype html>
 {% macro op_icon(name, class_name='') -%}
-<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260731d') }}#xk-{{ name }}"></use></svg>
+<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260801b') }}#xk-{{ name }}"></use></svg>
 {%- endmacro %}
 <html lang="ru">
 <head>
@@ -69,7 +69,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260801a') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260801b') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -4336,29 +4336,29 @@ https://..."></textarea>
   </div>
 </div>
 
-<!-- File Manager: bookmarks (pins) modal -->
+<!-- File Manager: bookmarks modal -->
 <div id="fm-bookmarks-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Избранное">
-  <div class="modal-content" style="max-width:860px;">
+  <div class="modal-content">
     <div class="modal-header">
       <span class="modal-title" id="fm-bookmarks-title">Избранное (local)</span>
-      <button type="button" class="modal-close" id="fm-bookmarks-close-btn" aria-label="Close">×</button>
+      <button type="button" class="modal-close" id="fm-bookmarks-close-btn" aria-label="Закрыть">{{ op_icon('close') }}</button>
     </div>
     <div class="modal-body">
-      <div class="status" style="margin:0 0 8px 0; opacity:.9;">
-        Закладки сохраняются в браузере (localStorage) и доступны в обоих панелях. В выпадающем меню 📌 будут показаны ваши пути.
+      <div class="status fm-bm-intro">
+        Закладки сохраняются в браузере (localStorage) и доступны в обеих панелях. Выберите путь в меню быстрых путей.
       </div>
       <div id="fm-bookmarks-list" class="fm-bm-list"></div>
       <div id="fm-bookmarks-error" class="error" style="display:none;"></div>
     </div>
-    <div class="modal-actions" style="justify-content:space-between; gap:10px; flex-wrap:wrap;">
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button type="button" class="btn-secondary" id="fm-bookmarks-reset-btn" title="Вернуть стандартный набор">Сбросить</button>
-        <button type="button" class="btn-secondary" id="fm-bookmarks-add-row-btn" title="Добавить строку">＋ Добавить</button>
-        <button type="button" class="btn-secondary" id="fm-bookmarks-add-current-btn" title="Добавить текущую папку активной панели">⭐ Текущая</button>
+    <div class="modal-actions fm-bm-actions">
+      <div class="fm-bm-actions-group">
+        <button type="button" class="btn-secondary" id="fm-bookmarks-reset-btn" title="Вернуть стандартный набор">{{ op_icon('restore') }}<span class="xk-action-label">Сбросить</span></button>
+        <button type="button" class="btn-secondary" id="fm-bookmarks-add-row-btn" title="Добавить строку">{{ op_icon('add-node') }}<span class="xk-action-label">Добавить</span></button>
+        <button type="button" class="btn-secondary" id="fm-bookmarks-add-current-btn" title="Добавить текущую папку активной панели">{{ op_icon('bookmark') }}<span class="xk-action-label">Текущая папка</span></button>
       </div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+      <div class="fm-bm-actions-group fm-bm-actions-primary">
         <button type="button" class="btn-secondary" id="fm-bookmarks-cancel-btn">Отмена</button>
-        <button type="button" class="btn-primary" id="fm-bookmarks-save-btn">Сохранить</button>
+        <button type="button" class="btn-primary" id="fm-bookmarks-save-btn">{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
       </div>
     </div>
   </div>

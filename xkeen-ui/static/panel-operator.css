@@ -3975,6 +3975,170 @@ body.panel-page .fm-resize-handle-bottom:hover::before {
   opacity: 0.9;
 }
 
+/* File manager bookmarks: a native select remains the reliable path picker,
+ * while its visual trigger uses the shared monochrome Operator icon contract. */
+body.panel-page .fm-bookmarks-control {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 32px;
+  width: 32px;
+  min-width: 32px;
+  height: 30px;
+  overflow: hidden;
+  border: 1px solid var(--op-border) !important;
+  border-radius: 5px !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .fm-bookmarks-control:hover,
+body.panel-page .fm-bookmarks-control:focus-within {
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-text) !important;
+}
+
+body.panel-page .fm-bookmarks-control:focus-within {
+  outline: 1px solid var(--op-accent-border);
+  outline-offset: 1px;
+}
+
+body.panel-page .fm-bookmarks-glyph {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+
+body.panel-page .fm-bookmarks-glyph .xk-action-icon,
+body.panel-page .fm-bookmarks-btn .xk-action-icon,
+body.panel-page .fm-bm-mini .xk-action-icon,
+body.panel-page #fm-bookmarks-modal .modal-close .xk-action-icon {
+  display: block;
+  margin: 0;
+}
+
+body.panel-page .fm-bookmarks-select {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  appearance: none;
+  opacity: 0;
+  cursor: pointer;
+}
+
+body.panel-page .fm-bookmarks-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  min-width: 32px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 !important;
+  line-height: 1;
+}
+
+body.panel-page .fm-bm-mini {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 !important;
+  line-height: 1;
+}
+
+body.panel-page #fm-bookmarks-modal .modal-content {
+  width: min(860px, calc(100vw - 32px));
+  max-width: none !important;
+}
+
+body.panel-page #fm-bookmarks-modal .modal-body {
+  padding: 12px !important;
+}
+
+body.panel-page #fm-bookmarks-modal .fm-bm-intro {
+  margin: 0 0 10px;
+  color: var(--op-muted) !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  line-height: 1.45;
+}
+
+body.panel-page #fm-bookmarks-modal .fm-bm-list {
+  gap: 6px;
+  max-height: min(52dvh, 520px);
+  margin-top: 0;
+  padding: 0;
+}
+
+body.panel-page #fm-bookmarks-modal .fm-bm-row {
+  display: grid;
+  grid-template-columns: minmax(140px, .6fr) minmax(180px, 1.25fr) repeat(3, 30px);
+  gap: 6px;
+}
+
+body.panel-page #fm-bookmarks-modal .fm-bm-row .terminal-input {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: 5px !important;
+  background: var(--op-surface-2) !important;
+  border-color: var(--op-border) !important;
+  color: var(--op-text) !important;
+}
+
+body.panel-page #fm-bookmarks-modal .fm-bm-mini[disabled] {
+  opacity: .42;
+}
+
+body.panel-page #fm-bookmarks-modal .fm-bm-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+body.panel-page #fm-bookmarks-modal .fm-bm-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+body.panel-page #fm-bookmarks-modal .fm-bm-actions-group > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 620px) {
+  body.panel-page #fm-bookmarks-modal .fm-bm-row {
+    grid-template-columns: minmax(0, 1fr) repeat(3, 30px);
+  }
+
+  body.panel-page #fm-bookmarks-modal .fm-bm-path {
+    grid-column: 1 / -1;
+  }
+
+  body.panel-page #fm-bookmarks-modal .fm-bm-actions-primary {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
 /* Terminal: the output is the workspace; chrome is a quiet frame around it. */
 body.panel-page .terminal-overlay,
 html[data-theme="light"] body.panel-page .terminal-overlay {

@@ -31,7 +31,7 @@ def test_files_markup_exposes_toolbar_and_dual_grid_contract():
         assert fragment in view
 
     assert 'aria-label="Target"' not in view
-    assert "filename='panel-operator.css', v='20260801a'" in text
+    assert "filename='panel-operator.css', v='20260801b'" in text
 
 
 def test_files_runtime_exposes_loading_empty_error_selection_focus_and_drop_states():
@@ -115,6 +115,27 @@ def test_files_bottom_resize_and_same_folder_drop_cancel_are_explicit():
     modal = dragdrop.index("chosenOp = await openDropOpModal", guard)
     assert guard < modal
     assert "Источник и назначение совпадают" not in dragdrop
+
+
+def test_file_bookmark_controls_use_centered_operator_icons_without_emoji_actions():
+    css = CSS.read_text(encoding="utf-8")
+    bookmarks = (ROOT / "xkeen-ui/static/js/features/file_manager/bookmarks.js").read_text(encoding="utf-8")
+    template = TEMPLATE.read_text(encoding="utf-8")
+
+    for fragment in (
+        ".fm-bookmarks-control",
+        ".fm-bookmarks-glyph",
+        "place-items: center;",
+        ".fm-bm-row",
+        "grid-template-columns: minmax(140px, .6fr)",
+    ):
+        assert fragment in css
+
+    assert "iconHtml('bookmark')" in bookmarks
+    assert "📌" not in bookmarks
+    assert "⭐" not in template
+    assert "{{ op_icon('bookmark') }}" in template
+
 
 
 def test_files_closure_is_documented():

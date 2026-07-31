@@ -45,7 +45,7 @@ import { iconHtml } from '../../ui/operator_icons.js';
     const tr = getTrashRoot();
     return [
       { label: '/opt/var', value: '/opt/var' },
-      { label: `🗑 Корзина (${tr})`, value: tr },
+      { label: `Корзина (${tr})`, value: tr },
       { label: '/opt/etc', value: '/opt/etc' },
       { label: '/tmp/mnt (диски)', value: '/tmp/mnt' },
       { label: '/opt/etc/xray', value: '/opt/etc/xray' },
@@ -133,8 +133,12 @@ import { iconHtml } from '../../ui/operator_icons.js';
     const bar = qs('.fm-panel-bar', pd.root);
     if (!bar) return;
 
-    let sel = qs('.fm-bookmarks-select', bar);
+    let selectControl = qs('.fm-bookmarks-control', bar);
+    let sel = selectControl ? qs('.fm-bookmarks-select', selectControl) : qs('.fm-bookmarks-select', bar);
     if (!sel) {
+      selectControl = document.createElement('span');
+      selectControl.className = 'fm-bookmarks-control';
+      selectControl.innerHTML = `<span class="fm-bookmarks-glyph">${iconHtml('bookmark')}</span>`;
       sel = document.createElement('select');
       sel.className = 'fm-bookmarks-select';
       sel.title = 'Быстрые пути';
@@ -147,17 +151,25 @@ import { iconHtml } from '../../ui/operator_icons.js';
         try { pd.pathInput && (pd.pathInput.value = (p.target === 'remote' && v === '.') ? '~' : v); } catch (e) {}
         await _listFromInput(side);
       });
+      selectControl.appendChild(sel);
 
       // Place it after the target selector to avoid stealing width from the path input.
       try {
         if (pd.targetSelect && pd.targetSelect.parentElement === bar) {
-          bar.insertBefore(sel, pd.targetSelect.nextSibling);
+          bar.insertBefore(selectControl, pd.targetSelect.nextSibling);
         } else {
-          bar.insertBefore(sel, bar.firstChild);
+          bar.insertBefore(selectControl, bar.firstChild);
         }
       } catch (e) {
-        try { bar.appendChild(sel); } catch (e2) {}
+        try { bar.appendChild(selectControl); } catch (e2) {}
       }
+    } else if (!selectControl) {
+      // Upgrade controls created before the Operator icon layer without changing
+      // the native select's event/value contract.
+      selectControl = document.createElement('span');
+      selectControl.className = 'fm-bookmarks-control';
+      selectControl.innerHTML = `<span class="fm-bookmarks-glyph">${iconHtml('bookmark')}</span>`;
+      try { sel.parentElement.insertBefore(selectControl, sel); selectControl.appendChild(sel); } catch (e) {}
     }
 
     // Extra: user bookmarks for local target (quick add + manage)
@@ -175,7 +187,7 @@ import { iconHtml } from '../../ui/operator_icons.js';
         addCurrent(side);
       });
       try {
-        const ref = sel.nextSibling;
+        const ref = selectControl.nextSibling;
         bar.insertBefore(addBtn, ref);
       } catch (e) {
         try { bar.appendChild(addBtn); } catch (e2) {}
@@ -196,7 +208,7 @@ import { iconHtml } from '../../ui/operator_icons.js';
         openManager(side);
       });
       try {
-        const ref = sel.nextSibling;
+        const ref = addBtn.nextSibling;
         bar.insertBefore(editBtn, ref);
       } catch (e) {
         try { bar.appendChild(editBtn); } catch (e2) {}
@@ -223,7 +235,7 @@ import { iconHtml } from '../../ui/operator_icons.js';
       sel.innerHTML = '';
       const ph = document.createElement('option');
       ph.value = '';
-      ph.textContent = '📌';
+      ph.textContent = 'Быстрые пути';
       sel.appendChild(ph);
 
       // Remote: plain list. Local: show unavailable in a separate group (disabled).
@@ -254,7 +266,7 @@ import { iconHtml } from '../../ui/operator_icons.js';
           denied.forEach((o) => {
             const opt = document.createElement('option');
             opt.value = String(o.value || '');
-            opt.textContent = '⛔ ' + String(o.label || o.value || '');
+            opt.textContent = '[Недоступно] ' + String(o.label || o.value || '');
             opt.disabled = true;
             g2.appendChild(opt);
           });
