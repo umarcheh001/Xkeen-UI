@@ -2269,7 +2269,10 @@ body.panel-page .routing-rule-head {
 
 body.panel-page .routing-rule-main {
   display: grid;
-  grid-template-columns: minmax(250px, 1.15fr) minmax(150px, 0.7fr) minmax(200px, 1fr);
+  /* The type/count metadata is only a few short labels.  Giving it a
+   * proportional column wastes space and makes the match summary collide
+   * visually with it, so keep this track content-sized. */
+  grid-template-columns: minmax(220px, 1.15fr) minmax(76px, max-content) minmax(180px, 1fr);
   align-items: center;
   gap: 8px 12px;
   min-width: 0;

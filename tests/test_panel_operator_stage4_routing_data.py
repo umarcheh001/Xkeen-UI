@@ -28,7 +28,7 @@ def test_stage4_routing_rules_use_one_record_list_and_neutral_editor_flow():
         "body.panel-page .routing-rule-card {",
         "border-left: 2px solid var(--routing-record-tone) !important;",
         "body.panel-page .routing-rule-main {",
-        "grid-template-columns: minmax(250px, 1.15fr) minmax(150px, 0.7fr) minmax(200px, 1fr);",
+        "grid-template-columns: minmax(220px, 1.15fr) minmax(76px, max-content) minmax(180px, 1fr);",
         "body.panel-page .routing-rule-card.is-disabled {",
         "body.panel-page .routing-rule-card.is-target-block {",
         "body.panel-page .routing-rule-card:is(.is-target-balancer, .is-target-direct) {",
