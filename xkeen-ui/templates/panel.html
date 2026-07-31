@@ -69,7 +69,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260731b') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260801a') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -1755,19 +1755,19 @@
       <div class="modal-content xray-devices-modal-content" data-modal-key="xray-log-devices">
         <div class="modal-header">
           <span class="modal-title">Имена устройств</span>
-          <button type="button" class="modal-close" id="xray-devices-close-btn" title="Закрыть">×</button>
+          <button type="button" class="modal-close" id="xray-devices-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
         </div>
         <div class="modal-body xray-devices-body">
           <div class="xray-devices-toolbar">
-            <button type="button" class="btn-secondary" id="xray-devices-refresh-btn">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
-            <span id="xray-devices-summary" class="small xray-devices-summary"></span>
+            <button type="button" class="btn-secondary btn-icon" id="xray-devices-refresh-btn" title="Обновить список устройств" aria-label="Обновить список устройств">{{ op_icon('refresh') }}</button>
+            <span id="xray-devices-summary" class="small xray-devices-summary" role="status" aria-live="polite"></span>
           </div>
           <div class="xray-devices-form" aria-label="Ручное имя устройства">
-            <input id="xray-devices-ip" class="xray-log-filter" type="text" inputmode="numeric" placeholder="192.168.1.83" autocomplete="off">
-            <input id="xray-devices-name" class="xray-log-filter" type="text" placeholder="umar-pc" autocomplete="off">
-            <button type="button" class="btn-secondary" id="xray-devices-save-btn">Сохранить</button>
+            <input id="xray-devices-ip" class="xray-log-filter" type="text" inputmode="numeric" placeholder="IP-адрес" aria-label="IP-адрес устройства" autocomplete="off">
+            <input id="xray-devices-name" class="xray-log-filter" type="text" placeholder="Имя устройства" aria-label="Имя устройства" autocomplete="off">
+            <button type="button" class="btn-primary" id="xray-devices-save-btn">{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
           </div>
-          <div id="xray-devices-list" class="xray-devices-list"></div>
+          <div id="xray-devices-list" class="xray-devices-list" role="list" aria-label="Список устройств"></div>
         </div>
         <div class="modal-actions xray-devices-actions">
           <button type="button" class="btn-secondary" id="xray-devices-close-btn2">Закрыть</button>

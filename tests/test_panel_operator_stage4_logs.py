@@ -101,6 +101,48 @@ def test_logs_operator_layer_unifies_filters_counters_details_and_states():
     assert "padding: 2px 6px;" in shared_compact
 
 
+def test_xray_devices_modal_uses_operator_data_rows_instead_of_blue_cards():
+    template = TEMPLATE.read_text(encoding="utf-8")
+    css = CSS.read_text(encoding="utf-8")
+    xray = XRAY_LOGS.read_text(encoding="utf-8")
+    modal = css[
+        css.index("/* Xray device names are dense operational data") :
+        css.index("/* Mihomo import/HWID are workbenches")
+    ]
+
+    for fragment in (
+        'class="btn-secondary btn-icon" id="xray-devices-refresh-btn"',
+        'class="btn-primary" id="xray-devices-save-btn"',
+        'role="list" aria-label="Список устройств"',
+        'title="Закрыть" aria-label="Закрыть"',
+    ):
+        assert fragment in template
+
+    for fragment in (
+        "grid-template-rows: auto minmax(0, 1fr);",
+        "background: var(--op-surface) !important;",
+        "border-bottom: 1px solid var(--op-border) !important;",
+        "border-radius: 0 !important;",
+        "background-image: none !important;",
+        ".xray-devices-summary[data-tone=\"warning\"]",
+        ".xray-device-source.manual",
+        ".xray-devices-actions",
+        "display: none !important;",
+    ):
+        assert fragment in modal
+
+    for legacy in ("linear-gradient(", "border-radius: 999px", "var(--accent, #60a5fa)"):
+        assert legacy not in modal
+
+    assert "refs.list.dataset.state = 'empty';" in xray
+    assert "refs.list.dataset.state = 'ready';" in xray
+    assert 'class="xray-device-row" role="listitem"' in xray
+    responsive = css[css.index("@media (max-width: 720px)") :]
+    assert "body.panel-page #xray-devices-modal .xray-devices-form" in responsive
+    assert "grid-template-columns: minmax(0, 1fr);" in responsive
+    assert "resize: none;" in responsive
+
+
 def test_logs_runtime_renders_structured_counters_detail_focus_and_error_states():
     xray = XRAY_LOGS.read_text(encoding="utf-8")
     restart = RESTART_LOG.read_text(encoding="utf-8")

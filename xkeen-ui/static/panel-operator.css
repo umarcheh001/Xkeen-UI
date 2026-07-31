@@ -5519,6 +5519,239 @@ body.panel-page .modal-close:hover {
   color: var(--op-text) !important;
 }
 
+/* Xray device names are dense operational data. The legacy feature layer
+ * presents every device as a blue-glass card; the Operator modal keeps one
+ * frame and separates records with quiet rules instead. */
+body.panel-page #xray-devices-modal .xray-devices-modal-content,
+html[data-theme="light"] body.panel-page #xray-devices-modal .xray-devices-modal-content {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(820px, calc(100vw - 36px));
+  min-width: min(520px, calc(100vw - 36px));
+  max-width: min(1120px, calc(100vw - 36px));
+  height: min(720px, calc(100dvh - 36px));
+  min-height: min(480px, calc(100dvh - 36px));
+  max-height: calc(100dvh - 36px);
+  overflow: hidden;
+  resize: both;
+  border-radius: var(--op-radius-lg) !important;
+  background: var(--op-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--op-shadow-float) !important;
+}
+
+body.panel-page #xray-devices-modal .xray-devices-modal-content .modal-header {
+  min-height: 50px;
+  padding: 9px 12px !important;
+  border-color: var(--op-border) !important;
+  background: var(--op-surface) !important;
+}
+
+body.panel-page #xray-devices-modal .xray-devices-modal-content .modal-title {
+  color: var(--op-text-strong) !important;
+  font-size: calc(14px * var(--xk-font-scale, 1));
+  font-weight: 670;
+}
+
+body.panel-page #xray-devices-modal .xray-devices-modal-content .modal-close {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted) !important;
+}
+
+body.panel-page #xray-devices-modal .xray-devices-body {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 0;
+  min-height: 0;
+  padding: 0 !important;
+  overflow: hidden;
+  background: var(--op-surface) !important;
+}
+
+body.panel-page #xray-devices-modal .xray-devices-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 46px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--op-border);
+  background: var(--op-surface) !important;
+}
+
+body.panel-page #xray-devices-modal .xray-devices-summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--op-data-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 560;
+}
+
+body.panel-page #xray-devices-modal .xray-devices-summary[data-tone="warning"] {
+  color: var(--op-warning) !important;
+}
+
+body.panel-page #xray-devices-modal .xray-devices-form {
+  display: grid;
+  grid-template-columns: minmax(150px, 210px) minmax(220px, 1fr) auto;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: var(--op-surface-2) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #xray-devices-modal .xray-devices-form .xray-log-filter {
+  width: 100%;
+  min-width: 0;
+  height: var(--op-control-h);
+  min-height: var(--op-control-h);
+  border-color: var(--op-border-strong) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-editor) !important;
+  color: var(--op-text) !important;
+}
+
+body.panel-page #xray-devices-modal .xray-devices-form #xray-devices-save-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--op-control-h);
+  gap: 6px;
+  padding: 0 11px;
+  border-radius: var(--op-control-radius) !important;
+}
+
+body.panel-page #xray-devices-modal .xray-devices-list {
+  display: block;
+  min-height: 0;
+  max-height: none;
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  background: var(--op-surface) !important;
+}
+
+body.panel-page #xray-devices-modal .xray-device-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(72px, auto) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 7px 12px;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+  transition: background-color 0.12s ease;
+}
+
+body.panel-page #xray-devices-modal .xray-device-row:hover {
+  border-color: var(--op-border) !important;
+  background: var(--op-surface-2) !important;
+  background-image: none !important;
+}
+
+body.panel-page #xray-devices-modal .xray-device-main {
+  display: grid;
+  grid-template-columns: minmax(112px, 0.42fr) minmax(0, 1fr);
+  gap: 2px 12px;
+  min-width: 0;
+  align-items: baseline;
+}
+
+body.panel-page #xray-devices-modal .xray-device-ip {
+  color: var(--op-accent-hover) !important;
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #xray-devices-modal .xray-device-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--op-text) !important;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page #xray-devices-modal .xray-device-details {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--op-data-faint) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page #xray-devices-modal .xray-device-source {
+  align-self: center;
+  justify-self: start;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--op-data-faint) !important;
+  box-shadow: none !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #xray-devices-modal .xray-device-source.manual {
+  color: var(--op-success) !important;
+}
+
+body.panel-page #xray-devices-modal .xray-device-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+body.panel-page #xray-devices-modal .xray-device-row-btn {
+  min-height: var(--op-control-compact-h);
+  padding: 0 9px;
+  border-radius: var(--op-control-radius) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #xray-devices-modal .xray-devices-empty {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  margin: 12px;
+  padding: 16px;
+  border: 0 !important;
+  border-left: 2px solid var(--op-border-strong) !important;
+  border-radius: 0 !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  text-align: center;
+}
+
+/* The header close control is always available; keep the legacy runtime node
+ * but remove its duplicate visual action from the footer. */
+body.panel-page #xray-devices-modal .xray-devices-actions {
+  display: none !important;
+}
+
 /* Mihomo import/HWID are workbenches, not full-height canvases. Their preview
  * editors need a readable minimum, but must not turn an empty preview into
  * hundreds of pixels of dead space. */
@@ -6850,6 +7083,41 @@ body.panel-page :is(.fm-panel-error-retry, .fm-empty-action) .xk-action-icon {
 
 /* Mobile: two dense shell rows, scrollable nav, full-width editor. */
 @media (max-width: 720px) {
+  body.panel-page #xray-devices-modal .xray-devices-modal-content,
+  html[data-theme="light"] body.panel-page #xray-devices-modal .xray-devices-modal-content {
+    width: calc(100vw - 14px);
+    min-width: 0;
+    max-width: calc(100vw - 14px);
+    height: calc(100dvh - 14px);
+    min-height: 0;
+    max-height: calc(100dvh - 14px);
+    resize: none;
+  }
+
+  body.panel-page #xray-devices-modal .xray-devices-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.panel-page #xray-devices-modal .xray-device-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 10px;
+    min-height: 0;
+    padding-block: 9px;
+  }
+
+  body.panel-page #xray-devices-modal .xray-device-main {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(104px, 0.44fr) minmax(0, 1fr);
+  }
+
+  body.panel-page #xray-devices-modal .xray-device-source {
+    grid-column: 1;
+  }
+
+  body.panel-page #xray-devices-modal .xray-device-actions {
+    grid-column: 2;
+  }
+
   body.panel-page {
     font-size: calc(12.5px * var(--xk-font-scale, 1));
   }

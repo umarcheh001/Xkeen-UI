@@ -4319,13 +4319,16 @@ function renderXrayDeviceNamesModal(payload) {
     if (manualCount) parts.push(manualCount + ' вручную');
     if (routerError && !routerCount) parts.push('роутер недоступен');
     refs.summary.textContent = parts.join(' • ');
+    refs.summary.dataset.tone = routerError && !routerCount ? 'warning' : 'neutral';
   }
 
   if (!refs.list) return;
   if (!entries.length) {
+    refs.list.dataset.state = 'empty';
     refs.list.innerHTML = '<div class="xray-devices-empty">Нет сохранённых имён устройств</div>';
     return;
   }
+  refs.list.dataset.state = 'ready';
 
   refs.list.innerHTML = entries.map((entry) => {
     const source = xrayDeviceSourceLabel(entry.source);
@@ -4336,10 +4339,10 @@ function renderXrayDeviceNamesModal(payload) {
     const ipB64 = b64Encode(entry.ip);
     const nameB64 = b64Encode(entry.name);
     const deleteBtn = String(entry.source || '') === 'manual'
-      ? '<button type="button" class="btn-secondary xray-device-row-btn" data-action="delete" data-ip-b64="' + ipB64 + '">Удалить</button>'
+      ? '<button type="button" class="btn-danger xray-device-row-btn" data-action="delete" data-ip-b64="' + ipB64 + '">Удалить</button>'
       : '';
     return [
-      '<div class="xray-device-row" data-ip-b64="' + ipB64 + '">',
+      '<div class="xray-device-row" role="listitem" data-ip-b64="' + ipB64 + '">',
       '<div class="xray-device-main">',
       '<span class="xray-device-ip">' + escapeHtml(entry.ip) + '</span>',
       '<span class="xray-device-name">' + escapeHtml(entry.name) + '</span>',
