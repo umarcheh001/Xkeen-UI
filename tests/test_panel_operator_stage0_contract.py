@@ -119,8 +119,8 @@ def test_stage0_inventory_classifies_all_inline_styles_and_dom_hooks(tmp_path):
     inline = payload["inline_styles"]
     dom = payload["dom_contract"]
 
-    assert inline["attribute_count"] == 282
-    assert sum(inline["attribute_kind_counts"].values()) == 282
+    assert inline["attribute_count"] == 277
+    assert sum(inline["attribute_kind_counts"].values()) == 277
     assert inline["attribute_kind_counts"]["state-visibility-hook"] > 0
     assert inline["attribute_kind_counts"]["presentation-geometry"] > 0
     assert inline["attribute_kind_counts"]["mixed-state-and-presentation"] > 0

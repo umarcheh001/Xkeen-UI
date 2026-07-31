@@ -1135,15 +1135,15 @@
     ]
   },
   "inline_styles": {
-    "attribute_count": 282,
+    "attribute_count": 277,
     "attribute_kind_counts": {
       "mixed-state-and-presentation": 6,
-      "presentation-geometry": 213,
+      "presentation-geometry": 208,
       "state-visibility-hook": 63
     },
-    "declaration_count": 493,
+    "declaration_count": 480,
     "declaration_kind_counts": {
-      "presentation-geometry": 424,
+      "presentation-geometry": 411,
       "state-visibility": 69
     },
     "property_counts": {
@@ -1152,24 +1152,24 @@
       "border": 3,
       "border-top": 1,
       "color": 2,
-      "display": 120,
+      "display": 118,
       "flex": 6,
       "flex-direction": 7,
-      "flex-wrap": 17,
+      "flex-wrap": 14,
       "font-size": 16,
       "font-weight": 2,
-      "gap": 54,
+      "gap": 51,
       "grid-template-columns": 6,
       "height": 1,
-      "justify-content": 34,
-      "margin": 49,
+      "justify-content": 32,
+      "margin": 48,
       "margin-bottom": 9,
       "margin-top": 22,
       "max-height": 6,
-      "max-width": 37,
+      "max-width": 36,
       "min-height": 1,
       "min-width": 5,
-      "opacity": 32,
+      "opacity": 31,
       "overflow": 3,
       "padding": 22,
       "white-space": 1,
@@ -5029,36 +5029,6 @@
       },
       {
         "index": 247,
-        "locator": "div.modal-content@L4341",
-        "line": 4341,
-        "kind": "presentation-geometry",
-        "source": "max-width:860px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "860px"
-          }
-        ]
-      },
-      {
-        "index": 248,
-        "locator": "div.status@L4347",
-        "line": 4347,
-        "kind": "presentation-geometry",
-        "source": "margin:0 0 8px 0; opacity:.9;",
-        "declarations": [
-          {
-            "property": "margin",
-            "value": "0 0 8px 0"
-          },
-          {
-            "property": "opacity",
-            "value": ".9"
-          }
-        ]
-      },
-      {
-        "index": 249,
         "locator": "#fm-bookmarks-error",
         "line": 4351,
         "kind": "state-visibility-hook",
@@ -5071,74 +5041,7 @@
         ]
       },
       {
-        "index": 250,
-        "locator": "div.modal-actions@L4353",
-        "line": 4353,
-        "kind": "presentation-geometry",
-        "source": "justify-content:space-between; gap:10px; flex-wrap:wrap;",
-        "declarations": [
-          {
-            "property": "justify-content",
-            "value": "space-between"
-          },
-          {
-            "property": "gap",
-            "value": "10px"
-          },
-          {
-            "property": "flex-wrap",
-            "value": "wrap"
-          }
-        ]
-      },
-      {
-        "index": 251,
-        "locator": "div@L4354",
-        "line": 4354,
-        "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; flex-wrap:wrap;",
-        "declarations": [
-          {
-            "property": "display",
-            "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
-          },
-          {
-            "property": "flex-wrap",
-            "value": "wrap"
-          }
-        ]
-      },
-      {
-        "index": 252,
-        "locator": "div@L4359",
-        "line": 4359,
-        "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;",
-        "declarations": [
-          {
-            "property": "display",
-            "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
-          },
-          {
-            "property": "flex-wrap",
-            "value": "wrap"
-          },
-          {
-            "property": "justify-content",
-            "value": "flex-end"
-          }
-        ]
-      },
-      {
-        "index": 253,
+        "index": 248,
         "locator": "div.modal-content@L4369",
         "line": 4369,
         "kind": "presentation-geometry",
@@ -5151,7 +5054,7 @@
         ]
       },
       {
-        "index": 254,
+        "index": 249,
         "locator": "#fm-download-multi-desc",
         "line": 4375,
         "kind": "presentation-geometry",
@@ -5168,7 +5071,7 @@
         ]
       },
       {
-        "index": 255,
+        "index": 250,
         "locator": "div@L4377",
         "line": 4377,
         "kind": "presentation-geometry",
@@ -5189,7 +5092,7 @@
         ]
       },
       {
-        "index": 256,
+        "index": 251,
         "locator": "label@L4378",
         "line": 4378,
         "kind": "presentation-geometry",
@@ -5210,7 +5113,7 @@
         ]
       },
       {
-        "index": 257,
+        "index": 252,
         "locator": "div@L4381",
         "line": 4381,
         "kind": "presentation-geometry",
@@ -5223,7 +5126,7 @@
         ]
       },
       {
-        "index": 258,
+        "index": 253,
         "locator": "div@L4382",
         "line": 4382,
         "kind": "presentation-geometry",
@@ -5240,7 +5143,7 @@
         ]
       },
       {
-        "index": 259,
+        "index": 254,
         "locator": "label@L4386",
         "line": 4386,
         "kind": "presentation-geometry",
@@ -5261,7 +5164,7 @@
         ]
       },
       {
-        "index": 260,
+        "index": 255,
         "locator": "div@L4389",
         "line": 4389,
         "kind": "presentation-geometry",
@@ -5274,7 +5177,7 @@
         ]
       },
       {
-        "index": 261,
+        "index": 256,
         "locator": "#fm-download-multi-queue-hint",
         "line": 4390,
         "kind": "presentation-geometry",
@@ -5291,7 +5194,7 @@
         ]
       },
       {
-        "index": 262,
+        "index": 257,
         "locator": "label@L4395",
         "line": 4395,
         "kind": "presentation-geometry",
@@ -5316,7 +5219,7 @@
         ]
       },
       {
-        "index": 263,
+        "index": 258,
         "locator": "span@L4397",
         "line": 4397,
         "kind": "presentation-geometry",
@@ -5333,7 +5236,7 @@
         ]
       },
       {
-        "index": 264,
+        "index": 259,
         "locator": "div.modal-actions@L4400",
         "line": 4400,
         "kind": "presentation-geometry",
@@ -5350,7 +5253,7 @@
         ]
       },
       {
-        "index": 265,
+        "index": 260,
         "locator": "div.modal-content@L4409",
         "line": 4409,
         "kind": "presentation-geometry",
@@ -5363,7 +5266,7 @@
         ]
       },
       {
-        "index": 266,
+        "index": 261,
         "locator": "div.modal-actions@L4421",
         "line": 4421,
         "kind": "presentation-geometry",
@@ -5376,7 +5279,7 @@
         ]
       },
       {
-        "index": 267,
+        "index": 262,
         "locator": "div.modal-content@L4430",
         "line": 4430,
         "kind": "presentation-geometry",
@@ -5389,7 +5292,7 @@
         ]
       },
       {
-        "index": 268,
+        "index": 263,
         "locator": "div@L4436",
         "line": 4436,
         "kind": "presentation-geometry",
@@ -5422,7 +5325,7 @@
         ]
       },
       {
-        "index": 269,
+        "index": 264,
         "locator": "div@L4437",
         "line": 4437,
         "kind": "presentation-geometry",
@@ -5447,7 +5350,7 @@
         ]
       },
       {
-        "index": 270,
+        "index": 265,
         "locator": "label@L4438",
         "line": 4438,
         "kind": "presentation-geometry",
@@ -5472,7 +5375,7 @@
         ]
       },
       {
-        "index": 271,
+        "index": 266,
         "locator": "span@L4439",
         "line": 4439,
         "kind": "presentation-geometry",
@@ -5485,7 +5388,7 @@
         ]
       },
       {
-        "index": 272,
+        "index": 267,
         "locator": "#fm-ops-filter",
         "line": 4440,
         "kind": "presentation-geometry",
@@ -5498,7 +5401,7 @@
         ]
       },
       {
-        "index": 273,
+        "index": 268,
         "locator": "div@L4448",
         "line": 4448,
         "kind": "presentation-geometry",
@@ -5523,7 +5426,7 @@
         ]
       },
       {
-        "index": 274,
+        "index": 269,
         "locator": "#fm-ops-summary",
         "line": 4453,
         "kind": "presentation-geometry",
@@ -5544,7 +5447,7 @@
         ]
       },
       {
-        "index": 275,
+        "index": 270,
         "locator": "div.modal-content@L4461",
         "line": 4461,
         "kind": "presentation-geometry",
@@ -5557,7 +5460,7 @@
         ]
       },
       {
-        "index": 276,
+        "index": 271,
         "locator": "div@L4467",
         "line": 4467,
         "kind": "presentation-geometry",
@@ -5590,7 +5493,7 @@
         ]
       },
       {
-        "index": 277,
+        "index": 272,
         "locator": "div@L4468",
         "line": 4468,
         "kind": "presentation-geometry",
@@ -5615,7 +5518,7 @@
         ]
       },
       {
-        "index": 278,
+        "index": 273,
         "locator": "#fm-volumes-spinner",
         "line": 4470,
         "kind": "presentation-geometry",
@@ -5628,7 +5531,7 @@
         ]
       },
       {
-        "index": 279,
+        "index": 274,
         "locator": "#fm-volumes-summary",
         "line": 4472,
         "kind": "presentation-geometry",
@@ -5645,7 +5548,7 @@
         ]
       },
       {
-        "index": 280,
+        "index": 275,
         "locator": "div.status@L4476",
         "line": 4476,
         "kind": "presentation-geometry",
@@ -5662,7 +5565,7 @@
         ]
       },
       {
-        "index": 281,
+        "index": 276,
         "locator": "div.modal-content@L4483",
         "line": 4483,
         "kind": "presentation-geometry",
@@ -5675,7 +5578,7 @@
         ]
       },
       {
-        "index": 282,
+        "index": 277,
         "locator": "div.modal-actions@L4541",
         "line": 4541,
         "kind": "presentation-geometry",

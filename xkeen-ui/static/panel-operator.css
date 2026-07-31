@@ -4124,21 +4124,6 @@ body.panel-page #fm-bookmarks-modal .fm-bm-actions-group > button {
   gap: 6px;
 }
 
-@media (max-width: 620px) {
-  body.panel-page #fm-bookmarks-modal .fm-bm-row {
-    grid-template-columns: minmax(0, 1fr) repeat(3, 30px);
-  }
-
-  body.panel-page #fm-bookmarks-modal .fm-bm-path {
-    grid-column: 1 / -1;
-  }
-
-  body.panel-page #fm-bookmarks-modal .fm-bm-actions-primary {
-    width: 100%;
-    justify-content: flex-end;
-  }
-}
-
 /* Terminal: the output is the workspace; chrome is a quiet frame around it. */
 body.panel-page .terminal-overlay,
 html[data-theme="light"] body.panel-page .terminal-overlay {
@@ -7247,6 +7232,19 @@ body.panel-page :is(.fm-panel-error-retry, .fm-empty-action) .xk-action-icon {
 
 /* Mobile: two dense shell rows, scrollable nav, full-width editor. */
 @media (max-width: 720px) {
+  body.panel-page #fm-bookmarks-modal .fm-bm-row {
+    grid-template-columns: minmax(0, 1fr) repeat(3, 30px);
+  }
+
+  body.panel-page #fm-bookmarks-modal .fm-bm-path {
+    grid-column: 1 / -1;
+  }
+
+  body.panel-page #fm-bookmarks-modal .fm-bm-actions-primary {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
   body.panel-page #xray-devices-modal .xray-devices-modal-content,
   html[data-theme="light"] body.panel-page #xray-devices-modal .xray-devices-modal-content {
     width: calc(100vw - 14px);
