@@ -2988,6 +2988,7 @@ let mihomoPanelModuleApi = null;
             buildMihomoMiniButton('activate', activateLabel, {
               icon: 'check',
               tone: isActive ? 'ok' : 'primary',
+              iconOnly: true,
               title: activateTitle,
               disabled: isActive,
             }) +

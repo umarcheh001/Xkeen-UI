@@ -1732,10 +1732,14 @@ let restartLogModuleApi = null;
       if (actions.querySelector(`[data-xk-restart-log-filter="${value}"]`)) return;
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'btn-secondary log-btn restart-log-filter-btn';
+      const icon = value === 'errors' ? 'alert' : 'list-details';
+      const label = value === 'errors' ? 'Показать только ошибки' : 'Показать все записи';
+      btn.className = 'btn-secondary log-btn btn-icon restart-log-filter-btn';
       btn.setAttribute('data-xk-restart-log-filter', value);
       btn.setAttribute('aria-pressed', value === RL._filter ? 'true' : 'false');
-      btn.textContent = text;
+      btn.setAttribute('title', label);
+      btn.setAttribute('aria-label', label);
+      btn.innerHTML = iconHtml(icon);
       const anchor = actions.querySelector('[data-xk-restart-log-action]');
       insertRestartLogButton(actions, btn, anchor);
     } catch (error) {}
@@ -1747,9 +1751,15 @@ let restartLogModuleApi = null;
       if (actions.querySelector(`[data-xk-restart-log-action="${action}"]`)) return;
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'btn-secondary log-btn';
+      const iconByAction = { refresh: 'refresh', clear: 'clear', copy: 'duplicate' };
+      const labelByAction = { refresh: 'Обновить журнал', clear: 'Очистить журнал', copy: 'Скопировать журнал' };
+      const icon = iconByAction[action] || 'list-details';
+      const label = labelByAction[action] || text;
+      btn.className = 'btn-secondary log-btn btn-icon';
       btn.setAttribute('data-xk-restart-log-action', action);
-      btn.textContent = text;
+      btn.setAttribute('title', label);
+      btn.setAttribute('aria-label', label);
+      btn.innerHTML = iconHtml(icon);
       const anchor = action === 'refresh'
         ? actions.querySelector('[data-xk-restart-log-action="clear"]')
         : null;

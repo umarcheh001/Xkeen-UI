@@ -42,6 +42,33 @@ def test_logs_markup_keeps_runtime_hooks_and_exposes_shared_operator_regions():
     assert 'style="max-height:60vh; overflow:auto;"' not in view
 
 
+def test_restart_log_actions_are_icon_only_and_keep_descriptive_tooltips():
+    text = TEMPLATE.read_text(encoding="utf-8")
+    restart = RESTART_LOG.read_text(encoding="utf-8")
+    journal_markup = "\n".join(
+        part.split('</section>', 1)[0]
+        for part in text.split('<section class="card log-card xk-restart-log-card')[1:]
+    )
+
+    assert journal_markup.count('data-xk-restart-log-filter="all"') == 5
+    assert journal_markup.count('data-xk-restart-log-filter="errors"') == 5
+    assert journal_markup.count('data-xk-restart-log-action="refresh"') == 5
+    assert journal_markup.count('data-xk-restart-log-action="clear"') == 5
+    assert journal_markup.count('data-xk-restart-log-action="copy"') == 5
+    assert journal_markup.count('class="btn-secondary log-btn btn-icon restart-log-filter-btn"') == 10
+    assert journal_markup.count('class="btn-secondary log-btn btn-icon"') == 15
+    assert 'title="Показать все записи" aria-label="Показать все записи"' in journal_markup
+    assert 'title="Показать только ошибки" aria-label="Показать только ошибки"' in journal_markup
+    assert 'title="Обновить журнал" aria-label="Обновить журнал"' in journal_markup
+    assert 'title="Очистить журнал" aria-label="Очистить журнал"' in journal_markup
+    assert 'title="Скопировать журнал" aria-label="Скопировать журнал"' in journal_markup
+    assert '<span class="xk-action-label">Обновить</span>' not in journal_markup
+    assert '<span class="xk-action-label">Очистить</span>' not in journal_markup
+    assert '<span class="xk-action-label">Копировать</span>' not in journal_markup
+    assert "btn.className = 'btn-secondary log-btn btn-icon restart-log-filter-btn';" in restart
+    assert "btn.className = 'btn-secondary log-btn btn-icon';" in restart
+
+
 def test_logs_operator_layer_unifies_filters_counters_details_and_states():
     css = CSS.read_text(encoding="utf-8")
     stage = css[css.index("/* Logs keep their terminal surface dominant") : css.index("/* File manager:")]

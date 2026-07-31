@@ -16,8 +16,8 @@ def test_mihomo_generator_reuses_late_scoped_operator_layer():
     template = GENERATOR.read_text(encoding="utf-8")
     panel_template = PANEL.read_text(encoding="utf-8")
     assert '<body class="panel-page mihomo-generator-page">' in template
-    assert "filename='panel-operator.css', v='20260731a'" in template
-    assert "filename='panel-operator.css', v='20260731a'" in panel_template
+    assert "filename='panel-operator.css', v='20260731b'" in template
+    assert "filename='panel-operator.css', v='20260731b'" in panel_template
     assert template.index("filename='panel-operator.css'") > template.index("</style>")
     for fragment in ('class="generator-field-card xk-op-field"', 'class="xk-op-field-label" for="profileSelect"', 'class="generator-action-row xk-op-action-row"', 'class="hint xk-card-desc xk-op-field-hint"'):
         assert fragment in template
@@ -50,7 +50,7 @@ def test_operator_layer_flattens_mihomo_tables_forms_and_actions():
 def test_profile_actions_and_create_row_keep_the_compact_layout_aligned():
     css = CSS.read_text(encoding="utf-8")
     assert '.xk-mihomo-vault-table--profiles .xk-mihomo-row-actions {' in css
-    assert 'grid-template-columns: var(--op-control-compact-h) minmax(132px, 1fr) var(--op-control-compact-h);' in css
+    assert 'grid-template-columns: repeat(3, var(--op-control-compact-h));' in css
     assert '.xk-mihomo-mini-btn[data-action="activate"] {' in css
     assert 'border-radius: 0 !important;' in css
     assert '.xk-mihomo-profile-control-row {' in css
@@ -58,6 +58,23 @@ def test_profile_actions_and_create_row_keep_the_compact_layout_aligned():
     assert 'body.panel-page .xk-mihomo-profile-input {' in css
     assert 'body.panel-page .xk-mihomo-backups-clean-input {' in css
     assert 'margin: 0 !important;' in css
+
+
+def test_profiles_and_backups_use_icon_only_actions_without_decorative_heading_icon():
+    panel = PANEL.read_text(encoding="utf-8")
+    runtime = MIHOMO_JS.read_text(encoding="utf-8")
+    heading = panel.split('id="mihomo-profiles-link"', 1)[1].split('</div>', 1)[0]
+
+    assert '<h3>Профили и бэкапы Mihomo</h3>' in heading
+    assert "op_icon('archive')" not in heading
+    assert 'id="mihomo-refresh-profiles-btn" class="btn-secondary btn-icon' in panel
+    assert 'aria-label="Обновить профили"' in panel
+    assert 'id="mihomo-refresh-backups-btn" class="btn-secondary btn-icon' in panel
+    assert 'aria-label="Обновить бэкапы"' in panel
+    assert 'id="mihomo-save-profile-btn"' in panel
+    assert 'class="btn-secondary btn-icon xk-mihomo-profile-save-btn"' in panel
+    assert "buildMihomoMiniButton('activate', activateLabel, {" in runtime
+    assert "tone: isActive ? 'ok' : 'primary',\n              iconOnly: true," in runtime
 
 
 def test_visual_correction_removes_blue_glass_and_fixed_modal_canvases():
@@ -77,7 +94,7 @@ def test_visual_correction_removes_blue_glass_and_fixed_modal_canvases():
         assert fragment in css
 
     template = GENERATOR.read_text(encoding="utf-8")
-    assert "filename='panel-operator.css', v='20260731a'" in template
+    assert "filename='panel-operator.css', v='20260731b'" in template
 
 
 def test_mihomo_forms_closure_is_documented():

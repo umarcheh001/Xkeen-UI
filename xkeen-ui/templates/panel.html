@@ -69,7 +69,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260731a') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260731b') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -919,11 +919,11 @@
           <div class="log-header-row">
             <h2>Журнал операций Xkeen</h2>
             <div class="log-header-actions">
-              <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="all" aria-pressed="true">Все</button>
-              <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="errors" aria-pressed="false">Ошибки</button>
-              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="refresh">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
-              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="clear">{{ op_icon('clear') }}<span class="xk-action-label">Очистить</span></button>
-              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="copy">{{ op_icon('duplicate') }}<span class="xk-action-label">Копировать</span></button>
+              <button type="button" class="btn-secondary log-btn btn-icon restart-log-filter-btn" data-xk-restart-log-filter="all" aria-pressed="true" title="Показать все записи" aria-label="Показать все записи">{{ op_icon('list-details') }}</button>
+              <button type="button" class="btn-secondary log-btn btn-icon restart-log-filter-btn" data-xk-restart-log-filter="errors" aria-pressed="false" title="Показать только ошибки" aria-label="Показать только ошибки">{{ op_icon('alert') }}</button>
+              <button type="button" class="btn-secondary log-btn btn-icon" data-xk-restart-log-action="refresh" title="Обновить журнал" aria-label="Обновить журнал">{{ op_icon('refresh') }}</button>
+              <button type="button" class="btn-secondary log-btn btn-icon" data-xk-restart-log-action="clear" title="Очистить журнал" aria-label="Очистить журнал">{{ op_icon('clear') }}</button>
+              <button type="button" class="btn-secondary log-btn btn-icon" data-xk-restart-log-action="copy" title="Скопировать журнал" aria-label="Скопировать журнал">{{ op_icon('duplicate') }}</button>
             </div>
           </div>
           <div class="restart-log-summary" data-xk-restart-log-summary="1" hidden></div>
@@ -1065,9 +1065,9 @@
 
       
       
-<!-- Профили и бэкапы Mihomo -->
+      <!-- Профили и бэкапы Mihomo -->
       <div class="commands-header" id="mihomo-profiles-link" role="button" tabindex="0">
-        <h3>{{ op_icon('archive') }}<span>Профили и бэкапы Mihomo</span></h3>
+        <h3>Профили и бэкапы Mihomo</h3>
         <span id="mihomo-profiles-arrow">▼</span>
       </div>
 
@@ -1079,8 +1079,8 @@
                 <h4>Профили</h4>
                 <p class="xk-card-desc">Локальные шаблоны для быстрого переключения и возврата к сохранённым вариантам `config.yaml`.</p>
               </div>
-              <button id="mihomo-refresh-profiles-btn" class="btn-secondary xk-mihomo-vault-head-btn" type="button">
-                {{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span>
+              <button id="mihomo-refresh-profiles-btn" class="btn-secondary btn-icon xk-mihomo-vault-head-btn" type="button" title="Обновить профили" aria-label="Обновить профили">
+                {{ op_icon('refresh') }}
               </button>
             </div>
 
@@ -1115,10 +1115,11 @@
                            aria-describedby="mihomo-new-profile-name-hint mihomo-new-profile-name-error"
                            placeholder="Например, home">
                     <button id="mihomo-save-profile-btn"
-                            class="btn-secondary xk-mihomo-profile-save-btn"
+                            class="btn-secondary btn-icon xk-mihomo-profile-save-btn"
                             type="submit"
-                            title="Сохранить текущий config.yaml как профиль">
-                      {{ op_icon('save') }}<span class="xk-action-label">Сохранить</span>
+                            title="Сохранить текущий config.yaml как профиль"
+                            aria-label="Сохранить текущий config.yaml как профиль">
+                      {{ op_icon('save') }}
                     </button>
                   </div>
                   <span id="mihomo-new-profile-name-hint" class="xk-op-field-hint">Без расширения <code>.yaml</code>.</span>
@@ -1134,8 +1135,8 @@
                 <h4>Бэкапы</h4>
                 <p class="xk-card-desc">Точки возврата для профилей Mihomo с быстрым просмотром, откатом и очисткой хвоста.</p>
               </div>
-              <button id="mihomo-refresh-backups-btn" class="btn-secondary xk-mihomo-vault-head-btn" type="button">
-                {{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span>
+              <button id="mihomo-refresh-backups-btn" class="btn-secondary btn-icon xk-mihomo-vault-head-btn" type="button" title="Обновить бэкапы" aria-label="Обновить бэкапы">
+                {{ op_icon('refresh') }}
               </button>
             </div>
 
@@ -1189,11 +1190,11 @@
     <div class="log-header-row">
       <h2>Журнал операций Xkeen</h2>
       <div class="log-header-actions">
-        <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="all" aria-pressed="true">Все</button>
-        <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="errors" aria-pressed="false">Ошибки</button>
-        <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="refresh">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
-        <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="clear">{{ op_icon('clear') }}<span class="xk-action-label">Очистить</span></button>
-        <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="copy">{{ op_icon('duplicate') }}<span class="xk-action-label">Копировать</span></button>
+        <button type="button" class="btn-secondary log-btn btn-icon restart-log-filter-btn" data-xk-restart-log-filter="all" aria-pressed="true" title="Показать все записи" aria-label="Показать все записи">{{ op_icon('list-details') }}</button>
+        <button type="button" class="btn-secondary log-btn btn-icon restart-log-filter-btn" data-xk-restart-log-filter="errors" aria-pressed="false" title="Показать только ошибки" aria-label="Показать только ошибки">{{ op_icon('alert') }}</button>
+        <button type="button" class="btn-secondary log-btn btn-icon" data-xk-restart-log-action="refresh" title="Обновить журнал" aria-label="Обновить журнал">{{ op_icon('refresh') }}</button>
+        <button type="button" class="btn-secondary log-btn btn-icon" data-xk-restart-log-action="clear" title="Очистить журнал" aria-label="Очистить журнал">{{ op_icon('clear') }}</button>
+        <button type="button" class="btn-secondary log-btn btn-icon" data-xk-restart-log-action="copy" title="Скопировать журнал" aria-label="Скопировать журнал">{{ op_icon('duplicate') }}</button>
       </div>
     </div>
     <div class="restart-log-summary" data-xk-restart-log-summary="1" hidden></div>
@@ -1303,11 +1304,11 @@
           <div class="log-header-row">
             <h2>Журнал операций Xkeen</h2>
             <div class="log-header-actions">
-              <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="all" aria-pressed="true">Все</button>
-              <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="errors" aria-pressed="false">Ошибки</button>
-              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="refresh">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
-              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="clear">{{ op_icon('clear') }}<span class="xk-action-label">Очистить</span></button>
-              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="copy">{{ op_icon('duplicate') }}<span class="xk-action-label">Копировать</span></button>
+              <button type="button" class="btn-secondary log-btn btn-icon restart-log-filter-btn" data-xk-restart-log-filter="all" aria-pressed="true" title="Показать все записи" aria-label="Показать все записи">{{ op_icon('list-details') }}</button>
+              <button type="button" class="btn-secondary log-btn btn-icon restart-log-filter-btn" data-xk-restart-log-filter="errors" aria-pressed="false" title="Показать только ошибки" aria-label="Показать только ошибки">{{ op_icon('alert') }}</button>
+              <button type="button" class="btn-secondary log-btn btn-icon" data-xk-restart-log-action="refresh" title="Обновить журнал" aria-label="Обновить журнал">{{ op_icon('refresh') }}</button>
+              <button type="button" class="btn-secondary log-btn btn-icon" data-xk-restart-log-action="clear" title="Очистить журнал" aria-label="Очистить журнал">{{ op_icon('clear') }}</button>
+              <button type="button" class="btn-secondary log-btn btn-icon" data-xk-restart-log-action="copy" title="Скопировать журнал" aria-label="Скопировать журнал">{{ op_icon('duplicate') }}</button>
             </div>
           </div>
           <div class="restart-log-summary" data-xk-restart-log-summary="1" hidden></div>
@@ -1514,11 +1515,11 @@
       <div class="log-header-row">
         <h2>Журнал операций Xkeen</h2>
         <div class="log-header-actions">
-          <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="all" aria-pressed="true">Все</button>
-          <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="errors" aria-pressed="false">Ошибки</button>
-          <button type="button" class="btn-secondary log-btn" id="restart-log-refresh-btn" data-xk-restart-log-action="refresh">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
-          <button type="button" class="btn-secondary log-btn" id="restart-log-clear-btn" data-xk-restart-log-action="clear">{{ op_icon('clear') }}<span class="xk-action-label">Очистить</span></button>
-          <button type="button" class="btn-secondary log-btn" id="restart-log-copy-btn" data-xk-restart-log-action="copy">{{ op_icon('duplicate') }}<span class="xk-action-label">Копировать</span></button>
+          <button type="button" class="btn-secondary log-btn btn-icon restart-log-filter-btn" data-xk-restart-log-filter="all" aria-pressed="true" title="Показать все записи" aria-label="Показать все записи">{{ op_icon('list-details') }}</button>
+          <button type="button" class="btn-secondary log-btn btn-icon restart-log-filter-btn" data-xk-restart-log-filter="errors" aria-pressed="false" title="Показать только ошибки" aria-label="Показать только ошибки">{{ op_icon('alert') }}</button>
+          <button type="button" class="btn-secondary log-btn btn-icon" id="restart-log-refresh-btn" data-xk-restart-log-action="refresh" title="Обновить журнал" aria-label="Обновить журнал">{{ op_icon('refresh') }}</button>
+          <button type="button" class="btn-secondary log-btn btn-icon" id="restart-log-clear-btn" data-xk-restart-log-action="clear" title="Очистить журнал" aria-label="Очистить журнал">{{ op_icon('clear') }}</button>
+          <button type="button" class="btn-secondary log-btn btn-icon" id="restart-log-copy-btn" data-xk-restart-log-action="copy" title="Скопировать журнал" aria-label="Скопировать журнал">{{ op_icon('duplicate') }}</button>
         </div>
       </div>
       <div class="restart-log-summary" data-xk-restart-log-summary="1" hidden></div>
@@ -1722,11 +1723,11 @@
         <div class="log-header-row">
           <h2>Журнал операций Xkeen</h2>
           <div class="log-header-actions">
-            <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="all" aria-pressed="true">Все</button>
-            <button type="button" class="btn-secondary log-btn restart-log-filter-btn" data-xk-restart-log-filter="errors" aria-pressed="false">Ошибки</button>
-            <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="refresh">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
-            <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="clear">{{ op_icon('clear') }}<span class="xk-action-label">Очистить</span></button>
-            <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="copy">{{ op_icon('duplicate') }}<span class="xk-action-label">Копировать</span></button>
+            <button type="button" class="btn-secondary log-btn btn-icon restart-log-filter-btn" data-xk-restart-log-filter="all" aria-pressed="true" title="Показать все записи" aria-label="Показать все записи">{{ op_icon('list-details') }}</button>
+            <button type="button" class="btn-secondary log-btn btn-icon restart-log-filter-btn" data-xk-restart-log-filter="errors" aria-pressed="false" title="Показать только ошибки" aria-label="Показать только ошибки">{{ op_icon('alert') }}</button>
+            <button type="button" class="btn-secondary log-btn btn-icon" data-xk-restart-log-action="refresh" title="Обновить журнал" aria-label="Обновить журнал">{{ op_icon('refresh') }}</button>
+            <button type="button" class="btn-secondary log-btn btn-icon" data-xk-restart-log-action="clear" title="Очистить журнал" aria-label="Очистить журнал">{{ op_icon('clear') }}</button>
+            <button type="button" class="btn-secondary log-btn btn-icon" data-xk-restart-log-action="copy" title="Скопировать журнал" aria-label="Скопировать журнал">{{ op_icon('duplicate') }}</button>
           </div>
         </div>
         <div class="restart-log-summary" data-xk-restart-log-summary="1" hidden></div>
