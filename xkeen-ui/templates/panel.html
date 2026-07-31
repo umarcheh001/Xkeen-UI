@@ -958,7 +958,6 @@
                 data-tooltip="Сохранить (авто‑бэкап, авто‑перезапуск по галке)"
                 aria-label="Сохранить config.yaml">
           {{ op_icon('save') }}
-          <span class="xk-btn-label">Сохранить</span>
         </button>
 
         <button id="mihomo-save-restart-btn"
@@ -967,7 +966,6 @@
                 data-tooltip="Сохранить и перезапустить mihomo"
                 aria-label="Сохранить и перезапустить mihomo">
           {{ op_icon('restart') }}
-          <span class="xk-btn-label">Рестарт</span>
         </button>
 
         <details class="dt-log-menu xk-mihomo-menu">
@@ -1227,7 +1225,7 @@
               <div class="xkeen-mini-footer">
                 <div id="port-proxying-status" class="status" role="status" aria-live="polite"></div>
                 <div class="actions">
-                  <button id="port-proxying-save-btn" aria-label="Сохранить port_proxying.lst" data-tooltip="Сохранить список port_proxying.lst.">{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
+                  <button id="port-proxying-save-btn" class="btn-icon" aria-label="Сохранить port_proxying.lst" data-tooltip="Сохранить список port_proxying.lst.">{{ op_icon('save') }}</button>
                 </div>
               </div>
             </div>
@@ -1249,7 +1247,7 @@
               <div class="xkeen-mini-footer">
                 <div id="port-exclude-status" class="status" role="status" aria-live="polite"></div>
                 <div class="actions">
-                  <button id="port-exclude-save-btn" aria-label="Сохранить port_exclude.lst" data-tooltip="Сохранить список port_exclude.lst.">{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
+                  <button id="port-exclude-save-btn" class="btn-icon" aria-label="Сохранить port_exclude.lst" data-tooltip="Сохранить список port_exclude.lst.">{{ op_icon('save') }}</button>
                 </div>
               </div>
             </div>
@@ -1269,7 +1267,7 @@
               <div class="xkeen-mini-footer">
                 <div id="ip-exclude-status" class="status" role="status" aria-live="polite"></div>
                 <div class="actions">
-                  <button id="ip-exclude-save-btn" aria-label="Сохранить ip_exclude.lst" data-tooltip="Сохранить список ip_exclude.lst.">{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
+                  <button id="ip-exclude-save-btn" class="btn-icon" aria-label="Сохранить ip_exclude.lst" data-tooltip="Сохранить список ip_exclude.lst.">{{ op_icon('save') }}</button>
                 </div>
               </div>
             </div>
@@ -1291,7 +1289,7 @@
               <div class="xkeen-mini-footer">
                 <div id="xkeen-config-status" class="status" role="status" aria-live="polite"></div>
                 <div class="actions">
-                  <button id="xkeen-config-save-btn" aria-label="Сохранить xkeen.json" data-tooltip="Сохранить файл xkeen.json.">{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
+                  <button id="xkeen-config-save-btn" class="btn-icon" aria-label="Сохранить xkeen.json" data-tooltip="Сохранить файл xkeen.json.">{{ op_icon('save') }}</button>
                 </div>
               </div>
             </div>
@@ -1326,8 +1324,8 @@
           {% set __xk_commands_is_mips = is_mips %}
           {% set is_mips = not terminal_supports_pty %}
           <h2>Команды</h2>
-          <button type="button" class="btn-secondary commands-title-action" id="terminal-open-shell-btn" {% if not is_mips %}style="display:none;"{% endif %} data-tooltip="Открыть терминал (обычный режим).">{{ op_icon('terminal') }}<span class="xk-action-label">Открыть терминал</span></button>
-          <button type="button" class="btn-secondary btn-interactive-shell commands-title-action" id="terminal-open-pty-btn" {% if is_mips %}style="display:none;"{% endif %} title="Интерактивная оболочка (PTY)" data-tooltip="Открыть интерактивную оболочку (PTY).">{{ op_icon('terminal') }}<span class="xk-action-label">Interactive Shell</span></button>
+          <button type="button" class="btn-secondary btn-icon commands-title-action" id="terminal-open-shell-btn" {% if not is_mips %}style="display:none;"{% endif %} title="Открыть терминал" aria-label="Открыть терминал" data-tooltip="Открыть терминал (обычный режим).">{{ op_icon('terminal') }}</button>
+          <button type="button" class="btn-secondary btn-icon btn-interactive-shell commands-title-action" id="terminal-open-pty-btn" {% if is_mips %}style="display:none;"{% endif %} title="Интерактивная оболочка (PTY)" aria-label="Открыть интерактивную оболочку" data-tooltip="Открыть интерактивную оболочку (PTY).">{{ op_icon('terminal') }}</button>
         </div>
       </div>
     </div>
@@ -1341,8 +1339,8 @@
         <span class="core-ver" id="core-xray-installed">—</span>
         <a class="core-latest" id="core-xray-latest" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть релиз на GitHub">↑ <span class="core-latest-ver">—</span></a>
         <a class="core-prerelease" id="core-xray-prerelease" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть pre-release на GitHub">pre <span class="core-prerelease-ver">—</span></a>
-        <button type="button" class="btn-secondary btn-mini btn-prerelease-action" id="core-xray-prerelease-update-btn" data-core="xray" style="display:none;" data-tooltip="Запустить обновление Xray до pre-release через терминал с авто-вводом версии.">Pre</button>
-        <button type="button" class="btn-secondary btn-mini" id="core-xray-update-btn" data-core="xray" style="display:none;" data-tooltip="Запустить обновление Xray (xkeen -ux) через терминал.">Обновить</button>
+        <button type="button" class="btn-secondary btn-icon btn-prerelease-action" id="core-xray-prerelease-update-btn" data-core="xray" style="display:none;" title="Обновить Xray до pre-release" aria-label="Обновить Xray до pre-release" data-tooltip="Запустить обновление Xray до pre-release через терминал с авто-вводом версии.">{{ op_icon('download') }}</button>
+        <button type="button" class="btn-secondary btn-icon" id="core-xray-update-btn" data-core="xray" style="display:none;" title="Обновить Xray" aria-label="Обновить Xray" data-tooltip="Запустить обновление Xray (xkeen -ux) через терминал.">{{ op_icon('download') }}</button>
       </div>
       {% endif %}
       {% if has_mihomo %}
@@ -1351,12 +1349,12 @@
         <span class="core-ver" id="core-mihomo-installed">—</span>
         <a class="core-latest" id="core-mihomo-latest" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть релиз на GitHub">↑ <span class="core-latest-ver">—</span></a>
         <a class="core-prerelease" id="core-mihomo-prerelease" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть pre-release на GitHub">pre <span class="core-prerelease-ver">—</span></a>
-        <button type="button" class="btn-secondary btn-mini btn-prerelease-action" id="core-mihomo-prerelease-update-btn" data-core="mihomo" style="display:none;" data-tooltip="Запустить обновление Mihomo до pre-release через терминал с авто-вводом версии.">Pre</button>
-        <button type="button" class="btn-secondary btn-mini" id="core-mihomo-update-btn" data-core="mihomo" style="display:none;" data-tooltip="Запустить обновление Mihomo (xkeen -um) через терминал.">Обновить</button>
+        <button type="button" class="btn-secondary btn-icon btn-prerelease-action" id="core-mihomo-prerelease-update-btn" data-core="mihomo" style="display:none;" title="Обновить Mihomo до pre-release" aria-label="Обновить Mihomo до pre-release" data-tooltip="Запустить обновление Mihomo до pre-release через терминал с авто-вводом версии.">{{ op_icon('download') }}</button>
+        <button type="button" class="btn-secondary btn-icon" id="core-mihomo-update-btn" data-core="mihomo" style="display:none;" title="Обновить Mihomo" aria-label="Обновить Mihomo" data-tooltip="Запустить обновление Mihomo (xkeen -um) через терминал.">{{ op_icon('download') }}</button>
       </div>
       {% endif %}
 
-      <button type="button" class="btn-secondary btn-mini" id="cores-check-btn" title="Проверить обновления (с кэшем)">{{ op_icon('refresh') }}<span class="xk-action-label">Проверить обновления</span></button>
+      <button type="button" class="btn-secondary btn-icon" id="cores-check-btn" title="Проверить обновления (с кэшем)" aria-label="Проверить обновления">{{ op_icon('refresh') }}</button>
       <span class="cores-checked-at" id="cores-checked-at"></span>
     </div>
   </div>
@@ -1532,8 +1530,8 @@
     <div class="fm-header">
       <h2 id="fm-title">Файловый менеджер</h2>
       <div class="fm-header-actions fm-toolbar" role="toolbar" aria-label="Действия файлового менеджера">
-        <button type="button" class="btn-secondary" id="fm-volumes-btn" style="display:none;" title="USB-диски/разделы: список и Mount/Unmount">{{ op_icon('storage') }}<span class="xk-action-label">Диски</span></button>
-        <button type="button" class="btn-secondary" id="fm-ops-btn" data-fm-lite-hide="1" title="Операции с файлами (копировать, переместить, удалить, архивы и т.д.)">{{ op_icon('list-details') }}<span class="xk-action-label">Операции</span></button>
+        <button type="button" class="btn-secondary btn-icon" id="fm-volumes-btn" style="display:none;" title="USB-диски/разделы: список и Mount/Unmount" aria-label="Диски">{{ op_icon('storage') }}</button>
+        <button type="button" class="btn-secondary btn-icon" id="fm-ops-btn" data-fm-lite-hide="1" title="Операции с файлами (копировать, переместить, удалить, архивы и т.д.)" aria-label="Операции">{{ op_icon('list-details') }}</button>
       </div>
     </div>
 
@@ -1613,7 +1611,7 @@
     </div>
 
     <div class="fm-footer">
-      <button type="button" class="btn-secondary fm-help-btn" id="fm-help-btn" title="Справка (F1)" aria-label="Справка">{{ op_icon('help') }}<span class="xk-action-label">Справка</span></button>
+      <button type="button" class="btn-secondary btn-icon fm-help-btn" id="fm-help-btn" title="Справка (F1)" aria-label="Справка">{{ op_icon('help') }}</button>
       <div class="fm-footer-actions fm-toolbar" role="toolbar" aria-label="Операции с файлами"></div>
     </div>
   </section>
@@ -4448,8 +4446,8 @@ https://..."></textarea>
           </label>
         </div>
         <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
-          <button type="button" class="btn-secondary" id="fm-ops-clear-btn">{{ op_icon('clear') }}<span class="xk-action-label">Очистить историю</span></button>
-          <button type="button" class="btn-secondary" id="fm-ops-refresh-btn">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
+          <button type="button" class="btn-secondary btn-icon" id="fm-ops-clear-btn" title="Очистить историю" aria-label="Очистить историю">{{ op_icon('clear') }}</button>
+          <button type="button" class="btn-secondary btn-icon" id="fm-ops-refresh-btn" title="Обновить операции" aria-label="Обновить операции">{{ op_icon('refresh') }}</button>
         </div>
       </div>
       <div id="fm-ops-summary" style="font-size:12px; opacity:.85; margin:6px 0 10px 0;"></div>
@@ -4468,7 +4466,7 @@ https://..."></textarea>
     <div class="modal-body">
       <div style="display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:10px;">
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <button type="button" class="btn-secondary" id="fm-volumes-refresh-btn">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
+          <button type="button" class="btn-secondary btn-icon" id="fm-volumes-refresh-btn" title="Обновить список дисков" aria-label="Обновить список дисков">{{ op_icon('refresh') }}</button>
           <span id="fm-volumes-spinner" class="hidden" style="opacity:.85;">{{ op_icon('loading') }}</span>
         </div>
         <div id="fm-volumes-summary" style="font-size:12px; opacity:.85;"></div>
