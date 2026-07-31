@@ -8,6 +8,7 @@ import {
   syncMihomoModalBodyScrollLock,
 } from './mihomo_runtime.js';
 import { getXkeenFilePath } from './xkeen_runtime.js';
+import { iconHtml } from '../ui/operator_icons.js';
 
 let mihomoImportModuleApi = null;
 
@@ -552,12 +553,12 @@ let mihomoImportModuleApi = null;
     } catch (e) {}
   }
 
-  function makeManagedIconButton(icon, label, onClick, extraClass) {
+  function makeManagedIconButton(iconName, label, onClick, extraClass) {
     const safeLabel = String(label || '');
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn-secondary xk-mi-managed-btn' + (extraClass ? ' ' + extraClass : '');
-    btn.textContent = String(icon || '');
+    btn.innerHTML = iconHtml(iconName);
     btn.setAttribute('aria-label', safeLabel);
     btn.setAttribute('title', safeLabel);
     btn.setAttribute('data-tooltip', safeLabel);
@@ -619,12 +620,12 @@ let mihomoImportModuleApi = null;
       intervalLabel.className = 'mihomo-managed-sub-interval-label';
       intervalLabel.textContent = 'ч';
 
-      const saveBtn = makeManagedIconButton('💾', 'Сохранить интервал обновления', () => saveManagedXraySubscription(String(sub.id || ''), {
+      const saveBtn = makeManagedIconButton('save', 'Сохранить интервал обновления', () => saveManagedXraySubscription(String(sub.id || ''), {
         interval_hours: intervalInput.value,
       }));
 
       const toggleBtn = makeManagedIconButton(
-        enabled ? '⏸' : '▶',
+        enabled ? 'pause' : 'play',
         enabled ? 'Поставить автообновление на паузу' : 'Включить автообновление',
         () => saveManagedXraySubscription(String(sub.id || ''), {
           enabled: !enabled,
@@ -633,19 +634,19 @@ let mihomoImportModuleApi = null;
       );
 
       const refreshBtn = makeManagedIconButton(
-        '↻',
+        'refresh',
         'Обновить подписку сейчас',
         () => refreshManagedXraySubscription(String(sub.id || '')),
       );
 
       const detachBtn = makeManagedIconButton(
-        '⛓',
+        'detach',
         'Убрать из автообновления, прокси оставить',
         () => deleteManagedXraySubscription(String(sub.id || ''), false),
       );
 
       const removeBtn = makeManagedIconButton(
-        '🗑',
+        'trash',
         'Удалить автообновление и proxy-блоки',
         () => deleteManagedXraySubscription(String(sub.id || ''), true),
         'xk-mi-managed-btn--danger',

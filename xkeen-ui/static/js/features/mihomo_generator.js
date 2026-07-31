@@ -13,6 +13,7 @@ import {
   getXkeenEditorToolbarMiniItems,
   getXkeenPageName,
 } from './xkeen_runtime.js';
+import { iconHtml } from '../ui/operator_icons.js';
 
 let mihomoGeneratorModuleApi = null;
 
@@ -860,7 +861,7 @@ function initEngineToggle() {
         }
 
         function getEditablePreviewDirtyMessage() {
-          return "Исходные данные изменены. Режим редактирования включён: автопредпросмотр приостановлен. Нажмите ⚙️ или выключите «Редактирование», чтобы пересобрать YAML.";
+          return "Исходные данные изменены. Режим редактирования включён: автопредпросмотр приостановлен. Нажмите «Сгенерировать» или выключите «Редактирование», чтобы пересобрать YAML.";
         }
       
         // Обновление сводки состояния над предпросмотром
@@ -1735,7 +1736,7 @@ function initEngineToggle() {
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "btn btn-ghost btn-xs";
-          btn.textContent = "✕";
+          btn.innerHTML = iconHtml('trash');
           btn.title = "Удалить подписку";
           btn.setAttribute("aria-label", "Удалить подписку");
           btn.onclick = () => {
@@ -1880,7 +1881,7 @@ function initEngineToggle() {
             intervalInput.className = "mihomo-managed-sub-interval";
             intervalInput.title = "Интервал обновления: от 1 до 168 часов";
             const saveBtn = makeManagedSubIconButton(
-              "💾",
+              "save",
               "Сохранить интервал обновления",
               () => saveManagedSubscriptionSettings(String(sub.id || ""), intervalInput.value, { draftOnly: isDraftOnly })
             );
@@ -1889,14 +1890,14 @@ function initEngineToggle() {
             actions.appendChild(saveBtn);
             if (!isDraftOnly) {
               const refreshBtn = makeManagedSubIconButton(
-                "↻",
+                "refresh",
                 "Обновить подписку сейчас",
                 () => refreshManagedSubscription(String(sub.id || ""))
               );
               actions.appendChild(refreshBtn);
             }
             const deleteBtn = makeManagedSubIconButton(
-              "🗑",
+              "trash",
               isDraftOnly ? "Убрать автообновление из черновика" : "Удалить запись автообновления",
               () => deleteManagedSubscription(sub, { draftOnly: isDraftOnly }),
               "mihomo-managed-sub-icon-btn--danger"
@@ -1990,11 +1991,11 @@ function initEngineToggle() {
           } catch (e) {}
         }
 
-        function makeManagedSubIconButton(icon, label, onClick, extraClass = "") {
+        function makeManagedSubIconButton(iconName, label, onClick, extraClass = "") {
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "btn btn-ghost btn-xs mihomo-managed-sub-icon-btn" + (extraClass ? " " + extraClass : "");
-          btn.textContent = String(icon || "");
+          btn.innerHTML = iconHtml(iconName);
           btn.setAttribute("aria-label", String(label || ""));
           btn.setAttribute("title", String(label || ""));
           btn.setAttribute("data-tooltip", String(label || ""));
@@ -2298,7 +2299,7 @@ function initEngineToggle() {
           const delBtn = document.createElement("button");
           delBtn.type = "button";
           delBtn.className = "btn btn-danger btn-xs";
-          delBtn.textContent = "Удалить";
+          delBtn.innerHTML = iconHtml('trash') + '<span class="xk-action-label">Удалить</span>';
           delBtn.onclick = () => {
             const pos = proxyControllers.indexOf(ctrl);
             if (pos >= 0) proxyControllers.splice(pos, 1);
@@ -3357,10 +3358,9 @@ function initEngineToggle() {
             return;
           }
 
-          const originalBtnText = bulkImportApplyBtn ? String(bulkImportApplyBtn.textContent || "") : "";
           if (bulkImportApplyBtn) {
             bulkImportApplyBtn.disabled = true;
-            bulkImportApplyBtn.textContent = "Импортирую...";
+            bulkImportApplyBtn.innerHTML = iconHtml('import') + '<span class="xk-action-label">Импортирую...</span>';
           }
 
           try {
@@ -3476,7 +3476,7 @@ function initEngineToggle() {
           } finally {
             if (bulkImportApplyBtn) {
               bulkImportApplyBtn.disabled = false;
-              bulkImportApplyBtn.textContent = originalBtnText || "Импортировать";
+              bulkImportApplyBtn.innerHTML = iconHtml('import') + '<span class="xk-action-label">Импортировать</span>';
             }
           }
         }

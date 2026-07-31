@@ -1,4 +1,7 @@
 <!doctype html>
+{% macro op_icon(name, class_name='') -%}
+<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260731c') }}#xk-{{ name }}"></use></svg>
+{%- endmacro %}
 <html lang="ru">
 <head>
   <meta charset="utf-8">
@@ -1987,7 +1990,7 @@
             class="service-core-text xk-header-btn xk-header-btn-ui"
             data-xk-top-nav="1"
             title="Назад на главную панель"
-          >← Назад</a>
+          >{{ op_icon('back') }}<span class="xk-action-label">Назад</span></a>
           <a
             href="{{ url_for('devtools_page') }}"
             class="service-core-text xk-header-btn xk-header-btn-devtools"
@@ -2051,7 +2054,7 @@
               <div id="subscriptionsList" class="subscriptions-list"></div>
               <div class="generator-action-row xk-op-action-row">
                 <button type="button" id="addSubscriptionBtn" class="btn btn-ghost btn-xs" data-tooltip="Добавить новую подписку (proxy-provider).">
-                  Добавить подписку
+                  {{ op_icon('add-node') }}<span class="xk-action-label">Добавить подписку</span>
                 </button>
               </div>
               <div class="hint xk-card-desc xk-op-field-hint">
@@ -2065,10 +2068,10 @@
               <div id="mihomoManagedSubscriptionsList" class="mihomo-managed-sub-list"></div>
               <div class="generator-action-row">
                 <button type="button" id="reloadMihomoManagedSubsBtn" class="btn btn-ghost btn-xs" data-tooltip="Обновить список управляемых Xray-JSON подписок.">
-                  Обновить список
+                  {{ op_icon('refresh') }}<span class="xk-action-label">Обновить список</span>
                 </button>
                 <button type="button" id="refreshMihomoManagedDueBtn" class="btn btn-ghost btn-xs" data-tooltip="Запустить обновление подписок, у которых подошло время.">
-                  Обновить due
+                  {{ op_icon('refresh') }}<span class="xk-action-label">Обновить due</span>
                 </button>
               </div>
               <div class="hint xk-card-desc">
@@ -2120,13 +2123,13 @@
               <div id="proxiesList" class="proxies-list"></div>
               <div class="generator-action-row">
                 <button type="button" id="addProxyBtn" class="btn btn-ghost btn-xs" data-tooltip="Добавить новый узел (proxy) вручную.">
-                  + Добавить узел
+                  {{ op_icon('add-node') }}<span class="xk-action-label">Добавить узел</span>
                 </button>
                 <button type="button" id="bulkImportBtn" class="btn btn-ghost btn-xs" title="Вставьте список ссылок (vless/trojan/vmess/ss/hysteria2/hy2/tailscale) и/или https подписок">
-                  📥 Импорт списка
+                  {{ op_icon('import') }}<span class="xk-action-label">Импорт списка</span>
                 </button>
                 <button type="button" id="normalizeProxiesBtn" class="btn btn-ghost btn-xs" title="Заполнить пустые имена/группы и нормализовать текущие узлы по шаблонам из импорта">
-                  ✨ Нормализовать
+                  {{ op_icon('normalize') }}<span class="xk-action-label">Нормализовать</span>
                 </button>
               </div>
             </div>
@@ -2173,22 +2176,22 @@
                 Редактирование
               </label>
               <button type="button" id="generateBtn" class="btn btn-primary btn-icon" title="Сгенерировать/обновить предпросмотр" aria-label="Сгенерировать предпросмотр">
-                ⚙️
+                {{ op_icon('format') }}
               </button>
               <button type="button" id="resetPreviewBtn" class="btn btn-icon" title="Сбросить предпросмотр к состоянию по умолчанию" aria-label="Сбросить предпросмотр" data-tooltip="Сбросить предпросмотр к состоянию по умолчанию">
-                ↺
+                {{ op_icon('restore') }}
               </button>
               <button type="button" id="copyBtn" class="btn" title="Копировать в буфер обмена">
-                📋
+                {{ op_icon('duplicate') }}
               </button>
               <button type="button" id="saveBtn" class="btn" title="Скачать config.yaml">
-                💾
+                {{ op_icon('save') }}
               </button>
               <button type="button" id="validateBtn" class="btn" title="Проверить config.yaml через mihomo -t">
-                🩺
+                {{ op_icon('validate') }}
               </button>
               <button type="button" id="applyBtn" class="btn" title="Сохранить и применить на роутере">
-                🚀
+                {{ op_icon('apply') }}
               </button>
             </div>
           </div>
@@ -2198,7 +2201,7 @@
           <div class="validation-log-header">
             Лог проверки mihomo
             <button type="button" id="clearValidationLogBtn" class="btn" style="float:right;" data-tooltip="Очистить окно лога проверки.">
-              Очистить
+              {{ op_icon('trash') }}<span class="xk-action-label">Очистить</span>
             </button>
           </div>
           <div id="validationLog" class="validation-log"></div>
@@ -2215,7 +2218,7 @@
         <span id="mihomoResultModalTitle" class="modal-title">Результат операции</span>
         <div id="mihomoResultModalSubtitle" class="mihomo-result-modal-subtitle">Подробности проверки, предпросмотра и применения конфигурации отображаются в одном окне.</div>
       </div>
-      <button type="button" class="modal-close" data-dismiss="mihomo-result">×</button>
+      <button type="button" class="modal-close" data-dismiss="mihomo-result" aria-label="Закрыть">{{ op_icon('close') }}</button>
     </div>
     <div class="modal-body mihomo-result-modal-body">
       <section class="mihomo-result-lead">
@@ -2258,8 +2261,8 @@
     </div>
     <div class="modal-actions mihomo-result-footer">
       <div class="mihomo-result-footer-actions">
-        <button type="button" id="mihomoResultJumpBtn" class="btn" style="display:none;">Перейти к ошибке</button>
-        <button type="button" id="mihomoResultCopyBtn" class="btn">Скопировать детали</button>
+        <button type="button" id="mihomoResultJumpBtn" class="btn" style="display:none;">{{ op_icon('preview') }}<span class="xk-action-label">Перейти к ошибке</span></button>
+        <button type="button" id="mihomoResultCopyBtn" class="btn">{{ op_icon('duplicate') }}<span class="xk-action-label">Скопировать детали</span></button>
       </div>
       <button type="button" class="btn btn-primary" data-dismiss="mihomo-result">Закрыть</button>
     </div>
@@ -2273,7 +2276,7 @@
         <div class="bulk-import-modal-kicker">Mihomo / bulk import</div>
         <div class="bulk-import-header-help">Ссылки, HTTPS-подписки и Xray-JSON URL. Xray-JSON будет конвертирован в YAML-узлы.</div>
       </div>
-      <button type="button" class="modal-close" data-dismiss="bulk-import">×</button>
+      <button type="button" class="modal-close" data-dismiss="bulk-import" aria-label="Закрыть">{{ op_icon('close') }}</button>
     </div>
     <div class="modal-body bulk-import-modal-body">
       <div class="bulk-import-layout">
@@ -2366,7 +2369,7 @@ My node | vless://... | YouTube,HK"></textarea>
     <div class="bulk-import-actions">
       <div class="bulk-import-actions-main">
         <button type="button" class="btn" data-dismiss="bulk-import">Отмена</button>
-        <button type="button" id="bulkImportApplyBtn" class="btn btn-primary">Импортировать</button>
+        <button type="button" id="bulkImportApplyBtn" class="btn btn-primary">{{ op_icon('import') }}<span class="xk-action-label">Импортировать</span></button>
       </div>
     </div>
   </div>
@@ -2376,7 +2379,7 @@ My node | vless://... | YouTube,HK"></textarea>
   <div class="modal-content" style="max-width: 560px;" data-modal-key="mihomo-generator-confirm">
     <div class="modal-header">
       <span class="modal-title" id="confirm-modal-title">Подтверждение</span>
-      <button type="button" class="modal-close" id="confirm-modal-close-btn" title="Закрыть">×</button>
+      <button type="button" class="modal-close" id="confirm-modal-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
     </div>
     <div class="modal-body">
       <p id="confirm-modal-message" class="modal-description" style="white-space: pre-line; margin: 0;"></p>

@@ -25,6 +25,7 @@ import {
 } from './xkeen_runtime.js';
 import { loadEditorSchema, resolveEditorSnippetProvider } from '../ui/editor_schema.js';
 import { createMihomoQuickFixProvider } from '../ui/schema_quickfixes.js';
+import { iconHtml } from '../ui/operator_icons.js';
 
 let mihomoPanelModuleApi = null;
 
@@ -469,7 +470,7 @@ let mihomoPanelModuleApi = null;
       try { btn.dataset.tip = 'Фулскрин (F11 / Esc)'; } catch (e) {}
       try { btn.dataset.actionId = 'fs_hdr'; } catch (e) {}
       const icons = getXkeenEditorToolbarIcons();
-      btn.innerHTML = icons.fullscreen || '⛶';
+      btn.innerHTML = icons.fullscreen || iconHtml('fullscreen');
 
       btn.addEventListener('click', (e) => {
         try { e.preventDefault(); e.stopPropagation(); } catch (err) {}
@@ -2909,7 +2910,7 @@ let mihomoPanelModuleApi = null;
       'aria-label="' + escapeHtml(o.ariaLabel || label || '') + '"',
     ];
     if (o.disabled) attrs.push('disabled');
-    const glyph = o.glyph ? ('<span class="xk-btn-inline-glyph" aria-hidden="true">' + escapeHtml(o.glyph) + '</span>') : '';
+    const glyph = o.icon ? iconHtml(o.icon, 'xk-btn-inline-glyph') : '';
     const text = o.iconOnly
       ? '<span class="xk-visually-hidden">' + escapeHtml(label || '') + '</span>'
       : '<span class="xk-mihomo-mini-btn-label">' + escapeHtml(label || '') + '</span>';
@@ -2980,18 +2981,18 @@ let mihomoPanelModuleApi = null;
           '<td>' + (isActive ? buildMihomoRowBadge('Активен', 'ok') : buildMihomoRowBadge('Не активен', 'muted')) + '</td>',
           '<td><div class="xk-mihomo-row-actions">' +
             buildMihomoMiniButton('load', 'Открыть в редакторе', {
-              glyph: '📥',
+              icon: 'download',
               iconOnly: true,
               title: 'Загрузить профиль в редактор',
             }) +
             buildMihomoMiniButton('activate', activateLabel, {
-              glyph: '✓',
+              icon: 'check',
               tone: isActive ? 'ok' : 'primary',
               title: activateTitle,
               disabled: isActive,
             }) +
             buildMihomoMiniButton('delete', 'Удалить профиль', {
-              glyph: '🗑',
+              icon: 'trash',
               tone: 'danger',
               iconOnly: true,
               title: 'Удалить профиль ' + name,
@@ -3046,19 +3047,19 @@ let mihomoPanelModuleApi = null;
           '<td><span class="xk-mihomo-created-at">' + escapeHtml(created) + '</span></td>',
           '<td><div class="xk-mihomo-row-actions">' +
             buildMihomoMiniButton('preview', 'Просмотреть бэкап', {
-              glyph: '👁',
+              icon: 'preview',
               iconOnly: true,
               title: 'Просмотреть и загрузить бэкап в редактор',
             }) +
             buildMihomoMiniButton('restore', 'Восстановить бэкап', {
-              glyph: '↩',
+              icon: 'restore',
               tone: isOwnProfile ? 'primary' : 'muted',
               iconOnly: true,
               title: restoreTitle,
               disabled: !isOwnProfile,
             }) +
             buildMihomoMiniButton('delete', 'Удалить бэкап', {
-              glyph: '🗑',
+              icon: 'trash',
               tone: 'danger',
               iconOnly: true,
               title: 'Удалить бэкап ' + b.filename,

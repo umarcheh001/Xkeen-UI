@@ -238,7 +238,7 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 
 ## Сквозной поток I. Иконки действий: Tabler Icons → минимальный SVG sprite → `xk-action-icon`
 
-Статус на 30 июля 2026 года: **инфраструктура и пилот Routing Xray закрыты; миграция остальных экранов панели открыта.** Этот поток идёт параллельно Этапам 5–7 и не меняет маршруты, API, обработчики, `id`, `data-*` или смысл действий. Источник — локально закреплённый пакет `@tabler/icons`; в production не допускаются CDN, runtime-загрузка пакета или отдельный полный набор SVG.
+Статус на 31 июля 2026 года: **I0–I2 закрыты; миграция остальных экранов панели открыта.** Этот поток идёт параллельно Этапам 5–7 и не меняет маршруты, API, обработчики, `id`, `data-*` или смысл действий. Источник — локально закреплённый пакет `@tabler/icons`; в production не допускаются CDN, runtime-загрузка пакета или отдельный полный набор SVG.
 
 ### Контракт и границы
 
@@ -274,11 +274,13 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 
 ### I2. Routing Mihomo и связанные формы
 
-- [ ] составить inventory статических и динамических действий `#view-mihomo`, профилей, generator, import/proxy/HWID и subscription rows;
-- [ ] утвердить semantic mapping до замены, переиспользуя существующие XKeen-имена и добавляя в allowlist только реально используемые symbols;
-- [ ] мигрировать toolbar, row actions, empty/error actions и modal actions без изменения runtime hooks;
-- [ ] удалить emoji/text-glyph fallbacks из соответствующих render-функций;
-- [ ] проверить отдельный route Mihomo generator и попадание его иконок в локальный архив.
+- [x] составить inventory статических и динамических действий `#view-mihomo`, профилей, generator, import/proxy/HWID и subscription rows;
+- [x] утвердить semantic mapping до замены, переиспользуя существующие XKeen-имена и добавляя в allowlist только реально используемые symbols;
+- [x] мигрировать toolbar, row actions, empty/error actions и modal actions без изменения runtime hooks;
+- [x] удалить emoji/text-glyph fallbacks из соответствующих render-функций;
+- [x] проверить отдельный route Mihomo generator и попадание его иконок в локальный архив.
+
+Закрытие I2 зафиксировано в [`panel-operator-icon-i2-mihomo.md`](panel-operator-icon-i2-mihomo.md).
 
 Критерий завершения: Routing Mihomo и его связанные формы используют тот же sprite/helper/CSS contract, не создавая второго icon API или отдельного sprite.
 

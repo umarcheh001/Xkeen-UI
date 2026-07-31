@@ -103,3 +103,41 @@ def test_operator_icon_css_contract_is_monochrome_and_state_driven():
         "pointer-events: none;",
     ):
         assert fragment in contract
+
+
+def test_mihomo_routing_and_related_forms_use_operator_sprite_contract():
+    panel = TEMPLATE.read_text(encoding="utf-8")
+    generator = (ROOT / "xkeen-ui/templates/mihomo_generator.html").read_text(encoding="utf-8")
+    panel_mihomo = panel[panel.index('<div id="view-mihomo"') : panel.index('<div id="view-xkeen"')]
+    related_forms = panel[panel.index('id="mihomo-import-modal"') : panel.index('id="fm-upload-conflict-modal"') ]
+    dynamic_sources = {
+        "panel": (ROOT / "xkeen-ui/static/js/features/mihomo_panel.js").read_text(encoding="utf-8"),
+        "import": (ROOT / "xkeen-ui/static/js/features/mihomo_import.js").read_text(encoding="utf-8"),
+        "generator": (ROOT / "xkeen-ui/static/js/features/mihomo_generator.js").read_text(encoding="utf-8"),
+    }
+
+    for name in (
+        "save", "restart", "more", "download", "add-node", "hwid", "tools", "dashboard",
+        "format", "validate", "refresh", "trash", "edit", "transfer", "close",
+    ):
+        assert f"op_icon('{name}')" in panel_mihomo or f"op_icon('{name}')" in related_forms
+
+    for name in (
+        "back", "add-node", "refresh", "import", "normalize", "format", "restore",
+        "duplicate", "save", "validate", "apply", "trash", "preview", "close",
+    ):
+        assert f"op_icon('{name}')" in generator
+
+    assert "iconHtml(o.icon" in dynamic_sources["panel"]
+    assert "iconHtml(iconName)" in dynamic_sources["import"]
+    assert "iconHtml(iconName)" in dynamic_sources["generator"]
+    assert "iconHtml('trash')" in dynamic_sources["generator"]
+    assert "bulkImportApplyBtn.innerHTML = iconHtml('import')" in dynamic_sources["generator"]
+
+    emoji = re.compile(r"[\U0001F300-\U0001FAFF]")
+    for markup in (panel_mihomo, related_forms, generator):
+        for control in re.findall(r"<(?:button|summary)\b[^>]*>.*?</(?:button|summary)>", markup, flags=re.DOTALL):
+            assert not emoji.search(control), control
+
+    assert "\u00d7</button>" not in related_forms
+    assert "\u00d7</button>" not in generator

@@ -5497,19 +5497,19 @@ let outboundsModuleApi = null;
         if (resetBtn) {
           resetBtn.classList.add('xk-sub-head-chip');
           resetBtn.setAttribute('aria-label', String(resetBtn.getAttribute('title') || 'Очистить форму'));
-          resetBtn.innerHTML = '<span class="xk-sub-head-chip-glyph" aria-hidden="true">&#8634;</span><span class="xk-visually-hidden">Очистить форму</span>';
+          resetBtn.innerHTML = iconHtml('restore', 'xk-sub-head-chip-glyph') + '<span class="xk-visually-hidden">Очистить форму</span>';
         }
         const saveBtn = root.querySelector(`#${SUB_IDS.save}`);
         if (saveBtn) {
           saveBtn.classList.add('xk-sub-head-chip', 'is-primary');
           saveBtn.setAttribute('aria-label', String(saveBtn.getAttribute('title') || 'Сохранить настройки'));
-          saveBtn.innerHTML = '<span class="xk-sub-head-chip-glyph" aria-hidden="true">&#128190;</span><span class="xk-visually-hidden">Сохранить настройки</span>';
+          saveBtn.innerHTML = iconHtml('save', 'xk-sub-head-chip-glyph') + '<span class="xk-visually-hidden">Сохранить настройки</span>';
         }
         const previewBtn = root.querySelector(`#${SUB_IDS.preview}`);
         if (previewBtn) {
           previewBtn.classList.add('xk-sub-head-chip');
           previewBtn.setAttribute('aria-label', String(previewBtn.getAttribute('title') || 'Скачать подписку'));
-          previewBtn.innerHTML = '<span class="xk-sub-head-chip-glyph" aria-hidden="true">&#128065;</span><span class="xk-visually-hidden">Скачать подписку</span>';
+          previewBtn.innerHTML = iconHtml('preview', 'xk-sub-head-chip-glyph') + '<span class="xk-visually-hidden">Скачать подписку</span>';
         }
       } catch (e) {}
     }

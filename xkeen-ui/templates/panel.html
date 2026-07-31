@@ -1,6 +1,6 @@
 <!doctype html>
 {% macro op_icon(name, class_name='') -%}
-<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260730a') }}#xk-{{ name }}"></use></svg>
+<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260731c') }}#xk-{{ name }}"></use></svg>
 {%- endmacro %}
 <html lang="ru">
 <head>
@@ -957,11 +957,7 @@
                 class="terminal-tool-btn xk-save-btn xk-save-btn-primary xk-icon-btn"
                 data-tooltip="Сохранить (авто‑бэкап, авто‑перезапуск по галке)"
                 aria-label="Сохранить config.yaml">
-          <svg class="xk-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M7 3h10l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            <path d="M17 3v6H7V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <path d="M7 21v-8h10v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-          </svg>
+          {{ op_icon('save') }}
           <span class="xk-btn-label">Сохранить</span>
         </button>
 
@@ -970,15 +966,12 @@
                 class="terminal-tool-btn xk-save-btn terminal-tool-btn-danger xk-icon-btn"
                 data-tooltip="Сохранить и перезапустить mihomo"
                 aria-label="Сохранить и перезапустить mihomo">
-          <svg class="xk-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M21 12a9 9 0 1 1-2.64-6.36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <path d="M21 3v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+          {{ op_icon('restart') }}
           <span class="xk-btn-label">Рестарт</span>
         </button>
 
         <details class="dt-log-menu xk-mihomo-menu">
-          <summary class="terminal-tool-btn xk-mihomo-menu-trigger" data-tooltip="Меню" aria-label="Меню">⋯</summary>
+          <summary class="terminal-tool-btn xk-mihomo-menu-trigger" data-tooltip="Меню" aria-label="Меню">{{ op_icon('more') }}</summary>
 
           <div class="dt-log-menu-panel xk-mihomo-menu-panel">
             <div class="terminal-menu-section" aria-label="Шаблоны">
@@ -997,49 +990,49 @@
                       type="button"
                       class="terminal-tool-btn"
                       data-tooltip="Загрузить текущий config.yaml">
-                📥 Конфиг
+                {{ op_icon('download') }}<span class="xk-action-label">Конфиг</span>
               </button>
 
               <button id="mihomo-import-node-btn"
                       type="button"
                       class="terminal-tool-btn"
                       title="Mihomo Premium Import: узел, подписка или конфиг">
-                ➕ Узел
+                {{ op_icon('add-node') }}<span class="xk-action-label">Узел</span>
               </button>
 
               <button id="mihomo-hwid-sub-btn"
                       type="button"
                       class="terminal-tool-btn"
                       data-tooltip="HWID-подписка Mihomo: probe заголовков, YAML preview и diagnostics/compare view.">
-                🧬 HWID
+                {{ op_icon('hwid') }}<span class="xk-action-label">HWID</span>
               </button>
 
               <button id="mihomo-proxy-tools-btn"
                       type="button"
                       class="terminal-tool-btn"
                       data-tooltip="Proxy Tools: быстрый rename/replace узлов в секции proxies без ручного редактирования YAML">
-                ⚙️ Прокси
+                {{ op_icon('tools') }}<span class="xk-action-label">Прокси</span>
               </button>
 
               <button id="mihomo-open-zashboard-btn"
                       type="button"
                       class="terminal-tool-btn"
                       data-tooltip="Открыть Zashboard UI через same-origin прокси (без проблем с портами/CORS)">
-                🌐 Zashboard UI
+                {{ op_icon('dashboard') }}<span class="xk-action-label">Zashboard UI</span>
               </button>
 
               <button id="mihomo-format-yaml-btn"
                       type="button"
                       class="terminal-tool-btn"
                       data-tooltip="Отформатировать YAML (Prettier; оффлайн‑фолбэк через static/vendor)">
-                🧹 YAML
+                {{ op_icon('format') }}<span class="xk-action-label">YAML</span>
               </button>
 
               <button id="mihomo-validate-btn"
                       type="button"
                       class="terminal-tool-btn"
                       data-tooltip="Проверить config.yaml через mihomo (без сохранения и рестарта)">
-                🩺 Проверка
+                {{ op_icon('validate') }}<span class="xk-action-label">Проверка</span>
               </button>
             </div>
           </div>
@@ -1074,7 +1067,7 @@
       
 <!-- Профили и бэкапы Mihomo -->
       <div class="commands-header" id="mihomo-profiles-link" role="button" tabindex="0">
-        <h3>🗂️ Профили и бэкапы Mihomo</h3>
+        <h3>{{ op_icon('archive') }}<span>Профили и бэкапы Mihomo</span></h3>
         <span id="mihomo-profiles-arrow">▼</span>
       </div>
 
@@ -1087,7 +1080,7 @@
                 <p class="xk-card-desc">Локальные шаблоны для быстрого переключения и возврата к сохранённым вариантам `config.yaml`.</p>
               </div>
               <button id="mihomo-refresh-profiles-btn" class="btn-secondary xk-mihomo-vault-head-btn" type="button">
-                ⟳ Обновить
+                {{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span>
               </button>
             </div>
 
@@ -1125,7 +1118,7 @@
                             class="btn-secondary xk-mihomo-profile-save-btn"
                             type="submit"
                             title="Сохранить текущий config.yaml как профиль">
-                      💾 Сохранить
+                      {{ op_icon('save') }}<span class="xk-action-label">Сохранить</span>
                     </button>
                   </div>
                   <span id="mihomo-new-profile-name-hint" class="xk-op-field-hint">Без расширения <code>.yaml</code>.</span>
@@ -1142,7 +1135,7 @@
                 <p class="xk-card-desc">Точки возврата для профилей Mihomo с быстрым просмотром, откатом и очисткой хвоста.</p>
               </div>
               <button id="mihomo-refresh-backups-btn" class="btn-secondary xk-mihomo-vault-head-btn" type="button">
-                ⟳ Обновить
+                {{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span>
               </button>
             </div>
 
@@ -1164,7 +1157,7 @@
                   >
                   <span>шт.</span>
                 </label>
-                <button id="mihomo-backups-clean-btn" class="btn-secondary btn-icon xk-mihomo-backups-clean-btn" type="button" title="Очистить бэкапы">🧹</button>
+                <button id="mihomo-backups-clean-btn" class="btn-secondary btn-icon xk-mihomo-backups-clean-btn" type="button" title="Очистить бэкапы">{{ op_icon('trash') }}</button>
               </div>
             </div>
 
@@ -2883,7 +2876,7 @@ vless://...#mytag"></textarea>
           <div class="xk-mi-titlebox">
             <span class="modal-title">Mihomo Premium Import</span>
           </div>
-          <button type="button" class="modal-close" id="mihomo-import-close-btn" title="Закрыть">×</button>
+          <button type="button" class="modal-close" id="mihomo-import-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
         </div>
         <div class="modal-body xk-mi-body">
           <div class="xk-mi-grid">
@@ -2971,9 +2964,9 @@ https://..."></textarea>
         </div>
         <div class="modal-actions xk-mi-footer">
           <div class="xk-mi-footer-actions">
-            <button type="button" id="mihomo-import-parse-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Преобразовать ссылку в YAML и показать результат.">Преобразовать</button>
-            <button type="button" id="mihomo-import-parse-static-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Скачать подписку через доступные заголовки и вставить найденные узлы как статические proxies.">В proxies</button>
-            <button type="button" id="mihomo-import-insert-btn" class="btn-primary btn-compact xk-mi-primary-action" data-tooltip="Вставить YAML в config.yaml (proxies / proxy-providers) и закрыть окно." disabled>Вставить в конфиг</button>
+            <button type="button" id="mihomo-import-parse-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Преобразовать ссылку в YAML и показать результат.">{{ op_icon('format') }}<span class="xk-action-label">Преобразовать</span></button>
+            <button type="button" id="mihomo-import-parse-static-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Скачать подписку через доступные заголовки и вставить найденные узлы как статическ��е proxies.">{{ op_icon('download') }}<span class="xk-action-label">В proxies</span></button>
+            <button type="button" id="mihomo-import-insert-btn" class="btn-primary btn-compact xk-mi-primary-action" data-tooltip="Вставить YAML в config.yaml (proxies / proxy-providers) и закрыть окно." disabled>{{ op_icon('add-node') }}<span class="xk-action-label">Вставить в конфиг</span></button>
           </div>
           <button type="button" id="mihomo-import-cancel-btn" class="btn-secondary btn-compact">Отмена</button>
         </div>
@@ -2992,7 +2985,7 @@ https://..."></textarea>
               Аккуратные операции над <code>proxies:</code> без ручного редактирования YAML: <b>переименование</b> узла с обновлением групп и <b>точечная замена</b> содержимого по ссылке, <b>WireGuard (.conf)</b>, <b>OpenVPN (.ovpn)</b> или <b>Tailscale</b>.
             </p>
           </div>
-          <button type="button" class="modal-close" id="mihomo-proxy-tools-close-btn" title="Закрыть">×</button>
+          <button type="button" class="modal-close" id="mihomo-proxy-tools-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
         </div>
 
         <div class="modal-body xk-pt-body">
@@ -3034,7 +3027,7 @@ https://..."></textarea>
                   Proxy Tools работает только со статическими <code>proxies</code>. Хотите быстро добавить безопасный шаблон узла?
                 </div>
                 <div class="xk-pt-empty-actions">
-                  <button type="button" id="mihomo-proxy-tools-add-static-btn" class="btn-primary xk-pt-primary-btn" data-tooltip="Вставить секцию proxies: с примером статического узла в текущий YAML.">✨ Добавить статический proxy</button>
+                  <button type="button" id="mihomo-proxy-tools-add-static-btn" class="btn-primary xk-pt-primary-btn" data-tooltip="Вставить секцию proxies: с примером статического узла в текущий YAML.">{{ op_icon('add-node') }}<span class="xk-action-label">Добавить статический proxy</span></button>
                 </div>
                 <div class="xk-pt-empty-note">
                   Будет добавлен аккуратный шаблон <code>socks5</code> в секцию <code>proxies</code>. После этого его можно сразу отредактировать под свой сервер.
@@ -3057,7 +3050,7 @@ https://..."></textarea>
                 </label>
 
                 <div class="xk-pt-card-actions">
-                  <button type="button" id="mihomo-proxy-tools-rename-btn" class="btn-primary xk-pt-primary-btn" data-tooltip="Переименовать proxy и обновить все упоминания в proxy-groups.">✏️ Переименовать</button>
+                  <button type="button" id="mihomo-proxy-tools-rename-btn" class="btn-primary xk-pt-primary-btn" data-tooltip="Переименовать proxy и обновить все упоминания в proxy-groups.">{{ op_icon('edit') }}<span class="xk-action-label">Переименовать</span></button>
                 </div>
 
                 <div class="xk-pt-note">
@@ -3085,8 +3078,8 @@ https://..."></textarea>
                   </label>
 
                   <div class="xk-pt-inline-actions">
-                    <button type="button" id="mihomo-proxy-tools-prepare-btn" class="xk-pt-secondary-btn" data-tooltip="Преобразовать ссылку/конфиг в YAML и показать preview.">✨ Подготовить</button>
-                    <button type="button" id="mihomo-proxy-tools-replace-btn" class="btn-danger xk-pt-danger-btn" data-tooltip="Заменить выбранный proxy block на подготовленный YAML." disabled>♻️ Заменить</button>
+                    <button type="button" id="mihomo-proxy-tools-prepare-btn" class="xk-pt-secondary-btn" data-tooltip="Преобразовать ссылку/конфиг в YAML и показать preview.">{{ op_icon('format') }}<span class="xk-action-label">Подготовить</span></button>
+                    <button type="button" id="mihomo-proxy-tools-replace-btn" class="btn-danger xk-pt-danger-btn" data-tooltip="Заменить выбранный proxy block на подготовленный YAML." disabled>{{ op_icon('transfer') }}<span class="xk-action-label">Заменить</span></button>
                   </div>
                 </div>
 
@@ -3132,7 +3125,7 @@ https://..."></textarea>
               Проверь ссылку и preview, затем вставь provider или примени его с рестартом.
             </p>
           </div>
-          <button type="button" class="modal-close" id="mihomo-hwid-close-btn" title="Закрыть">×</button>
+          <button type="button" class="modal-close" id="mihomo-hwid-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
         </div>
 
         <div class="modal-body xk-hw-body">
@@ -3272,9 +3265,9 @@ https://..."></textarea>
 
         <div class="modal-actions xk-hw-footer">
           <div class="xk-hw-footer-actions">
-            <button type="button" id="mihomo-hwid-probe-btn" class="btn-secondary btn-compact xk-hw-secondary-btn" data-tooltip="Проверить ссылку, собрать HWID-заголовки и показать YAML preview.">Проверить</button>
-            <button type="button" id="mihomo-hwid-insert-btn" class="btn-primary btn-compact xk-hw-primary-btn" data-tooltip="Вставить proxy-provider в config.yaml редактора и закрыть окно." disabled>Вставить в конфиг</button>
-            <button type="button" id="mihomo-hwid-apply-restart-btn" class="btn-primary btn-compact xk-hw-primary-btn" data-tooltip="Сервер сохранит config.yaml и поставит рестарт в очередь." disabled>Применить + рестарт</button>
+            <button type="button" id="mihomo-hwid-probe-btn" class="btn-secondary btn-compact xk-hw-secondary-btn" data-tooltip="Проверить ссылку, собрать HWID-заголовки и показать YAML preview.">{{ op_icon('validate') }}<span class="xk-action-label">Проверить</span></button>
+            <button type="button" id="mihomo-hwid-insert-btn" class="btn-primary btn-compact xk-hw-primary-btn" data-tooltip="Вставить proxy-provider в config.yaml редактора и закрыть окно." disabled>{{ op_icon('add-node') }}<span class="xk-action-label">Вставить в конфиг</span></button>
+            <button type="button" id="mihomo-hwid-apply-restart-btn" class="btn-primary btn-compact xk-hw-primary-btn" data-tooltip="Сервер сохранит config.yaml и поставит рестарт в очередь." disabled>{{ op_icon('restart') }}<span class="xk-action-label">Применить + рестарт</span></button>
           </div>
           <button type="button" id="mihomo-hwid-cancel-btn" class="btn-secondary btn-compact">Отмена</button>
         </div>

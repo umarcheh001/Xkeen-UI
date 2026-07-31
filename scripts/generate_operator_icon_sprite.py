@@ -16,6 +16,7 @@ ICONS = {
     "add-balancer": "scale",
     "add-rule": "list-details",
     "archive": "archive",
+    "back": "arrow-left",
     "catalog": "folder-open",
     "chevron-down": "chevron-down",
     "download": "download",
@@ -48,7 +49,18 @@ ICONS = {
     "transfer": "arrows-exchange",
     "upload": "upload",
     "x": "x",
+    "add-node": "plus",
+    "apply": "rocket",
     "check": "check",
+    "close": "x",
+    "dashboard": "world",
+    "detach": "unlink",
+    "fullscreen": "maximize",
+    "hwid": "fingerprint",
+    "pause": "player-pause",
+    "play": "player-play",
+    "preview": "eye",
+    "validate": "stethoscope",
 }
 
 SVG_BODY_RE = re.compile(r"<svg\b[^>]*>(?P<body>.*)</svg>\s*", re.DOTALL)

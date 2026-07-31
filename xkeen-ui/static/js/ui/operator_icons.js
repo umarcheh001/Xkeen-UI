@@ -2,7 +2,7 @@ window.XKeen = window.XKeen || {};
 const XKeen = window.XKeen;
 XKeen.ui = XKeen.ui || {};
 
-const SPRITE_URL = '/static/icons/operator.svg?v=20260730a';
+const SPRITE_URL = '/static/icons/operator.svg?v=20260731c';
 const SAFE_ICON_NAME = /^[a-z0-9-]+$/;
 
 function iconHref(name) {
