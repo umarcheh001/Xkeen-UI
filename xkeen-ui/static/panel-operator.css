@@ -8400,7 +8400,8 @@ body.panel-page .xk-action-icon {
 }
 
 body.panel-page :is(button, [role="button"], a[href], summary)[aria-busy="true"] .xk-action-icon {
-  animation: xk-operator-icon-spin 0.9s linear infinite;
+  cursor: progress;
+  opacity: 0.72;
 }
 
 body.panel-page :is(button, [role="button"], a[href], summary):disabled .xk-action-icon,
@@ -8464,8 +8465,4 @@ body.panel-page :is(button, [role="button"], a[href], summary)[aria-disabled="tr
     stroke: currentColor !important;
     forced-color-adjust: auto;
   }
-}
-
-@keyframes xk-operator-icon-spin {
-  to { transform: rotate(360deg); }
 }

@@ -17,7 +17,7 @@ def test_i5_css_publishes_accessibility_and_forced_colors_contract():
         "@media (max-width: 720px), (any-pointer: coarse)",
         "--op-touch-target: 40px",
         "outline: 2px solid var(--op-accent-hover)",
-        "xk-operator-icon-spin",
+        "cursor: progress",
         "@media (prefers-reduced-motion: reduce)",
     ):
         assert fragment in css
