@@ -165,6 +165,31 @@ let coresStatusModuleApi = null;
     pillEl.classList.toggle('has-error', !!state.hasError);
   }
 
+  function releaseErrorLabel(release) {
+    if (!release || release.ok !== false) return '';
+    const status = Number(release.meta && release.meta.status) || 0;
+    if (status === 403 || status === 429) return 'GitHub: лимит запросов';
+    if (status >= 400) return `GitHub: ошибка ${status}`;
+    return 'GitHub недоступен';
+  }
+
+  function setCoreState(core, text) {
+    const el = $(`core-${core}-state`);
+    if (!el) return;
+    setText(el, text || '');
+    el.title = String(text || '');
+  }
+
+  function setGlobalUpdateFailure(message) {
+    const text = String(message || 'Не удалось проверить обновления через GitHub.');
+    setCoreState('xray', text);
+    setCoreState('mihomo', text);
+    setPillState($('core-pill-xray'), { hasUpdate: false, hasError: true });
+    setPillState($('core-pill-mihomo'), { hasUpdate: false, hasError: true });
+    const checkedEl = $('cores-checked-at');
+    if (checkedEl) checkedEl.textContent = 'проверка не выполнена';
+  }
+
   function applyReleaseLink(linkEl, release, {
     versionSelector,
     preferV = false,
@@ -716,6 +741,7 @@ let coresStatusModuleApi = null;
     const checkedTs = payload && payload.checked_ts ? payload.checked_ts : null;
     const stale = !!(payload && payload.stale);
     const refreshing = isRefreshInProgress(payload);
+    const globalFailure = !!(payload && payload.ok === false);
 
     const checkedEl = $('cores-checked-at');
     if (checkedEl) {
@@ -755,7 +781,8 @@ let coresStatusModuleApi = null;
       coreLabel: 'Xray',
     });
     show(xUpdateBtn, !!upd.xray);
-    setPillState(pillX, { hasUpdate: !!upd.xray, hasError: x.ok === false });
+    setPillState(pillX, { hasUpdate: !!upd.xray, hasError: globalFailure || x.ok === false });
+    setCoreState('xray', releaseErrorLabel(x) || (globalFailure ? 'GitHub недоступен' : ''));
 
     const m = latest.mihomo || {};
     const mStable = m.stable || ((m.tag || m.url) ? m : null);
@@ -780,7 +807,8 @@ let coresStatusModuleApi = null;
       coreLabel: 'Mihomo',
     });
     show(mUpdateBtn, !!upd.mihomo);
-    setPillState(pillM, { hasUpdate: !!upd.mihomo, hasError: m.ok === false });
+    setPillState(pillM, { hasUpdate: !!upd.mihomo, hasError: globalFailure || m.ok === false });
+    setCoreState('mihomo', releaseErrorLabel(m) || (globalFailure ? 'GitHub недоступен' : ''));
   }
 
   async function refreshVersions() {
@@ -816,16 +844,19 @@ let coresStatusModuleApi = null;
             if (isRefreshInProgress(settled)) {
               toastMsg('Проверка обновлений продолжается в фоне.', 'info');
             } else if (settled && settled.ok === false) {
+              applyUpdates(settled);
               toastMsg('Не удалось проверить обновления.', 'error');
             } else {
               toastMsg('Проверка обновлений выполнена.', 'info');
             }
           } else if (data && data.ok === false) {
+            applyUpdates(data);
             toastMsg('Не удалось проверить обновления.', 'error');
           } else {
             toastMsg('Проверка обновлений выполнена.', 'info');
           }
         } catch (e) {
+          setGlobalUpdateFailure();
           toastMsg('Не удалось проверить обновления.', 'error');
         } finally {
           setLoading(false);
@@ -886,6 +917,7 @@ let coresStatusModuleApi = null;
       try {
         await refreshUpdates(false);
       } catch (e) {
+        setGlobalUpdateFailure();
       } finally {
         setLoading(false);
       }

@@ -69,7 +69,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260801b') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260801f') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -1320,23 +1320,39 @@
   <div class="commands-hero">
     <div class="commands-header">
       <div class="commands-header-copy">
+        <span class="commands-kicker">Библиотека действий</span>
         <div class="commands-title-row">
           {% set __xk_commands_is_mips = is_mips %}
           {% set is_mips = not terminal_supports_pty %}
           <h2>Команды</h2>
-          <button type="button" class="btn-secondary btn-icon commands-title-action" id="terminal-open-shell-btn" {% if not is_mips %}style="display:none;"{% endif %} title="Открыть терминал" aria-label="Открыть терминал" data-tooltip="Открыть терминал (обычный режим).">{{ op_icon('terminal') }}</button>
-          <button type="button" class="btn-secondary btn-icon btn-interactive-shell commands-title-action" id="terminal-open-pty-btn" {% if is_mips %}style="display:none;"{% endif %} title="Интерактивная оболочка (PTY)" aria-label="Открыть интерактивную оболочку" data-tooltip="Открыть интерактивную оболочку (PTY).">{{ op_icon('terminal') }}</button>
+          <p class="commands-subtitle">Выберите действие или откройте оболочку для ручной работы.</p>
         </div>
+      </div>
+      <div class="commands-header-actions">
+        <button type="button" class="btn-primary commands-title-action" id="terminal-open-shell-btn" {% if not is_mips %}style="display:none;"{% endif %} title="Открыть терминал" aria-label="Открыть терминал" data-tooltip="Открыть терминал (обычный режим).">{{ op_icon('terminal') }}<span>Открыть терминал</span></button>
+        <button type="button" class="btn-primary btn-interactive-shell commands-title-action" id="terminal-open-pty-btn" {% if is_mips %}style="display:none;"{% endif %} title="Интерактивная оболочка (PTY)" aria-label="Открыть интерактивную оболочку" data-tooltip="Открыть интерактивную оболочку (PTY).">{{ op_icon('terminal') }}<span>Открыть терминал</span></button>
       </div>
     </div>
 
     {% set is_mips = __xk_commands_is_mips %}
     <!-- Cores status row (installed versions + update hints). Filled by js/features/cores_status.js -->
-    <div class="commands-status-row" id="commands-status-row" aria-live="polite">
+    <div class="commands-status-panel">
+      <div class="commands-status-heading">
+        <div>
+          <span class="commands-status-label">Ядра</span>
+          <span class="commands-status-hint">Установленные версии и доступные обновления</span>
+        </div>
+        <div class="commands-status-meta">
+          <span class="cores-checked-at" id="cores-checked-at"></span>
+          <button type="button" class="btn-secondary" id="cores-check-btn" title="Проверить обновления (с кэшем)" aria-label="Проверить обновления">{{ op_icon('refresh') }}<span>Проверить</span></button>
+        </div>
+      </div>
+      <div class="commands-status-row" id="commands-status-row" aria-live="polite">
       {% if has_xray %}
       <div class="core-pill" id="core-pill-xray" data-core="xray">
         <span class="core-name">Xray</span>
         <span class="core-ver" id="core-xray-installed">—</span>
+        <span class="core-state" id="core-xray-state"></span>
         <a class="core-latest" id="core-xray-latest" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть релиз на GitHub">↑ <span class="core-latest-ver">—</span></a>
         <a class="core-prerelease" id="core-xray-prerelease" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть pre-release на GitHub">pre <span class="core-prerelease-ver">—</span></a>
         <button type="button" class="btn-secondary btn-icon btn-prerelease-action" id="core-xray-prerelease-update-btn" data-core="xray" style="display:none;" title="Обновить Xray до pre-release" aria-label="Обновить Xray до pre-release" data-tooltip="Запустить обновление Xray до pre-release через терминал с авто-вводом версии.">{{ op_icon('download') }}</button>
@@ -1347,6 +1363,7 @@
       <div class="core-pill" id="core-pill-mihomo" data-core="mihomo">
         <span class="core-name">Mihomo</span>
         <span class="core-ver" id="core-mihomo-installed">—</span>
+        <span class="core-state" id="core-mihomo-state"></span>
         <a class="core-latest" id="core-mihomo-latest" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть релиз на GitHub">↑ <span class="core-latest-ver">—</span></a>
         <a class="core-prerelease" id="core-mihomo-prerelease" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть pre-release на GitHub">pre <span class="core-prerelease-ver">—</span></a>
         <button type="button" class="btn-secondary btn-icon btn-prerelease-action" id="core-mihomo-prerelease-update-btn" data-core="mihomo" style="display:none;" title="Обновить Mihomo до pre-release" aria-label="Обновить Mihomo до pre-release" data-tooltip="Запустить обновление Mihomo до pre-release через терминал с авто-вводом версии.">{{ op_icon('download') }}</button>
@@ -1354,13 +1371,23 @@
       </div>
       {% endif %}
 
-      <button type="button" class="btn-secondary btn-icon" id="cores-check-btn" title="Проверить обновления (с кэшем)" aria-label="Проверить обновления">{{ op_icon('refresh') }}</button>
-      <span class="cores-checked-at" id="cores-checked-at"></span>
+      </div>
     </div>
   </div>
 
   <div id="commands-body">
+  {# Keep the three desktop lanes deliberately balanced. The proxy-management
+     group is much taller than the others, so automatic CSS columns leave a
+     large hole before moving that group to the next lane. #}
+  {% set command_column_indexes = [
+    [0, 1, 2, 3, 4, 5, 10],
+    [6, 7, 8, 9, 11, 12, 14, 15],
+    [13]
+  ] %}
+  {% for column_indexes in command_column_indexes %}
+    <div class="commands-column" data-command-column="{{ loop.index }}">
   {% for group in command_groups %}
+    {% if loop.index0 in column_indexes %}
       {% set _tone = group.tone if group.tone is defined else '' %}
       {% set _parts = group.title.split(' | ', 1) %}
     <div class="command-group{% if _tone %} tone-{{ _tone }}{% endif %}" data-tone="{{ _tone or 'neutral' }}">
@@ -1373,25 +1400,25 @@
       <ul class="command-list">
         {% for cmd in group['items'] %}
           <li class="command-item-wrap">
-            <button type="button"
-                    class="command-item"
+            <div class="command-item"
                     data-flag="{{ cmd.flag }}"
                     data-label="xkeen {{ cmd.flag }}"
                     data-command="xkeen {{ cmd.flag }}"
                     data-action="run"
-                    aria-label="Выполнить xkeen {{ cmd.flag }}"
                     data-tooltip="{{ cmd.desc }}">
               <span class="command-item-prefix">xkeen</span>
               <code>{{ cmd.flag }}</code>
               <span class="command-item-desc">{{ cmd.desc }}</span>
-              <span class="command-item-action">Выполнить</span>
-            </button>
+              <button type="button" class="command-item-action" aria-label="Выполнить xkeen {{ cmd.flag }}">Выполнить</button>
+            </div>
           </li>
         {% endfor %}
       </ul>
     </div>
+    {% endif %}
   {% endfor %}
 
+  {% if loop.last %}
     <div class="command-group tone-info" data-tone="info">
       <div class="command-group-head">
         <div class="command-group-title tone-info">Утилиты панели</div>
@@ -1399,112 +1426,101 @@
       </div>
       <ul class="command-list">
         <li class="command-item-wrap">
-          <button type="button"
-                  class="command-item"
+          <div class="command-item"
                   data-flag="__sysmon_full"
                   data-label="sysmon --full"
                   data-command="sysmon --full"
                   data-action="run"
-                  aria-label="Выполнить sysmon --full"
                   data-tooltip="Мониторинг (расширенно): сеть/DNS/HTTPS/conntrack/ошибки интерфейсов/логи">
             <span class="command-item-prefix">panel</span>
             <code>sysmon --full</code>
             <span class="command-item-desc">Расширенный мониторинг сети, DNS, HTTPS, conntrack, интерфейсов и логов</span>
-            <span class="command-item-action">Выполнить</span>
-          </button>
+            <button type="button" class="command-item-action" aria-label="Выполнить sysmon --full">Выполнить</button>
+          </div>
         </li>
         <li class="command-item-wrap">
-          <button type="button"
-                  class="command-item"
+          <div class="command-item"
                   data-flag="__entware_backup"
                   data-label="entware-backup"
                   data-command="entware-backup"
                   data-action="run"
-                  aria-label="Выполнить entware-backup"
                   data-tooltip="Создать tar.gz-бэкап Entware (/opt) на выбранный накопитель">
             <span class="command-item-prefix">panel</span>
             <code>entware-backup</code>
             <span class="command-item-desc">Создать tar.gz-бэкап Entware (/opt) на выбранный накопитель</span>
-            <span class="command-item-action">Выполнить</span>
-          </button>
+            <button type="button" class="command-item-action" aria-label="Выполнить entware-backup">Выполнить</button>
+          </div>
         </li>
         <li class="command-item-wrap">
-          <button type="button"
-                  class="command-item"
+          <div class="command-item"
                   data-flag="__storage_dashboard"
                   data-label="storage-dashboard"
                   data-command="storage-dashboard"
                   data-action="run"
-                  aria-label="Выполнить storage-dashboard"
                   data-tooltip="Дашборд хранилища: разделы, размеры, тип FS, использование, swap">
             <span class="command-item-prefix">panel</span>
             <code>storage-dashboard</code>
             <span class="command-item-desc">Показать разделы, размеры, тип FS, использование и swap</span>
-            <span class="command-item-action">Выполнить</span>
-          </button>
+            <button type="button" class="command-item-action" aria-label="Выполнить storage-dashboard">Выполнить</button>
+          </div>
         </li>
         <li class="command-item-wrap">
-          <button type="button"
-                  class="command-item"
+          <div class="command-item"
                   data-flag="__device_lock_detector"
                   data-label="device-locks"
                   data-command="device-locks"
                   data-action="run"
-                  aria-label="Выполнить device-locks"
                   data-tooltip="Детектор блокировок: какие процессы удерживают диски">
             <span class="command-item-prefix">panel</span>
             <code>device-locks</code>
             <span class="command-item-desc">Найти процессы, которые удерживают диски</span>
-            <span class="command-item-action">Выполнить</span>
-          </button>
+            <button type="button" class="command-item-action" aria-label="Выполнить device-locks">Выполнить</button>
+          </div>
         </li>
         <li class="command-item-wrap">
-          <button type="button"
-                  class="command-item"
+          <div class="command-item"
                   data-flag="__memory_check"
                   data-label="memory-check"
                   data-command="memory-check"
                   data-action="run"
-                  aria-label="Выполнить memory-check"
                   data-tooltip="Диагностика памяти: RAM, swap, буферы, предупреждения, топ процессов">
             <span class="command-item-prefix">panel</span>
             <code>memory-check</code>
             <span class="command-item-desc">Проверить RAM, swap, буферы, предупреждения и топ процессов</span>
-            <span class="command-item-action">Выполнить</span>
-          </button>
+            <button type="button" class="command-item-action" aria-label="Выполнить memory-check">Выполнить</button>
+          </div>
         </li>
         <li class="command-item-wrap">
-          <button type="button"
-                  class="command-item"
+          <div class="command-item"
                   data-flag="__version_check"
                   data-label="version-check"
                   data-command="version-check"
                   data-action="run"
-                  aria-label="Выполнить version-check"
                   data-tooltip="Проверка версий: xkeen, xkeen-ui, xray, mihomo — сравнение с GitHub">
             <span class="command-item-prefix">panel</span>
             <code>version-check</code>
             <span class="command-item-desc">Сравнить версии XKeen, UI, Xray и Mihomo с GitHub</span>
-            <span class="command-item-action">Выполнить</span>
-          </button>
+            <button type="button" class="command-item-action" aria-label="Выполнить version-check">Выполнить</button>
+          </div>
         </li>
         <li class="command-item-wrap">
-          <button type="button"
-                  class="command-item"
+          <div class="command-item"
                   data-flag="__backup_monitor"
                   data-label="backup-monitor"
                   data-command="backup-monitor"
                   data-action="run"
-                  aria-label="Выполнить backup-monitor"
                   data-tooltip="Монитор бэкапов: список архивов, валидация, статус последнего бэкапа">
             <span class="command-item-prefix">panel</span>
             <code>backup-monitor</code>
             <span class="command-item-desc">Показать архивы, валидацию и статус последнего бэкапа</span>
-            <span class="command-item-action">Выполнить</span>
-          </button>
+            <button type="button" class="command-item-action" aria-label="Выполнить backup-monitor">Выполнить</button>
+          </div>
         </li>
       </ul>
     </div>
+  {% endif %}
+    </div>
+  {% endfor %}
 
   </div>
 </section>

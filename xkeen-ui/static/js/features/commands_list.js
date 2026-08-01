@@ -160,7 +160,12 @@ let commandsListModuleApi = null;
     if (!items || !items.length) return;
 
     items.forEach((el) => {
-      el.addEventListener('click', async () => {
+      const actionNode = el.querySelector('.command-item-action');
+      if (!actionNode) return;
+
+      actionNode.addEventListener('click', async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         const flag = el.getAttribute('data-flag');
         // Presentation exposes one stable string model. Keep data-label as a
         // compatibility fallback for older injected command rows.
@@ -171,10 +176,10 @@ let commandsListModuleApi = null;
         if (action !== 'run') return;
         if (!flag) return;
 
-        const actionNode = el.querySelector('.command-item-action');
         const previousAction = actionNode ? actionNode.textContent : '';
         el.classList.add('loading');
         el.setAttribute('aria-busy', 'true');
+        actionNode.disabled = true;
         if (actionNode) actionNode.textContent = 'Выполняется…';
 
         try {
@@ -200,6 +205,7 @@ let commandsListModuleApi = null;
         } finally {
           el.classList.remove('loading');
           el.removeAttribute('aria-busy');
+          actionNode.disabled = false;
           if (actionNode) actionNode.textContent = previousAction || 'Выполнить';
         }
       });
