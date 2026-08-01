@@ -8371,3 +8371,101 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
     animation-iteration-count: 1 !important;
   }
 }
+
+/* ===========================================================================
+ * I5. ACCESSIBILITY / THEMES / RESPONSIVE ICON CONTRACT
+ *
+ * SVG glyphs are deliberately semantic-color agnostic: the control owns
+ * color through currentColor, while this boundary owns focus, disabled and
+ * forced-colors behavior.  Keep this block last so legacy component rules
+ * cannot reduce the accessible hit area or focus indicator.
+ * =========================================================================== */
+body.panel-page :is(
+  button,
+  [role="button"],
+  a[href],
+  summary,
+  input,
+  select,
+  textarea
+):focus-visible {
+  outline: 2px solid var(--op-accent-hover) !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px var(--op-bg) !important;
+}
+
+body.panel-page .xk-action-icon {
+  color: currentColor;
+  forced-color-adjust: auto;
+}
+
+body.panel-page :is(button, [role="button"], a[href], summary)[aria-busy="true"] .xk-action-icon {
+  animation: xk-operator-icon-spin 0.9s linear infinite;
+}
+
+body.panel-page :is(button, [role="button"], a[href], summary):disabled .xk-action-icon,
+body.panel-page :is(button, [role="button"], a[href], summary)[aria-disabled="true"] .xk-action-icon {
+  color: currentColor;
+}
+
+/* Touch targets grow without scaling the 16px glyph.  The layout remains
+ * fluid at 125%/150% zoom because labels may wrap and controls may shrink. */
+@media (max-width: 720px), (any-pointer: coarse) {
+  body.panel-page :is(
+    button,
+    [role="button"],
+    a[href],
+    summary,
+    label:has(input[type="checkbox"]),
+    label:has(input[type="radio"])
+  ) {
+    min-height: var(--op-touch-target) !important;
+  }
+
+  body.panel-page :is(.btn-icon, .icon-only, .xk-icon-btn, .xk-sub-icon-btn, .xkeen-cm-tool) {
+    width: var(--op-touch-target) !important;
+    min-width: var(--op-touch-target) !important;
+    height: var(--op-touch-target) !important;
+  }
+}
+
+@media (forced-colors: active) {
+  body.panel-page {
+    --op-accent: Highlight;
+    --op-accent-hover: Highlight;
+    --op-accent-border: Highlight;
+    --op-accent-soft: Canvas;
+    --op-border: ButtonText;
+    --op-border-strong: ButtonText;
+    --op-text: CanvasText;
+    --op-text-strong: CanvasText;
+    --op-muted: GrayText;
+    --op-faint: GrayText;
+    --op-success: LinkText;
+    --op-warning: LinkText;
+    --op-danger: Mark;
+  }
+
+  body.panel-page :is(button, [role="button"], a[href], summary, input, select, textarea) {
+    forced-color-adjust: auto;
+    border-color: ButtonText !important;
+    background: Canvas !important;
+    color: ButtonText !important;
+    box-shadow: none !important;
+  }
+
+  body.panel-page :is(button, [role="button"], a[href], summary):is(:hover, :focus-visible, [aria-pressed="true"], [aria-expanded="true"]) {
+    background: Highlight !important;
+    color: HighlightText !important;
+  }
+
+  body.panel-page .xk-action-icon {
+    fill: none !important;
+    stroke: currentColor !important;
+    forced-color-adjust: auto;
+  }
+}
+
+@keyframes xk-operator-icon-spin {
+  to { transform: rotate(360deg); }
+}

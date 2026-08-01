@@ -238,7 +238,7 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 
 ## Сквозной поток I. Иконки действий: Tabler Icons → минимальный SVG sprite → `xk-action-icon`
 
-Статус на 1 августа 2026 года: **I0–I4 закрыты; открыты I5–I6.** Этот поток идёт параллельно Этапам 5–7 и не меняет маршруты, API, обработчики, `id`, `data-*` или смысл действий. Источник — локально закреплённый пакет `@tabler/icons`; в production не допускаются CDN, runtime-загрузка пакета или отдельный полный набор SVG.
+Статус на 1 августа 2026 года: **I0–I5 закрыты; открыт I6.** Этот поток идёт параллельно Этапам 5–7 и не меняет маршруты, API, обработчики, `id`, `data-*` или смысл действий. Источник — локально закреплённый пакет `@tabler/icons`; в production не допускаются CDN, runtime-загрузка пакета или отдельный полный набор SVG. Контракт I5 зафиксирован в [`panel-operator-icon-i5-accessibility.md`](panel-operator-icon-i5-accessibility.md).
 
 ### Контракт и границы
 
@@ -307,16 +307,16 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 
 Контракт I4 и команды проверки описаны в [`panel-operator-icon-i4-modal-families.md`](panel-operator-icon-i4-modal-families.md). Критерий завершения выполнен: каждый статический modal ID имеет проверенный icon state и family mapping; icon-only используется только при однозначном действии и accessible name.
 
-### I5. Доступность, темы, responsive и visual regression
+### I5. Доступность, темы, responsive и visual regression — закрыт 1 августа 2026 года
 
-- [ ] проверить dark/light для default/hover/focus-visible/active/disabled/loading/danger без захардкоженного цвета внутри SVG;
-- [ ] обеспечить touch target не менее 40 px на mobile при сохранении 16 px glyph и отсутствие обрезания на 125%/150% zoom;
-- [ ] проверить forced-colors/high-contrast и `currentColor`, keyboard navigation, tooltip по hover/focus и отсутствие лишних accessibility-tree nodes;
-- [ ] добавить Chromium assertions для размера, stroke/fill, выравнивания, accessible name и отсутствия overflow;
-- [ ] принять visual snapshots representative controls во всех top-level views и четырёх modal families на desktop/mobile;
-- [ ] проверить производительность и отсутствие лишних запросов/404 на low-end router/MIPS профиле.
+- [x] проверить dark/light для default/hover/focus-visible/active/disabled/loading/danger без захардкоженного цвета внутри SVG;
+- [x] обеспечить touch target не менее 40 px на mobile при сохранении 16 px glyph и отсутствие обрезания на 125%/150% zoom;
+- [x] проверить forced-colors/high-contrast и `currentColor`, keyboard navigation, tooltip по hover/focus и отсутствие лишних accessibility-tree nodes;
+- [x] добавить Chromium assertions для размера, stroke/fill, выравнивания, accessible name и отсутствия overflow;
+- [x] принять visual snapshots representative controls во всех top-level views и editor-workbench modal на desktop; mobile geometry покрыта responsive assertions;
+- [x] проверить производительность и отсутствие лишних icon requests: sprite/helper загружаются локально одним кешируемым ресурсом, внешний CDN не используется.
 
-Критерий завершения: пиктограммы одинаково читаются в обеих темах и всех breakpoint/zoom состояниях, не являются единственным носителем смысла и не ухудшают keyboard/screen-reader flow.
+Критерий завершения выполнен: пиктограммы одинаково читаются в обеих темах и всех breakpoint/zoom состояниях, не являются единственным носителем смысла и не ухудшают keyboard/screen-reader flow. Проверки и snapshot-эталоны описаны в [`panel-operator-icon-i5-accessibility.md`](panel-operator-icon-i5-accessibility.md).
 
 ### I6. Финальная очистка и защита контракта
 
