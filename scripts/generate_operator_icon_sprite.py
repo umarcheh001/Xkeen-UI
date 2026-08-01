@@ -26,6 +26,7 @@ ICONS = {
     "edit": "file-pencil",
     "export": "file-export",
     "format": "sparkles",
+    "forward": "arrow-right",
     "github": "brand-github",
     "help": "help-circle",
     "import": "file-import",

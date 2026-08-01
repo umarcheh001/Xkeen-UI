@@ -5,6 +5,8 @@
   const XKeen = window.XKeen;
   XKeen.ui = XKeen.ui || {};
 
+  const iconHtml = (name) => (XKeen.ui && XKeen.ui.operatorIcons ? XKeen.ui.operatorIcons.html(name) : '');
+
   const SUMMARY_LINE_RE = /\b(failed|error|invalid|unexpected|panic|unable|cannot|unknown|duplicate|missing|malformed|timeout|timed out|not found)\b/i;
   const WARNING_LINE_RE = /\b(warn(?:ing)?|deprecated|retry|fallback)\b/i;
   const NOISE_LINE_RE = /^(using confdir from arg:|xray \d+\.\d+\.\d+|a unified platform|reading config:|appended inbound|appended outbound|appended routing|configuration ok)$/i;
@@ -870,7 +872,7 @@
       '<div class="modal-content xk-preflight-modal">' +
       '  <div class="modal-header">' +
       '    <span class="modal-title" data-xk-preflight-title>Xray отклонил конфиг</span>' +
-      '    <button type="button" class="modal-close" title="Закрыть">×</button>' +
+      '    <button type="button" class="modal-close" title="Закрыть" aria-label="Закрыть">' + iconHtml('close') + '</button>' +
       '  </div>' +
       '  <div class="modal-body xk-preflight-body">' +
       '    <section class="xk-preflight-lead">' +

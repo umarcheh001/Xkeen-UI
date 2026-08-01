@@ -112,6 +112,11 @@ def test_stage0_inventory_covers_views_accordions_engines_and_all_modals(tmp_pat
         "drawer-help",
     }
     assert all(item["states"] for item in modal_inventory["items"])
+    assert all(item["operator_family"] == item["family"] for item in modal_inventory["items"])
+    assert all(item["icon_inventory"]["close_control_count"] == 1 for item in modal_inventory["items"])
+    assert all(item["icon_inventory"]["close_icons"] == ["close"] for item in modal_inventory["items"])
+    assert all(not item["icon_inventory"]["icon_only_without_accessible_name"] for item in modal_inventory["items"])
+    assert all(not item["icon_inventory"]["legacy_glyph_controls"] for item in modal_inventory["items"])
 
 
 def test_stage0_inventory_classifies_all_inline_styles_and_dom_hooks(tmp_path):

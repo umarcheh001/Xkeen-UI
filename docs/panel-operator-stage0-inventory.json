@@ -370,6 +370,7 @@
         "aria_modal": "true",
         "aria_label": null,
         "data_modal_key": null,
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -378,7 +379,39 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "xray-context-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "xray-context-copy-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": true
+            },
+            {
+              "control": "xray-context-close-btn2",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": true
+            }
+          ]
+        }
       },
       {
         "id": "xray-devices-modal",
@@ -387,6 +420,7 @@
         "aria_modal": "true",
         "aria_label": "Имена устройств в логах Xray",
         "data_modal_key": null,
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -395,7 +429,49 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 4,
+          "operator_icon_control_count": 3,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "xray-devices-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "xray-devices-refresh-btn",
+              "icons": [
+                "refresh"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "xray-devices-save-btn",
+              "icons": [
+                "save"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "xray-devices-close-btn2",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "terminal-history-modal",
@@ -404,12 +480,53 @@
         "aria_modal": null,
         "aria_label": "История терминала",
         "data_modal_key": null,
+        "operator_family": "drawer-help",
         "states": [
           "closed",
           "open",
           "loaded",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 4,
+          "operator_icon_control_count": 2,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "terminal-history-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "terminal-history-clear-btn",
+              "icons": [
+                "clear"
+              ],
+              "icon_only": false,
+              "accessible_name": true
+            },
+            {
+              "control": "terminal-history-insert-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": true
+            },
+            {
+              "control": "terminal-history-run-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": true
+            }
+          ]
+        }
       },
       {
         "id": "core-modal",
@@ -418,12 +535,57 @@
         "aria_modal": "true",
         "aria_label": "Выбор ядра XKeen",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 5,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "core-modal-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "control@1202",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@1560",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "core-modal-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "core-modal-confirm-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "confirm-modal",
@@ -432,12 +594,45 @@
         "aria_modal": "true",
         "aria_label": "Подтверждение",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "confirm-modal-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "confirm-modal-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "confirm-modal-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "inbounds-apply-modal",
@@ -446,12 +641,45 @@
         "aria_modal": "true",
         "aria_label": "Применение режима inbounds",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "inbounds-apply-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "inbounds-apply-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "inbounds-apply-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "routing-balancer-help-modal",
@@ -460,12 +688,123 @@
         "aria_modal": "true",
         "aria_label": "Справка по балансировщикам",
         "data_modal_key": null,
+        "operator_family": "drawer-help",
         "states": [
           "closed",
           "open",
           "loaded",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 16,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "routing-balancer-help-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "control@3901",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@6593",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@7694",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@8647",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@9426",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@10119",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@11328",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@12607",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@13876",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@14922",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@15469",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@15998",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@16518",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@17065",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "routing-balancer-help-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "xray-snapshot-modal",
@@ -474,6 +813,7 @@
         "aria_modal": "true",
         "aria_label": "Просмотр снимка Xray конфигурации",
         "data_modal_key": null,
+        "operator_family": "editor-workbench",
         "states": [
           "closed",
           "open",
@@ -481,7 +821,41 @@
           "loaded",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 2,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "xray-snapshot-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "xray-snapshot-copy-btn",
+              "icons": [
+                "duplicate"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "xray-snapshot-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "routing-template-modal",
@@ -490,6 +864,7 @@
         "aria_modal": "true",
         "aria_label": "Импорт шаблона роутинга",
         "data_modal_key": null,
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -498,7 +873,71 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 7,
+          "operator_icon_control_count": 5,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "routing-template-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "routing-template-refresh-btn",
+              "icons": [
+                "refresh"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "routing-template-save-btn",
+              "icons": [
+                "save"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "routing-template-edit-btn",
+              "icons": [
+                "edit"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "routing-template-delete-btn",
+              "icons": [
+                "trash"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "routing-template-import-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "routing-template-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "routing-template-save-modal",
@@ -507,12 +946,45 @@
         "aria_modal": "true",
         "aria_label": "Сохранить шаблон роутинга",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "routing-template-save-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "routing-template-save-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "routing-template-save-confirm-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "routing-template-edit-modal",
@@ -521,6 +993,7 @@
         "aria_modal": "true",
         "aria_label": "Редактировать шаблон роутинга",
         "data_modal_key": null,
+        "operator_family": "editor-workbench",
         "states": [
           "closed",
           "open",
@@ -528,7 +1001,39 @@
           "loaded",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "routing-template-edit-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "routing-template-edit-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "routing-template-edit-confirm-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "outbounds-generator-modal",
@@ -537,6 +1042,7 @@
         "aria_modal": "true",
         "aria_label": "Сборка ссылки прокси",
         "data_modal_key": "outbounds-generator-premium-v1",
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -545,7 +1051,63 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 6,
+          "operator_icon_control_count": 4,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "outbounds-generator-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "control@7349",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "outbounds-gen-prefill-btn",
+              "icons": [
+                "restore"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "outbounds-gen-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "outbounds-gen-generate-btn",
+              "icons": [
+                "format"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "outbounds-gen-insert-btn",
+              "icons": [
+                "apply"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "outbounds-pool-modal",
@@ -554,6 +1116,7 @@
         "aria_modal": "true",
         "aria_label": "Пул прокси для балансировщика",
         "data_modal_key": "outbounds-pool-premium-v2",
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -562,7 +1125,63 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 6,
+          "operator_icon_control_count": 4,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "outbounds-pool-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "outbounds-pool-add-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "outbounds-pool-clear-btn",
+              "icons": [
+                "clear"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "outbounds-pool-entware-mark-btn",
+              "icons": [
+                "settings"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "outbounds-pool-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "outbounds-pool-save-btn",
+              "icons": [
+                "save"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "mihomo-import-modal",
@@ -571,6 +1190,7 @@
         "aria_modal": "true",
         "aria_label": "Импорт узла Mihomo",
         "data_modal_key": null,
+        "operator_family": "editor-workbench",
         "states": [
           "closed",
           "open",
@@ -578,7 +1198,69 @@
           "loaded",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 7,
+          "operator_icon_control_count": 4,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "mihomo-import-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "mihomo-import-groups-all-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "mihomo-import-groups-none-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "mihomo-import-parse-btn",
+              "icons": [
+                "format"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "mihomo-import-parse-static-btn",
+              "icons": [
+                "download"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "mihomo-import-insert-btn",
+              "icons": [
+                "add-node"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "mihomo-import-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "mihomo-proxy-tools-modal",
@@ -587,6 +1269,7 @@
         "aria_modal": "true",
         "aria_label": "Proxy Tools Mihomo",
         "data_modal_key": null,
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -595,7 +1278,65 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 6,
+          "operator_icon_control_count": 5,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "mihomo-proxy-tools-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "mihomo-proxy-tools-add-static-btn",
+              "icons": [
+                "add-node"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "mihomo-proxy-tools-rename-btn",
+              "icons": [
+                "edit"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "mihomo-proxy-tools-prepare-btn",
+              "icons": [
+                "format"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "mihomo-proxy-tools-replace-btn",
+              "icons": [
+                "transfer"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "mihomo-proxy-tools-close2-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "mihomo-hwid-modal",
@@ -604,6 +1345,7 @@
         "aria_modal": "true",
         "aria_label": "HWID‑подписка Mihomo",
         "data_modal_key": null,
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -612,7 +1354,73 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 7,
+          "operator_icon_control_count": 6,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "mihomo-hwid-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "mihomo-hwid-diag-toggle",
+              "icons": [
+                "chevron-down"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "mihomo-hwid-diag-compare-toggle",
+              "icons": [
+                "chevron-down"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "mihomo-hwid-probe-btn",
+              "icons": [
+                "validate"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "mihomo-hwid-insert-btn",
+              "icons": [
+                "add-node"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "mihomo-hwid-apply-restart-btn",
+              "icons": [
+                "restart"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "mihomo-hwid-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-upload-conflict-modal",
@@ -621,12 +1429,51 @@
         "aria_modal": "true",
         "aria_label": "Конфликт при загрузке",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 4,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-upload-conflict-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-upload-conflict-skip-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-upload-conflict-rename-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-upload-conflict-overwrite-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-editor-modal",
@@ -635,6 +1482,7 @@
         "aria_modal": "true",
         "aria_label": "Редактор файла",
         "data_modal_key": null,
+        "operator_family": "editor-workbench",
         "states": [
           "closed",
           "open",
@@ -642,7 +1490,49 @@
           "loaded",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 4,
+          "operator_icon_control_count": 3,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-editor-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-editor-download-btn",
+              "icons": [
+                "download"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-editor-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-editor-save-btn",
+              "icons": [
+                "save"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "github-export-modal",
@@ -651,12 +1541,45 @@
         "aria_modal": null,
         "aria_label": null,
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "github-export-cancel-btn-header",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "github-export-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "github-export-confirm-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "github-catalog-modal",
@@ -665,6 +1588,7 @@
         "aria_modal": null,
         "aria_label": null,
         "data_modal_key": null,
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -673,7 +1597,41 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 2,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "github-catalog-close-btn-header",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "github-catalog-retry-btn",
+              "icons": [
+                "refresh"
+              ],
+              "icon_only": false,
+              "accessible_name": true
+            },
+            {
+              "control": "github-catalog-close-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "donate-modal",
@@ -682,12 +1640,71 @@
         "aria_modal": "true",
         "aria_label": "Поддержать проект",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 6,
+          "operator_icon_control_count": 5,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "donate-modal-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "Скопировать адрес USDT (TON)",
+              "icons": [
+                "duplicate"
+              ],
+              "icon_only": false,
+              "accessible_name": true
+            },
+            {
+              "control": "Скопировать адрес TONCOIN",
+              "icons": [
+                "duplicate"
+              ],
+              "icon_only": false,
+              "accessible_name": true
+            },
+            {
+              "control": "Скопировать адрес BITCOIN",
+              "icons": [
+                "duplicate"
+              ],
+              "icon_only": false,
+              "accessible_name": true
+            },
+            {
+              "control": "Скопировать адрес Ethereum",
+              "icons": [
+                "duplicate"
+              ],
+              "icon_only": false,
+              "accessible_name": true
+            },
+            {
+              "control": "donate-modal-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "ui-settings-modal",
@@ -696,6 +1713,7 @@
         "aria_modal": "true",
         "aria_label": "Настройки интерфейса",
         "data_modal_key": null,
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -704,7 +1722,33 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 2,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "ui-settings-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "ui-settings-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "json-editor-modal",
@@ -713,6 +1757,7 @@
         "aria_modal": null,
         "aria_label": null,
         "data_modal_key": null,
+        "operator_family": "editor-workbench",
         "states": [
           "closed",
           "open",
@@ -720,7 +1765,49 @@
           "loaded",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 4,
+          "operator_icon_control_count": 3,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "json-editor-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "json-editor-format-btn",
+              "icons": [
+                "format"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "json-editor-save-btn",
+              "icons": [
+                "save"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "json-editor-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "routing-dat-contents-modal",
@@ -729,6 +1816,7 @@
         "aria_modal": "true",
         "aria_label": "DAT content viewer",
         "data_modal_key": null,
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -737,7 +1825,117 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 14,
+          "operator_icon_control_count": 7,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "routing-dat-contents-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "routing-dat-contents-install-geodat-btn",
+              "icons": [
+                "download"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "routing-dat-contents-reload-btn",
+              "icons": [
+                "refresh"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "routing-dat-contents-copy-selected-btn",
+              "icons": [
+                "duplicate"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "routing-dat-contents-prev-btn",
+              "icons": [
+                "back"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "routing-dat-contents-next-btn",
+              "icons": [
+                "forward"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "routing-dat-contents-inrouting-btn",
+              "icons": [
+                "add-node"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "routing-dat-contents-search-items-mode-local",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "routing-dat-contents-search-items-mode-server",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "routing-dat-contents-ipfilter-all",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "routing-dat-contents-ipfilter-v4",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "routing-dat-contents-ipfilter-v6",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "routing-dat-contents-search-items-more",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "routing-dat-contents-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "mihomo-validation-modal",
@@ -746,6 +1944,7 @@
         "aria_modal": "true",
         "aria_label": null,
         "data_modal_key": null,
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -754,7 +1953,39 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "Закрыть",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "mihomo-validation-copy-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "mihomo-validation",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "ssh-modal",
@@ -763,6 +1994,7 @@
         "aria_modal": "true",
         "aria_label": "SSH profiles",
         "data_modal_key": null,
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -771,7 +2003,75 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 7,
+          "operator_icon_control_count": 7,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "ssh-modal-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "ssh-add-btn",
+              "icons": [
+                "add-node"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "ssh-delete-selected-btn",
+              "icons": [
+                "trash"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "ssh-export-btn",
+              "icons": [
+                "export"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "ssh-import-btn",
+              "icons": [
+                "import"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "ssh-copy-preview-btn",
+              "icons": [
+                "duplicate"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "ssh-run-preview-btn",
+              "icons": [
+                "play"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "ssh-edit-modal",
@@ -780,12 +2080,55 @@
         "aria_modal": "true",
         "aria_label": "SSH profile editor",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 4,
+          "operator_icon_control_count": 3,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "ssh-edit-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "ssh-edit-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "ssh-edit-delete-btn",
+              "icons": [
+                "trash"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "ssh-edit-save-btn",
+              "icons": [
+                "save"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "ssh-confirm-modal",
@@ -794,12 +2137,45 @@
         "aria_modal": "true",
         "aria_label": "Confirm",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "ssh-confirm-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "ssh-confirm-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "ssh-confirm-ok",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "ssh-transfer-modal",
@@ -808,6 +2184,7 @@
         "aria_modal": "true",
         "aria_label": "SSH profile transfer",
         "data_modal_key": null,
+        "operator_family": "editor-workbench",
         "states": [
           "closed",
           "open",
@@ -815,7 +2192,45 @@
           "loaded",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 4,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "ssh-transfer-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "ssh-transfer-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "ssh-transfer-copy-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "ssh-transfer-submit-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-connect-modal",
@@ -824,12 +2239,67 @@
         "aria_modal": "true",
         "aria_label": "Remote connect",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 6,
+          "operator_icon_control_count": 3,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-connect-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-conn-profile-del-btn",
+              "icons": [
+                "trash"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-knownhosts-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-hostkey-remove-btn",
+              "icons": [
+                "trash"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-connect-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-connect-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-knownhosts-modal",
@@ -838,6 +2308,7 @@
         "aria_modal": "true",
         "aria_label": "known_hosts",
         "data_modal_key": null,
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -846,7 +2317,51 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 5,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-knownhosts-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-knownhosts-remove-host-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-knownhosts-refresh-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-knownhosts-clear-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-knownhosts-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-create-modal",
@@ -855,12 +2370,45 @@
         "aria_modal": "true",
         "aria_label": "Create",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-create-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-create-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-create-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-rename-modal",
@@ -869,12 +2417,45 @@
         "aria_modal": "true",
         "aria_label": "Rename",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-rename-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-rename-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-rename-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-archive-modal",
@@ -883,12 +2464,45 @@
         "aria_modal": "true",
         "aria_label": "Archive",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-archive-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-archive-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-archive-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-extract-modal",
@@ -897,12 +2511,63 @@
         "aria_modal": "true",
         "aria_label": "Extract",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 6,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-extract-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-extract-dest-here-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-extract-dest-other-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-extract-dest-pick-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-extract-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-extract-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-folder-picker-modal",
@@ -911,6 +2576,7 @@
         "aria_modal": "true",
         "aria_label": "Folder picker",
         "data_modal_key": null,
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -919,7 +2585,53 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 5,
+          "operator_icon_control_count": 2,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-folder-picker-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-folder-picker-up-btn",
+              "icons": [
+                "move-up"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-folder-picker-home-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-folder-picker-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-folder-picker-select-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-archive-list-modal",
@@ -928,6 +2640,7 @@
         "aria_modal": "true",
         "aria_label": "Archive list",
         "data_modal_key": null,
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -936,7 +2649,63 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 7,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-archive-list-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-archive-list-select-all-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-archive-list-select-none-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-archive-list-refresh-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-archive-list-extract-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-archive-list-extract-here-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-archive-list-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-mask-modal",
@@ -945,12 +2714,45 @@
         "aria_modal": "true",
         "aria_label": "Select by mask",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-mask-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-mask-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-mask-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-props-modal",
@@ -959,12 +2761,39 @@
         "aria_modal": "true",
         "aria_label": "Properties",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 2,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-props-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-props-close-btn2",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-hash-modal",
@@ -973,12 +2802,57 @@
         "aria_modal": "true",
         "aria_label": "Checksum",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 5,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-hash-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-hash-copy-md5",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-hash-copy-sha256",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-hash-copy-all",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-hash-close-btn2",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-chmod-modal",
@@ -987,12 +2861,45 @@
         "aria_modal": "true",
         "aria_label": "Chmod",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-chmod-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-chmod-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-chmod-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-chown-modal",
@@ -1001,12 +2908,45 @@
         "aria_modal": "true",
         "aria_label": "Chown",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-chown-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-chown-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-chown-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-dropop-modal",
@@ -1015,12 +2955,51 @@
         "aria_modal": "true",
         "aria_label": "Move or Copy",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 4,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-dropop-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-dropop-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-dropop-copy-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-dropop-move-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-conflicts-modal",
@@ -1029,6 +3008,7 @@
         "aria_modal": "true",
         "aria_label": "Conflicts",
         "data_modal_key": null,
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -1037,7 +3017,39 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-conflicts-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-conflicts-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-conflicts-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-bookmarks-modal",
@@ -1046,6 +3058,7 @@
         "aria_modal": "true",
         "aria_label": "Избранное",
         "data_modal_key": null,
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -1054,7 +3067,65 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 6,
+          "operator_icon_control_count": 5,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-bookmarks-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-bookmarks-reset-btn",
+              "icons": [
+                "restore"
+              ],
+              "icon_only": false,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-bookmarks-add-row-btn",
+              "icons": [
+                "add-node"
+              ],
+              "icon_only": false,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-bookmarks-add-current-btn",
+              "icons": [
+                "bookmark"
+              ],
+              "icon_only": false,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-bookmarks-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-bookmarks-save-btn",
+              "icons": [
+                "save"
+              ],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-download-multi-modal",
@@ -1063,12 +3134,45 @@
         "aria_modal": "true",
         "aria_label": "Download",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-download-multi-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-download-multi-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-download-multi-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-progress-modal",
@@ -1077,12 +3181,45 @@
         "aria_modal": "true",
         "aria_label": "Progress",
         "data_modal_key": null,
+        "operator_family": "confirm-compact-form",
         "states": [
           "closed",
           "open",
           "validation-error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-progress-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-progress-cancel-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "fm-progress-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       },
       {
         "id": "fm-ops-modal",
@@ -1091,6 +3228,7 @@
         "aria_modal": "true",
         "aria_label": "Operations",
         "data_modal_key": null,
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -1099,7 +3237,43 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 3,
+          "operator_icon_control_count": 3,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-ops-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-ops-clear-btn",
+              "icons": [
+                "clear"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-ops-refresh-btn",
+              "icons": [
+                "refresh"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            }
+          ]
+        }
       },
       {
         "id": "fm-volumes-modal",
@@ -1108,6 +3282,7 @@
         "aria_modal": "true",
         "aria_label": "Диски / Тома",
         "data_modal_key": null,
+        "operator_family": "master-detail",
         "states": [
           "closed",
           "open",
@@ -1116,7 +3291,35 @@
           "empty",
           "error",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 2,
+          "operator_icon_control_count": 2,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-volumes-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-volumes-refresh-btn",
+              "icons": [
+                "refresh"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            }
+          ]
+        }
       },
       {
         "id": "fm-help-modal",
@@ -1125,12 +3328,39 @@
         "aria_modal": "true",
         "aria_label": "Справка по файловому менеджеру",
         "data_modal_key": null,
+        "operator_family": "drawer-help",
         "states": [
           "closed",
           "open",
           "loaded",
           "narrow"
-        ]
+        ],
+        "icon_inventory": {
+          "action_control_count": 2,
+          "operator_icon_control_count": 1,
+          "close_control_count": 1,
+          "close_icons": [
+            "close"
+          ],
+          "icon_only_without_accessible_name": [],
+          "legacy_glyph_controls": [],
+          "controls": [
+            {
+              "control": "fm-help-close-btn",
+              "icons": [
+                "close"
+              ],
+              "icon_only": true,
+              "accessible_name": true
+            },
+            {
+              "control": "fm-help-ok-btn",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            }
+          ]
+        }
       }
     ]
   },
@@ -6575,7 +8805,7 @@
       "xray-snapshot-status",
       "xray-snapshot-title"
     ],
-    "data_attribute_count": 369,
+    "data_attribute_count": 462,
     "data_attributes": [
       {
         "locator": "header.panel-header.panel-header-shell@L81",
@@ -7833,14 +10063,34 @@
         "value": "1"
       },
       {
+        "locator": "#xray-context-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
+      },
+      {
         "locator": "div.modal-content.xray-context-modal-content@L1754",
         "name": "data-modal-key",
         "value": "xray-log-context"
       },
       {
+        "locator": "#xray-context-close-btn2",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#xray-devices-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
+      },
+      {
         "locator": "div.modal-content.xray-devices-modal-content@L1771",
         "name": "data-modal-key",
         "value": "xray-log-devices"
+      },
+      {
+        "locator": "#xray-devices-close-btn2",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
       },
       {
         "locator": "#terminal-conn-lamp",
@@ -7908,6 +10158,11 @@
         "value": "1"
       },
       {
+        "locator": "#terminal-history-modal",
+        "name": "data-operator-modal-family",
+        "value": "drawer-help"
+      },
+      {
         "locator": "#core-modal",
         "name": "data-modal-nopos",
         "value": "1"
@@ -7916,6 +10171,11 @@
         "locator": "#core-modal",
         "name": "data-modal-remember",
         "value": "0"
+      },
+      {
+        "locator": "#core-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
       },
       {
         "locator": "button.core-option.xk-core-option@L1995",
@@ -7928,9 +10188,39 @@
         "value": "mihomo"
       },
       {
+        "locator": "#core-modal-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#confirm-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
+        "locator": "#confirm-modal-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#inbounds-apply-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
         "locator": "div.modal-content@L2037",
         "name": "data-modal-key",
         "value": "inbounds-apply"
+      },
+      {
+        "locator": "#inbounds-apply-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#routing-balancer-help-modal",
+        "name": "data-operator-modal-family",
+        "value": "drawer-help"
       },
       {
         "locator": "div.modal-content@L2089",
@@ -7978,6 +10268,16 @@
         "value": "xk-bhelp-troubles"
       },
       {
+        "locator": "#routing-balancer-help-ok-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#xray-snapshot-modal",
+        "name": "data-operator-modal-family",
+        "value": "editor-workbench"
+      },
+      {
         "locator": "div.modal-content@L2350",
         "name": "data-modal-key",
         "value": "xray-snapshot-preview"
@@ -7991,6 +10291,16 @@
         "locator": "#xray-snapshot-copy-btn",
         "name": "data-tooltip",
         "value": "Скопировать текст снимка в буфер обмена"
+      },
+      {
+        "locator": "#xray-snapshot-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#routing-template-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
       },
       {
         "locator": "div.modal-content@L2380",
@@ -8028,9 +10338,29 @@
         "value": "Заменить текст в редакторе выбранным шаблоном"
       },
       {
+        "locator": "#routing-template-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#routing-template-save-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
         "locator": "div.modal-content@L2433",
         "name": "data-modal-key",
         "value": "routing-template-save"
+      },
+      {
+        "locator": "#routing-template-save-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#routing-template-edit-modal",
+        "name": "data-operator-modal-family",
+        "value": "editor-workbench"
       },
       {
         "locator": "div.modal-content@L2469",
@@ -8043,9 +10373,19 @@
         "value": "Выбор движка редактора: CodeMirror или Monaco (общая настройка)"
       },
       {
+        "locator": "#routing-template-edit-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
         "locator": "#outbounds-generator-modal",
         "name": "data-modal-key",
         "value": "outbounds-generator-premium-v1"
+      },
+      {
+        "locator": "#outbounds-generator-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
       },
       {
         "locator": "div.modal-content.xk-gen-modal@L2522",
@@ -8063,6 +10403,11 @@
         "value": "Заполнить поля генератора из ссылки, вставленной в поле на странице (удобно для редактирования существующего прокси)."
       },
       {
+        "locator": "#outbounds-gen-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
         "locator": "#outbounds-gen-generate-btn",
         "name": "data-tooltip",
         "value": "Собрать ссылку из заполненных полей."
@@ -8078,6 +10423,11 @@
         "value": "outbounds-pool-premium-v2"
       },
       {
+        "locator": "#outbounds-pool-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
+      },
+      {
         "locator": "div.modal-content@L2790",
         "name": "data-modal-key",
         "value": "outbounds-pool-premium-v2-content"
@@ -8091,6 +10441,16 @@
         "locator": "#outbounds-pool-summary",
         "name": "data-tooltip",
         "value": "Количество строк, подготовленных к сохранению"
+      },
+      {
+        "locator": "#outbounds-pool-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#mihomo-import-modal",
+        "name": "data-operator-modal-family",
+        "value": "editor-workbench"
       },
       {
         "locator": "div.modal-content.xk-mi-modal@L2889",
@@ -8128,6 +10488,16 @@
         "value": "Вставить YAML в config.yaml (proxies / proxy-providers) и закрыть окно."
       },
       {
+        "locator": "#mihomo-import-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#mihomo-proxy-tools-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
+      },
+      {
         "locator": "div.modal-content.xk-pt-modal@L2994",
         "name": "data-modal-key",
         "value": "mihomo-proxy-tools"
@@ -8151,6 +10521,16 @@
         "locator": "#mihomo-proxy-tools-replace-btn",
         "name": "data-tooltip",
         "value": "Заменить выбранный proxy block на подготовленный YAML."
+      },
+      {
+        "locator": "#mihomo-proxy-tools-close2-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#mihomo-hwid-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
       },
       {
         "locator": "div.modal-content.xk-hw-modal@L3133",
@@ -8198,9 +10578,54 @@
         "value": "Сервер сохранит config.yaml и поставит рестарт в очередь."
       },
       {
+        "locator": "#mihomo-hwid-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-upload-conflict-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
+        "locator": "#fm-editor-modal",
+        "name": "data-operator-modal-family",
+        "value": "editor-workbench"
+      },
+      {
         "locator": "#fm-editor-engine-select",
         "name": "data-tooltip",
         "value": "Выбор движка редактора: CodeMirror или Monaco (общая настройка)"
+      },
+      {
+        "locator": "#fm-editor-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#github-export-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
+        "locator": "#github-export-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#github-catalog-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
+      },
+      {
+        "locator": "#github-catalog-close-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#donate-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
       },
       {
         "locator": "button.donate-address.xk-tooltip@L3411",
@@ -8248,9 +10673,24 @@
         "value": "#ui-settings-nav-btn-editor"
       },
       {
+        "locator": "#ui-settings-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
+      },
+      {
         "locator": "div.modal-content.xk-ui-settings-modal-content@L3454",
         "name": "data-modal-key",
         "value": "ui-settings"
+      },
+      {
+        "locator": "#ui-settings-ok-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#json-editor-modal",
+        "name": "data-operator-modal-family",
+        "value": "editor-workbench"
       },
       {
         "locator": "#json-editor-engine-select",
@@ -8271,6 +10711,16 @@
         "locator": "#json-editor-format-btn",
         "name": "data-tooltip",
         "value": "Форматировать JSON/JSONC (с комментариями)"
+      },
+      {
+        "locator": "#json-editor-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#routing-dat-contents-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
       },
       {
         "locator": "#routing-dat-contents-install-geodat-btn",
@@ -8348,6 +10798,11 @@
         "value": "Найти ещё совпадения"
       },
       {
+        "locator": "#routing-dat-contents-ok-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
         "locator": "#mihomo-validation-modal",
         "name": "data-kind",
         "value": "info"
@@ -8356,6 +10811,11 @@
         "locator": "#mihomo-validation-modal",
         "name": "data-modal-dismiss",
         "value": "mihomo-validation"
+      },
+      {
+        "locator": "#mihomo-validation-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
       },
       {
         "locator": "button.modal-close@L3640",
@@ -8373,14 +10833,244 @@
         "value": "mihomo-validation"
       },
       {
+        "locator": "button.btn-primary@L3683",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#ssh-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
+      },
+      {
+        "locator": "#ssh-edit-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
+        "locator": "#ssh-edit-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#ssh-confirm-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
+        "locator": "#ssh-confirm-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#ssh-transfer-modal",
+        "name": "data-operator-modal-family",
+        "value": "editor-workbench"
+      },
+      {
+        "locator": "#ssh-transfer-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-connect-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
         "locator": "#fm-hostkey-remove-btn",
         "name": "data-tooltip",
         "value": "Удалить hostkey для этого host (запись из known_hosts)"
       },
       {
+        "locator": "#fm-connect-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-knownhosts-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
+      },
+      {
+        "locator": "#fm-knownhosts-ok-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-create-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
+        "locator": "#fm-create-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-rename-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
+        "locator": "#fm-rename-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-archive-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
+        "locator": "#fm-archive-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-extract-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
+        "locator": "#fm-extract-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-folder-picker-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
+      },
+      {
+        "locator": "#fm-folder-picker-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-archive-list-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
+      },
+      {
+        "locator": "#fm-archive-list-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-mask-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
+        "locator": "#fm-mask-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-props-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
+        "locator": "#fm-props-close-btn2",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-hash-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
+        "locator": "#fm-hash-close-btn2",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-chmod-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
+        "locator": "#fm-chmod-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-chown-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
+        "locator": "#fm-chown-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-dropop-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
         "locator": "div.status@L4318",
         "name": "data-fm-lite-hide",
         "value": "1"
+      },
+      {
+        "locator": "#fm-dropop-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-conflicts-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
+      },
+      {
+        "locator": "#fm-conflicts-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-bookmarks-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
+      },
+      {
+        "locator": "#fm-bookmarks-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-download-multi-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
+        "locator": "#fm-download-multi-cancel-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
+      },
+      {
+        "locator": "#fm-progress-modal",
+        "name": "data-operator-modal-family",
+        "value": "confirm-compact-form"
+      },
+      {
+        "locator": "#fm-ops-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
+      },
+      {
+        "locator": "#fm-volumes-modal",
+        "name": "data-operator-modal-family",
+        "value": "master-detail"
+      },
+      {
+        "locator": "#fm-help-modal",
+        "name": "data-operator-modal-family",
+        "value": "drawer-help"
       },
       {
         "locator": "li@L4529",
@@ -8421,6 +11111,11 @@
         "locator": "li@L4551",
         "name": "data-fm-lite-hide",
         "value": "1"
+      },
+      {
+        "locator": "#fm-help-ok-btn",
+        "name": "data-operator-dismiss-duplicate",
+        "value": "true"
       }
     ],
     "hidden_runtime_node_count": 156,

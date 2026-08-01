@@ -69,11 +69,11 @@ import { iconHtml } from '../../../ui/operator_icons.js';
     if (!document.body) return null;
 
     document.body.insertAdjacentHTML('beforeend', `
-      <div id="routing-balancer-quick-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Быстрый старт балансировщика (leastPing)">
+      <div id="routing-balancer-quick-modal" class="modal hidden" data-operator-modal-family="editor-workbench" role="dialog" aria-modal="true" aria-label="Быстрый старт балансировщика (leastPing)">
         <div class="modal-content xk-qb-modal" data-modal-key="routing-balancer-quick-premium-v1">
           <div class="modal-header">
             <span class="modal-title">Быстрый старт: балансировщик leastPing</span>
-            <button type="button" class="modal-close" id="routing-balancer-quick-close-btn" title="Закрыть">×</button>
+            <button type="button" class="modal-close" id="routing-balancer-quick-close-btn" title="Закрыть" aria-label="Закрыть">${iconHtml('close')}</button>
           </div>
           <div class="modal-body">
             <div class="xk-qb-lead">

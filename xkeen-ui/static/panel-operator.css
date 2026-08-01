@@ -7209,6 +7209,142 @@ body.panel-page :is(.fm-panel-error-retry, .fm-empty-action) .xk-action-icon {
  * ========================================================================== */
 /* Tablet: keep the editor first and move the inspector below it before either
  * workspace becomes too narrow to scan comfortably. */
+
+/* I4: modal families are explicit on every static panel dialog.  The legacy
+ * feature classes still own content semantics; these rules own only the frame,
+ * scroll region and responsive geometry. */
+body.panel-page .modal[data-operator-modal-family] .modal-content {
+  display: grid;
+  width: min(760px, calc(100vw - 36px));
+  max-width: calc(100vw - 36px);
+  max-height: calc(100dvh - 36px);
+}
+
+body.panel-page .modal[data-operator-modal-family] :is(.modal-header, .modal-actions) {
+  z-index: 1;
+}
+
+body.panel-page .modal[data-operator-modal-family] .modal-body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+body.panel-page .modal[data-operator-modal-family="confirm-compact-form"] .modal-content {
+  grid-template-rows: auto minmax(0, auto) auto;
+  height: auto;
+  min-height: 0;
+}
+
+body.panel-page .modal[data-operator-modal-family="confirm-compact-form"] .modal-body {
+  max-height: min(56dvh, 540px);
+}
+
+body.panel-page .modal[data-operator-modal-family="editor-workbench"] .modal-content {
+  grid-template-rows: 50px minmax(0, 1fr) 50px;
+  width: min(1180px, calc(100vw - 36px));
+  height: clamp(520px, 82dvh, 900px);
+}
+
+body.panel-page .modal[data-operator-modal-family="editor-workbench"] .modal-header,
+body.panel-page .modal[data-operator-modal-family="editor-workbench"] .modal-actions {
+  min-height: 50px;
+}
+
+body.panel-page .modal[data-operator-modal-family="editor-workbench"] .modal-body {
+  display: flex;
+  flex-direction: column;
+}
+
+body.panel-page .modal[data-operator-modal-family="editor-workbench"] :is(
+  textarea,
+  .CodeMirror,
+  .monaco-editor,
+  .monaco-editor-container,
+  .xk-editor-host,
+  .fm-editor-host
+) {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+body.panel-page .modal[data-operator-modal-family="master-detail"] .modal-content {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(1040px, calc(100vw - 36px));
+  min-height: min(440px, calc(100dvh - 36px));
+  height: min(76dvh, 780px);
+}
+
+body.panel-page .modal[data-operator-modal-family="master-detail"] .modal-body {
+  min-height: 0;
+}
+
+body.panel-page .modal[data-operator-modal-family="drawer-help"] {
+  justify-content: flex-end;
+  padding-left: max(18px, 28vw);
+}
+
+body.panel-page .modal[data-operator-modal-family="drawer-help"] .modal-content {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(680px, calc(100vw - 36px));
+  height: min(100%, calc(100dvh - 36px));
+}
+
+body.panel-page .modal[data-operator-modal-family] .modal-close > .xk-action-icon {
+  display: block;
+}
+
+
+/* Modal actions with an icon keep one inline baseline. Legacy button styles
+ * made SVG `display:block`, which pushed the text below the glyph. */
+body.panel-page .modal-actions :is(button, .btn-primary, .btn-secondary):has(.xk-action-icon) {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+body.panel-page .modal-actions :is(button, .btn-primary, .btn-secondary) > .xk-action-label {
+  display: inline;
+  line-height: 1;
+}
+
+/* Header close is the only visible dismissal action. The old footer controls
+ * remain attached for existing runtime listeners and keyboard flows. */
+body.panel-page .modal [data-operator-dismiss-duplicate="true"] {
+  display: none !important;
+}
+
+body.panel-page .modal-actions > :is(div, span):has(> [data-operator-dismiss-duplicate="true"]):not(:has(> :not([data-operator-dismiss-duplicate="true"]))) {
+  display: none !important;
+}
+
+
+/* Read-only dialogs that formerly had only a second “Close” action no longer
+ * reserve an empty footer after the duplicate control is hidden. */
+body.panel-page :is(
+  #xray-context-modal,
+  #xray-devices-modal,
+  #routing-balancer-help-modal,
+  #routing-dat-contents-modal,
+  #fm-knownhosts-modal,
+  #fm-archive-list-modal,
+  #fm-props-modal,
+  #fm-hash-modal,
+  #fm-help-modal
+) .modal-actions:has(> [data-operator-dismiss-duplicate="true"]):not(:has(> :not([data-operator-dismiss-duplicate="true"]))) {
+  display: none !important;
+}
+
+body.panel-page :is(#json-editor-modal, #fm-editor-modal) .modal-actions {
+  justify-content: space-between;
+}
+
+body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-btn, #fm-editor-save-btn) {
+  min-width: 122px;
+}
+
 @media (max-width: 1180px) {
   body.panel-page #view-commands #commands-body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -7443,6 +7579,38 @@ body.panel-page :is(.fm-panel-error-retry, .fm-empty-action) .xk-action-icon {
 
 /* Mobile: two dense shell rows, scrollable nav, full-width editor. */
 @media (max-width: 720px) {
+  body.panel-page .modal[data-operator-modal-family] {
+    align-items: stretch;
+    padding: 0;
+  }
+
+  body.panel-page .modal[data-operator-modal-family] .modal-content,
+  body.panel-page .modal[data-operator-modal-family="editor-workbench"] .modal-content,
+  body.panel-page .modal[data-operator-modal-family="master-detail"] .modal-content,
+  body.panel-page .modal[data-operator-modal-family="drawer-help"] .modal-content {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    min-height: 100dvh;
+    border-width: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  body.panel-page .modal[data-operator-modal-family="confirm-compact-form"] .modal-content {
+    align-self: end;
+    min-height: 0;
+    height: auto;
+    max-height: 88dvh;
+    border-width: 1px !important;
+    border-radius: var(--op-radius) var(--op-radius) 0 0 !important;
+  }
+
+  body.panel-page .modal[data-operator-modal-family="drawer-help"] {
+    padding-left: 0;
+  }
+
+
   body.panel-page #view-commands #commands-body {
     grid-template-columns: minmax(0, 1fr);
     gap: 10px;

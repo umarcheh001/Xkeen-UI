@@ -238,7 +238,7 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 
 ## Сквозной поток I. Иконки действий: Tabler Icons → минимальный SVG sprite → `xk-action-icon`
 
-Статус на 31 июля 2026 года: **I0–I3 закрыты; миграция modal families и настроек (I4) остаётся открытой.** Этот поток идёт параллельно Этапам 5–7 и не меняет маршруты, API, обработчики, `id`, `data-*` или смысл действий. Источник — локально закреплённый пакет `@tabler/icons`; в production не допускаются CDN, runtime-загрузка пакета или отдельный полный набор SVG.
+Статус на 1 августа 2026 года: **I0–I4 закрыты; открыты I5–I6.** Этот поток идёт параллельно Этапам 5–7 и не меняет маршруты, API, обработчики, `id`, `data-*` или смысл действий. Источник — локально закреплённый пакет `@tabler/icons`; в production не допускаются CDN, runtime-загрузка пакета или отдельный полный набор SVG.
 
 ### Контракт и границы
 
@@ -296,15 +296,16 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 
 Критерий завершения: **выполнен**. Все основные рабочие экраны панели используют один semantic icon dictionary; legacy glyphs оставлены только для явно документированных content/status исключений и modal families следующего этапа.
 
-### I4. Модальные семейства, редакторы и настройки
+### I4. Модальные семейства, редакторы и настройки — закрыт 1 августа 2026 года
 
-- [ ] включить icon inventory всех 50 modal IDs в существующий modal inventory;
-- [ ] мигрировать editor/workbench toolbars, help drawer, confirm/compact forms, master/detail и file-manager dialogs партиями вместе с Этапом 5;
-- [ ] привести close/back/more/help/save/cancel/danger actions к одному значению и порядку, не заменяя ясный текст иконкой ради компактности;
-- [ ] мигрировать UI settings, core selector, DAT Explorer, terminal и остальные поздние modal states;
-- [ ] отдельно проверить body-portal controls и динамически создаваемые кнопки после open/close/reopen.
+- [x] включить icon inventory всех 50 modal IDs в существующий modal inventory; для каждого окна зафиксированы семейство, close icon, icon-only accessible name и legacy-glyph guard;
+- [x] мигрировать editor/workbench toolbars, help drawer, confirm/compact forms, master/detail и file-manager dialogs на локальный `xk-action-icon` sprite без изменения DOM/JS hooks;
+- [x] привести close/back/more/help/save/cancel/danger actions к одному semantic dictionary и порядку, сохранив текстовые подписи там, где они повышают ясность;
+- [x] мигрировать UI settings, core selector, DAT Explorer, terminal и поздние modal states; динамические preflight/routing/help/JSON/subscription модалы используют тот же helper;
+- [x] отдельно проверить body-portal controls и динамически создаваемые кнопки после open/close/reopen;
+- [x] добавить четыре явных CSS-family contracts (`confirm-compact-form`, `editor-workbench`, `master-detail`, `drawer-help`) с fullscreen narrow fallback и растущим editor body.
 
-Критерий завершения: каждый modal ID имеет проверенный icon state в loaded/empty/error/narrow режимах; icon-only используется только там, где действие остаётся однозначным и имеет accessible name.
+Контракт I4 и команды проверки описаны в [`panel-operator-icon-i4-modal-families.md`](panel-operator-icon-i4-modal-families.md). Критерий завершения выполнен: каждый статический modal ID имеет проверенный icon state и family mapping; icon-only используется только при однозначном действии и accessible name.
 
 ### I5. Доступность, темы, responsive и visual regression
 

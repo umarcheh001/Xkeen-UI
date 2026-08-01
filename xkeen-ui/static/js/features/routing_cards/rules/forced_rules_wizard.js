@@ -66,11 +66,11 @@ import { iconHtml } from '../../../ui/operator_icons.js';
     if (!document.body) return null;
 
     document.body.insertAdjacentHTML('beforeend', `
-      <div id="routing-forced-rules-modal" class="modal hidden" data-modal-key="routing-forced-rules-premium-v4" role="dialog" aria-modal="true" aria-label="Принудительные правила (обход балансировщика)">
+      <div id="routing-forced-rules-modal" class="modal hidden" data-operator-modal-family="editor-workbench" data-modal-key="routing-forced-rules-premium-v4" role="dialog" aria-modal="true" aria-label="Принудительные правила (обход балансировщика)">
         <div class="modal-content" data-modal-key="routing-forced-rules-premium-v4-content">
           <div class="modal-header">
             <span class="modal-title">Принудительные правила (обход балансировщика)</span>
-            <button type="button" class="modal-close" id="routing-forced-rules-close-btn" title="Закрыть">×</button>
+            <button type="button" class="modal-close" id="routing-forced-rules-close-btn" title="Закрыть" aria-label="Закрыть">${iconHtml('close')}</button>
           </div>
           <div class="modal-body">
             <div class="xk-forced-wizard-lead">

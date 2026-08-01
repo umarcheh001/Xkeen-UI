@@ -372,7 +372,86 @@ def _editor_engine_contract(engine_source: str, elements: list[dict[str, object]
     }
 
 
-def _build_modals(elements: list[dict[str, object]]) -> list[dict[str, object]]:
+def _modal_source(source: str, modal_id: str) -> str:
+    """Return one top-level modal subtree without relying on fragile line ranges."""
+    root = re.search(
+        rf'<div\b(?=[^>]*\bid=["\']{re.escape(modal_id)}["\'])(?=[^>]*\bclass=["\'][^"\']*\bmodal\b[^"\']*["\'])[^>]*>',
+        source,
+        re.IGNORECASE,
+    )
+    if not root:
+        return ""
+    depth = 0
+    for tag in re.finditer(r'</?div\b[^>]*>', source[root.start():], re.IGNORECASE):
+        value = tag.group(0)
+        if value.startswith('</'):
+            depth -= 1
+            if depth == 0:
+                return source[root.start(): root.start() + tag.end()]
+        elif not value.rstrip().endswith('/>'):
+            depth += 1
+    return source[root.start():]
+
+
+def _control_id(attrs: str, position: int) -> str:
+    for name in ('id', 'aria-label', 'title', 'data-dismiss'):
+        value = _attr_from_tag(attrs, name)
+        if value:
+            return value
+    return f'control@{position}'
+
+
+def _modal_icon_inventory(source: str, modal_id: str) -> dict[str, object]:
+    """Describe action glyphs in a modal as a reviewable static contract.
+
+    Jinja renders the SVG on the server, therefore inspection deliberately reads
+    the template source and records the semantic ``op_icon`` name rather than a
+    transient rendered URL. This makes stale emoji/action glyphs visible before
+    a browser is opened.
+    """
+    subtree = _modal_source(source, modal_id)
+    controls: list[dict[str, object]] = []
+    legacy_glyph_controls: list[str] = []
+    close_controls: list[dict[str, object]] = []
+    control_re = re.compile(
+        r'<(?P<tag>button|summary)\b(?P<attrs>[^>]*)>(?P<body>.*?)</(?P=tag)>',
+        re.IGNORECASE | re.DOTALL,
+    )
+    icon_re = re.compile(r"op_icon\(\s*['\"]([a-z0-9-]+)['\"]")
+    emoji_re = re.compile(r'[\U0001F300-\U0001FAFF]')
+    legacy_action_re = re.compile(r'(?:^|>)\s*[×✕✖←→↔⛶⋯▶■⛔🗑📋](?:\s|<|$)')
+    for match in control_re.finditer(subtree):
+        attrs = match.group('attrs')
+        body = match.group('body')
+        icons = icon_re.findall(body)
+        control = {
+            'control': _control_id(attrs, match.start()),
+            'icons': icons,
+            'icon_only': bool(icons) and not re.sub(r'{{\s*op_icon\([^}]+}}|<[^>]+>', '', body).strip(),
+            'accessible_name': bool(_attr_from_tag(attrs, 'aria-label') or _attr_from_tag(attrs, 'title')),
+        }
+        controls.append(control)
+        if 'modal-close' in attrs:
+            close_controls.append(control)
+        if emoji_re.search(body) or legacy_action_re.search(body):
+            legacy_glyph_controls.append(str(control['control']))
+
+    icon_only_without_name = [
+        str(item['control']) for item in controls
+        if item['icon_only'] and not item['accessible_name']
+    ]
+    return {
+        'action_control_count': len(controls),
+        'operator_icon_control_count': sum(1 for item in controls if item['icons']),
+        'close_control_count': len(close_controls),
+        'close_icons': [icon for item in close_controls for icon in item['icons']],
+        'icon_only_without_accessible_name': icon_only_without_name,
+        'legacy_glyph_controls': legacy_glyph_controls,
+        'controls': controls,
+    }
+
+
+def _build_modals(elements: list[dict[str, object]], source: str) -> list[dict[str, object]]:
     modals: list[dict[str, object]] = []
     for element in elements:
         attrs = element["attrs"]
@@ -389,7 +468,9 @@ def _build_modals(elements: list[dict[str, object]]) -> list[dict[str, object]]:
                 "aria_modal": attrs.get("aria-modal") or None,
                 "aria_label": attrs.get("aria-label") or None,
                 "data_modal_key": attrs.get("data-modal-key") or None,
+                "operator_family": attrs.get("data-operator-modal-family") or None,
                 "states": FAMILY_STATES.get(family or "", []),
+                "icon_inventory": _modal_icon_inventory(source, modal_id),
             }
         )
     return modals
@@ -529,7 +610,7 @@ class PanelOperatorInventoryGenerator:
         parser = TemplateParser()
         parser.feed(source)
         elements = parser.elements
-        modals = _build_modals(elements)
+        modals = _build_modals(elements, source)
 
         modal_ids = {item["id"] for item in modals}
         family_ids = set(MODAL_FAMILIES)

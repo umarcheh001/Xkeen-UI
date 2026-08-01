@@ -226,3 +226,38 @@ def test_top_level_action_controls_have_no_emoji_or_feature_local_svg():
     for path in action_sources:
         text = path.read_text(encoding="utf-8")
         assert "<path" not in text and "<svg" not in text, path
+
+
+
+def test_modal_action_icons_are_inline_and_duplicate_dismiss_controls_are_presentation_only():
+    template = TEMPLATE.read_text(encoding="utf-8")
+    css = CSS.read_text(encoding="utf-8")
+
+    for control_id, icon in (
+        ("json-editor-format-btn", "format"),
+        ("json-editor-save-btn", "save"),
+        ("fm-editor-download-btn", "download"),
+        ("fm-editor-save-btn", "save"),
+        ("routing-template-refresh-btn", "refresh"),
+        ("routing-template-edit-btn", "edit"),
+    ):
+        match = re.search(
+            rf'<button\b[^>]*\bid="{control_id}"[^>]*>(.*?)</button>', template, re.DOTALL
+        )
+        assert match, control_id
+        assert f"op_icon('{icon}')" in match.group(1), control_id
+        assert not re.search(r"[\U0001F000-\U0001FAFF]", match.group(1)), control_id
+
+    for fragment in (
+        '.modal-actions :is(button, .btn-primary, .btn-secondary):has(.xk-action-icon)',
+        'align-items: center;',
+        'gap: 7px;',
+        '[data-operator-dismiss-duplicate="true"]',
+    ):
+        assert fragment in css
+
+    assert template.count('data-operator-dismiss-duplicate="true"') >= 40
+    assert not re.search(
+        r'<button\b[^>]*class="modal-close"[^>]*data-operator-dismiss-duplicate',
+        template,
+    )

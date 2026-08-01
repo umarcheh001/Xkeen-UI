@@ -133,6 +133,11 @@
     <symbol id="xk-format" viewBox="0 0 24 24">
       <path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6" />
     </symbol>
+    <symbol id="xk-forward" viewBox="0 0 24 24">
+      <path d="M5 12l14 0" />
+      <path d="M13 18l6 -6" />
+      <path d="M13 6l6 6" />
+    </symbol>
     <symbol id="xk-fullscreen" viewBox="0 0 24 24">
       <path d="M4 8v-2a2 2 0 0 1 2 -2h2" />
       <path d="M4 16v2a2 2 0 0 0 2 2h2" />

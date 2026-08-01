@@ -1,4 +1,5 @@
 import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
+import { iconHtml } from '../../../ui/operator_icons.js';
 
 /*
   routing_cards/rules/json_modal.js
@@ -76,7 +77,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
     closeBtn.className = 'modal-close';
-    closeBtn.textContent = '×';
+    closeBtn.innerHTML = iconHtml('close');
     closeBtn.setAttribute('aria-label', 'Close');
 
     header.appendChild(title);

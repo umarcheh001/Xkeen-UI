@@ -5544,7 +5544,7 @@ let outboundsModuleApi = null;
                 <span class="xk-sub-subtitle">Автообновление generated outbounds и observatory.</span>
                 <span class="xk-sub-interval-note">Интервал: по умолчанию 24 ч; рекомендация провайдера не перезаписывает выбранное значение.</span>
               </div>
-              <button type="button" class="modal-close" id="outbounds-subscriptions-close-btn" title="Закрыть" data-tooltip="Закрыть окно подписок.">×</button>
+              <button type="button" class="modal-close" id="outbounds-subscriptions-close-btn" title="Закрыть" aria-label="Закрыть" data-tooltip="Закрыть окно подписок.">${XKeen.ui.operatorIcons.html('close')}</button>
             </div>
             <div class="modal-body">
               <div class="xk-sub-brief">
