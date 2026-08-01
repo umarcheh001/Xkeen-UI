@@ -206,7 +206,7 @@ def _parse_mihomo_version(output: str) -> Optional[str]:
 
 def _read_json(path: str) -> Optional[dict]:
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(os.path.realpath(path), "r", encoding="utf-8") as f:
             v = json.load(f)
         return v if isinstance(v, dict) else None
     except Exception:
@@ -214,14 +214,15 @@ def _read_json(path: str) -> Optional[dict]:
 
 
 def _write_json_atomic(path: str, data: dict) -> None:
+    safe_path = os.path.realpath(path)
     try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+        os.makedirs(os.path.dirname(safe_path), exist_ok=True)
     except Exception:
         pass
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
+    tmp = safe_path + ".tmp"
+    with open(os.path.realpath(tmp), "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)
+    os.replace(tmp, safe_path)
 
 
 def _opkg_primary_arch() -> str:
