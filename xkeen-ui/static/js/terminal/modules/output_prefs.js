@@ -2,6 +2,7 @@ import {
   publishTerminalCompatApi,
   toastTerminal,
 } from '../runtime.js';
+import { iconHtml } from '../../ui/operator_icons.js';
 
 // Terminal output prefs module (Stage 8.3.2)
 // Owns persistent prefs for output pipeline: ANSI filter, log highlight, follow.
@@ -80,7 +81,7 @@ import {
 
       if (btnFollow) {
         try { btnFollow.classList.toggle('is-active', !!p.follow); } catch (e) {}
-        try { btnFollow.textContent = p.follow ? '⇣ Следить' : '📌 Фикс'; } catch (e2) {}
+        try { btnFollow.innerHTML = `${iconHtml('more')}<span class="xk-action-label">${p.follow ? 'Следить' : 'Фикс'}</span>`; } catch (e2) {}
         try { btnFollow.title = p.follow ? 'Автопрокрутка: ВКЛ (авто-переход в конец)' : 'Автопрокрутка: ВЫКЛ (фиксация прокрутки)'; } catch (e3) {}
       }
     }

@@ -10,6 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 GENERATOR = ROOT / "scripts/generate_operator_icon_sprite.py"
 SPRITE = ROOT / "xkeen-ui/static/icons/operator.svg"
 LICENSE = ROOT / "xkeen-ui/static/icons/tabler-icons.LICENSE"
+MANIFEST = ROOT / "xkeen-ui/static/js/ui/operator_icons_manifest.js"
+INVENTORY_GENERATOR = ROOT / "scripts/generate_operator_icon_inventory.py"
+INVENTORY = ROOT / "docs/panel-operator-icon-inventory.json"
 TEMPLATE = ROOT / "xkeen-ui/templates/panel.html"
 CSS = ROOT / "xkeen-ui/static/panel-operator.css"
 HELPER = ROOT / "xkeen-ui/static/js/ui/operator_icons.js"
@@ -66,6 +69,85 @@ def test_operator_sprite_is_generated_and_committed_with_tabler_license(tmp_path
     assert generated.read_text(encoding="utf-8") == SPRITE.read_text(encoding="utf-8")
     assert generated_license.read_text(encoding="utf-8") == LICENSE.read_text(encoding="utf-8")
     assert "MIT License" in LICENSE.read_text(encoding="utf-8")
+
+
+def test_operator_icon_manifest_and_machine_readable_inventory_are_reproducible(tmp_path):
+    generated_manifest = tmp_path / "operator_icons_manifest.js"
+    generated_inventory = tmp_path / "panel-operator-icon-inventory.json"
+    generated_sprite = tmp_path / "operator.svg"
+    generated_license = tmp_path / "tabler-icons.LICENSE"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(GENERATOR),
+            "--output", str(generated_sprite),
+            "--license-output", str(generated_license),
+            "--manifest-output", str(generated_manifest),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+    result = subprocess.run(
+        [sys.executable, str(INVENTORY_GENERATOR), "--output", str(generated_inventory)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+    assert generated_manifest.read_text(encoding="utf-8") == MANIFEST.read_text(encoding="utf-8")
+    assert generated_inventory.read_text(encoding="utf-8") == INVENTORY.read_text(encoding="utf-8")
+    inventory = __import__("json").loads(INVENTORY.read_text(encoding="utf-8"))
+    assert inventory["item_count"] == len(re.findall(r'^  "[a-z0-9-]+"', MANIFEST.read_text(encoding="utf-8"), re.MULTILINE))
+    assert inventory["unused_semantic_names"] == []
+    assert inventory["unknown_direct_semantic_names"] == []
+    assert all(item["usage"] for item in inventory["items"])
+
+
+def test_every_operator_use_reference_is_resolved_and_names_are_allowlisted():
+    symbols = set(re.findall(r'<symbol\s+id="xk-([a-z0-9-]+)"', SPRITE.read_text(encoding="utf-8")))
+    manifest_names = set(re.findall(r'^  "([a-z0-9-]+)"', MANIFEST.read_text(encoding="utf-8"), re.MULTILINE))
+    assert symbols == manifest_names
+
+    source_paths = [*TEMPLATE.parent.glob("*.html"), *(ROOT / "xkeen-ui/static/js").rglob("*.js")]
+    references: list[tuple[Path, str]] = []
+    for path in source_paths:
+        if "vendor" in path.parts or "frontend-build" in path.parts:
+            continue
+        source = path.read_text(encoding="utf-8", errors="replace")
+        for match in re.finditer(r'#xk-([a-z0-9-]+)', source):
+            references.append((path, match.group(1)))
+    assert references
+    assert all(name in symbols for _, name in references)
+
+    helper = HELPER.read_text(encoding="utf-8")
+    assert "KNOWN_ICON_NAMES" in helper
+    assert "!KNOWN_ICON_NAMES.has(value)" in helper
+
+
+def test_i6_guard_rejects_action_emoji_and_feature_local_svg_except_documented_content_assets():
+    emoji_or_legacy_action = re.compile(r"[\U0001F300-\U0001FAFF×✕✖←→↔⛶⋯▶■⛔🗑📋⚙✏➕➖⌕⟳↻⇣↓↑⏹⏸⏻🗕⌚👁]")
+    controls = re.compile(r'<(?:button|summary)\b[^>]*>(.*?)</(?:button|summary)>', re.IGNORECASE | re.DOTALL)
+    for path in (TEMPLATE, ROOT / "xkeen-ui/templates/mihomo_generator.html"):
+        source = path.read_text(encoding="utf-8")
+        for control in controls.findall(source):
+            visible = re.sub(r'<[^>]+>|{{\s*op_icon\([^}]+}}', '', control)
+            assert not emoji_or_legacy_action.search(visible), path
+
+    allowed_inline_svg = {
+        ROOT / "xkeen-ui/static/js/ui/operator_icons.js",
+        ROOT / "xkeen-ui/static/js/features/outbounds.js",  # content country flags
+    }
+    for path in (ROOT / "xkeen-ui/static/js").rglob("*.js"):
+        if "vendor" in path.parts or "frontend-build" in path.parts or path in allowed_inline_svg:
+            continue
+        source = path.read_text(encoding="utf-8", errors="replace")
+        assert not re.search(r"<svg\b|<path\b", source), path
 
 
 def test_routing_xray_uses_semantic_operator_icons_without_emoji_actions():
@@ -238,6 +320,7 @@ def test_modal_action_icons_are_inline_and_duplicate_dismiss_controls_are_presen
         ("json-editor-save-btn", "save"),
         ("fm-editor-download-btn", "download"),
         ("fm-editor-save-btn", "save"),
+        ("routing-dat-contents-install-geodat-btn", "download"),
         ("routing-template-refresh-btn", "refresh"),
         ("routing-template-edit-btn", "edit"),
     ):
@@ -250,6 +333,7 @@ def test_modal_action_icons_are_inline_and_duplicate_dismiss_controls_are_presen
 
     for fragment in (
         '.modal-actions :is(button, .btn-primary, .btn-secondary):has(.xk-action-icon)',
+        '#routing-dat-contents-modal .xk-dat-controls .btn-secondary:has(.xk-action-icon)',
         'align-items: center;',
         'gap: 7px;',
         '[data-operator-dismiss-duplicate="true"]',

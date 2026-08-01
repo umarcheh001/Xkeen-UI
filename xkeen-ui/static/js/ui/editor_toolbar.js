@@ -10,6 +10,11 @@
   const XKeen = window.XKeen;
   XKeen.ui = XKeen.ui || {};
 
+  function iconHtml(name) {
+    try { return (XKeen.ui && XKeen.ui.operatorIcons) ? XKeen.ui.operatorIcons.html(name) : ''; } catch (e) {}
+    return '';
+  }
+
   function actions() {
     try { return (window.XKeen && XKeen.ui && XKeen.ui.editorActions) ? XKeen.ui.editorActions : null; } catch (e) {}
     return null;
@@ -38,7 +43,7 @@
     drawer.innerHTML = `
       <div class="xkeen-cm-help-head">
         <div class="xkeen-cm-help-title">Справка по редактору</div>
-        <button type="button" class="xkeen-cm-help-close" aria-label="Закрыть">✕</button>
+        <button type="button" class="xkeen-cm-help-close" aria-label="Закрыть">${iconHtml('close')}</button>
       </div>
       <div class="xkeen-cm-help-body" id="xkeen-cm-help-body"></div>
     `;
@@ -153,16 +158,18 @@
     drawer.classList.add('is-open');
   }
 
+  // The editor toolbar exposes HTML for legacy consumers, but every glyph
+  // still originates from the shared local Operator sprite.
   const XKEEN_CM_ICONS = {
-    search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>',
-    down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>',
-    up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>',
-    replace: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>',
-    quickFix: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="20" x2="12" y2="12"></line><path d="M14.5 4.5l1.2 2.8 2.8 1.2-2.8 1.2-1.2 2.8-1.2-2.8-2.8-1.2 2.8-1.2z"></path><path d="M18 13.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"></path></svg>',
-    comment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path></svg>',
-    fullscreen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>',
-    help: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
-    compare: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3v18"></path><path d="M15 3v18"></path><path d="M5 7l-2 2 2 2"></path><path d="M19 13l2 2-2 2"></path></svg>',
+    search: iconHtml('search'),
+    down: iconHtml('move-down'),
+    up: iconHtml('move-up'),
+    replace: iconHtml('replace'),
+    quickFix: iconHtml('quick-fix'),
+    comment: iconHtml('comment'),
+    fullscreen: iconHtml('fullscreen'),
+    help: iconHtml('help'),
+    compare: iconHtml('compare'),
   };
 
   function openDiffForEditor(editor) {

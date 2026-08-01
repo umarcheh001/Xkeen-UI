@@ -177,7 +177,7 @@ import { getRoutingCardsApi } from '../features/routing_cards.js';
     sel.innerHTML = '';
     const optNew = document.createElement('option');
     optNew.value = 'new';
-    optNew.textContent = '➕ Новое правило';
+    optNew.textContent = 'Новое правило';
     sel.appendChild(optNew);
     rules.forEach((r) => {
       const o = document.createElement('option');

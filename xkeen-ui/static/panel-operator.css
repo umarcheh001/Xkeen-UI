@@ -2939,23 +2939,24 @@ body.panel-page #view-commands .commands-title-action:hover {
 
 body.panel-page #view-commands .commands-status-panel {
   display: grid;
-  grid-template-columns: minmax(270px, 0.56fr) minmax(0, 1fr);
-  min-height: 48px;
+  grid-template-columns: minmax(240px, 0.32fr) minmax(0, 1fr);
+  min-height: 0;
   margin: 0;
   padding: 0 16px;
   background: var(--op-surface-2);
 }
 
 body.panel-page #view-commands .commands-status-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: center;
   gap: 10px;
   padding: 6px 12px 6px 0;
   border-right: 1px solid var(--op-border);
 }
 
 body.panel-page #view-commands .commands-status-heading > div:first-child {
+  grid-column: 1 / -1;
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -2969,8 +2970,10 @@ body.panel-page #view-commands .commands-status-hint {
 }
 
 body.panel-page #view-commands .commands-status-meta {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
 }
 
@@ -2987,9 +2990,9 @@ body.panel-page #view-commands #cores-check-btn {
 body.panel-page #view-commands .commands-status-row,
 html[data-theme="light"] body.panel-page #view-commands .commands-status-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(250px, 1fr));
-  align-items: center;
-  gap: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 1px;
   margin: 0;
   padding: 0;
   border: 0 !important;
@@ -3001,11 +3004,11 @@ html[data-theme="light"] body.panel-page #view-commands .commands-status-row {
 body.panel-page #view-commands .commands-status-row .core-pill,
 html[data-theme="light"] body.panel-page #view-commands .commands-status-row .core-pill {
   display: grid;
-  grid-template-columns: auto minmax(70px, auto) minmax(0, 1fr) auto auto auto;
-  align-items: center;
-  gap: 8px;
-  min-height: 48px;
-  padding: 6px 12px;
+  grid-template-columns: minmax(112px, auto) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 12px;
+  min-height: 0;
+  padding: 10px 12px;
   border: 0 !important;
   border-right: 1px solid var(--op-border) !important;
   border-radius: 0 !important;
@@ -3016,6 +3019,62 @@ html[data-theme="light"] body.panel-page #view-commands .commands-status-row .co
 
 body.panel-page #view-commands .commands-status-row .core-pill:last-of-type {
   border-right: 0 !important;
+}
+
+body.panel-page #view-commands .core-summary {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+body.panel-page #view-commands .core-installed {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+body.panel-page #view-commands .core-installed-label,
+body.panel-page #view-commands .core-release-kind {
+  color: var(--op-faint) !important;
+  font-size: calc(9.5px * var(--xk-font-scale, 1));
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+body.panel-page #view-commands .core-releases {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+body.panel-page #view-commands .core-release {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 3px 4px 3px 7px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-sm);
+  background: var(--op-surface);
+}
+
+body.panel-page #view-commands .core-release-kind {
+  color: var(--op-muted) !important;
+}
+
+body.panel-page #view-commands .core-release-prerelease {
+  border-color: color-mix(in srgb, var(--op-warning) 30%, var(--op-border));
+  background: var(--op-warning-soft);
+}
+
+body.panel-page #view-commands .core-release-prerelease .core-release-kind {
+  color: var(--op-warning) !important;
 }
 
 body.panel-page #view-commands .core-name {
@@ -3030,6 +3089,9 @@ body.panel-page #view-commands :is(.core-ver, .core-latest, .core-prerelease) {
 
 body.panel-page #view-commands .core-ver {
   color: var(--op-data-muted) !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 body.panel-page #view-commands .core-state {
@@ -3049,13 +3111,61 @@ body.panel-page #view-commands .core-pill.has-error .core-state {
 
 body.panel-page #view-commands .core-latest {
   color: var(--op-accent-hover) !important;
+  min-width: 0;
+  overflow: hidden;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 body.panel-page #view-commands .core-prerelease {
-  justify-self: start;
-  padding: 2px 5px;
-  border: 1px solid color-mix(in srgb, var(--op-warning) 44%, var(--op-border)) !important;
-  border-radius: 4px !important;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--op-warning) !important;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page #view-commands .core-update-action {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 98px;
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
+  padding: 0 8px !important;
+  border-radius: 5px !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+body.panel-page #view-commands .core-update-action .xk-action-icon {
+  width: 13px;
+  height: 13px;
+}
+
+body.panel-page #view-commands .core-update-action-stable {
+  border-color: color-mix(in srgb, var(--op-accent) 50%, var(--op-border)) !important;
+  color: var(--op-accent-hover) !important;
+}
+
+body.panel-page #view-commands .core-update-action-prerelease {
+  border-color: color-mix(in srgb, var(--op-warning) 56%, var(--op-border)) !important;
+  background: color-mix(in srgb, var(--op-warning-soft) 68%, var(--op-surface)) !important;
+  color: var(--op-warning) !important;
+}
+
+body.panel-page #view-commands .core-update-action-prerelease:hover:not([disabled]) {
+  border-color: var(--op-warning) !important;
   background: var(--op-warning-soft) !important;
   color: var(--op-warning) !important;
 }
@@ -6688,6 +6798,21 @@ body.panel-page #routing-dat-contents-modal .xk-dat-controls .btn-secondary {
   border-radius: 5px !important;
 }
 
+/* DAT header controls may combine a sprite icon with a text label. The legacy
+ * button rule renders the SVG as a block, placing the label underneath it. */
+body.panel-page #routing-dat-contents-modal .xk-dat-controls .btn-secondary:has(.xk-action-icon) {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+body.panel-page #routing-dat-contents-modal .xk-dat-controls .btn-secondary > .xk-action-label {
+  display: inline;
+  line-height: 1;
+}
+
 body.panel-page #routing-dat-contents-modal .dat-contents-layout {
   grid-template-columns: minmax(360px, 420px) minmax(0, 1fr);
   gap: 0;
@@ -7170,6 +7295,30 @@ body.panel-page .footer {
   font-size: calc(10px * var(--xk-font-scale, 1));
 }
 
+
+/* I6: dynamic utility controls are always composed from the local sprite. */
+body.panel-page #view-xray-logs .restart-log-search-icon .xk-action-icon,
+body.panel-page #routing-forced-rules-modal .xk-chip .xk-action-icon,
+body.panel-page .xkeen-diff-modal .xkeen-diff-side-sep .xk-action-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+body.panel-page #routing-forced-rules-modal .xk-chip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: var(--op-radius-sm);
+  cursor: pointer;
+}
+
+body.panel-page #routing-forced-rules-modal .xk-chip:focus-visible {
+  outline: 2px solid var(--op-focus);
+  outline-offset: 2px;
+}
+
 /* I3 top-level icon controls: all glyphs use the shared local sprite; text and
  * tooltips remain the accessible source of meaning. */
 body.panel-page :is(.fm-toolbar, .fm-footer-actions, .fm-context-item, .log-header-actions, .dt-log-controls, .xk-header-btn) > .xk-action-icon,
@@ -7463,7 +7612,7 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
   }
 
   body.panel-page #view-commands .commands-status-panel {
-    grid-template-columns: minmax(220px, 0.4fr) minmax(0, 1fr);
+    grid-template-columns: minmax(188px, 0.28fr) minmax(0, 1fr);
   }
 
   body.panel-page #view-commands .commands-status-row {
@@ -7472,7 +7621,7 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
 
   body.panel-page #view-commands .commands-status-row .core-pill,
   body.panel-page #view-commands .commands-status-row .core-pill:last-of-type {
-    min-height: 44px;
+    min-height: 0;
     border-right: 0 !important;
     border-bottom: 1px solid var(--op-border) !important;
   }
@@ -7945,6 +8094,16 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
     border-bottom: 1px solid var(--op-border);
   }
 
+  body.panel-page #view-commands .commands-status-heading > div:first-child {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  body.panel-page #view-commands .commands-status-meta {
+    justify-content: flex-start;
+  }
+
   body.panel-page #view-commands .commands-status-meta {
     display: flex;
     align-items: center;
@@ -7957,8 +8116,13 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
   }
 
   body.panel-page #view-commands .commands-status-row .core-pill {
-    grid-template-columns: auto minmax(64px, auto) minmax(0, 1fr) auto auto auto;
-    padding-inline: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px 0;
+  }
+
+  body.panel-page #view-commands .core-release {
+    grid-template-columns: 68px minmax(0, 1fr) auto;
   }
 
   body.panel-page #view-commands .command-item,

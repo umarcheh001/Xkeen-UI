@@ -40,6 +40,9 @@
       <path d="M5 12l6 6" />
       <path d="M5 12l6 -6" />
     </symbol>
+    <symbol id="xk-bolt" viewBox="0 0 24 24">
+      <path d="M13 3l0 7l6 0l-8 11l0 -7l-6 0l8 -11" />
+    </symbol>
     <symbol id="xk-bookmark" viewBox="0 0 24 24">
       <path d="M18 7v14l-6 -4l-6 4v-14a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4" />
     </symbol>
@@ -62,6 +65,11 @@
     <symbol id="xk-close" viewBox="0 0 24 24">
       <path d="M18 6l-12 12" />
       <path d="M6 6l12 12" />
+    </symbol>
+    <symbol id="xk-comment" viewBox="0 0 24 24">
+      <path d="M8 9h8" />
+      <path d="M8 13h6" />
+      <path d="M18 4a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-5l-5 3v-3h-2a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12" />
     </symbol>
     <symbol id="xk-compare" viewBox="0 0 24 24">
       <path d="M4 6a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
@@ -195,6 +203,12 @@
       <path d="M11 16a1 1 0 1 0 2 0a1 1 0 0 0 -2 0" />
       <path d="M8 11v-4a4 4 0 1 1 8 0v4" />
     </symbol>
+    <symbol id="xk-minimize" viewBox="0 0 24 24">
+      <path d="M15 19v-2a2 2 0 0 1 2 -2h2" />
+      <path d="M15 5v2a2 2 0 0 0 2 2h2" />
+      <path d="M5 15h2a2 2 0 0 1 2 2v2" />
+      <path d="M5 9h2a2 2 0 0 0 2 -2v-2" />
+    </symbol>
     <symbol id="xk-moon" viewBox="0 0 24 24">
       <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454l0 .008" />
     </symbol>
@@ -253,6 +267,9 @@
       <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
       <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6" />
     </symbol>
+    <symbol id="xk-quick-fix" viewBox="0 0 24 24">
+      <path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6" />
+    </symbol>
     <symbol id="xk-quick-start" viewBox="0 0 24 24">
       <path d="M13 3l0 7l6 0l-8 11l0 -7l-6 0l8 -11" />
     </symbol>
@@ -263,6 +280,12 @@
     <symbol id="xk-reload" viewBox="0 0 24 24">
       <path d="M19.933 13.041a8 8 0 1 1 -9.925 -8.788c3.899 -1 7.935 1.007 9.425 4.747" />
       <path d="M20 4v5h-5" />
+    </symbol>
+    <symbol id="xk-replace" viewBox="0 0 24 24">
+      <path d="M3 4a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4" />
+      <path d="M15 16a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4" />
+      <path d="M21 11v-3a2 2 0 0 0 -2 -2h-6l3 3m0 -6l-3 3" />
+      <path d="M3 13v3a2 2 0 0 0 2 2h6l-3 -3m0 6l3 -3" />
     </symbol>
     <symbol id="xk-restart" viewBox="0 0 24 24">
       <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" />
@@ -343,11 +366,6 @@
       <path d="M11 3v2" />
       <path d="M6 3v2" />
       <path d="M18 10a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
-    </symbol>
-    <symbol id="xk-warning" viewBox="0 0 24 24">
-      <path d="M12 9v4" />
-      <path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0" />
-      <path d="M12 16h.01" />
     </symbol>
     <symbol id="xk-x" viewBox="0 0 24 24">
       <path d="M18 6l-12 12" />

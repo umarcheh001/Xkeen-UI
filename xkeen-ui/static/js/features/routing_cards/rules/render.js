@@ -515,7 +515,7 @@ import { setIcon } from '../../../ui/operator_icons.js';
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'routing-rule-remove-field';
-        removeBtn.textContent = '×';
+        setIcon(removeBtn, 'close');
         removeBtn.setAttribute('aria-label', 'Убрать поле ' + String(fieldKey));
         removeBtn.setAttribute('title', 'Убрать поле');
         removeBtn.addEventListener('click', (ev) => {
@@ -1246,7 +1246,7 @@ import { setIcon } from '../../../ui/operator_icons.js';
         const x = document.createElement('button');
         x.type = 'button';
         x.className = 'routing-selector-chip-x';
-        x.textContent = '×';
+        setIcon(x, 'close');
         x.setAttribute('aria-label', 'Удалить: ' + String(tag));
         x.addEventListener('click', (e) => {
           e.preventDefault();

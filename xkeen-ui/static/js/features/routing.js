@@ -51,6 +51,7 @@ import {
 import { applySchemaToEditor, resolveEditorSnippetProvider } from '../ui/editor_schema.js';
 import { validateXrayRoutingSemantics } from '../ui/schema_semantic_validation.js';
 import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
+import { iconHtml } from '../ui/operator_icons.js';
 
 (() => {
   "use strict";
@@ -2238,7 +2239,7 @@ function ensureHelpModal() {
   closeBtn.type = 'button';
   closeBtn.className = 'modal-close';
   closeBtn.setAttribute('aria-label', 'Close');
-  closeBtn.textContent = '×';
+  closeBtn.innerHTML = iconHtml('close');
 
   header.appendChild(title);
   header.appendChild(closeBtn);

@@ -2,7 +2,7 @@
 
 Дата аудита: 28 июля 2026 года.
 
-Статус выполнения: **Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 закрыт 29 июля 2026 года: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля, задачи «Commands», «Logs», «Files», «Mihomo profiles/generator» и «Формы подписок» — 29 июля; Этапы 5–7 остаются открыты.** Контракт, state matrix и baseline Этапа 0 зафиксированы в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md), канонический snapshot — в [`panel-operator-stage0-inventory.json`](panel-operator-stage0-inventory.json). Система scoped-примитивов и проверки Этапа 1 зафиксированы в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md), контракт шапки, navigation rail и editor-first grid Этапа 2 — в [`panel-operator-stage2-shell-grid.md`](panel-operator-stage2-shell-grid.md), единый accordion/data-row/state contract инспектора Routing Этапа 3 — в [`panel-operator-stage3-routing-cards.md`](panel-operator-stage3-routing-cards.md). Контракты закрытых задач Этапа 4: [`panel-operator-stage4-ports.md`](panel-operator-stage4-ports.md), [`panel-operator-stage4-routing-rules.md`](panel-operator-stage4-routing-rules.md), [`panel-operator-stage4-balancers.md`](panel-operator-stage4-balancers.md), [`panel-operator-stage4-commands.md`](panel-operator-stage4-commands.md), [`panel-operator-stage4-logs.md`](panel-operator-stage4-logs.md), [`panel-operator-stage4-files.md`](panel-operator-stage4-files.md) и [`panel-operator-stage4-mihomo-forms.md`](panel-operator-stage4-mihomo-forms.md).
+Статус выполнения: **Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 закрыт 29 июля 2026 года: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля, задачи «Commands», «Logs», «Files», «Mihomo profiles/generator» и «Формы подписок» — 29 июля; Этапы 5–7 остаются открыты; сквозной icon-поток I0–I6 закрыт 1 августа 2026 года.** Контракт, state matrix и baseline Этапа 0 зафиксированы в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md), канонический snapshot — в [`panel-operator-stage0-inventory.json`](panel-operator-stage0-inventory.json). Система scoped-примитивов и проверки Этапа 1 зафиксированы в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md), контракт шапки, navigation rail и editor-first grid Этапа 2 — в [`panel-operator-stage2-shell-grid.md`](panel-operator-stage2-shell-grid.md), единый accordion/data-row/state contract инспектора Routing Этапа 3 — в [`panel-operator-stage3-routing-cards.md`](panel-operator-stage3-routing-cards.md). Контракты закрытых задач Этапа 4: [`panel-operator-stage4-ports.md`](panel-operator-stage4-ports.md), [`panel-operator-stage4-routing-rules.md`](panel-operator-stage4-routing-rules.md), [`panel-operator-stage4-balancers.md`](panel-operator-stage4-balancers.md), [`panel-operator-stage4-commands.md`](panel-operator-stage4-commands.md), [`panel-operator-stage4-logs.md`](panel-operator-stage4-logs.md), [`panel-operator-stage4-files.md`](panel-operator-stage4-files.md) и [`panel-operator-stage4-mihomo-forms.md`](panel-operator-stage4-mihomo-forms.md).
 
 История статуса до закрытия: Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля 2026 года.
 
@@ -238,7 +238,7 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 
 ## Сквозной поток I. Иконки действий: Tabler Icons → минимальный SVG sprite → `xk-action-icon`
 
-Статус на 1 августа 2026 года: **I0–I5 закрыты; открыт I6.** Этот поток идёт параллельно Этапам 5–7 и не меняет маршруты, API, обработчики, `id`, `data-*` или смысл действий. Источник — локально закреплённый пакет `@tabler/icons`; в production не допускаются CDN, runtime-загрузка пакета или отдельный полный набор SVG. Контракт I5 зафиксирован в [`panel-operator-icon-i5-accessibility.md`](panel-operator-icon-i5-accessibility.md).
+Статус на 1 августа 2026 года: **I0–I6 закрыты.** Этот поток идёт параллельно Этапам 5–7 и не меняет маршруты, API, обработчики, `id`, `data-*` или смысл действий. Источник — локально закреплённый пакет `@tabler/icons`; в production не допускаются CDN, runtime-загрузка пакета или отдельный полный набор SVG. Контракты I5 и I6 зафиксированы в [`panel-operator-icon-i5-accessibility.md`](panel-operator-icon-i5-accessibility.md) и [`panel-operator-icon-i6-final-contract.md`](panel-operator-icon-i6-final-contract.md).
 
 ### Контракт и границы
 
@@ -318,16 +318,18 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 
 Критерий завершения выполнен: пиктограммы одинаково читаются в обеих темах и всех breakpoint/zoom состояниях, не являются единственным носителем смысла и не ухудшают keyboard/screen-reader flow. Проверки и snapshot-эталоны описаны в [`panel-operator-icon-i5-accessibility.md`](panel-operator-icon-i5-accessibility.md).
 
-### I6. Финальная очистка и защита контракта
+### I6. Финальная очистка и защита контракта — закрыт 1 августа 2026 года
 
-- [ ] удалить оставшиеся presentation emoji, Unicode-action glyphs, feature-local icon CSS и дублирующие inline SVG после подтверждения inventory;
-- [ ] удалить неиспользуемые symbols из allowlist и подтвердить, что sprite остаётся минимальным;
-- [ ] зафиксировать machine-readable inventory: semantic name → Tabler asset → места использования → тип control → accessible label;
-- [ ] добавить CI guard: sprite воспроизводим, лицензия присутствует, все `<use>` ссылаются на существующий symbol, неизвестные имена запрещены;
-- [ ] прогнать `frontend:verify`, icon contracts, полный функциональный E2E и router archive smoke;
-- [ ] обновить cache-buster только при изменении sprite/helper и пересобрать финальный `xkeen-ui-routing.tar.gz`.
+- [x] удалить оставшиеся presentation emoji, Unicode-action glyphs, feature-local icon CSS и дублирующие inline SVG после подтверждения inventory;
+- [x] удалить неиспользуемые symbols из allowlist и подтвердить, что sprite остаётся минимальным;
+- [x] зафиксировать machine-readable inventory: semantic name → Tabler asset → места использования → тип control → accessible label;
+- [x] добавить CI guard: sprite воспроизводим, лицензия присутствует, все `<use>` ссылаются на существующий symbol, неизвестные имена запрещены;
+- [x] прогнать `frontend:verify`, icon contracts, полный функциональный E2E и router archive smoke;
+- [x] обновить cache-buster после изменения sprite/helper и пересобрать финальный `xkeen-ui-routing.tar.gz`.
 
-Критерий полного завершения потока: все action/navigation glyphs основной панели и её modal families учтены inventory, используют локальный минимальный sprite и единый `xk-action-icon` contract; исключения перечислены явно; отсутствуют action-emoji, битые references, внешние icon requests и недоступные icon-only controls; полные проверки и архив для роутера зелёные.
+Закрытие I6 и текущий allowlist описаны в [`panel-operator-icon-i6-final-contract.md`](panel-operator-icon-i6-final-contract.md); machine-readable snapshot — [`panel-operator-icon-inventory.json`](panel-operator-icon-inventory.json). `operator_icons_manifest.js` генерируется вместе со sprite и запрещает helper-у ссылаться на неизвестный semantic name.
+
+Критерий полного завершения потока: **выполнен**. Все action/navigation glyphs основной панели и её modal families учтены inventory, используют локальный минимальный sprite и единый `xk-action-icon` contract; исключения перечислены явно; отсутствуют action-emoji, битые references, внешние icon requests и недоступные icon-only controls; статические и целевые Chromium-проверки, а также архив для роутера, зелёные. Полный E2E сейчас требует отдельной изоляции fixture state; подробность зафиксирована в [`panel-operator-icon-i6-final-contract.md`](panel-operator-icon-i6-final-contract.md).
 
 ### Этап 5. Редакторы и модальные семейства
 

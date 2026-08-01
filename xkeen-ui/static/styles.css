@@ -32789,17 +32789,16 @@ body.panel-page #view-xray-logs .log-card:not(.is-fullscreen) .xray-log-block {
 }
 
 .xkeen-diff-modal .xkeen-diff-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   margin-bottom: 0;
 }
 
 .xkeen-diff-modal .xkeen-diff-head .modal-title {
   font-size: calc(14px * var(--xk-font-scale, 1));
   margin: 0;
-  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -32809,8 +32808,21 @@ body.panel-page #view-xray-logs .log-card:not(.is-fullscreen) .xray-log-block {
 .xkeen-diff-modal .xkeen-diff-head-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+/* The diff toolbar occupies its own header row. Keep icon-and-label actions
+ * on one baseline so a button never grows into the title/source rows. */
+body.panel-page .xkeen-diff-modal .xkeen-diff-head-actions :is(.xkeen-diff-apply-btn, .xkeen-diff-close-x):has(.xk-action-icon) {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .xkeen-diff-modal .xkeen-diff-mode {
@@ -33026,26 +33038,8 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-source option {
   color: var(--text, #111827);
 }
 
-html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-helper {
-  background: rgba(37, 99, 235, 0.06);
-  border-color: rgba(37, 99, 235, 0.14);
-  color: #475569;
-}
-
 .xkeen-diff-modal .xkeen-diff-source.hidden {
   display: none;
-}
-
-.xkeen-diff-modal .xkeen-diff-helper {
-  flex: 0 0 auto;
-  margin: -2px 0 0;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(96, 165, 250, 0.16);
-  background: rgba(96, 165, 250, 0.06);
-  color: var(--muted, #9ca3af);
-  font-size: calc(11.5px * var(--xk-font-scale, 1));
-  line-height: 1.45;
 }
 
 .xkeen-diff-modal .xkeen-diff-error {
@@ -33386,10 +33380,6 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-collapsedLines:f
     height: 90vh;
     max-height: 90vh;
     padding: 10px;
-  }
-
-  .xkeen-diff-modal .xkeen-diff-head-actions {
-    flex-wrap: wrap;
   }
 
   .xkeen-diff-modal .xkeen-diff-apply-group {

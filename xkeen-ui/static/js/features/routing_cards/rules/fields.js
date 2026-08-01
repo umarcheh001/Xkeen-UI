@@ -1,4 +1,5 @@
 import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
+import { iconHtml } from '../../../ui/operator_icons.js';
 
 /*
   routing_cards/rules/fields.js
@@ -253,7 +254,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'routing-chip-remove';
-        btn.textContent = '×';
+        btn.innerHTML = iconHtml('close');
         btn.setAttribute('aria-label', 'Удалить: ' + item);
         btn.addEventListener('click', (ev) => {
           ev.preventDefault();

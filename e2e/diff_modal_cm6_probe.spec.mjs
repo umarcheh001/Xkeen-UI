@@ -452,6 +452,43 @@ test('CodeMirror diff modal keeps save file visible and clickable for writable s
   }).toBe(1);
 });
 
+test('diff modal keeps title, toolbar and sources in separate header rows', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/');
+  await waitForRoutingEditor(page);
+  await ensureCodeMirrorRouting(page);
+  await page.waitForFunction(() => !!window.XKeen?.ui?.diffModal?.open);
+  await installProbeScope(page);
+  await openProbeDiff(page);
+
+  const header = await page.evaluate(() => {
+    const rect = (selector) => {
+      const el = document.querySelector(selector);
+      if (!el) return null;
+      const box = el.getBoundingClientRect();
+      return { top: box.top, right: box.right, bottom: box.bottom, left: box.left, width: box.width };
+    };
+    const actions = document.querySelector('#xkeen-diff-modal .xkeen-diff-head-actions');
+    return {
+      card: rect('#xkeen-diff-modal .xkeen-diff-card'),
+      title: rect('#xkeen-diff-modal .modal-title'),
+      actions: rect('#xkeen-diff-modal .xkeen-diff-head-actions'),
+      sources: rect('#xkeen-diff-modal .xkeen-diff-labels'),
+      helperCount: document.querySelectorAll('#xkeen-diff-modal .xkeen-diff-helper').length,
+      actionsOverflow: actions ? actions.scrollWidth - actions.clientWidth : Number.POSITIVE_INFINITY,
+    };
+  });
+
+  expect(header.helperCount).toBe(0);
+  expect(header.actionsOverflow).toBeLessThanOrEqual(1);
+  expect(header.title.bottom).toBeLessThanOrEqual(header.actions.top + 1);
+  expect(header.actions.bottom).toBeLessThanOrEqual(header.sources.top + 1);
+  for (const row of [header.title, header.actions, header.sources]) {
+    expect(row.left).toBeGreaterThanOrEqual(header.card.left - 1);
+    expect(row.right).toBeLessThanOrEqual(header.card.right + 1);
+  }
+});
+
 test('CodeMirror diff modal keeps panes stable across apply-right, apply-all, and revert', async ({ page }) => {
   await page.goto('/');
   await waitForRoutingEditor(page);

@@ -1,6 +1,6 @@
 <!doctype html>
 {% macro op_icon(name, class_name='') -%}
-<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260801c') }}#xk-{{ name }}"></use></svg>
+<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260801d') }}#xk-{{ name }}"></use></svg>
 {%- endmacro %}
 <html lang="ru">
 <head>
@@ -63,13 +63,13 @@
   <script src="{{ url_for('static', filename='js/ui/sections.js', v='20260101c') }}"></script>
   <!-- Editor payload is lazy-loaded by js/runtime/lazy_runtime.js + js/ui/editor_engine.js. -->
   {% include '_top_level_host_theme_bootstrap.html' %}
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260609b') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260802a') }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
   {# Global Custom CSS (DevTools) — last in order so it can override everything. #}
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260801f') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260802a') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -1350,24 +1350,44 @@
       <div class="commands-status-row" id="commands-status-row" aria-live="polite">
       {% if has_xray %}
       <div class="core-pill" id="core-pill-xray" data-core="xray">
-        <span class="core-name">Xray</span>
-        <span class="core-ver" id="core-xray-installed">—</span>
-        <span class="core-state" id="core-xray-state"></span>
-        <a class="core-latest" id="core-xray-latest" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть релиз на GitHub">↑ <span class="core-latest-ver">—</span></a>
-        <a class="core-prerelease" id="core-xray-prerelease" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть pre-release на GitHub">pre <span class="core-prerelease-ver">—</span></a>
-        <button type="button" class="btn-secondary btn-icon btn-prerelease-action" id="core-xray-prerelease-update-btn" data-core="xray" style="display:none;" title="Обновить Xray до pre-release" aria-label="Обновить Xray до pre-release" data-tooltip="Запустить обновление Xray до pre-release через терминал с авто-вводом версии.">{{ op_icon('download') }}</button>
-        <button type="button" class="btn-secondary btn-icon" id="core-xray-update-btn" data-core="xray" style="display:none;" title="Обновить Xray" aria-label="Обновить Xray" data-tooltip="Запустить обновление Xray (xkeen -ux) через терминал.">{{ op_icon('download') }}</button>
+        <div class="core-summary">
+          <span class="core-name">Xray</span>
+          <span class="core-installed"><span class="core-installed-label">Установлено</span><span class="core-ver" id="core-xray-installed">—</span></span>
+          <span class="core-state" id="core-xray-state"></span>
+        </div>
+        <div class="core-releases" aria-label="Доступные обновления Xray">
+          <div class="core-release core-release-stable" id="core-xray-stable-release" style="display:none;">
+            <span class="core-release-kind">Stable</span>
+            <a class="core-latest" id="core-xray-latest" href="#" target="_blank" rel="noopener" title="Открыть стабильный релиз на GitHub"><span class="core-latest-ver">—</span></a>
+            <button type="button" class="btn-secondary core-update-action core-update-action-stable" id="core-xray-update-btn" data-core="xray" style="display:none;" title="Обновить Xray до стабильной версии" aria-label="Обновить Xray до стабильной версии" data-tooltip="Запустить обновление Xray до стабильной версии (xkeen -ux) через терминал.">{{ op_icon('download') }}<span>Обновить</span></button>
+          </div>
+          <div class="core-release core-release-prerelease" id="core-xray-prerelease-release" style="display:none;">
+            <span class="core-release-kind">Pre-release</span>
+            <a class="core-prerelease" id="core-xray-prerelease" href="#" target="_blank" rel="noopener" title="Открыть pre-release на GitHub"><span class="core-prerelease-ver">—</span></a>
+            <button type="button" class="btn-secondary core-update-action core-update-action-prerelease btn-prerelease-action" id="core-xray-prerelease-update-btn" data-core="xray" style="display:none;" title="Обновить Xray до pre-release" aria-label="Обновить Xray до pre-release" data-tooltip="Запустить обновление Xray до pre-release через терминал с авто-вводом версии.">{{ op_icon('download') }}<span>Установить</span></button>
+          </div>
+        </div>
       </div>
       {% endif %}
       {% if has_mihomo %}
       <div class="core-pill" id="core-pill-mihomo" data-core="mihomo">
-        <span class="core-name">Mihomo</span>
-        <span class="core-ver" id="core-mihomo-installed">—</span>
-        <span class="core-state" id="core-mihomo-state"></span>
-        <a class="core-latest" id="core-mihomo-latest" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть релиз на GitHub">↑ <span class="core-latest-ver">—</span></a>
-        <a class="core-prerelease" id="core-mihomo-prerelease" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть pre-release на GitHub">pre <span class="core-prerelease-ver">—</span></a>
-        <button type="button" class="btn-secondary btn-icon btn-prerelease-action" id="core-mihomo-prerelease-update-btn" data-core="mihomo" style="display:none;" title="Обновить Mihomo до pre-release" aria-label="Обновить Mihomo до pre-release" data-tooltip="Запустить обновление Mihomo до pre-release через терминал с авто-вводом версии.">{{ op_icon('download') }}</button>
-        <button type="button" class="btn-secondary btn-icon" id="core-mihomo-update-btn" data-core="mihomo" style="display:none;" title="Обновить Mihomo" aria-label="Обновить Mihomo" data-tooltip="Запустить обновление Mihomo (xkeen -um) через терминал.">{{ op_icon('download') }}</button>
+        <div class="core-summary">
+          <span class="core-name">Mihomo</span>
+          <span class="core-installed"><span class="core-installed-label">Установлено</span><span class="core-ver" id="core-mihomo-installed">—</span></span>
+          <span class="core-state" id="core-mihomo-state"></span>
+        </div>
+        <div class="core-releases" aria-label="Доступные обновления Mihomo">
+          <div class="core-release core-release-stable" id="core-mihomo-stable-release" style="display:none;">
+            <span class="core-release-kind">Stable</span>
+            <a class="core-latest" id="core-mihomo-latest" href="#" target="_blank" rel="noopener" title="Открыть стабильный релиз на GitHub"><span class="core-latest-ver">—</span></a>
+            <button type="button" class="btn-secondary core-update-action core-update-action-stable" id="core-mihomo-update-btn" data-core="mihomo" style="display:none;" title="Обновить Mihomo до стабильной версии" aria-label="Обновить Mihomo до стабильной версии" data-tooltip="Запустить обновление Mihomo до стабильной версии (xkeen -um) через терминал.">{{ op_icon('download') }}<span>Обновить</span></button>
+          </div>
+          <div class="core-release core-release-prerelease" id="core-mihomo-prerelease-release" style="display:none;">
+            <span class="core-release-kind">Pre-release</span>
+            <a class="core-prerelease" id="core-mihomo-prerelease" href="#" target="_blank" rel="noopener" title="Открыть pre-release на GitHub"><span class="core-prerelease-ver">—</span></a>
+            <button type="button" class="btn-secondary core-update-action core-update-action-prerelease btn-prerelease-action" id="core-mihomo-prerelease-update-btn" data-core="mihomo" style="display:none;" title="Обновить Mihomo до pre-release" aria-label="Обновить Mihomo до pre-release" data-tooltip="Запустить обновление Mihomo до pre-release через терминал с авто-вводом версии.">{{ op_icon('download') }}<span>Установить</span></button>
+          </div>
+        </div>
       </div>
       {% endif %}
 
@@ -1677,7 +1697,7 @@
             title="Очистить фильтр"
             aria-label="Очистить фильтр"
           >
-            ✖
+            {{ op_icon('close') }}
           </button>
         </div>
         <div class="dt-log-controls xray-log-controls xk-log-control-bar" aria-label="Управление логами Xray">
@@ -1801,18 +1821,18 @@
 	            <span id="terminal-uptime" class="terminal-uptime" title="Аптайм">00:00</span>
 </div>
 	          <div class="terminal-toolbar" aria-label="Terminal toolbar">
-              <button type="button" class="terminal-tool-btn" id="terminal-btn-fullscreen" title="Полный экран / обычный режим" aria-label="Полный экран / обычный режим">⛶</button>
-              <button type="button" class="terminal-tool-btn" id="terminal-btn-overflow" title="Меню терминала" aria-label="Меню терминала">⋯</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-fullscreen" title="Полный экран / обычный режим" aria-label="Полный экран / обычный режим">{{ op_icon('fullscreen') }}</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-overflow" title="Меню терминала" aria-label="Меню терминала">{{ op_icon('more') }}</button>
 
               <div id="terminal-overflow-menu" class="terminal-overflow-menu hidden" role="menu" aria-label="Меню терминала">
                 <div class="terminal-menu-section" aria-label="Сессия" data-collapsible="1" data-section="session">
                   <div class="terminal-menu-title">Сессия</div>
-                  <button type="button" class="terminal-tool-btn" id="terminal-btn-reconnect" title="Переподключиться" aria-label="Переподключиться">🔌 Переподключиться</button>
-                  <button type="button" class="terminal-tool-btn" id="terminal-btn-retry-now" title="Повторить сейчас" aria-label="Повторить сейчас">↻ Повторить сейчас</button>
-                  <button type="button" class="terminal-tool-btn terminal-tool-btn-danger" id="terminal-btn-stop-retry" title="Остановить автоподключение" aria-label="Остановить автоподключение">⏹ Остановить автоподключение</button>
-                  <button type="button" class="terminal-tool-btn" id="terminal-btn-new-session" title="Новая сессия" aria-label="Новая сессия">➕ Новая сессия</button>
-                  <button type="button" class="terminal-tool-btn" id="terminal-btn-detach" title="Отсоединиться (оставить PTY живым)" aria-label="Отсоединиться">⏸ Отсоединиться</button>
-                  <button type="button" class="terminal-tool-btn terminal-tool-btn-danger" id="terminal-btn-kill" title="Завершить PTY-сессию" aria-label="Завершить PTY">⏻ Завершить сессию</button>
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-reconnect" title="Переподключиться" aria-label="Переподключиться">{{ op_icon('reload') }}<span class="xk-action-label">Переподключиться</span></button>
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-retry-now" title="Повторить сейчас" aria-label="Повторить сейчас">{{ op_icon('reload') }}<span class="xk-action-label">Повторить сейчас</span></button>
+                  <button type="button" class="terminal-tool-btn terminal-tool-btn-danger" id="terminal-btn-stop-retry" title="Остановить автоподключение" aria-label="Остановить автоподключение">{{ op_icon('stop') }}<span class="xk-action-label">Остановить автоподключение</span></button>
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-new-session" title="Новая сессия" aria-label="Новая сессия">{{ op_icon('add-node') }}<span class="xk-action-label">Новая сессия</span></button>
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-detach" title="Отсоединиться (оставить PTY живым)" aria-label="Отсоединиться">{{ op_icon('detach') }}<span class="xk-action-label">Отсоединиться</span></button>
+                  <button type="button" class="terminal-tool-btn terminal-tool-btn-danger" id="terminal-btn-kill" title="Завершить PTY-сессию" aria-label="Завершить PTY">{{ op_icon('stop') }}<span class="xk-action-label">Завершить сессию</span></button>
                 </div>
 
                 <div class="terminal-menu-sep" role="separator" aria-hidden="true"></div>
@@ -1832,7 +1852,7 @@
 
                 <div class="terminal-menu-section" aria-label="Инструменты" data-collapsible="1" data-section="tools">
                   <div class="terminal-menu-title">Инструменты</div>
-                  <button type="button" class="terminal-tool-btn" id="terminal-btn-xraylogs" data-menu-keepopen="1" title="Логи Xray (tail -f в PTY)" aria-label="Логи Xray">📜 Логи Xray</button>
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-xraylogs" data-menu-keepopen="1" title="Логи Xray (tail -f в PTY)" aria-label="Логи Xray">{{ op_icon('list-details') }}<span class="xk-action-label">Логи Xray</span></button>
                   <div id="terminal-xraylogs-menu" class="terminal-xraylogs-menu hidden" role="menu" aria-label="Логи Xray">
                     <div class="terminal-xraylogs-row">
                       <select id="terminal-xraylogs-file" class="xray-log-select" title="Файл лога" aria-label="Файл лога">
@@ -1847,25 +1867,25 @@
                       </select>
                     </div>
                     <div class="terminal-xraylogs-actions">
-                      <button type="button" class="terminal-tool-btn terminal-xraylogs-iconbtn" id="terminal-xraylogs-start" title="Старт" aria-label="Запустить tail">▶</button>
-                      <button type="button" class="terminal-tool-btn terminal-tool-btn-danger terminal-xraylogs-iconbtn" id="terminal-xraylogs-stop" title="Стоп (остановить tail)" aria-label="Остановить tail">■</button>
-                      <button type="button" class="terminal-tool-btn terminal-tool-btn-danger terminal-xraylogs-iconbtn" id="terminal-xraylogs-disable" title="Отключить логи" aria-label="Отключить логи">⛔</button>
+                      <button type="button" class="terminal-tool-btn terminal-xraylogs-iconbtn" id="terminal-xraylogs-start" title="Старт" aria-label="Запустить tail">{{ op_icon('play') }}</button>
+                      <button type="button" class="terminal-tool-btn terminal-tool-btn-danger terminal-xraylogs-iconbtn" id="terminal-xraylogs-stop" title="Стоп (остановить tail)" aria-label="Остановить tail">{{ op_icon('stop') }}</button>
+                      <button type="button" class="terminal-tool-btn terminal-tool-btn-danger terminal-xraylogs-iconbtn" id="terminal-xraylogs-disable" title="Отключить логи" aria-label="Отключить логи">{{ op_icon('alert') }}</button>
                     </div>
                   </div>
 
                   <button type="button" class="terminal-tool-btn" id="terminal-btn-ssh" title="Профили SSH" aria-label="Профили SSH">SSH Профили</button>
-                  <button type="button" class="terminal-tool-btn" id="terminal-history-btn" title="История команд" aria-label="История">⌚ История</button>
+                  <button type="button" class="terminal-tool-btn" id="terminal-history-btn" title="История команд" aria-label="История">{{ op_icon('list-details') }}<span class="xk-action-label">История</span></button>
                 </div>
 
                 <div class="terminal-menu-sep" role="separator" aria-hidden="true"></div>
 
                 <div class="terminal-menu-section" aria-label="Окно">
                   <div class="terminal-menu-title">Окно</div>
-                  <button type="button" class="terminal-tool-btn" id="terminal-btn-minimize" title="Свернуть (скрыть окно, не разрывая WS)" aria-label="Свернуть">🗕 Свернуть</button>
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-minimize" title="Свернуть (скрыть окно, не разрывая WS)" aria-label="Свернуть">{{ op_icon('minimize') }}<span class="xk-action-label">Свернуть</span></button>
                 </div>
               </div>
 
-              <button type="button" class="terminal-close" id="terminal-btn-close" title="Закрыть" aria-label="Закрыть">×</button>
+              <button type="button" class="terminal-close" id="terminal-btn-close" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
             </div>
         </div>
         <input id="terminal-command"
@@ -1879,38 +1899,38 @@
 	                 placeholder="Поиск в терминале (Ctrl+F / F3)"
 	                 autocomplete="off"
 	                 spellcheck="false">
-	          <button type="button" class="terminal-search-btn" id="terminal-search-prev" title="Предыдущее (Shift+F3)" aria-label="Предыдущее совпадение">↑</button>
-	          <button type="button" class="terminal-search-btn" id="terminal-search-next" title="Следующее (F3 / Enter)" aria-label="Следующее совпадение">↓</button>
+	          <button type="button" class="terminal-search-btn" id="terminal-search-prev" title="Предыдущее (Shift+F3)" aria-label="Предыдущее совпадение">{{ op_icon('move-up') }}</button>
+	          <button type="button" class="terminal-search-btn" id="terminal-search-next" title="Следующее (F3 / Enter)" aria-label="Следующее совпадение">{{ op_icon('move-down') }}</button>
 	          <span id="terminal-search-counter" class="terminal-search-counter" title="Совпадения" aria-label="Количество совпадений">0/0</span>
-	          <button type="button" class="terminal-search-btn" id="terminal-search-clear" title="Очистить" aria-label="Очистить поиск">×</button>
+	          <button type="button" class="terminal-search-btn" id="terminal-search-clear" title="Очистить" aria-label="Очистить поиск">{{ op_icon('close') }}</button>
 	        </div>
         <div id="terminal-xterm" class="terminal-output hidden"></div>
         <pre id="terminal-output" class="terminal-output"></pre>
         <div class="terminal-footer" aria-label="Terminal footer toolbar">
           <div class="terminal-footer-group terminal-footer-group-view" aria-label="Отображение">
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-view-menu" title="Вид" aria-label="Вид">👁 Вид</button>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-view-menu" title="Вид" aria-label="Вид">{{ op_icon('preview') }}<span class="xk-action-label">Вид</span></button>
             <div id="terminal-view-menu" class="terminal-view-menu hidden" role="menu" aria-label="Вид">
               <button type="button" class="terminal-tool-btn" id="terminal-btn-font-dec" title="Шрифт −" aria-label="Шрифт меньше">A− Шрифт меньше</button>
               <button type="button" class="terminal-tool-btn" id="terminal-btn-font-inc" title="Шрифт +" aria-label="Шрифт больше">A+ Шрифт больше</button>
               <button type="button" class="terminal-tool-btn" id="terminal-btn-cursorblink" title="Мигание курсора" aria-label="Мигание курсора">▮ Мигание курсора</button>
               <button type="button" class="terminal-tool-btn" id="terminal-btn-ansi" title="ANSI-фильтр (скрыть/показать ANSI-коды)" aria-label="ANSI-фильтр">ANSI ANSI-фильтр</button>
-              <button type="button" class="terminal-tool-btn" id="terminal-btn-loghl" title="Подсветка логов" aria-label="Подсветка логов">📝 Подсветка логов</button>
-              <button type="button" class="terminal-tool-btn" id="terminal-btn-follow" title="Автопрокрутка" aria-label="Автопрокрутка">⇣ Следить</button>
-              <button type="button" class="terminal-tool-btn" id="terminal-btn-bottom" title="В конец" aria-label="В конец">↓ В конец</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-loghl" title="Подсветка логов" aria-label="Подсветка логов">{{ op_icon('format') }}<span class="xk-action-label">Подсветка логов</span></button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-follow" title="Автопрокрутка" aria-label="Автопрокрутка">{{ op_icon('more') }}<span class="xk-action-label">Следить</span></button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-bottom" title="В конец" aria-label="В конец">{{ op_icon('move-down') }}<span class="xk-action-label">В конец</span></button>
             </div>
           </div>
 
           <div class="terminal-footer-group terminal-footer-group-buffer" id="terminal-buffer-group" aria-label="Буфер обмена">
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-buffer-menu" title="Буфер" aria-label="Буфер">📋 Буфер</button>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-buffer-menu" title="Буфер" aria-label="Буфер">{{ op_icon('more') }}<span class="xk-action-label">Буфер</span></button>
             <div id="terminal-buffer-menu" class="terminal-buffer-menu hidden" role="menu" aria-label="Буфер">
-              <button type="button" class="terminal-tool-btn" id="terminal-btn-copy" title="Копировать" aria-label="Копировать">📋 Копировать</button>
-              <button type="button" class="terminal-tool-btn" id="terminal-btn-copyall" title="Копировать весь буфер" aria-label="Копировать весь буфер">📋 Копировать всё</button>
-              <button type="button" class="terminal-tool-btn" id="terminal-btn-paste" title="Вставить" aria-label="Вставить">📥 Вставить</button>
-              <button type="button" class="terminal-tool-btn" id="terminal-btn-clear" title="Очистить" aria-label="Очистить">🧹 Очистить</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-copy" title="Копировать" aria-label="Копировать">{{ op_icon('duplicate') }}<span class="xk-action-label">Копировать</span></button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-copyall" title="Копировать весь буфер" aria-label="Копировать весь буфер">{{ op_icon('duplicate') }}<span class="xk-action-label">Копировать всё</span></button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-paste" title="Вставить" aria-label="Вставить">{{ op_icon('import') }}<span class="xk-action-label">Вставить</span></button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-clear" title="Очистить" aria-label="Очистить">{{ op_icon('clear') }}<span class="xk-action-label">Очистить</span></button>
 
               <div class="terminal-menu-sep" role="separator" aria-hidden="true"></div>
 
-              <div class="terminal-menu-title terminal-menu-title-inline">⬇️ Скачать</div>
+              <div class="terminal-menu-title terminal-menu-title-inline">Скачать</div>
               <button type="button" class="terminal-tool-btn" id="terminal-btn-download" title="Скачать вывод (.txt)" aria-label="Скачать вывод">.txt</button>
               <button type="button" class="terminal-tool-btn" id="terminal-btn-download-html" title="Скачать вывод (.html, с цветами)" aria-label="Скачать вывод HTML">.html</button>
               <button type="button" class="terminal-tool-btn" id="terminal-btn-snapshot-vt" title="Снапшот VT (с ESC-последовательностями)" aria-label="Снапшот VT">VT (snapshot)</button>
@@ -1919,7 +1939,7 @@
 
           <div class="terminal-footer-group terminal-footer-group-commands" id="terminal-commands-group" aria-label="Команды">
             <span class="terminal-footer-label">Команды</span>
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-commands" title="Быстрые команды" aria-label="Быстрые команды">⋯ Команды</button>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-commands" title="Быстрые команды" aria-label="Быстрые команды">{{ op_icon('more') }}<span class="xk-action-label">Команды</span></button>
             <div id="terminal-commands-menu" class="terminal-commands-menu hidden" role="menu" aria-label="Меню команд">
               <div class="terminal-commands-head">
                 <div class="terminal-commands-title">Быстрые команды</div>

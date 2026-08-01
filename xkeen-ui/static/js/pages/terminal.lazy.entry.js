@@ -4,6 +4,7 @@ import {
   markTerminalDebugState,
   startTerminalDebugRun,
 } from '../features/terminal_debug.js';
+import '../ui/operator_icons.js';
 import {
   ensureXtermVendorReady,
   OPTIONAL_XTERM_VENDOR_SPECS,

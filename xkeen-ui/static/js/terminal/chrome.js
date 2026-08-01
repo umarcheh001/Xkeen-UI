@@ -8,6 +8,9 @@ import {
   syncTerminalBodyScrollLock,
 } from './runtime.js';
 import { appendTerminalDebug, markTerminalDebugState } from '../features/terminal_debug.js';
+const iconHtml = (name) => (window.XKeen && XKeen.ui && XKeen.ui.operatorIcons
+  ? XKeen.ui.operatorIcons.html(name)
+  : '');
 
 // Terminal window chrome: drag/resize/persist geometry + fullscreen/minimize
 // Pure UI module (no fetch/ws business logic)
@@ -188,11 +191,11 @@ import { appendTerminalDebug, markTerminalDebugState } from '../features/termina
     const btn = byId('terminal-btn-fullscreen');
     if (!btn) return;
     if (isFullscreen) {
-      btn.textContent = '🗗';
+      btn.innerHTML = iconHtml('fullscreen-exit');
       btn.title = 'Восстановить';
       btn.setAttribute('aria-label', 'Восстановить');
     } else {
-      btn.textContent = '⛶';
+      btn.innerHTML = iconHtml('fullscreen');
       btn.title = 'Полный экран';
       btn.setAttribute('aria-label', 'Полный экран');
     }

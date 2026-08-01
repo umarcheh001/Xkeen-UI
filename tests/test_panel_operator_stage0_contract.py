@@ -171,8 +171,8 @@ def test_operator_stylesheet_is_last_owned_and_fully_scoped():
         if "body.panel-page" in prelude:
             legacy_blocks.append(f"{prelude}{{{declarations}}}")
     legacy_digest = hashlib.sha256(("\n".join(legacy_blocks) + "\n").encode("utf-8")).hexdigest()
-    assert len(legacy_blocks) == 737
-    assert legacy_digest == "db48996397ae5cacc8e7c636a5f3e48d1b208dc90b7a7150d82e229f03608416"
+    assert len(legacy_blocks) == 738
+    assert legacy_digest == "6240c3421a60d918980211858b6d49bfd97e66472136c12f5983e9e9c4a38c95"
 
     without_comments = re.sub(r"/\*.*?\*/", "", operator_css, flags=re.DOTALL)
     unscoped: list[str] = []

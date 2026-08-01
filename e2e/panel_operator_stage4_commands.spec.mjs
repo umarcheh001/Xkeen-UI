@@ -141,4 +141,79 @@ test.describe('Operator Console Stage 4 commands', () => {
     await expect(page.locator('#core-pill-xray')).toHaveClass(/has-error/);
     await expect(page.locator('#core-pill-mihomo')).toHaveClass(/has-error/);
   });
+
+  test('stable and pre-release updates are grouped and visibly distinct', async ({ page }) => {
+    await page.route('**/api/cores/versions', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          cores: {
+            xray: { installed: true, version: '26.6.1' },
+            mihomo: { installed: true, version: 'alpha-978d25a' },
+          },
+        }),
+      });
+    });
+    await page.route('**/api/cores/updates*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          refreshing: false,
+          stale: false,
+          checked_ts: 1_786_000_000,
+          latest: {
+            xray: {
+              ok: true,
+              stable: { tag: 'v26.7.28', url: 'https://example.test/xray-stable' },
+              prerelease: { tag: 'v26.8.0-rc1', url: 'https://example.test/xray-pre' },
+            },
+            mihomo: {
+              ok: true,
+              stable: { tag: 'v1.19.29', url: 'https://example.test/mihomo-stable' },
+              prerelease: { tag: 'pre-alpha-9a9c4c6', url: 'https://example.test/mihomo-pre' },
+            },
+          },
+          installed: {
+            xray: { installed: true, version: '26.6.1' },
+            mihomo: { installed: true, version: 'alpha-978d25a' },
+          },
+          update_available: { xray: true, mihomo: true },
+        }),
+      });
+    });
+
+    await openCommands(page, 'dark', { width: 1440, height: 900 });
+    await expect(page.locator('#core-mihomo-stable-release')).toBeVisible();
+    await expect(page.locator('#core-mihomo-prerelease-release')).toBeVisible();
+    await expect(page.locator('#core-mihomo-update-btn')).toHaveText(/Обновить/);
+    await expect(page.locator('#core-mihomo-prerelease-update-btn')).toHaveText(/Установить/);
+
+    const geometry = await page.evaluate(() => {
+      const stable = document.querySelector('#core-mihomo-stable-release');
+      const prerelease = document.querySelector('#core-mihomo-prerelease-release');
+      const stableAction = document.querySelector('#core-mihomo-update-btn');
+      const prereleaseAction = document.querySelector('#core-mihomo-prerelease-update-btn');
+      return {
+        stableWidth: stable.getBoundingClientRect().width,
+        prereleaseWidth: prerelease.getBoundingClientRect().width,
+        stableActionWidth: stableAction.getBoundingClientRect().width,
+        prereleaseActionWidth: prereleaseAction.getBoundingClientRect().width,
+        stableKind: stable.querySelector('.core-release-kind').textContent.trim(),
+        prereleaseKind: prerelease.querySelector('.core-release-kind').textContent.trim(),
+        prereleaseBorder: getComputedStyle(prerelease).borderColor,
+        stableBorder: getComputedStyle(stable).borderColor,
+      };
+    });
+    expect(geometry.stableWidth).toBeGreaterThan(220);
+    expect(geometry.prereleaseWidth).toBeGreaterThan(220);
+    expect(geometry.stableActionWidth).toBeGreaterThan(80);
+    expect(geometry.prereleaseActionWidth).toBeGreaterThan(80);
+    expect(geometry.stableKind).toBe('Stable');
+    expect(geometry.prereleaseKind).toBe('Pre-release');
+    expect(geometry.prereleaseBorder).not.toBe(geometry.stableBorder);
+  });
 });

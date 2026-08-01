@@ -1775,9 +1775,9 @@ let restartLogModuleApi = null;
       wrap.className = 'restart-log-search';
       wrap.setAttribute('aria-label', 'Поиск по журналу операций');
       wrap.innerHTML = [
-        '<span class="restart-log-search-icon" aria-hidden="true">⌕</span>',
+        `<span class="restart-log-search-icon" aria-hidden="true">${iconHtml('search')}</span>`,
         '<input type="search" class="restart-log-search-input" data-xk-restart-log-search="1" placeholder="Поиск">',
-        '<button type="button" class="restart-log-search-clear" data-xk-restart-log-search-clear="1" aria-label="Очистить поиск" hidden>×</button>',
+        `<button type="button" class="restart-log-search-clear" data-xk-restart-log-search-clear="1" aria-label="Очистить поиск" hidden>${iconHtml('close')}</button>`,
       ].join('');
       const anchor = actions.querySelector('[data-xk-restart-log-filter]');
       insertRestartLogButton(actions, wrap, anchor);

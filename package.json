@@ -9,7 +9,7 @@
   "packageManager": "npm@10.9.8",
   "scripts": {
     "frontend:vendor": "node scripts/run_python.mjs scripts/sync_frontend_vendor.py",
-    "icons:operator": "node scripts/run_python.mjs scripts/generate_operator_icon_sprite.py",
+    "icons:operator": "node scripts/run_python.mjs scripts/generate_operator_icon_sprite.py && node scripts/run_python.mjs scripts/generate_operator_icon_inventory.py",
     "frontend:build": "npm run icons:operator && node scripts/run_python.mjs scripts/sync_frontend_vendor.py && vite build --config vite.config.mjs && node scripts/run_python.mjs scripts/sync_frontend_build_manifest.py",
     "frontend:verify:static": "node scripts/verify_frontend_build.mjs",
     "frontend:verify": "npm run frontend:build && npm run frontend:verify:static",

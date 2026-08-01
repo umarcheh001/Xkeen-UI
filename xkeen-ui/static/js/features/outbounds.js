@@ -4213,7 +4213,7 @@ let outboundsModuleApi = null;
         const del = document.createElement('button');
         del.type = 'button';
         del.className = 'btn-secondary xk-pool-delete-btn';
-        del.textContent = '✕';
+        del.innerHTML = iconHtml('close');
         del.title = 'Удалить';
         del.setAttribute('aria-label', 'Удалить строку');
         del.addEventListener('click', () => {

@@ -1,3 +1,5 @@
+import { iconHtml } from './operator_icons.js';
+
 (() => {
   'use strict';
 
@@ -36,7 +38,6 @@
   let _rightLabelEl = null;
   let _leftSelectEl = null;
   let _rightSelectEl = null;
-  let _helperEl = null;
   let _summaryEl = null;
   let _errorEl = null;
   let _modeBtnSplitEl = null;
@@ -166,31 +167,31 @@
 
     const navGroup = document.createElement('div');
     navGroup.className = 'xkeen-diff-nav';
-    _navPrevBtnEl = makeBtn('▲', 'btn-secondary btn-icon', () => navigateDiff(-1), 'К предыдущему изменению (Shift+F3)');
-    _navNextBtnEl = makeBtn('▼', 'btn-secondary btn-icon', () => navigateDiff(1), 'К следующему изменению (F3)');
+    _navPrevBtnEl = makeBtn('', 'btn-secondary btn-icon', () => navigateDiff(-1), 'К предыдущему изменению (Shift+F3)', 'move-up');
+    _navNextBtnEl = makeBtn('', 'btn-secondary btn-icon', () => navigateDiff(1), 'К следующему изменению (F3)', 'move-down');
     navGroup.appendChild(_navPrevBtnEl);
     navGroup.appendChild(_navNextBtnEl);
 
     const applyGroup = document.createElement('div');
     applyGroup.className = 'xkeen-diff-apply-group';
-    _applyAllToLeftBtnEl = makeBtn('Все ←', 'btn-secondary xkeen-diff-apply-btn hidden',
+    _applyAllToLeftBtnEl = makeBtn('Все влево', 'btn-secondary xkeen-diff-apply-btn hidden',
       () => applyAllChangesToSide('left'),
-      'Перенести все изменения из правой версии в левую');
-    _applyAllToRightBtnEl = makeBtn('Все →', 'btn-secondary xkeen-diff-apply-btn hidden',
+      'Перенести все изменения из правой версии в левую', 'back');
+    _applyAllToRightBtnEl = makeBtn('Все вправо', 'btn-secondary xkeen-diff-apply-btn hidden',
       () => applyAllChangesToSide('right'),
-      'Перенести все изменения из левой версии в правую');
-    _applyToLeftBtnEl = makeBtn('← Влево', 'btn-secondary xkeen-diff-apply-btn hidden',
+      'Перенести все изменения из левой версии в правую', 'forward');
+    _applyToLeftBtnEl = makeBtn('Влево', 'btn-secondary xkeen-diff-apply-btn hidden',
       () => applyHunkToSide('left'),
-      'Перенести текущий хунк из правой версии в левую');
-    _applyToRightBtnEl = makeBtn('Вправо →', 'btn-secondary xkeen-diff-apply-btn hidden',
+      'Перенести текущий хунк из правой версии в левую', 'back');
+    _applyToRightBtnEl = makeBtn('Вправо', 'btn-secondary xkeen-diff-apply-btn hidden',
       () => applyHunkToSide('right'),
-      'Перенести текущий хунк из левой версии в правую');
+      'Перенести текущий хунк из левой версии в правую', 'forward');
     applyGroup.appendChild(_applyAllToLeftBtnEl);
     applyGroup.appendChild(_applyAllToRightBtnEl);
     applyGroup.appendChild(_applyToLeftBtnEl);
     applyGroup.appendChild(_applyToRightBtnEl);
 
-    _xBtnEl = makeBtn('×', 'btn-icon xkeen-diff-close-x', () => close('x'), 'Закрыть окно сравнения (Esc)');
+    _xBtnEl = makeBtn('', 'btn-icon xkeen-diff-close-x', () => close('x'), 'Закрыть окно сравнения (Esc)', 'close');
 
     headRight.appendChild(modeGroup);
     headRight.appendChild(ignoreWhitespaceToggle);
@@ -220,7 +221,7 @@
 
     const sep = document.createElement('span');
     sep.className = 'xkeen-diff-side-sep';
-    sep.textContent = '↔';
+    sep.innerHTML = iconHtml('transfer');
 
     const rightWrap = document.createElement('div');
     rightWrap.className = 'xkeen-diff-side xkeen-diff-side-right';
@@ -238,11 +239,6 @@
     labels.appendChild(leftWrap);
     labels.appendChild(sep);
     labels.appendChild(rightWrap);
-
-    const helper = document.createElement('div');
-    helper.className = 'xkeen-diff-helper';
-    helper.textContent = 'Окно сравнивает текущий редактор, сохранённую версию и внешний текст. Для подстановки другого содержимого используйте «Вставить из буфера» или «Загрузить из файла».';
-    _helperEl = helper;
 
     const errorBanner = document.createElement('div');
     errorBanner.className = 'xkeen-diff-error hidden';
@@ -277,7 +273,6 @@
 
     card.appendChild(head);
     card.appendChild(labels);
-    card.appendChild(helper);
     card.appendChild(errorBanner);
     card.appendChild(host);
     card.appendChild(foot);
@@ -297,11 +292,12 @@
     return modal;
   }
 
-  function makeBtn(text, cls, onClick, tip) {
+  function makeBtn(text, cls, onClick, tip, icon) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = cls || '';
-    b.textContent = text;
+    if (icon) b.innerHTML = `${iconHtml(icon)}${text ? `<span class="xk-action-label">${text}</span>` : ''}`;
+    else b.textContent = text;
     if (tip) {
       try { b.setAttribute('data-tooltip', tip); } catch (e) {}
       try { b.setAttribute('aria-label', tip); } catch (e2) {}

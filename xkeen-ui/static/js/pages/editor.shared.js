@@ -8,4 +8,4 @@ import '../ui/editor_actions.js?v=20260325-stage3';
 import '../ui/editor_toolbar.js?v=20260325-wave3';
 import '../ui/editor_links.js?v=20260325-wave3';
 import '../ui/diff_engine.js?v=20260430-diff19';
-import '../ui/diff_modal.js?v=20260430-diff19';
+import '../ui/diff_modal.js?v=20260802a';

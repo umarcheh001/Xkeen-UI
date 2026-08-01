@@ -136,7 +136,7 @@
         if (host.closest && host.closest('.xterm, .xterm-helpers, .xterm-helper-textarea')) return;
       } catch (e0) {}
 
-      // Some libraries put aria-label on the child (<svg>, <span>) instead of the button.
+      // Some libraries put aria-label on the child (SVG or span) instead of the button.
       const aria = normalizeText(el.getAttribute('aria-label')) || normalizeText(host.getAttribute('aria-label'));
       if (!aria) return;
 

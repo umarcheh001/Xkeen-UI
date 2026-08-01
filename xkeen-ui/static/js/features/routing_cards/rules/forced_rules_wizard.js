@@ -97,7 +97,7 @@ import { iconHtml } from '../../../ui/operator_icons.js';
                     <span class="xk-forced-fieldlabel">outbound</span>
                     <div class="xk-forced-outbound-wrap">
                       <select id="routing-forced-rules-outbound" class="routing-rule-input"></select>
-                      <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-refresh-tags-btn" data-tooltip="Обновить список outbound-тегов" aria-label="Обновить список outbound-тегов"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16.2 10a6.2 6.2 0 1 1-1.83-4.39"/><path d="M16.2 4.6v3.62h-3.62"/></svg></button>
+                      <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-refresh-tags-btn" data-tooltip="Обновить список outbound-тегов" aria-label="Обновить список outbound-тегов">${iconHtml('refresh')}</button>
                     </div>
                   </label>
 
@@ -114,9 +114,9 @@ import { iconHtml } from '../../../ui/operator_icons.js';
                   <div class="xk-forced-editor-head">
                     <span class="xk-forced-fieldlabel">Значения</span>
                     <div class="xk-forced-wizard-toolbar">
-                      <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-add-btn" data-tooltip="Добавить значения в выбранный outbound" aria-label="Добавить значения"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4.2v11.6"/><path d="M4.2 10h11.6"/></svg></button>
-                      <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-clear-proxy-btn" data-tooltip="Очистить значения только у выбранного outbound" aria-label="Очистить выбранный outbound"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8.1 5h6.95a1.4 1.4 0 0 1 1.4 1.4v7.2a1.4 1.4 0 0 1-1.4 1.4H8.1L3.55 10 8.1 5Z"/><path d="m9.3 8 4.1 4.1"/><path d="m13.4 8-4.1 4.1"/></svg></button>
-                      <button type="button" class="btn-danger btn-icon xk-icon-btn" id="routing-forced-rules-clear-all-btn" data-tooltip="Удалить все записи мастера" aria-label="Удалить все записи"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.8 6.2h8.4"/><path d="M7.1 6.2V5a1 1 0 0 1 1-1h3.8a1 1 0 0 1 1 1v1.2"/><path d="M7.2 8.2v6.1"/><path d="M10 8.2v6.1"/><path d="M12.8 8.2v6.1"/><path d="M6.5 6.2l.6 9a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-9"/></svg></button>
+                      <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-add-btn" data-tooltip="Добавить значения в выбранный outbound" aria-label="Добавить значения">${iconHtml('add-node')}</button>
+                      <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-clear-proxy-btn" data-tooltip="Очистить значения только у выбранного outbound" aria-label="Очистить выбранный outbound">${iconHtml('clear')}</button>
+                      <button type="button" class="btn-danger btn-icon xk-icon-btn" id="routing-forced-rules-clear-all-btn" data-tooltip="Удалить все записи мастера" aria-label="Удалить все записи">${iconHtml('trash')}</button>
                     </div>
                   </div>
 
@@ -360,7 +360,7 @@ geoip:private"></textarea>
     }
 
     function renderChip(tag, kind, value) {
-      return `<span class="xk-chip" data-kind="${escapeHtml(kind)}" data-tag="${escapeHtml(tag)}" data-value="${escapeHtml(value)}" title="Удалить значение">${escapeHtml(value)} ×</span>`;
+      return `<button type="button" class="xk-chip" data-kind="${escapeHtml(kind)}" data-tag="${escapeHtml(tag)}" data-value="${escapeHtml(value)}" title="Удалить значение" aria-label="Удалить значение ${escapeHtml(value)}">${escapeHtml(value)}${iconHtml('close')}</button>`;
     }
 
     function renderInlineRow(tag, kind, values) {
@@ -897,7 +897,8 @@ geoip:private"></textarea>
     if (listEl) {
       listEl.addEventListener('click', (e) => {
         try {
-          const t = e && e.target;
+          const target = e && e.target;
+          const t = target && target.closest ? target.closest('.xk-chip') : target;
           if (!t || !t.getAttribute) return;
           if (!t.classList || !t.classList.contains('xk-chip')) return;
           const tag = t.getAttribute('data-tag');

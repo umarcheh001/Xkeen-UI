@@ -207,6 +207,11 @@ let coresStatusModuleApi = null;
     if (nextTitle) linkEl.title = nextTitle;
   }
 
+  function setReleaseVisible(core, kind, isVisible) {
+    const el = $(`core-${core}-${kind}-release`);
+    show(el, isVisible);
+  }
+
   function findCommandButton(flag) {
     try {
       return document.querySelector(`.command-item[data-flag="${CSS.escape(String(flag || ''))}"]`);
@@ -772,10 +777,12 @@ let coresStatusModuleApi = null;
       preferV: true,
       title: 'Открыть стабильный релиз на GitHub',
     });
+    setReleaseVisible('xray', 'stable', !!(xStable && xStable.tag));
     applyReleaseLink(xPreEl, xPre, {
       versionSelector: '.core-prerelease-ver',
       title: 'Открыть pre-release на GitHub',
     });
+    setReleaseVisible('xray', 'prerelease', !!(xPre && xPre.tag));
     configurePrereleaseAction(xPreUpdateBtn, xPre, installed && installed.xray ? installed.xray.version : '', {
       flag: '-ux',
       coreLabel: 'Xray',
@@ -798,10 +805,12 @@ let coresStatusModuleApi = null;
       preferV: true,
       title: 'Открыть стабильный релиз на GitHub',
     });
+    setReleaseVisible('mihomo', 'stable', !!(mStable && mStable.tag));
     applyReleaseLink(mPreEl, mPre, {
       versionSelector: '.core-prerelease-ver',
       title: 'Открыть pre-release на GitHub',
     });
+    setReleaseVisible('mihomo', 'prerelease', !!(mPre && mPre.tag));
     configurePrereleaseAction(mPreUpdateBtn, mPre, installed && installed.mihomo ? installed.mihomo.version : '', {
       flag: '-um',
       coreLabel: 'Mihomo',

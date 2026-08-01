@@ -1,6 +1,6 @@
 <!doctype html>
 {% macro op_icon(name, class_name='') -%}
-<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260801b') }}#xk-{{ name }}"></use></svg>
+<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260801d') }}#xk-{{ name }}"></use></svg>
 {%- endmacro %}
 <html lang="ru">
 <head>
@@ -38,7 +38,7 @@
   <script src="{{ url_for('static', filename='js/ui/sections.js', v='20260101c') }}"></script>
 
   {% include '_top_level_host_theme_bootstrap.html' %}
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260609b') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260802a') }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
 <style>
     body {
@@ -1951,7 +1951,7 @@
   </style>
   {# Shared Operator Console primitives are loaded last. The page keeps its
      runtime hooks while the late layer flattens legacy generator chrome. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260801f') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260802a') }}">
 </head>
 <body class="panel-page mihomo-generator-page">
   {% set top_level_spinner_text = 'Применяем изменения и перезапускаем xkeen…' %}
