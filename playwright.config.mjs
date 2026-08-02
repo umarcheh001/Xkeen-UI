@@ -13,7 +13,9 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // The E2E runtime fixture is shared between tests. Keep runs serial so
+  // remaining filesystem-backed scenarios cannot race one another.
+  workers: 1,
   reporter: [
     ['list'],
     ['html', { open: 'never' }],

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.mjs';
 
 
 async function openDevtools(page, theme, viewport) {
@@ -9,8 +9,8 @@ async function openDevtools(page, theme, viewport) {
   await page.goto('/devtools');
   await expect(page.locator('body')).toHaveClass(/\bdevtools-page\b/);
   await expect(page.locator('#dt-env-card')).toBeVisible();
-  // ENV is intentionally deferred; its first group is also a stable signal
-  // that the keep-alive screen bootstrap has finished restoring initial state.
+  // ENV is intentionally deferred; its first group is the stable signal that
+  // the keep-alive screen bootstrap has finished restoring initial state.
   await expect(page.locator('.dt-env-group-toggle').first()).toBeVisible();
 }
 

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.mjs';
 
 
 const captureEnabled = process.env.XKEEN_CAPTURE_STAGE0_BASELINE === '1';

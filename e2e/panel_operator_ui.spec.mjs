@@ -1,9 +1,17 @@
 import path from 'node:path';
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.mjs';
 
 
 const captureEnabled = process.env.XKEEN_CAPTURE_UI === '1';
+
+async function openInteractivePanel(page) {
+  await page.goto('/');
+  await page.waitForFunction(() => {
+    const shell = window.XKeen?.pages?.panelShell;
+    return !!shell?.isInitialized?.();
+  });
+}
 
 async function capture(page, name) {
   if (!captureEnabled) return;
@@ -23,7 +31,7 @@ async function expectNoPageOverflow(page) {
 }
 
 test('operator stylesheet is isolated and loaded last', async ({ page }) => {
-  await page.goto('/');
+  await openInteractivePanel(page);
 
   await expect(page.locator('body')).toHaveClass(/\bpanel-page\b/);
   await expect(page.locator('#routing-focus-note')).toBeAttached();
@@ -43,7 +51,7 @@ test('operator stylesheet is isolated and loaded last', async ({ page }) => {
 });
 
 test('ports workspace uses dense editor rows instead of pill actions', async ({ page }) => {
-  await page.goto('/');
+  await openInteractivePanel(page);
   await page.locator('.top-tab-btn[data-view="xkeen"]').click();
 
   await expect(page.locator('#view-xkeen')).toBeVisible();
@@ -64,7 +72,7 @@ test('ports workspace uses dense editor rows instead of pill actions', async ({ 
 
 test('ports and Xray logs keep a standard gap before the operation journal', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('xkeen-theme', 'dark'));
-  await page.goto('/');
+  await openInteractivePanel(page);
 
   const workspaces = [
     {
@@ -98,7 +106,7 @@ test('ports and Xray logs keep a standard gap before the operation journal', asy
 });
 
 test('help links render as compact data rows', async ({ page }) => {
-  await page.goto('/');
+  await openInteractivePanel(page);
   await page.locator('#routing-help-header').click();
 
   const links = page.locator('#routing-help-body .links > li');
@@ -117,7 +125,7 @@ test('help links render as compact data rows', async ({ page }) => {
 });
 
 test('json editor modal keeps the editor as the visual center', async ({ page }) => {
-  await page.goto('/');
+  await openInteractivePanel(page);
   const outboundsBody = page.locator('#outbounds-body');
   if (!(await outboundsBody.isVisible())) {
     await page.locator('#outbounds-header').click();
@@ -153,7 +161,7 @@ test.describe('mobile operator shell', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
   test('navigation and workspace fit without horizontal page scrolling', async ({ page }) => {
-    await page.goto('/');
+    await openInteractivePanel(page);
     await expect(page.locator('.panel-header')).toBeVisible();
     await expectNoPageOverflow(page);
 

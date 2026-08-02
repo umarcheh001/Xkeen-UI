@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.mjs';
 
 test('Monaco marks the YAML alias sigil separately from its name', async ({ page }) => {
   await page.goto('/');

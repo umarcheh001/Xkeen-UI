@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.mjs';
 
 async function waitForMihomoGeneratorPreview(page) {
   await expect(page.locator('#profileSelect')).toBeVisible();
