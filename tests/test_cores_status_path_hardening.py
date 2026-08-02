@@ -56,7 +56,10 @@ def test_read_json_rejects_symlink_escaping_trusted_root(tmp_path):
     outside.write_text(json.dumps({"secret": "data"}))
     try:
         link = tmp_path / "evil_link.json"
-        link.symlink_to(outside)
+        try:
+            link.symlink_to(outside)
+        except OSError as exc:
+            pytest.skip(f"symlinks are unavailable in this environment: {exc}")
         result = _read_json(str(link), str(tmp_path))
         assert result is None, "Should reject a symlink that resolves outside trusted_root"
     finally:
@@ -68,7 +71,10 @@ def test_write_json_atomic_rejects_symlink_escaping_trusted_root(tmp_path):
     outside.write_text("{}")
     try:
         link = tmp_path / "evil_link.json"
-        link.symlink_to(outside)
+        try:
+            link.symlink_to(outside)
+        except OSError as exc:
+            pytest.skip(f"symlinks are unavailable in this environment: {exc}")
         with pytest.raises(ValueError, match="escapes trusted root"):
             _write_json_atomic(str(link), {"pwned": True}, str(tmp_path))
     finally:
