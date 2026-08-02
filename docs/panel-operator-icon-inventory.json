@@ -515,7 +515,7 @@
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L46",
+          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L48",
           "control_type": "runtime-action",
           "accessible_label": "Закрыть"
         },
@@ -821,12 +821,12 @@
       "tabler_asset": "message",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L101",
+          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L110",
           "control_type": "runtime-action",
           "accessible_label": "Комментарии"
         },
         {
-          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L169",
+          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L188",
           "control_type": "runtime-action",
           "accessible_label": "Комментарии"
         }
@@ -852,7 +852,7 @@
           "accessible_label": "Сравнить"
         },
         {
-          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L172",
+          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L191",
           "control_type": "runtime-action",
           "accessible_label": "Сравнить"
         }
@@ -1310,12 +1310,12 @@
           "accessible_label": "Полный экран"
         },
         {
-          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L102",
+          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L111",
           "control_type": "runtime-action",
           "accessible_label": "Полный экран"
         },
         {
-          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L170",
+          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L189",
           "control_type": "runtime-action",
           "accessible_label": "Полный экран"
         },
@@ -1383,7 +1383,7 @@
           "accessible_label": "Справка"
         },
         {
-          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L171",
+          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L190",
           "control_type": "runtime-action",
           "accessible_label": "Справка"
         },
@@ -1774,7 +1774,7 @@
           "accessible_label": "Вниз"
         },
         {
-          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L165",
+          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L184",
           "control_type": "runtime-action",
           "accessible_label": "Вниз"
         },
@@ -1810,7 +1810,7 @@
           "accessible_label": "Вверх"
         },
         {
-          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L166",
+          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L185",
           "control_type": "runtime-action",
           "accessible_label": "Вверх"
         },
@@ -2060,7 +2060,7 @@
       "tabler_asset": "sparkles",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L168",
+          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L187",
           "control_type": "runtime-action",
           "accessible_label": "Быстрое исправление"
         }
@@ -2299,12 +2299,12 @@
           "accessible_label": "Заменить"
         },
         {
-          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L100",
+          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L109",
           "control_type": "runtime-action",
           "accessible_label": "Заменить"
         },
         {
-          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L167",
+          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L186",
           "control_type": "runtime-action",
           "accessible_label": "Заменить"
         }
@@ -2533,7 +2533,7 @@
           "accessible_label": "Поиск"
         },
         {
-          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L164",
+          "location": "xkeen-ui/static/js/ui/editor_toolbar.js:L183",
           "control_type": "runtime-action",
           "accessible_label": "Поиск"
         },

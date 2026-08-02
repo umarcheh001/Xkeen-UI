@@ -53,6 +53,36 @@ def test_parse_subscription_links_accepts_plain_and_base64_payloads():
     assert parse_subscription_links(encoded) == [_vless("Plain"), _vless("Second")]
 
 
+def test_subscription_url_policy_allows_public_http_and_blocks_private_redirects(monkeypatch):
+    from services import xray_subscriptions as subs
+
+    monkeypatch.delenv("XKEEN_SUBSCRIPTION_ALLOW_HTTP", raising=False)
+    monkeypatch.delenv("XKEEN_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS", raising=False)
+    policy = subs._subscription_policy()
+
+    assert subs.is_url_allowed("http://subscriptions.example/list", policy) == (True, "ok_custom")
+    assert subs.is_url_allowed("http://127.0.0.1/list", policy) == (
+        False,
+        "private_host_not_allowed:127.0.0.1",
+    )
+
+    redirect = subs._SafeRedirect(policy)
+    request = subs.urllib.request.Request("http://subscriptions.example/list")
+    with pytest.raises(urllib.error.URLError, match=r"url_blocked:private_host_not_allowed:127\.0\.0\.1"):
+        redirect.redirect_request(request, None, 302, "Found", {}, "http://127.0.0.1/private")
+
+
+def test_subscription_url_policy_can_disable_public_http(monkeypatch):
+    from services import xray_subscriptions as subs
+
+    monkeypatch.setenv("XKEEN_SUBSCRIPTION_ALLOW_HTTP", "0")
+
+    assert subs.is_url_allowed("http://subscriptions.example/list", subs._subscription_policy()) == (
+        False,
+        "http_not_allowed",
+    )
+
+
 def test_fetch_subscription_body_resolves_happ_landing_via_helper(monkeypatch):
     from services import xray_subscriptions as subs
 

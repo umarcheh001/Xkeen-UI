@@ -1098,7 +1098,11 @@ def delete_subscription(
 def _subscription_policy() -> URLPolicy:
     return URLPolicy(
         allow_hosts=(),
-        allow_http=env_flag("XKEEN_SUBSCRIPTION_ALLOW_HTTP", False),
+        # Subscription providers still commonly publish public feeds over HTTP.
+        # This exception is scoped to ordinary Xray subscriptions: private and
+        # local hosts remain blocked, including when reached through redirects.
+        # Set XKEEN_SUBSCRIPTION_ALLOW_HTTP=0 to enforce HTTPS-only feeds.
+        allow_http=env_flag("XKEEN_SUBSCRIPTION_ALLOW_HTTP", True),
         allow_private_hosts=env_flag("XKEEN_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS", False),
         allow_custom_urls=True,
     )

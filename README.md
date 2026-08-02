@@ -106,6 +106,10 @@ http://<IP_роутера>:<порт>/
 - `/opt/var/log/xkeen-ui.log`
 - `/opt/var/log/xkeen-ui/`
 
+## URL Xray-подписок
+
+Обычные Xray-подписки принимают публичные `https://` и `http://` URL. Локальные и private-адреса, в том числе адреса в редиректах, по умолчанию заблокированы. Чтобы принудительно принимать только HTTPS, задайте `XKEEN_SUBSCRIPTION_ALLOW_HTTP=0`; доступ к private-адресам требует отдельного явного `XKEEN_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS=1`.
+
 ## Управление сервисом
 
 ```sh
