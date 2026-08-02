@@ -204,18 +204,26 @@ def _parse_mihomo_version(output: str) -> Optional[str]:
     return pre.group(1) if pre else None
 
 
-def _read_json(path: str) -> Optional[dict]:
+def _read_json(path: str, trusted_root: str) -> Optional[dict]:
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        resolved = os.path.realpath(path)
+        trusted = os.path.realpath(trusted_root)
+        if os.path.commonpath([resolved, trusted]) != trusted:
+            return None
+        with open(resolved, "r", encoding="utf-8") as f:
             v = json.load(f)
         return v if isinstance(v, dict) else None
     except Exception:
         return None
 
 
-def _write_json_atomic(path: str, data: dict) -> None:
+def _write_json_atomic(path: str, data: dict, trusted_root: str) -> None:
+    resolved = os.path.realpath(path)
+    trusted = os.path.realpath(trusted_root)
+    if os.path.commonpath([resolved, trusted]) != trusted:
+        raise ValueError(f"Path escapes trusted root: {path!r}")
     try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+        os.makedirs(os.path.dirname(resolved), exist_ok=True)
     except Exception:
         pass
     tmp = path + ".tmp"
@@ -651,6 +659,7 @@ def create_cores_status_blueprint(ui_state_dir: str) -> Blueprint:
     bp = Blueprint("cores_status", __name__)
 
     cache_path = os.path.join(str(ui_state_dir or "/tmp"), "cores_updates_cache.json")
+    trusted_root = os.path.realpath(str(ui_state_dir or "/tmp"))
     refresh_lock = threading.Lock()
     refresh_state = {
         "running": False,
@@ -735,6 +744,7 @@ def create_cores_status_blueprint(ui_state_dir: str) -> Blueprint:
                         "stale": False,
                         "data": {"ok": ok, "latest": latest},
                     },
+                    trusted_root,
                 )
         except Exception:
             try:
@@ -796,7 +806,7 @@ def create_cores_status_blueprint(ui_state_dir: str) -> Blueprint:
 
         xray_repo = str(os.environ.get("XKEEN_UI_XRAY_REPO") or "XTLS/Xray-core")
         mihomo_repo = str(os.environ.get("XKEEN_UI_MIHOMO_REPO") or "MetaCubeX/mihomo")
-        cached = _read_json(cache_path)
+        cached = _read_json(cache_path, trusted_root)
         installed = _detect_installed()
         cached_checked_ts = _cache_checked_ts(cached)
         cache_is_fresh = False

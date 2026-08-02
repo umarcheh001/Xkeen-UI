@@ -287,6 +287,7 @@ def test_cores_updates_returns_stale_cache_while_refresh_runs_in_background(tmp_
                 },
             },
         },
+        str(tmp_path),
     )
 
     gate = threading.Event()
