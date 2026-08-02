@@ -7417,6 +7417,170 @@ body.panel-page .modal[data-operator-modal-family="editor-workbench"] :is(
   min-height: 0;
 }
 
+/* Stage 5 — editor/workbench family: JSON, file editor and snapshot share
+ * one bounded frame. Feature markup stays intact; only the presentation grid
+ * is owned here, after the frozen legacy editor rules. */
+body.panel-page :is(#json-editor-modal, #fm-editor-modal, #xray-snapshot-modal) .modal-content {
+  grid-template-rows: 50px minmax(0, 1fr) 50px;
+  width: min(1180px, calc(100vw - 36px));
+  height: clamp(520px, 82dvh, 900px);
+}
+
+body.panel-page :is(#json-editor-modal, #fm-editor-modal, #xray-snapshot-modal) :is(.modal-header, .modal-actions) {
+  box-sizing: border-box;
+  height: 50px;
+  min-height: 50px;
+}
+
+body.panel-page :is(#json-editor-modal, #fm-editor-modal, #xray-snapshot-modal) .modal-body {
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+  flex-direction: column;
+  gap: 8px;
+}
+
+body.panel-page :is(#json-editor-modal, #fm-editor-modal, #xray-snapshot-modal) :is(
+  .xk-editor-workbench-toolbar,
+  #fm-editor-warning,
+  #fm-editor-error,
+  #json-editor-error,
+  #xray-snapshot-status
+) {
+  flex: 0 0 auto;
+}
+
+body.panel-page :is(#json-editor-modal, #fm-editor-modal, #xray-snapshot-modal) :is(
+  textarea,
+  .CodeMirror,
+  .xkeen-cm6-host,
+  .xk-monaco-editor,
+  .monaco-editor,
+  .monaco-editor-container
+) {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  height: 100%;
+}
+
+/* The two in-body editor toolbars have the same 42px operational row. The
+ * file editor keeps its engine selector next to its title, but uses this same
+ * control grid and height rather than a feature-local button treatment. */
+body.panel-page :is(#json-editor-modal, #xray-snapshot-modal) .xk-editor-workbench-toolbar {
+  display: grid;
+  align-items: center;
+  min-height: 42px;
+  margin: 0 !important;
+  gap: 8px;
+}
+
+body.panel-page #json-editor-modal .xk-editor-workbench-toolbar {
+  grid-template-columns: max-content minmax(0, max-content) minmax(0, max-content);
+  justify-content: space-between;
+}
+
+body.panel-page #xray-snapshot-modal .xk-editor-workbench-toolbar {
+  grid-template-columns: minmax(0, 1fr) max-content;
+}
+
+body.panel-page :is(#json-editor-modal, #xray-snapshot-modal) .xk-editor-engine,
+body.panel-page #fm-editor-modal .xk-editor-workbench-header-tools {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  align-items: center;
+  gap: 8px;
+}
+
+body.panel-page #xray-snapshot-modal #xray-snapshot-meta {
+  min-width: 0;
+  margin: 0 !important;
+  overflow: hidden;
+  color: var(--op-muted) !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page #xray-snapshot-modal #xray-snapshot-status {
+  margin: 0 !important;
+}
+
+body.panel-page #fm-editor-modal .xk-editor-workbench-title {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+body.panel-page #fm-editor-modal #fm-editor-subtitle {
+  margin: 0;
+  overflow: hidden;
+  color: var(--op-muted) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  line-height: 1.2;
+  opacity: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page :is(#json-editor-modal, #fm-editor-modal, #xray-snapshot-modal) .xk-editor-workbench-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+body.panel-page :is(#json-editor-modal, #fm-editor-modal, #xray-snapshot-modal) .xk-editor-workbench-action-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* JSON comments and schema are passive state labels, not clickable chips. */
+body.panel-page #json-editor-modal .xk-editor-status-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 0 0 7px;
+  border: 0 !important;
+  border-left: 2px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--op-muted) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+body.panel-page #json-editor-modal .xk-editor-status-label::before {
+  content: none !important;
+  display: none !important;
+}
+
+body.panel-page #json-editor-modal .xk-editor-status-label.xk-comments-on {
+  border-left-color: var(--op-success) !important;
+  color: var(--op-success) !important;
+}
+
+body.panel-page #json-editor-modal .xk-editor-status-label.xk-schema-on {
+  border-left-color: var(--op-accent) !important;
+  color: var(--op-accent-hover) !important;
+}
+
+body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-btn, #fm-editor-save-btn) {
+  min-width: 122px;
+  border-color: var(--op-accent) !important;
+  background: var(--op-accent) !important;
+  color: #fff !important;
+}
+
+body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-btn, #fm-editor-save-btn):hover {
+  border-color: var(--op-accent-hover) !important;
+  background: var(--op-accent-hover) !important;
+}
+
 body.panel-page .modal[data-operator-modal-family="master-detail"] .modal-content {
   grid-template-rows: auto minmax(0, 1fr) auto;
   width: min(1040px, calc(100vw - 36px));
@@ -7437,6 +7601,94 @@ body.panel-page .modal[data-operator-modal-family="drawer-help"] .modal-content 
   grid-template-rows: auto minmax(0, 1fr) auto;
   width: min(680px, calc(100vw - 36px));
   height: min(100%, calc(100dvh - 36px));
+}
+
+/* Stage 5 — the dynamic CodeMirror help is a workbench sidecar, rather than
+ * a second full-screen overlay. On wide viewports the open editor is moved
+ * into the remaining canvas, so the help never covers its Save/Cancel row. */
+body.panel-page {
+  --op-editor-help-drawer-width: min(420px, 30vw);
+}
+
+body.panel-page .xkeen-cm-help-overlay {
+  background: transparent !important;
+  pointer-events: none !important;
+}
+
+body.panel-page .xkeen-cm-help-drawer {
+  box-sizing: border-box;
+  width: var(--op-editor-help-drawer-width);
+  max-width: calc(100vw - 36px);
+  height: calc(100dvh - 36px);
+  max-height: calc(100dvh - 36px);
+  top: 18px;
+  right: 18px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface) !important;
+  box-shadow: var(--op-shadow-float) !important;
+  color: var(--op-text) !important;
+}
+
+body.panel-page .xkeen-cm-help-head {
+  box-sizing: border-box;
+  flex: 0 0 50px;
+  min-height: 50px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--op-border) !important;
+  background: var(--op-surface-2) !important;
+}
+
+body.panel-page .xkeen-cm-help-title {
+  color: var(--op-text-strong);
+  font-size: calc(13px * var(--xk-font-scale, 1));
+  letter-spacing: 0;
+}
+
+body.panel-page .xkeen-cm-help-close {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: transparent !important;
+  color: var(--op-text) !important;
+}
+
+body.panel-page .xkeen-cm-help-close:hover {
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-3) !important;
+}
+
+body.panel-page .xkeen-cm-help-body {
+  min-height: 0;
+  padding: 12px;
+  overscroll-behavior: contain;
+}
+
+body.panel-page .xkeen-cm-help-section {
+  margin: 0 0 8px;
+  padding: 10px 0;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+body.panel-page .xkeen-cm-help-section:last-child {
+  margin-bottom: 0;
+  border-bottom: 0 !important;
+}
+
+body.panel-page.xk-editor-help-open .modal[data-operator-modal-family="editor-workbench"]:not(.hidden) {
+  justify-content: flex-start;
+  padding-right: calc(18px + var(--op-editor-help-drawer-width));
+}
+
+body.panel-page.xk-editor-help-open :is(#json-editor-modal, #fm-editor-modal, #xray-snapshot-modal):not(.hidden) .modal-content {
+  width: min(1180px, calc(100vw - 54px - var(--op-editor-help-drawer-width)));
+  max-width: calc(100vw - 54px - var(--op-editor-help-drawer-width));
 }
 
 body.panel-page .modal[data-operator-modal-family] .modal-close > .xk-action-icon {
@@ -7495,6 +7747,38 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
 }
 
 @media (max-width: 1180px) {
+  body.panel-page.xk-editor-help-open .modal[data-operator-modal-family="editor-workbench"]:not(.hidden) {
+    align-items: flex-start;
+    padding: 18px 18px calc(18px + min(42dvh, 380px));
+  }
+
+  body.panel-page.xk-editor-help-open :is(#json-editor-modal, #fm-editor-modal, #xray-snapshot-modal):not(.hidden) .modal-content {
+    width: min(1180px, calc(100vw - 36px));
+    max-width: calc(100vw - 36px);
+    min-height: 0;
+    height: calc(100dvh - 36px - min(42dvh, 380px));
+  }
+
+  body.panel-page .xkeen-cm-help-drawer {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100vw;
+    max-width: 100vw;
+    height: min(42dvh, 380px);
+    max-height: min(42dvh, 380px);
+    border-right: 0 !important;
+    border-bottom: 0 !important;
+    border-left: 0 !important;
+    border-radius: var(--op-radius) var(--op-radius) 0 0 !important;
+    transform: translateY(100%);
+  }
+
+  body.panel-page .xkeen-cm-help-drawer.is-open {
+    transform: translateY(0);
+  }
+
   body.panel-page #view-commands #commands-body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -7728,6 +8012,59 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
 
 /* Mobile: two dense shell rows, scrollable nav, full-width editor. */
 @media (max-width: 720px) {
+  /* Complex modal bodies are their only scroll region. This keeps their
+   * header and action footer reachable while long content scrolls. */
+  body.panel-page .modal[data-operator-modal-family]:is(
+    [data-operator-modal-family="editor-workbench"],
+    [data-operator-modal-family="master-detail"],
+    [data-operator-modal-family="drawer-help"]
+  ) .modal-content {
+    grid-template-rows: 50px minmax(0, 1fr) auto;
+    overflow: hidden;
+  }
+
+  body.panel-page .modal[data-operator-modal-family="editor-workbench"] .modal-content {
+    grid-template-rows: 50px minmax(0, 1fr) 50px;
+  }
+
+  body.panel-page :is(#json-editor-modal, #fm-editor-modal, #xray-snapshot-modal) .modal-content {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  body.panel-page .modal[data-operator-modal-family]:is(
+    [data-operator-modal-family="editor-workbench"],
+    [data-operator-modal-family="master-detail"],
+    [data-operator-modal-family="drawer-help"]
+  ) .modal-body {
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  body.panel-page.xk-editor-help-open .modal[data-operator-modal-family="editor-workbench"]:not(.hidden) {
+    padding: 0;
+  }
+
+  body.panel-page.xk-editor-help-open :is(#json-editor-modal, #fm-editor-modal, #xray-snapshot-modal):not(.hidden) .modal-content {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+  }
+
+  body.panel-page .xkeen-cm-help-drawer {
+    inset: 0;
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+
   body.panel-page .modal[data-operator-modal-family] {
     align-items: stretch;
     padding: 0;

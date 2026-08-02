@@ -36,9 +36,11 @@
     const drawer = document.createElement('div');
     drawer.id = 'xkeen-cm-help-drawer';
     drawer.className = 'xkeen-cm-help-drawer';
+    drawer.dataset.operatorWorkbenchSidecar = 'editor-help';
     drawer.setAttribute('role', 'dialog');
     drawer.setAttribute('aria-modal', 'true');
     drawer.setAttribute('aria-label', 'Справка по редактору');
+    drawer.setAttribute('aria-hidden', 'true');
 
     drawer.innerHTML = `
       <div class="xkeen-cm-help-head">
@@ -52,8 +54,15 @@
     document.body.appendChild(drawer);
 
     function close() {
+      const returnFocus = drawer._xkeenReturnFocus;
       overlay.classList.remove('is-open');
       drawer.classList.remove('is-open');
+      drawer.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('xk-editor-help-open');
+      drawer._xkeenReturnFocus = null;
+      try {
+        if (returnFocus && document.contains(returnFocus)) returnFocus.focus();
+      } catch (e) {}
     }
 
     overlay.addEventListener('click', close);
@@ -154,8 +163,18 @@
     const body = document.getElementById('xkeen-cm-help-body');
     if (!overlay || !drawer || !body) return;
     body.innerHTML = buildHelpHtml(editor);
+    try {
+      drawer._xkeenReturnFocus = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    } catch (e) {
+      drawer._xkeenReturnFocus = null;
+    }
     overlay.classList.add('is-open');
     drawer.classList.add('is-open');
+    drawer.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('xk-editor-help-open');
+    try { drawer.querySelector('.xkeen-cm-help-close').focus(); } catch (e) {}
   }
 
   // The editor toolbar exposes HTML for legacy consumers, but every glyph

@@ -2373,7 +2373,7 @@
           <button type="button" class="modal-close" id="xray-snapshot-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
         </div>
         <div class="modal-body">
-          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom: 10px;">
+          <div class="xk-editor-workbench-toolbar xk-editor-workbench-toolbar--snapshot" style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom: 10px;">
             <p id="xray-snapshot-meta" class="modal-description" style="margin:0;">—</p>
             <div class="xk-editor-engine" id="xray-snapshot-engine" style="margin-top: 2px;">
               <span class="xk-editor-engine-label">Редактор</span>
@@ -2387,9 +2387,9 @@
           <textarea class="routing-template-preview-code" id="xray-snapshot-preview" readonly>// загрузка…</textarea>
           <div id="xray-snapshot-status" class="modal-hint" style="margin-top: 10px;"></div>
         </div>
-        <div class="modal-actions" style="justify-content: space-between;">
+        <div class="modal-actions xk-editor-workbench-actions" style="justify-content: space-between;">
           <button type="button" class="btn-secondary" id="xray-snapshot-copy-btn" data-tooltip="Скопировать текст снимка в буфер обмена">{{ op_icon('duplicate') }}<span class="xk-action-label">Копировать</span></button>
-          <div style="display:flex; gap:10px;">
+          <div class="xk-editor-workbench-action-group" style="display:flex; gap:10px;">
             <button type="button" id="xray-snapshot-cancel-btn" data-operator-dismiss-duplicate="true">Закрыть</button>
           </div>
         </div>
@@ -3334,11 +3334,11 @@ https://..."></textarea>
     <div id="fm-editor-modal" class="modal hidden" data-operator-modal-family="editor-workbench" role="dialog" aria-modal="true" aria-label="Редактор файла">
       <div class="modal-content" style="max-width: 980px;">
         <div class="modal-header">
-          <div style="display:flex; flex-direction:column; gap:2px;">
+          <div class="xk-editor-workbench-title" style="display:flex; flex-direction:column; gap:2px;">
             <span class="modal-title" id="fm-editor-title">Файл</span>
             <span id="fm-editor-subtitle" class="modal-hint" style="margin:0; font-size: 0.82rem; opacity:0.75;"></span>
           </div>
-          <div style="display:flex; align-items:center; gap:10px;">
+          <div class="xk-editor-workbench-header-tools" style="display:flex; align-items:center; gap:10px;">
             <div class="xk-editor-engine" id="fm-editor-engine">
               <span class="xk-editor-engine-label">Редактор</span>
               <select id="fm-editor-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" data-tooltip="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" aria-label="Выбор движка редактора">
@@ -3355,11 +3355,11 @@ https://..."></textarea>
           <div id="fm-editor-monaco" class="xk-monaco-editor xk-monaco-editor--modal hidden"></div>
           <textarea id="fm-editor-textarea" spellcheck="false"></textarea>
         </div>
-        <div class="modal-actions">
-          <div style="display:flex; gap:8px; align-items:center;">
+        <div class="modal-actions xk-editor-workbench-actions">
+          <div class="xk-editor-workbench-action-group" style="display:flex; gap:8px; align-items:center;">
             <button type="button" class="btn-secondary" id="fm-editor-download-btn">{{ op_icon('download') }}<span class="xk-action-label">Скачать</span></button>
           </div>
-          <div style="display:flex; gap:8px; align-items:center;">
+          <div class="xk-editor-workbench-action-group" style="display:flex; gap:8px; align-items:center;">
             <button type="button" id="fm-editor-cancel-btn" data-operator-dismiss-duplicate="true">Закрыть</button>
             <button type="button" id="fm-editor-save-btn">{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
           </div>
@@ -3523,7 +3523,7 @@ https://..."></textarea>
           #}
           <p id="json-editor-file-label" class="xk-editor-file-label hidden"></p>
 
-          <div class="xk-editor-toolbar" id="json-editor-toolbar">
+          <div class="xk-editor-toolbar xk-editor-workbench-toolbar" id="json-editor-toolbar">
             <!-- Engine toggle (CodeMirror / Monaco) -->
             <div class="xk-editor-engine" id="json-editor-engine">
               <span class="xk-editor-engine-label">Редактор</span>
@@ -3533,8 +3533,8 @@ https://..."></textarea>
               </select>
             </div>
 
-            <span id="json-editor-comments-status" class="xk-comments-badge xk-comments-off" data-tooltip="Статус JSONC sidecar (комментарии)">Комментарии: —</span>
-            <span id="json-editor-schema-status" class="xk-comments-badge xk-schema-badge xk-schema-off" data-tooltip="JSON-схема пока не загружена.">Schema: —</span>
+            <span id="json-editor-comments-status" class="xk-editor-status-label xk-comments-off" role="status" data-tooltip="Статус JSONC sidecar (комментарии)">Комментарии: —</span>
+            <span id="json-editor-schema-status" class="xk-editor-status-label xk-schema-off" role="status" data-tooltip="JSON-схема пока не загружена.">Schema: —</span>
           </div>
 
           <textarea id="json-editor-textarea" spellcheck="false"></textarea>

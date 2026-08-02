@@ -4224,7 +4224,7 @@
       },
       {
         "index": 60,
-        "locator": "div@L2376",
+        "locator": "div.xk-editor-workbench-toolbar.xk-editor-workbench-toolbar--snapshot@L2376",
         "line": 2376,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom: 10px;",
@@ -4292,7 +4292,7 @@
       },
       {
         "index": 64,
-        "locator": "div.modal-actions@L2390",
+        "locator": "div.modal-actions.xk-editor-workbench-actions@L2390",
         "line": 2390,
         "kind": "presentation-geometry",
         "source": "justify-content: space-between;",
@@ -4305,7 +4305,7 @@
       },
       {
         "index": 65,
-        "locator": "div@L2392",
+        "locator": "div.xk-editor-workbench-action-group@L2392",
         "line": 2392,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:10px;",
@@ -4869,7 +4869,7 @@
       },
       {
         "index": 105,
-        "locator": "div@L3337",
+        "locator": "div.xk-editor-workbench-title@L3337",
         "line": 3337,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column; gap:2px;",
@@ -4911,7 +4911,7 @@
       },
       {
         "index": 107,
-        "locator": "div@L3341",
+        "locator": "div.xk-editor-workbench-header-tools@L3341",
         "line": 3341,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; gap:10px;",
@@ -4958,7 +4958,7 @@
       },
       {
         "index": 110,
-        "locator": "div@L3359",
+        "locator": "div.xk-editor-workbench-action-group@L3359",
         "line": 3359,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center;",
@@ -4979,7 +4979,7 @@
       },
       {
         "index": 111,
-        "locator": "div@L3362",
+        "locator": "div.xk-editor-workbench-action-group@L3362",
         "line": 3362,
         "kind": "presentation-geometry",
         "source": "display:flex; gap:8px; align-items:center;",

@@ -624,7 +624,7 @@
         event.stopPropagation();
         if (btn.disabled) return;
         runAction(raw, it, o);
-        const shouldRefocus = !(it && (it.command === 'findPersistent' || it.command === 'find' || it.command === 'replace'));
+        const shouldRefocus = !(it && (it.command === 'findPersistent' || it.command === 'find' || it.command === 'replace' || it.isHelp || it.id === 'help'));
         if (shouldRefocus) {
           try { if (isFn(raw.focus)) raw.focus(); } catch (e) {}
         }
