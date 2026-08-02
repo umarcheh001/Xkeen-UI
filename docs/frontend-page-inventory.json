@@ -185,6 +185,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/ui/operator_icons_manifest.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/features/feature_access.js",
           "globals": [],
           "lazy_features": []
@@ -438,6 +443,8 @@
             "XKeen.ui.editorToolbar",
             "XKeen.ui.editorActions",
             "XKeen.ui",
+            "XKeen.ui.operatorIcons",
+            "XKeen.ui.operatorIcons.html",
             "XKeen.ui.diff",
             "XKeen.ui.diff.openForScope"
           ],
@@ -811,6 +818,7 @@
         "XKeen.ui.diff",
         "XKeen.ui.editorActions",
         "XKeen.ui.editorToolbar",
+        "XKeen.ui.operatorIcons.html",
         "XKeen.ui.diff.openForScope",
         "XKeen.ui.editorLinks",
         "XKeen.ui.diff.registerScope",
@@ -1075,6 +1083,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/ui/operator_icons_manifest.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/features/feature_access.js",
           "globals": [],
           "lazy_features": []
@@ -1146,6 +1159,8 @@
             "XKeen.ui.editorToolbar",
             "XKeen.ui.editorActions",
             "XKeen.ui",
+            "XKeen.ui.operatorIcons",
+            "XKeen.ui.operatorIcons.html",
             "XKeen.ui.diff",
             "XKeen.ui.diff.openForScope"
           ],
@@ -1400,6 +1415,7 @@
         "XKeen.ui.diff",
         "XKeen.ui.editorActions",
         "XKeen.ui.editorToolbar",
+        "XKeen.ui.operatorIcons.html",
         "XKeen.ui.diff.openForScope",
         "XKeen.ui.editorLinks",
         "XKeen.ui.diff.registerScope",
@@ -1615,6 +1631,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/ui/operator_icons_manifest.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/features/feature_access.js",
           "globals": [],
           "lazy_features": []
@@ -1686,6 +1707,8 @@
             "XKeen.ui.editorToolbar",
             "XKeen.ui.editorActions",
             "XKeen.ui",
+            "XKeen.ui.operatorIcons",
+            "XKeen.ui.operatorIcons.html",
             "XKeen.ui.diff",
             "XKeen.ui.diff.openForScope"
           ],
@@ -2055,6 +2078,7 @@
         "XKeen.ui.diff",
         "XKeen.ui.editorActions",
         "XKeen.ui.editorToolbar",
+        "XKeen.ui.operatorIcons.html",
         "XKeen.ui.diff.openForScope",
         "XKeen.ui.editorLinks",
         "XKeen.ui.diff.registerScope",
@@ -2284,6 +2308,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/ui/operator_icons_manifest.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/features/feature_access.js",
           "globals": [],
           "lazy_features": []
@@ -2355,6 +2384,8 @@
             "XKeen.ui.editorToolbar",
             "XKeen.ui.editorActions",
             "XKeen.ui",
+            "XKeen.ui.operatorIcons",
+            "XKeen.ui.operatorIcons.html",
             "XKeen.ui.diff",
             "XKeen.ui.diff.openForScope"
           ],
@@ -2567,6 +2598,7 @@
         "XKeen.ui.diff",
         "XKeen.ui.editorActions",
         "XKeen.ui.editorToolbar",
+        "XKeen.ui.operatorIcons.html",
         "XKeen.ui.diff.openForScope",
         "XKeen.ui.editorLinks",
         "XKeen.ui.diff.registerScope",
@@ -2745,6 +2777,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/ui/operator_icons_manifest.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/features/feature_access.js",
           "globals": [],
           "lazy_features": []
@@ -2816,6 +2853,8 @@
             "XKeen.ui.editorToolbar",
             "XKeen.ui.editorActions",
             "XKeen.ui",
+            "XKeen.ui.operatorIcons",
+            "XKeen.ui.operatorIcons.html",
             "XKeen.ui.diff",
             "XKeen.ui.diff.openForScope"
           ],
@@ -3156,6 +3195,7 @@
         "XKeen.ui.diff",
         "XKeen.ui.editorActions",
         "XKeen.ui.editorToolbar",
+        "XKeen.ui.operatorIcons.html",
         "XKeen.ui.diff.openForScope",
         "XKeen.ui.editorLinks",
         "XKeen.ui.diff.registerScope",

@@ -98,7 +98,7 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "input.showPicker();" in diff_modal
     assert "let focusBackTimer = 0;" in diff_modal
     assert "}, 180);" in diff_modal
-    assert "Окно сравнивает текущий редактор, сохранённую версию и внешний текст." in diff_modal
+    assert "Окно сравнивает текущий редактор, сохранённую версию и внешний текст." not in diff_modal
     assert "Вставить из буфера…" in diff_modal
     assert "Загрузить из файла…" in diff_modal
     assert "Текущий редактор" in diff_modal
@@ -133,7 +133,7 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "if (r !== 'save' && _hasAnyDraft()) {" in diff_modal
 
     assert ".xkeen-diff-apply-group {" in styles
-    assert ".xkeen-diff-modal .xkeen-diff-helper {" in styles
+    assert ".xkeen-diff-modal .xkeen-diff-helper {" not in styles
     assert ".xkeen-diff-foot-actions {" in styles
     assert ".xkeen-diff-save-btn {" in styles
     assert ".xkeen-diff-revert-btn {" in styles
