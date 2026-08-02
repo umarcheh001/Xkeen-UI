@@ -14,7 +14,7 @@
 
 ## Активные инициативы
 
-- `panel-operator-redesign-completion-plan.md` — план завершения переезда панели на Operator Console; Этапы 0–4 закрыты, в Этапе 5 закрыты editor/workbench, comments/schema status labels, responsive editor help и mobile fullscreen сложных модалов; Этапы 5–7 в целом открыты; сквозной icon-поток I0–I6 закрыт.
+- `panel-operator-redesign-completion-plan.md` — план завершения переезда панели на Operator Console; Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля 2026 года; в Этапе 5 закрыты editor/workbench, comments/schema status labels, responsive editor help и mobile fullscreen сложных модалов; Этапы 5–7 в целом открыты; сквозной icon-поток I0–I6 закрыт.
 
 ## Недавние закрытые инициативы
 
