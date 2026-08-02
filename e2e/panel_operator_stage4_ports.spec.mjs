@@ -120,7 +120,7 @@ test.describe('Operator Console Stage 4 ports', () => {
 
       await page.locator('#port-proxying-save-btn').click();
       await expect(page.locator('#port-proxying-status')).toHaveText('port_proxying.lst сохранён.');
-      await expect(page.locator('#port-proxying-save-btn')).toHaveText('Сохранить');
+      await expect(page.locator('#port-proxying-save-btn')).toHaveAccessibleName(/Сохранить port_proxying\.lst/);
     });
   }
 

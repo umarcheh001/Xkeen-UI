@@ -129,7 +129,16 @@ def ensure_mihomo_layout() -> None:
             CONFIG_PATH.unlink()
         except FileNotFoundError:
             pass
-    CONFIG_PATH.symlink_to(default_profile)
+    try:
+        CONFIG_PATH.symlink_to(default_profile)
+    except (OSError, NotImplementedError):
+        # Symlink creation requires an elevated Windows privilege.  The
+        # disposable E2E fixture (and some developer checkouts) may not have
+        # it; keep a regular active config instead of making the whole
+        # generator/validation endpoint fail.
+        if CONFIG_PATH.exists() or CONFIG_PATH.is_symlink():
+            CONFIG_PATH.unlink()
+        shutil.copy2(default_profile, CONFIG_PATH)
 
 
 def _active_profile_path() -> Path:

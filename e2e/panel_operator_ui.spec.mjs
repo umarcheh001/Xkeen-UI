@@ -132,7 +132,8 @@ test('json editor modal keeps the editor as the visual center', async ({ page })
   const layout = await modal.evaluate((node) => {
     const content = node.querySelector('.modal-content');
     const body = node.querySelector('.modal-body');
-    const editor = node.querySelector('.xkeen-cm6-host, .CodeMirror, .xk-monaco-editor:not(.hidden), textarea:not(.hidden)');
+    const editor = Array.from(node.querySelectorAll('.xkeen-cm6-host, .CodeMirror, .xk-monaco-editor:not(.hidden), textarea:not(.hidden)'))
+      .find((candidate) => candidate.getBoundingClientRect().height > 0);
     const contentRect = content?.getBoundingClientRect();
     const bodyRect = body?.getBoundingClientRect();
     const editorRect = editor?.getBoundingClientRect();

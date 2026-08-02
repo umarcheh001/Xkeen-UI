@@ -218,16 +218,16 @@ test('routing quick fix button shows an icon and applies fixes in CodeMirror and
   await replaceRoutingText(page, ROUTING_SCALAR_ARRAY);
   await moveRoutingCursorAfterText(page, '"selector": "');
   await expect.poll(() => getRoutingQuickFixTitles(page)).toContain('Обернуть значение в массив');
-  await expect(page.locator('#routing-toolbar-host button[data-action-id="quick_fix"] svg')).toBeVisible();
-  await page.locator('#routing-toolbar-host button[data-action-id="quick_fix"]').click();
+  await expect(page.locator('#routing-toolbar-host button[data-action-id="quick_fix"]:visible svg')).toBeVisible();
+  await page.locator('#routing-toolbar-host button[data-action-id="quick_fix"]:visible').click();
   await expect.poll(() => getRoutingText(page)).toContain('"selector": [');
 
   await ensureMonacoRouting(page);
   await replaceRoutingText(page, ROUTING_SCALAR_ARRAY);
   await moveRoutingCursorAfterText(page, '"selector": "');
   await expect.poll(() => getRoutingQuickFixTitles(page)).toContain('Обернуть значение в массив');
-  await expect(page.locator('#routing-toolbar-host button[data-action-id="quick_fix"] svg')).toBeVisible();
-  await page.locator('#routing-toolbar-host button[data-action-id="quick_fix"]').click();
+  await expect(page.locator('#routing-toolbar-host button[data-action-id="quick_fix"]:visible svg')).toBeVisible();
+  await page.locator('#routing-toolbar-host button[data-action-id="quick_fix"]:visible').click();
   await expect.poll(() => getRoutingText(page)).toContain('"selector": [');
 });
 

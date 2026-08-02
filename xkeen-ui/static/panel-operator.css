@@ -8568,6 +8568,12 @@ body.panel-page :is(button, [role="button"], a[href], summary)[aria-busy="true"]
   opacity: 0.72;
 }
 
+/* Some controls provide a dedicated busy-state icon and must hide their
+ * ordinary glyph completely while the spinner is visible. */
+body.panel-page :is(button, [role="button"], a[href], summary)[aria-busy="true"] .xk-sub-pingall-glyph {
+  opacity: 0 !important;
+}
+
 body.panel-page :is(button, [role="button"], a[href], summary):disabled .xk-action-icon,
 body.panel-page :is(button, [role="button"], a[href], summary)[aria-disabled="true"] .xk-action-icon {
   color: currentColor;

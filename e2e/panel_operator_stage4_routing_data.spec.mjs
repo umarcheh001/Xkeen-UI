@@ -411,7 +411,9 @@ test.describe('Operator Console Stage 4 routing data screens', () => {
     expect(dragGeometry.ghost).toEqual({ radius: '0px', backgroundImage: 'none' });
     expect(dragGeometry.placeholder).toEqual({ radius: '0px', backgroundImage: 'none' });
     expect(dragGeometry.badge).toEqual({ backgroundImage: 'none', boxShadow: 'none' });
-    expect(dragGeometry.action).toEqual({ width: 70, height: 28 });
+    // Rule actions became icon-only in I6. The drag ghost must preserve the
+    // same compact hit target instead of reviving the former text button.
+    expect(dragGeometry.action).toEqual({ width: 28, height: 28 });
 
     await page.mouse.move(target.x + target.width / 4, target.y + 4, { steps: 8 });
     await page.mouse.up();

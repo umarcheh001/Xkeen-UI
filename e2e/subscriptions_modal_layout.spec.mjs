@@ -625,7 +625,12 @@ test('subscriptions modal ping-all button shows compact spinner while probing', 
   await bulkProbeStarted;
   await expect(pingAllBtn).toHaveClass(/is-busy/);
   await expect(pingAllBtn).toHaveAttribute('aria-busy', 'true');
-  await page.waitForTimeout(240);
+  // The glyph fades through a CSS transition; wait for the settled state
+  // instead of sampling at an arbitrary point in that transition.
+  await expect.poll(() => pingAllBtn.evaluate((button) => {
+    const glyph = button.querySelector('.xk-sub-pingall-glyph');
+    return glyph ? Number.parseFloat(window.getComputedStyle(glyph).opacity) : 0;
+  })).toBeLessThan(0.15);
 
   const busyState = await pingAllBtn.evaluate((button) => {
     const glyph = button.querySelector('.xk-sub-pingall-glyph');

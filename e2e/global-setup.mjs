@@ -4,6 +4,15 @@ import path from 'node:path';
 import { chromium } from '@playwright/test';
 
 
+async function removeIfPresent(filePath) {
+  try {
+    await fs.rm(filePath, { force: true });
+  } catch (error) {
+    // A missing state file is the desired clean starting condition.
+  }
+}
+
+
 function getEnv(name, fallback) {
   const value = String(process.env[name] || '').trim();
   return value || fallback;
@@ -71,6 +80,10 @@ export default async function globalSetup(fullConfig) {
   const authPath = path.resolve('e2e/.auth/user.json');
 
   await ensureDir(path.dirname(authPath));
+  // Never reuse an authenticated browser state from another server run. The
+  // local E2E server recreates its fixture at startup, invalidating old
+  // sessions by design.
+  await removeIfPresent(authPath);
 
   const browser = await chromium.launch();
   const page = await browser.newPage();

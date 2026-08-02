@@ -105,7 +105,11 @@ test.describe('Operator Console Stage 1 primitive contract', () => {
         expect(await collectChromeEffects(page), `legacy effects in ${view}/${theme}`).toEqual([]);
 
         if (view === 'commands') {
-          await page.locator('#terminal-open-pty-btn').click();
+          const terminalButton = page.locator(
+            '#terminal-open-pty-btn:visible:not([disabled]), #terminal-open-shell-btn:visible:not([disabled])',
+          ).first();
+          await expect(terminalButton).toBeVisible();
+          await terminalButton.click();
           await expect(page.locator('#terminal-overlay')).toBeVisible();
           expect(await collectChromeEffects(page), `legacy effects in terminal/${theme}`).toEqual([]);
           await page.locator('#terminal-btn-close').click();
