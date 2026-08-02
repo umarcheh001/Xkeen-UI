@@ -145,25 +145,28 @@
     return legacyCopyFallback(value);
   }
 
-  async function clipboardReadText() {
-    try {
-      const nav = window.navigator || null;
-      const clipboard = nav && nav.clipboard;
-      if (clipboard && typeof clipboard.readText === 'function') {
-        const text = await clipboard.readText();
-        if (typeof text === 'string') {
-          storeLastClipboardText(text);
-          return text;
-        }
-      }
-    } catch (e) {}
+  function getCachedClipboardText() {
     try {
       if (typeof window.__xkLastClipboardText === 'string') return window.__xkLastClipboardText;
     } catch (e) {}
     return null;
   }
 
-  async function runClipboardAction(kind, editor) {
+  async function clipboardReadText(event) {
+    try {
+      const clipboardData = event && event.clipboardData;
+      if (clipboardData && typeof clipboardData.getData === 'function') {
+        const text = clipboardData.getData('text/plain') || clipboardData.getData('text');
+        if (typeof text === 'string') {
+          storeLastClipboardText(text);
+          return text;
+        }
+      }
+    } catch (e) {}
+    return getCachedClipboardText();
+  }
+
+  async function runClipboardAction(kind, editor, event) {
     const ed = editor || getActiveEditor();
     if (!ed) return false;
     focusEditor(ed);
@@ -185,7 +188,7 @@
     }
 
     if (kind === 'paste') {
-      const text = await clipboardReadText();
+      const text = await clipboardReadText(event);
       if (typeof text !== 'string') return false;
       return executeReplaceSelections(ed, text);
     }
@@ -222,6 +225,7 @@
                 return;
               }
             } catch (e) {}
+            if (kind === 'paste') return;
             if (originalRun) return originalRun(...args);
           };
           action.__xkClipboardPatched = true;
@@ -380,7 +384,7 @@
       try { event.stopPropagation(); } catch (e) {}
       try { event.stopImmediatePropagation(); } catch (e) {}
 
-      Promise.resolve(runClipboardAction(kind, editor))
+      Promise.resolve(runClipboardAction(kind, editor, event))
         .finally(() => {
           try { closeMonacoMenus(); } catch (e) {}
         });
@@ -442,7 +446,7 @@
       try {
         if (event && event.clipboardData && typeof event.clipboardData.getData === 'function') {
           const text = event.clipboardData.getData('text/plain') || event.clipboardData.getData('text');
-          if (typeof text === 'string' && text) storeLastClipboardText(text);
+          if (typeof text === 'string') storeLastClipboardText(text);
         }
       } catch (e) {}
     }, true);
