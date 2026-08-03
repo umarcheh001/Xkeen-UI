@@ -44,14 +44,74 @@ def test_stage5_json_statuses_are_labels_not_legacy_pills():
         assert "xk-comments-badge" not in line
         assert 'role="status"' in line
 
+    toolbar_end = json_modal.index('</div>', json_modal.index('id="json-editor-toolbar"'))
+    runtime_meta_start = json_modal.index('id="json-editor-runtime-meta"')
+    editor_start = json_modal.index('id="json-editor-textarea"')
+    assert runtime_meta_start > editor_start > toolbar_end
+
+    assert 'id="json-editor-runtime-meta" class="xk-editor-runtime-meta"' in json_modal
+
     for fragment in (
+        'body.panel-page #json-editor-modal .xk-editor-runtime-meta {',
+        'border-top: 1px solid var(--op-border);',
         "body.panel-page #json-editor-modal .xk-editor-status-label {",
-        "border-left: 2px solid var(--op-border) !important;",
+        "border-left: 0 !important;",
         "border-radius: 0 !important;",
         "body.panel-page #json-editor-modal .xk-editor-status-label::before {",
         "content: none !important;",
         ".xk-editor-status-label.xk-comments-on",
         ".xk-editor-status-label.xk-schema-on",
+    ):
+        assert fragment in css
+
+
+def test_stage5_monaco_completion_and_parameter_widgets_use_operator_surfaces():
+    css = CSS.read_text(encoding="utf-8")
+
+    for fragment in (
+        "body.panel-page .monaco-editor .suggest-widget {",
+        ".suggest-details,",
+        ".suggest-details-container,",
+        ".parameter-hints-widget,",
+        "background: var(--op-surface-2) !important;",
+        "body.panel-page .monaco-editor :is(.suggest-details, .parameter-hints-widget) :is(pre, code) {",
+    ):
+        assert fragment in css
+
+
+
+def test_stage5_all_static_modals_are_bound_to_one_of_the_four_family_frames():
+    template = TEMPLATE.read_text(encoding="utf-8")
+    css = CSS.read_text(encoding="utf-8")
+
+    expected_counts = {
+        "confirm-compact-form": 22,
+        "editor-workbench": 6,
+        "master-detail": 19,
+        "drawer-help": 3,
+    }
+    modal_pairs = __import__("re").findall(
+        r'<div\b[^>]*\bid="([^"]+)"[^>]*\bclass="[^"]*\bmodal\b[^"]*"[^>]*\bdata-operator-modal-family="([^"]+)"',
+        template,
+    )
+
+    assert len(modal_pairs) == 50
+    assert {family for _, family in modal_pairs} == set(expected_counts)
+    assert {family: sum(mapped == family for _, mapped in modal_pairs) for family in expected_counts} == expected_counts
+
+    # A family hook is intentionally structural: every existing modal keeps its
+    # feature markup and handlers while receiving the same frame, scroll region
+    # and narrow-screen geometry.
+    for fragment in (
+        '.modal[data-operator-modal-family] .modal-content {',
+        '.modal[data-operator-modal-family] .modal-body {',
+        '.modal[data-operator-modal-family="confirm-compact-form"] .modal-content {',
+        '.modal[data-operator-modal-family="editor-workbench"] .modal-content {',
+        '.modal[data-operator-modal-family="master-detail"] .modal-content {',
+        '.modal[data-operator-modal-family="drawer-help"] .modal-content {',
+        'body.panel-page .modal[data-operator-modal-family] {',
+        'width: 100vw;',
+        'height: 100dvh;',
     ):
         assert fragment in css
 
@@ -65,19 +125,21 @@ def test_stage5_editor_tasks_are_documented_as_closed():
         "### Этап 5. Редакторы и модальные семейства — в работе",
         "[x] создать единый editor modal contract для JSON, file editor и snapshot",
         "[x] заменить comments/schema pills на компактные status labels",
+        "[x] применить четыре modal family ко всем 50 окнам в приоритетном порядке из аудита",
         "panel-operator-stage5-editor-workbench.md",
     ):
         assert fragment in plan
 
     for fragment in (
-        "Статус: **четыре связанные задачи Этапа 5 закрыты 2 и 3 августа 2026 года**.",
+        "Статус: **пять связанных задач Этапа 5 закрыты 2 и 3 августа 2026 года**.",
         "## 1. Общий editor/workbench contract — закрыто",
         "## 2. Comments/schema status labels — закрыто",
         "## 3. Responsive editor help drawer/workbench — закрыто",
         "## 4. Fullscreen сложных модалов на mobile — закрыто",
+        "## 5. Четыре modal family применены ко всем 50 окнам — закрыто",
         "## Сохранённые контракты",
         "## Проверка",
-        "Критерий этих четырёх задач выполнен",
+        "Критерий этих пяти задач выполнен",
     ):
         assert fragment in contract
 

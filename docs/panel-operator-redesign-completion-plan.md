@@ -2,7 +2,7 @@
 
 Дата аудита: 28 июля 2026 года.
 
-Статус выполнения: **Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 закрыт 29 июля 2026 года: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля, задачи «Commands», «Logs», «Files», «Mihomo profiles/generator» и «Формы подписок» — 29 июля; Этап 5 в работе: 2 августа закрыты общий editor modal contract и comments/schema status labels, 3 августа — responsive editor help drawer/workbench и fullscreen сложных модалов на mobile; Этапы 6–7 остаются открыты; сквозной icon-поток I0–I6 закрыт 1 августа 2026 года.** Контракт, state matrix и baseline Этапа 0 зафиксированы в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md), канонический snapshot — в [`panel-operator-stage0-inventory.json`](panel-operator-stage0-inventory.json). Система scoped-примитивов и проверки Этапа 1 зафиксированы в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md), контракт шапки, navigation rail и editor-first grid Этапа 2 — в [`panel-operator-stage2-shell-grid.md`](panel-operator-stage2-shell-grid.md), единый accordion/data-row/state contract инспектора Routing Этапа 3 — в [`panel-operator-stage3-routing-cards.md`](panel-operator-stage3-routing-cards.md). Контракты закрытых задач Этапа 4: [`panel-operator-stage4-ports.md`](panel-operator-stage4-ports.md), [`panel-operator-stage4-routing-rules.md`](panel-operator-stage4-routing-rules.md), [`panel-operator-stage4-balancers.md`](panel-operator-stage4-balancers.md), [`panel-operator-stage4-commands.md`](panel-operator-stage4-commands.md), [`panel-operator-stage4-logs.md`](panel-operator-stage4-logs.md), [`panel-operator-stage4-files.md`](panel-operator-stage4-files.md) и [`panel-operator-stage4-mihomo-forms.md`](panel-operator-stage4-mihomo-forms.md).
+Статус выполнения: **Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 закрыт 29 июля 2026 года: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля, задачи «Commands», «Logs», «Files», «Mihomo profiles/generator» и «Формы подписок» — 29 июля; Этап 5 в работе: 2 августа закрыты общий editor modal contract и comments/schema status labels, 3 августа — responsive editor help drawer/workbench, fullscreen сложных модалов на mobile и применение четырёх modal families ко всем 50 статическим окнам; Этапы 6–7 остаются открыты; сквозной icon-поток I0–I6 закрыт 1 августа 2026 года.** Контракт, state matrix и baseline Этапа 0 зафиксированы в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md), канонический snapshot — в [`panel-operator-stage0-inventory.json`](panel-operator-stage0-inventory.json). Система scoped-примитивов и проверки Этапа 1 зафиксированы в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md), контракт шапки, navigation rail и editor-first grid Этапа 2 — в [`panel-operator-stage2-shell-grid.md`](panel-operator-stage2-shell-grid.md), единый accordion/data-row/state contract инспектора Routing Этапа 3 — в [`panel-operator-stage3-routing-cards.md`](panel-operator-stage3-routing-cards.md). Контракты закрытых задач Этапа 4: [`panel-operator-stage4-ports.md`](panel-operator-stage4-ports.md), [`panel-operator-stage4-routing-rules.md`](panel-operator-stage4-routing-rules.md), [`panel-operator-stage4-balancers.md`](panel-operator-stage4-balancers.md), [`panel-operator-stage4-commands.md`](panel-operator-stage4-commands.md), [`panel-operator-stage4-logs.md`](panel-operator-stage4-logs.md), [`panel-operator-stage4-files.md`](panel-operator-stage4-files.md) и [`panel-operator-stage4-mihomo-forms.md`](panel-operator-stage4-mihomo-forms.md).
 
 История статуса до закрытия: Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля 2026 года.
 
@@ -333,7 +333,7 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 
 ### Этап 5. Редакторы и модальные семейства — в работе
 
-Первые две связанные партии закрыты 2 и 3 августа 2026 года; их контракт — [`panel-operator-stage5-editor-workbench.md`](panel-operator-stage5-editor-workbench.md). Сам Этап 5 остаётся открытым: остальные modal families, empty/error states и полный responsive прогон выполняются отдельными партиями.
+Пять связанных задач закрыты 2 и 3 августа 2026 года; их контракт — [`panel-operator-stage5-editor-workbench.md`](panel-operator-stage5-editor-workbench.md). Сам Этап 5 остаётся открытым: чистка presentation inline styles, empty/error states и полный responsive прогон выполняются отдельными партиями.
 
 Задачи:
 
@@ -341,7 +341,7 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 - [x] заменить comments/schema pills на компактные status labels без круглой capsule-формы;
 - [x] сохранить engine selector и все toolbar actions, но выровнять их одной сеткой;
 - [x] переработать editor help в responsive drawer/workbench без перекрытия save/cancel;
-- [ ] применить четыре modal family ко всем 50 окнам в приоритетном порядке из аудита;
+- [x] применить четыре modal family ко всем 50 окнам в приоритетном порядке из аудита;
 - [ ] убрать чисто презентационные inline max-width/gap/margin после переноса в scoped classes;
 - [ ] для пустых/error состояний использовать auto-height вместо искусственно высокого body;
 - [x] на mobile переводить сложные модалы в fullscreen и оставлять header/footer доступными при прокрутке.

@@ -7363,7 +7363,7 @@ body.panel-page :is(.fm-panel-error-retry, .fm-empty-action) .xk-action-icon {
  * feature classes still own content semantics; these rules own only the frame,
  * scroll region and responsive geometry. */
 body.panel-page .modal[data-operator-modal-family] .modal-content {
-  display: grid;
+  display: grid !important;
   width: min(760px, calc(100vw - 36px));
   max-width: calc(100vw - 36px);
   max-height: calc(100dvh - 36px);
@@ -7476,8 +7476,8 @@ body.panel-page :is(#json-editor-modal, #xray-snapshot-modal) .xk-editor-workben
 }
 
 body.panel-page #json-editor-modal .xk-editor-workbench-toolbar {
-  grid-template-columns: max-content minmax(0, max-content) minmax(0, max-content);
-  justify-content: space-between;
+  grid-template-columns: max-content;
+  justify-content: start;
 }
 
 body.panel-page #xray-snapshot-modal .xk-editor-workbench-toolbar {
@@ -7536,20 +7536,34 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal, #xray-snapshot-modal) 
   gap: 8px;
 }
 
+/* Keep JSON runtime state where it is useful: directly below the editor, as in
+ * the primary Xray workbench. The toolbar only carries editor controls. */
+body.panel-page #json-editor-modal .xk-editor-runtime-meta {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  min-height: 28px;
+  margin: 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--op-border);
+}
+
 /* JSON comments and schema are passive state labels, not clickable chips. */
 body.panel-page #json-editor-modal .xk-editor-status-label {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
-  padding: 0 0 0 7px;
+  min-height: 20px;
+  padding: 0;
   border: 0 !important;
-  border-left: 2px solid var(--op-border) !important;
+  border-left: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
   color: var(--op-muted) !important;
-  font-size: calc(11px * var(--xk-font-scale, 1));
-  font-weight: 600;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 590;
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -7560,12 +7574,10 @@ body.panel-page #json-editor-modal .xk-editor-status-label::before {
 }
 
 body.panel-page #json-editor-modal .xk-editor-status-label.xk-comments-on {
-  border-left-color: var(--op-success) !important;
   color: var(--op-success) !important;
 }
 
 body.panel-page #json-editor-modal .xk-editor-status-label.xk-schema-on {
-  border-left-color: var(--op-accent) !important;
   color: var(--op-accent-hover) !important;
 }
 
@@ -8935,6 +8947,115 @@ body.panel-page :is(button, [role="button"], a[href], summary)[aria-disabled="tr
     min-width: var(--op-touch-target) !important;
     height: var(--op-touch-target) !important;
   }
+}
+
+/* Monaco completion and parameter widgets are rendered inside the editor
+ * overflow layer. Explicitly reset the complete row stack here: legacy theme
+ * rules otherwise can leave the popup surface visible while its rows inherit
+ * a near-identical foreground/background pair. */
+body.panel-page .monaco-editor .suggest-widget {
+  --vscode-editorWidget-background: var(--op-surface-2);
+  --vscode-editorWidget-foreground: var(--op-text);
+  --vscode-editorWidget-border: var(--op-border-strong);
+  --vscode-editorSuggestWidget-background: var(--op-surface-2);
+  --vscode-editorSuggestWidget-foreground: var(--op-text);
+  --vscode-editorSuggestWidget-border: var(--op-border-strong);
+  --vscode-editorSuggestWidget-selectedBackground: var(--op-surface-3);
+  --vscode-editorSuggestWidget-selectedForeground: var(--op-text-strong);
+  --vscode-editorSuggestWidget-highlightForeground: var(--op-accent-hover);
+  box-sizing: border-box;
+  border: 1px solid var(--op-border-strong) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface-2) !important;
+  background-color: var(--op-surface-2) !important;
+  color: var(--op-text) !important;
+  box-shadow: var(--op-shadow-float) !important;
+  opacity: 1 !important;
+  isolation: isolate;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+body.panel-page .monaco-editor .suggest-widget :is(
+  .tree,
+  .monaco-list,
+  .monaco-scrollable-element,
+  .monaco-list-rows,
+  .contents,
+  .main,
+  .suggest-icon
+) {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: inherit !important;
+  opacity: 1 !important;
+}
+
+body.panel-page .monaco-editor .suggest-widget .monaco-list-row {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: var(--op-text) !important;
+  opacity: 1 !important;
+}
+
+body.panel-page .monaco-editor .suggest-widget .monaco-list-row:is(.focused, .selected, :hover) {
+  background: var(--op-surface-3) !important;
+  background-color: var(--op-surface-3) !important;
+  color: var(--op-text-strong) !important;
+}
+
+body.panel-page .monaco-editor .suggest-widget .monaco-list-row :is(
+  .label-name,
+  .label-description,
+  .details-label,
+  .readMore,
+  .monaco-highlighted-label,
+  .highlight,
+  .codicon
+) {
+  color: var(--op-text) !important;
+  opacity: 1 !important;
+}
+
+body.panel-page .monaco-editor .suggest-widget .monaco-list-row :is(.label-description, .details-label) {
+  color: var(--op-muted) !important;
+}
+
+/* Keep the second half of IntelliSense on the same opaque surface. Monaco
+ * creates documentation and signature/parameter-help cards as independent
+ * widgets, so styling only .suggest-widget leaves them as empty navy panes. */
+body.panel-page .monaco-editor :is(
+  .suggest-details,
+  .suggest-details-container,
+  .parameter-hints-widget,
+  .editor-widget:not(.find-widget):not(.rename-box)
+) {
+  --vscode-editorWidget-background: var(--op-surface-2);
+  --vscode-editorWidget-foreground: var(--op-text);
+  --vscode-editorWidget-border: var(--op-border-strong);
+  box-sizing: border-box;
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-2) !important;
+  background-color: var(--op-surface-2) !important;
+  color: var(--op-text) !important;
+  box-shadow: var(--op-shadow-float) !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+body.panel-page .monaco-editor :is(
+  .suggest-details,
+  .suggest-details-container,
+  .parameter-hints-widget
+) :is(p, pre, code, span, a, strong, em, .codicon, .monaco-highlighted-label) {
+  color: inherit !important;
+  opacity: 1 !important;
+}
+
+body.panel-page .monaco-editor :is(.suggest-details, .parameter-hints-widget) :is(pre, code) {
+  border-color: var(--op-border) !important;
+  background: var(--op-surface) !important;
 }
 
 @media (forced-colors: active) {
