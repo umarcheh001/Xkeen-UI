@@ -5177,6 +5177,10 @@ body.panel-page .xk-op-unit {
   font-variant-numeric: tabular-nums;
 }
 
+body.panel-page .xk-mihomo-vault {
+  margin-top: 8px;
+}
+
 body.panel-page .xk-mihomo-vault-grid {
   grid-template-columns: minmax(0, 1fr) !important;
   gap: 12px !important;
