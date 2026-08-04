@@ -529,7 +529,7 @@
         <div class="xk-sub-panelhead">
           <div>
             <div class="xk-pool-kicker">Серверы</div>
-            <div class="terminal-menu-title" style="margin:0;">Узлы текущего proxy-фрагмента</div>
+            <div class="terminal-menu-title xk-op-m-0">Узлы текущего proxy-фрагмента</div>
             <div id="outbounds-nodes-caption" class="xk-sub-muted">Список появится после загрузки proxy-фрагмента.</div>
               <div id="outbounds-active-node-status" class="xk-outbounds-active-status is-unknown hidden" role="status" aria-live="polite"></div>
           </div>
@@ -1069,7 +1069,7 @@
         <span id="mihomo-profiles-arrow">▼</span>
       </div>
 
-      <div id="mihomo-profiles-panel" class="xk-mihomo-vault" style="display:none; margin-top:8px;">
+      <div id="mihomo-profiles-panel" class="xk-mihomo-vault xk-op-mt-8" style="display:none;">
         <div class="xk-mihomo-vault-grid">
           <section class="xk-mihomo-vault-card xk-mihomo-vault-card--profiles">
             <div class="xk-mihomo-vault-head">
@@ -2054,7 +2054,7 @@
 
     <!-- Inbounds preset apply modal (preserve extras + optional socks-in) -->
     <div id="inbounds-apply-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Применение режима inbounds">
-      <div class="modal-content" style="max-width: 760px;" data-modal-key="inbounds-apply">
+      <div class="modal-content xk-modal-width xk-modal-width-760" data-modal-key="inbounds-apply">
         <div class="modal-header">
           <span class="modal-title">Применение режима inbounds</span>
           <button type="button" class="modal-close" id="inbounds-apply-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
@@ -2069,7 +2069,7 @@
             <span class="dt-switch-slider" aria-hidden="true"></span>
             <span class="dt-switch-label">Сохранить пользовательские inbounds</span>
           </label>
-          <div id="inbounds-apply-extras-hint" class="modal-hint" style="margin: 6px 0 12px 34px;"></div>
+          <div id="inbounds-apply-extras-hint" class="modal-hint xk-modal-mt-6 xk-modal-mb-12 xk-modal-ml-34"></div>
 
           <label class="dt-switch xk-mini-switch" title="Добавить inbound для локального SOCKS-прокси (tag: socks-in).">
             <input type="checkbox" id="inbounds-apply-add-socks">
@@ -2077,21 +2077,21 @@
             <span class="dt-switch-label">Добавить SOCKS-in</span>
           </label>
 
-          <div id="inbounds-apply-socks-row" style="display:none; margin: 8px 0 0 34px;">
-            <div style="display:flex; gap: 12px; align-items:flex-start; flex-wrap: wrap;">
-              <label class="routing-rule-field" style="margin:0; min-width: 220px;">
+          <div id="inbounds-apply-socks-row" class="xk-modal-mt-8 xk-modal-ml-34" style="display:none;">
+            <div class="xk-modal-gap-12" style="display:flex; align-items:flex-start; flex-wrap: wrap;">
+              <label class="routing-rule-field xk-modal-m-0" style="min-width: 220px;">
                 <span class="routing-rule-key"><span>Порт</span></span>
                 <input id="inbounds-apply-socks-port" class="routing-rule-input" type="number" min="1" max="65535" step="1" placeholder="1080" inputmode="numeric">
               </label>
-              <div class="modal-hint" style="margin-top: 2px; max-width: 420px;">
+              <div class="modal-hint xk-modal-mt-2 xk-modal-max-width-420">
                 Будет создан inbound <code>tag: socks-in</code>, <code>protocol: socks</code>, <code>udp: true</code> + <code>sniffing</code>.
               </div>
             </div>
           </div>
 
-          <div id="inbounds-apply-warn" class="modal-hint" style="display:none; margin-top: 10px; color: var(--warning, #f59e0b);"></div>
+          <div id="inbounds-apply-warn" class="modal-hint xk-modal-mt-10" style="display:none; color: var(--warning, #f59e0b);"></div>
 
-          <div id="inbounds-apply-error" class="modal-hint" style="display:none; margin-top: 10px; color: var(--danger, #ef4444);"></div>
+          <div id="inbounds-apply-error" class="modal-hint xk-modal-mt-10" style="display:none; color: var(--danger, #ef4444);"></div>
         </div>
         <div class="modal-actions">
           <button type="button" id="inbounds-apply-cancel-btn" data-operator-dismiss-duplicate="true">Отмена</button>
@@ -2106,14 +2106,14 @@
 
     <!-- Balancers help (how-to) -->
     <div id="routing-balancer-help-modal" class="modal hidden" data-operator-modal-family="drawer-help" role="dialog" aria-modal="true" aria-label="Справка по балансировщикам">
-      <div class="modal-content" style="max-width: 980px;" data-modal-key="routing-balancer-help">
+      <div class="modal-content xk-modal-width xk-modal-width-980" data-modal-key="routing-balancer-help">
         <div class="modal-header">
           <span class="modal-title">Справка: балансировщики (Xray Routing)</span>
           <button type="button" class="modal-close" id="routing-balancer-help-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
         </div>
         <div class="modal-body routing-help-body xk-balancer-help-grid">
           <nav class="xk-balancer-help-toc" aria-label="Навигация по справке">
-            <div class="terminal-menu-title" style="margin:0 0 8px;">Содержание</div>
+            <div class="terminal-menu-title xk-modal-mb-8">Содержание</div>
             <a href="#" data-help-target="xk-bhelp-what">Как это устроено</a>
             <a href="#" data-help-target="xk-bhelp-quickstart">🚀 Быстрый старт</a>
             <a href="#" data-help-target="xk-bhelp-manual">Серверы вручную</a>
@@ -2140,9 +2140,9 @@
               </li>
               <li><code>07_observatory.json</code> — измерение доступности/пинга (нужно для <code>leastPing</code>).</li>
             </ul>
-            <div class="xk-balancer-help-details" style="margin: 10px 0 12px; padding: 10px 12px;">
+            <div class="xk-balancer-help-details xk-modal-mt-10 xk-modal-mb-12" style="padding: 10px 12px;">
               <b>Минимальный пример (для понимания)</b>
-              <div class="modal-hint" style="margin: 6px 0 8px;">Смысл: несколько outbounds с тегами → один balancer → правило с balancerTag.</div>
+              <div class="modal-hint xk-modal-mt-6 xk-modal-mb-8">Смысл: несколько outbounds с тегами → один balancer → правило с balancerTag.</div>
               <div class="xk-balancer-help-code">
                 <code>// routing.balancers</code><br>
                 <code>{ "tag": "proxy", "selector": ["vless-"], "strategy": {"type":"leastPing"}, "fallbackTag": "direct" }</code><br><br>
@@ -2151,7 +2151,7 @@
               </div>
             </div>
 
-            <div class="modal-hint" style="margin: 0 0 12px;">
+            <div class="modal-hint xk-modal-mb-12">
               <b>Keenetic:</b> ядро Xray ставится пакетом <code>xkeen</code> через Entware. Перезапуск — <code>xkeen -restart</code>, панель делает сама. Xray применяет конфиг <b>только после рестарта</b>. В мастерах “Применить + Рестарт” это происходит автоматически (job + лог).
             </div>
 
@@ -2182,10 +2182,10 @@
 
               <p><b>3. Готово.</b> Xray перезапустился, трафик идёт через подписку по leastPing.</p>
 
-              <div class="modal-hint" style="margin-top: 10px;">
+              <div class="modal-hint xk-modal-mt-10">
                 💡 Чтобы пускать через VPN только часть трафика — снимите галку дефолтного правила и в разделе “Правила” добавьте rules только для нужных доменов.
               </div>
-              <div class="xk-balancer-help-callout" style="margin-top: 10px;">
+              <div class="xk-balancer-help-callout xk-modal-mt-10">
                 ⚠️ <b>Keenetic-лимит:</b> 300+ активных узлов в балансировщике кладут роутер (RAM / observatory / conntrack). Держите десятки, а не сотни — используйте regex-фильтры и ручные исключения узлов.
               </div>
             </details>
@@ -2219,7 +2219,7 @@
                 <li>Пишет отдельный файл <code>04_outbounds.&lt;id&gt;.json</code> с тегами <code>&lt;prefix&gt;--&lt;node&gt;</code>.</li>
                 <li>(Опц.) Добавляет теги в <code>07_observatory.json</code> для leastPing.</li>
               </ol>
-              <div class="xk-balancer-help-callout" style="margin-top: 10px;">
+              <div class="xk-balancer-help-callout xk-modal-mt-10">
                 <b>Главное:</b> подписки <i>не трогают</i> ручной <code>04_outbounds.json</code>. Они живут отдельными фрагментами; мастер leastPing видит теги из всех outbounds-файлов.
               </div>
             </details>
@@ -2273,7 +2273,7 @@
                 <li><code>strategy</code> — алгоритм: <code>leastPing</code> / <code>leastLoad</code> / <code>random</code>.</li>
                 <li><code>fallbackTag</code> — запасной outbound tag или префикс сгенерированных outbound (обычно <code>direct</code>).</li>
               </ul>
-              <div class="xk-balancer-help-callout" style="margin-top:10px;">
+              <div class="xk-balancer-help-callout xk-modal-mt-10">
                 <b>selector — префикс, не точный тег!</b> Если у вас теги <code>vless-1</code> и <code>vless-10</code>, selector <code>vless-1</code> захватит оба. Делайте теги уникальными без пересечений.
               </div>
             </details>
@@ -2293,7 +2293,7 @@
               <div class="xk-balancer-help-code">
                 <code>{ "type": "field", "balancerTag": "proxy" }</code>
               </div>
-              <div class="modal-hint" style="margin-top: 8px;">
+            <div class="modal-hint xk-modal-mt-8">
                 Если правила/балансировщики редактируете через карточки: <b>💾 Применить изменения</b> → в редакторе <b>Сохранить</b> → (при необходимости) <b>Перезапуск</b>. В мастере ⚡ это делается одной кнопкой.
               </div>
             </details>
@@ -2367,15 +2367,15 @@
 
     <!-- Xray snapshots preview modal (read-only) -->
     <div id="xray-snapshot-modal" class="modal hidden" data-operator-modal-family="editor-workbench" role="dialog" aria-modal="true" aria-label="Просмотр снимка Xray конфигурации">
-      <div class="modal-content" style="max-width: 980px;" data-modal-key="xray-snapshot-preview">
+      <div class="modal-content xk-modal-width xk-modal-width-980" data-modal-key="xray-snapshot-preview">
         <div class="modal-header">
           <span class="modal-title">Снимок: <span id="xray-snapshot-title">—</span></span>
           <button type="button" class="modal-close" id="xray-snapshot-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
         </div>
         <div class="modal-body">
-          <div class="xk-editor-workbench-toolbar xk-editor-workbench-toolbar--snapshot" style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom: 10px;">
-            <p id="xray-snapshot-meta" class="modal-description" style="margin:0;">—</p>
-            <div class="xk-editor-engine" id="xray-snapshot-engine" style="margin-top: 2px;">
+          <div class="xk-editor-workbench-toolbar xk-editor-workbench-toolbar--snapshot xk-modal-gap-12 xk-modal-mb-10" style="display:flex; align-items:flex-start; justify-content:space-between;">
+            <p id="xray-snapshot-meta" class="modal-description xk-modal-m-0">—</p>
+            <div class="xk-editor-engine xk-modal-mt-2" id="xray-snapshot-engine">
               <span class="xk-editor-engine-label">Редактор</span>
               <select id="xray-snapshot-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" data-tooltip="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" aria-label="Выбор движка редактора">
                 <option value="codemirror">CodeMirror</option>
@@ -2385,11 +2385,11 @@
           </div>
           <div id="xray-snapshot-preview-monaco" class="xk-monaco-editor xray-snapshot-preview-monaco hidden"></div>
           <textarea class="routing-template-preview-code" id="xray-snapshot-preview" readonly>// загрузка…</textarea>
-          <div id="xray-snapshot-status" class="modal-hint" style="margin-top: 10px;"></div>
+          <div id="xray-snapshot-status" class="modal-hint xk-modal-mt-10"></div>
         </div>
         <div class="modal-actions xk-editor-workbench-actions" style="justify-content: space-between;">
           <button type="button" class="btn-secondary" id="xray-snapshot-copy-btn" data-tooltip="Скопировать текст снимка в буфер обмена">{{ op_icon('duplicate') }}<span class="xk-action-label">Копировать</span></button>
-          <div class="xk-editor-workbench-action-group" style="display:flex; gap:10px;">
+          <div class="xk-editor-workbench-action-group xk-modal-gap-10" style="display:flex;">
             <button type="button" id="xray-snapshot-cancel-btn" data-operator-dismiss-duplicate="true">Закрыть</button>
           </div>
         </div>
@@ -2397,13 +2397,13 @@
     </div>
     <!-- Routing templates: import preset into 05_routing.json (no auto-save) -->
     <div id="routing-template-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-label="Импорт шаблона роутинга">
-      <div class="modal-content" style="max-width: 860px;" data-modal-key="routing-templates">
+      <div class="modal-content xk-modal-width xk-modal-width-860" data-modal-key="routing-templates">
         <div class="modal-header">
           <span class="modal-title">Импорт шаблона роутинга <span id="routing-template-count" class="xk-count-badge">0</span></span>
           <button type="button" class="modal-close" id="routing-template-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
         </div>
         <div class="modal-body">
-          <p class="modal-description" style="margin-bottom: 12px;">
+          <p class="modal-description xk-modal-mb-12">
             Выбери готовый шаблон. Он будет загружен в редактор и заменит текущий текст <b>без автосохранения</b>.
           </p>
 
@@ -2412,7 +2412,7 @@
 
             <div class="routing-template-preview">
               <div class="routing-template-preview-header">
-                <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+          <div class="xk-modal-gap-10" style="display:flex; align-items:flex-start; justify-content:space-between;">
                   <div>
                     <div class="routing-template-preview-title" id="routing-template-title">—</div>
                     <div class="routing-template-preview-desc" id="routing-template-desc">Выбери шаблон слева, чтобы увидеть описание и превью.</div>
@@ -2431,16 +2431,16 @@
             </div>
           </div>
 
-          <div id="routing-template-status" class="modal-hint" style="margin-top: 10px;"></div>
+          <div id="routing-template-status" class="modal-hint xk-modal-mt-10"></div>
         </div>
         <div class="modal-actions" style="justify-content: space-between;">
-          <div style="display:flex; gap:10px; flex-wrap: wrap;">
+          <div class="xk-modal-gap-10" style="display:flex; flex-wrap: wrap;">
             <button type="button" class="btn-secondary" id="routing-template-refresh-btn" data-tooltip="Перечитать список шаблонов из /opt/etc/xray/templates/routing">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
             <button type="button" class="btn-secondary" id="routing-template-save-btn" data-tooltip="Сохранить текущий текст из редактора как новый пользовательский шаблон">{{ op_icon('save') }}<span class="xk-action-label">Сохранить как шаблон</span></button>
             <button type="button" class="btn-secondary" id="routing-template-edit-btn" disabled data-tooltip="Редактировать выбранный шаблон (только пользовательские)">{{ op_icon('edit') }}<span class="xk-action-label">Редактировать</span></button>
             <button type="button" class="btn-danger" id="routing-template-delete-btn" disabled data-tooltip="Удалить выбранный шаблон (только пользовательские)">{{ op_icon('trash') }}<span class="xk-action-label">Удалить</span></button>
           </div>
-          <div style="display:flex; gap:10px;">
+          <div class="xk-modal-gap-10" style="display:flex;">
             <button type="button" id="routing-template-import-btn" class="btn-primary" disabled data-tooltip="Заменить текст в редакторе выбранным шаблоном">Импортировать</button>
             <button type="button" class="btn-secondary" id="routing-template-cancel-btn" data-operator-dismiss-duplicate="true">Закрыть</button>
           </div>
@@ -2450,13 +2450,13 @@
 
     <!-- Routing templates: save current editor content as a user template -->
     <div id="routing-template-save-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Сохранить шаблон роутинга">
-      <div class="modal-content" style="max-width: 560px;" data-modal-key="routing-template-save">
+      <div class="modal-content xk-modal-width xk-modal-width-560" data-modal-key="routing-template-save">
         <div class="modal-header">
           <span class="modal-title">Сохранить как шаблон</span>
           <button type="button" class="modal-close" id="routing-template-save-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
         </div>
         <div class="modal-body">
-          <p class="modal-description" style="margin-bottom: 10px;">
+          <p class="modal-description xk-modal-mb-10">
             Сохранит текущий текст из редактора как новый пользовательский шаблон в <code>/opt/etc/xray/templates/routing</code>.
           </p>
 
@@ -2475,7 +2475,7 @@
             </label>
           </div>
 
-          <div id="routing-template-save-status" class="modal-hint" style="margin-top: 10px;"></div>
+          <div id="routing-template-save-status" class="modal-hint xk-modal-mt-10"></div>
         </div>
         <div class="modal-actions">
           <button type="button" class="btn-secondary" id="routing-template-save-cancel-btn" data-operator-dismiss-duplicate="true">Отмена</button>
@@ -2486,10 +2486,10 @@
 
 <!-- Routing templates: edit existing user template -->
 <div id="routing-template-edit-modal" class="modal hidden" data-operator-modal-family="editor-workbench" role="dialog" aria-modal="true" aria-label="Редактировать шаблон роутинга">
-  <div class="modal-content" style="max-width: 860px;" data-modal-key="routing-template-edit">
+      <div class="modal-content xk-modal-width xk-modal-width-860" data-modal-key="routing-template-edit">
     <div class="modal-header">
       <span class="modal-title">Редактировать шаблон</span>
-      <div style="display:flex; align-items:center; gap:10px;">
+          <div class="xk-modal-gap-10" style="display:flex; align-items:center;">
         <div class="xk-editor-engine" id="routing-template-edit-engine">
           <span class="xk-editor-engine-label">Редактор</span>
           <select id="routing-template-edit-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" data-tooltip="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" aria-label="Выбор движка редактора">
@@ -2501,7 +2501,7 @@
       </div>
     </div>
     <div class="modal-body">
-      <p class="modal-description" style="margin-bottom: 10px;">
+          <p class="modal-description xk-modal-mb-10">
         Измени <b>имя / название / описание</b> и содержимое шаблона. Доступно только для <b>пользовательских</b> шаблонов.
       </p>
 
@@ -2529,7 +2529,7 @@
         </label>
       </div>
 
-      <div id="routing-template-edit-status" class="modal-hint" style="margin-top: 10px;"></div>
+          <div id="routing-template-edit-status" class="modal-hint xk-modal-mt-10"></div>
     </div>
     <div class="modal-actions">
       <button type="button" class="btn-secondary" id="routing-template-edit-cancel-btn" data-operator-dismiss-duplicate="true">Отмена</button>
@@ -2549,7 +2549,7 @@
             <div class="xk-gen-lead-icon">🧩</div>
             <div class="xk-gen-lead-copy">
               <div class="xk-gen-lead-title">Параметры → аккуратно собранная ссылка</div>
-              <p class="modal-description" style="margin:0;">
+              <p class="modal-description xk-modal-m-0">
                 Выберите <b>протокол</b>, укажите базовые поля и при необходимости заполните дополнительные параметры.
                 Ниже панель соберёт готовую ссылку для <code>04_outbounds.json</code>, которую можно сразу вставить в поле прокси.
               </p>
@@ -2561,7 +2561,7 @@
               <div class="xk-gen-panelhead">
                 <div>
                   <div class="xk-gen-kicker">Шаг 1</div>
-                  <div class="terminal-menu-title" style="margin:0;">Основные параметры</div>
+                  <div class="terminal-menu-title xk-modal-m-0">Основные параметры</div>
                 </div>
                 <div id="outbounds-gen-summary" class="xk-gen-summary" data-tooltip="Текущая схема сборки">VLESS · TCP · Reality</div>
               </div>
@@ -2667,7 +2667,7 @@
               <div class="xk-gen-panelhead">
                 <div>
                   <div class="xk-gen-kicker">Шаг 2</div>
-                  <div class="terminal-menu-title" style="margin:0;">Дополнительно и результат</div>
+                  <div class="terminal-menu-title xk-modal-m-0">Дополнительно и результат</div>
                 </div>
                 <div id="outbounds-gen-prefill-hint" class="modal-hint xk-gen-sidehint">Можно взять данные из текущего поля</div>
               </div>
@@ -2817,7 +2817,7 @@
 	            <div class="xk-pool-lead-icon">🧱</div>
 	            <div class="xk-pool-lead-text">
 	              <div class="xk-pool-lead-title">Несколько ссылок → готовый пул тегов</div>
-	              <p class="modal-description" style="margin:0;">
+	              <p class="modal-description xk-modal-m-0">
 	                Вставьте ссылки по одной на строку. Поддерживаются форматы <code>tag | url</code>, <code>tag = url</code> и просто <code>url</code>.
 	                Панель соберёт outbounds, аккуратно обновит <code>04_outbounds.json</code> и подготовит теги для балансировщика <code>leastPing</code>.
 	              </p>
@@ -2829,7 +2829,7 @@
 	              <div class="xk-pool-panelhead">
 	                <div>
 	                  <div class="xk-pool-kicker">Шаг 1</div>
-	                  <div class="terminal-menu-title" style="margin:0;">Вставка и подготовка</div>
+	                  <div class="terminal-menu-title xk-modal-m-0">Вставка и подготовка</div>
 	                </div>
 	              </div>
 
@@ -2856,7 +2856,7 @@ vless://...#mytag"></textarea>
 	              <div class="xk-pool-panelhead">
 	                <div>
 	                  <div class="xk-pool-kicker">Шаг 2</div>
-	                  <div class="terminal-menu-title" style="margin:0;">Итоговый пул</div>
+	                  <div class="terminal-menu-title xk-modal-m-0">Итоговый пул</div>
 	                </div>
 	                <div id="outbounds-pool-summary" class="xk-pool-summary" data-tooltip="Количество строк, подготовленных к сохранению">0 строк · 0 tag</div>
 	              </div>
@@ -2864,10 +2864,10 @@ vless://...#mytag"></textarea>
 	              <div class="xk-pool-listbox">
 	                <div class="xk-pool-listhead">
 	                  <div class="xk-pool-listtitle">
-	                    <div class="terminal-menu-title" style="margin:0;">Список для записи</div>
+	                    <div class="terminal-menu-title xk-modal-m-0">Список для записи</div>
 	                    <div class="xk-pool-list-subtitle">Tag можно поправить вручную, URL — заменить прямо в таблице. Кнопка справа удаляет строку.</div>
 	                  </div>
-	                  <div id="outbounds-pool-status" class="modal-hint xk-pool-status" style="margin:0;"></div>
+	                  <div id="outbounds-pool-status" class="modal-hint xk-pool-status xk-modal-m-0"></div>
 	                </div>
 
 	                <div class="xk-pool-tablewrap">
@@ -3011,7 +3011,7 @@ https://..."></textarea>
 
     <!-- Mihomo: proxy tools (rename / replace) -->
     <div id="mihomo-proxy-tools-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-label="Proxy Tools Mihomo">
-      <div class="modal-content xk-pt-modal" style="max-width: 1040px;" data-modal-key="mihomo-proxy-tools">
+      <div class="modal-content xk-pt-modal xk-modal-width xk-modal-width-1040" data-modal-key="mihomo-proxy-tools">
         <div class="modal-header xk-pt-header">
           <div class="xk-pt-titlebox">
             <span class="xk-pt-kicker">Mihomo · Premium proxy tools</span>
@@ -3150,7 +3150,7 @@ https://..."></textarea>
 
     <!-- Mihomo: HWID subscription wizard modal -->
     <div id="mihomo-hwid-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-label="HWID‑подписка Mihomo">
-      <div class="modal-content xk-hw-modal" style="max-width: 1020px;" data-modal-key="mihomo-hwid">
+      <div class="modal-content xk-hw-modal xk-modal-width xk-modal-width-1020" data-modal-key="mihomo-hwid">
         <div class="modal-header xk-hw-header">
           <div class="xk-hw-titlebox">
             <span class="xk-hw-kicker">Mihomo · Premium HWID subscription</span>
@@ -3311,14 +3311,14 @@ https://..."></textarea>
 
     <!-- File manager: upload conflict (same-name file already exists) -->
     <div id="fm-upload-conflict-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Конфликт при загрузке">
-      <div class="modal-content" style="max-width: 720px;">
+      <div class="modal-content xk-modal-width xk-modal-width-720">
         <div class="modal-header">
           <span class="modal-title" id="fm-upload-conflict-title">Файл уже существует</span>
           <button type="button" class="modal-close" id="fm-upload-conflict-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
         </div>
         <div class="modal-body">
           <p id="fm-upload-conflict-message" class="modal-description"></p>
-          <p class="modal-hint" style="margin:8px 0 0; opacity:0.75; font-size: 0.85rem;">
+          <p class="modal-hint xk-modal-m-0 xk-modal-mt-8" style="opacity:0.75; font-size: 0.85rem;">
             «Переименовать» сохранит оба файла, добавив к имени номер (например, <code>file (1).txt</code>).
           </p>
         </div>
@@ -3332,13 +3332,13 @@ https://..."></textarea>
 
     <!-- File manager: text file viewer/editor -->
     <div id="fm-editor-modal" class="modal hidden" data-operator-modal-family="editor-workbench" role="dialog" aria-modal="true" aria-label="Редактор файла">
-      <div class="modal-content" style="max-width: 980px;">
+      <div class="modal-content xk-modal-width xk-modal-width-980">
         <div class="modal-header">
-          <div class="xk-editor-workbench-title" style="display:flex; flex-direction:column; gap:2px;">
+          <div class="xk-editor-workbench-title xk-modal-gap-2" style="display:flex; flex-direction:column;">
             <span class="modal-title" id="fm-editor-title">Файл</span>
-            <span id="fm-editor-subtitle" class="modal-hint" style="margin:0; font-size: 0.82rem; opacity:0.75;"></span>
+            <span id="fm-editor-subtitle" class="modal-hint xk-modal-m-0" style="font-size: 0.82rem; opacity:0.75;"></span>
           </div>
-          <div class="xk-editor-workbench-header-tools" style="display:flex; align-items:center; gap:10px;">
+          <div class="xk-editor-workbench-header-tools xk-modal-gap-10" style="display:flex; align-items:center;">
             <div class="xk-editor-engine" id="fm-editor-engine">
               <span class="xk-editor-engine-label">Редактор</span>
               <select id="fm-editor-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" data-tooltip="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" aria-label="Выбор движка редактора">
@@ -3356,10 +3356,10 @@ https://..."></textarea>
           <textarea id="fm-editor-textarea" spellcheck="false"></textarea>
         </div>
         <div class="modal-actions xk-editor-workbench-actions">
-          <div class="xk-editor-workbench-action-group" style="display:flex; gap:8px; align-items:center;">
+          <div class="xk-editor-workbench-action-group xk-modal-gap-8" style="display:flex; align-items:center;">
             <button type="button" class="btn-secondary" id="fm-editor-download-btn">{{ op_icon('download') }}<span class="xk-action-label">Скачать</span></button>
           </div>
-          <div class="xk-editor-workbench-action-group" style="display:flex; gap:8px; align-items:center;">
+          <div class="xk-editor-workbench-action-group xk-modal-gap-8" style="display:flex; align-items:center;">
             <button type="button" id="fm-editor-cancel-btn" data-operator-dismiss-duplicate="true">Закрыть</button>
             <button type="button" id="fm-editor-save-btn">{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
           </div>
@@ -3394,18 +3394,18 @@ https://..."></textarea>
         </div>
         <div class="modal-body">
           <div class="github-catalog-messages">
-            <div id="github-catalog-status" class="status" style="margin-top:0;"></div>
-            <div id="github-catalog-error" class="error" style="display:none; margin-top:0;"></div>
+            <div id="github-catalog-status" class="status xk-modal-mt-0"></div>
+            <div id="github-catalog-error" class="error xk-modal-mt-0" style="display:none;"></div>
           </div>
           <div id="github-catalog-list">Загрузка...</div>
         </div>
         <div class="modal-actions">
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <div class="xk-modal-gap-8" style="display:flex; align-items:center; flex-wrap:wrap;">
             <button type="button" class="btn-secondary btn-compact" id="github-catalog-retry-btn" title="Повторить загрузку каталога">{{ op_icon('refresh') }}<span class="xk-action-label">Повторить</span></button>
             <span id="github-catalog-stale-pill" class="github-stale-pill hidden" title="Показаны данные из кэша">кэш</span>
             <a id="github-repo-link" href="{{ github_repo_url }}" target="_blank">Открыть репозиторий на GitHub</a>
           </div>
-          <div style="display:flex; gap:8px; align-items:center;">
+          <div class="xk-modal-gap-8" style="display:flex; align-items:center;">
             <button id="github-catalog-close-btn" data-operator-dismiss-duplicate="true">Закрыть</button>
           </div>
         </div>
@@ -3716,21 +3716,21 @@ https://..."></textarea>
     </div>
 
     <div class="modal-body">
-      <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+      <div class="xk-modal-gap-8 xk-modal-mb-10" style="display:flex; flex-wrap:wrap;">
         <button type="button" id="ssh-add-btn">{{ op_icon('add-node') }}<span class="xk-action-label">Добавить</span></button>
         <button type="button" id="ssh-delete-selected-btn" disabled>{{ op_icon('trash') }}<span class="xk-action-label">Удалить</span></button>
         <button type="button" id="ssh-export-btn">{{ op_icon('export') }}<span class="xk-action-label">Export</span></button>
         <button type="button" id="ssh-import-btn">{{ op_icon('import') }}<span class="xk-action-label">Import</span></button>
       </div>
 
-      <div id="ssh-profiles-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+      <div id="ssh-profiles-list" class="xk-modal-gap-8" style="display:flex; flex-direction:column;"></div>
 
-      <hr style="border:0; border-top:1px solid #334155; margin:12px 0;">
+      <hr class="xk-modal-m-0 xk-modal-mt-12 xk-modal-mb-12" style="border:0; border-top:1px solid #334155;">
 
-      <div style="display:flex; flex-direction:column; gap:8px;">
+      <div class="xk-modal-gap-8" style="display:flex; flex-direction:column;">
         <label style="opacity:.85;">Команда (будет отправлена в PTY)</label>
         <input id="ssh-command-preview" class="terminal-input" style="width:100%;" placeholder="ssh user@host -p 22" />
-        <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
+        <div class="xk-modal-gap-8" style="display:flex; justify-content:flex-end; flex-wrap:wrap;">
           <button type="button" id="ssh-copy-preview-btn">{{ op_icon('duplicate') }}<span class="xk-action-label">Copy</span></button>
           <button type="button" id="ssh-run-preview-btn">{{ op_icon('play') }}<span class="xk-action-label">Run</span></button>
         </div>
@@ -3741,7 +3741,7 @@ https://..."></textarea>
 
 <!-- SSH profile editor (no browser prompts/alerts) -->
 <div id="ssh-edit-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="SSH profile editor">
-  <div class="modal-content" style="max-width:640px;">
+    <div class="modal-content xk-modal-width xk-modal-width-640">
     <div class="modal-header">
       <span class="modal-title" id="ssh-edit-title">SSH профиль</span>
       <button type="button" class="modal-close" id="ssh-edit-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
@@ -3772,7 +3772,7 @@ https://..."></textarea>
 
     <div class="modal-actions">
       <button type="button" class="btn-secondary" id="ssh-edit-cancel-btn" data-operator-dismiss-duplicate="true">Отмена</button>
-      <div style="display:flex; gap:8px; justify-content:flex-end;">
+      <div class="xk-modal-gap-8" style="display:flex; justify-content:flex-end;">
         <button type="button" id="ssh-edit-delete-btn">{{ op_icon('trash') }}<span class="xk-action-label">Удалить</span></button>
         <button type="button" class="btn-primary" id="ssh-edit-save-btn">{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
       </div>
@@ -3782,7 +3782,7 @@ https://..."></textarea>
 
 <!-- Small confirm modal for delete -->
 <div id="ssh-confirm-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Confirm">
-  <div class="modal-content" style="max-width:420px;">
+    <div class="modal-content xk-modal-width xk-modal-width-420">
     <div class="modal-header">
       <span class="modal-title">Подтверждение</span>
       <button type="button" class="modal-close" id="ssh-confirm-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
@@ -3798,19 +3798,19 @@ https://..."></textarea>
 </div>
 
 <div id="ssh-transfer-modal" class="modal hidden" data-operator-modal-family="editor-workbench" role="dialog" aria-modal="true" aria-label="SSH profile transfer">
-  <div class="modal-content" style="max-width:760px;">
+    <div class="modal-content xk-modal-width xk-modal-width-760">
     <div class="modal-header">
       <span class="modal-title" id="ssh-transfer-title">SSH профили</span>
       <button type="button" class="modal-close" id="ssh-transfer-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
     </div>
-    <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
+    <div class="modal-body xk-modal-gap-10" style="display:flex; flex-direction:column;">
       <div id="ssh-transfer-help" style="opacity:.85;"></div>
       <textarea id="ssh-transfer-text" class="xkeen-textarea" rows="14" spellcheck="false" style="min-height:280px;"></textarea>
       <div id="ssh-transfer-error" class="error"></div>
     </div>
     <div class="modal-actions">
       <button type="button" class="btn-secondary" id="ssh-transfer-cancel-btn" data-operator-dismiss-duplicate="true">Отмена</button>
-      <div style="display:flex; gap:8px; justify-content:flex-end;">
+      <div class="xk-modal-gap-8" style="display:flex; justify-content:flex-end;">
         <button type="button" id="ssh-transfer-copy-btn">Копировать</button>
         <button type="button" class="btn-primary" id="ssh-transfer-submit-btn">Сохранить</button>
       </div>
@@ -3820,7 +3820,7 @@ https://..."></textarea>
 
 <!-- File Manager: Connect modal -->
 <div id="fm-connect-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Remote connect">
-  <div class="modal-content" style="max-width:560px;">
+    <div class="modal-content xk-modal-width xk-modal-width-560">
     <div class="modal-header">
       <span class="modal-title">Подключение к серверу</span>
       <button type="button" class="modal-close" id="fm-connect-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
@@ -3829,7 +3829,7 @@ https://..."></textarea>
     <div class="modal-body">
       <div class="fm-form-grid">
         <label for="fm-conn-profile">Профиль</label>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div class="xk-modal-gap-8" style="display:flex; align-items:center;">
           <select id="fm-conn-profile" class="terminal-input" style="flex:1;">
             <option value="">—</option>
           </select>
@@ -3871,7 +3871,7 @@ https://..."></textarea>
         <input id="fm-passphrase" class="terminal-input" type="text" placeholder="(если нужно)" autocomplete="off" style="display:none;" disabled />
 
         <label for="fm-hostkey-policy">SFTP host key</label>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div class="xk-modal-gap-8" style="display:flex; align-items:center;">
           <select id="fm-hostkey-policy" class="terminal-input" style="flex:1;">
           <option value="accept_new">accept_new (рекомендуется)</option>
           <option value="reject_new">reject_new (строго)</option>
@@ -3881,8 +3881,8 @@ https://..."></textarea>
         </div>
 
         <label id="fm-hostkey-fp-label">Host key fingerprint</label>
-        <div id="fm-hostkey-row" style="display:flex; gap:8px; align-items:center;">
-          <div id="fm-hostkey-fp" class="status" style="margin:0; padding:8px 10px; opacity:.85; flex:1;">&nbsp;</div>
+        <div id="fm-hostkey-row" class="xk-modal-gap-8" style="display:flex; align-items:center;">
+          <div id="fm-hostkey-fp" class="status xk-modal-m-0" style="padding:8px 10px; opacity:.85; flex:1;">&nbsp;</div>
           <button
             type="button"
             class="btn-secondary btn-icon xk-tooltip"
@@ -3900,7 +3900,7 @@ https://..."></textarea>
         </select>
 
         <label for="fm-remember-profile">Запомнить профиль</label>
-        <div style="display:flex; align-items:center; gap:10px;">
+        <div class="xk-modal-gap-10" style="display:flex; align-items:center;">
           <input id="fm-remember-profile" type="checkbox" />
           <span style="opacity:.85;">host/user/port/proto (без пароля, хранится в браузере)</span>
         </div>
@@ -3918,28 +3918,28 @@ https://..."></textarea>
 
 <!-- File Manager: known_hosts management -->
 <div id="fm-knownhosts-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-label="known_hosts">
-  <div class="modal-content" style="max-width:760px;">
+    <div class="modal-content xk-modal-width xk-modal-width-760">
     <div class="modal-header">
       <span class="modal-title">SFTP: known_hosts</span>
       <button type="button" class="modal-close" id="fm-knownhosts-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
     </div>
     <div class="modal-body">
-      <div id="fm-knownhosts-path" class="status" style="margin:0 0 10px 0; padding:8px 10px; opacity:.85;">&nbsp;</div>
+      <div id="fm-knownhosts-path" class="status xk-modal-m-0 xk-modal-mb-10" style="padding:8px 10px; opacity:.85;">&nbsp;</div>
 
-      <div class="form-row" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:0 0 10px 0;">
+      <div class="form-row xk-modal-gap-8 xk-modal-m-0 xk-modal-mb-10" style="display:flex; align-items:center; flex-wrap:wrap;">
         <label for="fm-knownhosts-remove-host" style="min-width:170px;">Удалить по host</label>
         <input id="fm-knownhosts-remove-host" class="terminal-input" placeholder="example.com[:2222] или [2001:db8::1]:2222" style="flex:1; min-width:260px;" />
         <button type="button" class="btn-secondary" id="fm-knownhosts-remove-host-btn">Удалить</button>
       </div>
 
-      <div style="display:flex; gap:8px; justify-content:flex-end; margin-bottom:10px; flex-wrap:wrap;">
+      <div class="xk-modal-gap-8 xk-modal-mb-10" style="display:flex; justify-content:flex-end; flex-wrap:wrap;">
         <button type="button" class="btn-secondary" id="fm-knownhosts-refresh-btn">Обновить</button>
         <button type="button" class="btn-danger" id="fm-knownhosts-clear-btn">Очистить known_hosts</button>
       </div>
       <div id="fm-knownhosts-error" class="error"></div>
-      <div id="fm-knownhosts-hashed-hint" class="status" style="display:none; margin:0 0 10px 0; opacity:.75;"></div>
+      <div id="fm-knownhosts-hashed-hint" class="status xk-modal-m-0 xk-modal-mb-10" style="display:none; opacity:.75;"></div>
       <div id="fm-knownhosts-body" style="max-height:380px; overflow:auto;"></div>
-      <div class="status" style="margin-top:10px; opacity:.75;">Подсказка: если сервер перевыпустил ключ — удалите соответствующую запись и подключитесь снова.</div>
+      <div class="status xk-modal-mt-10" style="opacity:.75;">Подсказка: если сервер перевыпустил ключ — удалите соответствующую запись и подключитесь снова.</div>
     </div>
     <div class="modal-actions" style="justify-content:flex-end;">
       <button type="button" class="btn-secondary" id="fm-knownhosts-ok-btn" data-operator-dismiss-duplicate="true">Закрыть</button>
@@ -3949,7 +3949,7 @@ https://..."></textarea>
 
 <!-- File Manager: create folder / file -->
 <div id="fm-create-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Create">
-  <div class="modal-content" style="max-width:560px;">
+    <div class="modal-content xk-modal-width xk-modal-width-560">
     <div class="modal-header">
       <span class="modal-title" id="fm-create-title">Создать</span>
       <button type="button" class="modal-close" id="fm-create-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
@@ -3960,16 +3960,16 @@ https://..."></textarea>
         <input id="fm-create-name" class="terminal-input" placeholder="example.txt" spellcheck="false" />
 
         <label></label>
-        <div id="fm-create-dest" class="status" style="margin:0; padding:8px 10px;">&nbsp;</div>
+        <div id="fm-create-dest" class="status xk-modal-m-0" style="padding:8px 10px;">&nbsp;</div>
 
         <label></label>
-        <label style="display:flex; gap:8px; align-items:center;">
+        <label class="xk-modal-gap-8" style="display:flex; align-items:center;">
           <input id="fm-create-parents" type="checkbox" checked />
           <span>Создать родителей (mkdir -p)</span>
         </label>
 
         <label></label>
-        <label id="fm-create-createonly-row" style="display:flex; gap:8px; align-items:center;">
+        <label id="fm-create-createonly-row" class="xk-modal-gap-8" style="display:flex; align-items:center;">
           <input id="fm-create-createonly" type="checkbox" checked />
           <span>Не перезаписывать если существует</span>
         </label>
@@ -3986,7 +3986,7 @@ https://..."></textarea>
 
 <!-- File Manager: rename file / folder -->
 <div id="fm-rename-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Rename">
-  <div class="modal-content" style="max-width:560px;">
+    <div class="modal-content xk-modal-width xk-modal-width-560">
     <div class="modal-header">
       <span class="modal-title" id="fm-rename-title">Переименовать</span>
       <button type="button" class="modal-close" id="fm-rename-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
@@ -3997,9 +3997,9 @@ https://..."></textarea>
         <input id="fm-rename-name" class="terminal-input" placeholder="new-name" spellcheck="false" />
 
         <label></label>
-        <div id="fm-rename-src" class="status" style="margin:0; padding:8px 10px;">&nbsp;</div>
+        <div id="fm-rename-src" class="status xk-modal-m-0" style="padding:8px 10px;">&nbsp;</div>
       </div>
-      <div class="status" style="margin-top:10px; opacity:.8;">Подсказка: переименование работает только в текущем каталоге (без "/" и "").</div>
+      <div class="status xk-modal-mt-10" style="opacity:.8;">Подсказка: переименование работает только в текущем каталоге (без "/" и "").</div>
       <div id="fm-rename-error" class="error"></div>
     </div>
     <div class="modal-actions" style="justify-content:flex-end;">
@@ -4011,7 +4011,7 @@ https://..."></textarea>
 
 <!-- File Manager: archive create -->
 <div id="fm-archive-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Archive">
-  <div class="modal-content" style="max-width:680px;">
+    <div class="modal-content xk-modal-width xk-modal-width-680">
     <div class="modal-header">
       <span class="modal-title" id="fm-archive-title">Архивировать</span>
       <button type="button" class="modal-close" id="fm-archive-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
@@ -4019,22 +4019,22 @@ https://..."></textarea>
     <div class="modal-body">
       <div class="fm-form-grid" style="grid-template-columns: 160px 1fr;">
         <label></label>
-        <div id="fm-archive-src" class="status" style="margin:0; padding:8px 10px;">&nbsp;</div>
+        <div id="fm-archive-src" class="status xk-modal-m-0" style="padding:8px 10px;">&nbsp;</div>
 
         <label>Выбрано</label>
-        <pre id="fm-archive-list" class="fm-dropop-list" style="margin:0; max-height:180px;"></pre>
+        <pre id="fm-archive-list" class="fm-dropop-list xk-modal-m-0" style="max-height:180px;"></pre>
 
         <label for="fm-archive-name">Имя архива *</label>
         <input id="fm-archive-name" class="terminal-input fm-mono" placeholder="archive.zip" spellcheck="false" />
 
         <label for="fm-archive-format">Формат</label>
-        <select id="fm-archive-format" class="terminal-input" style="max-width:220px;">
+        <select id="fm-archive-format" class="terminal-input xk-modal-max-width-220">
           <option value="zip">.zip</option>
           <option value="tar.gz">.tar.gz</option>
         </select>
 
         <label></label>
-        <label style="display:flex; gap:8px; align-items:center;">
+        <label class="xk-modal-gap-8" style="display:flex; align-items:center;">
           <input id="fm-archive-overwrite" type="checkbox" />
           <span>Перезаписать если существует</span>
         </label>
@@ -4050,7 +4050,7 @@ https://..."></textarea>
 
 <!-- File Manager: archive extract -->
 <div id="fm-extract-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Extract">
-  <div class="modal-content" style="max-width:680px;">
+    <div class="modal-content xk-modal-width xk-modal-width-680">
     <div class="modal-header">
       <span class="modal-title" id="fm-extract-title">Распаковать</span>
       <button type="button" class="modal-close" id="fm-extract-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
@@ -4058,13 +4058,13 @@ https://..."></textarea>
     <div class="modal-body">
       <div class="fm-form-grid" style="grid-template-columns: 160px 1fr;">
         <label>Архив</label>
-        <div id="fm-extract-archive" class="status" style="margin:0; padding:8px 10px;">&nbsp;</div>
+        <div id="fm-extract-archive" class="status xk-modal-m-0" style="padding:8px 10px;">&nbsp;</div>
 
         <label for="fm-extract-dest">Папка назначения</label>
         <input id="fm-extract-dest" class="terminal-input fm-mono" placeholder="./out" spellcheck="false" />
 
         <label></label>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <div class="xk-modal-gap-8" style="display:flex; align-items:center; flex-wrap:wrap;">
           <button type="button" class="btn-secondary" id="fm-extract-dest-here-btn" style="padding:6px 10px; font-size:12px;">Текущая</button>
           <button type="button" class="btn-secondary" id="fm-extract-dest-other-btn" style="padding:6px 10px; font-size:12px;">Другая панель</button>
           <button type="button" class="btn-secondary" id="fm-extract-dest-pick-btn" style="padding:6px 10px; font-size:12px;">Выбрать…</button>
@@ -4072,30 +4072,30 @@ https://..."></textarea>
         </div>
 
         <label></label>
-        <label style="display:flex; gap:8px; align-items:center;">
+        <label class="xk-modal-gap-8" style="display:flex; align-items:center;">
           <input id="fm-extract-create-dest" type="checkbox" checked />
           <span>Распаковать в отдельную папку</span>
         </label>
 
         <label></label>
-        <label style="display:flex; gap:8px; align-items:center;">
+        <label class="xk-modal-gap-8" style="display:flex; align-items:center;">
           <input id="fm-extract-strip-top" type="checkbox" />
           <span>Убрать верхнюю папку архива (если она одна)</span>
         </label>
 
         <label></label>
-        <label style="display:flex; gap:8px; align-items:center;">
+        <label class="xk-modal-gap-8" style="display:flex; align-items:center;">
           <input id="fm-extract-flatten" type="checkbox" />
           <span>Не сохранять структуру папок (плоско)</span>
         </label>
 
         <label></label>
-        <label style="display:flex; gap:8px; align-items:center;">
+        <label class="xk-modal-gap-8" style="display:flex; align-items:center;">
           <input id="fm-extract-overwrite" type="checkbox" />
           <span>Перезаписывать существующие файлы</span>
         </label>
       </div>
-      <div class="status" style="margin-top:10px; opacity:.75;">Поддерживаются архивы: <span class="fm-mono">.zip</span>, <span class="fm-mono">.tar</span>, <span class="fm-mono">.tar.gz</span>, <span class="fm-mono">.tgz</span>, <span class="fm-mono">.tar.xz</span>, <span class="fm-mono">.tar.bz2</span>.</div>
+      <div class="status xk-modal-mt-10" style="opacity:.75;">Поддерживаются архивы: <span class="fm-mono">.zip</span>, <span class="fm-mono">.tar</span>, <span class="fm-mono">.tar.gz</span>, <span class="fm-mono">.tgz</span>, <span class="fm-mono">.tar.xz</span>, <span class="fm-mono">.tar.bz2</span>.</div>
       <div id="fm-extract-error" class="error"></div>
     </div>
     <div class="modal-actions" style="justify-content:flex-end;">
@@ -4107,19 +4107,19 @@ https://..."></textarea>
 
 <!-- File Manager: folder picker -->
 <div id="fm-folder-picker-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-label="Folder picker">
-  <div class="modal-content" style="max-width:780px;">
+    <div class="modal-content xk-modal-width xk-modal-width-780">
     <div class="modal-header">
       <span class="modal-title" id="fm-folder-picker-title">Выбор папки</span>
       <button type="button" class="modal-close" id="fm-folder-picker-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
     </div>
     <div class="modal-body">
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+      <div class="xk-modal-gap-8 xk-modal-mb-10" style="display:flex; align-items:center; flex-wrap:wrap;">
         <button type="button" class="btn-secondary" id="fm-folder-picker-up-btn" style="padding:6px 10px; font-size:12px;">{{ op_icon('move-up') }}<span class="xk-action-label">Вверх</span></button>
         <button type="button" class="btn-secondary" id="fm-folder-picker-home-btn" style="padding:6px 10px; font-size:12px;">Корень</button>
         <input id="fm-folder-picker-path" class="terminal-input fm-mono" placeholder="/opt/var" spellcheck="false" style="flex:1; min-width:220px;" />
       </div>
-      <div id="fm-folder-picker-status" class="status" style="margin:0 0 10px 0; padding:6px 10px; opacity:.85;">&nbsp;</div>
-      <div id="fm-folder-picker-list" class="fm-dropop-list fm-mono" style="margin:0; max-height:420px; overflow:auto; padding:0;"></div>
+      <div id="fm-folder-picker-status" class="status xk-modal-m-0 xk-modal-mb-10" style="padding:6px 10px; opacity:.85;">&nbsp;</div>
+      <div id="fm-folder-picker-list" class="fm-dropop-list fm-mono xk-modal-m-0" style="max-height:420px; overflow:auto; padding:0;"></div>
       <div id="fm-folder-picker-error" class="error"></div>
     </div>
     <div class="modal-actions" style="justify-content:flex-end;">
@@ -4131,7 +4131,7 @@ https://..."></textarea>
 
 <!-- File Manager: archive list -->
 <div id="fm-archive-list-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-label="Archive list">
-  <div class="modal-content" style="max-width:860px;">
+    <div class="modal-content xk-modal-width xk-modal-width-860">
     <div class="modal-header">
       <span class="modal-title" id="fm-archive-list-title">Содержимое архива</span>
       <button type="button" class="modal-close" id="fm-archive-list-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
@@ -4139,24 +4139,24 @@ https://..."></textarea>
     <div class="modal-body">
       <div class="fm-form-grid" style="grid-template-columns: 120px 1fr;">
         <label>Архив</label>
-        <div id="fm-archive-list-path" class="status" style="margin:0; padding:8px 10px;">&nbsp;</div>
+        <div id="fm-archive-list-path" class="status xk-modal-m-0" style="padding:8px 10px;">&nbsp;</div>
 
         <label>Файлы</label>
         <div>
-          <div style="display:flex; gap:8px; align-items:center; margin:0 0 6px 0;">
+          <div class="xk-modal-gap-8 xk-modal-m-0 xk-modal-mb-6" style="display:flex; align-items:center;">
             <input id="fm-archive-list-filter" class="terminal-input fm-mono" placeholder="Фильтр (например: conf)" spellcheck="false" style="flex:1; min-width:200px;" />
             <button type="button" class="btn-secondary" id="fm-archive-list-select-all-btn">Все</button>
             <button type="button" class="btn-secondary" id="fm-archive-list-select-none-btn">Снять</button>
           </div>
-          <div id="fm-archive-list-body" class="fm-dropop-list fm-mono" style="margin:0; max-height:420px; overflow:auto; padding:0;"></div>
+          <div id="fm-archive-list-body" class="fm-dropop-list fm-mono xk-modal-m-0" style="max-height:420px; overflow:auto; padding:0;"></div>
         </div>
 
         <label></label>
-        <div id="fm-archive-list-meta" class="status" style="margin:0; padding:6px 10px; opacity:.8;">&nbsp;</div>
+        <div id="fm-archive-list-meta" class="status xk-modal-m-0" style="padding:6px 10px; opacity:.8;">&nbsp;</div>
       </div>
       <div id="fm-archive-list-error" class="error"></div>
     </div>
-    <div class="modal-actions" style="justify-content:flex-end; gap:10px;">
+    <div class="modal-actions xk-modal-gap-10" style="justify-content:flex-end;">
       <button type="button" class="btn-secondary" id="fm-archive-list-refresh-btn">Обновить</button>
       <button type="button" class="btn-secondary" id="fm-archive-list-extract-btn">Распаковать…</button>
       <button type="button" class="btn-secondary" id="fm-archive-list-extract-here-btn">Извлечь сюда</button>
@@ -4167,7 +4167,7 @@ https://..."></textarea>
 
 <!-- File Manager: select by mask -->
 <div id="fm-mask-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Select by mask">
-  <div class="modal-content" style="max-width:560px;">
+    <div class="modal-content xk-modal-width xk-modal-width-560">
     <div class="modal-header">
       <span class="modal-title">Выделить по маске</span>
       <button type="button" class="modal-close" id="fm-mask-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
@@ -4178,7 +4178,7 @@ https://..."></textarea>
         <input id="fm-mask-pattern" class="terminal-input fm-mono" placeholder="*.log *.json" spellcheck="false" />
 
         <label></label>
-        <div class="status" style="margin:0; padding:8px 10px;">Пример: <span class="fm-mono">*.log</span>, <span class="fm-mono">*.json</span></div>
+        <div class="status xk-modal-m-0" style="padding:8px 10px;">Пример: <span class="fm-mono">*.log</span>, <span class="fm-mono">*.json</span></div>
       </div>
       <div id="fm-mask-error" class="error"></div>
     </div>
@@ -4191,11 +4191,11 @@ https://..."></textarea>
 
 <!-- File Manager: properties -->
 <div id="fm-props-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Properties">
-  <div class="modal-content" style="max-width:720px;">
+    <div class="modal-content xk-modal-width xk-modal-width-720">
     <div class="modal-header">
-      <div style="display:flex; flex-direction:column; gap:2px;">
+      <div class="xk-modal-gap-2" style="display:flex; flex-direction:column;">
         <span class="modal-title">Свойства</span>
-        <span id="fm-props-modal-meta" class="status" style="margin:0; padding:0; background:transparent; border:none; opacity:.75; font-size:0.82rem;"></span>
+        <span id="fm-props-modal-meta" class="status xk-modal-m-0" style="padding:0; background:transparent; border:none; opacity:.75; font-size:0.82rem;"></span>
       </div>
       <button type="button" class="modal-close" id="fm-props-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
     </div>
@@ -4210,11 +4210,11 @@ https://..."></textarea>
 
 <!-- File Manager: checksum (md5/sha256) -->
 <div id="fm-hash-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Checksum">
-  <div class="modal-content" style="max-width:760px;">
+    <div class="modal-content xk-modal-width xk-modal-width-760">
     <div class="modal-header">
-      <div style="display:flex; flex-direction:column; gap:2px;">
+      <div class="xk-modal-gap-2" style="display:flex; flex-direction:column;">
         <span class="modal-title">Checksum</span>
-        <span id="fm-hash-meta" class="status" style="margin:0; padding:0; background:transparent; border:none; opacity:.75; font-size:0.82rem;"></span>
+        <span id="fm-hash-meta" class="status xk-modal-m-0" style="padding:0; background:transparent; border:none; opacity:.75; font-size:0.82rem;"></span>
       </div>
       <button type="button" class="modal-close" id="fm-hash-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
     </div>
@@ -4242,7 +4242,7 @@ https://..."></textarea>
 
 <!-- File Manager: chmod modal -->
 <div id="fm-chmod-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Chmod">
-  <div class="modal-content" style="max-width:620px;">
+    <div class="modal-content xk-modal-width xk-modal-width-620">
     <div class="modal-header">
       <span class="modal-title" id="fm-chmod-title">Права доступа (chmod)</span>
       <button type="button" class="modal-close" id="fm-chmod-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
@@ -4250,16 +4250,16 @@ https://..."></textarea>
     <div class="modal-body">
       <div class="fm-form-grid" style="grid-template-columns: 160px 1fr;">
         <label></label>
-        <div id="fm-chmod-src" class="status" style="margin:0; padding:8px 10px;">&nbsp;</div>
+        <div id="fm-chmod-src" class="status xk-modal-m-0" style="padding:8px 10px;">&nbsp;</div>
 
         <label>Выбрано</label>
-        <pre id="fm-chmod-list" class="fm-dropop-list" style="margin:0; max-height:160px;"></pre>
+        <pre id="fm-chmod-list" class="fm-dropop-list xk-modal-m-0" style="max-height:160px;"></pre>
 
         <label for="fm-chmod-mode">Mode *</label>
         <input id="fm-chmod-mode" class="terminal-input fm-mono" placeholder="755" spellcheck="false" />
 
         <label></label>
-        <div class="status" style="margin:0; opacity:.8;">Подсказка: можно вводить <span class="fm-mono">644</span>, <span class="fm-mono">0755</span> или <span class="fm-mono">0o755</span>.</div>
+        <div class="status xk-modal-m-0" style="opacity:.8;">Подсказка: можно вводить <span class="fm-mono">644</span>, <span class="fm-mono">0755</span> или <span class="fm-mono">0o755</span>.</div>
 
         <label></label>
         <div class="fm-perms-grid" aria-label="Права">
@@ -4295,7 +4295,7 @@ https://..."></textarea>
 
 <!-- File Manager: chown modal -->
 <div id="fm-chown-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Chown">
-  <div class="modal-content" style="max-width:620px;">
+    <div class="modal-content xk-modal-width xk-modal-width-620">
     <div class="modal-header">
       <span class="modal-title" id="fm-chown-title">Владелец (chown)</span>
       <button type="button" class="modal-close" id="fm-chown-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
@@ -4303,10 +4303,10 @@ https://..."></textarea>
     <div class="modal-body">
       <div class="fm-form-grid" style="grid-template-columns: 160px 1fr;">
         <label></label>
-        <div id="fm-chown-src" class="status" style="margin:0; padding:8px 10px;">&nbsp;</div>
+        <div id="fm-chown-src" class="status xk-modal-m-0" style="padding:8px 10px;">&nbsp;</div>
 
         <label>Выбрано</label>
-        <pre id="fm-chown-list" class="fm-dropop-list" style="margin:0; max-height:160px;"></pre>
+        <pre id="fm-chown-list" class="fm-dropop-list xk-modal-m-0" style="max-height:160px;"></pre>
 
         <label for="fm-chown-uid">UID *</label>
         <input id="fm-chown-uid" class="terminal-input fm-mono" placeholder="0" inputmode="numeric" />
@@ -4315,7 +4315,7 @@ https://..."></textarea>
         <input id="fm-chown-gid" class="terminal-input fm-mono" placeholder="0 (или пусто — не менять)" inputmode="numeric" />
 
         <label></label>
-        <div class="status" style="margin:0; opacity:.8;">Подсказка: для remote операция доступна только для <b>SFTP</b>.</div>
+        <div class="status xk-modal-m-0" style="opacity:.8;">Подсказка: для remote операция доступна только для <b>SFTP</b>.</div>
       </div>
       <div id="fm-chown-error" class="error"></div>
     </div>
@@ -4329,15 +4329,15 @@ https://..."></textarea>
 <!-- File Manager: drag&drop operation (move/copy) -->
 
 <div id="fm-dropop-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Move or Copy">
-  <div class="modal-content" style="max-width:620px;">
+    <div class="modal-content xk-modal-width xk-modal-width-620">
     <div class="modal-header">
       <span class="modal-title">Операция при перетаскивании</span>
       <button type="button" class="modal-close" id="fm-dropop-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
     </div>
     <div class="modal-body">
-      <div id="fm-dropop-text" class="status" style="margin:0 0 10px 0;"></div>
-      <pre id="fm-dropop-list" class="fm-dropop-list" style="margin:0;"></pre>
-      <div class="status" style="margin-top:10px; opacity:.8;" data-fm-lite-hide="1">Подсказка: Ctrl во время Drag&Drop меняет выбор по умолчанию.</div>
+      <div id="fm-dropop-text" class="status xk-modal-m-0 xk-modal-mb-10"></div>
+      <pre id="fm-dropop-list" class="fm-dropop-list xk-modal-m-0"></pre>
+      <div class="status xk-modal-mt-10" style="opacity:.8;" data-fm-lite-hide="1">Подсказка: Ctrl во время Drag&Drop меняет выбор по умолчанию.</div>
     </div>
     <div class="modal-actions" style="justify-content:flex-end;">
       <button type="button" class="btn-secondary" id="fm-dropop-cancel-btn" data-operator-dismiss-duplicate="true">Отмена</button>
@@ -4349,7 +4349,7 @@ https://..."></textarea>
 
 <!-- File Manager: conflicts modal (overwrite=ask) -->
 <div id="fm-conflicts-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-label="Conflicts">
-  <div class="modal-content" style="max-width:760px;">
+    <div class="modal-content xk-modal-width xk-modal-width-760">
     <div class="modal-header">
       <span class="modal-title">Конфликты при копировании</span>
       <button type="button" class="modal-close" id="fm-conflicts-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
@@ -4357,9 +4357,9 @@ https://..."></textarea>
     <div class="modal-body">
       <div id="fm-conflicts-list" class="fm-conflicts-list"></div>
       <div class="fm-conflicts-footer">
-        <label style="display:flex; gap:8px; align-items:center;">
+        <label class="xk-modal-gap-8" style="display:flex; align-items:center;">
           <span style="opacity:.85;">Действие по умолчанию:</span>
-          <select id="fm-conflicts-default" class="terminal-input" style="max-width:220px;">
+          <select id="fm-conflicts-default" class="terminal-input xk-modal-max-width-220">
             <option value="replace">Заменить все</option>
             <option value="skip">Пропустить все</option>
           </select>
@@ -4404,16 +4404,16 @@ https://..."></textarea>
 
 <!-- File Manager: multi-download mode chooser -->
 <div id="fm-download-multi-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Download">
-  <div class="modal-content" style="max-width:560px;">
+    <div class="modal-content xk-modal-width xk-modal-width-560">
     <div class="modal-header">
       <span class="modal-title">Скачать выбранное</span>
       <button type="button" class="modal-close" id="fm-download-multi-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
     </div>
     <div class="modal-body">
-      <div class="status" id="fm-download-multi-desc" style="margin:0 0 10px 0; opacity:.9;"></div>
+      <div class="status xk-modal-m-0 xk-modal-mb-10" id="fm-download-multi-desc" style="opacity:.9;"></div>
 
-      <div style="display:flex; flex-direction:column; gap:10px;">
-        <label style="display:flex; gap:10px; align-items:flex-start;">
+      <div class="xk-modal-gap-10" style="display:flex; flex-direction:column;">
+        <label class="xk-modal-gap-10" style="display:flex; align-items:flex-start;">
           <input type="radio" name="fm-download-multi-mode" id="fm-download-multi-mode-zip" value="zip" />
           <div>
             <div style="font-weight:600;">Одним ZIP-архивом</div>
@@ -4421,7 +4421,7 @@ https://..."></textarea>
           </div>
         </label>
 
-        <label style="display:flex; gap:10px; align-items:flex-start;">
+        <label class="xk-modal-gap-10" style="display:flex; align-items:flex-start;">
           <input type="radio" name="fm-download-multi-mode" id="fm-download-multi-mode-queue" value="queue" />
           <div>
             <div style="font-weight:600;">По очереди (каждый файл отдельно)</div>
@@ -4430,12 +4430,12 @@ https://..."></textarea>
         </label>
       </div>
 
-      <label style="display:flex; gap:8px; align-items:center; margin-top:12px;">
+      <label class="xk-modal-gap-8 xk-modal-mt-12" style="display:flex; align-items:center;">
         <input type="checkbox" id="fm-download-multi-remember" />
         <span style="font-size:12px; opacity:.9;">Запомнить выбор</span>
       </label>
     </div>
-    <div class="modal-actions" style="justify-content:flex-end; gap:10px;">
+    <div class="modal-actions xk-modal-gap-10" style="justify-content:flex-end;">
       <button type="button" class="btn-secondary" id="fm-download-multi-cancel-btn" data-operator-dismiss-duplicate="true">Отмена</button>
       <button type="button" class="btn-primary" id="fm-download-multi-ok-btn">Скачать</button>
     </div>
@@ -4444,7 +4444,7 @@ https://..."></textarea>
 
 <!-- File Manager: progress modal -->
 <div id="fm-progress-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Progress">
-  <div class="modal-content" style="max-width:620px;">
+    <div class="modal-content xk-modal-width xk-modal-width-620">
     <div class="modal-header">
       <span class="modal-title">Операция</span>
       <button type="button" class="modal-close" id="fm-progress-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
@@ -4465,15 +4465,15 @@ https://..."></textarea>
 
 <!-- File Manager: operations list -->
 <div id="fm-ops-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-label="Operations">
-  <div class="modal-content" style="max-width:760px;">
+    <div class="modal-content xk-modal-width xk-modal-width-760">
     <div class="modal-header">
       <span class="modal-title">Операции</span>
       <button type="button" class="modal-close" id="fm-ops-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
     </div>
     <div class="modal-body">
-      <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:8px;">
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <label style="display:flex; align-items:center; gap:6px; opacity:.9;">
+      <div class="xk-modal-gap-8 xk-modal-mb-8" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+        <div class="xk-modal-gap-8" style="display:flex; align-items:center; flex-wrap:wrap;">
+          <label class="xk-modal-gap-6" style="display:flex; align-items:center; opacity:.9;">
             <span style="font-size:12px;">Фильтр</span>
             <select id="fm-ops-filter" class="terminal-input" style="height:32px;">
               <option value="all">Все</option>
@@ -4483,12 +4483,12 @@ https://..."></textarea>
             </select>
           </label>
         </div>
-        <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
+        <div class="xk-modal-gap-8" style="display:flex; justify-content:flex-end; flex-wrap:wrap;">
           <button type="button" class="btn-secondary btn-icon" id="fm-ops-clear-btn" title="Очистить историю" aria-label="Очистить историю">{{ op_icon('clear') }}</button>
           <button type="button" class="btn-secondary btn-icon" id="fm-ops-refresh-btn" title="Обновить операции" aria-label="Обновить операции">{{ op_icon('refresh') }}</button>
         </div>
       </div>
-      <div id="fm-ops-summary" style="font-size:12px; opacity:.85; margin:6px 0 10px 0;"></div>
+      <div id="fm-ops-summary" class="xk-modal-mt-6 xk-modal-mb-10" style="font-size:12px; opacity:.85;"></div>
       <div id="fm-ops-list" class="fm-ops-list"></div>
     </div>
   </div>
@@ -4496,14 +4496,14 @@ https://..."></textarea>
 
 <!-- File Manager: USB volumes (mount/unmount) -->
 <div id="fm-volumes-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-label="Диски / Тома">
-  <div class="modal-content" style="max-width:920px;">
+    <div class="modal-content xk-modal-width xk-modal-width-920">
     <div class="modal-header">
       <span class="modal-title">Диски / Тома (USB)</span>
       <button type="button" class="modal-close" id="fm-volumes-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
     </div>
     <div class="modal-body">
-      <div style="display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:10px;">
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <div class="xk-modal-gap-10 xk-modal-mb-10" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+        <div class="xk-modal-gap-8" style="display:flex; align-items:center; flex-wrap:wrap;">
           <button type="button" class="btn-secondary btn-icon" id="fm-volumes-refresh-btn" title="Обновить список дисков" aria-label="Обновить список дисков">{{ op_icon('refresh') }}</button>
           <span id="fm-volumes-spinner" class="hidden" style="opacity:.85;">{{ op_icon('loading') }}</span>
         </div>
@@ -4511,14 +4511,14 @@ https://..."></textarea>
       </div>
 
       <div id="fm-volumes-list"></div>
-      <div class="status" style="margin-top:10px; opacity:.75;">Команды: <code>show usb</code>, <code>system mount &lt;fs&gt;</code>, <code>system no mount &lt;fs&gt;</code>.</div>
+      <div class="status xk-modal-mt-10" style="opacity:.75;">Команды: <code>show usb</code>, <code>system mount &lt;fs&gt;</code>, <code>system no mount &lt;fs&gt;</code>.</div>
     </div>
   </div>
 </div>
 
 <!-- File Manager: help modal -->
 <div id="fm-help-modal" class="modal hidden" data-operator-modal-family="drawer-help" role="dialog" aria-modal="true" aria-label="Справка по файловому менеджеру">
-  <div class="modal-content" style="max-width:780px;">
+    <div class="modal-content xk-modal-width xk-modal-width-780">
     <div class="modal-header">
       <span class="modal-title">Справка: файловый менеджер</span>
       <button type="button" class="modal-close" id="fm-help-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>

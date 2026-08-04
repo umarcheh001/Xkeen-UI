@@ -145,6 +145,23 @@ function expectWorkbench(geometry, fullscreen = false) {
   }
 }
 
+async function modalFrameGeometry(page, id) {
+  return page.locator(`#${id}`).evaluate((modal) => {
+    const content = modal.querySelector('.modal-content');
+    const body = modal.querySelector('.modal-body');
+    const contentRect = content?.getBoundingClientRect();
+    const bodyRect = body?.getBoundingClientRect();
+    const contentStyle = content ? getComputedStyle(content) : null;
+    const bodyStyle = body ? getComputedStyle(body) : null;
+    return {
+      contentHeight: contentRect?.height || 0,
+      bodyHeight: bodyRect?.height || 0,
+      contentRows: contentStyle?.gridTemplateRows || '',
+      bodyOverflowY: bodyStyle?.overflowY || '',
+    };
+  });
+}
+
 test.describe('Operator Console Stage 5 editor workbench contract', () => {
   for (const theme of ['dark', 'light']) {
     test(`JSON, file and snapshot keep a bounded workbench in ${theme}`, async ({ page }) => {
@@ -290,6 +307,58 @@ test.describe('Operator Console Stage 5 editor workbench contract', () => {
     });
     await triggerMonacoSuggest(page, '#mihomo-editor-monaco', 'proxies:\n  - name: demo\n    type: ', 'vless');
     await expectVisibleMonacoSuggest(page, '#mihomo-editor-monaco', 'vless');
+  });
+
+  test('visible empty and error states restore auto-height without shrinking hidden placeholders', async ({ page }) => {
+    await openPanel(page, 'dark');
+
+    await openStaticWorkbenchModal(page, 'fm-editor-modal');
+    const workbenchLoaded = await modalFrameGeometry(page, 'fm-editor-modal');
+    expect(workbenchLoaded.contentHeight).toBeGreaterThan(500);
+
+    const workbenchError = await page.locator('#fm-editor-modal').evaluate((modal) => {
+      const error = modal.querySelector('#fm-editor-error');
+      error.textContent = 'Unable to load the selected file.';
+      error.style.display = 'block';
+      const content = modal.querySelector('.modal-content');
+      const body = modal.querySelector('.modal-body');
+      return {
+        contentHeight: content.getBoundingClientRect().height,
+        bodyHeight: body.getBoundingClientRect().height,
+        contentRows: getComputedStyle(content).gridTemplateRows,
+        bodyOverflowY: getComputedStyle(body).overflowY,
+      };
+    });
+    expect(workbenchError.contentHeight).toBeLessThan(workbenchLoaded.contentHeight - 80);
+    expect(workbenchError.contentRows).not.toContain('1fr');
+    expect(workbenchError.bodyOverflowY).toBe('auto');
+
+    await page.locator('#fm-editor-modal').evaluate((modal) => {
+      const error = modal.querySelector('#fm-editor-error');
+      error.textContent = '';
+      error.style.display = 'none';
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'Nothing to edit.';
+      modal.querySelector('.modal-body').prepend(empty);
+    });
+    const workbenchEmpty = await modalFrameGeometry(page, 'fm-editor-modal');
+    expect(workbenchEmpty.contentHeight).toBeLessThan(workbenchLoaded.contentHeight - 80);
+    expect(workbenchEmpty.contentRows).not.toContain('1fr');
+    expect(workbenchEmpty.bodyOverflowY).toBe('auto');
+
+    await page.locator('#fm-editor-modal').evaluate((modal) => modal.classList.add('hidden'));
+    await openStaticWorkbenchModal(page, 'github-catalog-modal');
+    const detailLoaded = await modalFrameGeometry(page, 'github-catalog-modal');
+    expect(detailLoaded.contentHeight).toBeGreaterThan(500);
+    await page.locator('#github-catalog-error').evaluate((error) => {
+      error.textContent = 'Catalog is temporarily unavailable.';
+      error.style.display = 'block';
+    });
+    const detailError = await modalFrameGeometry(page, 'github-catalog-modal');
+    expect(detailError.contentHeight).toBeLessThan(detailLoaded.contentHeight - 80);
+    expect(detailError.contentRows).not.toContain('1fr');
+    expect(detailError.bodyOverflowY).toBe('auto');
   });
 
   test('narrow JSON workbench is fullscreen with fixed header and footer', async ({ page }) => {

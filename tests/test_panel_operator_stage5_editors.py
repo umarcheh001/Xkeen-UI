@@ -126,12 +126,14 @@ def test_stage5_editor_tasks_are_documented_as_closed():
         "[x] создать единый editor modal contract для JSON, file editor и snapshot",
         "[x] заменить comments/schema pills на компактные status labels",
         "[x] применить четыре modal family ко всем 50 окнам в приоритетном порядке из аудита",
+        "[x] убрать чисто презентационные inline max-width/gap/margin после переноса в scoped classes;",
+        "[x] для пустых/error состояний использовать auto-height вместо искусственно высокого body;",
         "panel-operator-stage5-editor-workbench.md",
     ):
         assert fragment in plan
 
     for fragment in (
-        "Статус: **пять связанных задач Этапа 5 закрыты 2 и 3 августа 2026 года**.",
+        "Статус: **семь связанных задач Этапа 5 закрыты 2–4 августа 2026 года**.",
         "## 1. Общий editor/workbench contract — закрыто",
         "## 2. Comments/schema status labels — закрыто",
         "## 3. Responsive editor help drawer/workbench — закрыто",
@@ -139,7 +141,7 @@ def test_stage5_editor_tasks_are_documented_as_closed():
         "## 5. Четыре modal family применены ко всем 50 окнам — закрыто",
         "## Сохранённые контракты",
         "## Проверка",
-        "Критерий этих пяти задач выполнен",
+        "Критерий этих семи задач выполнен",
     ):
         assert fragment in contract
 
@@ -171,3 +173,44 @@ def test_stage5_editor_help_is_a_responsive_workbench_sidecar():
         "drawer._xkeenReturnFocus",
     ):
         assert fragment in toolbar
+
+
+def test_stage5_modal_geometry_is_scoped_and_empty_or_error_restores_auto_height():
+    template = TEMPLATE.read_text(encoding="utf-8")
+    css = CSS.read_text(encoding="utf-8")
+    plan = PLAN.read_text(encoding="utf-8")
+    contract = CONTRACT.read_text(encoding="utf-8")
+
+    assert not __import__("re").search(
+        r'style="[^\"]*(?:max-width|gap|margin)', template, flags=__import__("re").I
+    )
+
+    for fragment in (
+        "presentation geometry belongs to the scoped modal layer",
+        ".xk-modal-width-980",
+        ".xk-modal-max-width-420",
+        ".xk-modal-gap-12",
+        ".xk-modal-mb-12",
+        ".xk-modal-ml-34",
+        "A workbench fills the canvas only when it has working data.",
+        '.modal:is(\n  [data-operator-modal-family="editor-workbench"],\n  [data-operator-modal-family="master-detail"]\n):has(:is(',
+        ".empty-state:not(.hidden)",
+        ".fm-empty:not(.hidden)",
+        ".xk-pt-empty:not(.hidden)",
+        ".xk-pool-empty:not(.hidden)",
+        ".error:not(:empty):not(.hidden)",
+        "height: auto;",
+        "max-height: min(56dvh, 540px);",
+        "max-height: min(38dvh, 320px);",
+    ):
+        assert fragment in css
+
+    for fragment in (
+        "Семь связанных задач закрыты 2–4 августа 2026 года",
+        "[x] убрать чисто презентационные inline max-width/gap/margin после переноса в scoped classes;",
+        "[x] для пустых/error состояний использовать auto-height вместо искусственно высокого body;",
+        "## 6. Presentation geometry и empty/error auto-height — закрыто",
+        "Пустые error placeholders, `.hidden`, `[hidden]` и `display:none` не активируют этот режим.",
+        "Критерий этих семи задач выполнен",
+    ):
+        assert fragment in plan or fragment in contract

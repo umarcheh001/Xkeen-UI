@@ -714,85 +714,85 @@
               "accessible_name": true
             },
             {
-              "control": "control@3901",
+              "control": "control@3898",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@6665",
+              "control": "control@6640",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@7766",
+              "control": "control@7741",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@8719",
+              "control": "control@8683",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@9498",
+              "control": "control@9462",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@10191",
+              "control": "control@10155",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@11400",
+              "control": "control@11364",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@12679",
+              "control": "control@12633",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@13948",
+              "control": "control@13889",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@14994",
+              "control": "control@14935",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@15541",
+              "control": "control@15482",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@16070",
+              "control": "control@16011",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@16590",
+              "control": "control@16531",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@17137",
+              "control": "control@17078",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -1071,7 +1071,7 @@
               "accessible_name": true
             },
             {
-              "control": "control@7349",
+              "control": "control@7334",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -3365,15 +3365,15 @@
     ]
   },
   "inline_styles": {
-    "attribute_count": 277,
+    "attribute_count": 211,
     "attribute_kind_counts": {
-      "mixed-state-and-presentation": 6,
-      "presentation-geometry": 208,
-      "state-visibility-hook": 63
+      "mixed-state-and-presentation": 3,
+      "presentation-geometry": 142,
+      "state-visibility-hook": 66
     },
-    "declaration_count": 480,
+    "declaration_count": 314,
     "declaration_kind_counts": {
-      "presentation-geometry": 411,
+      "presentation-geometry": 245,
       "state-visibility": 69
     },
     "property_counts": {
@@ -3388,15 +3388,10 @@
       "flex-wrap": 14,
       "font-size": 16,
       "font-weight": 2,
-      "gap": 51,
       "grid-template-columns": 6,
       "height": 1,
       "justify-content": 32,
-      "margin": 48,
-      "margin-bottom": 9,
-      "margin-top": 22,
       "max-height": 6,
-      "max-width": 36,
       "min-height": 1,
       "min-width": 5,
       "opacity": 31,
@@ -3500,19 +3495,6 @@
       },
       {
         "index": 8,
-        "locator": "div.terminal-menu-title@L532",
-        "line": 532,
-        "kind": "presentation-geometry",
-        "source": "margin:0;",
-        "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          }
-        ]
-      },
-      {
-        "index": 9,
         "locator": "#outbounds-parse-box",
         "line": 615,
         "kind": "state-visibility-hook",
@@ -3525,7 +3507,7 @@
         ]
       },
       {
-        "index": 10,
+        "index": 9,
         "locator": "#outbounds-badge-state",
         "line": 620,
         "kind": "state-visibility-hook",
@@ -3538,7 +3520,7 @@
         ]
       },
       {
-        "index": 11,
+        "index": 10,
         "locator": "#outbounds-badge-state-bad",
         "line": 621,
         "kind": "state-visibility-hook",
@@ -3551,7 +3533,7 @@
         ]
       },
       {
-        "index": 12,
+        "index": 11,
         "locator": "#outbounds-parse-error",
         "line": 624,
         "kind": "state-visibility-hook",
@@ -3564,7 +3546,7 @@
         ]
       },
       {
-        "index": 13,
+        "index": 12,
         "locator": "#outbounds-parse-warn",
         "line": 625,
         "kind": "state-visibility-hook",
@@ -3577,7 +3559,7 @@
         ]
       },
       {
-        "index": 14,
+        "index": 13,
         "locator": "#routing-backups-body",
         "line": 652,
         "kind": "state-visibility-hook",
@@ -3590,7 +3572,7 @@
         ]
       },
       {
-        "index": 15,
+        "index": 14,
         "locator": "#routing-help-body",
         "line": 707,
         "kind": "state-visibility-hook",
@@ -3603,7 +3585,7 @@
         ]
       },
       {
-        "index": 16,
+        "index": 15,
         "locator": "#routing-rules-body",
         "line": 747,
         "kind": "state-visibility-hook",
@@ -3616,7 +3598,7 @@
         ]
       },
       {
-        "index": 17,
+        "index": 16,
         "locator": "#local-config-file-input",
         "line": 911,
         "kind": "state-visibility-hook",
@@ -3629,7 +3611,7 @@
         ]
       },
       {
-        "index": 18,
+        "index": 17,
         "locator": "#view-mihomo",
         "line": 938,
         "kind": "state-visibility-hook",
@@ -3642,24 +3624,20 @@
         ]
       },
       {
-        "index": 19,
+        "index": 18,
         "locator": "#mihomo-profiles-panel",
         "line": 1072,
-        "kind": "mixed-state-and-presentation",
-        "source": "display:none; margin-top:8px;",
+        "kind": "state-visibility-hook",
+        "source": "display:none;",
         "declarations": [
           {
             "property": "display",
             "value": "none"
-          },
-          {
-            "property": "margin-top",
-            "value": "8px"
           }
         ]
       },
       {
-        "index": 20,
+        "index": 19,
         "locator": "#view-xkeen",
         "line": 1202,
         "kind": "state-visibility-hook",
@@ -3672,7 +3650,7 @@
         ]
       },
       {
-        "index": 21,
+        "index": 20,
         "locator": "#view-commands",
         "line": 1317,
         "kind": "state-visibility-hook",
@@ -3685,7 +3663,7 @@
         ]
       },
       {
-        "index": 22,
+        "index": 21,
         "locator": "#terminal-open-shell-btn",
         "line": 1332,
         "kind": "state-visibility-hook",
@@ -3698,7 +3676,7 @@
         ]
       },
       {
-        "index": 23,
+        "index": 22,
         "locator": "#terminal-open-pty-btn",
         "line": 1333,
         "kind": "state-visibility-hook",
@@ -3711,7 +3689,7 @@
         ]
       },
       {
-        "index": 24,
+        "index": 23,
         "locator": "#core-xray-stable-release",
         "line": 1359,
         "kind": "state-visibility-hook",
@@ -3724,7 +3702,7 @@
         ]
       },
       {
-        "index": 25,
+        "index": 24,
         "locator": "#core-xray-update-btn",
         "line": 1362,
         "kind": "state-visibility-hook",
@@ -3737,7 +3715,7 @@
         ]
       },
       {
-        "index": 26,
+        "index": 25,
         "locator": "#core-xray-prerelease-release",
         "line": 1364,
         "kind": "state-visibility-hook",
@@ -3750,7 +3728,7 @@
         ]
       },
       {
-        "index": 27,
+        "index": 26,
         "locator": "#core-xray-prerelease-update-btn",
         "line": 1367,
         "kind": "state-visibility-hook",
@@ -3763,7 +3741,7 @@
         ]
       },
       {
-        "index": 28,
+        "index": 27,
         "locator": "#core-mihomo-stable-release",
         "line": 1380,
         "kind": "state-visibility-hook",
@@ -3776,7 +3754,7 @@
         ]
       },
       {
-        "index": 29,
+        "index": 28,
         "locator": "#core-mihomo-update-btn",
         "line": 1383,
         "kind": "state-visibility-hook",
@@ -3789,7 +3767,7 @@
         ]
       },
       {
-        "index": 30,
+        "index": 29,
         "locator": "#core-mihomo-prerelease-release",
         "line": 1385,
         "kind": "state-visibility-hook",
@@ -3802,7 +3780,7 @@
         ]
       },
       {
-        "index": 31,
+        "index": 30,
         "locator": "#core-mihomo-prerelease-update-btn",
         "line": 1388,
         "kind": "state-visibility-hook",
@@ -3815,7 +3793,7 @@
         ]
       },
       {
-        "index": 32,
+        "index": 31,
         "locator": "#view-files",
         "line": 1564,
         "kind": "state-visibility-hook",
@@ -3828,7 +3806,7 @@
         ]
       },
       {
-        "index": 33,
+        "index": 32,
         "locator": "#fm-volumes-btn",
         "line": 1569,
         "kind": "state-visibility-hook",
@@ -3841,7 +3819,7 @@
         ]
       },
       {
-        "index": 34,
+        "index": 33,
         "locator": "#fm-disabled-note",
         "line": 1575,
         "kind": "state-visibility-hook",
@@ -3854,7 +3832,7 @@
         ]
       },
       {
-        "index": 35,
+        "index": 34,
         "locator": "button.btn-secondary.fm-disconnect-btn@L1596",
         "line": 1596,
         "kind": "state-visibility-hook",
@@ -3867,7 +3845,7 @@
         ]
       },
       {
-        "index": 36,
+        "index": 35,
         "locator": "button.btn-secondary.fm-disconnect-btn@L1616",
         "line": 1616,
         "kind": "state-visibility-hook",
@@ -3880,7 +3858,7 @@
         ]
       },
       {
-        "index": 37,
+        "index": 36,
         "locator": "#view-xray-logs",
         "line": 1656,
         "kind": "state-visibility-hook",
@@ -3893,7 +3871,7 @@
         ]
       },
       {
-        "index": 38,
+        "index": 37,
         "locator": "span.small@L1735",
         "line": 1735,
         "kind": "presentation-geometry",
@@ -3906,7 +3884,7 @@
         ]
       },
       {
-        "index": 39,
+        "index": 38,
         "locator": "#terminal-overlay",
         "line": 1815,
         "kind": "state-visibility-hook",
@@ -3919,62 +3897,28 @@
         ]
       },
       {
-        "index": 40,
-        "locator": "div.modal-content@L2057",
-        "line": 2057,
-        "kind": "presentation-geometry",
-        "source": "max-width: 760px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "760px"
-          }
-        ]
-      },
-      {
-        "index": 41,
-        "locator": "#inbounds-apply-extras-hint",
-        "line": 2072,
-        "kind": "presentation-geometry",
-        "source": "margin: 6px 0 12px 34px;",
-        "declarations": [
-          {
-            "property": "margin",
-            "value": "6px 0 12px 34px"
-          }
-        ]
-      },
-      {
-        "index": 42,
+        "index": 39,
         "locator": "#inbounds-apply-socks-row",
         "line": 2080,
-        "kind": "mixed-state-and-presentation",
-        "source": "display:none; margin: 8px 0 0 34px;",
+        "kind": "state-visibility-hook",
+        "source": "display:none;",
         "declarations": [
           {
             "property": "display",
             "value": "none"
-          },
-          {
-            "property": "margin",
-            "value": "8px 0 0 34px"
           }
         ]
       },
       {
-        "index": 43,
-        "locator": "div@L2081",
+        "index": 40,
+        "locator": "div.xk-modal-gap-12@L2081",
         "line": 2081,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap: 12px; align-items:flex-start; flex-wrap: wrap;",
+        "source": "display:flex; align-items:flex-start; flex-wrap: wrap;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "12px"
           },
           {
             "property": "align-items",
@@ -3987,16 +3931,12 @@
         ]
       },
       {
-        "index": 44,
-        "locator": "label.routing-rule-field@L2082",
+        "index": 41,
+        "locator": "label.routing-rule-field.xk-modal-m-0@L2082",
         "line": 2082,
         "kind": "presentation-geometry",
-        "source": "margin:0; min-width: 220px;",
+        "source": "min-width: 220px;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "min-width",
             "value": "220px"
@@ -4004,36 +3944,15 @@
         ]
       },
       {
-        "index": 45,
-        "locator": "div.modal-hint@L2086",
-        "line": 2086,
-        "kind": "presentation-geometry",
-        "source": "margin-top: 2px; max-width: 420px;",
-        "declarations": [
-          {
-            "property": "margin-top",
-            "value": "2px"
-          },
-          {
-            "property": "max-width",
-            "value": "420px"
-          }
-        ]
-      },
-      {
-        "index": 46,
+        "index": 42,
         "locator": "#inbounds-apply-warn",
         "line": 2092,
         "kind": "mixed-state-and-presentation",
-        "source": "display:none; margin-top: 10px; color: var(--warning, #f59e0b);",
+        "source": "display:none; color: var(--warning, #f59e0b);",
         "declarations": [
           {
             "property": "display",
             "value": "none"
-          },
-          {
-            "property": "margin-top",
-            "value": "10px"
           },
           {
             "property": "color",
@@ -4042,19 +3961,15 @@
         ]
       },
       {
-        "index": 47,
+        "index": 43,
         "locator": "#inbounds-apply-error",
         "line": 2094,
         "kind": "mixed-state-and-presentation",
-        "source": "display:none; margin-top: 10px; color: var(--danger, #ef4444);",
+        "source": "display:none; color: var(--danger, #ef4444);",
         "declarations": [
           {
             "property": "display",
             "value": "none"
-          },
-          {
-            "property": "margin-top",
-            "value": "10px"
           },
           {
             "property": "color",
@@ -4063,42 +3978,12 @@
         ]
       },
       {
-        "index": 48,
-        "locator": "div.modal-content@L2109",
-        "line": 2109,
-        "kind": "presentation-geometry",
-        "source": "max-width: 980px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "980px"
-          }
-        ]
-      },
-      {
-        "index": 49,
-        "locator": "div.terminal-menu-title@L2116",
-        "line": 2116,
-        "kind": "presentation-geometry",
-        "source": "margin:0 0 8px;",
-        "declarations": [
-          {
-            "property": "margin",
-            "value": "0 0 8px"
-          }
-        ]
-      },
-      {
-        "index": 50,
-        "locator": "div.xk-balancer-help-details@L2143",
+        "index": 44,
+        "locator": "div.xk-balancer-help-details.xk-modal-mt-10.xk-modal-mb-12@L2143",
         "line": 2143,
         "kind": "presentation-geometry",
-        "source": "margin: 10px 0 12px; padding: 10px 12px;",
+        "source": "padding: 10px 12px;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "10px 0 12px"
-          },
           {
             "property": "padding",
             "value": "10px 12px"
@@ -4106,98 +3991,7 @@
         ]
       },
       {
-        "index": 51,
-        "locator": "div.modal-hint@L2145",
-        "line": 2145,
-        "kind": "presentation-geometry",
-        "source": "margin: 6px 0 8px;",
-        "declarations": [
-          {
-            "property": "margin",
-            "value": "6px 0 8px"
-          }
-        ]
-      },
-      {
-        "index": 52,
-        "locator": "div.modal-hint@L2154",
-        "line": 2154,
-        "kind": "presentation-geometry",
-        "source": "margin: 0 0 12px;",
-        "declarations": [
-          {
-            "property": "margin",
-            "value": "0 0 12px"
-          }
-        ]
-      },
-      {
-        "index": 53,
-        "locator": "div.modal-hint@L2185",
-        "line": 2185,
-        "kind": "presentation-geometry",
-        "source": "margin-top: 10px;",
-        "declarations": [
-          {
-            "property": "margin-top",
-            "value": "10px"
-          }
-        ]
-      },
-      {
-        "index": 54,
-        "locator": "div.xk-balancer-help-callout@L2188",
-        "line": 2188,
-        "kind": "presentation-geometry",
-        "source": "margin-top: 10px;",
-        "declarations": [
-          {
-            "property": "margin-top",
-            "value": "10px"
-          }
-        ]
-      },
-      {
-        "index": 55,
-        "locator": "div.xk-balancer-help-callout@L2222",
-        "line": 2222,
-        "kind": "presentation-geometry",
-        "source": "margin-top: 10px;",
-        "declarations": [
-          {
-            "property": "margin-top",
-            "value": "10px"
-          }
-        ]
-      },
-      {
-        "index": 56,
-        "locator": "div.xk-balancer-help-callout@L2276",
-        "line": 2276,
-        "kind": "presentation-geometry",
-        "source": "margin-top:10px;",
-        "declarations": [
-          {
-            "property": "margin-top",
-            "value": "10px"
-          }
-        ]
-      },
-      {
-        "index": 57,
-        "locator": "div.modal-hint@L2296",
-        "line": 2296,
-        "kind": "presentation-geometry",
-        "source": "margin-top: 8px;",
-        "declarations": [
-          {
-            "property": "margin-top",
-            "value": "8px"
-          }
-        ]
-      },
-      {
-        "index": 58,
+        "index": 45,
         "locator": "div.modal-actions@L2362",
         "line": 2362,
         "kind": "presentation-geometry",
@@ -4210,24 +4004,11 @@
         ]
       },
       {
-        "index": 59,
-        "locator": "div.modal-content@L2370",
-        "line": 2370,
-        "kind": "presentation-geometry",
-        "source": "max-width: 980px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "980px"
-          }
-        ]
-      },
-      {
-        "index": 60,
-        "locator": "div.xk-editor-workbench-toolbar.xk-editor-workbench-toolbar--snapshot@L2376",
+        "index": 46,
+        "locator": "div.xk-editor-workbench-toolbar.xk-editor-workbench-toolbar--snapshot.xk-modal-gap-12@L2376",
         "line": 2376,
         "kind": "presentation-geometry",
-        "source": "display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom: 10px;",
+        "source": "display:flex; align-items:flex-start; justify-content:space-between;",
         "declarations": [
           {
             "property": "display",
@@ -4240,58 +4021,11 @@
           {
             "property": "justify-content",
             "value": "space-between"
-          },
-          {
-            "property": "gap",
-            "value": "12px"
-          },
-          {
-            "property": "margin-bottom",
-            "value": "10px"
           }
         ]
       },
       {
-        "index": 61,
-        "locator": "#xray-snapshot-meta",
-        "line": 2377,
-        "kind": "presentation-geometry",
-        "source": "margin:0;",
-        "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          }
-        ]
-      },
-      {
-        "index": 62,
-        "locator": "#xray-snapshot-engine",
-        "line": 2378,
-        "kind": "presentation-geometry",
-        "source": "margin-top: 2px;",
-        "declarations": [
-          {
-            "property": "margin-top",
-            "value": "2px"
-          }
-        ]
-      },
-      {
-        "index": 63,
-        "locator": "#xray-snapshot-status",
-        "line": 2388,
-        "kind": "presentation-geometry",
-        "source": "margin-top: 10px;",
-        "declarations": [
-          {
-            "property": "margin-top",
-            "value": "10px"
-          }
-        ]
-      },
-      {
-        "index": 64,
+        "index": 47,
         "locator": "div.modal-actions.xk-editor-workbench-actions@L2390",
         "line": 2390,
         "kind": "presentation-geometry",
@@ -4304,54 +4038,24 @@
         ]
       },
       {
-        "index": 65,
-        "locator": "div.xk-editor-workbench-action-group@L2392",
+        "index": 48,
+        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-10@L2392",
         "line": 2392,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:10px;",
+        "source": "display:flex;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "10px"
           }
         ]
       },
       {
-        "index": 66,
-        "locator": "div.modal-content@L2400",
-        "line": 2400,
-        "kind": "presentation-geometry",
-        "source": "max-width: 860px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "860px"
-          }
-        ]
-      },
-      {
-        "index": 67,
-        "locator": "p.modal-description@L2406",
-        "line": 2406,
-        "kind": "presentation-geometry",
-        "source": "margin-bottom: 12px;",
-        "declarations": [
-          {
-            "property": "margin-bottom",
-            "value": "12px"
-          }
-        ]
-      },
-      {
-        "index": 68,
-        "locator": "div@L2415",
+        "index": 49,
+        "locator": "div.xk-modal-gap-10@L2415",
         "line": 2415,
         "kind": "presentation-geometry",
-        "source": "display:flex; align-items:flex-start; justify-content:space-between; gap:10px;",
+        "source": "display:flex; align-items:flex-start; justify-content:space-between;",
         "declarations": [
           {
             "property": "display",
@@ -4364,28 +4068,11 @@
           {
             "property": "justify-content",
             "value": "space-between"
-          },
-          {
-            "property": "gap",
-            "value": "10px"
           }
         ]
       },
       {
-        "index": 69,
-        "locator": "#routing-template-status",
-        "line": 2434,
-        "kind": "presentation-geometry",
-        "source": "margin-top: 10px;",
-        "declarations": [
-          {
-            "property": "margin-top",
-            "value": "10px"
-          }
-        ]
-      },
-      {
-        "index": 70,
+        "index": 50,
         "locator": "div.modal-actions@L2436",
         "line": 2436,
         "kind": "presentation-geometry",
@@ -4398,19 +4085,15 @@
         ]
       },
       {
-        "index": 71,
-        "locator": "div@L2437",
+        "index": 51,
+        "locator": "div.xk-modal-gap-10@L2437",
         "line": 2437,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:10px; flex-wrap: wrap;",
+        "source": "display:flex; flex-wrap: wrap;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "10px"
           },
           {
             "property": "flex-wrap",
@@ -4419,80 +4102,24 @@
         ]
       },
       {
-        "index": 72,
-        "locator": "div@L2443",
+        "index": 52,
+        "locator": "div.xk-modal-gap-10@L2443",
         "line": 2443,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:10px;",
+        "source": "display:flex;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "10px"
           }
         ]
       },
       {
-        "index": 73,
-        "locator": "div.modal-content@L2453",
-        "line": 2453,
-        "kind": "presentation-geometry",
-        "source": "max-width: 560px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "560px"
-          }
-        ]
-      },
-      {
-        "index": 74,
-        "locator": "p.modal-description@L2459",
-        "line": 2459,
-        "kind": "presentation-geometry",
-        "source": "margin-bottom: 10px;",
-        "declarations": [
-          {
-            "property": "margin-bottom",
-            "value": "10px"
-          }
-        ]
-      },
-      {
-        "index": 75,
-        "locator": "#routing-template-save-status",
-        "line": 2478,
-        "kind": "presentation-geometry",
-        "source": "margin-top: 10px;",
-        "declarations": [
-          {
-            "property": "margin-top",
-            "value": "10px"
-          }
-        ]
-      },
-      {
-        "index": 76,
-        "locator": "div.modal-content@L2489",
-        "line": 2489,
-        "kind": "presentation-geometry",
-        "source": "max-width: 860px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "860px"
-          }
-        ]
-      },
-      {
-        "index": 77,
-        "locator": "div@L2492",
+        "index": 53,
+        "locator": "div.xk-modal-gap-10@L2492",
         "line": 2492,
         "kind": "presentation-geometry",
-        "source": "display:flex; align-items:center; gap:10px;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
@@ -4501,67 +4128,11 @@
           {
             "property": "align-items",
             "value": "center"
-          },
-          {
-            "property": "gap",
-            "value": "10px"
           }
         ]
       },
       {
-        "index": 78,
-        "locator": "p.modal-description@L2504",
-        "line": 2504,
-        "kind": "presentation-geometry",
-        "source": "margin-bottom: 10px;",
-        "declarations": [
-          {
-            "property": "margin-bottom",
-            "value": "10px"
-          }
-        ]
-      },
-      {
-        "index": 79,
-        "locator": "#routing-template-edit-status",
-        "line": 2532,
-        "kind": "presentation-geometry",
-        "source": "margin-top: 10px;",
-        "declarations": [
-          {
-            "property": "margin-top",
-            "value": "10px"
-          }
-        ]
-      },
-      {
-        "index": 80,
-        "locator": "p.modal-description@L2552",
-        "line": 2552,
-        "kind": "presentation-geometry",
-        "source": "margin:0;",
-        "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          }
-        ]
-      },
-      {
-        "index": 81,
-        "locator": "div.terminal-menu-title@L2564",
-        "line": 2564,
-        "kind": "presentation-geometry",
-        "source": "margin:0;",
-        "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          }
-        ]
-      },
-      {
-        "index": 82,
+        "index": 54,
         "locator": "#outbounds-gen-cred-trojan",
         "line": 2632,
         "kind": "state-visibility-hook",
@@ -4574,7 +4145,7 @@
         ]
       },
       {
-        "index": 83,
+        "index": 55,
         "locator": "#outbounds-gen-cred-vmess",
         "line": 2637,
         "kind": "state-visibility-hook",
@@ -4587,7 +4158,7 @@
         ]
       },
       {
-        "index": 84,
+        "index": 56,
         "locator": "#outbounds-gen-cred-ss",
         "line": 2642,
         "kind": "state-visibility-hook",
@@ -4600,7 +4171,7 @@
         ]
       },
       {
-        "index": 85,
+        "index": 57,
         "locator": "#outbounds-gen-cred-ss-pass",
         "line": 2653,
         "kind": "state-visibility-hook",
@@ -4613,7 +4184,7 @@
         ]
       },
       {
-        "index": 86,
+        "index": 58,
         "locator": "#outbounds-gen-cred-hy2",
         "line": 2658,
         "kind": "state-visibility-hook",
@@ -4626,20 +4197,7 @@
         ]
       },
       {
-        "index": 87,
-        "locator": "div.terminal-menu-title@L2670",
-        "line": 2670,
-        "kind": "presentation-geometry",
-        "source": "margin:0;",
-        "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          }
-        ]
-      },
-      {
-        "index": 88,
+        "index": 59,
         "locator": "#outbounds-gen-field-ss-plugin",
         "line": 2744,
         "kind": "state-visibility-hook",
@@ -4652,7 +4210,7 @@
         ]
       },
       {
-        "index": 89,
+        "index": 60,
         "locator": "#outbounds-gen-field-hy2-insecure",
         "line": 2749,
         "kind": "state-visibility-hook",
@@ -4665,7 +4223,7 @@
         ]
       },
       {
-        "index": 90,
+        "index": 61,
         "locator": "#outbounds-gen-field-hy2-obfs",
         "line": 2757,
         "kind": "state-visibility-hook",
@@ -4678,7 +4236,7 @@
         ]
       },
       {
-        "index": 91,
+        "index": 62,
         "locator": "#outbounds-gen-field-hy2-obfspwd",
         "line": 2765,
         "kind": "state-visibility-hook",
@@ -4691,7 +4249,7 @@
         ]
       },
       {
-        "index": 92,
+        "index": 63,
         "locator": "#outbounds-gen-field-hy2-pinsha256",
         "line": 2770,
         "kind": "state-visibility-hook",
@@ -4704,72 +4262,7 @@
         ]
       },
       {
-        "index": 93,
-        "locator": "p.modal-description@L2820",
-        "line": 2820,
-        "kind": "presentation-geometry",
-        "source": "margin:0;",
-        "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          }
-        ]
-      },
-      {
-        "index": 94,
-        "locator": "div.terminal-menu-title@L2832",
-        "line": 2832,
-        "kind": "presentation-geometry",
-        "source": "margin:0;",
-        "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          }
-        ]
-      },
-      {
-        "index": 95,
-        "locator": "div.terminal-menu-title@L2859",
-        "line": 2859,
-        "kind": "presentation-geometry",
-        "source": "margin:0;",
-        "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          }
-        ]
-      },
-      {
-        "index": 96,
-        "locator": "div.terminal-menu-title@L2867",
-        "line": 2867,
-        "kind": "presentation-geometry",
-        "source": "margin:0;",
-        "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          }
-        ]
-      },
-      {
-        "index": 97,
-        "locator": "#outbounds-pool-status",
-        "line": 2870,
-        "kind": "presentation-geometry",
-        "source": "margin:0;",
-        "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          }
-        ]
-      },
-      {
-        "index": 98,
+        "index": 64,
         "locator": "div.xk-card-desc@L2955",
         "line": 2955,
         "kind": "presentation-geometry",
@@ -4782,20 +4275,7 @@
         ]
       },
       {
-        "index": 99,
-        "locator": "div.modal-content.xk-pt-modal@L3014",
-        "line": 3014,
-        "kind": "presentation-geometry",
-        "source": "max-width: 1040px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "1040px"
-          }
-        ]
-      },
-      {
-        "index": 100,
+        "index": 65,
         "locator": "#mihomo-proxy-tools-no-proxies",
         "line": 3059,
         "kind": "state-visibility-hook",
@@ -4808,42 +4288,12 @@
         ]
       },
       {
-        "index": 101,
-        "locator": "div.modal-content.xk-hw-modal@L3153",
-        "line": 3153,
-        "kind": "presentation-geometry",
-        "source": "max-width: 1020px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "1020px"
-          }
-        ]
-      },
-      {
-        "index": 102,
-        "locator": "div.modal-content@L3314",
-        "line": 3314,
-        "kind": "presentation-geometry",
-        "source": "max-width: 720px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "720px"
-          }
-        ]
-      },
-      {
-        "index": 103,
-        "locator": "p.modal-hint@L3321",
+        "index": 66,
+        "locator": "p.modal-hint.xk-modal-m-0.xk-modal-mt-8@L3321",
         "line": 3321,
         "kind": "presentation-geometry",
-        "source": "margin:8px 0 0; opacity:0.75; font-size: 0.85rem;",
+        "source": "opacity:0.75; font-size: 0.85rem;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "8px 0 0"
-          },
           {
             "property": "opacity",
             "value": "0.75"
@@ -4855,24 +4305,11 @@
         ]
       },
       {
-        "index": 104,
-        "locator": "div.modal-content@L3335",
-        "line": 3335,
-        "kind": "presentation-geometry",
-        "source": "max-width: 980px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "980px"
-          }
-        ]
-      },
-      {
-        "index": 105,
-        "locator": "div.xk-editor-workbench-title@L3337",
+        "index": 67,
+        "locator": "div.xk-editor-workbench-title.xk-modal-gap-2@L3337",
         "line": 3337,
         "kind": "presentation-geometry",
-        "source": "display:flex; flex-direction:column; gap:2px;",
+        "source": "display:flex; flex-direction:column;",
         "declarations": [
           {
             "property": "display",
@@ -4881,24 +4318,16 @@
           {
             "property": "flex-direction",
             "value": "column"
-          },
-          {
-            "property": "gap",
-            "value": "2px"
           }
         ]
       },
       {
-        "index": 106,
+        "index": 68,
         "locator": "#fm-editor-subtitle",
         "line": 3339,
         "kind": "presentation-geometry",
-        "source": "margin:0; font-size: 0.82rem; opacity:0.75;",
+        "source": "font-size: 0.82rem; opacity:0.75;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "font-size",
             "value": "0.82rem"
@@ -4910,11 +4339,11 @@
         ]
       },
       {
-        "index": 107,
-        "locator": "div.xk-editor-workbench-header-tools@L3341",
+        "index": 69,
+        "locator": "div.xk-editor-workbench-header-tools.xk-modal-gap-10@L3341",
         "line": 3341,
         "kind": "presentation-geometry",
-        "source": "display:flex; align-items:center; gap:10px;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
@@ -4923,15 +4352,11 @@
           {
             "property": "align-items",
             "value": "center"
-          },
-          {
-            "property": "gap",
-            "value": "10px"
           }
         ]
       },
       {
-        "index": 108,
+        "index": 70,
         "locator": "#fm-editor-warning",
         "line": 3353,
         "kind": "state-visibility-hook",
@@ -4944,7 +4369,7 @@
         ]
       },
       {
-        "index": 109,
+        "index": 71,
         "locator": "#fm-editor-error",
         "line": 3354,
         "kind": "state-visibility-hook",
@@ -4957,19 +4382,15 @@
         ]
       },
       {
-        "index": 110,
-        "locator": "div.xk-editor-workbench-action-group@L3359",
+        "index": 72,
+        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-8@L3359",
         "line": 3359,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -4978,19 +4399,15 @@
         ]
       },
       {
-        "index": 111,
-        "locator": "div.xk-editor-workbench-action-group@L3362",
+        "index": 73,
+        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-8@L3362",
         "line": 3362,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -4999,49 +4416,28 @@
         ]
       },
       {
-        "index": 112,
-        "locator": "#github-catalog-status",
-        "line": 3397,
-        "kind": "presentation-geometry",
-        "source": "margin-top:0;",
-        "declarations": [
-          {
-            "property": "margin-top",
-            "value": "0"
-          }
-        ]
-      },
-      {
-        "index": 113,
+        "index": 74,
         "locator": "#github-catalog-error",
         "line": 3398,
-        "kind": "mixed-state-and-presentation",
-        "source": "display:none; margin-top:0;",
+        "kind": "state-visibility-hook",
+        "source": "display:none;",
         "declarations": [
           {
             "property": "display",
             "value": "none"
-          },
-          {
-            "property": "margin-top",
-            "value": "0"
           }
         ]
       },
       {
-        "index": 114,
-        "locator": "div@L3403",
+        "index": 75,
+        "locator": "div.xk-modal-gap-8@L3403",
         "line": 3403,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center; flex-wrap:wrap;",
+        "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -5054,19 +4450,15 @@
         ]
       },
       {
-        "index": 115,
-        "locator": "div@L3408",
+        "index": 76,
+        "locator": "div.xk-modal-gap-8@L3408",
         "line": 3408,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -5075,7 +4467,7 @@
         ]
       },
       {
-        "index": 116,
+        "index": 77,
         "locator": "#routing-dat-contents-ipfilter",
         "line": 3624,
         "kind": "state-visibility-hook",
@@ -5088,7 +4480,7 @@
         ]
       },
       {
-        "index": 117,
+        "index": 78,
         "locator": "#routing-dat-contents-search-items-more",
         "line": 3630,
         "kind": "state-visibility-hook",
@@ -5101,7 +4493,7 @@
         ]
       },
       {
-        "index": 118,
+        "index": 79,
         "locator": "div.modal-actions.xk-dat-modal-actions@L3638",
         "line": 3638,
         "kind": "presentation-geometry",
@@ -5114,7 +4506,7 @@
         ]
       },
       {
-        "index": 119,
+        "index": 80,
         "locator": "#mihomo-validation-summary-wrap",
         "line": 3680,
         "kind": "state-visibility-hook",
@@ -5127,7 +4519,7 @@
         ]
       },
       {
-        "index": 120,
+        "index": 81,
         "locator": "#mihomo-validation-explain-wrap",
         "line": 3685,
         "kind": "state-visibility-hook",
@@ -5140,7 +4532,7 @@
         ]
       },
       {
-        "index": 121,
+        "index": 82,
         "locator": "#mihomo-validation-side-panel",
         "line": 3692,
         "kind": "state-visibility-hook",
@@ -5153,7 +4545,7 @@
         ]
       },
       {
-        "index": 122,
+        "index": 83,
         "locator": "#mihomo-validation-log-wrap",
         "line": 3693,
         "kind": "state-visibility-hook",
@@ -5166,23 +4558,15 @@
         ]
       },
       {
-        "index": 123,
-        "locator": "div@L3719",
+        "index": 84,
+        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L3719",
         "line": 3719,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;",
+        "source": "display:flex; flex-wrap:wrap;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
-          },
-          {
-            "property": "margin-bottom",
-            "value": "10px"
           },
           {
             "property": "flex-wrap",
@@ -5191,11 +4575,11 @@
         ]
       },
       {
-        "index": 124,
+        "index": 85,
         "locator": "#ssh-profiles-list",
         "line": 3726,
         "kind": "presentation-geometry",
-        "source": "display:flex; flex-direction:column; gap:8px;",
+        "source": "display:flex; flex-direction:column;",
         "declarations": [
           {
             "property": "display",
@@ -5204,19 +4588,15 @@
           {
             "property": "flex-direction",
             "value": "column"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           }
         ]
       },
       {
-        "index": 125,
-        "locator": "hr@L3728",
+        "index": 86,
+        "locator": "hr.xk-modal-m-0.xk-modal-mt-12.xk-modal-mb-12@L3728",
         "line": 3728,
         "kind": "presentation-geometry",
-        "source": "border:0; border-top:1px solid #334155; margin:12px 0;",
+        "source": "border:0; border-top:1px solid #334155;",
         "declarations": [
           {
             "property": "border",
@@ -5225,19 +4605,15 @@
           {
             "property": "border-top",
             "value": "1px solid #334155"
-          },
-          {
-            "property": "margin",
-            "value": "12px 0"
           }
         ]
       },
       {
-        "index": 126,
-        "locator": "div@L3730",
+        "index": 87,
+        "locator": "div.xk-modal-gap-8@L3730",
         "line": 3730,
         "kind": "presentation-geometry",
-        "source": "display:flex; flex-direction:column; gap:8px;",
+        "source": "display:flex; flex-direction:column;",
         "declarations": [
           {
             "property": "display",
@@ -5246,15 +4622,11 @@
           {
             "property": "flex-direction",
             "value": "column"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           }
         ]
       },
       {
-        "index": 127,
+        "index": 88,
         "locator": "label@L3731",
         "line": 3731,
         "kind": "presentation-geometry",
@@ -5267,7 +4639,7 @@
         ]
       },
       {
-        "index": 128,
+        "index": 89,
         "locator": "#ssh-command-preview",
         "line": 3732,
         "kind": "presentation-geometry",
@@ -5280,19 +4652,15 @@
         ]
       },
       {
-        "index": 129,
-        "locator": "div@L3733",
+        "index": 90,
+        "locator": "div.xk-modal-gap-8@L3733",
         "line": 3733,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;",
+        "source": "display:flex; justify-content:flex-end; flex-wrap:wrap;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "justify-content",
@@ -5305,32 +4673,15 @@
         ]
       },
       {
-        "index": 130,
-        "locator": "div.modal-content@L3744",
-        "line": 3744,
-        "kind": "presentation-geometry",
-        "source": "max-width:640px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "640px"
-          }
-        ]
-      },
-      {
-        "index": 131,
-        "locator": "div@L3775",
+        "index": 91,
+        "locator": "div.xk-modal-gap-8@L3775",
         "line": 3775,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; justify-content:flex-end;",
+        "source": "display:flex; justify-content:flex-end;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "justify-content",
@@ -5339,20 +4690,7 @@
         ]
       },
       {
-        "index": 132,
-        "locator": "div.modal-content@L3785",
-        "line": 3785,
-        "kind": "presentation-geometry",
-        "source": "max-width:420px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "420px"
-          }
-        ]
-      },
-      {
-        "index": 133,
+        "index": 92,
         "locator": "#ssh-confirm-text",
         "line": 3791,
         "kind": "presentation-geometry",
@@ -5365,7 +4703,7 @@
         ]
       },
       {
-        "index": 134,
+        "index": 93,
         "locator": "div.modal-actions@L3793",
         "line": 3793,
         "kind": "presentation-geometry",
@@ -5378,24 +4716,11 @@
         ]
       },
       {
-        "index": 135,
-        "locator": "div.modal-content@L3801",
-        "line": 3801,
-        "kind": "presentation-geometry",
-        "source": "max-width:760px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "760px"
-          }
-        ]
-      },
-      {
-        "index": 136,
-        "locator": "div.modal-body@L3806",
+        "index": 94,
+        "locator": "div.modal-body.xk-modal-gap-10@L3806",
         "line": 3806,
         "kind": "presentation-geometry",
-        "source": "display:flex; flex-direction:column; gap:10px;",
+        "source": "display:flex; flex-direction:column;",
         "declarations": [
           {
             "property": "display",
@@ -5404,15 +4729,11 @@
           {
             "property": "flex-direction",
             "value": "column"
-          },
-          {
-            "property": "gap",
-            "value": "10px"
           }
         ]
       },
       {
-        "index": 137,
+        "index": 95,
         "locator": "#ssh-transfer-help",
         "line": 3807,
         "kind": "presentation-geometry",
@@ -5425,7 +4746,7 @@
         ]
       },
       {
-        "index": 138,
+        "index": 96,
         "locator": "#ssh-transfer-text",
         "line": 3808,
         "kind": "presentation-geometry",
@@ -5438,19 +4759,15 @@
         ]
       },
       {
-        "index": 139,
-        "locator": "div@L3813",
+        "index": 97,
+        "locator": "div.xk-modal-gap-8@L3813",
         "line": 3813,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; justify-content:flex-end;",
+        "source": "display:flex; justify-content:flex-end;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "justify-content",
@@ -5459,32 +4776,15 @@
         ]
       },
       {
-        "index": 140,
-        "locator": "div.modal-content@L3823",
-        "line": 3823,
-        "kind": "presentation-geometry",
-        "source": "max-width:560px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "560px"
-          }
-        ]
-      },
-      {
-        "index": 141,
-        "locator": "div@L3832",
+        "index": 98,
+        "locator": "div.xk-modal-gap-8@L3832",
         "line": 3832,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -5493,7 +4793,7 @@
         ]
       },
       {
-        "index": 142,
+        "index": 99,
         "locator": "#fm-conn-profile",
         "line": 3833,
         "kind": "presentation-geometry",
@@ -5506,7 +4806,7 @@
         ]
       },
       {
-        "index": 143,
+        "index": 100,
         "locator": "#fm-key-file-label",
         "line": 3864,
         "kind": "state-visibility-hook",
@@ -5519,7 +4819,7 @@
         ]
       },
       {
-        "index": 144,
+        "index": 101,
         "locator": "#fm-key-file",
         "line": 3865,
         "kind": "state-visibility-hook",
@@ -5532,7 +4832,7 @@
         ]
       },
       {
-        "index": 145,
+        "index": 102,
         "locator": "#fm-key-path-label",
         "line": 3867,
         "kind": "state-visibility-hook",
@@ -5545,7 +4845,7 @@
         ]
       },
       {
-        "index": 146,
+        "index": 103,
         "locator": "#fm-key-path",
         "line": 3868,
         "kind": "state-visibility-hook",
@@ -5558,7 +4858,7 @@
         ]
       },
       {
-        "index": 147,
+        "index": 104,
         "locator": "#fm-passphrase-label",
         "line": 3870,
         "kind": "state-visibility-hook",
@@ -5571,7 +4871,7 @@
         ]
       },
       {
-        "index": 148,
+        "index": 105,
         "locator": "#fm-passphrase",
         "line": 3871,
         "kind": "state-visibility-hook",
@@ -5584,19 +4884,15 @@
         ]
       },
       {
-        "index": 149,
-        "locator": "div@L3874",
+        "index": 106,
+        "locator": "div.xk-modal-gap-8@L3874",
         "line": 3874,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -5605,7 +4901,7 @@
         ]
       },
       {
-        "index": 150,
+        "index": 107,
         "locator": "#fm-hostkey-policy",
         "line": 3875,
         "kind": "presentation-geometry",
@@ -5618,19 +4914,15 @@
         ]
       },
       {
-        "index": 151,
+        "index": 108,
         "locator": "#fm-hostkey-row",
         "line": 3884,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -5639,16 +4931,12 @@
         ]
       },
       {
-        "index": 152,
+        "index": 109,
         "locator": "#fm-hostkey-fp",
         "line": 3885,
         "kind": "presentation-geometry",
-        "source": "margin:0; padding:8px 10px; opacity:.85; flex:1;",
+        "source": "padding:8px 10px; opacity:.85; flex:1;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "padding",
             "value": "8px 10px"
@@ -5664,11 +4952,11 @@
         ]
       },
       {
-        "index": 153,
-        "locator": "div@L3903",
+        "index": 110,
+        "locator": "div.xk-modal-gap-10@L3903",
         "line": 3903,
         "kind": "presentation-geometry",
-        "source": "display:flex; align-items:center; gap:10px;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
@@ -5677,15 +4965,11 @@
           {
             "property": "align-items",
             "value": "center"
-          },
-          {
-            "property": "gap",
-            "value": "10px"
           }
         ]
       },
       {
-        "index": 154,
+        "index": 111,
         "locator": "span@L3905",
         "line": 3905,
         "kind": "presentation-geometry",
@@ -5698,7 +4982,7 @@
         ]
       },
       {
-        "index": 155,
+        "index": 112,
         "locator": "#fm-connect-warn",
         "line": 3909,
         "kind": "state-visibility-hook",
@@ -5711,7 +4995,7 @@
         ]
       },
       {
-        "index": 156,
+        "index": 113,
         "locator": "div.modal-actions@L3911",
         "line": 3911,
         "kind": "presentation-geometry",
@@ -5724,29 +5008,12 @@
         ]
       },
       {
-        "index": 157,
-        "locator": "div.modal-content@L3921",
-        "line": 3921,
-        "kind": "presentation-geometry",
-        "source": "max-width:760px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "760px"
-          }
-        ]
-      },
-      {
-        "index": 158,
+        "index": 114,
         "locator": "#fm-knownhosts-path",
         "line": 3927,
         "kind": "presentation-geometry",
-        "source": "margin:0 0 10px 0; padding:8px 10px; opacity:.85;",
+        "source": "padding:8px 10px; opacity:.85;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0 0 10px 0"
-          },
           {
             "property": "padding",
             "value": "8px 10px"
@@ -5758,19 +5025,15 @@
         ]
       },
       {
-        "index": 159,
-        "locator": "div.form-row@L3929",
+        "index": 115,
+        "locator": "div.form-row.xk-modal-gap-8.xk-modal-m-0@L3929",
         "line": 3929,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:0 0 10px 0;",
+        "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -5779,15 +5042,11 @@
           {
             "property": "flex-wrap",
             "value": "wrap"
-          },
-          {
-            "property": "margin",
-            "value": "0 0 10px 0"
           }
         ]
       },
       {
-        "index": 160,
+        "index": 116,
         "locator": "label@L3930",
         "line": 3930,
         "kind": "presentation-geometry",
@@ -5800,7 +5059,7 @@
         ]
       },
       {
-        "index": 161,
+        "index": 117,
         "locator": "#fm-knownhosts-remove-host",
         "line": 3931,
         "kind": "presentation-geometry",
@@ -5817,27 +5076,19 @@
         ]
       },
       {
-        "index": 162,
-        "locator": "div@L3935",
+        "index": 118,
+        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L3935",
         "line": 3935,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; justify-content:flex-end; margin-bottom:10px; flex-wrap:wrap;",
+        "source": "display:flex; justify-content:flex-end; flex-wrap:wrap;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
           },
           {
-            "property": "gap",
-            "value": "8px"
-          },
-          {
             "property": "justify-content",
             "value": "flex-end"
-          },
-          {
-            "property": "margin-bottom",
-            "value": "10px"
           },
           {
             "property": "flex-wrap",
@@ -5846,19 +5097,15 @@
         ]
       },
       {
-        "index": 163,
+        "index": 119,
         "locator": "#fm-knownhosts-hashed-hint",
         "line": 3940,
         "kind": "mixed-state-and-presentation",
-        "source": "display:none; margin:0 0 10px 0; opacity:.75;",
+        "source": "display:none; opacity:.75;",
         "declarations": [
           {
             "property": "display",
             "value": "none"
-          },
-          {
-            "property": "margin",
-            "value": "0 0 10px 0"
           },
           {
             "property": "opacity",
@@ -5867,7 +5114,7 @@
         ]
       },
       {
-        "index": 164,
+        "index": 120,
         "locator": "#fm-knownhosts-body",
         "line": 3941,
         "kind": "presentation-geometry",
@@ -5884,16 +5131,12 @@
         ]
       },
       {
-        "index": 165,
-        "locator": "div.status@L3942",
+        "index": 121,
+        "locator": "div.status.xk-modal-mt-10@L3942",
         "line": 3942,
         "kind": "presentation-geometry",
-        "source": "margin-top:10px; opacity:.75;",
+        "source": "opacity:.75;",
         "declarations": [
-          {
-            "property": "margin-top",
-            "value": "10px"
-          },
           {
             "property": "opacity",
             "value": ".75"
@@ -5901,7 +5144,7 @@
         ]
       },
       {
-        "index": 166,
+        "index": 122,
         "locator": "div.modal-actions@L3944",
         "line": 3944,
         "kind": "presentation-geometry",
@@ -5914,29 +5157,12 @@
         ]
       },
       {
-        "index": 167,
-        "locator": "div.modal-content@L3952",
-        "line": 3952,
-        "kind": "presentation-geometry",
-        "source": "max-width:560px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "560px"
-          }
-        ]
-      },
-      {
-        "index": 168,
+        "index": 123,
         "locator": "#fm-create-dest",
         "line": 3963,
         "kind": "presentation-geometry",
-        "source": "margin:0; padding:8px 10px;",
+        "source": "padding:8px 10px;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "padding",
             "value": "8px 10px"
@@ -5944,19 +5170,15 @@
         ]
       },
       {
-        "index": 169,
-        "locator": "label@L3966",
+        "index": 124,
+        "locator": "label.xk-modal-gap-8@L3966",
         "line": 3966,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -5965,19 +5187,15 @@
         ]
       },
       {
-        "index": 170,
+        "index": 125,
         "locator": "#fm-create-createonly-row",
         "line": 3972,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -5986,7 +5204,7 @@
         ]
       },
       {
-        "index": 171,
+        "index": 126,
         "locator": "div.modal-actions@L3979",
         "line": 3979,
         "kind": "presentation-geometry",
@@ -5999,29 +5217,12 @@
         ]
       },
       {
-        "index": 172,
-        "locator": "div.modal-content@L3989",
-        "line": 3989,
-        "kind": "presentation-geometry",
-        "source": "max-width:560px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "560px"
-          }
-        ]
-      },
-      {
-        "index": 173,
+        "index": 127,
         "locator": "#fm-rename-src",
         "line": 4000,
         "kind": "presentation-geometry",
-        "source": "margin:0; padding:8px 10px;",
+        "source": "padding:8px 10px;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "padding",
             "value": "8px 10px"
@@ -6029,16 +5230,12 @@
         ]
       },
       {
-        "index": 174,
-        "locator": "div.status@L4002",
+        "index": 128,
+        "locator": "div.status.xk-modal-mt-10@L4002",
         "line": 4002,
         "kind": "presentation-geometry",
-        "source": "margin-top:10px; opacity:.8;",
+        "source": "opacity:.8;",
         "declarations": [
-          {
-            "property": "margin-top",
-            "value": "10px"
-          },
           {
             "property": "opacity",
             "value": ".8"
@@ -6046,7 +5243,7 @@
         ]
       },
       {
-        "index": 175,
+        "index": 129,
         "locator": "div.modal-actions@L4005",
         "line": 4005,
         "kind": "presentation-geometry",
@@ -6059,20 +5256,7 @@
         ]
       },
       {
-        "index": 176,
-        "locator": "div.modal-content@L4014",
-        "line": 4014,
-        "kind": "presentation-geometry",
-        "source": "max-width:680px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "680px"
-          }
-        ]
-      },
-      {
-        "index": 177,
+        "index": 130,
         "locator": "div.fm-form-grid@L4020",
         "line": 4020,
         "kind": "presentation-geometry",
@@ -6085,16 +5269,12 @@
         ]
       },
       {
-        "index": 178,
+        "index": 131,
         "locator": "#fm-archive-src",
         "line": 4022,
         "kind": "presentation-geometry",
-        "source": "margin:0; padding:8px 10px;",
+        "source": "padding:8px 10px;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "padding",
             "value": "8px 10px"
@@ -6102,16 +5282,12 @@
         ]
       },
       {
-        "index": 179,
+        "index": 132,
         "locator": "#fm-archive-list",
         "line": 4025,
         "kind": "presentation-geometry",
-        "source": "margin:0; max-height:180px;",
+        "source": "max-height:180px;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "max-height",
             "value": "180px"
@@ -6119,32 +5295,15 @@
         ]
       },
       {
-        "index": 180,
-        "locator": "#fm-archive-format",
-        "line": 4031,
-        "kind": "presentation-geometry",
-        "source": "max-width:220px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "220px"
-          }
-        ]
-      },
-      {
-        "index": 181,
-        "locator": "label@L4037",
+        "index": 133,
+        "locator": "label.xk-modal-gap-8@L4037",
         "line": 4037,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -6153,7 +5312,7 @@
         ]
       },
       {
-        "index": 182,
+        "index": 134,
         "locator": "div.modal-actions@L4044",
         "line": 4044,
         "kind": "presentation-geometry",
@@ -6166,20 +5325,7 @@
         ]
       },
       {
-        "index": 183,
-        "locator": "div.modal-content@L4053",
-        "line": 4053,
-        "kind": "presentation-geometry",
-        "source": "max-width:680px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "680px"
-          }
-        ]
-      },
-      {
-        "index": 184,
+        "index": 135,
         "locator": "div.fm-form-grid@L4059",
         "line": 4059,
         "kind": "presentation-geometry",
@@ -6192,16 +5338,12 @@
         ]
       },
       {
-        "index": 185,
+        "index": 136,
         "locator": "#fm-extract-archive",
         "line": 4061,
         "kind": "presentation-geometry",
-        "source": "margin:0; padding:8px 10px;",
+        "source": "padding:8px 10px;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "padding",
             "value": "8px 10px"
@@ -6209,19 +5351,15 @@
         ]
       },
       {
-        "index": 186,
-        "locator": "div@L4067",
+        "index": 137,
+        "locator": "div.xk-modal-gap-8@L4067",
         "line": 4067,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center; flex-wrap:wrap;",
+        "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -6234,7 +5372,7 @@
         ]
       },
       {
-        "index": 187,
+        "index": 138,
         "locator": "#fm-extract-dest-here-btn",
         "line": 4068,
         "kind": "presentation-geometry",
@@ -6251,7 +5389,7 @@
         ]
       },
       {
-        "index": 188,
+        "index": 139,
         "locator": "#fm-extract-dest-other-btn",
         "line": 4069,
         "kind": "presentation-geometry",
@@ -6268,7 +5406,7 @@
         ]
       },
       {
-        "index": 189,
+        "index": 140,
         "locator": "#fm-extract-dest-pick-btn",
         "line": 4070,
         "kind": "presentation-geometry",
@@ -6285,7 +5423,7 @@
         ]
       },
       {
-        "index": 190,
+        "index": 141,
         "locator": "span@L4071",
         "line": 4071,
         "kind": "presentation-geometry",
@@ -6302,19 +5440,15 @@
         ]
       },
       {
-        "index": 191,
-        "locator": "label@L4075",
+        "index": 142,
+        "locator": "label.xk-modal-gap-8@L4075",
         "line": 4075,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -6323,19 +5457,15 @@
         ]
       },
       {
-        "index": 192,
-        "locator": "label@L4081",
+        "index": 143,
+        "locator": "label.xk-modal-gap-8@L4081",
         "line": 4081,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -6344,19 +5474,15 @@
         ]
       },
       {
-        "index": 193,
-        "locator": "label@L4087",
+        "index": 144,
+        "locator": "label.xk-modal-gap-8@L4087",
         "line": 4087,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -6365,19 +5491,15 @@
         ]
       },
       {
-        "index": 194,
-        "locator": "label@L4093",
+        "index": 145,
+        "locator": "label.xk-modal-gap-8@L4093",
         "line": 4093,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -6386,16 +5508,12 @@
         ]
       },
       {
-        "index": 195,
-        "locator": "div.status@L4098",
+        "index": 146,
+        "locator": "div.status.xk-modal-mt-10@L4098",
         "line": 4098,
         "kind": "presentation-geometry",
-        "source": "margin-top:10px; opacity:.75;",
+        "source": "opacity:.75;",
         "declarations": [
-          {
-            "property": "margin-top",
-            "value": "10px"
-          },
           {
             "property": "opacity",
             "value": ".75"
@@ -6403,7 +5521,7 @@
         ]
       },
       {
-        "index": 196,
+        "index": 147,
         "locator": "div.modal-actions@L4101",
         "line": 4101,
         "kind": "presentation-geometry",
@@ -6416,32 +5534,15 @@
         ]
       },
       {
-        "index": 197,
-        "locator": "div.modal-content@L4110",
-        "line": 4110,
-        "kind": "presentation-geometry",
-        "source": "max-width:780px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "780px"
-          }
-        ]
-      },
-      {
-        "index": 198,
-        "locator": "div@L4116",
+        "index": 148,
+        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L4116",
         "line": 4116,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px;",
+        "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -6450,15 +5551,11 @@
           {
             "property": "flex-wrap",
             "value": "wrap"
-          },
-          {
-            "property": "margin-bottom",
-            "value": "10px"
           }
         ]
       },
       {
-        "index": 199,
+        "index": 149,
         "locator": "#fm-folder-picker-up-btn",
         "line": 4117,
         "kind": "presentation-geometry",
@@ -6475,7 +5572,7 @@
         ]
       },
       {
-        "index": 200,
+        "index": 150,
         "locator": "#fm-folder-picker-home-btn",
         "line": 4118,
         "kind": "presentation-geometry",
@@ -6492,7 +5589,7 @@
         ]
       },
       {
-        "index": 201,
+        "index": 151,
         "locator": "#fm-folder-picker-path",
         "line": 4119,
         "kind": "presentation-geometry",
@@ -6509,16 +5606,12 @@
         ]
       },
       {
-        "index": 202,
+        "index": 152,
         "locator": "#fm-folder-picker-status",
         "line": 4121,
         "kind": "presentation-geometry",
-        "source": "margin:0 0 10px 0; padding:6px 10px; opacity:.85;",
+        "source": "padding:6px 10px; opacity:.85;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0 0 10px 0"
-          },
           {
             "property": "padding",
             "value": "6px 10px"
@@ -6530,16 +5623,12 @@
         ]
       },
       {
-        "index": 203,
+        "index": 153,
         "locator": "#fm-folder-picker-list",
         "line": 4122,
         "kind": "presentation-geometry",
-        "source": "margin:0; max-height:420px; overflow:auto; padding:0;",
+        "source": "max-height:420px; overflow:auto; padding:0;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "max-height",
             "value": "420px"
@@ -6555,7 +5644,7 @@
         ]
       },
       {
-        "index": 204,
+        "index": 154,
         "locator": "div.modal-actions@L4125",
         "line": 4125,
         "kind": "presentation-geometry",
@@ -6568,20 +5657,7 @@
         ]
       },
       {
-        "index": 205,
-        "locator": "div.modal-content@L4134",
-        "line": 4134,
-        "kind": "presentation-geometry",
-        "source": "max-width:860px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "860px"
-          }
-        ]
-      },
-      {
-        "index": 206,
+        "index": 155,
         "locator": "div.fm-form-grid@L4140",
         "line": 4140,
         "kind": "presentation-geometry",
@@ -6594,16 +5670,12 @@
         ]
       },
       {
-        "index": 207,
+        "index": 156,
         "locator": "#fm-archive-list-path",
         "line": 4142,
         "kind": "presentation-geometry",
-        "source": "margin:0; padding:8px 10px;",
+        "source": "padding:8px 10px;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "padding",
             "value": "8px 10px"
@@ -6611,32 +5683,24 @@
         ]
       },
       {
-        "index": 208,
-        "locator": "div@L4146",
+        "index": 157,
+        "locator": "div.xk-modal-gap-8.xk-modal-m-0.xk-modal-mb-6@L4146",
         "line": 4146,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center; margin:0 0 6px 0;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
           },
           {
-            "property": "gap",
-            "value": "8px"
-          },
-          {
             "property": "align-items",
             "value": "center"
-          },
-          {
-            "property": "margin",
-            "value": "0 0 6px 0"
           }
         ]
       },
       {
-        "index": 209,
+        "index": 158,
         "locator": "#fm-archive-list-filter",
         "line": 4147,
         "kind": "presentation-geometry",
@@ -6653,16 +5717,12 @@
         ]
       },
       {
-        "index": 210,
+        "index": 159,
         "locator": "#fm-archive-list-body",
         "line": 4151,
         "kind": "presentation-geometry",
-        "source": "margin:0; max-height:420px; overflow:auto; padding:0;",
+        "source": "max-height:420px; overflow:auto; padding:0;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "max-height",
             "value": "420px"
@@ -6678,16 +5738,12 @@
         ]
       },
       {
-        "index": 211,
+        "index": 160,
         "locator": "#fm-archive-list-meta",
         "line": 4155,
         "kind": "presentation-geometry",
-        "source": "margin:0; padding:6px 10px; opacity:.8;",
+        "source": "padding:6px 10px; opacity:.8;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "padding",
             "value": "6px 10px"
@@ -6699,46 +5755,25 @@
         ]
       },
       {
-        "index": 212,
-        "locator": "div.modal-actions@L4159",
+        "index": 161,
+        "locator": "div.modal-actions.xk-modal-gap-10@L4159",
         "line": 4159,
         "kind": "presentation-geometry",
-        "source": "justify-content:flex-end; gap:10px;",
+        "source": "justify-content:flex-end;",
         "declarations": [
           {
             "property": "justify-content",
             "value": "flex-end"
-          },
-          {
-            "property": "gap",
-            "value": "10px"
           }
         ]
       },
       {
-        "index": 213,
-        "locator": "div.modal-content@L4170",
-        "line": 4170,
-        "kind": "presentation-geometry",
-        "source": "max-width:560px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "560px"
-          }
-        ]
-      },
-      {
-        "index": 214,
-        "locator": "div.status@L4181",
+        "index": 162,
+        "locator": "div.status.xk-modal-m-0@L4181",
         "line": 4181,
         "kind": "presentation-geometry",
-        "source": "margin:0; padding:8px 10px;",
+        "source": "padding:8px 10px;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "padding",
             "value": "8px 10px"
@@ -6746,7 +5781,7 @@
         ]
       },
       {
-        "index": 215,
+        "index": 163,
         "locator": "div.modal-actions@L4185",
         "line": 4185,
         "kind": "presentation-geometry",
@@ -6759,24 +5794,11 @@
         ]
       },
       {
-        "index": 216,
-        "locator": "div.modal-content@L4194",
-        "line": 4194,
-        "kind": "presentation-geometry",
-        "source": "max-width:720px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "720px"
-          }
-        ]
-      },
-      {
-        "index": 217,
-        "locator": "div@L4196",
+        "index": 164,
+        "locator": "div.xk-modal-gap-2@L4196",
         "line": 4196,
         "kind": "presentation-geometry",
-        "source": "display:flex; flex-direction:column; gap:2px;",
+        "source": "display:flex; flex-direction:column;",
         "declarations": [
           {
             "property": "display",
@@ -6785,24 +5807,16 @@
           {
             "property": "flex-direction",
             "value": "column"
-          },
-          {
-            "property": "gap",
-            "value": "2px"
           }
         ]
       },
       {
-        "index": 218,
+        "index": 165,
         "locator": "#fm-props-modal-meta",
         "line": 4198,
         "kind": "presentation-geometry",
-        "source": "margin:0; padding:0; background:transparent; border:none; opacity:.75; font-size:0.82rem;",
+        "source": "padding:0; background:transparent; border:none; opacity:.75; font-size:0.82rem;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "padding",
             "value": "0"
@@ -6826,7 +5840,7 @@
         ]
       },
       {
-        "index": 219,
+        "index": 166,
         "locator": "div.modal-actions@L4205",
         "line": 4205,
         "kind": "presentation-geometry",
@@ -6839,24 +5853,11 @@
         ]
       },
       {
-        "index": 220,
-        "locator": "div.modal-content@L4213",
-        "line": 4213,
-        "kind": "presentation-geometry",
-        "source": "max-width:760px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "760px"
-          }
-        ]
-      },
-      {
-        "index": 221,
-        "locator": "div@L4215",
+        "index": 167,
+        "locator": "div.xk-modal-gap-2@L4215",
         "line": 4215,
         "kind": "presentation-geometry",
-        "source": "display:flex; flex-direction:column; gap:2px;",
+        "source": "display:flex; flex-direction:column;",
         "declarations": [
           {
             "property": "display",
@@ -6865,24 +5866,16 @@
           {
             "property": "flex-direction",
             "value": "column"
-          },
-          {
-            "property": "gap",
-            "value": "2px"
           }
         ]
       },
       {
-        "index": 222,
+        "index": 168,
         "locator": "#fm-hash-meta",
         "line": 4217,
         "kind": "presentation-geometry",
-        "source": "margin:0; padding:0; background:transparent; border:none; opacity:.75; font-size:0.82rem;",
+        "source": "padding:0; background:transparent; border:none; opacity:.75; font-size:0.82rem;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "padding",
             "value": "0"
@@ -6906,7 +5899,7 @@
         ]
       },
       {
-        "index": 223,
+        "index": 169,
         "locator": "div.fm-form-grid@L4222",
         "line": 4222,
         "kind": "presentation-geometry",
@@ -6923,7 +5916,7 @@
         ]
       },
       {
-        "index": 224,
+        "index": 170,
         "locator": "div.modal-actions@L4237",
         "line": 4237,
         "kind": "presentation-geometry",
@@ -6936,20 +5929,7 @@
         ]
       },
       {
-        "index": 225,
-        "locator": "div.modal-content@L4245",
-        "line": 4245,
-        "kind": "presentation-geometry",
-        "source": "max-width:620px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "620px"
-          }
-        ]
-      },
-      {
-        "index": 226,
+        "index": 171,
         "locator": "div.fm-form-grid@L4251",
         "line": 4251,
         "kind": "presentation-geometry",
@@ -6962,16 +5942,12 @@
         ]
       },
       {
-        "index": 227,
+        "index": 172,
         "locator": "#fm-chmod-src",
         "line": 4253,
         "kind": "presentation-geometry",
-        "source": "margin:0; padding:8px 10px;",
+        "source": "padding:8px 10px;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "padding",
             "value": "8px 10px"
@@ -6979,16 +5955,12 @@
         ]
       },
       {
-        "index": 228,
+        "index": 173,
         "locator": "#fm-chmod-list",
         "line": 4256,
         "kind": "presentation-geometry",
-        "source": "margin:0; max-height:160px;",
+        "source": "max-height:160px;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "max-height",
             "value": "160px"
@@ -6996,16 +5968,12 @@
         ]
       },
       {
-        "index": 229,
-        "locator": "div.status@L4262",
+        "index": 174,
+        "locator": "div.status.xk-modal-m-0@L4262",
         "line": 4262,
         "kind": "presentation-geometry",
-        "source": "margin:0; opacity:.8;",
+        "source": "opacity:.8;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "opacity",
             "value": ".8"
@@ -7013,7 +5981,7 @@
         ]
       },
       {
-        "index": 230,
+        "index": 175,
         "locator": "div.modal-actions@L4289",
         "line": 4289,
         "kind": "presentation-geometry",
@@ -7026,20 +5994,7 @@
         ]
       },
       {
-        "index": 231,
-        "locator": "div.modal-content@L4298",
-        "line": 4298,
-        "kind": "presentation-geometry",
-        "source": "max-width:620px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "620px"
-          }
-        ]
-      },
-      {
-        "index": 232,
+        "index": 176,
         "locator": "div.fm-form-grid@L4304",
         "line": 4304,
         "kind": "presentation-geometry",
@@ -7052,16 +6007,12 @@
         ]
       },
       {
-        "index": 233,
+        "index": 177,
         "locator": "#fm-chown-src",
         "line": 4306,
         "kind": "presentation-geometry",
-        "source": "margin:0; padding:8px 10px;",
+        "source": "padding:8px 10px;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "padding",
             "value": "8px 10px"
@@ -7069,16 +6020,12 @@
         ]
       },
       {
-        "index": 234,
+        "index": 178,
         "locator": "#fm-chown-list",
         "line": 4309,
         "kind": "presentation-geometry",
-        "source": "margin:0; max-height:160px;",
+        "source": "max-height:160px;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "max-height",
             "value": "160px"
@@ -7086,16 +6033,12 @@
         ]
       },
       {
-        "index": 235,
-        "locator": "div.status@L4318",
+        "index": 179,
+        "locator": "div.status.xk-modal-m-0@L4318",
         "line": 4318,
         "kind": "presentation-geometry",
-        "source": "margin:0; opacity:.8;",
+        "source": "opacity:.8;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          },
           {
             "property": "opacity",
             "value": ".8"
@@ -7103,7 +6046,7 @@
         ]
       },
       {
-        "index": 236,
+        "index": 180,
         "locator": "div.modal-actions@L4322",
         "line": 4322,
         "kind": "presentation-geometry",
@@ -7116,55 +6059,12 @@
         ]
       },
       {
-        "index": 237,
-        "locator": "div.modal-content@L4332",
-        "line": 4332,
-        "kind": "presentation-geometry",
-        "source": "max-width:620px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "620px"
-          }
-        ]
-      },
-      {
-        "index": 238,
-        "locator": "#fm-dropop-text",
-        "line": 4338,
-        "kind": "presentation-geometry",
-        "source": "margin:0 0 10px 0;",
-        "declarations": [
-          {
-            "property": "margin",
-            "value": "0 0 10px 0"
-          }
-        ]
-      },
-      {
-        "index": 239,
-        "locator": "#fm-dropop-list",
-        "line": 4339,
-        "kind": "presentation-geometry",
-        "source": "margin:0;",
-        "declarations": [
-          {
-            "property": "margin",
-            "value": "0"
-          }
-        ]
-      },
-      {
-        "index": 240,
-        "locator": "div.status@L4340",
+        "index": 181,
+        "locator": "div.status.xk-modal-mt-10@L4340",
         "line": 4340,
         "kind": "presentation-geometry",
-        "source": "margin-top:10px; opacity:.8;",
+        "source": "opacity:.8;",
         "declarations": [
-          {
-            "property": "margin-top",
-            "value": "10px"
-          },
           {
             "property": "opacity",
             "value": ".8"
@@ -7172,7 +6072,7 @@
         ]
       },
       {
-        "index": 241,
+        "index": 182,
         "locator": "div.modal-actions@L4342",
         "line": 4342,
         "kind": "presentation-geometry",
@@ -7185,32 +6085,15 @@
         ]
       },
       {
-        "index": 242,
-        "locator": "div.modal-content@L4352",
-        "line": 4352,
-        "kind": "presentation-geometry",
-        "source": "max-width:760px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "760px"
-          }
-        ]
-      },
-      {
-        "index": 243,
-        "locator": "label@L4360",
+        "index": 183,
+        "locator": "label.xk-modal-gap-8@L4360",
         "line": 4360,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -7219,7 +6102,7 @@
         ]
       },
       {
-        "index": 244,
+        "index": 184,
         "locator": "span@L4361",
         "line": 4361,
         "kind": "presentation-geometry",
@@ -7232,20 +6115,7 @@
         ]
       },
       {
-        "index": 245,
-        "locator": "#fm-conflicts-default",
-        "line": 4362,
-        "kind": "presentation-geometry",
-        "source": "max-width:220px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "220px"
-          }
-        ]
-      },
-      {
-        "index": 246,
+        "index": 185,
         "locator": "div.modal-actions@L4370",
         "line": 4370,
         "kind": "presentation-geometry",
@@ -7258,7 +6128,7 @@
         ]
       },
       {
-        "index": 247,
+        "index": 186,
         "locator": "#fm-bookmarks-error",
         "line": 4389,
         "kind": "state-visibility-hook",
@@ -7271,29 +6141,12 @@
         ]
       },
       {
-        "index": 248,
-        "locator": "div.modal-content@L4407",
-        "line": 4407,
-        "kind": "presentation-geometry",
-        "source": "max-width:560px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "560px"
-          }
-        ]
-      },
-      {
-        "index": 249,
+        "index": 187,
         "locator": "#fm-download-multi-desc",
         "line": 4413,
         "kind": "presentation-geometry",
-        "source": "margin:0 0 10px 0; opacity:.9;",
+        "source": "opacity:.9;",
         "declarations": [
-          {
-            "property": "margin",
-            "value": "0 0 10px 0"
-          },
           {
             "property": "opacity",
             "value": ".9"
@@ -7301,11 +6154,11 @@
         ]
       },
       {
-        "index": 250,
-        "locator": "div@L4415",
+        "index": 188,
+        "locator": "div.xk-modal-gap-10@L4415",
         "line": 4415,
         "kind": "presentation-geometry",
-        "source": "display:flex; flex-direction:column; gap:10px;",
+        "source": "display:flex; flex-direction:column;",
         "declarations": [
           {
             "property": "display",
@@ -7314,27 +6167,19 @@
           {
             "property": "flex-direction",
             "value": "column"
-          },
-          {
-            "property": "gap",
-            "value": "10px"
           }
         ]
       },
       {
-        "index": 251,
-        "locator": "label@L4416",
+        "index": 189,
+        "locator": "label.xk-modal-gap-10@L4416",
         "line": 4416,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:10px; align-items:flex-start;",
+        "source": "display:flex; align-items:flex-start;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "10px"
           },
           {
             "property": "align-items",
@@ -7343,7 +6188,7 @@
         ]
       },
       {
-        "index": 252,
+        "index": 190,
         "locator": "div@L4419",
         "line": 4419,
         "kind": "presentation-geometry",
@@ -7356,7 +6201,7 @@
         ]
       },
       {
-        "index": 253,
+        "index": 191,
         "locator": "div@L4420",
         "line": 4420,
         "kind": "presentation-geometry",
@@ -7373,19 +6218,15 @@
         ]
       },
       {
-        "index": 254,
-        "locator": "label@L4424",
+        "index": 192,
+        "locator": "label.xk-modal-gap-10@L4424",
         "line": 4424,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:10px; align-items:flex-start;",
+        "source": "display:flex; align-items:flex-start;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "10px"
           },
           {
             "property": "align-items",
@@ -7394,7 +6235,7 @@
         ]
       },
       {
-        "index": 255,
+        "index": 193,
         "locator": "div@L4427",
         "line": 4427,
         "kind": "presentation-geometry",
@@ -7407,7 +6248,7 @@
         ]
       },
       {
-        "index": 256,
+        "index": 194,
         "locator": "#fm-download-multi-queue-hint",
         "line": 4428,
         "kind": "presentation-geometry",
@@ -7424,32 +6265,24 @@
         ]
       },
       {
-        "index": 257,
-        "locator": "label@L4433",
+        "index": 195,
+        "locator": "label.xk-modal-gap-8.xk-modal-mt-12@L4433",
         "line": 4433,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center; margin-top:12px;",
+        "source": "display:flex; align-items:center;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
           },
           {
-            "property": "gap",
-            "value": "8px"
-          },
-          {
             "property": "align-items",
             "value": "center"
-          },
-          {
-            "property": "margin-top",
-            "value": "12px"
           }
         ]
       },
       {
-        "index": 258,
+        "index": 196,
         "locator": "span@L4435",
         "line": 4435,
         "kind": "presentation-geometry",
@@ -7466,37 +6299,20 @@
         ]
       },
       {
-        "index": 259,
-        "locator": "div.modal-actions@L4438",
+        "index": 197,
+        "locator": "div.modal-actions.xk-modal-gap-10@L4438",
         "line": 4438,
         "kind": "presentation-geometry",
-        "source": "justify-content:flex-end; gap:10px;",
+        "source": "justify-content:flex-end;",
         "declarations": [
           {
             "property": "justify-content",
             "value": "flex-end"
-          },
-          {
-            "property": "gap",
-            "value": "10px"
           }
         ]
       },
       {
-        "index": 260,
-        "locator": "div.modal-content@L4447",
-        "line": 4447,
-        "kind": "presentation-geometry",
-        "source": "max-width:620px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "620px"
-          }
-        ]
-      },
-      {
-        "index": 261,
+        "index": 198,
         "locator": "div.modal-actions@L4459",
         "line": 4459,
         "kind": "presentation-geometry",
@@ -7509,32 +6325,15 @@
         ]
       },
       {
-        "index": 262,
-        "locator": "div.modal-content@L4468",
-        "line": 4468,
-        "kind": "presentation-geometry",
-        "source": "max-width:760px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "760px"
-          }
-        ]
-      },
-      {
-        "index": 263,
-        "locator": "div@L4474",
+        "index": 199,
+        "locator": "div.xk-modal-gap-8.xk-modal-mb-8@L4474",
         "line": 4474,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:8px;",
+        "source": "display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -7547,27 +6346,19 @@
           {
             "property": "flex-wrap",
             "value": "wrap"
-          },
-          {
-            "property": "margin-bottom",
-            "value": "8px"
           }
         ]
       },
       {
-        "index": 264,
-        "locator": "div@L4475",
+        "index": 200,
+        "locator": "div.xk-modal-gap-8@L4475",
         "line": 4475,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center; flex-wrap:wrap;",
+        "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -7580,11 +6371,11 @@
         ]
       },
       {
-        "index": 265,
-        "locator": "label@L4476",
+        "index": 201,
+        "locator": "label.xk-modal-gap-6@L4476",
         "line": 4476,
         "kind": "presentation-geometry",
-        "source": "display:flex; align-items:center; gap:6px; opacity:.9;",
+        "source": "display:flex; align-items:center; opacity:.9;",
         "declarations": [
           {
             "property": "display",
@@ -7595,17 +6386,13 @@
             "value": "center"
           },
           {
-            "property": "gap",
-            "value": "6px"
-          },
-          {
             "property": "opacity",
             "value": ".9"
           }
         ]
       },
       {
-        "index": 266,
+        "index": 202,
         "locator": "span@L4477",
         "line": 4477,
         "kind": "presentation-geometry",
@@ -7618,7 +6405,7 @@
         ]
       },
       {
-        "index": 267,
+        "index": 203,
         "locator": "#fm-ops-filter",
         "line": 4478,
         "kind": "presentation-geometry",
@@ -7631,19 +6418,15 @@
         ]
       },
       {
-        "index": 268,
-        "locator": "div@L4486",
+        "index": 204,
+        "locator": "div.xk-modal-gap-8@L4486",
         "line": 4486,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;",
+        "source": "display:flex; justify-content:flex-end; flex-wrap:wrap;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "justify-content",
@@ -7656,11 +6439,11 @@
         ]
       },
       {
-        "index": 269,
+        "index": 205,
         "locator": "#fm-ops-summary",
         "line": 4491,
         "kind": "presentation-geometry",
-        "source": "font-size:12px; opacity:.85; margin:6px 0 10px 0;",
+        "source": "font-size:12px; opacity:.85;",
         "declarations": [
           {
             "property": "font-size",
@@ -7669,40 +6452,19 @@
           {
             "property": "opacity",
             "value": ".85"
-          },
-          {
-            "property": "margin",
-            "value": "6px 0 10px 0"
           }
         ]
       },
       {
-        "index": 270,
-        "locator": "div.modal-content@L4499",
-        "line": 4499,
-        "kind": "presentation-geometry",
-        "source": "max-width:920px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "920px"
-          }
-        ]
-      },
-      {
-        "index": 271,
-        "locator": "div@L4505",
+        "index": 206,
+        "locator": "div.xk-modal-gap-10.xk-modal-mb-10@L4505",
         "line": 4505,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:10px;",
+        "source": "display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "10px"
           },
           {
             "property": "align-items",
@@ -7715,27 +6477,19 @@
           {
             "property": "flex-wrap",
             "value": "wrap"
-          },
-          {
-            "property": "margin-bottom",
-            "value": "10px"
           }
         ]
       },
       {
-        "index": 272,
-        "locator": "div@L4506",
+        "index": 207,
+        "locator": "div.xk-modal-gap-8@L4506",
         "line": 4506,
         "kind": "presentation-geometry",
-        "source": "display:flex; gap:8px; align-items:center; flex-wrap:wrap;",
+        "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
           {
             "property": "display",
             "value": "flex"
-          },
-          {
-            "property": "gap",
-            "value": "8px"
           },
           {
             "property": "align-items",
@@ -7748,7 +6502,7 @@
         ]
       },
       {
-        "index": 273,
+        "index": 208,
         "locator": "#fm-volumes-spinner",
         "line": 4508,
         "kind": "presentation-geometry",
@@ -7761,7 +6515,7 @@
         ]
       },
       {
-        "index": 274,
+        "index": 209,
         "locator": "#fm-volumes-summary",
         "line": 4510,
         "kind": "presentation-geometry",
@@ -7778,16 +6532,12 @@
         ]
       },
       {
-        "index": 275,
-        "locator": "div.status@L4514",
+        "index": 210,
+        "locator": "div.status.xk-modal-mt-10@L4514",
         "line": 4514,
         "kind": "presentation-geometry",
-        "source": "margin-top:10px; opacity:.75;",
+        "source": "opacity:.75;",
         "declarations": [
-          {
-            "property": "margin-top",
-            "value": "10px"
-          },
           {
             "property": "opacity",
             "value": ".75"
@@ -7795,20 +6545,7 @@
         ]
       },
       {
-        "index": 276,
-        "locator": "div.modal-content@L4521",
-        "line": 4521,
-        "kind": "presentation-geometry",
-        "source": "max-width:780px;",
-        "declarations": [
-          {
-            "property": "max-width",
-            "value": "780px"
-          }
-        ]
-      },
-      {
-        "index": 277,
+        "index": 211,
         "locator": "div.modal-actions@L4579",
         "line": 4579,
         "kind": "presentation-geometry",
@@ -10213,7 +8950,7 @@
         "value": "confirm-compact-form"
       },
       {
-        "locator": "div.modal-content@L2057",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-760@L2057",
         "name": "data-modal-key",
         "value": "inbounds-apply"
       },
@@ -10228,7 +8965,7 @@
         "value": "drawer-help"
       },
       {
-        "locator": "div.modal-content@L2109",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-980@L2109",
         "name": "data-modal-key",
         "value": "routing-balancer-help"
       },
@@ -10283,7 +9020,7 @@
         "value": "editor-workbench"
       },
       {
-        "locator": "div.modal-content@L2370",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-980@L2370",
         "name": "data-modal-key",
         "value": "xray-snapshot-preview"
       },
@@ -10308,7 +9045,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "div.modal-content@L2400",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-860@L2400",
         "name": "data-modal-key",
         "value": "routing-templates"
       },
@@ -10353,7 +9090,7 @@
         "value": "confirm-compact-form"
       },
       {
-        "locator": "div.modal-content@L2453",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-560@L2453",
         "name": "data-modal-key",
         "value": "routing-template-save"
       },
@@ -10368,7 +9105,7 @@
         "value": "editor-workbench"
       },
       {
-        "locator": "div.modal-content@L2489",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-860@L2489",
         "name": "data-modal-key",
         "value": "routing-template-edit"
       },
@@ -10503,7 +9240,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "div.modal-content.xk-pt-modal@L3014",
+        "locator": "div.modal-content.xk-pt-modal.xk-modal-width@L3014",
         "name": "data-modal-key",
         "value": "mihomo-proxy-tools"
       },
@@ -10538,7 +9275,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "div.modal-content.xk-hw-modal@L3153",
+        "locator": "div.modal-content.xk-hw-modal.xk-modal-width@L3153",
         "name": "data-modal-key",
         "value": "mihomo-hwid"
       },
@@ -11018,7 +9755,7 @@
         "value": "confirm-compact-form"
       },
       {
-        "locator": "div.status@L4340",
+        "locator": "div.status.xk-modal-mt-10@L4340",
         "name": "data-fm-lite-hide",
         "value": "1"
       },

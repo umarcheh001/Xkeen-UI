@@ -1,8 +1,8 @@
 # Operator Console — Этап 5: editor/workbench, status labels и modal families
 
-Даты частичного закрытия: **2 и 3 августа 2026 года**.
+Даты частичного закрытия: **2–4 августа 2026 года**.
 
-Статус: **пять связанных задач Этапа 5 закрыты 2 и 3 августа 2026 года**. Это не закрывает весь Этап 5: чистка presentation inline styles, empty/error states и полный matrix состояний остаются отдельной работой.
+Статус: **семь связанных задач Этапа 5 закрыты 2–4 августа 2026 года**. Это не закрывает весь Этап 5: полный responsive matrix состояний остаётся отдельной работой.
 
 ## 1. Общий editor/workbench contract — закрыто
 
@@ -75,6 +75,19 @@ parameter hints получают непрозрачную operator surface, ко
 sheet. Chromium guard открывает каждый из 50 static modals, проверяет family
 counts `22 / 6 / 19 / 3`, grid frame, видимый header/body и границы viewport.
 
+## 6. Presentation geometry и empty/error auto-height — закрыто
+
+4 августа статические presentation-значения `max-width`, `gap` и `margin`
+убраны из `panel.html`: им соответствуют scoped-классы `xk-modal-width-*`,
+`xk-modal-max-width-*`, `xk-modal-gap-*` и `xk-modal-m*`. Динамические
+visibility/state inline hooks не менялись.
+
+Крупные `editor-workbench` и `master-detail` сохраняют рабочую высоту только
+когда отображают данные. Если открыт непустой `.empty-state`, `.fm-empty`,
+`.xk-pt-empty`, `.xk-pool-empty`, `.error`, `.is-error` или runtime-узел с
+суффиксом `-error`, frame переключается на `height: auto`; body получает
+ограниченную прокрутку. Пустые error placeholders, `.hidden`, `[hidden]` и `display:none` не активируют этот режим. У коротких `confirm-compact-form` auto-height остаётся базовым contract.
+
 ## Сохранённые контракты
 
 - `data-operator-modal-family="editor-workbench"` не переопределяет API/modal lifecycle и остаётся общим family hook;
@@ -91,6 +104,6 @@ python -m pytest -q tests/test_panel_operator_stage5_editors.py \
 npx playwright test e2e/panel_operator_stage5_editors.spec.mjs --project=chromium
 ```
 
-Static contract проверяет общий frame, все три editor IDs, отсутствие JSON pills, workbench-sidecar help, точное распределение всех 50 modal IDs по четырём families и документированное закрытие задачи. Chromium-contract проверяет 50 px header/footer, доминирующую область editor и flat status labels в dark/light, включая реальные schema autocomplete Xray (`type`) и Mihomo (`vless`), непрозрачную Monaco documentation surface, fullscreen narrow geometry JSON modal, sidecar без перекрытия footer, fullscreen help на mobile и grid frame/границы viewport каждого static modal.
+Static contract проверяет общий frame, все три editor IDs, отсутствие JSON pills, workbench-sidecar help, точное распределение всех 50 modal IDs по четырём families и документированное закрытие задачи. Chromium-contract проверяет 50 px header/footer, доминирующую область editor и flat status labels в dark/light, включая реальные schema autocomplete Xray (`type`) и Mihomo (`vless`), непрозрачную Monaco documentation surface, fullscreen narrow geometry JSON modal, sidecar без перекрытия footer, fullscreen help на mobile и grid frame/границы viewport каждого static modal. Отдельно проверяются реальные modal frames с видимыми error и empty states: они сжимаются, а скрытые пустые placeholders не меняют рабочую высоту.
 
-Критерий этих пяти задач выполнен: JSON, file editor и snapshot имеют общий bounded workbench frame, comments/schema больше не конкурируют с editor как декоративные pills, help не закрывает save/cancel, все 50 static modal IDs получают один из четырёх family contracts, а mobile не теряет header/footer сложных модалов. Полный критерий Этапа 5 остаётся открытым.
+Критерий этих семи задач выполнен: JSON, file editor и snapshot имеют общий bounded workbench frame, comments/schema больше не конкурируют с editor как декоративные pills, help не закрывает save/cancel, все 50 static modal IDs получают один из четырёх family contracts, presentation geometry вынесена из template inline styles, empty/error не резервируют высокий canvas, а mobile не теряет header/footer сложных модалов. Полный критерий Этапа 5 остаётся открытым.

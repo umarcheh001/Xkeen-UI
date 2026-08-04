@@ -7421,9 +7421,9 @@ body.panel-page .modal[data-operator-modal-family="editor-workbench"] :is(
  * one bounded frame. Feature markup stays intact; only the presentation grid
  * is owned here, after the frozen legacy editor rules. */
 body.panel-page :is(#json-editor-modal, #fm-editor-modal, #xray-snapshot-modal) .modal-content {
-  grid-template-rows: 50px minmax(0, 1fr) 50px;
+  grid-template-rows: var(--xk-workbench-frame-rows, 50px minmax(0, 1fr) 50px);
   width: min(1180px, calc(100vw - 36px));
-  height: clamp(520px, 82dvh, 900px);
+  height: var(--xk-workbench-height, clamp(520px, 82dvh, 900px));
 }
 
 body.panel-page :is(#json-editor-modal, #fm-editor-modal, #xray-snapshot-modal) :is(.modal-header, .modal-actions) {
@@ -7435,7 +7435,7 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal, #xray-snapshot-modal) 
 body.panel-page :is(#json-editor-modal, #fm-editor-modal, #xray-snapshot-modal) .modal-body {
   display: flex;
   min-height: 0;
-  overflow: hidden;
+  overflow: var(--xk-workbench-body-overflow, hidden);
   flex-direction: column;
   gap: 8px;
 }
@@ -7458,10 +7458,10 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal, #xray-snapshot-modal) 
   .monaco-editor,
   .monaco-editor-container
 ) {
-  flex: 1 1 auto;
+  flex: var(--xk-workbench-editor-flex, 1 1 auto);
   min-height: 0;
-  max-height: none;
-  height: 100%;
+  max-height: var(--xk-workbench-editor-max-height, none);
+  height: var(--xk-workbench-editor-height, 100%);
 }
 
 /* The two in-body editor toolbars have the same 42px operational row. The
@@ -7701,6 +7701,114 @@ body.panel-page.xk-editor-help-open .modal[data-operator-modal-family="editor-wo
 body.panel-page.xk-editor-help-open :is(#json-editor-modal, #fm-editor-modal, #xray-snapshot-modal):not(.hidden) .modal-content {
   width: min(1180px, calc(100vw - 54px - var(--op-editor-help-drawer-width)));
   max-width: calc(100vw - 54px - var(--op-editor-help-drawer-width));
+}
+
+/* Stage 5 — presentation geometry belongs to the scoped modal layer. These
+ * utility hooks replace static template max-width, gap and margin values while
+ * leaving feature IDs, data hooks and dynamic visibility styles untouched. */
+body.panel-page .modal[data-operator-modal-family] .modal-content.xk-modal-width {
+  max-width: min(var(--xk-modal-width), calc(100vw - 36px));
+}
+
+body.panel-page .modal .xk-modal-width-420 { --xk-modal-width: 420px; }
+body.panel-page .modal .xk-modal-width-560 { --xk-modal-width: 560px; }
+body.panel-page .modal .xk-modal-width-620 { --xk-modal-width: 620px; }
+body.panel-page .modal .xk-modal-width-640 { --xk-modal-width: 640px; }
+body.panel-page .modal .xk-modal-width-680 { --xk-modal-width: 680px; }
+body.panel-page .modal .xk-modal-width-720 { --xk-modal-width: 720px; }
+body.panel-page .modal .xk-modal-width-760 { --xk-modal-width: 760px; }
+body.panel-page .modal .xk-modal-width-780 { --xk-modal-width: 780px; }
+body.panel-page .modal .xk-modal-width-860 { --xk-modal-width: 860px; }
+body.panel-page .modal .xk-modal-width-920 { --xk-modal-width: 920px; }
+body.panel-page .modal .xk-modal-width-980 { --xk-modal-width: 980px; }
+body.panel-page .modal .xk-modal-width-1020 { --xk-modal-width: 1020px; }
+body.panel-page .modal .xk-modal-width-1040 { --xk-modal-width: 1040px; }
+
+body.panel-page .modal .xk-modal-max-width-220 { max-width: 220px; }
+body.panel-page .modal .xk-modal-max-width-420 { max-width: 420px; }
+
+body.panel-page .modal .xk-modal-gap-2 { gap: 2px; }
+body.panel-page .modal .xk-modal-gap-6 { gap: 6px; }
+body.panel-page .modal .xk-modal-gap-8 { gap: 8px; }
+body.panel-page .modal .xk-modal-gap-10 { gap: 10px; }
+body.panel-page .modal .xk-modal-gap-12 { gap: 12px; }
+
+body.panel-page .modal .xk-modal-m-0 { margin: 0; }
+body.panel-page .modal .xk-modal-mt-0 { margin-top: 0; }
+body.panel-page .modal .xk-modal-mt-2 { margin-top: 2px; }
+body.panel-page .modal .xk-modal-mt-6 { margin-top: 6px; }
+body.panel-page .modal .xk-modal-mt-8 { margin-top: 8px; }
+body.panel-page .modal .xk-modal-mt-10 { margin-top: 10px; }
+body.panel-page .modal .xk-modal-mt-12 { margin-top: 12px; }
+body.panel-page .modal .xk-modal-mb-6 { margin-bottom: 6px; }
+body.panel-page .modal .xk-modal-mb-8 { margin-bottom: 8px; }
+body.panel-page .modal .xk-modal-mb-10 { margin-bottom: 10px; }
+body.panel-page .modal .xk-modal-mb-12 { margin-bottom: 12px; }
+body.panel-page .modal .xk-modal-ml-34 { margin-left: 34px; }
+
+/* A workbench fills the canvas only when it has working data. A real empty or
+ * error message restores auto-height, keeps header/footer in view and bounds
+ * only the content that can still scroll. Blank error placeholders do not
+ * trigger this rule. */
+body.panel-page .modal:is(
+  [data-operator-modal-family="editor-workbench"],
+  [data-operator-modal-family="master-detail"]
+):has(:is(
+  .empty-state:not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"]),
+  .fm-empty:not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"]),
+  .xk-pt-empty:not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"]),
+  .xk-pool-empty:not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"]),
+  .error:not(:empty):not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"]),
+  .is-error:not(:empty):not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"]),
+  [id$="-error"]:not(:empty):not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"])
+)) .modal-content {
+  --xk-workbench-frame-rows: auto minmax(0, auto) auto;
+  --xk-workbench-height: auto;
+  grid-template-rows: auto minmax(0, auto) auto;
+  height: auto;
+  min-height: 0;
+}
+
+body.panel-page .modal:is(
+  [data-operator-modal-family="editor-workbench"],
+  [data-operator-modal-family="master-detail"]
+):has(:is(
+  .empty-state:not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"]),
+  .fm-empty:not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"]),
+  .xk-pt-empty:not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"]),
+  .xk-pool-empty:not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"]),
+  .error:not(:empty):not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"]),
+  .is-error:not(:empty):not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"]),
+  [id$="-error"]:not(:empty):not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"])
+)) .modal-body {
+  --xk-workbench-body-overflow: auto;
+  flex: 0 1 auto;
+  max-height: min(56dvh, 540px);
+  overflow: auto;
+}
+
+body.panel-page .modal[data-operator-modal-family="editor-workbench"]:has(:is(
+  .empty-state:not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"]),
+  .fm-empty:not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"]),
+  .xk-pt-empty:not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"]),
+  .xk-pool-empty:not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"]),
+  .error:not(:empty):not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"]),
+  .is-error:not(:empty):not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"]),
+  [id$="-error"]:not(:empty):not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"])
+)) :is(
+  textarea,
+  .CodeMirror,
+  .xkeen-cm6-host,
+  .xk-monaco-editor,
+  .monaco-editor,
+  .monaco-editor-container
+) {
+  --xk-workbench-editor-flex: 0 1 auto;
+  --xk-workbench-editor-height: auto;
+  --xk-workbench-editor-max-height: min(38dvh, 320px);
+  flex: 0 1 auto;
+  height: auto;
+  max-height: min(38dvh, 320px);
 }
 
 body.panel-page .modal[data-operator-modal-family] .modal-close > .xk-action-icon {
