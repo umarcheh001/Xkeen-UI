@@ -310,7 +310,16 @@ def _build_accordions(elements: list[dict[str, object]]) -> list[dict[str, objec
         assert isinstance(attrs, dict)
         classes = _classes(attrs)
         is_commands_header = "commands-header" in classes
-        is_explicit_collapsible = bool(attrs.get("aria-controls") and attrs.get("aria-expanded") != "")
+        # A combobox trigger also owns ``aria-controls`` and
+        # ``aria-expanded``.  It exposes a transient listbox, however, and is
+        # not a panel accordion.  Keep that interaction in the DOM contract
+        # rather than adding it to the fixed Stage 0 accordion matrix.
+        is_listbox_trigger = attrs.get("aria-haspopup") == "listbox"
+        is_explicit_collapsible = bool(
+            attrs.get("aria-controls")
+            and attrs.get("aria-expanded") != ""
+            and not is_listbox_trigger
+        )
         if not is_commands_header and not is_explicit_collapsible:
             continue
         if attrs.get("id") == "last-load":
