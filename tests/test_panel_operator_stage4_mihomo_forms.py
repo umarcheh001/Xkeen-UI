@@ -16,8 +16,8 @@ def test_mihomo_generator_reuses_late_scoped_operator_layer():
     template = GENERATOR.read_text(encoding="utf-8")
     panel_template = PANEL.read_text(encoding="utf-8")
     assert '<body class="panel-page mihomo-generator-page">' in template
-    assert "filename='panel-operator.css', v='20260803a'" in template
-    assert "filename='panel-operator.css', v='20260803a'" in panel_template
+    assert "filename='panel-operator.css', v='20260805b'" in template
+    assert "filename='panel-operator.css', v='20260805b'" in panel_template
     assert template.index("filename='panel-operator.css'") > template.index("</style>")
     for fragment in ('class="generator-field-card xk-op-field"', 'class="xk-op-field-label" for="profileSelect"', 'class="generator-action-row xk-op-action-row"', 'class="hint xk-card-desc xk-op-field-hint"'):
         assert fragment in template
@@ -34,7 +34,7 @@ def test_profiles_markup_and_runtime_expose_form_table_validation_contract():
 
 def test_subscription_form_aligns_labels_hints_validation_units_and_disclosure():
     runtime = SUBSCRIPTIONS_JS.read_text(encoding="utf-8")
-    for fragment in ('class="xk-sub-advanced xk-sub-wide"', '<summary><span>Дополнительные настройки</span>', 'class="xk-sub-advanced-grid"', 'id="outbounds-subscriptions-interval-unit" class="xk-op-unit">ч</span>', 'required aria-required="true" aria-describedby="outbounds-subscriptions-url-note"', 'aria-describedby="outbounds-subscriptions-name-filter-note"', 'aria-describedby="outbounds-subscriptions-type-filter-note"', 'aria-describedby="outbounds-subscriptions-transport-filter-note"', 'class="xk-sub-field-hint">Regex; пусто — все имена.', "el.setAttribute('aria-invalid', invalid ? 'true' : 'false')", "setAttribute('role', invalid ? 'alert' : 'status')"):
+    for fragment in ('class="xk-sub-advanced xk-sub-wide"', '<summary>', 'class="xk-sub-advanced-heading"', 'Дополнительные настройки</span>', 'class="xk-sub-advanced-grid"', 'id="outbounds-subscriptions-interval-unit" class="xk-op-unit">ч</span>', 'required aria-required="true" aria-describedby="outbounds-subscriptions-url-note"', 'aria-describedby="outbounds-subscriptions-name-filter-note"', 'aria-describedby="outbounds-subscriptions-type-filter-note"', 'aria-describedby="outbounds-subscriptions-transport-filter-note"', 'class="xk-sub-field-hint">Regex; пусто — все имена.', "el.setAttribute('aria-invalid', invalid ? 'true' : 'false')", "setAttribute('role', invalid ? 'alert' : 'status')"):
         assert fragment in runtime
 
 
@@ -94,7 +94,7 @@ def test_visual_correction_removes_blue_glass_and_fixed_modal_canvases():
         assert fragment in css
 
     template = GENERATOR.read_text(encoding="utf-8")
-    assert "filename='panel-operator.css', v='20260803a'" in template
+    assert "filename='panel-operator.css', v='20260805b'" in template
 
 
 def test_mihomo_forms_closure_is_documented():
