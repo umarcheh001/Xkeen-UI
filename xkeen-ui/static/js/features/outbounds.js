@@ -4847,11 +4847,11 @@ let outboundsModuleApi = null;
         const label = input && input.closest ? input.closest('label') : null;
         if (label) {
           try { label.setAttribute('data-tooltip', labelTooltip); } catch (e) {}
-          const span = label.querySelector ? label.querySelector('span:last-of-type') : null;
-          if (span) span.textContent = text;
+          try { label.setAttribute('aria-label', text); } catch (e1) {}
         }
         if (input) {
           try { input.setAttribute('title', inputTooltip || text); } catch (e2) {}
+          try { input.setAttribute('aria-label', text); } catch (e2a) {}
           try { input.setAttribute('data-tooltip', inputTooltip || text); } catch (e3) {}
         }
       };
@@ -5498,21 +5498,21 @@ let outboundsModuleApi = null;
           resetBtn.classList.add('xk-sub-head-chip');
           resetBtn.classList.add('xk-sub-form-action');
           resetBtn.setAttribute('aria-label', String(resetBtn.getAttribute('title') || 'Очистить форму'));
-          resetBtn.innerHTML = iconHtml('restore', 'xk-sub-head-chip-glyph xk-sub-form-action-icon') + '<span class="xk-action-label">Очистить</span>';
+          resetBtn.innerHTML = iconHtml('restore', 'xk-sub-head-chip-glyph xk-sub-form-action-icon');
         }
         const saveBtn = root.querySelector(`#${SUB_IDS.save}`);
         if (saveBtn) {
           saveBtn.classList.add('xk-sub-head-chip', 'is-primary');
           saveBtn.classList.add('xk-sub-form-action');
           saveBtn.setAttribute('aria-label', String(saveBtn.getAttribute('title') || 'Сохранить настройки'));
-          saveBtn.innerHTML = iconHtml('save', 'xk-sub-head-chip-glyph xk-sub-form-action-icon') + '<span class="xk-action-label">Сохранить</span>';
+          saveBtn.innerHTML = iconHtml('save', 'xk-sub-head-chip-glyph xk-sub-form-action-icon');
         }
         const previewBtn = root.querySelector(`#${SUB_IDS.preview}`);
         if (previewBtn) {
           previewBtn.classList.add('xk-sub-head-chip');
           previewBtn.classList.add('xk-sub-form-action');
           previewBtn.setAttribute('aria-label', String(previewBtn.getAttribute('title') || 'Скачать подписку'));
-          previewBtn.innerHTML = iconHtml('preview', 'xk-sub-head-chip-glyph xk-sub-form-action-icon') + '<span class="xk-action-label">Скачать</span>';
+          previewBtn.innerHTML = iconHtml('download', 'xk-sub-head-chip-glyph xk-sub-form-action-icon');
         }
       } catch (e) {}
     }
@@ -5613,7 +5613,10 @@ let outboundsModuleApi = null;
                       </div>
                     </div>
                     <details class="xk-sub-advanced xk-sub-wide">
-                      <summary><span>Дополнительные настройки</span><span class="xk-sub-advanced-summary">Фильтры, маршрутизация и служебные параметры</span></summary>
+                      <summary>
+                        <span class="xk-sub-advanced-heading"><span class="xk-sub-advanced-caret" aria-hidden="true">${iconHtml('chevron-down')}</span><span>Дополнительные настройки</span></span>
+                        <span class="xk-sub-advanced-summary">Фильтры, маршрутизация и служебные параметры</span>
+                      </summary>
                       <div class="xk-sub-advanced-grid">
                     <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Regex по имени ноды из подписки. Например: Germany|Netherlands|SG. Пусто — без фильтра.">
                       <span class="xk-pool-fieldlabel">Фильтр по имени</span>
@@ -5634,12 +5637,12 @@ let outboundsModuleApi = null;
                       <span id="outbounds-subscriptions-transport-filter-note" class="xk-sub-field-note" hidden></span>
                     </label>
                     <div class="xk-sub-controls">
-                      <label class="xk-sub-check" data-tooltip="Включить плановое автообновление этой подписки."><input id="outbounds-subscriptions-enabled" type="checkbox" checked title="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><span>Авто</span></label>
-                      <label class="xk-sub-check" data-tooltip="Добавлять tag prefix подписки в observatory через subjectSelector для leastPing-проверок. Xray сопоставляет его по началу generated tag."><input id="outbounds-subscriptions-ping" type="checkbox" checked title="Пинг observatory" data-tooltip="Добавлять tag prefix подписки в 07_observatory.json через subjectSelector для LeastPing."><span>Пинг</span></label>
-                      <label class="xk-sub-check" data-tooltip="После сохранения сразу скачать подписку и создать фрагмент."><input id="outbounds-subscriptions-refresh-now" type="checkbox" checked title="Обновить сразу" data-tooltip="Сразу скачать подписку после сохранения."><span>Обновить сразу</span></label>
-                      <label class="xk-sub-check xk-sub-auto-rule-check" data-tooltip="Добавлять tag prefix этой подписки в общий auto-managed leastPing pool и держать служебное правило xk_auto_leastPing. Выключи, если подписка должна работать только через выбранные ниже balancer-ы.">
-                        <input id="outbounds-subscriptions-routing-auto-rule" type="checkbox" checked title="Общий leastPing pool" data-tooltip="Добавлять tag prefix этой подписки в общий auto-managed leastPing pool.">
-                        <span>Служебный пул</span>
+                      <label class="xk-sub-check" aria-label="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><input id="outbounds-subscriptions-enabled" type="checkbox" checked title="Автообновление" aria-label="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><span class="xk-sub-check-icon" aria-hidden="true">${iconHtml('refresh')}</span></label>
+                      <label class="xk-sub-check" aria-label="Пинг observatory" data-tooltip="Добавлять tag prefix подписки в observatory через subjectSelector для leastPing-проверок. Xray сопоставляет его по началу generated tag."><input id="outbounds-subscriptions-ping" type="checkbox" checked title="Пинг observatory" aria-label="Пинг observatory" data-tooltip="Добавлять tag prefix подписки в 07_observatory.json через subjectSelector для LeastPing."><span class="xk-sub-check-icon" aria-hidden="true">${iconHtml('ping')}</span></label>
+                      <label class="xk-sub-check" aria-label="Обновить сразу" data-tooltip="После сохранения сразу скачать подписку и создать фрагмент."><input id="outbounds-subscriptions-refresh-now" type="checkbox" checked title="Обновить сразу" aria-label="Обновить сразу" data-tooltip="Сразу скачать подписку после сохранения."><span class="xk-sub-check-icon" aria-hidden="true">${iconHtml('download')}</span></label>
+                      <label class="xk-sub-check xk-sub-auto-rule-check" aria-label="Общий leastPing pool" data-tooltip="Добавлять tag prefix этой подписки в общий auto-managed leastPing pool и держать служебное правило xk_auto_leastPing. Выключи, если подписка должна работать только через выбранные ниже balancer-ы.">
+                        <input id="outbounds-subscriptions-routing-auto-rule" type="checkbox" checked title="Общий leastPing pool" aria-label="Общий leastPing pool" data-tooltip="Добавлять tag prefix этой подписки в общий auto-managed leastPing pool.">
+                        <span class="xk-sub-check-icon" aria-hidden="true">${iconHtml('pool')}</span>
                       </label>
                       <button type="button" id="outbounds-subscriptions-entware-mark-btn" class="xk-entware-mark-toggle xk-entware-mark-toggle--sub" aria-label="Entware mark 255" aria-pressed="false" title="Добавлять sockopt.mark=255 для проксирования Entware" data-tooltip="Добавлять sockopt.mark=255 во все generated proxy-outbound подписки.">${iconHtml('bolt', 'xk-sub-mark-icon')}<span>mark 255</span></button>
                       <label class="xk-sub-routing-mode" for="outbounds-subscriptions-routing-mode" data-tooltip="Как панель должна подвязывать подписку к маршрутизации. Безопасно сохраняет vless-reality рядом с подпиской. Жёстко переводит совместимые auto-правила на общий balancerTag пула. Только подписка ведёт служебный pool только через generated nodes и не требует одиночный outbound в 04_outbounds.json.">
@@ -5694,18 +5697,21 @@ let outboundsModuleApi = null;
                     </table>
                     <div id="outbounds-subscriptions-empty" class="xk-pool-empty">Подписок пока нет.</div>
                   </div>
-                  <div id="outbounds-subscriptions-diagnostics" class="xk-sub-diagnostics">
-                    <div class="xk-sub-diag-head">
-                      <div>
-                        <div class="xk-pool-kicker">Диагностика</div>
-                        <div id="outbounds-subscriptions-diagnostics-title" class="terminal-menu-title" style="margin:0;">Выбери подписку</div>
-                      </div>
-                      <div id="outbounds-subscriptions-diagnostics-pills" class="xk-sub-diag-pills"></div>
-                    </div>
+                  <details id="outbounds-subscriptions-diagnostics" class="xk-sub-diagnostics" open>
+                    <summary class="xk-sub-diag-head">
+                      <span class="xk-sub-diag-heading">
+                        <span class="xk-sub-diag-caret" aria-hidden="true">${iconHtml('chevron-down')}</span>
+                        <span class="xk-sub-diag-copy">
+                          <span class="xk-pool-kicker">Диагностика</span>
+                          <span id="outbounds-subscriptions-diagnostics-title" class="terminal-menu-title">Выбери подписку</span>
+                        </span>
+                      </span>
+                      <span id="outbounds-subscriptions-diagnostics-pills" class="xk-sub-diag-pills"></span>
+                    </summary>
                     <div id="outbounds-subscriptions-diagnostics-body" class="xk-sub-diag-body">
                       <div class="xk-sub-diag-empty">Выбери подписку справа, чтобы увидеть полный текст ошибки refresh, warnings транспорта и ошибки узлов.</div>
                     </div>
-                  </div>
+                  </details>
                   <div id="outbounds-subscriptions-status" class="modal-hint xk-sub-status"></div>
                 </section>
               </div>

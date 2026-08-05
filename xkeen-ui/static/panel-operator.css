@@ -6805,13 +6805,20 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-form-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  width: auto;
-  min-width: 0;
+  width: var(--op-control-h);
+  min-width: var(--op-control-h);
   height: var(--op-control-h);
-  padding: 0 9px !important;
+  padding: 0 !important;
   border-radius: var(--op-control-radius) !important;
   box-shadow: none !important;
+}
+
+/* The base preview control carries a legacy auto-width rule. Keep all three
+ * URL actions on the same square hit target after their text labels are gone. */
+body.panel-page #outbounds-subscriptions-modal .xk-sub-form-action.xk-sub-url-preview {
+  width: var(--op-control-h) !important;
+  min-width: var(--op-control-h) !important;
+  padding: 0 !important;
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-form-action-icon {
@@ -6840,6 +6847,36 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-advanced {
 body.panel-page #outbounds-subscriptions-modal .xk-sub-advanced > summary {
   padding: 9px 12px !important;
   background: transparent !important;
+  cursor: pointer;
+  list-style: none;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-advanced-heading {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 7px;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-advanced-caret {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--op-faint);
+  transform: rotate(-90deg);
+  transition: transform 0.12s ease;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-advanced-caret .xk-action-icon {
+  width: 14px;
+  height: 14px;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-advanced[open] > summary .xk-sub-advanced-caret {
+  transform: rotate(0deg);
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-advanced-grid {
@@ -6888,8 +6925,31 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-controls > .xk-sub-check,
 body.panel-page #outbounds-subscriptions-modal .xk-sub-controls > .xk-entware-mark-toggle--sub {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   flex: none;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-check {
+  gap: 6px;
+  cursor: pointer;
+  position: relative;
+}
+
+/* Keep the state control close to the left edge without pulling its semantic
+ * icon away from the visual centre of the button. */
+body.panel-page #outbounds-subscriptions-modal .xk-sub-check > input[type="checkbox"] {
+  position: absolute;
+  left: 10px;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-check-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-check-icon .xk-action-icon {
+  width: 14px;
+  height: 14px;
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-entware-mark-toggle--sub {
@@ -6950,9 +7010,10 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-mark-icon {
 body.panel-page #outbounds-subscriptions-modal .xk-sub-routing-mode {
   display: grid;
   grid-column: 1 / -1;
-  grid-template-columns: minmax(90px, auto) minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
+  grid-template-columns: minmax(184px, 248px);
+  justify-content: start;
+  align-items: start;
+  gap: 4px;
   width: auto;
   margin: 0;
   padding: 2px 0 0;
@@ -6968,15 +7029,20 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-inline-label {
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-routing-mode .xray-log-filter {
   min-width: 0;
+  width: 100%;
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-balancers {
-  gap: 5px;
-  padding: 5px 0 0 !important;
+  display: grid;
+  gap: 7px;
+  padding: 10px 0 0 !important;
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-balancers-head {
-  gap: 6px 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 5px 10px;
+  min-width: 0;
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-balancers-note {
@@ -6984,17 +7050,39 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-balancers-note {
   line-height: 1.3;
 }
 
+body.panel-page #outbounds-subscriptions-modal .xk-sub-balancers-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-content: start;
+  gap: 7px;
+  min-width: 0;
+}
+
 body.panel-page #outbounds-subscriptions-modal .xk-sub-balancer-check {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
+  align-items: start;
   column-gap: 8px;
-  min-height: 42px;
+  min-height: 54px;
   padding: 7px 9px;
+  cursor: pointer;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-balancer-check > input[type="checkbox"] {
+  position: static;
+  margin-top: 3px;
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-balancer-check .xk-sub-balancer-copy {
+  display: grid;
   gap: 3px;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-balancer-tag,
+body.panel-page #outbounds-subscriptions-modal .xk-sub-balancer-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-list-head-actions {
@@ -7055,8 +7143,6 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-table tbody tr.is-selecte
 body.panel-page #outbounds-subscriptions-modal .xk-sub-badge,
 body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-pill,
 body.panel-page #outbounds-subscriptions-modal .xk-sub-file-badge,
-body.panel-page #outbounds-subscriptions-modal .xk-pool-summary,
-body.panel-page #outbounds-subscriptions-modal .xk-sub-draft-badge,
 body.panel-page #outbounds-subscriptions-modal .xk-sub-node-latency {
   border-radius: 4px !important;
   background-image: none !important;
@@ -7064,16 +7150,135 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-node-latency {
   animation: none !important;
 }
 
+body.panel-page #outbounds-subscriptions-modal .xk-sub-draft-badge {
+  margin-left: 7px;
+  padding: 1px 6px;
+  border: 1px solid var(--op-accent-border) !important;
+  border-radius: 4px !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent-hover) !important;
+  font-size: calc(9.5px * var(--xk-font-scale, 1));
+  font-weight: 620;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  box-shadow: none !important;
+  animation: none !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal :is(.xk-sub-list-head-actions, .xk-sub-nodes-head-actions) .xk-pool-summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--op-control-compact-h);
+  min-height: var(--op-control-compact-h);
+  padding: 0 8px;
+  border: 1px solid var(--op-border-strong) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-data-muted) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-weight: 620;
+  line-height: 1;
+  box-shadow: none !important;
+}
+
 body.panel-page #outbounds-subscriptions-modal .xk-sub-diagnostics {
+  display: block;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-top: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-diagnostics > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 46px;
+  padding: 8px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-diagnostics > summary::-webkit-details-marker {
+  display: none;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-heading,
+body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-copy {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-heading {
   gap: 7px;
-  padding: 8px 0 0 !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-copy {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-caret {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--op-faint);
+  transform: rotate(-90deg);
+  transition: transform 0.12s ease;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-caret .xk-action-icon {
+  width: 14px;
+  height: 14px;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-diagnostics[open] > summary .xk-sub-diag-caret {
+  transform: rotate(0deg);
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-pills {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  min-width: 0;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-pill {
+  min-height: var(--op-control-compact-h);
+  padding: 0 7px;
+  border: 1px solid var(--op-accent-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent-hover) !important;
+  font-size: calc(9.5px * var(--xk-font-scale, 1));
+  font-weight: 620;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-pill:is(.is-error, .is-warning, .is-error-list, .is-filtered) {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent-hover) !important;
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-body {
   max-height: 164px;
+  margin: 0 0 8px;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
+}
+
+/* The feature stylesheet makes the diagnostics body a flex container.  That
+ * explicit display value otherwise wins over the browser's closed-details
+ * rule, leaving the contents visible after the summary is collapsed. */
+body.panel-page #outbounds-subscriptions-modal .xk-sub-diagnostics:not([open]) > .xk-sub-diag-body {
+  display: none;
+  margin: 0;
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-group {
@@ -7086,7 +7291,10 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-group {
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-node-panel {
-  flex: 0 0 auto;
+  /* Once a user enlarges the resizable modal, let the server work area claim
+   * the remaining body height instead of leaving an empty canvas below it. */
+  flex: 1 1 auto;
+  min-height: 0;
   gap: 8px;
   margin: 0;
   padding: 10px 14px 14px;
@@ -7102,9 +7310,9 @@ html[data-theme="light"] body.panel-page #outbounds-subscriptions-modal .xk-sub-
   gap: 8px;
   align-items: stretch;
   align-content: start;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-height: 0;
-  max-height: min(292px, 38dvh);
+  max-height: none;
   padding: 0;
   overflow: auto;
   border: 0 !important;
@@ -7216,7 +7424,7 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-node-side {
   align-content: space-between;
   align-items: center;
   justify-items: end;
-  min-width: 50px;
+  min-width: 56px;
   gap: 3px;
   padding: 0;
 }
@@ -7257,14 +7465,44 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-node-actions {
   gap: 3px;
 }
 
-body.panel-page #outbounds-subscriptions-modal :is(.xk-sub-node-ping, .xk-sub-node-toggle, .xk-sub-icon-btn).btn-compact {
-  width: 22px;
-  min-width: 22px;
-  height: 22px;
-  min-height: 22px;
+body.panel-page #outbounds-subscriptions-modal :is(.xk-sub-node-ping, .xk-sub-node-toggle).btn-compact {
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  max-height: 28px;
+  line-height: 0;
   padding: 0 !important;
-  border-radius: 4px !important;
-  background: transparent !important;
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-2) !important;
+}
+
+/* Probe is a circular utility action, while exclusion stays a compact square
+ * to make the two destructive/diagnostic actions distinguishable at a glance. */
+body.panel-page #outbounds-subscriptions-modal .xk-sub-node-ping.btn-compact {
+  border-radius: 50% !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-node-toggle.btn-compact {
+  border-radius: var(--op-radius-sm) !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal :is(.xk-sub-node-ping, .xk-sub-node-toggle).btn-compact:hover:not([disabled]) {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal #outbounds-subscriptions-nodes-pingall.xk-sub-icon-btn.btn-compact {
+  width: var(--op-control-compact-h);
+  min-width: var(--op-control-compact-h);
+  height: var(--op-control-compact-h);
+  min-height: var(--op-control-compact-h);
+  padding: 0 !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
 }
 
 body.panel-page #outbounds-subscriptions-modal :is(.xk-sub-node-ping, .xk-sub-node-toggle) .xk-action-icon {
@@ -9980,6 +10218,12 @@ body.panel-page .monaco-editor :is(.suggest-details, .parameter-hints-widget) :i
 
   body.panel-page #outbounds-subscriptions-modal .xk-sub-controls {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  body.panel-page #outbounds-subscriptions-modal .xk-sub-routing-mode,
+  body.panel-page #outbounds-subscriptions-modal .xk-sub-balancers-list {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
   }
 
   body.panel-page #outbounds-subscriptions-modal .xk-sub-form-action .xk-action-label {
