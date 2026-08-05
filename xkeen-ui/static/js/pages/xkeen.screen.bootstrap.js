@@ -6,7 +6,7 @@ import '../core/xk_http.js';
 import '../core/xk_storage.js';
 import '../features/update_notifier.js';
 import '../ui/theme.js?v=20260324b';
-import '../ui/tooltips_auto.js?v=20260119d';
+import '../ui/tooltips_auto.js?v=20260805g';
 import '../util/helpers.js';
 import '../ui/spinner_fetch.js';
 import { bootXkeenPage } from './xkeen.init.js';

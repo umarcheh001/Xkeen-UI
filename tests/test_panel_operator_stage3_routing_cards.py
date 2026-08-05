@@ -12,6 +12,7 @@ COLLAPSE_JS = ROOT / "xkeen-ui/static/js/features/routing_cards/collapse.js"
 LAZY_BINDINGS_JS = ROOT / "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
 DAT_CARD_JS = ROOT / "xkeen-ui/static/js/features/routing_cards/dat/card.js"
 DAT_API_JS = ROOT / "xkeen-ui/static/js/features/routing_cards/dat/api.js"
+TOOLTIPS_JS = ROOT / "xkeen-ui/static/js/ui/tooltips_auto.js"
 PLAN_DOC = ROOT / "docs/panel-operator-redesign-completion-plan.md"
 CONTRACT_DOC = ROOT / "docs/panel-operator-stage3-routing-cards.md"
 DOCS_INDEX = ROOT / "docs/README.md"
@@ -86,6 +87,21 @@ def test_stage3_dat_and_outbound_rows_have_explicit_state_semantics():
     assert "return raw;" in outbounds
 
 
+def test_dat_file_picker_uses_its_listbox_contract_without_an_overlapping_tooltip():
+    template = PANEL_TEMPLATE.read_text(encoding="utf-8")
+    combo = (ROOT / "xkeen-ui/static/js/features/routing_cards/dat/combo.js").read_text(encoding="utf-8")
+    tooltips = TOOLTIPS_JS.read_text(encoding="utf-8")
+
+    for kind in ("geosite", "geoip"):
+        assert f'id="routing-dat-{kind}-found" class="routing-dat-found" role="listbox"' in template
+        assert f'id="routing-dat-{kind}-browse"' in template
+        assert f'aria-controls="routing-dat-{kind}-found"' in template
+    assert 'data-tooltip="Найденные DAT в папке.' not in template
+    assert "trigger.setAttribute('aria-expanded', open ? 'true' : 'false')" in combo
+    assert "host.getAttribute('aria-haspopup') === 'listbox'" in tooltips
+    assert "el.getAttribute('aria-haspopup') === 'listbox'" in tooltips
+
+
 def test_stage3_css_is_flat_dense_and_kept_inside_canonical_sections():
     css = OPERATOR_CSS.read_text(encoding="utf-8")
     workspaces = css[css.index("* 5. WORKSPACES") : css.index("* 6. MODALS")]
@@ -96,6 +112,13 @@ def test_stage3_css_is_flat_dense_and_kept_inside_canonical_sections():
         '.routing-side-card > [id$="-body"]',
         "background: var(--op-surface-2);",
         ".routing-dat-toolbar",
+        ".routing-dat-fields-row",
+        ".routing-dat-help-popover",
+        "position: static !important;",
+        "z-index: 60;",
+        ".routing-dat-combo.is-open .routing-dat-found",
+        ".routing-dat-actions-inline",
+        "grid-template-columns: repeat(4, minmax(0, 1fr));",
         ':is(.routing-dat-meta, #routing-dat-status)',
         ".routing-side-card--backups #backups-table",
         ".xk-sub-node-health-cell",
@@ -111,6 +134,8 @@ def test_stage3_css_is_flat_dense_and_kept_inside_canonical_sections():
     assert ".routing-side-card--outbounds .xk-outbounds-node-list" in responsive
     assert "grid-template-columns: minmax(0, 1fr);" in responsive
     assert ".routing-side-card--outbounds .xk-outbounds-node-item" in responsive
+    assert "body.panel-page .routing-dat-fields-row" in responsive
+    assert "body.panel-page .routing-dat-actions-inline" in responsive
     assert "final fixes" not in responsive.lower()
 
 
@@ -120,7 +145,7 @@ def test_stage3_closure_is_reflected_in_documentation():
     contract = CONTRACT_DOC.read_text(encoding="utf-8")
     index = DOCS_INDEX.read_text(encoding="utf-8")
 
-    assert "filename='panel-operator.css', v='20260805f'" in template
+    assert "filename='panel-operator.css', v='20260805h'" in template
     for fragment in (
         "Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля 2026 года",
         "### Этап 3. Пересобрать routing cards и operational blocks — закрыт",

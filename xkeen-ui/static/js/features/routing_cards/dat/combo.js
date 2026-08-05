@@ -69,6 +69,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       if (!root) return;
       if (open) root.classList.add('is-open');
       else root.classList.remove('is-open');
+      const trigger = root.querySelector('.routing-dat-combo-btn');
+      if (trigger) trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
     } catch (e) {}
   }
 
@@ -79,6 +81,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         const k = String((root && (root.getAttribute('data-kind') || (root.dataset && root.dataset.kind))) || '').toLowerCase();
         if (ex && k === ex) return;
         root.classList.remove('is-open');
+        const trigger = root.querySelector('.routing-dat-combo-btn');
+        if (trigger) trigger.setAttribute('aria-expanded', 'false');
       });
     } catch (e) {}
 
@@ -116,6 +120,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         btn.type = 'button';
         btn.className = 'routing-dat-found-item' + (name.toLowerCase() === current ? ' is-current' : '');
         btn.dataset.name = name;
+        btn.setAttribute('role', 'option');
+        btn.setAttribute('aria-selected', name.toLowerCase() === current ? 'true' : 'false');
 
         const n = document.createElement('span');
         n.className = 'routing-dat-found-name';

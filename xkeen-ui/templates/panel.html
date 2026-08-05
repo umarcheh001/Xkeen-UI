@@ -69,7 +69,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260805f') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260805h') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -311,20 +311,22 @@
                       <div class="routing-dat-meta" id="routing-dat-geosite-meta">—</div>
                     </div>
 
-                    <label class="routing-dat-field">
-                      <span>Папка</span>
-                      <input id="routing-dat-geosite-dir" class="routing-dat-input" type="text" placeholder="/opt/etc/xray/dat">
-                    </label>
+                    <div class="routing-dat-fields-row">
+                      <label class="routing-dat-field">
+                        <span>Папка</span>
+                        <input id="routing-dat-geosite-dir" class="routing-dat-input" type="text" placeholder="/opt/etc/xray/dat">
+                      </label>
 
-                    <label class="routing-dat-field">
-                      <span>Имя файла</span>
-                      <div class="routing-dat-combo" data-kind="geosite">
-                        <input id="routing-dat-geosite-name" class="routing-dat-input" type="text" list="routing-dat-geosite-name-list" placeholder="geosite.dat">
-                        <button id="routing-dat-geosite-browse" class="btn-secondary btn-icon routing-dat-combo-btn" type="button" aria-label="Обнаруженные DAT" data-tooltip="Показать найденные .dat в папке.">{{ op_icon('chevron-down') }}</button>
-                        <div id="routing-dat-geosite-found" class="routing-dat-found" data-tooltip="Найденные DAT в папке. Клик по строке подставит имя файла.">—</div>
-                      </div>
-                      <datalist id="routing-dat-geosite-name-list"></datalist>
-                    </label>
+                      <label class="routing-dat-field">
+                        <span>Имя файла</span>
+                        <div class="routing-dat-combo" data-kind="geosite">
+                          <input id="routing-dat-geosite-name" class="routing-dat-input" type="text" placeholder="geosite.dat">
+                          <button id="routing-dat-geosite-browse" class="btn-secondary btn-icon routing-dat-combo-btn" type="button" aria-label="Обнаруженные DAT" aria-controls="routing-dat-geosite-found" aria-expanded="false" aria-haspopup="listbox">{{ op_icon('chevron-down') }}</button>
+                          <div id="routing-dat-geosite-found" class="routing-dat-found" role="listbox" aria-label="Обнаруженные файлы GeoSite">—</div>
+                        </div>
+                        <datalist id="routing-dat-geosite-name-list" hidden></datalist>
+                      </label>
+                    </div>
 
                     <label class="routing-dat-field">
                       <span>URL обновления</span>
@@ -333,11 +335,11 @@
 
                     <input id="routing-dat-geosite-file" type="file" accept=".dat" style="display:none">
 
-                    <div class="actions xk-actions-inline routing-dat-actions-inline">
-                      <button id="routing-dat-geosite-upload-btn" class="btn-icon" type="button" aria-label="Загрузить" data-tooltip="Загрузить DAT-файл с компьютера и сохранить по указанному пути.">{{ op_icon('upload') }}</button>
-                      <button id="routing-dat-geosite-update-btn" class="btn-icon" type="button" aria-label="Обновить" data-tooltip="Скачать DAT по URL и заменить текущий файл (с подтверждением).">{{ op_icon('download') }}</button>
-                      <button id="routing-dat-geosite-download-btn" class="btn-icon" type="button" aria-label="Скачать" data-tooltip="Скачать текущий локальный DAT-файл.">{{ op_icon('download') }}</button>
-                      <button id="routing-dat-geosite-content-btn" class="btn-icon" type="button" aria-label="Содержимое" data-tooltip="Открыть просмотр тегов/содержимого GeoSite (поиск + копирование geosite:TAG).">{{ op_icon('catalog') }}</button>
+                    <div class="actions xk-actions-inline routing-dat-actions-inline" aria-label="Действия GeoSite">
+                      <button id="routing-dat-geosite-upload-btn" type="button" aria-label="Загрузить" data-tooltip="Загрузить DAT-файл с компьютера и сохранить по указанному пути.">{{ op_icon('upload') }}<span class="xk-action-label">Загрузить</span></button>
+                      <button id="routing-dat-geosite-update-btn" type="button" aria-label="Обновить" data-tooltip="Скачать DAT по URL и заменить текущий файл (с подтверждением).">{{ op_icon('download') }}<span class="xk-action-label">Обновить</span></button>
+                      <button id="routing-dat-geosite-download-btn" type="button" aria-label="Скачать" data-tooltip="Скачать текущий локальный DAT-файл.">{{ op_icon('download') }}<span class="xk-action-label">Скачать</span></button>
+                      <button id="routing-dat-geosite-content-btn" type="button" aria-label="Содержимое" data-tooltip="Открыть просмотр тегов/содержимого GeoSite (поиск + копирование geosite:TAG).">{{ op_icon('catalog') }}<span class="xk-action-label">Открыть</span></button>
                     </div>
                   </div>
 
@@ -350,20 +352,22 @@
                       <div class="routing-dat-meta" id="routing-dat-geoip-meta">—</div>
                     </div>
 
-                    <label class="routing-dat-field">
-                      <span>Папка</span>
-                      <input id="routing-dat-geoip-dir" class="routing-dat-input" type="text" placeholder="/opt/etc/xray/dat">
-                    </label>
+                    <div class="routing-dat-fields-row">
+                      <label class="routing-dat-field">
+                        <span>Папка</span>
+                        <input id="routing-dat-geoip-dir" class="routing-dat-input" type="text" placeholder="/opt/etc/xray/dat">
+                      </label>
 
-                    <label class="routing-dat-field">
-                      <span>Имя файла</span>
-                      <div class="routing-dat-combo" data-kind="geoip">
-                        <input id="routing-dat-geoip-name" class="routing-dat-input" type="text" list="routing-dat-geoip-name-list" placeholder="geoip.dat">
-                        <button id="routing-dat-geoip-browse" class="btn-secondary btn-icon routing-dat-combo-btn" type="button" aria-label="Обнаруженные DAT" data-tooltip="Показать найденные .dat в папке.">{{ op_icon('chevron-down') }}</button>
-                        <div id="routing-dat-geoip-found" class="routing-dat-found" data-tooltip="Найденные DAT в папке. Клик по строке подставит имя файла.">—</div>
-                      </div>
-                      <datalist id="routing-dat-geoip-name-list"></datalist>
-                    </label>
+                      <label class="routing-dat-field">
+                        <span>Имя файла</span>
+                        <div class="routing-dat-combo" data-kind="geoip">
+                          <input id="routing-dat-geoip-name" class="routing-dat-input" type="text" placeholder="geoip.dat">
+                          <button id="routing-dat-geoip-browse" class="btn-secondary btn-icon routing-dat-combo-btn" type="button" aria-label="Обнаруженные DAT" aria-controls="routing-dat-geoip-found" aria-expanded="false" aria-haspopup="listbox">{{ op_icon('chevron-down') }}</button>
+                          <div id="routing-dat-geoip-found" class="routing-dat-found" role="listbox" aria-label="Обнаруженные файлы GeoIP">—</div>
+                        </div>
+                        <datalist id="routing-dat-geoip-name-list" hidden></datalist>
+                      </label>
+                    </div>
 
                     <label class="routing-dat-field">
                       <span>URL обновления</span>
@@ -372,11 +376,11 @@
 
                     <input id="routing-dat-geoip-file" type="file" accept=".dat" style="display:none">
 
-                    <div class="actions xk-actions-inline routing-dat-actions-inline">
-                      <button id="routing-dat-geoip-upload-btn" class="btn-icon" type="button" aria-label="Загрузить" data-tooltip="Загрузить DAT-файл с компьютера и сохранить по указанному пути.">{{ op_icon('upload') }}</button>
-                      <button id="routing-dat-geoip-update-btn" class="btn-icon" type="button" aria-label="Обновить" data-tooltip="Скачать DAT по URL и заменить текущий файл (с подтверждением).">{{ op_icon('download') }}</button>
-                      <button id="routing-dat-geoip-download-btn" class="btn-icon" type="button" aria-label="Скачать" data-tooltip="Скачать текущий локальный DAT-файл.">{{ op_icon('download') }}</button>
-                      <button id="routing-dat-geoip-content-btn" class="btn-icon" type="button" aria-label="Содержимое" data-tooltip="Открыть просмотр тегов/содержимого GeoIP (поиск + копирование geoip:TAG).">{{ op_icon('catalog') }}</button>
+                    <div class="actions xk-actions-inline routing-dat-actions-inline" aria-label="Действия GeoIP">
+                      <button id="routing-dat-geoip-upload-btn" type="button" aria-label="Загрузить" data-tooltip="Загрузить DAT-файл с компьютера и сохранить по указанному пути.">{{ op_icon('upload') }}<span class="xk-action-label">Загрузить</span></button>
+                      <button id="routing-dat-geoip-update-btn" type="button" aria-label="Обновить" data-tooltip="Скачать DAT по URL и заменить текущий файл (с подтверждением).">{{ op_icon('download') }}<span class="xk-action-label">Обновить</span></button>
+                      <button id="routing-dat-geoip-download-btn" type="button" aria-label="Скачать" data-tooltip="Скачать текущий локальный DAT-файл.">{{ op_icon('download') }}<span class="xk-action-label">Скачать</span></button>
+                      <button id="routing-dat-geoip-content-btn" type="button" aria-label="Содержимое" data-tooltip="Открыть просмотр тегов/содержимого GeoIP (поиск + копирование geoip:TAG).">{{ op_icon('catalog') }}<span class="xk-action-label">Открыть</span></button>
                     </div>
                   </div>
                 </div>

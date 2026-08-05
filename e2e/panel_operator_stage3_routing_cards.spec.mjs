@@ -203,6 +203,37 @@ async function collectNodeRowGeometry(page) {
 }
 
 
+async function collectDatCardGeometry(page) {
+  return page.evaluate(() => {
+    const card = document.querySelector('.routing-dat-item[data-kind="geosite"]');
+    const fields = card?.querySelector('.routing-dat-fields-row');
+    const dir = document.querySelector('#routing-dat-geosite-dir');
+    const name = document.querySelector('#routing-dat-geosite-name');
+    const combo = name?.closest('.routing-dat-combo');
+    const found = document.querySelector('#routing-dat-geosite-found');
+    const geoip = document.querySelector('.routing-dat-item[data-kind="geoip"]');
+    const actions = card?.querySelector('.routing-dat-actions-inline');
+    const inspector = card?.closest('.routing-side-card');
+    const rect = (node) => {
+      const value = node?.getBoundingClientRect();
+      return value ? { top: value.top, bottom: value.bottom, left: value.left, right: value.right, width: value.width } : null;
+    };
+    return {
+      fieldsColumns: fields ? getComputedStyle(fields).gridTemplateColumns.split(' ').length : 0,
+      actionColumns: actions ? getComputedStyle(actions).gridTemplateColumns.split(' ').length : 0,
+      dir: rect(dir),
+      name: rect(name),
+      combo: rect(combo),
+      found: rect(found),
+      geoip: rect(geoip),
+      inspector: rect(inspector),
+      foundPosition: found ? getComputedStyle(found).position : '',
+      pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+}
+
+
 test.describe('Operator Console Stage 3 routing cards', () => {
   for (const theme of ['dark', 'light']) {
     test(`accordions, statuses and node rows share one contract in ${theme}`, async ({ page }) => {
@@ -260,6 +291,75 @@ test.describe('Operator Console Stage 3 routing cards', () => {
       expect(datVisual.borderTop).toBe('0px');
       expect(datVisual.radius).toBe('0px');
 
+      const datClosedGeometry = await collectDatCardGeometry(page);
+      expect(datClosedGeometry.fieldsColumns).toBe(2);
+      expect(datClosedGeometry.dir.top).toBeCloseTo(datClosedGeometry.name.top, 1);
+      expect(datClosedGeometry.dir.width).toBeGreaterThan(0);
+      expect(datClosedGeometry.name.width).toBeGreaterThan(0);
+      expect(datClosedGeometry.actionColumns).toBe(4);
+      expect(datClosedGeometry.pageOverflow).toBeLessThanOrEqual(1);
+
+      const datHelp = page.locator('.routing-dat-help-popover');
+      await datHelp.locator('.xk-card-help-trigger').click();
+      await expect(datHelp).toHaveAttribute('open', '');
+      const datHelpGeometry = await page.evaluate(() => {
+        const panel = document.querySelector('.routing-dat-help-popover .xk-card-help-panel');
+        const inspector = document.querySelector('.routing-dat-card');
+        const trigger = document.querySelector('.routing-dat-help-popover .xk-card-help-trigger');
+        const rect = (node) => {
+          const value = node?.getBoundingClientRect();
+          return value ? { left: value.left, right: value.right, top: value.top, bottom: value.bottom } : null;
+        };
+        return {
+          panel: panel ? {
+            ...rect(panel),
+            position: getComputedStyle(panel).position,
+            zIndex: Number.parseInt(getComputedStyle(panel).zIndex, 10),
+          } : null,
+          inspector: rect(inspector),
+          trigger: trigger ? {
+            ...rect(trigger),
+            radius: Number.parseFloat(getComputedStyle(trigger).borderRadius),
+            background: getComputedStyle(trigger).backgroundImage,
+          } : null,
+        };
+      });
+      expect(datHelpGeometry.panel.position).toBe('absolute');
+      expect(datHelpGeometry.panel.left).toBeGreaterThanOrEqual(datHelpGeometry.inspector.left - 1);
+      expect(datHelpGeometry.panel.right).toBeLessThanOrEqual(datHelpGeometry.inspector.right + 1);
+      expect(datHelpGeometry.panel.top).toBeGreaterThanOrEqual(datHelpGeometry.trigger.bottom);
+      expect(datHelpGeometry.panel.zIndex).toBeGreaterThan(50);
+      expect(datHelpGeometry.trigger.radius).toBeLessThanOrEqual(6);
+      expect(datHelpGeometry.trigger.background).toBe('none');
+      await datHelp.locator('.xk-card-help-trigger').click();
+      await expect(datHelp).not.toHaveAttribute('open', '');
+
+      await page.route('**/api/fs/list?**', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ok: true,
+            items: [
+              { name: 'geosite_refilter.dat', type: 'file', size: 1024, mtime: 1_777_777_777 },
+              { name: 'geosite_v2fly.dat', type: 'file', size: 2048, mtime: 1_777_777_778 },
+            ],
+          }),
+        });
+      });
+      await page.locator('#routing-dat-refresh-btn').click();
+      await expect(page.locator('#routing-dat-status')).toHaveAttribute('data-state', 'ok');
+      await page.locator('#routing-dat-geosite-browse').click();
+      await expect(page.locator('#routing-dat-geosite-browse')).toHaveAttribute('aria-expanded', 'true');
+      await expect(page.locator('#routing-dat-geosite-found')).toBeVisible();
+      await expect(page.locator('#routing-dat-geosite-found [role="option"]')).toHaveCount(2);
+      const datOpenGeometry = await collectDatCardGeometry(page);
+      expect(datOpenGeometry.foundPosition).toBe('static');
+      expect(datOpenGeometry.found.bottom).toBeLessThanOrEqual(datOpenGeometry.geoip.top + 0.5);
+      expect(datOpenGeometry.pageOverflow).toBeLessThanOrEqual(1);
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#routing-dat-geosite-browse')).toHaveAttribute('aria-expanded', 'false');
+
       await page.locator('#routing-dat-refresh-btn').click();
       await expect(page.locator('#routing-dat-refresh-btn')).toHaveAttribute('aria-busy', 'true');
       await expect(page.locator('#routing-dat-refresh-btn')).toBeDisabled();
@@ -300,6 +400,11 @@ test.describe('Operator Console Stage 3 routing cards', () => {
       expect(mobileGeometry.columns.split(' ').length).toBe(2);
       expect(mobileGeometry.overflow).toBe('hidden');
       expect(mobileGeometry.pageOverflow).toBeLessThanOrEqual(1);
+
+      const mobileDatGeometry = await collectDatCardGeometry(page);
+      expect(mobileDatGeometry.fieldsColumns).toBe(2);
+      expect(mobileDatGeometry.actionColumns).toBe(2);
+      expect(mobileDatGeometry.pageOverflow).toBeLessThanOrEqual(1);
     });
   }
 });

@@ -1427,6 +1427,7 @@ body.panel-page .routing-dat-grid {
 }
 
 body.panel-page .routing-dat-toolbar {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
@@ -1434,6 +1435,66 @@ body.panel-page .routing-dat-toolbar {
   margin: 0;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--op-border);
+}
+
+/* GeoDAT help belongs to this inspector, not the editor canvas. Its panel is
+ * positioned from the full toolbar (rather than the 32px summary) so it stays
+ * within the inspector and above the editor toolbar. */
+body.panel-page .routing-dat-help-popover {
+  position: static !important;
+  display: block;
+  flex: 0 0 auto;
+}
+
+body.panel-page .routing-dat-help-popover > .xk-card-help-trigger {
+  display: inline-grid;
+  width: var(--op-control-h);
+  min-width: var(--op-control-h);
+  height: var(--op-control-h);
+  min-height: var(--op-control-h);
+  padding: 0 !important;
+  place-items: center;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
+  box-shadow: none !important;
+  color: var(--op-muted) !important;
+  cursor: pointer;
+  list-style: none;
+}
+
+body.panel-page .routing-dat-help-popover > .xk-card-help-trigger::-webkit-details-marker {
+  display: none;
+}
+
+body.panel-page .routing-dat-help-popover > .xk-card-help-trigger:is(:hover, :focus-visible),
+body.panel-page .routing-dat-help-popover[open] > .xk-card-help-trigger {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-text) !important;
+  transform: none !important;
+}
+
+body.panel-page .routing-dat-help-popover > .xk-card-help-panel {
+  position: absolute !important;
+  z-index: 60;
+  top: calc(100% + 8px);
+  right: 0;
+  left: auto;
+  width: min(320px, calc(100vw - 40px));
+  margin: 0;
+  padding: 10px 12px;
+  border-color: var(--op-border-strong) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface-2) !important;
+  box-shadow: var(--op-shadow-float) !important;
+  color: var(--op-text) !important;
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  line-height: 1.45;
+}
+
+body.panel-page .routing-dat-help-popover > .xk-card-help-panel code {
+  color: var(--op-text-strong) !important;
 }
 
 body.panel-page .routing-dat-toolbar-left {
@@ -1451,6 +1512,174 @@ body.panel-page .routing-dat-item {
 body.panel-page .routing-dat-item:first-child {
   border-top: 0 !important;
   padding-top: 2px;
+}
+
+/* GeoDAT is an operational record: the destination path and selected asset
+ * are one decision, so they share a compact row. The file finder expands in
+ * normal flow instead of covering the record below it. */
+body.panel-page .routing-dat-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+}
+
+body.panel-page .routing-dat-title {
+  min-width: 0;
+}
+
+body.panel-page .routing-dat-name {
+  color: var(--op-text-strong) !important;
+  font-size: calc(13px * var(--xk-font-scale, 1));
+  font-weight: 650;
+}
+
+body.panel-page .routing-dat-fields-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 8px;
+  align-items: start;
+}
+
+body.panel-page .routing-dat-fields-row .routing-dat-field {
+  min-width: 0;
+}
+
+body.panel-page .routing-dat-combo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--op-control-h);
+  gap: 4px;
+  align-items: start;
+}
+
+body.panel-page .routing-dat-combo .routing-dat-input {
+  min-width: 0;
+}
+
+body.panel-page .routing-dat-combo-btn {
+  grid-column: 2;
+  grid-row: 1;
+  width: var(--op-control-h);
+  min-width: var(--op-control-h);
+  padding: 0 !important;
+}
+
+body.panel-page .routing-dat-found {
+  display: none;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  position: static !important;
+  inset: auto !important;
+  z-index: auto;
+  max-height: min(34dvh, 188px);
+  margin: 0;
+  padding: 3px;
+  overflow: auto;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-editor) !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .routing-dat-combo.is-open .routing-dat-found {
+  display: block;
+}
+
+body.panel-page .routing-dat-found-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
+  min-height: 30px;
+  gap: 8px;
+  padding: 4px 6px;
+  border: 1px solid transparent !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  color: var(--op-text) !important;
+  font: inherit;
+  text-align: left;
+}
+
+body.panel-page .routing-dat-found-item:hover,
+body.panel-page .routing-dat-found-item:focus-visible {
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-text-strong) !important;
+}
+
+body.panel-page .routing-dat-found-item.is-current {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+}
+
+body.panel-page .routing-dat-found-name {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page .routing-dat-found-meta {
+  color: var(--op-data-faint) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+body.panel-page .routing-dat-found-empty {
+  padding: 5px 6px;
+  color: var(--op-muted);
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+}
+
+/* All four DAT commands fit across the desktop inspector. Preserve the
+ * compact two-column fallback only where touch targets need the extra width. */
+body.panel-page .routing-dat-actions-inline {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+
+body.panel-page .routing-side-card .routing-dat-actions-inline > button {
+  display: inline-flex !important;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  gap: 5px;
+  padding: 0 7px !important;
+  color: var(--op-text) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  line-height: 1;
+  white-space: nowrap;
+}
+
+body.panel-page .routing-dat-actions-inline > button .xk-action-icon {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+body.panel-page .routing-dat-actions-inline > button:is(
+  #routing-dat-geosite-update-btn,
+  #routing-dat-geoip-update-btn
+):not([disabled]) {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent) !important;
+  color: #fff !important;
+}
+
+body.panel-page .routing-dat-actions-inline > button:is(
+  #routing-dat-geosite-update-btn,
+  #routing-dat-geoip-update-btn
+):hover:not([disabled]) {
+  border-color: var(--op-accent-hover) !important;
+  background: var(--op-accent-hover) !important;
+  color: #fff !important;
 }
 
 body.panel-page .routing-dat-file {
@@ -1523,6 +1752,10 @@ body.panel-page :is(label, .routing-dat-field > span, .routing-rule-key, .small)
 
 body.panel-page .routing-dat-field {
   gap: 4px;
+  margin-top: 8px;
+}
+
+body.panel-page .routing-dat-fields-row .routing-dat-field {
   margin-top: 8px;
 }
 
@@ -9384,6 +9617,23 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
 @media (max-width: 720px) {
   /* Complex modal bodies are their only scroll region. This keeps their
    * header and action footer reachable while long content scrolls. */
+
+  /* GeoDAT keeps both destination controls visible together even on a narrow
+   * inspector. The compact action bar has no duplicate icon-only mode here. */
+  body.panel-page .routing-dat-fields-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  body.panel-page .routing-dat-actions-inline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.panel-page .routing-side-card .routing-dat-actions-inline > button {
+    min-height: var(--op-touch-target);
+    padding: 0 6px !important;
+  }
+
   body.panel-page .modal[data-operator-modal-family]:is(
     [data-operator-modal-family="editor-workbench"],
     [data-operator-modal-family="master-detail"],
@@ -10235,7 +10485,7 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
   }
 
   body.panel-page .routing-dat-actions-inline {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

@@ -6,7 +6,7 @@ import '../ui/operator_icons.js';
 import '../ui/modal.js';
 import '../ui/confirm_modal.js';
 import '../ui/theme.js?v=20260324b';
-import '../ui/tooltips_auto.js?v=20260119d';
+import '../ui/tooltips_auto.js?v=20260805g';
 import '../util/helpers.js';
 import '../runtime/lazy_runtime.js?v=20260324d';
 import '../util/tab_id.js';

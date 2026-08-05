@@ -55,7 +55,7 @@ Desktop и tablet используют одну строку. На ширине 
 - help links — строки высотой 32 px с разделителями, без pill/card surface;
 - scenario options — единый разделённый record list; выбранный вариант получает только accent marker;
 - backups — обычная плоская таблица внутри accordion body без второй рамки, радиуса и тени;
-- GeoDAT — два records с верхним divider вместо двух вложенных cards;
+- GeoDAT — два records с верхним divider вместо двух вложенных cards; папка и имя файла образуют одну двухколоночную строку, а найденные DAT раскрываются в потоке записи и не перекрывают GeoIP/GeoSite ниже;
 - subscription/pool nodes — общий data-row contract вместо набора самостоятельных cards;
 - inbounds/outbounds/status rows — live text с semantic tone вместо самостоятельных badges.
 

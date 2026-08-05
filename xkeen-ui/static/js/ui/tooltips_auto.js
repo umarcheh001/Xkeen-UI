@@ -127,6 +127,11 @@
       // Do not override explicit tooltips.
       if (host.hasAttribute(ATTR) || host.hasAttribute('title') || host.hasAttribute(LEGACY_ATTR)) return;
 
+      // Combobox triggers announce their purpose through the label and change
+      // state with aria-expanded. A hover tooltip floats over the associated
+      // listbox just as it opens, so it is visual noise rather than help.
+      if (host.getAttribute('aria-haspopup') === 'listbox') return;
+
       // Form fields often use aria-label for accessibility/IME internals.
       // Turning those into hover tooltips creates noisy, misplaced portal tooltips
       // (for example xterm's helper textarea: "Terminal input").
@@ -351,6 +356,9 @@
         const el = target.closest ? target.closest('[' + ATTR + ']') : null;
         if (!el) return null;
         if (SKIP_TAGS.has(el.tagName)) return null;
+        // A listbox owns the disclosure affordance. Never let a legacy or
+        // already-migrated tooltip cover the options while that trigger opens.
+        if (el.getAttribute('aria-haspopup') === 'listbox') return null;
         // Skip empty tooltips
         const tip = normalizeText(el.getAttribute(ATTR));
         if (!tip) return null;
