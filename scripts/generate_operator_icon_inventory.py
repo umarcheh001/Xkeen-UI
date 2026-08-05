@@ -23,11 +23,11 @@ JS_ROOT = ROOT / "xkeen-ui" / "static" / "js"
 ACCESSIBLE_LABELS = {
     "add-balancer": "Добавить балансировщик", "add-node": "Добавить", "add-rule": "Д��бавить правило",
     "alert": "Предупреждение", "apply": "Применить", "archive": "Создать архив",
-    "back": "Назад", "bolt": "Быстрое действие", "bookmark": "Закладка",
+    "back": "Назад", "bolt": "Быстрое действие", "bookmark": "Закладка", "broom": "Очистить журнал",
     "catalog": "Открыть каталог", "check": "Подтвердить", "chevron-down": "Раскрыть",
     "clear": "Очистить", "close": "Закрыть", "comment": "Комментарии",
     "compare": "Сравнить", "dashboard": "Открыть панель", "detach": "Отсоединиться",
-    "devices": "Устройства", "download": "Скачать", "drag": "Перетащить",
+    "devices": "Устройства", "dns": "Показать доменные имена", "download": "Скачать", "drag": "Перетащить",
     "duplicate": "Копировать", "edit": "Редактировать", "export": "Экспорт",
     "file-add": "Создать файл", "folder-add": "Создать папку", "format": "Форматировать",
     "forward": "Вперёд", "fullscreen": "Полный экран", "fullscreen-exit": "Восстановить",

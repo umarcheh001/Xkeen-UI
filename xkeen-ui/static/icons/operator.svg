@@ -46,6 +46,12 @@
     <symbol id="xk-bookmark" viewBox="0 0 24 24">
       <path d="M18 7v14l-6 -4l-6 4v-14a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4" />
     </symbol>
+    <symbol id="xk-broom" viewBox="0 0 24 24">
+      <path d="M3 21v-4a4 4 0 1 1 4 4h-4" />
+      <path d="M21 3a16 16 0 0 0 -12.8 10.2" />
+      <path d="M21 3a16 16 0 0 1 -10.2 12.8" />
+      <path d="M10.6 9a9 9 0 0 1 4.4 4.4" />
+    </symbol>
     <symbol id="xk-catalog" viewBox="0 0 24 24">
       <path d="M5 19l2.757 -7.351a1 1 0 0 1 .936 -.649h12.307a1 1 0 0 1 .986 1.164l-.996 5.211a2 2 0 0 1 -1.964 1.625h-14.026a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2h4l3 3h7a2 2 0 0 1 2 2v2" />
     </symbol>
@@ -100,6 +106,16 @@
       <path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
       <path d="M21 21v-2a4 4 0 0 0 -3 -3.85" />
+    </symbol>
+    <symbol id="xk-dns" viewBox="0 0 24 24">
+      <path d="M6 9a6 6 0 1 0 12 0a6 6 0 0 0 -12 0" />
+      <path d="M12 3c1.333 .333 2 2.333 2 6s-.667 5.667 -2 6" />
+      <path d="M12 3c-1.333 .333 -2 2.333 -2 6s.667 5.667 2 6" />
+      <path d="M6 9h12" />
+      <path d="M3 20h7" />
+      <path d="M14 20h7" />
+      <path d="M10 20a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path d="M12 15v3" />
     </symbol>
     <symbol id="xk-download" viewBox="0 0 24 24">
       <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" />

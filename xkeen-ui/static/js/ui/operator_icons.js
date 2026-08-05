@@ -4,7 +4,7 @@ window.XKeen = window.XKeen || {};
 const XKeen = window.XKeen;
 XKeen.ui = XKeen.ui || {};
 
-const SPRITE_URL = '/static/icons/operator.svg?v=20260802a';
+const SPRITE_URL = '/static/icons/operator.svg?v=20260805e';
 const SAFE_ICON_NAME = /^[a-z0-9-]+$/;
 const KNOWN_ICON_NAMES = new Set(OPERATOR_ICON_NAMES);
 

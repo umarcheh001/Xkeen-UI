@@ -357,6 +357,14 @@ body.panel-page .panel-shell-identity {
   min-width: 0;
 }
 
+body.panel-page .header-center {
+  position: absolute;
+  left: 50%;
+  justify-self: center;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+
 body.panel-page :is(
   .header-title-group,
   .header-center,
@@ -447,7 +455,7 @@ body.panel-page .service-status-text {
 body.panel-page .header-center {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
 }
 
 body.panel-page .header-right {
@@ -553,6 +561,65 @@ body.panel-page .last-load-chip {
   font-weight: 610;
   text-decoration: none;
   transform: none !important;
+}
+
+/* The core selector and active-log indicator share the physical center of the
+ * shell.  Unlike the retired glossy badge, this is a compact operator status:
+ * an indigo document glyph with a clear active state and no decorative glow. */
+body.panel-page .panel-shell-center {
+  min-height: 30px;
+  padding: 0 7px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-sm);
+  background: var(--op-surface-2);
+}
+
+body.panel-page .panel-shell-center .service-core-text {
+  min-height: 26px;
+  padding: 0 7px;
+  border: 0 !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+}
+
+body.panel-page .panel-shell-center .panel-shell-badges {
+  margin-left: 1px;
+  padding-left: 6px;
+  border-left: 1px solid var(--op-border);
+}
+
+:is(body.panel-page, html[data-theme="light"] body.panel-page) #xray-logs-badge {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent !important;
+  border-radius: 4px;
+  background: transparent !important;
+  color: var(--op-faint) !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
+
+:is(body.panel-page, html[data-theme="light"] body.panel-page) #xray-logs-badge .xk-action-icon {
+  width: 14px;
+  height: 14px;
+}
+
+:is(body.panel-page, html[data-theme="light"] body.panel-page) #xray-logs-badge[data-state="on"] {
+  display: inline-flex;
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent-hover) !important;
+}
+
+:is(body.panel-page, html[data-theme="light"] body.panel-page) #xray-logs-badge[data-state="on"][data-live="on"] {
+  border-color: var(--op-accent) !important;
+  background: rgba(116, 119, 232, 0.22) !important;
+  color: #bfc1ff !important;
 }
 
 body.panel-page header .xk-header-btn:hover,
@@ -3389,6 +3456,16 @@ body.panel-page #view-xray-logs .restart-log-search-input {
   box-shadow: none !important;
 }
 
+body.panel-page #view-xray-logs #xray-log-toggle-domains[data-state="on"] {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent-hover) !important;
+}
+
+body.panel-page #view-xray-logs #xray-log-toggle-domains[data-state="on"] .xk-action-icon {
+  filter: drop-shadow(0 0 5px rgba(133, 136, 242, 0.48));
+}
+
 body.panel-page #view-xray-logs :is(.xray-log-select, .xray-log-filter, .dt-log-lines-input, .restart-log-search-input):focus {
   border-color: var(--op-accent-border) !important;
   outline: 2px solid var(--op-accent-soft) !important;
@@ -3702,8 +3779,7 @@ body.panel-page #view-xray-logs .restart-log-empty-detail {
   font-size: calc(10.5px * var(--xk-font-scale, 1));
 }
 
-body.panel-page #view-xray-logs .xk-log-state,
-body.panel-page #view-xray-logs .xray-log-domain-hint {
+body.panel-page #view-xray-logs .xk-log-state {
   display: flex;
   align-items: center;
   min-height: 32px;
@@ -9472,8 +9548,11 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
   }
 
   body.panel-page .header-center {
+    position: static;
+    left: auto;
     justify-self: end;
     justify-content: flex-end;
+    transform: none;
   }
 
   body.panel-page .header-right {

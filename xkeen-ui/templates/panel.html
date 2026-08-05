@@ -1,6 +1,6 @@
 <!doctype html>
 {% macro op_icon(name, class_name='') -%}
-<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260802a') }}#xk-{{ name }}"></use></svg>
+<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260805e') }}#xk-{{ name }}"></use></svg>
 {%- endmacro %}
 <html lang="ru">
 <head>
@@ -69,7 +69,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260805d') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260805e') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -122,8 +122,7 @@
                 title="Логи Xray выключены"
                 aria-label="Логи Xray выключены"
               >
-                <span class="xray-logs-badge__glyph" aria-hidden="true"></span>
-                <span class="xray-logs-badge__dot" aria-hidden="true"></span>
+                {{ op_icon('list-details') }}
               </span>
             </div>
             {% endif %}
@@ -1676,7 +1675,8 @@
             <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-view-btn" title="Просмотреть логи" aria-label="Просмотреть логи">{{ op_icon('search') }}</button>
             <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-enable-btn" title="Включить логи" aria-label="Включить логи">{{ op_icon('play') }}</button>
             <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-disable-btn" title="Остановить логи" aria-label="Остановить логи">{{ op_icon('stop') }}</button>
-            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-clear-screen-btn" title="Очистить журнал" aria-label="Очистить журнал">{{ op_icon('clear') }}</button>
+            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-toggle-domains" title="Показывать доменные имена рядом с IP-адресами" aria-label="Показывать доменные имена рядом с IP-адресами" aria-pressed="false">{{ op_icon('dns') }}</button>
+            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-clear-screen-btn" title="Очистить журнал" aria-label="Очистить журнал">{{ op_icon('broom') }}</button>
             <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-clear-files-btn" title="Очистить логфайлы" aria-label="Очистить логфайлы">{{ op_icon('trash') }}</button>
             <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-copy-btn" title="Скопировать" aria-label="Скопировать">{{ op_icon('duplicate') }}</button>
             <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-devices-btn" title="Имена устройств" aria-label="Имена устройств">{{ op_icon('devices') }}</button>
@@ -1748,7 +1748,6 @@
         </div>
 
         <pre id="xray-log-output" class="log-block xray-log-block" aria-label="Строки лога Xray" tabindex="0"></pre>
-        <div id="xray-log-domain-hint" class="status xray-log-domain-hint hidden" role="status"></div>
         <div id="xray-log-status" class="status xk-log-state" role="status" aria-live="polite"></div>
       </section>
 

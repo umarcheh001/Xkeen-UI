@@ -1951,6 +1951,17 @@ def test_xray_logs_destination_domain_hints_ui_contract():
     assert '.log-block .xray-log-dest-domain' in css
 
 
+def test_xray_logs_dns_display_toggle_is_in_toolbar_without_legacy_banner():
+    template = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
+    script = Path('xkeen-ui/static/js/features/xray_logs.js').read_text(encoding='utf-8')
+
+    assert 'id="xray-log-toggle-domains"' in template
+    assert "op_icon('dns')" in template
+    assert 'id="xray-log-domain-hint"' not in template
+    assert 'function syncXrayLogDomainsToggle' in script
+    assert 'function toggleXrayLogDomainsDisplay' in script
+
+
 def test_file_manager_non_navigation_refreshes_do_not_consume_path_input_drafts():
     editor_text = Path('xkeen-ui/static/js/features/file_manager/editor.js').read_text(encoding='utf-8')
     listing_text = Path('xkeen-ui/static/js/features/file_manager/listing.js').read_text(encoding='utf-8')
