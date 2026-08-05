@@ -604,8 +604,10 @@ let outboundsModuleApi = null;
         }
         try { setOutboundTag('proxy'); } catch (e) {}
         try { renderParsePreview({ ok: false, scheme: '', fields: {}, errors: [], warnings: [] }); } catch (e) {}
-        const isPool = normalizedMode === 'pool';
-        if (normalizedMode === 'subscription') {
+        // The node-card panel is the single source of truth for both generated
+        // subscriptions and manually assembled pools.  Do not repeat the same
+        // proxy tags in a separate fragment summary above it.
+        if (normalizedMode === 'subscription' || normalizedMode === 'pool') {
           try {
             if (summaryEl) {
               summaryEl.innerHTML = '';
@@ -615,8 +617,8 @@ let outboundsModuleApi = null;
           return;
         }
         renderOutboundsFragmentSummary(fileName, summary, {
-          title: isPool ? 'Пул прокси' : 'Сгенерированный фрагмент подписки',
-          emptyMeta: isPool ? 'outbounds пула' : 'outbounds подписки',
+          title: 'Сгенерированный фрагмент подписки',
+          emptyMeta: 'outbounds подписки',
         });
         try { if (summaryEl) summaryEl.classList.remove('hidden'); } catch (e2) {}
       } else {
@@ -1644,9 +1646,13 @@ let outboundsModuleApi = null;
       if (emojiCode) return emojiCode;
       const tokenCode = countryCodeFromTokens(value);
       if (tokenCode) return tokenCode;
+      // Pool tags commonly use underscores and dots (for example,
+      // `YYY_Netherlands.0005`). Those characters are word characters for
+      // regex `\b`, so normalize them before matching country-name rules.
+      const countryText = value.replace(/[_.\/-]+/g, ' ');
       for (const rule of COUNTRY_TEXT_RULES) {
         try {
-          if (rule[0].test(value)) return rule[1];
+          if (rule[0].test(countryText)) return rule[1];
         } catch (e) {}
       }
       return '';

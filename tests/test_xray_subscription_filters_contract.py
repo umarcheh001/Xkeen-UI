@@ -84,7 +84,7 @@ def test_outbounds_single_link_tag_control_is_wired_to_payload():
     assert ".outbounds-tag-panel" in styles_src
 
 
-def test_outbounds_proxy_pool_uses_fragment_summary_without_hiding_pool_button():
+def test_outbounds_proxy_pool_uses_node_cards_without_hiding_pool_button():
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
     styles_src = _read("xkeen-ui/static/styles.css")
 
@@ -100,6 +100,9 @@ def test_outbounds_proxy_pool_uses_fragment_summary_without_hiding_pool_button()
     assert "outboundsDistinctProxySignatureCount(data && data.config) > 1" in outbounds_src
     assert "outbounds-load-pool-fragment" in outbounds_src
     assert "Пул прокси загружен:" in outbounds_src
+    assert "if (normalizedMode === 'subscription' || normalizedMode === 'pool')" in outbounds_src
+    assert "const countryText = value.replace(/[_.\\/-]+/g, ' ');" in outbounds_src
+    assert "if (rule[0].test(countryText)) return rule[1];" in outbounds_src
     assert "#outbounds-body.xk-outbounds-summary-fragment #outbounds-save-btn" in styles_src
     assert "#outbounds-body.xk-outbounds-subscription-fragment #outbounds-pool-btn" in styles_src
     assert "#outbounds-body.xk-outbounds-summary-fragment #outbounds-pool-btn" not in styles_src

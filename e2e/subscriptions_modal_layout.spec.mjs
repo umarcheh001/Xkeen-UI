@@ -411,6 +411,20 @@ test('main outbounds pool card relayouts cleanly after switching between Routing
   await expect(page.locator('#outbounds-nodes-panel')).toBeVisible();
   await expect(page.locator('#outbounds-nodes-list .xk-outbounds-node-item')).toHaveCount(nodes.length);
 
+  const poolPresentation = await page.evaluate(() => {
+    const summary = document.querySelector('#outbounds-fragment-summary');
+    const flags = Array.from(document.querySelectorAll('#outbounds-nodes-list .xk-sub-node-country'));
+    return {
+      summaryVisible: !!summary && !summary.classList.contains('hidden')
+        && window.getComputedStyle(summary).display !== 'none',
+      flagCountries: flags.map((flag) => flag.getAttribute('data-country')),
+    };
+  });
+  expect(poolPresentation.summaryVisible).toBe(false);
+  expect(poolPresentation.flagCountries).toContain('NL');
+  expect(poolPresentation.flagCountries).toContain('DE');
+  expect(poolPresentation.flagCountries).toContain('SE');
+
   await page.locator('.top-tab-btn[data-view="mihomo"]').click();
   await expect(page.locator('#view-mihomo')).toBeVisible();
 
