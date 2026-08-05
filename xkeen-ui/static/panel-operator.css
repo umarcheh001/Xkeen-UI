@@ -8315,6 +8315,97 @@ body.panel-page #ui-settings-modal .xk-ui-settings-item-meta {
   font-size: calc(10px * var(--xk-font-scale, 1));
 }
 
+/* UI settings used the old blue-glass switch wrapper and fully rounded status
+ * pills.  Keep controls compact, but make them read as the same neutral
+ * operator controls used throughout the panel. */
+body.panel-page #ui-settings-modal .xk-ui-settings-toggle.dt-switch,
+html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-toggle.dt-switch {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-toggle .dt-switch-slider,
+html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-toggle .dt-switch-slider {
+  width: 34px;
+  min-width: 34px;
+  height: 18px;
+  border: 1px solid var(--op-border-strong) !important;
+  border-radius: 999px !important;
+  background: var(--op-surface-3) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-toggle .dt-switch-slider::after,
+html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-toggle .dt-switch-slider::after {
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  background: var(--op-text) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-toggle input:checked + .dt-switch-slider,
+html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-toggle input:checked + .dt-switch-slider {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-toggle input:checked + .dt-switch-slider::after,
+html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-toggle input:checked + .dt-switch-slider::after {
+  background: var(--op-accent-hover) !important;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-value,
+body.panel-page #ui-settings-modal .xk-ui-settings-action,
+body.panel-page #ui-settings-modal .xk-ui-settings-pill,
+html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-value,
+html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-action,
+html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-pill {
+  min-height: var(--op-control-compact-h);
+  padding: 0 8px;
+  border: 1px solid var(--op-border-strong) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-data-muted) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-value[data-tone="positive"] {
+  color: var(--op-success) !important;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-value[data-tone="warning"] {
+  color: var(--op-warning) !important;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-value[data-tone="danger"],
+body.panel-page #ui-settings-modal .xk-ui-settings-action-danger {
+  color: var(--op-danger) !important;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-action:hover:not([disabled]),
+body.panel-page #ui-settings-modal .xk-ui-settings-pill:hover {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-text) !important;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-status.error {
+  border-radius: var(--op-control-radius) !important;
+  border-color: color-mix(in srgb, var(--op-danger) 42%, var(--op-border)) !important;
+  background: var(--op-danger-soft) !important;
+  color: var(--op-danger) !important;
+}
+
 /* ==========================================================================
  * 7. THEMES
  *
