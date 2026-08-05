@@ -488,7 +488,7 @@ def test_mihomo_yaml_schema_runtime_requires_matching_network_for_ws_opts():
     assert any(str(item["path"]) == "proxies[0]" for item in result["diagnostics"])
 
 
-def test_mihomo_yaml_schema_runtime_requires_reality_companion_fields():
+def test_mihomo_yaml_schema_runtime_allows_optional_reality_companion_fields():
     result = _run_mihomo_yaml_schema(
         "\n".join([
             "proxies:",
@@ -504,11 +504,9 @@ def test_mihomo_yaml_schema_runtime_requires_reality_companion_fields():
         ])
     )
 
-    assert result["ok"] is False
-    messages = [str(item["message"]) for item in result["diagnostics"]]
-    assert any("`client-fingerprint`" in message for message in messages)
-    assert any("`servername`" in message for message in messages)
-    assert any(str(item["path"]) == "proxies[0]" for item in result["diagnostics"])
+    assert result["ok"] is True
+    assert result["parseOk"] is True
+    assert result["diagnostics"] == []
 
 
 def test_mihomo_yaml_schema_runtime_accepts_http_rule_provider_without_path():
@@ -547,3 +545,21 @@ def test_mihomo_yaml_schema_runtime_reports_yaml_parser_location():
     assert result["line"] == 2
     assert result["column"] == 1
     assert "flow collection" in str(result["summary"])
+
+
+def test_mihomo_yaml_schema_runtime_accepts_documented_direct_proxy_without_server_port():
+    result = _run_mihomo_yaml_schema(
+        "\n".join([
+            "proxies:",
+            "  - name: OpenConnect-Alcazar",
+            "    type: direct",
+            "    udp: true",
+            "    ip-version: ipv4",
+            "    interface-name: nocli4",
+            "",
+        ])
+    )
+
+    assert result["ok"] is True
+    assert result["parseOk"] is True
+    assert result["diagnostics"] == []

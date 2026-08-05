@@ -737,9 +737,6 @@
       "x-ui-example": "{ name: \"DE-01\", type: \"vless\", server: \"edge.example.com\", port: 443, uuid: \"11111111-1111-1111-1111-111111111111\", tls: true }",
       "x-ui-warning": "Обязательные поля зависят от `type`, а transport-блоки (`ws-opts`, `grpc-opts`, `xhttp-opts`) работают только вместе с подходящим `network`.",
       "required": ["name", "type"],
-      "dependentRequired": {
-        "reality-opts": ["client-fingerprint", "servername"]
-      },
       "properties": {
         "name": {
           "type": "string",
@@ -748,8 +745,8 @@
         },
         "type": {
           "type": "string",
-          "enum": ["ss", "ssr", "vmess", "vless", "trojan", "hysteria", "hysteria2", "wireguard", "openvpn", "tailscale", "tuic", "socks5", "http", "ssh", "snell", "anytls"],
-          "description": "Тип протокола. `vless`+`reality` и `hysteria2` — современные рекомендуемые варианты. `ssr` устарел, `vmess` нежелателен из-за проблем с fingerprint'ом."
+          "enum": ["ss", "ssr", "vmess", "vless", "trojan", "hysteria", "hysteria2", "wireguard", "openvpn", "tailscale", "tuic", "socks5", "http", "ssh", "snell", "anytls", "direct"],
+          "description": "Тип протокола или встроенной политики. Помимо сетевых протоколов Mihomo поддерживает `direct`: трафик идёт напрямую, без `server` и `port`. `vless`+`reality` и `hysteria2` — современные рекомендуемые варианты."
         },
         "server": {
           "type": "string",
@@ -1164,7 +1161,7 @@
           "if": {
             "required": ["type"],
             "properties": {
-              "type": { "not": { "const": "tailscale" } }
+              "type": { "not": { "enum": ["tailscale", "direct"] } }
             }
           },
           "then": {

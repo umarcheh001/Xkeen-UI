@@ -116,6 +116,36 @@ console.log(JSON.stringify({{
     assert "proxies[0].servername" in paths
 
 
+def test_mihomo_semantic_validation_allows_documented_direct_proxy_name():
+    doc = "\n".join([
+        "proxies:",
+        "  - name: DIRECT",
+        "    type: direct",
+        "    udp: true",
+        "",
+    ])
+
+    script = f"""
+import fs from 'node:fs';
+import {{ validateYamlTextAgainstSchema }} from './xkeen-ui/static/js/ui/yaml_schema.js';
+
+const schema = JSON.parse(fs.readFileSync('./xkeen-ui/static/schemas/mihomo-config.schema.json', 'utf8'));
+const result = validateYamlTextAgainstSchema({json.dumps(doc)}, schema, {{ maxErrors: 12 }});
+console.log(JSON.stringify({{
+  ok: !!result.ok,
+  diagnostics: (result.diagnostics || []).map((item) => ({{
+    code: item.code || '',
+    path: item.path || '',
+    message: item.message || '',
+  }})),
+}}));
+"""
+
+    payload = _run_node_json(script)
+    assert payload["ok"] is True
+    assert not any(item["code"] == "proxies-reserved-name" for item in payload["diagnostics"])
+
+
 def test_xray_semantic_validation_runtime_reports_missing_refs_and_duplicates():
     script = """
 import { validateXrayRoutingSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';

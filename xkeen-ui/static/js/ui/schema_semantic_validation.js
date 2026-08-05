@@ -152,11 +152,17 @@ function validateNamedDuplicates(target, list, pathPrefix, noun) {
     if (!name) return;
     const path = [pathPrefix, index, 'name'];
     if (isReservedMihomoTarget(name)) {
-      pushDiagnostic(target, createYamlDiagnostic(path, `${noun} \`${name}\` совпадает со спец-именем Mihomo (\`DIRECT\`, \`REJECT\`, \`PASS\`). Такое имя создаёт путаницу в \`rules\` и \`proxy-groups\`.`, {
-        severity: 'warning',
-        source: 'mihomo-semantic',
-        code: `${pathPrefix}-reserved-name`,
-      }));
+      const isDirectNode = pathPrefix === 'proxies'
+        && item
+        && cleanName(item.type).toUpperCase() === 'DIRECT'
+        && name.toLowerCase() === 'direct';
+      if (!isDirectNode) {
+        pushDiagnostic(target, createYamlDiagnostic(path, `${noun} \`${name}\` совпадает со спец-именем Mihomo (\`DIRECT\`, \`REJECT\`, \`PASS\`). Такое имя создаёт путаницу в \`rules\` и \`proxy-groups\`.`, {
+          severity: 'warning',
+          source: 'mihomo-semantic',
+          code: `${pathPrefix}-reserved-name`,
+        }));
+      }
     }
     if (seen.has(name)) {
       const firstIndex = seen.get(name);
