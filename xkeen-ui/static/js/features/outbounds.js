@@ -1196,9 +1196,11 @@ let outboundsModuleApi = null;
         const data = await res.json().catch(() => ({}));
         if (data && data.entry) _outboundsNodeLatency[key] = data.entry;
         if (!res.ok || !data || data.ok === false) {
-          const msg = String((data && (data.error || data.message)) || 'Не удалось проверить задержку proxy-узла.');
-          if (statusEl) setOutboundsStatus(statusEl, msg, 'error');
-          try { toastXkeen(msg, 'error'); } catch (e2) {}
+          const rawError = String((data && (data.error || data.message)) || '');
+          const msg = rawError
+            ? subsProbeFailureMessage(rawError, 'proxy-узел')
+            : 'Не удалось начать проверку подключения через proxy-узел. Повторите попытку позже.';
+          if (statusEl) setOutboundsStatus(statusEl, msg, 'warning');
           return false;
         }
         const delay = Number(data.delay_ms || (data.entry && data.entry.delay_ms));
@@ -1209,9 +1211,8 @@ let outboundsModuleApi = null;
         }
         return true;
       } catch (e) {
-        const msg = 'Ошибка проверки задержки: ' + String(e && e.message ? e.message : e);
-        if (statusEl) setOutboundsStatus(statusEl, msg, 'error');
-        try { toastXkeen(msg, 'error'); } catch (e2) {}
+        const msg = subsProbeFailureMessage(e && e.message ? e.message : e, 'proxy-узел');
+        if (statusEl) setOutboundsStatus(statusEl, msg, 'warning');
         return false;
       } finally {
         delete _outboundsNodePingState[pendingKey];
@@ -1263,13 +1264,12 @@ let outboundsModuleApi = null;
         if (statusEl) {
           setOutboundsStatus(statusEl, failed <= 0
             ? `Проверено proxy-узлов: ${ok}.`
-            : `Проверено ${ok} из ${total}, ошибок: ${failed}.`, failed <= 0 ? 'success' : 'warning');
+            : `Проверено ${ok} из ${total}: ${subsProbeFailureCountText(failed)}.`, failed <= 0 ? 'success' : 'warning');
         }
         return failed <= 0;
       } catch (e) {
-        const msg = 'Ошибка массовой проверки задержки: ' + String(e && e.message ? e.message : e);
-        if (statusEl) setOutboundsStatus(statusEl, msg, 'error');
-        try { toastXkeen(msg, 'error'); } catch (e2) {}
+        const msg = subsProbeBatchFailureMessage(e && e.message ? e.message : e, 'узлов');
+        if (statusEl) setOutboundsStatus(statusEl, msg, 'warning');
         return false;
       } finally {
         pendingKeys.forEach((key) => { delete _outboundsNodePingState[key]; });
@@ -5871,8 +5871,10 @@ let outboundsModuleApi = null;
       if (!el) return;
       try {
         subsSetStatusContent(el, String(msg || ''), opts);
+        const warning = !isErr && !!(opts && opts.warning);
         el.classList.toggle('is-error', !!isErr);
-        el.classList.toggle('is-success', !isErr && !!isOk);
+        el.classList.toggle('is-warning', warning);
+        el.classList.toggle('is-success', !isErr && !warning && !!isOk);
         el.classList.toggle('is-busy', !!(msg && String(msg).trim()) && !!(opts && opts.busy));
         if (msg && String(msg).trim() && opts && opts.busy) el.setAttribute('aria-busy', 'true');
         else el.removeAttribute('aria-busy');
@@ -5916,13 +5918,85 @@ let outboundsModuleApi = null;
       return entry && typeof entry === 'object' ? entry : null;
     }
 
+    // Latency checks are HTTPS requests sent *through* the selected node,
+    // not ICMP pings. Browser/Python/Xray error strings are implementation
+    // details, so the operator sees the outcome and a next action instead.
+    function subsProbeFailureInfo(value) {
+      const normalized = String(value || '').trim().toLowerCase();
+      if (/unexpected_eof|eof occurred in violation|tlsv1_alert|certificate verify|ssl.*handshake|tls.*handshake/.test(normalized)) {
+        return {
+          summary: 'не получен ответ при защищённом подключении',
+          hint: 'Повторите проверку позже или выберите другой узел.',
+        };
+      }
+      if (/connection reset by peer|errno 104|econnreset|connection reset/.test(normalized)) {
+        return {
+          summary: 'удалённый сервер прервал подключение',
+          hint: 'Это может быть временной проблемой узла или его сети. Повторите проверку позже.',
+        };
+      }
+      if (/timed out|timeout|time out/.test(normalized)) {
+        return {
+          summary: 'узел не ответил за отведённое время',
+          hint: 'Проверьте его позднее или используйте другой узел.',
+        };
+      }
+      if (/connection refused|econnrefused/.test(normalized)) {
+        return {
+          summary: 'сервер отклонил контрольное подключение',
+          hint: 'Вероятно, узел временно недоступен. Выберите другой или обновите подписку.',
+        };
+      }
+      if (/network is unreachable|no route to host|name or service not known|temporary failure in name resolution/.test(normalized)) {
+        return {
+          summary: 'роутер не смог подключиться к контрольному адресу',
+          hint: 'Проверьте подключение роутера к интернету и повторите проверку.',
+        };
+      }
+      return {
+        summary: 'тестовое подключение через узел не установлено',
+        hint: 'Повторите проверку позже или попробуйте другой узел.',
+      };
+    }
+
+    function subsProbeFailureMessage(value, subject) {
+      const info = subsProbeFailureInfo(value);
+      const target = String(subject || 'узел').trim();
+      return `Проверка через ${target} не завершена: ${info.summary}. ${info.hint}`;
+    }
+
+    function subsProbeBatchFailureMessage(value, subject) {
+      const info = subsProbeFailureInfo(value);
+      const target = String(subject || 'узлов').trim();
+      return `Проверка ${target} не завершена: ${info.summary}. ${info.hint}`;
+    }
+
+    function subsProbeFailureTooltip(value) {
+      const info = subsProbeFailureInfo(value);
+      return [
+        `Проверка подключения не завершена: ${info.summary}.`,
+        info.hint,
+        'Проверка идёт через узел к контрольному HTTPS-адресу. Её сбой не обязательно означает, что сам узел не работает.',
+      ].join('\n');
+    }
+
+    function subsProbeFailureCountText(count) {
+      const value = Math.max(0, Math.floor(Number(count) || 0));
+      const mod100 = value % 100;
+      const mod10 = value % 10;
+      const noun = mod100 >= 11 && mod100 <= 14
+        ? 'узлов'
+        : (mod10 === 1 ? 'узел' : (mod10 >= 2 && mod10 <= 4 ? 'узла' : 'узлов'));
+      return `${value} ${noun} не прошли проверку подключения`;
+    }
+
     function subsNodeLatencyTone(entry, pending, canPing) {
       if (pending) return 'is-pending';
       if (!canPing) return 'is-unavailable';
       const hasDelay = !!(entry && entry.delay_ms != null && entry.delay_ms !== '');
       const delay = hasDelay ? Number(entry.delay_ms) : NaN;
       const status = String(entry && entry.status || '').trim().toLowerCase();
-      if (status === 'error') return 'is-error';
+      if (status === 'error') return 'is-check-failed';
       if (Number.isFinite(delay) && delay >= 0) {
         if (delay <= 250) return 'is-fast';
         if (delay <= 700) return 'is-mid';
@@ -5938,7 +6012,7 @@ let outboundsModuleApi = null;
       const delay = hasDelay ? Number(entry.delay_ms) : NaN;
       if (Number.isFinite(delay) && delay >= 0) return `${Math.round(delay)} ms`;
       const status = String(entry && entry.status || '').trim().toLowerCase();
-      if (status === 'error') return 'fail';
+      if (status === 'error') return 'нет ответа';
       return '—';
     }
 
@@ -5954,8 +6028,8 @@ let outboundsModuleApi = null;
       const probeUrl = String(entry && entry.probe_url || '').trim();
       if (Number.isFinite(delay) && delay >= 0) {
         parts.push(`Последняя задержка: ${Math.round(delay)} ms`);
-      } else if (status === 'error' && error) {
-        parts.push(`Последняя проверка: ${error}`);
+      } else if (status === 'error') {
+        parts.push(subsProbeFailureTooltip(error));
       } else {
         parts.push('Пока нет данных по задержке.');
       }
@@ -5974,7 +6048,9 @@ let outboundsModuleApi = null;
           const rowChecked = subsFormatClockTime(item && item.checked_at);
           const rowValue = Number.isFinite(rowDelay) && rowDelay >= 0
             ? `${Math.round(rowDelay)} ms`
-            : (rowStatus === 'error' && rowError ? rowError : rowStatus || '—');
+            : (rowStatus === 'error'
+              ? `нет ответа (${subsProbeFailureInfo(rowError).summary})`
+              : rowStatus || '—');
           return `${rowChecked} · ${rowValue}`;
         });
         parts.push(`История:\n${rows.join('\n')}`);
@@ -7113,8 +7189,11 @@ let outboundsModuleApi = null;
           sub.node_latency = map;
         }
         if (!res.ok || !data || data.ok === false) {
-          const msg = String((data && (data.error || data.message)) || 'Не удалось проверить задержку узла.');
-          subsSetStatus(msg, true);
+          const rawError = String((data && (data.error || data.message)) || '');
+          const msg = rawError
+            ? subsProbeFailureMessage(rawError, 'узел')
+            : 'Не удалось начать проверку подключения через узел. Повторите попытку позже.';
+          subsSetStatus(msg, false, false, { warning: true });
           return false;
         }
         const delay = Number(data.delay_ms || (data.entry && data.entry.delay_ms));
@@ -7124,8 +7203,8 @@ let outboundsModuleApi = null;
         subsSetStatus(msg, false, true);
         return true;
       } catch (e) {
-        const msg = 'Ошибка проверки задержки: ' + String(e && e.message ? e.message : e);
-        subsSetStatus(msg, true);
+        const msg = subsProbeFailureMessage(e && e.message ? e.message : e, 'узел');
+        subsSetStatus(msg, false, false, { warning: true });
         return false;
       } finally {
         delete _subscriptionNodePingState[pendingKey];
@@ -7245,13 +7324,12 @@ let outboundsModuleApi = null;
         if (failed <= 0) {
           subsSetStatus(`Проверено узлов: ${ok}.`, false, true);
         } else {
-          subsSetStatus(`Проверено ${ok} из ${total}, ошибок: ${failed}.`, true);
+          subsSetStatus(`Проверено ${ok} из ${total}: ${subsProbeFailureCountText(failed)}.`, false, false, { warning: true });
         }
         return failed <= 0;
       } catch (e) {
-        const msg = 'Ошибка массовой проверки задержки: ' + String(e && e.message ? e.message : e);
-        subsSetStatus(msg, true);
-        try { toastXkeen(msg, 'error'); } catch (e2) {}
+        const msg = subsProbeBatchFailureMessage(e && e.message ? e.message : e, 'узлов');
+        subsSetStatus(msg, false, false, { warning: true });
         return false;
       } finally {
         pendingStateKeys.forEach((key) => {

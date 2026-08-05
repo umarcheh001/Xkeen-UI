@@ -318,6 +318,14 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "LeastPing и generated fragments" in outbounds_src
     assert "function subsNodeLatencyEntry(sub, nodeKey) {" in outbounds_src
     assert "function subsProbeNode(subId, nodeKey) {" in outbounds_src
+    assert "function subsProbeFailureInfo(value) {" in outbounds_src
+    assert "function subsProbeFailureTooltip(value) {" in outbounds_src
+    assert "Её сбой не обязательно означает, что сам узел не работает." in outbounds_src
+    assert "if (status === 'error') return 'нет ответа';" in outbounds_src
+    assert "Технические детали:" not in outbounds_src
+    assert ".xk-sub-node-latency.is-check-failed" in styles_src
+    assert "subsSetStatus(msg, false, false, { warning: true });" in outbounds_src
+    assert ".xk-sub-status.is-warning" in styles_src
     assert "function subsPingAllTooltipText(sub, hasPingable) {" in outbounds_src
     assert "class=\"xk-sub-file-badge\">JSON</span>" in outbounds_src
     assert "xk-sub-list-action xk-sub-list-action-refresh xk-sub-refresh" in outbounds_src
