@@ -563,41 +563,45 @@ body.panel-page .last-load-chip {
   transform: none !important;
 }
 
-/* The core selector and active-log indicator share the physical center of the
- * shell.  Unlike the retired glossy badge, this is a compact operator status:
- * an indigo document glyph with a clear active state and no decorative glow. */
+/* The core selector stays on the physical center line.  The active-log status
+ * is an adjacent, independent indicator so neither control looks fused into a
+ * legacy pill. */
 body.panel-page .panel-shell-center {
   min-height: 30px;
-  padding: 0 7px;
-  border: 1px solid var(--op-border);
-  border-radius: var(--op-radius-sm);
-  background: var(--op-surface-2);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 body.panel-page .panel-shell-center .service-core-text {
-  min-height: 26px;
-  padding: 0 7px;
-  border: 0 !important;
-  border-radius: 4px !important;
-  background: transparent !important;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface-2) !important;
 }
 
 body.panel-page .panel-shell-center .panel-shell-badges {
-  margin-left: 1px;
-  padding-left: 6px;
-  border-left: 1px solid var(--op-border);
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 8px);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  transform: translateY(-50%);
 }
 
 :is(body.panel-page, html[data-theme="light"] body.panel-page) #xray-logs-badge {
   display: none;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  min-width: 26px;
-  height: 26px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
   padding: 0;
   border: 1px solid transparent !important;
-  border-radius: 4px;
+  border-radius: var(--op-radius-sm);
   background: transparent !important;
   color: var(--op-faint) !important;
   box-shadow: none !important;
@@ -9552,6 +9556,11 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
     left: auto;
     justify-self: end;
     justify-content: flex-end;
+    transform: none;
+  }
+
+  body.panel-page .panel-shell-center .panel-shell-badges {
+    position: static;
     transform: none;
   }
 

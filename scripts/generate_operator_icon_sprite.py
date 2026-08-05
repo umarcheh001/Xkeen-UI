@@ -18,7 +18,7 @@ ICONS = {
     "add-rule": "list-details",
     "archive": "archive",
     "back": "arrow-left",
-    "broom": "brush",
+    "broom": "custom:broom",
     "bookmark": "bookmark",
     "catalog": "folder-open",
     "chevron-down": "chevron-down",
@@ -100,6 +100,18 @@ ICONS = {
     "terminal": "terminal-2",
 }
 
+# Tabler does not ship a household broom in the pinned icon set.  A paintbrush
+# is too easily confused with the adjacent destructive-file action at 16px, so
+# keep this one small, explicit operator glyph in the generated sprite.
+CUSTOM_ICON_BODIES = {
+    "custom:broom": """
+<path d="M17 3l-8 11" />
+<path d="M5 14h6l3 6h-11z" />
+<path d="M5 17h7" />
+<path d="M4 20h8" />
+""",
+}
+
 SVG_BODY_RE = re.compile(r"<svg\b[^>]*>(?P<body>.*)</svg>\s*", re.DOTALL)
 EMPTY_CANVAS_RE = re.compile(
     r'\s*<path\s+stroke="none"\s+d="M0 0h24v24H0z"\s+fill="none"\s*/>\s*'
@@ -115,6 +127,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def read_icon_body(tabler_name: str) -> str:
+    if tabler_name in CUSTOM_ICON_BODIES:
+        body = CUSTOM_ICON_BODIES[tabler_name].strip()
+        return "\n".join(f"      {line.strip()}" for line in body.splitlines() if line.strip())
+
     source = TABLER_ROOT / "icons" / "outline" / f"{tabler_name}.svg"
     if not source.is_file():
         raise SystemExit(f"missing Tabler icon: {source}")

@@ -882,6 +882,14 @@ let xrayLogsModuleApi = null;
     const badge = refs.headerBadge;
     if (!badge) return;
 
+    // The header is also rendered before this lazy feature loads.  Normalize
+    // its glyph once the feature is ready, so a cached legacy shell cannot
+    // leave the retired document/pill artwork beside the core selector.
+    const glyph = badge.querySelector('use');
+    if (!glyph || !String(glyph.getAttribute('href') || '').endsWith('#xk-terminal')) {
+      badge.innerHTML = iconHtml('terminal');
+    }
+
     const nextState = state === 'on' ? 'on' : 'off';
     const nextLevel = String(level || '').trim().toLowerCase();
     const nextLive = (_streaming && nextState === 'on') ? 'on' : 'off';

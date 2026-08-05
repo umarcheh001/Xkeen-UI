@@ -278,12 +278,12 @@
     },
     {
       "semantic_name": "broom",
-      "tabler_asset": "brush",
+      "tabler_asset": "custom:broom",
       "usage": [
         {
           "location": "xkeen-ui/templates/panel.html:L1679",
           "control_type": "icon-only",
-          "accessible_label": "Очистить журнал"
+          "accessible_label": "Очистить отображение журнала"
         }
       ]
     },
@@ -405,7 +405,7 @@
           "accessible_label": "Очистить"
         },
         {
-          "location": "xkeen-ui/static/js/features/xray_logs.js:L3762",
+          "location": "xkeen-ui/static/js/features/xray_logs.js:L3770",
           "control_type": "runtime-action",
           "accessible_label": "Очистить"
         },
@@ -1181,7 +1181,7 @@
           "accessible_label": "Редактировать"
         },
         {
-          "location": "xkeen-ui/static/js/features/xray_logs.js:L4330",
+          "location": "xkeen-ui/static/js/features/xray_logs.js:L4338",
           "control_type": "runtime-action",
           "accessible_label": "Редактировать"
         },
@@ -1357,7 +1357,7 @@
           "accessible_label": "Полный экран"
         },
         {
-          "location": "xkeen-ui/static/js/features/xray_logs.js:L2499",
+          "location": "xkeen-ui/static/js/features/xray_logs.js:L2507",
           "control_type": "runtime-action",
           "accessible_label": "Полный экран"
         },
@@ -1403,7 +1403,7 @@
           "accessible_label": "Восстановить"
         },
         {
-          "location": "xkeen-ui/static/js/features/xray_logs.js:L2495",
+          "location": "xkeen-ui/static/js/features/xray_logs.js:L2503",
           "control_type": "runtime-action",
           "accessible_label": "Восстановить"
         },
@@ -1721,7 +1721,7 @@
           "accessible_label": "Загрузка"
         },
         {
-          "location": "xkeen-ui/static/js/features/xray_logs.js:L3069",
+          "location": "xkeen-ui/static/js/features/xray_logs.js:L3077",
           "control_type": "runtime-action",
           "accessible_label": "Загрузка"
         },
@@ -1966,22 +1966,22 @@
           "accessible_label": "Пауза"
         },
         {
-          "location": "xkeen-ui/static/js/features/xray_logs.js:L1075",
+          "location": "xkeen-ui/static/js/features/xray_logs.js:L1083",
           "control_type": "runtime-action",
           "accessible_label": "Пауза"
         },
         {
-          "location": "xkeen-ui/static/js/features/xray_logs.js:L1093",
+          "location": "xkeen-ui/static/js/features/xray_logs.js:L1101",
           "control_type": "runtime-action",
           "accessible_label": "Пауза"
         },
         {
-          "location": "xkeen-ui/static/js/features/xray_logs.js:L4084",
+          "location": "xkeen-ui/static/js/features/xray_logs.js:L4092",
           "control_type": "runtime-action",
           "accessible_label": "Пауза"
         },
         {
-          "location": "xkeen-ui/static/js/features/xray_logs.js:L4098",
+          "location": "xkeen-ui/static/js/features/xray_logs.js:L4106",
           "control_type": "runtime-action",
           "accessible_label": "Пауза"
         },
@@ -2044,12 +2044,12 @@
           "accessible_label": "Запустить"
         },
         {
-          "location": "xkeen-ui/static/js/features/xray_logs.js:L1086",
+          "location": "xkeen-ui/static/js/features/xray_logs.js:L1094",
           "control_type": "runtime-action",
           "accessible_label": "Запустить"
         },
         {
-          "location": "xkeen-ui/static/js/features/xray_logs.js:L4094",
+          "location": "xkeen-ui/static/js/features/xray_logs.js:L4102",
           "control_type": "runtime-action",
           "accessible_label": "Запустить"
         },
@@ -2662,7 +2662,7 @@
           "accessible_label": "Остановить"
         },
         {
-          "location": "xkeen-ui/static/js/features/xray_logs.js:L5268",
+          "location": "xkeen-ui/static/js/features/xray_logs.js:L5276",
           "control_type": "runtime-action",
           "accessible_label": "Остановить"
         },
@@ -2693,7 +2693,7 @@
       "tabler_asset": "device-usb",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/xray_logs.js:L2047",
+          "location": "xkeen-ui/static/js/features/xray_logs.js:L2055",
           "control_type": "runtime-action",
           "accessible_label": "Хранилище"
         },
@@ -2758,6 +2758,11 @@
         },
         {
           "location": "xkeen-ui/static/js/features/file_manager/wire.js:L486",
+          "control_type": "runtime-action",
+          "accessible_label": "Терминал"
+        },
+        {
+          "location": "xkeen-ui/static/js/features/xray_logs.js:L890",
           "control_type": "runtime-action",
           "accessible_label": "Терминал"
         },

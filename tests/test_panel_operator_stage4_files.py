@@ -31,7 +31,7 @@ def test_files_markup_exposes_toolbar_and_dual_grid_contract():
         assert fragment in view
 
     assert 'aria-label="Target"' not in view
-    assert "filename='panel-operator.css', v='20260805e'" in text
+    assert "filename='panel-operator.css', v='20260805f'" in text
 
 
 def test_files_runtime_exposes_loading_empty_error_selection_focus_and_drop_states():

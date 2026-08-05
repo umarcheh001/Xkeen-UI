@@ -42,6 +42,34 @@ def test_logs_markup_keeps_runtime_hooks_and_exposes_shared_operator_regions():
     assert 'style="max-height:60vh; overflow:auto;"' not in view
 
 
+def test_logs_toolbar_distinguishes_screen_cleanup_and_file_deletion():
+    template = TEMPLATE.read_text(encoding="utf-8")
+    css = CSS.read_text(encoding="utf-8")
+    runtime = XRAY_LOGS.read_text(encoding="utf-8")
+
+    assert 'id="xray-log-clear-screen-btn" title="Очистить экран журнала"' in template
+    assert 'id="xray-log-clear-files-btn" title="Очистить логфайлы"' in template
+    assert "id=\"xray-log-clear-screen-btn\" title=\"Очистить экран журнала\" aria-label=\"Очистить отображение журнала\">{{ op_icon('broom') }}" in template
+    assert "id=\"xray-log-clear-files-btn\" title=\"Очистить логфайлы\" aria-label=\"Очистить логфайлы\">{{ op_icon('trash') }}" in template
+
+    header = template[template.index('class="header-center panel-shell-center"'):template.index('</div>\n        </div>', template.index('class="header-center panel-shell-center"'))]
+    assert "{{ op_icon('terminal') }}" in header
+
+    for fragment in (
+        "body.panel-page .panel-shell-center .panel-shell-badges {",
+        "position: absolute;",
+        "left: calc(100% + 8px);",
+        "transform: translateY(-50%);",
+        "body.panel-page .panel-shell-center {",
+        "background: transparent;",
+        "body.panel-page .panel-shell-center .service-core-text {",
+        "border: 1px solid var(--op-border) !important;",
+    ):
+        assert fragment in css
+
+    assert "badge.innerHTML = iconHtml('terminal');" in runtime
+
+
 def test_restart_log_actions_are_icon_only_and_keep_descriptive_tooltips():
     text = TEMPLATE.read_text(encoding="utf-8")
     restart = RESTART_LOG.read_text(encoding="utf-8")

@@ -101,6 +101,46 @@ async function readLogsGeometry(page) {
 
 
 test.describe('Operator Console Stage 4 logs', () => {
+  test('header keeps the Xray status separate from the centered core selector', async ({ page }) => {
+    await openLogs(page, 'dark', { width: 1440, height: 900 });
+
+    const geometry = await page.evaluate(() => {
+      const core = document.querySelector('#xkeen-core-text');
+      const badge = document.querySelector('#xray-logs-badge');
+      core.classList.remove('hidden');
+      core.textContent = 'Ядро';
+      badge.dataset.state = 'on';
+
+      const box = (node) => {
+        const rect = node.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, center: rect.left + rect.width / 2, width: rect.width };
+      };
+      const coreBox = box(core);
+      const badgeBox = box(badge);
+      return {
+        core: coreBox,
+        badge: badgeBox,
+        badgePosition: getComputedStyle(badge.parentElement).position,
+        badgeTransform: getComputedStyle(badge.parentElement).transform,
+        headerCenter: box(document.querySelector('.header-center')),
+        viewportCenter: innerWidth / 2,
+      };
+    });
+
+    expect(geometry.core.center).toBeCloseTo(geometry.viewportCenter, 0);
+    expect(geometry.headerCenter.center).toBeCloseTo(geometry.viewportCenter, 0);
+    expect(geometry.badge.left).toBeGreaterThanOrEqual(geometry.core.right + 8);
+    expect(geometry.badgePosition).toBe('absolute');
+    expect(geometry.badgeTransform).not.toBe('none');
+    await expect(page.locator('#xray-logs-badge use')).toHaveAttribute('href', /#xk-terminal$/);
+  });
+
+  test('screen cleanup uses a broom while log-file cleanup retains trash', async ({ page }) => {
+    await openLogs(page, 'dark', { width: 1440, height: 900 });
+    await expect(page.locator('#xray-log-clear-screen-btn use')).toHaveAttribute('href', /#xk-broom$/);
+    await expect(page.locator('#xray-log-clear-files-btn use')).toHaveAttribute('href', /#xk-trash$/);
+  });
+
   for (const theme of ['dark', 'light']) {
     test(`filters, counters and details share one contract in ${theme}`, async ({ page }) => {
       await openLogs(page, theme, { width: 1440, height: 900 });
