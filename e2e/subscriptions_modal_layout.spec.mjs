@@ -254,6 +254,60 @@ test('main outbounds card keeps proxy nodes inside scrollable panel', async ({ p
       clientHeight: list ? Math.round(list.clientHeight) : 0,
       scrollHeight: list ? Math.round(list.scrollHeight) : 0,
       maxHeight: listStyle ? listStyle.maxHeight : '',
+      display: listStyle ? listStyle.display : '',
+      columns: new Set(rects.map((item) => Math.round(item.left))).size,
+      cardHeights: rects.map((item) => Math.round(item.bottom - item.top)),
+      detailsHidden: cards.every((card) => {
+        const detail = card.querySelector('.xk-sub-node-detail');
+        return !detail || window.getComputedStyle(detail).display === 'none';
+      }),
+      pingButtons: cards.map((card) => {
+        const button = card.querySelector('.xk-outbounds-node-ping');
+        const rect = button?.getBoundingClientRect();
+        return {
+          width: rect ? Math.round(rect.width) : 0,
+          height: rect ? Math.round(rect.height) : 0,
+          radius: button ? window.getComputedStyle(button).borderRadius : '',
+        };
+      }),
+      pingAll: (() => {
+        const button = document.querySelector('#outbounds-nodes-pingall');
+        const rect = button?.getBoundingClientRect();
+        return {
+          width: rect ? Math.round(rect.width) : 0,
+          height: rect ? Math.round(rect.height) : 0,
+          radius: button ? window.getComputedStyle(button).borderRadius : '',
+        };
+      })(),
+      summary: (() => {
+        const badge = document.querySelector('#outbounds-nodes-summary');
+        const style = badge ? window.getComputedStyle(badge) : null;
+        return {
+          radius: style ? style.borderRadius : '',
+          backgroundImage: style ? style.backgroundImage : '',
+        };
+      })(),
+      globalMarker: (() => {
+        const marker = document.createElement('span');
+        marker.className = 'xk-sub-node-country is-globe';
+        list?.appendChild(marker);
+        const rect = marker?.getBoundingClientRect();
+        const result = {
+          width: rect ? Math.round(rect.width) : 0,
+          height: rect ? Math.round(rect.height) : 0,
+          radius: marker ? window.getComputedStyle(marker).borderRadius : '',
+        };
+        marker.remove();
+        return result;
+      })(),
+      latency: (() => {
+        const badge = cards[0]?.querySelector('.xk-sub-node-latency');
+        const style = badge ? window.getComputedStyle(badge) : null;
+        return {
+          radius: style ? style.borderRadius : '',
+          backgroundImage: style ? style.backgroundImage : '',
+        };
+      })(),
       overlaps,
     };
   });
@@ -262,6 +316,21 @@ test('main outbounds card keeps proxy nodes inside scrollable panel', async ({ p
   expect(['auto', 'scroll']).toContain(layout.listOverflowY);
   expect(layout.maxHeight).not.toBe('none');
   expect(layout.scrollHeight).toBeGreaterThan(layout.clientHeight);
+  expect(layout.display).toBe('grid');
+  expect(layout.columns).toBeGreaterThanOrEqual(1);
+  expect(layout.cardHeights.every((height) => height >= 72 && height <= 100)).toBe(true);
+  expect(layout.detailsHidden).toBe(true);
+  expect(layout.pingButtons.every((button) => (
+    button.width === button.height && button.width >= 28 && button.radius === '50%'
+  ))).toBe(true);
+  expect(layout.pingAll.width).toBe(layout.pingAll.height);
+  expect(layout.pingAll.width).toBeGreaterThanOrEqual(28);
+  expect(layout.pingAll.radius).toBe('50%');
+  expect(layout.summary.radius).toBe('6px');
+  expect(layout.summary.backgroundImage).toBe('none');
+  expect(layout.globalMarker).toEqual({ width: 20, height: 14, radius: '3px' });
+  expect(layout.latency.radius).toBe('6px');
+  expect(layout.latency.backgroundImage).toBe('none');
   expect(layout.overlaps).toEqual([]);
 });
 

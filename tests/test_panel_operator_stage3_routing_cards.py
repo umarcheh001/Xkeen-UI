@@ -97,18 +97,18 @@ def test_stage3_css_is_flat_dense_and_kept_inside_canonical_sections():
         ':is(.routing-dat-meta, #routing-dat-status)',
         ".routing-side-card--backups #backups-table",
         ".xk-sub-node-health-cell",
-        "display: contents;",
-        "minmax(90px, 1.25fr)",
-        "minmax(72px, 0.85fr)",
-        "minmax(88px, 1fr)",
+        ".routing-side-card--outbounds .xk-outbounds-node-list",
+        "grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));",
+        "grid-template-columns: minmax(0, 1fr) auto;",
+        "grid-template-rows: auto auto;",
     ):
         assert fragment in workspaces
 
     assert "border-radius: 0 !important;" in workspaces
     assert "background: transparent !important;" in workspaces
-    assert "minmax(56px, 1.2fr)" in responsive
-    assert "minmax(52px, 0.8fr)" in responsive
-    assert "minmax(60px, 1fr)" in responsive
+    assert ".routing-side-card--outbounds .xk-outbounds-node-list" in responsive
+    assert "grid-template-columns: minmax(0, 1fr);" in responsive
+    assert ".routing-side-card--outbounds .xk-outbounds-node-item" in responsive
     assert "final fixes" not in responsive.lower()
 
 
@@ -118,7 +118,7 @@ def test_stage3_closure_is_reflected_in_documentation():
     contract = CONTRACT_DOC.read_text(encoding="utf-8")
     index = DOCS_INDEX.read_text(encoding="utf-8")
 
-    assert "filename='panel-operator.css', v='20260805b'" in template
+    assert "filename='panel-operator.css', v='20260805c'" in template
     for fragment in (
         "Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля 2026 года",
         "### Этап 3. Пересобрать routing cards и operational blocks — закрыт",

@@ -287,10 +287,9 @@ test.describe('Operator Console Stage 3 routing cards', () => {
       await expect(page.locator('#outbounds-nodes-list .xk-outbounds-node-item').first()).toContainText('se-YYY-Sweden.e026');
       const desktopGeometry = await collectNodeRowGeometry(page);
       expect(desktopGeometry.cells.every(Boolean)).toBe(true);
-      expect(desktopGeometry.cells.map((cell) => cell.left)).toEqual(
-        [...desktopGeometry.cells].map((cell) => cell.left).sort((a, b) => a - b),
-      );
-      expect(desktopGeometry.columns.split(' ').length).toBe(5);
+      // Server tiles share the two-column grammar used in the subscriptions
+      // workbench: content on the left, diagnostic controls on the right.
+      expect(desktopGeometry.columns.split(' ').length).toBe(2);
       // The inspector intentionally clips overly long cell labels. Its own
       // scroll width is not page overflow and does not make a row unusable.
       expect(desktopGeometry.pageOverflow).toBeLessThanOrEqual(1);
@@ -298,7 +297,7 @@ test.describe('Operator Console Stage 3 routing cards', () => {
       await page.setViewportSize({ width: 390, height: 844 });
       await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const mobileGeometry = await collectNodeRowGeometry(page);
-      expect(mobileGeometry.columns.split(' ').length).toBe(5);
+      expect(mobileGeometry.columns.split(' ').length).toBe(2);
       expect(mobileGeometry.overflow).toBe('hidden');
       expect(mobileGeometry.pageOverflow).toBeLessThanOrEqual(1);
     });
