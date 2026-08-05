@@ -4459,7 +4459,6 @@ let outboundsModuleApi = null;
       open: 'outbounds-subscriptions-btn',
       modal: 'outbounds-subscriptions-modal',
       close: 'outbounds-subscriptions-close-btn',
-      cancel: 'outbounds-subscriptions-cancel-btn',
       form: 'outbounds-subscriptions-form',
       id: 'outbounds-subscriptions-id',
       name: 'outbounds-subscriptions-name',
@@ -5735,12 +5734,6 @@ let outboundsModuleApi = null;
                 <div id="outbounds-subscriptions-nodes-list" class="xk-sub-node-list"></div>
                 <div id="outbounds-subscriptions-nodes-empty" class="xk-pool-empty">Список узлов появится после обновления подписки.</div>
               </section>
-            </div>
-            <div class="modal-actions xk-pool-footer">
-              <div></div>
-              <div class="xk-pool-footer-actions">
-                <button type="button" id="outbounds-subscriptions-cancel-btn" class="btn-compact" title="Закрыть" data-tooltip="Закрыть окно подписок.">Закрыть</button>
-              </div>
             </div>
           </div>
         </div>
@@ -7867,7 +7860,6 @@ let outboundsModuleApi = null;
       if (!modal || (modal.dataset && modal.dataset.xkWired === '1')) return;
 
       wireButton(SUB_IDS.close, () => { void subsClose(); });
-      wireButton(SUB_IDS.cancel, () => { void subsClose(); });
       wireButton(SUB_IDS.reset, async () => {
         const ok = await subsConfirmDiscardDraft({
           message: 'Очистить форму подписки и потерять текущий черновик?',

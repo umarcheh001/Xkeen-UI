@@ -1013,16 +1013,16 @@ test('subscriptions modal keeps its workbench frame available on mobile', async 
     const modal = document.querySelector('#outbounds-subscriptions-modal .xk-sub-modal');
     const header = modal ? modal.querySelector('.modal-header') : null;
     const body = modal ? modal.querySelector('.modal-body') : null;
-    const footer = modal ? modal.querySelector('.modal-actions') : null;
     const modalRect = modal ? modal.getBoundingClientRect() : null;
     const headerRect = header ? header.getBoundingClientRect() : null;
-    const footerRect = footer ? footer.getBoundingClientRect() : null;
     return {
       width: modalRect ? Math.round(modalRect.width) : 0,
       height: modalRect ? Math.round(modalRect.height) : 0,
       bodyOverflowY: body ? window.getComputedStyle(body).overflowY : '',
       headerInside: !!(modalRect && headerRect && headerRect.top >= modalRect.top && headerRect.bottom <= modalRect.bottom),
-      footerInside: !!(modalRect && footerRect && footerRect.top >= modalRect.top && footerRect.bottom <= modalRect.bottom),
+      topClose: modal ? modal.querySelectorAll('#outbounds-subscriptions-close-btn').length : 0,
+      duplicateClose: modal ? modal.querySelectorAll('#outbounds-subscriptions-cancel-btn').length : 0,
+      footer: modal ? modal.querySelector('.modal-actions') : null,
     };
   });
 
@@ -1030,7 +1030,9 @@ test('subscriptions modal keeps its workbench frame available on mobile', async 
   expect(layout.height).toBeLessThanOrEqual(828);
   expect(['auto', 'scroll']).toContain(layout.bodyOverflowY);
   expect(layout.headerInside).toBe(true);
-  expect(layout.footerInside).toBe(true);
+  expect(layout.topClose).toBe(1);
+  expect(layout.duplicateClose).toBe(0);
+  expect(layout.footer).toBeNull();
 });
 
 test('subscriptions modal does not reserve an empty desktop canvas without nodes', async ({ page }) => {

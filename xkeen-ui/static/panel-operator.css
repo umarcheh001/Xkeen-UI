@@ -7510,17 +7510,6 @@ body.panel-page #outbounds-subscriptions-modal :is(.xk-sub-node-ping, .xk-sub-no
   height: 12px;
 }
 
-body.panel-page #outbounds-subscriptions-modal .modal-actions {
-  min-height: 46px;
-  padding: 7px 12px !important;
-}
-
-body.panel-page #outbounds-subscriptions-modal .xk-pool-footer-actions > button {
-  min-height: var(--op-control-h);
-  border-radius: var(--op-control-radius) !important;
-}
-
-
 /* Core selector: two compact data rows; no logo plaque, marketing eyebrow or
  * restart pill. These nodes stay available to runtime and accessibility APIs. */
 body.panel-page #core-modal .xk-core-modal-content,
