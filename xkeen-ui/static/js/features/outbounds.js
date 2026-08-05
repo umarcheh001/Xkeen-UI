@@ -1102,6 +1102,11 @@ let outboundsModuleApi = null;
         const port = escapeHtml(String(node && (node.port || node.port === 0) ? node.port : ''));
         const detail = escapeHtml(String(node && node.detail ? node.detail : ''));
         const endpoint = [host, port].filter(Boolean).join(':');
+        // Protocol, transport and security are already visible in the card.
+        // Use its tooltip for the technical connection data hidden by the
+        // compact layout, matching the subscription modal's node cards.
+        const connectionSummary = [endpoint, detail].filter(Boolean).join(' · ');
+        const connectionSummaryHtml = escapeHtml(connectionSummary);
         const canPing = !!(keyText && tagText);
         const pingBusy = !!_outboundsNodePingState[outboundsNodePingStateKey(keyText)];
         const isActiveRoute = !!entry.active;
@@ -1120,10 +1125,10 @@ let outboundsModuleApi = null;
           <div class="xk-sub-node-item xk-outbounds-node-item is-enabled ${isActiveRoute ? 'is-active-route' : ''}" data-node-key="${key}" ${activeTooltip ? `title="${activeTooltip}"` : ''}>
             <div class="xk-sub-node-main">
               <div class="xk-sub-node-name">${countryBadge}<span class="xk-sub-node-title-text">${name}</span></div>
-              <div class="xk-sub-node-meta xk-sub-node-protocol" aria-label="Протокол" data-tooltip="${protocolSummary}">
+              <div class="xk-sub-node-meta xk-sub-node-protocol" aria-label="Технические параметры" ${connectionSummary ? `data-tooltip="${connectionSummaryHtml}"` : ''}>
                 <span class="xk-sub-node-protocol-text">${protocolSummary}</span>
               </div>
-              <div class="xk-sub-node-endpoint-cell" aria-label="Endpoint">
+              <div class="xk-sub-node-endpoint-cell" aria-label="Endpoint" ${connectionSummary ? `data-tooltip="${connectionSummaryHtml}"` : ''}>
                 ${endpoint ? `<span class="xk-sub-node-endpoint">${endpoint}</span>` : '<span class="xk-sub-node-endpoint">—</span>'}
                 ${detail ? `<span class="xk-sub-node-detail">${detail}</span>` : ''}
               </div>

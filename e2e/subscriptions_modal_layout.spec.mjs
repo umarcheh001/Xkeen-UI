@@ -308,6 +308,14 @@ test('main outbounds card keeps proxy nodes inside scrollable panel', async ({ p
           backgroundImage: style ? style.backgroundImage : '',
         };
       })(),
+      technicalTooltips: cards.map((card) => {
+        const protocol = card.querySelector('.xk-sub-node-protocol');
+        const endpoint = card.querySelector('.xk-sub-node-endpoint-cell');
+        return {
+          protocol: protocol?.getAttribute('data-tooltip') || '',
+          endpoint: endpoint?.getAttribute('data-tooltip') || '',
+        };
+      }),
       overlaps,
     };
   });
@@ -331,6 +339,8 @@ test('main outbounds card keeps proxy nodes inside scrollable panel', async ({ p
   expect(layout.globalMarker).toEqual({ width: 20, height: 14, radius: '3px' });
   expect(layout.latency.radius).toBe('6px');
   expect(layout.latency.backgroundImage).toBe('none');
+  expect(layout.technicalTooltips.every(({ protocol, endpoint }) => protocol === endpoint)).toBe(true);
+  expect(layout.technicalTooltips.some(({ protocol }) => protocol.includes('path=/api/v2/'))).toBe(true);
   expect(layout.overlaps).toEqual([]);
 });
 

@@ -81,6 +81,8 @@ def test_stage3_dat_and_outbound_rows_have_explicit_state_semantics():
     ):
         assert outbounds.count(fragment) == 2
     assert "const protocolSummary = [protocol, transport, security]" in outbounds
+    assert "const connectionSummary = [endpoint, detail].filter(Boolean).join(' · ');" in outbounds
+    assert 'aria-label="Технические параметры" ${connectionSummary ? `data-tooltip="${connectionSummaryHtml}"` : \'\'}' in outbounds
     assert "return raw;" in outbounds
 
 
