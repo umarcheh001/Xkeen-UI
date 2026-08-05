@@ -80,8 +80,9 @@ function buildDemoSubscription(nodes = buildDemoNodes(), overrides = {}) {
 async function openSubscriptionsModal(page) {
   await page.goto('/');
   const body = page.locator('#outbounds-body');
-  if (!(await body.isVisible())) {
+  for (let attempt = 0; attempt < 3 && !(await body.isVisible()); attempt += 1) {
     await page.locator('#outbounds-header').click();
+    await page.waitForTimeout(350);
   }
   await expect(body).toBeVisible();
   await page.locator('#outbounds-subscriptions-btn').click();
@@ -91,8 +92,9 @@ async function openSubscriptionsModal(page) {
 async function openOutboundsPanel(page) {
   await page.goto('/');
   const body = page.locator('#outbounds-body');
-  if (!(await body.isVisible())) {
+  for (let attempt = 0; attempt < 3 && !(await body.isVisible()); attempt += 1) {
     await page.locator('#outbounds-header').click();
+    await page.waitForTimeout(350);
   }
   await expect(body).toBeVisible();
 }
@@ -461,7 +463,7 @@ test('subscriptions modal cards stay separated at medium width', async ({ page }
   expect(layout.overlaps).toEqual([]);
 });
 
-test('subscriptions modal fits three compact node columns on desktop width', async ({ page }) => {
+test('subscriptions modal presents nodes as a compact server tile grid on desktop', async ({ page }) => {
   await page.setViewportSize({ width: 1365, height: 768 });
   const nodes = buildDemoNodes();
   const subscription = buildDemoSubscription(nodes);
@@ -489,12 +491,16 @@ test('subscriptions modal fits three compact node columns on desktop width', asy
     const cards = Array.from(document.querySelectorAll('#outbounds-subscriptions-nodes-list .xk-sub-node-item'));
     const rects = cards.map((card) => {
       const rect = card.getBoundingClientRect();
+      const endpoint = card.querySelector('.xk-sub-node-endpoint');
       return {
         left: Math.round(rect.left),
         top: Math.round(rect.top),
         right: Math.round(rect.right),
         bottom: Math.round(rect.bottom),
         width: Math.round(rect.width),
+        endpoint: String(endpoint?.textContent || '').trim(),
+        endpointDisplay: endpoint ? window.getComputedStyle(endpoint).display : '',
+        endpointClipped: endpoint ? endpoint.scrollWidth > endpoint.clientWidth + 1 : true,
       };
     });
     const overlaps = [];
@@ -511,14 +517,278 @@ test('subscriptions modal fits three compact node columns on desktop width', asy
       modalWidth: modal ? Math.round(modal.getBoundingClientRect().width) : 0,
       listWidth: list ? Math.round(list.getBoundingClientRect().width) : 0,
       columns: Array.from(new Set(rects.map((item) => item.left))).length,
-      minCardWidth: rects.length ? Math.min(...rects.map((item) => item.width)) : 0,
+      minTileWidth: rects.length ? Math.min(...rects.map((item) => item.width)) : 0,
+      maxTileWidth: rects.length ? Math.max(...rects.map((item) => item.width)) : 0,
+      maxTileHeight: rects.length ? Math.max(...rects.map((item) => item.bottom - item.top)) : 0,
+      endpoints: rects.map((item) => item.endpoint),
+      endpointDisplays: rects.map((item) => item.endpointDisplay),
+      clippedEndpoints: rects.filter((item) => item.endpointClipped).map((item) => item.endpoint),
       overlaps,
     };
   });
 
-  expect(layout.columns).toBeGreaterThanOrEqual(3);
-  expect(layout.minCardWidth).toBeGreaterThanOrEqual(250);
+  expect(layout.columns).toBeGreaterThanOrEqual(5);
+  expect(layout.modalWidth).toBeGreaterThanOrEqual(1280);
+  expect(layout.minTileWidth).toBeGreaterThanOrEqual(232);
+  expect(layout.maxTileWidth).toBeLessThanOrEqual(275);
+  expect(layout.maxTileHeight).toBeLessThanOrEqual(88);
+  expect(layout.endpoints).toContain('195.133.25.89:443');
+  expect(layout.endpointDisplays.every((display) => display !== 'none')).toBe(true);
+  expect(layout.clippedEndpoints).toEqual([]);
   expect(layout.overlaps).toEqual([]);
+});
+
+test('subscriptions advanced settings keep a consistent inner gutter', async ({ page }) => {
+  const subscription = buildDemoSubscription();
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscriptions: [subscription] }),
+    });
+  });
+
+  await openSubscriptionsModal(page);
+  await page.locator('tr[data-sub-id="demo-sub"]').click();
+  const advanced = page.locator('#outbounds-subscriptions-modal .xk-sub-advanced');
+  if (!(await advanced.getAttribute('open'))) await advanced.locator('summary').click();
+
+  const spacing = await advanced.evaluate((root) => {
+    const summary = root.querySelector(':scope > summary');
+    const grid = root.querySelector('.xk-sub-advanced-grid');
+    const summaryStyle = summary ? window.getComputedStyle(summary) : null;
+    const gridStyle = grid ? window.getComputedStyle(grid) : null;
+    return {
+      summaryLeft: summaryStyle ? Number.parseFloat(summaryStyle.paddingLeft) : 0,
+      summaryRight: summaryStyle ? Number.parseFloat(summaryStyle.paddingRight) : 0,
+      gridLeft: gridStyle ? Number.parseFloat(gridStyle.paddingLeft) : 0,
+      gridRight: gridStyle ? Number.parseFloat(gridStyle.paddingRight) : 0,
+      gridBottom: gridStyle ? Number.parseFloat(gridStyle.paddingBottom) : 0,
+    };
+  });
+
+  expect(spacing.summaryLeft).toBeGreaterThanOrEqual(12);
+  expect(spacing.summaryRight).toBeGreaterThanOrEqual(12);
+  expect(spacing.gridLeft).toBeGreaterThanOrEqual(12);
+  expect(spacing.gridRight).toBeGreaterThanOrEqual(12);
+  expect(spacing.gridBottom).toBeGreaterThanOrEqual(12);
+});
+
+test('subscriptions workbench collapses empty rows and keeps refresh due in the list header', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  const nodes = buildDemoNodes().slice(0, 7);
+  const subscription = buildDemoSubscription(nodes);
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscriptions: [subscription] }),
+    });
+  });
+
+  await openSubscriptionsModal(page);
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await page.locator('tr[data-sub-id="demo-sub"]').click();
+  const advanced = page.locator('#outbounds-subscriptions-modal .xk-sub-advanced');
+  if (!(await advanced.getAttribute('open'))) await advanced.locator('summary').click();
+
+  const layout = await page.evaluate(() => {
+    const modal = document.querySelector('#outbounds-subscriptions-modal .xk-sub-modal');
+    const listPanel = document.querySelector('#outbounds-subscriptions-modal .xk-sub-list-panel');
+    const panelHead = listPanel?.querySelector('.xk-sub-panelhead');
+    const due = document.querySelector('#outbounds-subscriptions-refresh-due-btn');
+    const tableWrap = document.querySelector('#outbounds-subscriptions-modal .xk-sub-tablewrap');
+    const table = tableWrap?.querySelector('table');
+    const nodesList = document.querySelector('#outbounds-subscriptions-nodes-list');
+    const cards = Array.from(nodesList?.querySelectorAll('.xk-sub-node-item') || []);
+    const hiddenNotes = Array.from(document.querySelectorAll('#outbounds-subscriptions-form .xk-sub-field-note[hidden]'));
+    const modalRect = modal?.getBoundingClientRect();
+    const headRect = panelHead?.getBoundingClientRect();
+    const dueRect = due?.getBoundingClientRect();
+    const tableRect = table?.getBoundingClientRect();
+    const wrapRect = tableWrap?.getBoundingClientRect();
+    const listRect = nodesList?.getBoundingClientRect();
+    const cardBottom = cards.length
+      ? Math.max(...cards.map((card) => card.getBoundingClientRect().bottom))
+      : 0;
+    return {
+      modalHeight: modalRect ? Math.round(modalRect.height) : 0,
+      dueInsideHead: !!(headRect && dueRect && dueRect.top >= headRect.top - 1 && dueRect.bottom <= headRect.bottom + 1),
+      tableSlack: tableRect && wrapRect ? Math.round(wrapRect.height - tableRect.height) : 999,
+      nodeSlack: listRect && cardBottom ? Math.round(listRect.bottom - cardBottom) : 999,
+      hiddenNotesVisible: hiddenNotes.filter((note) => window.getComputedStyle(note).display !== 'none').length,
+    };
+  });
+
+  expect(layout.dueInsideHead).toBe(true);
+  expect(layout.tableSlack).toBeLessThanOrEqual(3);
+  expect(layout.nodeSlack).toBeLessThanOrEqual(3);
+  expect(layout.hiddenNotesVisible).toBe(0);
+  expect(layout.modalHeight).toBeLessThan(1000);
+});
+
+test('subscriptions help expands below its summary without a blank split column', async ({ page }) => {
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscriptions: [] }),
+    });
+  });
+
+  await openSubscriptionsModal(page);
+  await page.locator('#outbounds-subscriptions-modal .xk-sub-brief > summary').click();
+
+  const layout = await page.evaluate(() => {
+    const details = document.querySelector('#outbounds-subscriptions-modal .xk-sub-brief');
+    const summary = details ? details.querySelector(':scope > summary') : null;
+    const content = details ? details.querySelector('.xk-sub-brief-content') : null;
+    const detailsRect = details ? details.getBoundingClientRect() : null;
+    const summaryRect = summary ? summary.getBoundingClientRect() : null;
+    const contentRect = content ? content.getBoundingClientRect() : null;
+    return {
+      display: details ? window.getComputedStyle(details).display : '',
+      contentBelowSummary: !!(summaryRect && contentRect && contentRect.top >= summaryRect.bottom - 1),
+      contentWidth: contentRect ? Math.round(contentRect.width) : 0,
+      detailsWidth: detailsRect ? Math.round(detailsRect.width) : 0,
+    };
+  });
+
+  expect(layout.display).toBe('block');
+  expect(layout.contentBelowSummary).toBe(true);
+  expect(layout.contentWidth).toBeGreaterThanOrEqual(layout.detailsWidth - 4);
+});
+
+test('subscriptions modal checkboxes use the Operator accent in both themes', async ({ page }) => {
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscriptions: [] }),
+    });
+  });
+
+  await openSubscriptionsModal(page);
+
+  const readTheme = async (theme) => page.evaluate((nextTheme) => {
+    document.documentElement.dataset.theme = nextTheme;
+    const input = document.querySelector('#outbounds-subscriptions-enabled');
+    const label = input ? input.closest('.xk-sub-check') : null;
+    const bodyStyle = window.getComputedStyle(document.body);
+    const inputStyle = input ? window.getComputedStyle(input) : null;
+    const labelStyle = label ? window.getComputedStyle(label) : null;
+    const swatch = document.createElement('span');
+    swatch.style.backgroundColor = bodyStyle.getPropertyValue('--op-accent').trim();
+    document.body.appendChild(swatch);
+    const resolvedAccent = window.getComputedStyle(swatch).backgroundColor;
+    swatch.remove();
+    return {
+      appearance: inputStyle ? inputStyle.appearance : '',
+      inputBackground: inputStyle ? inputStyle.backgroundColor : '',
+      inputBorder: inputStyle ? inputStyle.borderTopColor : '',
+      labelBackground: labelStyle ? labelStyle.backgroundColor : '',
+      resolvedAccent,
+    };
+  }, theme);
+
+  const dark = await readTheme('dark');
+  const light = await readTheme('light');
+
+  for (const state of [dark, light]) {
+    expect(state.appearance).toBe('none');
+    expect(state.inputBackground).toBe(state.resolvedAccent);
+    expect(state.inputBorder).toBe(state.resolvedAccent);
+    expect(state.labelBackground).not.toBe('rgba(0, 0, 0, 0)');
+  }
+  expect(dark.resolvedAccent).not.toBe(light.resolvedAccent);
+});
+
+test('subscriptions modal keeps its workbench frame available on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscriptions: [] }),
+    });
+  });
+
+  await openSubscriptionsModal(page);
+
+  const layout = await page.evaluate(() => {
+    const modal = document.querySelector('#outbounds-subscriptions-modal .xk-sub-modal');
+    const header = modal ? modal.querySelector('.modal-header') : null;
+    const body = modal ? modal.querySelector('.modal-body') : null;
+    const footer = modal ? modal.querySelector('.modal-actions') : null;
+    const modalRect = modal ? modal.getBoundingClientRect() : null;
+    const headerRect = header ? header.getBoundingClientRect() : null;
+    const footerRect = footer ? footer.getBoundingClientRect() : null;
+    return {
+      width: modalRect ? Math.round(modalRect.width) : 0,
+      height: modalRect ? Math.round(modalRect.height) : 0,
+      bodyOverflowY: body ? window.getComputedStyle(body).overflowY : '',
+      headerInside: !!(modalRect && headerRect && headerRect.top >= modalRect.top && headerRect.bottom <= modalRect.bottom),
+      footerInside: !!(modalRect && footerRect && footerRect.top >= modalRect.top && footerRect.bottom <= modalRect.bottom),
+    };
+  });
+
+  expect(layout.width).toBeGreaterThanOrEqual(374);
+  expect(layout.height).toBeLessThanOrEqual(828);
+  expect(['auto', 'scroll']).toContain(layout.bodyOverflowY);
+  expect(layout.headerInside).toBe(true);
+  expect(layout.footerInside).toBe(true);
+});
+
+test('subscriptions modal does not reserve an empty desktop canvas without nodes', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscriptions: [] }),
+    });
+  });
+
+  await openSubscriptionsModal(page);
+
+  const layout = await page.evaluate(() => {
+    const modal = document.querySelector('#outbounds-subscriptions-modal .xk-sub-modal');
+    const body = modal ? modal.querySelector('.modal-body') : null;
+    const modalRect = modal ? modal.getBoundingClientRect() : null;
+    return {
+      height: modalRect ? Math.round(modalRect.height) : 0,
+      bodyScrollHeight: body ? Math.round(body.scrollHeight) : 0,
+      hasNodes: !!document.querySelector('#outbounds-subscriptions-nodes-list .xk-sub-node-item'),
+    };
+  });
+
+  expect(layout.hasNodes).toBe(false);
+  expect(layout.height).toBeLessThan(760);
+  expect(layout.height).toBeGreaterThanOrEqual(layout.bodyScrollHeight);
 });
 
 test('subscriptions diagnostics keep long source links compact without horizontal scroll', async ({ page }) => {

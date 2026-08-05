@@ -333,7 +333,7 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 
 ### Этап 5. Редакторы и модальные семейства — в работе
 
-Семь связанных задач закрыты 2–4 августа 2026 года; их контракт — [`panel-operator-stage5-editor-workbench.md`](panel-operator-stage5-editor-workbench.md). Сам Этап 5 остаётся открытым: полный responsive прогон выполняется отдельной партией.
+Семь связанных задач закрыты 2–4 августа 2026 года; их контракт — [`panel-operator-stage5-editor-workbench.md`](panel-operator-stage5-editor-workbench.md). 4 августа отдельным проходом Xray subscriptions переведён в master-detail workbench с компактной адаптивной сеткой серверных плиток, progressive disclosure и собственными Operator-checkboxes на `--op-accent`; empty-state больше не резервирует полноэкранный canvas, а desktop/mobile и dark/light состояния покрыты целевым Chromium-тестом. Сам Этап 5 остаётся открытым: полный responsive прогон выполняется отдельной партией.
 
 Задачи:
 

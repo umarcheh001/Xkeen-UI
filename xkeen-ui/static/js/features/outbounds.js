@@ -5496,20 +5496,23 @@ let outboundsModuleApi = null;
         const resetBtn = root.querySelector(`#${SUB_IDS.reset}`);
         if (resetBtn) {
           resetBtn.classList.add('xk-sub-head-chip');
+          resetBtn.classList.add('xk-sub-form-action');
           resetBtn.setAttribute('aria-label', String(resetBtn.getAttribute('title') || 'Очистить форму'));
-          resetBtn.innerHTML = iconHtml('restore', 'xk-sub-head-chip-glyph') + '<span class="xk-visually-hidden">Очистить форму</span>';
+          resetBtn.innerHTML = iconHtml('restore', 'xk-sub-head-chip-glyph xk-sub-form-action-icon') + '<span class="xk-action-label">Очистить</span>';
         }
         const saveBtn = root.querySelector(`#${SUB_IDS.save}`);
         if (saveBtn) {
           saveBtn.classList.add('xk-sub-head-chip', 'is-primary');
+          saveBtn.classList.add('xk-sub-form-action');
           saveBtn.setAttribute('aria-label', String(saveBtn.getAttribute('title') || 'Сохранить настройки'));
-          saveBtn.innerHTML = iconHtml('save', 'xk-sub-head-chip-glyph') + '<span class="xk-visually-hidden">Сохранить настройки</span>';
+          saveBtn.innerHTML = iconHtml('save', 'xk-sub-head-chip-glyph xk-sub-form-action-icon') + '<span class="xk-action-label">Сохранить</span>';
         }
         const previewBtn = root.querySelector(`#${SUB_IDS.preview}`);
         if (previewBtn) {
           previewBtn.classList.add('xk-sub-head-chip');
+          previewBtn.classList.add('xk-sub-form-action');
           previewBtn.setAttribute('aria-label', String(previewBtn.getAttribute('title') || 'Скачать подписку'));
-          previewBtn.innerHTML = iconHtml('preview', 'xk-sub-head-chip-glyph') + '<span class="xk-visually-hidden">Скачать подписку</span>';
+          previewBtn.innerHTML = iconHtml('preview', 'xk-sub-head-chip-glyph xk-sub-form-action-icon') + '<span class="xk-action-label">Скачать</span>';
         }
       } catch (e) {}
     }
@@ -5547,16 +5550,21 @@ let outboundsModuleApi = null;
               <button type="button" class="modal-close" id="outbounds-subscriptions-close-btn" title="Закрыть" aria-label="Закрыть" data-tooltip="Закрыть окно подписок.">${iconHtml('close')}</button>
             </div>
             <div class="modal-body">
-              <div class="xk-sub-brief">
-                <div class="xk-sub-brief-main">
-                  <div class="xk-sub-brief-title">LeastPing и generated fragments</div>
-                  <div class="xk-sub-brief-text">Подписка создаёт отдельный <code>04_outbounds.&lt;tag&gt;.json</code>, использует <code>Tag prefix</code> как prefix для <code>selector</code> и <code>subjectSelector</code>: Xray сопоставляет его по началу тега, поэтому <code>sub</code> найдёт generated outbounds вида <code>sub--node</code>. При включённом «Пинг» этот prefix добавляется в <code>07_observatory.json</code>. Режим <b>Применение</b> выбирает, оставить ли одиночный <code>vless-reality</code> рядом с подпиской или вести служебный pool только через generated nodes; в режиме «Только подписка» одиночный outbound в <code>04_outbounds.json</code> не требуется.</div>
+              <details class="xk-sub-brief">
+                <summary>
+                  <span class="xk-sub-brief-title">LeastPing и generated fragments</span>
+                  <span class="xk-sub-brief-summary">Отдельный outbounds-фрагмент · prefix-match · observatory leastPing</span>
+                </summary>
+                <div class="xk-sub-brief-content">
+                  <div class="xk-sub-brief-main">
+                    <div class="xk-sub-brief-text">Подписка создаёт отдельный <code>04_outbounds.&lt;tag&gt;.json</code>, использует <code>Tag prefix</code> как prefix для <code>selector</code> и <code>subjectSelector</code>: Xray сопоставляет его по началу тега, поэтому <code>sub</code> найдёт generated outbounds вида <code>sub--node</code>. При включённом «Пинг» этот prefix добавляется в <code>07_observatory.json</code>. Режим <b>Применение</b> выбирает, оставить ли одиночный <code>vless-reality</code> рядом с подпиской или вести служебный pool только через generated nodes; в режиме «Только подписка» одиночный outbound в <code>04_outbounds.json</code> не требуется.</div>
+                  </div>
+                  <div class="xk-sub-update-note">
+                    <div class="xk-sub-update-title">Автообновление</div>
+                    <div class="xk-sub-update-text">Интервал задаётся в форме ниже. <b>Обновить due</b> запускает только просроченные подписки, а <b>Обновить сразу</b> скачивает узлы и создаёт fragment после сохранения.</div>
+                  </div>
                 </div>
-                <div class="xk-sub-update-note">
-                  <div class="xk-sub-update-title">Автообновление</div>
-                  <div class="xk-sub-update-text">Интервал задаётся в форме ниже. <b>Обновить due</b> запускает только просроченные подписки, а <b>Обновить сразу</b> скачивает узлы и создаёт fragment после сохранения.</div>
-                </div>
-              </div>
+              </details>
               <div class="xk-sub-grid">
                 <section class="xk-sub-panel xk-sub-form-panel">
                   <div class="xk-sub-panelhead xk-sub-form-head">
@@ -5633,7 +5641,7 @@ let outboundsModuleApi = null;
                         <input id="outbounds-subscriptions-routing-auto-rule" type="checkbox" checked title="Общий leastPing pool" data-tooltip="Добавлять tag prefix этой подписки в общий auto-managed leastPing pool.">
                         <span>Служебный пул</span>
                       </label>
-                      <button type="button" id="outbounds-subscriptions-entware-mark-btn" class="xk-entware-mark-toggle xk-entware-mark-toggle--sub" aria-label="Entware mark 255" aria-pressed="false" title="Добавлять sockopt.mark=255 для проксирования Entware" data-tooltip="Добавлять sockopt.mark=255 во все generated proxy-outbound подписки.">↯</button>
+                      <button type="button" id="outbounds-subscriptions-entware-mark-btn" class="xk-entware-mark-toggle xk-entware-mark-toggle--sub" aria-label="Entware mark 255" aria-pressed="false" title="Добавлять sockopt.mark=255 для проксирования Entware" data-tooltip="Добавлять sockopt.mark=255 во все generated proxy-outbound подписки.">${iconHtml('bolt', 'xk-sub-mark-icon')}<span>mark 255</span></button>
                       <label class="xk-sub-routing-mode" for="outbounds-subscriptions-routing-mode" data-tooltip="Как панель должна подвязывать подписку к маршрутизации. Безопасно сохраняет vless-reality рядом с подпиской. Жёстко переводит совместимые auto-правила на общий balancerTag пула. Только подписка ведёт служебный pool только через generated nodes и не требует одиночный outbound в 04_outbounds.json.">
                         <span class="xk-sub-inline-label">Применение</span>
                         <select id="outbounds-subscriptions-routing-mode" class="xray-log-filter" title="Режим маршрутизации подписки" data-tooltip="Безопасно: leastPing-balancer и fallback синхронизируются, а vless-reality остаётся. Жёстко: auto-правила на vless-reality переезжают в balancerTag пула. Только подписка: служебный pool работает только через generated nodes; одиночный outbound в 04_outbounds.json не нужен.">
@@ -5661,10 +5669,10 @@ let outboundsModuleApi = null;
                       <div class="xk-pool-kicker">Список</div>
                       <div class="terminal-menu-title" style="margin:0;">Сгенерированные фрагменты</div>
                     </div>
-                    <div id="outbounds-subscriptions-summary" class="xk-pool-summary">0</div>
-                  </div>
-                  <div class="xk-sub-toolbar">
-                    <button type="button" id="outbounds-subscriptions-refresh-due-btn" class="btn-secondary btn-compact" title="Обновить due" data-tooltip="Обновить все подписки, у которых уже наступило время next update.">Обновить due</button>
+                    <div class="xk-sub-list-head-actions">
+                      <div id="outbounds-subscriptions-summary" class="xk-pool-summary">0</div>
+                      <button type="button" id="outbounds-subscriptions-refresh-due-btn" class="btn-secondary btn-compact" title="Обновить due" data-tooltip="Обновить все подписки, у которых уже наступило время next update.">Обновить due</button>
+                    </div>
                   </div>
                   <div class="xk-sub-tablewrap">
                     <table class="xk-pool-table xk-sub-table">
@@ -5767,8 +5775,8 @@ let outboundsModuleApi = null;
       }
       const isUserSized = !!(content.dataset && content.dataset.xkDragged === '1');
       const maxReadableWidth = viewportWidth > 0
-        ? Math.max(760, Math.min(1080, viewportWidth - 20))
-        : 1080;
+        ? Math.max(760, Math.min(1560, viewportWidth - 36))
+        : 1560;
       const maxViewportWidth = viewportWidth > 0
         ? Math.max(760, viewportWidth - 20)
         : maxReadableWidth;
@@ -5789,12 +5797,19 @@ let outboundsModuleApi = null;
         }
         width = clampWidth;
       }
+      if (!isUserSized && width < clampWidth - 1) {
+        try {
+          content.style.width = `${Math.round(clampWidth)}px`;
+          content.style.maxWidth = `${Math.round(clampWidth)}px`;
+        } catch (e5) {}
+        width = clampWidth;
+      }
       const compact = width > 0 ? width < 900 : false;
       const narrow = width > 0 ? width < 720 : false;
       try {
         content.classList.toggle('xk-sub-modal-compact', compact);
         content.classList.toggle('xk-sub-modal-narrow', narrow);
-      } catch (e5) {}
+      } catch (e6) {}
     }
 
     function subsShow(show) {
