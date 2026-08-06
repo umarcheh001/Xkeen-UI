@@ -2220,13 +2220,16 @@ function ensureHelpModal() {
   modal = document.createElement('div');
   modal.id = HELP_MODAL_ID;
   modal.className = 'modal hidden';
+  modal.dataset.operatorModalFamily = 'drawer-help';
+  modal.dataset.modalNopos = '1';
+  modal.dataset.modalNoresize = '1';
+  modal.dataset.modalRemember = '0';
   modal.setAttribute('role', 'dialog');
   modal.setAttribute('aria-modal', 'true');
   modal.setAttribute('aria-label', 'Routing help');
 
   const content = document.createElement('div');
-  content.className = 'modal-content';
-  content.style.maxWidth = '960px';
+  content.className = 'modal-content xk-routing-help-shell';
 
   const header = document.createElement('div');
   header.className = 'modal-header';
@@ -2238,44 +2241,43 @@ function ensureHelpModal() {
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
   closeBtn.className = 'modal-close';
-  closeBtn.setAttribute('aria-label', 'Close');
+  closeBtn.setAttribute('aria-label', 'Закрыть');
   closeBtn.innerHTML = iconHtml('close');
 
   header.appendChild(title);
   header.appendChild(closeBtn);
 
   const body = document.createElement('div');
-  body.className = 'modal-body';
-  body.style.paddingTop = '8px';
+  body.className = 'modal-body xk-routing-help-body';
 
   const HELP_PATH = '/static/routing-comments-help.html';
-  const HELP_URL = HELP_PATH + '?v=20260415b';
+  const HELP_URL = HELP_PATH + '?v=20260806a';
   let helpState = 'loading';
 
   const helpHost = document.createElement('div');
   helpHost.id = HELP_CONTENT_ID;
-  helpHost.style.cssText = 'width:100%;height:100%;min-height:0;flex:1 1 auto;overflow:auto;overscroll-behavior:contain;border-radius:10px;background:rgba(2,6,23,.65)';
+  helpHost.className = 'xk-routing-help-host';
 
   function showHelpFallback() {
     if (helpState === 'fallback') return;
     helpState = 'fallback';
     try {
       const fallback = document.createElement('div');
-      fallback.style.cssText = 'height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px;text-align:center;color:var(--text,#e5e7eb);border:1px solid rgba(148,163,184,.24);border-radius:12px;background:rgba(15,23,42,.28)';
+      fallback.className = 'xk-routing-help-fallback';
 
       const titleEl = document.createElement('div');
-      titleEl.style.cssText = 'font-weight:800;margin-bottom:8px';
+      titleEl.className = 'xk-routing-help-fallback-title';
       titleEl.textContent = 'Не удалось загрузить справку во встроенном окне';
 
       const hintEl = document.createElement('div');
-      hintEl.style.cssText = 'color:var(--muted,#94a3b8);line-height:1.45;margin:0 auto 16px;max-width:520px';
-      hintEl.textContent = 'Браузер или старый кеш мог заблокировать iframe. Справку можно открыть отдельной вкладкой.';
+      hintEl.className = 'xk-routing-help-fallback-hint';
+      hintEl.textContent = 'Не удалось получить документ справки. Его можно открыть в отдельной вкладке.';
 
       const link = document.createElement('a');
       link.href = HELP_URL;
       link.target = '_blank';
       link.rel = 'noopener';
-      link.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:0 16px;border-radius:999px;border:1px solid rgba(96,165,250,.45);color:#dbeafe;text-decoration:none;background:rgba(37,99,235,.18);font-weight:700';
+      link.className = 'xk-routing-help-fallback-link';
       link.textContent = 'Открыть справку';
 
       fallback.appendChild(titleEl);
@@ -2468,7 +2470,7 @@ function ensureHelpModal() {
         .map((styleEl) => styleEl.textContent || '')
         .join('\n');
       style.textContent = [
-        ':host{display:block;height:100%;min-height:0;overflow:auto;border-radius:10px;background:var(--bg);color:var(--text);}',
+        ':host{display:block;height:100%;min-height:0;overflow:auto;background:var(--bg);color:var(--text);}',
         '*{box-sizing:border-box;}',
         normalizeRoutingHelpCss(sourceCss),
         '.routing-help-document{min-height:100%;}'
@@ -2514,25 +2516,12 @@ function ensureHelpModal() {
   body.appendChild(helpHost);
   loadRoutingHelpInline();
 
-  const actions = document.createElement('div');
-  actions.className = 'modal-actions';
-  actions.style.justifyContent = 'flex-end';
-
-  const okBtn = document.createElement('button');
-  okBtn.type = 'button';
-  okBtn.className = 'btn-secondary';
-  okBtn.textContent = 'Закрыть';
-
-  actions.appendChild(okBtn);
-
   content.appendChild(header);
   content.appendChild(body);
-  content.appendChild(actions);
   modal.appendChild(content);
 
   function close() { closeHelp(); }
   closeBtn.addEventListener('click', close);
-  okBtn.addEventListener('click', close);
 
   document.body.appendChild(modal);
   return modal;

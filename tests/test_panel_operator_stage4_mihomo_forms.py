@@ -16,8 +16,8 @@ def test_mihomo_generator_reuses_late_scoped_operator_layer():
     template = GENERATOR.read_text(encoding="utf-8")
     panel_template = PANEL.read_text(encoding="utf-8")
     assert '<body class="panel-page mihomo-generator-page">' in template
-    assert "filename='panel-operator.css', v='20260806p'" in template
-    assert "filename='panel-operator.css', v='20260806p'" in panel_template
+    assert "filename='panel-operator.css', v='20260806q'" in template
+    assert "filename='panel-operator.css', v='20260806q'" in panel_template
     assert template.index("filename='panel-operator.css'") > template.index("</style>")
     for fragment in ('class="generator-field-card xk-op-field"', 'class="xk-op-field-label" for="profileSelect"', 'class="generator-action-row xk-op-action-row"', 'class="hint xk-card-desc xk-op-field-hint"'):
         assert fragment in template
@@ -94,7 +94,7 @@ def test_visual_correction_removes_blue_glass_and_fixed_modal_canvases():
         assert fragment in css
 
     template = GENERATOR.read_text(encoding="utf-8")
-    assert "filename='panel-operator.css', v='20260806p'" in template
+    assert "filename='panel-operator.css', v='20260806q'" in template
 
 
 def test_mihomo_forms_closure_is_documented():

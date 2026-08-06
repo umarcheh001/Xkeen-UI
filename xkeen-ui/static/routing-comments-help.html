@@ -3,327 +3,316 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Маршрутизация Xray — комментарии и примеры (05_routing*.jsonc)</title>
+  <title>Комментарии JSONC в routing-файлах Xray — XKeen UI</title>
   <style>
-    :root{
-      --bg: #f5f5f7;
-      --text: #111827;
-      --muted: #374151;
-      --card-bg: #ffffff;
-      --border: #d1d5db;
-      --code-bg: #e5e7eb;
-      --code-border: #cbd5e1;
-      --code-text: #0f172a;
-      --pre-bg: rgba(15, 23, 42, 0.04);
-      --tag-bg: #eff6ff;
-      --tag-text: #1f2937;
-      --link: #2563eb;
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --surface: #ffffff;
+      --surface-2: #f1f3f6;
+      --text: #1a1d24;
+      --text-strong: #0d0f14;
+      --muted: #626a78;
+      --border: #d9dde5;
+      --border-strong: #c7ccd6;
+      --accent: #4f46e5;
+      --accent-hover: #4338ca;
+      --success: #16825d;
+      --warning: #a16207;
+      --code-bg: #f2f4f7;
+      --code-fg: #222631;
+      --comment: #737b89;
+      --property: #315aa8;
+      --string: #8b3d53;
+      --number: #087f5b;
+      --atom: #7c3aed;
+      --punct: #626a78;
+      --radius: 8px;
+      --radius-sm: 6px;
     }
 
-    /* Match the surrounding UI theme when user/device prefers dark mode. */
-    @media (prefers-color-scheme: dark){
-      :root{
-        --bg: #0f172a;
-        --text: #e5e7eb;
-        --muted: #cbd5e1;
-        --card-bg: #020617;
-        --border: #1f2937;
-        --code-bg: #1e293b;
-        --code-border: #334155;
-        --code-text: #e5e7eb;
-        --pre-bg: rgba(148, 163, 184, 0.10);
-        --tag-bg: rgba(96, 165, 250, 0.18);
-        --tag-text: #e5e7eb;
-        --link: #60a5fa;
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #101216;
+      --surface: #15181d;
+      --surface-2: #1b1f26;
+      --text: #d5d9e1;
+      --text-strong: #f1f3f6;
+      --muted: #9299a6;
+      --border: #2a2f38;
+      --border-strong: #393f49;
+      --accent: #818cf8;
+      --accent-hover: #a5b4fc;
+      --success: #52c99a;
+      --warning: #e2b35f;
+      --code-bg: #111318;
+      --code-fg: #d9dde5;
+      --comment: #7f8795;
+      --property: #8aa8ee;
+      --string: #d69aa9;
+      --number: #69c7a8;
+      --atom: #b6a1f2;
+      --punct: #9299a6;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --bg: #101216;
+        --surface: #15181d;
+        --surface-2: #1b1f26;
+        --text: #d5d9e1;
+        --text-strong: #f1f3f6;
+        --muted: #9299a6;
+        --border: #2a2f38;
+        --border-strong: #393f49;
+        --accent: #818cf8;
+        --accent-hover: #a5b4fc;
+        --success: #52c99a;
+        --warning: #e2b35f;
+        --code-bg: #111318;
+        --code-fg: #d9dde5;
+        --comment: #7f8795;
+        --property: #8aa8ee;
+        --string: #d69aa9;
+        --number: #69c7a8;
+        --atom: #b6a1f2;
+        --punct: #9299a6;
       }
     }
 
     body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      max-width: 960px;
+      max-width: 820px;
       margin: 0 auto;
-      padding: 24px;
-      line-height: 1.6;
+      padding: 24px 28px 36px;
       background: var(--bg);
       color: var(--text);
-    }
-
-    h1 {
-      font-size: 26px;
-      margin: 0 0 12px;
-      color: var(--text);
-    }
-
-    h2 {
-      font-size: 20px;
-      margin: 24px 0 8px;
-      color: var(--text);
-    }
-
-    h3 {
-      font-size: 16px;
-      margin: 20px 0 6px;
-      color: var(--text);
-    }
-
-    p {
-      margin: 0 0 12px;
-      color: var(--muted);
-    }
-
-    ul {
-      padding-left: 20px;
-      margin: 8px 0 12px;
-      color: var(--muted);
-    }
-
-    a{ color: var(--link); }
-    a:hover{ text-decoration: underline; }
-
-    code {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      font-size: 13px;
-      padding: 2px 6px;
-      border-radius: 6px;
-      background: var(--code-bg);
-      border: 1px solid var(--code-border);
-      color: var(--code-text);
-      white-space: nowrap;
-    }
-
-    pre {
-      margin: 12px 0 16px;
-      padding: 12px 14px;
-      border-radius: 10px;
-      background: var(--pre-bg);
-      border: 1px solid var(--border);
-      overflow: auto;
-    }
-
-    pre code {
-      padding: 0;
-      background: transparent;
-      border: none;
-      border-radius: 0;
-      display: block;
-      white-space: pre;
-    }
-
-    .card {
-      background: var(--card-bg);
-      border-radius: 12px;
-      padding: 16px 18px;
-      margin: 16px 0 20px;
-      border: 1px solid var(--border);
-      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
-    }
-
-    .tag {
-      display: inline-block;
-      font-size: 11px;
-      padding: 2px 8px;
-      border-radius: 999px;
-      background: var(--tag-bg);
-      color: var(--tag-text);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 8px;
-    }
-
-    hr {
-      border: none;
-      border-top: 1px solid var(--border);
-      margin: 24px 0;
-    }
-
-    button.back-to-panel {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 16px;
-      padding: 6px 14px;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      background: var(--card-bg);
-      color: var(--text);
-      font-size: 13px;
-      cursor: pointer;
-      box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
-    }
-
-    button.back-to-panel:hover {
-      background: color-mix(in srgb, var(--card-bg) 85%, var(--text) 15%);
-    }
-
-    button.back-to-panel:active {
-      transform: translateY(1px);
-      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
-    }
-
-    @media (max-width: 640px) {
-      body {
-        padding: 16px;
-      }
-
-      pre {
-        font-size: 12px;
-        padding: 10px 12px;
-      }
-
-      .card {
-        padding: 12px;
-      }
-
-      button.back-to-panel {
-        width: 100%;
-        max-width: 320px;
-        justify-content: center;
-      }
-    }
-  
-    /* Подсветка комментариев в примерах кода */
-    .code-comment {
-      color: #6b7280;
-      font-style: italic;
-    }
-    html[data-theme="dark"] .code-comment {
-      color: #9ca3af;
-    }
-
-    /* Тёмная тема для этой страницы помощи */
-    html[data-theme="dark"] body {
-      background: #020617;
-      color: #e5e7eb;
-    }
-
-    html[data-theme="dark"] h1,
-    html[data-theme="dark"] h2,
-    html[data-theme="dark"] h3 {
-      color: #e5e7eb;
-    }
-
-    html[data-theme="dark"] p,
-    html[data-theme="dark"] ul,
-    html[data-theme="dark"] li {
-      color: #d1d5db;
-    }
-
-    html[data-theme="dark"] code {
-      background: #020617;
-      color: #e5e7eb;
-    }
-
-    html[data-theme="dark"] pre {
-      background: #020617;
-      border-color: #1f2937;
-    }
-
-    html[data-theme="dark"] .card {
-      background: #020617;
-      border-color: #1f2937;
-      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.85);
-    }
-
-    html[data-theme="dark"] .tag {
-      background: #1f2937;
-      color: #e5e7eb;
-    }
-
-    html[data-theme="dark"] hr {
-      border-top-color: #374151;
-    }
-
-  
-    /* === Подсветка кода как в редакторе JSON (CodeMirror material-darker + правки XKeen) === */
-    :root {
-      --xk-code-bg: #f9fafb;
-      --xk-code-fg: #111827;
-      --xk-code-border: #d1d5db;
-
-      --xk-comment: #6b7280;
-      --xk-property: #1f2937;
-      --xk-string: #b91c1c;
-      --xk-number: #047857;
-      --xk-atom: #047857;
-      --xk-keyword: #7c3aed;
-      --xk-punct: #111827;
-    }
-
-    html[data-theme="dark"] {
-      --xk-code-bg: #020617;
-      --xk-code-fg: #e5e7eb;
-      --xk-code-border: #111827;
-
-      --xk-comment: #64748b;
-      --xk-property: #60a5fa;
-      --xk-string: #a3e635;
-      --xk-number: #f97316;
-      --xk-atom: #22d3ee;
-      --xk-keyword: #facc15;
-      --xk-punct: #9ca3af;
-    }
-
-    /* Кодовые блоки */
-    pre {
-      background: var(--xk-code-bg);
-      border: 1px solid var(--xk-code-border);
-      border-radius: 8px;
-    }
-
-    pre code {
-      color: var(--xk-code-fg);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 14px;
       line-height: 1.55;
     }
 
-    /* Токены */
-    pre code .cm-comment { color: var(--xk-comment); }
-    html[data-theme="dark"] pre code .cm-comment { font-style: italic; }
+    h1,
+    h2,
+    h3 {
+      color: var(--text-strong);
+      letter-spacing: -0.015em;
+    }
 
-    pre code .cm-property { color: var(--xk-property); }
-    pre code .cm-string { color: var(--xk-string); }
-    pre code .cm-number { color: var(--xk-number); }
-    pre code .cm-atom { color: var(--xk-atom); }
-    pre code .cm-keyword { color: var(--xk-keyword); }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+      line-height: 1.25;
+    }
+
+    h2 {
+      margin: 28px 0 10px;
+      padding-top: 2px;
+      font-size: 17px;
+      line-height: 1.35;
+    }
+
+    h3 {
+      margin: 20px 0 7px;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    p,
+    ul,
+    ol {
+      margin: 0 0 12px;
+      color: var(--text);
+    }
+
+    ul,
+    ol {
+      padding-left: 20px;
+    }
+
+    li + li {
+      margin-top: 5px;
+    }
+
+    a {
+      color: var(--accent);
+      text-underline-offset: 3px;
+    }
+
+    a:hover {
+      color: var(--accent-hover);
+    }
+
+    code {
+      padding: 1px 5px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--surface-2);
+      color: var(--text-strong);
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.92em;
+      white-space: nowrap;
+    }
+
+    pre {
+      margin: 10px 0 16px;
+      padding: 13px 15px;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--code-bg);
+    }
+
+    pre code {
+      display: block;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: var(--code-fg);
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre;
+    }
+
+    .card {
+      margin: 18px 0 22px;
+      padding: 14px 16px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .card ul:last-child,
+    .card p:last-child {
+      margin-bottom: 0;
+    }
+
+    .tag {
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 650;
+      line-height: 1.3;
+    }
+
+    .status-list {
+      display: grid;
+      gap: 8px;
+      margin: 12px 0 16px;
+      padding: 0;
+      list-style: none;
+    }
+
+    .status-list li {
+      display: grid;
+      grid-template-columns: minmax(165px, max-content) minmax(0, 1fr);
+      gap: 12px;
+      align-items: baseline;
+      margin: 0;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .status-list li:first-child {
+      border-top: 1px solid var(--border);
+    }
+
+    .status-name {
+      color: var(--text-strong);
+      font-weight: 630;
+    }
+
+    .note {
+      margin: 14px 0;
+      padding: 10px 12px;
+      border-left: 3px solid var(--accent);
+      background: var(--surface-2);
+      color: var(--text);
+    }
+
+    .note.warning {
+      border-left-color: var(--warning);
+    }
+
+    hr {
+      margin: 28px 0;
+      border: 0;
+      border-top: 1px solid var(--border);
+    }
+
+    pre code .cm-comment { color: var(--comment); font-style: italic; }
+    pre code .cm-property { color: var(--property); }
+    pre code .cm-string { color: var(--string); }
+    pre code .cm-number { color: var(--number); }
+    pre code .cm-atom,
+    pre code .cm-keyword { color: var(--atom); }
     pre code .cm-punctuation,
-    pre code .cm-bracket { color: var(--xk-punct); }
+    pre code .cm-bracket { color: var(--punct); }
 
+    @media (max-width: 640px) {
+      body {
+        padding: 18px 16px 28px;
+        font-size: 13px;
+      }
+
+      h1 { font-size: 21px; }
+      h2 { font-size: 16px; }
+
+      .status-list li {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 3px;
+      }
+
+      pre {
+        margin-right: -4px;
+        margin-left: -4px;
+        padding: 11px 12px;
+      }
+    }
   </style>
 </head>
 <body>
 
-  <h1>Маршрутизация Xray (JSONC)</h1>
-  <p>Эта страница объясняет, как правильно писать комментарии и правила в файле routing-части Xray в формате <code>.jsonc</code> (JSON с комментариями), чтобы панель XKeen UI могла его загрузить и применить.</p>
-  <p><b>Важно:</b> имя файла <b>определяется</b> профилем/ядром. Обычно это <code>05_routing.jsonc</code>, но для Hysteria2 может использоваться <code>05_routing_hys2.jsonc</code>.</p>
+  <h1>Комментарии в routing-файлах Xray</h1>
+  <p>Редактор XKeen UI понимает JSONC: обычный JSON с комментариями. Комментарии можно использовать для пояснений и временного отключения правил, не удаляя их.</p>
+  <p>Активный файл выбирается в панели. Обычно основной фрагмент называется <code>05_routing.json</code>, но имя зависит от установленного профиля и ядра.</p>
 
   <div class="card">
-    <div class="tag">Кратко</div>
+    <div class="tag">Как это работает сейчас</div>
     <ul>
       <li>Поддерживаются комментарии: <code>//</code>, <code>#</code>, <code>/* ... */</code>.</li>
-      <li>При сохранении комментарии удаляются, а файл проверяется как обычный JSON.</li>
-      <li>После удаления комментариев не должно быть синтаксических ошибок (висячих запятых, незакрытых скобок и т.п.).</li>
+      <li>Панель хранит редактируемый текст с комментариями в отдельном JSONC sidecar-файле.</li>
+      <li>Для Xray рядом с остальными фрагментами записывается очищенный валидный <code>.json</code>. Сам Xray комментарии не читает.</li>
+      <li>Перед сохранением панель проверяет синтаксис JSONC, структуру routing и запускает Xray preflight.</li>
     </ul>
   </div>
 
-  <h2>1. Виды поддерживаемых комментариев</h2>
+  <div class="note"><strong>Главное:</strong> обычное сохранение не должно удалять комментарии из текста редактора. Если отдельная операция не может сохранить их безопасно, панель предупреждает до перезаписи.</div>
+
+  <h2>1. Поддерживаемые комментарии</h2>
 
   <h3>1.1. Однострочный комментарий <code>//</code></h3>
   <pre><code>// Комментарий целой строки
 {
-  "rules": [
+  "routing": {
+    "rules": [
     // Комментарий перед правилом
     { "type": "field", "outboundTag": "proxy" } // Комментарий в конце строки
-  ]
+    ]
+  }
 }</code></pre>
 
   <h3>1.2. Однострочный комментарий <code>#</code></h3>
   <pre><code># Комментарий целой строки
 {
-  "domainStrategy": "AsIs",  # Комментарий в конце строки
-  "rules": [
-    # комментарий внутри списка
-    { "type": "field", "outboundTag": "direct" }
-  ]
+  "routing": {
+    "domainStrategy": "AsIs", # Комментарий в конце строки
+    "rules": [
+      # комментарий внутри списка
+      { "type": "field", "outboundTag": "direct" }
+    ]
+  }
 }</code></pre>
 
   <h3>1.3. Многострочный комментарий <code>/* ... */</code></h3>
@@ -334,242 +323,118 @@
     - кто его правил
     - когда вносились изменения
   */
-  "rules": [
-    {
-      "type": "field",
-      "ip": ["geoip:private"],
-      "outboundTag": "direct"
-    }
-  ]
+  "routing": {
+    "rules": [
+      {
+        "type": "field",
+        "ip": ["geoip:private"],
+        "outboundTag": "direct"
+      }
+    ]
+  }
 }</code></pre>
 
-  <p><strong>Важно:</strong> каждый многострочный комментарий должен быть закрыт <code>*/</code>. Незакрытый блок-сomментарий сломает весь файл.</p>
+  <p>Последовательности <code>//</code>, <code>#</code> и <code>/*</code> внутри строки в двойных кавычках остаются частью строки и не считаются комментариями.</p>
 
-  <hr>
+  <h2>2. Сохранение и статусы комментариев</h2>
 
-  <h2>2. Типичные ошибки</h2>
+  <p>Строка состояния под редактором показывает, откуда загружен текст и удалось ли сохранить комментарии при операции:</p>
+  <ul class="status-list">
+    <li><span class="status-name">JSONC active</span><span>Sidecar найден и его версия с комментариями открыта в редакторе.</span></li>
+    <li><span class="status-name">sidecar найден</span><span>JSONC-копия существует, но основной JSON новее и отличается. Панель показывает актуальный JSON, чтобы не затереть внешнее изменение.</span></li>
+    <li><span class="status-name">off</span><span>Sidecar ещё не создан. При сохранении он будет создан вместе с очищенным JSON для Xray.</span></li>
+    <li><span class="status-name">JSONC preserve</span><span>Операция над правилами применилась с сохранением комментариев.</span></li>
+    <li><span class="status-name">нужен fallback</span><span>Автоматически сохранить расположение комментариев не удалось; перед полной перезаписью потребуется подтверждение.</span></li>
+  </ul>
 
-  <h3>2.1. Висячая запятая перед закрывающей скобкой</h3>
+  <p>JSONC sidecar хранится в служебном каталоге панели, отдельно от каталога конфигурации Xray. Это сделано специально: Xray не должен пытаться загрузить файл с комментариями как конфигурационный фрагмент.</p>
+
+  <h2>3. Типичные ошибки</h2>
+
+  <h3>3.1. Висячая запятая перед закрывающей скобкой</h3>
   <p>После удаления комментариев JSON не должен содержать лишних запятых.</p>
 
   <p><strong>Неправильно:</strong></p>
   <pre><code>{
-  "rules": [
-    { "type": "field", "outboundTag": "proxy" }, // последний элемент,
-  ] # после удаления комментариев останется лишняя запятая
+  "routing": {
+    "rules": [
+      { "type": "field", "outboundTag": "proxy" }, // лишняя запятая
+    ]
+  }
 }</code></pre>
 
   <p><strong>Правильно:</strong></p>
   <pre><code>{
-  "rules": [
-    { "type": "field", "outboundTag": "proxy" } // последний элемент, без запятой
-  ]
+  "routing": {
+    "rules": [
+      { "type": "field", "outboundTag": "proxy" } // без запятой
+    ]
+  }
 }</code></pre>
 
-  <h3>2.2. Незакрытый многострочный комментарий</h3>
+  <h3>3.2. Незакрытый многострочный комментарий</h3>
 
   <p><strong>Неправильно:</strong></p>
   <pre><code>{
   /* Начали писать
      большой комментарий и забыли закрыть
-  "rules": [
-    ...
-  ]
+  "routing": { "rules": [] }
 }</code></pre>
 
   <p><strong>Правильно:</strong></p>
   <pre><code>{
   /* Всё ОК */
-  "rules": [
-    ...
-  ]
+  "routing": { "rules": [] }
 }</code></pre>
 
-  <h3>2.3. Комментарии внутри строк</h3>
-  <p>Последовательности <code>//</code>, <code>#</code> и <code>/*</code> внутри строк не считаются комментариями:</p>
+  <h3>3.3. Повреждённая структура JSON</h3>
+  <p>Комментарии не отменяют требования JSON: ключи и строки должны быть в двойных кавычках, а все скобки — закрыты.</p>
   <pre><code>{
-  "note": "это просто текст // а не комментарий"
+  "routing": {
+    "rules": []
+  }
 }</code></pre>
 
-  <hr>
+  <h2>4. Как устроен routing-фрагмент</h2>
 
-  <h2>3. Как устроены правила маршрутизации</h2>
-
-  <p>Внутри поля <code>"rules"</code> каждый объект — это отдельное правило. Основные поля:</p>
+  <p>В актуальных фрагментах массив правил находится в <code>routing.rules</code>. Каждое правило — отдельный объект. Часто используются:</p>
   <ul>
-    <li><code>"type": "field"</code> — тип правила (обычно его не меняют).</li>
-    <li><code>"domain": [...]</code> — список доменов или групп доменов (<code>geosite:...</code>).</li>
-    <li><code>"ip": [...]</code> — список IP или групп IP (<code>geoip:...</code>).</li>
-    <li><code>"outboundTag": "proxy"</code> — тег, который должен существовать в <code>04_outbounds.json</code>.</li>
+    <li><code>domain</code> — домены и списки GeoSite;</li>
+    <li><code>ip</code> — IP/CIDR и списки GeoIP;</li>
+    <li><code>network</code>, <code>port</code>, <code>protocol</code>, <code>inboundTag</code> — дополнительные условия;</li>
+    <li><code>outboundTag</code> или <code>balancerTag</code> — назначение правила. Указанный тег должен существовать в текущей конфигурации.</li>
   </ul>
 
-  <p>Пример: отправить Netflix через прокси:</p>
+  <p>Минимальный пример с двумя правилами:</p>
   <pre><code>{
-  "type": "field",
-  "domain": [
-    "geosite:netflix",
-    "netflix.com"
-  ],
-  "outboundTag": "proxy"
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      // Локальные сети — напрямую
+      {
+      "type": "field",
+        "ip": ["geoip:private"],
+        "outboundTag": "direct"
+      },
+      // Пример доменного правила
+      {
+      "type": "field",
+        "domain": ["domain:example.org"],
+        "outboundTag": "proxy"
+      }
+    ]
+  }
 }</code></pre>
 
-  <p>Пример: локальные сети в обход прокси:</p>
-  <pre><code>{
-  "type": "field",
-  "ip": [
-    "geoip:private"
-  ],
-  "outboundTag": "direct"
-}</code></pre>
+  <div class="note warning"><strong>Порядок важен:</strong> Xray проверяет правила сверху вниз. Размещайте более точные исключения раньше общих правил.</div>
 
-  <hr>
-
-  <h2>4. Готовый пример 05_routing*.jsonc</h2>
-
-  <p>Ниже — рабочий шаблон <code>05_routing*.jsonc</code>, который можно использовать как базу и редактировать под себя.</p>
-
-  <pre><code>/*
- * 05_routing*.jsonc — пример с комментариями
- *
- * Поддерживаются комментарии:
- *   // однострочный комментарий
- *   # однострочный комментарий
- *   /* многострочный комментарий *\/
- *
- * После удаления комментариев файл превращается в обычный валидный JSON.
- * Следи только за тем, чтобы не было "висячих" запятых после последнего элемента.
- */
-
-# Общие настройки маршрутизатора Xray
-{
-  // Как обрабатывать домены (AsIs / IPIfNonMatch / IPOnDemand)
-  "domainStrategy": "AsIs",
-
-  // Как сопоставлять домены (plain / vdomain / mph / hybrid)
-  "domainMatcher": "hybrid",
-
-  // Основные правила маршрутизации
-  "rules": [
-    // ===================== ЛОКАЛЬНЫЕ СЕТИ / ЛОКАЛЬНЫЕ ДОМЕНЫ =====================
-
-    {
-      // Весь приватный диапазон IP → direct
-      "type": "field",
-      "ip": [
-        "geoip:private",         // RFC1918, локальные сети
-        "geoip:cn"               // пример: Китай напрямую (можно удалить, если не нужно)
-      ],
-      "outboundTag": "direct"    // тег должен существовать в 04_outbounds.json
-    },
-
-    {
-      // Локальные домены, типа router.local, *.lan и т.п.
-      "type": "field",
-      "domain": [
-        "geosite:private"
-      ],
-      "outboundTag": "direct"
-    },
-
-    // ===================== БЛОКИРОВКА РЕКЛАМЫ / НЕНУЖНЫЙ ТРАФИК =====================
-
-    {
-      // Рекламные домены по готовым спискам
-      "type": "field",
-      "domain": [
-        "geosite:category-ads-all"  // списки рекламы (если импортированы в geosite)
-      ],
-      "outboundTag": "block"        // тег block должен быть настроен в outbounds
-    },
-
-    // ===================== СТРИМИНГ / МЕДИА ЧЕРЕЗ ПРОКСИ =====================
-
-    {
-      /*
-       * Стриминговые сервисы → proxy
-       * сюда можно добавлять свои геосайты и домены
-       */
-      "type": "field",
-      "domain": [
-        // Сервисы из geosite
-        "geosite:netflix",
-        "geosite:disney",
-        "geosite:youtube",
-
-        // Прямые домены (пример)
-        "netflix.com",
-        "youtube.com"
-      ],
-      "outboundTag": "proxy"
-    },
-
-    // ===================== РАБОТА / VPN ДЛЯ ОФИСА =====================
-
-    {
-      /*
-       * Пример: рабочие ресурсы через отдельный прокси
-       * Можно удалить или раскомментировать и дописать свои домены.
-       */
-      "type": "field",
-      "domain": [
-        "corp.example.com",
-        "jira.example.com",
-        "vpn.example.com"
-      ],
-      "outboundTag": "work-proxy"   // не забудь добавить этот тег в outbounds
-    },
-
-    // ===================== ПРИМЕРЫ ДЛЯ ПОЛЬЗОВАТЕЛЕЙ =====================
-
-    /*
-    {
-      // Пример: игры в Steam идут напрямую
-      "type": "field",
-      "domain": [
-        "store.steampowered.com",
-        "api.steampowered.com"
-      ],
-      "outboundTag": "direct"
-    },
-    */
-
-    /*
-    {
-      // Пример: какие-то сайты всегда через VPN
-      "type": "field",
-      "domain": [
-        "mybank.com",
-        "secure.example.org"
-      ],
-      "outboundTag": "proxy"
-    },
-    */
-
-    // ===================== ПРАВИЛО ПО УМОЛЧАНИЮ =====================
-
-    {
-      /*
-       * Фоллбэк: всё, что не попало ни под одно правило выше,
-       * идёт через proxy (можно сменить на direct, если нужно).
-       */
-      "type": "field",
-      "outboundTag": "proxy"
-    }
-  ]
-}</code></pre>
-
-  <hr>
-
-  <h2>5. Советы</h2>
+  <h2>5. Безопасная работа в панели</h2>
   <ul>
-    <li>Если сомневаетесь — закомментируйте правило, а не удаляйте его.</li>
-    <li>После правок убедитесь, что:
-      <ul>
-        <li>все скобки <code>{}</code> и <code>[]</code> закрыты;</li>
-        <li>строки в двойных кавычках <code>"..."</code>;</li>
-        <li>нет лишней запятой перед <code>]</code> или <code>}</code>.</li>
-      </ul>
-    </li>
+    <li>Для обычных изменений используйте RAW-редактор или карточки правил — они синхронизированы с текущим текстом.</li>
+    <li>Перед сохранением исправьте все сообщения JSONC/schema. Клик по ошибке переводит редактор к проблемному месту.</li>
+    <li>Если Xray preflight не проходит, файл не записывается. Проверьте неизвестные outbound/balancer tags, GeoIP/GeoSite и синтаксис значений.</li>
+    <li>Команда удаления комментариев делает это явно. Сортировка и некоторые массовые сценарии могут попросить подтверждение, если сохранить комментарии на прежних местах невозможно.</li>
+    <li>Если конфигурацию изменили вне панели, статус <code>sidecar найден</code> защищает более новый основной JSON от тихой перезаписи старой JSONC-копией.</li>
   </ul>
 
 

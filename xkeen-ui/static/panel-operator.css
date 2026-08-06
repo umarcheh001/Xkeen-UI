@@ -11282,6 +11282,82 @@ body.panel-page .modal[data-operator-modal-family="drawer-help"] .modal-content 
   height: min(100%, calc(100dvh - 36px));
 }
 
+/* Routing JSONC help is created at runtime. Keep the document inside the same
+ * neutral drawer family instead of its legacy navy page/frame treatment. */
+body.panel-page #xkeen-routing-help-modal .xk-routing-help-shell {
+  grid-template-rows: 50px minmax(0, 1fr);
+  width: min(820px, calc(100vw - 36px));
+  height: min(900px, calc(100dvh - 36px));
+}
+
+body.panel-page #xkeen-routing-help-modal .xk-routing-help-body {
+  display: flex;
+  min-height: 0;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+body.panel-page #xkeen-routing-help-modal .xk-routing-help-host {
+  display: block;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 0;
+  border-radius: 0;
+  background: var(--op-surface-2);
+}
+
+body.panel-page #xkeen-routing-help-modal .modal-actions {
+  justify-content: flex-end;
+}
+
+body.panel-page #xkeen-routing-help-modal .xk-routing-help-fallback {
+  display: flex;
+  height: 100%;
+  padding: 28px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  border: 0;
+  background: var(--op-surface-2);
+  color: var(--op-text);
+  text-align: center;
+}
+
+body.panel-page #xkeen-routing-help-modal .xk-routing-help-fallback-title {
+  margin-bottom: 8px;
+  color: var(--op-text-strong);
+  font-weight: 670;
+}
+
+body.panel-page #xkeen-routing-help-modal .xk-routing-help-fallback-hint {
+  max-width: 520px;
+  margin: 0 auto 16px;
+  color: var(--op-muted);
+  line-height: 1.45;
+}
+
+body.panel-page #xkeen-routing-help-modal .xk-routing-help-fallback-link {
+  display: inline-flex;
+  min-height: 32px;
+  padding: 0 12px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--op-border-strong);
+  border-radius: var(--op-radius-sm);
+  background: var(--op-surface);
+  color: var(--op-accent-hover);
+  font-weight: 630;
+  text-decoration: none;
+}
+
+body.panel-page #xkeen-routing-help-modal .xk-routing-help-fallback-link:hover {
+  border-color: var(--op-accent);
+  background: var(--op-surface-hover);
+}
+
 /* Stage 5 — the dynamic CodeMirror help is a workbench sidecar, rather than
  * a second full-screen overlay. On wide viewports the open editor is moved
  * into the remaining canvas, so the help never covers its Save/Cancel row. */
@@ -11955,6 +12031,26 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
     min-height: 100dvh;
     border-width: 0 !important;
     border-radius: 0 !important;
+  }
+
+  body.panel-page #xkeen-routing-help-modal .xk-routing-help-shell {
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    min-height: 100dvh !important;
+    transform: none !important;
+    border-width: 0 !important;
+    border-radius: 0 !important;
+    grid-template-rows: 50px minmax(0, 1fr);
+  }
+
+  body.panel-page #xkeen-routing-help-modal {
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    overflow: hidden !important;
   }
 
   body.panel-page .modal[data-operator-modal-family="confirm-compact-form"] .modal-content {
