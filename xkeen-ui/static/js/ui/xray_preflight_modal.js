@@ -722,7 +722,8 @@
     } catch (e) {}
     _copyResetTimer = null;
     try {
-      copyBtn.textContent = copyBtn.dataset.defaultLabel || 'Скопировать детали';
+      const label = copyBtn.dataset.defaultLabel || 'Скопировать детали';
+      copyBtn.innerHTML = iconHtml('duplicate') + '<span class="xk-action-label">' + label + '</span>';
       copyBtn.classList.remove('is-success');
       copyBtn.classList.remove('is-error');
     } catch (e2) {}
@@ -863,6 +864,7 @@
     const modal = document.createElement('div');
     modal.id = 'xray-preflight-modal';
     modal.className = 'modal hidden';
+    modal.dataset.operatorModalFamily = 'master-detail';
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
     modal.setAttribute('aria-label', 'Ошибка проверки Xray');
@@ -885,7 +887,7 @@
       '      <button type="button" class="xk-preflight-chip xk-preflight-action-chip" data-xk-preflight-retry-skip style="display:none;">Повторить без проверки</button>' +
       '    </section>' +
       '    <div class="xk-preflight-grid">' +
-      '      <section class="xk-preflight-panel">' +
+      '      <section class="xk-preflight-panel xk-preflight-panel--diagnosis">' +
       '        <div class="xk-preflight-block xk-preflight-block--summary" data-xk-preflight-summary-wrap style="display:none;">' +
       '          <div class="xk-preflight-block-title">Что сломалось</div>' +
       '          <div data-xk-preflight-summary></div>' +
@@ -913,7 +915,7 @@
       '          <div class="xk-preflight-explainer" data-xk-preflight-explainer></div>' +
       '        </div>' +
       '      </section>' +
-      '      <section class="xk-preflight-panel">' +
+      '      <section class="xk-preflight-panel xk-preflight-panel--output" data-xk-preflight-output-panel>' +
       '        <div class="xk-preflight-block xk-preflight-block--stderr" data-xk-preflight-stderr-wrap style="display:none;">' +
       '          <div class="xk-preflight-block-title">stderr</div>' +
       '          <pre data-xk-preflight-stderr class="xk-preflight-terminal xk-preflight-terminal--stderr"></pre>' +
@@ -926,8 +928,8 @@
       '    </div>' +
       '  </div>' +
       '  <div class="modal-actions xk-preflight-footer">' +
-      '    <button type="button" data-xk-preflight-copy>Скопировать детали</button>' +
-      '    <button type="button" class="btn-primary" data-xk-preflight-close>Закрыть</button>' +
+      '    <button type="button" class="btn-secondary" data-xk-preflight-copy>' + iconHtml('duplicate') + '<span class="xk-action-label">Скопировать детали</span></button>' +
+      '    <button type="button" class="btn-primary" data-xk-preflight-close data-operator-dismiss-duplicate="true">Закрыть</button>' +
       '  </div>' +
       '</div>';
 
@@ -987,13 +989,13 @@
             if (body) body.scrollTop = 0;
           } catch (e4) {}
           try {
-            okBtn.focus();
+            closeBtn.focus();
           } catch (e5) {}
         });
       } catch (e6) {
         setTimeout(() => {
           try {
-            okBtn.focus();
+            closeBtn.focus();
           } catch (e7) {}
         }, 0);
       }
@@ -1070,11 +1072,11 @@
       }
       clearCopyState(copyBtn);
       if (copied) {
-        copyBtn.textContent = 'Скопировано';
+        copyBtn.innerHTML = iconHtml('check') + '<span class="xk-action-label">Скопировано</span>';
         copyBtn.classList.add('is-success');
         if (typeof window.toast === 'function') window.toast('Детали ошибки скопированы.', 'info');
       } else {
-        copyBtn.textContent = 'Не удалось скопировать';
+        copyBtn.innerHTML = iconHtml('alert') + '<span class="xk-action-label">Не удалось скопировать</span>';
         copyBtn.classList.add('is-error');
         if (typeof window.toast === 'function') window.toast('Не удалось скопировать детали ошибки.', true);
       }
@@ -1119,6 +1121,7 @@
       stderr: modal.querySelector('[data-xk-preflight-stderr]'),
       stdoutWrap: modal.querySelector('[data-xk-preflight-stdout-wrap]'),
       stdout: modal.querySelector('[data-xk-preflight-stdout]'),
+      outputPanel: modal.querySelector('[data-xk-preflight-output-panel]'),
       copyBtn,
     };
 
@@ -1252,6 +1255,8 @@
     }
     setVisible(els.stderrWrap, showStderr);
     setVisible(els.stdoutWrap, showStdout);
+    setVisible(els.outputPanel, showStderr || showStdout);
+    els.modal.classList.toggle('has-output', showStderr || showStdout);
 
     const copyParts = [
       phase === 'json_parse' ? 'JSON parse error' : 'Xray preflight error',

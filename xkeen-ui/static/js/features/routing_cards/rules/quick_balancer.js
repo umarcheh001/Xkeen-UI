@@ -69,7 +69,7 @@ import { iconHtml } from '../../../ui/operator_icons.js';
     if (!document.body) return null;
 
     document.body.insertAdjacentHTML('beforeend', `
-      <div id="routing-balancer-quick-modal" class="modal hidden" data-operator-modal-family="editor-workbench" role="dialog" aria-modal="true" aria-label="Быстрый старт балансировщика (leastPing)">
+      <div id="routing-balancer-quick-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-label="Быстрый старт балансировщика (leastPing)">
         <div class="modal-content xk-qb-modal" data-modal-key="routing-balancer-quick-premium-v1">
           <div class="modal-header">
             <span class="modal-title">Быстрый старт: балансировщик leastPing</span>
@@ -80,7 +80,7 @@ import { iconHtml } from '../../../ui/operator_icons.js';
               <div class="xk-qb-lead-icon">${iconHtml('quick-start')}</div>
               <div class="xk-qb-lead-text">
                 <div class="xk-qb-lead-title">leastPing + observatory + готовое правило маршрутизации</div>
-                <p class="modal-description" style="margin:0;">
+                <p class="modal-description">
                   Мастер создаст или обновит балансировщик <code>leastPing</code>, сформирует <code>07_observatory.json</code>, при необходимости добавит дефолтное правило и затем выполнит <b>Сохранить + Перезапуск</b> с логом.
                 </p>
               </div>
@@ -91,7 +91,7 @@ import { iconHtml } from '../../../ui/operator_icons.js';
                 <div class="xk-qb-panelhead">
                   <div>
                     <div class="xk-qb-kicker">Шаг 1</div>
-                    <div class="terminal-menu-title" style="margin:0;">Параметры балансировщика</div>
+                    <div class="terminal-menu-title">Параметры балансировщика</div>
                   </div>
                   <div id="routing-balancer-quick-summary" class="xk-qb-summary" data-tooltip="Текущий balancer.tag и количество выбранных прокси-тегов">proxy · 0 tag</div>
                 </div>
@@ -144,7 +144,7 @@ import { iconHtml } from '../../../ui/operator_icons.js';
                 <div class="xk-qb-panelhead">
                   <div>
                     <div class="xk-qb-kicker">Шаг 2</div>
-                    <div class="terminal-menu-title" style="margin:0;">Пул тегов для selector / subjectSelector</div>
+                    <div class="terminal-menu-title">Пул тегов для selector / subjectSelector</div>
                   </div>
                   <button type="button" class="btn-secondary btn-compact xk-qb-refresh-btn" id="routing-balancer-quick-refresh-tags-btn" data-tooltip="Взять теги из 04_outbounds.json и исключить служебные outbound">
                     ${iconHtml('refresh', 'xk-btn-inline-glyph')}

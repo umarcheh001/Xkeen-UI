@@ -42,6 +42,33 @@ async function openProxyGenerator(page) {
   await expect(page.locator('#outbounds-generator-modal')).toBeVisible();
 }
 
+async function openQuickBalancer(page) {
+  await page.locator('.top-tab-btn[data-view="routing"]').click();
+  await expect(page.locator('#view-routing')).toBeVisible();
+  const rules = page.locator('#routing-rules-body');
+  if (!(await rules.isVisible())) await page.locator('#routing-rules-header').click();
+  await page.locator('#routing-balancer-quick-btn').click();
+  await expect(page.locator('#routing-balancer-quick-modal')).toBeVisible();
+}
+
+async function openForcedRules(page) {
+  await page.locator('.top-tab-btn[data-view="routing"]').click();
+  await expect(page.locator('#view-routing')).toBeVisible();
+  const rules = page.locator('#routing-rules-body');
+  if (!(await rules.isVisible())) await page.locator('#routing-rules-header').click();
+  await page.locator('#routing-forced-rules-btn').click();
+  await expect(page.locator('#routing-forced-rules-modal')).toBeVisible();
+}
+
+async function openBalancerHelp(page) {
+  await page.locator('.top-tab-btn[data-view="routing"]').click();
+  await expect(page.locator('#view-routing')).toBeVisible();
+  const rules = page.locator('#routing-rules-body');
+  if (!(await rules.isVisible())) await page.locator('#routing-rules-header').click();
+  await page.locator('#routing-balancer-help-btn').click();
+  await expect(page.locator('#routing-balancer-help-modal')).toBeVisible();
+}
+
 async function openEditorHelp(page) {
   await page.locator('#json-editor-format-btn').focus();
   await page.evaluate(() => window.xkeenOpenCmHelp({}));
@@ -336,6 +363,238 @@ test.describe('Operator Console Stage 5 editor workbench contract', () => {
       expect(state.inputHeight).toBeGreaterThanOrEqual(31);
       expect(state.inputHeight).toBeLessThanOrEqual(33);
       expect(state.gridColumns).toBe(2);
+    });
+  }
+
+  for (const theme of ['dark', 'light']) {
+    test(`Routing quick-start uses the two-step operator workbench in ${theme}`, async ({ page }) => {
+      await openPanel(page, theme, { width: 1440, height: 900 });
+      await openQuickBalancer(page);
+
+      const state = await page.locator('#routing-balancer-quick-modal').evaluate((modal) => {
+        const inspect = (selector) => {
+          const node = modal.querySelector(selector);
+          const style = getComputedStyle(node);
+          const rect = node.getBoundingClientRect();
+          return {
+            backgroundImage: style.backgroundImage,
+            border: Number.parseFloat(style.borderTopWidth),
+            radius: Number.parseFloat(style.borderTopLeftRadius),
+            height: rect.height,
+          };
+        };
+        const content = modal.querySelector('.modal-content').getBoundingClientRect();
+        const footer = modal.querySelector('.modal-actions').getBoundingClientRect();
+        const grid = getComputedStyle(modal.querySelector('.xk-qb-grid'));
+        const options = Array.from(modal.querySelectorAll('.xk-qb-option-card'));
+        return {
+          family: modal.dataset.operatorModalFamily,
+          lead: inspect('.xk-qb-lead'),
+          grid: inspect('.xk-qb-grid'),
+          field: inspect('.xk-qb-fields-grid > label'),
+          option: inspect('.xk-qb-option-card'),
+          note: inspect('.xk-qb-note'),
+          input: inspect('#routing-balancer-quick-tag'),
+          primary: inspect('#routing-balancer-quick-run-btn'),
+          gridColumns: grid.gridTemplateColumns.split(' ').length,
+          optionColumns: getComputedStyle(options[0]).gridTemplateColumns.split(' ').length,
+          optionTops: options.map((node) => node.getBoundingClientRect().top),
+          contentBottom: content.bottom,
+          footerBottom: footer.bottom,
+          viewport: window.innerHeight,
+        };
+      });
+
+      expect(state.family).toBe('master-detail');
+      for (const surface of [state.lead, state.grid, state.field, state.option, state.note, state.input, state.primary]) {
+        expect(surface.backgroundImage).toBe('none');
+      }
+      expect(state.lead.radius).toBe(0);
+      expect(state.field.border).toBe(0);
+      expect(state.field.radius).toBe(0);
+      expect(state.option.radius).toBe(0);
+      expect(state.note.radius).toBe(0);
+      expect(state.input.height).toBeGreaterThanOrEqual(31);
+      expect(state.input.height).toBeLessThanOrEqual(33);
+      expect(state.primary.height).toBeGreaterThanOrEqual(31);
+      expect(state.primary.height).toBeLessThanOrEqual(33);
+      expect(state.gridColumns).toBe(2);
+      expect(state.optionColumns).toBe(2);
+      expect(state.optionTops[1]).toBeGreaterThan(state.optionTops[0]);
+      expect(state.optionTops[2]).toBeGreaterThan(state.optionTops[1]);
+      expect(state.footerBottom).toBeLessThanOrEqual(state.contentBottom + 1);
+      expect(state.contentBottom).toBeLessThanOrEqual(state.viewport - 17);
+
+      const toc = page.locator('#routing-balancer-help-modal .xk-balancer-help-toc');
+      const main = page.locator('#routing-balancer-help-modal .xk-balancer-help-main');
+      const diagnosticLink = toc.locator('a[data-help-target="xk-bhelp-troubles"]');
+      await diagnosticLink.click();
+      await expect(diagnosticLink).toHaveAttribute('aria-current', 'location');
+
+      await expect.poll(async () => main.evaluate((node) => node.scrollTop)).toBeGreaterThan(100);
+      const navigationState = await page.locator('#routing-balancer-help-modal').evaluate((modal) => {
+        const body = modal.querySelector('.modal-body');
+        const toc = modal.querySelector('.xk-balancer-help-toc');
+        const main = modal.querySelector('.xk-balancer-help-main');
+        const target = modal.querySelector('#xk-bhelp-troubles');
+        const tocRect = toc.getBoundingClientRect();
+        const bodyRect = body.getBoundingClientRect();
+        const mainRect = main.getBoundingClientRect();
+        const targetRect = target.getBoundingClientRect();
+        return {
+          bodyScrollTop: body.scrollTop,
+          mainScrollTop: main.scrollTop,
+          tocTop: tocRect.top,
+          tocBottom: tocRect.bottom,
+          bodyTop: bodyRect.top,
+          bodyBottom: bodyRect.bottom,
+          targetTop: targetRect.top,
+          mainTop: mainRect.top,
+        };
+      });
+      expect(navigationState.bodyScrollTop).toBe(0);
+      expect(navigationState.mainScrollTop).toBeGreaterThan(100);
+      expect(navigationState.tocTop).toBeGreaterThanOrEqual(navigationState.bodyTop - 1);
+      expect(navigationState.tocBottom).toBeLessThanOrEqual(navigationState.bodyBottom + 1);
+      expect(Math.abs(navigationState.targetTop - navigationState.mainTop)).toBeLessThanOrEqual(14);
+    });
+  }
+
+  for (const theme of ['dark', 'light']) {
+    test(`Forced routing rules use flat operator controls in ${theme}`, async ({ page }) => {
+      await openPanel(page, theme, { width: 1440, height: 900 });
+      await openForcedRules(page);
+
+      const state = await page.locator('#routing-forced-rules-modal').evaluate((modal) => {
+        const inspect = (selector) => {
+          const node = modal.querySelector(selector);
+          const style = getComputedStyle(node);
+          const rect = node.getBoundingClientRect();
+          return {
+            backgroundImage: style.backgroundImage,
+            border: Number.parseFloat(style.borderTopWidth),
+            radius: Number.parseFloat(style.borderTopLeftRadius),
+            height: rect.height,
+          };
+        };
+        const content = modal.querySelector('.modal-content').getBoundingClientRect();
+        const footer = modal.querySelector('.modal-actions').getBoundingClientRect();
+        const optionCards = Array.from(modal.querySelectorAll('.xk-forced-option-card'));
+        const toolbar = modal.querySelector('.xk-forced-wizard-toolbar');
+        const priorityLabel = optionCards[1].querySelector('.xk-forced-fieldlabel').getBoundingClientRect();
+        const prioritySelect = optionCards[1].querySelector('select').getBoundingClientRect();
+        return {
+          family: modal.dataset.operatorModalFamily,
+          lead: inspect('.xk-forced-wizard-lead'),
+          grid: inspect('.xk-forced-wizard-grid'),
+          panel: inspect('.xk-forced-wizard-panel'),
+          toolbar: inspect('.xk-forced-wizard-toolbar'),
+          option: inspect('.xk-forced-option-card'),
+          note: inspect('.xk-forced-wizard-note'),
+          list: inspect('.xk-forced-wizard-list'),
+          input: inspect('#routing-forced-rules-outbound'),
+          primary: inspect('#routing-forced-rules-run-btn'),
+          gridColumns: getComputedStyle(modal.querySelector('.xk-forced-wizard-grid')).gridTemplateColumns.split(' ').length,
+          optionColumns: getComputedStyle(modal.querySelector('.xk-forced-options-grid')).gridTemplateColumns.split(' ').length,
+          toolbarBorder: Number.parseFloat(getComputedStyle(toolbar).borderTopWidth),
+          optionTops: optionCards.map((node) => node.getBoundingClientRect().top),
+          priorityLabelRight: priorityLabel.right,
+          prioritySelectLeft: prioritySelect.left,
+          prioritySelectWidth: prioritySelect.width,
+          clearSelectedIcon: modal.querySelector('#routing-forced-rules-clear-proxy-btn use')?.getAttribute('href') || '',
+          clearAllIcon: modal.querySelector('#routing-forced-rules-clear-all-btn use')?.getAttribute('href') || '',
+          contentBottom: content.bottom,
+          footerBottom: footer.bottom,
+          viewport: window.innerHeight,
+        };
+      });
+
+      expect(state.family).toBe('master-detail');
+      for (const surface of [state.lead, state.grid, state.panel, state.toolbar, state.option, state.note, state.list, state.input, state.primary]) {
+        expect(surface.backgroundImage).toBe('none');
+      }
+      expect(state.lead.radius).toBe(0);
+      expect(state.panel.border).toBe(0);
+      expect(state.panel.radius).toBe(0);
+      expect(state.toolbarBorder).toBe(0);
+      expect(state.option.radius).toBe(0);
+      expect(state.note.radius).toBe(0);
+      expect(state.input.height).toBeGreaterThanOrEqual(31);
+      expect(state.input.height).toBeLessThanOrEqual(33);
+      expect(state.primary.height).toBeGreaterThanOrEqual(31);
+      expect(state.primary.height).toBeLessThanOrEqual(33);
+      expect(state.gridColumns).toBe(2);
+      expect(state.optionColumns).toBe(1);
+      expect(state.optionTops[1]).toBeGreaterThan(state.optionTops[0]);
+      expect(state.optionTops[2]).toBeGreaterThan(state.optionTops[0]);
+      expect(state.optionTops[2]).toBeGreaterThan(state.optionTops[1]);
+      expect(state.prioritySelectLeft).toBeGreaterThanOrEqual(state.priorityLabelRight + 15);
+      expect(state.prioritySelectWidth).toBeLessThanOrEqual(281);
+      expect(state.clearSelectedIcon).toContain('#xk-broom');
+      expect(state.clearAllIcon).toContain('#xk-trash');
+      expect(state.footerBottom).toBeLessThanOrEqual(state.contentBottom + 1);
+      expect(state.contentBottom).toBeLessThanOrEqual(state.viewport - 17);
+    });
+  }
+
+  for (const theme of ['dark', 'light']) {
+    test(`Balancer help is a current flat operator handbook in ${theme}`, async ({ page }) => {
+      await openPanel(page, theme, { width: 1440, height: 900 });
+      await openBalancerHelp(page);
+
+      const state = await page.locator('#routing-balancer-help-modal').evaluate((modal) => {
+        const inspect = (selector) => {
+          const node = modal.querySelector(selector);
+          const style = getComputedStyle(node);
+          return {
+            backgroundImage: style.backgroundImage,
+            border: Number.parseFloat(style.borderTopWidth),
+            radius: Number.parseFloat(style.borderTopLeftRadius),
+          };
+        };
+        const content = modal.querySelector('.modal-content').getBoundingClientRect();
+        const body = modal.querySelector('.modal-body').getBoundingClientRect();
+        const toc = modal.querySelector('.xk-balancer-help-toc').getBoundingClientRect();
+        return {
+          family: modal.dataset.operatorModalFamily,
+          content: inspect('.modal-content'),
+          toc: inspect('.xk-balancer-help-toc'),
+          tocLink: inspect('.xk-balancer-help-toc a'),
+          callout: inspect('.xk-balancer-help-callout'),
+          details: inspect('.xk-balancer-help-details'),
+          code: inspect('.xk-balancer-help-code'),
+          flow: inspect('.xk-balancer-help-flow'),
+          sectionCount: modal.querySelectorAll('.xk-balancer-help-section').length,
+          tocCount: modal.querySelectorAll('.xk-balancer-help-toc a').length,
+          hasCurrentSubscriptionCopy: modal.textContent.includes('Служебный пул')
+            && modal.textContent.includes('Только подписка')
+            && modal.textContent.includes('xk_auto_leastPing'),
+          bodyTop: body.top,
+          bodyBottom: body.bottom,
+          tocTop: toc.top,
+          tocBottom: toc.bottom,
+          contentBottom: content.bottom,
+          viewport: window.innerHeight,
+        };
+      });
+
+      expect(state.family).toBe('drawer-help');
+      for (const surface of [state.content, state.toc, state.tocLink, state.callout, state.details, state.code]) {
+        expect(surface.backgroundImage).toBe('none');
+      }
+      expect(state.toc.border).toBe(0);
+      expect(state.toc.radius).toBe(0);
+      expect(state.tocLink.border).toBe(0);
+      expect(state.callout.radius).toBe(0);
+      expect(state.details.radius).toBeLessThanOrEqual(7);
+      expect(state.code.radius).toBeLessThanOrEqual(7);
+      expect(state.flow.radius).toBeLessThanOrEqual(7);
+      expect(state.sectionCount).toBe(8);
+      expect(state.tocCount).toBe(8);
+      expect(state.hasCurrentSubscriptionCopy).toBe(true);
+      expect(state.tocTop).toBeGreaterThanOrEqual(state.bodyTop - 1);
+      expect(state.tocBottom).toBeLessThanOrEqual(state.bodyBottom + 1);
+      expect(state.contentBottom).toBeLessThanOrEqual(state.viewport - 17);
     });
   }
 

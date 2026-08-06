@@ -66,7 +66,7 @@ import { iconHtml } from '../../../ui/operator_icons.js';
     if (!document.body) return null;
 
     document.body.insertAdjacentHTML('beforeend', `
-      <div id="routing-forced-rules-modal" class="modal hidden" data-operator-modal-family="editor-workbench" data-modal-key="routing-forced-rules-premium-v4" role="dialog" aria-modal="true" aria-label="Принудительные правила (обход балансировщика)">
+      <div id="routing-forced-rules-modal" class="modal hidden" data-operator-modal-family="master-detail" data-modal-key="routing-forced-rules-premium-v4" role="dialog" aria-modal="true" aria-label="Принудительные правила (обход ��алансировщика)">
         <div class="modal-content" data-modal-key="routing-forced-rules-premium-v4-content">
           <div class="modal-header">
             <span class="modal-title">Принудительные правила (обход балансировщика)</span>
@@ -77,7 +77,7 @@ import { iconHtml } from '../../../ui/operator_icons.js';
               <div class="xk-forced-wizard-lead-icon">${iconHtml('transfer')}</div>
               <div class="xk-forced-wizard-lead-text">
                 <div class="xk-forced-wizard-lead-title">Домены и IP → конкретный outbound</div>
-                <p class="modal-description" style="margin:0;">
+                <p class="modal-description">
                   Мастер создаёт правила <code>type: field</code>, которые отправляют выбранные значения <b>мимо балансировщика</b> прямо на нужный <code>outboundTag</code>.
                 </p>
               </div>
@@ -88,7 +88,7 @@ import { iconHtml } from '../../../ui/operator_icons.js';
                 <div class="xk-forced-wizard-panelhead">
                   <div>
                     <div class="xk-forced-wizard-kicker">Шаг 1</div>
-                    <div class="terminal-menu-title" style="margin:0;">Добавить значения</div>
+                    <div class="terminal-menu-title">Добавить значения</div>
                   </div>
                 </div>
 
@@ -115,8 +115,8 @@ import { iconHtml } from '../../../ui/operator_icons.js';
                     <span class="xk-forced-fieldlabel">Значения</span>
                     <div class="xk-forced-wizard-toolbar">
                       <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-add-btn" data-tooltip="Добавить значения в выбранный outbound" aria-label="Добавить значения">${iconHtml('add-node')}</button>
-                      <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-clear-proxy-btn" data-tooltip="Очистить значения только у выбранного outbound" aria-label="Очистить выбранный outbound">${iconHtml('clear')}</button>
-                      <button type="button" class="btn-danger btn-icon xk-icon-btn" id="routing-forced-rules-clear-all-btn" data-tooltip="Удалить все записи мастера" aria-label="Удалить все записи">${iconHtml('trash')}</button>
+                      <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-clear-proxy-btn" data-tooltip="Очистить значения только у выбранного outbound" aria-label="Очистить выбранный outbound метлой">${iconHtml('broom')}</button>
+                      <button type="button" class="btn-danger btn-icon xk-icon-btn" id="routing-forced-rules-clear-all-btn" data-tooltip="Удалить все записи мастера" aria-label="Удалить все записи мастера">${iconHtml('trash')}</button>
                     </div>
                   </div>
 
@@ -139,7 +139,7 @@ geoip:private"></textarea>
                 <div class="xk-forced-wizard-panelhead">
                   <div>
                     <div class="xk-forced-wizard-kicker">Шаг 2</div>
-                    <div class="terminal-menu-title" style="margin:0;">Параметры и результат</div>
+                    <div class="terminal-menu-title">Параметры и результат</div>
                   </div>
                   <div id="routing-forced-rules-summary" class="xk-forced-wizard-summary" data-tooltip="Количество outbound, domain и ip в мастере">0 outbound · 0 domain · 0 ip</div>
                 </div>
@@ -173,10 +173,10 @@ geoip:private"></textarea>
                 <div class="xk-forced-wizard-listbox">
                   <div class="xk-forced-wizard-listhead">
                     <div class="xk-forced-wizard-listtitle">
-                      <div class="terminal-menu-title" style="margin:0;">Текущие правила</div>
+                      <div class="terminal-menu-title">Текущие правила</div>
                       <div class="xk-forced-list-subtitle">Карточки по outboundTag: компактный обзор, клик по chip удаляет значение</div>
                     </div>
-                    <div id="routing-forced-rules-status" class="modal-hint" style="margin:0;"></div>
+                    <div id="routing-forced-rules-status" class="modal-hint"></div>
                   </div>
                   <div id="routing-forced-rules-list" class="xk-card-desc xk-forced-wizard-list">—</div>
                 </div>

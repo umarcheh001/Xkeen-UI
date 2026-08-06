@@ -187,6 +187,8 @@ def test_routing_xray_uses_semantic_operator_icons_without_emoji_actions():
     assert "setIcon(handle, 'drag')" in rules
     assert "iconHtml('check'" in quick_balancer
     assert "iconHtml('transfer'" in forced_rules
+    assert "iconHtml('broom'" in forced_rules
+    assert "iconHtml('trash'" in forced_rules
 
     emoji = re.compile(r"[\U0001F300-\U0001FAFF]")
     assert not emoji.search(markup)

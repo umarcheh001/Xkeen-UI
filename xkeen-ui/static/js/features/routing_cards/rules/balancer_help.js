@@ -65,6 +65,26 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     if (!m) return;
     const el = document.getElementById(String(targetId || ''));
     if (!el) return;
+    const scroller = m.querySelector('.xk-balancer-help-main');
+    const body = m.querySelector('.modal-body');
+    if (scroller) {
+      try {
+        // scrollIntoView also scrolls the modal body even when its overflow is
+        // hidden. That moved the persistent TOC out of view. Own only the
+        // article scroller and keep the two-column shell at scrollTop 0.
+        if (body) body.scrollTop = 0;
+        const scrollerRect = scroller.getBoundingClientRect();
+        const targetRect = el.getBoundingClientRect();
+        const top = Math.max(0, scroller.scrollTop + targetRect.top - scrollerRect.top - 10);
+        scroller.scrollTo({ top, behavior: 'smooth' });
+        Array.from(m.querySelectorAll('.xk-balancer-help-toc a[data-help-target]')).forEach((link) => {
+          const active = String(link.dataset && link.dataset.helpTarget || '') === String(targetId || '');
+          if (active) link.setAttribute('aria-current', 'location');
+          else link.removeAttribute('aria-current');
+        });
+        return;
+      } catch (e) {}
+    }
     try {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (e) {

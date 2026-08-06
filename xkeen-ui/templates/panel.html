@@ -69,7 +69,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260806o') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260806p') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -2118,262 +2118,166 @@
 
     
 
-    <!-- Balancers help (how-to) -->
+    <!-- Balancers help (current operator workflow) -->
     <div id="routing-balancer-help-modal" class="modal hidden" data-operator-modal-family="drawer-help" role="dialog" aria-modal="true" aria-label="Справка по балансировщикам">
       <div class="modal-content xk-modal-width xk-modal-width-980" data-modal-key="routing-balancer-help">
         <div class="modal-header">
-          <span class="modal-title">Справка: балансировщики (Xray Routing)</span>
+          <span class="modal-title">Балансировщики Xray: актуальная схема работы</span>
           <button type="button" class="modal-close" id="routing-balancer-help-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
         </div>
         <div class="modal-body routing-help-body xk-balancer-help-grid">
           <nav class="xk-balancer-help-toc" aria-label="Навигация по справке">
-            <div class="terminal-menu-title xk-modal-mb-8">Содержание</div>
-            <a href="#" data-help-target="xk-bhelp-what">Как это устроено</a>
-            <a href="#" data-help-target="xk-bhelp-quickstart">🚀 Быстрый старт</a>
-            <a href="#" data-help-target="xk-bhelp-manual">Серверы вручную</a>
-            <a href="#" data-help-target="xk-bhelp-subscriptions">Подписки Xray (детали)</a>
-            <a href="#" data-help-target="xk-bhelp-balancer">Балансировщик</a>
-            <a href="#" data-help-target="xk-bhelp-rules">Правила</a>
-            <a href="#" data-help-target="xk-bhelp-forced">Исключения (🔒)</a>
-            <a href="#" data-help-target="xk-bhelp-troubles">Ошибки и подсказки</a>
+            <div class="terminal-menu-title">Разделы</div>
+            <a href="#" data-help-target="xk-bhelp-what">Как связаны компоненты</a>
+            <a href="#" data-help-target="xk-bhelp-quickstart">Быстрый старт</a>
+            <a href="#" data-help-target="xk-bhelp-manual">Источники прокси</a>
+            <a href="#" data-help-target="xk-bhelp-subscriptions">Подписки и routing</a>
+            <a href="#" data-help-target="xk-bhelp-balancer">Ручной балансировщик</a>
+            <a href="#" data-help-target="xk-bhelp-rules">Правила и порядок</a>
+            <a href="#" data-help-target="xk-bhelp-forced">Принудительные правила</a>
+            <a href="#" data-help-target="xk-bhelp-troubles">Диагностика</a>
           </nav>
 
           <div class="xk-balancer-help-main">
             <div class="xk-balancer-help-callout">
-              <b>Идея простая:</b> добавьте серверы (outbounds) с разными <code>tag</code>,
-              создайте <b>балансировщик</b>, в правилах укажите <code>balancerTag</code>.
-              Дальше Xray сам выбирает “какой outbound использовать сейчас”.
+              <strong>Рекомендуемый путь:</strong> добавьте прокси через <b>Подписки</b> или <b>Пул прокси</b>, затем подключите их к routing в форме подписки либо через <b>Быстрый старт</b>. Панель умеет согласованно обновить routing, observatory и выполнить перезапуск.
             </div>
 
-            <h3 id="xk-bhelp-what">Как это устроено в панели</h3>
-            <ul>
-              <li><code>04_outbounds.json</code> — ручные серверы (каждый с уникальным <code>tag</code>).</li>
-              <li><code>04_outbounds.&lt;id&gt;.json</code> — generated-фрагменты подписок. Основной <code>04_outbounds.json</code> не перезаписывается.</li>
-              <li><code>05_routing.json</code> — <code>routing.balancers</code> и <code>routing.rules</code>.
-                <span class="modal-hint">(в некоторых сборках/профилях может быть <code>05_routing_hys2.json</code>; панель показывает активный файл в селекторе сверху)</span>
-              </li>
-              <li><code>07_observatory.json</code> — измерение доступности/пинга (нужно для <code>leastPing</code>).</li>
-            </ul>
-            <div class="xk-balancer-help-details xk-modal-mt-10 xk-modal-mb-12" style="padding: 10px 12px;">
-              <b>Минимальный пример (для понимания)</b>
-              <div class="modal-hint xk-modal-mt-6 xk-modal-mb-8">Смысл: несколько outbounds с тегами → один balancer → правило с balancerTag.</div>
-              <div class="xk-balancer-help-code">
-                <code>// routing.balancers</code><br>
-                <code>{ "tag": "proxy", "selector": ["vless-"], "strategy": {"type":"leastPing"}, "fallbackTag": "direct" }</code><br><br>
-                <code>// routing.rules (в конце списка)</code><br>
-                <code>{ "type": "field", "balancerTag": "proxy" }</code>
+            <section class="xk-balancer-help-section" aria-labelledby="xk-bhelp-what">
+              <h3 id="xk-bhelp-what">Как связаны компоненты</h3>
+              <div class="xk-balancer-help-flow">
+                <div><code>04_outbounds.json</code><span>Ручные proxy-outbound и служебные direct/block/dns.</span></div>
+                <div><code>04_outbounds.&lt;id&gt;.json</code><span>Отдельные generated-фрагменты подписок; ручной файл не перезаписывается.</span></div>
+                <div><code>05_routing*.json</code><span>Правила и балансировщики активного routing-фрагмента.</span></div>
+                <div><code>07_observatory.json</code><span>Проверка доступности и задержки для <code>leastPing</code>.</span></div>
               </div>
-            </div>
+              <p class="modal-hint">Активный routing-файл показан в селекторе над редактором. Изменения карточек сначала попадают в редактор, а Xray начинает использовать сохранённый конфиг после перезапуска.</p>
+            </section>
 
-            <div class="modal-hint xk-modal-mb-12">
-              <b>Keenetic:</b> ядро Xray ставится пакетом <code>xkeen</code> через Entware. Перезапуск — <code>xkeen -restart</code>, панель делает сама. Xray применяет конфиг <b>только после рестарта</b>. В мастерах “Применить + Рестарт” это происходит автоматически (job + лог).
-            </div>
+            <section class="xk-balancer-help-section" aria-labelledby="xk-bhelp-quickstart">
+              <h3 id="xk-bhelp-quickstart">Быстрый старт leastPing</h3>
+              <details class="xk-balancer-help-details" open>
+                <summary>Когда использовать кнопку с молнией</summary>
+                <p>Мастер подходит, когда outbounds уже существуют, но routing и observatory ещё не настроены или их нужно синхронизировать.</p>
+                <ol>
+                  <li>Откройте <b>Правила маршрутизации</b> и нажмите кнопку <b>Быстрый старт</b> с молнией.</li>
+                  <li>Проверьте <code>balancer.tag</code>, <code>fallbackTag</code>, адрес и интервал проверки.</li>
+                  <li>Нажмите <b>Обновить</b>: мастер загрузит обычные outbound-теги, исключив direct/block/dns. Список можно отредактировать вручную.</li>
+                  <li>Оставьте <b>Перезаписать observatory</b>, если панель должна обновлять <code>07_observatory.json</code>.</li>
+                  <li>Опция <b>Сделать балансировщик дефолтным</b> создаёт служебное правило для inbound <code>redirect</code>/<code>tproxy</code>.</li>
+                  <li><b>Только применить</b> обновляет GUI и RAW без сохранения. <b>Применить + Рестарт</b> сохраняет конфиг и запускает Xray через журнал операций.</li>
+                </ol>
+              </details>
+              <div class="xk-balancer-help-code"><code>outbound tags → balancer.selector → rule.balancerTag → observatory leastPing</code></div>
+            </section>
 
-            <h3 id="xk-bhelp-quickstart">🚀 Быстрый старт: подписка + балансировщик за 5 минут</h3>
-            <details class="xk-balancer-help-details" open>
-              <summary>Самый простой путь для Keenetic-пользователя</summary>
-              <p><b>1. Создайте подписку.</b> Карточка <b>Прокси</b> → кнопка <b>Подписки</b>. Заполните:</p>
-              <ul>
-                <li><b>Имя</b> — любое (например, <code>VPN-1</code>).</li>
-                <li><b>Tag prefix</b> — короткий префикс, например <code>sub</code>. Generated-теги станут <code>sub--node1</code>, <code>sub--node2</code> и т.д.</li>
-                <li><b>URL подписки</b> — публичная HTTP(S) ссылка от провайдера (поддерживаются share-ссылки, base64, Xray JSON). Локальные и private-адреса, включая редиректы, заблокированы.</li>
-                <li>(Опц.) <b>Фильтр имени</b> — regex, оставить только нужные локации: <code>Germany|Netherlands|SG</code>.</li>
-                <li>(Опц.) <b>Фильтр типа</b> — <code>vless|trojan|vmess|ss|hy2</code>.</li>
-                <li>(Опц.) <b>Фильтр транспорта</b> — для VLESS: <code>xhttp|ws|grpc|httpupgrade|tcp</code>.</li>
-                <li><b>Интервал</b> — 1-168 ч (6 ч — разумно).</li>
-                <li>Галки: <b>Авто</b> (плановое обновление), <b>Пинг</b> (добавить теги в observatory — нужно для leastPing), <b>Обновить сразу</b>.</li>
-              </ul>
-              <p>Нажмите <b>Сохранить</b> → панель скачает подписку и покажет список узлов. Там можно пингануть каждый узел кнопкой и вручную отключить медленные.</p>
+            <section class="xk-balancer-help-section" aria-labelledby="xk-bhelp-manual">
+              <h3 id="xk-bhelp-manual">Источники прокси</h3>
+              <details class="xk-balancer-help-details" open>
+                <summary>Пул, мини-генератор или подписка</summary>
+                <ul>
+                  <li><b>Пул прокси</b> принимает несколько share-ссылок, позволяет назначить теги и обновляет ручной <code>04_outbounds.json</code>.</li>
+                  <li><b>Мини-генератор</b> собирает один outbound из параметров протокола и вставляет его в текущий фрагмент.</li>
+                  <li><b>Подписки</b> создают отдельные generated-фрагменты, поддерживают расписание, фильтры, исключения узлов, проверку задержки и routing-интеграцию.</li>
+                </ul>
+                <p class="modal-hint">Теги должны быть уникальными. Не используйте системные значения <code>direct</code>, <code>block</code> и <code>dns</code> для прокси.</p>
+              </details>
+            </section>
 
-              <p><b>2. Создайте балансировщик.</b> Вернитесь в <b>Роутинг Xray</b> → в карточке правил нажмите <b>⚡</b>:</p>
-              <ul>
-                <li><b>Selector</b>: <code>sub--</code> (ваш префикс).</li>
-                <li><b>Стратегия</b>: <code>leastPing</code>.</li>
-                <li><b>Fallback</b>: <code>direct</code>.</li>
-                <li>Оставьте галку “создать дефолтное правило” — весь трафик пойдёт через балансировщик.</li>
-                <li>Нажмите <b>Применить + Рестарт</b>.</li>
-              </ul>
+            <section class="xk-balancer-help-section" aria-labelledby="xk-bhelp-subscriptions">
+              <h3 id="xk-bhelp-subscriptions">Подписки и routing</h3>
+              <details class="xk-balancer-help-details" open>
+                <summary>Что делает форма подписки сейчас</summary>
+                <ul>
+                  <li><b>Tag prefix</b> формирует generated-теги вида <code>prefix--node</code>. Xray-селекторы сопоставляются по началу тега.</li>
+                  <li><b>Пинг</b> добавляет prefix в <code>observatory.subjectSelector</code>; сам по себе routing не меняет.</li>
+                  <li><b>Служебный пул</b> ведёт auto-managed leastPing-balancer и правило <code>xk_auto_leastPing</code> для redirect/tproxy.</li>
+                  <li><b>Balancer selectors</b> подключает prefix к отмеченным пользовательским балансировщикам.</li>
+                  <li>Исключённые в списке узлы не попадают в generated-фрагмент при сохранении или следующем обновлении.</li>
+                </ul>
+              </details>
+              <details class="xk-balancer-help-details">
+                <summary>Режим «Применение»</summary>
+                <div class="xk-balancer-help-flow">
+                  <div><b>Безопасно</b><span>Синхронизирует leastPing-пул и fallback, не переносит существующие явные proxy-правила.</span></div>
+                  <div><b>Жёстко · pool</b><span>Совместимые auto-правила на одиночный proxy переводятся на <code>balancerTag</code> пула.</span></div>
+                  <div><b>Только подписка</b><span>Служебный пул использует generated nodes; одиночный proxy в ручном outbounds-файле не требуется.</span></div>
+                </div>
+              </details>
+              <div class="xk-balancer-help-callout">
+                Не создавайте второй одинаковый служебный пул через быстрый мастер без необходимости: сначала проверьте план изменений в форме подписки и существующие <code>routing.balancers</code>.
+              </div>
+            </section>
 
-              <p><b>3. Готово.</b> Xray перезапустился, трафик идёт через подписку по leastPing.</p>
+            <section class="xk-balancer-help-section" aria-labelledby="xk-bhelp-balancer">
+              <h3 id="xk-bhelp-balancer">Ручной балансировщик</h3>
+              <details class="xk-balancer-help-details" open>
+                <summary>Поля карточки балансировщика</summary>
+                <ul>
+                  <li><code>tag</code> — уникальное имя, на которое ссылается <code>rule.balancerTag</code>.</li>
+                  <li><code>selector</code> — один или несколько префиксов outbound-тегов. Префикс <code>sub</code> включает теги вида <code>sub--nl</code> и <code>sub--de</code>.</li>
+                  <li><code>strategy.type</code> — <code>leastPing</code>, <code>leastLoad</code>, <code>random</code> или <code>roundRobin</code>.</li>
+                  <li><code>fallbackTag</code> — маршрут на случай, когда подходящий proxy недоступен; часто это <code>direct</code>.</li>
+                </ul>
+                <p class="modal-hint"><code>leastPing</code> требует observatory. Избегайте пересекающихся selector-префиксов: <code>node-1</code> также совпадёт с <code>node-10</code>.</p>
+              </details>
+            </section>
 
-              <div class="modal-hint xk-modal-mt-10">
-                💡 Чтобы пускать через VPN только часть трафика — снимите галку дефолтного правила и в разделе “Правила” добавьте rules только для нужных доменов.
-              </div>
-              <div class="xk-balancer-help-callout xk-modal-mt-10">
-                ⚠️ <b>Keenetic-лимит:</b> 300+ активных узлов в балансировщике кладут роутер (RAM / observatory / conntrack). Держите десятки, а не сотни — используйте regex-фильтры и ручные исключения узлов.
-              </div>
-            </details>
+            <section class="xk-balancer-help-section" aria-labelledby="xk-bhelp-rules">
+              <h3 id="xk-bhelp-rules">Правила и порядок</h3>
+              <details class="xk-balancer-help-details" open>
+                <summary>Как направить трафик</summary>
+                <ul>
+                  <li><code>outboundTag</code> отправляет трафик в конкретный outbound.</li>
+                  <li><code>balancerTag</code> отправляет трафик в балансировщик. Не задавайте оба поля в одном правиле.</li>
+                  <li>Правила выполняются сверху вниз; побеждает первое совпадение.</li>
+                  <li>Специальные domain/ip-правила размещайте выше общего правила, а catch-all — в конце соответствующей группы.</li>
+                </ul>
+                <div class="xk-balancer-help-code"><code>{ "type": "field", "domain": ["geosite:category-ads-all"], "outboundTag": "block" }</code><br><code>{ "type": "field", "inboundTag": ["redirect", "tproxy"], "balancerTag": "proxy" }</code></div>
+                <p class="modal-hint">После правок в карточках нажмите <b>Применить в JSON</b>, затем сохраните активный routing-файл. Мастера с действием «Применить + Рестарт» выполняют эти шаги сами.</p>
+              </details>
+            </section>
 
-            <h3 id="xk-bhelp-manual">Серверы в 04_outbounds вручную (опционально)</h3>
-            <details class="xk-balancer-help-details">
-              <summary>Если не используете подписки — добавьте серверы руками</summary>
-              <p>
-                Откройте карточку <b>Outbounds (04_outbounds.json)</b> и нажмите <b>🧱 Пул прокси</b>.
-                Вставьте несколько строк со ссылками — по одной записи на строку:
-              </p>
-              <div class="xk-balancer-help-code">
-                <code>vless-1 | vless://....</code><br>
-                <code>vless-2 = vless://....</code><br>
-                <code>vless://....#vless-3</code>
-              </div>
-              <ul>
-                <li><b>Рекомендуется</b> общий префикс в тегах (<code>vless-*</code>) — проще настраивать selector.</li>
-                <li>Теги <code>direct</code>/<code>block</code>/<code>dns</code> — служебные, их не занимайте.</li>
-                <li>После сохранения пул попадёт в <code>04_outbounds</code>. В мастерах теги подтянутся автоматически.</li>
-              </ul>
-            </details>
+            <section class="xk-balancer-help-section" aria-labelledby="xk-bhelp-forced">
+              <h3 id="xk-bhelp-forced">Принудительные правила</h3>
+              <details class="xk-balancer-help-details" open>
+                <summary>Обход балансировщика для domain и IP</summary>
+                <p>Мастер создаёт отдельные правила с конкретным <code>outboundTag</code>. Это удобно для локальных ресурсов, банков, IPTV и любого трафика, который нельзя отправлять через общий пул.</p>
+                <ul>
+                  <li><b>Только redirect / tproxy</b> ограничивает правила основными перехватывающими inbound.</li>
+                  <li><b>После block-правил</b> сохраняет приоритет блокировок; <b>Перед балансировщиком</b> помещает исключения непосредственно перед первым balancer-правилом.</li>
+                  <li><b>Импорт legacy-правил</b> подхватывает совместимые правила без служебного <code>ruleTag</code>, не создавая дубли.</li>
+                  <li>Метла очищает значения выбранного outbound, корзина удаляет все записи мастера.</li>
+                </ul>
+              </details>
+            </section>
 
-            <h3 id="xk-bhelp-subscriptions">Подписки Xray (подробно)</h3>
-            <details class="xk-balancer-help-details" open>
-              <summary>Как работают подписки внутри</summary>
-              <p>Подписка = URL, по которому провайдер отдаёт список VLESS/VMess/Trojan-ссылок. Панель:</p>
-              <ol>
-                <li>Скачивает по расписанию (интервал 1-168 ч).</li>
-                <li>Парсит ноды (share-ссылки / base64 / Xray JSON).</li>
-                <li>Пишет отдельный файл <code>04_outbounds.&lt;id&gt;.json</code> с тегами <code>&lt;prefix&gt;--&lt;node&gt;</code>.</li>
-                <li>(Опц.) Добавляет теги в <code>07_observatory.json</code> для leastPing.</li>
-              </ol>
-              <div class="xk-balancer-help-callout xk-modal-mt-10">
-                <b>Главное:</b> подписки <i>не трогают</i> ручной <code>04_outbounds.json</code>. Они живут отдельными фрагментами; мастер leastPing видит теги из всех outbounds-файлов.
-              </div>
-            </details>
-            <details class="xk-balancer-help-details">
-              <summary>Фильтры — уменьшают число узлов перед сохранением</summary>
-              <ul>
-                <li><b>Имя</b> (regex): <code>Germany|Netherlands|SG</code> — оставить только нужные локации.</li>
-                <li><b>Тип</b> (regex): <code>vless|trojan|vmess|ss|hy2</code> — убрать лишние протоколы.</li>
-                <li><b>Транспорт</b> (для VLESS): <code>xhttp|ws|grpc|httpupgrade|tcp</code> — оставить только нужные транспорты.</li>
-              </ul>
-              <div class="modal-hint">
-                Regex чувствителен к регистру в зависимости от исходной подписки. Если сомневаетесь — используйте короткие явные токены через <code>|</code>.
-              </div>
-            </details>
-            <details class="xk-balancer-help-details">
-              <summary>Список узлов: ping и ручные исключения</summary>
-              <ul>
-                <li><b>Кнопка ping</b> у каждого узла показывает реальную задержку — удобно находить медленные.</li>
-                <li><b>Галочки</b> — вручную отключить конкретные узлы: они не попадут в generated-файл при следующем обновлении.</li>
-              </ul>
-              <div class="modal-hint">
-                Управление списком подписок — в модалке <b>Прокси → Подписки</b>: создать / редактировать / обновить / удалить.
-              </div>
-            </details>
-
-            <h3 id="xk-bhelp-balancer">Балансировщик</h3>
-            <details class="xk-balancer-help-details" open>
-              <summary>Быстрый старт — рекомендовано для большинства</summary>
-              <p>
-                Кнопка <b>⚡</b> создаёт/обновляет балансировщик со стратегией <code>leastPing</code> и настраивает всё нужное:
-              </p>
-              <ul>
-                <li>Создаёт <code>routing.balancers</code> с <code>strategy.type = leastPing</code>.</li>
-                <li>Заполняет <code>selector</code> по списку outbound‑тегов (можно отредактировать).</li>
-                <li>Генерирует <code>07_observatory.json</code>, чтобы Xray мог измерять задержку.</li>
-                <li>Опционально добавляет “дефолтное” правило <code>match‑all</code> с <code>balancerTag</code> (чтобы весь трафик пошёл через балансировщик).</li>
-                <li>Нажатие <b>“Применить + Рестарт”</b> — сохранит файлы и перезапустит Xray в job‑режиме с логом.</li>
-              </ul>
-              <div class="modal-hint">
-                Если не хотите, чтобы <i>весь</i> трафик шёл через балансировщик — снимите галочку про “дефолтное правило” и создайте правило вручную только для нужных доменов/устройств.
-              </div>
-            </details>
-            <details class="xk-balancer-help-details">
-              <summary>Добавить балансировщик — ручная настройка</summary>
-              <p>
-                Кнопка <b>⚖️</b> добавляет пустой балансировщик в список “Балансировщики”. Дальше вы редактируете поля:
-              </p>
-              <ul>
-                <li><code>tag</code> — имя балансировщика (его потом указывают в <code>balancerTag</code> у правил).</li>
-                <li><code>selector</code> — список <b>префиксов</b> outbound‑тегов. Xray выберет все outbounds, чьи <code>tag</code> начинаются с этих строк.</li>
-                <li><code>strategy</code> — алгоритм: <code>leastPing</code> / <code>leastLoad</code> / <code>random</code>.</li>
-                <li><code>fallbackTag</code> — запасной outbound tag или префикс сгенерированных outbound (обычно <code>direct</code>).</li>
-              </ul>
-              <div class="xk-balancer-help-callout xk-modal-mt-10">
-                <b>selector — префикс, не точный тег!</b> Если у вас теги <code>vless-1</code> и <code>vless-10</code>, selector <code>vless-1</code> захватит оба. Делайте теги уникальными без пересечений.
-              </div>
-            </details>
-
-            <h3 id="xk-bhelp-rules">Правила маршрутизации</h3>
-            <details class="xk-balancer-help-details" open>
-              <summary>Как отправить трафик в балансировщик</summary>
-              <p>
-                В правилах (<code>routing.rules</code>) у каждого правила должно быть <b>одно из двух</b>:
-                <code>outboundTag</code> (на конкретный сервер) или <code>balancerTag</code> (в балансировщик).
-              </p>
-              <ul>
-                <li>Чтобы использовать балансировщик — задайте <code>balancerTag: &lt;tag балансировщика&gt;</code>.</li>
-                <li>Правила проверяются <b>сверху вниз</b>. Первое совпавшее побеждает.</li>
-                <li>Дефолтное правило (match‑all) ставят в самый низ списка.</li>
-              </ul>
-              <div class="xk-balancer-help-code">
-                <code>{ "type": "field", "balancerTag": "proxy" }</code>
-              </div>
-            <div class="modal-hint xk-modal-mt-8">
-                Если правила/балансировщики редактируете через карточки: <b>💾 Применить изменения</b> → в редакторе <b>Сохранить</b> → (при необходимости) <b>Перезапуск</b>. В мастере ⚡ это делается одной кнопкой.
-              </div>
-            </details>
-
-            <h3 id="xk-bhelp-forced">Исключения (🔒 Принудительные правила)</h3>
-            <details class="xk-balancer-help-details" open>
-              <summary>Когда нужны принудительные правила</summary>
-              <p>
-                Если какие‑то домены/IP <b>нельзя</b> отправлять в балансировщик (локальные ресурсы, банки, IPTV, админка роутера) — используйте кнопку <b>🔒</b>.
-              </p>
-              <ul>
-                <li>Мастер создаёт правила <code>type: field</code>, ведущие на <b>конкретный</b> <code>outboundTag</code> (обычно <code>direct</code>).</li>
-                <li>Правила вставляются <b>выше</b> правила с <code>balancerTag</code>, поэтому они “обходят” балансировщик.</li>
-                <li>Опция “Только для redirect/tproxy” — не трогать другие inbound’ы.</li>
-              </ul>
-              <div class="xk-balancer-help-code">
-                <code>geosite:category-ru</code><br>
-                <code>domain:example.com</code><br>
-                <code>geoip:private</code>
-              </div>
-            </details>
-
-            <h3 id="xk-bhelp-troubles">Ошибки и подсказки</h3>
-            <details class="xk-balancer-help-details">
-              <summary>Пустой список тегов в мастере</summary>
-              <ul>
-                <li>В <code>04_outbounds</code> должны быть outbounds с <b>уникальными</b> <code>tag</code>.</li>
-                <li>Нажмите “⟳ Обновить список” в мастере (фильтрует служебные теги).</li>
-                <li>Если теги должны быть из подписки — проверьте, что подписка реально скачалась (кнопка “Обновить” в модалке подписок, посмотрите ошибки).</li>
-              </ul>
-            </details>
-            <details class="xk-balancer-help-details">
-              <summary>leastPing не работает / не видно переключений</summary>
-              <ul>
-                <li>Для <code>leastPing</code> нужен <code>07_observatory.json</code> и перезапуск Xray.</li>
-                <li>Используйте ⚡ мастер и кнопку “Применить + Рестарт” — создаёт observatory и показывает лог.</li>
-                <li>Проверьте, что серверы реально доступны из роутера (DNS / маршруты / время/NTP).</li>
-              </ul>
-            </details>
-            <details class="xk-balancer-help-details">
-              <summary>Трафик “не туда” / правило не срабатывает</summary>
-              <ul>
-                <li>Правила сверху вниз. Исключения должны быть <b>выше</b> дефолта.</li>
-                <li>Проверьте условия rule: <code>domain</code> / <code>ip</code> / <code>source</code> / <code>inboundTag</code>.</li>
-                <li><code>selector</code> — префиксы, не точные теги. Не делайте пересекающиеся.</li>
-              </ul>
-            </details>
-            <details class="xk-balancer-help-details">
-              <summary>Роутер тормозит / Xray падает после подписки</summary>
-              <ul>
-                <li>Keenetic ограничен по RAM (обычно 128-256 МБ) и CPU. Большие подписки нагружают observatory и conntrack.</li>
-                <li>Сужайте подписку фильтрами (имя / тип / транспорт) или вручную отключайте лишние узлы.</li>
-                <li><b>300+</b> активных узлов в балансировщике — подтверждённый случай падения роутера.</li>
-              </ul>
-            </details>
-            <details class="xk-balancer-help-details">
-              <summary>Подписка не обновляется сама</summary>
-              <ul>
-                <li>Включите чекбокс <b>Авто</b> в форме подписки.</li>
-                <li>Интервал — 1-168 часов.</li>
-                <li>Автообновление идёт через панель — она должна быть запущена.</li>
-              </ul>
-            </details>
+            <section class="xk-balancer-help-section" aria-labelledby="xk-bhelp-troubles">
+              <h3 id="xk-bhelp-troubles">Диагностика</h3>
+              <details class="xk-balancer-help-details">
+                <summary>В мастере нет outbound-тегов</summary>
+                <p>Сначала сохраните или обновите пул/подписку, затем нажмите <b>Обновить</b> в мастере. Проверьте уникальность тегов и активный outbounds-фрагмент.</p>
+              </details>
+              <details class="xk-balancer-help-details">
+                <summary>leastPing не выбирает узлы</summary>
+                <p>Проверьте <code>07_observatory.json</code>, совпадение <code>subjectSelector</code> и <code>balancer.selector</code> с реальными тегами, доступность probe URL и факт перезапуска Xray.</p>
+              </details>
+              <details class="xk-balancer-help-details">
+                <summary>Трафик идёт не по ожидаемому правилу</summary>
+                <p>Проверьте порядок правил сверху вниз, условия <code>domain</code>/<code>ip</code>/<code>source</code>/<code>inboundTag</code> и отсутствие более раннего catch-all.</p>
+              </details>
+              <details class="xk-balancer-help-details">
+                <summary>Роутер перегружен после подписки</summary>
+                <p>Сократите число активных узлов фильтрами и ручными исключениями. Observatory проверяет каждый подходящий outbound, поэтому десятки узлов безопаснее сотен на устройствах с ограниченной RAM и CPU.</p>
+              </details>
+              <details class="xk-balancer-help-details">
+                <summary>Где смотреть результат операции</summary>
+                <p>Действия с сохранением и перезапуском публикуют результат в <b>Журнале операций XKeen</b>. Ошибки Xray после запуска дополнительно проверяйте во вкладке логов Xray.</p>
+              </details>
+            </section>
           </div>
         </div>
-        <div class="modal-actions" style="justify-content:flex-end;">
+        <div class="modal-actions">
           <button type="button" class="btn-secondary" id="routing-balancer-help-ok-btn" data-operator-dismiss-duplicate="true">Закрыть</button>
         </div>
       </div>
