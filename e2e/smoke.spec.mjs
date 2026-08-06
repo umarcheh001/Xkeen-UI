@@ -372,6 +372,76 @@ test('routing Mihomo proxy tools use a compact operator empty state', async ({ p
 });
 
 
+test('routing Mihomo proxy tools keep a scrollable resize-safe workbench and aligned action labels', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await expect(page.locator('#view-mihomo')).toBeVisible();
+
+  const menu = page.locator('.xk-mihomo-menu');
+  await menu.locator('summary').click();
+  await page.locator('#mihomo-proxy-tools-btn').click();
+
+  const modal = page.locator('#mihomo-proxy-tools-modal');
+  const content = modal.locator('.modal-content');
+  const body = modal.locator('.xk-pt-body');
+  await expect(modal).toBeVisible();
+
+  const before = await content.evaluate((node) => ({
+    height: node.getBoundingClientRect().height,
+    scrollHeight: node.querySelector('.xk-pt-body')?.scrollHeight || 0,
+    clientHeight: node.querySelector('.xk-pt-body')?.clientHeight || 0,
+    overflowY: getComputedStyle(node.querySelector('.xk-pt-body')).overflowY,
+  }));
+  expect(before.overflowY).toBe('auto');
+
+  await content.evaluate((node) => {
+    const panel = node.querySelector('.xk-pt-empty') || node.querySelector('.xk-pt-card--replace');
+    panel.insertAdjacentHTML('beforeend', '<div data-test-proxy-tools-overflow style="height: 1200px"></div>');
+  });
+  await expect.poll(() => body.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
+
+  const resizer = modal.locator('.modal-resizer');
+  await expect(resizer).toBeVisible();
+  const resizerBox = await resizer.boundingBox();
+  await page.mouse.move(resizerBox.x + 4, resizerBox.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(resizerBox.x + 4, resizerBox.y + 84, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(() => content.evaluate((node) => node.getBoundingClientRect().height)).toBeGreaterThan(before.height + 50);
+
+  await modal.locator('#mihomo-proxy-tools-add-static-btn').click();
+  await expect(modal.locator('#mihomo-proxy-tools-select')).toHaveValue('static-proxy-1');
+
+  for (const selector of [
+    '#mihomo-proxy-tools-rename-btn',
+    '#mihomo-proxy-tools-prepare-btn',
+    '#mihomo-proxy-tools-replace-btn',
+  ]) {
+    const action = modal.locator(selector);
+    const layout = await action.evaluate((button) => {
+      const buttonRect = button.getBoundingClientRect();
+      const icon = button.querySelector('.xk-action-icon')?.getBoundingClientRect();
+      const label = button.querySelector('.xk-action-label')?.getBoundingClientRect();
+      return {
+        buttonTop: buttonRect.top,
+        buttonBottom: buttonRect.bottom,
+        iconTop: icon?.top || 0,
+        iconBottom: icon?.bottom || 0,
+        iconRight: icon?.right || 0,
+        labelLeft: label?.left || 0,
+        labelTop: label?.top || 0,
+        labelBottom: label?.bottom || 0,
+      };
+    });
+    expect(layout.iconRight).toBeLessThan(layout.labelLeft);
+    expect(layout.labelTop).toBeGreaterThanOrEqual(layout.buttonTop);
+    expect(layout.labelBottom).toBeLessThanOrEqual(layout.buttonBottom);
+    expect(layout.iconTop).toBeGreaterThanOrEqual(layout.buttonTop);
+    expect(layout.iconBottom).toBeLessThanOrEqual(layout.buttonBottom);
+  }
+});
+
+
 test('mihomo generator removes optional rule groups from preview when all checkboxes are cleared', async ({ page }) => {
   await page.goto('/mihomo_generator');
   await waitForMihomoGeneratorPreview(page);

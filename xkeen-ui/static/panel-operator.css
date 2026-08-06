@@ -7840,11 +7840,14 @@ body.panel-page .modal .xk-mihomo-validation-log-shell {
  * poster; here selection is the first explicit step and the empty state gives
  * one safe next action. */
 body.panel-page #mihomo-proxy-tools-modal .modal-content {
-  width: min(960px, calc(100vw - 36px)) !important;
-  max-width: calc(100vw - 36px) !important;
-  min-height: 0 !important;
-  height: auto !important;
-  max-height: min(82dvh, 760px) !important;
+  /* Keep a predictable initial work area, but do not make the geometry
+   * `!important`: the shared modal controller writes inline dimensions while
+   * the user drags the bottom-right resizer. */
+  width: min(960px, calc(100vw - 36px));
+  max-width: calc(100vw - 36px);
+  min-height: 0;
+  height: min(82dvh, 760px);
+  max-height: min(82dvh, 760px);
   grid-template-rows: auto minmax(0, auto) auto;
   border-color: var(--op-border-strong) !important;
   background: var(--op-surface) !important;
@@ -7880,9 +7883,11 @@ body.panel-page #mihomo-proxy-tools-modal .xk-pt-subtitle {
 }
 
 body.panel-page #mihomo-proxy-tools-modal .xk-pt-body {
+  min-height: 0;
   gap: 0;
   padding: 12px !important;
-  overflow: auto;
+  overflow: auto !important;
+  overscroll-behavior: contain;
 }
 
 body.panel-page #mihomo-proxy-tools-modal .xk-pt-lead {
@@ -8090,6 +8095,27 @@ body.panel-page #mihomo-proxy-tools-modal :is(.xk-pt-primary-btn, .xk-pt-seconda
   padding: 0 10px;
   border-radius: var(--op-control-radius) !important;
   box-shadow: none !important;
+}
+
+/* These actions live inside the workbench body, not `.modal-actions`. The
+ * legacy button rule gives their SVG a block layout, which put labels below
+ * the icon. Keep every action on one clear horizontal baseline. */
+body.panel-page #mihomo-proxy-tools-modal :is(.xk-pt-primary-btn, .xk-pt-secondary-btn, .xk-pt-danger-btn):has(.xk-action-icon) {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+body.panel-page #mihomo-proxy-tools-modal :is(.xk-pt-primary-btn, .xk-pt-secondary-btn, .xk-pt-danger-btn) .xk-action-icon {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+body.panel-page #mihomo-proxy-tools-modal :is(.xk-pt-primary-btn, .xk-pt-secondary-btn, .xk-pt-danger-btn) .xk-action-label {
+  display: inline;
+  line-height: 1;
 }
 
 body.panel-page #mihomo-proxy-tools-modal .xk-pt-primary-btn:not([disabled]) {
