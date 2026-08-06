@@ -121,7 +121,7 @@ def test_stage4_routing_section_has_one_primary_apply_action():
     rules_end = template.index('<!-- Сворачиваемый блок routing -->', rules_start)
     rules_markup = template[rules_start:rules_end]
 
-    assert "filename='panel-operator.css', v='20260806x'" in template
+    assert "filename='panel-operator.css', v='20260807a'" in template
     assert 'id="routing-rules-apply-btn" class="btn-primary btn-icon routing-rules-apply-primary"' in rules_markup
     assert rules_markup.count("btn-primary") == 1
     assert "op_icon('save')" in rules_markup

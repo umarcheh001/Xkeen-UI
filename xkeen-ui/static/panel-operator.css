@@ -886,6 +886,33 @@ body.panel-page .xk-global-autorestart-switch {
   box-shadow: none !important;
 }
 
+/* The header toggle uses the same 34 × 18 control geometry as settings
+ * switches.  A compact legacy override made its 12 px thumb look offset
+ * against the header label, especially in the light theme. */
+body.panel-page .xk-global-autorestart-switch .dt-switch-slider {
+  width: 34px;
+  min-width: 34px;
+  height: 18px;
+  border-radius: 999px;
+}
+
+/* Match the UI Settings switch state: an inactive control has a high-contrast
+ * thumb (light in dark mode, dark in light mode); an active control keeps a
+ * white thumb on the indigo track.  This is intentionally explicit instead
+ * of inheriting the generic switch thumb from --op-surface. */
+body.panel-page .xk-global-autorestart-switch .dt-switch-slider::after {
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  background: var(--op-text) !important;
+}
+
+body.panel-page .xk-global-autorestart-switch input:checked + .dt-switch-slider::after {
+  transform: translateX(16px) !important;
+  background: #fff !important;
+}
+
 /* The legacy global control has an equally specific light-theme label rule
  * with a blue value.  Keep it on the shared neutral text token so the label
  * and the switch do not look like two unrelated controls. */

@@ -93,25 +93,30 @@ test.describe('Operator Console Stage 0 runtime contract', () => {
           width: node.getBoundingClientRect().width,
           height: node.getBoundingClientRect().height,
           backgroundImage: style.backgroundImage,
+          thumbBackgroundColor: thumb.backgroundColor,
           thumbBackgroundImage: thumb.backgroundImage,
           thumbTransform: thumb.transform,
         };
       });
 
       const on = await read();
-      expect(on.width).toBe(30);
-      expect(on.height).toBe(16);
+      expect(on.width).toBe(34);
+      expect(on.height).toBe(18);
       expect(on.backgroundImage).toBe('none');
       expect(on.thumbBackgroundImage).toBe('none');
+      expect(on.thumbBackgroundColor).toBe('rgb(255, 255, 255)');
       expect(on.thumbTransform).not.toBe('none');
 
       await input.evaluate((node) => { node.checked = false; });
       await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
       const off = await read();
-      expect(off.width).toBe(30);
-      expect(off.height).toBe(16);
+      expect(off.width).toBe(34);
+      expect(off.height).toBe(18);
       expect(off.backgroundImage).toBe('none');
       expect(off.thumbBackgroundImage).toBe('none');
+      expect(off.thumbBackgroundColor).toBe(
+        theme === 'dark' ? 'rgb(232, 234, 240)' : 'rgb(48, 51, 58)',
+      );
       await expect
         .poll(async () => (await read()).thumbTransform)
         .toBe('none');
