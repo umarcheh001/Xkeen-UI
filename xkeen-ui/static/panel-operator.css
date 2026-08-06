@@ -7600,6 +7600,640 @@ body.panel-page .modal .xk-mihomo-validation-log-shell {
   box-shadow: none !important;
 }
 
+/* The generator's validation result is an operational diagnostic, not a
+ * blue-glass "premium" report.  It keeps the existing runtime nodes for
+ * preview/apply results, but validates in one compact, auto-height surface:
+ * a semantic state summary followed by one divided detail region. */
+body.panel-page.mihomo-generator-page #mihomoResultModal {
+  --xk-mihomo-result-tone: var(--op-accent);
+  --xk-mihomo-result-tone-soft: var(--op-accent-soft);
+  padding: 18px !important;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal[data-kind="success"] {
+  --xk-mihomo-result-tone: var(--op-success);
+  --xk-mihomo-result-tone-soft: var(--op-success-soft);
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal[data-kind="warning"] {
+  --xk-mihomo-result-tone: var(--op-warning);
+  --xk-mihomo-result-tone-soft: var(--op-warning-soft);
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal[data-kind="error"] {
+  --xk-mihomo-result-tone: var(--op-danger);
+  --xk-mihomo-result-tone-soft: var(--op-danger-soft);
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .modal-content {
+  display: grid !important;
+  grid-template-rows: auto minmax(0, auto) auto;
+  width: min(920px, calc(100vw - 36px)) !important;
+  max-width: calc(100vw - 36px) !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: min(82dvh, 720px) !important;
+  resize: none !important;
+  border-color: var(--op-border-strong) !important;
+  border-radius: var(--op-radius-lg) !important;
+  background: var(--op-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--op-shadow-float) !important;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .modal-resizer {
+  display: none !important;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-modal-header {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-titlebox {
+  gap: 2px;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-modal-kicker {
+  display: block;
+  width: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-weight: 620;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-modal-subtitle {
+  max-width: 76ch;
+  color: var(--op-muted) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  line-height: 1.42;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-modal-body {
+  display: flex;
+  min-height: 0;
+  max-height: min(60dvh, 520px);
+  gap: 10px;
+  padding: 12px !important;
+  overflow: auto !important;
+  background: var(--op-surface) !important;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-lead {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 9px;
+  margin: 0 !important;
+  padding: 0 0 10px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-lead-icon {
+  display: grid;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--xk-mihomo-result-tone) 42%, var(--op-border)) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--xk-mihomo-result-tone-soft) !important;
+  color: var(--xk-mihomo-result-tone) !important;
+  box-shadow: none !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  letter-spacing: 0.04em;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-lead-copy {
+  gap: 2px;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-lead-title {
+  color: var(--op-text-strong) !important;
+  font-size: calc(13px * var(--xk-font-scale, 1));
+  font-weight: 670;
+  line-height: 1.3;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-lead-desc {
+  color: var(--op-muted) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  line-height: 1.42;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-state-badge {
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--xk-mihomo-result-tone) 42%, var(--op-border)) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--xk-mihomo-result-tone-soft) !important;
+  color: var(--xk-mihomo-result-tone) !important;
+  box-shadow: none !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(320px, 1.08fr);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-grid[data-has-log="0"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-panel {
+  min-width: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-panel--side {
+  border-left: 1px solid var(--op-border) !important;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal :is(
+  .mihomo-result-overview,
+  .mihomo-result-block,
+  .mihomo-result-log-shell
+) {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-overview-header,
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-block-title {
+  min-height: 32px;
+  margin: 0;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--op-border);
+  color: var(--op-muted) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-weight: 620;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-block {
+  border-top: 1px solid var(--op-border) !important;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-overview-header + .mihomo-result-block {
+  border-top: 0 !important;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-summary {
+  padding: 10px;
+  color: var(--op-text) !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  line-height: 1.46;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--op-border);
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-meta-card {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 0 !important;
+  border-right: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-meta-card:last-child {
+  border-right: 0 !important;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-meta-label {
+  margin: 0 0 3px;
+  color: var(--op-faint) !important;
+  font-size: calc(9.5px * var(--xk-font-scale, 1));
+  font-weight: 620;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-meta-value {
+  color: var(--op-data-muted) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 620;
+  line-height: 1.35;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal :is(#mihomoResultWarnings, #mihomoResultErrors) {
+  padding: 0 10px;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-item {
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 0;
+  border: 0 !important;
+  border-top: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--op-data-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  line-height: 1.42;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-item:first-child {
+  border-top: 0 !important;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-item-index {
+  display: inline-grid;
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 1px solid var(--op-border) !important;
+  border-radius: 4px !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(9px * var(--xk-font-scale, 1));
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-item--warning .mihomo-result-item-index {
+  border-color: color-mix(in srgb, var(--op-warning) 42%, var(--op-border)) !important;
+  background: var(--op-warning-soft) !important;
+  color: var(--op-warning) !important;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-item--error .mihomo-result-item-index {
+  border-color: color-mix(in srgb, var(--op-danger) 42%, var(--op-border)) !important;
+  background: var(--op-danger-soft) !important;
+  color: var(--op-danger) !important;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-log-shell {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-terminal {
+  min-height: 144px;
+  max-height: min(38dvh, 320px);
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--op-editor) !important;
+  color: var(--op-data-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  line-height: 1.45;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-footer {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-footer-actions {
+  gap: 6px;
+}
+
+body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-footer :is(button, .btn, .btn-primary) {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--op-control-h);
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: var(--op-control-radius) !important;
+}
+
+/* Routing Mihomo uses the same diagnostic grammar as the generator.  The
+ * legacy feature sheet still owns the runtime IDs and the rendered log, while
+ * this late layer removes its blue glass, capsule states and artificial blank
+ * canvas.  The result stays a compact summary plus an optional log column. */
+body.panel-page #mihomo-validation-modal {
+  --xk-mihomo-validation-tone: var(--op-accent);
+  --xk-mihomo-validation-tone-soft: var(--op-accent-soft);
+  padding: 18px !important;
+}
+
+body.panel-page #mihomo-validation-modal[data-kind="success"] {
+  --xk-mihomo-validation-tone: var(--op-success);
+  --xk-mihomo-validation-tone-soft: var(--op-success-soft);
+}
+
+body.panel-page #mihomo-validation-modal[data-kind="warning"] {
+  --xk-mihomo-validation-tone: var(--op-warning);
+  --xk-mihomo-validation-tone-soft: var(--op-warning-soft);
+}
+
+body.panel-page #mihomo-validation-modal[data-kind="error"] {
+  --xk-mihomo-validation-tone: var(--op-danger);
+  --xk-mihomo-validation-tone-soft: var(--op-danger-soft);
+}
+
+body.panel-page #mihomo-validation-modal .modal-content {
+  display: grid !important;
+  grid-template-rows: auto minmax(0, auto) auto;
+  width: min(920px, calc(100vw - 36px)) !important;
+  max-width: calc(100vw - 36px) !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: min(82dvh, 720px) !important;
+  resize: none !important;
+  border-color: var(--op-border-strong) !important;
+  border-radius: var(--op-radius-lg) !important;
+  background: var(--op-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--op-shadow-float) !important;
+}
+
+body.panel-page #mihomo-validation-modal .modal-resizer {
+  display: none !important;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-header {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-titlebox {
+  gap: 2px;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-kicker {
+  display: block;
+  width: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-weight: 620;
+  letter-spacing: 0.04em !important;
+  text-transform: none !important;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-subtitle {
+  max-width: 76ch;
+  color: var(--op-muted) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  line-height: 1.42;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-body {
+  display: flex;
+  min-height: 0;
+  max-height: min(60dvh, 520px);
+  gap: 10px;
+  padding: 12px !important;
+  overflow: auto !important;
+  background: var(--op-surface) !important;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-lead {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 9px;
+  margin: 0 !important;
+  padding: 0 0 10px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-lead-icon {
+  display: grid;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--xk-mihomo-validation-tone) 42%, var(--op-border)) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--xk-mihomo-validation-tone-soft) !important;
+  color: var(--xk-mihomo-validation-tone) !important;
+  box-shadow: none !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  letter-spacing: 0.04em;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-lead-copy {
+  gap: 2px;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-lead-title {
+  color: var(--op-text-strong) !important;
+  font-size: calc(13px * var(--xk-font-scale, 1));
+  font-weight: 670;
+  line-height: 1.3;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-lead-desc {
+  color: var(--op-muted) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  line-height: 1.42;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-state-badge {
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--xk-mihomo-validation-tone) 42%, var(--op-border)) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--xk-mihomo-validation-tone-soft) !important;
+  color: var(--xk-mihomo-validation-tone) !important;
+  box-shadow: none !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(320px, 1.08fr);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-grid[data-has-log="0"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-panel {
+  min-width: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-panel--side {
+  border-left: 1px solid var(--op-border) !important;
+}
+
+body.panel-page #mihomo-validation-modal :is(
+  .xk-mihomo-validation-overview,
+  .xk-mihomo-validation-block,
+  .xk-mihomo-validation-log-shell
+) {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-block {
+  border-top: 1px solid var(--op-border) !important;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-block:first-child {
+  border-top: 0 !important;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-block-title {
+  min-height: 32px;
+  margin: 0;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--op-border);
+  color: var(--op-muted) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-weight: 620;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+body.panel-page #mihomo-validation-modal :is(
+  .xk-mihomo-validation-summary,
+  .xk-mihomo-validation-explainer
+) {
+  padding: 10px;
+  color: var(--op-text) !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  line-height: 1.46;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-hint-list {
+  gap: 0;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-hint-item {
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--op-border);
+  color: var(--op-data-muted) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  line-height: 1.42;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-hint-item:first-child {
+  border-top: 0;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-hint-dot {
+  width: 6px;
+  height: 6px;
+  margin-top: 5px;
+  border: 1px solid color-mix(in srgb, var(--xk-mihomo-validation-tone) 42%, var(--op-border));
+  border-radius: 2px;
+  background: var(--xk-mihomo-validation-tone-soft) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-log-shell {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-terminal {
+  min-height: 144px;
+  max-height: min(38dvh, 320px);
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--op-editor) !important;
+  color: var(--op-data-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  line-height: 1.45;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-copy-status {
+  min-height: 0;
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-copy-status.is-error {
+  color: var(--op-danger) !important;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-footer {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-footer-actions {
+  gap: 6px;
+}
+
+body.panel-page #mihomo-validation-modal .xk-mihomo-validation-footer :is(button, .btn-primary, .btn-secondary) {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--op-control-h);
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: var(--op-control-radius) !important;
+}
+
 body.panel-page .modal .xk-sub-node-item,
 html[data-theme="light"] body.panel-page .modal .xk-sub-node-item {
   border-color: var(--op-border) !important;
@@ -12316,6 +12950,170 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
     min-height: 100dvh;
     border-width: 0 !important;
     border-radius: 0 !important;
+  }
+
+  /* The Mihomo result retains the same operator full-screen contract as the
+   * other master/detail diagnostics. Its content, not the page behind it,
+   * becomes the scroll region on a phone. */
+  body.panel-page.mihomo-generator-page #mihomoResultModal {
+    padding: 0 !important;
+  }
+
+  body.panel-page.mihomo-generator-page #mihomoResultModal .modal-content {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    grid-template-rows: 50px minmax(0, 1fr) 50px;
+  }
+
+  body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-modal-body {
+    flex: 1 1 auto;
+    max-height: none;
+  }
+
+  body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-modal-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--op-touch-target);
+    grid-template-rows: 1fr;
+    align-items: start;
+    gap: 8px;
+    height: 50px;
+    min-height: 50px;
+  }
+
+  body.panel-page.mihomo-generator-page #mihomoResultModal .modal-close {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+  }
+
+  body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-titlebox {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-modal-kicker,
+  body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-modal-subtitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.panel-page.mihomo-generator-page #mihomoResultModal .modal-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-panel--side {
+    border-top: 1px solid var(--op-border) !important;
+    border-left: 0 !important;
+  }
+
+  body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-meta-card {
+    border-bottom: 1px solid var(--op-border) !important;
+  }
+
+  body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-footer {
+    align-items: stretch;
+    flex-direction: column;
+    min-height: 50px;
+    height: 50px;
+    padding: 5px 12px !important;
+  }
+
+  body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-footer-actions {
+    display: none;
+  }
+
+  body.panel-page.mihomo-generator-page #mihomoResultModal .mihomo-result-footer > .btn-primary {
+    width: 100%;
+    min-height: 40px;
+    justify-content: center;
+  }
+
+  /* Routing Mihomo opens the same validation diagnostic from the editor menu.
+   * Its desktop contract is deliberately auto-height, so it needs this
+   * explicit mobile counterpart instead of inheriting a large blank
+   * master/detail canvas. */
+  body.panel-page #mihomo-validation-modal {
+    padding: 0 !important;
+  }
+
+  body.panel-page #mihomo-validation-modal .modal-content {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    grid-template-rows: 50px minmax(0, 1fr) 50px;
+  }
+
+  body.panel-page #mihomo-validation-modal .xk-mihomo-validation-body {
+    flex: 1 1 auto;
+    max-height: none;
+  }
+
+  body.panel-page #mihomo-validation-modal .xk-mihomo-validation-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--op-touch-target);
+    grid-template-rows: 1fr;
+    align-items: start;
+    gap: 8px;
+    height: 50px;
+    min-height: 50px;
+  }
+
+  body.panel-page #mihomo-validation-modal .modal-close {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+  }
+
+  body.panel-page #mihomo-validation-modal .xk-mihomo-validation-titlebox {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  body.panel-page #mihomo-validation-modal :is(
+    .xk-mihomo-validation-kicker,
+    .xk-mihomo-validation-subtitle,
+    .modal-title
+  ) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.panel-page #mihomo-validation-modal .xk-mihomo-validation-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.panel-page #mihomo-validation-modal .xk-mihomo-validation-panel--side {
+    border-top: 1px solid var(--op-border) !important;
+    border-left: 0 !important;
+  }
+
+  body.panel-page #mihomo-validation-modal .xk-mihomo-validation-footer {
+    align-items: stretch;
+    flex-direction: column;
+    min-height: 50px;
+    height: 50px;
+    padding: 5px 12px !important;
+  }
+
+  body.panel-page #mihomo-validation-modal .xk-mihomo-validation-copy-status {
+    display: none;
+  }
+
+  body.panel-page #mihomo-validation-modal .xk-mihomo-validation-footer-actions {
+    display: none;
   }
 
   body.panel-page #xkeen-routing-help-modal .xk-routing-help-shell {

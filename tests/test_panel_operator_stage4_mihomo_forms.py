@@ -16,8 +16,8 @@ def test_mihomo_generator_reuses_late_scoped_operator_layer():
     template = GENERATOR.read_text(encoding="utf-8")
     panel_template = PANEL.read_text(encoding="utf-8")
     assert '<body class="panel-page mihomo-generator-page">' in template
-    assert "filename='panel-operator.css', v='20260806s'" in template
-    assert "filename='panel-operator.css', v='20260806s'" in panel_template
+    assert "filename='panel-operator.css', v='20260806t'" in template
+    assert "filename='panel-operator.css', v='20260806t'" in panel_template
     assert template.index("filename='panel-operator.css'") > template.index("</style>")
     for fragment in ('class="generator-field-card xk-op-field"', 'class="xk-op-field-label" for="profileSelect"', 'class="generator-action-row xk-op-action-row"', 'class="hint xk-card-desc xk-op-field-hint"'):
         assert fragment in template
@@ -96,7 +96,7 @@ def test_visual_correction_removes_blue_glass_and_fixed_modal_canvases():
         assert fragment in css
 
     template = GENERATOR.read_text(encoding="utf-8")
-    assert "filename='panel-operator.css', v='20260806s'" in template
+    assert "filename='panel-operator.css', v='20260806t'" in template
 
 
 def test_mihomo_forms_closure_is_documented():
@@ -112,3 +112,53 @@ def test_mihomo_forms_closure_is_documented():
     assert "Bulk Import имеет auto-height" in doc
     assert "Визуальная доводка Mihomo" in plan
     assert "panel-operator-stage4-mihomo-forms.md" in index
+
+
+def test_mihomo_generator_validation_result_uses_flat_operator_diagnostic_contract():
+    template = (ROOT / "xkeen-ui" / "templates" / "mihomo_generator.html").read_text(encoding="utf-8")
+    css = (ROOT / "xkeen-ui" / "static" / "panel-operator.css").read_text(encoding="utf-8")
+
+    modal = template[template.index('id="mihomoResultModal"'):template.index('id="bulkImportModal"')]
+    assert 'data-operator-modal-family="master-detail"' in modal
+
+    for fragment in (
+        "/* The generator's validation result is an operational diagnostic",
+        "#mihomoResultModal .modal-content {",
+        "#mihomoResultModal .mihomo-result-grid {",
+        "#mihomoResultModal .mihomo-result-state-badge {",
+        "#mihomoResultModal .mihomo-result-terminal {",
+        "background: var(--op-surface) !important;",
+        "background: var(--op-editor) !important;",
+        "border-radius: var(--op-control-radius) !important;",
+    ):
+        assert fragment in css
+
+    operator_block = css[css.index("/* The generator's validation result is an operational diagnostic") : css.index("/* Xray proxy pool")]
+    for legacy in ("linear-gradient", "radial-gradient", "999px", "#60a5fa"):
+        assert legacy not in operator_block
+
+
+def test_routing_mihomo_validation_uses_the_same_flat_operator_diagnostic_contract():
+    template = PANEL.read_text(encoding="utf-8")
+    css = CSS.read_text(encoding="utf-8")
+
+    modal = template[template.index('id="mihomo-validation-modal"'):template.index('id="ssh-modal"')]
+    assert 'data-operator-modal-family="master-detail"' in modal
+
+    for fragment in (
+        "/* Routing Mihomo uses the same diagnostic grammar as the generator.",
+        "#mihomo-validation-modal .modal-content {",
+        "#mihomo-validation-modal .xk-mihomo-validation-grid {",
+        "#mihomo-validation-modal .xk-mihomo-validation-state-badge {",
+        "#mihomo-validation-modal .xk-mihomo-validation-terminal {",
+        "Routing Mihomo opens the same validation diagnostic from the editor menu.",
+        "height: 100dvh !important;",
+    ):
+        assert fragment in css
+
+    routing_block = css[
+        css.index("/* Routing Mihomo uses the same diagnostic grammar as the generator.")
+        : css.index("/* Xray proxy pool")
+    ]
+    for legacy in ("linear-gradient", "radial-gradient", "999px", "#60a5fa"):
+        assert legacy not in routing_block

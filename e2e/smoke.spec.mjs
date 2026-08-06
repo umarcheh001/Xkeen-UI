@@ -312,4 +312,8 @@ test('mihomo validation modal uses compact validate layout', async ({ page }) =>
   await expect(page.locator('#mihomoResultMetaWrap')).toContainText('Источник');
   await expect(page.locator('#mihomoResultMetaWrap')).toContainText('Операция');
   await expect(page.locator('#mihomoResultModal .mihomo-result-terminal')).toBeVisible();
+  await expect(page.locator('#mihomoResultModal')).toHaveCSS('background-image', 'none');
+  await expect(page.locator('#mihomoResultModal .modal-content')).toHaveCSS('background-image', 'none');
+  await expect(page.locator('#mihomoResultModal .mihomo-result-state-badge')).toHaveCSS('border-radius', '6px');
+  await expect(page.locator('#mihomoResultModal .mihomo-result-grid')).toHaveCSS('border-radius', '9px');
 });

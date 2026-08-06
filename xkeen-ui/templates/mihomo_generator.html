@@ -1951,7 +1951,7 @@
   </style>
   {# Shared Operator Console primitives are loaded last. The page keeps its
      runtime hooks while the late layer flattens legacy generator chrome. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260806s') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260806t') }}">
 </head>
 <body class="panel-page mihomo-generator-page">
   {% set top_level_spinner_text = 'Применяем изменения и перезапускаем xkeen…' %}
@@ -2210,7 +2210,7 @@
 	<!-- Modularization scaffold (no behavior changes yet) -->
   <!-- Frontend workspace entrypoint (step 37). -->
   <script type="module" src="{{ frontend_page_entry_url('mihomo_generator') }}"></script>
-<div id="mihomoResultModal" class="modal hidden" data-kind="info" data-modal-dismiss="mihomo-result">
+<div id="mihomoResultModal" class="modal hidden" data-operator-modal-family="master-detail" data-kind="info" data-modal-dismiss="mihomo-result">
   <div class="modal-content" role="dialog" aria-modal="true" aria-label="Результат операций генератора Mihomo">
     <div class="modal-header mihomo-result-modal-header">
       <div class="mihomo-result-titlebox">
