@@ -6954,10 +6954,154 @@ body.panel-page #xray-devices-modal .xray-devices-actions {
   display: none !important;
 }
 
-/* Mihomo import/HWID are workbenches, not full-height canvases. Their preview
- * editors need a readable minimum, but must not turn an empty preview into
- * hundreds of pixels of dead space. */
-body.panel-page #mihomo-import-modal .modal-content,
+/* Mihomo import is an editor workbench.  Its frame must retain a real
+ * resizeable canvas: the previous auto-height override won over the inline
+ * geometry applied by the shared modal resizer, leaving the bottom handle
+ * unable to grow the dialog.  Keep dimensions non-important so user-resized
+ * width/height can take precedence, and let the preview own the free row. */
+body.panel-page #mihomo-import-modal .modal-content {
+  grid-template-rows: 50px minmax(0, 1fr) 50px;
+  width: min(96vw, 1160px);
+  max-width: 1160px;
+  min-height: min(520px, calc(100dvh - 36px));
+  height: clamp(520px, 82dvh, 900px);
+  max-height: calc(100dvh - 36px);
+}
+
+body.panel-page #mihomo-import-modal .modal-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-panel {
+  min-height: 0;
+  padding: 12px;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-panel--controls {
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-panel--preview {
+  overflow: hidden;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-preview-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-editor) !important;
+}
+
+body.panel-page #mihomo-import-modal :is(
+  #mihomo-import-preview,
+  #mihomo-import-preview-monaco,
+  .xk-mihomo-import-preview,
+  .xk-mihomo-import-preview.CodeMirror,
+  .xk-mihomo-import-preview .CodeMirror,
+  .xk-mihomo-import-preview .cm-editor
+) {
+  flex: 1 1 auto;
+  min-height: 0 !important;
+  height: 100% !important;
+  max-height: none !important;
+}
+
+body.panel-page #mihomo-import-modal :is(
+  .xk-mihomo-import-preview .CodeMirror-scroll,
+  .xk-mihomo-import-preview .cm-scroller,
+  #mihomo-import-preview-monaco .monaco-editor,
+  #mihomo-import-preview-monaco .monaco-editor-container
+) {
+  min-height: 0;
+  height: 100%;
+  max-height: none;
+}
+
+/* The import workbench uses the same flat Operator surface as the rest of the
+ * routing console. Status colour is semantic, not a blue-glass decoration. */
+body.panel-page #mihomo-import-modal .xk-mi-section-title,
+body.panel-page #mihomo-import-modal .mihomo-managed-sub-title {
+  color: var(--op-text-strong) !important;
+}
+
+body.panel-page #mihomo-import-modal :is(
+  .xk-mi-section-subtitle,
+  .xk-mi-refresh-note,
+  .mihomo-managed-sub-meta,
+  .mihomo-managed-sub-interval-label
+) {
+  color: var(--op-muted) !important;
+}
+
+body.panel-page #mihomo-import-modal :is(
+  .xk-mi-groups-shell,
+  .xk-mi-managed-row
+) {
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-editor) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-target {
+  gap: 6px;
+  padding: 6px 0 6px 9px;
+  border: 0 !important;
+  border-left: 2px solid var(--op-accent) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-status {
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface-2) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-status.success {
+  border-left: 2px solid var(--op-success) !important;
+  color: var(--op-success) !important;
+  background: var(--op-success-soft) !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-status.warning {
+  border-left: 2px solid var(--op-warning) !important;
+  color: var(--op-warning) !important;
+  background: var(--op-warning-soft) !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-status.error {
+  border-left: 2px solid var(--op-danger) !important;
+  color: var(--op-danger) !important;
+  background: var(--op-danger-soft) !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-section-head > :first-child {
+  min-width: 0;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-inline-actions {
+  flex-wrap: nowrap;
+}
+
+/* HWID keeps its existing compact inspection layout. It does not share the
+ * import modal's stretchable editor contract. */
 body.panel-page #mihomo-hwid-modal .modal-content {
   width: min(96vw, 1160px) !important;
   max-width: 1160px !important;
@@ -6966,7 +7110,7 @@ body.panel-page #mihomo-hwid-modal .modal-content {
   max-height: calc(100dvh - 36px) !important;
 }
 
-body.panel-page :is(#mihomo-import-modal, #mihomo-hwid-modal) .modal-body {
+body.panel-page #mihomo-hwid-modal .modal-body {
   flex: 0 1 auto !important;
   min-height: 0 !important;
   height: auto !important;
@@ -6974,35 +7118,26 @@ body.panel-page :is(#mihomo-import-modal, #mihomo-hwid-modal) .modal-body {
   overflow: auto !important;
 }
 
-body.panel-page #mihomo-import-modal .xk-mi-grid,
 body.panel-page #mihomo-hwid-modal .xk-hw-grid {
   flex: 0 1 auto;
   height: auto !important;
 }
 
-body.panel-page #mihomo-import-modal .xk-mi-preview-wrap,
 body.panel-page #mihomo-hwid-modal .xk-hw-preview-wrap {
   flex: 0 0 auto;
   height: clamp(240px, 36dvh, 360px) !important;
 }
 
-body.panel-page #mihomo-import-modal .xk-mi-panel,
 body.panel-page #mihomo-hwid-modal .xk-hw-panel {
   min-height: 0;
 }
 
-body.panel-page #mihomo-import-modal .xk-mi-panel--controls,
 body.panel-page #mihomo-hwid-modal .xk-hw-panel--controls {
   overflow: auto;
 }
 
-body.panel-page #mihomo-import-modal .xk-mi-section-head > :first-child,
 body.panel-page #mihomo-hwid-modal .xk-hw-section-head > :first-child {
   min-width: 0;
-}
-
-body.panel-page #mihomo-import-modal .xk-mi-inline-actions {
-  flex-wrap: nowrap;
 }
 
 body.panel-page :is(#mihomo-import-modal, #mihomo-hwid-modal) .modal-actions {
@@ -7024,10 +7159,6 @@ body.panel-page :is(#mihomo-import-modal, #mihomo-hwid-modal) .modal-actions :is
 body.panel-page #mihomo-import-modal .xk-mi-footer-actions,
 body.panel-page #mihomo-hwid-modal .xk-hw-footer-actions {
   gap: 6px;
-}
-
-body.panel-page #mihomo-import-modal .xk-mi-footer-actions,
-body.panel-page #mihomo-hwid-modal .xk-hw-footer-actions {
   flex-wrap: wrap;
 }
 

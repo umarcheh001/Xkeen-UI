@@ -135,7 +135,7 @@ def test_xray_devices_modal_uses_operator_data_rows_instead_of_blue_cards():
     xray = XRAY_LOGS.read_text(encoding="utf-8")
     modal = css[
         css.index("/* Xray device names are dense operational data") :
-        css.index("/* Mihomo import/HWID are workbenches")
+        css.index("/* Mihomo import is an editor workbench")
     ]
 
     for fragment in (
