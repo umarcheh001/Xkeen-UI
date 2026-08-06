@@ -261,6 +261,81 @@ test('mihomo generator page renders source and preview panes', async ({ page }) 
 });
 
 
+test('mihomo generator keeps its editor controls and subscription fields aligned', async ({ page }) => {
+  await page.goto('/mihomo_generator');
+  await waitForMihomoGeneratorPreview(page);
+  await expect(page.locator('#previewToolbarHost .xkeen-cm-toolbar')).toBeVisible();
+  await expect(page.locator('.subscription-row button')).toBeVisible();
+  await expect(page.locator('.rule-group-checkbox').first()).toBeVisible();
+
+  const geometry = await page.evaluate(() => {
+    const engine = document.querySelector('#mihomo-preview-engine-select');
+    const toolbar = document.querySelector('#previewToolbarHost .xkeen-cm-toolbar');
+    const row = document.querySelector('.subscription-row');
+    const input = row?.querySelector('input');
+    const remove = row?.querySelector('button');
+    const selectAll = document.querySelector('#ruleGroupsSelectAll');
+    const ruleGroup = document.querySelector('.rule-group-checkbox');
+
+    if (!engine || !toolbar || !row || !input || !remove || !selectAll || !ruleGroup) {
+      throw new Error('Mihomo generator controls are incomplete');
+    }
+
+    const engineRect = engine.getBoundingClientRect();
+    const toolbarRect = toolbar.getBoundingClientRect();
+    const inputRect = input.getBoundingClientRect();
+    const removeRect = remove.getBoundingClientRect();
+
+    return {
+      toolbarGap: Math.round(toolbarRect.left - engineRect.right),
+      rowControlBottomDelta: Math.abs(Math.round(removeRect.bottom - inputRect.bottom)),
+      selectAllAccent: getComputedStyle(selectAll).accentColor,
+      ruleGroupAccent: getComputedStyle(ruleGroup).accentColor,
+    };
+  });
+
+  expect(geometry.toolbarGap).toBeGreaterThanOrEqual(8);
+  expect(geometry.rowControlBottomDelta).toBeLessThanOrEqual(1);
+  expect(geometry.selectAllAccent).toBe(geometry.ruleGroupAccent);
+  expect(geometry.selectAllAccent).not.toBe('rgb(37, 99, 235)');
+  expect(geometry.selectAllAccent).not.toBe('rgb(96, 165, 250)');
+});
+
+
+test('mihomo bulk import presents a guided operator flow without legacy blue chrome', async ({ page }) => {
+  await page.goto('/mihomo_generator');
+  await waitForMihomoGeneratorPreview(page);
+  await page.locator('#bulkImportBtn').click();
+
+  const modal = page.locator('#bulkImportModal');
+  await expect(modal).toBeVisible();
+  await expect(modal).toHaveAttribute('data-operator-modal-family', 'compact-form');
+  await expect(modal.locator('#bulkImportModalTitle')).toHaveText('Импорт списка');
+  await expect(modal.locator('.bulk-import-options-title')).toContainText('Шаг 2');
+  await expect(modal.locator('.bulk-import-summary-title')).toHaveText('Сводка импорта');
+
+  const chrome = await modal.evaluate((node) => {
+    const summary = node.querySelector('#bulkImportSummary');
+    const textarea = node.querySelector('#bulkImportTextarea');
+    const check = node.querySelector('#bulkImportToSubscriptions');
+    return {
+      modalBackgroundImage: getComputedStyle(node).backgroundImage,
+      summaryBackgroundImage: summary ? getComputedStyle(summary).backgroundImage : '',
+      textareaBackgroundImage: textarea ? getComputedStyle(textarea).backgroundImage : '',
+      accent: check ? getComputedStyle(check).accentColor : '',
+    };
+  });
+
+  expect(chrome.modalBackgroundImage).toBe('none');
+  expect(chrome.summaryBackgroundImage).toBe('none');
+  expect(chrome.textareaBackgroundImage).toBe('none');
+  expect(chrome.accent).not.toBe('rgb(96, 165, 250)');
+
+  await modal.locator('#bulkImportTextarea').fill('vless://example\nhttps://sub.example.com/list');
+  await expect(modal.locator('#bulkImportSummary')).toContainText('Будет добавлено: узлов 1, подписок 1.');
+});
+
+
 test('mihomo generator removes optional rule groups from preview when all checkboxes are cleared', async ({ page }) => {
   await page.goto('/mihomo_generator');
   await waitForMihomoGeneratorPreview(page);

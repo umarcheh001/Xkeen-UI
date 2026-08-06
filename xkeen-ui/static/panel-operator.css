@@ -6583,6 +6583,43 @@ body.panel-page.mihomo-generator-page :is(.generator-checkbox-meta, .rule-group-
   box-shadow: none !important;
 }
 
+/* Generator inputs are assembled at runtime, so keep their compact controls
+ * explicitly aligned with the field they operate on.  The legacy label margin
+ * made the remove action sit one label-gap below the subscription URL. */
+body.panel-page.mihomo-generator-page .subscription-field {
+  display: block;
+  margin: 0 !important;
+}
+
+body.panel-page.mihomo-generator-page .subscription-row > .btn {
+  align-self: end;
+}
+
+/* The engine selector and the editor toolbar share one header host on this
+ * route.  They are separate control groups, not one connected control. */
+body.panel-page.mihomo-generator-page .preview-toolbar-host {
+  gap: 8px;
+}
+
+body.panel-page.mihomo-generator-page .preview-toolbar-host > .xk-editor-engine {
+  flex: 0 0 auto;
+}
+
+body.panel-page.mihomo-generator-page .preview-toolbar-host > .xkeen-cm-toolbar {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+
+/* Do not let the page-local blue checkbox accents leak back into the
+ * operator workbench.  Both the select-all control and runtime rule rows use
+ * the same indigo semantic accent. */
+body.panel-page.mihomo-generator-page :is(
+  .generator-checkbox-meta input[type="checkbox"],
+  .rule-group-item input[type="checkbox"]
+) {
+  accent-color: var(--op-accent) !important;
+}
+
 body.panel-page.mihomo-generator-page .generator-preview-shell {
   display: flex;
   flex: 1 1 auto;
@@ -7368,9 +7405,9 @@ body.panel-page.mihomo-generator-page #bulkImportModal .modal-content {
 }
 
 body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-modal-header {
-  min-height: 50px;
+  min-height: 64px;
   margin: 0 !important;
-  padding: 9px 12px !important;
+  padding: 10px 12px !important;
   border-bottom: 1px solid var(--op-border);
 }
 
@@ -7384,21 +7421,36 @@ body.panel-page.mihomo-generator-page #bulkImportModal :is(.bulk-import-modal-ki
 }
 
 body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-modal-kicker {
-  padding: 3px 7px;
+  padding: 0;
+  border: 0 !important;
+  background: transparent !important;
   color: var(--op-muted) !important;
   font-size: calc(10px * var(--xk-font-scale, 1));
   letter-spacing: 0.04em;
 }
 
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-modal-title {
+  color: var(--op-text-strong) !important;
+  font-size: calc(15px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-header-help {
+  color: var(--op-muted) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  line-height: 1.4;
+}
+
 body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-modal-body {
   height: auto !important;
   max-height: calc(100dvh - 144px) !important;
-  padding: 12px !important;
+  padding: 10px 12px 12px !important;
   overflow: auto !important;
 }
 
 body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-panel {
-  gap: 9px;
+  gap: 10px;
   padding: 0 !important;
   border: 0 !important;
   border-radius: 0 !important;
@@ -7407,16 +7459,92 @@ body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-panel {
   box-shadow: none !important;
 }
 
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-panel-head {
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-step,
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-options-title,
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-summary-title {
+  color: var(--op-muted) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-weight: 620;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-panel-title {
+  margin-top: 2px;
+  color: var(--op-text-strong) !important;
+  font-size: calc(13px * var(--xk-font-scale, 1));
+  font-weight: 650;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-panel-help {
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  text-align: right;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-source-label,
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-field-label {
+  display: block;
+  margin: 0 !important;
+  color: var(--op-text) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 620;
+  line-height: 1.3;
+}
+
 body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-textarea {
-  min-height: 112px;
-  height: 132px;
-  max-height: 220px;
+  min-height: 118px;
+  height: clamp(118px, 18dvh, 164px);
+  max-height: 210px;
   border: 1px solid var(--op-border) !important;
   border-radius: var(--op-control-radius) !important;
   background: var(--op-editor) !important;
   background-image: none !important;
   color: var(--op-text) !important;
   box-shadow: none !important;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-textarea:is(:hover, :focus-visible) {
+  border-color: var(--op-accent-border) !important;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-hint {
+  margin: -3px 0 0;
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  line-height: 1.4;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-supported {
+  gap: 5px;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-chip {
+  min-height: 22px;
+  padding: 0 6px;
+  border-radius: 4px !important;
+  color: var(--op-muted) !important;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: calc(9.5px * var(--xk-font-scale, 1));
+  font-weight: 550;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-options {
+  padding-top: 9px;
+  border-top: 1px solid var(--op-border);
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-options-title {
+  margin-bottom: 7px;
 }
 
 body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-option-row {
@@ -7426,7 +7554,23 @@ body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-option-row {
 body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-check {
   min-height: var(--op-control-compact-h);
   padding: 0 8px;
+  border-radius: var(--op-control-radius) !important;
   font-size: calc(11px * var(--xk-font-scale, 1));
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-check:is(:hover, :focus-within) {
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-3) !important;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-check input[type="checkbox"] {
+  accent-color: var(--op-accent) !important;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-check--destructive:has(input:checked) {
+  border-color: color-mix(in srgb, var(--op-danger) 42%, var(--op-border)) !important;
+  background: var(--op-danger-soft) !important;
+  color: var(--op-danger) !important;
 }
 
 body.panel-page.mihomo-generator-page #bulkImportModal :is(.bulk-import-advanced, .bulk-import-card, .bulk-import-summary) {
@@ -7438,17 +7582,75 @@ body.panel-page.mihomo-generator-page #bulkImportModal :is(.bulk-import-advanced
 }
 
 body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-advanced > summary {
-  padding: 7px 9px;
+  display: flex;
+  align-items: center;
+  min-height: var(--op-control-h);
+  padding: 0 9px;
   color: var(--op-text) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 620;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-advanced-body {
+  padding: 0 9px 9px;
+  border-top: 1px solid var(--op-border);
 }
 
 body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-card {
-  padding: 9px;
+  padding: 9px 0 0;
+  border: 0 !important;
+  border-top: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-card:first-child {
+  border-top: 0 !important;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-card-title {
+  color: var(--op-text) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-minihelp {
+  color: var(--op-muted) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  line-height: 1.45;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-minihelp code {
+  border-color: var(--op-border) !important;
+  border-radius: 3px;
+  background: var(--op-editor) !important;
+  color: var(--op-data-muted) !important;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-summary-wrap {
+  padding-top: 9px;
+  border-top: 1px solid var(--op-border);
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-summary-title {
+  margin-bottom: 5px;
 }
 
 body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-summary {
-  padding: 8px 9px;
-  color: var(--op-muted) !important;
+  min-height: var(--op-control-h);
+  padding: 7px 9px;
+  border-left: 2px solid var(--op-border-strong) !important;
+  border-radius: 0 var(--op-control-radius) var(--op-control-radius) 0 !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-data-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  line-height: 1.4;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-summary.is-warning {
+  border-color: color-mix(in srgb, var(--op-warning) 48%, var(--op-border)) !important;
+  border-left-color: var(--op-warning) !important;
+  background: var(--op-warning-soft) !important;
+  color: var(--op-warning) !important;
 }
 
 body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-actions {
@@ -7457,6 +7659,17 @@ body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-actions {
   padding: 9px 12px !important;
   border-top: 1px solid var(--op-border);
   background: var(--op-surface) !important;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal #bulkImportApplyBtn:not([disabled]) {
+  border-color: var(--op-accent) !important;
+  background: var(--op-accent) !important;
+  color: #fff !important;
+}
+
+body.panel-page.mihomo-generator-page #bulkImportModal #bulkImportApplyBtn:not([disabled]):is(:hover, :focus-visible) {
+  border-color: var(--op-accent-hover) !important;
+  background: var(--op-accent-hover) !important;
 }
 
 /* Complex feature dialogs use a single divided workbench. Their historical
@@ -12744,6 +12957,16 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
   body.panel-page.mihomo-generator-page #bulkImportModal .modal-content {
     width: calc(100vw - 12px) !important;
     max-height: calc(100dvh - 12px) !important;
+  }
+
+  body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-panel-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  body.panel-page.mihomo-generator-page #bulkImportModal .bulk-import-panel-help {
+    text-align: left;
   }
 
   body.panel-page .xk-mihomo-profile-create,

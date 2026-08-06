@@ -1951,7 +1951,7 @@
   </style>
   {# Shared Operator Console primitives are loaded last. The page keeps its
      runtime hooks while the late layer flattens legacy generator chrome. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260806u') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260806w') }}">
 </head>
 <body class="panel-page mihomo-generator-page">
   {% set top_level_spinner_text = 'Применяем изменения и перезапускаем xkeen…' %}
@@ -2269,28 +2269,35 @@
   </div>
 </div>
 
-<div id="bulkImportModal" class="modal hidden bulk-import-premium-modal" data-modal-dismiss="bulk-import" data-modal-remember="0" data-modal-noresize="1" data-modal-nopos="1" data-modal-nodrag="1" data-modal-backdrop-close="0">
+<div id="bulkImportModal" class="modal hidden bulk-import-premium-modal" role="dialog" aria-modal="true" aria-labelledby="bulkImportModalTitle" aria-describedby="bulkImportModalHelp" data-operator-modal-family="compact-form" data-modal-dismiss="bulk-import" data-modal-remember="0" data-modal-noresize="1" data-modal-nopos="1" data-modal-nodrag="1" data-modal-backdrop-close="0">
   <div class="modal-content">
     <div class="modal-header bulk-import-modal-header">
       <div class="bulk-import-modal-titlebox">
-        <div class="bulk-import-modal-kicker">Mihomo / bulk import</div>
-        <div class="bulk-import-header-help">Ссылки, HTTPS-подписки и Xray-JSON URL. Xray-JSON будет конвертирован в YAML-узлы.</div>
+        <div class="bulk-import-modal-kicker">Mihomo / импорт</div>
+        <div id="bulkImportModalTitle" class="bulk-import-modal-title">Импорт списка</div>
+        <div id="bulkImportModalHelp" class="bulk-import-header-help">Вставьте ссылки по одной на строку. HTTPS-подписки и Xray-JSON URL будут обработаны автоматически.</div>
       </div>
       <button type="button" class="modal-close" data-dismiss="bulk-import" aria-label="Закрыть">{{ op_icon('close') }}</button>
     </div>
     <div class="modal-body bulk-import-modal-body">
       <div class="bulk-import-layout">
-        <section class="bulk-import-panel bulk-import-panel--source">
+        <section class="bulk-import-panel bulk-import-panel--source" aria-labelledby="bulkImportSourceTitle">
           <div class="bulk-import-panel-head">
-            <div class="bulk-import-panel-title">Источник импорта</div>
+            <div>
+              <div class="bulk-import-step">Шаг 1</div>
+              <div id="bulkImportSourceTitle" class="bulk-import-panel-title">Вставьте ссылки</div>
+            </div>
+            <div class="bulk-import-panel-help">Одна ссылка или узел на строку</div>
           </div>
 
-          <textarea id="bulkImportTextarea" class="bulk-import-textarea" rows="5" placeholder="vless://...
+          <label for="bulkImportTextarea" class="bulk-import-source-label">Список для импорта</label>
+          <textarea id="bulkImportTextarea" class="bulk-import-textarea" rows="5" aria-describedby="bulkImportSourceHint bulkImportSummary" placeholder="vless://...
 https://sub.example.com/...
 trojan://...
 My node | vless://... | YouTube,HK"></textarea>
+          <div id="bulkImportSourceHint" class="bulk-import-hint">Поддерживаются ссылки узлов, HTTPS-подписки, Xray-JSON URL и строки с именем и группами.</div>
 
-          <div class="bulk-import-supported">
+          <div class="bulk-import-supported" aria-label="Поддерживаемые форматы">
             <span class="bulk-import-chip">vless://</span>
             <span class="bulk-import-chip">trojan://</span>
             <span class="bulk-import-chip">vmess://</span>
@@ -2301,23 +2308,26 @@ My node | vless://... | YouTube,HK"></textarea>
             <span class="bulk-import-chip">https://</span>
           </div>
 
-          <div class="bulk-import-option-row">
-            <label class="bulk-import-check">
-              <input id="bulkImportToSubscriptions" type="checkbox" checked>
-              HTTPS-строки добавлять в «Подписки»
-            </label>
-            <label class="bulk-import-check">
-              <input id="bulkImportDedup" type="checkbox" checked>
-              Игнорировать дубли
-            </label>
-            <label class="bulk-import-check">
-              <input id="bulkImportClearExisting" type="checkbox">
-              Очистить текущие узлы перед импортом
-            </label>
+          <div class="bulk-import-options" role="group" aria-labelledby="bulkImportOptionsTitle">
+            <div id="bulkImportOptionsTitle" class="bulk-import-options-title">Шаг 2 · Как обработать список</div>
+            <div class="bulk-import-option-row">
+              <label class="bulk-import-check">
+                <input id="bulkImportToSubscriptions" type="checkbox" checked>
+                HTTPS URL → «Подписки»
+              </label>
+              <label class="bulk-import-check">
+                <input id="bulkImportDedup" type="checkbox" checked>
+                Пропускать дубли
+              </label>
+              <label class="bulk-import-check bulk-import-check--destructive">
+                <input id="bulkImportClearExisting" type="checkbox">
+                Очистить текущие узлы
+              </label>
+            </div>
           </div>
 
           <details class="bulk-import-advanced">
-            <summary>Дополнительно: шаблоны и GEO</summary>
+            <summary>Дополнительно · имена, группы и GEO</summary>
             <div class="bulk-import-advanced-body">
               <div class="bulk-import-subgrid">
                 <div class="bulk-import-card">
@@ -2362,7 +2372,10 @@ My node | vless://... | YouTube,HK"></textarea>
             </div>
           </details>
 
-          <div id="bulkImportSummary" class="bulk-import-summary">Вставьте список, чтобы увидеть сводку импорта.</div>
+          <div class="bulk-import-summary-wrap" aria-live="polite" aria-atomic="true">
+            <div class="bulk-import-summary-title">Сводка импорта</div>
+            <div id="bulkImportSummary" class="bulk-import-summary">Вставьте список, чтобы увидеть сводку импорта.</div>
+          </div>
         </section>
       </div>
     </div>
