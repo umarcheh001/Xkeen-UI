@@ -137,6 +137,32 @@ test.describe('Operator Console Stage 4 files', () => {
     await expect(modal).not.toContainText('📌');
   });
 
+  test('bottom file actions keep their icon and persistent text label together', async ({ page }) => {
+    await openFiles(page, 'dark', { width: 1440, height: 900 });
+
+    const actions = [
+      ['#fm-help-btn', 'Справка'],
+      ['#fm-mkdir-btn', 'Новая папка'],
+      ['#fm-touch-btn', 'Новый файл'],
+      ['#fm-upload-btn', 'Загрузить'],
+      ['#fm-download-btn', 'Скачать'],
+    ];
+
+    for (const [selector, label] of actions) {
+      const action = page.locator(selector);
+      await expect(action).toBeVisible();
+      await expect(action.locator('.xk-action-icon')).toBeVisible();
+      await expect(action.locator('.xk-action-label')).toHaveText(label);
+    }
+
+    const layout = await page.locator('#fm-mkdir-btn').evaluate((button) => {
+      const icon = button.querySelector('.xk-action-icon')?.getBoundingClientRect();
+      const label = button.querySelector('.xk-action-label')?.getBoundingClientRect();
+      return { iconRight: icon?.right || 0, labelLeft: label?.left || 0 };
+    });
+    expect(layout.iconRight).toBeLessThan(layout.labelLeft);
+  });
+
   test('selection and keyboard focus remain distinct and accessible', async ({ page }) => {
     await openFiles(page, 'dark', { width: 1440, height: 900 });
     const list = page.locator('.fm-panel[data-side="left"] .fm-list');

@@ -514,9 +514,9 @@ import { iconHtml } from '../../ui/operator_icons.js';
     if (!el('fm-clear-trash-active-btn')) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'btn-secondary btn-icon hidden';
+      b.className = 'btn-secondary fm-footer-action hidden';
       b.id = 'fm-clear-trash-active-btn';
-      b.innerHTML = iconHtml('clear');
+      b.innerHTML = `${iconHtml('clear')}<span class="xk-action-label">Очистить корзину</span>`;
       b.title = 'Очистить корзину (активная панель)';
       b.setAttribute('aria-label', 'Очистить корзину');
       b.addEventListener('click', async (e) => {
@@ -540,9 +540,9 @@ import { iconHtml } from '../../ui/operator_icons.js';
     if (!el('fm-mkdir-btn')) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'btn-secondary btn-icon';
+      b.className = 'btn-secondary fm-footer-action';
       b.id = 'fm-mkdir-btn';
-      b.innerHTML = iconHtml('folder-add');
+      b.innerHTML = `${iconHtml('folder-add')}<span class="xk-action-label">Новая папка</span>`;
       b.title = 'Создать папку в активной панели';
       b.setAttribute('aria-label', 'Создать папку');
       b.addEventListener('click', (e) => {
@@ -559,9 +559,9 @@ import { iconHtml } from '../../ui/operator_icons.js';
     if (!el('fm-touch-btn')) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'btn-secondary btn-icon';
+      b.className = 'btn-secondary fm-footer-action';
       b.id = 'fm-touch-btn';
-      b.innerHTML = iconHtml('file-add');
+      b.innerHTML = `${iconHtml('file-add')}<span class="xk-action-label">Новый файл</span>`;
       b.title = 'Создать пустой файл в активной панели';
       b.setAttribute('aria-label', 'Создать файл');
       b.addEventListener('click', (e) => {
@@ -579,17 +579,17 @@ import { iconHtml } from '../../ui/operator_icons.js';
 
     const upBtn = document.createElement('button');
     upBtn.type = 'button';
-    upBtn.className = 'btn-secondary btn-icon';
+    upBtn.className = 'btn-secondary fm-footer-action';
     upBtn.id = 'fm-upload-btn';
-    upBtn.innerHTML = iconHtml('upload');
+    upBtn.innerHTML = `${iconHtml('upload')}<span class="xk-action-label">Загрузить</span>`;
     upBtn.title = 'Загрузить файлы в активную панель';
     upBtn.setAttribute('aria-label', 'Загрузить файлы');
 
     const downBtn = document.createElement('button');
     downBtn.type = 'button';
-    downBtn.className = 'btn-secondary btn-icon';
+    downBtn.className = 'btn-secondary fm-footer-action';
     downBtn.id = 'fm-download-btn';
-    downBtn.innerHTML = iconHtml('download');
+    downBtn.innerHTML = `${iconHtml('download')}<span class="xk-action-label">Скачать</span>`;
     downBtn.title = 'Скачать выбранные файлы/папки (ZIP)';
     downBtn.setAttribute('aria-label', 'Скачать выбранные файлы');
 

@@ -15929,3 +15929,27 @@ body.panel-page #xray-preflight-modal [data-xk-preflight-copy].is-error {
     justify-self: start;
   }
 }
+
+/* File manager footer: action icons carry persistent labels, so the bottom
+ * toolbar remains understandable without relying on hover tooltips. */
+body.panel-page .fm-footer :is(.fm-help-btn, .fm-footer-action) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: auto;
+  min-width: 0;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 9px !important;
+}
+
+body.panel-page .fm-footer :is(.fm-help-btn, .fm-footer-action) .xk-action-icon {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+body.panel-page .fm-footer :is(.fm-help-btn, .fm-footer-action) .xk-action-label {
+  display: inline;
+  line-height: 1;
+}
