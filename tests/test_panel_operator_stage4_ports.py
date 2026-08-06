@@ -77,7 +77,7 @@ def test_stage4_ports_closure_is_reflected_in_documentation():
     contract = CONTRACT_DOC.read_text(encoding="utf-8")
     index = DOCS_INDEX.read_text(encoding="utf-8")
 
-    assert "filename='panel-operator.css', v='20260805h'" in template
+    assert "filename='panel-operator.css', v='20260806j'" in template
     for fragment in (
         "Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля 2026 года",
         "### Этап 4. Формы, таблицы и data-heavy экраны — в работе",
