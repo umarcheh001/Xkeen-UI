@@ -28,6 +28,20 @@ async function openStaticWorkbenchModal(page, id) {
   await expect(page.locator(`#${id}`)).toBeVisible();
 }
 
+async function openProxyPool(page) {
+  const outbounds = page.locator('#outbounds-body');
+  if (!(await outbounds.isVisible())) await page.locator('#outbounds-header').click();
+  await page.locator('#outbounds-pool-btn').click();
+  await expect(page.locator('#outbounds-pool-modal')).toBeVisible();
+}
+
+async function openProxyGenerator(page) {
+  const outbounds = page.locator('#outbounds-body');
+  if (!(await outbounds.isVisible())) await page.locator('#outbounds-header').click();
+  await page.locator('#outbounds-build-btn').click();
+  await expect(page.locator('#outbounds-generator-modal')).toBeVisible();
+}
+
 async function openEditorHelp(page) {
   await page.locator('#json-editor-format-btn').focus();
   await page.evaluate(() => window.xkeenOpenCmHelp({}));
@@ -233,6 +247,138 @@ test.describe('Operator Console Stage 5 editor workbench contract', () => {
       expect(frame.bodyHeight, frame.id).toBeGreaterThan(0);
     }
   });
+
+  test('proxy-pool source resizes both directions and keeps actions below the field', async ({ page }) => {
+    await openPanel(page, 'dark');
+    await openProxyPool(page);
+
+    const input = page.locator('#outbounds-pool-input');
+    const toolbar = page.locator('#outbounds-pool-modal .xk-pool-toolbar');
+    const modalContent = page.locator('#outbounds-pool-modal .modal-content');
+    const geometry = async () => page.locator('#outbounds-pool-modal').evaluate((modal) => {
+      const field = modal.querySelector('#outbounds-pool-input').getBoundingClientRect();
+      const actions = modal.querySelector('.xk-pool-toolbar').getBoundingClientRect();
+      return {
+        fieldHeight: field.height,
+        fieldBottom: field.bottom,
+        toolbarTop: actions.top,
+      };
+    });
+
+    const dragResizeHandle = async (deltaY) => {
+      const box = await input.boundingBox();
+      const x = box.x + box.width - 2;
+      const y = box.y + box.height - 2;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x, y + deltaY, { steps: 12 });
+      await page.mouse.up();
+    };
+
+    const initial = await geometry();
+    expect(initial.toolbarTop).toBeGreaterThanOrEqual(initial.fieldBottom + 1);
+
+    await modalContent.evaluate((content) => {
+      const current = content.getBoundingClientRect();
+      content.style.height = `${Math.min(window.innerHeight - 36, current.height + 100)}px`;
+      document.dispatchEvent(new CustomEvent('xkeen-modal-resize', {
+        detail: { modal: 'outbounds-pool-modal' },
+      }));
+    });
+    await page.waitForTimeout(50);
+    const fitted = await geometry();
+    expect(fitted.fieldHeight).toBeGreaterThan(initial.fieldHeight + 70);
+    expect(fitted.toolbarTop).toBeGreaterThanOrEqual(fitted.fieldBottom + 1);
+
+    await dragResizeHandle(100);
+    const enlarged = await geometry();
+    expect(enlarged.fieldHeight).toBeGreaterThan(fitted.fieldHeight + 70);
+    expect(enlarged.toolbarTop).toBeGreaterThanOrEqual(enlarged.fieldBottom + 1);
+
+    await dragResizeHandle(-80);
+    const reduced = await geometry();
+    expect(reduced.fieldHeight).toBeLessThan(enlarged.fieldHeight - 50);
+    expect(reduced.toolbarTop).toBeGreaterThanOrEqual(reduced.fieldBottom + 1);
+    await expect(toolbar).toBeVisible();
+  });
+
+  for (const theme of ['dark', 'light']) {
+    test(`Xray mini-generator uses flat operator surfaces in ${theme}`, async ({ page }) => {
+      await openPanel(page, theme);
+      await openProxyGenerator(page);
+
+      const state = await page.locator('#outbounds-generator-modal').evaluate((modal) => {
+        const style = (selector) => getComputedStyle(modal.querySelector(selector));
+        const lead = style('.xk-gen-lead');
+        const grid = style('.xk-gen-grid2');
+        const field = style('.xk-gen-selects label');
+        const summary = style('.xk-gen-summary');
+        const credentials = style('.xk-gen-credentials-card');
+        const preview = style('.xk-gen-preview-block');
+        const input = style('#outbounds-gen-host');
+        return {
+          gradients: [lead, grid, field, summary, credentials, preview, input]
+            .map((item) => item.backgroundImage),
+          fieldBorder: Number.parseFloat(field.borderTopWidth),
+          fieldRadius: Number.parseFloat(field.borderTopLeftRadius),
+          summaryBorder: Number.parseFloat(summary.borderTopWidth),
+          summaryRadius: Number.parseFloat(summary.borderTopLeftRadius),
+          inputHeight: modal.querySelector('#outbounds-gen-host').getBoundingClientRect().height,
+          gridColumns: grid.gridTemplateColumns.split(' ').length,
+        };
+      });
+
+      expect(state.gradients.every((value) => value === 'none')).toBe(true);
+      expect(state.fieldBorder).toBe(0);
+      expect(state.fieldRadius).toBe(0);
+      expect(state.summaryBorder).toBe(0);
+      expect(state.summaryRadius).toBe(0);
+      expect(state.inputHeight).toBeGreaterThanOrEqual(31);
+      expect(state.inputHeight).toBeLessThanOrEqual(33);
+      expect(state.gridColumns).toBe(2);
+    });
+  }
+
+  for (const theme of ['dark', 'light']) {
+    test(`parsed proxy metadata uses flat operator rows in ${theme}`, async ({ page }) => {
+      await openPanel(page, theme);
+      const outbounds = page.locator('#outbounds-body');
+      if (!(await outbounds.isVisible())) await page.locator('#outbounds-header').click();
+
+      await page.locator('#outbounds-url').fill(
+        'vless://11111111-1111-4111-8111-111111111111@example.com:443?security=tls&type=ws&path=%2Fws#demo',
+      );
+      await expect(page.locator('#outbounds-parse-box')).toBeVisible();
+      await expect(page.locator('#outbounds-parse-kv .outbounds-kv-row').first()).toBeVisible();
+
+      const state = await page.locator('.routing-side-card--outbounds').evaluate((card) => {
+        const inspect = (selector) => {
+          const node = card.querySelector(selector);
+          const style = getComputedStyle(node);
+          return {
+            backgroundImage: style.backgroundImage,
+            border: Number.parseFloat(style.borderTopWidth),
+            radius: Number.parseFloat(style.borderTopLeftRadius),
+          };
+        };
+        return {
+          box: inspect('#outbounds-parse-box'),
+          badge: inspect('.outbounds-badge'),
+          row: inspect('.outbounds-kv-row'),
+          rowCount: card.querySelectorAll('.outbounds-kv-row').length,
+        };
+      });
+
+      expect(state.box.backgroundImage).toBe('none');
+      expect(state.box.radius).toBe(0);
+      expect(state.badge.backgroundImage).toBe('none');
+      expect(state.badge.border).toBe(0);
+      expect(state.badge.radius).toBe(0);
+      expect(state.row.backgroundImage).toBe('none');
+      expect(state.row.radius).toBe(0);
+      expect(state.rowCount).toBeGreaterThan(2);
+    });
+  }
 
   test('JSON status labels are flat, semantic and stay below the editor', async ({ page }) => {
     await openPanel(page, 'dark');

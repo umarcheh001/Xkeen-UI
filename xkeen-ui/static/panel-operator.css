@@ -7326,6 +7326,693 @@ html[data-theme="light"] body.panel-page .modal .xk-sub-node-item {
   transform: none !important;
 }
 
+/* Xray proxy pool is a two-step workbench.  Its original feature stylesheet
+ * paints each step as a separate blue-glass card (and even restores that
+ * treatment under the light-theme selector).  Keep the existing hooks, but
+ * make the source and result two quiet regions of one operator surface. */
+:is(body.panel-page, html[data-theme="light"] body.panel-page) #outbounds-pool-modal .modal-content {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(1040px, calc(100vw - 36px));
+  min-width: min(720px, calc(100vw - 36px));
+  max-width: calc(100vw - 36px);
+  height: min(76dvh, 780px);
+  min-height: min(440px, calc(100dvh - 36px));
+  max-height: calc(100dvh - 36px);
+  background: var(--op-surface) !important;
+  background-image: none !important;
+}
+
+:is(body.panel-page, html[data-theme="light"] body.panel-page) #outbounds-pool-modal .modal-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px !important;
+  background: var(--op-surface) !important;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-lead {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  margin: 0 0 12px !important;
+  padding: 0 0 12px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-lead-icon {
+  display: grid;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted) !important;
+  font-size: calc(15px * var(--xk-font-scale, 1));
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-lead-title,
+body.panel-page #outbounds-pool-modal .terminal-menu-title,
+body.panel-page #outbounds-pool-modal .xk-pool-replace-copy strong {
+  color: var(--op-text-strong) !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-lead-title {
+  margin: 0 0 3px;
+  font-size: calc(13px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.1fr);
+  gap: 0 !important;
+  /* The grid fills every extra pixel when the user resizes the modal.  The
+   * modal body is still its scroll boundary if a manually enlarged textarea
+   * becomes taller than the available work area. */
+  flex: 1 1 auto;
+  min-height: 360px;
+  overflow: visible;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-panel {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  gap: 10px;
+  padding: 12px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-preview-panel {
+  border-left: 1px solid var(--op-border) !important;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-panelhead,
+body.panel-page #outbounds-pool-modal .xk-pool-listhead {
+  gap: 8px;
+}
+
+body.panel-page #outbounds-pool-modal :is(.xk-pool-kicker, .xk-pool-fieldlabel) {
+  margin-bottom: 3px;
+  color: var(--op-muted) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-summary {
+  min-height: var(--op-control-compact-h);
+  padding: 0 8px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-data-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #outbounds-pool-modal #outbounds-pool-input {
+  display: block;
+  /* The runtime fits this initial height to the modal once, then native
+   * textarea resize owns it. Keeping the field out of flex sizing lets the
+   * user move the handle both down and back up without flex restoring it. */
+  flex: 0 0 auto;
+  height: clamp(168px, 28dvh, 280px);
+  min-height: 168px;
+  max-height: none;
+  padding: 9px 10px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-editor) !important;
+  background-image: none !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+  resize: vertical !important;
+}
+
+body.panel-page #outbounds-pool-modal #outbounds-pool-input:focus {
+  border-color: var(--op-accent-border) !important;
+  box-shadow: none !important;
+}
+
+/* The source field is deliberately allowed to grow. Keep its controls in the
+ * normal document flow so native textarea resizing moves the row below it,
+ * rather than painting it over the resize corner. */
+body.panel-page #outbounds-pool-modal .xk-pool-editor-block {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-toolbar {
+  display: flex;
+  position: static !important;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 6px;
+  min-height: var(--op-control-h);
+  margin: 2px 0 0 !important;
+  padding: 0 0 0 1px;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-toolbar :is(
+  .xk-pool-action,
+  .xk-entware-mark-toggle--pool
+) {
+  box-sizing: border-box;
+  height: var(--op-control-h) !important;
+  min-height: var(--op-control-h) !important;
+  max-height: var(--op-control-h) !important;
+  margin: 0 !important;
+  border-radius: var(--op-control-radius) !important;
+  vertical-align: middle;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-toolbar .xk-pool-action {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 9px !important;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-toolbar .xk-entware-mark-toggle--pool {
+  display: inline-grid;
+  flex: 0 0 var(--op-control-h);
+  width: var(--op-control-h) !important;
+  min-width: var(--op-control-h) !important;
+  padding: 0 !important;
+  place-items: center;
+  border-color: var(--op-border) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-toolbar .xk-entware-mark-toggle--pool:is(:hover, :focus-visible),
+body.panel-page #outbounds-pool-modal .xk-pool-toolbar .xk-entware-mark-toggle--pool:is(.is-active, [aria-pressed="true"]) {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent-hover) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-note {
+  gap: 5px;
+  padding: 8px 0 0 9px;
+  border: 0 !important;
+  border-left: 2px solid var(--op-border-strong) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--op-data-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #outbounds-pool-modal :is(
+  .xk-pool-existing,
+  .xk-pool-list-subtitle,
+  .xk-pool-status,
+  .xk-pool-replace-copy small
+) {
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-tablewrap {
+  flex: 1 1 auto;
+  min-height: 220px;
+  max-height: none;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-editor) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-table thead th {
+  padding: 8px 10px;
+  border-bottom-color: var(--op-border) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  letter-spacing: 0.04em;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-table :is(td, tbody tr + tr td) {
+  border-color: var(--op-border) !important;
+  background: transparent !important;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-table td {
+  padding: 7px 8px;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-table input.xray-log-filter {
+  min-height: var(--op-control-h);
+  border-radius: var(--op-control-radius) !important;
+  border-color: var(--op-border) !important;
+  background: var(--op-surface) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-delete-btn {
+  width: var(--op-control-h);
+  min-width: var(--op-control-h);
+  height: var(--op-control-h);
+  border-radius: var(--op-control-radius) !important;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-empty {
+  min-height: 72px;
+  margin: 10px;
+  padding: 14px;
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: transparent !important;
+  color: var(--op-muted) !important;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px !important;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-replace-card {
+  min-height: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  border-top: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-replace-card input[type="checkbox"] {
+  margin-top: 2px;
+  accent-color: var(--op-accent);
+}
+
+body.panel-page #outbounds-pool-modal .xk-pool-footer-actions {
+  align-items: center;
+  gap: 6px;
+}
+
+body.panel-page #outbounds-pool-modal #outbounds-pool-save-btn {
+  min-width: 112px;
+  border-color: var(--op-accent) !important;
+  background: var(--op-accent) !important;
+  color: #fff !important;
+}
+
+body.panel-page #outbounds-pool-modal #outbounds-pool-save-btn:not([disabled]):is(:hover, :focus-visible) {
+  border-color: var(--op-accent-hover) !important;
+  background: var(--op-accent-hover) !important;
+}
+
+/* Xray mini-generator uses the same operator workbench as the proxy pool.
+ * Legacy feature CSS made every field a blue card and treated passive schema
+ * information as an accent pill. Keep the form structure and runtime hooks,
+ * but reduce the presentation to two divided regions and ordinary fields. */
+:is(body.panel-page, html[data-theme="light"] body.panel-page) #outbounds-generator-modal .xk-gen-modal {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(1120px, calc(100vw - 36px));
+  min-width: min(720px, calc(100vw - 36px));
+  max-width: calc(100vw - 36px);
+  height: min(78dvh, 820px);
+  min-height: min(520px, calc(100dvh - 36px));
+  max-height: calc(100dvh - 36px);
+  background: var(--op-surface) !important;
+  background-image: none !important;
+}
+
+:is(body.panel-page, html[data-theme="light"] body.panel-page) #outbounds-generator-modal .modal-body {
+  display: flex;
+  min-height: 0;
+  padding: 12px !important;
+  overflow: auto;
+  flex-direction: column;
+  background: var(--op-surface) !important;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-lead {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  margin: 0 0 12px !important;
+  padding: 0 0 12px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-lead-icon {
+  display: grid;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-lead-icon .xk-action-icon {
+  width: 16px;
+  height: 16px;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-lead-title {
+  margin: 0 0 3px;
+  color: var(--op-text-strong) !important;
+  font-size: calc(13px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  letter-spacing: 0 !important;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-grid2 {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.08fr) minmax(340px, 0.92fr);
+  flex: 1 1 auto;
+  min-height: 390px;
+  gap: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-panel {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px !important;
+  overflow: auto;
+  flex-direction: column;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-result-panel {
+  border-left: 1px solid var(--op-border) !important;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-panelhead {
+  display: flex;
+  min-height: 36px;
+  margin: 0 0 12px;
+  padding: 0 0 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-kicker {
+  margin: 0 0 2px;
+  color: var(--op-muted) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+body.panel-page #outbounds-generator-modal .terminal-menu-title {
+  color: var(--op-text-strong) !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  letter-spacing: 0 !important;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-summary {
+  display: inline-flex;
+  min-height: 0;
+  padding: 0;
+  align-items: center;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--op-data-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 600;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-sidehint {
+  max-width: 220px;
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  text-align: right;
+}
+
+body.panel-page #outbounds-generator-modal :is(.xk-gen-selects, .xk-gen-fields-grid) {
+  display: grid;
+  gap: 10px;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-selects {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 0 12px;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-form-panel > .xk-gen-fields-grid {
+  grid-template-columns: minmax(0, 1.15fr) minmax(150px, 0.85fr);
+}
+
+body.panel-page #outbounds-generator-modal :is(.xk-gen-credentials-grid, .xk-gen-adv-grid) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+:is(body.panel-page, html[data-theme="light"] body.panel-page) #outbounds-generator-modal :is(
+  .xk-gen-selects label,
+  .xk-gen-fields-grid label
+) {
+  display: flex;
+  min-width: 0;
+  gap: 5px;
+  padding: 0 !important;
+  flex-direction: column;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-fieldlabel {
+  padding: 0;
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 560;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body.panel-page #outbounds-generator-modal :is(input.xray-log-filter, select.xray-log-select) {
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--op-control-h);
+  min-height: var(--op-control-h);
+  padding: 0 9px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
+  background-image: none !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-generator-modal :is(input.xray-log-filter, select.xray-log-select):focus {
+  border-color: var(--op-accent-border) !important;
+  box-shadow: none !important;
+}
+
+:is(body.panel-page, html[data-theme="light"] body.panel-page) #outbounds-generator-modal .xk-gen-credentials-card {
+  margin: 12px 0 0 !important;
+  padding: 12px 0 0 !important;
+  border: 0 !important;
+  border-top: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-subtitle {
+  margin: 0 0 10px;
+  color: var(--op-text-strong) !important;
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  font-weight: 650;
+}
+
+:is(body.panel-page, html[data-theme="light"] body.panel-page) #outbounds-generator-modal .xk-gen-advanced-card {
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-advanced-card > summary {
+  min-height: 38px;
+  margin: 0 !important;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  color: var(--op-data-muted) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 600;
+  background: var(--op-surface-2) !important;
+  cursor: pointer;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-advanced-card[open] > summary {
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-advanced-card > .xk-gen-adv-grid {
+  padding: 10px;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-statusbar {
+  display: none;
+  min-height: 0;
+  margin: 10px 0 0;
+  padding: 7px 0 7px 9px;
+  border: 0 !important;
+  border-left: 2px solid var(--op-border-strong) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-statusbar:not(:empty) {
+  display: block;
+}
+
+:is(body.panel-page, html[data-theme="light"] body.panel-page) #outbounds-generator-modal .xk-gen-preview-block {
+  display: flex;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 12px 0 0 !important;
+  flex-direction: column;
+  border: 0 !important;
+  border-top: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-generator-modal #outbounds-gen-preview {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 112px;
+  max-height: 240px;
+  padding: 9px 10px;
+  resize: vertical;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-editor) !important;
+  background-image: none !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-note {
+  margin: 8px 0 0;
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  line-height: 1.4;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-footer {
+  display: flex;
+  min-height: 50px;
+  padding: 9px 12px !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+body.panel-page #outbounds-generator-modal :is(.xk-gen-footer-left, .xk-gen-footer-actions) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+body.panel-page #outbounds-generator-modal .xk-gen-footer-btn {
+  display: inline-flex !important;
+  height: var(--op-control-h) !important;
+  min-height: var(--op-control-h) !important;
+  max-height: var(--op-control-h) !important;
+  padding: 0 10px !important;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--op-control-radius) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-generator-modal #outbounds-gen-insert-btn {
+  min-width: 132px;
+  border-color: var(--op-accent) !important;
+  background: var(--op-accent) !important;
+  color: #fff !important;
+}
+
+body.panel-page #outbounds-generator-modal #outbounds-gen-insert-btn:not([disabled]):is(:hover, :focus-visible) {
+  border-color: var(--op-accent-hover) !important;
+  background: var(--op-accent-hover) !important;
+}
+
+body.panel-page #outbounds-generator-modal #outbounds-gen-insert-btn[disabled] {
+  border-color: var(--op-border) !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-faint) !important;
+  opacity: 0.72;
+}
+
 /* Xray subscriptions are an operator workbench, not a card gallery. Keep the
  * runtime DOM hooks intact while presenting one source/list split followed by
  * a dense node table. */
@@ -9582,6 +10269,21 @@ body.panel-page .modal[data-operator-modal-family="editor-workbench"]:has(:is(
   max-height: min(38dvh, 320px);
 }
 
+/* An empty pool is a normal initial state, not an error.  It must retain the
+ * master-detail workbench geometry so the source textarea can both fill a
+ * manually enlarged modal and preserve its native resize height. */
+body.panel-page #outbounds-pool-modal:has(.xk-pool-empty:not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"])) .modal-content {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: min(76dvh, 780px);
+  min-height: min(440px, calc(100dvh - 36px));
+}
+
+body.panel-page #outbounds-pool-modal:has(.xk-pool-empty:not(.hidden):not([hidden]):not([style*="display:none"]):not([style*="display: none"])) .modal-body {
+  flex: 1 1 auto;
+  max-height: none;
+  overflow: auto;
+}
+
 body.panel-page .modal[data-operator-modal-family] .modal-close > .xk-action-icon {
   display: block;
 }
@@ -9638,6 +10340,29 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
 }
 
 @media (max-width: 1180px) {
+  body.panel-page #outbounds-generator-modal .xk-gen-grid2 {
+    grid-template-columns: minmax(0, 1fr);
+    overflow: visible;
+  }
+
+  body.panel-page #outbounds-generator-modal .xk-gen-result-panel {
+    border-top: 1px solid var(--op-border) !important;
+    border-left: 0 !important;
+  }
+
+  :is(body.panel-page, html[data-theme="light"] body.panel-page) #outbounds-pool-modal .modal-content {
+    min-width: 0;
+  }
+
+  body.panel-page #outbounds-pool-modal .xk-pool-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.panel-page #outbounds-pool-modal .xk-pool-preview-panel {
+    border-top: 1px solid var(--op-border) !important;
+    border-left: 0 !important;
+  }
+
   body.panel-page.xk-editor-help-open .modal[data-operator-modal-family="editor-workbench"]:not(.hidden) {
     align-items: flex-start;
     padding: 18px 18px calc(18px + min(42dvh, 380px));
@@ -9998,6 +10723,41 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
     max-height: 88dvh;
     border-width: 1px !important;
     border-radius: var(--op-radius) var(--op-radius) 0 0 !important;
+  }
+
+  body.panel-page #outbounds-pool-modal .xk-pool-footer {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  body.panel-page #outbounds-pool-modal .xk-pool-footer-actions {
+    justify-content: flex-end;
+  }
+
+  body.panel-page #outbounds-generator-modal :is(
+    .xk-gen-selects,
+    .xk-gen-form-panel > .xk-gen-fields-grid,
+    .xk-gen-credentials-grid,
+    .xk-gen-adv-grid
+  ) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.panel-page #outbounds-generator-modal .xk-gen-panelhead,
+  body.panel-page #outbounds-generator-modal .xk-gen-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  body.panel-page #outbounds-generator-modal .xk-gen-sidehint {
+    max-width: none;
+    text-align: left;
+  }
+
+  body.panel-page #outbounds-generator-modal :is(.xk-gen-footer-left, .xk-gen-footer-actions) {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
   }
 
   body.panel-page .modal[data-operator-modal-family="drawer-help"] {
@@ -11343,6 +12103,166 @@ body.panel-page .routing-side-card--outbounds #outbounds-entware-mark-btn.xk-ent
   background: var(--op-accent-soft) !important;
   color: var(--op-accent-hover) !important;
   box-shadow: none !important;
+}
+
+/* Parsed proxy metadata is operational data, not a group of blue badges and
+ * nested cards. Keep protocol/type/security hooks and validation tones, but
+ * present them as one compact metadata line followed by divided data rows. */
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .routing-side-card--outbounds #outbounds-parse-box {
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border: 0 !important;
+  border-top: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-parse-badges {
+  display: flex;
+  min-height: 24px;
+  gap: 0;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .routing-side-card--outbounds .outbounds-badge {
+  display: inline-flex;
+  min-height: 20px;
+  padding: 0;
+  align-items: center;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--op-data-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-badge + .outbounds-badge::before {
+  content: "·";
+  display: inline-block;
+  margin: 0 6px;
+  color: var(--op-faint);
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-badge-ok {
+  color: var(--op-success) !important;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-badge-bad {
+  color: var(--op-danger) !important;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-parse-msg {
+  margin: 6px 0 0;
+  padding: 6px 0 6px 9px;
+  border-left: 2px solid currentColor;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  line-height: 1.4;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-parse-error {
+  color: var(--op-danger) !important;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-parse-warn {
+  color: var(--op-warning) !important;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-parse-kv {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  margin: 7px 0 0;
+  overflow: hidden;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-control-radius);
+  background: var(--op-surface);
+}
+
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .routing-side-card--outbounds .outbounds-kv-row {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.38fr) minmax(0, 0.62fr);
+  min-height: 30px;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 8px;
+  align-items: start;
+  border: 0 !important;
+  border-top: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-kv-row:first-child {
+  border-top: 0 !important;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-kv-row .k {
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 560;
+  overflow-wrap: anywhere;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-kv-row .v {
+  color: var(--op-text) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-family: var(--xk-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+body.panel-page .routing-side-card--outbounds #outbounds-url.xk-invalid {
+  border-color: var(--op-danger) !important;
+  box-shadow: none !important;
+}
+
+/* Fragment summaries use the same flat data contract. Legacy tags are kept
+ * attached, but look like values in a compact record instead of blue pills. */
+body.panel-page .routing-side-card--outbounds .outbounds-fragment-summary-meta {
+  margin-top: 6px;
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-fragment-tags {
+  display: flex;
+  gap: 0 8px;
+  margin-top: 6px;
+  padding: 0;
+  scrollbar-color: var(--op-border-strong) transparent;
+}
+
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .routing-side-card--outbounds :is(
+  .outbounds-fragment-tags code,
+  .outbounds-fragment-more,
+  .outbounds-fragment-empty,
+  .outbounds-fragment-count
+) {
+  min-height: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--op-data-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 560;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-fragment-tags code + code::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--op-faint);
 }
 
 /* The scenario switcher shares the same compact inspector grammar as inbounds:

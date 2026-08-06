@@ -3985,6 +3985,8 @@ let outboundsModuleApi = null;
     };
 
     let _poolEntries = [];
+    let _poolContentResizeObserver = null;
+    let _poolLastContentHeight = 0;
 
     const POOL_RESERVED = new Set([
       'direct','block','dns',
@@ -4000,6 +4002,65 @@ let outboundsModuleApi = null;
         else modal.classList.add('hidden');
       } catch (e) {}
       try { syncXkeenBodyScrollLock(!!show); } catch (e) {}
+      if (show) {
+        try {
+          requestAnimationFrame(() => {
+            try { poolFitInputToPanel(); } catch (e2) {}
+          });
+        } catch (e3) {}
+      }
+    }
+
+    function poolFitInputToPanel() {
+      const modal = $(POOL_IDS.modal);
+      const input = $(POOL_IDS.input);
+      if (!modal || !input || modal.classList.contains('hidden')) return;
+
+      const panel = input.closest ? input.closest('.xk-pool-input-panel') : null;
+      const tail = panel && panel.querySelector ? panel.querySelector('.xk-pool-note') : null;
+      const content = modal.querySelector ? modal.querySelector('.modal-content') : null;
+      if (!panel || !tail || !content) return;
+
+      const panelRect = panel.getBoundingClientRect();
+      const inputRect = input.getBoundingClientRect();
+      const tailRect = tail.getBoundingClientRect();
+      const panelStyle = getComputedStyle(panel);
+      const contentRect = content.getBoundingClientRect();
+      const paddingBottom = Number.parseFloat(panelStyle.paddingBottom) || 0;
+      const slack = (panelRect.bottom - paddingBottom) - tailRect.bottom;
+      const nextHeight = Math.max(168, Math.round(inputRect.height + slack));
+
+      if (Math.abs(nextHeight - inputRect.height) > 1) {
+        input.style.height = `${nextHeight}px`;
+      }
+      _poolLastContentHeight = contentRect.height;
+    }
+
+    function poolWireInputLayout(modal) {
+      if (!modal || (modal.dataset && modal.dataset.xkPoolInputLayoutBound === '1')) return;
+      const content = modal.querySelector ? modal.querySelector('.modal-content') : null;
+      if (!content) return;
+
+      try {
+        if (typeof ResizeObserver !== 'undefined') {
+          _poolContentResizeObserver = new ResizeObserver(() => {
+            if (modal.classList.contains('hidden')) return;
+            const height = content.getBoundingClientRect().height;
+            if (_poolLastContentHeight && Math.abs(height - _poolLastContentHeight) < 1) return;
+            try { poolFitInputToPanel(); } catch (e) {}
+          });
+          _poolContentResizeObserver.observe(content);
+        }
+      } catch (e) {}
+
+      try {
+        window.addEventListener('resize', () => {
+          if (modal.classList.contains('hidden')) return;
+          try { poolFitInputToPanel(); } catch (e) {}
+        });
+      } catch (e) {}
+
+      if (modal.dataset) modal.dataset.xkPoolInputLayoutBound = '1';
     }
 
     function poolSetStatus(msg, isErr) {
@@ -4396,6 +4457,8 @@ let outboundsModuleApi = null;
       const modal = $(POOL_IDS.modal);
       if (!modal) return;
       if (modal.dataset && modal.dataset.xkWired === '1') return;
+
+      poolWireInputLayout(modal);
 
       wireButton(POOL_IDS.open, poolOpen);
       wireButton(POOL_IDS.close, poolClose);
