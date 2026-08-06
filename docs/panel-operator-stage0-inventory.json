@@ -9168,7 +9168,7 @@
       {
         "locator": "#mihomo-import-parse-static-btn",
         "name": "data-tooltip",
-        "value": "Скачать подписку через доступные заголовки и вставить найденные узлы как статическ��е proxies."
+        "value": "Скачать подписку через доступные заголовки и вставить найденные узлы как статические proxies."
       },
       {
         "locator": "#mihomo-import-insert-btn",
