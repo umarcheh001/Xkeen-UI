@@ -1071,7 +1071,7 @@
               "accessible_name": true
             },
             {
-              "control": "control@7334",
+              "control": "control@7355",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -1161,7 +1161,7 @@
             {
               "control": "outbounds-pool-entware-mark-btn",
               "icons": [
-                "settings"
+                "bolt"
               ],
               "icon_only": true,
               "accessible_name": true
