@@ -874,6 +874,9 @@ body.panel-page .routing-focus-note {
 }
 
 body.panel-page .xk-global-autorestart-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-height: 28px;
   margin: 0;
   padding: 0;
@@ -883,10 +886,38 @@ body.panel-page .xk-global-autorestart-switch {
   box-shadow: none !important;
 }
 
+/* The legacy global control has an equally specific light-theme label rule
+ * with a blue value.  Keep it on the shared neutral text token so the label
+ * and the switch do not look like two unrelated controls. */
+html[data-theme="light"] body.panel-page .xk-global-autorestart-switch,
+html[data-theme="light"] body.panel-page .xk-global-autorestart-switch .dt-switch-label {
+  color: var(--op-muted) !important;
+}
+
 body.panel-page .dt-switch-slider {
-  border-color: var(--op-border-strong) !important;
+  box-sizing: border-box;
+  width: 30px;
+  min-width: 30px;
+  height: 16px;
+  border: 1px solid var(--op-border-strong) !important;
+  border-radius: 8px;
   background: var(--op-surface-3) !important;
+  flex: 0 0 auto;
   box-shadow: none !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+body.panel-page .dt-switch-slider::after {
+  box-sizing: border-box;
+  top: 1px;
+  left: 1px;
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--op-surface) !important;
+  box-shadow: none !important;
+  transition: transform 0.15s ease, background-color 0.15s ease;
 }
 
 body.panel-page .dt-switch input:checked + .dt-switch-slider {
@@ -894,10 +925,29 @@ body.panel-page .dt-switch input:checked + .dt-switch-slider {
   background: var(--op-accent) !important;
 }
 
+body.panel-page .dt-switch input:checked + .dt-switch-slider::after {
+  transform: translateX(14px) !important;
+  background: #fff !important;
+}
+
+body.panel-page .dt-switch input:focus-visible + .dt-switch-slider {
+  outline: 2px solid var(--op-accent-hover);
+  outline-offset: 2px;
+}
+
+body.panel-page .dt-switch input:disabled + .dt-switch-slider {
+  opacity: 0.48;
+}
+
+body.panel-page .dt-switch input:disabled ~ .dt-switch-label {
+  color: var(--op-faint);
+}
+
 body.panel-page .dt-switch-label {
   color: var(--op-muted);
   font-size: calc(10.5px * var(--xk-font-scale, 1));
   font-weight: 560;
+  opacity: 1 !important;
 }
 
 /* ==========================================================================
@@ -3748,15 +3798,18 @@ body.panel-page #view-xray-logs :is(.dt-switch, .dt-log-interval) {
 
 body.panel-page #view-xray-logs .dt-switch-slider {
   width: 28px;
+  min-width: 28px;
   height: 16px;
-  border-color: var(--op-border-strong) !important;
+  border: 1px solid var(--op-border-strong) !important;
   background: var(--op-surface-3) !important;
 }
 
 body.panel-page #view-xray-logs .dt-switch-slider::after {
+  top: 1px;
+  left: 1px;
   width: 12px;
   height: 12px;
-  background: var(--op-data-muted) !important;
+  background: var(--op-surface) !important;
 }
 
 body.panel-page #view-xray-logs .dt-switch input:checked + .dt-switch-slider {
@@ -3767,6 +3820,10 @@ body.panel-page #view-xray-logs .dt-switch input:checked + .dt-switch-slider {
 body.panel-page #view-xray-logs .dt-switch input:checked + .dt-switch-slider::after {
   background: #fff !important;
   transform: translateX(12px) !important;
+}
+
+body.panel-page #view-xray-logs .dt-switch input:not(:checked) + .dt-switch-slider::after {
+  transform: none !important;
 }
 
 body.panel-page #view-xray-logs .dt-log-interval .xray-log-select {
@@ -4488,22 +4545,30 @@ html[data-theme="light"] body.panel-page .fm-toggle {
 
 body.panel-page .fm-toggle-slider,
 html[data-theme="light"] body.panel-page .fm-toggle-slider {
+  box-sizing: border-box;
   width: 28px;
+  min-width: 28px;
   height: 16px;
-  border-color: var(--op-border-strong) !important;
+  border: 1px solid var(--op-border-strong) !important;
   border-radius: 999px;
   background: var(--op-surface-3) !important;
+  flex: 0 0 auto;
   box-shadow: none !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 body.panel-page .fm-toggle-slider::after,
 html[data-theme="light"] body.panel-page .fm-toggle-slider::after {
+  box-sizing: border-box;
   top: 1px;
   left: 1px;
   width: 12px;
   height: 12px;
   border: 0;
+  border-radius: 50%;
   background: var(--op-muted);
+  box-shadow: none !important;
+  transition: transform 0.15s ease, background-color 0.15s ease;
 }
 
 body.panel-page .fm-toggle input:checked + .fm-toggle-slider {
@@ -4513,7 +4578,7 @@ body.panel-page .fm-toggle input:checked + .fm-toggle-slider {
 
 body.panel-page .fm-toggle input:checked + .fm-toggle-slider::after {
   background: #fff;
-  transform: translateX(12px);
+  transform: translateX(12px) !important;
 }
 
 body.panel-page .fm-context-menu,
@@ -12314,6 +12379,7 @@ html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-togg
 
 body.panel-page #ui-settings-modal .xk-ui-settings-toggle .dt-switch-slider,
 html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-toggle .dt-switch-slider {
+  box-sizing: border-box;
   width: 34px;
   min-width: 34px;
   height: 18px;
@@ -12325,10 +12391,13 @@ html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-togg
 
 body.panel-page #ui-settings-modal .xk-ui-settings-toggle .dt-switch-slider::after,
 html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-toggle .dt-switch-slider::after {
+  box-sizing: border-box;
   top: 1px;
   left: 1px;
   width: 14px;
   height: 14px;
+  border: 0;
+  border-radius: 50%;
   background: var(--op-text) !important;
   box-shadow: none !important;
 }
@@ -12336,12 +12405,17 @@ html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-togg
 body.panel-page #ui-settings-modal .xk-ui-settings-toggle input:checked + .dt-switch-slider,
 html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-toggle input:checked + .dt-switch-slider {
   border-color: var(--op-accent-border) !important;
-  background: var(--op-accent-soft) !important;
+  background: var(--op-accent) !important;
 }
 
 body.panel-page #ui-settings-modal .xk-ui-settings-toggle input:checked + .dt-switch-slider::after,
 html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-toggle input:checked + .dt-switch-slider::after {
-  background: var(--op-accent-hover) !important;
+  background: #fff !important;
+  transform: translateX(14px) !important;
+}
+
+body.panel-page #ui-settings-modal .xk-ui-settings-toggle input:not(:checked) + .dt-switch-slider::after {
+  transform: none !important;
 }
 
 body.panel-page #ui-settings-modal .xk-ui-settings-value,

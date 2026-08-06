@@ -79,6 +79,45 @@ test.describe('Operator Console Stage 0 runtime contract', () => {
     await expect(page.locator('#json-editor-modal')).toBeHidden();
   });
 
+  test('switches preserve the same indigo on/off geometry in light and dark themes', async ({ page }) => {
+    for (const theme of ['dark', 'light']) {
+      await openPanel(page, theme);
+      const toggle = page.locator('.xk-global-autorestart-switch');
+      const input = toggle.locator('input');
+      const slider = toggle.locator('.dt-switch-slider');
+
+      const read = () => slider.evaluate((node) => {
+        const thumb = getComputedStyle(node, '::after');
+        const style = getComputedStyle(node);
+        return {
+          width: node.getBoundingClientRect().width,
+          height: node.getBoundingClientRect().height,
+          backgroundImage: style.backgroundImage,
+          thumbBackgroundImage: thumb.backgroundImage,
+          thumbTransform: thumb.transform,
+        };
+      });
+
+      const on = await read();
+      expect(on.width).toBe(30);
+      expect(on.height).toBe(16);
+      expect(on.backgroundImage).toBe('none');
+      expect(on.thumbBackgroundImage).toBe('none');
+      expect(on.thumbTransform).not.toBe('none');
+
+      await input.evaluate((node) => { node.checked = false; });
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+      const off = await read();
+      expect(off.width).toBe(30);
+      expect(off.height).toBe(16);
+      expect(off.backgroundImage).toBe('none');
+      expect(off.thumbBackgroundImage).toBe('none');
+      await expect
+        .poll(async () => (await read()).thumbTransform)
+        .toBe('none');
+    }
+  });
+
   test('runtime duplicate nodes remain attached but visually suppressed', async ({ page }) => {
     await openPanel(page, 'dark');
 
