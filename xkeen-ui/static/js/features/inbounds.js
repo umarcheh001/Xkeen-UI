@@ -206,6 +206,11 @@ let inboundsModuleApi = null;
       return '';
     }
 
+    function getModeLabel(mode) {
+      const value = String(mode || '').trim();
+      return value === 'mixed' ? 'Hybrid' : value;
+    }
+
     function syncDirtyUi(dirty) {
       try {
         const saveBtn = $('inbounds-save-btn');
@@ -851,8 +856,8 @@ let inboundsModuleApi = null;
               : 'Обнаружен пользовательский конфиг (не совпадает с пресетами).', 'warning');
           } else if (mode) {
             setInboundsStatus(statusEl, extrasShort
-              ? ('Текущий режим: ' + mode + '. Есть пользовательские секции: ' + extrasShort + '.')
-              : ('Текущий режим: ' + mode), extrasShort ? 'warning' : 'info');
+              ? ('Текущий режим: ' + getModeLabel(mode) + '. Есть пользовательские секции: ' + extrasShort + '.')
+              : ('Текущий режим: ' + getModeLabel(mode)), extrasShort ? 'warning' : 'info');
           } else {
             setInboundsStatus(statusEl, 'Режим не определён (файл отсутствует или повреждён).', 'warning');
           }
@@ -887,7 +892,7 @@ let inboundsModuleApi = null;
           if (restart) {
             // avoid redundant restarts when user clicks the already active mode
             if (currentMode === r.value && !autoSaveInFlight) {
-              if (statusEl) setInboundsStatus(statusEl, 'Текущий режим: ' + currentMode, 'info');
+              if (statusEl) setInboundsStatus(statusEl, 'Текущий режим: ' + getModeLabel(currentMode), 'info');
               try { syncDirtyState(false); } catch (e) {}
               return;
             }
@@ -904,7 +909,7 @@ let inboundsModuleApi = null;
 
           // If autorestart is disabled: only mark selection as pending.
           if (statusEl) {
-            setInboundsStatus(statusEl, 'Выбрано: ' + r.value + '. Нажмите "Save inbounds" чтобы применить.', 'warning');
+            setInboundsStatus(statusEl, 'Выбрано: ' + getModeLabel(r.value) + '. Нажмите «Сохранить» чтобы применить.', 'warning');
           }
           try { syncDirtyState(); } catch (e) {}
         });

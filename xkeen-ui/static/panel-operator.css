@@ -10812,3 +10812,219 @@ body.panel-page .monaco-editor :is(.suggest-details, .parameter-hints-widget) :i
     width: 100%;
   }
 }
+
+/* Inbounds actions follow the labelled compact controls used by the DAT card. */
+body.panel-page .routing-side-card--inbounds .xk-actions-inline > button:has(.xk-action-label) {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 6px !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  line-height: 1;
+  white-space: nowrap;
+}
+
+body.panel-page .routing-side-card--inbounds .xk-actions-inline > button .xk-action-icon {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+/* The scenario switcher shares the same compact inspector grammar as inbounds:
+ * a state is expressed by the selected row, not by a header badge or a second
+ * toolbar treatment. */
+body.panel-page .routing-side-card--scenario #routing-scenario-badge {
+  display: none !important;
+}
+
+body.panel-page .routing-side-card--scenario #routing-scenario-body {
+  position: relative;
+}
+
+/* Keep help available without introducing a standalone, legacy-looking row. */
+body.panel-page .routing-side-card--scenario .routing-scenario-help-row {
+  position: absolute;
+  z-index: 2;
+  top: 11px;
+  right: 12px;
+  margin: 0;
+}
+
+body.panel-page .routing-side-card--scenario .routing-scenario-help-popover {
+  position: static !important;
+  display: block;
+}
+
+body.panel-page .routing-side-card--scenario .routing-scenario-help-popover > .xk-card-help-trigger {
+  display: inline-grid;
+  width: var(--op-control-h);
+  min-width: var(--op-control-h);
+  height: var(--op-control-h);
+  min-height: var(--op-control-h);
+  padding: 0 !important;
+  place-items: center;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
+  box-shadow: none !important;
+  color: var(--op-muted) !important;
+  cursor: pointer;
+  list-style: none;
+}
+
+body.panel-page .routing-side-card--scenario .routing-scenario-help-popover > .xk-card-help-trigger::-webkit-details-marker {
+  display: none;
+}
+
+body.panel-page .routing-side-card--scenario .routing-scenario-help-popover > .xk-card-help-trigger:is(:hover, :focus-visible),
+body.panel-page .routing-side-card--scenario .routing-scenario-help-popover[open] > .xk-card-help-trigger {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-text) !important;
+  transform: none !important;
+}
+
+body.panel-page .routing-side-card--scenario .routing-scenario-help-popover > .xk-card-help-panel {
+  position: absolute !important;
+  z-index: 60;
+  top: calc(100% + 8px);
+  right: 0;
+  left: auto;
+  width: min(320px, calc(100vw - 40px));
+  margin: 0;
+  padding: 10px 12px;
+  border-color: var(--op-border-strong) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface-2) !important;
+  box-shadow: var(--op-shadow-float) !important;
+  color: var(--op-text) !important;
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  line-height: 1.45;
+}
+
+body.panel-page .routing-side-card--scenario .routing-scenario-options {
+  margin: 0;
+}
+
+body.panel-page .routing-side-card--scenario .routing-scenario-option:first-child > div {
+  padding-right: 34px;
+}
+
+body.panel-page .routing-side-card--scenario .routing-scenario-actions {
+  display: flex;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--op-border);
+}
+
+body.panel-page .routing-side-card--scenario .routing-scenario-actions > button {
+  display: inline-flex !important;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 0 8px !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  line-height: 1;
+}
+
+body.panel-page .routing-side-card--scenario .routing-scenario-actions > button .xk-action-icon {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+/* Scenario choices deliberately use the exact same connected-choice control as
+ * Inbounds: one outlined list, no gaps, and a single quiet selected-row state. */
+body.panel-page .routing-side-card--scenario .routing-scenario-options {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface) !important;
+}
+
+:is(body.panel-page, html[data-theme="light"] body.panel-page) .routing-side-card--scenario .routing-scenario-option {
+  position: relative;
+  display: grid !important;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 9px;
+  min-height: 0;
+  margin: 0 !important;
+  padding: 9px 10px !important;
+  border: 0 !important;
+  border-top: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body.panel-page .routing-side-card--scenario .routing-scenario-option:first-child {
+  border-top: 0 !important;
+}
+
+body.panel-page .routing-side-card--scenario .routing-scenario-option:hover {
+  background: var(--op-surface-2) !important;
+}
+
+body.panel-page .routing-side-card--scenario .routing-scenario-option:has(input:checked),
+html[data-theme="light"] body.panel-page .routing-side-card--scenario .routing-scenario-option:has(input:checked) {
+  border-color: var(--op-border) !important;
+  background: var(--op-accent-soft) !important;
+  box-shadow: inset 2px 0 0 var(--op-accent) !important;
+  transform: none !important;
+}
+
+body.panel-page .routing-side-card--scenario .routing-scenario-option input {
+  width: 13px !important;
+  height: 13px !important;
+  margin: 3px 0 0 !important;
+  accent-color: var(--op-accent) !important;
+  filter: none !important;
+}
+
+body.panel-page .routing-side-card--scenario .routing-scenario-option strong,
+body.panel-page .routing-side-card--scenario .routing-scenario-option:has(input:checked) strong {
+  color: var(--op-text-strong) !important;
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  font-weight: 650;
+}
+
+body.panel-page .routing-side-card--scenario .routing-scenario-option small,
+body.panel-page .routing-side-card--scenario .routing-scenario-option:has(input:checked) small,
+body.panel-page .routing-side-card--scenario .routing-scenario-option code,
+body.panel-page .routing-side-card--scenario .routing-scenario-option:has(input:checked) code {
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  line-height: 1.42;
+}
+
+/* Reserve the border pixel inside the scenario list as well. This prevents a
+ * selected row from visually merging with the card surface in the legacy
+ * cascade, while keeping the connected-list treatment identical to Inbounds. */
+body.panel-page .routing-side-card--scenario .routing-scenario-options {
+  box-sizing: border-box !important;
+  padding: 1px !important;
+  border: 1px solid var(--op-border-strong) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface) !important;
+}
+
+body.panel-page .routing-side-card--scenario .routing-scenario-option:first-child {
+  border-top: 0 !important;
+}
+
+/* The scenario markup intentionally also carries .inbounds-modes. This is the
+ * canonical connected-list container used for Inbounds, so both inspectors
+ * receive the same border, clipping and row geometry from one selector. */
+body.panel-page .routing-side-card--scenario .inbounds-modes.routing-scenario-options {
+  padding: 0 !important;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface) !important;
+}

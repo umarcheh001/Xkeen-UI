@@ -69,7 +69,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260805h') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260806e') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -411,8 +411,8 @@
         <label class="mode-item">
           <input type="radio" name="inbounds_mode" value="mixed">
           <div>
-            <strong>Mixed</strong><br>
-            <small class="xk-card-desc">UDP через TProxy, TCP через Redirect. Баланс скорости и совместимости (рекомендуемый режим).</small>
+            <strong>Hybrid</strong><br>
+            <small class="xk-card-desc">UDP через TProxy, TCP через Redirect</small>
           </div>
         </label>
 
@@ -420,7 +420,7 @@
           <input type="radio" name="inbounds_mode" value="tproxy">
           <div>
             <strong>TProxy</strong><br>
-            <small class="xk-card-desc">TCP+UDP через TProxy. Максимальная совместимость, но самый медленный и ресурсоёмкий.</small>
+            <small class="xk-card-desc">TCP+UDP через TProxy</small>
           </div>
         </label>
 
@@ -428,7 +428,7 @@
           <input type="radio" name="inbounds_mode" value="redirect">
           <div>
             <strong>Redirect</strong><br>
-            <small class="xk-card-desc">Только TCP через Redirect. Самый быстрый, но не подходит для игр и стриминга.</small>
+            <small class="xk-card-desc">Только TCP через Redirect</small>
           </div>
         </label>
       </div>
@@ -440,10 +440,10 @@
       </label>
 
       <div class="actions xk-actions-inline">
-        <button id="inbounds-open-editor-btn" class="btn-icon" aria-label="Редактор" data-tooltip="Открыть {{ inbounds_name|e }} в редакторе JSON.">{{ op_icon('edit') }}</button>
-        <button id="inbounds-save-btn" class="btn-icon btn-primary" aria-label="Сохранить" data-tooltip="Сохранить {{ inbounds_name|e }}.">{{ op_icon('save') }}</button>
-        <button id="inbounds-backup-btn" class="btn-icon" aria-label="Backup" data-tooltip="Сделать бэкап {{ inbounds_name|e }}.">{{ op_icon('archive') }}</button>
-        <button id="inbounds-restore-auto-btn" class="btn-icon" aria-label="Restore" data-tooltip="Восстановить inbounds из автобэкапа.">{{ op_icon('restore') }}</button>
+        <button id="inbounds-open-editor-btn" class="btn-icon" aria-label="Редактировать" data-tooltip="Открыть {{ inbounds_name|e }} в редакторе JSON.">{{ op_icon('edit') }}<span class="xk-action-label">Правка</span></button>
+        <button id="inbounds-save-btn" class="btn-icon btn-primary" aria-label="Сохранить" data-tooltip="Сохранить {{ inbounds_name|e }}.">{{ op_icon('save') }}<span class="xk-action-label">Сохр.</span></button>
+        <button id="inbounds-backup-btn" class="btn-icon" aria-label="Создать резервную копию" data-tooltip="Сделать бэкап {{ inbounds_name|e }}.">{{ op_icon('archive') }}<span class="xk-action-label">Бэкап</span></button>
+        <button id="inbounds-restore-auto-btn" class="btn-icon" aria-label="Восстановить из резервной копии" data-tooltip="Восстановить inbounds из автобэкапа.">{{ op_icon('restore') }}<span class="xk-action-label">Восст.</span></button>
       </div>
 
 	      <div id="inbounds-status" class="status" role="status" aria-live="polite"></div>
@@ -459,7 +459,7 @@
 	      </div>
 
 	      <div id="routing-scenario-body" style="display:none;">
-	        <div class="xk-card-help-row routing-scenario-help-row">
+	        <div class="routing-scenario-help-row">
 	          <details class="xk-card-help-popover routing-scenario-help-popover">
 	            <summary class="xk-card-help-trigger"
 	                     aria-label="Справка по сценарию маршрутизации"
@@ -482,7 +482,7 @@
 	            </div>
 	          </details>
 	        </div>
-	        <div class="routing-scenario-options" role="radiogroup" aria-label="Сценарий маршрутизации Xray">
+	        <div class="inbounds-modes routing-scenario-options" role="radiogroup" aria-label="Сценарий маршрутизации Xray">
 	          <label class="mode-item routing-scenario-option">
 	            <input id="routing-scenario-normal" type="radio" name="routing_scenario" value="normal" checked>
 	            <div>
@@ -500,9 +500,9 @@
 	          </label>
 	        </div>
 
-	        <div class="routing-scenario-actions">
-	          <button id="routing-scenario-apply-btn" class="btn-secondary btn-compact" type="button"
-	                  data-tooltip="Применить выбранный сценарий к текущему routing-файлу и сохранить его.">Применить</button>
+	        <div class="actions xk-actions-inline routing-scenario-actions">
+	          <button id="routing-scenario-apply-btn" class="btn-primary" type="button"
+	                  data-tooltip="Применить выбранный сценарий к текущему routing-файлу и сохранить его.">{{ op_icon('save') }}<span class="xk-action-label">Применить</span></button>
 	        </div>
 	        <div id="routing-scenario-status" class="routing-scenario-status" role="status" aria-live="polite"></div>
 	      </div>

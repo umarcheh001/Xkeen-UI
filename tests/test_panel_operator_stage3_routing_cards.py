@@ -56,6 +56,35 @@ def test_stage3_routing_cards_expose_one_accordion_contract():
     assert "if (keyName !== 'Enter' && keyName !== ' ') return;" in lazy_bindings
 
 
+def test_inbounds_mode_copy_uses_hybrid_label_and_compact_actions():
+    template = PANEL_TEMPLATE.read_text(encoding="utf-8")
+    inbounds = INBOUNDS_JS.read_text(encoding="utf-8")
+    css = OPERATOR_CSS.read_text(encoding="utf-8")
+
+    assert 'name="inbounds_mode" value="mixed"' in template
+    for fragment in (
+        '<strong>Hybrid</strong>',
+        'UDP через TProxy, TCP через Redirect</small>',
+        'TCP+UDP через TProxy</small>',
+        'Только TCP \u0447\u0435\u0440\u0435\u0437 Redirect</small>',
+        '<span class="xk-action-label">Правка</span>',
+        '<span class="xk-action-label">Сохр.</span>',
+        '<span class="xk-action-label">Бэкап</span>',
+        '<span class="xk-action-label">Восст.</span>',
+    ):
+        assert fragment in template
+    assert "return value === 'mixed' ? 'Hybrid' : value;" in inbounds
+    assert ".routing-side-card--inbounds .xk-actions-inline > button:has(.xk-action-label)" in css
+
+    assert 'class="inbounds-modes routing-scenario-options"' in template
+    assert 'class="actions xk-actions-inline routing-scenario-actions"' in template
+    assert '<span class="xk-action-label">Применить</span>' in template
+    assert ".routing-side-card--scenario #routing-scenario-badge" in css
+    assert ".routing-side-card--scenario .routing-scenario-help-popover > .xk-card-help-trigger" in css
+    assert "padding: 1px !important;" in css
+    assert "border: 1px solid var(--op-border-strong) !important;" in css
+
+
 def test_stage3_dat_and_outbound_rows_have_explicit_state_semantics():
     template = PANEL_TEMPLATE.read_text(encoding="utf-8")
     dat_card = DAT_CARD_JS.read_text(encoding="utf-8")
@@ -145,7 +174,7 @@ def test_stage3_closure_is_reflected_in_documentation():
     contract = CONTRACT_DOC.read_text(encoding="utf-8")
     index = DOCS_INDEX.read_text(encoding="utf-8")
 
-    assert "filename='panel-operator.css', v='20260805h'" in template
+    assert "filename='panel-operator.css', v='20260806e'" in template
     for fragment in (
         "Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля 2026 года",
         "### Этап 3. Пересобрать routing cards и operational blocks — закрыт",
