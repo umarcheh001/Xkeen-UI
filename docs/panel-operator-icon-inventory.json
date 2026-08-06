@@ -171,7 +171,7 @@
           "accessible_label": "Применить"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L4532",
+          "location": "xkeen-ui/static/js/features/routing.js:L4521",
           "control_type": "runtime-action",
           "accessible_label": "Применить"
         },
@@ -501,7 +501,7 @@
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L2242",
+          "location": "xkeen-ui/static/js/features/routing.js:L2245",
           "control_type": "runtime-action",
           "accessible_label": "Закрыть"
         },
@@ -883,7 +883,7 @@
           "accessible_label": "Сравнить"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L4952",
+          "location": "xkeen-ui/static/js/features/routing.js:L4941",
           "control_type": "runtime-action",
           "accessible_label": "Сравнить"
         },
@@ -1196,7 +1196,7 @@
           "accessible_label": "Редактировать"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L4863",
+          "location": "xkeen-ui/static/js/features/routing.js:L4852",
           "control_type": "runtime-action",
           "accessible_label": "Редактировать"
         },
@@ -1285,7 +1285,7 @@
       "tabler_asset": "sparkles",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L6394",
+          "location": "xkeen-ui/static/js/features/routing.js:L6383",
           "control_type": "runtime-action",
           "accessible_label": "Форматировать"
         },
@@ -1460,7 +1460,7 @@
           "accessible_label": "Справка"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L4796",
+          "location": "xkeen-ui/static/js/features/routing.js:L4785",
           "control_type": "runtime-action",
           "accessible_label": "Справка"
         },
@@ -1736,7 +1736,7 @@
           "accessible_label": "Загрузка"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L2253",
+          "location": "xkeen-ui/static/js/features/routing.js:L2255",
           "control_type": "runtime-action",
           "accessible_label": "Загрузка"
         },
@@ -1969,7 +1969,7 @@
           "accessible_label": "Открыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L2463",
+          "location": "xkeen-ui/static/js/features/routing.js:L2465",
           "control_type": "runtime-action",
           "accessible_label": "Открыть"
         }
@@ -2406,7 +2406,7 @@
           "accessible_label": "Заменить"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L4731",
+          "location": "xkeen-ui/static/js/features/routing.js:L4720",
           "control_type": "runtime-action",
           "accessible_label": "Заменить"
         },
@@ -2534,7 +2534,7 @@
           "accessible_label": "Сохранить"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L6386",
+          "location": "xkeen-ui/static/js/features/routing.js:L6375",
           "control_type": "runtime-action",
           "accessible_label": "Сохранить"
         },
@@ -2681,7 +2681,7 @@
           "accessible_label": "Настройки"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L4254",
+          "location": "xkeen-ui/static/js/features/routing.js:L4243",
           "control_type": "runtime-action",
           "accessible_label": "Настройки"
         },
@@ -3017,7 +3017,7 @@
           "accessible_label": "Проверить"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L6390",
+          "location": "xkeen-ui/static/js/features/routing.js:L6379",
           "control_type": "runtime-action",
           "accessible_label": "Проверить"
         },
