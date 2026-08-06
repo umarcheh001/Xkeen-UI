@@ -93,11 +93,13 @@ Route-action `Mihomo Генератор` и modal-action `Поддержать` 
 
 ### Editor / workbench
 
+`#mihomo-hwid-modal` — YAML workbench: controls/diagnostics remain in the left scroll region; preview fills the right canvas and follows modal resize.
+
 `#xray-snapshot-modal`, `#routing-template-edit-modal`, `#mihomo-import-modal`, `#fm-editor-modal`, `#json-editor-modal`, `#ssh-transfer-modal`.
 
 ### Master / detail
 
-`#xray-context-modal`, `#xray-devices-modal`, `#routing-template-modal`, `#outbounds-generator-modal`, `#outbounds-pool-modal`, `#mihomo-proxy-tools-modal`, `#mihomo-hwid-modal`, `#github-catalog-modal`, `#ui-settings-modal`, `#routing-dat-contents-modal`, `#mihomo-validation-modal`, `#ssh-modal`, `#fm-knownhosts-modal`, `#fm-folder-picker-modal`, `#fm-archive-list-modal`, `#fm-conflicts-modal`, `#fm-bookmarks-modal`, `#fm-ops-modal`, `#fm-volumes-modal`.
+`#xray-context-modal`, `#xray-devices-modal`, `#routing-template-modal`, `#outbounds-generator-modal`, `#outbounds-pool-modal`, `#mihomo-proxy-tools-modal`, `#github-catalog-modal`, `#ui-settings-modal`, `#routing-dat-contents-modal`, `#mihomo-validation-modal`, `#ssh-modal`, `#fm-knownhosts-modal`, `#fm-folder-picker-modal`, `#fm-archive-list-modal`, `#fm-conflicts-modal`, `#fm-bookmarks-modal`, `#fm-ops-modal`, `#fm-volumes-modal`.
 
 ### Drawer / help
 

@@ -357,8 +357,8 @@
     "family_counts": {
       "confirm-compact-form": 22,
       "drawer-help": 3,
-      "editor-workbench": 6,
-      "master-detail": 19
+      "editor-workbench": 7,
+      "master-detail": 18
     },
     "missing_family_ids": [],
     "stale_family_ids": [],
@@ -1328,18 +1328,17 @@
       },
       {
         "id": "mihomo-hwid-modal",
-        "family": "master-detail",
+        "family": "editor-workbench",
         "initial_visibility": "hidden",
         "aria_modal": "true",
         "aria_label": "HWID‑подписка Mihomo",
         "data_modal_key": null,
-        "operator_family": "master-detail",
+        "operator_family": "editor-workbench",
         "states": [
           "closed",
           "open",
           "loading",
           "loaded",
-          "empty",
           "error",
           "narrow"
         ],
@@ -9218,7 +9217,7 @@
       {
         "locator": "#mihomo-hwid-modal",
         "name": "data-operator-modal-family",
-        "value": "master-detail"
+        "value": "editor-workbench"
       },
       {
         "locator": "div.modal-content.xk-hw-modal.xk-modal-width@L3071",

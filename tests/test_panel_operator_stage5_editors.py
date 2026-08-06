@@ -86,8 +86,8 @@ def test_stage5_all_static_modals_are_bound_to_one_of_the_four_family_frames():
 
     expected_counts = {
         "confirm-compact-form": 22,
-        "editor-workbench": 6,
-        "master-detail": 19,
+        "editor-workbench": 7,
+        "master-detail": 18,
         "drawer-help": 3,
     }
     modal_pairs = __import__("re").findall(

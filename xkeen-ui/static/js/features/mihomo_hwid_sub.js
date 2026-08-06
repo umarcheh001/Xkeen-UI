@@ -910,11 +910,18 @@ let mihomoHwidSubModuleApi = null;
       });
     } catch (e2) {}
     try {
-      document.addEventListener('xkeen-theme-change', () => {
-        try { if (_previewCm && _previewCm.setOption) _previewCm.setOption('theme', cmThemeFromPage()); } catch (e3) {}
+      document.addEventListener('xkeen-modal-resize', (event) => {
+        const detail = event && event.detail ? event.detail : {};
+        if (detail.modal && detail.modal !== IDS.modal) return;
         if (modalOpen()) layoutPreviewEditor();
       });
-    } catch (e4) {}
+    } catch (e3) {}
+    try {
+      document.addEventListener('xkeen-theme-change', () => {
+        try { if (_previewCm && _previewCm.setOption) _previewCm.setOption('theme', cmThemeFromPage()); } catch (e4) {}
+        if (modalOpen()) layoutPreviewEditor();
+      });
+    } catch (e5) {}
     if (modal.dataset) modal.dataset.xkHwPreviewLayoutBound = '1';
   }
 

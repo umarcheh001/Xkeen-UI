@@ -7100,44 +7100,186 @@ body.panel-page #mihomo-import-modal .xk-mi-inline-actions {
   flex-wrap: nowrap;
 }
 
-/* HWID keeps its existing compact inspection layout. It does not share the
- * import modal's stretchable editor contract. */
+/* HWID is a second YAML workbench: keep the form/diagnostics as the left
+ * scroll region and let the preview own every free pixel of the canvas.  The
+ * declarations deliberately do not use !important so the shared modal
+ * resizer's inline width/height remains authoritative. */
 body.panel-page #mihomo-hwid-modal .modal-content {
-  width: min(96vw, 1160px) !important;
-  max-width: 1160px !important;
-  min-height: 0 !important;
-  height: auto !important;
-  max-height: calc(100dvh - 36px) !important;
+  /* Unlike the short import title, HWID keeps a readable two-line operating
+   * summary in its header. Reserve that row instead of letting it overlap
+   * the workbench body. */
+  grid-template-rows: 102px minmax(0, 1fr) 50px;
+  width: min(96vw, 1160px);
+  max-width: 1160px;
+  min-height: min(520px, calc(100dvh - 36px));
+  height: clamp(520px, 82dvh, 900px);
+  max-height: calc(100dvh - 36px);
 }
 
 body.panel-page #mihomo-hwid-modal .modal-body {
-  flex: 0 1 auto !important;
-  min-height: 0 !important;
-  height: auto !important;
-  max-height: calc(100dvh - 156px) !important;
-  overflow: auto !important;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
 }
 
 body.panel-page #mihomo-hwid-modal .xk-hw-grid {
-  flex: 0 1 auto;
-  height: auto !important;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
 }
 
 body.panel-page #mihomo-hwid-modal .xk-hw-preview-wrap {
-  flex: 0 0 auto;
-  height: clamp(240px, 36dvh, 360px) !important;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-editor) !important;
 }
 
 body.panel-page #mihomo-hwid-modal .xk-hw-panel {
   min-height: 0;
+  padding: 12px;
 }
 
 body.panel-page #mihomo-hwid-modal .xk-hw-panel--controls {
   overflow: auto;
+  overscroll-behavior: contain;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-panel--preview {
+  overflow: hidden;
+}
+
+body.panel-page #mihomo-hwid-modal :is(
+  #mihomo-hwid-preview,
+  #mihomo-hwid-preview-monaco,
+  .xk-hw-preview-cm,
+  .xk-hw-preview-cm.CodeMirror,
+  .xk-hw-preview-cm .CodeMirror,
+  .xk-hw-preview-cm .cm-editor
+) {
+  flex: 1 1 auto;
+  min-height: 0 !important;
+  height: 100% !important;
+  max-height: none !important;
+}
+
+body.panel-page #mihomo-hwid-modal :is(
+  .xk-hw-preview-cm .CodeMirror-scroll,
+  .xk-hw-preview-cm .cm-scroller,
+  #mihomo-hwid-preview-monaco .monaco-editor,
+  #mihomo-hwid-preview-monaco .monaco-editor-container
+) {
+  min-height: 0;
+  height: 100%;
+  max-height: none;
 }
 
 body.panel-page #mihomo-hwid-modal .xk-hw-section-head > :first-child {
   min-width: 0;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-section-title {
+  color: var(--op-text-strong) !important;
+}
+
+body.panel-page #mihomo-hwid-modal :is(
+  .xk-hw-section-subtitle,
+  .xk-hw-field-note,
+  .xk-hw-switch-copy small,
+  .xk-hw-diag-label,
+  .xk-hw-diag-note,
+  .xk-hw-compare-label,
+  .xk-hw-compare-note,
+  .xk-hw-compare-row-label
+) {
+  color: var(--op-muted) !important;
+}
+
+body.panel-page #mihomo-hwid-modal :is(
+  .xk-hw-switch,
+  .xk-hw-meta,
+  .xk-hw-status,
+  .xk-hw-tip,
+  .xk-hw-compare-row
+) {
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface-2) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-hwid-modal :is(.xk-hw-diag-card, .xk-hw-compare-card) {
+  border-color: var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-meta {
+  padding: 8px 10px;
+  border-left: 2px solid var(--op-accent) !important;
+  color: var(--op-data-muted) !important;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-status.success {
+  border-left: 2px solid var(--op-success) !important;
+  background: var(--op-success-soft) !important;
+  color: var(--op-success) !important;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-status.error {
+  border-left: 2px solid var(--op-danger) !important;
+  background: var(--op-danger-soft) !important;
+  color: var(--op-danger) !important;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-tip {
+  border-left: 2px solid var(--op-warning) !important;
+  background: var(--op-warning-soft) !important;
+  color: var(--op-warning) !important;
+}
+
+body.panel-page #mihomo-hwid-modal :is(.xk-hw-diag-value, .xk-hw-diag-pre, .xk-hw-compare-value) {
+  color: var(--op-data-muted) !important;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-compare {
+  border-top-color: var(--op-border) !important;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-compare-badge {
+  border-radius: var(--op-control-radius) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-compare-badge--match {
+  border-color: color-mix(in srgb, var(--op-success) 42%, var(--op-border)) !important;
+  background: var(--op-success-soft) !important;
+  color: var(--op-success) !important;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-compare-badge--diff {
+  border-color: color-mix(in srgb, var(--op-warning) 42%, var(--op-border)) !important;
+  background: var(--op-warning-soft) !important;
+  color: var(--op-warning) !important;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-compare-badge--muted {
+  border-color: var(--op-border) !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-muted) !important;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-switch {
+  padding: 9px 10px;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-switch-copy strong {
+  color: var(--op-text) !important;
 }
 
 body.panel-page :is(#mihomo-import-modal, #mihomo-hwid-modal) .modal-actions {
@@ -7174,6 +7316,17 @@ body.panel-page #mihomo-hwid-modal .xk-hw-section-toggle {
   padding: 0 10px;
   border-radius: var(--op-control-radius) !important;
   letter-spacing: 0 !important;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-primary-btn:not([disabled]) {
+  border-color: var(--op-accent) !important;
+  background: var(--op-accent) !important;
+  color: #fff !important;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-primary-btn:not([disabled]):is(:hover, :focus-visible) {
+  border-color: var(--op-accent-hover) !important;
+  background: var(--op-accent-hover) !important;
 }
 
 /* Bulk import belongs to the same compact modal family. The old generator
@@ -11597,6 +11750,7 @@ body.panel-page .modal .xk-modal-width-920 { --xk-modal-width: 920px; }
 body.panel-page .modal .xk-modal-width-980 { --xk-modal-width: 980px; }
 body.panel-page .modal .xk-modal-width-1020 { --xk-modal-width: 1020px; }
 body.panel-page .modal .xk-modal-width-1040 { --xk-modal-width: 1040px; }
+body.panel-page .modal .xk-modal-width-1160 { --xk-modal-width: 1160px; }
 
 body.panel-page .modal .xk-modal-max-width-220 { max-width: 220px; }
 body.panel-page .modal .xk-modal-max-width-420 { max-width: 420px; }

@@ -62,7 +62,7 @@ MODAL_FAMILIES = {
     "outbounds-pool-modal": "master-detail",
     "mihomo-import-modal": "editor-workbench",
     "mihomo-proxy-tools-modal": "master-detail",
-    "mihomo-hwid-modal": "master-detail",
+    "mihomo-hwid-modal": "editor-workbench",
     "fm-upload-conflict-modal": "confirm-compact-form",
     "fm-editor-modal": "editor-workbench",
     "github-export-modal": "confirm-compact-form",

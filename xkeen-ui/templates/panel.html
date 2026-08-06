@@ -69,7 +69,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260806r') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260806s') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -3067,8 +3067,8 @@ https://..."></textarea>
 
 
     <!-- Mihomo: HWID subscription wizard modal -->
-    <div id="mihomo-hwid-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-label="HWID‑подписка Mihomo">
-      <div class="modal-content xk-hw-modal xk-modal-width xk-modal-width-1020" data-modal-key="mihomo-hwid">
+    <div id="mihomo-hwid-modal" class="modal hidden" data-operator-modal-family="editor-workbench" role="dialog" aria-modal="true" aria-label="HWID‑подписка Mihomo">
+      <div class="modal-content xk-hw-modal xk-modal-width xk-modal-width-1160" data-modal-key="mihomo-hwid">
         <div class="modal-header xk-hw-header">
           <div class="xk-hw-titlebox">
             <span class="xk-hw-kicker">Mihomo · Premium HWID subscription</span>

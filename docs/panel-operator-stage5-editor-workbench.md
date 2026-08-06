@@ -54,8 +54,8 @@ parameter hints получают непрозрачную operator surface, ко
 
 | Family | Окон | Порядок прохода из аудита |
 | --- | ---: | --- |
-| `editor-workbench` | 6 | JSON/file/snapshot editors, затем routing template, Mihomo import и SSH transfer |
-| `master-detail` | 19 | subscriptions/generator/pool/Mihomo, DAT/templates, UI settings/core, SSH и file-manager lists |
+| `editor-workbench` | 7 | JSON/file/snapshot editors, routing template, Mihomo Import, HWID subscription и SSH transfer |
+| `master-detail` | 18 | subscriptions/generator/pool/Mihomo, DAT/templates, UI settings/core, SSH и file-manager lists |
 | `drawer-help` | 3 | editor help, balancer help, terminal/file-manager help |
 | `confirm-compact-form` | 22 | core/confirm, SSH и все короткие file-manager действия, GitHub/donate |
 
@@ -73,7 +73,7 @@ parameter hints получают непрозрачную operator surface, ко
 На ширине до 720 px editor/master-detail/drawer-help становятся fullscreen с
 доступными header/footer, тогда как compact form остаётся коротким bottom
 sheet. Chromium guard открывает каждый из 50 static modals, проверяет family
-counts `22 / 6 / 19 / 3`, grid frame, видимый header/body и границы viewport.
+counts `22 / 7 / 18 / 3`, grid frame, видимый header/body и границы viewport.
 
 ## 6. Presentation geometry и empty/error auto-height — закрыто
 
