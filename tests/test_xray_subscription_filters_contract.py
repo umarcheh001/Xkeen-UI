@@ -87,6 +87,7 @@ def test_outbounds_single_link_tag_control_is_wired_to_payload():
 def test_outbounds_proxy_pool_uses_node_cards_without_hiding_pool_button():
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
     styles_src = _read("xkeen-ui/static/styles.css")
+    operator_styles_src = _read("xkeen-ui/static/panel-operator.css")
 
     assert "function setOutboundsSummaryFragmentMode(mode, fileName, summary) {" in outbounds_src
     assert "body.classList.toggle('xk-outbounds-pool-fragment', normalizedMode === 'pool');" in outbounds_src
@@ -106,6 +107,10 @@ def test_outbounds_proxy_pool_uses_node_cards_without_hiding_pool_button():
     assert "#outbounds-body.xk-outbounds-summary-fragment #outbounds-save-btn" in styles_src
     assert "#outbounds-body.xk-outbounds-subscription-fragment #outbounds-pool-btn" in styles_src
     assert "#outbounds-body.xk-outbounds-summary-fragment #outbounds-pool-btn" not in styles_src
+    assert "#outbounds-body.xk-outbounds-summary-fragment .outbounds-hints {" in operator_styles_src
+    assert "display: none !important;" in operator_styles_src.split(
+        "#outbounds-body.xk-outbounds-summary-fragment .outbounds-hints {", 1
+    )[1].split("}", 1)[0]
 
 
 def test_outbounds_fragment_selector_keeps_create_single_option_when_pool_is_active():

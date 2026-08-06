@@ -348,7 +348,7 @@ test('main outbounds pool card relayouts cleanly after switching between Routing
   const nodes = buildDemoNodes();
   const nodeLatency = buildNodeLatency(nodes);
 
-  await page.route('**/api/outbounds', async (route) => {
+  await page.route('**/api/outbounds**', async (route) => {
     if (route.request().method() !== 'GET') {
       await route.fallback();
       return;
@@ -410,6 +410,8 @@ test('main outbounds pool card relayouts cleanly after switching between Routing
   await openOutboundsPanel(page);
   await expect(page.locator('#outbounds-nodes-panel')).toBeVisible();
   await expect(page.locator('#outbounds-nodes-list .xk-outbounds-node-item')).toHaveCount(nodes.length);
+  await expect(page.locator('#outbounds-body')).toHaveClass(/xk-outbounds-pool-fragment/);
+  await expect(page.locator('#outbounds-body .outbounds-hints')).toBeHidden();
 
   const poolPresentation = await page.evaluate(() => {
     const summary = document.querySelector('#outbounds-fragment-summary');
@@ -418,12 +420,16 @@ test('main outbounds pool card relayouts cleanly after switching between Routing
       summaryVisible: !!summary && !summary.classList.contains('hidden')
         && window.getComputedStyle(summary).display !== 'none',
       flagCountries: flags.map((flag) => flag.getAttribute('data-country')),
+      summaryMode: document.querySelector('#outbounds-body')?.classList.contains('xk-outbounds-summary-fragment') || false,
+      hintsDisplay: window.getComputedStyle(document.querySelector('#outbounds-body .outbounds-hints')).display,
     };
   });
   expect(poolPresentation.summaryVisible).toBe(false);
   expect(poolPresentation.flagCountries).toContain('NL');
   expect(poolPresentation.flagCountries).toContain('DE');
   expect(poolPresentation.flagCountries).toContain('SE');
+  expect(poolPresentation.summaryMode).toBe(true);
+  expect(poolPresentation.hintsDisplay).toBe('none');
 
   await page.locator('.top-tab-btn[data-view="mihomo"]').click();
   await expect(page.locator('#view-mihomo')).toBeVisible();
@@ -472,6 +478,81 @@ test('main outbounds pool card relayouts cleanly after switching between Routing
   expect(['auto', 'scroll']).toContain(layout.listOverflowY);
   expect(layout.scrollHeight).toBeGreaterThan(layout.clientHeight);
   expect(layout.overlaps).toEqual([]);
+});
+
+test('main outbounds subscription fragment hides single-outbound technical fields', async ({ page }) => {
+  const nodes = buildDemoNodes().slice(0, 2);
+  const fragment = '04_outbounds.cdn.pecan.run.json';
+
+  await page.addInitScript((selectedFragment) => {
+    localStorage.setItem('xkeen.outbounds.fragment', selectedFragment);
+  }, fragment);
+
+  await page.route('**/api/outbounds/fragments', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        current: fragment,
+        items: [{ name: fragment }],
+      }),
+    });
+  });
+
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        subscriptions: [{ id: 'demo-sub', output_file: fragment }],
+      }),
+    });
+  });
+
+  await page.route('**/api/outbounds**', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        file: fragment,
+        url: '',
+        config: {
+          outbounds: nodes.map((node) => ({ tag: node.tag, protocol: node.protocol })),
+        },
+      }),
+    });
+  });
+
+  await page.route('**/api/xray/outbounds/nodes**', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, nodes, node_latency: buildNodeLatency(nodes) }),
+    });
+  });
+
+  await openOutboundsPanel(page);
+  await expect(page.locator('#outbounds-body')).toHaveClass(/xk-outbounds-subscription-fragment/);
+  await expect(page.locator('#outbounds-body .outbounds-hints')).toBeHidden();
+  await expect(page.locator('#outbounds-proto')).toBeHidden();
+  await expect(page.locator('#outbounds-type')).toBeHidden();
+  await expect(page.locator('#outbounds-security')).toBeHidden();
+  await expect(page.locator('#outbounds-nodes-list .xk-outbounds-node-item')).toHaveCount(nodes.length);
 });
 
 test('subscriptions modal cards stay separated at medium width', async ({ page }) => {

@@ -15133,6 +15133,14 @@ body.panel-page .routing-side-card--outbounds #outbounds-body .outbounds-hints {
   padding: 0 !important;
 }
 
+/* Subscription-generated fragments and proxy pools do not have one editable
+ * outbound link. Keep the single-outbound protocol/transport/security form
+ * out of those modes; the legacy state rule is otherwise overridden by the
+ * more specific Operator layout above. */
+body.panel-page .routing-side-card--outbounds #outbounds-body.xk-outbounds-summary-fragment .outbounds-hints {
+  display: none !important;
+}
+
 body.panel-page .routing-side-card--outbounds #outbounds-body .outbounds-hint-field {
   display: grid;
   grid-template-rows: auto var(--op-control-h);
