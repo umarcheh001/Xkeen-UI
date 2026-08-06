@@ -69,7 +69,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260806j') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260806o') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -605,7 +605,7 @@
                    class="outbounds-tag-trigger"
                    aria-label="Tag outbound"
                    title="Tag outbound"
-                   data-tooltip="Tag outbound для одиночного outbound.">tag</summary>
+                   data-tooltip="Tag outbound для одиночного outbound.">Tag</summary>
           <div class="outbounds-tag-panel">
             <label for="outbounds-tag">Tag outbound</label>
             <input id="outbounds-tag" type="text" value="proxy" placeholder="proxy">
@@ -630,15 +630,15 @@
         <div id="outbounds-parse-kv" class="outbounds-parse-kv"></div>
       </div>
 
-      <div class="actions xk-actions-inline">
-        <button id="outbounds-open-editor-btn" class="btn-icon" aria-label="Редактор" data-tooltip="Открыть {{ outbounds_name|e }} в редакторе JSON.">{{ op_icon('edit') }}</button>
-        <button id="outbounds-normalize-btn" class="btn-icon" aria-label="Нормализовать" data-tooltip="Нормализовать ссылку: дефолты, алиасы, порядок параметров.">{{ op_icon('normalize') }}</button>
-        <button id="outbounds-build-btn" class="btn-icon" aria-label="Собрать" data-tooltip="Открыть мини-генератор и собрать ссылку из подсказок (protocol/type/security).">{{ op_icon('tools') }}</button>
-        <button id="outbounds-pool-btn" class="btn-icon" aria-label="Пул" data-tooltip="Пул прокси (несколько ссылок) — удобно для балансировщика.">{{ op_icon('pool') }}</button>
-        <button id="outbounds-subscriptions-btn" class="btn-icon" aria-label="Подписки" data-tooltip="Подписки: автообновление outbounds и observatory-пинг.">{{ op_icon('subscriptions') }}</button>
-        <button id="outbounds-save-btn" class="btn-icon btn-primary" aria-label="Сохранить" data-tooltip="Распарсить ссылку и сохранить как outbounds для Xray.">{{ op_icon('save') }}</button>
-        <button id="outbounds-backup-btn" class="btn-icon" aria-label="Backup" data-tooltip="Сделать бэкап {{ outbounds_name|e }}.">{{ op_icon('archive') }}</button>
-        <button id="outbounds-restore-auto-btn" class="btn-icon" aria-label="Restore" data-tooltip="Восстановить outbounds из автобэкапа.">{{ op_icon('restore') }}</button>
+      <div class="actions xk-actions-inline outbounds-actions">
+        <button id="outbounds-open-editor-btn" class="btn-icon" aria-label="Редактор" data-tooltip="Открыть {{ outbounds_name|e }} в редакторе JSON.">{{ op_icon('edit') }}<span class="xk-action-label">Правка</span></button>
+        <button id="outbounds-normalize-btn" class="btn-icon" aria-label="Нормализовать" data-tooltip="Нормализовать ссылку: дефолты, алиасы, порядок параметров.">{{ op_icon('normalize') }}<span class="xk-action-label">Норм.</span></button>
+        <button id="outbounds-build-btn" class="btn-icon" aria-label="Собрать" data-tooltip="Открыть мини-генератор и собрать ссылку из подсказок (protocol/type/security).">{{ op_icon('tools') }}<span class="xk-action-label">Собрать</span></button>
+        <button id="outbounds-pool-btn" class="btn-icon" aria-label="Пул" data-tooltip="Пул прокси (несколько ссылок) — удобно для балансировщика.">{{ op_icon('pool') }}<span class="xk-action-label">Пул</span></button>
+        <button id="outbounds-subscriptions-btn" class="btn-icon" aria-label="Подписки" data-tooltip="Подписки: автообновление outbounds и observatory-пинг.">{{ op_icon('subscriptions') }}<span class="xk-action-label">Подписки</span></button>
+        <button id="outbounds-save-btn" class="btn-icon btn-primary" aria-label="Сохранить" data-tooltip="Распарсить ссылку и сохранить как outbounds для Xray.">{{ op_icon('save') }}<span class="xk-action-label">Сохр.</span></button>
+        <button id="outbounds-backup-btn" class="btn-icon" aria-label="Backup" data-tooltip="Сделать бэкап {{ outbounds_name|e }}.">{{ op_icon('archive') }}<span class="xk-action-label">Бэкап</span></button>
+        <button id="outbounds-restore-auto-btn" class="btn-icon" aria-label="Restore" data-tooltip="Восстановить outbounds из автобэкапа.">{{ op_icon('restore') }}<span class="xk-action-label">Восст.</span></button>
       </div>
 
       <div id="outbounds-status" class="status" role="status" aria-live="polite"></div>
@@ -653,16 +653,31 @@
       </div>
 
       <div id="routing-backups-body" style="display:none;">
-        <p class="routing-backups-path xk-card-desc">Каталог бэкапов: <code>{{ backup_dir }}</code></p>
-
+        <div class="xk-backups-intro">
+          <p class="routing-backups-path xk-card-desc">Все точки возврата Xray в одном месте. Каталог: <code>{{ backup_dir }}</code></p>
+          <div class="xk-backups-mode-tabs" aria-label="Тип бэкапов Xray">
+            <button id="backups-mode-snapshots-btn" class="xk-backups-mode-tab is-active" type="button" aria-pressed="true">Снимки</button>
+            <button id="backups-mode-history-btn" class="xk-backups-mode-tab" type="button" aria-pressed="false">История</button>
+          </div>
+        </div>
 
         <div class="xk-backups-toolbar">
-          <button
-            type="button"
-            id="backups-clear-snapshots-btn"
-            class="btn-secondary xk-backups-toolbar-btn"
-            data-tooltip="Удалить все rollback-снимки из этой карточки. History-backup и auto-backup не затрагиваются."
-          >Удалить все</button>
+          <span id="backups-mode-description" class="xk-backups-mode-description xk-card-desc">Rollback-снимки предыдущего состояния файлов.</span>
+          <div class="xk-backups-toolbar-actions">
+            <button
+              type="button"
+              id="backups-refresh-btn"
+              class="btn-secondary btn-icon xk-backups-toolbar-btn"
+              aria-label="Обновить список бэкапов"
+              data-tooltip="Обновить список бэкапов"
+            >{{ op_icon('refresh') }}</button>
+            <button
+              type="button"
+              id="backups-clear-snapshots-btn"
+              class="btn-secondary xk-backups-toolbar-btn xk-backups-clear-btn"
+              data-tooltip="Удалить все rollback-снимки. History-backup и auto-backup не затрагиваются."
+            >{{ op_icon('trash') }}<span class="xk-action-label">Очистить</span></button>
+          </div>
         </div>
 
         <table id="backups-table" data-mode="snapshots">
@@ -679,10 +694,6 @@
         </table>
 
         <div id="backups-status" class="status" role="status" aria-live="polite"></div>
-
-        <div class="hint xk-card-desc">
-          <a href="/backups" data-xk-top-nav="1">Открыть страницу истории бэкапов →</a>
-        </div>
 
         <div class="xk-card-help-row xk-card-help-row--corner">
           <details class="xk-card-help-popover">
@@ -727,10 +738,10 @@
               {{ op_icon('help', 'xk-card-help-icon') }}
             </summary>
             <div class="xk-card-help-panel">
-              <p><b>JSONC-комментарии:</b> карточки «Правила / Балансировщики» сначала пытаются применить изменения точечно и сохранить комментарии рядом с элементами.</p>
-              <p>Для устойчивой привязки задавайте уникальный <code>ruleTag</code> у правил и <code>tag</code> у балансировщиков.</p>
-              <p>Если точечное обновление невозможно, панель предложит <b>legacy rewrite</b> без сохранения комментариев.</p>
-              <p>Диагностика: выполните в консоли <code>localStorage.setItem('xk.routing.jsonc.debug','1')</code> и повторите действие — причина fallback появится в toast/console.</p>
+              <p><b>GUI и RAW:</b> карточки «Правила маршрутизации» и «Балансировщики» меняют модель маршрутизации, а кнопка «Применить» переносит эти правки в RAW JSON/JSONC-редактор. Сохранение файла и перезапуск Xray выполняются отдельным действием редактора.</p>
+              <p>Если используется JSONC, панель сначала точечно обновляет <code>routing.rules</code>, <code>routing.balancers</code> и <code>domainStrategy</code>, чтобы сохранить комментарии вокруг элементов. Уникальные <code>ruleTag</code> у правил и <code>tag</code> у балансировщиков делают такую синхронизацию надёжнее.</p>
+              <p>Комментарии внутри изменённого правила или балансировщика могут быть перезаписаны. Если точечное обновление недоступно, панель спросит разрешение на полную перезапись; при отмене RAW-текст останется без изменений.</p>
+              <p>Включённое в настройках «Автоприменение правок маршрутизации» синхронизирует GUI с RAW только безопасным способом и не запускает полную перезапись без подтверждения.</p>
             </div>
           </details>
         </div>

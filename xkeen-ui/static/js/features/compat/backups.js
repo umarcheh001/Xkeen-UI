@@ -1,4 +1,4 @@
-import { getBackupsApi } from '../backups.js?v=20260317b';
+import { getBackupsApi } from '../backups.js?v=20260806a';
 
 window.XKeen = window.XKeen || {};
 const XKeen = window.XKeen;

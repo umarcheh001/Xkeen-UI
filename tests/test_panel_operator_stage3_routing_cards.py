@@ -8,6 +8,7 @@ PANEL_TEMPLATE = ROOT / "xkeen-ui/templates/panel.html"
 OPERATOR_CSS = ROOT / "xkeen-ui/static/panel-operator.css"
 INBOUNDS_JS = ROOT / "xkeen-ui/static/js/features/inbounds.js"
 OUTBOUNDS_JS = ROOT / "xkeen-ui/static/js/features/outbounds.js"
+BACKUPS_JS = ROOT / "xkeen-ui/static/js/features/backups.js"
 COLLAPSE_JS = ROOT / "xkeen-ui/static/js/features/routing_cards/collapse.js"
 LAZY_BINDINGS_JS = ROOT / "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
 DAT_CARD_JS = ROOT / "xkeen-ui/static/js/features/routing_cards/dat/card.js"
@@ -76,6 +77,26 @@ def test_inbounds_mode_copy_uses_hybrid_label_and_compact_actions():
     assert "return value === 'mixed' ? 'Hybrid' : value;" in inbounds
     assert ".routing-side-card--inbounds .xk-actions-inline > button:has(.xk-action-label)" in css
 
+    for fragment in (
+        'class="actions xk-actions-inline outbounds-actions"',
+        '<span class="xk-action-label">Правка</span>',
+        '<span class="xk-action-label">Подписки</span>',
+        '<span class="xk-action-label">Бэкап</span>',
+        '<span class="xk-action-label">Восст.</span>',
+    ):
+        assert fragment in template
+    assert ".routing-side-card--outbounds .outbounds-actions .xk-action-label" in css
+    assert "grid-template-columns: repeat(4, minmax(0, 1fr));" in css
+    for fragment in (
+        ".routing-side-card--outbounds #outbounds-body .outbounds-hints",
+        "grid-template-columns: repeat(3, minmax(0, 1fr)) var(--op-control-h);",
+        ".routing-side-card--outbounds #outbounds-body .outbounds-help-trigger",
+        ".routing-side-card--outbounds .outbounds-tag-trigger",
+        ".routing-side-card--outbounds #outbounds-entware-mark-btn.xk-entware-mark-toggle",
+    ):
+        assert fragment in css
+    assert '>Tag</summary>' in template
+
     assert 'class="routing-scenario-options"' in template
     assert 'class="actions xk-actions-inline routing-scenario-actions"' in template
     assert '<span class="xk-action-label">Применить</span>' in template
@@ -83,6 +104,47 @@ def test_inbounds_mode_copy_uses_hybrid_label_and_compact_actions():
     assert ".routing-side-card--scenario .routing-scenario-help-popover > .xk-card-help-trigger" in css
     assert "padding: 0 !important;" in css
     assert "border: 1px solid var(--op-border) !important;" in css
+
+
+def test_backups_card_keeps_full_history_in_the_operator_panel():
+    template = PANEL_TEMPLATE.read_text(encoding="utf-8")
+    css = OPERATOR_CSS.read_text(encoding="utf-8")
+    backups = BACKUPS_JS.read_text(encoding="utf-8")
+
+    for fragment in (
+        'Все точки возврата Xray в одном месте.',
+        'GUI и RAW:',
+        'Автоприменение правок маршрутизации',
+        'id="backups-mode-snapshots-btn"',
+        'id="backups-mode-history-btn"',
+        'id="backups-refresh-btn"',
+        '<span class="xk-action-label">Очистить</span>',
+    ):
+        assert fragment in template
+    assert 'href="/backups"' not in template
+
+    for fragment in (
+        "import '../ui/operator_icons.js';",
+        'function setBackupMode(mode)',
+        'table.dataset.mode = nextMode;',
+        "operatorIcon('preview')",
+        "operatorIcon('restore')",
+        "operatorIcon('trash')",
+        'function loadHistory()',
+    ):
+        assert fragment in backups
+
+    for fragment in (
+        '.routing-side-card--backups .xk-backups-mode-tabs',
+        '.routing-side-card--backups .xk-backups-toolbar',
+        '.xk-backups-mode-tab.is-active',
+        '#backups-table thead',
+        '.xk-card-help-row--corner .xk-card-help-trigger',
+        '.routing-side-card--help .xk-card-help-row--corner .xk-card-help-trigger',
+        'button.backup-icon-btn',
+        '.backup-action-icon',
+    ):
+        assert fragment in css
 
 
 def test_stage3_dat_and_outbound_rows_have_explicit_state_semantics():
@@ -174,7 +236,7 @@ def test_stage3_closure_is_reflected_in_documentation():
     contract = CONTRACT_DOC.read_text(encoding="utf-8")
     index = DOCS_INDEX.read_text(encoding="utf-8")
 
-    assert "filename='panel-operator.css', v='20260806j'" in template
+    assert "filename='panel-operator.css', v='20260806o'" in template
     for fragment in (
         "Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля 2026 года",
         "### Этап 3. Пересобрать routing cards и operational blocks — закрыт",

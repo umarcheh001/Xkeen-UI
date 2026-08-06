@@ -1,5 +1,5 @@
 import '../features/compat/backups.js';
-import { initBackups } from '../features/backups.js?v=20260317b';
+import { initBackups } from '../features/backups.js?v=20260806a';
 import { wireTopLevelNavigation } from './top_level_nav.shared.js';
 
 function isBackupsPage() {

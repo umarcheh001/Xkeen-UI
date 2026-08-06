@@ -13,7 +13,7 @@ import '../ui/tooltips_auto.js?v=20260805g';
 import '../ui/monaco_loader.js?v=20260317b';
 import '../ui/spinner_fetch.js';
 import { bootBackupsPage } from './backups.init.js';
-import { getBackupsApi } from '../features/backups.js?v=20260317b';
+import { getBackupsApi } from '../features/backups.js?v=20260806a';
 
 function getWindowRef() {
   try {

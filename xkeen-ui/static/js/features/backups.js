@@ -3,11 +3,13 @@ import {
   confirmXkeenAction,
   getXkeenEditorEngineApi,
   getXkeenPageFilesConfig,
+  getXkeenUiApi,
   getXkeenSharedPrimitivesApi,
   openXkeenModal,
   toastXkeen,
 } from './xkeen_runtime.js';
 import { getRestartLogApi } from './restart_log.js';
+import '../ui/operator_icons.js';
 
 let backupsModuleApi = null;
 
@@ -479,6 +481,15 @@ let backupsModuleApi = null;
     return table.querySelector('tbody');
   }
 
+  function operatorIcon(name) {
+    try {
+      const ui = getXkeenUiApi();
+      const icons = ui && ui.operatorIcons;
+      if (icons && typeof icons.html === 'function') return icons.html(name, 'backup-action-icon');
+    } catch (e) {}
+    return '';
+  }
+
   function renderEmptyRow(tbody, text) {
     tbody.innerHTML = '';
     const tr = document.createElement('tr');
@@ -531,7 +542,7 @@ let backupsModuleApi = null;
     restoreBtn.className = 'backup-icon-btn';
     restoreBtn.title = 'Восстановить бэкап';
     restoreBtn.setAttribute('data-tooltip', 'Восстановить бэкап');
-    restoreBtn.innerHTML = '<img src="/static/icons/restore.svg" alt="Восстановить" class="backup-icon">';
+    restoreBtn.innerHTML = operatorIcon('restore');
     restoreBtn.addEventListener('click', () => restoreBackup(String(b && b.name ? b.name : '')));
 
     const deleteBtn = document.createElement('button');
@@ -539,7 +550,7 @@ let backupsModuleApi = null;
     deleteBtn.className = 'backup-icon-btn backup-delete-btn';
     deleteBtn.title = 'Удалить бэкап';
     deleteBtn.setAttribute('data-tooltip', 'Удалить бэкап');
-    deleteBtn.innerHTML = '<img src="/static/icons/trash.svg" alt="Удалить" class="backup-icon">';
+    deleteBtn.innerHTML = operatorIcon('trash');
     deleteBtn.addEventListener('click', () => deleteBackup(String(b && b.name ? b.name : '')));
 
     actionsDiv.appendChild(restoreBtn);
@@ -1066,7 +1077,7 @@ let backupsModuleApi = null;
     viewBtn.className = 'backup-icon-btn';
     viewBtn.title = 'Просмотреть снимок';
     viewBtn.setAttribute('data-tooltip', 'Просмотреть');
-    viewBtn.innerHTML = '<img src="/static/icons/eye.svg" alt="Просмотреть" class="backup-icon">';
+    viewBtn.innerHTML = operatorIcon('preview');
     viewBtn.addEventListener('click', () => viewSnapshot(String(s && s.name ? s.name : '')));
 
     const restoreBtn = document.createElement('button');
@@ -1074,7 +1085,7 @@ let backupsModuleApi = null;
     restoreBtn.className = 'backup-icon-btn';
     restoreBtn.title = 'Восстановить снимок';
     restoreBtn.setAttribute('data-tooltip', 'Восстановить');
-    restoreBtn.innerHTML = '<img src="/static/icons/restore.svg" alt="Восстановить" class="backup-icon">';
+    restoreBtn.innerHTML = operatorIcon('restore');
     restoreBtn.addEventListener('click', () => restoreSnapshot(String(s && s.name ? s.name : '')));
 
     const deleteBtn = document.createElement('button');
@@ -1082,7 +1093,7 @@ let backupsModuleApi = null;
     deleteBtn.className = 'backup-icon-btn backup-delete-btn';
     deleteBtn.title = 'Удалить снимок';
     deleteBtn.setAttribute('data-tooltip', 'Удалить');
-    deleteBtn.innerHTML = '<img src="/static/icons/trash.svg" alt="Удалить" class="backup-icon">';
+    deleteBtn.innerHTML = operatorIcon('trash');
     deleteBtn.addEventListener('click', () => deleteSnapshot(String(s && s.name ? s.name : '')));
 
     actionsDiv.appendChild(viewBtn);
@@ -1445,16 +1456,57 @@ let backupsModuleApi = null;
     }
   }
 
+  function setBackupMode(mode) {
+    const table = tableEl();
+    if (!table) return;
+    const nextMode = mode === 'history' ? 'history' : 'snapshots';
+    table.dataset.mode = nextMode;
+
+    const snapshotsTab = el('backups-mode-snapshots-btn');
+    const historyTab = el('backups-mode-history-btn');
+    const clearBtn = el('backups-clear-snapshots-btn');
+    const description = el('backups-mode-description');
+    const snapshotsActive = nextMode === 'snapshots';
+    [[snapshotsTab, snapshotsActive], [historyTab, !snapshotsActive]].forEach(([tab, active]) => {
+      if (!tab) return;
+      tab.classList.toggle('is-active', active);
+      tab.setAttribute('aria-pressed', active ? 'true' : 'false');
+      tab.tabIndex = active ? 0 : -1;
+    });
+    if (clearBtn) clearBtn.hidden = !snapshotsActive;
+    if (description) description.textContent = snapshotsActive
+      ? 'Rollback-снимки предыдущего состояния файлов.'
+      : 'История сохранённых бэкапов конфигурации Xray.';
+    if (snapshotsActive) setSnapshotsToolbarState(_lastSnapshotItems);
+    else if (clearBtn) clearBtn.disabled = false;
+    load();
+  }
+
   function wireSnapshotsToolbarOnce() {
     const clearBtn = el('backups-clear-snapshots-btn');
-    if (!clearBtn) return;
-    if (clearBtn.dataset && clearBtn.dataset.xkeenWired === '1') return;
-    if (clearBtn.dataset) clearBtn.dataset.xkeenWired = '1';
-    clearBtn.addEventListener('click', (e) => {
-      if (e && e.preventDefault) e.preventDefault();
-      deleteAllSnapshots();
+    const refreshBtn = el('backups-refresh-btn');
+    const snapshotsTab = el('backups-mode-snapshots-btn');
+    const historyTab = el('backups-mode-history-btn');
+    if (clearBtn && !(clearBtn.dataset && clearBtn.dataset.xkeenWired === '1')) {
+      if (clearBtn.dataset) clearBtn.dataset.xkeenWired = '1';
+      clearBtn.addEventListener('click', (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        deleteAllSnapshots();
+      });
+    }
+    if (refreshBtn && !(refreshBtn.dataset && refreshBtn.dataset.xkeenWired === '1')) {
+      if (refreshBtn.dataset) refreshBtn.dataset.xkeenWired = '1';
+      refreshBtn.addEventListener('click', (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        load();
+      });
+    }
+    [[snapshotsTab, 'snapshots'], [historyTab, 'history']].forEach(([tab, mode]) => {
+      if (!tab || (tab.dataset && tab.dataset.xkeenWired === '1')) return;
+      if (tab.dataset) tab.dataset.xkeenWired = '1';
+      tab.addEventListener('click', () => setBackupMode(mode));
     });
-    setSnapshotsToolbarState(_lastSnapshotItems);
+    if (getMode() === 'snapshots') setSnapshotsToolbarState(_lastSnapshotItems);
   }
 
   // ------------------------- shared API -------------------------

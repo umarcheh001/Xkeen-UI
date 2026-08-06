@@ -5208,13 +5208,126 @@ body.panel-page .routing-dat-toolbar #routing-dat-status {
   border-top: 0 !important;
 }
 
-body.panel-page .routing-side-card--backups :is(
-  .routing-backups-path,
-  .xk-backups-toolbar
-) {
+/* Xray backups use the same compact operator grammar as the other routing
+ * cards.  Snapshots and the older timestamped history live behind local tabs,
+ * so an operator does not have to leave the current configuration context. */
+body.panel-page .routing-side-card--backups .xk-backups-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
   margin: 0;
   padding: 0 0 8px;
   border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page .routing-side-card--backups .routing-backups-path {
+  margin: 0;
+  min-width: 0;
+}
+
+body.panel-page .routing-side-card--backups .routing-backups-path code {
+  overflow-wrap: anywhere;
+}
+
+body.panel-page .routing-side-card--backups .xk-backups-mode-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-sm);
+  background: var(--op-surface-2);
+}
+
+body.panel-page .routing-side-card--backups .xk-backups-mode-tab {
+  min-height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--op-muted);
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  line-height: 1;
+  cursor: pointer;
+}
+
+body.panel-page .routing-side-card--backups .xk-backups-mode-tab:is(:hover, :focus-visible) {
+  color: var(--op-text-strong);
+  background: var(--op-surface);
+}
+
+body.panel-page .routing-side-card--backups .xk-backups-mode-tab.is-active {
+  border: 1px solid var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+  background-image: none !important;
+  color: var(--op-accent-hover) !important;
+  box-shadow: inset 0 0 0 1px rgba(116, 119, 232, 0.12) !important;
+}
+
+body.panel-page .routing-side-card--backups .xk-backups-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page .routing-side-card--backups .xk-backups-mode-description {
+  margin: 0;
+  color: var(--op-muted);
+}
+
+body.panel-page .routing-side-card--backups .xk-backups-toolbar-actions,
+body.panel-page .routing-side-card--backups .backup-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+body.panel-page .routing-side-card--backups .xk-backups-toolbar-btn,
+body.panel-page .routing-side-card--backups button.backup-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 28px;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 7px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: 4px !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+  line-height: 1;
+}
+
+body.panel-page .routing-side-card--backups .xk-backups-toolbar-btn:is(:hover, :focus-visible),
+body.panel-page .routing-side-card--backups button.backup-icon-btn:is(:hover, :focus-visible) {
+  border-color: var(--op-border-strong, var(--op-border)) !important;
+  background: var(--op-surface) !important;
+  color: var(--op-text-strong) !important;
+  transform: none !important;
+}
+
+body.panel-page .routing-side-card--backups .xk-backups-clear-btn,
+body.panel-page .routing-side-card--backups button.backup-icon-btn.backup-delete-btn {
+  color: var(--op-danger, #e58a8a) !important;
+}
+
+body.panel-page .routing-side-card--backups button.backup-icon-btn {
+  width: 28px;
+  padding: 0;
+}
+
+body.panel-page .routing-side-card--backups .backup-action-icon {
+  width: 13px;
+  height: 13px;
+  color: currentColor;
 }
 
 body.panel-page .routing-side-card--backups #backups-table {
@@ -5225,8 +5338,183 @@ body.panel-page .routing-side-card--backups #backups-table {
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
+  color: var(--op-text);
   font-size: calc(10.5px * var(--xk-font-scale, 1));
   table-layout: fixed;
+}
+
+/* The global legacy table header is navy. Keep this data header neutral so
+ * the active snapshot/history state is the only indigo signal in the card. */
+body.panel-page .routing-side-card--backups #backups-table thead,
+body.panel-page .routing-side-card--backups #backups-table thead tr {
+  background: var(--op-surface) !important;
+  background-image: none !important;
+}
+
+body.panel-page .routing-side-card--backups #backups-table :is(th, td) {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--op-border) !important;
+  background: transparent !important;
+  vertical-align: middle;
+}
+
+body.panel-page .routing-side-card--backups #backups-table th {
+  color: var(--op-muted);
+  font-size: calc(9.5px * var(--xk-font-scale, 1));
+  font-weight: 700;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+
+body.panel-page .routing-side-card--backups #backups-table th:nth-child(1) { width: 42%; }
+body.panel-page .routing-side-card--backups #backups-table th:nth-child(2) { width: 15%; }
+body.panel-page .routing-side-card--backups #backups-table th:nth-child(3) { width: 25%; }
+body.panel-page .routing-side-card--backups #backups-table th:nth-child(4) { width: 18%; }
+
+body.panel-page .routing-side-card--backups #backups-table td code {
+  display: block;
+  overflow: hidden;
+  color: var(--op-text-strong);
+  font-size: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page .routing-side-card--backups #backups-table tbody tr:is(:hover, :focus-within) {
+  background: var(--op-surface-2) !important;
+}
+
+body.panel-page .routing-side-card--backups #backups-table .backups-empty-row td {
+  padding: 12px 8px;
+  color: var(--op-muted);
+  text-align: center;
+}
+
+body.panel-page .routing-side-card--backups .xk-card-help-row--corner {
+  justify-content: flex-end;
+  margin: 8px 0 0;
+}
+
+body.panel-page .routing-side-card--backups .xk-card-help-row--corner .xk-card-help-popover {
+  position: relative;
+}
+
+body.panel-page .routing-side-card--backups .xk-card-help-row--corner .xk-card-help-trigger {
+  display: inline-grid;
+  width: var(--op-control-compact-h);
+  min-width: var(--op-control-compact-h);
+  height: var(--op-control-compact-h);
+  min-height: var(--op-control-compact-h);
+  padding: 0 !important;
+  place-items: center;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
+  background-image: none !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  transform: none !important;
+}
+
+body.panel-page .routing-side-card--backups .xk-card-help-row--corner .xk-card-help-trigger::before,
+body.panel-page .routing-side-card--backups .xk-card-help-row--corner .xk-card-help-trigger::after {
+  content: none !important;
+  display: none !important;
+}
+
+body.panel-page .routing-side-card--backups .xk-card-help-row--corner .xk-card-help-trigger::-webkit-details-marker {
+  display: none;
+}
+
+body.panel-page .routing-side-card--backups .xk-card-help-row--corner .xk-card-help-icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 0;
+  background: transparent !important;
+  color: currentColor !important;
+}
+
+body.panel-page .routing-side-card--backups .xk-card-help-row--corner .xk-card-help-popover[open] .xk-card-help-trigger,
+body.panel-page .routing-side-card--backups .xk-card-help-row--corner .xk-card-help-trigger:is(:hover, :focus-visible) {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent-hover) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body.panel-page .routing-side-card--backups .xk-card-help-row--corner .xk-card-help-panel {
+  border-color: var(--op-border-strong) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface-2) !important;
+  background-image: none !important;
+  color: var(--op-text) !important;
+  box-shadow: var(--op-shadow-float) !important;
+}
+
+
+body.panel-page .routing-side-card--help .xk-card-help-row--corner {
+  justify-content: flex-end;
+  margin: 8px 0 0;
+}
+
+body.panel-page .routing-side-card--help .xk-card-help-row--corner .xk-card-help-popover {
+  position: relative;
+}
+
+body.panel-page .routing-side-card--help .xk-card-help-row--corner .xk-card-help-trigger {
+  display: inline-grid;
+  width: var(--op-control-compact-h);
+  min-width: var(--op-control-compact-h);
+  height: var(--op-control-compact-h);
+  min-height: var(--op-control-compact-h);
+  padding: 0 !important;
+  place-items: center;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
+  background-image: none !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  transform: none !important;
+}
+
+body.panel-page .routing-side-card--help .xk-card-help-row--corner .xk-card-help-trigger::before,
+body.panel-page .routing-side-card--help .xk-card-help-row--corner .xk-card-help-trigger::after {
+  content: none !important;
+  display: none !important;
+}
+
+body.panel-page .routing-side-card--help .xk-card-help-row--corner .xk-card-help-trigger::-webkit-details-marker {
+  display: none;
+}
+
+body.panel-page .routing-side-card--help .xk-card-help-row--corner .xk-card-help-icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 0;
+  background: transparent !important;
+  color: currentColor !important;
+}
+
+body.panel-page .routing-side-card--help .xk-card-help-row--corner .xk-card-help-popover[open] .xk-card-help-trigger,
+body.panel-page .routing-side-card--help .xk-card-help-row--corner .xk-card-help-trigger:is(:hover, :focus-visible) {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent-hover) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body.panel-page .routing-side-card--help .xk-card-help-row--corner .xk-card-help-panel {
+  border-color: var(--op-border-strong) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface-2) !important;
+  background-image: none !important;
+  color: var(--op-text) !important;
+  box-shadow: var(--op-shadow-float) !important;
 }
 
 :is(body.panel-page, html[data-theme="light"] body.panel-page) .outbounds-fragment-summary {
@@ -10831,6 +11119,232 @@ body.panel-page .routing-side-card--inbounds .xk-actions-inline > button .xk-act
   margin: 0;
 }
 
+/* Proxy actions expose labels in a compact 2×4 action grid for a single
+ * outbound. Generated subscription fragments keep their four actions on one
+ * line, using the same labelled controls. */
+body.panel-page .routing-side-card--outbounds .outbounds-actions {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-actions > button:has(.xk-action-label) {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 0 6px !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-actions .xk-action-label {
+  display: inline;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-actions .xk-action-icon {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+/* Single outbound form: compact field/action primitives instead of the legacy
+ * blue-glass helper card, pill tag and oversized selects. */
+body.panel-page .routing-side-card--outbounds #outbounds-body .outbounds-hints {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) var(--op-control-h);
+  gap: 6px !important;
+  align-items: end;
+  margin: 0 0 8px !important;
+  padding: 0 !important;
+}
+
+body.panel-page .routing-side-card--outbounds #outbounds-body .outbounds-hint-field {
+  display: grid;
+  grid-template-rows: auto var(--op-control-h);
+  gap: 4px;
+  min-width: 0;
+}
+
+body.panel-page .routing-side-card--outbounds #outbounds-body .outbounds-hint-field .hint-label {
+  padding: 0 !important;
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 560;
+  line-height: 1.2;
+}
+
+body.panel-page .routing-side-card--outbounds #outbounds-body .outbounds-hint-field .xray-log-select {
+  width: 100%;
+  min-height: var(--op-control-h) !important;
+  height: var(--op-control-h) !important;
+  padding: 0 26px 0 8px !important;
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background-color: var(--op-surface) !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .routing-side-card--outbounds #outbounds-body .outbounds-help-popover {
+  position: relative;
+  align-self: end;
+}
+
+body.panel-page .routing-side-card--outbounds #outbounds-body .outbounds-help-trigger {
+  display: inline-grid;
+  width: var(--op-control-h);
+  min-width: var(--op-control-h);
+  height: var(--op-control-h);
+  min-height: var(--op-control-h);
+  padding: 0 !important;
+  place-items: center;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface) !important;
+  box-shadow: none !important;
+  color: var(--op-muted) !important;
+  cursor: pointer;
+  list-style: none;
+}
+
+body.panel-page .routing-side-card--outbounds #outbounds-body .outbounds-help-trigger::-webkit-details-marker {
+  display: none;
+}
+
+body.panel-page .routing-side-card--outbounds #outbounds-body .outbounds-help-popover[open] .outbounds-help-trigger,
+body.panel-page .routing-side-card--outbounds #outbounds-body .outbounds-help-trigger:is(:hover, :focus-visible) {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body.panel-page .routing-side-card--outbounds #outbounds-body .outbounds-help-panel {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(320px, calc(100vw - 40px));
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--op-border-strong) !important;
+  border-radius: var(--op-radius) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-text) !important;
+  box-shadow: var(--op-shadow-float) !important;
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  line-height: 1.45;
+}
+
+body.panel-page .routing-side-card--outbounds #outbounds-body .outbounds-url-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px var(--op-control-h);
+  gap: 6px;
+  align-items: center;
+  margin: 0;
+}
+
+body.panel-page .routing-side-card--outbounds #outbounds-url {
+  min-height: var(--op-control-h);
+  padding: 0 9px;
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface) !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .routing-side-card--outbounds #outbounds-url:focus {
+  border-color: var(--op-accent-border) !important;
+  box-shadow: 0 0 0 1px var(--op-accent-border) !important;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-tag-menu {
+  position: relative;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-tag-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: var(--op-control-h);
+  padding: 0;
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface) !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-tag-menu[open] .outbounds-tag-trigger,
+body.panel-page .routing-side-card--outbounds .outbounds-tag-trigger:is(:hover, :focus-visible) {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-tag-panel {
+  z-index: 60;
+  top: calc(100% + 8px);
+  width: min(236px, calc(100vw - 40px));
+  padding: 10px;
+}
+
+body.panel-page .routing-side-card--outbounds .outbounds-tag-panel label {
+  margin: 0 0 5px;
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 560;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body.panel-page .routing-side-card--outbounds #outbounds-tag {
+  min-height: var(--op-control-h);
+  padding: 0 9px;
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface) !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .routing-side-card--outbounds #outbounds-entware-mark-btn.xk-entware-mark-toggle {
+  width: var(--op-control-h);
+  min-width: var(--op-control-h);
+  height: var(--op-control-h);
+  padding: 0;
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface) !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .routing-side-card--outbounds #outbounds-entware-mark-btn.xk-entware-mark-toggle:is(:hover, :focus-visible),
+body.panel-page .routing-side-card--outbounds #outbounds-entware-mark-btn.xk-entware-mark-toggle.is-active {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent-hover) !important;
+  box-shadow: none !important;
+}
+
 /* The scenario switcher shares the same compact inspector grammar as inbounds:
  * a state is expressed by the selected row, not by a header badge or a second
  * toolbar treatment. */
@@ -11016,4 +11530,32 @@ html body.panel-page section.routing-side-card.routing-side-card--scenario #rout
 
 html body.panel-page section.routing-side-card.routing-side-card--scenario #routing-scenario-body .routing-scenario-options > .mode-item:first-child {
   border-top: 0 !important;
+}
+
+
+@media (max-width: 680px) {
+  body.panel-page .routing-side-card--backups .xk-backups-intro {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.panel-page .routing-side-card--backups .xk-backups-mode-tabs {
+    justify-self: start;
+  }
+
+  body.panel-page .routing-side-card--backups .xk-backups-toolbar {
+    align-items: flex-start;
+  }
+
+  body.panel-page .routing-side-card--backups #backups-table :is(th, td) {
+    padding: 7px 5px;
+  }
+
+  body.panel-page .routing-side-card--backups #backups-table th:nth-child(2),
+  body.panel-page .routing-side-card--backups #backups-table td:nth-child(2) {
+    display: none;
+  }
+
+  body.panel-page .routing-side-card--backups #backups-table th:nth-child(1) { width: 46%; }
+  body.panel-page .routing-side-card--backups #backups-table th:nth-child(3) { width: 30%; }
+  body.panel-page .routing-side-card--backups #backups-table th:nth-child(4) { width: 24%; }
 }
