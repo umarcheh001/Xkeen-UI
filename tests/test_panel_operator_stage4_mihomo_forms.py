@@ -16,8 +16,8 @@ def test_mihomo_generator_reuses_late_scoped_operator_layer():
     template = GENERATOR.read_text(encoding="utf-8")
     panel_template = PANEL.read_text(encoding="utf-8")
     assert '<body class="panel-page mihomo-generator-page">' in template
-    assert "filename='panel-operator.css', v='20260806t'" in template
-    assert "filename='panel-operator.css', v='20260806t'" in panel_template
+    assert "filename='panel-operator.css', v='20260806u'" in template
+    assert "filename='panel-operator.css', v='20260806u'" in panel_template
     assert template.index("filename='panel-operator.css'") > template.index("</style>")
     for fragment in ('class="generator-field-card xk-op-field"', 'class="xk-op-field-label" for="profileSelect"', 'class="generator-action-row xk-op-action-row"', 'class="hint xk-card-desc xk-op-field-hint"'):
         assert fragment in template
@@ -96,7 +96,7 @@ def test_visual_correction_removes_blue_glass_and_fixed_modal_canvases():
         assert fragment in css
 
     template = GENERATOR.read_text(encoding="utf-8")
-    assert "filename='panel-operator.css', v='20260806t'" in template
+    assert "filename='panel-operator.css', v='20260806u'" in template
 
 
 def test_mihomo_forms_closure_is_documented():
@@ -162,3 +162,19 @@ def test_routing_mihomo_validation_uses_the_same_flat_operator_diagnostic_contra
     ]
     for legacy in ("linear-gradient", "radial-gradient", "999px", "#60a5fa"):
         assert legacy not in routing_block
+
+
+def test_generator_validation_log_uses_a_readable_neutral_diagnostic_canvas():
+    css = CSS.read_text(encoding="utf-8")
+
+    for fragment in (
+        "body.panel-page.mihomo-generator-page .validation-log-panel {",
+        "min-height: 146px;",
+        "flex: 0 0 clamp(146px, 18dvh, 190px);",
+        "body.panel-page.mihomo-generator-page .validation-log {",
+        "min-height: 0 !important;",
+        "max-height: none !important;",
+        "background: var(--op-editor) !important;",
+        "color: var(--op-data-muted) !important;",
+    ):
+        assert fragment in css

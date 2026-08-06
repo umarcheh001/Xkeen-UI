@@ -317,3 +317,34 @@ test('mihomo validation modal uses compact validate layout', async ({ page }) =>
   await expect(page.locator('#mihomoResultModal .mihomo-result-state-badge')).toHaveCSS('border-radius', '6px');
   await expect(page.locator('#mihomoResultModal .mihomo-result-grid')).toHaveCSS('border-radius', '9px');
 });
+
+
+test('mihomo generator keeps a readable neutral validation log', async ({ page }) => {
+  await page.goto('/mihomo_generator');
+  await waitForMihomoGeneratorPreview(page);
+
+  await page.locator('#validationLog').evaluate((node) => {
+    node.textContent = 'line 1\nline 2\nline 3\nline 4\nline 5';
+  });
+
+  await expect(page.locator('.validation-log-panel')).toHaveCSS('background-image', 'none');
+  await expect(page.locator('#validationLog')).toHaveCSS('background-image', 'none');
+  const logSurface = await page.locator('#validationLog').evaluate((node) => {
+    const style = getComputedStyle(node);
+    return {
+      background: style.backgroundColor,
+      page: getComputedStyle(document.body).backgroundColor,
+    };
+  });
+  expect(logSurface.background).toBe(logSurface.page);
+
+  const geometry = await page.locator('.validation-log-panel').evaluate((panel) => {
+    const log = panel.querySelector('.validation-log');
+    return {
+      panelHeight: Math.round(panel.getBoundingClientRect().height),
+      logHeight: Math.round(log.getBoundingClientRect().height),
+    };
+  });
+  expect(geometry.panelHeight).toBeGreaterThanOrEqual(146);
+  expect(geometry.logHeight).toBeGreaterThanOrEqual(88);
+});

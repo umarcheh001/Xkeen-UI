@@ -6619,16 +6619,38 @@ body.panel-page.mihomo-generator-page .generator-statusbar {
 }
 
 body.panel-page.mihomo-generator-page .validation-log-panel {
-  flex: 0 0 auto;
-  max-height: 94px;
+  display: flex;
+  min-height: 146px;
+  max-height: 190px;
+  flex: 0 0 clamp(146px, 18dvh, 190px);
+  flex-direction: column;
+  gap: 6px;
   margin-top: 10px;
   padding: 7px 9px 8px;
 }
 
+body.panel-page.mihomo-generator-page .validation-log-header {
+  flex: 0 0 auto;
+  color: var(--op-text) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+}
+
 body.panel-page.mihomo-generator-page .validation-log {
-  min-height: 24px;
-  max-height: 38px;
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin: 0;
+  padding: 8px 9px;
   overflow: auto;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-editor) !important;
+  background-image: none !important;
+  color: var(--op-data-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  line-height: 1.45;
 }
 
 /* ==========================================================================
