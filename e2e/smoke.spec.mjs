@@ -336,6 +336,42 @@ test('mihomo bulk import presents a guided operator flow without legacy blue chr
 });
 
 
+test('routing Mihomo proxy tools use a compact operator empty state', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await expect(page.locator('#view-mihomo')).toBeVisible();
+
+  const menu = page.locator('.xk-mihomo-menu');
+  await menu.locator('summary').click();
+  await page.locator('#mihomo-proxy-tools-btn').click();
+
+  const modal = page.locator('#mihomo-proxy-tools-modal');
+  await expect(modal).toBeVisible();
+  await expect(modal.locator('#mihomo-proxy-tools-title')).toHaveText('Управление proxy');
+  await expect(modal.locator('.xk-pt-section-kicker').first()).toHaveText('Шаг 1');
+  await expect(modal.locator('.xk-pt-empty')).toBeVisible();
+  await expect(modal.locator('.xk-pt-empty-title')).toHaveText('В конфиге нет статических узлов');
+  await expect(modal.locator('#mihomo-proxy-tools-add-static-btn')).toHaveText('Добавить пример proxy');
+
+  const chrome = await modal.evaluate((node) => {
+    const lead = node.querySelector('.xk-pt-lead');
+    const empty = node.querySelector('.xk-pt-empty');
+    const add = node.querySelector('#mihomo-proxy-tools-add-static-btn');
+    return {
+      modalBackgroundImage: getComputedStyle(node).backgroundImage,
+      leadBackgroundImage: lead ? getComputedStyle(lead).backgroundImage : '',
+      emptyBackgroundImage: empty ? getComputedStyle(empty).backgroundImage : '',
+      addBackgroundImage: add ? getComputedStyle(add).backgroundImage : '',
+    };
+  });
+
+  expect(chrome.modalBackgroundImage).toBe('none');
+  expect(chrome.leadBackgroundImage).toBe('none');
+  expect(chrome.emptyBackgroundImage).toBe('none');
+  expect(chrome.addBackgroundImage).toBe('none');
+});
+
+
 test('mihomo generator removes optional rule groups from preview when all checkboxes are cleared', async ({ page }) => {
   await page.goto('/mihomo_generator');
   await waitForMihomoGeneratorPreview(page);

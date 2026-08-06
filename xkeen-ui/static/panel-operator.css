@@ -7835,6 +7835,311 @@ body.panel-page .modal .xk-mihomo-validation-log-shell {
   box-shadow: none !important;
 }
 
+/* Routing Mihomo Proxy Tools follows the operator workbench contract.  The
+ * legacy "premium" surface turned the empty provider state into a large blue
+ * poster; here selection is the first explicit step and the empty state gives
+ * one safe next action. */
+body.panel-page #mihomo-proxy-tools-modal .modal-content {
+  width: min(960px, calc(100vw - 36px)) !important;
+  max-width: calc(100vw - 36px) !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: min(82dvh, 760px) !important;
+  grid-template-rows: auto minmax(0, auto) auto;
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--op-shadow-float) !important;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-header {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-titlebox {
+  gap: 3px;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-kicker,
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-section-kicker,
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-empty-kicker {
+  color: var(--op-muted) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-weight: 620;
+  letter-spacing: 0.04em !important;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-subtitle {
+  max-width: 84ch;
+  color: var(--op-muted) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  line-height: 1.42;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-body {
+  gap: 0;
+  padding: 12px !important;
+  overflow: auto;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-lead {
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: start;
+  margin: 0 !important;
+  padding: 0 0 10px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-lead-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--op-accent-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent-hover) !important;
+  box-shadow: none !important;
+  font-size: calc(14px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-lead-title,
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-section-title,
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-empty-title {
+  color: var(--op-text-strong) !important;
+  font-size: calc(12.5px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+body.panel-page #mihomo-proxy-tools-modal :is(.xk-pt-lead-desc, .xk-pt-section-subtitle, .xk-pt-note, .xk-pt-empty-text, .xk-pt-empty-note, .xk-pt-footer-note) {
+  color: var(--op-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  line-height: 1.42;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-chiprow {
+  gap: 4px;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-chip,
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-current {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  max-width: 220px;
+  padding: 0 7px;
+  overflow: hidden;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-data-muted) !important;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: calc(9.5px * var(--xk-font-scale, 1));
+  font-weight: 550;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-current.is-empty {
+  color: var(--op-muted) !important;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-shell {
+  gap: 0;
+  padding-top: 10px;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-panel--target {
+  padding: 0 0 10px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-panel-head,
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-card-head {
+  margin-bottom: 8px;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-field {
+  gap: 4px;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-field .hint-label {
+  color: var(--op-text) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 620;
+}
+
+body.panel-page #mihomo-proxy-tools-modal :is(.xk-pt-control, .xk-pt-textarea) {
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
+  background-image: none !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-proxy-tools-modal :is(.xk-pt-control, .xk-pt-textarea):is(:hover, :focus-visible) {
+  border-color: var(--op-accent-border) !important;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-status {
+  margin-top: 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--op-border) !important;
+  border-left: 2px solid var(--op-accent) !important;
+  border-radius: 0 var(--op-control-radius) var(--op-control-radius) 0 !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-data-muted) !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-status.error {
+  border-color: color-mix(in srgb, var(--op-danger) 42%, var(--op-border)) !important;
+  border-left-color: var(--op-danger) !important;
+  background: var(--op-danger-soft) !important;
+  color: var(--op-danger) !important;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-empty {
+  display: grid;
+  gap: 6px;
+  min-height: 0;
+  margin-top: 10px;
+  padding: 12px !important;
+  border: 1px dashed var(--op-border-strong) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-empty-actions {
+  margin-top: 4px;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-empty-note {
+  margin-top: 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--op-border);
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-workgrid {
+  grid-template-columns: minmax(250px, 0.72fr) minmax(0, 1.28fr);
+  gap: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface) !important;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-card {
+  padding: 10px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-card + .xk-pt-card {
+  border-left: 1px solid var(--op-border) !important;
+}
+
+body.panel-page #mihomo-proxy-tools-modal :is(.xk-pt-card-actions, .xk-pt-inline-actions) {
+  gap: 6px;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-card-actions {
+  margin-top: 9px;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-topbar {
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-editor-grid {
+  gap: 8px;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-textarea {
+  min-height: 150px;
+  background: var(--op-editor) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  line-height: 1.4;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-textarea--preview {
+  color: var(--op-data-muted) !important;
+}
+
+body.panel-page #mihomo-proxy-tools-modal :is(.xk-pt-primary-btn, .xk-pt-secondary-btn, .xk-pt-danger-btn) {
+  min-height: var(--op-control-h);
+  padding: 0 10px;
+  border-radius: var(--op-control-radius) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-primary-btn:not([disabled]) {
+  border-color: var(--op-accent) !important;
+  background: var(--op-accent) !important;
+  color: #fff !important;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-secondary-btn {
+  border-color: var(--op-border) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-text) !important;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-danger-btn:not([disabled]) {
+  border-color: var(--op-danger) !important;
+  background: var(--op-danger-soft) !important;
+  color: var(--op-danger) !important;
+}
+
+body.panel-page #mihomo-proxy-tools-modal .xk-pt-footer {
+  min-height: 48px;
+  padding: 8px 12px !important;
+  border-top: 1px solid var(--op-border);
+  background: var(--op-surface) !important;
+}
+
+@media (max-width: 820px) {
+  body.panel-page #mihomo-proxy-tools-modal .xk-pt-lead {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+
+  body.panel-page #mihomo-proxy-tools-modal .xk-pt-chiprow {
+    grid-column: 1 / -1;
+  }
+
+  body.panel-page #mihomo-proxy-tools-modal .xk-pt-workgrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.panel-page #mihomo-proxy-tools-modal .xk-pt-card + .xk-pt-card {
+    border-top: 1px solid var(--op-border) !important;
+    border-left: 0 !important;
+  }
+
+  body.panel-page #mihomo-proxy-tools-modal .xk-pt-editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* The generator's validation result is an operational diagnostic, not a
  * blue-glass "premium" report.  It keeps the existing runtime nodes for
  * preview/apply results, but validates in one compact, auto-height surface:

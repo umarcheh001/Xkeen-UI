@@ -69,7 +69,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260806w') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260806x') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -2928,14 +2928,14 @@ https://..."></textarea>
 
 
     <!-- Mihomo: proxy tools (rename / replace) -->
-    <div id="mihomo-proxy-tools-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-label="Proxy Tools Mihomo">
+    <div id="mihomo-proxy-tools-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-labelledby="mihomo-proxy-tools-title" aria-describedby="mihomo-proxy-tools-subtitle">
       <div class="modal-content xk-pt-modal xk-modal-width xk-modal-width-1040" data-modal-key="mihomo-proxy-tools">
         <div class="modal-header xk-pt-header">
           <div class="xk-pt-titlebox">
-            <span class="xk-pt-kicker">Mihomo · Premium proxy tools</span>
-            <span class="modal-title">Proxy Tools</span>
-            <p class="xk-pt-subtitle">
-              Аккуратные операции над <code>proxies:</code> без ручного редактирования YAML: <b>переименование</b> узла с обновлением групп и <b>точечная замена</b> содержимого по ссылке, <b>WireGuard (.conf)</b>, <b>OpenVPN (.ovpn)</b> или <b>Tailscale</b>.
+            <span class="xk-pt-kicker">Mihomo · static proxies</span>
+            <span class="modal-title" id="mihomo-proxy-tools-title">Управление proxy</span>
+            <p class="xk-pt-subtitle" id="mihomo-proxy-tools-subtitle">
+              Выберите статический узел из <code>proxies:</code>. Его можно переименовать с обновлением групп или заменить новым конфигом, сохранив имя узла.
             </p>
           </div>
           <button type="button" class="modal-close" id="mihomo-proxy-tools-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
@@ -2959,14 +2959,15 @@ https://..."></textarea>
             <section class="xk-pt-panel xk-pt-panel--target">
               <div class="xk-pt-panel-head">
                 <div>
-                  <div class="xk-pt-section-title">Целевой proxy</div>
+                  <div class="xk-pt-section-kicker">Шаг 1</div>
+                  <div class="xk-pt-section-title">Выберите proxy</div>
                   <div class="xk-pt-section-subtitle">Список берётся из текущей секции <code>proxies:</code> в <code>config.yaml</code>.</div>
                 </div>
                 <div id="mihomo-proxy-tools-current" class="xk-pt-current is-empty">— не выбран —</div>
               </div>
 
               <label class="xk-pt-field">
-                <span class="hint-label">Выбери узел</span>
+                <span class="hint-label">Proxy в config.yaml</span>
                 <select id="mihomo-proxy-tools-select" class="xray-log-select xk-pt-control">
                   <option value="">— нет proxies —</option>
                 </select>
@@ -2975,15 +2976,16 @@ https://..."></textarea>
               <div id="mihomo-proxy-tools-status" class="status xk-pt-status hidden"></div>
 
               <div id="mihomo-proxy-tools-no-proxies" class="xk-pt-empty hidden" style="display:none;">
-                <div class="xk-pt-empty-title">Статические proxies не найдены</div>
+                <div class="xk-pt-empty-kicker">Static proxies</div>
+                <div class="xk-pt-empty-title">В конфиге нет статических узлов</div>
                 <div id="mihomo-proxy-tools-no-proxies-text" class="xk-pt-empty-text">
-                  Proxy Tools работает только со статическими <code>proxies</code>. Хотите быстро добавить безопасный шаблон узла?
+                  Этот инструмент работает с секцией <code>proxies:</code>, а не с <code>proxy-providers</code>. Добавьте пример статического узла, если хотите настроить его вручную.
                 </div>
                 <div class="xk-pt-empty-actions">
-                  <button type="button" id="mihomo-proxy-tools-add-static-btn" class="btn-primary xk-pt-primary-btn" data-tooltip="Вставить секцию proxies: с примером статического узла в текущий YAML.">{{ op_icon('add-node') }}<span class="xk-action-label">Добавить статический proxy</span></button>
+                  <button type="button" id="mihomo-proxy-tools-add-static-btn" class="btn-primary xk-pt-primary-btn" data-tooltip="Вставить секцию proxies: с примером статического узла в текущий YAML.">{{ op_icon('add-node') }}<span class="xk-action-label">Добавить пример proxy</span></button>
                 </div>
                 <div class="xk-pt-empty-note">
-                  Будет добавлен аккуратный шаблон <code>socks5</code> в секцию <code>proxies</code>. После этого его можно сразу отредактировать под свой сервер.
+                  Будет добавлен шаблон <code>socks5</code> в <code>proxies:</code>. После этого укажите сервер и порт в редакторе.
                 </div>
               </div>
             </section>
@@ -2992,7 +2994,8 @@ https://..."></textarea>
               <section class="xk-pt-card xk-pt-card--rename">
                 <div class="xk-pt-card-head">
                   <div>
-                    <div class="xk-pt-section-title">Rename</div>
+                    <div class="xk-pt-section-kicker">Шаг 2A</div>
+                    <div class="xk-pt-section-title">Переименовать</div>
                     <div class="xk-pt-section-subtitle">Меняем <code>- name:</code> и обновляем все ссылки на узел внутри <code>proxy-groups</code>.</div>
                   </div>
                 </div>
@@ -3014,7 +3017,8 @@ https://..."></textarea>
               <section class="xk-pt-card xk-pt-card--replace">
                 <div class="xk-pt-card-head">
                   <div>
-                    <div class="xk-pt-section-title">Replace</div>
+                    <div class="xk-pt-section-kicker">Шаг 2B</div>
+                    <div class="xk-pt-section-title">Заменить конфиг</div>
                     <div class="xk-pt-section-subtitle">Подготовь новый YAML-фрагмент и замени только выбранный proxy block, сохранив структуру конфига.</div>
                   </div>
                 </div>
