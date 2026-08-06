@@ -76,13 +76,13 @@ def test_inbounds_mode_copy_uses_hybrid_label_and_compact_actions():
     assert "return value === 'mixed' ? 'Hybrid' : value;" in inbounds
     assert ".routing-side-card--inbounds .xk-actions-inline > button:has(.xk-action-label)" in css
 
-    assert 'class="inbounds-modes routing-scenario-options"' in template
+    assert 'class="routing-scenario-options"' in template
     assert 'class="actions xk-actions-inline routing-scenario-actions"' in template
     assert '<span class="xk-action-label">Применить</span>' in template
     assert ".routing-side-card--scenario #routing-scenario-badge" in css
     assert ".routing-side-card--scenario .routing-scenario-help-popover > .xk-card-help-trigger" in css
-    assert "padding: 1px !important;" in css
-    assert "border: 1px solid var(--op-border-strong) !important;" in css
+    assert "padding: 0 !important;" in css
+    assert "border: 1px solid var(--op-border) !important;" in css
 
 
 def test_stage3_dat_and_outbound_rows_have_explicit_state_semantics():
@@ -174,7 +174,7 @@ def test_stage3_closure_is_reflected_in_documentation():
     contract = CONTRACT_DOC.read_text(encoding="utf-8")
     index = DOCS_INDEX.read_text(encoding="utf-8")
 
-    assert "filename='panel-operator.css', v='20260806e'" in template
+    assert "filename='panel-operator.css', v='20260806j'" in template
     for fragment in (
         "Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля 2026 года",
         "### Этап 3. Пересобрать routing cards и operational blocks — закрыт",

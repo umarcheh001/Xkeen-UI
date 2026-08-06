@@ -11004,27 +11004,16 @@ body.panel-page .routing-side-card--scenario .routing-scenario-option:has(input:
   line-height: 1.42;
 }
 
-/* Reserve the border pixel inside the scenario list as well. This prevents a
- * selected row from visually merging with the card surface in the legacy
- * cascade, while keeping the connected-list treatment identical to Inbounds. */
-body.panel-page .routing-side-card--scenario .routing-scenario-options {
+/* Same thin connected-list frame as Inbounds. The scenario has its own class,
+ * so its frame cannot be reset by legacy .inbounds-modes rules. */
+html body.panel-page section.routing-side-card.routing-side-card--scenario #routing-scenario-body .routing-scenario-options {
   box-sizing: border-box !important;
-  padding: 1px !important;
-  border: 1px solid var(--op-border-strong) !important;
-  border-radius: var(--op-radius-sm) !important;
-  background: var(--op-surface) !important;
-}
-
-body.panel-page .routing-side-card--scenario .routing-scenario-option:first-child {
-  border-top: 0 !important;
-}
-
-/* The scenario markup intentionally also carries .inbounds-modes. This is the
- * canonical connected-list container used for Inbounds, so both inspectors
- * receive the same border, clipping and row geometry from one selector. */
-body.panel-page .routing-side-card--scenario .inbounds-modes.routing-scenario-options {
   padding: 0 !important;
   border: 1px solid var(--op-border) !important;
   border-radius: var(--op-radius-sm) !important;
   background: var(--op-surface) !important;
+}
+
+html body.panel-page section.routing-side-card.routing-side-card--scenario #routing-scenario-body .routing-scenario-options > .mode-item:first-child {
+  border-top: 0 !important;
 }
