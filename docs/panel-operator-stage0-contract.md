@@ -20,7 +20,7 @@
 | Область | Зафиксировано |
 | --- | ---: |
 | Top-level views | 6 |
-| Collapsible/accordion contracts | 12 |
+| Collapsible/accordion contracts | 10 |
 | Editor engine selectors | 8 |
 | Editor engines | CodeMirror, Monaco |
 | Modal IDs | 50 |

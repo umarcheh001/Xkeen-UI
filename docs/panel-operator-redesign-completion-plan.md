@@ -157,7 +157,7 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 Выполнено 28 июля 2026 года:
 
 - [x] `panel-operator.css` сохранён последним; статический и Chromium guard запрещают потерю scope/порядка, а `styles.css` объявлен закрытым для новых panel redesign rules;
-- [x] `scripts/generate_panel_operator_inventory.py` фиксирует 6 top-level views, 12 accordion/collapsible contracts, 8 editor engine selectors и все 50 modal IDs;
+- [x] `scripts/generate_panel_operator_inventory.py` фиксирует 6 top-level views, 10 accordion/collapsible contracts, 8 editor engine selectors и все 50 modal IDs;
 - [x] все 282 inline-style разделены на 63 state/visibility hooks, 213 presentation/geometry attributes и 6 mixed attributes;
 - [x] сняты 12 baseline PNG: dark/light для 1920 × 1080, 1440 × 900, 1280 × 720, 1024 × 768, 390 × 844 и 360 × 800;
 - [x] DOM-contract зафиксировал 971 уникальный `id`, 365 `data-*`, 156 hidden runtime IDs и mapping 942 JS-referenced handler anchors;

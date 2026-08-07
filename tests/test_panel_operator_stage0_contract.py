@@ -92,7 +92,9 @@ def test_stage0_inventory_covers_views_accordions_engines_and_all_modals(tmp_pat
     assert all(item["states"] for item in views)
 
     accordions = payload["accordions"]
-    assert len(accordions) == 12
+    # The HWID subscription editor replaced its two diagnostic accordions
+    # with direct, editable device-profile fields.
+    assert len(accordions) == 10
     assert all(item["target_id"] and item["target_present"] for item in accordions)
     assert all(item["states"] == ["collapsed", "expanded"] for item in accordions)
 

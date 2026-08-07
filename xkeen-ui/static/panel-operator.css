@@ -893,7 +893,7 @@ body.panel-page .xk-global-autorestart-switch .dt-switch-slider {
   width: 34px;
   min-width: 34px;
   height: 18px;
-  border-radius: 999px;
+  border-radius: 9px;
 }
 
 /* Match the UI Settings switch state: an inactive control has a high-contrast
@@ -8293,29 +8293,6 @@ body.panel-page #mihomo-proxy-tools-modal .xk-pt-footer {
   background: var(--op-surface) !important;
 }
 
-@media (max-width: 820px) {
-  body.panel-page #mihomo-proxy-tools-modal .xk-pt-lead {
-    grid-template-columns: 30px minmax(0, 1fr);
-  }
-
-  body.panel-page #mihomo-proxy-tools-modal .xk-pt-chiprow {
-    grid-column: 1 / -1;
-  }
-
-  body.panel-page #mihomo-proxy-tools-modal .xk-pt-workgrid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  body.panel-page #mihomo-proxy-tools-modal .xk-pt-card + .xk-pt-card {
-    border-top: 1px solid var(--op-border) !important;
-    border-left: 0 !important;
-  }
-
-  body.panel-page #mihomo-proxy-tools-modal .xk-pt-editor-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 /* The generator's validation result is an operational diagnostic, not a
  * blue-glass "premium" report.  It keeps the existing runtime nodes for
  * preview/apply results, but validates in one compact, auto-height surface:
@@ -12469,7 +12446,7 @@ html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-togg
   min-width: 34px;
   height: 18px;
   border: 1px solid var(--op-border-strong) !important;
-  border-radius: 999px !important;
+  border-radius: 9px !important;
   background: var(--op-surface-3) !important;
   box-shadow: none !important;
 }
@@ -12668,6 +12645,29 @@ body.panel-page :is(.fm-panel-error-retry, .fm-empty-action) .xk-action-icon {
  * ========================================================================== */
 /* Tablet: keep the editor first and move the inspector below it before either
  * workspace becomes too narrow to scan comfortably. */
+
+@media (max-width: 820px) {
+  body.panel-page #mihomo-proxy-tools-modal .xk-pt-lead {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+
+  body.panel-page #mihomo-proxy-tools-modal .xk-pt-chiprow {
+    grid-column: 1 / -1;
+  }
+
+  body.panel-page #mihomo-proxy-tools-modal .xk-pt-workgrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.panel-page #mihomo-proxy-tools-modal .xk-pt-card + .xk-pt-card {
+    border-top: 1px solid var(--op-border) !important;
+    border-left: 0 !important;
+  }
+
+  body.panel-page #mihomo-proxy-tools-modal .xk-pt-editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 
 /* I4: modal families are explicit on every static panel dialog.  The legacy
  * feature classes still own content semantics; these rules own only the frame,
