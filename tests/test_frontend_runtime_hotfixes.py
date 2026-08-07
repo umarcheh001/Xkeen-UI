@@ -1999,6 +1999,10 @@ def test_forced_rules_wizard_uses_real_outbounds_and_separates_domain_ip_rules()
     assert "function buildForcedRule(outboundTag, kind, values, opts)" in text
     assert "const field = kind === 'ip' ? 'ip' : 'domain';" in text
     assert "safeRuleTagForOutbound(outboundTag, field)" in text
+    assert 'class="xk-chip-remove"' in text
+    assert "target.closest('.xk-chip-remove')" in text
+    assert "if (!remove) return;" in text
+    assert "Нажмите крестик, чтобы удалить адрес." in text
     assert "buildForcedRule(tag, 'domain', domains, { inboundOnly })" in text
     assert "buildForcedRule(tag, 'ip', ips, { inboundOnly })" in text
     assert "fields inside one RuleObject as AND conditions" in text
@@ -2016,6 +2020,15 @@ def test_forced_rules_wizard_uses_real_outbounds_and_separates_domain_ip_rules()
     assert "#routing-forced-rules-modal .xk-forced-wizard-listbox {\n  display: flex;\n  flex: 1 1 0;" in css
     assert "#routing-forced-rules-modal .xk-chip" in css
     assert "color: var(--op-text) !important;" in css
+    assert "border-radius: 50% !important;" in css
+    assert "flex: 0 0 18px;" in css
+    assert (
+        "body.panel-page #routing-forced-rules-modal .xk-chip-remove:hover {\n"
+        "  border-color: rgba(255, 91, 107, 0.52) !important;\n"
+        "  background: var(--op-danger-soft) !important;\n"
+        "  color: var(--op-danger) !important;\n"
+        "}\n"
+    ) in css
     assert "max-height: min(40dvh, 360px);" in css
 
 

@@ -179,7 +179,7 @@ geoip:private"></textarea>
                   <div class="xk-forced-wizard-listhead">
                     <div class="xk-forced-wizard-listtitle">
                       <div class="terminal-menu-title">Карта маршрутов</div>
-                      <div class="xk-forced-list-subtitle">Первое совпадение определяет маршрут. Нажмите на адрес, чтобы удалить его.</div>
+                      <div class="xk-forced-list-subtitle">Первое совпадение определяет маршрут. Нажмите крестик, чтобы удалить адрес.</div>
                     </div>
                     <div id="routing-forced-rules-status" class="modal-hint"></div>
                   </div>
@@ -420,7 +420,7 @@ geoip:private"></textarea>
     }
 
     function renderChip(tag, kind, value) {
-      return `<button type="button" class="xk-chip" data-kind="${escapeHtml(kind)}" data-tag="${escapeHtml(tag)}" data-value="${escapeHtml(value)}" title="Удалить значение" aria-label="Удалить значение ${escapeHtml(value)}">${escapeHtml(value)}${iconHtml('close')}</button>`;
+      return `<span class="xk-chip" data-kind="${escapeHtml(kind)}" data-tag="${escapeHtml(tag)}" data-value="${escapeHtml(value)}">${escapeHtml(value)}<button type="button" class="xk-chip-remove" title="Удалить значение" aria-label="Удалить значение ${escapeHtml(value)}">${iconHtml('close')}</button></span>`;
     }
 
     function renderInlineRow(tag, kind, values) {
@@ -1020,7 +1020,9 @@ geoip:private"></textarea>
             renderList();
             return;
           }
-          const t = target && target.closest ? target.closest('.xk-chip') : target;
+          const remove = target && target.closest ? target.closest('.xk-chip-remove') : null;
+          if (!remove) return;
+          const t = remove.closest ? remove.closest('.xk-chip') : null;
           if (!t || !t.getAttribute) return;
           if (!t.classList || !t.classList.contains('xk-chip')) return;
           const tag = t.getAttribute('data-tag');

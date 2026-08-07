@@ -483,6 +483,12 @@ test.describe('Operator Console Stage 5 editor workbench contract', () => {
       await expect(page.locator('.xk-chip[data-value="geoip:private"]')).toBeVisible();
       await expect(page.locator('.xk-forced-count.is-domain')).toContainText('домены 2');
 
+      const chatgptChip = page.locator('.xk-chip[data-value="domain:chatgpt.com"]');
+      await chatgptChip.click();
+      await expect(chatgptChip).toBeVisible();
+      await chatgptChip.locator('.xk-chip-remove').click();
+      await expect(chatgptChip).toBeHidden();
+
       const routerTraffic = page.locator('#routing-forced-rules-inbound-only');
       await expect(routerTraffic).toBeChecked();
       await page.locator('.xk-forced-router-traffic-option .xk-forced-option-copy').click();

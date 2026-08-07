@@ -10569,12 +10569,12 @@ body.panel-page #routing-forced-rules-modal .xk-forced-count {
   padding: 0;
   border: 0 !important;
   color: var(--op-text-strong) !important;
-  font-size: calc(10px * var(--xk-font-scale, 1));
-  font-weight: 600;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 650;
 }
 
 body.panel-page #routing-forced-rules-modal :is(.xk-forced-inline-label, .xk-forced-rule-group-title) {
-  color: var(--op-text-strong) !important;
+  color: #b9bef2 !important;
   font-weight: 650;
 }
 
@@ -10588,27 +10588,76 @@ body.panel-page #routing-forced-rules-modal :is(.xk-forced-inline-label, .xk-for
   min-width: 0;
   padding: 0;
   border: 0 !important;
-  color: var(--op-muted) !important;
-  font-size: calc(9.5px * var(--xk-font-scale, 1));
+  color: #b9bef2 !important;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 650;
   letter-spacing: 0.04em;
 }
 
 :is(body.panel-page, html[data-theme="light"] body.panel-page) #routing-forced-rules-modal .xk-chip {
-  min-height: 24px;
-  padding: 2px 6px !important;
+  min-height: 29px;
+  padding: 3px 8px !important;
   border: 1px solid var(--op-border) !important;
   border-radius: var(--op-control-radius) !important;
   background: var(--op-surface-2) !important;
   background-image: none !important;
-  color: var(--op-text) !important;
+  color: #b9bef2 !important;
   box-shadow: none !important;
-  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  font-weight: 550;
+  line-height: 1.25;
 }
 
-body.panel-page #routing-forced-rules-modal .xk-chip:is(:hover, :focus-visible) {
+body.panel-page #routing-forced-rules-modal .xk-chip:hover {
   border-color: var(--op-accent-border) !important;
   background: var(--op-accent-soft) !important;
-  color: var(--op-text) !important;
+  color: #e1e3ff !important;
+}
+
+/* Only the dedicated button removes an address. */
+body.panel-page #routing-forced-rules-modal .xk-forced-rule-chips .xk-chip {
+  cursor: default;
+}
+
+body.panel-page #routing-forced-rules-modal .xk-chip-remove {
+  appearance: none;
+  box-sizing: border-box;
+  display: inline-flex !important;
+  flex: 0 0 18px;
+  width: 18px !important;
+  min-width: 18px !important;
+  max-width: 18px !important;
+  height: 18px !important;
+  min-height: 18px !important;
+  max-height: 18px !important;
+  margin: 0 -2px 0 1px;
+  padding: 0 !important;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(185, 190, 242, 0.16) !important;
+  border-radius: 50% !important;
+  background: rgba(185, 190, 242, 0.1) !important;
+  color: inherit !important;
+  cursor: pointer;
+  line-height: 1;
+  transition: color 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
+}
+
+body.panel-page #routing-forced-rules-modal .xk-chip-remove:hover {
+  border-color: rgba(255, 91, 107, 0.52) !important;
+  background: var(--op-danger-soft) !important;
+  color: var(--op-danger) !important;
+}
+
+body.panel-page #routing-forced-rules-modal .xk-chip-remove:focus-visible {
+  outline: 2px solid var(--op-focus);
+  outline-offset: 1px;
+}
+
+body.panel-page #routing-forced-rules-modal .xk-chip-remove .xk-action-icon {
+  width: 12px !important;
+  height: 12px !important;
+  pointer-events: none;
 }
 
 body.panel-page #routing-forced-rules-modal .xk-forced-wizard-footer {
@@ -12875,8 +12924,8 @@ body.panel-page .footer {
 body.panel-page #view-xray-logs .restart-log-search-icon .xk-action-icon,
 body.panel-page #routing-forced-rules-modal .xk-chip .xk-action-icon,
 body.panel-page .xkeen-diff-modal .xkeen-diff-side-sep .xk-action-icon {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
   flex: 0 0 auto;
 }
 
