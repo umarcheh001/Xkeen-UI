@@ -54,3 +54,43 @@ test('HWID subscription uses the resizable Operator workbench and stretches its 
   expect(after.previewHeight).toBeGreaterThan(before.previewHeight + 40);
   expect(after.editorHeight).toBeGreaterThanOrEqual(after.previewHeight - 2);
 });
+
+
+test('HWID device profile is compact, editable, and resets to Mihomo panel defaults', async ({ page }) => {
+  await page.addInitScript(() => localStorage.removeItem('xkeen.mihomo.hwid.device-profile.v1'));
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  const menu = page.locator('.xk-mihomo-menu');
+  await menu.locator('summary').click();
+  await page.locator('#mihomo-hwid-sub-btn').click();
+
+  const editor = page.locator('#mihomo-hwid-diag');
+  await expect(editor).toBeVisible();
+  const hwid = page.locator('#mihomo-hwid-device-hwid');
+  const userAgent = page.locator('#mihomo-hwid-device-ua');
+  await expect(hwid).not.toHaveValue('');
+  const panelHwid = await hwid.inputValue();
+  const panelUa = await userAgent.inputValue();
+
+  await expect(userAgent).toHaveValue(/mihomo\//);
+  await expect(page.locator('#mihomo-hwid-ua-android-btn')).toHaveCount(0);
+  await expect(page.locator('#mihomo-hwid-ua-iphone-btn')).toHaveCount(0);
+  await hwid.fill('CUSTOM-HWID');
+
+  await page.locator('#mihomo-hwid-reset-btn').click();
+  await expect(hwid).toHaveValue(panelHwid);
+  await expect(userAgent).toHaveValue(panelUa);
+
+  const density = await editor.evaluate((node) => {
+    const fields = node.querySelectorAll('.xk-hw-device-input');
+    const style = getComputedStyle(node);
+    return {
+      gap: parseFloat(style.gap || '0'),
+      paddingTop: parseFloat(style.paddingTop || '0'),
+      maxInputHeight: Math.max(...Array.from(fields).map((field) => field.getBoundingClientRect().height)),
+    };
+  });
+  expect(density.gap).toBeLessThanOrEqual(8);
+  expect(density.paddingTop).toBeLessThanOrEqual(10);
+  expect(density.maxInputHeight).toBeLessThanOrEqual(36);
+});

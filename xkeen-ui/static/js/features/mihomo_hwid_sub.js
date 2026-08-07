@@ -59,6 +59,12 @@ let mihomoHwidSubModuleApi = null;
     diagCompareBody: 'mihomo-hwid-diag-compare-body',
     diagCompareGrid: 'mihomo-hwid-diag-compare-grid',
     diagCompareRelations: 'mihomo-hwid-diag-compare-relations',
+    editorHwid: 'mihomo-hwid-device-hwid',
+    editorOs: 'mihomo-hwid-device-os',
+    editorOsVersion: 'mihomo-hwid-device-os-version',
+    editorModel: 'mihomo-hwid-device-model',
+    editorUa: 'mihomo-hwid-device-ua',
+    btnResetDevice: 'mihomo-hwid-reset-btn',
 
     btnProbe: 'mihomo-hwid-probe-btn',
     btnInsert: 'mihomo-hwid-insert-btn',
@@ -76,6 +82,9 @@ let mihomoHwidSubModuleApi = null;
     compare: { key: 'xkeen.mihomo.hwid.compare.open.v1', defaultOpen: false },
   });
 
+  const DEVICE_PROFILE_PREF = 'xkeen.mihomo.hwid.device-profile.v1';
+  const LEGACY_HAPP_PRESET_RE = /^Happ\/3\.18\.3\/(?:Android|iOS)\/17771400994551771562$/i;
+
   let _inited = false;
   let _restartLogModulePromise = null;
   let _device = null; // device info from /api/mihomo/hwid/device
@@ -90,6 +99,7 @@ let mihomoHwidSubModuleApi = null;
   let _previewLayoutRaf = 0;
   let _engineUnsub = null;
   let _engineSyncing = false;
+  let _deviceProfileReady = false;
 
   const CM6_SCOPE = 'mihomo-hwid-preview';
 
@@ -328,6 +338,123 @@ let mihomoHwidSubModuleApi = null;
     return lines.filter(Boolean).join('\n') || 'Провайдер не вернул специальных HWID-заголовков.';
   }
 
+  function defaultDeviceProfile(device) {
+    const info = device && typeof device === 'object' ? device : {};
+    const headers = info.headers && typeof info.headers === 'object' ? info.headers : {};
+    return {
+      hwid: String(headers['x-hwid'] || info.hwid || '').trim(),
+      platform: String(headers['x-device-os'] || 'Keenetic OS').trim(),
+      osVersion: String(headers['x-ver-os'] || info.os_release || '').trim(),
+      model: String(headers['x-device-model'] || info.device_model || 'Keenetic').trim(),
+      userAgent: String(headers['User-Agent'] || info.user_agent || '').trim(),
+    };
+  }
+
+  function normalizeDeviceProfile(value) {
+    const profile = value && typeof value === 'object' ? value : {};
+    const clean = (key) => String(profile[key] == null ? '' : profile[key]).replace(/[\r\n]+/g, ' ').trim().slice(0, 512);
+    return {
+      hwid: clean('hwid'),
+      platform: clean('platform'),
+      osVersion: clean('osVersion'),
+      model: clean('model'),
+      userAgent: clean('userAgent'),
+    };
+  }
+
+  function readSavedDeviceProfile() {
+    try {
+      const raw = localStorage.getItem(DEVICE_PROFILE_PREF);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? normalizeDeviceProfile(parsed) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveDeviceProfile(profile) {
+    try { localStorage.setItem(DEVICE_PROFILE_PREF, JSON.stringify(normalizeDeviceProfile(profile))); } catch (e) {}
+  }
+
+  function deviceProfileFromInputs() {
+    const valueOf = (id) => {
+      const el = $(id);
+      return el ? String(el.value || '') : '';
+    };
+    return normalizeDeviceProfile({
+      hwid: valueOf(IDS.editorHwid),
+      platform: valueOf(IDS.editorOs),
+      osVersion: valueOf(IDS.editorOsVersion),
+      model: valueOf(IDS.editorModel),
+      userAgent: valueOf(IDS.editorUa),
+    });
+  }
+
+  function setDeviceProfileInputs(profile) {
+    const value = normalizeDeviceProfile(profile);
+    const assign = (id, text) => {
+      const el = $(id);
+      if (el) el.value = String(text || '');
+    };
+    assign(IDS.editorHwid, value.hwid);
+    assign(IDS.editorOs, value.platform);
+    assign(IDS.editorOsVersion, value.osVersion);
+    assign(IDS.editorModel, value.model);
+    assign(IDS.editorUa, value.userAgent);
+  }
+
+  function headersFromDeviceProfile(profile) {
+    const value = normalizeDeviceProfile(profile);
+    return {
+      'x-hwid': value.hwid,
+      'x-device-os': value.platform,
+      'x-ver-os': value.osVersion,
+      'x-device-model': value.model,
+      'User-Agent': value.userAgent,
+    };
+  }
+
+  function ensureDeviceProfile(device) {
+    if (_deviceProfileReady) return deviceProfileFromInputs();
+    const defaults = defaultDeviceProfile(device);
+    const saved = readSavedDeviceProfile();
+    const profile = saved || defaults;
+    // The first editor iteration exposed Happ mobile presets here. Happ is an
+    // Xray client and its UA can make subscription panels return Xray JSON
+    // instead of a Mihomo provider, so migrate those exact generated values.
+    if (saved && LEGACY_HAPP_PRESET_RE.test(String(profile.userAgent || ''))) {
+      profile.userAgent = defaults.userAgent;
+      saveDeviceProfile(profile);
+    }
+    setDeviceProfileInputs(profile);
+    _deviceProfileReady = true;
+    return profile;
+  }
+
+  function resetDeviceProfile() {
+    if (!_device) return;
+    const profile = defaultDeviceProfile(_device);
+    setDeviceProfileInputs(profile);
+    saveDeviceProfile(profile);
+    _lastProbe = null;
+    setInsertEnabled(false);
+    setApplyEnabled(false);
+    renderDiagnostics(_device, null);
+    updatePreviewFromState();
+    toastMsg('Профиль устройства сброшен к настройкам панели.', 'success');
+  }
+
+  function onDeviceProfileMutate() {
+    if (!_deviceProfileReady) return;
+    saveDeviceProfile(deviceProfileFromInputs());
+    _lastProbe = null;
+    setInsertEnabled(false);
+    setApplyEnabled(false);
+    renderDiagnostics(_device, null);
+    updatePreviewFromState();
+  }
+
   function normalizeCompareValue(value) {
     return String(value == null ? '' : value).trim();
   }
@@ -478,7 +605,8 @@ let mihomoHwidSubModuleApi = null;
       return;
     }
 
-    const hwid = String(device.hwid || '').trim();
+    const profile = ensureDeviceProfile(device);
+    const hwid = String(profile.hwid || '').trim();
     const source = hwidSourceLabel(device.hwid_source);
     const mac = String(device.mac || '').trim();
     const macHwid = String(device.mac_hwid || '').trim();
@@ -510,13 +638,13 @@ let mihomoHwidSubModuleApi = null;
 
     setDiagValue(IDS.diagActive, hwid || 'не определён');
     setDiagNote(IDS.diagActiveNote, activeNote.filter(Boolean).join(' • '));
-    setDiagValue(IDS.diagSource, source || 'не определён');
+    setDiagValue(IDS.diagSource, 'Источник: ' + (source || 'настройки панели'));
     setDiagNote(IDS.diagSourceNote, sourceNote);
-    setDiagValue(IDS.diagRouter, routerValue);
+    setDiagValue(IDS.diagRouter, 'Router HWID: ' + routerValue);
     setDiagNote(IDS.diagRouterNote, routerNote);
     setDiagValue(IDS.diagDevice, deviceValue || '—');
     setDiagNote(IDS.diagDeviceNote, deviceNote);
-    setDiagValue(IDS.diagHeaders, formatHeaderBlock(device.headers, 'Заголовки пока не собраны.'));
+    setDiagValue(IDS.diagHeaders, formatHeaderBlock(headersFromDeviceProfile(profile), 'Заголовки пока не собраны.'));
     setDiagValue(IDS.diagResponse, formatProviderResponseBlock(result));
     renderCompareView(device, result);
     toggleBlock(wrap, true);
@@ -1164,6 +1292,7 @@ let mihomoHwidSubModuleApi = null;
     try {
       const data = await http.fetchJSON('/api/mihomo/hwid/device');
       _device = data || null;
+      ensureDeviceProfile(_device);
       renderDiagnostics(_device, _lastProbe);
       // Non-intrusive summary
       try {
@@ -1202,7 +1331,7 @@ let mihomoHwidSubModuleApi = null;
     return s.slice(0, 64);
   }
 
-  function buildProviderAdapterUrl(url, insecure) {
+  function buildProviderAdapterUrl(url, insecure, profile) {
     const raw = String(url || '').trim();
     let port = '';
     try {
@@ -1214,6 +1343,12 @@ let mihomoHwidSubModuleApi = null;
     const params = new URLSearchParams();
     params.set('url', raw);
     params.set('insecure', insecure ? '1' : '0');
+    const value = normalizeDeviceProfile(profile || deviceProfileFromInputs());
+    params.set('hwid', value.hwid);
+    params.set('device_os', value.platform);
+    params.set('os_version', value.osVersion);
+    params.set('device_model', value.model);
+    params.set('user_agent', value.userAgent);
     return `http://127.0.0.1:${port}/mihomo/hwid/provider.yaml?${params.toString()}`;
   }
 
@@ -1295,7 +1430,7 @@ let mihomoHwidSubModuleApi = null;
       return;
     }
     const insecureEl = $(IDS.insecure);
-    const adapterUrl = buildProviderAdapterUrl(url, !!(insecureEl && insecureEl.checked));
+    const adapterUrl = buildProviderAdapterUrl(url, !!(insecureEl && insecureEl.checked), deviceProfileFromInputs());
     setPreview(buildProviderSnippet(name, url, {}, { providerUrl: adapterUrl }));
     if (_lastProbe && _lastProbe.ok) {
       setInsertEnabled(true);
@@ -1343,7 +1478,12 @@ let mihomoHwidSubModuleApi = null;
 
     try {
       const dev = await fetchDeviceInfo();
-      const r = await postJSONAllowError('/api/mihomo/hwid/probe', { url, insecure: insecure });
+      const deviceProfile = ensureDeviceProfile(dev);
+      const r = await postJSONAllowError('/api/mihomo/hwid/probe', {
+        url,
+        insecure: insecure,
+        device_profile: deviceProfile,
+      });
       const res = r && r.data ? r.data : null;
       _lastProbe = res || null;
       renderDiagnostics(dev, _lastProbe);
@@ -1400,7 +1540,7 @@ let mihomoHwidSubModuleApi = null;
       } catch (e0) {
         setTip('');
       }
-      const adapterUrl = buildProviderAdapterUrl(url, insecure);
+      const adapterUrl = buildProviderAdapterUrl(url, insecure, deviceProfile);
       const snippet = buildProviderSnippet(nm, url, {}, { providerUrl: adapterUrl });
       setPreview(snippet);
 
@@ -1523,6 +1663,7 @@ let mihomoHwidSubModuleApi = null;
         name,
         template_name,
         restart: true,
+        device_profile: deviceProfileFromInputs(),
       });
       const res = r && r.data ? r.data : null;
 
@@ -1605,7 +1746,7 @@ let mihomoHwidSubModuleApi = null;
     }
 
     const insecureEl = $(IDS.insecure);
-    const adapterUrl = buildProviderAdapterUrl(url, !!(insecureEl && insecureEl.checked));
+    const adapterUrl = buildProviderAdapterUrl(url, !!(insecureEl && insecureEl.checked), deviceProfileFromInputs());
     const snippet = buildProviderSnippet(name, url, {}, { providerUrl: adapterUrl });
 
     const patch = getMihomoYamlPatchApi();
@@ -1644,7 +1785,7 @@ let mihomoHwidSubModuleApi = null;
 
     wireButton(IDS.btnProbe, () => doProbe());
     wireButton(IDS.btnInsert, () => doInsert());
-    wireCollapsibleSections();
+    wireButton(IDS.btnResetDevice, () => resetDeviceProfile());
 
     // MH-04: injected UI
     try {
@@ -1671,6 +1812,13 @@ let mihomoHwidSubModuleApi = null;
       bindLivePreview($(IDS.name));
       bindLivePreview($(IDS.url), { invalidateProbe: true });
       bindLivePreview($(IDS.insecure), { invalidateProbe: true });
+      [IDS.editorHwid, IDS.editorOs, IDS.editorOsVersion, IDS.editorModel, IDS.editorUa].forEach((id) => {
+        const el = $(id);
+        if (!el || (el.dataset && el.dataset.xkHwDeviceProfile === '1')) return;
+        el.addEventListener('input', onDeviceProfileMutate);
+        el.addEventListener('change', onDeviceProfileMutate);
+        if (el.dataset) el.dataset.xkHwDeviceProfile = '1';
+      });
     } catch (e) {}
 
     try {

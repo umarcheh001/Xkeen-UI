@@ -23168,6 +23168,93 @@ html[data-theme="light"] .routing-rule-grid.is-dnd-live .routing-rule-handle {
   gap: 12px;
 }
 
+.xk-hw-device-editor {
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.24);
+}
+
+.xk-hw-device-editor__head {
+  align-items: center;
+  gap: 8px;
+}
+
+.xk-hw-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  border: 1px solid rgba(96, 165, 250, 0.26);
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.08);
+  color: rgba(219, 234, 254, 0.96);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.xk-hw-reset-btn {
+  padding: 5px 9px;
+}
+
+.xk-hw-device-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
+}
+
+.xk-hw-device-input {
+  min-height: 34px;
+  border-color: rgba(148, 163, 184, 0.24);
+  background: rgba(2, 6, 23, 0.42);
+}
+
+.xk-hw-device-input--mono {
+  font-family: var(--xk-mono-font-family, "Cascadia Code", Consolas, monospace);
+}
+
+.xk-hw-editor-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.xk-hw-reset-btn:hover {
+  border-color: rgba(96, 165, 250, 0.52);
+  background: rgba(59, 130, 246, 0.16);
+}
+
+.xk-hw-editor-meta__item {
+  padding: 4px 7px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.46);
+  color: rgba(203, 213, 225, 0.84);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.xk-hw-provider-response {
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  padding-top: 7px;
+}
+
+.xk-hw-provider-response summary {
+  color: rgba(226, 232, 240, 0.8);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.xk-hw-provider-response .xk-hw-diag-pre {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(2, 6, 23, 0.34);
+}
+
 .xk-hw-section-head--compact {
   align-items: center;
 }
@@ -23492,6 +23579,7 @@ html[data-theme="light"] .routing-rule-grid.is-dnd-live .routing-rule-handle {
 @media (max-width: 920px) {
   .xk-hw-grid,
   .xk-hw-form-grid,
+  .xk-hw-device-grid,
   .xk-hw-diag-grid,
   .xk-hw-compare-grid {
     grid-template-columns: 1fr;
@@ -23567,6 +23655,24 @@ html[data-theme="light"] .xk-hw-kicker {
 html[data-theme="light"] .xk-hw-diag-card {
   border-color: rgba(15, 23, 42, 0.12);
   background: rgba(248, 250, 252, 0.92);
+}
+
+html[data-theme="light"] .xk-hw-device-editor,
+html[data-theme="light"] .xk-hw-device-input,
+html[data-theme="light"] .xk-hw-provider-response .xk-hw-diag-pre {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(248, 250, 252, 0.92);
+}
+
+html[data-theme="light"] .xk-hw-reset-btn {
+  border-color: rgba(37, 99, 235, 0.22);
+  background: rgba(37, 99, 235, 0.06);
+  color: #1d4ed8;
+}
+
+html[data-theme="light"] .xk-hw-editor-meta__item {
+  background: rgba(226, 232, 240, 0.72);
+  color: rgba(15, 23, 42, 0.76);
 }
 
 html[data-theme="light"] .xk-hw-diag-label {

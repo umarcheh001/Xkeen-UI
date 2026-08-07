@@ -169,6 +169,74 @@ def test_hwid_probe_route_allows_private_url_when_enabled(monkeypatch, client):
     assert len(calls) == 1
 
 
+def test_hwid_probe_route_applies_device_profile_overrides(monkeypatch, client):
+    monkeypatch.setattr(
+        mihomo,
+        "_mh_hwid_get_device_info",
+        lambda: {
+            "headers": {
+                "x-hwid": "PANEL-HWID",
+                "x-device-os": "Keenetic OS",
+                "x-ver-os": "4.2.6",
+                "x-device-model": "Keenetic",
+                "User-Agent": "ClashMeta/1.19.25; mihomo/1.19.25",
+            }
+        },
+    )
+    calls = []
+
+    def fake_probe(url, *, headers, insecure, timeout, prefer, policy):
+        calls.append(dict(headers))
+        return {
+            "ok": True,
+            "probe": {"url": url, "http_status": 200, "method": "HEAD"},
+            "profile": {"profile_title": "Custom", "suggested_name": "Custom"},
+            "headers_used": headers,
+            "warnings": [],
+            "error": None,
+        }
+
+    monkeypatch.setattr(mihomo, "_mh_hwid_probe_subscription_safe", fake_probe)
+    monkeypatch.setattr(
+        mihomo,
+        "_mh_hwid_fetch_provider_payload",
+        lambda *args, **kwargs: ("proxies:\n  - name: node\n    type: direct\n", {}),
+    )
+
+    response = client.post(
+        "/api/mihomo/hwid/probe",
+        json={
+            "url": "https://provider.example/sub",
+            "device_profile": {
+                "hwid": "USER-HWID",
+                "platform": "Android",
+                "osVersion": "15",
+                "model": "Pixel 9",
+                "userAgent": "Happ/3.18.3/Android/demo",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert calls[0] == {
+        "x-hwid": "USER-HWID",
+        "x-device-os": "Android",
+        "x-ver-os": "15",
+        "x-device-model": "Pixel 9",
+        "User-Agent": "Happ/3.18.3/Android/demo",
+    }
+
+
+def test_hwid_profile_headers_strip_newlines():
+    headers = mihomo._mihomo_hwid_profile_headers(
+        {"headers": {"x-hwid": "PANEL"}},
+        {"hwid": "custom\r\nx-injected: yes", "userAgent": "ua\nnext"},
+    )
+
+    assert headers["x-hwid"] == "custom x-injected: yes"
+    assert headers["User-Agent"] == "ua next"
+
+
 def test_hwid_probe_route_warns_when_hwid_payload_empty_but_regular_has_nodes(monkeypatch, client):
     monkeypatch.setattr(
         mihomo,

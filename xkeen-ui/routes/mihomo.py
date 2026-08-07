@@ -260,6 +260,41 @@ _MIHOMO_HWID_URL_POLICY_ENV_PREFIX = "XKEEN_MIHOMO_HWID"
 _MIHOMO_PROVIDER_URL_POLICY_ENV_PREFIX = "XKEEN_MIHOMO_PROVIDER"
 
 
+def _mihomo_hwid_profile_headers(info: Any, profile: Any = None) -> Dict[str, str]:
+    """Return the panel defaults with safe per-request device overrides."""
+    defaults = (info or {}).get("headers") if isinstance(info, dict) else {}
+    headers = dict(defaults or {})
+    raw = profile if isinstance(profile, dict) else {}
+    fields = {
+        "hwid": "x-hwid",
+        "platform": "x-device-os",
+        "osVersion": "x-ver-os",
+        "model": "x-device-model",
+        "userAgent": "User-Agent",
+    }
+    for field, header in fields.items():
+        if field not in raw:
+            continue
+        value = re.sub(r"[\r\n]+", " ", str(raw.get(field) or "")).strip()[:512]
+        headers[header] = value
+    return headers
+
+
+def _mihomo_hwid_profile_from_query() -> Dict[str, str]:
+    fields = {
+        "hwid": "hwid",
+        "platform": "device_os",
+        "osVersion": "os_version",
+        "model": "device_model",
+        "userAgent": "user_agent",
+    }
+    return {
+        field: request.args.get(query_key, "")
+        for field, query_key in fields.items()
+        if query_key in request.args
+    }
+
+
 def _mihomo_hwid_url_policy() -> URLPolicy:
     return URLPolicy(
         allow_hosts=(),
@@ -667,13 +702,28 @@ def create_mihomo_blueprint(
     def _ui_loopback_port() -> int:
         return _mihomo_ui_loopback_port_from_request()
 
-    def _hwid_provider_adapter_url(upstream_url: str, *, insecure: bool) -> str:
-        query = urllib.parse.urlencode(
-            {
-                "url": str(upstream_url or "").strip(),
-                "insecure": "1" if insecure else "0",
-            }
-        )
+    def _hwid_provider_adapter_url(
+        upstream_url: str,
+        *,
+        insecure: bool,
+        device_profile: Any = None,
+    ) -> str:
+        params = {
+            "url": str(upstream_url or "").strip(),
+            "insecure": "1" if insecure else "0",
+        }
+        if isinstance(device_profile, dict):
+            profile_headers = _mihomo_hwid_profile_headers({}, device_profile)
+            params.update(
+                {
+                    "hwid": profile_headers.get("x-hwid", ""),
+                    "device_os": profile_headers.get("x-device-os", ""),
+                    "os_version": profile_headers.get("x-ver-os", ""),
+                    "device_model": profile_headers.get("x-device-model", ""),
+                    "user_agent": profile_headers.get("User-Agent", ""),
+                }
+            )
+        query = urllib.parse.urlencode(params)
         return f"http://127.0.0.1:{_ui_loopback_port()}/mihomo/hwid/provider.yaml?{query}"
 
     def _write_hwid_provider_cache(provider_name: str, payload: str) -> bool:
@@ -920,9 +970,10 @@ def create_mihomo_blueprint(
 
         try:
             info = _mh_hwid_get_device_info()
+            headers = _mihomo_hwid_profile_headers(info, _mihomo_hwid_profile_from_query())
             payload, _meta = _mh_hwid_fetch_provider_payload(
                 url,
-                headers=info.get("headers") or {},
+                headers=headers,
                 insecure=insecure,
                 timeout=20.0,
                 policy=policy,
@@ -1052,7 +1103,7 @@ def create_mihomo_blueprint(
         timeout_s = max(1.0, min(float(timeout_ms) / 1000.0, 60.0))
 
         info = _mh_hwid_get_device_info()
-        headers = info.get("headers") or {}
+        headers = _mihomo_hwid_profile_headers(info, data.get("device_profile"))
 
         result = _mh_hwid_probe_subscription_safe(
             url,
@@ -1180,7 +1231,8 @@ def create_mihomo_blueprint(
             return jsonify({"ok": False, "stage": "probe", "probe": blocked}), 400
 
         info = _mh_hwid_get_device_info()
-        headers = info.get("headers") or {}
+        device_profile = data.get("device_profile")
+        headers = _mihomo_hwid_profile_headers(info, device_profile)
 
         # Probe (in worker thread) to get profile-title and validate URL.
         probe = _mh_hwid_probe_subscription_safe(
@@ -1235,7 +1287,11 @@ def create_mihomo_blueprint(
             base_for_name = base_yaml
 
         name_unique = _mh_hwid_ensure_unique_provider_name(base_for_name, name_base)
-        adapter_url = _hwid_provider_adapter_url(url, insecure=insecure)
+        adapter_url = _hwid_provider_adapter_url(
+            url,
+            insecure=insecure,
+            device_profile=device_profile,
+        )
         entry = _mh_hwid_build_provider_entry(name_unique, url, {}, provider_url=adapter_url)
         provider_cache_written = False
         try:

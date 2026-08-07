@@ -7292,12 +7292,36 @@ body.panel-page #mihomo-hwid-modal .xk-hw-preview-wrap {
 
 body.panel-page #mihomo-hwid-modal .xk-hw-panel {
   min-height: 0;
-  padding: 12px;
+  padding: 10px;
+  gap: 9px;
 }
 
 body.panel-page #mihomo-hwid-modal .xk-hw-panel--controls {
   overflow: auto;
   overscroll-behavior: contain;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-panel--controls .xk-hw-form-grid {
+  gap: 9px;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-panel--controls .xk-hw-field {
+  gap: 5px;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-device-editor {
+  gap: 8px;
+  padding: 9px;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-device-editor .xk-hw-section-subtitle,
+body.panel-page #mihomo-hwid-modal .xk-hw-device-editor .xk-hw-field-note {
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  line-height: 1.3;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-device-editor .hint-label {
+  line-height: 1.2;
 }
 
 body.panel-page #mihomo-hwid-modal .xk-hw-panel--preview {
@@ -7352,6 +7376,7 @@ body.panel-page #mihomo-hwid-modal :is(
 
 body.panel-page #mihomo-hwid-modal :is(
   .xk-hw-switch,
+  .xk-hw-device-editor,
   .xk-hw-meta,
   .xk-hw-status,
   .xk-hw-tip,
@@ -7361,6 +7386,39 @@ body.panel-page #mihomo-hwid-modal :is(
   border-radius: var(--op-radius-sm) !important;
   background: var(--op-surface-2) !important;
   box-shadow: none !important;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-device-input {
+  height: 32px !important;
+  min-height: 32px !important;
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-editor) !important;
+  color: var(--op-text-strong) !important;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-reset-btn {
+  border-color: color-mix(in srgb, var(--op-accent) 42%, var(--op-border)) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-editor-meta__item {
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-control-radius);
+  background: var(--op-surface-3);
+  color: var(--op-muted);
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-provider-response {
+  border-top-color: var(--op-border);
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-provider-response .xk-hw-diag-pre {
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-sm);
+  background: var(--op-editor);
 }
 
 body.panel-page #mihomo-hwid-modal :is(.xk-hw-diag-card, .xk-hw-compare-card) {
