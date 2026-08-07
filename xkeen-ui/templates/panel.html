@@ -69,7 +69,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260807a') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260807b') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -2012,9 +2012,9 @@
       <div class="modal-content xk-core-modal-content">
         <div class="modal-header xk-core-modal-header">
           <div class="xk-core-titleline">
-            <span class="xk-core-title-icon" aria-hidden="true"></span>
+            <span class="xk-core-title-icon" aria-hidden="true">{{ op_icon('settings') }}</span>
             <div class="xk-core-titlebox">
-              <span class="xk-core-kicker">XKEEN ENGINE</span>
+              <span class="xk-core-kicker">XKEEN · ЯДРО</span>
               <span class="modal-title">Управление ядром</span>
             </div>
           </div>
@@ -2022,18 +2022,33 @@
         </div>
         <div class="modal-body xk-core-modal-body">
           <div class="xk-core-lead">
-            <span class="xk-core-lead-chip">restart on apply</span>
+            <span class="xk-core-lead-icon" aria-hidden="true">{{ op_icon('restart') }}</span>
+            <span class="xk-core-lead-copy">
+              <strong>Выберите активное ядро</strong>
+              <small>После переключения сервис xkeen перезапустится.</small>
+            </span>
+            <span class="xk-core-lead-chip">рестарт</span>
           </div>
           <div class="core-select-row xk-core-engine-list" role="radiogroup" aria-label="Выбор ядра XKeen">
             <div class="xk-core-engine-row">
               <button type="button" class="core-option xk-core-option" data-core="xray" role="radio" aria-checked="false">
-                <span class="xk-core-option-title">Xray</span>
+                <span class="xk-core-option-mark" aria-hidden="true">XR</span>
+                <span class="xk-core-option-copy">
+                  <span class="xk-core-option-title">Xray</span>
+                  <span class="xk-core-option-note">Ядро прокси-сервиса</span>
+                </span>
+                <span class="xk-core-option-indicator" aria-hidden="true"><span></span></span>
               </button>
               <span class="xk-core-option-state" aria-hidden="true">Доступно</span>
             </div>
             <div class="xk-core-engine-row">
               <button type="button" class="core-option xk-core-option" data-core="mihomo" role="radio" aria-checked="false">
-                <span class="xk-core-option-title">Mihomo</span>
+                <span class="xk-core-option-mark" aria-hidden="true">MH</span>
+                <span class="xk-core-option-copy">
+                  <span class="xk-core-option-title">Mihomo</span>
+                  <span class="xk-core-option-note">Ядро прокси-сервиса</span>
+                </span>
+                <span class="xk-core-option-indicator" aria-hidden="true"><span></span></span>
               </button>
               <span class="xk-core-option-state" aria-hidden="true">Доступно</span>
             </div>
@@ -2043,7 +2058,7 @@
         <div class="modal-actions xk-core-modal-actions">
           <div class="xk-core-actions-row">
             <button type="button" id="core-modal-cancel-btn" class="btn-secondary btn-compact" data-operator-dismiss-duplicate="true">Отмена</button>
-            <button type="button" id="core-modal-confirm-btn" class="btn-primary btn-compact">Применить</button>
+            <button type="button" id="core-modal-confirm-btn" class="btn-primary btn-compact">Переключить</button>
           </div>
         </div>
       </div>
