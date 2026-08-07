@@ -10032,7 +10032,7 @@ body.panel-page #routing-balancer-quick-modal #routing-balancer-quick-run-btn:no
   min-height: 0;
   gap: 0;
   padding: 12px !important;
-  overflow: auto;
+  overflow: hidden;
   flex-direction: column;
   background: var(--op-surface) !important;
 }
@@ -10086,8 +10086,8 @@ body.panel-page #routing-forced-rules-modal .xk-forced-wizard-lead .modal-descri
 body.panel-page #routing-forced-rules-modal .xk-forced-wizard-grid {
   display: grid;
   grid-template-columns: minmax(370px, 0.9fr) minmax(440px, 1.1fr);
-  flex: 1 1 auto;
-  min-height: 410px;
+  flex: 1 1 0;
+  min-height: 0;
   gap: 0 !important;
   overflow: hidden;
   border: 1px solid var(--op-border) !important;
@@ -10113,6 +10113,7 @@ body.panel-page #routing-forced-rules-modal .xk-forced-wizard-grid {
 }
 
 body.panel-page #routing-forced-rules-modal .xk-forced-wizard-preview-panel {
+  overflow: hidden !important;
   border-left: 1px solid var(--op-border) !important;
 }
 
@@ -10163,7 +10164,7 @@ body.panel-page #routing-forced-rules-modal .xk-forced-controls-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(120px, 0.55fr);
   gap: 10px;
-  align-items: end;
+  align-items: start;
 }
 
 body.panel-page #routing-forced-rules-modal :is(.xk-forced-fieldgroup, .xk-forced-option-select) {
@@ -10180,6 +10181,16 @@ body.panel-page #routing-forced-rules-modal .xk-forced-fieldlabel {
   font-weight: 560;
   letter-spacing: 0;
   text-transform: none;
+}
+
+body.panel-page #routing-forced-rules-modal .xk-forced-target-hint {
+  height: 15px;
+  color: var(--op-muted) !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 body.panel-page #routing-forced-rules-modal .xk-forced-outbound-wrap {
@@ -10250,6 +10261,17 @@ body.panel-page #routing-forced-rules-modal .xk-forced-wizard-toolbar {
   box-shadow: none !important;
 }
 
+body.panel-page #routing-forced-rules-modal .xk-forced-add-btn {
+  display: inline-flex;
+  min-height: var(--op-control-h);
+  padding: 0 10px;
+  align-items: center;
+  gap: 6px;
+  border-color: var(--op-accent-border) !important;
+  color: var(--op-text) !important;
+  white-space: nowrap;
+}
+
 body.panel-page #routing-forced-rules-modal :is(
   .xk-forced-outbound-wrap .btn-icon,
   .xk-forced-wizard-toolbar .btn-icon
@@ -10288,6 +10310,23 @@ body.panel-page #routing-forced-rules-modal .xk-forced-options-grid {
   background: transparent !important;
 }
 
+body.panel-page #routing-forced-rules-modal .xk-forced-advanced {
+  border-top: 1px solid var(--op-border);
+}
+
+body.panel-page #routing-forced-rules-modal .xk-forced-advanced > summary {
+  min-height: 38px;
+  padding: 0 10px;
+  color: var(--op-data-muted);
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  line-height: 38px;
+  cursor: pointer;
+}
+
+body.panel-page #routing-forced-rules-modal .xk-forced-advanced-body {
+  border-top: 1px solid var(--op-border);
+}
+
 :is(body.panel-page, html[data-theme="light"] body.panel-page) #routing-forced-rules-modal .xk-forced-option-card {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
@@ -10304,7 +10343,7 @@ body.panel-page #routing-forced-rules-modal .xk-forced-options-grid {
   transform: none !important;
 }
 
-body.panel-page #routing-forced-rules-modal .xk-forced-option-card:nth-child(2) {
+body.panel-page #routing-forced-rules-modal .xk-forced-advanced .xk-forced-option-card:first-child {
   display: flex !important;
   min-height: 52px;
   padding-left: 10px !important;
@@ -10316,24 +10355,24 @@ body.panel-page #routing-forced-rules-modal .xk-forced-option-card:nth-child(2) 
   flex-direction: row !important;
 }
 
-body.panel-page #routing-forced-rules-modal .xk-forced-option-card:nth-child(2) > .xk-forced-fieldlabel {
+body.panel-page #routing-forced-rules-modal .xk-forced-advanced .xk-forced-option-card:first-child > .xk-forced-fieldlabel {
   flex: 0 0 88px;
   min-width: 88px;
 }
 
-body.panel-page #routing-forced-rules-modal .xk-forced-option-card:nth-child(2) > #routing-forced-rules-priority {
+body.panel-page #routing-forced-rules-modal .xk-forced-advanced .xk-forced-option-card:first-child > #routing-forced-rules-priority {
   flex: 0 1 280px;
   width: min(280px, calc(100% - 104px)) !important;
   max-width: 280px;
   margin-left: auto;
 }
 
-body.panel-page #routing-forced-rules-modal .xk-forced-option-card:nth-child(3) {
+body.panel-page #routing-forced-rules-modal .xk-forced-advanced .xk-forced-option-card:nth-child(2) {
   grid-column: auto;
   border-top: 1px solid var(--op-border) !important;
 }
 
-body.panel-page #routing-forced-rules-modal .xk-forced-option-card:hover {
+body.panel-page #routing-forced-rules-modal .xk-forced-option-card:has(input[type="checkbox"]):hover {
   background: var(--op-surface-2) !important;
 }
 
@@ -10347,6 +10386,7 @@ body.panel-page #routing-forced-rules-modal .xk-forced-option-card input[type="c
   height: 13px;
   margin: 3px 0 0;
   accent-color: var(--op-accent);
+  cursor: pointer;
 }
 
 body.panel-page #routing-forced-rules-modal .xk-forced-option-copy {
@@ -10370,7 +10410,7 @@ body.panel-page #routing-forced-rules-modal .xk-forced-option-copy small {
 
 body.panel-page #routing-forced-rules-modal .xk-forced-wizard-listbox {
   display: flex;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   gap: 7px;
   flex-direction: column;
@@ -10428,6 +10468,17 @@ body.panel-page #routing-forced-rules-modal .xk-forced-wizard-empty {
   color: var(--op-muted) !important;
   font-size: calc(10.5px * var(--xk-font-scale, 1));
   text-align: center;
+}
+
+body.panel-page #routing-forced-rules-modal .xk-forced-wizard-empty strong,
+body.panel-page #routing-forced-rules-modal .xk-forced-wizard-empty span {
+  display: block;
+}
+
+body.panel-page #routing-forced-rules-modal .xk-forced-wizard-empty strong {
+  margin-bottom: 3px;
+  color: var(--op-text);
+  font-weight: 600;
 }
 
 :is(body.panel-page, html[data-theme="light"] body.panel-page) #routing-forced-rules-modal .xk-forced-rule-card {
@@ -10490,14 +10541,41 @@ body.panel-page #routing-forced-rules-modal .xk-forced-rule-tag {
 }
 
 body.panel-page #routing-forced-rules-modal .xk-forced-rule-badges {
+  display: flex;
+  align-items: center;
   gap: 0 7px;
+}
+
+body.panel-page #routing-forced-rules-modal .xk-forced-rule-collapse {
+  width: 24px !important;
+  min-width: 24px !important;
+  height: 24px !important;
+  min-height: 24px !important;
+  margin-left: 2px;
+  padding: 0 !important;
+  border-color: var(--op-border) !important;
+  color: var(--op-muted) !important;
+}
+
+body.panel-page #routing-forced-rules-modal .xk-forced-rule-collapse.is-expanded .xk-action-icon {
+  transform: rotate(180deg);
+}
+
+body.panel-page #routing-forced-rules-modal .xk-forced-rule-card.is-collapsed .xk-forced-rule-groups {
+  display: none;
 }
 
 body.panel-page #routing-forced-rules-modal .xk-forced-count {
   padding: 0;
   border: 0 !important;
-  color: var(--op-muted) !important;
+  color: var(--op-text-strong) !important;
   font-size: calc(10px * var(--xk-font-scale, 1));
+  font-weight: 600;
+}
+
+body.panel-page #routing-forced-rules-modal :is(.xk-forced-inline-label, .xk-forced-rule-group-title) {
+  color: var(--op-text-strong) !important;
+  font-weight: 650;
 }
 
 body.panel-page #routing-forced-rules-modal .xk-forced-rule-group,
@@ -10522,7 +10600,7 @@ body.panel-page #routing-forced-rules-modal :is(.xk-forced-inline-label, .xk-for
   border-radius: var(--op-control-radius) !important;
   background: var(--op-surface-2) !important;
   background-image: none !important;
-  color: var(--op-data-muted) !important;
+  color: var(--op-text) !important;
   box-shadow: none !important;
   font-size: calc(10px * var(--xk-font-scale, 1));
 }
@@ -10564,7 +10642,7 @@ body.panel-page #routing-forced-rules-modal .xk-forced-primary-action {
 }
 
 body.panel-page #routing-forced-rules-modal #routing-forced-rules-run-btn {
-  min-width: 152px;
+  min-width: 184px;
   border-color: var(--op-accent) !important;
   background: var(--op-accent) !important;
   background-image: none !important;
@@ -13617,14 +13695,31 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
     grid-template-columns: 180px minmax(0, 1fr);
   }
 
+  body.panel-page #routing-forced-rules-modal .modal-body {
+    overflow: auto;
+  }
+
   body.panel-page #routing-forced-rules-modal .xk-forced-wizard-grid {
     grid-template-columns: minmax(0, 1fr);
+    flex: 0 0 auto;
     overflow: visible;
   }
 
   body.panel-page #routing-forced-rules-modal .xk-forced-wizard-preview-panel {
+    overflow: visible !important;
     border-top: 1px solid var(--op-border) !important;
     border-left: 0 !important;
+  }
+
+  /* In the one-column layout the route map remains an independent scroll
+   * region, so expanding its cards cannot compress the settings above it. */
+  body.panel-page #routing-forced-rules-modal .xk-forced-wizard-listbox {
+    flex: 0 0 auto;
+  }
+
+  body.panel-page #routing-forced-rules-modal .xk-forced-wizard-list {
+    min-height: 180px;
+    max-height: min(40dvh, 360px);
   }
 
   body.panel-page #routing-balancer-quick-modal .xk-qb-grid {
@@ -14205,7 +14300,7 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
     grid-template-columns: minmax(0, 1fr);
   }
 
-  body.panel-page #routing-forced-rules-modal .xk-forced-option-card:nth-child(2) {
+  body.panel-page #routing-forced-rules-modal .xk-forced-advanced .xk-forced-option-card:first-child {
     display: flex !important;
     gap: 5px;
     align-items: stretch;
@@ -14214,19 +14309,19 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
     flex-direction: column !important;
   }
 
-  body.panel-page #routing-forced-rules-modal .xk-forced-option-card:nth-child(2) > .xk-forced-fieldlabel {
+  body.panel-page #routing-forced-rules-modal .xk-forced-advanced .xk-forced-option-card:first-child > .xk-forced-fieldlabel {
     flex: 0 0 auto;
     min-width: 0;
   }
 
-  body.panel-page #routing-forced-rules-modal .xk-forced-option-card:nth-child(2) > #routing-forced-rules-priority {
+  body.panel-page #routing-forced-rules-modal .xk-forced-advanced .xk-forced-option-card:first-child > #routing-forced-rules-priority {
     flex: 0 0 auto;
     width: 100% !important;
     max-width: none;
     margin-left: 0;
   }
 
-  body.panel-page #routing-forced-rules-modal .xk-forced-option-card:nth-child(3) {
+  body.panel-page #routing-forced-rules-modal .xk-forced-advanced .xk-forced-option-card:nth-child(2) {
     grid-column: auto;
   }
 

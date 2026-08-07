@@ -786,7 +786,7 @@
               <div class="routing-rules-actions">
                 <button id="routing-balancer-quick-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Быстрый старт: leastPing + observatory + сохранить+рестарт" aria-label="Быстрый старт балансировщика">{{ op_icon('quick-start') }}</button>
                 <button id="routing-balancer-help-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Справка по балансировщикам" aria-label="Справка по балансировщикам">{{ op_icon('help') }}</button>
-                <button id="routing-forced-rules-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Принудительные правила (обход балансировщика): домены/IP → конкретный outbound" aria-label="Принудительные правила">{{ op_icon('lock') }}</button>
+                <button id="routing-forced-rules-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Направить сервисы или IP через нужный прокси либо напрямую" aria-label="Маршрутизация сервисов и IP">{{ op_icon('lock') }}</button>
                 <button id="routing-balancer-add-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Добавить балансировщик" aria-label="Добавить балансировщик">{{ op_icon('add-balancer') }}</button>
                 <button id="routing-rules-add-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Добавить правило" aria-label="Добавить правило">{{ op_icon('add-rule') }}</button>
                 <button id="routing-rules-apply-btn" class="btn-primary btn-icon routing-rules-apply-primary" type="button" data-tooltip="Применить изменения в JSON‑редактор (с сохранением JSONC‑комментариев, best effort)" aria-label="Применить в JSON">{{ op_icon('save') }}</button>
@@ -2149,7 +2149,7 @@
             <a href="#" data-help-target="xk-bhelp-subscriptions">Подписки и routing</a>
             <a href="#" data-help-target="xk-bhelp-balancer">Ручной балансировщик</a>
             <a href="#" data-help-target="xk-bhelp-rules">Правила и порядок</a>
-            <a href="#" data-help-target="xk-bhelp-forced">Принудительные правила</a>
+            <a href="#" data-help-target="xk-bhelp-forced">Сервисы и IP</a>
             <a href="#" data-help-target="xk-bhelp-troubles">Диагностика</a>
           </nav>
 
@@ -2254,15 +2254,15 @@
             </section>
 
             <section class="xk-balancer-help-section" aria-labelledby="xk-bhelp-forced">
-              <h3 id="xk-bhelp-forced">Принудительные правила</h3>
+              <h3 id="xk-bhelp-forced">Маршрутизация сервисов и IP</h3>
               <details class="xk-balancer-help-details" open>
-                <summary>Обход балансировщика для domain и IP</summary>
-                <p>Мастер создаёт отдельные правила с конкретным <code>outboundTag</code>. Это удобно для локальных ресурсов, банков, IPTV и любого трафика, который нельзя отправлять через общий пул.</p>
+                <summary>Прокси или прямое подключение для выбранных адресов</summary>
+                <p>Мастер направляет домены, списки сервисов и IP в конкретный прокси либо в <code>direct</code>, не отдавая их общему балансировщику. Это удобно для банков, IPTV, локальных ресурсов и сервисов, которым нужен определённый регион.</p>
                 <ul>
-                  <li><b>Только redirect / tproxy</b> ограничивает правила основными перехватывающими inbound.</li>
-                  <li><b>После block-правил</b> сохраняет приоритет блокировок; <b>Перед балансировщиком</b> помещает исключения непосредственно перед первым balancer-правилом.</li>
-                  <li><b>Импорт legacy-правил</b> подхватывает совместимые правила без служебного <code>ruleTag</code>, не создавая дубли.</li>
-                  <li>Метла очищает значения выбранного outbound, корзина удаляет все записи мастера.</li>
+                  <li>Вставляйте вперемешку домены, полные ссылки, IP/CIDR, <code>geosite:TAG</code> и <code>geoip:TAG</code> — тип оп��еделяется автоматически.</li>
+                  <li>Обычный домен преобразуется в точное правило для домена и его поддоменов; из полной ссылки берётся только имя хоста.</li>
+                  <li>Один адрес может вести только в один маршрут: при повторном назначении мастер переносит его, а не создаёт конфликт.</li>
+                  <li><b>Только трафик этого роутера</b> ограничивает правило входами <code>redirect</code> / <code>tproxy</code>. Порядок и импорт старых правил находятся в дополнительных настройках.</li>
                 </ul>
               </details>
             </section>

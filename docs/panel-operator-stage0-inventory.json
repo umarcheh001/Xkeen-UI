@@ -690,73 +690,73 @@
               "accessible_name": true
             },
             {
-              "control": "control@3091",
+              "control": "control@3081",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@4599",
+              "control": "control@4589",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@5625",
+              "control": "control@5615",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@6490",
+              "control": "control@6480",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@7620",
+              "control": "control@7610",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@8768",
+              "control": "control@8758",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@10035",
+              "control": "control@10030",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@11158",
+              "control": "control@11324",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@11473",
+              "control": "control@11639",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@11824",
+              "control": "control@11990",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@12165",
+              "control": "control@12331",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@12533",
+              "control": "control@12699",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -7960,7 +7960,7 @@
       {
         "locator": "#routing-forced-rules-btn",
         "name": "data-tooltip",
-        "value": "Принудительные правила (обход балансировщика): домены/IP → конкретный outbound"
+        "value": "Направить сервисы или IP через нужный прокси либо напрямую"
       },
       {
         "locator": "#routing-balancer-add-btn",

@@ -462,8 +462,53 @@ test.describe('Operator Console Stage 5 editor workbench contract', () => {
 
   for (const theme of ['dark', 'light']) {
     test(`Forced routing rules use flat operator controls in ${theme}`, async ({ page }) => {
+      await page.route('**/api/xray/outbound-tags**', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ ok: true, tags: ['proxy-a', 'direct'] }),
+        });
+      });
       await openPanel(page, theme, { width: 1440, height: 900 });
       await openForcedRules(page);
+
+      await expect(page.locator('#routing-forced-rules-outbound')).toHaveValue('');
+      await page.locator('#routing-forced-rules-outbound').selectOption('direct');
+      await expect(page.locator('#routing-forced-rules-target-hint')).toContainText('напрямую');
+      await page.locator('#routing-forced-rules-values').fill('youtube.com\nhttps://chatgpt.com/c/new\n1.2.3.4/32\ngeoip:private');
+      await page.locator('#routing-forced-rules-add-btn').click();
+      await expect(page.locator('.xk-chip[data-value="domain:youtube.com"]')).toBeVisible();
+      await expect(page.locator('.xk-chip[data-value="domain:chatgpt.com"]')).toBeVisible();
+      await expect(page.locator('.xk-chip[data-value="1.2.3.4/32"]')).toBeVisible();
+      await expect(page.locator('.xk-chip[data-value="geoip:private"]')).toBeVisible();
+      await expect(page.locator('.xk-forced-count.is-domain')).toContainText('домены 2');
+
+      const routerTraffic = page.locator('#routing-forced-rules-inbound-only');
+      await expect(routerTraffic).toBeChecked();
+      await page.locator('.xk-forced-router-traffic-option .xk-forced-option-copy').click();
+      await expect(routerTraffic).toBeChecked();
+      await routerTraffic.click();
+      await expect(routerTraffic).not.toBeChecked();
+      await routerTraffic.click();
+      await expect(routerTraffic).toBeChecked();
+
+      const directCard = page.locator('.xk-forced-rule-card').filter({ hasText: 'direct' });
+      await directCard.locator('.xk-forced-rule-collapse').click();
+      await expect(directCard).toHaveClass(/\bis-collapsed\b/);
+      await expect(directCard.locator('.xk-forced-rule-groups')).toBeHidden();
+      await directCard.locator('.xk-forced-rule-collapse').click();
+      await expect(directCard).not.toHaveClass(/\bis-collapsed\b/);
+      await expect(directCard.locator('.xk-forced-rule-groups')).toBeVisible();
+
+      await page.locator('#routing-forced-rules-outbound').selectOption('proxy-a');
+      await page.locator('#routing-forced-rules-values').fill('youtube.com');
+      await page.locator('#routing-forced-rules-add-btn').click();
+      await expect(page.locator('.xk-forced-rule-card')).toHaveCount(2);
+      await expect(page.locator('.xk-forced-rule-card').filter({ hasText: 'proxy-a' })).toContainText('domain:youtube.com');
+      await expect(page.locator('.xk-forced-rule-card').filter({ hasText: 'direct' })).not.toContainText('domain:youtube.com');
+      await expect(page.locator('#routing-forced-rules-status')).toContainText('перенесено из другого маршрута: 1');
+
+      await page.locator('#routing-forced-rules-modal .xk-forced-advanced > summary').click();
 
       const state = await page.locator('#routing-forced-rules-modal').evaluate((modal) => {
         const inspect = (selector) => {
@@ -506,6 +551,12 @@ test.describe('Operator Console Stage 5 editor workbench contract', () => {
           contentBottom: content.bottom,
           footerBottom: footer.bottom,
           viewport: window.innerHeight,
+          previewPanelOverflow: getComputedStyle(modal.querySelector('.xk-forced-wizard-preview-panel')).overflowY,
+          listScrollHeight: modal.querySelector('.xk-forced-wizard-list').scrollHeight,
+          listClientHeight: modal.querySelector('.xk-forced-wizard-list').clientHeight,
+          listOverflow: getComputedStyle(modal.querySelector('.xk-forced-wizard-list')).overflowY,
+          chipColor: getComputedStyle(modal.querySelector('.xk-chip')).color,
+          countColor: getComputedStyle(modal.querySelector('.xk-forced-count')).color,
         };
       });
 
@@ -532,6 +583,11 @@ test.describe('Operator Console Stage 5 editor workbench contract', () => {
       expect(state.prioritySelectWidth).toBeLessThanOrEqual(281);
       expect(state.clearSelectedIcon).toContain('#xk-broom');
       expect(state.clearAllIcon).toContain('#xk-trash');
+      expect(state.previewPanelOverflow).toBe('hidden');
+      expect(state.listOverflow).toBe('auto');
+      expect(state.listScrollHeight).toBeGreaterThanOrEqual(state.listClientHeight);
+      expect(state.chipColor).not.toBe('rgb(177, 183, 194)');
+      expect(state.countColor).not.toBe('rgb(150, 157, 169)');
       expect(state.footerBottom).toBeLessThanOrEqual(state.contentBottom + 1);
       expect(state.contentBottom).toBeLessThanOrEqual(state.viewport - 17);
     });

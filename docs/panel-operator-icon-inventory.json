@@ -28,7 +28,7 @@
           "accessible_label": "Добавить"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L117",
+          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L120",
           "control_type": "runtime-action",
           "accessible_label": "Добавить"
         },
@@ -291,7 +291,7 @@
       "tabler_asset": "custom:broom",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L118",
+          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L121",
           "control_type": "runtime-action",
           "accessible_label": "Очистить журнал"
         },
@@ -343,7 +343,7 @@
           "accessible_label": "Подтвердить"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L190",
+          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L195",
           "control_type": "runtime-action",
           "accessible_label": "Подтвердить"
         },
@@ -370,6 +370,11 @@
         },
         {
           "location": "xkeen-ui/static/js/features/outbounds.js:L5776",
+          "control_type": "runtime-action",
+          "accessible_label": "Раскрыть"
+        },
+        {
+          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L489",
           "control_type": "runtime-action",
           "accessible_label": "Раскрыть"
         },
@@ -506,12 +511,12 @@
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L363",
+          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L423",
           "control_type": "runtime-action",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L73",
+          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L74",
           "control_type": "runtime-action",
           "accessible_label": "Закрыть"
         },
@@ -932,7 +937,7 @@
           "accessible_label": "Показать доменные имена"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L477",
+          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L540",
           "control_type": "runtime-action",
           "accessible_label": "Показать доменные имена"
         },
@@ -1731,7 +1736,7 @@
           "accessible_label": "Загрузка"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L932",
+          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L1054",
           "control_type": "runtime-action",
           "accessible_label": "Загрузка"
         },
@@ -1759,7 +1764,7 @@
         {
           "location": "xkeen-ui/templates/panel.html:L789",
           "control_type": "icon-only",
-          "accessible_label": "Принудительные правила"
+          "accessible_label": "Маршрутизация сервисов и IP"
         }
       ]
     },
@@ -2209,7 +2214,7 @@
           "accessible_label": "Обновить"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L100",
+          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L101",
           "control_type": "runtime-action",
           "accessible_label": "Обновить"
         },
@@ -2417,7 +2422,7 @@
       "tabler_asset": "refresh",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L191",
+          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L196",
           "control_type": "runtime-action",
           "accessible_label": "Перезапустить"
         },
@@ -2844,7 +2849,7 @@
           "accessible_label": "Перенести"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L77",
+          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L78",
           "control_type": "runtime-action",
           "accessible_label": "Перенести"
         },
@@ -2900,7 +2905,7 @@
           "accessible_label": "Удалить"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L119",
+          "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L122",
           "control_type": "runtime-action",
           "accessible_label": "Удалить"
         },

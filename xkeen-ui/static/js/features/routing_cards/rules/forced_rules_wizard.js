@@ -47,6 +47,7 @@ import { iconHtml } from '../../../ui/operator_icons.js';
     outbound: 'routing-forced-rules-outbound',
     type: 'routing-forced-rules-type',
     values: 'routing-forced-rules-values',
+    targetHint: 'routing-forced-rules-target-hint',
     add: 'routing-forced-rules-add-btn',
     clearProxy: 'routing-forced-rules-clear-proxy-btn',
     clearAll: 'routing-forced-rules-clear-all-btn',
@@ -66,19 +67,19 @@ import { iconHtml } from '../../../ui/operator_icons.js';
     if (!document.body) return null;
 
     document.body.insertAdjacentHTML('beforeend', `
-      <div id="routing-forced-rules-modal" class="modal hidden" data-operator-modal-family="master-detail" data-modal-key="routing-forced-rules-premium-v4" role="dialog" aria-modal="true" aria-label="Принудительные правила (обход ��алансировщика)">
+      <div id="routing-forced-rules-modal" class="modal hidden" data-operator-modal-family="master-detail" data-modal-key="routing-forced-rules-premium-v4" role="dialog" aria-modal="true" aria-label="Маршрутизация сервисов и IP">
         <div class="modal-content" data-modal-key="routing-forced-rules-premium-v4-content">
           <div class="modal-header">
-            <span class="modal-title">Принудительные правила (обход балансировщика)</span>
+            <span class="modal-title">Маршрутизация сервисов и IP</span>
             <button type="button" class="modal-close" id="routing-forced-rules-close-btn" title="Закрыть" aria-label="Закрыть">${iconHtml('close')}</button>
           </div>
           <div class="modal-body">
             <div class="xk-forced-wizard-lead">
               <div class="xk-forced-wizard-lead-icon">${iconHtml('transfer')}</div>
               <div class="xk-forced-wizard-lead-text">
-                <div class="xk-forced-wizard-lead-title">Домены и IP → конкретный outbound</div>
+                <div class="xk-forced-wizard-lead-title">Направьте сервисы через нужный прокси или напрямую</div>
                 <p class="modal-description">
-                  Мастер создаёт правила <code>type: field</code>, которые отправляют выбранные значения <b>мимо балансировщика</b> прямо на нужный <code>outboundTag</code>.
+                  Укажите домены, списки сервисов или IP — мастер создаст правила в обход балансировщика. Один адрес может вести только в один маршрут.
                 </p>
               </div>
             </div>
@@ -88,50 +89,50 @@ import { iconHtml } from '../../../ui/operator_icons.js';
                 <div class="xk-forced-wizard-panelhead">
                   <div>
                     <div class="xk-forced-wizard-kicker">Шаг 1</div>
-                    <div class="terminal-menu-title">Добавить значения</div>
+                    <div class="terminal-menu-title">Что и куда направлять</div>
                   </div>
                 </div>
 
                 <div class="xk-forced-controls-grid">
-                  <label class="xk-forced-fieldgroup">
-                    <span class="xk-forced-fieldlabel">outbound</span>
+                  <div class="xk-forced-fieldgroup">
+                    <span class="xk-forced-fieldlabel">Маршрут</span>
                     <div class="xk-forced-outbound-wrap">
                       <select id="routing-forced-rules-outbound" class="routing-rule-input"></select>
                       <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-refresh-tags-btn" data-tooltip="Обновить список outbound-тегов" aria-label="Обновить список outbound-тегов">${iconHtml('refresh')}</button>
                     </div>
-                  </label>
+                    <small id="routing-forced-rules-target-hint" class="xk-forced-target-hint">Выберите прокси или прямое подключение</small>
+                  </div>
 
-                  <label class="xk-forced-fieldgroup xk-forced-fieldgroup-compact">
-                    <span class="xk-forced-fieldlabel">Тип</span>
+                  <div class="xk-forced-fieldgroup xk-forced-fieldgroup-compact">
+                    <span class="xk-forced-fieldlabel">Распознать как</span>
                     <select id="routing-forced-rules-type" class="routing-rule-input">
-                      <option value="domain">domain</option>
-                      <option value="ip">ip</option>
+                      <option value="auto">Автоматически</option>
+                      <option value="domain">Домены</option>
+                      <option value="ip">IP-адреса</option>
                     </select>
-                  </label>
+                  </div>
                 </div>
 
                 <div class="xk-forced-editor-block">
                   <div class="xk-forced-editor-head">
-                    <span class="xk-forced-fieldlabel">Значения</span>
+                    <span class="xk-forced-fieldlabel">Сервисы, домены и IP</span>
                     <div class="xk-forced-wizard-toolbar">
-                      <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-add-btn" data-tooltip="Добавить значения в выбранный outbound" aria-label="Добавить значения">${iconHtml('add-node')}</button>
+                      <button type="button" class="btn-secondary btn-compact xk-forced-add-btn" id="routing-forced-rules-add-btn" data-tooltip="Добавить значения в выбранный маршрут">${iconHtml('add-node', 'xk-btn-inline-glyph')}<span>Добавить в маршрут</span></button>
                       <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-clear-proxy-btn" data-tooltip="Очистить значения только у выбранного outbound" aria-label="Очистить выбранный outbound метлой">${iconHtml('broom')}</button>
                       <button type="button" class="btn-danger btn-icon xk-icon-btn" id="routing-forced-rules-clear-all-btn" data-tooltip="Удалить все записи мастера" aria-label="Удалить все записи мастера">${iconHtml('trash')}</button>
                     </div>
                   </div>
 
-                  <textarea id="routing-forced-rules-values" class="xkeen-textarea" spellcheck="false" rows="7" placeholder="По одному на строке
-example.com
-domain:google.com
-geosite:youtube
-
-Для ip:
+                  <textarea id="routing-forced-rules-values" class="xkeen-textarea" spellcheck="false" rows="7" placeholder="По одному на строке, можно смешивать:
+youtube.com
+geosite:google
+https://chatgpt.com/
 1.2.3.4/32
 geoip:private"></textarea>
                 </div>
 
                 <div class="xk-forced-wizard-note">
-                  Поддерживаются обычные значения Xray для <code>domain</code>/<code>ip</code>: <code>domain:example.com</code>, <code>geosite:TAG</code>, <code>geoip:TAG</code> и другие.
+                  Обычный домен охватывает его поддомены. Ссылки преобразуются в домены. Также поддерживаются <code>geosite:TAG</code>, <code>geoip:TAG</code>, CIDR и расширенный синтаксис Xray.
                 </div>
               </section>
 
@@ -139,42 +140,46 @@ geoip:private"></textarea>
                 <div class="xk-forced-wizard-panelhead">
                   <div>
                     <div class="xk-forced-wizard-kicker">Шаг 2</div>
-                    <div class="terminal-menu-title">Параметры и результат</div>
+                    <div class="terminal-menu-title">Готовые маршруты</div>
                   </div>
-                  <div id="routing-forced-rules-summary" class="xk-forced-wizard-summary" data-tooltip="Количество outbound, domain и ip в мастере">0 outbound · 0 domain · 0 ip</div>
+                  <div id="routing-forced-rules-summary" class="xk-forced-wizard-summary" data-tooltip="Количество маршрутов, доменов и IP">0 маршрутов · 0 доменов · 0 IP</div>
                 </div>
 
                 <div class="xk-forced-options-grid">
-                  <label class="xk-forced-option-card global-autorestart-toggle">
+                  <div class="xk-forced-option-card global-autorestart-toggle xk-forced-router-traffic-option">
                     <input type="checkbox" id="routing-forced-rules-inbound-only" checked>
                     <div class="xk-forced-option-copy">
-                      <strong>Только redirect / tproxy</strong>
-                      <small>Не трогать другие inbound</small>
+                      <strong>Только трафик этого роутера</strong>
+                      <small>Рекомендуется: только <code>redirect</code> / <code>tproxy</code>; другие входящие подключения не затрагиваются</small>
                     </div>
-                  </label>
+                  </div>
 
-                  <label class="xk-forced-option-card xk-forced-option-select">
-                    <span class="xk-forced-fieldlabel">Приоритет</span>
-                    <select id="routing-forced-rules-priority" class="routing-rule-input">
-                      <option value="after_block">После block-правил</option>
-                      <option value="before_balancer">Перед балансировщиком</option>
-                    </select>
-                  </label>
-
-                  <label class="xk-forced-option-card global-autorestart-toggle xk-forced-option-wide">
-                    <input type="checkbox" id="routing-forced-rules-import-legacy">
-                    <div class="xk-forced-option-copy">
-                      <strong>Импорт legacy-правил</strong>
-                      <small>Мигрировать правила без <code>ruleTag</code> без дублей</small>
+                  <details class="xk-forced-advanced">
+                    <summary>Дополнительные настройки</summary>
+                    <div class="xk-forced-advanced-body">
+                      <div class="xk-forced-option-card xk-forced-option-select">
+                        <span class="xk-forced-fieldlabel">Порядок правил</span>
+                        <select id="routing-forced-rules-priority" class="routing-rule-input">
+                          <option value="after_block">Рекомендуемый · после блокировок</option>
+                          <option value="before_balancer">После моих правил · перед балансировщиком</option>
+                        </select>
+                      </div>
+                      <div class="xk-forced-option-card global-autorestart-toggle xk-forced-option-wide">
+                        <input type="checkbox" id="routing-forced-rules-import-legacy">
+                        <div class="xk-forced-option-copy">
+                          <strong>Импорт старых правил</strong>
+                          <small>Взять под управление похожие правила без <code>ruleTag</code> и убрать дубли</small>
+                        </div>
+                      </div>
                     </div>
-                  </label>
+                  </details>
                 </div>
 
                 <div class="xk-forced-wizard-listbox">
                   <div class="xk-forced-wizard-listhead">
                     <div class="xk-forced-wizard-listtitle">
-                      <div class="terminal-menu-title">Текущие правила</div>
-                      <div class="xk-forced-list-subtitle">Карточки по outboundTag: компактный обзор, клик по chip удаляет значение</div>
+                      <div class="terminal-menu-title">Карта маршрутов</div>
+                      <div class="xk-forced-list-subtitle">Первое совпадение определяет маршрут. Нажмите на адрес, чтобы удалить его.</div>
                     </div>
                     <div id="routing-forced-rules-status" class="modal-hint"></div>
                   </div>
@@ -187,8 +192,8 @@ geoip:private"></textarea>
           <div class="modal-actions xk-forced-wizard-footer">
             <button type="button" class="btn-compact" id="routing-forced-rules-cancel-btn">Отмена</button>
             <div class="xk-forced-wizard-footer-actions">
-              <button type="button" class="btn-secondary btn-compact xk-forced-primary-action" id="routing-forced-rules-dry-btn" data-tooltip="Только применить изменения в редакторе без сохранения и рестарта">${iconHtml('check', 'xk-btn-inline-glyph')}<span>Только применить</span></button>
-              <button type="button" class="btn-danger btn-compact xk-forced-primary-action" id="routing-forced-rules-run-btn">${iconHtml('restart', 'xk-btn-inline-glyph')}<span>Применить + Рестарт</span></button>
+              <button type="button" class="btn-secondary btn-compact xk-forced-primary-action" id="routing-forced-rules-dry-btn" data-tooltip="Перенести правила в JSON-редактор без сохранения">${iconHtml('check', 'xk-btn-inline-glyph')}<span>В JSON-редактор</span></button>
+              <button type="button" class="btn-danger btn-compact xk-forced-primary-action" id="routing-forced-rules-run-btn">${iconHtml('restart', 'xk-btn-inline-glyph')}<span>Сохранить и перезапустить</span></button>
             </div>
           </div>
         </div>
@@ -210,6 +215,10 @@ geoip:private"></textarea>
   function openModal() {
     const m = ensureModalDom();
     if (!m) return;
+    try {
+      const tooltip = document.getElementById('xk-tooltip-portal');
+      if (tooltip) tooltip.setAttribute('hidden', '');
+    } catch (e) {}
     try { m.classList.remove('hidden'); } catch (e) {}
     _syncBodyScroll();
   }
@@ -243,7 +252,7 @@ geoip:private"></textarea>
       ips += Array.isArray(item.ips) ? item.ips.length : 0;
     });
     try {
-      el.textContent = `${tags.length} outbound · ${domains} domain · ${ips} ip`;
+      el.textContent = `${tags.length} маршрутов · ${domains} доменов · ${ips} IP`;
     } catch (e) {}
   }
 
@@ -263,7 +272,9 @@ geoip:private"></textarea>
   FW._state = FW._state || {
     forced: {}, // tag -> { domains:[], ips:[] }
     tags: [],
+    collapsed: {},
   };
+  FW._state.collapsed = FW._state.collapsed || {};
 
   function normalizeList(values) {
     const raw = String(values || '')
@@ -279,6 +290,55 @@ geoip:private"></textarea>
       out.push(v);
     }
     return out;
+  }
+
+  function normalizeInputValue(value, kind) {
+    let v = String(value || '').trim();
+    if (!v) return '';
+    if (kind !== 'ip' && /^[a-z][a-z0-9+.-]*:\/\//i.test(v)) {
+      try {
+        const u = new URL(v);
+        if (u.hostname) return `domain:${String(u.hostname).toLowerCase()}`;
+      } catch (e) {}
+    }
+    if (kind === 'domain') {
+      const lc = v.toLowerCase();
+      const advanced = ['domain:', 'full:', 'keyword:', 'regexp:', 'geosite:', 'ext:', 'dotless:'];
+      if (advanced.some((prefix) => lc.startsWith(prefix))) return v;
+      if (/^[^\s/:]+(?:\.[^\s/:]+)+\.?$/.test(v)) return `domain:${v.replace(/\.$/, '').toLowerCase()}`;
+    }
+    return v;
+  }
+
+  function detectInputKind(value) {
+    const v = String(value || '').trim();
+    const lc = v.toLowerCase();
+    if (lc.startsWith('geoip:')) return 'ip';
+    if (lc.startsWith('ext:')) return lc.includes('geoip') ? 'ip' : 'domain';
+    if (['domain:', 'full:', 'keyword:', 'regexp:', 'geosite:', 'dotless:'].some((prefix) => lc.startsWith(prefix))) return 'domain';
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(v)) return 'domain';
+    if (/^[^\s/:]+(?:\.[^\s/:]+)+:\d{1,5}$/.test(v)) return 'domain';
+    if (/^(?:\d{1,3}\.){3}\d{1,3}(?:\/\d{1,2})?$/.test(v)) return 'ip';
+    if (v.includes(':') && !lc.startsWith('ext:')) return 'ip';
+    return 'domain';
+  }
+
+  function parseInputValues(values, requestedKind) {
+    const result = { domains: [], ips: [] };
+    for (const raw of normalizeList(values)) {
+      const kind = requestedKind === 'ip' || requestedKind === 'domain' ? requestedKind : detectInputKind(raw);
+      const value = normalizeInputValue(raw, kind);
+      if (value) result[kind === 'ip' ? 'ips' : 'domains'].push(value);
+    }
+    result.domains = normalizeList(result.domains.join('\n'));
+    result.ips = normalizeList(result.ips.join('\n'));
+    return result;
+  }
+
+  function comparableValue(value, kind) {
+    let v = String(value || '').trim().toLowerCase();
+    if (kind === 'domain') v = v.replace(/^domain:/, '').replace(/\.$/, '');
+    return v;
   }
 
   function safeRuleTagForOutbound(tag, kind) {
@@ -355,7 +415,7 @@ geoip:private"></textarea>
     const tags = Object.keys(forced);
     updateSummary();
     if (!tags.length) {
-      el.innerHTML = '<div class="xk-forced-wizard-empty">Пока пусто. Добавьте домены или IP слева.</div>';
+      el.innerHTML = '<div class="xk-forced-wizard-empty"><strong>Маршрутов пока нет</strong><span>Выберите прокси или «Напрямую», вставьте адреса слева и нажмите «Добавить в маршрут».</span></div>';
       return;
     }
 
@@ -414,17 +474,19 @@ geoip:private"></textarea>
         }
       }
 
+      const collapsed = !!FW._state.collapsed[tag];
       parts.push(
-        `<div class="xk-forced-rule-card${compactInline ? ' is-inline' : ''}">` +
+        `<div class="xk-forced-rule-card${compactInline ? ' is-inline' : ''}${collapsed ? ' is-collapsed' : ''}">` +
           `<div class="xk-forced-rule-head">` +
             `<div class="xk-forced-rule-tagwrap">` +
               `<span class="xk-forced-rule-accent" aria-hidden="true"></span>` +
               `<div class="xk-forced-rule-tag"><code>${escapeHtml(tag)}</code></div>` +
             `</div>` +
             `<div class="xk-forced-rule-badges">` +
-              `<span class="xk-forced-count is-total">${total} знач.</span>` +
-              `<span class="xk-forced-count is-domain">domain ${d.length}</span>` +
-              `<span class="xk-forced-count is-ip">ip ${ip.length}</span>` +
+              `<span class="xk-forced-count is-total">${total} адресов</span>` +
+              `<span class="xk-forced-count is-domain">домены ${d.length}</span>` +
+              `<span class="xk-forced-count is-ip">IP ${ip.length}</span>` +
+              `<button type="button" class="btn-secondary btn-icon xk-icon-btn xk-forced-rule-collapse${collapsed ? '' : ' is-expanded'}" data-tag="${escapeHtml(tag)}" aria-expanded="${collapsed ? 'false' : 'true'}" data-tooltip="${collapsed ? 'Развернуть маршрут' : 'Свернуть маршрут'}" aria-label="${collapsed ? 'Развернуть маршрут' : 'Свернуть маршрут'}">${iconHtml('chevron-down')}</button>` +
             `</div>` +
           `</div>` +
           `<div class="xk-forced-rule-groups${compactInline ? ' is-inline' : ''}">${groups.join('') || '<span class="xk-forced-rule-empty">—</span>'}</div>` +
@@ -453,6 +515,7 @@ geoip:private"></textarea>
     it[k] = it[k].filter((x) => String(x || '').trim() !== v);
     if (!it.domains.length && !it.ips.length) {
       try { delete FW._state.forced[t]; } catch (e) {}
+      try { delete FW._state.collapsed[t]; } catch (e2) {}
     }
     renderList();
   }
@@ -503,29 +566,56 @@ geoip:private"></textarea>
       sel.value = '';
       return;
     }
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Выберите маршрут…';
+    placeholder.disabled = true;
+    sel.appendChild(placeholder);
     for (const t of filtered) {
       const opt = document.createElement('option');
       opt.value = t;
-      opt.textContent = t;
+      opt.textContent = t.toLowerCase() === 'direct' ? 'Напрямую · direct' : t;
       sel.appendChild(opt);
     }
-    if (prev && filtered.includes(prev)) sel.value = prev;
-    else sel.value = filtered[0] || '';
+    sel.value = prev && filtered.includes(prev) ? prev : '';
+    updateTargetHint();
+  }
+
+  function updateTargetHint() {
+    const sel = $(IDS.outbound);
+    const hint = $(IDS.targetHint);
+    if (!hint) return;
+    const tag = sel ? String(sel.value || '').trim() : '';
+    hint.textContent = tag.toLowerCase() === 'direct'
+      ? 'Трафик пойдёт напрямую, без прокси'
+      : (tag ? `Трафик всегда пойдёт через «${tag}»` : 'Выберите прокси или прямое подключение');
   }
 
   function addValuesToState(outboundTag, kind, values) {
     const tag = String(outboundTag || '').trim();
-    if (!tag) return { added: 0 };
+    if (!tag) return { added: 0, moved: 0 };
     if (!FW._state.forced[tag]) FW._state.forced[tag] = { domains: [], ips: [] };
     const it = FW._state.forced[tag];
     const key = (kind === 'ip') ? 'ips' : 'domains';
 
-    const existing = new Set((it[key] || []).map((x) => String(x || '').trim()).filter(Boolean));
+    const existing = new Set((it[key] || []).map((x) => comparableValue(x, kind)).filter(Boolean));
     let added = 0;
+    let moved = 0;
     for (const v of values) {
       const vv = String(v || '').trim();
-      if (!vv || existing.has(vv)) continue;
-      existing.add(vv);
+      const comparable = comparableValue(vv, kind);
+      if (!vv) continue;
+      for (const otherTag of Object.keys(FW._state.forced || {})) {
+        if (otherTag === tag) continue;
+        const other = FW._state.forced[otherTag];
+        if (!other || !Array.isArray(other[key])) continue;
+        const before = other[key].length;
+        other[key] = other[key].filter((x) => comparableValue(x, kind) !== comparable);
+        if (other[key].length !== before) moved++;
+        if (!other.domains.length && !other.ips.length) delete FW._state.forced[otherTag];
+      }
+      if (existing.has(comparable)) continue;
+      existing.add(comparable);
       it[key].push(vv);
       added++;
     }
@@ -534,7 +624,13 @@ geoip:private"></textarea>
     if (!it.domains.length && !it.ips.length) {
       try { delete FW._state.forced[tag]; } catch (e) {}
     }
-    return { added };
+    return { added, moved };
+  }
+
+  function addParsedValuesToState(outboundTag, parsed) {
+    const d = addValuesToState(outboundTag, 'domain', parsed.domains || []);
+    const ip = addValuesToState(outboundTag, 'ip', parsed.ips || []);
+    return { added: d.added + ip.added, moved: d.moved + ip.moved, domains: d.added, ips: ip.added };
   }
 
   function clearSelected() {
@@ -544,11 +640,13 @@ geoip:private"></textarea>
     if (FW._state.forced && FW._state.forced[tag]) {
       try { delete FW._state.forced[tag]; } catch (e) {}
     }
+    try { delete FW._state.collapsed[tag]; } catch (e2) {}
     renderList();
   }
 
   function clearAll() {
     FW._state.forced = {};
+    FW._state.collapsed = {};
     renderList();
   }
 
@@ -855,20 +953,36 @@ geoip:private"></textarea>
       const typeEl = $(IDS.type);
       const valEl = $(IDS.values);
       const tag = sel ? String(sel.value || '').trim() : '';
-      const kind = typeEl ? String(typeEl.value || 'domain') : 'domain';
-      const values = normalizeList(valEl ? valEl.value : '');
+      const kind = typeEl ? String(typeEl.value || 'auto') : 'auto';
+      const parsed = parseInputValues(valEl ? valEl.value : '', kind);
       if (!tag) {
-        setStatus('Выберите outboundTag.', true);
+        setStatus('Выберите маршрут: конкретный прокси или прямое подключение.', true);
         return;
       }
-      if (!values.length) {
-        setStatus('Добавьте хотя бы одно значение.', true);
+      if (!parsed.domains.length && !parsed.ips.length) {
+        setStatus('Добавьте хотя бы один домен, ссылку или IP-адрес.', true);
         return;
       }
-      const r = addValuesToState(tag, kind, values);
+      const r = addParsedValuesToState(tag, parsed);
       try { if (valEl) valEl.value = ''; } catch (e2) {}
       renderList();
-      setStatus(`Добавлено: ${r.added}.`, false);
+      const parts = [];
+      if (r.domains) parts.push(`доменов: ${r.domains}`);
+      if (r.ips) parts.push(`IP: ${r.ips}`);
+      if (r.moved) parts.push(`перенесено из другого маршрута: ${r.moved}`);
+      if (r.added) setStatus(`Добавлено в «${tag}» — ${parts.join(' · ')}.`, false);
+      else if (r.moved) setStatus(`Адрес уже был в «${tag}»; удалено дублей из других маршрутов: ${r.moved}.`, false);
+      else setStatus('Эти адреса уже есть в выбранном маршруте.', false);
+    });
+
+    const outboundEl = $(IDS.outbound);
+    if (outboundEl) outboundEl.addEventListener('change', updateTargetHint);
+
+    const valuesEl = $(IDS.values);
+    if (valuesEl) valuesEl.addEventListener('keydown', (e) => {
+      if (!(e && (e.ctrlKey || e.metaKey) && e.key === 'Enter')) return;
+      e.preventDefault();
+      try { addBtn && addBtn.click(); } catch (e2) {}
     });
 
     const clearProxyBtn = $(IDS.clearProxy);
@@ -898,6 +1012,14 @@ geoip:private"></textarea>
       listEl.addEventListener('click', (e) => {
         try {
           const target = e && e.target;
+          const collapse = target && target.closest ? target.closest('.xk-forced-rule-collapse') : null;
+          if (collapse && collapse.getAttribute) {
+            const tag = String(collapse.getAttribute('data-tag') || '').trim();
+            if (!tag) return;
+            FW._state.collapsed[tag] = !FW._state.collapsed[tag];
+            renderList();
+            return;
+          }
           const t = target && target.closest ? target.closest('.xk-chip') : target;
           if (!t || !t.getAttribute) return;
           if (!t.classList || !t.classList.contains('xk-chip')) return;

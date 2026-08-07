@@ -2003,6 +2003,20 @@ def test_forced_rules_wizard_uses_real_outbounds_and_separates_domain_ip_rules()
     assert "buildForcedRule(tag, 'ip', ips, { inboundOnly })" in text
     assert "fields inside one RuleObject as AND conditions" in text
     assert "if (newRules.length) {" in text
+    assert "function parseInputValues(values, requestedKind)" in text
+    assert "function detectInputKind(value)" in text
+    assert "return `domain:${String(u.hostname).toLowerCase()}`;" in text
+    assert "placeholder.textContent = 'Выберите маршрут…';" in text
+    assert "Трафик пойдёт напрямую, без прокси" in text
+    assert "other[key] = other[key].filter" in text
+    assert "перенесено из другого маршрута" in text
+    assert "удалено дублей из других маршрутов" in text
+    css = Path('xkeen-ui/static/panel-operator.css').read_text(encoding='utf-8')
+    assert "#routing-forced-rules-modal .xk-forced-wizard-preview-panel {\n  overflow: hidden !important;" in css
+    assert "#routing-forced-rules-modal .xk-forced-wizard-listbox {\n  display: flex;\n  flex: 1 1 0;" in css
+    assert "#routing-forced-rules-modal .xk-chip" in css
+    assert "color: var(--op-text) !important;" in css
+    assert "max-height: min(40dvh, 360px);" in css
 
 
 def test_quick_balancer_wizard_normalizes_default_rule_and_reports_observatory_noop():
