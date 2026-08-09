@@ -248,11 +248,7 @@ export async function refreshMihomoClashGroups() {
     if (!active || sequence !== requestSequence) return false;
     payload = next && typeof next === 'object' ? next : { groups: [] };
     if (!disclosureSeeded) {
-      const initialGroups = groups();
-      const initiallyOpen = initialGroups.find((group) => !group.hidden) || initialGroups[0];
-      for (const group of initialGroups) {
-        if (group.name !== initiallyOpen?.name) collapsedGroups.add(group.name);
-      }
+      for (const group of groups()) collapsedGroups.add(group.name);
       disclosureSeeded = true;
     }
     render();

@@ -75,7 +75,26 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   });
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('AUTO');
   await expect(page.locator('#mihomo-clash-groups-list')).not.toContainText('HIDDEN');
-  await expect(page.locator('[data-group-name="AUTO"] [data-mihomo-group-toggle]')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('[data-group-name="AUTO"] [data-mihomo-group-toggle]')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#mihomo-clash-groups-collapse')).toHaveText('Развернуть');
+  await expect(page.locator('#mihomo-clash-test-visible')).toBeDisabled();
+  const collapseGeometry = await page.locator('#mihomo-clash-groups-collapse').evaluate((button) => {
+    const icon = button.querySelector('.xk-action-icon');
+    const label = button.querySelector('span:not(.xk-action-icon)');
+    const iconBox = icon?.getBoundingClientRect();
+    const labelBox = label?.getBoundingClientRect();
+    return {
+      iconFlexShrink: icon ? getComputedStyle(icon).flexShrink : null,
+      labelRightOfIcon: !!iconBox && !!labelBox && labelBox.left >= iconBox.right,
+      verticallyAligned: !!iconBox && !!labelBox
+        && Math.abs((iconBox.top + iconBox.height / 2) - (labelBox.top + labelBox.height / 2)) <= 1,
+    };
+  });
+  expect(collapseGeometry).toEqual({
+    iconFlexShrink: '0',
+    labelRightOfIcon: true,
+    verticallyAligned: true,
+  });
 
   await page.locator('#mihomo-clash-show-hidden').check();
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('HIDDEN');

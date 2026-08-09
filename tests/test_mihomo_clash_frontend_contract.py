@@ -150,6 +150,18 @@ def test_groups_ui_has_compact_filter_select_and_bounded_delay_contract():
     assert "encodeURIComponent" in client
 
 
+def test_groups_start_collapsed_and_keep_labelled_actions_on_one_baseline():
+    markup = _mihomo_markup()
+    groups = _text(GROUPS)
+    css = _text(CSS)
+
+    assert "for (const group of groups()) collapsedGroups.add(group.name);" in groups
+    assert 'id="mihomo-clash-groups-collapse"' in markup
+    assert ".xk-mihomo-groups-collapse" in css
+    assert "display: inline-flex !important;" in css
+    assert "> span:not(.xk-action-icon)" in css
+
+
 def test_groups_lifecycle_stops_load_and_delay_work_outside_control_view():
     feature = _text(FEATURE)
     groups = _text(GROUPS)

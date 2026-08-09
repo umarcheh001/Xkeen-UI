@@ -16536,13 +16536,14 @@ body.panel-page .fm-footer :is(.fm-help-btn, .fm-footer-action) .xk-action-label
  * operational strip and one state surface, not a cloned analytics dashboard. */
 body.panel-page #view-mihomo {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 body.panel-page .xk-mihomo-workspace-head {
   display: flex;
   align-items: center;
   min-width: 0;
+  margin-bottom: 2px;
 }
 
 body.panel-page .xk-mihomo-workspace-title {
@@ -16808,18 +16809,36 @@ body.panel-page .xk-mihomo-groups-count {
   white-space: nowrap;
 }
 
-body.panel-page :is(#mihomo-clash-test-visible, .xk-mihomo-group-test) {
-  display: inline-flex;
+/* The legacy base sheet makes inline SVG block-level. Keep all labelled
+ * groups actions on a single baseline, including the collapse control. */
+body.panel-page :is(#mihomo-clash-test-visible, .xk-mihomo-groups-collapse, .xk-mihomo-group-test) {
+  display: inline-flex !important;
   align-items: center;
   justify-content: center;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
   gap: 5px;
   padding: 0 9px;
   white-space: nowrap;
 }
 
-body.panel-page :is(#mihomo-clash-test-visible, .xk-mihomo-group-test) .xk-action-icon {
+/* `.xk-mihomo-groups-toolbar` is a flex parent and a legacy descendant rule
+ * changes controls to `display:flex`; repeat the exact selector to retain the
+ * labelled inline baseline for the collapse action. */
+body.panel-page .xk-mihomo-groups-toolbar > :is(#mihomo-clash-test-visible, .xk-mihomo-groups-collapse) {
+  display: inline-flex !important;
+}
+
+body.panel-page :is(#mihomo-clash-test-visible, .xk-mihomo-groups-collapse, .xk-mihomo-group-test) .xk-action-icon {
+  flex: 0 0 auto;
   width: 14px;
   height: 14px;
+  margin: 0;
+}
+
+body.panel-page :is(#mihomo-clash-test-visible, .xk-mihomo-groups-collapse, .xk-mihomo-group-test) > span:not(.xk-action-icon) {
+  display: inline !important;
+  line-height: 1;
 }
 
 body.panel-page .xk-mihomo-delay-run {
