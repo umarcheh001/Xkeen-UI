@@ -20,6 +20,8 @@ let request = null;
 let requestSequence = 0;
 let selection = null;
 let delayRun = null;
+const collapsedGroups = new Set();
+let disclosureSeeded = false;
 const latestDelays = new Map();
 let messageTimer = 0;
 
@@ -161,9 +163,19 @@ function groupSummary(group) {
 
 function renderGroup(group) {
   const nodes = Array.isArray(group.nodes) ? group.nodes : [];
+  // A search result must never stay hidden inside a previously collapsed group.
+  // Keep the persisted disclosure state and only expand matches for the duration
+  // of the active filter.
+  const collapsed = collapsedGroups.has(group.name) && !filterText.trim();
+  const panelId = `mihomo-group-${encodeURIComponent(group.name).replace(/%/g, '-').replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   return `
     <section class="xk-mihomo-group" data-group-name="${escapeHtml(group.name)}">
-      <header class="xk-mihomo-group-head">
+      <header class="xk-mihomo-group-head${collapsed ? ' is-collapsed' : ''}">
+        <button type="button" class="xk-mihomo-group-toggle" data-mihomo-group-toggle="1"
+          data-group="${escapeHtml(group.name)}" aria-expanded="${collapsed ? 'false' : 'true'}" aria-controls="${panelId}">
+          ${iconHtml('chevron-down')}
+          <span class="xk-visually-hidden">${collapsed ? 'Развернуть' : 'Свернуть'} группу ${escapeHtml(group.name)}</span>
+        </button>
         <div class="xk-mihomo-group-title">
           <div><strong title="${escapeHtml(group.name)}">${escapeHtml(group.name)}</strong>${group.hidden ? '<span class="xk-mihomo-group-flag">hidden</span>' : ''}</div>
           <small>${escapeHtml(groupSummary(group))}</small>
@@ -172,10 +184,12 @@ function renderGroup(group) {
         <button type="button" class="btn-secondary xk-mihomo-group-test" data-mihomo-group-delay="1"
           data-group="${escapeHtml(group.name)}" ${delayRun ? 'disabled' : ''}>${iconHtml('ping')}<span>Тест группы</span></button>
       </header>
-      <div class="xk-mihomo-node-head" aria-hidden="true"><span>Узел / provider</span><span>Состояние</span><span>Задержка</span><span></span></div>
-      <ul class="xk-mihomo-node-list" aria-label="Узлы группы ${escapeHtml(group.name)}">
-        ${nodes.length ? nodes.map((node) => renderNode(group, node)).join('') : '<li class="xk-mihomo-groups-empty">Нет узлов по текущему фильтру.</li>'}
-      </ul>
+      <div id="${panelId}" class="xk-mihomo-group-body" ${collapsed ? 'hidden' : ''}>
+        <div class="xk-mihomo-node-head" aria-hidden="true"><span>Узел / provider</span><span>Состояние</span><span>Задержка</span><span></span></div>
+        <ul class="xk-mihomo-node-list" aria-label="Узлы группы ${escapeHtml(group.name)}">
+          ${nodes.length ? nodes.map((node) => renderNode(group, node)).join('') : '<li class="xk-mihomo-groups-empty">Нет узлов по текущему фильтру.</li>'}
+        </ul>
+      </div>
     </section>`;
 }
 
@@ -187,12 +201,24 @@ function render() {
   const runButton = document.getElementById('mihomo-clash-test-visible');
   const cancelButton = document.getElementById('mihomo-clash-delay-cancel');
   const progress = document.getElementById('mihomo-clash-delay-progress');
+  const collapseButton = document.getElementById('mihomo-clash-groups-collapse');
   if (!list) return;
   const visibleGroups = filteredGroups();
   const visibleNodes = visibleGroups.reduce((sum, group) => sum + (group.nodes || []).length, 0);
+  const visibleExpandedNodes = visibleGroups.reduce(
+    (sum, group) => sum + (collapsedGroups.has(group.name) && !filterText.trim() ? 0 : (group.nodes || []).length),
+    0,
+  );
   if (count) count.textContent = `${visibleGroups.length} групп · ${visibleNodes} узлов`;
   if (hiddenToggle) hiddenToggle.checked = showHidden;
-  if (runButton) runButton.disabled = !!delayRun || !visibleNodes;
+  if (runButton) runButton.disabled = !!delayRun || !visibleExpandedNodes;
+  if (collapseButton) {
+    const allCollapsed = visibleGroups.length > 0 && visibleGroups.every((group) => collapsedGroups.has(group.name));
+    collapseButton.dataset.mode = allCollapsed ? 'expand' : 'collapse';
+    collapseButton.setAttribute('aria-label', allCollapsed ? 'Развернуть все группы' : 'Свернуть все группы');
+    const label = collapseButton.querySelector('span:not(.xk-action-icon)');
+    if (label) label.textContent = allCollapsed ? 'Развернуть' : 'Свернуть';
+  }
   if (cancelButton) cancelButton.hidden = !delayRun;
   if (progress) {
     progress.hidden = !delayRun;
@@ -221,6 +247,14 @@ export async function refreshMihomoClashGroups() {
     const next = await fetchMihomoClashGroups({ signal: controller?.signal });
     if (!active || sequence !== requestSequence) return false;
     payload = next && typeof next === 'object' ? next : { groups: [] };
+    if (!disclosureSeeded) {
+      const initialGroups = groups();
+      const initiallyOpen = initialGroups.find((group) => !group.hidden) || initialGroups[0];
+      for (const group of initialGroups) {
+        if (group.name !== initiallyOpen?.name) collapsedGroups.add(group.name);
+      }
+      disclosureSeeded = true;
+    }
     render();
     setMessage(groups().length ? 'Данные Mihomo обновлены.' : 'Mihomo не вернул рабочих групп.', groups().length ? 'positive' : 'warning');
     return true;
@@ -372,6 +406,7 @@ function visibleNodeQueue() {
   const names = new Set();
   const items = [];
   for (const group of filteredGroups()) {
+    if (collapsedGroups.has(group.name) && !filterText.trim()) continue;
     for (const node of group.nodes || []) {
       const key = delayKey(node.name, node.provider);
       if (names.has(key)) continue;
@@ -395,12 +430,32 @@ function bind() {
   root.addEventListener('change', (event) => {
     if (event.target?.id !== 'mihomo-clash-show-hidden') return;
     showHidden = !!event.target.checked;
+    if (showHidden) {
+      for (const group of groups()) {
+        if (group.hidden) collapsedGroups.add(group.name);
+      }
+    }
     render();
   });
   root.addEventListener('click', (event) => {
-    const target = event.target?.closest?.('[data-mihomo-groups-refresh], [data-mihomo-group-select], [data-mihomo-node-delay], [data-mihomo-group-delay], [data-mihomo-delay-visible], [data-mihomo-delay-cancel]');
+    const target = event.target?.closest?.('[data-mihomo-groups-refresh], [data-mihomo-groups-collapse], [data-mihomo-group-toggle], [data-mihomo-group-select], [data-mihomo-node-delay], [data-mihomo-group-delay], [data-mihomo-delay-visible], [data-mihomo-delay-cancel]');
     if (!target) return;
     if (target.hasAttribute('data-mihomo-groups-refresh')) void refreshMihomoClashGroups();
+    if (target.hasAttribute('data-mihomo-groups-collapse')) {
+      const visibleGroups = filteredGroups();
+      const shouldExpand = target.dataset.mode === 'expand';
+      for (const group of visibleGroups) {
+        if (shouldExpand) collapsedGroups.delete(group.name);
+        else collapsedGroups.add(group.name);
+      }
+      render();
+    }
+    if (target.hasAttribute('data-mihomo-group-toggle')) {
+      const name = String(target.dataset.group || '');
+      if (collapsedGroups.has(name)) collapsedGroups.delete(name);
+      else collapsedGroups.add(name);
+      render();
+    }
     if (target.hasAttribute('data-mihomo-group-select')) void selectProxy(target.dataset.group, target.dataset.node);
     if (target.hasAttribute('data-mihomo-node-delay')) {
       const provider = String(target.dataset.provider || '');

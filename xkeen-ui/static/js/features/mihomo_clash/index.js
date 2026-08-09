@@ -129,6 +129,7 @@ function applySubview(name, options = {}) {
   document.querySelectorAll('[data-mihomo-clash-panel]').forEach((panel) => {
     setHidden(panel, panel.dataset.mihomoClashPanel !== next);
   });
+  setHidden(runtimeRoot(), next === 'config');
   if (next === 'config') {
     abortStatusRequest();
     deactivateMihomoClashGroups();

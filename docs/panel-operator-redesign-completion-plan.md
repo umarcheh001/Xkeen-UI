@@ -2,7 +2,9 @@
 
 Дата аудита: 28 июля 2026 года.
 
-Статус выполнения: **Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 закрыт 29 июля 2026 года: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля, задачи «Commands», «Logs», «Files», «Mihomo profiles/generator» и «Формы подписок» — 29 июля; Этап 5 в работе: 2 августа закрыты общий editor modal contract и comments/schema status labels, 3 августа — responsive editor help drawer/workbench, fullscreen сложных модалов на mobile и применение четырёх modal families ко всем 50 статическим окнам, 4 августа — чистка presentation inline geometry и state-aware auto-height empty/error; Этапы 6–7 остаются открыты; сквозной icon-поток I0–I6 закрыт 1 августа 2026 года.** Контракт, state matrix и baseline Этапа 0 зафиксированы в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md), канонический snapshot — в [`panel-operator-stage0-inventory.json`](panel-operator-stage0-inventory.json). Система scoped-примитивов и проверки Этапа 1 зафиксированы в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md), контракт шапки, navigation rail и editor-first grid Этапа 2 — в [`panel-operator-stage2-shell-grid.md`](panel-operator-stage2-shell-grid.md), единый accordion/data-row/state contract инспектора Routing Этапа 3 — в [`panel-operator-stage3-routing-cards.md`](panel-operator-stage3-routing-cards.md). Контракты закрытых задач Этапа 4: [`panel-operator-stage4-ports.md`](panel-operator-stage4-ports.md), [`panel-operator-stage4-routing-rules.md`](panel-operator-stage4-routing-rules.md), [`panel-operator-stage4-balancers.md`](panel-operator-stage4-balancers.md), [`panel-operator-stage4-commands.md`](panel-operator-stage4-commands.md), [`panel-operator-stage4-logs.md`](panel-operator-stage4-logs.md), [`panel-operator-stage4-files.md`](panel-operator-stage4-files.md) и [`panel-operator-stage4-mihomo-forms.md`](panel-operator-stage4-mihomo-forms.md).
+Статус выполнения: **Визуальный corrective gate Clash/Mihomo реализован в исходниках 10 августа 2026 года; переход к следующему этапу Clash API блокирует только повторный acceptance новой сборки на роутере. Исторические Этапы 0–4 повторно применены к новому runtime workspace.**
+
+Исторический статус: **Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 закрыт 29 июля 2026 года: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля, задачи «Commands», «Logs», «Files», «Mihomo profiles/generator» и «Формы подписок» — 29 июля; Этап 5 в работе: 2 августа закрыты общий editor modal contract и comments/schema status labels, 3 августа — responsive editor help drawer/workbench, fullscreen сложных модалов на mobile и применение четырёх modal families ко всем 50 статическим окнам, 4 августа — чистка presentation inline geometry и state-aware auto-height empty/error; Этапы 6–7 остаются открыты; сквозной icon-поток I0–I6 закрыт 1 августа 2026 года.** Контракт, state matrix и baseline Этапа 0 зафиксированы в [`panel-operator-stage0-contract.md`](panel-operator-stage0-contract.md), канонический snapshot — в [`panel-operator-stage0-inventory.json`](panel-operator-stage0-inventory.json). Система scoped-примитивов и проверки Этапа 1 зафиксированы в [`panel-operator-stage1-primitives.md`](panel-operator-stage1-primitives.md), контракт шапки, navigation rail и editor-first grid Этапа 2 — в [`panel-operator-stage2-shell-grid.md`](panel-operator-stage2-shell-grid.md), единый accordion/data-row/state contract инспектора Routing Этапа 3 — в [`panel-operator-stage3-routing-cards.md`](panel-operator-stage3-routing-cards.md). Контракты закрытых задач Этапа 4: [`panel-operator-stage4-ports.md`](panel-operator-stage4-ports.md), [`panel-operator-stage4-routing-rules.md`](panel-operator-stage4-routing-rules.md), [`panel-operator-stage4-balancers.md`](panel-operator-stage4-balancers.md), [`panel-operator-stage4-commands.md`](panel-operator-stage4-commands.md), [`panel-operator-stage4-logs.md`](panel-operator-stage4-logs.md), [`panel-operator-stage4-files.md`](panel-operator-stage4-files.md) и [`panel-operator-stage4-mihomo-forms.md`](panel-operator-stage4-mihomo-forms.md).
 
 История статуса до закрытия: Этапы 0–3 закрыты 28 июля 2026 года; Этап 4 в работе: задачи «Порты», «Routing rules» и «Balancers» закрыты 28 июля 2026 года.
 
@@ -376,6 +378,37 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 - обновить cache-buster только после зелёных проверок и финальных снимков.
 
 Критерий завершения: полный E2E зелёный, visual snapshots приняты, в scoped-слое нет добавочного блока «final fixes» после responsive section.
+
+## Корректирующий визуальный проход Clash/Mihomo (10 августа 2026 года)
+
+Проверка фактической панели после появления Clash API workspace выявила регрессию относительно эталонных принципов плотности. Исправления внесены в исходники, однако проход остаётся **обязательным блокером перед следующим этапом** Clash API до router acceptance новой сборки и не отменяет функциональный acceptance-аудит в [`README_clash_api_implementation_plan.md`](README_clash_api_implementation_plan.md).
+
+Наблюдаемое состояние на предоставленных снимках:
+
+- workspace header повторяет контекст `Mihomo` через отдельные `Operator runtime` + `Mihomo`, хотя активное ядро и top-level вкладка уже видимы в основной шапке;
+- status strip и отдельный runtime card образуют лишний уровень рамок, а loading/placeholder-state резервирует `min-height: 180/112 px`; на экранах «Управление»/«Соединения» это даёт большую пустую полосу перед основным содержимым;
+- селекторы выводят все узлы всех групп одной полноширинной колонкой (на проверенном snapshot — 15 групп / 387 вхождений узлов), из-за чего конфигурационный редактор уходит далеко за fold;
+- group headers не являются disclosure controls: нет `aria-expanded`/`aria-controls`, keyboard toggle и сохранения раскрытого состояния; фильтр не решает проблему исходной высоты;
+- одинаковые node rows повторяются во множестве групп, а desktop не использует доступную ширину для 2–3 компактных колонок/карточек селекторов;
+- по сравнению с Zashboard данные типографически спокойны, но расход площади заметно выше: крупные рамочные блоки и обязательные раскрытые таблицы конкурируют с YAML-workbench.
+
+До corrective pass формулировка закрытого Этапа 2 «оболочка не конкурирует с редактором по площади» не выполнялась для нового `#view-mihomo`, а критерий Этапа 4 «нет больших пустых областей; data-heavy screen не показан растянутой плиткой» требовал повторного применения к Clash runtime. В исходниках требования повторно применены; соответствие поставляемой панели будет подтверждено после router acceptance.
+
+### Обязательные задачи
+
+- [x] собрать compact workspace bar: один заголовок/статус/навигация без повтора `Operator runtime` и второго `Mihomo`;
+- [x] сделать status компактной строкой; loading/error остаются content-driven, без постоянной `min-height` (security-warning остаётся отдельным функциональным acceptance-дефектом Clash-плана);
+- [x] сделать группы настоящими disclosure/accordion controls с `button`, `aria-expanded`, `aria-controls`, Enter/Space и сохранением состояния на rerender;
+- [x] по умолчанию раскрывать только первую релевантную группу; предоставить явные «свернуть/развернуть» без скрытия поиска;
+- [x] на широком desktop размещать summary групп адаптивно в 3/2 колонки, а узлы показывать внутри раскрытой группы; на tablet/mobile возвращаться к одной колонке без horizontal page overflow;
+- [x] уменьшить вертикальный ритм group/node rows и убрать лишние вложенные рамки, сохранив доступный touch target на mobile;
+- [x] гарантировать быстрый переход к `Конфигурации`: переключатель остаётся в compact workspace bar, editor не находится после сотен обязательно раскрытых rows;
+- [x] добавить функциональные E2E assertions для keyboard accordion flow, collapse-all и прямого перехода в конфигурацию;
+- [ ] добавить полный visual/geometry matrix для ready/loading/empty/error, 15/387 fixture, dark/light, 1920/1440/1024/390 px и no-overflow;
+- [x] обновить cache-buster `panel-operator.css` до `20260810a`;
+- [ ] проверить исправленную поставляемую сборку на реальной панели до закрытия этого прохода.
+
+Критерий выхода: при 1440×900 оператор видит compact runtime summary и начало полезного содержимого без искусственной пустоты; список 15 групп сканируется без прокрутки через сотни строк, раскрытие узлов осознанно и доступно с клавиатуры, а `Конфигурация` остаётся достижимой одним действием из видимого workspace bar.
 
 ## Предлагаемая матрица визуальной проверки
 

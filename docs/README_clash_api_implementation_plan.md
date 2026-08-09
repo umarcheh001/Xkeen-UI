@@ -3,6 +3,8 @@
 Статус на **10 августа 2026 года**: **PR 1–3 подтверждены в реализованном объёме; PR 4–5 функционально собраны и работают на aarch64-панели, но после acceptance-аудита переведены в статус «частично закрыт / требуется доработка»**. До повторного закрытия нужно довести visual lifecycle/status security warning, provider identity/latency semantics, массовый latency budget и router mutation acceptance. WS/fallback, disconnect и connections UI по-прежнему не реализованы.
 Дата последнего аудита: **10 августа 2026 года**.
 
+Визуальный corrective gate перед следующим функциональным этапом: **реализован в исходниках 10 августа 2026 года, router acceptance ожидает поставки новой сборки**. Runtime shell уплотнён без повторных `Operator runtime`/`Mihomo`, постоянные искусственные `min-height` удалены, группы переведены на keyboard-accessible disclosure с исходно раскрытой только первой группой, добавлены массовое сворачивание/раскрытие и адаптивная 3/2/1-колоночная summary-сетка. Полный перечень причин и критериев — в разделе «Корректирующий визуальный проход Clash/Mihomo» документа [`panel-operator-redesign-completion-plan.md`](panel-operator-redesign-completion-plan.md).
+
 ### Сводка acceptance-аудита 10 августа 2026 года
 
 Проверены рабочее дерево, targeted/full test contracts, установленная панель `ee9bf8e` и текущий Mihomo на предоставленном aarch64-роутере. Секреты, реальные IP/host, имена узлов и rule payload в документ не сохраняются.
@@ -12,7 +14,7 @@
 | Установленная панель | `BUILD.json.version=ee9bf8e`, Python service активен; `gevent` и `geventwebsocket` установлены |
 | Core/API | Mihomo `alpha-978d25a`; `/version`, `/configs`, `/proxies`, `/group`, `/providers/proxies`, `/connections` → `200` |
 | REST facade | `/status`, `/proxy-groups`, `/connections` → `200`, schema v1; 15 групп, 16 providers, 387 group-node occurrences; snapshot не truncated |
-| Operator workspace | Lazy workspace и groups UI реально загружаются; status показывает version/mode, filter и responsive layout работают |
+| Operator workspace | Lazy workspace и groups UI реально загружаются; status показывает version/mode, filter и responsive layout работают. В исходниках выполнен corrective density/disclosure pass; установленная сборка его ещё не содержит |
 | Connections | REST snapshot готов; установленный subview пока честный placeholder, WS/polling/table/disconnect отсутствуют |
 | Security | Активный controller слушает LAN на `:9090` без `secret`; backend ходит к нему через loopback и `/status.security` возвращает `tcp_lan_unprotected`, но UI предупреждение ещё не отображает |
 | Device enrichment | Существующий Keenetic device map на роутере возвращает 13 устройств без ошибки, но Clash connections route его не подключает; `source_name` пуст |

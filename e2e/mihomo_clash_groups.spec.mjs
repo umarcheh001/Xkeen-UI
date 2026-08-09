@@ -69,11 +69,17 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
 
   await page.goto('/');
   await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e' });
+  });
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('AUTO');
   await expect(page.locator('#mihomo-clash-groups-list')).not.toContainText('HIDDEN');
+  await expect(page.locator('[data-group-name="AUTO"] [data-mihomo-group-toggle]')).toHaveAttribute('aria-expanded', 'true');
 
   await page.locator('#mihomo-clash-show-hidden').check();
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('HIDDEN');
+  await expect(page.locator('[data-group-name="HIDDEN"] [data-mihomo-group-toggle]')).toHaveAttribute('aria-expanded', 'false');
   await page.locator('#mihomo-clash-groups-filter').fill('node-b');
   await expect(page.locator('.xk-mihomo-node-row')).toHaveCount(1);
 
@@ -86,4 +92,36 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   expect(delays).toEqual([
     { scope: 'provider-proxy', name: 'node-b', provider: 'provider-one', preset: 'google' },
   ]);
+});
+
+
+test('Mihomo group disclosures keep the workspace compact and keyboard accessible', async ({ page }) => {
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: groupsPayload() }));
+
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e' });
+  });
+  await expect(page.locator('#mihomo-clash-groups-list')).toContainText('AUTO');
+
+  const hiddenToggle = page.locator('[data-group-name="HIDDEN"] [data-mihomo-group-toggle]');
+  await page.locator('#mihomo-clash-show-hidden').check();
+  await expect(hiddenToggle).toHaveAttribute('aria-expanded', 'false');
+  await hiddenToggle.focus();
+  await hiddenToggle.press('Enter');
+  await expect(hiddenToggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('[data-group-name="HIDDEN"] .xk-mihomo-group-body')).toBeVisible();
+
+  await page.locator('#mihomo-clash-groups-collapse').click();
+  await expect(page.locator('[data-mihomo-group-toggle][aria-expanded="true"]')).toHaveCount(0);
+  await expect(page.locator('#mihomo-clash-test-visible')).toBeDisabled();
+  await page.locator('#mihomo-clash-groups-collapse').click();
+  await expect(page.locator('[data-mihomo-group-toggle][aria-expanded="true"]')).toHaveCount(2);
+
+  await page.locator('#mihomo-clash-tab-config').click();
+  await expect(page.locator('#mihomo-clash-panel-config')).toBeVisible();
+  await expect(page.locator('#mihomo-clash-runtime')).toBeHidden();
 });

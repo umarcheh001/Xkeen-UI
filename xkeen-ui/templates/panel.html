@@ -69,7 +69,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260807b') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260810a') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -951,10 +951,6 @@
     {% endif %}
 <div id="view-mihomo" class="view-section" style="display:none;" data-xk-section="mihomo">
   <div class="xk-mihomo-workspace-head">
-    <div class="xk-mihomo-workspace-title">
-      <span class="xk-mihomo-workspace-kicker">Operator runtime</span>
-      <h2>Mihomo</h2>
-    </div>
     <div class="xk-mihomo-workspace-tabs" role="tablist" aria-label="Рабочая область Mihomo">
       <button type="button" class="xk-mihomo-workspace-tab is-active" id="mihomo-clash-tab-control" data-mihomo-clash-subview="control" role="tab" aria-selected="true" aria-controls="mihomo-clash-panel-control">
         {{ op_icon('dashboard') }}<span>Управление</span>
@@ -1009,6 +1005,9 @@
               <span>Скрытые группы</span>
             </label>
             <span id="mihomo-clash-groups-count" class="xk-mihomo-groups-count">0 групп · 0 узлов</span>
+            <button type="button" id="mihomo-clash-groups-collapse" class="btn-secondary xk-mihomo-groups-collapse" data-mihomo-groups-collapse aria-label="Свернуть все группы">
+              {{ op_icon('chevron-down') }}<span>Свернуть</span>
+            </button>
             <button type="button" id="mihomo-clash-test-visible" class="btn-secondary" data-mihomo-delay-visible>
               {{ op_icon('ping') }}<span>Тест видимых</span>
             </button>
