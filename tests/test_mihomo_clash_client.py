@@ -223,6 +223,29 @@ def test_select_proxy_encodes_one_path_segment_and_sends_bounded_json_body():
     ]
 
 
+def test_provider_proxy_delay_encodes_provider_and_node_segments():
+    endpoints = {
+        "provider_proxy_delay": MihomoClashEndpoint(
+            "GET",
+            "/providers/proxies/{provider}/proxies/{name}/healthcheck",
+            2,
+            1024,
+        )
+    }
+    expected = (
+        "/providers/proxies/provider%2Fone/proxies/node%2Fone/healthcheck"
+        "?url=https%3A%2F%2Fwww.gstatic.com%2Fgenerate_204&timeout=5000&expected=204"
+    )
+    with tcp_server({expected: (200, "application/json", b'{"delay":42}')}) as (port, handler):
+        response = client_for_port(port, endpoints).request_provider_proxy_delay(
+            "provider/one",
+            "node/one",
+        )
+
+    assert response.payload == {"delay": 42}
+    assert handler.seen[0]["path"] == expected
+
+
 def test_delay_uses_backend_preset_and_never_accepts_arbitrary_url():
     endpoints = {"proxy_delay": MihomoClashEndpoint("GET", "/proxies/{name}/delay", 2, 1024)}
     expected_path = (

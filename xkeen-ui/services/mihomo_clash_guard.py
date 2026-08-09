@@ -21,7 +21,9 @@ class MihomoClashActionPolicy:
 MIHOMO_CLASH_ACTION_POLICIES: Mapping[str, MihomoClashActionPolicy] = MappingProxyType(
     {
         "proxy-select": MihomoClashActionPolicy(4, 1, 30, 60.0),
-        "delay": MihomoClashActionPolicy(3, 1, 12, 60.0),
+        # Large selector groups need a useful manual batch while still keeping
+        # the router protected by one in-flight action per authenticated user.
+        "delay": MihomoClashActionPolicy(3, 1, 256, 60.0),
     }
 )
 

@@ -77,6 +77,10 @@ const panelFeatureSpecs = Object.freeze({
     ),
     getApi: (mod) => (mod && typeof mod.getMihomoHwidSubApi === 'function') ? mod.getMihomoHwidSubApi() : null,
   },
+  mihomoClash: {
+    load: () => import('../features/mihomo_clash/index.js'),
+    getApi: (mod) => (mod && typeof mod.getMihomoClashApi === 'function') ? mod.getMihomoClashApi() : null,
+  },
   xkeenTexts: {
     load: () => import('../features/xkeen_texts.js'),
     getApi: (mod) => (mod && typeof mod.getXkeenTextsApi === 'function') ? mod.getXkeenTextsApi() : null,

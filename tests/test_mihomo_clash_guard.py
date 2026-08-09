@@ -1,9 +1,17 @@
 from __future__ import annotations
 
 from services.mihomo_clash_guard import (
+    MIHOMO_CLASH_ACTION_POLICIES,
     MihomoClashActionGuard,
     MihomoClashActionPolicy,
 )
+
+
+def test_default_delay_policy_supports_bounded_large_group_batch():
+    policy = MIHOMO_CLASH_ACTION_POLICIES["delay"]
+    assert policy.max_global_concurrent == 3
+    assert policy.max_subject_concurrent == 1
+    assert policy.max_calls_per_window == 256
 
 
 def test_action_guard_limits_same_subject_concurrency_and_releases_lease():

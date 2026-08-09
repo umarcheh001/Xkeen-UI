@@ -253,7 +253,7 @@ def build_mihomo_clash_delay_dto(
     results: list[dict[str, Any]] = []
     truncated = False
 
-    if normalized_scope == "proxy":
+    if normalized_scope in {"proxy", "provider-proxy"}:
         raw_items = [(name, payload.get("delay"))]
     else:
         candidates = list(payload.items())

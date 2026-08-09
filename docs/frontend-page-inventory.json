@@ -669,6 +669,7 @@
           "path": "static/js/pages/panel.view_runtime.js",
           "globals": [],
           "lazy_features": [
+            "mihomoClash",
             "xkeenTexts",
             "commandsList",
             "coresStatus"
@@ -880,6 +881,7 @@
         "commandsList",
         "coresStatus",
         "jsonEditor",
+        "mihomoClash",
         "restartLog"
       ],
       "lazy_runtime_inventory": {

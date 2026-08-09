@@ -1,6 +1,7 @@
 import { getLogsShellApi, activateLogsShellView, deactivateLogsShellView } from './logs_shell.shared.js';
 import { getConfigShellApi, activateRoutingConfigView } from './config_shell.shared.js';
 import { ensurePanelLazyFeature, getPanelLazyRuntimeApi } from './panel.lazy_bindings.runtime.js';
+import { getPanelLazyFeatureApi } from './panel.lazy_bindings.runtime.js';
 import { initMihomoPanel, onShowMihomoPanel } from '../features/mihomo_panel.js';
 import {
   getXkeenStateValue,
@@ -37,6 +38,10 @@ function ensureFileManagerReady() {
     : Promise.resolve(false);
 }
 
+function getMihomoClashFeatureApi() {
+  return getPanelLazyFeatureApi('mihomoClash');
+}
+
 async function resolveFileManagerModuleApi() {
   try {
     const mod = await import('../features/file_manager.js');
@@ -48,6 +53,16 @@ async function resolveFileManagerModuleApi() {
 }
 
 const viewInitFlags = Object.create(null);
+let mihomoConfigSubviewRuntimeBound = false;
+
+function bindMihomoConfigSubviewRuntime() {
+  if (mihomoConfigSubviewRuntimeBound) return;
+  mihomoConfigSubviewRuntimeBound = true;
+  document.addEventListener('xkeen:mihomo-config-subview-shown', () => {
+    safe(() => onShowMihomoPanel({ reason: 'subview' }));
+  });
+}
+
 function initViewOnce(name, fn) {
   const key = String(name || '');
   if (!key) return Promise.resolve(false);
@@ -80,6 +95,16 @@ export function applyPanelViewRuntime(name) {
     }).catch((error) => {
       try { console.error('[XKeen] view init failed:', viewName, error); } catch (e) {}
     });
+    ensurePanelLazyFeature('mihomoClash').then((ready) => {
+      if (!ready) return;
+      const feature = getMihomoClashFeatureApi();
+      if (feature && typeof feature.activate === 'function') feature.activate({ reason: 'panel-view' });
+    }).catch((error) => {
+      try { console.error('[XKeen] Mihomo Clash workspace activation failed', error); } catch (e) {}
+    });
+  } else {
+    const feature = getMihomoClashFeatureApi();
+    if (feature && typeof feature.deactivate === 'function') safe(() => feature.deactivate());
   }
 
   if (viewName === 'xkeen') {
@@ -165,6 +190,7 @@ let panelShellViewRuntimeBound = false;
 export function bindPanelShellViewRuntime(sharedShell) {
   if (panelShellViewRuntimeBound) return;
   panelShellViewRuntimeBound = true;
+  bindMihomoConfigSubviewRuntime();
 
   document.addEventListener('xkeen:panel-view-changed', (event) => {
     const detail = event && event.detail ? event.detail : {};

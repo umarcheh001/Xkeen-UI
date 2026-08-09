@@ -22,6 +22,7 @@ class StubClient:
         self.operations: list[str] = []
         self.selections: list[tuple[str, str]] = []
         self.delays: list[tuple[str, str, str]] = []
+        self.provider_delays: list[tuple[str, str, str]] = []
 
     def request_json(self, operation: str):
         self.operations.append(operation)
@@ -37,6 +38,12 @@ class StubClient:
 
     def request_delay(self, scope: str, name: str, *, preset: str):
         self.delays.append((scope, name, preset))
+        if self.error:
+            raise self.error
+        return self.responses["delay"]
+
+    def request_provider_proxy_delay(self, provider: str, name: str, *, preset: str):
+        self.provider_delays.append((provider, name, preset))
         if self.error:
             raise self.error
         return self.responses["delay"]
@@ -335,6 +342,27 @@ def test_group_delay_route_returns_bounded_named_results():
         {"name": "node-b", "delay_ms": 0},
     ]
     assert client.delays == [("group", "AUTO", "cloudflare")]
+
+
+def test_provider_scoped_delay_route_forwards_provider_and_node_only():
+    client = StubClient(
+        responses={"delay": MihomoClashJSONResponse({"delay": 41}, 200, 2, 18)}
+    )
+    app = make_app(ready_discovery(), client)
+
+    response = app.test_client().post(
+        "/api/mihomo/clash/delay",
+        json={
+            "scope": "provider-proxy",
+            "provider": "provider-a",
+            "name": "same-name-node",
+            "preset": "google",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["results"] == [{"name": "same-name-node", "delay_ms": 41}]
+    assert client.provider_delays == [("provider-a", "same-name-node", "google")]
 
 
 def test_delay_route_returns_retry_after_when_action_guard_rejects():

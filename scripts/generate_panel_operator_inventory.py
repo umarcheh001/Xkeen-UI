@@ -310,6 +310,11 @@ def _build_accordions(elements: list[dict[str, object]]) -> list[dict[str, objec
         assert isinstance(attrs, dict)
         classes = _classes(attrs)
         is_commands_header = "commands-header" in classes
+        # Tabs also expose aria-controls/aria-selected, but they switch
+        # mutually exclusive panels rather than expanding an accordion.
+        # Keep them in the DOM/feature contract instead of inflating the fixed
+        # Stage 0 accordion inventory.
+        is_tab = attrs.get("role") == "tab"
         # A combobox trigger also owns ``aria-controls`` and
         # ``aria-expanded``.  It exposes a transient listbox, however, and is
         # not a panel accordion.  Keep that interaction in the DOM contract
@@ -319,6 +324,7 @@ def _build_accordions(elements: list[dict[str, object]]) -> list[dict[str, objec
             attrs.get("aria-controls")
             and attrs.get("aria-expanded") != ""
             and not is_listbox_trigger
+            and not is_tab
         )
         if not is_commands_header and not is_explicit_collapsible:
             continue

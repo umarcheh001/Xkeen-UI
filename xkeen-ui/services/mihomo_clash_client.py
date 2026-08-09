@@ -73,6 +73,12 @@ MIHOMO_CLASH_ENDPOINTS: Mapping[str, MihomoClashEndpoint] = MappingProxyType(
         "proxy_select": MihomoClashEndpoint("PUT", "/proxies/{name}", 5.0, 64 * 1024),
         "proxy_delay": MihomoClashEndpoint("GET", "/proxies/{name}/delay", 8.0, 512 * 1024),
         "group_delay": MihomoClashEndpoint("GET", "/group/{name}/delay", 8.0, 2 * 1024 * 1024),
+        "provider_proxy_delay": MihomoClashEndpoint(
+            "GET",
+            "/providers/proxies/{provider}/proxies/{name}/healthcheck",
+            8.0,
+            512 * 1024,
+        ),
         "connections_snapshot": MihomoClashEndpoint("GET", "/connections", 5.0),
         "connections_stream": MihomoClashEndpoint(
             "GET",
@@ -164,11 +170,12 @@ class MihomoClashClient:
                 or path.startswith("//")
                 or "#" in path
                 or "\x00" in path
-                or path.count("{name}") != path.count("{")
-                or path.count("{name}") != path.count("}")
                 or path.count("{name}") > 1
-                or path.replace("{name}", "").find("{") >= 0
-                or path.replace("{name}", "").find("}") >= 0
+                or path.count("{provider}") > 1
+                or path.count("{") != path.count("{name}") + path.count("{provider}")
+                or path.count("}") != path.count("{name}") + path.count("{provider}")
+                or path.replace("{name}", "").replace("{provider}", "").find("{") >= 0
+                or path.replace("{name}", "").replace("{provider}", "").find("}") >= 0
             ):
                 raise ValueError("invalid Mihomo endpoint path")
             if spec.timeout_seconds <= 0 or spec.max_response_bytes <= 0:
@@ -178,7 +185,7 @@ class MihomoClashClient:
 
     def request_json(self, operation: str) -> MihomoClashJSONResponse:
         spec = self._endpoint(operation, stream=False)
-        if "{name}" in spec.path:
+        if "{name}" in spec.path or "{provider}" in spec.path:
             raise MihomoClashClientError(
                 "operation_not_allowed",
                 "The requested Mihomo API operation requires a controlled resource name.",
@@ -246,6 +253,35 @@ class MihomoClashClient:
             path=f"{self._named_path(spec, name)}?{query}",
             expect_json=True,
         )
+
+    def request_provider_proxy_delay(
+        self,
+        provider: str,
+        name: str,
+        *,
+        preset: str = "google",
+    ) -> MihomoClashJSONResponse:
+        """Probe one provider-scoped proxy to avoid same-name collisions."""
+
+        try:
+            delay_preset = MIHOMO_CLASH_DELAY_PRESETS[str(preset)]
+        except (KeyError, TypeError) as exc:
+            raise MihomoClashClientError(
+                "delay_preset_not_allowed",
+                "The requested Mihomo delay preset is not allowed.",
+                status=400,
+            ) from exc
+        spec = self._endpoint("provider_proxy_delay", stream=False)
+        path = spec.path.replace("{provider}", quote(self._operation_name(provider), safe=""))
+        path = path.replace("{name}", quote(self._operation_name(name), safe=""))
+        query = urlencode(
+            {
+                "url": delay_preset.url,
+                "timeout": delay_preset.timeout_ms,
+                "expected": delay_preset.expected,
+            }
+        )
+        return self._request(spec, path=f"{path}?{query}", expect_json=True)
 
     def _request(
         self,

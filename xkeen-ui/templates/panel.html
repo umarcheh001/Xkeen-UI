@@ -950,6 +950,94 @@
 
     {% endif %}
 <div id="view-mihomo" class="view-section" style="display:none;" data-xk-section="mihomo">
+  <div class="xk-mihomo-workspace-head">
+    <div class="xk-mihomo-workspace-title">
+      <span class="xk-mihomo-workspace-kicker">Operator runtime</span>
+      <h2>Mihomo</h2>
+    </div>
+    <div class="xk-mihomo-workspace-tabs" role="tablist" aria-label="Рабочая область Mihomo">
+      <button type="button" class="xk-mihomo-workspace-tab is-active" id="mihomo-clash-tab-control" data-mihomo-clash-subview="control" role="tab" aria-selected="true" aria-controls="mihomo-clash-panel-control">
+        {{ op_icon('dashboard') }}<span>Управление</span>
+      </button>
+      <button type="button" class="xk-mihomo-workspace-tab" id="mihomo-clash-tab-connections" data-mihomo-clash-subview="connections" role="tab" aria-selected="false" aria-controls="mihomo-clash-panel-connections">
+        {{ op_icon('transfer') }}<span>Соединения</span>
+      </button>
+      <button type="button" class="xk-mihomo-workspace-tab" id="mihomo-clash-tab-rules" data-mihomo-clash-subview="rules" role="tab" aria-selected="false" aria-controls="mihomo-clash-panel-rules" aria-disabled="true" title="Просмотр правил появится после стабилизации MVP">
+        {{ op_icon('list-details') }}<span>Правила</span><span class="xk-mihomo-workspace-tab-note">P1</span>
+      </button>
+      <button type="button" class="xk-mihomo-workspace-tab" id="mihomo-clash-tab-config" data-mihomo-clash-subview="config" role="tab" aria-selected="false" aria-controls="mihomo-clash-panel-config">
+        {{ op_icon('settings') }}<span>Конфигурация</span>
+      </button>
+    </div>
+  </div>
+
+  <section id="mihomo-clash-runtime" class="card xk-mihomo-runtime" data-mihomo-clash-state="idle" aria-labelledby="mihomo-clash-tab-control">
+    <div class="xk-mihomo-status-strip" id="mihomo-clash-status-strip" role="status" aria-live="polite" aria-atomic="true">
+      <span class="xk-mihomo-status-led" aria-hidden="true"></span>
+      <strong id="mihomo-clash-status-label">API · ожидание</strong>
+      <span class="xk-mihomo-status-separator" aria-hidden="true"></span>
+      <span id="mihomo-clash-status-version">Mihomo —</span>
+      <span class="xk-mihomo-status-separator" aria-hidden="true"></span>
+      <span id="mihomo-clash-status-mode">Режим —</span>
+      <span class="xk-mihomo-status-spacer"></span>
+      <button type="button" id="mihomo-clash-status-retry" class="btn-secondary btn-icon xk-mihomo-status-retry" title="Проверить Clash API снова" aria-label="Проверить Clash API снова">
+        {{ op_icon('refresh') }}
+      </button>
+    </div>
+
+    <div id="mihomo-clash-panel-control" class="xk-mihomo-runtime-panel" data-mihomo-clash-panel="control" role="tabpanel" aria-labelledby="mihomo-clash-tab-control">
+      <div class="xk-mihomo-runtime-state" id="mihomo-clash-control-state">
+        <span class="xk-mihomo-runtime-state-icon">{{ op_icon('loading') }}</span>
+        <div>
+          <h3 id="mihomo-clash-control-title">Проверяем локальный Mihomo API</h3>
+          <p id="mihomo-clash-control-message">Панель подключается к controller только через защищённый backend facade.</p>
+        </div>
+        <div class="xk-mihomo-runtime-state-actions">
+          <button type="button" class="btn-secondary" data-mihomo-clash-action="retry">Проверить снова</button>
+          <button type="button" class="btn-secondary" data-mihomo-clash-action="open-config">Открыть конфигурацию</button>
+        </div>
+      </div>
+      <div id="mihomo-clash-control-content" class="xk-mihomo-groups" hidden>
+        <div id="mihomo-clash-groups" aria-busy="false">
+          <div class="xk-mihomo-groups-toolbar" role="toolbar" aria-label="Управление группами Mihomo">
+            <label class="xk-mihomo-groups-search" for="mihomo-clash-groups-filter">
+              {{ op_icon('search') }}
+              <input id="mihomo-clash-groups-filter" type="search" placeholder="Группа, узел или provider" autocomplete="off">
+            </label>
+            <label class="xk-mihomo-groups-hidden-toggle">
+              <input id="mihomo-clash-show-hidden" type="checkbox">
+              <span>Скрытые группы</span>
+            </label>
+            <span id="mihomo-clash-groups-count" class="xk-mihomo-groups-count">0 групп · 0 узлов</span>
+            <button type="button" id="mihomo-clash-test-visible" class="btn-secondary" data-mihomo-delay-visible>
+              {{ op_icon('ping') }}<span>Тест видимых</span>
+            </button>
+            <button type="button" class="btn-secondary btn-icon" data-mihomo-groups-refresh title="Обновить группы" aria-label="Обновить группы Mihomo">
+              {{ op_icon('refresh') }}
+            </button>
+          </div>
+          <div class="xk-mihomo-delay-run" aria-live="polite">
+            <span id="mihomo-clash-delay-progress" hidden></span>
+            <button type="button" id="mihomo-clash-delay-cancel" class="btn-secondary" data-mihomo-delay-cancel hidden>Остановить очередь</button>
+          </div>
+          <div id="mihomo-clash-groups-message" class="xk-mihomo-groups-message" role="status" aria-live="polite" hidden></div>
+          <div id="mihomo-clash-groups-list" class="xk-mihomo-groups-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="mihomo-clash-panel-connections" class="xk-mihomo-runtime-panel" data-mihomo-clash-panel="connections" role="tabpanel" aria-labelledby="mihomo-clash-tab-connections" hidden>
+      <div class="xk-mihomo-runtime-placeholder">
+        <div>
+          <span class="xk-mihomo-runtime-placeholder-label">HTTP snapshot готов</span>
+          <h3>Соединения</h3>
+          <p>Live stream, fallback cadence и таблица будут активированы на следующем connection-этапе. Скрытый экран не создаёт сетевой трафик.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="mihomo-clash-panel-config" class="xk-mihomo-config-subview" data-mihomo-clash-panel="config" role="tabpanel" aria-labelledby="mihomo-clash-tab-config" hidden>
   <section class="card">
     <div class="commands-header" data-xk-toggle="mihomo-card" role="button" tabindex="0" aria-controls="mihomo-body" aria-expanded="true">
       <h2>Роутинг Mihomo</h2>
@@ -1212,6 +1300,7 @@
     <div class="restart-log-summary" data-xk-restart-log-summary="1" hidden></div>
     <pre class="log-block" data-xk-restart-log="1"></pre>
   </section>
+  </div>
 </div>
 <div id="view-xkeen" class="view-section" style="display:none;" data-xk-section="xkeen">
   <!-- XKeen: порты и исключения -->

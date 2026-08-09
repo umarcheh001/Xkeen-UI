@@ -401,7 +401,13 @@ def create_mihomo_clash_blueprint(
         scope = body.get("scope") if isinstance(body.get("scope"), str) else ""
         name = _action_name(body, "name")
         preset = body.get("preset", "google")
-        if not name or scope not in {"proxy", "group"} or not isinstance(preset, str):
+        provider = _action_name(body, "provider") if scope == "provider-proxy" else None
+        if (
+            not name
+            or scope not in {"proxy", "group", "provider-proxy"}
+            or not isinstance(preset, str)
+            or (scope == "provider-proxy" and not provider)
+        ):
             return error_response(
                 "Некорректные параметры проверки задержки.",
                 400,
@@ -418,7 +424,10 @@ def create_mihomo_clash_blueprint(
             lease.release()
             return unavailable
         try:
-            result = client.request_delay(scope, name, preset=preset)
+            if scope == "provider-proxy":
+                result = client.request_provider_proxy_delay(provider, name, preset=preset)
+            else:
+                result = client.request_delay(scope, name, preset=preset)
         except MihomoClashClientError as exc:
             _audit_action(
                 "delay",
