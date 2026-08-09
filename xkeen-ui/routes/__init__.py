@@ -47,6 +47,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     from .xray_configs import create_xray_configs_blueprint
     from .xray_subscriptions import create_xray_subscriptions_blueprint
     from .mihomo import create_mihomo_blueprint
+    from .mihomo_clash import create_mihomo_clash_blueprint
     from .backups import create_backups_blueprint
     from .service import create_service_blueprint
     from .xray_logs import create_xray_logs_blueprint
@@ -116,6 +117,12 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
             MIHOMO_DEFAULT_TEMPLATE=ctx.mihomo_default_template,
             ui_state_dir=ctx.ui_state_dir,
             restart_xkeen=ctx.restart_xkeen,
+        )
+    )
+    app.register_blueprint(
+        create_mihomo_clash_blueprint(
+            mihomo_config_file=ctx.mihomo_config_file,
+            mihomo_root=os.path.dirname(ctx.mihomo_config_file),
         )
     )
 
