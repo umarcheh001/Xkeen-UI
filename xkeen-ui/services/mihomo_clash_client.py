@@ -9,11 +9,13 @@ Unix domain socket without an additional runtime dependency.
 from __future__ import annotations
 
 import http.client
+import json
 import socket
 import time
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Iterator, Mapping
+from urllib.parse import quote, urlencode
 
 from services.mihomo_clash_stream import (
     BoundedNDJSONParser,
@@ -26,6 +28,7 @@ from services.mihomo_clash_target import MihomoClashTarget
 DEFAULT_RESPONSE_LIMIT = 2 * 1024 * 1024
 DEFAULT_STREAM_FRAME_LIMIT = 2 * 1024 * 1024
 READ_CHUNK_BYTES = 64 * 1024
+MAX_OPERATION_NAME_BYTES = 1024
 
 
 @dataclass(frozen=True)
@@ -37,6 +40,29 @@ class MihomoClashEndpoint:
     stream: bool = False
 
 
+@dataclass(frozen=True)
+class MihomoClashDelayPreset:
+    url: str
+    timeout_ms: int
+    expected: str
+
+
+MIHOMO_CLASH_DELAY_PRESETS: Mapping[str, MihomoClashDelayPreset] = MappingProxyType(
+    {
+        "google": MihomoClashDelayPreset(
+            "https://www.gstatic.com/generate_204",
+            5000,
+            "204",
+        ),
+        "cloudflare": MihomoClashDelayPreset(
+            "https://cp.cloudflare.com/",
+            5000,
+            "204",
+        ),
+    }
+)
+
+
 MIHOMO_CLASH_ENDPOINTS: Mapping[str, MihomoClashEndpoint] = MappingProxyType(
     {
         "version": MihomoClashEndpoint("GET", "/version", 2.0, 64 * 1024),
@@ -44,6 +70,9 @@ MIHOMO_CLASH_ENDPOINTS: Mapping[str, MihomoClashEndpoint] = MappingProxyType(
         "proxies": MihomoClashEndpoint("GET", "/proxies", 5.0),
         "groups": MihomoClashEndpoint("GET", "/group", 5.0),
         "providers_proxies": MihomoClashEndpoint("GET", "/providers/proxies", 8.0),
+        "proxy_select": MihomoClashEndpoint("PUT", "/proxies/{name}", 5.0, 64 * 1024),
+        "proxy_delay": MihomoClashEndpoint("GET", "/proxies/{name}/delay", 8.0, 512 * 1024),
+        "group_delay": MihomoClashEndpoint("GET", "/group/{name}/delay", 8.0, 2 * 1024 * 1024),
         "connections_snapshot": MihomoClashEndpoint("GET", "/connections", 5.0),
         "connections_stream": MihomoClashEndpoint(
             "GET",
@@ -130,7 +159,17 @@ class MihomoClashClient:
             path = str(spec.path or "")
             if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
                 raise ValueError("invalid Mihomo endpoint method")
-            if not path.startswith("/") or path.startswith("//") or "#" in path or "\x00" in path:
+            if (
+                not path.startswith("/")
+                or path.startswith("//")
+                or "#" in path
+                or "\x00" in path
+                or path.count("{name}") != path.count("{")
+                or path.count("{name}") != path.count("}")
+                or path.count("{name}") > 1
+                or path.replace("{name}", "").find("{") >= 0
+                or path.replace("{name}", "").find("}") >= 0
+            ):
                 raise ValueError("invalid Mihomo endpoint path")
             if spec.timeout_seconds <= 0 or spec.max_response_bytes <= 0:
                 raise ValueError("invalid Mihomo endpoint limits")
@@ -139,16 +178,100 @@ class MihomoClashClient:
 
     def request_json(self, operation: str) -> MihomoClashJSONResponse:
         spec = self._endpoint(operation, stream=False)
+        if "{name}" in spec.path:
+            raise MihomoClashClientError(
+                "operation_not_allowed",
+                "The requested Mihomo API operation requires a controlled resource name.",
+                status=400,
+            )
+        return self._request(spec, path=spec.path, expect_json=True)
+
+    def select_proxy(self, group_name: str, proxy_name: str) -> MihomoClashJSONResponse:
+        """Select one group member without exposing a generic method/path relay."""
+
+        spec = self._endpoint("proxy_select", stream=False)
+        body = json.dumps(
+            {"name": self._operation_name(proxy_name)},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return self._request(
+            spec,
+            path=self._named_path(spec, group_name),
+            body=body,
+            expect_json=False,
+        )
+
+    def request_delay(
+        self,
+        scope: str,
+        name: str,
+        *,
+        preset: str = "google",
+    ) -> MihomoClashJSONResponse:
+        """Run one allow-listed proxy/group delay probe.
+
+        The caller supplies only a preset id.  URL, timeout and expected HTTP
+        status remain backend constants and can never be turned into an SSRF
+        primitive by a browser request.
+        """
+
+        normalized_scope = str(scope or "").strip().lower()
+        operation = {"proxy": "proxy_delay", "group": "group_delay"}.get(normalized_scope)
+        if operation is None:
+            raise MihomoClashClientError(
+                "operation_not_allowed",
+                "The requested Mihomo delay operation is not allowed.",
+                status=400,
+            )
+        try:
+            delay_preset = MIHOMO_CLASH_DELAY_PRESETS[str(preset)]
+        except (KeyError, TypeError) as exc:
+            raise MihomoClashClientError(
+                "delay_preset_not_allowed",
+                "The requested Mihomo delay preset is not allowed.",
+                status=400,
+            ) from exc
+
+        spec = self._endpoint(operation, stream=False)
+        query = urlencode(
+            {
+                "url": delay_preset.url,
+                "timeout": delay_preset.timeout_ms,
+                "expected": delay_preset.expected,
+            }
+        )
+        return self._request(
+            spec,
+            path=f"{self._named_path(spec, name)}?{query}",
+            expect_json=True,
+        )
+
+    def _request(
+        self,
+        spec: MihomoClashEndpoint,
+        *,
+        path: str,
+        body: bytes | None = None,
+        expect_json: bool,
+    ) -> MihomoClashJSONResponse:
         started = time.monotonic()
         connection: http.client.HTTPConnection | None = None
         response: http.client.HTTPResponse | None = None
         try:
             connection = self._open_connection(spec.timeout_seconds)
-            connection.request(spec.method, spec.path, headers=self._headers())
+            headers = self._headers()
+            if body is not None:
+                headers["Content-Type"] = "application/json"
+            connection.request(spec.method, path, body=body, headers=headers)
             response = connection.getresponse()
-            self._validate_response(response, stream=False)
+            self._validate_response(response, require_json=expect_json)
             raw = self._read_bounded(response, spec.max_response_bytes)
-            payload = parse_bounded_json(raw, max_bytes=spec.max_response_bytes)
+            payload = (
+                parse_bounded_json(raw, max_bytes=spec.max_response_bytes)
+                if expect_json
+                else None
+            )
             return MihomoClashJSONResponse(
                 payload=payload,
                 status=int(response.status),
@@ -193,7 +316,7 @@ class MihomoClashClient:
             connection = self._open_connection(spec.timeout_seconds)
             connection.request(spec.method, spec.path, headers=self._headers())
             response = connection.getresponse()
-            self._validate_response(response, stream=True)
+            self._validate_response(response, require_json=True)
             while True:
                 chunk = response.read1(READ_CHUNK_BYTES)
                 if not chunk:
@@ -245,6 +368,46 @@ class MihomoClashClient:
             )
         return spec
 
+    @staticmethod
+    def _operation_name(value: str) -> str:
+        if not isinstance(value, str):
+            raise MihomoClashClientError(
+                "resource_name_invalid",
+                "The Mihomo resource name is invalid.",
+                status=400,
+            )
+        name = value.strip()
+        try:
+            encoded = name.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise MihomoClashClientError(
+                "resource_name_invalid",
+                "The Mihomo resource name is invalid.",
+                status=400,
+            ) from exc
+        if (
+            not name
+            or len(encoded) > MAX_OPERATION_NAME_BYTES
+            or any(ord(char) < 32 or ord(char) == 127 for char in name)
+        ):
+            raise MihomoClashClientError(
+                "resource_name_invalid",
+                "The Mihomo resource name is invalid.",
+                status=400,
+            )
+        return name
+
+    @classmethod
+    def _named_path(cls, spec: MihomoClashEndpoint, name: str) -> str:
+        if spec.path.count("{name}") != 1:
+            raise MihomoClashClientError(
+                "operation_not_allowed",
+                "The requested Mihomo API operation cannot address a resource.",
+                status=400,
+            )
+        encoded = quote(cls._operation_name(name), safe="")
+        return spec.path.replace("{name}", encoded)
+
     def _open_connection(self, timeout: float) -> http.client.HTTPConnection:
         if self._target.transport == "unix":
             if self._target.socket_path is None:
@@ -278,7 +441,7 @@ class MihomoClashClient:
         return headers
 
     @staticmethod
-    def _validate_response(response: http.client.HTTPResponse, *, stream: bool) -> None:
+    def _validate_response(response: http.client.HTTPResponse, *, require_json: bool) -> None:
         status = int(response.status)
         if status < 200 or status >= 300:
             if status in {401, 403}:
@@ -297,14 +460,17 @@ class MihomoClashClient:
                 retryable=status == 429 or status >= 500,
             )
 
-        content_type = str(response.getheader("Content-Type") or "").split(";", 1)[0].strip().lower()
-        allowed = {"application/json", "application/x-ndjson", "application/ndjson"}
-        if content_type not in allowed:
-            raise MihomoClashClientError(
-                "upstream_content_type_invalid",
-                "Mihomo API returned an unexpected content type.",
-                status=502,
+        if require_json:
+            content_type = (
+                str(response.getheader("Content-Type") or "").split(";", 1)[0].strip().lower()
             )
+            allowed = {"application/json", "application/x-ndjson", "application/ndjson"}
+            if content_type not in allowed:
+                raise MihomoClashClientError(
+                    "upstream_content_type_invalid",
+                    "Mihomo API returned an unexpected content type.",
+                    status=502,
+                )
 
     @staticmethod
     def _read_bounded(response: http.client.HTTPResponse, limit: int) -> bytes:
@@ -342,9 +508,12 @@ class MihomoClashClient:
 __all__ = [
     "DEFAULT_RESPONSE_LIMIT",
     "DEFAULT_STREAM_FRAME_LIMIT",
+    "MAX_OPERATION_NAME_BYTES",
+    "MIHOMO_CLASH_DELAY_PRESETS",
     "MIHOMO_CLASH_ENDPOINTS",
     "MihomoClashClient",
     "MihomoClashClientError",
+    "MihomoClashDelayPreset",
     "MihomoClashEndpoint",
     "MihomoClashJSONResponse",
 ]

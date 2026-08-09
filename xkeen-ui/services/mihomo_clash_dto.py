@@ -17,6 +17,7 @@ MIHOMO_CLASH_SCHEMA_VERSION = 1
 MAX_GROUPS = 256
 MAX_GROUP_NODES = 1024
 MAX_CONNECTION_ROWS = 250
+MAX_DELAY_RESULTS = 1024
 MIHOMO_CLASH_CAPABILITY_KEYS = (
     "status",
     "proxy_groups",
@@ -238,6 +239,49 @@ def build_mihomo_clash_proxy_groups_dto(
     }
 
 
+def build_mihomo_clash_delay_dto(
+    delay_payload: Any,
+    *,
+    scope: str,
+    name: str,
+    preset: str,
+) -> dict[str, Any]:
+    """Normalize single-proxy and group delay responses into one bounded shape."""
+
+    payload = _mapping(delay_payload)
+    normalized_scope = _text(scope, 16).lower()
+    results: list[dict[str, Any]] = []
+    truncated = False
+
+    if normalized_scope == "proxy":
+        raw_items = [(name, payload.get("delay"))]
+    else:
+        candidates = list(payload.items())
+        truncated = len(candidates) > MAX_DELAY_RESULTS
+        raw_items = candidates[:MAX_DELAY_RESULTS]
+
+    for raw_name, raw_delay in raw_items:
+        result_name = _text(raw_name, 256)
+        if not result_name or isinstance(raw_delay, bool):
+            continue
+        try:
+            delay_ms = int(raw_delay)
+        except (TypeError, ValueError, OverflowError):
+            continue
+        if delay_ms < 0:
+            continue
+        results.append({"name": result_name, "delay_ms": delay_ms})
+
+    return {
+        "schema_version": MIHOMO_CLASH_SCHEMA_VERSION,
+        "scope": normalized_scope,
+        "name": _text(name, 256),
+        "preset": _text(preset, 32),
+        "results": results,
+        "truncated": truncated,
+    }
+
+
 def _device_name(device_map: Mapping[str, Any], source_ip: str) -> str:
     raw = device_map.get(source_ip)
     if isinstance(raw, Mapping):
@@ -314,11 +358,13 @@ def build_mihomo_clash_connections_dto(
 
 __all__ = [
     "MAX_CONNECTION_ROWS",
+    "MAX_DELAY_RESULTS",
     "MAX_GROUPS",
     "MAX_GROUP_NODES",
     "MIHOMO_CLASH_CAPABILITY_KEYS",
     "MIHOMO_CLASH_SCHEMA_VERSION",
     "build_mihomo_clash_connections_dto",
+    "build_mihomo_clash_delay_dto",
     "build_mihomo_clash_proxy_groups_dto",
     "build_mihomo_clash_status_dto",
 ]

@@ -7,6 +7,7 @@ from flask import Flask
 
 from routes.mihomo_clash import create_mihomo_clash_blueprint
 from services.mihomo_clash_client import MihomoClashClientError, MihomoClashJSONResponse
+from services.mihomo_clash_guard import MihomoClashActionRejected
 from services.mihomo_clash_target import (
     MihomoClashDiagnostic,
     MihomoClashDiscovery,
@@ -19,6 +20,8 @@ class StubClient:
         self.responses = responses or {}
         self.error = error
         self.operations: list[str] = []
+        self.selections: list[tuple[str, str]] = []
+        self.delays: list[tuple[str, str, str]] = []
 
     def request_json(self, operation: str):
         self.operations.append(operation)
@@ -26,8 +29,20 @@ class StubClient:
             raise self.error
         return self.responses[operation]
 
+    def select_proxy(self, group_name: str, proxy_name: str):
+        self.selections.append((group_name, proxy_name))
+        if self.error:
+            raise self.error
+        return MihomoClashJSONResponse(None, 204, 1, 0)
 
-def make_app(discovery, client: StubClient) -> Flask:
+    def request_delay(self, scope: str, name: str, *, preset: str):
+        self.delays.append((scope, name, preset))
+        if self.error:
+            raise self.error
+        return self.responses["delay"]
+
+
+def make_app(discovery, client: StubClient, *, audit_logger=None) -> Flask:
     app = Flask(__name__)
     app.config["TESTING"] = True
     app.register_blueprint(
@@ -36,6 +51,7 @@ def make_app(discovery, client: StubClient) -> Flask:
             mihomo_root="/safe/mihomo",
             discovery_factory=lambda _config, _root: discovery,
             client_factory=lambda _target: client,
+            audit_logger=audit_logger,
         )
     )
     return app
@@ -167,7 +183,294 @@ def test_status_route_maps_unreachable_core_without_disclosing_target():
     assert "/private/mihomo.sock" not in serialized
 
 
-def test_routes_registry_registers_mihomo_clash_status(monkeypatch):
+def groups_payload(now: str = "node-a"):
+    return {
+        "proxies": {
+            "GLOBAL": {"type": "Selector", "all": ["AUTO"], "now": "AUTO"},
+            "AUTO": {
+                "type": "Selector",
+                "all": ["node-a", "node-b"],
+                "now": now,
+            },
+            "node-a": {"name": "node-a", "type": "VLESS", "alive": True},
+            "node-b": {"name": "node-b", "type": "Trojan", "alive": True},
+        }
+    }
+
+
+def test_proxy_groups_route_returns_versioned_normalized_payload():
+    client = StubClient(
+        responses={
+            "proxies": MihomoClashJSONResponse(groups_payload(), 200, 2, 200),
+            "providers_proxies": MihomoClashJSONResponse(
+                {"providers": {}}, 200, 3, 100
+            ),
+        }
+    )
+    response = make_app(ready_discovery(), client).test_client().get(
+        "/api/mihomo/clash/proxy-groups"
+    )
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body["ok"] is True
+    assert body["schema_version"] == 1
+    assert body["groups"][0]["name"] == "AUTO"
+    assert body["capabilities"]["proxy_groups"] is True
+    assert body["capabilities"]["proxy_select"] is True
+    assert body["telemetry"]["providers"]["size_bytes"] == 100
+    assert client.operations == ["proxies", "providers_proxies"]
+
+
+def test_proxy_select_is_reconciled_against_fresh_snapshot():
+    audit_events = []
+    client = StubClient(
+        responses={
+            "proxies": MihomoClashJSONResponse(groups_payload(now="node-b"), 200, 2, 200),
+        }
+    )
+    response = make_app(
+        ready_discovery(),
+        client,
+        audit_logger=lambda ok, **metadata: audit_events.append((ok, metadata)),
+    ).test_client().put(
+        "/api/mihomo/clash/proxy-groups/AUTO",
+        json={"name": "node-b"},
+    )
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body["ok"] is True
+    assert body["group"]["now"] == "node-b"
+    assert body["reconciled"] is True
+    assert client.selections == [("AUTO", "node-b")]
+    assert client.operations == ["proxies", "proxies"]
+    assert audit_events == [
+        (
+            True,
+            {"source": "mihomo-clash", "action": "proxy-select", "group": "AUTO"},
+        )
+    ]
+
+
+def test_proxy_select_rejects_stale_or_unknown_choice_before_mutation():
+    client = StubClient(
+        responses={
+            "proxies": MihomoClashJSONResponse(groups_payload(), 200, 2, 200),
+        }
+    )
+    response = make_app(ready_discovery(), client).test_client().put(
+        "/api/mihomo/clash/proxy-groups/AUTO",
+        json={"name": "removed-node"},
+    )
+
+    assert response.status_code == 409
+    assert response.get_json()["code"] == "proxy_selection_not_available"
+    assert client.selections == []
+    assert client.operations == ["proxies"]
+
+
+def test_proxy_select_rejects_non_json_and_does_not_touch_upstream():
+    client = StubClient()
+    response = make_app(ready_discovery(), client).test_client().put(
+        "/api/mihomo/clash/proxy-groups/AUTO",
+        data="name=node-b",
+        content_type="application/x-www-form-urlencoded",
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["code"] == "invalid_proxy_selection"
+    assert client.selections == []
+
+
+def test_delay_route_forwards_only_scope_name_and_preset_id():
+    client = StubClient(
+        responses={
+            "delay": MihomoClashJSONResponse({"delay": 87, "raw": "dropped"}, 200, 3, 20)
+        }
+    )
+    response = make_app(ready_discovery(), client).test_client().post(
+        "/api/mihomo/clash/delay",
+        json={
+            "scope": "proxy",
+            "name": "node-a",
+            "preset": "google",
+            "url": "http://127.0.0.1/private",
+        },
+    )
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body == {
+        "ok": True,
+        "schema_version": 1,
+        "scope": "proxy",
+        "name": "node-a",
+        "preset": "google",
+        "results": [{"name": "node-a", "delay_ms": 87}],
+        "truncated": False,
+    }
+    assert client.delays == [("proxy", "node-a", "google")]
+
+
+def test_group_delay_route_returns_bounded_named_results():
+    client = StubClient(
+        responses={
+            "delay": MihomoClashJSONResponse(
+                {"node-a": 87, "node-b": 0, "invalid": "timeout"},
+                200,
+                3,
+                40,
+            )
+        }
+    )
+    response = make_app(ready_discovery(), client).test_client().post(
+        "/api/mihomo/clash/delay",
+        json={"scope": "group", "name": "AUTO", "preset": "cloudflare"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["results"] == [
+        {"name": "node-a", "delay_ms": 87},
+        {"name": "node-b", "delay_ms": 0},
+    ]
+    assert client.delays == [("group", "AUTO", "cloudflare")]
+
+
+def test_delay_route_returns_retry_after_when_action_guard_rejects():
+    class RejectingGuard:
+        def try_acquire(self, action: str, subject: str):
+            assert action == "delay"
+            assert subject == "authenticated"
+            return None, MihomoClashActionRejected("action_busy", 3)
+
+    client = StubClient()
+    app = Flask(__name__)
+    app.secret_key = "test-secret"
+    app.config["TESTING"] = True
+    app.register_blueprint(
+        create_mihomo_clash_blueprint(
+            mihomo_config_file="/safe/mihomo/config.yaml",
+            mihomo_root="/safe/mihomo",
+            discovery_factory=lambda _config, _root: ready_discovery(),
+            client_factory=lambda _target: client,
+            action_guard=RejectingGuard(),
+        )
+    )
+
+    response = app.test_client().post(
+        "/api/mihomo/clash/delay",
+        json={"scope": "proxy", "name": "node-a", "preset": "google"},
+    )
+
+    assert response.status_code == 429
+    assert response.headers["Retry-After"] == "3"
+    assert response.get_json()["code"] == "action_busy"
+    assert client.delays == []
+
+
+def test_connections_route_returns_bounded_normalized_snapshot():
+    client = StubClient(
+        responses={
+            "connections_snapshot": MihomoClashJSONResponse(
+                {
+                    "downloadTotal": 100,
+                    "uploadTotal": 50,
+                    "memory": 200,
+                    "connections": [
+                        {
+                            "id": "connection-1",
+                            "metadata": {"host": "example.test", "sourceIP": "192.0.2.1"},
+                            "chains": ["AUTO", "node-a"],
+                        }
+                    ],
+                },
+                200,
+                4,
+                300,
+            )
+        }
+    )
+    response = make_app(ready_discovery(), client).test_client().get(
+        "/api/mihomo/clash/connections"
+    )
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body["ok"] is True
+    assert body["schema_version"] == 1
+    assert body["connections"][0]["id"] == "connection-1"
+    assert body["capabilities"]["connections_snapshot"] is True
+    assert body["telemetry"]["size_bytes"] == 300
+
+
+def test_facade_maps_client_error_without_leaking_exception_message():
+    client = StubClient(
+        error=MihomoClashClientError(
+            "upstream_unreachable",
+            "private socket /opt/etc/mihomo/controller.sock",
+            retryable=True,
+        )
+    )
+    response = make_app(ready_discovery(), client).test_client().get(
+        "/api/mihomo/clash/proxy-groups"
+    )
+    serialized = json.dumps(response.get_json())
+
+    assert response.status_code == 502
+    assert response.get_json()["code"] == "upstream_unreachable"
+    assert response.get_json()["retryable"] is True
+    assert "/opt/etc/mihomo" not in serialized
+
+
+def test_mutating_facade_uses_global_session_and_csrf_guard(monkeypatch, tmp_path):
+    from services import auth_setup
+
+    auth_setup.AUTH_DIR = str(tmp_path)
+    auth_setup.AUTH_FILE = str(tmp_path / "auth.json")
+    auth_setup.SECRET_KEY_FILE = str(tmp_path / "secret.key")
+    (tmp_path / "auth.json").write_text(
+        json.dumps({"username": "admin", "password_hash": "configured"}),
+        encoding="utf-8",
+    )
+
+    client_stub = StubClient(
+        responses={
+            "delay": MihomoClashJSONResponse({"delay": 42}, 200, 1, 12),
+        }
+    )
+    app = make_app(ready_discovery(), client_stub)
+    auth_setup.init_auth(app)
+    client = app.test_client()
+
+    unauthorized = client.post(
+        "/api/mihomo/clash/delay",
+        json={"scope": "proxy", "name": "node-a", "preset": "google"},
+    )
+    assert unauthorized.status_code == 401
+
+    with client.session_transaction() as session:
+        session["auth"] = True
+        session["user"] = "admin"
+        session["csrf"] = "csrf-fixture"
+
+    csrf_missing = client.post(
+        "/api/mihomo/clash/delay",
+        json={"scope": "proxy", "name": "node-a", "preset": "google"},
+    )
+    assert csrf_missing.status_code == 403
+    assert csrf_missing.get_json()["error"] == "csrf_failed"
+
+    allowed = client.post(
+        "/api/mihomo/clash/delay",
+        json={"scope": "proxy", "name": "node-a", "preset": "google"},
+        headers={"X-CSRF-Token": "csrf-fixture"},
+    )
+    assert allowed.status_code == 200
+    assert allowed.get_json()["results"] == [{"name": "node-a", "delay_ms": 42}]
+
+
+def test_routes_registry_registers_mihomo_clash_facade(monkeypatch):
     import routes
     from core.context import AppContext
     from core.settings import Settings
@@ -225,4 +528,9 @@ def test_routes_registry_registers_mihomo_clash_status(monkeypatch):
     routes.register_blueprints(app, context)
 
     assert "mihomo_clash" in registered
-    assert any(rule.rule == "/api/mihomo/clash/status" for rule in app.url_map.iter_rules())
+    rules = {rule.rule: set(rule.methods or ()) for rule in app.url_map.iter_rules()}
+    assert "GET" in rules["/api/mihomo/clash/status"]
+    assert "GET" in rules["/api/mihomo/clash/proxy-groups"]
+    assert "PUT" in rules["/api/mihomo/clash/proxy-groups/<path:group_name>"]
+    assert "POST" in rules["/api/mihomo/clash/delay"]
+    assert "GET" in rules["/api/mihomo/clash/connections"]

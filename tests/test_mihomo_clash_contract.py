@@ -166,6 +166,30 @@ def test_proxy_groups_dto_does_not_guess_provider_when_names_collide():
     assert node["provider_ambiguous"] is True
 
 
+def test_delay_dto_normalizes_proxy_and_group_results():
+    from services.mihomo_clash_dto import build_mihomo_clash_delay_dto
+
+    proxy = build_mihomo_clash_delay_dto(
+        {"delay": 87, "secret": "drop"},
+        scope="proxy",
+        name="node-a",
+        preset="google",
+    )
+    group = build_mihomo_clash_delay_dto(
+        {"node-a": 87, "node-b": 0, "invalid": "timeout"},
+        scope="group",
+        name="AUTO",
+        preset="cloudflare",
+    )
+
+    assert proxy["results"] == [{"name": "node-a", "delay_ms": 87}]
+    assert group["results"] == [
+        {"name": "node-a", "delay_ms": 87},
+        {"name": "node-b", "delay_ms": 0},
+    ]
+    assert "secret" not in json.dumps(proxy).lower()
+
+
 def test_connections_dto_is_bounded_and_resolves_source_device():
     from services.mihomo_clash_dto import build_mihomo_clash_connections_dto
 
