@@ -1,0 +1,29 @@
+{
+  "downloadTotal": 4096,
+  "uploadTotal": 1024,
+  "memory": 33554432,
+  "connections": [
+    {
+      "id": "conn-001",
+      "metadata": {
+        "network": "tcp",
+        "type": "Inner",
+        "sourceIP": "192.0.2.10",
+        "sourcePort": "51000",
+        "destinationIP": "198.51.100.20",
+        "destinationPort": "443",
+        "host": "example.invalid",
+        "sniffHost": "example.invalid",
+        "inboundName": "mixed-in",
+        "process": "browser"
+      },
+      "upload": 128,
+      "download": 2048,
+      "start": "2026-08-09T16:00:00Z",
+      "chains": ["AUTO", "node-a"],
+      "providerChains": [],
+      "rule": "MATCH",
+      "rulePayload": "AUTO"
+    }
+  ]
+}

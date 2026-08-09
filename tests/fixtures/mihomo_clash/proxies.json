@@ -1,0 +1,43 @@
+{
+  "proxies": {
+    "GLOBAL": {
+      "type": "Selector",
+      "all": ["AUTO", "DIRECT"],
+      "now": "AUTO"
+    },
+    "AUTO": {
+      "type": "URLTest",
+      "all": ["node-a", "node-b", "DIRECT"],
+      "now": "node-a",
+      "history": [
+        {
+          "time": "2026-08-09T16:00:00Z",
+          "delay": 123
+        }
+      ]
+    },
+    "DIRECT": {
+      "type": "Direct",
+      "alive": true,
+      "udp": true
+    },
+    "node-a": {
+      "name": "node-a",
+      "type": "VLESS",
+      "alive": true,
+      "udp": true,
+      "history": [
+        {
+          "time": "2026-08-09T16:00:00Z",
+          "delay": 87
+        }
+      ]
+    },
+    "node-b": {
+      "name": "node-b",
+      "type": "Trojan",
+      "alive": false,
+      "udp": false
+    }
+  }
+}

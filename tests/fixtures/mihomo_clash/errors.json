@@ -1,0 +1,18 @@
+{
+  "unauthorized": {
+    "status": 401,
+    "code": "api_unauthorized"
+  },
+  "not_found": {
+    "status": 404,
+    "code": "endpoint_not_supported"
+  },
+  "timeout": {
+    "status": 504,
+    "code": "upstream_timeout"
+  },
+  "oversized": {
+    "status": 502,
+    "code": "upstream_payload_too_large"
+  }
+}

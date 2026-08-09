@@ -1,0 +1,18 @@
+{
+  "providers": {
+    "demo-provider": {
+      "name": "demo-provider",
+      "type": "Proxy",
+      "vehicleType": "HTTP",
+      "updatedAt": "2026-08-09T15:59:00Z",
+      "proxies": [
+        {
+          "name": "node-b",
+          "type": "Trojan",
+          "alive": false,
+          "udp": false
+        }
+      ]
+    }
+  }
+}

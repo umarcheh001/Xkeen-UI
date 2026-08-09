@@ -1,0 +1,18 @@
+{
+  "proxies": [
+    {
+      "name": "AUTO",
+      "type": "URLTest",
+      "all": ["node-a", "node-b", "DIRECT"],
+      "now": "node-a",
+      "alive": true,
+      "hidden": false,
+      "history": [
+        {
+          "time": "2026-08-09T16:00:00Z",
+          "delay": 123
+        }
+      ]
+    }
+  ]
+}

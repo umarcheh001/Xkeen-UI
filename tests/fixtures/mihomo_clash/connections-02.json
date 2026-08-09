@@ -1,0 +1,39 @@
+{
+  "downloadTotal": 8192,
+  "uploadTotal": 2048,
+  "memory": 34603008,
+  "connections": [
+    {
+      "id": "conn-001",
+      "metadata": {
+        "network": "tcp",
+        "type": "Inner",
+        "sourceIP": "192.0.2.10",
+        "sourcePort": "51000",
+        "destinationIP": "198.51.100.20",
+        "destinationPort": "443",
+        "host": "example.invalid"
+      },
+      "upload": 256,
+      "download": 4096,
+      "start": "2026-08-09T16:00:00Z",
+      "chains": ["AUTO", "node-a"],
+      "rule": "MATCH"
+    },
+    {
+      "id": "conn-002",
+      "metadata": {
+        "network": "udp",
+        "sourceIP": "192.0.2.11",
+        "destinationIP": "203.0.113.53",
+        "destinationPort": "53",
+        "host": "dns.example.invalid"
+      },
+      "upload": 64,
+      "download": 128,
+      "start": "2026-08-09T16:00:01Z",
+      "chains": ["DIRECT"],
+      "rule": "GEOSITE,private"
+    }
+  ]
+}

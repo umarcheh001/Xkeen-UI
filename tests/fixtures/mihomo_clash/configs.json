@@ -1,0 +1,9 @@
+{
+  "mode": "rule",
+  "log-level": "info",
+  "allow-lan": false,
+  "ipv6": true,
+  "tun": {
+    "enable": false
+  }
+}
