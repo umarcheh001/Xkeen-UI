@@ -364,7 +364,7 @@
       "tabler_asset": "chevron-down",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L165",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L167",
           "control_type": "runtime-action",
           "accessible_label": "Раскрыть"
         },
@@ -486,7 +486,7 @@
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/connections.js:L162",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/connections.js:L169",
           "control_type": "runtime-action",
           "accessible_label": "Закрыть"
         },
@@ -1751,12 +1751,12 @@
           "accessible_label": "Загрузка"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/connections.js:L162",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/connections.js:L169",
           "control_type": "runtime-action",
           "accessible_label": "Загрузка"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L114",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L116",
           "control_type": "runtime-action",
           "accessible_label": "Загрузка"
         },
@@ -2073,7 +2073,7 @@
       "tabler_asset": "stopwatch",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L173",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L175",
           "control_type": "runtime-action",
           "accessible_label": "Проверить задержку"
         },
@@ -2726,7 +2726,7 @@
       "tabler_asset": "server-off",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L117",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L119",
           "control_type": "runtime-action",
           "accessible_label": "server-off"
         }

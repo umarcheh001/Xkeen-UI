@@ -1,6 +1,6 @@
 # Clash API в Xkeen UI: план реализации операторского контура Mihomo
 
-Статус на **10 августа 2026 года**: **PR 1–3 и PR 6–7 закрыты в реализованном объёме; PR 4–5 функционально собраны и работают на aarch64-панели, но после acceptance-аудита переведены в статус «частично закрыт / требуется доработка»**. До повторного закрытия PR 4–5 нужно довести visual lifecycle/status security warning, provider identity/latency semantics, массовый latency budget и router mutation acceptance. Connections backend/UI и кешированное device enrichment собраны локально; поставка новой сборки и router acceptance остаются открыты.
+Статус на **10 августа 2026 года**: **PR 1–3, PR 6–7 и локально доступная часть PR 8 закрыты; PR 4–5 функционально собраны и работают на aarch64-панели, но после acceptance-аудита переведены в статус «частично закрыт / требуется доработка»**. Без роутера PR 8 усилен stateful fake Mihomo, нагрузочными/error/recovery и responsive/accessibility gates; hardware acceptance aarch64/mipsle, WS/no-gevent и реальные CPU/RAM/network/mutation проверки честно отложены.
 Дата последнего аудита: **10 августа 2026 года**.
 
 Визуальный corrective gate перед следующим функциональным этапом: **реализован в исходниках 10 августа 2026 года, router acceptance ожидает поставки новой сборки**. Runtime shell уплотнён без повторных `Operator runtime`/`Mihomo`, постоянные искусственные `min-height` удалены, группы переведены на keyboard-accessible disclosure и по умолчанию все свёрнуты; добавлены массовое сворачивание/раскрытие и адаптивная 3/2/1-колоночная summary-сетка. Полный перечень причин и критериев — в разделе «Корректирующий визуальный проход Clash/Mihomo» документа [`panel-operator-redesign-completion-plan.md`](panel-operator-redesign-completion-plan.md).
@@ -848,16 +848,45 @@ Acceptance baseline: на aarch64 существующий `get_xray_device_name
 
 ### Этап 8. Финальная проверка и закрытие инициативы
 
+Статус локального PR 8 на 10 августа 2026 года: **доступный без роутера объём закрыт; hardware acceptance намеренно отложен**. Добавлен stateful fake Mihomo для TCP/Unix, локальные integration/load/error/recovery contracts и выделенный Playwright gate. Нельзя честно закрыть aarch64/mipsle, постоянный Unix socket на Keenetic, реальные CPU/RAM/network и mutation acceptance без живого роутера.
+
 Задачи:
 
-- [ ] Unit/integration/contract/E2E проходят на Windows dev и Linux CI.
+- [x] Unit/integration/contract/E2E проходят локально; Linux CI дополнен обязательным Mihomo Chromium gate. Фактический green нового CI job подтверждается после запуска workflow, Windows остаётся внешней матрицей.
 - [ ] Router acceptance: aarch64 + mipsle, gevent + no-gevent.
-- [ ] Dark/light: 1920×1080, 1440×900, 1024×768, 390×844, 360×800.
-- [ ] Keyboard, focus, screen-reader labels, reduced motion и touch targets проверены.
+- [x] Локально dark/light: 1920×1080, 1440×900, 1024×768, 390×844, 360×800; router browser re-check остаётся в hardware acceptance.
+- [x] Локально keyboard, focus, accessible labels, reduced motion и touch targets проверены; ручной screen-reader/router check остаётся.
 - [ ] Измерены CPU/RAM/network при idle, 100 и 500 connections, latency batch.
-- [ ] Выполнены `npm run frontend:verify`, `pytest` и целевые Playwright suites.
-- [ ] Обновлены frontend/operator inventories и документация только после осознанного diff.
-- [ ] Проведён security review endpoint whitelist, target resolution, tokens, CSRF, redaction и limits.
+- [x] Локально выполнены `npm run frontend:verify`, `pytest` и целевые Playwright suites.
+- [x] Frontend build manifests проверены; operator icon inventory и документация обновлены и проверены осознанным diff.
+- [x] Проведён локальный security contract review endpoint whitelist, target resolution, tokens, CSRF, redaction и limits; внешний/router review остаётся.
+
+Что закрыто в локальном PR 8 без роутера:
+
+- `tests/support/fake_mihomo.py` предоставляет stateful dependency-free TCP/Unix double с bearer auth, version/config/groups/providers/delay/connections/select/disconnect и управляемыми delay/error состояниями;
+- integration suite проходит реальные пути `config.yaml discovery → TCP/Unix client → Flask facade → DTO`, проверяет select reconciliation, delay, device enrichment, точное удаление соединения, disconnect all, auth injection и отсутствие secret в ответах;
+- recovery suite моделирует 401/503, timeout и восстановление после исправления config/состояния upstream; 500-connection snapshot проверяется на truncation 250, bounded response и щедрый локальный budget без попытки выдать PC-замер за mipsle результат;
+- Playwright PR 8 покрывает 500 connections/100 DOM rows, нулевой polling в hidden/config, 10 циклов subview без размножения poller/listeners, dark/light и полный viewport matrix, keyboard/inspector/Escape, reduced motion, labels/touch targets;
+- массовый latency batch ограничен 24 уникальными probes, cadence 180 ms, максимум 3 workers и 4 busy retries; backend global/session concurrency согласован с тремя workers, а session budget снижен до 48/min, что устраняет прежний retry-storm contract;
+- WS concurrency дополнительно проверяется race-safe тестом: максимум 8 глобально и один stream на client key;
+- `npm run e2e:mihomo-clash` объединяет groups, connections и PR 8 acceptance; тот же набор добавлен в Linux CI после установки Chromium.
+
+Локальная проверка PR 8:
+
+- stateful fake Mihomo TCP/Unix integration: `5 passed`;
+- targeted backend/frontend/security: `30 passed`;
+- `npm run e2e:mihomo-clash` → `10 passed`;
+- полный `pytest` → `1192 passed`; `npm run frontend:verify`, Ruff и `git diff --check` прошли;
+- все тесты используют disposable local state и fake/redacted данные; пользовательский router/config/traffic не затрагиваются.
+
+Отложенный router checklist для возврата к PR 8:
+
+1. aarch64 TCP + secret и постоянный Unix socket внутри Mihomo root;
+2. mipsle TCP/Unix, symlink path acceptance;
+3. gevent live WS и реальная сборка без gevent с HTTP fallback;
+4. реальные idle/100/500 CPU, RAM, network/frame/DOM замеры;
+5. selector/delay и disconnect one/all только в согласованное окно с тестовым трафиком;
+6. LAN/VPN loss/recovery, core restart, provider collisions и ручной screen-reader check.
 
 Критерий выхода:
 
@@ -942,7 +971,7 @@ Acceptance baseline: на aarch64 существующий `get_xray_device_name
 5. **PR 5 — groups UI** — частично закрыт: требуется provider/fixed-selection semantics и real-router latency/select acceptance;
 6. **PR 6 — connections WS/fallback backend** — закрыт локально: same-origin tokenized stream, HTTP fallback contract, guarded disconnect one/all; router WS/no-gevent acceptance остаётся Этапом 8;
 7. **PR 7 — connections/overview UI + device enrichment** — закрыт локально: lifecycle-aware WS/fallback UI, overview/table/mobile/inspector, cached device map и confirmed disconnect UX; router acceptance остаётся Этапом 8;
-8. **PR 8 — performance, responsive, accessibility, router acceptance**;
+8. **PR 8 — performance, responsive, accessibility, router acceptance** — локальная часть закрыта: stateful fake Mihomo, load/error/recovery, responsive/a11y/lifecycle gate и CI workflow; hardware acceptance остаётся отложенным до доступа к роутеру;
 9. **PR 9 — P1 rules/providers/logs**;
 10. **PR 10 — safe templates, migration UX и финальная документация**.
 

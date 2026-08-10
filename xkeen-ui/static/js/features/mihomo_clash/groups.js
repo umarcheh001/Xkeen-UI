@@ -9,7 +9,9 @@ const SELECTABLE_TYPES = new Set(['selector', 'select', 'urltest', 'fallback', '
 // Keep a bounded browser queue. The backend guard intentionally serializes
 // each authenticated subject, so workers retry short `action_busy` responses.
 const MAX_DELAY_CONCURRENCY = 3;
-const MAX_BUSY_RETRIES = 20;
+const MAX_BUSY_RETRIES = 4;
+const MAX_DELAY_BATCH_ITEMS = 24;
+const DELAY_BATCH_CADENCE_MS = 180;
 
 let root = null;
 let active = false;
@@ -366,14 +368,15 @@ async function probeDelay(scope, name, provider = '') {
 
 async function runDelayQueue(items) {
   if (!active || delayRun || !items.length) return;
+  const boundedItems = items.slice(0, MAX_DELAY_BATCH_ITEMS);
   delayRun = {
     controller: typeof AbortController === 'function' ? new AbortController() : null,
     results: new Map(),
-    total: items.length,
+    total: boundedItems.length,
     completed: 0,
     cancelled: false,
   };
-  for (const item of items) {
+  for (const item of boundedItems) {
     for (const key of delayKeysForProbe(item.scope, item.name, item.provider)) {
       delayRun.results.set(key, { state: 'pending' });
     }
@@ -382,12 +385,15 @@ async function runDelayQueue(items) {
   renderDelayNodes(affectedKeys);
   let cursor = 0;
   const worker = async () => {
-    while (delayRun && !delayRun.cancelled && cursor < items.length) {
-      const item = items[cursor++];
+    while (delayRun && !delayRun.cancelled && cursor < boundedItems.length) {
+      const item = boundedItems[cursor++];
       await probeDelay(item.scope, item.name, item.provider);
+      if (delayRun && !delayRun.cancelled && cursor < boundedItems.length) {
+        await wait(DELAY_BATCH_CADENCE_MS);
+      }
     }
   };
-  await Promise.all(Array.from({ length: Math.min(MAX_DELAY_CONCURRENCY, items.length) }, worker));
+  await Promise.all(Array.from({ length: Math.min(MAX_DELAY_CONCURRENCY, boundedItems.length) }, worker));
   if (!delayRun) return;
   const finished = delayRun;
   for (const [key, value] of finished.results) latestDelays.set(key, value);

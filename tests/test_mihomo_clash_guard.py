@@ -10,26 +10,43 @@ from services.mihomo_clash_guard import (
 def test_default_delay_policy_supports_bounded_large_group_batch():
     policy = MIHOMO_CLASH_ACTION_POLICIES["delay"]
     assert policy.max_global_concurrent == 3
-    assert policy.max_subject_concurrent == 1
-    assert policy.max_calls_per_window == 256
+    assert policy.max_subject_concurrent == 3
+    assert policy.max_calls_per_window == 48
 
 
 def test_action_guard_limits_same_subject_concurrency_and_releases_lease():
     guard = MihomoClashActionGuard()
-    lease, rejected = guard.try_acquire("delay", "operator")
+    lease, rejected = guard.try_acquire("proxy-select", "operator")
     assert lease is not None
     assert rejected is None
 
-    second, rejected = guard.try_acquire("delay", "operator")
+    second, rejected = guard.try_acquire("proxy-select", "operator")
     assert second is None
     assert rejected is not None
     assert rejected.code == "action_busy"
 
     lease.release()
-    third, rejected = guard.try_acquire("delay", "operator")
+    third, rejected = guard.try_acquire("proxy-select", "operator")
     assert third is not None
     assert rejected is None
     third.release()
+
+
+def test_delay_guard_matches_three_worker_browser_batch():
+    guard = MihomoClashActionGuard()
+    leases = []
+    for _ in range(3):
+        lease, rejected = guard.try_acquire("delay", "operator")
+        assert lease is not None
+        assert rejected is None
+        leases.append(lease)
+
+    fourth, rejected = guard.try_acquire("delay", "operator")
+    assert fourth is None
+    assert rejected is not None
+    assert rejected.code == "action_busy"
+    for lease in leases:
+        lease.release()
 
 
 def test_action_guard_enforces_global_concurrency_across_subjects():

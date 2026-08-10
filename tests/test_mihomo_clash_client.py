@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import socket
 import socketserver
+import tempfile
 import threading
 import time
 from contextlib import contextmanager
@@ -332,9 +333,7 @@ def test_named_operations_reject_invalid_resource_names_before_connecting(name: 
 
 
 @pytest.mark.skipif(not hasattr(socket, "AF_UNIX"), reason="Unix sockets are unavailable")
-def test_unix_socket_client_uses_same_http_contract(tmp_path: Path):
-    socket_path = tmp_path / "mihomo.sock"
-
+def test_unix_socket_client_uses_same_http_contract():
     class UnixHTTPServer(socketserver.UnixStreamServer):
         allow_reuse_address = True
 
@@ -343,17 +342,22 @@ def test_unix_socket_client_uses_same_http_contract(tmp_path: Path):
         (_FixtureHandler,),
         {"responses": {"/version": (200, "application/json", b'{"version":"unix"}')}, "seen": []},
     )
-    server = UnixHTTPServer(str(socket_path), handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        client = MihomoClashClient(
-            MihomoClashTarget(transport="unix", socket_path=socket_path),
-            endpoints={"probe": MihomoClashEndpoint("GET", "/version", 2, 1024)},
-        )
-        response = client.request_json("probe")
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=2)
+    # macOS limits AF_UNIX paths to 103 bytes; pytest's nested tmp_path can
+    # exceed that before the fixture even appends the socket filename.
+    short_tmp = "/tmp" if Path("/tmp").is_dir() else None
+    with tempfile.TemporaryDirectory(prefix="xk-client-", dir=short_tmp) as temp_root:
+        socket_path = Path(temp_root) / "mihomo.sock"
+        server = UnixHTTPServer(str(socket_path), handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            client = MihomoClashClient(
+                MihomoClashTarget(transport="unix", socket_path=socket_path),
+                endpoints={"probe": MihomoClashEndpoint("GET", "/version", 2, 1024)},
+            )
+            response = client.request_json("probe")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
     assert response.payload == {"version": "unix"}

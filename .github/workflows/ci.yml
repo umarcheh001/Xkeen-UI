@@ -47,3 +47,14 @@ jobs:
 
       - name: Verify frontend build
         run: node scripts/verify_frontend_build.mjs
+
+      - name: Install Chromium for Mihomo local acceptance
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Mihomo Clash local acceptance
+        run: >-
+          npx playwright test
+          e2e/mihomo_clash_groups.spec.mjs
+          e2e/mihomo_clash_connections.spec.mjs
+          e2e/mihomo_clash_pr8_acceptance.spec.mjs
+          --reporter=line

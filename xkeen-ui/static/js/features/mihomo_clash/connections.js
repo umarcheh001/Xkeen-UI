@@ -122,6 +122,13 @@ function setStreamState(state, copy) {
   setText('mihomo-clash-stream-state', copy);
 }
 
+function setFallbackNotice() {
+  const bounded = snapshot?.truncated
+    ? ` Показаны первые ${snapshot.connections.length} соединений из ${snapshot.total_connections}.`
+    : '';
+  setNotice(`HTTP fallback активен: обновление каждые 2 секунды.${bounded}`, 'warning');
+}
+
 function updateRates(next, receivedAt = Date.now()) {
   const download = Math.max(0, Number(next?.download_total) || 0);
   const upload = Math.max(0, Number(next?.upload_total) || 0);
@@ -234,7 +241,7 @@ async function pollSnapshot(runGeneration, immediate = false) {
     if (!active || runGeneration !== generation) return;
     capabilities = payload?.capabilities || capabilities;
     applySnapshot(payload, Date.now());
-    setNotice('HTTP fallback активен: обновление каждые 2 секунды.', 'warning');
+    setFallbackNotice();
   } catch (error) {
     if (!controller?.signal.aborted && active) {
       setStreamState('error', 'Ошибка');
@@ -370,7 +377,7 @@ async function startRuntime() {
     if (capabilities.connections_stream === true) void openSocket(runGeneration);
     else {
       setStreamState('fallback', 'HTTP fallback');
-      setNotice('HTTP fallback активен: обновление каждые 2 секунды.', 'warning');
+      setFallbackNotice();
       scheduleFallback(runGeneration);
     }
   } catch (error) {

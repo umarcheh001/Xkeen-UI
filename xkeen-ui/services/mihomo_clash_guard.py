@@ -21,9 +21,9 @@ class MihomoClashActionPolicy:
 MIHOMO_CLASH_ACTION_POLICIES: Mapping[str, MihomoClashActionPolicy] = MappingProxyType(
     {
         "proxy-select": MihomoClashActionPolicy(4, 1, 30, 60.0),
-        # Large selector groups need a useful manual batch while still keeping
-        # the router protected by one in-flight action per authenticated user.
-        "delay": MihomoClashActionPolicy(3, 1, 256, 60.0),
+        # One browser batch may use all three workers; the matching global cap
+        # still protects the router when several sessions start a batch.
+        "delay": MihomoClashActionPolicy(3, 3, 48, 60.0),
         # HTTP fallback uses this endpoint at a documented two-second cadence.
         # The rolling limit bounds accidental hot loops while leaving room for
         # manual refreshes and a reconnect bootstrap.

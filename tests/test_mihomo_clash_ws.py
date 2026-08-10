@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 
 from services.mihomo_clash_client import MihomoClashClientError, MihomoClashJSONResponse
 from services.mihomo_clash_target import MihomoClashDiscovery, MihomoClashTarget
@@ -8,6 +9,7 @@ from services.mihomo_clash_ws import (
     handle_mihomo_clash_connections_request,
     is_same_origin_websocket,
 )
+import services.mihomo_clash_ws as clash_ws
 
 
 class StubWebSocket:
@@ -140,3 +142,37 @@ def test_ws_maps_upstream_error_without_leaking_exception_text():
         "retryable": True,
     }
     assert "secret socket" not in serialized
+
+
+def test_ws_stream_limit_allows_one_per_client_and_releases_after_close():
+    with clash_ws._STREAM_LOCK:
+        clash_ws._ACTIVE_STREAMS.clear()
+    assert clash_ws._acquire_stream("192.0.2.1") is True
+    assert clash_ws._acquire_stream("192.0.2.1") is False
+    clash_ws._release_stream("192.0.2.1")
+    assert clash_ws._acquire_stream("192.0.2.1") is True
+    clash_ws._release_stream("192.0.2.1")
+
+
+def test_ws_global_limit_is_race_safe():
+    with clash_ws._STREAM_LOCK:
+        clash_ws._ACTIVE_STREAMS.clear()
+    barrier = threading.Barrier(17)
+    results: list[tuple[str, bool]] = []
+
+    def acquire(index: int):
+        key = f"client-{index}"
+        barrier.wait()
+        results.append((key, clash_ws._acquire_stream(key)))
+
+    threads = [threading.Thread(target=acquire, args=(index,)) for index in range(16)]
+    for thread in threads:
+        thread.start()
+    barrier.wait()
+    for thread in threads:
+        thread.join(timeout=2)
+
+    accepted = [key for key, ok in results if ok]
+    assert len(accepted) == clash_ws.MAX_ACTIVE_STREAMS
+    for key in accepted:
+        clash_ws._release_stream(key)
