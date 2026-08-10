@@ -132,6 +132,8 @@ def test_groups_ui_has_compact_filter_select_and_bounded_delay_contract():
     for fragment in (
             'id="mihomo-clash-groups-filter"',
             'id="mihomo-clash-show-hidden"',
+            'class="dt-switch xk-mihomo-groups-hidden-toggle"',
+            'dt-switch-slider',
             'data-mihomo-delay-visible',
             "fetchMihomoClashGroups",
         "selectMihomoClashProxy",

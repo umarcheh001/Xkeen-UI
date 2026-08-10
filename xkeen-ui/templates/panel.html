@@ -996,9 +996,10 @@
               {{ op_icon('search') }}
               <input id="mihomo-clash-groups-filter" type="search" placeholder="Группа, узел или provider" autocomplete="off">
             </label>
-            <label class="xk-mihomo-groups-hidden-toggle">
+            <label class="dt-switch xk-mihomo-groups-hidden-toggle" title="Показать служебные группы Mihomo, скрытые по умолчанию.">
               <input id="mihomo-clash-show-hidden" type="checkbox">
-              <span>Скрытые группы</span>
+              <span class="dt-switch-slider" aria-hidden="true"></span>
+              <span class="dt-switch-label">Скрытые группы</span>
             </label>
             <span id="mihomo-clash-groups-count" class="xk-mihomo-groups-count">0 групп · 0 узлов</span>
             <button type="button" id="mihomo-clash-groups-collapse" class="btn-secondary xk-mihomo-groups-collapse" data-mihomo-groups-collapse aria-label="Свернуть все группы">

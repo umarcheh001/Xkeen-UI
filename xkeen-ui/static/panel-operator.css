@@ -16819,14 +16819,50 @@ body.panel-page .xk-mihomo-groups-search input {
   padding-left: 31px !important;
 }
 
+/* Follow the panel's standard switch pattern instead of rendering this
+ * visibility preference as a bare native checkbox. */
 body.panel-page .xk-mihomo-groups-hidden-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-height: var(--op-control-h);
+  margin: 0;
+  padding: 0 8px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
   color: var(--op-muted);
   white-space: nowrap;
   cursor: pointer;
+  box-shadow: none !important;
+  transition: border-color .15s ease, background-color .15s ease, color .15s ease;
+}
+
+body.panel-page .xk-mihomo-groups-hidden-toggle:hover {
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-text) !important;
+}
+
+body.panel-page .xk-mihomo-groups-hidden-toggle .dt-switch-slider {
+  width: 30px;
+  min-width: 30px;
+  height: 16px;
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+/* Keep the inactive thumb as legible as the header's Auto-restart switch. */
+body.panel-page .xk-mihomo-groups-hidden-toggle .dt-switch-slider::after {
+  background: var(--op-text) !important;
+}
+
+body.panel-page .xk-mihomo-groups-hidden-toggle input:checked + .dt-switch-slider::after {
+  background: #fff !important;
+}
+
+body.panel-page .xk-mihomo-groups-hidden-toggle .dt-switch-label {
+  color: inherit;
 }
 
 body.panel-page .xk-mihomo-groups-count {
