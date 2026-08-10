@@ -123,6 +123,9 @@
       if (SKIP_TAGS.has(el.tagName)) return;
       const host = findTooltipHost(el);
       if (!host || SKIP_TAGS.has(host.tagName)) return;
+      // Components that already communicate their state visually can opt out
+      // of auto-generated aria-label tooltips without losing accessibility.
+      if (host.hasAttribute('data-tooltip-silent')) return;
 
       // Do not override explicit tooltips.
       if (host.hasAttribute(ATTR) || host.hasAttribute('title') || host.hasAttribute(LEGACY_ATTR)) return;

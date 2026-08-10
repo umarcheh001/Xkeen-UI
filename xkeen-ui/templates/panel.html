@@ -1,6 +1,6 @@
 <!doctype html>
 {% macro op_icon(name, class_name='') -%}
-<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260805f') }}#xk-{{ name }}"></use></svg>
+<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260810f') }}#xk-{{ name }}"></use></svg>
 {%- endmacro %}
 <html lang="ru">
 <head>
@@ -970,15 +970,11 @@
   <section id="mihomo-clash-runtime" class="card xk-mihomo-runtime" data-mihomo-clash-state="idle" aria-labelledby="mihomo-clash-tab-control">
     <div class="xk-mihomo-status-strip" id="mihomo-clash-status-strip" role="status" aria-live="polite" aria-atomic="true">
       <span class="xk-mihomo-status-led" aria-hidden="true"></span>
-      <strong id="mihomo-clash-status-label">API · ожидание</strong>
+      <button type="button" id="mihomo-clash-status-label" class="xk-mihomo-status-label" data-mihomo-clash-action="retry" aria-label="Проверить Mihomo API">API · ожидание</button>
       <span class="xk-mihomo-status-separator" aria-hidden="true"></span>
       <span id="mihomo-clash-status-version">Mihomo —</span>
       <span class="xk-mihomo-status-separator" aria-hidden="true"></span>
       <span id="mihomo-clash-status-mode">Режим —</span>
-      <span class="xk-mihomo-status-spacer"></span>
-      <button type="button" id="mihomo-clash-status-retry" class="btn-secondary btn-icon xk-mihomo-status-retry" title="Проверить Clash API снова" aria-label="Проверить Clash API снова">
-        {{ op_icon('refresh') }}
-      </button>
     </div>
 
     <div id="mihomo-clash-panel-control" class="xk-mihomo-runtime-panel" data-mihomo-clash-panel="control" role="tabpanel" aria-labelledby="mihomo-clash-tab-control">
@@ -1011,15 +1007,7 @@
             <button type="button" id="mihomo-clash-test-visible" class="btn-secondary" data-mihomo-delay-visible>
               {{ op_icon('ping') }}<span>Тест видимых</span>
             </button>
-            <button type="button" class="btn-secondary btn-icon" data-mihomo-groups-refresh title="Обновить группы" aria-label="Обновить группы Mihomo">
-              {{ op_icon('refresh') }}
-            </button>
           </div>
-          <div class="xk-mihomo-delay-run" aria-live="polite">
-            <span id="mihomo-clash-delay-progress" hidden></span>
-            <button type="button" id="mihomo-clash-delay-cancel" class="btn-secondary" data-mihomo-delay-cancel hidden>Остановить очередь</button>
-          </div>
-          <div id="mihomo-clash-groups-message" class="xk-mihomo-groups-message" role="status" aria-live="polite" hidden></div>
           <div id="mihomo-clash-groups-list" class="xk-mihomo-groups-list"></div>
         </div>
       </div>

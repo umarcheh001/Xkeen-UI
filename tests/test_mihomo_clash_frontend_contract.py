@@ -130,19 +130,20 @@ def test_groups_ui_has_compact_filter_select_and_bounded_delay_contract():
     css = _text(CSS)
 
     for fragment in (
-        'id="mihomo-clash-groups-filter"',
-        'id="mihomo-clash-show-hidden"',
-        'data-mihomo-delay-visible',
-        'data-mihomo-delay-cancel',
-        "fetchMihomoClashGroups",
+            'id="mihomo-clash-groups-filter"',
+            'id="mihomo-clash-show-hidden"',
+            'data-mihomo-delay-visible',
+            "fetchMihomoClashGroups",
         "selectMihomoClashProxy",
         "testMihomoClashDelay",
         "MAX_DELAY_CONCURRENCY = 3",
         "MAX_BUSY_RETRIES = 20",
         "provider-proxy",
-        "cancelDelayQueue",
+        "groupNodeQueue",
+        "is-pending",
         "selection = { group, node }",
-        ".xk-mihomo-node-row.is-current::before",
+        ".xk-mihomo-node-row.is-current",
+        "background: var(--op-accent-soft);",
     ):
         assert fragment in markup or fragment in client or fragment in groups or fragment in css
 
@@ -162,21 +163,58 @@ def test_groups_start_collapsed_and_keep_labelled_actions_on_one_baseline():
     assert "> span:not(.xk-action-icon)" in css
 
 
+def test_groups_toolbar_has_no_manual_refresh_action():
+    markup = _mihomo_markup()
+    groups = _text(GROUPS)
+
+    assert 'data-mihomo-groups-refresh' not in markup
+    assert 'data-mihomo-groups-refresh' not in groups
+
+
+def test_runtime_status_strip_avoids_redundant_branding_and_ready_state_retry():
+    markup = _mihomo_markup()
+    index = _text(FEATURE.parent / "index.js")
+
+    assert 'id="mihomo-clash-status-retry"' not in markup
+    assert 'id="mihomo-clash-status-label" class="xk-mihomo-status-label" data-mihomo-clash-action="retry"' in markup
+    assert 'Mihomo ${version}' not in index
+    assert "version || 'Версия —'" in index
+    assert "is-retry-suggested" in index
+
+
 def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
+    markup = _mihomo_markup()
     groups = _text(GROUPS)
     css = _text(CSS)
 
     assert 'class="xk-mihomo-node-head"' not in groups
     assert 'class="xk-mihomo-node-alive"' not in groups
-    assert 'aria-label="${escapeHtml(healthLabel)}"' in groups
+    assert 'title="${escapeHtml(node.name)}"' not in groups
+    assert 'title="${escapeHtml(meta)}"' not in groups
+    assert 'xk-mihomo-group-current' not in groups
+    assert 'xk-mihomo-node-marker' not in groups
+    assert 'class="xk-mihomo-node-probe' in groups
+    assert "iconHtml('alert')" in groups
+    assert 'data-tooltip="Проверить задержку"' not in groups
+    assert 'data-tooltip-silent="1"' in groups
+    assert "${collapsed ? '' : `<button type=\"button\" class=\"btn-secondary xk-mihomo-group-test\"" in groups
+    assert 'setMessage(' not in groups
+    assert 'mihomo-clash-groups-message' not in markup
+    assert 'aria-label="${escapeHtml(probeLabel)}"' in groups
+    assert "iconHtml('loading')" in groups
     assert "delaySucceeded ? delayTone(delay)" in groups
     assert "node.alive === false ? 'failed'" in groups
-    assert "delaySucceeded || node.alive === true" in groups
+    assert "node.alive === true" in groups
     assert 'grid-template-columns: repeat(auto-fill, minmax(min(100%, 232px), 1fr));' in css
     assert 'grid-auto-rows: minmax(72px, auto);' in css
     assert 'border-radius: var(--op-control-radius);' in css
     assert 'background: var(--op-editor);' in css
     assert '.xk-mihomo-node-delay::before' not in css
+    assert '.xk-mihomo-node-row.is-current::before' not in css
+    assert 'background: var(--op-accent-soft);' in css
+    assert 'body.panel-page .xk-mihomo-node-unavailable' in css
+    assert 'body.panel-page .xk-mihomo-node-probe:focus-visible' in css
+    assert 'xk-mihomo-node-probe-spin' in css
 
 
 def test_groups_lifecycle_stops_load_and_delay_work_outside_control_view():

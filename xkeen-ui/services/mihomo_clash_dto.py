@@ -256,7 +256,20 @@ def build_mihomo_clash_delay_dto(
     if normalized_scope in {"proxy", "provider-proxy"}:
         raw_items = [(name, payload.get("delay"))]
     else:
-        candidates = list(payload.items())
+        # Mihomo's group endpoint is version-dependent: some versions return a
+        # mapping of ``node -> delay``, while newer builds wrap the values in
+        # ``{"proxies": [{"name": ..., "delay": ...}]}``. Normalize both
+        # shapes before validating bounded named results.
+        group_proxies = payload.get("proxies")
+        if isinstance(group_proxies, Sequence) and not isinstance(group_proxies, (str, bytes, bytearray)):
+            candidates = [
+                (item.get("name"), item.get("delay"))
+                for raw_item in group_proxies
+                if isinstance(raw_item, Mapping)
+                for item in [_mapping(raw_item)]
+            ]
+        else:
+            candidates = list(payload.items())
         truncated = len(candidates) > MAX_DELAY_RESULTS
         raw_items = candidates[:MAX_DELAY_RESULTS]
 

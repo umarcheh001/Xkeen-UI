@@ -190,6 +190,22 @@ def test_delay_dto_normalizes_proxy_and_group_results():
     assert "secret" not in json.dumps(proxy).lower()
 
 
+def test_delay_dto_normalizes_wrapped_mihomo_group_results():
+    from services.mihomo_clash_dto import build_mihomo_clash_delay_dto
+
+    group = build_mihomo_clash_delay_dto(
+        {"proxies": [{"name": "node-a", "delay": 62}, {"name": "node-b", "delay": 95}]},
+        scope="group",
+        name="AUTO",
+        preset="google",
+    )
+
+    assert group["results"] == [
+        {"name": "node-a", "delay_ms": 62},
+        {"name": "node-b", "delay_ms": 95},
+    ]
+
+
 def test_connections_dto_is_bounded_and_resolves_source_device():
     from services.mihomo_clash_dto import build_mihomo_clash_connections_dto
 

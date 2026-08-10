@@ -16640,9 +16640,45 @@ body.panel-page .xk-mihomo-status-strip {
   color: var(--op-muted);
 }
 
-body.panel-page .xk-mihomo-status-strip strong {
+body.panel-page .xk-mihomo-status-label {
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 3px !important;
+  background: transparent !important;
   color: var(--op-text);
   font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 700;
+  line-height: 1.2;
+  box-shadow: none !important;
+}
+
+body.panel-page .xk-mihomo-status-label:hover:not(:disabled),
+body.panel-page .xk-mihomo-status-label:focus-visible {
+  color: var(--op-text-strong) !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* An error is actionable through the status text itself; the restrained tint
+ * is enough to invite a retry without adding another toolbar button. */
+body.panel-page .xk-mihomo-status-label.is-retry-suggested {
+  color: var(--op-warning) !important;
+}
+
+body.panel-page .xk-mihomo-runtime[data-tone="danger"] .xk-mihomo-status-label.is-retry-suggested {
+  color: var(--op-danger) !important;
+}
+
+body.panel-page .xk-mihomo-status-label.is-retry-suggested:hover:not(:disabled),
+body.panel-page .xk-mihomo-status-label.is-retry-suggested:focus-visible {
+  background: color-mix(in srgb, currentColor 10%, transparent) !important;
+  text-decoration: none;
+}
+
+body.panel-page .xk-mihomo-status-label:disabled {
+  cursor: wait;
+  opacity: 1;
 }
 
 body.panel-page .xk-mihomo-status-led {
@@ -16673,15 +16709,6 @@ body.panel-page .xk-mihomo-status-separator {
   background: var(--op-border);
 }
 
-body.panel-page .xk-mihomo-status-spacer {
-  flex: 1 1 auto;
-}
-
-body.panel-page .xk-mihomo-status-retry {
-  flex: 0 0 auto;
-}
-
-body.panel-page .xk-mihomo-runtime[aria-busy="true"] .xk-mihomo-status-retry .xk-action-icon,
 body.panel-page .xk-mihomo-runtime[aria-busy="true"] .xk-mihomo-runtime-state-icon .xk-action-icon {
   animation: xk-sub-pingall-spin .9s linear infinite;
 }
@@ -16841,33 +16868,6 @@ body.panel-page :is(#mihomo-clash-test-visible, .xk-mihomo-groups-collapse, .xk-
   line-height: 1;
 }
 
-body.panel-page .xk-mihomo-delay-run {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  min-height: 0;
-}
-
-body.panel-page .xk-mihomo-delay-run:has(#mihomo-clash-delay-progress:not([hidden])) {
-  min-height: 36px;
-  padding-top: 6px;
-}
-
-body.panel-page #mihomo-clash-delay-progress {
-  color: var(--op-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-body.panel-page .xk-mihomo-groups-message {
-  margin-top: 6px;
-  padding: 8px 10px;
-  border: 1px solid var(--op-border);
-  border-radius: var(--op-control-radius) !important;
-  background: var(--op-surface-2);
-  color: var(--op-muted);
-}
-
 body.panel-page .xk-mihomo-groups-list {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -16891,7 +16891,7 @@ body.panel-page .xk-mihomo-group:has(.xk-mihomo-group-body:not([hidden])) {
 
 body.panel-page .xk-mihomo-group-head {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) minmax(100px, .55fr) auto;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   min-height: 46px;
@@ -16927,12 +16927,24 @@ body.panel-page .xk-mihomo-group-toggle[aria-expanded="true"] .xk-action-icon {
   transform: rotate(180deg);
 }
 
+/* The disclosure arrow is a compact target, so give it a quiet surface cue
+ * on hover without competing with the selected-server indigo state. */
+body.panel-page .xk-mihomo-group-toggle:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--op-accent) 12%, transparent) !important;
+  color: var(--op-accent) !important;
+}
+
+body.panel-page .xk-mihomo-group-toggle:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--op-accent) 65%, transparent);
+  outline-offset: 2px;
+  border-radius: 5px;
+}
+
 body.panel-page .xk-mihomo-group-body[hidden] {
   display: none !important;
 }
 
-body.panel-page .xk-mihomo-group-title,
-body.panel-page .xk-mihomo-group-current {
+body.panel-page .xk-mihomo-group-title {
   min-width: 0;
 }
 
@@ -16943,8 +16955,7 @@ body.panel-page .xk-mihomo-group-title > div {
   min-width: 0;
 }
 
-body.panel-page .xk-mihomo-group-title strong,
-body.panel-page .xk-mihomo-group-current strong {
+body.panel-page .xk-mihomo-group-title strong {
   display: block;
   overflow: hidden;
   color: var(--op-text-strong);
@@ -16952,8 +16963,7 @@ body.panel-page .xk-mihomo-group-current strong {
   white-space: nowrap;
 }
 
-body.panel-page .xk-mihomo-group-title small,
-body.panel-page .xk-mihomo-group-current span {
+body.panel-page .xk-mihomo-group-title small {
   display: block;
   overflow: hidden;
   color: var(--op-muted);
@@ -16990,8 +17000,8 @@ body.panel-page .xk-mihomo-node-list {
 body.panel-page .xk-mihomo-node-row {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   align-items: stretch;
   align-self: stretch;
   gap: 5px;
@@ -17003,7 +17013,7 @@ body.panel-page .xk-mihomo-node-row {
   border: 1px solid var(--op-border);
   border-radius: var(--op-control-radius);
   background: var(--op-editor);
-  transition: border-color .14s ease, background-color .14s ease;
+  transition: border-color .14s ease, background-color .14s ease, box-shadow .14s ease;
 }
 
 body.panel-page .xk-mihomo-node-row:hover {
@@ -17011,17 +17021,23 @@ body.panel-page .xk-mihomo-node-row:hover {
   background: var(--op-surface-2);
 }
 
-body.panel-page .xk-mihomo-node-row.is-current::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 2px;
-  background: var(--op-accent);
+/* The selected server is identifiable by the card itself, rather than a
+ * duplicate radio dot. This follows the compact node cards used by the
+ * reference and gives the selected target a calmer indigo treatment. */
+body.panel-page .xk-mihomo-node-row.is-current {
+  border-color: var(--op-accent-border);
+  background: var(--op-accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--op-accent) 12%, transparent);
+}
+
+body.panel-page .xk-mihomo-node-row.is-current:hover {
+  border-color: var(--op-accent);
+  background: color-mix(in srgb, var(--op-accent) 19%, var(--op-editor));
 }
 
 body.panel-page .xk-mihomo-node-select {
   display: grid !important;
-  grid-template-columns: 12px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 6px;
   grid-column: 1;
@@ -17030,7 +17046,7 @@ body.panel-page .xk-mihomo-node-select {
   height: auto !important;
   min-height: 0 !important;
   max-height: none !important;
-  padding: 0 !important;
+  padding: 0 38px 0 0 !important;
   border-color: transparent !important;
   background: transparent !important;
   text-align: left;
@@ -17043,18 +17059,6 @@ body.panel-page .xk-mihomo-node-select[disabled] {
 body.panel-page .xk-mihomo-node-select:hover:not([disabled]) {
   border-color: transparent !important;
   background: transparent !important;
-}
-
-body.panel-page .xk-mihomo-node-marker {
-  width: 9px;
-  height: 9px;
-  border: 1px solid var(--op-border-strong);
-  border-radius: 50%;
-  background: transparent;
-}
-
-body.panel-page .xk-mihomo-node-row.is-current .xk-mihomo-node-marker {
-  border: 3px solid var(--op-accent);
 }
 
 body.panel-page .xk-mihomo-node-main {
@@ -17083,55 +17087,96 @@ body.panel-page .xk-mihomo-node-main small {
   line-height: 1.2;
 }
 
-body.panel-page .xk-mihomo-node-delay {
-  display: inline-flex;
+body.panel-page .xk-mihomo-node-probe {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  justify-self: end;
-  align-self: end;
-  grid-column: 2;
-  grid-row: 2;
-  min-width: 42px;
-  min-height: 18px;
-  padding: 0 5px;
-  border: 1px solid var(--op-border);
-  border-radius: 4px;
-  background: var(--op-surface-2);
+  box-sizing: border-box;
+  width: auto;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px !important;
+  padding: 0 4px !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  cursor: pointer;
   color: var(--op-muted);
   font-family: "SFMono-Regular", Consolas, monospace;
-  font-size: calc(8.5px * var(--xk-font-scale, 1));
+  font-size: calc(10px * var(--xk-font-scale, 1));
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
   white-space: nowrap;
+  transform: translateY(-50%) !important;
+}
+
+body.panel-page .xk-mihomo-node-probe:disabled {
+  cursor: wait;
+}
+
+/* Keep the latency slot stable while Mihomo is probing. The spinner replaces
+ * the value in place, so the grid does not need to reflow or flash. */
+body.panel-page .xk-mihomo-node-probe.is-pending:disabled {
+  opacity: 1;
+  color: var(--op-accent) !important;
+}
+
+body.panel-page .xk-mihomo-node-probe.is-pending .xk-action-icon {
+  width: 14px;
+  height: 14px;
+  animation: xk-mihomo-node-probe-spin .85s linear infinite;
+}
+
+@keyframes xk-mihomo-node-probe-spin {
+  to { transform: rotate(360deg); }
+}
+
+body.panel-page .xk-mihomo-node-probe:hover:not(:disabled) {
+  background: var(--op-surface-2) !important;
+  color: var(--op-text) !important;
+}
+
+body.panel-page .xk-mihomo-node-probe:focus-visible {
+  outline: 2px solid var(--op-accent-hover);
+  outline-offset: 2px;
+  border-radius: 3px;
 }
 
 body.panel-page .xk-mihomo-node-delay[data-delay-tone="good"] {
-  border-color: color-mix(in srgb, var(--op-success) 34%, transparent);
-  background: color-mix(in srgb, var(--op-success) 14%, transparent);
-  color: var(--op-success);
+  /* The panel's neutral button primitive declares `color` as !important.
+   * Keep the semantic latency signal above that reset. */
+  color: var(--op-success) !important;
 }
 body.panel-page .xk-mihomo-node-delay[data-delay-tone="warning"] {
-  border-color: color-mix(in srgb, var(--op-warning) 34%, transparent);
-  background: color-mix(in srgb, var(--op-warning) 14%, transparent);
-  color: var(--op-warning);
+  color: var(--op-warning) !important;
 }
 body.panel-page .xk-mihomo-node-delay[data-delay-tone="bad"],
 body.panel-page .xk-mihomo-node-delay[data-delay-tone="failed"],
 body.panel-page .xk-mihomo-node-delay[data-delay-tone="timeout"] {
-  border-color: color-mix(in srgb, var(--op-danger) 34%, transparent);
-  background: color-mix(in srgb, var(--op-danger) 12%, transparent);
-  color: var(--op-danger);
+  color: var(--op-danger) !important;
 }
 
-body.panel-page .xk-mihomo-node-test {
-  grid-column: 2;
-  grid-row: 1;
-  justify-self: end;
-  align-self: start;
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
-  min-height: 28px;
+body.panel-page .xk-mihomo-node-unavailable {
+  width: 24px;
+  min-width: 24px;
+  padding: 0 !important;
+  color: var(--op-danger) !important;
+}
+
+body.panel-page .xk-mihomo-node-unavailable .xk-action-icon {
+  width: 15px;
+  height: 15px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.panel-page .xk-mihomo-node-probe.is-pending .xk-action-icon {
+    animation: none;
+  }
 }
 
 body.panel-page .xk-mihomo-groups-empty {
@@ -17208,14 +17253,8 @@ body.panel-page .xk-mihomo-groups-empty {
     grid-template-columns: 28px minmax(0, 1fr) auto;
   }
 
-  body.panel-page .xk-mihomo-group-current {
-    grid-column: 2;
-    grid-row: 2;
-  }
-
   body.panel-page .xk-mihomo-group-test {
     grid-column: 3;
-    grid-row: 1 / span 2;
   }
 
 }

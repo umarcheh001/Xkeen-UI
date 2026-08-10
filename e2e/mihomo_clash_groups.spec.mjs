@@ -28,7 +28,7 @@ function groupsPayload(now = 'node-a') {
         selectable: true,
         nodes: [
           { name: 'node-a', type: 'VLESS', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: 82 },
-          { name: 'node-b', type: 'Trojan', alive: true, udp: true, provider: 'provider-one', provider_candidates: ['provider-one'], delay_ms: null },
+          { name: 'node-b', type: 'Trojan', alive: false, udp: true, provider: 'provider-one', provider_candidates: ['provider-one'], delay_ms: null },
           { name: 'DIRECT', type: 'Direct', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: null },
         ],
       },
@@ -64,6 +64,7 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await page.route('**/api/mihomo/clash/delay', async (route) => {
     const data = route.request().postDataJSON();
     delays.push(data);
+    await new Promise((resolve) => setTimeout(resolve, 100));
     await route.fulfill({ json: { ok: true, schema_version: 1, results: [{ name: data.name, delay_ms: 44 }] } });
   });
 
@@ -76,6 +77,7 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('AUTO');
   await expect(page.locator('#mihomo-clash-groups-list')).not.toContainText('HIDDEN');
   await expect(page.locator('[data-group-name="AUTO"] [data-mihomo-group-toggle]')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test')).toHaveCount(0);
   await expect(page.locator('#mihomo-clash-groups-collapse')).toHaveText('Развернуть');
   await expect(page.locator('#mihomo-clash-test-visible')).toBeDisabled();
   const collapseGeometry = await page.locator('#mihomo-clash-groups-collapse').evaluate((button) => {
@@ -96,6 +98,20 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
     verticallyAligned: true,
   });
 
+  await page.locator('[data-group-name="AUTO"] [data-mihomo-group-toggle]').click();
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test')).toBeVisible();
+  await page.locator('[data-group-name="AUTO"] .xk-mihomo-node-row').evaluateAll((nodes) => {
+    nodes.forEach((node, index) => { node.dataset.renderIdentity = String(index); });
+  });
+  await page.locator('[data-mihomo-node-delay][data-node="node-a"]').click();
+  await expect(page.locator('[data-node-name="node-a"] .xk-mihomo-node-probe')).toHaveClass(/is-pending/);
+  expect(await page.locator('[data-group-name="AUTO"] .xk-mihomo-node-row').evaluateAll(
+    (nodes) => nodes.map((node, index) => node.dataset.renderIdentity === String(index)),
+  )).toEqual([true, true, true]);
+  expect(await page.locator('#mihomo-clash-test-visible').evaluate((button) => button.disabled)).toBe(false);
+  expect(await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test').evaluate((button) => button.disabled)).toBe(false);
+  await expect(page.locator('[data-node-name="node-a"] .xk-mihomo-node-delay')).toHaveText('44 мс');
+
   await page.locator('#mihomo-clash-show-hidden').check();
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('HIDDEN');
   await expect(page.locator('[data-group-name="HIDDEN"] [data-mihomo-group-toggle]')).toHaveAttribute('aria-expanded', 'false');
@@ -107,10 +123,19 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   expect(selections).toEqual(['node-b']);
 
   await page.locator('[data-mihomo-node-delay][data-node="node-b"]').click();
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-probe')).toHaveClass(/is-pending/);
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-probe use')).toHaveAttribute('href', /#xk-loading$/);
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('44 мс');
-  expect(delays).toEqual([
+  expect(delays).toContainEqual(
     { scope: 'provider-proxy', name: 'node-b', provider: 'provider-one', preset: 'google' },
-  ]);
+  );
+
+  await page.locator('[data-group-name="AUTO"] [data-mihomo-group-test]').click();
+  await expect(page.locator('[data-node-name="node-a"] .xk-mihomo-node-delay')).toHaveText('44 мс');
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('44 мс');
+  await expect(page.locator('[data-node-name="DIRECT"] .xk-mihomo-node-delay')).toHaveText('44 мс');
+  expect(delays).toContainEqual({ scope: 'proxy', name: 'node-a', preset: 'google' });
+  expect(delays).toContainEqual({ scope: 'proxy', name: 'DIRECT', preset: 'google' });
 });
 
 
@@ -135,6 +160,7 @@ test('Mihomo group disclosures keep the workspace compact and keyboard accessibl
   await expect(page.locator('[data-group-name="HIDDEN"] .xk-mihomo-group-body')).toBeVisible();
   await expect(page.locator('[data-group-name="HIDDEN"] .xk-mihomo-node-alive')).toHaveCount(0);
   await expect(page.locator('[data-group-name="HIDDEN"] .xk-mihomo-node-head')).toHaveCount(0);
+  await page.locator('[data-group-name="AUTO"] [data-mihomo-group-toggle]').click();
   const expandedGrid = await page.locator('[data-group-name="HIDDEN"] .xk-mihomo-node-list').evaluate((list) => ({
     columns: getComputedStyle(list).gridTemplateColumns.split(' ').length,
     gap: getComputedStyle(list).gap,
@@ -145,8 +171,12 @@ test('Mihomo group disclosures keep the workspace compact and keyboard accessibl
   const nodeCard = await page.locator('[data-group-name="HIDDEN"] .xk-mihomo-node-row').evaluate((row) => ({
     radius: getComputedStyle(row).borderRadius,
     minHeight: getComputedStyle(row).minHeight,
+    hasSelectionDot: !!row.querySelector('.xk-mihomo-node-marker'),
   }));
-  expect(nodeCard).toEqual({ radius: '6px', minHeight: '72px' });
+  expect(nodeCard).toEqual({ radius: '6px', minHeight: '72px', hasSelectionDot: false });
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-probe')).toHaveCount(1);
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-probe')).not.toHaveAttribute('data-tooltip');
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-unavailable use')).toHaveAttribute('href', /#xk-alert$/);
 
   await page.locator('#mihomo-clash-groups-collapse').click();
   await expect(page.locator('[data-mihomo-group-toggle][aria-expanded="true"]')).toHaveCount(0);

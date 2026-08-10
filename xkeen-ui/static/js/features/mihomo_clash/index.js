@@ -56,12 +56,23 @@ function renderStatus(state, payload = null) {
   root.dataset.tone = stateTone(state);
   root.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
   setText('mihomo-clash-status-label', copy[0]);
+  const statusLabel = byId('mihomo-clash-status-label');
+  if (statusLabel) {
+    const retrySuggested = !['ready', 'loading', 'idle', 'paused'].includes(state);
+    statusLabel.classList.toggle('is-retry-suggested', retrySuggested);
+    statusLabel.disabled = state === 'loading';
+    statusLabel.setAttribute('aria-label', retrySuggested
+      ? 'Проверить Mihomo API снова'
+      : 'Проверить Mihomo API');
+  }
   setText('mihomo-clash-control-title', copy[1]);
   setText('mihomo-clash-control-message', copy[2]);
 
   const version = payload && payload.core ? String(payload.core.version || '') : '';
   const mode = payload && payload.runtime ? String(payload.runtime.mode || '') : '';
-  setText('mihomo-clash-status-version', version ? `Mihomo ${version}` : 'Mihomo —');
+  // `/version` already returns a branded value such as “Mihomo Meta v1.19.12”.
+  // Prefixing it again made the compact status strip repeat “Mihomo”.
+  setText('mihomo-clash-status-version', version || 'Версия —');
   setText('mihomo-clash-status-mode', mode ? mode.toUpperCase() : 'Режим —');
 
   const stateBox = byId('mihomo-clash-control-state');

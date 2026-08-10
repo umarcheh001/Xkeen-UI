@@ -93,6 +93,7 @@ ICONS = {
     "home": "home",
     "loading": "loader-2",
     "search": "search",
+    "server-off": "server-off",
     "settings": "settings",
     "stop": "player-stop",
     "storage": "device-usb",
