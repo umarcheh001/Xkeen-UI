@@ -46,6 +46,7 @@ def test_control_xkeen_action_falls_back_when_first_command_does_not_change_runt
         return attempts['count'] >= 2 and expected_running is True
 
     monkeypatch.setattr(xkeen_service, '_wait_xkeen_running', fake_wait)
+    monkeypatch.setattr(xkeen_service, '_xkeen_runtime_identity', lambda: ('', ()))
     monkeypatch.setattr(xkeen_service, 'is_xkeen_running', lambda: False)
 
     assert xkeen_service.control_xkeen_action('start', prefer_init=True) is True
@@ -275,3 +276,36 @@ def test_core_switch_modal_sets_loading_during_submit():
 
     assert '_coreModalLoading = true;' in confirm_src
     assert confirm_src.count('_coreModalLoading = false;') >= 2
+
+
+def test_restart_waits_for_new_process_identity(monkeypatch):
+    identities = iter([('mihomo', (101,)), ('mihomo', (101,)), ('mihomo', (202,))])
+    monkeypatch.setattr(xkeen_service, '_xkeen_runtime_identity', lambda: next(identities))
+    monkeypatch.setattr(
+        xkeen_service,
+        'build_xkeen_control_cmds',
+        lambda *_args, **_kwargs: [['xkeen', '-restart']],
+    )
+    monkeypatch.setattr(
+        xkeen_service, '_dispatch_xkeen_control_command', lambda *_args, **_kwargs: True
+    )
+    monkeypatch.setattr(xkeen_service.time, 'sleep', lambda *_args: None)
+
+    assert xkeen_service.control_xkeen_action('restart', settle_timeout=2) is True
+
+
+def test_restart_does_not_accept_same_already_running_process(monkeypatch):
+    monkeypatch.setattr(xkeen_service, '_xkeen_runtime_identity', lambda: ('mihomo', (101,)))
+    monkeypatch.setattr(
+        xkeen_service,
+        'build_xkeen_control_cmds',
+        lambda *_args, **_kwargs: [['xkeen', '-restart']],
+    )
+    monkeypatch.setattr(
+        xkeen_service, '_dispatch_xkeen_control_command', lambda *_args, **_kwargs: True
+    )
+    ticks = iter([0.0, 0.0, 3.0, 3.0])
+    monkeypatch.setattr(xkeen_service.time, 'monotonic', lambda: next(ticks))
+    monkeypatch.setattr(xkeen_service.time, 'sleep', lambda *_args: None)
+
+    assert xkeen_service.control_xkeen_action('restart', settle_timeout=2) is False

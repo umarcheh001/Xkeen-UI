@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -32,6 +33,13 @@ EXCLUDED_FILE_SUFFIXES = {
 }
 EXCLUDED_PROJECT_RELATIVE_DIRS = {
     Path("opt/etc/mihomo/backup"),
+}
+EXCLUDED_PROJECT_RELATIVE_FILES = {
+    # Runtime-owned user configuration must never be shipped by a UI update.
+    Path("opt/etc/mihomo/config.yaml"),
+}
+EXCLUDED_PROJECT_RELATIVE_FILE_PARENTS = {
+    Path("opt/etc/mihomo/profiles"),
 }
 EXECUTABLE_BIN_NAMES = {
     "happ-decryptor",
@@ -106,7 +114,21 @@ def ignore_project_entries(_src_dir: str, names: list[str]) -> set[str]:
         rel_dir = Path()
     for name in names:
         rel_path = rel_dir / name
+        try:
+            mode = os.lstat(Path(_src_dir) / name).st_mode
+            if not (stat.S_ISREG(mode) or stat.S_ISDIR(mode) or stat.S_ISLNK(mode)):
+                ignored.add(name)
+                continue
+        except OSError:
+            ignored.add(name)
+            continue
         if rel_path in EXCLUDED_PROJECT_RELATIVE_DIRS:
+            ignored.add(name)
+            continue
+        if (
+            rel_path in EXCLUDED_PROJECT_RELATIVE_FILES
+            or any(parent == rel_path or parent in rel_path.parents for parent in EXCLUDED_PROJECT_RELATIVE_FILE_PARENTS)
+        ):
             ignored.add(name)
             continue
         if name in EXCLUDED_DIR_NAMES or name in EXCLUDED_FILE_NAMES:

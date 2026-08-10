@@ -210,11 +210,15 @@ export function previewMihomoClashMigration(transport, options = {}) {
   });
 }
 
-export function applyMihomoClashMigration(transport, previewId, restart, options = {}) {
+export function applyMihomoClashMigration(transport, previewId, options = {}) {
   return requestJSON(MIGRATION_APPLY_ENDPOINT, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ transport: String(transport || 'unix'), preview_id: String(previewId || ''), confirmed: true, restart: !!restart }),
-    credentials: 'same-origin', timeoutMs: 30000, retry: 0, signal: options.signal,
+    body: JSON.stringify({
+      transport: String(transport || 'unix'),
+      preview_id: String(previewId || ''),
+      confirmed: true,
+    }),
+    credentials: 'same-origin', timeoutMs: 45000, retry: 0, signal: options.signal,
   });
 }
 

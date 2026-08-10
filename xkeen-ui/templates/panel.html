@@ -994,23 +994,28 @@
 
     <section id="mihomo-clash-migration" class="xk-mihomo-migration" aria-labelledby="mihomo-clash-migration-title" hidden>
       <div class="xk-mihomo-migration-head">
-        <div><h3 id="mihomo-clash-migration-title">Автоматическая настройка Mihomo API</h3><p id="mihomo-clash-migration-description">Панель подготовит изменение; активный config.yaml не меняется до отдельного подтверждения.</p></div>
-        <button type="button" class="btn-secondary btn-icon" data-mihomo-clash-action="migration-close" aria-label="Закрыть миграцию">{{ op_icon('close') }}</button>
+        <div>
+          <h3 id="mihomo-clash-migration-title">Настройка Mihomo API</h3>
+          <p id="mihomo-clash-migration-description">Панель выполнит всё автоматически.</p>
+        </div>
+        <button type="button" class="btn-secondary btn-icon" data-mihomo-clash-action="migration-close" aria-label="Закрыть помощник">{{ op_icon('close') }}</button>
       </div>
-      <label for="mihomo-clash-migration-transport">Transport</label>
-      <select id="mihomo-clash-migration-transport">
-        <option value="unix">Unix socket (рекомендуется)</option>
-        <option value="tcp-loopback">TCP loopback + generated secret</option>
-      </select>
-      <ul id="mihomo-clash-migration-changes"></ul>
-      <pre id="mihomo-clash-migration-preview" tabindex="0"></pre>
-      <label class="dt-switch" for="mihomo-clash-migration-restart">
-        <input id="mihomo-clash-migration-restart" type="checkbox">
-        <span class="dt-switch-slider" aria-hidden="true"></span><span id="mihomo-clash-migration-restart-label" class="dt-switch-label">Перезапустить после backup, validate и save</span>
-      </label>
+      <ol class="xk-mihomo-setup-steps" aria-label="Этапы настройки">
+        <li>Создать резервную копию config.yaml</li>
+        <li>Добавить безопасный локальный API и проверить конфиг</li>
+        <li>Перезапустить Mihomo и проверить подключение</li>
+      </ol>
+      <ul id="mihomo-clash-migration-changes" class="xk-mihomo-setup-changes"></ul>
+      <details class="xk-mihomo-setup-advanced">
+        <summary>Другой способ подключения</summary>
+        <label for="mihomo-clash-migration-transport">Подключение</label>
+        <select id="mihomo-clash-migration-transport">
+          <option value="unix">Unix socket (рекомендуется)</option>
+          <option value="tcp-loopback">Локальный TCP + новый secret</option>
+        </select>
+      </details>
       <div class="xk-mihomo-migration-actions">
-        <button type="button" class="btn-secondary" data-mihomo-clash-action="migration-refresh">Обновить preview</button>
-        <button id="mihomo-clash-migration-apply" type="button" class="btn-primary" data-mihomo-clash-action="migration-apply">Сохранить настройку</button>
+        <button id="mihomo-clash-migration-apply" type="button" class="btn-primary" data-mihomo-clash-action="migration-apply">Настроить и включить API</button>
       </div>
       <div id="mihomo-clash-migration-status" role="status" aria-live="polite"></div>
     </section>
@@ -2498,7 +2503,7 @@
                 <summary>Прокси или прямое подключение для выбранных адресов</summary>
                 <p>Мастер направляет домены, списки сервисов и IP в конкретный прокси либо в <code>direct</code>, не отдавая их общему балансировщику. Это удобно для банков, IPTV, локальных ресурсов и сервисов, которым нужен определённый регион.</p>
                 <ul>
-                  <li>Вставляйте вперемешку домены, полные ссылки, IP/CIDR, <code>geosite:TAG</code> и <code>geoip:TAG</code> — тип оп��еделяется автоматически.</li>
+                  <li>Вставляйте вперемешку домены, полные ссылки, IP/CIDR, <code>geosite:TAG</code> и <code>geoip:TAG</code> — тип определяется автоматически.</li>
                   <li>Обычный домен преобразуется в точное правило для домена и его поддоменов; из полной ссылки берётся только имя хоста.</li>
                   <li>Один адрес может вести только в один маршрут: при повторном назначении мастер переносит его, а не создаёт конфликт.</li>
                   <li><b>Только трафик этого роутера</b> ограничивает правило входами <code>redirect</code> / <code>tproxy</code>. Порядок и импорт старых правил находятся в дополнительных настройках.</li>

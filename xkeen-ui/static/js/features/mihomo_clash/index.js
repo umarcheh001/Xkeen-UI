@@ -133,19 +133,15 @@ function renderStatus(state, payload = null) {
   const nextAssistantKind = setupRequired ? 'setup' : (migrationRequired ? 'security' : '');
   if (warning) warning.dataset.kind = nextAssistantKind;
   if (nextAssistantKind === 'setup') {
-    setText('mihomo-clash-assistant-title', 'Mihomo API ещё не настроен');
-    setText('mihomo-clash-assistant-message', 'Ничего вручную дописывать не нужно: панель добавит безопасный локальный Unix socket, проверит конфиг и предложит перезапуск Mihomo.');
-    setText('mihomo-clash-assistant-button', 'Настроить автоматически');
+    setText('mihomo-clash-assistant-title', 'Нужно один раз включить Mihomo API');
+    setText('mihomo-clash-assistant-message', 'Панель сама создаст backup, добавит локальный API, проверит конфиг, перезапустит Mihomo и проверит подключение.');
+    setText('mihomo-clash-assistant-button', 'Включить API');
   } else if (nextAssistantKind === 'security') {
-    setText('mihomo-clash-assistant-title', 'Controller Mihomo доступен из LAN без secret');
-    setText('mihomo-clash-assistant-message', 'Панель использует локальный backend, но сам TCP-порт остаётся незащищённым. Безопасный помощник заменит его на Unix socket после подтверждения.');
-    setText('mihomo-clash-assistant-button', 'Исправить безопасно');
+    setText('mihomo-clash-assistant-title', 'Mihomo API нужно защитить');
+    setText('mihomo-clash-assistant-message', 'Панель автоматически перенесёт API с открытого LAN-порта на локальный Unix socket с backup и проверкой.');
+    setText('mihomo-clash-assistant-button', 'Защитить автоматически');
   }
-  setText('mihomo-clash-assistant-value', payload?.security?.recommended_value || 'external-controller-unix: ./mihomo-api.sock');
-  if (nextAssistantKind && nextAssistantKind !== assistantKind) {
-    const restart = byId('mihomo-clash-migration-restart');
-    if (restart) restart.checked = nextAssistantKind === 'setup';
-  }
+  setText('mihomo-clash-assistant-value', 'Ваши группы, узлы и подписки не изменятся');
   assistantKind = nextAssistantKind;
   setHidden(warning, !nextAssistantKind);
 }
@@ -164,12 +160,12 @@ function setMigrationStatus(message, error = false) {
 async function refreshMigrationPreview() {
   if (migrationBusy) return false;
   migrationBusy = true;
-  setMigrationStatus('Готовим preview…');
+  setMigrationBusy(true);
+  setMigrationStatus('Проверяем активную конфигурацию…');
   try {
     const payload = await previewMihomoClashMigration(migrationTransport());
     const preview = payload?.preview || {};
     migrationPreviewId = String(preview.preview_id || '');
-    setText('mihomo-clash-migration-preview', preview.content || '');
     const list = byId('mihomo-clash-migration-changes');
     if (list) {
       list.replaceChildren(...(Array.isArray(preview.changes) ? preview.changes : []).map((change) => {
@@ -178,61 +174,74 @@ async function refreshMigrationPreview() {
         return item;
       }));
     }
-    setMigrationStatus('Preview готов. Активный config.yaml не изменён.');
+    setMigrationStatus('Готово к настройке. До нажатия кнопки config.yaml не меняется.');
     return true;
   } catch (error) {
-    setMigrationStatus(error?.message || 'Не удалось подготовить preview.', true);
+    migrationPreviewId = '';
+    setMigrationStatus(error?.message || 'Не удалось проверить конфигурацию.', true);
     return false;
   } finally {
     migrationBusy = false;
+    setMigrationBusy(false);
   }
+}
+
+function setMigrationBusy(busy) {
+  const apply = byId('mihomo-clash-migration-apply');
+  const close = document.querySelector('[data-mihomo-clash-action="migration-close"]');
+  if (apply) apply.disabled = !!busy || !migrationPreviewId;
+  if (close) close.disabled = !!busy;
 }
 
 function renderMigrationAssistantCopy() {
   const setup = assistantKind === 'setup';
-  setText('mihomo-clash-migration-title', setup ? 'Автоматическая настройка Mihomo API' : 'Безопасная миграция controller');
+  setText('mihomo-clash-migration-title', setup ? 'Включить Mihomo API' : 'Защитить Mihomo API');
   setText('mihomo-clash-migration-description', setup
-    ? 'Панель сама добавит рекомендуемый Unix socket. До подтверждения активный config.yaml не меняется.'
-    : 'Панель заменит небезопасный LAN controller. До подтверждения активный config.yaml не меняется.');
-  setText('mihomo-clash-migration-restart-label', setup
-    ? 'Перезапустить Mihomo после проверки и сохранения (нужно для включения API)'
-    : 'Перезапустить после backup, validate и save');
-  setText('mihomo-clash-migration-apply', setup ? 'Сохранить и включить API' : 'Применить безопасную настройку');
+    ? 'Одна кнопка — backup, проверка, сохранение, перезапуск и контроль подключения.'
+    : 'Панель сохранит ваши настройки и автоматически закроет доступ к controller из LAN.');
+  setText('mihomo-clash-migration-apply', setup ? 'Настроить и включить API' : 'Защитить и перезапустить');
 }
 
 async function openMigrationPreview() {
   renderMigrationAssistantCopy();
   setHidden(byId('mihomo-clash-migration'), false);
-  return refreshMigrationPreview();
+  const ready = await refreshMigrationPreview();
+  if (ready) return applyMigration();
+  return false;
 }
 
 async function applyMigration() {
-  if (migrationBusy) return false;
-  const restart = !!byId('mihomo-clash-migration-restart')?.checked;
+  if (migrationBusy || !migrationPreviewId) return false;
   const setup = assistantKind === 'setup';
-  const unix = migrationTransport() === 'unix';
-  const controllerSetting = unix
-    ? 'external-controller-unix: ./mihomo-api.sock'
-    : 'локальный TCP controller 127.0.0.1:9090 с новым secret';
   const confirmed = window.confirm(setup
-    ? `Добавить ${controllerSetting}, создать backup, проверить конфиг${restart ? ' и перезапустить Mihomo' : ''}?`
-    : `Заменить controller на ${controllerSetting}, создать backup и проверить конфиг${restart ? ' с перезапуском Mihomo' : ''}?`);
+    ? 'Панель создаст backup, настроит локальный Mihomo API и перезапустит Mihomo. Продолжить?'
+    : 'Панель создаст backup, закроет доступ к controller из LAN и перезапустит Mihomo. Продолжить?');
   if (!confirmed) return false;
   migrationBusy = true;
-  setMigrationStatus('Проверяем конфиг и создаём backup…');
+  setMigrationBusy(true);
+  setMigrationStatus('Создаём backup, проверяем конфиг и перезапускаем Mihomo…');
   try {
-    const payload = await applyMihomoClashMigration(migrationTransport(), migrationPreviewId, restart);
-    setMigrationStatus(payload?.restarted
-      ? 'Миграция применена, Mihomo перезапущен.'
-      : 'Миграция применена. Перезапуск не выполнялся.');
+    const payload = await applyMihomoClashMigration(migrationTransport(), migrationPreviewId);
+    setMigrationStatus(payload?.api_ready
+      ? 'Готово. Mihomo API подключён и защищён.'
+      : 'Настройка сохранена. Проверяем подключение Mihomo API…');
     statusPayload = null;
-    window.setTimeout(() => void refreshMihomoClashStatus({ reason: 'migration' }), restart ? 1500 : 0);
+    window.setTimeout(async () => {
+      const ready = await refreshMihomoClashStatus({ reason: 'migration' });
+      if (ready && statusPayload?.state === 'ready') {
+        setHidden(byId('mihomo-clash-migration'), true);
+      }
+    }, payload?.api_ready ? 300 : 1500);
     return true;
   } catch (error) {
-    setMigrationStatus(error?.message || 'Миграция не применена.', true);
+    const saved = error?.data?.saved === true;
+    setMigrationStatus(saved
+      ? 'Настройка сохранена, но Mihomo не запустился. Попробуйте обычный перезапуск; backup уже создан.'
+      : (error?.message || 'Настройка не применена.'), true);
     return false;
   } finally {
     migrationBusy = false;
+    setMigrationBusy(false);
   }
 }
 

@@ -50,6 +50,31 @@ def is_xkeen_running() -> bool:
     return bool(detect_xkeen_runtime_core())
 
 
+def _xkeen_runtime_identity() -> tuple[str, tuple[int, ...]]:
+    """Return a process identity that changes after a real core restart."""
+    core = detect_xkeen_runtime_core()
+    if not core:
+        return "", ()
+    try:
+        result = subprocess.run(
+            ["pidof", core],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=1.0,
+        )
+        pids = tuple(
+            sorted(
+                int(token)
+                for token in str(result.stdout or "").split()
+                if token.isdigit()
+            )
+        )
+    except Exception:
+        pids = ()
+    return core, pids
+
+
 def get_xkeen_runtime_status() -> dict[str, object]:
     """Return compact runtime status fields for restart-log metadata."""
     core = detect_xkeen_runtime_core()
@@ -152,6 +177,26 @@ def _wait_xkeen_running(expected_running: bool, *, timeout: float, poll_interval
     return last_state == expected_running
 
 
+def _wait_xkeen_restarted(
+    previous: tuple[str, tuple[int, ...]],
+    *,
+    timeout: float,
+    poll_interval: float = 0.25,
+) -> bool:
+    """Wait for a new running core process, not merely an already-running one."""
+    deadline = time.monotonic() + max(0.2, float(timeout or 0))
+    saw_stopped = not bool(previous[0])
+    while time.monotonic() < deadline:
+        current = _xkeen_runtime_identity()
+        if not current[0]:
+            saw_stopped = True
+        elif saw_stopped or current != previous:
+            return True
+        time.sleep(max(0.05, float(poll_interval or 0.25)))
+    current = _xkeen_runtime_identity()
+    return bool(current[0] and (saw_stopped or current != previous))
+
+
 def control_xkeen_action(
     action: str,
     *,
@@ -177,6 +222,7 @@ def control_xkeen_action(
     if normalized == "stop" and not is_xkeen_running():
         return True
 
+    previous_identity = _xkeen_runtime_identity() if normalized == "restart" else ("", ())
     settle = max(2.0, float(settle_timeout or 0))
     for cmd in build_xkeen_control_cmds(
         normalized,
@@ -185,7 +231,10 @@ def control_xkeen_action(
     ):
         if not _dispatch_xkeen_control_command(cmd, dispatch_timeout=dispatch_timeout):
             continue
-        if _wait_xkeen_running(expected_running, timeout=settle):
+        if normalized == "restart":
+            if _wait_xkeen_restarted(previous_identity, timeout=settle):
+                return True
+        elif _wait_xkeen_running(expected_running, timeout=settle):
             return True
 
     return False

@@ -88,7 +88,10 @@ case "$ARCH" in
     ;;
 esac
 
-MIHOMO_TEMPLATES_DIR="/opt/etc/mihomo/templates"
+MIHOMO_ROOT="/opt/etc/mihomo"
+MIHOMO_CONFIG_FILE="$MIHOMO_ROOT/config.yaml"
+MIHOMO_PROFILES_DIR="$MIHOMO_ROOT/profiles"
+MIHOMO_TEMPLATES_DIR="$MIHOMO_ROOT/templates"
 SRC_MIHOMO_TEMPLATES="$SRC_DIR/opt/etc/mihomo/templates"
 
 # Шаблоны Xray (Routing)
@@ -1139,6 +1142,19 @@ else
   echo "[*] Это не первая установка, автоматические бэкапы конфигов пропущены."
 fi
 
+# Пользовательский Mihomo config и профили принадлежат XKeen, а не панели.
+# Старые архивы панели могли содержать opt/etc/mihomo с демонстрационными
+# файлами; никогда не позволяем обновлению UI затереть действующую настройку.
+MIHOMO_PRESERVE_DIR=""
+if [ -e "$MIHOMO_CONFIG_FILE" ] || [ -d "$MIHOMO_PROFILES_DIR" ]; then
+  MIHOMO_PRESERVE_DIR="$(mktemp -d /tmp/xkeen-ui-mihomo.XXXXXX 2>/dev/null || true)"
+  if [ -n "$MIHOMO_PRESERVE_DIR" ]; then
+    [ -e "$MIHOMO_CONFIG_FILE" ] && cp -L "$MIHOMO_CONFIG_FILE" "$MIHOMO_PRESERVE_DIR/config.yaml" 2>/dev/null || true
+    [ -d "$MIHOMO_PROFILES_DIR" ] && cp -a "$MIHOMO_PROFILES_DIR" "$MIHOMO_PRESERVE_DIR/profiles" 2>/dev/null || true
+    echo "[*] Временно сохраняю активный Mihomo config и пользовательские профили."
+  fi
+fi
+
 # --- Копирование файлов панели ---
 
 echo "[*] Создаю директории..."
@@ -1150,11 +1166,29 @@ migrate_legacy_jsonc_files || true
 
 echo "[*] Копирую файлы панели в $UI_DIR..."
 if command -v rsync >/dev/null 2>&1; then
-  rsync -a "$SRC_DIR"/ "$UI_DIR"/ --exclude "install.sh"
+  rsync -a "$SRC_DIR"/ "$UI_DIR"/ --exclude "install.sh" --exclude "opt/etc/mihomo/config.yaml" --exclude "opt/etc/mihomo/profiles/"
 else
   cp -r "$SRC_DIR"/* "$UI_DIR"/ 2>/dev/null || true
   cp -r "$SRC_DIR"/.[!.]* "$UI_DIR"/ 2>/dev/null || true
   rm -f "$UI_DIR/install.sh"
+fi
+
+if [ -n "$MIHOMO_PRESERVE_DIR" ] && [ -d "$MIHOMO_PRESERVE_DIR" ]; then
+  mkdir -p "$MIHOMO_ROOT"
+  if [ -e "$MIHOMO_PRESERVE_DIR/config.yaml" ]; then
+    if [ -L "$MIHOMO_CONFIG_FILE" ]; then
+      MIHOMO_ACTIVE_TARGET="$(readlink -f "$MIHOMO_CONFIG_FILE" 2>/dev/null || true)"
+      [ -n "$MIHOMO_ACTIVE_TARGET" ] && cp "$MIHOMO_PRESERVE_DIR/config.yaml" "$MIHOMO_ACTIVE_TARGET" 2>/dev/null || true
+    else
+      cp "$MIHOMO_PRESERVE_DIR/config.yaml" "$MIHOMO_CONFIG_FILE" 2>/dev/null || true
+    fi
+  fi
+  if [ -d "$MIHOMO_PRESERVE_DIR/profiles" ]; then
+    rm -rf "$MIHOMO_PROFILES_DIR" 2>/dev/null || true
+    cp -a "$MIHOMO_PRESERVE_DIR/profiles" "$MIHOMO_PROFILES_DIR" 2>/dev/null || true
+  fi
+  rm -rf "$MIHOMO_PRESERVE_DIR" 2>/dev/null || true
+  echo "[*] Активный Mihomo config и пользовательские профили сохранены."
 fi
 
 # --- BUILD.json (версия/сборка) ---

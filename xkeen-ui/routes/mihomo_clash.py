@@ -135,7 +135,11 @@ def _security_posture(discovery: MihomoClashDiscovery) -> dict[str, Any]:
     diagnostic_codes = {item.code for item in discovery.diagnostics}
     transport = discovery.target.transport if discovery.target else None
     lan_without_secret = "secret_missing_on_lan_bind" in diagnostic_codes
-    setup_required = "controller_missing" in diagnostic_codes and not discovery.configured
+    setup_required = (
+        not discovery.configured
+        or "controller_missing" in diagnostic_codes
+        or "unix_socket_missing" in diagnostic_codes
+    )
 
     if transport == "unix":
         mode = "unix_socket"

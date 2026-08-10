@@ -16719,6 +16719,40 @@ body.panel-page .xk-mihomo-migration-actions {
 body.panel-page .xk-mihomo-migration h3,
 body.panel-page .xk-mihomo-migration p { margin: 0; }
 body.panel-page .xk-mihomo-migration p { color: var(--op-text-muted); }
+body.panel-page .xk-mihomo-setup-steps {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 24px;
+  color: var(--op-text);
+}
+body.panel-page .xk-mihomo-setup-steps li::marker {
+  color: var(--op-positive, #34d399);
+  font-weight: 800;
+}
+body.panel-page .xk-mihomo-setup-changes {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 24px;
+  color: var(--op-text-muted);
+  font-size: calc(12px * var(--xk-font-scale, 1));
+}
+body.panel-page .xk-mihomo-setup-changes:empty { display: none; }
+body.panel-page .xk-mihomo-setup-advanced {
+  padding-top: 2px;
+  color: var(--op-text-muted);
+}
+body.panel-page .xk-mihomo-setup-advanced summary {
+  width: fit-content;
+  cursor: pointer;
+  user-select: none;
+}
+body.panel-page .xk-mihomo-setup-advanced[open] {
+  display: grid;
+  gap: 8px;
+}
+body.panel-page .xk-mihomo-migration-actions { justify-content: flex-end; }
 body.panel-page .xk-mihomo-migration pre {
   max-height: 320px;
   overflow: auto;

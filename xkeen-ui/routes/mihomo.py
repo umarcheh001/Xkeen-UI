@@ -134,11 +134,19 @@ from services.mihomo_clash_migration import (
     build_safe_mihomo_config,
     materialize_generated_secret,
 )
+from services.mihomo_clash_target import discover_mihomo_clash_target
 from utils.fs import load_text, save_text
 
 # Background command jobs (used to avoid long-running HTTP requests)
 from services.command_jobs import create_command_job
 from services.cores import detect_running_core
+
+
+MIHOMO_CLASH_BOOTSTRAP_CONFIG = """mode: rule
+proxies: []
+proxy-groups: []
+rules: []
+"""
 
 
 def _api_error(message: str, status: int = 400, *, ok: bool | None = None, **extra: Any):
@@ -1035,40 +1043,83 @@ def create_mihomo_blueprint(
         resp["restarted"] = restarted
         return jsonify(resp), 200
 
-    @bp.post("/api/mihomo/security/migration-preview")
-    def api_mihomo_security_migration_preview():
-        """Build an explicit, non-mutating safe-controller migration preview."""
-        data = request.get_json(silent=True) or {}
-        supplied = load_text(MIHOMO_CONFIG_FILE, default="") or ""
-        if not supplied:
-            return _api_error("Активный config.yaml не найден.", 404, ok=False, code="config_not_found")
+    def _mihomo_clash_setup_input() -> tuple[str, Any]:
+        supplied = load_text(MIHOMO_CONFIG_FILE, default=None)
+        if supplied is None:
+            # A genuinely fresh Mihomo installation may not have an active
+            # config yet.  Prepare a minimal valid base without writing it; the
+            # normal confirmed apply path will create layout + backup.
+            supplied = MIHOMO_CLASH_BOOTSTRAP_CONFIG
+        if not str(supplied).strip():
+            return "", _api_error(
+                "Активный config.yaml пуст. Откройте конфигурацию и добавьте настройки Mihomo.",
+                400,
+                ok=False,
+                code="config_empty",
+            )
         if len(supplied.encode("utf-8")) > 512 * 1024:
-            return _api_error("Некорректный или слишком большой конфиг.", 400, ok=False, code="migration_config_invalid")
+            return "", _api_error(
+                "Некорректный или слишком большой конфиг.",
+                400,
+                ok=False,
+                code="migration_config_invalid",
+            )
+        return supplied, None
+
+    def _mihomo_clash_setup_transport(data: Dict[str, Any]) -> tuple[str, Any]:
         transport = str(data.get("transport") or "unix").strip().lower()
         if transport not in {"unix", "tcp-loopback"}:
-            return _api_error("Недопустимый transport миграции.", 400, ok=False, code="migration_transport_invalid")
+            return "", _api_error(
+                "Недопустимый transport настройки.",
+                400,
+                ok=False,
+                code="migration_transport_invalid",
+            )
+        return transport, None
+
+    @bp.post("/api/mihomo/security/migration-preview")
+    def api_mihomo_security_migration_preview():
+        """Return a redacted summary; keep the complete user config server-side."""
+        data = request.get_json(silent=True) or {}
+        supplied, invalid = _mihomo_clash_setup_input()
+        if invalid:
+            return invalid
+        transport, invalid = _mihomo_clash_setup_transport(data)
+        if invalid:
+            return invalid
         preview = build_safe_mihomo_config(supplied, prefer_unix=transport == "unix")
-        return jsonify({"ok": True, "preview": preview.public_dict(), "requires_confirmation": True}), 200
+        return jsonify(
+            {
+                "ok": True,
+                "preview": preview.public_dict(),
+                "recommended": transport == "unix",
+                "restart_required": True,
+                "initial_setup": not os.path.exists(MIHOMO_CONFIG_FILE),
+            }
+        ), 200
 
     @bp.post("/api/mihomo/security/migration-apply")
     def api_mihomo_security_migration_apply():
-        """Apply a reviewed migration, with validation and backup before restart."""
+        """Validate, back up, save, restart and verify the local Mihomo API."""
         data = request.get_json(silent=True) or {}
         if data.get("confirmed") is not True:
-            return _api_error("Требуется явное подтверждение миграции.", 400, ok=False, code="migration_confirmation_required")
-        supplied = load_text(MIHOMO_CONFIG_FILE, default="") or ""
-        if not supplied:
-            return _api_error("Активный config.yaml не найден.", 404, ok=False, code="config_not_found")
-        if len(supplied.encode("utf-8")) > 512 * 1024:
-            return _api_error("Некорректный или слишком большой конфиг.", 400, ok=False, code="migration_config_invalid")
-        transport = str(data.get("transport") or "unix").strip().lower()
-        if transport not in {"unix", "tcp-loopback"}:
-            return _api_error("Недопустимый transport миграции.", 400, ok=False, code="migration_transport_invalid")
+            return _api_error(
+                "Требуется подтверждение настройки Mihomo API.",
+                400,
+                ok=False,
+                code="migration_confirmation_required",
+            )
+        supplied, invalid = _mihomo_clash_setup_input()
+        if invalid:
+            return invalid
+        transport, invalid = _mihomo_clash_setup_transport(data)
+        if invalid:
+            return invalid
         preview = build_safe_mihomo_config(supplied, prefer_unix=transport == "unix")
         preview_id = str(data.get("preview_id") or "")
         if not preview_id or not secrets.compare_digest(preview_id, preview.preview_id):
             return _api_error(
-                "Активный config.yaml изменился после preview; обновите и проверьте diff снова.",
+                "Конфигурация изменилась. Откройте помощник ещё раз.",
                 409,
                 ok=False,
                 code="migration_preview_stale",
@@ -1083,29 +1134,52 @@ def create_mihomo_blueprint(
             exit_match = re.search(r"\[exit code:\s*(-?\d+)\]", validation_log)
             if not exit_match or int(exit_match.group(1)) != 0:
                 return _api_error(
-                    "Mihomo не подтвердил конфиг миграции; config.yaml не изменён.",
+                    "Mihomo не подтвердил конфигурацию. Ничего не изменено.",
                     400,
                     ok=False,
                     code="migration_validation_failed",
                 )
-            save_config(content)  # regular Mihomo rollback backup is created here
-            restart = bool(data.get("restart"))
-            restarted = bool(restart and restart_xkeen(source="mihomo-security-migration"))
+
+            backup = save_config(content)
+            backup_name = str(getattr(backup, "filename", "") or "")
+            restarted = bool(restart_xkeen(source="mihomo-api-setup"))
+            if not restarted:
+                return jsonify(
+                    {
+                        "ok": False,
+                        "code": "migration_restart_failed",
+                        "error": "Настройка сохранена, но Mihomo не запустился. Конфиг можно восстановить из резервной копии.",
+                        "saved": True,
+                        "backup_created": True,
+                        "backup": backup_name or None,
+                        "restarted": False,
+                        "retryable": True,
+                    }
+                ), 503
+
+            discovery = discover_mihomo_clash_target(
+                MIHOMO_CONFIG_FILE,
+                os.path.dirname(MIHOMO_CONFIG_FILE),
+            )
+            api_ready = discovery.target is not None
             return jsonify(
                 {
                     "ok": True,
                     "transport": preview.transport,
                     "changes": list(preview.changes),
                     "backup_created": True,
-                    "restarted": restarted,
-                    "restart_requested": restart,
+                    "backup": backup_name or None,
+                    "saved": True,
+                    "restarted": True,
+                    "api_ready": api_ready,
+                    "verification_pending": not api_ready,
                 }
             ), 200
         except Exception as exc:
             return _mihomo_exception(
-                "Не удалось применить безопасную миграцию Mihomo.",
+                "Не удалось настроить Mihomo API.",
                 code="migration_apply_failed",
-                hint="Конфиг не применён; проверьте журнал и восстановите последний backup при необходимости.",
+                hint="Активный конфиг не изменён, если сохранение не успело завершиться.",
                 exc=exc,
                 status=400,
             )

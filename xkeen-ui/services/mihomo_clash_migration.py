@@ -1,9 +1,9 @@
-"""Opt-in migration helpers for an unsafe Mihomo external controller.
+"""Safe, minimal migration helpers for the local Mihomo Clash API.
 
-The migration is deliberately conservative: it only changes the top-level
-controller binding and never rewrites a user's YAML silently.  Unix socket is
-preferred because it requires no browser-visible credential; TCP fallback is
-loopback-only and gets a generated secret at apply time.
+Only top-level controller settings are changed.  The default Unix transport
+keeps credentials out of the browser and avoids exposing the API to the LAN.
+The returned preview is intentionally a compact change summary; the complete
+user configuration stays on the server.
 """
 
 from __future__ import annotations
@@ -37,13 +37,17 @@ class MigrationPreview:
         digest.update(self.content.encode("utf-8"))
         return digest.hexdigest()
 
-    def public_dict(self) -> dict[str, object]:
-        return {
+    def public_dict(self, *, include_content: bool = False) -> dict[str, object]:
+        payload: dict[str, object] = {
             "transport": self.transport,
             "changes": list(self.changes),
-            "content": self.content,
             "preview_id": self.preview_id,
         }
+        # Full configs can contain subscription URLs, credentials and private
+        # paths.  Keep them server-side unless a legacy/internal caller opts in.
+        if include_content:
+            payload["content"] = self.content
+        return payload
 
 
 def _replace_or_insert(
@@ -84,26 +88,26 @@ def build_safe_mihomo_config(
             original, _UNIX_RE, "external-controller-unix: ./mihomo-api.sock"
         )
         if not existed:
-            changes.append("Добавить external-controller-unix внутри корня Mihomo")
+            changes.append("Добавить локальный Unix socket Mihomo API")
         updated, existed_tcp = _replace_if_present(
             updated,
             _CONTROLLER_RE,
             "# external-controller отключён: используется Unix socket",
         )
         if existed_tcp:
-            changes.append("Отключить LAN/TCP controller")
+            changes.append("Закрыть прежний LAN/TCP controller")
         updated, existed_secret = _replace_if_present(
             updated, _SECRET_RE, "# secret не требуется для Unix socket"
         )
         if existed_secret:
-            changes.append("Удалить secret из runtime-конфига")
+            changes.append("Убрать больше не нужный secret")
         return MigrationPreview(updated, "unix", tuple(changes))
 
     updated, existed = _replace_or_insert(
         original, _CONTROLLER_RE, "external-controller: 127.0.0.1:9090"
     )
     if not existed:
-        changes.append("Добавить loopback TCP controller")
+        changes.append("Добавить локальный TCP controller")
     if _SECRET_RE.search(updated):
         updated = _SECRET_RE.sub(
             lambda m: f"{m.group('indent')}secret: __XKEEN_GENERATED_SECRET__",
