@@ -291,7 +291,7 @@ def test_rules_and_providers_routes_return_safe_versioned_dtos():
                 200, 2, 120,
             ),
             "providers_proxies": MihomoClashJSONResponse(
-                {"providers": {"proxy-one": {"name": "proxy-one", "healthCheck": {"enable": True}, "proxies": [{"name": "node", "alive": True}], "url": "https://secret.invalid"}}},
+                {"providers": {"proxy-one": {"name": "proxy-one", "healthCheck": {"enable": True}, "proxies": [{"name": "node", "alive": True}], "url": "https://secret.invalid", "headers": {"X-Token": "secret"}, "subscriptionInfo": {"Upload": 10, "Download": 20, "Total": 1000, "Expire": 1780000000}}}},
                 200, 3, 220,
             ),
             "providers_rules": MihomoClashJSONResponse(
@@ -312,7 +312,13 @@ def test_rules_and_providers_routes_return_safe_versioned_dtos():
     assert providers.status_code == 200
     assert [item["kind"] for item in providers.get_json()["providers"]] == ["proxy", "rule"]
     assert providers.get_json()["capabilities"]["provider_update"] is True
+    assert providers.get_json()["providers"][0]["subscription"] == {
+        "used": 30,
+        "total": 1000,
+        "expires_at": 1780000000,
+    }
     assert "secret.invalid" not in serialized
+    assert "X-Token" not in serialized
     assert "/private/rules" not in serialized
 
 

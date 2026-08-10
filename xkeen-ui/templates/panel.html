@@ -1126,7 +1126,10 @@
             <div class="xk-mihomo-rules-section-head">
               <h3 id="mihomo-clash-providers-title">Providers</h3>
               <span id="mihomo-clash-providers-count">0 providers</span>
-              <select id="mihomo-clash-provider-kind" aria-label="Тип provider"><option value="all">Все</option><option value="proxy">Proxy</option><option value="rule">Rules</option></select>
+              <div class="xk-mihomo-providers-head-actions">
+                <button type="button" id="mihomo-clash-providers-update-http" class="btn-secondary" hidden>{{ op_icon('refresh') }}<span class="xk-action-label">Обновить HTTP</span></button>
+                <select id="mihomo-clash-provider-kind" aria-label="Тип provider"><option value="all">Все</option><option value="proxy">Proxy</option><option value="rule">Rules</option></select>
+              </div>
             </div>
             <div id="mihomo-clash-providers-list" class="xk-mihomo-providers-list"></div>
             <div id="mihomo-clash-providers-empty" class="xk-mihomo-rules-empty">Providers не настроены.</div>

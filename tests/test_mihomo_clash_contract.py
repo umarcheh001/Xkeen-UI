@@ -176,7 +176,19 @@ def test_rules_and_providers_dtos_are_bounded_and_drop_raw_source_fields():
 
     proxy_payload = fixture("providers-proxies.json")
     proxy_payload["providers"]["demo-provider"].update(
-        {"url": "https://credential.invalid/list", "path": "/private/provider.yaml", "healthCheck": {"enable": True}}
+        {
+            "url": "https://credential.invalid/list",
+            "path": "/private/provider.yaml",
+            "headers": {"Authorization": "secret"},
+            "healthCheck": {"enable": True},
+            "subscriptionInfo": {
+                "Upload": 123,
+                "Download": 456,
+                "Total": 107374182400,
+                "Expire": 1780000000000,
+                "url": "https://nested-secret.invalid/list",
+            },
+        }
     )
     rules = build_mihomo_clash_rules_dto(fixture("rules.json"))
     providers = build_mihomo_clash_providers_dto(
@@ -196,9 +208,17 @@ def test_rules_and_providers_dtos_are_bounded_and_drop_raw_source_fields():
     assert rules["rules"][2]["index"] == 9
     assert rules["rules"][2]["disabled"] is False
     assert providers["providers"][0]["healthcheck"] is True
+    assert providers["providers"][0]["subscription"] == {
+        "used": 579,
+        "total": 107374182400,
+        "expires_at": 1780000000,
+    }
+    assert providers["providers"][1]["subscription"] is None
     assert providers["providers"][1]["count"] == 42
     serialized = json.dumps([rules, providers])
     assert "credential.invalid" not in serialized
+    assert "nested-secret.invalid" not in serialized
+    assert "Authorization" not in serialized
     assert "/private/provider.yaml" not in serialized
 
 

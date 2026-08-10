@@ -30,7 +30,9 @@ MIHOMO_CLASH_ACTION_POLICIES: Mapping[str, MihomoClashActionPolicy] = MappingPro
         "connections-snapshot": MihomoClashActionPolicy(8, 1, 40, 60.0),
         "connection-disconnect": MihomoClashActionPolicy(8, 2, 120, 60.0),
         "connections-disconnect-all": MihomoClashActionPolicy(1, 1, 10, 60.0),
-        "provider-update": MihomoClashActionPolicy(2, 1, 12, 60.0),
+        # The provider workspace uses a bounded two-worker queue for explicit
+        # HTTP-provider batches. Keep the server cap aligned with that queue.
+        "provider-update": MihomoClashActionPolicy(2, 2, 120, 60.0),
         "provider-healthcheck": MihomoClashActionPolicy(2, 1, 20, 60.0),
     }
 )

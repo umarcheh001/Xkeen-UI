@@ -11,6 +11,7 @@ import { invalidateMihomoClashGroups } from './groups.js';
 
 const MAX_RULE_ROWS = 300;
 const PROVIDER_PAGE_SIZE = 200;
+const PROVIDER_UPDATE_CONCURRENCY = 2;
 
 let root = null;
 let active = false;
@@ -21,7 +22,9 @@ let capabilities = {};
 let requests = new Set();
 let query = '';
 let providerKind = 'all';
-let pendingProvider = '';
+let pendingProviders = new Set();
+let providerBatch = null;
+let relativeTimeTimer = 0;
 let inspectedProvider = '';
 let inspectorPayload = null;
 let inspectorQuery = '';
@@ -79,6 +82,76 @@ function providerActionEnabled(capability) {
   return capabilities?.[capability] === true;
 }
 
+function timestampMs(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value >= 100_000_000_000 ? value : value * 1000;
+  const parsed = Date.parse(String(value || ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatRelativeTime(value) {
+  const timestamp = timestampMs(value);
+  if (!timestamp) return 'Время обновления неизвестно';
+  const seconds = Math.round((timestamp - Date.now()) / 1000);
+  const absolute = Math.abs(seconds);
+  let divisor = 1;
+  let unit = 'second';
+  if (absolute >= 86400) { divisor = 86400; unit = 'day'; }
+  else if (absolute >= 3600) { divisor = 3600; unit = 'hour'; }
+  else if (absolute >= 60) { divisor = 60; unit = 'minute'; }
+  try {
+    return `Обновлено ${new Intl.RelativeTimeFormat('ru', { numeric: 'auto' }).format(Math.round(seconds / divisor), unit)}`;
+  } catch (error) {
+    return `Обновлено ${new Date(timestamp).toLocaleString('ru-RU')}`;
+  }
+}
+
+function formatExpiry(value) {
+  const timestamp = timestampMs(Number(value));
+  if (!timestamp) return '';
+  const date = new Date(timestamp).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' });
+  return timestamp < Date.now() ? `Срок истёк ${date}` : `Действует до ${date}`;
+}
+
+function formatSize(value) {
+  const units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+  let amount = Math.max(0, Number(value) || 0);
+  let unit = 0;
+  while (amount >= 1024 && unit < units.length - 1) { amount /= 1024; unit += 1; }
+  return `${amount.toFixed(unit === 0 || amount >= 10 ? 0 : 1)} ${units[unit]}`;
+}
+
+function providerSubscriptionHtml(provider) {
+  const subscription = provider?.kind === 'proxy' && provider?.subscription && typeof provider.subscription === 'object'
+    ? provider.subscription : null;
+  if (!subscription) return '';
+  const used = Math.max(0, Number(subscription.used) || 0);
+  const total = Math.max(0, Number(subscription.total) || 0);
+  const expires = formatExpiry(subscription.expires_at);
+  const quota = total > 0
+    ? `Трафик <strong>${escapeHtml(formatSize(used))} из ${escapeHtml(formatSize(total))}</strong>`
+    : (used > 0 ? `Использовано <strong>${escapeHtml(formatSize(used))}</strong>` : '');
+  if (!quota && !expires) return '';
+  return `<div class="xk-mihomo-provider-subscription">${quota ? `<span>${quota}</span>` : ''}${expires ? `<span>${escapeHtml(expires)}</span>` : ''}</div>`;
+}
+
+function httpProviders() {
+  const source = Array.isArray(providersPayload?.providers) ? providersPayload.providers : [];
+  return source.filter((provider) => String(provider.vehicle_type || '').trim().toLowerCase() === 'http');
+}
+
+function renderBatchAction() {
+  const button = byId('mihomo-clash-providers-update-http');
+  if (!button) return;
+  const providers = httpProviders();
+  const running = providerBatch?.running === true;
+  const completed = Math.max(0, Number(providerBatch?.completed) || 0);
+  const total = running ? Math.max(0, Number(providerBatch?.total) || 0) : providers.length;
+  button.hidden = !running && (!providerActionEnabled('provider_update') || providers.length < 2);
+  button.disabled = running || pendingProviders.size > 0 || providers.length < 2;
+  button.setAttribute('aria-busy', running ? 'true' : 'false');
+  button.innerHTML = `${iconHtml(running ? 'loading' : 'refresh')}<span class="xk-action-label">${running ? `Обновление ${completed}/${total}` : `Обновить HTTP (${providers.length})`}</span>`;
+}
+
 function renderProviders() {
   const list = byId('mihomo-clash-providers-list');
   const empty = byId('mihomo-clash-providers-empty');
@@ -87,7 +160,7 @@ function renderProviders() {
   const providers = filteredProviders();
   list.innerHTML = providers.map((provider) => {
     const key = providerKey(provider);
-    const pending = pendingProvider === key;
+    const pending = pendingProviders.has(key);
     const updateEnabled = providerActionEnabled('provider_update');
     const healthcheckEnabled = provider.healthcheck && providerActionEnabled('provider_healthcheck');
     const state = provider.kind === 'proxy'
@@ -95,27 +168,22 @@ function renderProviders() {
       : `${provider.count || 0} правил · ${provider.behavior || provider.format || 'rule set'}`;
     return `<article class="xk-mihomo-provider" data-provider-key="${escapeHtml(key)}">
       <div class="xk-mihomo-provider-copy"><strong>${escapeHtml(provider.name)}</strong><small>${provider.kind === 'proxy' ? 'Proxy provider' : 'Rule provider'} · ${escapeHtml(provider.vehicle_type || provider.type || '—')}</small></div>
-      <div class="xk-mihomo-provider-state"><strong>${escapeHtml(state)}</strong><small>${escapeHtml(provider.updated_at || 'Время обновления неизвестно')}</small></div>
+      <div class="xk-mihomo-provider-state"><strong>${escapeHtml(state)}</strong><small>${escapeHtml(formatRelativeTime(provider.updated_at))}</small></div>
+      ${providerSubscriptionHtml(provider)}
       <div class="xk-mihomo-provider-actions">
         ${provider.kind === 'rule' ? `<button type="button" class="btn-secondary btn-icon" data-mihomo-provider-inspect aria-label="Просмотреть rule-provider ${escapeHtml(provider.name)}">${iconHtml('preview')}</button>` : ''}
         ${provider.healthcheck ? `<button type="button" class="btn-secondary btn-icon" data-mihomo-provider-healthcheck aria-label="Проверить provider ${escapeHtml(provider.name)}" ${pending || !healthcheckEnabled ? 'disabled' : ''}>${iconHtml(pending ? 'loading' : 'ping')}</button>` : ''}
-        <button type="button" class="btn-secondary btn-icon" data-mihomo-provider-update aria-label="Обновить provider ${escapeHtml(provider.name)}" ${pendingProvider || !updateEnabled ? 'disabled' : ''}>${iconHtml(pending ? 'loading' : 'refresh')}</button>
+        <button type="button" class="btn-secondary btn-icon" data-mihomo-provider-update aria-label="Обновить provider ${escapeHtml(provider.name)}" ${pendingProviders.size || providerBatch?.running || !updateEnabled ? 'disabled' : ''}>${iconHtml(pending ? 'loading' : 'refresh')}</button>
       </div>
     </article>`;
   }).join('');
   empty.hidden = providers.length > 0;
   if (count) count.textContent = `${providersPayload?.total_providers || 0} providers`;
+  renderBatchAction();
 }
 
 function providerByKey(key) {
   return (providersPayload?.providers || []).find((item) => providerKey(item) === key) || null;
-}
-
-function formatSize(value) {
-  const bytes = Math.max(0, Number(value) || 0);
-  if (bytes < 1024) return `${bytes} Б`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes >= 10240 ? 0 : 1)} КБ`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
 }
 
 function renderProviderInspector() {
@@ -196,7 +264,7 @@ function abortRequests() {
   window.clearTimeout(inspectorSearchTimer);
 }
 
-async function loadRuntime(runGeneration) {
+async function loadRuntime(runGeneration, { preserveNotice = false } = {}) {
   root?.setAttribute('aria-busy', 'true');
   const rulesController = new AbortController();
   const providersController = new AbortController();
@@ -209,7 +277,7 @@ async function loadRuntime(runGeneration) {
     if (!active || generation !== runGeneration) return;
     rulesPayload = nextRules; providersPayload = nextProviders;
     renderRules(); renderProviders();
-    setNotice('Правила read-only. Обновление providers выполняется только вручную.', 'neutral');
+    if (!preserveNotice) setNotice('Правила read-only. Обновление providers выполняется только вручную.', 'neutral');
   } catch (error) {
     if (active && generation === runGeneration
       && !rulesController.signal.aborted && !providersController.signal.aborted) {
@@ -222,7 +290,7 @@ async function loadRuntime(runGeneration) {
 }
 
 async function providerAction(provider, action) {
-  if (!active || pendingProvider || !provider) return;
+  if (!active || pendingProviders.size || providerBatch?.running || !provider) return;
   const key = providerKey(provider);
   const healthcheck = action === 'healthcheck';
   const accepted = await confirmMihomoAction({
@@ -233,7 +301,7 @@ async function providerAction(provider, action) {
     okText: healthcheck ? 'Проверить' : 'Обновить', cancelText: 'Отменить',
   }, healthcheck ? 'Запустить healthcheck provider?' : 'Обновить provider?');
   if (!accepted || !active) return;
-  pendingProvider = key; renderProviders();
+  pendingProviders.add(key); renderProviders();
   try {
     if (healthcheck) await healthcheckMihomoClashProvider(provider.name);
     else await updateMihomoClashProvider(provider.kind, provider.name);
@@ -243,7 +311,64 @@ async function providerAction(provider, action) {
     await loadRuntime(generation);
   } catch (error) {
     setNotice(healthcheck ? 'Не удалось запустить healthcheck.' : 'Не удалось обновить provider.', 'danger');
-  } finally { pendingProvider = ''; renderProviders(); }
+  } finally { pendingProviders.delete(key); renderProviders(); }
+}
+
+async function updateHttpProviders() {
+  if (!active || providerBatch?.running || pendingProviders.size || !providerActionEnabled('provider_update')) return;
+  const providers = httpProviders();
+  if (providers.length < 2) return;
+  const accepted = await confirmMihomoAction({
+    title: `Обновить HTTP providers (${providers.length})?`,
+    message: `Будут обновлены ${providers.length} HTTP providers. Запросы выполняются безопасной очередью по ${PROVIDER_UPDATE_CONCURRENCY} одновременно. Persistent YAML не изменяется.`,
+    okText: `Обновить ${providers.length}`,
+    cancelText: 'Отменить',
+  }, `Обновить ${providers.length} HTTP providers?`);
+  if (!accepted || !active) return;
+
+  const runGeneration = generation;
+  const batch = { running: true, completed: 0, total: providers.length, updated: 0, failed: 0 };
+  providerBatch = batch;
+  for (const provider of providers) pendingProviders.add(providerKey(provider));
+  renderProviders();
+  setNotice(`Обновление HTTP providers: 0/${providers.length}.`, 'neutral');
+
+  let nextIndex = 0;
+  async function worker() {
+    while (active && generation === runGeneration) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= providers.length) return;
+      const provider = providers[index];
+      try {
+        await updateMihomoClashProvider(provider.kind, provider.name);
+        batch.updated += 1;
+      } catch (error) {
+        batch.failed += 1;
+      } finally {
+        pendingProviders.delete(providerKey(provider));
+        batch.completed += 1;
+        if (active && generation === runGeneration) {
+          setNotice(`Обновление HTTP providers: ${batch.completed}/${batch.total}.`, batch.failed ? 'danger' : 'neutral');
+          renderProviders();
+        }
+      }
+    }
+  }
+
+  const workers = [];
+  const workerCount = Math.min(PROVIDER_UPDATE_CONCURRENCY, providers.length);
+  for (let index = 0; index < workerCount; index += 1) workers.push(worker());
+  // Await the bounded workers rather than starting one Promise per provider.
+  for (const workerPromise of workers) await workerPromise;
+  if (!active || generation !== runGeneration) return;
+  const result = batch;
+  providerBatch = null;
+  pendingProviders.clear();
+  invalidateMihomoClashGroups();
+  renderProviders();
+  setNotice(`Массовое обновление завершено: обновлено ${result.updated}, с ошибкой ${result.failed}.`, result.failed ? 'danger' : 'positive');
+  await loadRuntime(generation, { preserveNotice: true });
 }
 
 function bind() {
@@ -251,6 +376,7 @@ function bind() {
   root.dataset.bound = '1';
   byId('mihomo-clash-rules-filter')?.addEventListener('input', (event) => { query = event.target.value || ''; renderRules(); });
   byId('mihomo-clash-provider-kind')?.addEventListener('change', (event) => { providerKind = event.target.value || 'all'; renderProviders(); });
+  byId('mihomo-clash-providers-update-http')?.addEventListener('click', () => { void updateHttpProviders(); });
   byId('mihomo-clash-rules-refresh')?.addEventListener('click', () => { if (active) void loadRuntime(generation); });
   byId('mihomo-clash-provider-filter')?.addEventListener('input', (event) => {
     inspectorQuery = event.target.value || '';
@@ -280,11 +406,14 @@ export function activateMihomoClashRules(nextCapabilities = {}) {
   if (!root && !initMihomoClashRules()) return false;
   deactivateMihomoClashRules();
   active = true; capabilities = nextCapabilities || {}; generation += 1;
+  window.clearInterval(relativeTimeTimer);
+  relativeTimeTimer = window.setInterval(() => { if (active) renderProviders(); }, 60000);
   void loadRuntime(generation); return true;
 }
 
 export function deactivateMihomoClashRules() {
-  active = false; generation += 1; abortRequests(); closeProviderInspector(); root?.setAttribute('aria-busy', 'false'); return true;
+  active = false; generation += 1; window.clearInterval(relativeTimeTimer); relativeTimeTimer = 0;
+  providerBatch = null; pendingProviders.clear(); abortRequests(); closeProviderInspector(); root?.setAttribute('aria-busy', 'false'); return true;
 }
 
 export function focusMihomoClashRule(rule, payload = '') {

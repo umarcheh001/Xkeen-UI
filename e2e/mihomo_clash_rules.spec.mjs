@@ -30,7 +30,7 @@ function providersPayload() {
   return {
     ok: true, schema_version: 1, total_providers: 2, truncated: false,
     providers: [
-      { name: 'proxy/fixture', kind: 'proxy', type: 'Proxy', vehicle_type: 'HTTP', updated_at: '2026-08-10T10:00:00Z', count: 2, alive: 1, failed: 1, behavior: '', format: '', healthcheck: true },
+      { name: 'proxy/fixture', kind: 'proxy', type: 'Proxy', vehicle_type: 'HTTP', updated_at: '2026-08-10T10:00:00Z', count: 2, alive: 1, failed: 1, behavior: '', format: '', healthcheck: true, subscription: { used: 1073741824, total: 107374182400, expires_at: 1780000000 } },
       { name: 'fixture-rules', kind: 'rule', type: 'Rule', vehicle_type: 'HTTP', updated_at: '2026-08-10T10:01:00Z', count: 12, alive: null, failed: null, behavior: 'domain', format: 'mrs', healthcheck: false },
     ],
   };
@@ -102,6 +102,10 @@ test('rules search, connection cross-link and provider actions stay explicit', a
 
   await expect(page.locator('#mihomo-clash-rules-rows tr')).toHaveCount(3);
   await expect(page.locator('#mihomo-clash-providers-list .xk-mihomo-provider')).toHaveCount(2);
+  await expect(page.locator('[data-provider-key="proxy:proxy/fixture"]')).toContainText('1.0 ГБ из 100 ГБ');
+  await expect(page.locator('[data-provider-key="proxy:proxy/fixture"]')).toContainText('Срок истёк');
+  await expect(page.locator('[data-provider-key="proxy:proxy/fixture"]')).toContainText('Обновлено');
+  await expect(page.locator('#mihomo-clash-providers-update-http')).toBeVisible();
   const layout = await page.evaluate(() => {
     const ruleHead = document.querySelector('.xk-mihomo-rules-section .xk-mihomo-rules-section-head').getBoundingClientRect();
     const providerHead = document.querySelector('.xk-mihomo-providers-section .xk-mihomo-rules-section-head').getBoundingClientRect();
@@ -144,6 +148,47 @@ test('rules search, connection cross-link and provider actions stay explicit', a
   await expect(page.locator('#mihomo-clash-panel-rules')).toBeVisible();
   await expect(page.locator('#mihomo-clash-rules-filter')).toHaveValue('DomainSuffix example.test');
   await expect(page.locator('#mihomo-clash-rules-rows tr')).toHaveCount(1);
+});
+
+
+test('HTTP provider batch confirms count, limits concurrency, reports progress and result', async ({ page }) => {
+  const providers = Array.from({ length: 8 }, (_, index) => ({
+    name: `http-${index + 1}`, kind: 'proxy', type: 'Proxy', vehicle_type: 'HTTP',
+    updated_at: '2026-08-10T10:00:00Z', count: 1, alive: 1, failed: 0,
+    behavior: '', format: '', healthcheck: false, subscription: null,
+  }));
+  let activeUpdates = 0;
+  let maxActiveUpdates = 0;
+  const updated = [];
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route('**/api/mihomo/clash/rules', (route) => route.fulfill({ json: rulesPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/providers(?:\/.*)?(?:\?.*)?$/, async (route) => {
+    const request = route.request();
+    if (request.method() !== 'POST') {
+      return route.fulfill({ json: { ok: true, schema_version: 1, total_providers: providers.length, truncated: false, providers } });
+    }
+    const path = decodeURIComponent(new URL(request.url()).pathname);
+    activeUpdates += 1;
+    maxActiveUpdates = Math.max(maxActiveUpdates, activeUpdates);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    activeUpdates -= 1;
+    updated.push(path);
+    if (path.includes('/http-6/')) return route.fulfill({ status: 502, json: { ok: false, error: 'fixture failure' } });
+    return route.fulfill({ json: { ok: true, schema_version: 1 } });
+  });
+
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.locator('#mihomo-clash-tab-rules').click();
+  await expect(page.locator('#mihomo-clash-providers-update-http')).toContainText('Обновить HTTP (8)');
+  await page.locator('#mihomo-clash-providers-update-http').click();
+  await expect(page.locator('#confirm-modal-title')).toContainText('8');
+  await expect(page.locator('#confirm-modal-message')).toContainText('8 HTTP providers');
+  await page.locator('#confirm-modal-ok-btn').click();
+  await expect(page.locator('#mihomo-clash-rules-notice')).toContainText(/Обновление HTTP providers: [1-7]\/8/);
+  await expect(page.locator('#mihomo-clash-rules-notice')).toContainText('обновлено 7, с ошибкой 1');
+  expect(updated).toHaveLength(8);
+  expect(maxActiveUpdates).toBeLessThanOrEqual(2);
 });
 
 

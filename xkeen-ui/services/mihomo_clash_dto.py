@@ -87,6 +87,52 @@ def _optional_nonnegative_int(value: Any) -> int | None:
     return max(0, number)
 
 
+def _mapping_value_casefold(mapping: Mapping[str, Any], *keys: str) -> Any:
+    """Read one allow-listed key while tolerating Mihomo's casing changes."""
+
+    wanted = {str(key).casefold() for key in keys}
+    for key, value in mapping.items():
+        if str(key).casefold() in wanted:
+            return value
+    return None
+
+
+def _provider_subscription_dto(raw: Mapping[str, Any]) -> dict[str, int] | None:
+    """Normalize quota metadata without forwarding provider source details."""
+
+    info = _mapping(
+        raw.get("subscriptionInfo")
+        if raw.get("subscriptionInfo") is not None
+        else raw.get("subscription-info")
+    )
+    if not info:
+        return None
+
+    explicit_used = _optional_nonnegative_int(
+        _mapping_value_casefold(info, "used")
+    )
+    upload = _optional_nonnegative_int(_mapping_value_casefold(info, "upload"))
+    download = _optional_nonnegative_int(_mapping_value_casefold(info, "download"))
+    total = _optional_nonnegative_int(_mapping_value_casefold(info, "total"))
+    expires_at = _optional_nonnegative_int(
+        _mapping_value_casefold(info, "expire", "expires", "expires_at")
+    )
+    if all(value is None for value in (explicit_used, upload, download, total, expires_at)):
+        return None
+
+    # Mihomo normally returns Unix seconds. Tolerate millisecond timestamps
+    # from compatible cores while keeping one numeric browser contract.
+    normalized_expiry = expires_at or 0
+    if normalized_expiry >= 100_000_000_000:
+        normalized_expiry //= 1000
+    used = explicit_used if explicit_used is not None else (upload or 0) + (download or 0)
+    return {
+        "used": used,
+        "total": total or 0,
+        "expires_at": normalized_expiry,
+    }
+
+
 def _string_list(value: Any, *, limit: int = 256, item_limit: int = 256) -> list[str]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
         return []
@@ -337,6 +383,7 @@ def _provider_dto(name: str, raw: Mapping[str, Any], *, kind: str) -> dict[str, 
         "behavior": _text(raw.get("behavior"), 64),
         "format": _text(raw.get("format"), 32),
         "healthcheck": health_enabled is True if kind == "proxy" else False,
+        "subscription": _provider_subscription_dto(raw) if kind == "proxy" else None,
     }
 
 
