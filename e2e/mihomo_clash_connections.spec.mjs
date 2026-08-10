@@ -90,6 +90,13 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   await expect(page.locator('#mihomo-clash-connections-rows')).toContainText('Laptop');
   await expect(page.locator('#mihomo-clash-connections-rows')).toContainText('AUTO → node-a');
 
+  const closeButton = page.locator('[data-mihomo-connection-close="connection-one"]');
+  await expect(closeButton).toHaveAttribute('data-tooltip', 'Завершить соединение');
+  const closeColorBeforeHover = await closeButton.evaluate((element) => getComputedStyle(element).color);
+  await closeButton.hover();
+  await expect.poll(() => closeButton.evaluate((element) => getComputedStyle(element).color))
+    .not.toBe(closeColorBeforeHover);
+
   await page.locator('#mihomo-clash-connections-filter').fill('video.example');
   await expect(page.locator('#mihomo-clash-connections-rows tr')).toHaveCount(1);
   await page.locator('#mihomo-clash-connections-filter').fill('');

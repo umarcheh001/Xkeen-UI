@@ -290,9 +290,12 @@ def test_connections_ui_has_live_fallback_overview_and_guarded_actions():
         "disconnectMihomoClashConnection",
         "disconnectAllMihomoClashConnections",
         "confirmMihomoAction",
+        'title="Завершить соединение"',
         "activateMihomoClashConnections",
         "deactivateMihomoClashConnections",
         '.xk-mihomo-connections-table',
+        '.xk-mihomo-connection-close:hover:not(:disabled)',
+        'background: var(--op-danger-soft) !important;',
         'content: attr(data-label);',
     ):
         assert fragment in markup or fragment in client or fragment in feature or fragment in connections or fragment in css

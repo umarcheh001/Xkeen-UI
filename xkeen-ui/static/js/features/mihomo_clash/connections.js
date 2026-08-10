@@ -166,7 +166,7 @@ function rowMarkup(row) {
     <td data-label="Маршрут"><strong>${escapeHtml(route)}</strong><small>${escapeHtml(rule)}</small></td>
     <td data-label="Трафик"><strong>${escapeHtml(traffic)}</strong></td>
     <td data-label="Возраст"><strong>${escapeHtml(formatAge(row))}</strong></td>
-    <td data-label="Действие"><button type="button" class="btn-secondary btn-icon xk-mihomo-connection-close" data-mihomo-connection-close="${escapeHtml(row.id)}" aria-label="Завершить соединение" ${pendingId ? 'disabled' : ''}>${pendingId === row.id ? iconHtml('loading') : iconHtml('close')}</button></td>
+    <td data-label="Действие"><button type="button" class="btn-secondary btn-icon xk-mihomo-connection-close" data-mihomo-connection-close="${escapeHtml(row.id)}" aria-label="Завершить соединение" title="Завершить соединение" ${pendingId ? 'disabled' : ''}>${pendingId === row.id ? iconHtml('loading') : iconHtml('close')}</button></td>
   </tr>`;
 }
 
