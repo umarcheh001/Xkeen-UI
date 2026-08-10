@@ -172,9 +172,11 @@ def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
     assert "delaySucceeded ? delayTone(delay)" in groups
     assert "node.alive === false ? 'failed'" in groups
     assert "delaySucceeded || node.alive === true" in groups
-    assert 'grid-template-columns: repeat(7, minmax(0, 1fr));' in css
-    for columns in (6, 5, 4, 3, 2):
-        assert f'grid-template-columns: repeat({columns}, minmax(0, 1fr));' in css
+    assert 'grid-template-columns: repeat(auto-fill, minmax(min(100%, 232px), 1fr));' in css
+    assert 'grid-auto-rows: minmax(72px, auto);' in css
+    assert 'border-radius: var(--op-control-radius);' in css
+    assert 'background: var(--op-editor);' in css
+    assert '.xk-mihomo-node-delay::before' not in css
 
 
 def test_groups_lifecycle_stops_load_and_delay_work_outside_control_view():

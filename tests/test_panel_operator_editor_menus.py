@@ -105,4 +105,4 @@ def test_operator_editors_share_panel_canvas_and_schema_hover_is_readable():
     ):
         assert fragment in monaco
 
-    assert "filename='panel-operator.css', v='20260810d'" in template
+    assert "filename='panel-operator.css', v='20260810e'" in template
