@@ -80,12 +80,17 @@ MIHOMO_CLASH_ENDPOINTS: Mapping[str, MihomoClashEndpoint] = MappingProxyType(
             512 * 1024,
         ),
         "connections_snapshot": MihomoClashEndpoint("GET", "/connections", 5.0),
-        "connections_stream": MihomoClashEndpoint(
-            "GET",
-            "/connections?interval=1000",
-            15.0,
-            DEFAULT_STREAM_FRAME_LIMIT,
-            stream=True,
+        "connection_disconnect": MihomoClashEndpoint(
+            "DELETE",
+            "/connections/{name}",
+            5.0,
+            64 * 1024,
+        ),
+        "connections_disconnect_all": MihomoClashEndpoint(
+            "DELETE",
+            "/connections",
+            5.0,
+            64 * 1024,
         ),
     }
 )
@@ -282,6 +287,22 @@ class MihomoClashClient:
             }
         )
         return self._request(spec, path=f"{path}?{query}", expect_json=True)
+
+    def disconnect_connection(self, connection_id: str) -> MihomoClashJSONResponse:
+        """Close exactly one validated connection id."""
+
+        spec = self._endpoint("connection_disconnect", stream=False)
+        return self._request(
+            spec,
+            path=self._named_path(spec, connection_id),
+            expect_json=False,
+        )
+
+    def disconnect_all_connections(self) -> MihomoClashJSONResponse:
+        """Close all connections through the dedicated allow-listed operation."""
+
+        spec = self._endpoint("connections_disconnect_all", stream=False)
+        return self._request(spec, path=spec.path, expect_json=False)
 
     def _request(
         self,

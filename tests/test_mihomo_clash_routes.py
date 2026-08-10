@@ -23,6 +23,8 @@ class StubClient:
         self.selections: list[tuple[str, str]] = []
         self.delays: list[tuple[str, str, str]] = []
         self.provider_delays: list[tuple[str, str, str]] = []
+        self.disconnected: list[str] = []
+        self.disconnected_all = 0
 
     def request_json(self, operation: str):
         self.operations.append(operation)
@@ -48,8 +50,20 @@ class StubClient:
             raise self.error
         return self.responses["delay"]
 
+    def disconnect_connection(self, connection_id: str):
+        self.disconnected.append(connection_id)
+        if self.error:
+            raise self.error
+        return MihomoClashJSONResponse(None, 204, 1, 0)
 
-def make_app(discovery, client: StubClient, *, audit_logger=None) -> Flask:
+    def disconnect_all_connections(self):
+        self.disconnected_all += 1
+        if self.error:
+            raise self.error
+        return MihomoClashJSONResponse(None, 204, 1, 0)
+
+
+def make_app(discovery, client: StubClient, *, audit_logger=None, device_map_factory=None) -> Flask:
     app = Flask(__name__)
     app.config["TESTING"] = True
     app.register_blueprint(
@@ -59,6 +73,7 @@ def make_app(discovery, client: StubClient, *, audit_logger=None) -> Flask:
             discovery_factory=lambda _config, _root: discovery,
             client_factory=lambda _target: client,
             audit_logger=audit_logger,
+            **({"device_map_factory": device_map_factory} if device_map_factory else {}),
         )
     )
     return app
@@ -419,7 +434,11 @@ def test_connections_route_returns_bounded_normalized_snapshot():
             )
         }
     )
-    response = make_app(ready_discovery(), client).test_client().get(
+    response = make_app(
+        ready_discovery(),
+        client,
+        device_map_factory=lambda: {"192.0.2.1": {"name": "Laptop"}},
+    ).test_client().get(
         "/api/mihomo/clash/connections"
     )
     body = response.get_json()
@@ -428,8 +447,70 @@ def test_connections_route_returns_bounded_normalized_snapshot():
     assert body["ok"] is True
     assert body["schema_version"] == 1
     assert body["connections"][0]["id"] == "connection-1"
+    assert body["connections"][0]["metadata"]["source_name"] == "Laptop"
     assert body["capabilities"]["connections_snapshot"] is True
+    assert body["capabilities"]["connections_stream"] is False
+    assert body["capabilities"]["connection_disconnect"] is True
+    assert body["fallback"] == {"transport": "http-snapshot", "poll_interval_ms": 2000}
     assert body["telemetry"]["size_bytes"] == 300
+
+
+def _connection_snapshot(*ids: str):
+    return MihomoClashJSONResponse(
+        {
+            "connections": [
+                {"id": connection_id, "metadata": {"host": "example.test"}}
+                for connection_id in ids
+            ]
+        },
+        200,
+        1,
+        100,
+    )
+
+
+def test_disconnect_one_revalidates_id_before_allowlisted_mutation():
+    client = StubClient(responses={"connections_snapshot": _connection_snapshot("active/one")})
+    response = make_app(ready_discovery(), client).test_client().delete(
+        "/api/mihomo/clash/connections/active%2Fone"
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["disconnected"] is True
+    assert client.disconnected == ["active/one"]
+    assert client.operations == ["connections_snapshot"]
+
+
+def test_disconnect_one_rejects_stale_id_without_mutation():
+    client = StubClient(responses={"connections_snapshot": _connection_snapshot("active")})
+    response = make_app(ready_discovery(), client).test_client().delete(
+        "/api/mihomo/clash/connections/stale"
+    )
+
+    assert response.status_code == 409
+    assert response.get_json()["code"] == "connection_not_found"
+    assert client.disconnected == []
+
+
+def test_disconnect_all_requires_confirmed_matching_count():
+    client = StubClient(responses={"connections_snapshot": _connection_snapshot("one", "two")})
+    http = make_app(ready_discovery(), client).test_client()
+
+    missing = http.delete("/api/mihomo/clash/connections", json={"count": 2})
+    changed = http.delete(
+        "/api/mihomo/clash/connections", json={"confirm": True, "count": 1}
+    )
+    accepted = http.delete(
+        "/api/mihomo/clash/connections", json={"confirm": True, "count": 2}
+    )
+
+    assert missing.status_code == 400
+    assert missing.get_json()["code"] == "disconnect_all_confirmation_required"
+    assert changed.status_code == 409
+    assert changed.get_json()["current_count"] == 2
+    assert accepted.status_code == 200
+    assert accepted.get_json()["count"] == 2
+    assert client.disconnected_all == 1
 
 
 def test_facade_maps_client_error_without_leaking_exception_message():
@@ -556,9 +637,13 @@ def test_routes_registry_registers_mihomo_clash_facade(monkeypatch):
     routes.register_blueprints(app, context)
 
     assert "mihomo_clash" in registered
-    rules = {rule.rule: set(rule.methods or ()) for rule in app.url_map.iter_rules()}
+    rules: dict[str, set[str]] = {}
+    for rule in app.url_map.iter_rules():
+        rules.setdefault(rule.rule, set()).update(rule.methods or ())
     assert "GET" in rules["/api/mihomo/clash/status"]
     assert "GET" in rules["/api/mihomo/clash/proxy-groups"]
     assert "PUT" in rules["/api/mihomo/clash/proxy-groups/<path:group_name>"]
     assert "POST" in rules["/api/mihomo/clash/delay"]
     assert "GET" in rules["/api/mihomo/clash/connections"]
+    assert "DELETE" in rules["/api/mihomo/clash/connections"]
+    assert "DELETE" in rules["/api/mihomo/clash/connections/<path:connection_id>"]

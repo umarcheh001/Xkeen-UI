@@ -1015,12 +1015,43 @@
     </div>
 
     <div id="mihomo-clash-panel-connections" class="xk-mihomo-runtime-panel" data-mihomo-clash-panel="connections" role="tabpanel" aria-labelledby="mihomo-clash-tab-connections" hidden>
-      <div class="xk-mihomo-runtime-placeholder">
-        <div>
-          <span class="xk-mihomo-runtime-placeholder-label">HTTP snapshot готов</span>
-          <h3>Соединения</h3>
-          <p>Live stream, fallback cadence и таблица будут активированы на следующем connection-этапе. Скрытый экран не создаёт сетевой трафик.</p>
+      <div id="mihomo-clash-connections" class="xk-mihomo-connections" aria-busy="false">
+        <div class="xk-mihomo-connections-summary" aria-label="Сводка соединений Mihomo">
+          <div class="xk-mihomo-connection-stat"><span>Состояние</span><strong id="mihomo-clash-stream-state">Ожидание</strong></div>
+          <div class="xk-mihomo-connection-stat"><span>Активные</span><strong id="mihomo-clash-connection-count">0</strong></div>
+          <div class="xk-mihomo-connection-stat"><span>Загрузка</span><strong id="mihomo-clash-download-rate">0 Б/с</strong><small id="mihomo-clash-download-total">всего 0 Б</small></div>
+          <div class="xk-mihomo-connection-stat"><span>Отдача</span><strong id="mihomo-clash-upload-rate">0 Б/с</strong><small id="mihomo-clash-upload-total">всего 0 Б</small></div>
+          <div class="xk-mihomo-connection-stat"><span>Память</span><strong id="mihomo-clash-memory">0 Б</strong></div>
         </div>
+        <div class="xk-mihomo-connections-toolbar" role="toolbar" aria-label="Фильтры соединений Mihomo">
+          <label class="xk-mihomo-connections-search" for="mihomo-clash-connections-filter">
+            {{ op_icon('search') }}
+            <input id="mihomo-clash-connections-filter" type="search" placeholder="Устройство, host, IP, правило или цепочка" autocomplete="off">
+          </label>
+          <select id="mihomo-clash-connections-network" aria-label="Фильтр по протоколу">
+            <option value="all">TCP и UDP</option><option value="tcp">TCP</option><option value="udp">UDP</option>
+          </select>
+          <select id="mihomo-clash-connections-sort" aria-label="Сортировка соединений">
+            <option value="traffic">По трафику</option><option value="age">По возрасту</option><option value="source">По источнику</option><option value="destination">По назначению</option>
+          </select>
+          <button type="button" id="mihomo-clash-connections-refresh" class="btn-secondary btn-icon" aria-label="Обновить соединения">{{ op_icon('refresh') }}</button>
+          <button type="button" id="mihomo-clash-disconnect-all" class="btn-danger" disabled>{{ op_icon('trash') }}<span>Завершить все</span></button>
+        </div>
+        <div id="mihomo-clash-connections-notice" class="xk-mihomo-connections-notice" role="status" aria-live="polite" aria-atomic="true">Соединения загружаются только пока открыт этот экран.</div>
+        <div class="xk-mihomo-connections-table-wrap">
+          <table class="xk-mihomo-connections-table">
+            <thead><tr><th>Источник</th><th>Назначение</th><th>Маршрут</th><th>Трафик</th><th>Возраст</th><th><span class="xk-visually-hidden">Действия</span></th></tr></thead>
+            <tbody id="mihomo-clash-connections-rows"></tbody>
+          </table>
+          <div id="mihomo-clash-connections-empty" class="xk-mihomo-connections-empty">Активных соединений нет.</div>
+        </div>
+        <aside id="mihomo-clash-connection-inspector" class="xk-mihomo-connection-inspector" aria-labelledby="mihomo-clash-connection-inspector-title" hidden>
+          <div class="xk-mihomo-connection-inspector-head">
+            <h3 id="mihomo-clash-connection-inspector-title">Детали соединения</h3>
+            <button type="button" class="btn-secondary btn-icon" data-mihomo-connection-inspector-close aria-label="Закрыть детали">{{ op_icon('close') }}</button>
+          </div>
+          <dl id="mihomo-clash-connection-inspector-details"></dl>
+        </aside>
       </div>
     </div>
   </section>

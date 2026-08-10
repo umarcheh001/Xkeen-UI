@@ -12,6 +12,7 @@ FEATURE = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "i
 CLIENT = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "client.js"
 STATE = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "state.js"
 GROUPS = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "groups.js"
+CONNECTIONS = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "connections.js"
 LAZY = ROOT / "xkeen-ui" / "static" / "js" / "pages" / "panel.lazy_bindings.runtime.js"
 VIEW_RUNTIME = ROOT / "xkeen-ui" / "static" / "js" / "pages" / "panel.view_runtime.js"
 INVENTORY = ROOT / "docs" / "panel-operator-icon-inventory.json"
@@ -230,3 +231,47 @@ def test_groups_lifecycle_stops_load_and_delay_work_outside_control_view():
         "if (!active) return false;",
     ):
         assert fragment in feature or fragment in groups
+
+
+def test_connections_ui_has_live_fallback_overview_and_guarded_actions():
+    markup = _mihomo_markup()
+    client = _text(CLIENT)
+    feature = _text(FEATURE)
+    connections = _text(CONNECTIONS)
+    css = _text(CSS)
+
+    for fragment in (
+        'id="mihomo-clash-connections-filter"',
+        'id="mihomo-clash-connections-network"',
+        'id="mihomo-clash-connections-sort"',
+        'id="mihomo-clash-disconnect-all"',
+        'id="mihomo-clash-connection-inspector"',
+        "requestMihomoClashWsToken",
+        "scope: 'mihomo-clash'",
+        "HTTP_FALLBACK_INTERVAL_MS = 2000",
+        "MAX_RECONNECT_DELAY_MS = 15000",
+        "PAGE_SIZE = 100",
+        "disconnectMihomoClashConnection",
+        "disconnectAllMihomoClashConnections",
+        "confirmMihomoAction",
+        "activateMihomoClashConnections",
+        "deactivateMihomoClashConnections",
+        '.xk-mihomo-connections-table',
+        'content: attr(data-label);',
+    ):
+        assert fragment in markup or fragment in client or fragment in feature or fragment in connections or fragment in css
+
+    assert "snapshot.connections =" not in connections
+    assert "Строка исчезнет после подтверждённого snapshot" in connections
+
+
+def test_connections_lifecycle_stops_socket_polling_and_requests_when_hidden():
+    feature = _text(FEATURE)
+    connections = _text(CONNECTIONS)
+    for fragment in (
+        "deactivateMihomoClashConnections();",
+        "clearScheduled(); abortRequest(); closeSocket();",
+        "if (!active || runGeneration !== generation)",
+        "document.addEventListener('visibilitychange'",
+    ):
+        assert fragment in feature or fragment in connections

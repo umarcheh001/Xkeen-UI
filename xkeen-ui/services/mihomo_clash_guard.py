@@ -24,6 +24,12 @@ MIHOMO_CLASH_ACTION_POLICIES: Mapping[str, MihomoClashActionPolicy] = MappingPro
         # Large selector groups need a useful manual batch while still keeping
         # the router protected by one in-flight action per authenticated user.
         "delay": MihomoClashActionPolicy(3, 1, 256, 60.0),
+        # HTTP fallback uses this endpoint at a documented two-second cadence.
+        # The rolling limit bounds accidental hot loops while leaving room for
+        # manual refreshes and a reconnect bootstrap.
+        "connections-snapshot": MihomoClashActionPolicy(8, 1, 40, 60.0),
+        "connection-disconnect": MihomoClashActionPolicy(8, 2, 120, 60.0),
+        "connections-disconnect-all": MihomoClashActionPolicy(1, 1, 10, 60.0),
     }
 )
 

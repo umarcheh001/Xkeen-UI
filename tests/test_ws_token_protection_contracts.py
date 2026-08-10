@@ -1,10 +1,10 @@
 from pathlib import Path
 
 
-def test_ws_token_scopes_cover_logs_and_events():
+def test_ws_token_scopes_cover_logs_events_and_mihomo_clash():
     text = Path('xkeen-ui/services/ws_tokens.py').read_text(encoding='utf-8')
 
-    assert 'WS_TOKEN_SCOPES = {"pty", "cmd", "logs", "events"}' in text
+    assert 'WS_TOKEN_SCOPES = {"pty", "cmd", "logs", "events", "mihomo-clash"}' in text
     assert '_cleanup_ws_tokens_locked(now)' in text
 
 
@@ -28,6 +28,7 @@ def test_run_server_delegates_ws_runtime_to_extracted_service_modules():
     assert 'handle_xray_logs2_request(' in text
     assert 'handle_command_status_request(' in text
     assert 'handle_events_request(' in text
+    assert 'handle_mihomo_clash_connections_request(' in text
     assert 'start_pty_cleanup_loop()' in text
 
 

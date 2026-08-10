@@ -1,6 +1,6 @@
 # Clash API в Xkeen UI: план реализации операторского контура Mihomo
 
-Статус на **10 августа 2026 года**: **PR 1–3 подтверждены в реализованном объёме; PR 4–5 функционально собраны и работают на aarch64-панели, но после acceptance-аудита переведены в статус «частично закрыт / требуется доработка»**. До повторного закрытия нужно довести visual lifecycle/status security warning, provider identity/latency semantics, массовый latency budget и router mutation acceptance. WS/fallback, disconnect и connections UI по-прежнему не реализованы.
+Статус на **10 августа 2026 года**: **PR 1–3 и PR 6–7 закрыты в реализованном объёме; PR 4–5 функционально собраны и работают на aarch64-панели, но после acceptance-аудита переведены в статус «частично закрыт / требуется доработка»**. До повторного закрытия PR 4–5 нужно довести visual lifecycle/status security warning, provider identity/latency semantics, массовый latency budget и router mutation acceptance. Connections backend/UI и кешированное device enrichment собраны локально; поставка новой сборки и router acceptance остаются открыты.
 Дата последнего аудита: **10 августа 2026 года**.
 
 Визуальный corrective gate перед следующим функциональным этапом: **реализован в исходниках 10 августа 2026 года, router acceptance ожидает поставки новой сборки**. Runtime shell уплотнён без повторных `Operator runtime`/`Mihomo`, постоянные искусственные `min-height` удалены, группы переведены на keyboard-accessible disclosure и по умолчанию все свёрнуты; добавлены массовое сворачивание/раскрытие и адаптивная 3/2/1-колоночная summary-сетка. Полный перечень причин и критериев — в разделе «Корректирующий визуальный проход Clash/Mihomo» документа [`panel-operator-redesign-completion-plan.md`](panel-operator-redesign-completion-plan.md).
@@ -15,7 +15,7 @@
 | Core/API | Mihomo `alpha-978d25a`; `/version`, `/configs`, `/proxies`, `/group`, `/providers/proxies`, `/connections` → `200` |
 | REST facade | `/status`, `/proxy-groups`, `/connections` → `200`, schema v1; 15 групп, 16 providers, 387 group-node occurrences; snapshot не truncated |
 | Operator workspace | Lazy workspace и groups UI реально загружаются; status показывает version/mode, filter и responsive layout работают. В исходниках выполнен corrective density/disclosure pass; установленная сборка его ещё не содержит |
-| Connections | REST snapshot готов; установленный subview пока честный placeholder, WS/polling/table/disconnect отсутствуют |
+| Connections | REST/WS/HTTP fallback, overview, table/mobile records, filters/sort/inspector, cached device enrichment и guarded disconnect one/all реализованы в исходниках PR 6–7; установленная сборка ещё требует обновления и router acceptance |
 | Security | Активный controller слушает LAN на `:9090` без `secret`; backend ходит к нему через loopback и `/status.security` возвращает `tcp_lan_unprotected`, но UI предупреждение ещё не отображает |
 | Device enrichment | Существующий Keenetic device map на роутере возвращает 13 устройств без ошибки, но Clash connections route его не подключает; `source_name` пуст |
 | Tests | Clash targeted: `77 passed, 1 skipped`; Ruff: success; frontend verify: success; groups Playwright: `1 passed`; после синхронизации inventories pytest shards дали `920 passed, 10 skipped`, `234 passed`, отдельно inventory/frontend contracts `20 passed` |
@@ -753,20 +753,57 @@ docs/README_clash_api_implementation_plan.md
 
 ### Этап 5. Live connections и overview
 
-Статус на 10 августа 2026 года: **не начат, кроме подготовительного REST snapshot и bounded DTO/parser**. Установленный subview показывает placeholder; capability `connections_snapshot=true`, `connections_stream=null`, `connection_disconnect=null`.
+Статус на 10 августа 2026 года: **backend PR 6 и frontend/device enrichment PR 7 закрыты локально**. Реализованы same-origin WS facade, bounded HTTP fallback, envelope v1, reconnect/lifecycle, overview/table/mobile records, cached device names и guarded disconnect one/all. Новая сборка и router acceptance WS/no-gevent остаются Этапом 8.
 
 Задачи:
 
-- [ ] Реализовать dedicated WS dispatch в `run_server.py` и bounded HTTP snapshot polling fallback.
-- [ ] Добавить Xkeen envelope v1: sequence, received time, state, bounded payload.
-- [ ] Реализовать reconnect/backoff/jitter, visibility pause и fallback transition.
-- [ ] Рассчитывать rates из totals, обрабатывать reset и пропуски кадров.
-- [ ] Реализовать keyed rows/page, локальный search/filter/sort и details inspector.
-- [ ] Enrich source IP через кешированный Keenetic device map.
-- [ ] Реализовать disconnect one/all и подтверждение для all.
-- [ ] Добавить mobile record layout и accessible live-state announcements без озвучивания каждого кадра.
+- [x] Реализовать dedicated WS dispatch в `run_server.py` и bounded HTTP snapshot polling fallback contract.
+- [x] Добавить Xkeen envelope v1: sequence, received time, state, bounded payload.
+- [x] Реализовать browser reconnect/backoff/jitter, visibility pause и fallback transition (PR 7).
+- [x] Рассчитывать rates из totals, обрабатывать reset и пропуски кадров.
+- [x] Реализовать bounded rows/page, локальный search/filter/sort и details inspector.
+- [x] Enrich source IP через кешированный Keenetic device map.
+- [x] Реализовать disconnect one/all и подтверждение для all на backend; UI подтверждение остаётся PR 7.
+- [x] Добавить mobile record layout и accessible live-state announcements без озвучивания каждого кадра.
 
 Acceptance baseline: на aarch64 существующий `get_xray_device_names_state()` вернул 13 устройств без `router_error`, но Clash route вызывает DTO без `device_map`, поэтому в текущем snapshot `source_name` не заполнен. Это подтверждает, что enrichment можно сделать без нового discovery-механизма, но его нельзя считать готовым.
+
+Что закрыто в рекомендуемом PR 6:
+
+- one-time WS tokens получили отдельный scope `mihomo-clash`; handler требует совпадающий browser `Origin` и `Host` до расходования токена;
+- `run_server.py` dispatch-ит только `/ws/mihomo-clash/connections`, browser не управляет Mihomo host/path/method и не получает `secret`;
+- один browser stream последовательно получает bounded `/connections` snapshots через TCP loopback или Unix transport, нормализует каждый кадр через DTO v1 и отправляет envelope `type/schema_version/sequence/received_at_ms/state/payload`;
+- на процесс разрешено не более восьми stream и не более одного на client IP; закрытие browser socket останавливает цикл, upstream/target ошибки возвращают только безопасные codes;
+- `GET /api/mihomo/clash/connections` объявляет fallback `http-snapshot` с cadence 2000 ms и защищён отдельным concurrency/rate guard;
+- `DELETE /api/mihomo/clash/connections/<id>` перед mutation сверяет id со свежим bounded snapshot; id percent-encode-ится как один segment;
+- `DELETE /api/mihomo/clash/connections` требует JSON `{confirm:true,count:N}` и повторно сверяет актуальное количество; обе mutation используют session + CSRF, allow-listed client operations, action guard и sanitized audit;
+- capabilities теперь различают реально доступный WS runtime, HTTP snapshot и disconnect.
+
+Проверка закрытия рекомендуемого PR 6:
+
+- targeted backend/security suite: `87 passed`;
+- Ruff для изменённых backend/test файлов: `All checks passed`;
+- `git diff --check` проходит;
+- real-router disconnect endpoints не вызывались, чтобы не прерывать пользовательский трафик; WS/no-gevent и TCP/Unix router acceptance остаются обязательными перед финальным Этапом 8.
+
+Что закрыто в рекомендуемом PR 7:
+
+- `features/mihomo_clash/connections.js` активируется только в subview «Соединения», получает bootstrap snapshot, открывает не более одного browser WS, reconnect-ится с exponential backoff/jitter и после трёх неудач остаётся работоспособным через HTTP polling 2000 ms;
+- уход в другой subview/top-level, скрытие документа и deactivate закрывают socket, abort-ят request и останавливают polling; повторный вход создаёт ровно один новый runtime;
+- summary показывает live/fallback/reconnecting/paused/error, active count, download/upload rates и totals, memory; rate считается по delta totals с защитой от reset и разрывов;
+- bounded page до 100 строк поддерживает локальный поиск, TCP/UDP filter и сортировку по traffic/age/source/destination; desktop table превращается в mobile records без горизонтального overflow;
+- строка отвечает на вопрос «устройство/IP → host/IP → правило → цепочка», а keyboard-accessible inspector показывает inbound/process/provider chain и остальные bounded metadata;
+- `mihomo_clash_devices.py` переиспользует Keenetic device service и кеширует map на 30 секунд, поэтому RCI не вызывается на каждый WS/fallback frame; REST и WS DTO заполняют `source_name`;
+- disconnect one/all используют общий confirm modal; UI не удаляет строку оптимистично и ждёт следующий authoritative snapshot, а failure сохраняет строку;
+- stream status announcements меняются только на lifecycle transitions и не озвучивают каждый кадр.
+
+Проверка закрытия рекомендуемого PR 7:
+
+- targeted Clash/backend/frontend suite: `101 passed`;
+- `npm run frontend:verify` успешно, lazy chunk `mihomo_clash` собран отдельно;
+- Playwright `e2e/mihomo_clash_connections.spec.mjs` → `3 passed`: HTTP fallback/filter/inspector/disconnect, mobile records/no-overflow, single-WS lifecycle;
+- Ruff, `node --check` и `git diff --check` проходят;
+- real-router disconnect не вызывался; aarch64/mipsle WS/no-gevent и performance acceptance остаются Этапом 8.
 
 Критерий выхода:
 
@@ -903,8 +940,8 @@ Acceptance baseline: на aarch64 существующий `get_xray_device_name
 3. **PR 3 — REST groups/select/delay + fake Mihomo integration** — подтверждён локально и read-only aarch64 acceptance 10 августа 2026 года;
 4. **PR 4 — internal Operator workspace shell и status states** — частично закрыт: требуется повторная поставка visual lifecycle fix и security warning;
 5. **PR 5 — groups UI** — частично закрыт: требуется provider/fixed-selection semantics и real-router latency/select acceptance;
-6. **PR 6 — connections WS/fallback backend**;
-7. **PR 7 — connections/overview UI + device enrichment**;
+6. **PR 6 — connections WS/fallback backend** — закрыт локально: same-origin tokenized stream, HTTP fallback contract, guarded disconnect one/all; router WS/no-gevent acceptance остаётся Этапом 8;
+7. **PR 7 — connections/overview UI + device enrichment** — закрыт локально: lifecycle-aware WS/fallback UI, overview/table/mobile/inspector, cached device map и confirmed disconnect UX; router acceptance остаётся Этапом 8;
 8. **PR 8 — performance, responsive, accessibility, router acceptance**;
 9. **PR 9 — P1 rules/providers/logs**;
 10. **PR 10 — safe templates, migration UX и финальная документация**.

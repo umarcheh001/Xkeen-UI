@@ -66,6 +66,25 @@ class _FixtureHandler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
         self.wfile.flush()
 
+    def do_DELETE(self):  # noqa: N802
+        self.__class__.seen.append(
+            {
+                "method": "DELETE",
+                "path": self.path,
+                "authorization": self.headers.get("Authorization") or "",
+            }
+        )
+        status, content_type, payload = self.__class__.responses.get(
+            f"DELETE {self.path}",
+            (404, "application/json", b'{"error":"missing"}'),
+        )
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+        self.wfile.flush()
+
     def log_message(self, _format, *_args):
         return
 
@@ -220,6 +239,42 @@ def test_select_proxy_encodes_one_path_segment_and_sends_bounded_json_body():
             "content_type": "application/json",
             "body": '{"name":"узел-A"}',
         }
+    ]
+
+
+def test_disconnect_operations_are_dedicated_and_encode_one_id_segment():
+    endpoints = {
+        "connection_disconnect": MihomoClashEndpoint(
+            "DELETE", "/connections/{name}", 2, 1024
+        ),
+        "connections_disconnect_all": MihomoClashEndpoint(
+            "DELETE", "/connections", 2, 1024
+        ),
+    }
+    encoded = "/connections/id%2Fwith%2Fslashes"
+    with tcp_server(
+        {
+            f"DELETE {encoded}": (204, "text/plain", b""),
+            "DELETE /connections": (204, "text/plain", b""),
+        }
+    ) as (port, handler):
+        client = client_for_port(port, endpoints, secret="backend-only")
+        one = client.disconnect_connection("id/with/slashes")
+        all_connections = client.disconnect_all_connections()
+
+    assert one.status == 204
+    assert all_connections.status == 204
+    assert handler.seen == [
+        {
+            "method": "DELETE",
+            "path": encoded,
+            "authorization": "Bearer backend-only",
+        },
+        {
+            "method": "DELETE",
+            "path": "/connections",
+            "authorization": "Bearer backend-only",
+        },
     ]
 
 

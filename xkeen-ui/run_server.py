@@ -35,6 +35,8 @@ from app import (
     _unsubscribe_ws,
 )
 from services.ws_pty import handle_pty_request, start_cleanup_loop as start_pty_cleanup_loop
+from services.mihomo_clash_ws import handle_mihomo_clash_connections_request
+from services.mihomo_runtime import CONFIG_PATH as MIHOMO_CONFIG_FILE, MIHOMO_ROOT
 from services.ws_wsgi import (
     redact_ws_query_string,
     handle_xray_logs_request,
@@ -120,6 +122,17 @@ def application(environ, start_response):
             subscribe_ws=_subscribe_ws,
             unsubscribe_ws=_unsubscribe_ws,
             event_subscribers=EVENT_SUBSCRIBERS,
+        )
+
+    if GEVENT_AVAILABLE and path == "/ws/mihomo-clash/connections":
+        return handle_mihomo_clash_connections_request(
+            environ,
+            start_response,
+            fallback_app=app,
+            validate_ws_token=validate_ws_token,
+            ws_debug=ws_debug,
+            mihomo_config_file=str(MIHOMO_CONFIG_FILE),
+            mihomo_root=str(MIHOMO_ROOT),
         )
 
     return app(environ, start_response)

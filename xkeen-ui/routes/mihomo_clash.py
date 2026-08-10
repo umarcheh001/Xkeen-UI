@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -16,6 +17,7 @@ from services.mihomo_clash_dto import (
     build_mihomo_clash_status_dto,
 )
 from services.mihomo_clash_guard import MihomoClashActionGuard, MihomoClashActionRejected
+from services.mihomo_clash_devices import get_mihomo_clash_device_map
 from services.request_limits import PayloadTooLargeError, read_request_json_limited
 from services.mihomo_clash_target import (
     MihomoClashDiscovery,
@@ -25,6 +27,7 @@ from services.mihomo_clash_target import (
 
 DiscoveryFactory = Callable[[str, str], MihomoClashDiscovery]
 ClientFactory = Callable[[Any], MihomoClashClient]
+DeviceMapFactory = Callable[[], Mapping[str, Any]]
 MAX_ACTION_BODY_BYTES = 8 * 1024
 MAX_ACTION_NAME_CHARS = 256
 AuditLogger = Callable[..., Any]
@@ -38,6 +41,8 @@ def _capabilities(
     proxy_select: bool | None = None,
     proxy_delay: bool | None = None,
     connections_snapshot: bool | None = None,
+    connections_stream: bool | None = None,
+    connection_disconnect: bool | None = None,
 ) -> dict[str, bool | None]:
     return {
         "status": status,
@@ -45,8 +50,17 @@ def _capabilities(
         "proxy_select": proxy_select,
         "proxy_delay": proxy_delay,
         "connections_snapshot": connections_snapshot,
-        "connections_stream": None,
-        "connection_disconnect": None,
+        "connections_stream": connections_stream,
+        "connection_disconnect": connection_disconnect,
+    }
+
+
+def _ws_runtime_available() -> bool:
+    return str(os.environ.get("XKEEN_WS_RUNTIME") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
     }
 
 
@@ -87,7 +101,12 @@ def _status_payload(
         discovery,
         version_payload=version_payload,
         config_payload=config_payload,
-        capabilities=_capabilities(status=status_capability),
+        capabilities=_capabilities(
+            status=status_capability,
+            connections_snapshot=status_capability,
+            connections_stream=_ws_runtime_available() if status_capability else False,
+            connection_disconnect=status_capability,
+        ),
     )
     payload["ok"] = state == "ready"
     payload["state"] = state
@@ -154,6 +173,7 @@ def create_mihomo_clash_blueprint(
     client_factory: ClientFactory = MihomoClashClient,
     audit_logger: AuditLogger | None = None,
     action_guard: ActionGuard | None = None,
+    device_map_factory: DeviceMapFactory = get_mihomo_clash_device_map,
 ) -> Blueprint:
     bp = Blueprint("mihomo_clash", __name__)
     root = str(mihomo_root or Path(mihomo_config_file).parent)
@@ -479,8 +499,12 @@ def create_mihomo_clash_blueprint(
 
     @bp.get("/api/mihomo/clash/connections")
     def api_mihomo_clash_connections():
+        lease, rejected_response = _acquire_action("connections-snapshot")
+        if rejected_response:
+            return rejected_response
         client, unavailable = _client_or_response()
         if unavailable:
+            lease.release()
             return unavailable
         try:
             snapshot = client.request_json("connections_snapshot")
@@ -493,17 +517,151 @@ def create_mihomo_clash_blueprint(
                 ok=False,
                 code="mihomo_clash_connections_failed",
             )
-        payload = build_mihomo_clash_connections_dto(snapshot.payload)
+        finally:
+            lease.release()
+        payload = build_mihomo_clash_connections_dto(
+            snapshot.payload,
+            device_map=device_map_factory(),
+        )
         payload["ok"] = True
         payload["capabilities"] = _capabilities(
             status=True,
             connections_snapshot=True,
+            connections_stream=_ws_runtime_available(),
+            connection_disconnect=True,
         )
+        payload["fallback"] = {"transport": "http-snapshot", "poll_interval_ms": 2000}
         payload["telemetry"] = {
             "elapsed_ms": snapshot.elapsed_ms,
             "size_bytes": snapshot.size_bytes,
         }
         return jsonify(payload), 200
+
+    @bp.delete("/api/mihomo/clash/connections/<path:connection_id>")
+    def api_mihomo_clash_disconnect_connection(connection_id: str):
+        connection = str(connection_id or "").strip()
+        if not connection or len(connection) > MAX_ACTION_NAME_CHARS:
+            return error_response(
+                "Некорректный идентификатор соединения Mihomo.",
+                400,
+                ok=False,
+                code="invalid_connection_id",
+            )
+
+        lease, rejected_response = _acquire_action("connection-disconnect")
+        if rejected_response:
+            return rejected_response
+        client, unavailable = _client_or_response()
+        if unavailable:
+            lease.release()
+            return unavailable
+        try:
+            snapshot = client.request_json("connections_snapshot")
+            current = build_mihomo_clash_connections_dto(snapshot.payload)
+            ids = {row.get("id") for row in current.get("connections", [])}
+            if connection not in ids:
+                _audit_action(
+                    "connection-disconnect",
+                    False,
+                    error_code="connection_not_found",
+                )
+                return error_response(
+                    "Соединение уже завершено или больше недоступно.",
+                    409,
+                    ok=False,
+                    code="connection_not_found",
+                )
+            client.disconnect_connection(connection)
+        except MihomoClashClientError as exc:
+            _audit_action("connection-disconnect", False, error_code=exc.code)
+            return _safe_client_error(exc)
+        except Exception:
+            _audit_action("connection-disconnect", False, error_code="internal_error")
+            return error_response(
+                "Не удалось завершить соединение Mihomo.",
+                500,
+                ok=False,
+                code="mihomo_clash_disconnect_failed",
+            )
+        finally:
+            lease.release()
+
+        _audit_action("connection-disconnect", True)
+        return jsonify({"ok": True, "schema_version": 1, "disconnected": True}), 200
+
+    @bp.delete("/api/mihomo/clash/connections")
+    def api_mihomo_clash_disconnect_all():
+        try:
+            body = _read_action_body()
+        except PayloadTooLargeError:
+            return error_response(
+                "Тело запроса слишком большое.",
+                413,
+                ok=False,
+                code="payload_too_large",
+            )
+        expected_count = (body or {}).get("count")
+        if (
+            (body or {}).get("confirm") is not True
+            or isinstance(expected_count, bool)
+            or not isinstance(expected_count, int)
+            or expected_count < 0
+            or expected_count > 1_000_000
+        ):
+            return error_response(
+                "Для завершения всех соединений требуется явное подтверждение и их количество.",
+                400,
+                ok=False,
+                code="disconnect_all_confirmation_required",
+            )
+
+        lease, rejected_response = _acquire_action("connections-disconnect-all")
+        if rejected_response:
+            return rejected_response
+        client, unavailable = _client_or_response()
+        if unavailable:
+            lease.release()
+            return unavailable
+        try:
+            snapshot = client.request_json("connections_snapshot")
+            actual_count = build_mihomo_clash_connections_dto(snapshot.payload)["total_connections"]
+            if actual_count != expected_count:
+                _audit_action(
+                    "connections-disconnect-all",
+                    False,
+                    error_code="connection_count_changed",
+                )
+                return error_response(
+                    "Количество соединений изменилось. Обновите список и подтвердите действие снова.",
+                    409,
+                    ok=False,
+                    code="connection_count_changed",
+                    current_count=actual_count,
+                )
+            client.disconnect_all_connections()
+        except MihomoClashClientError as exc:
+            _audit_action("connections-disconnect-all", False, error_code=exc.code)
+            return _safe_client_error(exc)
+        except Exception:
+            _audit_action("connections-disconnect-all", False, error_code="internal_error")
+            return error_response(
+                "Не удалось завершить все соединения Mihomo.",
+                500,
+                ok=False,
+                code="mihomo_clash_disconnect_all_failed",
+            )
+        finally:
+            lease.release()
+
+        _audit_action("connections-disconnect-all", True)
+        return jsonify(
+            {
+                "ok": True,
+                "schema_version": 1,
+                "disconnected": True,
+                "count": actual_count,
+            }
+        ), 200
 
     return bp
 
