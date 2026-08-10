@@ -162,6 +162,21 @@ def test_groups_start_collapsed_and_keep_labelled_actions_on_one_baseline():
     assert "> span:not(.xk-action-icon)" in css
 
 
+def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
+    groups = _text(GROUPS)
+    css = _text(CSS)
+
+    assert 'class="xk-mihomo-node-head"' not in groups
+    assert 'class="xk-mihomo-node-alive"' not in groups
+    assert 'aria-label="${escapeHtml(healthLabel)}"' in groups
+    assert "delaySucceeded ? delayTone(delay)" in groups
+    assert "node.alive === false ? 'failed'" in groups
+    assert "delaySucceeded || node.alive === true" in groups
+    assert 'grid-template-columns: repeat(7, minmax(0, 1fr));' in css
+    for columns in (6, 5, 4, 3, 2):
+        assert f'grid-template-columns: repeat({columns}, minmax(0, 1fr));' in css
+
+
 def test_groups_lifecycle_stops_load_and_delay_work_outside_control_view():
     feature = _text(FEATURE)
     groups = _text(GROUPS)

@@ -93,6 +93,7 @@ function delayCopy(node) {
   if (runValue && runValue.state === 'timeout') return 'таймаут';
   if (runValue && runValue.state === 'failed') return 'ошибка';
   if (runValue && runValue.state === 'cancelled') return 'отменено';
+  if (!runValue && node.alive === false) return 'недоступен';
   const delay = runValue && Number.isFinite(runValue.delay) ? runValue.delay : node.delay_ms;
   return Number.isFinite(delay) ? `${delay} мс` : '—';
 }
@@ -128,13 +129,17 @@ function renderNode(group, node) {
   const selectPending = selection && selection.group === group.name && selection.node === node.name;
   const runValue = nodeDelayResult(node);
   const delay = runValue && Number.isFinite(runValue.delay) ? runValue.delay : node.delay_ms;
-  const tone = runValue && runValue.state !== 'done' ? runValue.state : delayTone(delay);
+  const delaySucceeded = runValue && runValue.state === 'done' && Number.isFinite(runValue.delay);
+  const tone = runValue
+    ? (delaySucceeded ? delayTone(delay) : runValue.state)
+    : (node.alive === false ? 'failed' : delayTone(delay));
   const selectable = !!group.selectable && SELECTABLE_TYPES.has(String(group.type || '').toLowerCase());
-  const alive = node.alive === true ? 'доступен' : (node.alive === false ? 'недоступен' : 'нет данных');
-  const aliveTone = node.alive === true ? 'positive' : (node.alive === false ? 'danger' : 'neutral');
+  const alive = delaySucceeded || node.alive === true ? 'доступен' : (node.alive === false ? 'недоступен' : 'нет данных');
   const meta = [node.type || 'unknown', providerCopy(node), node.udp === true ? 'UDP' : ''].filter(Boolean).join(' · ');
+  const delayLabel = delayCopy(node);
+  const healthLabel = `Задержка ${delayLabel}; состояние: ${alive}`;
   return `
-    <li class="xk-mihomo-node-row${selected ? ' is-current' : ''}" data-node-name="${escapeHtml(node.name)}">
+    <li class="xk-mihomo-node-row${selected ? ' is-current' : ''}" data-node-name="${escapeHtml(node.name)}" data-alive="${escapeHtml(alive)}">
       <button type="button" class="xk-mihomo-node-select" data-mihomo-group-select="1"
         data-group="${escapeHtml(group.name)}" data-node="${escapeHtml(node.name)}"
         aria-pressed="${selected ? 'true' : 'false'}" ${!selectable || selected || selectPending || selection ? 'disabled' : ''}
@@ -145,8 +150,7 @@ function renderNode(group, node) {
           <small title="${escapeHtml(meta)}">${escapeHtml(meta)}</small>
         </span>
       </button>
-      <span class="xk-mihomo-node-alive" data-tone="${aliveTone}"><span aria-hidden="true"></span>${alive}</span>
-      <span class="xk-mihomo-node-delay" data-delay-tone="${tone}">${escapeHtml(delayCopy(node))}</span>
+      <span class="xk-mihomo-node-delay" data-delay-tone="${tone}" aria-label="${escapeHtml(healthLabel)}" title="${escapeHtml(healthLabel)}">${escapeHtml(delayLabel)}</span>
       <button type="button" class="btn-secondary btn-icon xk-mihomo-node-test" data-mihomo-node-delay="1"
         data-node="${escapeHtml(node.name)}" data-provider="${escapeHtml(node.provider || '')}" aria-label="Проверить задержку узла ${escapeHtml(node.name)}"
         title="Проверить задержку" ${delayRun ? 'disabled' : ''}>${iconHtml('ping')}</button>
@@ -185,7 +189,6 @@ function renderGroup(group) {
           data-group="${escapeHtml(group.name)}" ${delayRun ? 'disabled' : ''}>${iconHtml('ping')}<span>Тест группы</span></button>
       </header>
       <div id="${panelId}" class="xk-mihomo-group-body" ${collapsed ? 'hidden' : ''}>
-        <div class="xk-mihomo-node-head" aria-hidden="true"><span>Узел / provider</span><span>Состояние</span><span>Задержка</span><span></span></div>
         <ul class="xk-mihomo-node-list" aria-label="Узлы группы ${escapeHtml(group.name)}">
           ${nodes.length ? nodes.map((node) => renderNode(group, node)).join('') : '<li class="xk-mihomo-groups-empty">Нет узлов по текущему фильтру.</li>'}
         </ul>

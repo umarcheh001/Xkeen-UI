@@ -364,7 +364,7 @@
       "tabler_asset": "chevron-down",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L176",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L180",
           "control_type": "runtime-action",
           "accessible_label": "Раскрыть"
         },
@@ -2053,12 +2053,12 @@
       "tabler_asset": "stopwatch",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L152",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L156",
           "control_type": "runtime-action",
           "accessible_label": "Проверить задержку"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L185",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L189",
           "control_type": "runtime-action",
           "accessible_label": "Проверить задержку"
         },

@@ -133,6 +133,13 @@ test('Mihomo group disclosures keep the workspace compact and keyboard accessibl
   await hiddenToggle.press('Enter');
   await expect(hiddenToggle).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('[data-group-name="HIDDEN"] .xk-mihomo-group-body')).toBeVisible();
+  await expect(page.locator('[data-group-name="HIDDEN"] .xk-mihomo-node-alive')).toHaveCount(0);
+  await expect(page.locator('[data-group-name="HIDDEN"] .xk-mihomo-node-head')).toHaveCount(0);
+  const expandedGrid = await page.locator('[data-group-name="HIDDEN"] .xk-mihomo-node-list').evaluate((list) => ({
+    columns: getComputedStyle(list).gridTemplateColumns.split(' ').length,
+    pageOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  }));
+  expect(expandedGrid).toEqual({ columns: 5, pageOverflow: false });
 
   await page.locator('#mihomo-clash-groups-collapse').click();
   await expect(page.locator('[data-mihomo-group-toggle][aria-expanded="true"]')).toHaveCount(0);
