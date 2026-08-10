@@ -4,14 +4,11 @@ import {
   fetchMihomoClashProviders,
   fetchMihomoClashRules,
   healthcheckMihomoClashProvider,
-  mihomoClashLogsWsUrl,
-  requestMihomoClashWsToken,
   updateMihomoClashProvider,
 } from './client.js';
 import { invalidateMihomoClashGroups } from './groups.js';
 
 const MAX_RULE_ROWS = 300;
-const MAX_LOG_ROWS = 500;
 
 let root = null;
 let active = false;
@@ -23,14 +20,6 @@ let requests = new Set();
 let query = '';
 let providerKind = 'all';
 let pendingProvider = '';
-let logsOpen = false;
-let logsPaused = false;
-let logLevel = 'all';
-let logQuery = '';
-let logRows = [];
-let logSocket = null;
-let logController = null;
-let logFocusReturn = null;
 
 function byId(id) { return document.getElementById(id); }
 function escapeHtml(value) {
@@ -109,66 +98,9 @@ function renderProviders() {
   if (count) count.textContent = `${providersPayload?.total_providers || 0} providers`;
 }
 
-function logSearchText(row) {
-  return [row?.level, row?.message, ...Object.entries(row?.fields || {}).flat()].join(' ').toLocaleLowerCase('ru');
-}
-
-function filteredLogs() {
-  const needle = logQuery.trim().toLocaleLowerCase('ru');
-  return logRows.filter((row) => (logLevel === 'all' || row.level === logLevel) && (!needle || logSearchText(row).includes(needle)));
-}
-
-function renderLogs() {
-  const drawer = byId('mihomo-clash-logs-drawer');
-  const list = byId('mihomo-clash-logs-list');
-  const state = byId('mihomo-clash-logs-state');
-  if (drawer) drawer.hidden = !logsOpen;
-  if (!list) return;
-  const rows = filteredLogs();
-  list.innerHTML = rows.map((row) => {
-    const fields = Object.entries(row.fields || {}).map(([key, value]) => `${key}=${value}`).join(' · ');
-    return `<li data-log-level="${escapeHtml(row.level)}"><time>${escapeHtml(row.time || '—')}</time><strong>${escapeHtml(row.level)}</strong><span>${escapeHtml(row.message || '—')}</span>${fields ? `<small>${escapeHtml(fields)}</small>` : ''}</li>`;
-  }).join('');
-  if (state) state.textContent = logsPaused ? `Пауза · ${logRows.length}/${MAX_LOG_ROWS}` : (logSocket ? `Live · ${logRows.length}/${MAX_LOG_ROWS}` : 'Ожидание');
-  const pause = byId('mihomo-clash-logs-pause');
-  if (pause) {
-    pause.setAttribute('aria-pressed', logsPaused ? 'true' : 'false');
-    pause.setAttribute('aria-label', logsPaused ? 'Продолжить вывод логов' : 'Пауза логов');
-  }
-}
-
-function setPaused(nextPaused) {
-  logsPaused = !!nextPaused;
-  if (!logsPaused) renderLogs();
-  else {
-    const state = byId('mihomo-clash-logs-state');
-    if (state) state.textContent = `Пауза · ${logRows.length}/${MAX_LOG_ROWS}`;
-    const pause = byId('mihomo-clash-logs-pause');
-    if (pause) {
-      pause.setAttribute('aria-pressed', 'true');
-      pause.setAttribute('aria-label', 'Продолжить вывод логов');
-    }
-  }
-}
-
 function abortRequests() {
   for (const controller of requests) { try { controller.abort(); } catch (error) {} }
   requests.clear();
-}
-
-function closeLogs({ restoreFocus = false } = {}) {
-  const socket = logSocket;
-  logSocket = null;
-  if (logController) { try { logController.abort(); } catch (error) {} }
-  logController = null;
-  if (socket) {
-    socket.onopen = null; socket.onmessage = null; socket.onerror = null; socket.onclose = null;
-    try { socket.close(); } catch (error) {}
-  }
-  renderLogs();
-  const focusTarget = logFocusReturn;
-  logFocusReturn = null;
-  if (restoreFocus && focusTarget?.isConnected) focusTarget.focus();
 }
 
 async function loadRuntime(runGeneration) {
@@ -221,56 +153,12 @@ async function providerAction(provider, action) {
   } finally { pendingProvider = ''; renderProviders(); }
 }
 
-async function openLogs() {
-  if (!active || logsOpen) return;
-  if (capabilities.logs_stream !== true) {
-    setNotice('Runtime logs недоступны без WebSocket runtime.', 'warning');
-    return;
-  }
-  logFocusReturn = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  logsOpen = true; logsPaused = false; renderLogs();
-  byId('mihomo-clash-logs-close')?.focus();
-  const runGeneration = generation;
-  const controller = new AbortController();
-  logController = controller;
-  try {
-    const token = await requestMihomoClashWsToken({
-      signal: controller.signal,
-      scope: 'mihomo-clash-logs',
-    });
-    if (!active || !logsOpen || generation !== runGeneration || !token) return;
-    const socket = new WebSocket(mihomoClashLogsWsUrl(token));
-    logSocket = socket;
-    socket.onopen = renderLogs;
-    socket.onmessage = (event) => {
-      if (!active || !logsOpen || logSocket !== socket) return;
-      let message = null;
-      try { message = JSON.parse(event.data); } catch (error) { return; }
-      if (message?.type !== 'mihomo-clash-logs' || message.state !== 'live' || Number(message.schema_version) !== 1) return;
-      if (message.payload) {
-        logRows.push(message.payload);
-        if (logRows.length > MAX_LOG_ROWS) logRows.splice(0, logRows.length - MAX_LOG_ROWS);
-        if (!logsPaused) renderLogs();
-      }
-    };
-    socket.onerror = () => {};
-    socket.onclose = () => { if (logSocket === socket) logSocket = null; renderLogs(); };
-  } catch (error) { if (!controller.signal.aborted) setNotice('Не удалось открыть поток логов.', 'danger'); }
-  finally { if (logController === controller) logController = null; }
-}
-
 function bind() {
   if (!root || root.dataset.bound === '1') return;
   root.dataset.bound = '1';
   byId('mihomo-clash-rules-filter')?.addEventListener('input', (event) => { query = event.target.value || ''; renderRules(); });
   byId('mihomo-clash-provider-kind')?.addEventListener('change', (event) => { providerKind = event.target.value || 'all'; renderProviders(); });
   byId('mihomo-clash-rules-refresh')?.addEventListener('click', () => { if (active) void loadRuntime(generation); });
-  byId('mihomo-clash-logs-open')?.addEventListener('click', () => void openLogs());
-  byId('mihomo-clash-logs-close')?.addEventListener('click', () => { logsOpen = false; closeLogs({ restoreFocus: true }); renderLogs(); });
-  byId('mihomo-clash-logs-pause')?.addEventListener('click', () => setPaused(!logsPaused));
-  byId('mihomo-clash-logs-clear')?.addEventListener('click', () => { logRows = []; renderLogs(); });
-  byId('mihomo-clash-logs-level')?.addEventListener('change', (event) => { logLevel = event.target.value || 'all'; renderLogs(); });
-  byId('mihomo-clash-logs-filter')?.addEventListener('input', (event) => { logQuery = event.target.value || ''; renderLogs(); });
   root.addEventListener('click', (event) => {
     const card = event.target.closest?.('[data-provider-key]');
     if (!card) return;
@@ -278,28 +166,23 @@ function bind() {
     if (event.target.closest?.('[data-mihomo-provider-update]')) void providerAction(provider, 'update');
     if (event.target.closest?.('[data-mihomo-provider-healthcheck]')) void providerAction(provider, 'healthcheck');
   });
-  root.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && logsOpen) { logsOpen = false; closeLogs({ restoreFocus: true }); renderLogs(); }
-  });
 }
 
 export function initMihomoClashRules() {
   root = byId('mihomo-clash-rules');
   if (!root) return false;
-  bind(); renderRules(); renderProviders(); renderLogs(); return true;
+  bind(); renderRules(); renderProviders(); return true;
 }
 
 export function activateMihomoClashRules(nextCapabilities = {}) {
   if (!root && !initMihomoClashRules()) return false;
   deactivateMihomoClashRules();
   active = true; capabilities = nextCapabilities || {}; generation += 1;
-  const logsButton = byId('mihomo-clash-logs-open');
-  if (logsButton) logsButton.disabled = capabilities.logs_stream !== true;
   void loadRuntime(generation); return true;
 }
 
 export function deactivateMihomoClashRules() {
-  active = false; generation += 1; abortRequests(); logsOpen = false; closeLogs(); root?.setAttribute('aria-busy', 'false'); return true;
+  active = false; generation += 1; abortRequests(); root?.setAttribute('aria-busy', 'false'); return true;
 }
 
 export function focusMihomoClashRule(rule, payload = '') {

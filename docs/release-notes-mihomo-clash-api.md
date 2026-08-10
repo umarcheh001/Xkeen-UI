@@ -9,5 +9,6 @@
 - Mihomo JSON Schema содержит `external-controller-unix` с подсказкой, примером `./mihomo-api.sock`, назначением и предупреждением безопасности для YAML hover.
 - Доступен совместимый loopback TCP режим с новым случайным secret. Пароль панели не копируется.
 - Zashboard сохранён как optional external tool, но больше не является частью основного runtime workflow.
+- Runtime logs перенесены из перекрывающего рабочую область drawer в полноценную вкладку **«Логи»** рядом с управлением, соединениями и правилами; WebSocket по-прежнему живёт только пока эта вкладка активна.
 
 Rollout не требует feature flag: API маршруты защищены существующими session/CSRF guards, UI lazy-loaded, а миграция всегда opt-in. Rollback — восстановить созданный Mihomo backup и перезапустить ядро.

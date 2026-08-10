@@ -20,6 +20,11 @@ import {
   initMihomoClashRules,
 } from './rules.js';
 import {
+  activateMihomoClashLogs,
+  deactivateMihomoClashLogs,
+  initMihomoClashLogs,
+} from './logs.js';
+import {
   mihomoClashStateCopy,
   normalizeMihomoClashState,
   normalizeMihomoClashSubview,
@@ -111,6 +116,11 @@ function renderStatus(state, payload = null) {
     activateMihomoClashRules(payload?.capabilities || {});
   } else if (currentSubview !== 'rules' || state !== 'loading') {
     deactivateMihomoClashRules();
+  }
+  if (state === 'ready' && active && visible && currentSubview === 'logs') {
+    activateMihomoClashLogs(payload?.capabilities || {});
+  } else if (currentSubview !== 'logs' || state !== 'loading') {
+    deactivateMihomoClashLogs();
   }
 
   const openConfig = document.querySelector('[data-mihomo-clash-action="open-config"]');
@@ -281,6 +291,7 @@ function applySubview(name, options = {}) {
     deactivateMihomoClashGroups();
     deactivateMihomoClashConnections();
     deactivateMihomoClashRules();
+    deactivateMihomoClashLogs();
     try {
       document.dispatchEvent(new CustomEvent('xkeen:mihomo-config-subview-shown', {
         detail: { reason: options.reason || 'subview' },
@@ -290,6 +301,7 @@ function applySubview(name, options = {}) {
     if (next !== 'control') deactivateMihomoClashGroups();
     if (next !== 'connections') deactivateMihomoClashConnections();
     if (next !== 'rules') deactivateMihomoClashRules();
+    if (next !== 'logs') deactivateMihomoClashLogs();
     void refreshMihomoClashStatus({ reason: options.reason || 'subview' });
   }
   return next;
@@ -355,6 +367,7 @@ function bindVisibility() {
       deactivateMihomoClashGroups();
       deactivateMihomoClashConnections();
       deactivateMihomoClashRules();
+      deactivateMihomoClashLogs();
       if (active && currentSubview !== 'config') renderStatus('paused', statusPayload);
     } else if (active && currentSubview !== 'config') {
       void refreshMihomoClashStatus({ reason: 'visibility' });
@@ -372,6 +385,7 @@ export function initMihomoClashWorkspace() {
   initMihomoClashGroups();
   initMihomoClashConnections();
   initMihomoClashRules();
+  initMihomoClashLogs();
   renderStatus('idle', null);
   applySubview(currentSubview, { reason: 'init' });
   return true;
@@ -395,6 +409,7 @@ export function deactivateMihomoClashWorkspace() {
   deactivateMihomoClashGroups();
   deactivateMihomoClashConnections();
   deactivateMihomoClashRules();
+  deactivateMihomoClashLogs();
   return true;
 }
 

@@ -88,20 +88,11 @@ test('rules search, connection cross-link and provider actions stay explicit', a
   const layout = await page.evaluate(() => {
     const ruleHead = document.querySelector('.xk-mihomo-rules-section .xk-mihomo-rules-section-head').getBoundingClientRect();
     const providerHead = document.querySelector('.xk-mihomo-providers-section .xk-mihomo-rules-section-head').getBoundingClientRect();
-    const button = document.querySelector('#mihomo-clash-logs-open').getBoundingClientRect();
-    const icon = document.querySelector('#mihomo-clash-logs-open .xk-action-icon').getBoundingClientRect();
-    const label = document.querySelector('#mihomo-clash-logs-open .xk-action-label').getBoundingClientRect();
     return {
       headerBottomDelta: Math.abs(ruleHead.bottom - providerHead.bottom),
-      iconInside: icon.left >= button.left && icon.right <= button.right && icon.top >= button.top && icon.bottom <= button.bottom,
-      labelInside: label.left >= button.left && label.right <= button.right && label.top >= button.top && label.bottom <= button.bottom,
-      centerDelta: Math.abs((icon.top + icon.bottom) / 2 - (label.top + label.bottom) / 2),
     };
   });
   expect(layout.headerBottomDelta).toBeLessThanOrEqual(1);
-  expect(layout.iconInside).toBe(true);
-  expect(layout.labelInside).toBe(true);
-  expect(layout.centerDelta).toBeLessThanOrEqual(1);
   await page.locator('#mihomo-clash-rules-filter').fill('fixture-rules');
   await expect(page.locator('#mihomo-clash-rules-rows tr')).toHaveCount(1);
   await page.locator('#mihomo-clash-provider-kind').selectOption('rule');
@@ -131,7 +122,7 @@ test('rules search, connection cross-link and provider actions stay explicit', a
 });
 
 
-test('structured logs use one on-demand socket, ring buffer, pause and close lifecycle', async ({ page }) => {
+test('structured logs use a full workspace tab, one on-demand socket, ring buffer and lifecycle', async ({ page }) => {
   await page.addInitScript(() => {
     window.__pr9LogSockets = [];
     class LogSocket {
@@ -148,9 +139,21 @@ test('structured logs use one on-demand socket, ring buffer, pause and close lif
   await mockPr9(page);
   await page.goto('/');
   await page.locator('.top-tab-btn[data-view="mihomo"]').click();
-  await page.locator('#mihomo-clash-tab-rules').click();
-  await page.locator('#mihomo-clash-logs-open').click();
-  await expect(page.locator('#mihomo-clash-logs-drawer')).toBeVisible();
+  await page.locator('#mihomo-clash-tab-logs').click();
+  await expect(page.locator('#mihomo-clash-panel-logs')).toBeVisible();
+  await expect(page.locator('#mihomo-clash-panel-rules')).toBeHidden();
+  const workspaceGeometry = await page.evaluate(() => {
+    const panel = document.querySelector('#mihomo-clash-panel-logs').getBoundingClientRect();
+    const workspace = document.querySelector('#mihomo-clash-logs').getBoundingClientRect();
+    return {
+      position: getComputedStyle(document.querySelector('#mihomo-clash-logs')).position,
+      insidePanel: workspace.left >= panel.left && workspace.right <= panel.right + 1,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+  expect(workspaceGeometry.position).not.toBe('fixed');
+  expect(workspaceGeometry.insidePanel).toBe(true);
+  expect(workspaceGeometry.overflow).toBeLessThanOrEqual(1);
   await expect.poll(() => page.evaluate(() => window.__pr9LogSockets.length)).toBe(1);
 
   await page.evaluate(() => {
@@ -177,7 +180,7 @@ test('structured logs use one on-demand socket, ring buffer, pause and close lif
 
   await page.locator('#mihomo-clash-tab-control').click();
   expect(await page.evaluate(() => window.__pr9LogSockets.every((socket) => socket.closed))).toBe(true);
-  await expect(page.locator('#mihomo-clash-logs-drawer')).toBeHidden();
+  await expect(page.locator('#mihomo-clash-panel-logs')).toBeHidden();
 });
 
 

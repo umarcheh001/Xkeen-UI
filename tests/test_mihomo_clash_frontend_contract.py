@@ -14,6 +14,7 @@ STATE = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "sta
 GROUPS = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "groups.js"
 CONNECTIONS = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "connections.js"
 RULES = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "rules.js"
+LOGS = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "logs.js"
 LAZY = ROOT / "xkeen-ui" / "static" / "js" / "pages" / "panel.lazy_bindings.runtime.js"
 VIEW_RUNTIME = ROOT / "xkeen-ui" / "static" / "js" / "pages" / "panel.view_runtime.js"
 INVENTORY = ROOT / "docs" / "panel-operator-icon-inventory.json"
@@ -31,7 +32,7 @@ def _mihomo_markup() -> str:
 def test_workspace_shell_preserves_existing_mihomo_editor_ids_inside_config_subview():
     markup = _mihomo_markup()
     assert 'role="tablist" aria-label="Рабочая область Mihomo"' in markup
-    for subview in ("control", "connections", "rules", "config"):
+    for subview in ("control", "connections", "rules", "logs", "config"):
         assert f'data-mihomo-clash-subview="{subview}"' in markup
     assert 'data-mihomo-clash-panel="config"' in markup
 
@@ -317,6 +318,7 @@ def test_rules_providers_and_logs_have_bounded_on_demand_contract():
     client = _text(CLIENT)
     feature = _text(FEATURE)
     rules = _text(RULES)
+    logs = _text(LOGS)
     state = _text(STATE)
     css = _text(CSS)
 
@@ -324,7 +326,10 @@ def test_rules_providers_and_logs_have_bounded_on_demand_contract():
         'id="mihomo-clash-panel-rules"',
         'id="mihomo-clash-rules-filter"',
         'id="mihomo-clash-provider-kind"',
-        'id="mihomo-clash-logs-drawer"',
+        'id="mihomo-clash-tab-logs"',
+        'data-mihomo-clash-subview="logs"',
+        'id="mihomo-clash-panel-logs"',
+        'id="mihomo-clash-logs"',
         "fetchMihomoClashRules",
         "fetchMihomoClashProviders",
         "updateMihomoClashProvider",
@@ -336,13 +341,16 @@ def test_rules_providers_and_logs_have_bounded_on_demand_contract():
         "requestMihomoClashWsToken",
         "scope: 'mihomo-clash-logs'",
         "deactivateMihomoClashRules();",
-        "abortRequests(); logsOpen = false; closeLogs();",
+        "deactivateMihomoClashLogs();",
         ".xk-mihomo-rules-layout",
-        ".xk-mihomo-logs-drawer[hidden]",
+        ".xk-mihomo-logs-workspace",
     ):
-        assert fragment in markup or fragment in client or fragment in feature or fragment in rules or fragment in css
+        assert fragment in markup or fragment in client or fragment in feature or fragment in rules or fragment in logs or fragment in css
 
     assert "if (value === 'rules') return 'control';" not in state
+    assert "if (value === 'logs') return 'control';" not in state
+    assert 'id="mihomo-clash-logs-open"' not in markup
+    assert 'id="mihomo-clash-logs-drawer"' not in markup
     assert 'aria-disabled="true" title="Просмотр правил' not in markup
     assert "PATCH /rules" not in client
     assert "PATCH /configs" not in client

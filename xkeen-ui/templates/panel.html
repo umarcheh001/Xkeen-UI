@@ -961,6 +961,9 @@
       <button type="button" class="xk-mihomo-workspace-tab" id="mihomo-clash-tab-rules" data-mihomo-clash-subview="rules" role="tab" aria-selected="false" aria-controls="mihomo-clash-panel-rules">
         {{ op_icon('list-details') }}<span>Правила</span>
       </button>
+      <button type="button" class="xk-mihomo-workspace-tab" id="mihomo-clash-tab-logs" data-mihomo-clash-subview="logs" role="tab" aria-selected="false" aria-controls="mihomo-clash-panel-logs">
+        {{ op_icon('terminal') }}<span>Логи</span>
+      </button>
       <button type="button" class="xk-mihomo-workspace-tab" id="mihomo-clash-tab-config" data-mihomo-clash-subview="config" role="tab" aria-selected="false" aria-controls="mihomo-clash-panel-config">
         {{ op_icon('settings') }}<span>Конфигурация</span>
       </button>
@@ -1099,7 +1102,6 @@
           </label>
           <span id="mihomo-clash-rules-count" class="xk-mihomo-rules-count">0 правил</span>
           <button type="button" id="mihomo-clash-rules-refresh" class="btn-secondary btn-icon" aria-label="Обновить правила и providers">{{ op_icon('refresh') }}</button>
-          <button type="button" id="mihomo-clash-logs-open" class="btn-secondary">{{ op_icon('terminal') }}<span class="xk-action-label">Логи</span></button>
         </div>
         <div id="mihomo-clash-rules-notice" class="xk-mihomo-rules-notice" role="status" aria-live="polite">Правила загружаются только при открытом экране.</div>
         <div class="xk-mihomo-rules-layout">
@@ -1120,13 +1122,16 @@
             <div id="mihomo-clash-providers-empty" class="xk-mihomo-rules-empty">Providers не настроены.</div>
           </section>
         </div>
-        <aside id="mihomo-clash-logs-drawer" class="xk-mihomo-logs-drawer" role="dialog" aria-modal="false" aria-labelledby="mihomo-clash-logs-title" hidden>
+      </div>
+    </div>
+
+    <div id="mihomo-clash-panel-logs" class="xk-mihomo-runtime-panel" data-mihomo-clash-panel="logs" role="tabpanel" aria-labelledby="mihomo-clash-tab-logs" hidden>
+      <section id="mihomo-clash-logs" class="xk-mihomo-logs-workspace" aria-labelledby="mihomo-clash-logs-title">
           <div class="xk-mihomo-logs-head">
-            <div><h3 id="mihomo-clash-logs-title">Runtime logs</h3><span id="mihomo-clash-logs-state">Ожидание</span></div>
+            <div><h3 id="mihomo-clash-logs-title">Логи Mihomo</h3><span id="mihomo-clash-logs-state" role="status" aria-live="polite">Ожидание</span></div>
             <div class="xk-mihomo-logs-actions">
               <button type="button" id="mihomo-clash-logs-pause" class="btn-secondary btn-icon" aria-label="Пауза логов">{{ op_icon('pause') }}</button>
               <button type="button" id="mihomo-clash-logs-clear" class="btn-secondary btn-icon" aria-label="Очистить логи">{{ op_icon('clear') }}</button>
-              <button type="button" id="mihomo-clash-logs-close" class="btn-secondary btn-icon" aria-label="Закрыть логи">{{ op_icon('close') }}</button>
             </div>
           </div>
           <div class="xk-mihomo-logs-filters">
@@ -1134,8 +1139,8 @@
             <input id="mihomo-clash-logs-filter" type="search" aria-label="Фильтр логов" placeholder="Фильтр сообщения или поля">
           </div>
           <ol id="mihomo-clash-logs-list" class="xk-mihomo-logs-list" aria-live="off"></ol>
-        </aside>
-      </div>
+          <div id="mihomo-clash-logs-empty" class="xk-mihomo-logs-empty">Новые записи появятся здесь в реальном времени.</div>
+      </section>
     </div>
   </section>
 

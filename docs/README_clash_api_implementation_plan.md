@@ -304,7 +304,7 @@ Frontend lifecycle:
 6. fallback запрашивает один кадр не чаще одного раза в 3 секунды и прекращается на скрытом экране;
 7. при возврате сначала пробует WS заново.
 
-Отдельный `/logs` stream в P1 создаётся только при открытом log drawer и никогда не работает одновременно «на всякий случай».
+Отдельный `/logs` stream в P1 создаётся только при открытой вкладке «Логи» и никогда не работает одновременно «на в��який случай».
 
 ### 5.5. Frontend state
 
@@ -831,8 +831,8 @@ Acceptance baseline: на aarch64 существующий `get_xray_device_name
 - DTO v1 сохраняет фактический rule index, нормализует `type/payload/target/size/extra.disabled`, ограничивает список 4096 правилами и не отдаёт raw provider URL/path; proxy/rule providers объединяются в bounded список с freshness/count/alive/failed/vehicle/format/healthcheck;
 - mutation перед вызовом Mihomo повторно сверяет kind/name и доступность healthcheck по свежему provider snapshot, использует session + CSRF, per-subject/global guard и sanitized audit без имени provider;
 - вкладка «Правила» выполняет поиск по index/type/payload/target, показывает compact providers и получает cross-link из inspector соединения; provider update/healthcheck требуют явного confirm, после action обновляют provider state и инвалидируют groups cache, чтобы следующий вход выполнил ровно один свежий refresh;
-- runtime logs открывают отдельный same-origin WS только по кнопке, используют отдельный one-time scope `mihomo-clash-logs`, normalized envelope v1 и credential redaction; browser хранит максимум 500 строк, поддерживает level/search/pause/clear и закрывает socket при закрытии drawer, смене subview/top-level или hidden document;
-- lazy interaction gate устраняет race первого клика по subview до загрузки feature chunk; responsive mobile records, keyboard path и возврат focus после закрытия log drawer остаются в Operator contract;
+- runtime logs размещены в самостоятельной вкладке рядом с «Управление / Соединения / Правила», открывают отдельный same-origin WS только пока эта вкладка активна и используют отдельный one-time scope `mihomo-clash-logs`, normalized envelope v1 и credential redaction; browser хранит максимум 500 строк и поддерживает level/search/pause/clear;
+- уход со вкладки «Логи», смена top-level view или hidden document немедленно закрывают socket; отдельный плавающий drawer удалён, чтобы логи не перекрывали рабочую область;
 - rule disable, mode switch, automatic provider refresh и disconnect-after-select отсутствуют; persistent YAML по-прежнему меняется только существующим config workflow.
 
 Локальная проверка закрытия PR 9:
@@ -845,12 +845,18 @@ Acceptance baseline: на aarch64 существующий `get_xray_device_name
 
 Post-PR 9 UI hotfix от 10 августа 2026 года:
 
-- заголовки карточек rules/providers выровнены по нижней границе с учётом `select`, а кнопка «Логи» получила явный inline-flex contract: иконка и подпись центрированы и не выходят за control bounds;
-- Playwright PR 9 дополнен geometry regression gate для обеих карточек и содержимого кнопки; целевой suite повторно прошёл (`3 passed`).
+- заголовки карточек rules/providers выровнены по нижней границе с учётом `select`; прежний geometry gate кнопки «Логи» стал неактуален после переноса логов в самостоятельную вкладку ниже;
+- Playwright PR 9 сохраняет geometry regression gate для обеих карточек и отдельный lifecycle gate полноценной вкладки логов.
+
+Post-PR 10 навигационная доработка от 10 августа 2026 года:
+
+- кнопка «Логи» внутри toolbar правил и плавающий drawer удалены;
+- «Логи» стали полноценной вкладкой рабочей области Mihomo с обычной панелью, фильтрами, pause/clear и большим scrollable log canvas;
+- lifecycle остался экономным: токен и WebSocket создаются только на активной вкладке логов и закрываются сразу при уходе с неё.
 
 Критерий выхода:
 
-- P1 streams живут только пока соответствующий subview/drawer открыт;
+- P1 streams живут только пока соответствующая вкладка открыта;
 - временные runtime actions явно отделены от persistent YAML;
 - нет дублирования существующих config/restart/update функций.
 

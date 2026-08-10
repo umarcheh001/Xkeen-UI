@@ -17098,22 +17098,6 @@ body.panel-page .xk-mihomo-rules-search .xk-action-icon {
 body.panel-page .xk-mihomo-rules-search input { width: 100%; padding-left: 31px !important; }
 body.panel-page .xk-mihomo-rules-count { margin-left: auto; color: var(--op-muted); white-space: nowrap; }
 
-body.panel-page #mihomo-clash-logs-open {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-width: 72px;
-  padding: 0 10px !important;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-body.panel-page #mihomo-clash-logs-open .xk-action-label {
-  display: inline-block;
-  line-height: 1;
-}
-
 body.panel-page .xk-mihomo-rules-notice {
   min-height: 18px;
   color: var(--op-muted);
@@ -17182,34 +17166,34 @@ body.panel-page .xk-mihomo-provider-actions button:disabled .xk-action-icon { an
 body.panel-page .xk-mihomo-rules-empty { padding: 24px 12px; color: var(--op-muted); text-align: center; }
 body.panel-page .xk-mihomo-rules-empty[hidden] { display: none; }
 
-body.panel-page .xk-mihomo-logs-drawer {
-  position: fixed;
-  z-index: 1200;
-  right: 12px;
-  bottom: 12px;
+body.panel-page .xk-mihomo-logs-workspace {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
-  width: min(760px, calc(100vw - 24px));
-  height: min(620px, calc(100dvh - 24px));
-  padding: 8px;
+  min-width: 0;
+  min-height: min(620px, calc(100dvh - 230px));
+  overflow: hidden;
   border: 1px solid var(--op-border-strong);
-  border-radius: var(--op-radius);
+  border-radius: var(--op-control-radius);
   background: var(--op-surface);
-  box-shadow: var(--op-shadow-2);
 }
 
-body.panel-page .xk-mihomo-logs-drawer[hidden] { display: none !important; }
-body.panel-page .xk-mihomo-logs-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 7px; border-bottom: 1px solid var(--op-border); }
+body.panel-page .xk-mihomo-logs-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--op-border); background: var(--op-surface-2); }
 body.panel-page .xk-mihomo-logs-head h3 { margin: 0; font-size: calc(12px * var(--xk-font-scale, 1)); }
 body.panel-page .xk-mihomo-logs-head span { color: var(--op-muted); font-size: calc(9px * var(--xk-font-scale, 1)); }
-body.panel-page .xk-mihomo-logs-filters { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 6px; padding: 7px 0; }
-body.panel-page .xk-mihomo-logs-list { min-height: 0; margin: 0; padding: 0; overflow: auto; border: 1px solid var(--op-border); border-radius: 4px; background: var(--op-editor); list-style: none; }
+body.panel-page #mihomo-clash-logs-state[data-tone="positive"] { color: var(--op-success); }
+body.panel-page #mihomo-clash-logs-state[data-tone="warning"] { color: var(--op-warning); }
+body.panel-page #mihomo-clash-logs-state[data-tone="danger"] { color: var(--op-danger); }
+body.panel-page .xk-mihomo-logs-filters { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--op-border); }
+body.panel-page .xk-mihomo-logs-list { min-height: 0; margin: 0; padding: 0; overflow: auto; background: var(--op-editor); list-style: none; }
+body.panel-page .xk-mihomo-logs-list[hidden] { display: none; }
 body.panel-page .xk-mihomo-logs-list li { display: grid; grid-template-columns: 150px 62px minmax(0, 1fr); gap: 7px; padding: 5px 7px; border-bottom: 1px solid var(--op-border); color: var(--op-text); font: calc(9px * var(--xk-font-scale, 1))/1.35 "SFMono-Regular", Consolas, monospace; }
 body.panel-page .xk-mihomo-logs-list li time,
 body.panel-page .xk-mihomo-logs-list li small { color: var(--op-muted); }
 body.panel-page .xk-mihomo-logs-list li small { grid-column: 3; overflow-wrap: anywhere; }
 body.panel-page .xk-mihomo-logs-list li[data-log-level="warning"] strong { color: var(--op-warning); }
 body.panel-page .xk-mihomo-logs-list li[data-log-level="error"] strong { color: var(--op-danger); }
+body.panel-page .xk-mihomo-logs-empty { grid-row: 3; align-self: center; padding: 36px 12px; color: var(--op-muted); text-align: center; }
+body.panel-page .xk-mihomo-logs-empty[hidden] { display: none; }
 
 body.panel-page .xk-mihomo-connection-inspector h3 { margin: 0; font-size: calc(12px * var(--xk-font-scale, 1)); }
 
