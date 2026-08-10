@@ -327,5 +327,10 @@ def test_connections_dto_is_bounded_and_resolves_source_device():
     assert dto["truncated"] is True
     assert len(dto["connections"]) == 2
     assert dto["connections"][0]["metadata"]["source_name"] == "operator-laptop"
+    assert dto["connections"][0]["metadata"]["remote_destination"] == "198.51.100.20:443"
+    assert dto["connections"][0]["metadata"]["dns_mode"] == "normal-redir"
+    assert dto["connections"][0]["metadata"]["inbound_ip"] == "192.0.2.254"
+    assert dto["connections"][0]["metadata"]["process_path"] == "/usr/bin/browser"
+    assert dto["connections"][0]["metadata"]["uid"] == 1000
     assert dto["connections"][0]["chains"] == ["AUTO", "node-a"]
     assert "secret" not in json.dumps(dto).lower()

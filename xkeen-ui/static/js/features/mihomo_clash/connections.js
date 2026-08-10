@@ -11,6 +11,7 @@ import {
 const HTTP_FALLBACK_INTERVAL_MS = 2000;
 const MAX_RECONNECT_DELAY_MS = 15000;
 const PAGE_SIZE = 100;
+const MAX_CLOSED_CONNECTIONS = 300;
 
 let root = null;
 let active = false;
@@ -21,6 +22,9 @@ let rates = { download: 0, upload: 0 };
 let filterText = '';
 let networkFilter = 'all';
 let sortMode = 'traffic';
+let sortDirection = 'desc';
+let connectionView = 'active';
+let closedConnections = new Map();
 let ws = null;
 let request = null;
 let timer = 0;
@@ -72,6 +76,11 @@ function destination(row) {
   return metadata.destination_port ? `${host}:${metadata.destination_port}` : host;
 }
 
+function destinationHost(row) {
+  const metadata = row?.metadata || {};
+  return metadata.sniff_host || metadata.host || metadata.destination_ip || '';
+}
+
 function source(row) {
   const metadata = row?.metadata || {};
   const address = metadata.source_port ? `${metadata.source_ip}:${metadata.source_port}` : metadata.source_ip;
@@ -92,25 +101,45 @@ function searchText(row) {
   const metadata = row?.metadata || {};
   return [
     row?.id, metadata.source_name, metadata.source_ip, metadata.host, metadata.sniff_host,
-    metadata.destination_ip, metadata.process, row?.rule, row?.rule_payload,
+    metadata.destination_ip, metadata.remote_destination, metadata.dns_mode,
+    metadata.inbound_ip, metadata.inbound_name, metadata.process, metadata.process_path,
+    row?.rule, row?.rule_payload, row?.closed_at,
     ...(row?.chains || []), ...(row?.provider_chains || []),
   ].join(' ').toLocaleLowerCase('ru');
 }
 
+function sortValue(row, mode) {
+  if (mode === 'age') return startTime(row);
+  if (mode === 'source') return `${source(row).name} ${source(row).address}`.trim();
+  if (mode === 'destination') return destination(row);
+  if (mode === 'route') return routeText(row);
+  return (Number(row?.upload) || 0) + (Number(row?.download) || 0);
+}
+
 function rows() {
-  const sourceRows = Array.isArray(snapshot?.connections) ? snapshot.connections : [];
+  const sourceRows = connectionView === 'closed'
+    ? Array.from(closedConnections.values())
+    : (Array.isArray(snapshot?.connections) ? snapshot.connections : []);
   const query = filterText.trim().toLocaleLowerCase('ru');
   const filtered = sourceRows.filter((row) => {
     const network = String(row?.metadata?.network || '').toLowerCase();
     return (networkFilter === 'all' || network === networkFilter) && (!query || searchText(row).includes(query));
   });
   filtered.sort((a, b) => {
-    if (sortMode === 'age') return startTime(a) - startTime(b);
-    if (sortMode === 'source') return source(a).name.localeCompare(source(b).name, 'ru');
-    if (sortMode === 'destination') return destination(a).localeCompare(destination(b), 'ru');
-    return ((Number(b.upload) || 0) + (Number(b.download) || 0)) - ((Number(a.upload) || 0) + (Number(a.download) || 0));
+    const aValue = sortValue(a, sortMode);
+    const bValue = sortValue(b, sortMode);
+    const comparison = typeof aValue === 'number' && typeof bValue === 'number'
+      ? aValue - bValue
+      : String(aValue).localeCompare(String(bValue), 'ru', { numeric: true, sensitivity: 'base' });
+    return sortDirection === 'asc' ? comparison : -comparison;
   });
   return filtered.slice(0, PAGE_SIZE);
+}
+
+function selectedRow() {
+  return (snapshot?.connections || []).find((item) => item.id === selectedId)
+    || closedConnections.get(selectedId)
+    || null;
 }
 
 function setText(id, value) { const element = byId(id); if (element) element.textContent = String(value); }
@@ -149,6 +178,8 @@ function updateRates(next, receivedAt = Date.now()) {
 
 function renderSummary() {
   setText('mihomo-clash-connection-count', snapshot?.total_connections || 0);
+  setText('mihomo-clash-active-tab-count', snapshot?.total_connections || 0);
+  setText('mihomo-clash-closed-count', closedConnections.size);
   setText('mihomo-clash-download-rate', formatBytes(rates.download, '/с'));
   setText('mihomo-clash-upload-rate', formatBytes(rates.upload, '/с'));
   setText('mihomo-clash-download-total', `всего ${formatBytes(snapshot?.download_total || 0)}`);
@@ -158,6 +189,16 @@ function renderSummary() {
   if (disconnectAll) disconnectAll.disabled = pendingAll || !(snapshot?.total_connections > 0) || capabilities.connection_disconnect === false;
 }
 
+function filterButton(value, label, content, className = '') {
+  if (!value) return escapeHtml(content || '—');
+  return `<button type="button" class="xk-mihomo-connection-value ${className}" data-mihomo-connection-filter="${escapeHtml(value)}" aria-label="Фильтровать по ${escapeHtml(label)}">${content || escapeHtml(value)}</button>`;
+}
+
+function copyButton(value, label) {
+  if (!value) return '';
+  return `<button type="button" class="xk-mihomo-connection-copy btn-secondary btn-icon" data-mihomo-connection-copy="${escapeHtml(value)}" aria-label="Копировать ${escapeHtml(label)}" title="Копировать ${escapeHtml(label)}">${iconHtml('duplicate')}</button>`;
+}
+
 function rowMarkup(row) {
   const origin = source(row);
   const metadata = row?.metadata || {};
@@ -165,13 +206,15 @@ function rowMarkup(row) {
   const traffic = `${formatBytes(row?.download || 0)} ↓ · ${formatBytes(row?.upload || 0)} ↑`;
   const route = routeText(row);
   const rule = [row?.rule, row?.rule_payload].filter(Boolean).join(' · ') || 'Правило —';
-  return `<tr data-connection-id="${escapeHtml(row.id)}" tabindex="0" aria-label="Открыть детали соединения ${escapeHtml(destination(row))}">
-    <td data-label="Источник"><strong>${escapeHtml(origin.address)}${deviceNameMarkup(origin.name, metadata.source_ip)}</strong><small>${escapeHtml(network)}</small></td>
-    <td data-label="Назначение"><strong>${escapeHtml(destination(row))}</strong><small>${escapeHtml(metadata.destination_ip || '')}</small></td>
-    <td data-label="Маршрут"><strong>${escapeHtml(route)}</strong><small>${escapeHtml(rule)}</small></td>
+  const sourceFilter = origin.name || metadata.source_ip;
+  const closed = connectionView === 'closed';
+  return `<tr data-connection-id="${escapeHtml(row.id)}" data-connection-state="${closed ? 'closed' : 'active'}" tabindex="0" aria-label="Открыть детали соединения ${escapeHtml(destination(row))}">
+    <td data-label="Источник"><strong>${filterButton(sourceFilter, 'источнику', `${escapeHtml(origin.address)}${deviceNameMarkup(origin.name, metadata.source_ip)}`)}</strong><small>${filterButton(metadata.network, 'протоколу', escapeHtml(network))}</small></td>
+    <td data-label="Назначение"><strong>${filterButton(destinationHost(row), 'назначению', escapeHtml(destination(row)))}</strong><small>${escapeHtml(metadata.destination_ip || '')}</small></td>
+    <td data-label="Маршрут"><strong>${filterButton((row?.chains || [])[0] || route, 'маршруту', escapeHtml(route))}</strong><small>${filterButton(row?.rule_payload || row?.rule, 'правилу', escapeHtml(rule))}</small></td>
     <td data-label="Трафик"><strong>${escapeHtml(traffic)}</strong></td>
     <td data-label="Возраст"><strong>${escapeHtml(formatAge(row))}</strong></td>
-    <td data-label="Действие"><button type="button" class="btn-secondary btn-icon xk-mihomo-connection-close" data-mihomo-connection-close="${escapeHtml(row.id)}" aria-label="Завершить соединение" title="Завершить соединение" ${pendingId ? 'disabled' : ''}>${pendingId === row.id ? iconHtml('loading') : iconHtml('close')}</button></td>
+    <td data-label="Действие">${closed ? '<span class="xk-mihomo-closed-mark">Закрыто</span>' : `<button type="button" class="btn-secondary btn-icon xk-mihomo-connection-close" data-mihomo-connection-close="${escapeHtml(row.id)}" aria-label="Завершить соединение" title="Завершить соединение" ${pendingId ? 'disabled' : ''}>${pendingId === row.id ? iconHtml('loading') : iconHtml('close')}</button>`}</td>
   </tr>`;
 }
 
@@ -182,10 +225,29 @@ function renderRows() {
   const visibleRows = rows();
   body.innerHTML = visibleRows.map(rowMarkup).join('');
   empty.hidden = visibleRows.length > 0;
-  if (!visibleRows.length) empty.textContent = snapshot?.total_connections > 0
+  if (!visibleRows.length) empty.textContent = filterText.trim()
     ? 'Соединения по текущему фильтру не найдены.'
-    : 'Активных соединений нет.';
-  if (snapshot?.truncated) setNotice(`Показаны первые ${snapshot.connections.length} соединений из ${snapshot.total_connections}.`, 'warning');
+    : (connectionView === 'closed' ? 'Недавно закрытых соединений нет.' : 'Активных соединений нет.');
+  if (connectionView === 'active' && snapshot?.truncated) setNotice(`Показаны первые ${snapshot.connections.length} соединений из ${snapshot.total_connections}.`, 'warning');
+  root?.querySelectorAll('[data-mihomo-connection-sort]').forEach((button) => {
+    const activeSort = button.dataset.mihomoConnectionSort === sortMode;
+    button.classList.toggle('is-active', activeSort);
+    button.setAttribute('aria-sort', activeSort ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none');
+    const indicator = button.querySelector('span');
+    if (indicator) indicator.textContent = activeSort ? (sortDirection === 'asc' ? '↑' : '↓') : '↕';
+  });
+}
+
+function renderViewTabs() {
+  root?.querySelectorAll('[data-mihomo-connections-view]').forEach((button) => {
+    const selected = button.dataset.mihomoConnectionsView === connectionView;
+    button.classList.toggle('is-active', selected);
+    button.setAttribute('aria-selected', selected ? 'true' : 'false');
+  });
+  const clear = byId('mihomo-clash-closed-clear');
+  if (clear) clear.hidden = connectionView !== 'closed' || !closedConnections.size;
+  const disconnectAllButton = byId('mihomo-clash-disconnect-all');
+  if (disconnectAllButton) disconnectAllButton.hidden = connectionView === 'closed';
 }
 
 function renderInspector() {
@@ -193,26 +255,76 @@ function renderInspector() {
   const details = byId('mihomo-clash-connection-inspector-details');
   if (!inspector || !details) return;
   const ruleLink = byId('mihomo-clash-connection-rule-link');
-  const row = (snapshot?.connections || []).find((item) => item.id === selectedId);
+  const row = selectedRow();
   inspector.hidden = !row;
   if (ruleLink) ruleLink.hidden = !row?.rule;
+  const copyAll = byId('mihomo-clash-connection-copy');
+  if (copyAll) copyAll.hidden = !row;
   if (!row) { details.innerHTML = ''; return; }
   const metadata = row.metadata || {};
   const fields = [
-    ['Устройство', source(row).name], ['IP источника', metadata.source_ip], ['Назначение', destination(row)],
-    ['IP назначения', metadata.destination_ip], ['Сеть', metadata.network], ['Тип', metadata.type],
-    ['Inbound', metadata.inbound_name], ['Процесс', metadata.process], ['Правило', row.rule],
-    ['Payload правила', row.rule_payload], ['Цепочка', routeText(row)],
-    ['Provider chain', (row.provider_chains || []).join(' → ')], ['Начало', row.start],
-  ].filter(([, value]) => value);
-  details.innerHTML = fields.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('');
+    ['Состояние', closedConnections.has(row.id) ? 'Недавно закрыто' : 'Активно'],
+    ['Устройство', source(row).name, source(row).name],
+    ['IP источника', metadata.source_ip, metadata.source_ip],
+    ['Порт источника', metadata.source_port],
+    ['Назначение', destination(row), destinationHost(row)],
+    ['IP назначения', metadata.destination_ip, metadata.destination_ip],
+    ['Порт назначения', metadata.destination_port],
+    ['Удалённый адрес', metadata.remote_destination, metadata.remote_destination],
+    ['Сеть', metadata.network, metadata.network], ['Тип', metadata.type],
+    ['DNS режим', metadata.dns_mode],
+    ['Inbound', metadata.inbound_name],
+    ['Inbound адрес', [metadata.inbound_ip, metadata.inbound_port].filter(Boolean).join(':')],
+    ['Inbound user', metadata.inbound_user],
+    ['Процесс', metadata.process], ['Путь процесса', metadata.process_path], ['UID', metadata.uid],
+    ['Правило', row.rule, row.rule], ['Payload правила', row.rule_payload, row.rule_payload],
+    ['Цепочка', routeText(row), (row.chains || [])[0] || routeText(row)],
+    ['Provider chain', (row.provider_chains || []).join(' → ')],
+    ['Получено', formatBytes(row.download || 0)], ['Отдано', formatBytes(row.upload || 0)],
+    ['Начало', row.start], ['Закрыто', row.closed_at],
+  ].filter(([, value]) => value !== null && value !== undefined && value !== '');
+  details.innerHTML = fields.map(([label, value, filterValue]) => `<div><dt>${escapeHtml(label)}</dt><dd><span>${filterValue ? filterButton(filterValue, label, escapeHtml(value)) : escapeHtml(value)}</span>${copyButton(value, label)}</dd></div>`).join('');
 }
 
-function render() { renderSummary(); renderRows(); renderInspector(); }
+function render() { renderSummary(); renderViewTabs(); renderRows(); renderInspector(); }
+
+function rememberClosedConnections(nextConnections, closedAt = Date.now(), authoritative = true) {
+  const previous = Array.isArray(snapshot?.connections) ? snapshot.connections : [];
+  const nextIds = new Set(nextConnections.map((row) => row.id));
+  if (authoritative) {
+    for (const row of previous) {
+      if (!nextIds.has(row.id) && row?.id) {
+        closedConnections.delete(row.id);
+        closedConnections.set(row.id, { ...row, closed_at: new Date(closedAt).toISOString() });
+      }
+    }
+  }
+  for (const row of nextConnections) closedConnections.delete(row.id);
+  while (closedConnections.size > MAX_CLOSED_CONNECTIONS) {
+    closedConnections.delete(closedConnections.keys().next().value);
+  }
+}
+
+export function reconcileMihomoClosedConnectionsForTest(previousRows, nextRows, options = {}) {
+  const priorSnapshot = snapshot;
+  const priorClosed = closedConnections;
+  try {
+    snapshot = { connections: Array.isArray(previousRows) ? previousRows : [] };
+    closedConnections = new Map();
+    rememberClosedConnections(Array.isArray(nextRows) ? nextRows : [], options.closedAt || 0, options.authoritative !== false);
+    return Array.from(closedConnections.values());
+  } finally {
+    snapshot = priorSnapshot;
+    closedConnections = priorClosed;
+  }
+}
 
 function applySnapshot(next, receivedAt = Date.now()) {
   if (!next || Number(next.schema_version) !== 1) return false;
   updateRates(next, receivedAt);
+  // A missing ID in a truncated snapshot is not proof that the connection
+  // closed; it may simply have moved outside the bounded first page.
+  rememberClosedConnections(Array.isArray(next.connections) ? next.connections : [], receivedAt, next.truncated !== true);
   snapshot = next;
   render();
   return true;
@@ -349,22 +461,97 @@ async function disconnectAll() {
   } finally { pendingAll = false; renderSummary(); }
 }
 
+async function copyText(value, label = 'Значение') {
+  const text = String(value || '');
+  if (!text) return false;
+  try {
+    await navigator.clipboard.writeText(text);
+    setNotice(`${label} скопировано.`, 'positive');
+    return true;
+  } catch (error) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand('copy');
+    textarea.remove();
+    setNotice(copied ? `${label} скопировано.` : 'Не удалось скопировать значение.', copied ? 'positive' : 'danger');
+    return copied;
+  }
+}
+
+function inspectorCopyText(row) {
+  if (!row) return '';
+  const metadata = row.metadata || {};
+  return [
+    `Состояние: ${closedConnections.has(row.id) ? 'недавно закрыто' : 'активно'}`,
+    source(row).name ? `Устройство: ${source(row).name}` : '',
+    `Источник: ${source(row).address}`,
+    `Назначение: ${destination(row)}`,
+    metadata.destination_ip ? `IP назначения: ${metadata.destination_ip}` : '',
+    metadata.remote_destination ? `Удалённый адрес: ${metadata.remote_destination}` : '',
+    metadata.network ? `Сеть: ${metadata.network}` : '',
+    metadata.dns_mode ? `DNS режим: ${metadata.dns_mode}` : '',
+    metadata.inbound_name ? `Inbound: ${metadata.inbound_name}` : '',
+    metadata.process || metadata.process_path ? `Процесс: ${metadata.process || metadata.process_path}` : '',
+    row.rule ? `Правило: ${row.rule}${row.rule_payload ? ` · ${row.rule_payload}` : ''}` : '',
+    `Цепочка: ${routeText(row)}`,
+    `Трафик: ↓ ${formatBytes(row.download || 0)} · ↑ ${formatBytes(row.upload || 0)}`,
+    row.start ? `Начало: ${row.start}` : '',
+    row.closed_at ? `Закрыто: ${row.closed_at}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+function setQuickFilter(value) {
+  filterText = String(value || '');
+  const input = byId('mihomo-clash-connections-filter');
+  if (input) { input.value = filterText; input.focus(); }
+  renderRows();
+}
+
+function switchConnectionView(nextView) {
+  connectionView = nextView === 'closed' ? 'closed' : 'active';
+  if (selectedId && !selectedRow()) selectedId = '';
+  render();
+}
+
 function bind() {
   if (!root || root.dataset.bound === '1') return;
   root.dataset.bound = '1';
   byId('mihomo-clash-connections-filter')?.addEventListener('input', (event) => { filterText = event.target.value || ''; renderRows(); });
   byId('mihomo-clash-connections-network')?.addEventListener('change', (event) => { networkFilter = event.target.value || 'all'; renderRows(); });
-  byId('mihomo-clash-connections-sort')?.addEventListener('change', (event) => { sortMode = event.target.value || 'traffic'; renderRows(); });
   byId('mihomo-clash-connections-refresh')?.addEventListener('click', () => {
     if (active) activateMihomoClashConnections(capabilities);
   });
   byId('mihomo-clash-disconnect-all')?.addEventListener('click', () => void disconnectAll());
+  byId('mihomo-clash-closed-clear')?.addEventListener('click', () => {
+    closedConnections.clear(); selectedId = ''; render();
+    setNotice('История недавно закрытых соединений очищена.', 'positive');
+  });
   root.addEventListener('click', (event) => {
+    const view = event.target.closest?.('[data-mihomo-connections-view]');
+    if (view) { switchConnectionView(view.dataset.mihomoConnectionsView); return; }
+    const sort = event.target.closest?.('[data-mihomo-connection-sort]');
+    if (sort) {
+      const nextMode = sort.dataset.mihomoConnectionSort || 'traffic';
+      if (sortMode === nextMode) sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      else { sortMode = nextMode; sortDirection = nextMode === 'source' || nextMode === 'destination' || nextMode === 'route' ? 'asc' : 'desc'; }
+      renderRows(); return;
+    }
+    const filter = event.target.closest?.('[data-mihomo-connection-filter]');
+    if (filter) { event.stopPropagation(); setQuickFilter(filter.dataset.mihomoConnectionFilter); return; }
+    const copy = event.target.closest?.('[data-mihomo-connection-copy]');
+    if (copy) { event.stopPropagation(); void copyText(copy.dataset.mihomoConnectionCopy, 'Значение'); return; }
+    if (event.target.closest?.('[data-mihomo-connection-copy-all]')) {
+      event.stopPropagation(); void copyText(inspectorCopyText(selectedRow()), 'Детали соединения'); return;
+    }
     const close = event.target.closest?.('[data-mihomo-connection-close]');
     if (close) { event.stopPropagation(); void disconnectOne(close.dataset.mihomoConnectionClose); return; }
     if (event.target.closest?.('[data-mihomo-connection-inspector-close]')) { selectedId = ''; renderInspector(); return; }
     if (event.target.closest?.('[data-mihomo-connection-rule-link]')) {
-      const selected = (snapshot?.connections || []).find((item) => item.id === selectedId);
+      const selected = selectedRow();
       if (selected) root.dispatchEvent(new CustomEvent('xkeen:mihomo-clash-open-rule', {
         bubbles: true, detail: { rule: selected.rule, payload: selected.rule_payload },
       }));

@@ -12,7 +12,15 @@
         "sourcePort": "51000",
         "destinationIP": "198.51.100.20",
         "destinationPort": "443",
-        "host": "example.invalid"
+        "host": "example.invalid",
+        "remoteDestination": "198.51.100.20:443",
+        "dnsMode": "normal-redir",
+        "inboundIP": "192.0.2.254",
+        "inboundPort": "7890",
+        "inboundName": "mixed-in",
+        "process": "browser",
+        "processPath": "/usr/bin/browser",
+        "uid": 1000
       },
       "upload": 256,
       "download": 4096,

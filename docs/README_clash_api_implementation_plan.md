@@ -3,6 +3,8 @@
 Статус на **10 августа 2026 года**: **PR 1–3, PR 6–7, локально доступная часть PR 8, PR 9 и рекомендуемый PR 10 закрыты; PR 4–5 функционально собраны и работают на aarch64-панели, но после acceptance-аудита переведены в статус «частично закрыт / требуется доработка»**. Без роутера PR 8 усилен stateful fake Mihomo, нагрузочными/error/recovery и responsive/accessibility gates; PR 9 закрыт локальными REST/WS/fake/browser контрактами. Hardware acceptance aarch64/mipsle, WS/no-gevent и реальные CPU/RAM/network/mutation проверки честно отложены.
 Дата последнего аудита: **10 августа 2026 года**.
 
+Post-MVP **PR 11 — Connections UX+** реализован локально 10 августа 2026 года: добавлены ограниченная памятью браузера история недавно закрытых соединений, расширенный allowlisted inspector, быстрые фильтры по значениям, копирование и сортировка по заголовкам. История не сохраняется на диск и ограничена 300 строками; router acceptance остаётся в общем hardware gate.
+
 Визуальный corrective gate перед следующим функциональным этапом: **реализован в исходниках 10 августа 2026 года, router acceptance ожидает поставки новой сборки**. Runtime shell уплотнён без повторных `Operator runtime`/`Mihomo`, постоянные искусственные `min-height` удалены, группы переведены на keyboard-accessible disclosure и по умолчанию все свёрнуты; добавлены массовое сворачивание/раскрытие и адаптивная 3/2/1-колоночная summary-сетка. Полный перечень причин и критериев — в разделе «Корректирующий визуальный проход Clash/Mihomo» документа [`panel-operator-redesign-completion-plan.md`](panel-operator-redesign-completion-plan.md).
 
 ### Сводка acceptance-аудита 10 августа 2026 года
@@ -1023,6 +1025,7 @@ Post-PR 10 навигационная доработка от 10 августа 
 8. **PR 8 — performance, responsive, accessibility, router acceptance** — локальная часть закрыта: stateful fake Mihomo, load/error/recovery, responsive/a11y/lifecycle gate и CI workflow; hardware acceptance остаётся отложенным до доступа к роутеру;
 9. **PR 9 — P1 rules/providers/logs** — закрыт локально; router acceptance остаётся отложенным hardware gate;
 10. **PR 10 — safe templates, автоматический setup/migration UX, schema hover и финальная документация** — закрыт локально; новый и обновившийся пользователь получает помощник при отсутствующем controller, а новая router-сборка и hardware acceptance остаются отложенным gate Этапа 8.
+11. **PR 11 — Connections UX+** — закрыт локально: недавно закрытые соединения (до 300 строк в памяти браузера), расширенный allowlisted inspector, фильтр по клику, копирование host/IP/цепочки и сортировка по заголовкам; router acceptance остаётся отложенным hardware gate Этапа 8.
 
 Не объединять generic relay, UI, template migration и destructive actions в один большой PR.
 

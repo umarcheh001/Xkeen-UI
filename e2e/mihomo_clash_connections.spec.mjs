@@ -47,7 +47,13 @@ function connectionsPayload(ids = ['connection-one', 'connection-two']) {
         sniff_host: '',
         inbound_name: 'mixed-in',
         inbound_user: '',
-        process: '',
+        inbound_ip: '192.0.2.254',
+        inbound_port: '7890',
+        remote_destination: '198.51.100.10:443',
+        dns_mode: 'normal-redir',
+        process: 'browser',
+        process_path: '/usr/bin/browser',
+        uid: 1000,
       },
       upload: 100 + index,
       download: 200 + index,
@@ -62,6 +68,7 @@ function connectionsPayload(ids = ['connection-one', 'connection-two']) {
 
 
 test('Mihomo connections use HTTP fallback, local filters, inspector and confirmed disconnect', async ({ page }) => {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   let ids = ['connection-one', 'connection-two'];
   const disconnects = [];
   await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
@@ -93,6 +100,16 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   await expect(firstSource).toContainText('192.0.2.1:5000');
   await expect(firstSource.locator('.xk-mihomo-device-name')).toHaveText('Laptop');
 
+  await firstSource.locator('.xk-mihomo-device-name').click();
+  await expect(page.locator('#mihomo-clash-connections-filter')).toHaveValue('Laptop');
+  await page.locator('#mihomo-clash-connections-filter').fill('');
+
+  const destinationSort = page.locator('[data-mihomo-connection-sort="destination"]');
+  await destinationSort.click();
+  await expect(destinationSort).toHaveAttribute('aria-sort', 'ascending');
+  await destinationSort.click();
+  await expect(destinationSort).toHaveAttribute('aria-sort', 'descending');
+
   const closeButton = page.locator('[data-mihomo-connection-close="connection-one"]');
   await expect(closeButton).toHaveAttribute('data-tooltip', 'Завершить соединение');
   const closeColorBeforeHover = await closeButton.evaluate((element) => getComputedStyle(element).color);
@@ -110,6 +127,10 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   await page.locator('[data-connection-id="connection-one"]').click();
   await expect(page.locator('#mihomo-clash-connection-inspector')).toBeVisible();
   await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('DomainSuffix');
+  await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('normal-redir');
+  await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('/usr/bin/browser');
+  await page.locator('#mihomo-clash-connection-copy').click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('Источник: 192.0.2.1:5000');
 
   await page.locator('[data-mihomo-connection-close="connection-one"]').click();
   await expect(page.locator('#confirm-modal')).not.toHaveClass(/hidden/);
@@ -117,6 +138,18 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   await expect.poll(() => disconnects).toEqual(['connection-one']);
   // The row remains until a subsequent authoritative snapshot removes it.
   await expect(page.locator('[data-connection-id="connection-one"]')).toHaveCount(1);
+
+  ids = ['connection-two'];
+  await page.locator('#mihomo-clash-connections-refresh').click();
+  await expect(page.locator('[data-connection-id="connection-one"]')).toHaveCount(0);
+  await page.locator('#mihomo-clash-connections-closed-tab').click();
+  await expect(page.locator('#mihomo-clash-closed-count')).toHaveText('1');
+  await expect(page.locator('[data-connection-id="connection-one"]')).toHaveAttribute('data-connection-state', 'closed');
+  await expect(page.locator('[data-connection-id="connection-one"]')).toContainText('Закрыто');
+  await page.locator('[data-connection-id="connection-one"]').click();
+  await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('Недавно закрыто');
+  await page.locator('#mihomo-clash-closed-clear').click();
+  await expect(page.locator('#mihomo-clash-closed-count')).toHaveText('0');
 
   await page.locator('#mihomo-clash-tab-config').click();
   await expect(page.locator('#mihomo-clash-runtime')).toBeHidden();
@@ -203,4 +236,21 @@ test('Mihomo connections keeps one WebSocket and closes it outside the subview',
     count: window.__clashSockets.length,
     active: window.__clashSockets.filter((socket) => !socket.closed).length,
   }))).toEqual({ count: countBeforeReentry + 1, active: 1 });
+});
+
+
+test('Mihomo closed history ignores disappearance from a truncated snapshot and stays bounded', async ({ page }) => {
+  await page.goto('/');
+  const result = await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/connections.js');
+    const previous = Array.from({ length: 305 }, (_, index) => ({ id: `closed-${index}`, metadata: {} }));
+    return {
+      truncated: mod.reconcileMihomoClosedConnectionsForTest(previous.slice(0, 2), [], { authoritative: false }),
+      bounded: mod.reconcileMihomoClosedConnectionsForTest(previous, [], { authoritative: true, closedAt: 1000 }),
+    };
+  });
+  expect(result.truncated).toEqual([]);
+  expect(result.bounded).toHaveLength(300);
+  expect(result.bounded[0].id).toBe('closed-5');
+  expect(result.bounded.at(-1).closed_at).toBe('1970-01-01T00:00:01.000Z');
 });
