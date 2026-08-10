@@ -1,4 +1,4 @@
-"""Dedicated same-origin WebSocket facade for Mihomo connection snapshots."""
+"""Dedicated same-origin WebSocket facades for Mihomo runtime streams."""
 
 from __future__ import annotations
 
@@ -9,7 +9,10 @@ from typing import Any, Callable
 from urllib.parse import parse_qs, urlsplit
 
 from services.mihomo_clash_client import MihomoClashClient, MihomoClashClientError
-from services.mihomo_clash_dto import build_mihomo_clash_connections_dto
+from services.mihomo_clash_dto import (
+    build_mihomo_clash_connections_dto,
+    build_mihomo_clash_log_entry_dto,
+)
 from services.mihomo_clash_devices import get_mihomo_clash_device_map
 from services.mihomo_clash_target import discover_mihomo_clash_target
 
@@ -76,6 +79,18 @@ def _envelope(
     }
     if error:
         message["error"] = error
+    return message
+
+
+def _log_envelope(
+    *,
+    sequence: int,
+    state: str,
+    payload: dict[str, Any] | None = None,
+    error: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    message = _envelope(sequence=sequence, state=state, payload=payload, error=error)
+    message["type"] = "mihomo-clash-logs"
     return message
 
 
@@ -188,8 +203,95 @@ def handle_mihomo_clash_connections_request(
     return []
 
 
+def handle_mihomo_clash_logs_request(
+    environ,
+    start_response,
+    *,
+    fallback_app,
+    validate_ws_token: Callable[[str, str], bool],
+    ws_debug: Callable[..., Any],
+    mihomo_config_file: str,
+    mihomo_root: str,
+    discovery_factory=discover_mihomo_clash_target,
+    client_factory=MihomoClashClient,
+):
+    """Relay only normalized structured log entries while the drawer is open."""
+
+    if environ.get("wsgi.websocket") is None:
+        return fallback_app(environ, start_response)
+
+    ws = environ["wsgi.websocket"]
+    if not is_same_origin_websocket(environ):
+        _send(ws, _log_envelope(sequence=0, state="error", error={"code": "origin_rejected"}))
+        _close_ws(ws)
+        return []
+
+    params = parse_qs(str(environ.get("QUERY_STRING") or ""))
+    token = str((params.get("token") or [""])[0] or "").strip()
+    if not validate_ws_token(token, scope="mihomo-clash-logs"):
+        _send(ws, _log_envelope(sequence=0, state="error", error={"code": "unauthorized"}))
+        _close_ws(ws)
+        return []
+
+    client_key = str(environ.get("REMOTE_ADDR") or "unknown")
+    if not _acquire_stream(client_key):
+        _send(ws, _log_envelope(sequence=0, state="error", error={"code": "stream_busy"}))
+        _close_ws(ws)
+        return []
+
+    sequence = 0
+    ws_debug("mihomo clash logs stream opened", client=environ.get("REMOTE_ADDR", "unknown"))
+    try:
+        discovery = discovery_factory(mihomo_config_file, mihomo_root)
+        if discovery.target is None:
+            _send(
+                ws,
+                _log_envelope(
+                    sequence=0,
+                    state="error",
+                    error={"code": "target_unavailable", "retryable": False},
+                ),
+            )
+            return []
+        client = client_factory(discovery.target)
+        for raw_frame in client.iter_json_frames("logs_stream"):
+            sequence += 1
+            entry = build_mihomo_clash_log_entry_dto(
+                raw_frame,
+                sequence=sequence,
+                secret=discovery.target.secret,
+            )
+            message = _log_envelope(sequence=sequence, state="live", payload=entry)
+            if not _send(ws, message):
+                break
+    except MihomoClashClientError as exc:
+        _send(
+            ws,
+            _log_envelope(
+                sequence=sequence,
+                state="error",
+                error={"code": exc.code, "retryable": exc.retryable},
+            ),
+        )
+    except Exception:
+        _send(
+            ws,
+            _log_envelope(
+                sequence=sequence,
+                state="error",
+                error={"code": "stream_failed", "retryable": True},
+            ),
+        )
+    finally:
+        _close_ws(ws)
+        _release_stream(client_key)
+        ws_debug("mihomo clash logs stream closed", frames=sequence)
+    return []
+
+
 __all__ = [
     "MAX_ACTIVE_STREAMS",
     "handle_mihomo_clash_connections_request",
+    "handle_mihomo_clash_logs_request",
     "is_same_origin_websocket",
 ]

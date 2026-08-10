@@ -4,6 +4,8 @@ const STATUS_ENDPOINT = '/api/mihomo/clash/status';
 const GROUPS_ENDPOINT = '/api/mihomo/clash/proxy-groups';
 const DELAY_ENDPOINT = '/api/mihomo/clash/delay';
 const CONNECTIONS_ENDPOINT = '/api/mihomo/clash/connections';
+const RULES_ENDPOINT = '/api/mihomo/clash/rules';
+const PROVIDERS_ENDPOINT = '/api/mihomo/clash/providers';
 const WS_TOKEN_ENDPOINT = '/api/ws-token';
 
 function httpApi() {
@@ -94,6 +96,33 @@ export function fetchMihomoClashConnections(options = {}) {
   });
 }
 
+export function fetchMihomoClashRules(options = {}) {
+  return requestJSON(RULES_ENDPOINT, {
+    method: 'GET', cache: 'no-store', credentials: 'same-origin',
+    timeoutMs: 12000, retry: 0, signal: options.signal,
+  });
+}
+
+export function fetchMihomoClashProviders(options = {}) {
+  return requestJSON(PROVIDERS_ENDPOINT, {
+    method: 'GET', cache: 'no-store', credentials: 'same-origin',
+    timeoutMs: 20000, retry: 0, signal: options.signal,
+  });
+}
+
+export function updateMihomoClashProvider(kind, name, options = {}) {
+  const providerKind = String(kind || '');
+  return requestJSON(`${PROVIDERS_ENDPOINT}/${encodeURIComponent(providerKind)}/${encodeURIComponent(String(name || ''))}/update`, {
+    method: 'POST', credentials: 'same-origin', timeoutMs: 25000, retry: 0, signal: options.signal,
+  });
+}
+
+export function healthcheckMihomoClashProvider(name, options = {}) {
+  return requestJSON(`${PROVIDERS_ENDPOINT}/proxy/${encodeURIComponent(String(name || ''))}/healthcheck`, {
+    method: 'POST', credentials: 'same-origin', timeoutMs: 25000, retry: 0, signal: options.signal,
+  });
+}
+
 export function disconnectMihomoClashConnection(id, options = {}) {
   return requestJSON(`${CONNECTIONS_ENDPOINT}/${encodeURIComponent(String(id || ''))}`, {
     method: 'DELETE',
@@ -117,10 +146,11 @@ export function disconnectAllMihomoClashConnections(count, options = {}) {
 }
 
 export async function requestMihomoClashWsToken(options = {}) {
+  const scope = String(options.scope || 'mihomo-clash');
   const payload = await requestJSON(WS_TOKEN_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ scope: 'mihomo-clash', ttl: 60 }),
+    body: JSON.stringify({ scope, ttl: 60 }),
     credentials: 'same-origin',
     timeoutMs: 5000,
     retry: 0,
@@ -136,12 +166,23 @@ export function mihomoClashConnectionsWsUrl(token) {
   return url.toString();
 }
 
+export function mihomoClashLogsWsUrl(token) {
+  const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = new URL('/ws/mihomo-clash/logs', `${scheme}//${window.location.host}`);
+  url.searchParams.set('token', String(token || ''));
+  return url.toString();
+}
+
 export const mihomoClashClientApi = Object.freeze({
   fetchStatus: fetchMihomoClashStatus,
   fetchGroups: fetchMihomoClashGroups,
   selectProxy: selectMihomoClashProxy,
   testDelay: testMihomoClashDelay,
   fetchConnections: fetchMihomoClashConnections,
+  fetchRules: fetchMihomoClashRules,
+  fetchProviders: fetchMihomoClashProviders,
+  updateProvider: updateMihomoClashProvider,
+  healthcheckProvider: healthcheckMihomoClashProvider,
   disconnectConnection: disconnectMihomoClashConnection,
   disconnectAllConnections: disconnectAllMihomoClashConnections,
   requestWsToken: requestMihomoClashWsToken,

@@ -10,6 +10,9 @@ import pytest
 from flask import Flask
 
 from routes.mihomo_clash import create_mihomo_clash_blueprint
+from services.mihomo_clash_client import MihomoClashClient
+from services.mihomo_clash_dto import build_mihomo_clash_log_entry_dto
+from services.mihomo_clash_target import discover_mihomo_clash_target
 from tests.support.fake_mihomo import FakeMihomo, FakeMihomoState
 
 
@@ -59,6 +62,22 @@ def test_stateful_fake_mihomo_exercises_real_discovery_client_routes_and_mutatio
 
         status = client.get("/api/mihomo/clash/status")
         groups = client.get("/api/mihomo/clash/proxy-groups")
+        rules = client.get("/api/mihomo/clash/rules")
+        providers = client.get("/api/mihomo/clash/providers")
+        updated_proxy = client.post("/api/mihomo/clash/providers/proxy/fixture-proxy/update")
+        updated_rules = client.post("/api/mihomo/clash/providers/rule/fixture-rules/update")
+        healthcheck = client.post("/api/mihomo/clash/providers/proxy/fixture-proxy/healthcheck")
+        discovery = discover_mihomo_clash_target(str(tmp_path / "config.yaml"), str(tmp_path))
+        assert discovery.target is not None
+        log_frames = list(MihomoClashClient(discovery.target).iter_json_frames("logs_stream"))
+        normalized_logs = [
+            build_mihomo_clash_log_entry_dto(
+                frame,
+                sequence=index,
+                secret=discovery.target.secret,
+            )
+            for index, frame in enumerate(log_frames, 1)
+        ]
         selected = client.put(
             "/api/mihomo/clash/proxy-groups/AUTO",
             json={"name": "node-b"},
@@ -81,6 +100,16 @@ def test_stateful_fake_mihomo_exercises_real_discovery_client_routes_and_mutatio
     assert status.status_code == 200
     assert status.get_json()["core"]["version"] == "Mihomo Meta fake-pr8"
     assert groups.get_json()["groups"][0]["now"] == "node-a"
+    assert rules.get_json()["rules"][0]["target"] == "AUTO"
+    assert [item["kind"] for item in providers.get_json()["providers"]] == ["proxy", "rule"]
+    assert updated_proxy.status_code == 200
+    assert updated_rules.status_code == 200
+    assert healthcheck.status_code == 200
+    assert state.provider_updates == [("proxy", "fixture-proxy"), ("rule", "fixture-rules")]
+    assert state.provider_healthchecks == ["fixture-proxy"]
+    assert len(normalized_logs) == 2
+    assert normalized_logs[1]["message"] == "Bearer [redacted]"
+    assert normalized_logs[1]["fields"] == {"host": "fixture.test"}
     assert selected.get_json()["reconciled"] is True
     assert selected.get_json()["group"]["now"] == "node-b"
     assert delay.get_json()["results"] == [{"name": "node-b", "delay_ms": 42}]
@@ -101,6 +130,8 @@ def test_stateful_fake_mihomo_exercises_real_discovery_client_routes_and_mutatio
         [
             status.get_json(),
             groups.get_json(),
+            rules.get_json(),
+            providers.get_json(),
             selected.get_json(),
             delay.get_json(),
             before.get_json(),

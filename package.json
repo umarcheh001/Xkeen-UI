@@ -22,7 +22,7 @@
     "e2e:headed": "playwright test --headed",
     "e2e:smoke": "playwright test e2e/smoke.spec.mjs",
     "e2e:smoke:headed": "playwright test e2e/smoke.spec.mjs --headed",
-    "e2e:mihomo-clash": "playwright test e2e/mihomo_clash_groups.spec.mjs e2e/mihomo_clash_connections.spec.mjs e2e/mihomo_clash_pr8_acceptance.spec.mjs"
+    "e2e:mihomo-clash": "playwright test e2e/mihomo_clash_groups.spec.mjs e2e/mihomo_clash_connections.spec.mjs e2e/mihomo_clash_pr8_acceptance.spec.mjs e2e/mihomo_clash_rules.spec.mjs"
   },
   "devDependencies": {
     "@codemirror/autocomplete": "^6.20.1",

@@ -361,3 +361,41 @@ def test_unix_socket_client_uses_same_http_contract():
             server.server_close()
             thread.join(timeout=2)
     assert response.payload == {"version": "unix"}
+
+
+def test_provider_operations_use_allowlisted_encoded_paths():
+    endpoints = {
+        "provider_proxy_update": MihomoClashEndpoint("PUT", "/providers/proxies/{name}", 2, 1024),
+        "provider_rule_update": MihomoClashEndpoint("PUT", "/providers/rules/{name}", 2, 1024),
+        "provider_proxy_healthcheck": MihomoClashEndpoint("GET", "/providers/proxies/{name}/healthcheck", 2, 1024),
+    }
+    responses = {
+        "PUT /providers/proxies/proxy%2Fone": (204, "application/json", b""),
+        "PUT /providers/rules/rules%20one": (204, "application/json", b""),
+        "/providers/proxies/proxy%2Fone/healthcheck": (204, "application/json", b""),
+    }
+    with tcp_server(responses) as (port, handler):
+        client = client_for_port(port, endpoints)
+        client.update_provider("proxy", "proxy/one")
+        client.update_provider("rule", "rules one")
+        client.healthcheck_provider("proxy/one")
+
+    assert [item["path"] for item in handler.seen] == [
+        "/providers/proxies/proxy%2Fone",
+        "/providers/rules/rules%20one",
+        "/providers/proxies/proxy%2Fone/healthcheck",
+    ]
+
+
+def test_structured_logs_stream_uses_static_debug_format_query():
+    endpoints = {
+        "logs_stream": MihomoClashEndpoint(
+            "GET", "/logs?level=debug&format=structured", 2, 1024, stream=True
+        )
+    }
+    body = b'{"time":"fixture","level":"info","message":"one"}\n'
+    with tcp_server({"/logs?level=debug&format=structured": (200, "application/x-ndjson", body)}) as (port, handler):
+        frames = list(client_for_port(port, endpoints).iter_json_frames("logs_stream"))
+
+    assert frames == [{"time": "fixture", "level": "info", "message": "one"}]
+    assert handler.seen[0]["path"] == "/logs?level=debug&format=structured"

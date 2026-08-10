@@ -13,7 +13,9 @@ from services.mihomo_clash_client import MihomoClashClient, MihomoClashClientErr
 from services.mihomo_clash_dto import (
     build_mihomo_clash_connections_dto,
     build_mihomo_clash_delay_dto,
+    build_mihomo_clash_providers_dto,
     build_mihomo_clash_proxy_groups_dto,
+    build_mihomo_clash_rules_dto,
     build_mihomo_clash_status_dto,
 )
 from services.mihomo_clash_guard import MihomoClashActionGuard, MihomoClashActionRejected
@@ -43,6 +45,12 @@ def _capabilities(
     connections_snapshot: bool | None = None,
     connections_stream: bool | None = None,
     connection_disconnect: bool | None = None,
+    rules: bool | None = None,
+    providers: bool | None = None,
+    provider_update: bool | None = None,
+    provider_healthcheck: bool | None = None,
+    logs: bool | None = None,
+    logs_stream: bool | None = None,
 ) -> dict[str, bool | None]:
     return {
         "status": status,
@@ -52,6 +60,12 @@ def _capabilities(
         "connections_snapshot": connections_snapshot,
         "connections_stream": connections_stream,
         "connection_disconnect": connection_disconnect,
+        "rules": rules,
+        "providers": providers,
+        "provider_update": provider_update,
+        "provider_healthcheck": provider_healthcheck,
+        "logs": logs,
+        "logs_stream": logs_stream,
     }
 
 
@@ -106,6 +120,12 @@ def _status_payload(
             connections_snapshot=status_capability,
             connections_stream=_ws_runtime_available() if status_capability else False,
             connection_disconnect=status_capability,
+            rules=status_capability,
+            providers=status_capability,
+            provider_update=status_capability,
+            provider_healthcheck=status_capability,
+            logs=status_capability,
+            logs_stream=_ws_runtime_available() if status_capability else False,
         ),
     )
     payload["ok"] = state == "ready"
@@ -197,7 +217,7 @@ def create_mihomo_clash_blueprint(
         safe_metadata = {
             key: value
             for key, value in metadata.items()
-            if key in {"group", "scope", "preset", "error_code"}
+            if key in {"group", "scope", "preset", "provider_kind", "error_code"}
             and isinstance(value, (str, int, bool))
         }
         try:
@@ -319,6 +339,191 @@ def create_mihomo_clash_blueprint(
             "providers": {"elapsed_ms": providers.elapsed_ms, "size_bytes": providers.size_bytes},
         }
         return jsonify(payload), 200
+
+    @bp.get("/api/mihomo/clash/rules")
+    def api_mihomo_clash_rules():
+        client, unavailable = _client_or_response()
+        if unavailable:
+            return unavailable
+        try:
+            result = client.request_json("rules")
+        except MihomoClashClientError as exc:
+            return _safe_client_error(exc)
+        except Exception:
+            return error_response(
+                "Не удалось получить правила Mihomo.",
+                500,
+                ok=False,
+                code="mihomo_clash_rules_failed",
+            )
+        payload = build_mihomo_clash_rules_dto(result.payload)
+        payload["ok"] = True
+        payload["capabilities"] = _capabilities(status=True, rules=True)
+        payload["telemetry"] = {
+            "elapsed_ms": result.elapsed_ms,
+            "size_bytes": result.size_bytes,
+        }
+        return jsonify(payload), 200
+
+    @bp.get("/api/mihomo/clash/providers")
+    def api_mihomo_clash_providers():
+        client, unavailable = _client_or_response()
+        if unavailable:
+            return unavailable
+        try:
+            proxy_result = client.request_json("providers_proxies")
+            rule_result = client.request_json("providers_rules")
+        except MihomoClashClientError as exc:
+            return _safe_client_error(exc)
+        except Exception:
+            return error_response(
+                "Не удалось получить providers Mihomo.",
+                500,
+                ok=False,
+                code="mihomo_clash_providers_failed",
+            )
+        payload = build_mihomo_clash_providers_dto(
+            proxy_result.payload,
+            rule_result.payload,
+        )
+        payload["ok"] = True
+        payload["capabilities"] = _capabilities(
+            status=True,
+            providers=True,
+            provider_update=True,
+            provider_healthcheck=True,
+        )
+        payload["telemetry"] = {
+            "proxy": {
+                "elapsed_ms": proxy_result.elapsed_ms,
+                "size_bytes": proxy_result.size_bytes,
+            },
+            "rule": {
+                "elapsed_ms": rule_result.elapsed_ms,
+                "size_bytes": rule_result.size_bytes,
+            },
+        }
+        return jsonify(payload), 200
+
+    @bp.post("/api/mihomo/clash/providers/<kind>/<path:provider_name>/update")
+    def api_mihomo_clash_provider_update(kind: str, provider_name: str):
+        provider_kind = str(kind or "").strip().lower()
+        provider = str(provider_name or "").strip()
+        if (
+            provider_kind not in {"proxy", "rule"}
+            or not provider
+            or len(provider) > MAX_ACTION_NAME_CHARS
+            or any(ord(char) < 32 for char in provider)
+        ):
+            return error_response(
+                "Некорректный provider Mihomo.",
+                400,
+                ok=False,
+                code="invalid_provider",
+            )
+        lease, rejected_response = _acquire_action("provider-update")
+        if rejected_response:
+            return rejected_response
+        client, unavailable = _client_or_response()
+        if unavailable:
+            lease.release()
+            return unavailable
+        try:
+            current_proxy = client.request_json("providers_proxies")
+            current_rule = client.request_json("providers_rules")
+            current = build_mihomo_clash_providers_dto(
+                current_proxy.payload,
+                current_rule.payload,
+            )["providers"]
+            if not any(item["kind"] == provider_kind and item["name"] == provider for item in current):
+                return error_response(
+                    "Provider больше не доступен.",
+                    409,
+                    ok=False,
+                    code="provider_not_found",
+                )
+            client.update_provider(provider_kind, provider)
+        except MihomoClashClientError as exc:
+            _audit_action(
+                "provider-update",
+                False,
+                provider_kind=provider_kind,
+                error_code=exc.code,
+            )
+            return _safe_client_error(exc)
+        except Exception:
+            _audit_action(
+                "provider-update",
+                False,
+                provider_kind=provider_kind,
+                error_code="internal_error",
+            )
+            return error_response(
+                "Не удалось обновить provider Mihomo.",
+                500,
+                ok=False,
+                code="mihomo_clash_provider_update_failed",
+            )
+        finally:
+            lease.release()
+        _audit_action("provider-update", True, provider_kind=provider_kind)
+        return jsonify(
+            {"ok": True, "schema_version": 1, "updated": True, "kind": provider_kind}
+        ), 200
+
+    @bp.post("/api/mihomo/clash/providers/proxy/<path:provider_name>/healthcheck")
+    def api_mihomo_clash_provider_healthcheck(provider_name: str):
+        provider = str(provider_name or "").strip()
+        if (
+            not provider
+            or len(provider) > MAX_ACTION_NAME_CHARS
+            or any(ord(char) < 32 for char in provider)
+        ):
+            return error_response(
+                "Некорректный proxy provider Mihomo.",
+                400,
+                ok=False,
+                code="invalid_provider",
+            )
+        lease, rejected_response = _acquire_action("provider-healthcheck")
+        if rejected_response:
+            return rejected_response
+        client, unavailable = _client_or_response()
+        if unavailable:
+            lease.release()
+            return unavailable
+        try:
+            current_proxy = client.request_json("providers_proxies")
+            current = build_mihomo_clash_providers_dto(current_proxy.payload, {})["providers"]
+            candidate = next(
+                (item for item in current if item["kind"] == "proxy" and item["name"] == provider),
+                None,
+            )
+            if not candidate or not candidate["healthcheck"]:
+                return error_response(
+                    "Healthcheck для provider недоступен.",
+                    409,
+                    ok=False,
+                    code="provider_healthcheck_not_available",
+                )
+            client.healthcheck_provider(provider)
+        except MihomoClashClientError as exc:
+            _audit_action("provider-healthcheck", False, error_code=exc.code)
+            return _safe_client_error(exc)
+        except Exception:
+            _audit_action("provider-healthcheck", False, error_code="internal_error")
+            return error_response(
+                "Не удалось запустить healthcheck provider Mihomo.",
+                500,
+                ok=False,
+                code="mihomo_clash_provider_healthcheck_failed",
+            )
+        finally:
+            lease.release()
+        _audit_action("provider-healthcheck", True)
+        return jsonify(
+            {"ok": True, "schema_version": 1, "healthcheck_started": True}
+        ), 200
 
     @bp.put("/api/mihomo/clash/proxy-groups/<path:group_name>")
     def api_mihomo_clash_proxy_select(group_name: str):

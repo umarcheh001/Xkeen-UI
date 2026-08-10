@@ -1,0 +1,7 @@
+{
+  "rules": [
+    {"index": 7, "type": "DomainSuffix", "payload": "example.invalid", "proxy": "AUTO"},
+    {"type": "RuleSet", "payload": "private", "proxy": "DIRECT", "size": 42},
+    {"index": 9, "type": "Match", "payload": "", "proxy": "AUTO", "extra": {"disabled": false, "hitCount": 3}}
+  ]
+}

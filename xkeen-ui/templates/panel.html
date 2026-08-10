@@ -958,8 +958,8 @@
       <button type="button" class="xk-mihomo-workspace-tab" id="mihomo-clash-tab-connections" data-mihomo-clash-subview="connections" role="tab" aria-selected="false" aria-controls="mihomo-clash-panel-connections">
         {{ op_icon('transfer') }}<span>Соединения</span>
       </button>
-      <button type="button" class="xk-mihomo-workspace-tab" id="mihomo-clash-tab-rules" data-mihomo-clash-subview="rules" role="tab" aria-selected="false" aria-controls="mihomo-clash-panel-rules" aria-disabled="true" title="Просмотр правил появится после стабилизации MVP">
-        {{ op_icon('list-details') }}<span>Правила</span><span class="xk-mihomo-workspace-tab-note">P1</span>
+      <button type="button" class="xk-mihomo-workspace-tab" id="mihomo-clash-tab-rules" data-mihomo-clash-subview="rules" role="tab" aria-selected="false" aria-controls="mihomo-clash-panel-rules">
+        {{ op_icon('list-details') }}<span>Правила</span>
       </button>
       <button type="button" class="xk-mihomo-workspace-tab" id="mihomo-clash-tab-config" data-mihomo-clash-subview="config" role="tab" aria-selected="false" aria-controls="mihomo-clash-panel-config">
         {{ op_icon('settings') }}<span>Конфигурация</span>
@@ -1048,9 +1048,59 @@
         <aside id="mihomo-clash-connection-inspector" class="xk-mihomo-connection-inspector" aria-labelledby="mihomo-clash-connection-inspector-title" hidden>
           <div class="xk-mihomo-connection-inspector-head">
             <h3 id="mihomo-clash-connection-inspector-title">Детали соединения</h3>
-            <button type="button" class="btn-secondary btn-icon" data-mihomo-connection-inspector-close aria-label="Закрыть детали">{{ op_icon('close') }}</button>
+            <div class="xk-mihomo-connection-inspector-actions">
+              <button type="button" id="mihomo-clash-connection-rule-link" class="btn-secondary" data-mihomo-connection-rule-link hidden>{{ op_icon('list-details') }}<span>Найти правило</span></button>
+              <button type="button" class="btn-secondary btn-icon" data-mihomo-connection-inspector-close aria-label="Закрыть детали">{{ op_icon('close') }}</button>
+            </div>
           </div>
           <dl id="mihomo-clash-connection-inspector-details"></dl>
+        </aside>
+      </div>
+    </div>
+
+    <div id="mihomo-clash-panel-rules" class="xk-mihomo-runtime-panel" data-mihomo-clash-panel="rules" role="tabpanel" aria-labelledby="mihomo-clash-tab-rules" hidden>
+      <div id="mihomo-clash-rules" class="xk-mihomo-rules" aria-busy="false">
+        <div class="xk-mihomo-rules-toolbar" role="toolbar" aria-label="Правила и providers Mihomo">
+          <label class="xk-mihomo-rules-search" for="mihomo-clash-rules-filter">
+            {{ op_icon('search') }}<input id="mihomo-clash-rules-filter" type="search" placeholder="Тип, payload или маршрут" autocomplete="off">
+          </label>
+          <span id="mihomo-clash-rules-count" class="xk-mihomo-rules-count">0 правил</span>
+          <button type="button" id="mihomo-clash-rules-refresh" class="btn-secondary btn-icon" aria-label="Обновить правила и providers">{{ op_icon('refresh') }}</button>
+          <button type="button" id="mihomo-clash-logs-open" class="btn-secondary">{{ op_icon('terminal') }}<span>Логи</span></button>
+        </div>
+        <div id="mihomo-clash-rules-notice" class="xk-mihomo-rules-notice" role="status" aria-live="polite">Правила загружаются только при открытом экране.</div>
+        <div class="xk-mihomo-rules-layout">
+          <section class="xk-mihomo-rules-section" aria-labelledby="mihomo-clash-rules-title">
+            <div class="xk-mihomo-rules-section-head"><h3 id="mihomo-clash-rules-title">Правила маршрутизации</h3><span>Read-only · порядок Mihomo</span></div>
+            <div class="xk-mihomo-rules-table-wrap">
+              <table class="xk-mihomo-rules-table"><thead><tr><th>#</th><th>Тип</th><th>Payload</th><th>Маршрут</th></tr></thead><tbody id="mihomo-clash-rules-rows"></tbody></table>
+              <div id="mihomo-clash-rules-empty" class="xk-mihomo-rules-empty">Правила загружаются.</div>
+            </div>
+          </section>
+          <section class="xk-mihomo-providers-section" aria-labelledby="mihomo-clash-providers-title">
+            <div class="xk-mihomo-rules-section-head">
+              <h3 id="mihomo-clash-providers-title">Providers</h3>
+              <span id="mihomo-clash-providers-count">0 providers</span>
+              <select id="mihomo-clash-provider-kind" aria-label="Тип provider"><option value="all">Все</option><option value="proxy">Proxy</option><option value="rule">Rules</option></select>
+            </div>
+            <div id="mihomo-clash-providers-list" class="xk-mihomo-providers-list"></div>
+            <div id="mihomo-clash-providers-empty" class="xk-mihomo-rules-empty">Providers не настроены.</div>
+          </section>
+        </div>
+        <aside id="mihomo-clash-logs-drawer" class="xk-mihomo-logs-drawer" role="dialog" aria-modal="false" aria-labelledby="mihomo-clash-logs-title" hidden>
+          <div class="xk-mihomo-logs-head">
+            <div><h3 id="mihomo-clash-logs-title">Runtime logs</h3><span id="mihomo-clash-logs-state">Ожидание</span></div>
+            <div class="xk-mihomo-logs-actions">
+              <button type="button" id="mihomo-clash-logs-pause" class="btn-secondary btn-icon" aria-label="Пауза логов">{{ op_icon('pause') }}</button>
+              <button type="button" id="mihomo-clash-logs-clear" class="btn-secondary btn-icon" aria-label="Очистить логи">{{ op_icon('clear') }}</button>
+              <button type="button" id="mihomo-clash-logs-close" class="btn-secondary btn-icon" aria-label="Закрыть логи">{{ op_icon('close') }}</button>
+            </div>
+          </div>
+          <div class="xk-mihomo-logs-filters">
+            <select id="mihomo-clash-logs-level" aria-label="Уровень логов"><option value="all">Все уровни</option><option value="debug">Debug</option><option value="info">Info</option><option value="warning">Warning</option><option value="error">Error</option></select>
+            <input id="mihomo-clash-logs-filter" type="search" aria-label="Фильтр логов" placeholder="Фильтр сообщения или поля">
+          </div>
+          <ol id="mihomo-clash-logs-list" class="xk-mihomo-logs-list" aria-live="off"></ol>
         </aside>
       </div>
     </div>

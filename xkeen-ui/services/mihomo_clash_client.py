@@ -70,6 +70,20 @@ MIHOMO_CLASH_ENDPOINTS: Mapping[str, MihomoClashEndpoint] = MappingProxyType(
         "proxies": MihomoClashEndpoint("GET", "/proxies", 5.0),
         "groups": MihomoClashEndpoint("GET", "/group", 5.0),
         "providers_proxies": MihomoClashEndpoint("GET", "/providers/proxies", 8.0),
+        "providers_rules": MihomoClashEndpoint("GET", "/providers/rules", 8.0),
+        "rules": MihomoClashEndpoint("GET", "/rules", 8.0, 4 * 1024 * 1024),
+        "provider_proxy_update": MihomoClashEndpoint(
+            "PUT", "/providers/proxies/{name}", 20.0, 64 * 1024
+        ),
+        "provider_rule_update": MihomoClashEndpoint(
+            "PUT", "/providers/rules/{name}", 20.0, 64 * 1024
+        ),
+        "provider_proxy_healthcheck": MihomoClashEndpoint(
+            "GET", "/providers/proxies/{name}/healthcheck", 20.0, 512 * 1024
+        ),
+        "logs_stream": MihomoClashEndpoint(
+            "GET", "/logs?level=debug&format=structured", 300.0, 64 * 1024, stream=True
+        ),
         "proxy_select": MihomoClashEndpoint("PUT", "/proxies/{name}", 5.0, 64 * 1024),
         "proxy_delay": MihomoClashEndpoint("GET", "/proxies/{name}/delay", 8.0, 512 * 1024),
         "group_delay": MihomoClashEndpoint("GET", "/group/{name}/delay", 8.0, 2 * 1024 * 1024),
@@ -303,6 +317,24 @@ class MihomoClashClient:
 
         spec = self._endpoint("connections_disconnect_all", stream=False)
         return self._request(spec, path=spec.path, expect_json=False)
+
+    def update_provider(self, kind: str, name: str) -> MihomoClashJSONResponse:
+        operation = {
+            "proxy": "provider_proxy_update",
+            "rule": "provider_rule_update",
+        }.get(str(kind or "").lower())
+        if operation is None:
+            raise MihomoClashClientError(
+                "operation_not_allowed",
+                "The requested Mihomo provider operation is not allowed.",
+                status=400,
+            )
+        spec = self._endpoint(operation, stream=False)
+        return self._request(spec, path=self._named_path(spec, name), expect_json=False)
+
+    def healthcheck_provider(self, name: str) -> MihomoClashJSONResponse:
+        spec = self._endpoint("provider_proxy_healthcheck", stream=False)
+        return self._request(spec, path=self._named_path(spec, name), expect_json=False)
 
     def _request(
         self,

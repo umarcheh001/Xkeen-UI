@@ -508,9 +508,14 @@ export function deactivateMihomoClashGroups() {
   render();
 }
 
+export function invalidateMihomoClashGroups() {
+  payload = null;
+}
+
 export const mihomoClashGroupsApi = Object.freeze({
   init: initMihomoClashGroups,
   activate: activateMihomoClashGroups,
   deactivate: deactivateMihomoClashGroups,
+  invalidate: invalidateMihomoClashGroups,
   refresh: refreshMihomoClashGroups,
 });

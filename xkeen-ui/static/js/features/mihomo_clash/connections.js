@@ -187,8 +187,10 @@ function renderInspector() {
   const inspector = byId('mihomo-clash-connection-inspector');
   const details = byId('mihomo-clash-connection-inspector-details');
   if (!inspector || !details) return;
+  const ruleLink = byId('mihomo-clash-connection-rule-link');
   const row = (snapshot?.connections || []).find((item) => item.id === selectedId);
   inspector.hidden = !row;
+  if (ruleLink) ruleLink.hidden = !row?.rule;
   if (!row) { details.innerHTML = ''; return; }
   const metadata = row.metadata || {};
   const fields = [
@@ -268,7 +270,10 @@ async function openSocket(runGeneration) {
   request = controller;
   setStreamState(reconnectAttempt ? 'reconnecting' : 'connecting', reconnectAttempt ? 'Переподключение' : 'Подключение');
   try {
-    const token = await requestMihomoClashWsToken({ signal: controller?.signal });
+    const token = await requestMihomoClashWsToken({
+      signal: controller?.signal,
+      scope: 'mihomo-clash',
+    });
     if (!active || runGeneration !== generation || !token) return;
     // A status refresh and a subview activation may finish their bootstrap at
     // nearly the same time. Replace the older socket before assigning the new
@@ -353,6 +358,13 @@ function bind() {
     const close = event.target.closest?.('[data-mihomo-connection-close]');
     if (close) { event.stopPropagation(); void disconnectOne(close.dataset.mihomoConnectionClose); return; }
     if (event.target.closest?.('[data-mihomo-connection-inspector-close]')) { selectedId = ''; renderInspector(); return; }
+    if (event.target.closest?.('[data-mihomo-connection-rule-link]')) {
+      const selected = (snapshot?.connections || []).find((item) => item.id === selectedId);
+      if (selected) root.dispatchEvent(new CustomEvent('xkeen:mihomo-clash-open-rule', {
+        bubbles: true, detail: { rule: selected.rule, payload: selected.rule_payload },
+      }));
+      return;
+    }
     const row = event.target.closest?.('[data-connection-id]');
     if (row) { selectedId = row.dataset.connectionId || ''; renderInspector(); }
   });

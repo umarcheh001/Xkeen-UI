@@ -10,6 +10,12 @@ import {
   initMihomoClashConnections,
 } from './connections.js';
 import {
+  activateMihomoClashRules,
+  deactivateMihomoClashRules,
+  focusMihomoClashRule,
+  initMihomoClashRules,
+} from './rules.js';
+import {
   mihomoClashStateCopy,
   normalizeMihomoClashState,
   normalizeMihomoClashSubview,
@@ -94,6 +100,11 @@ function renderStatus(state, payload = null) {
   } else if (currentSubview !== 'connections' || state !== 'loading') {
     deactivateMihomoClashConnections();
   }
+  if (state === 'ready' && active && visible && currentSubview === 'rules') {
+    activateMihomoClashRules(payload?.capabilities || {});
+  } else if (currentSubview !== 'rules' || state !== 'loading') {
+    deactivateMihomoClashRules();
+  }
 
   const openConfig = document.querySelector('[data-mihomo-clash-action="open-config"]');
   if (openConfig) {
@@ -155,6 +166,7 @@ function applySubview(name, options = {}) {
     abortStatusRequest();
     deactivateMihomoClashGroups();
     deactivateMihomoClashConnections();
+    deactivateMihomoClashRules();
     try {
       document.dispatchEvent(new CustomEvent('xkeen:mihomo-config-subview-shown', {
         detail: { reason: options.reason || 'subview' },
@@ -163,6 +175,7 @@ function applySubview(name, options = {}) {
   } else if (active && visible) {
     if (next !== 'control') deactivateMihomoClashGroups();
     if (next !== 'connections') deactivateMihomoClashConnections();
+    if (next !== 'rules') deactivateMihomoClashRules();
     void refreshMihomoClashStatus({ reason: options.reason || 'subview' });
   }
   return next;
@@ -202,6 +215,10 @@ function bindWorkspace() {
       if (tab.getAttribute('aria-disabled') !== 'true') applySubview(tab.dataset.mihomoClashSubview, { reason: 'keyboard' });
     }
   });
+  root.addEventListener('xkeen:mihomo-clash-open-rule', (event) => {
+    applySubview('rules', { reason: 'connection-rule' });
+    focusMihomoClashRule(event.detail?.rule, event.detail?.payload);
+  });
 }
 
 function bindVisibility() {
@@ -213,6 +230,7 @@ function bindVisibility() {
       abortStatusRequest();
       deactivateMihomoClashGroups();
       deactivateMihomoClashConnections();
+      deactivateMihomoClashRules();
       if (active && currentSubview !== 'config') renderStatus('paused', statusPayload);
     } else if (active && currentSubview !== 'config') {
       void refreshMihomoClashStatus({ reason: 'visibility' });
@@ -229,6 +247,7 @@ export function initMihomoClashWorkspace() {
   bindVisibility();
   initMihomoClashGroups();
   initMihomoClashConnections();
+  initMihomoClashRules();
   renderStatus('idle', null);
   applySubview(currentSubview, { reason: 'init' });
   return true;
@@ -251,6 +270,7 @@ export function deactivateMihomoClashWorkspace() {
   abortStatusRequest();
   deactivateMihomoClashGroups();
   deactivateMihomoClashConnections();
+  deactivateMihomoClashRules();
   return true;
 }
 

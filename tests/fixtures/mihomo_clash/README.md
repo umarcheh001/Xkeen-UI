@@ -18,5 +18,7 @@ Files:
 - `proxies.json` — `/proxies` groups and nodes in operator order.
 - `group.json` — `/group` policy-group collection shape.
 - `providers-proxies.json` — `/providers/proxies` enrichment.
+- `rules.json` — ordered read-only `/rules` contract.
+- `providers-rules.json` — `/providers/rules` state without source URL/path.
 - `connections-01.json` through `connections-03.json` — bounded live snapshots.
 - `errors.json` — representative status/error classes with sensitive details removed.

@@ -7,6 +7,7 @@ from services.mihomo_clash_client import MihomoClashClientError, MihomoClashJSON
 from services.mihomo_clash_target import MihomoClashDiscovery, MihomoClashTarget
 from services.mihomo_clash_ws import (
     handle_mihomo_clash_connections_request,
+    handle_mihomo_clash_logs_request,
     is_same_origin_websocket,
 )
 import services.mihomo_clash_ws as clash_ws
@@ -37,6 +38,18 @@ class StubClient:
         if self.error:
             raise self.error
         return MihomoClashJSONResponse(self.responses.pop(0), 200, 1, 100)
+
+
+class StubLogClient:
+    def __init__(self, frames=None, error=None):
+        self.frames = list(frames or [])
+        self.error = error
+
+    def iter_json_frames(self, operation: str):
+        assert operation == "logs_stream"
+        if self.error:
+            raise self.error
+        yield from self.frames
 
 
 def discovery():
@@ -142,6 +155,47 @@ def test_ws_maps_upstream_error_without_leaking_exception_text():
         "retryable": True,
     }
     assert "secret socket" not in serialized
+
+
+def test_logs_ws_normalizes_redacts_and_closes_after_bounded_stream():
+    ws = StubWebSocket()
+    handle_mihomo_clash_logs_request(
+        environ(ws),
+        lambda *_args: None,
+        fallback_app=lambda *_args: [],
+        validate_ws_token=lambda token, scope: token == "one-time-secret" and scope == "mihomo-clash-logs",
+        ws_debug=lambda *_args, **_kwargs: None,
+        mihomo_config_file="/safe/config.yaml",
+        mihomo_root="/safe",
+        discovery_factory=lambda *_args: discovery(),
+        client_factory=lambda _target: StubLogClient(
+            [{"time": "fixture", "level": "warning", "message": "Bearer fixture-secret", "fields": {"secret": "fixture-secret", "host": "example.test"}}]
+        ),
+    )
+
+    assert ws.messages[0]["type"] == "mihomo-clash-logs"
+    assert ws.messages[0]["payload"]["message"] == "Bearer [redacted]"
+    assert ws.messages[0]["payload"]["fields"] == {"host": "example.test"}
+    assert "fixture-secret" not in json.dumps(ws.messages)
+    assert ws.closed is True
+
+
+def test_logs_ws_rejects_cross_origin_before_consuming_token():
+    ws = StubWebSocket()
+    validated = []
+    handle_mihomo_clash_logs_request(
+        environ(ws, HTTP_ORIGIN="https://evil.test"),
+        lambda *_args: None,
+        fallback_app=lambda *_args: [],
+        validate_ws_token=lambda token, scope: validated.append((token, scope)) or True,
+        ws_debug=lambda *_args, **_kwargs: None,
+        mihomo_config_file="/safe/config.yaml",
+        mihomo_root="/safe",
+    )
+
+    assert ws.messages[0]["type"] == "mihomo-clash-logs"
+    assert ws.messages[0]["error"]["code"] == "origin_rejected"
+    assert validated == []
 
 
 def test_ws_stream_limit_allows_one_per_client_and_releases_after_close():

@@ -7,6 +7,7 @@ optional fields across Mihomo versions.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -18,6 +19,9 @@ MAX_GROUPS = 256
 MAX_GROUP_NODES = 1024
 MAX_CONNECTION_ROWS = 250
 MAX_DELAY_RESULTS = 1024
+MAX_RULES = 4096
+MAX_PROVIDERS = 512
+MAX_LOG_FIELDS = 32
 MIHOMO_CLASH_CAPABILITY_KEYS = (
     "status",
     "proxy_groups",
@@ -26,6 +30,20 @@ MIHOMO_CLASH_CAPABILITY_KEYS = (
     "connections_snapshot",
     "connections_stream",
     "connection_disconnect",
+    "rules",
+    "providers",
+    "provider_update",
+    "provider_healthcheck",
+    "logs",
+    "logs_stream",
+)
+
+_SENSITIVE_LOG_KEY = re.compile(
+    r"(?:authorization|cookie|password|passwd|secret|token|credential|api[-_]?key)",
+    re.IGNORECASE,
+)
+_SENSITIVE_LOG_VALUE = re.compile(
+    r"(?i)\b(Bearer\s+)[^\s,;]+|\b(secret|token|password|authorization|cookie)\s*([=:])\s*[^\s,;]+"
 )
 
 
@@ -51,6 +69,16 @@ def _nonnegative_int(value: Any, default: int = 0) -> int:
         number = int(value)
     except (TypeError, ValueError, OverflowError):
         return int(default)
+    return max(0, number)
+
+
+def _optional_nonnegative_int(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
     return max(0, number)
 
 
@@ -236,6 +264,153 @@ def build_mihomo_clash_proxy_groups_dto(
         "groups": groups,
         "providers": providers,
         "truncated": groups_truncated,
+    }
+
+
+def build_mihomo_clash_rules_dto(payload: Any) -> dict[str, Any]:
+    """Normalize the ordered read-only rule list without exposing raw fields."""
+
+    raw_rules = _mapping(payload).get("rules")
+    candidates = (
+        list(raw_rules[: MAX_RULES + 1])
+        if isinstance(raw_rules, Sequence) and not isinstance(raw_rules, (str, bytes, bytearray))
+        else []
+    )
+    rules: list[dict[str, Any]] = []
+    for index, raw_rule in enumerate(candidates[:MAX_RULES]):
+        rule = _mapping(raw_rule)
+        rules.append(
+            {
+                "index": _optional_nonnegative_int(rule.get("index"))
+                if rule.get("index") is not None
+                else index,
+                "type": _text(rule.get("type"), 96),
+                "payload": _text(rule.get("payload"), 1024),
+                "target": _text(rule.get("proxy") or rule.get("target"), 256),
+                "disabled": _optional_bool(
+                    _mapping(rule.get("extra")).get("disabled")
+                    if _mapping(rule.get("extra")).get("disabled") is not None
+                    else rule.get("disabled")
+                ),
+                "size": _optional_nonnegative_int(rule.get("size")),
+            }
+        )
+    return {
+        "schema_version": MIHOMO_CLASH_SCHEMA_VERSION,
+        "rules": rules,
+        "total_rules": len(raw_rules) if isinstance(raw_rules, Sequence) and not isinstance(raw_rules, (str, bytes, bytearray)) else 0,
+        "truncated": len(candidates) > MAX_RULES,
+    }
+
+
+def _provider_dto(name: str, raw: Mapping[str, Any], *, kind: str) -> dict[str, Any]:
+    proxies = raw.get("proxies")
+    proxy_items = (
+        list(proxies[:MAX_GROUP_NODES])
+        if isinstance(proxies, Sequence) and not isinstance(proxies, (str, bytes, bytearray))
+        else []
+    )
+    alive_values = [
+        item.get("alive")
+        for item in (_mapping(candidate) for candidate in proxy_items)
+        if isinstance(item.get("alive"), bool)
+    ]
+    count = len(proxy_items) if kind == "proxy" else _optional_nonnegative_int(
+        raw.get("ruleCount") if raw.get("ruleCount") is not None else raw.get("size")
+    )
+    health = _mapping(raw.get("healthCheck"))
+    health_enabled = _optional_bool(health.get("enable"))
+    return {
+        "name": _text(raw.get("name") or name, 256),
+        "kind": kind,
+        "type": _text(raw.get("type"), 64),
+        "vehicle_type": _text(raw.get("vehicleType"), 64),
+        "updated_at": _text(raw.get("updatedAt"), 96),
+        "count": count if count is not None else 0,
+        "alive": sum(value is True for value in alive_values) if kind == "proxy" else None,
+        "failed": sum(value is False for value in alive_values) if kind == "proxy" else None,
+        "behavior": _text(raw.get("behavior"), 64),
+        "format": _text(raw.get("format"), 32),
+        "healthcheck": health_enabled is True if kind == "proxy" else False,
+    }
+
+
+def build_mihomo_clash_providers_dto(
+    proxy_payload: Any,
+    rule_payload: Any,
+) -> dict[str, Any]:
+    """Combine proxy and rule provider state into one bounded product DTO."""
+
+    proxy_raw = _mapping(_mapping(proxy_payload).get("providers"))
+    rule_raw = _mapping(_mapping(rule_payload).get("providers"))
+    candidates: list[tuple[str, str, Mapping[str, Any]]] = []
+    candidates.extend(("proxy", str(name), _mapping(value)) for name, value in proxy_raw.items())
+    candidates.extend(("rule", str(name), _mapping(value)) for name, value in rule_raw.items())
+    providers = [
+        _provider_dto(name, value, kind=kind)
+        for kind, name, value in candidates[:MAX_PROVIDERS]
+        if _text(value.get("name") or name, 256)
+    ]
+    return {
+        "schema_version": MIHOMO_CLASH_SCHEMA_VERSION,
+        "providers": providers,
+        "total_providers": len(candidates),
+        "truncated": len(candidates) > MAX_PROVIDERS,
+    }
+
+
+def _redact_log_text(value: Any, *, secret: str = "", limit: int = 2048) -> str:
+    text = _text(value, limit * 2)
+    if secret:
+        text = text.replace(str(secret), "[redacted]")
+
+    def replace_sensitive(match: re.Match[str]) -> str:
+        if match.group(1):
+            return f"{match.group(1)}[redacted]"
+        return f"{match.group(2)}{match.group(3)}[redacted]"
+
+    return _SENSITIVE_LOG_VALUE.sub(replace_sensitive, text)[:limit]
+
+
+def build_mihomo_clash_log_entry_dto(
+    payload: Any,
+    *,
+    sequence: int = 0,
+    secret: str = "",
+) -> dict[str, Any]:
+    """Normalize one structured log frame and redact credential-shaped data."""
+
+    raw = _mapping(payload)
+    raw_fields_value = raw.get("fields")
+    if isinstance(raw_fields_value, Mapping):
+        field_candidates = list(raw_fields_value.items())
+    elif isinstance(raw_fields_value, Sequence) and not isinstance(
+        raw_fields_value, (str, bytes, bytearray)
+    ):
+        field_candidates = []
+        for candidate in raw_fields_value:
+            item = _mapping(candidate)
+            key = item.get("key") if item.get("key") is not None else item.get("name")
+            if key is not None:
+                field_candidates.append((key, item.get("value")))
+    else:
+        field_candidates = []
+    fields: dict[str, str] = {}
+    for raw_key, raw_value in field_candidates[:MAX_LOG_FIELDS]:
+        key = _text(raw_key, 96)
+        if not key or _SENSITIVE_LOG_KEY.search(key):
+            continue
+        if isinstance(raw_value, (str, int, float)) and not isinstance(raw_value, bool):
+            fields[key] = _redact_log_text(raw_value, secret=secret, limit=512)
+    level = _text(raw.get("level"), 16).lower()
+    if level not in {"debug", "info", "warning", "error"}:
+        level = "info"
+    return {
+        "sequence": max(0, int(sequence)),
+        "time": _text(raw.get("time"), 96),
+        "level": level,
+        "message": _redact_log_text(raw.get("message"), secret=secret),
+        "fields": fields,
     }
 
 

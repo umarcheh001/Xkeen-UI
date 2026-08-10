@@ -264,6 +264,7 @@
             "routingTemplates",
             "github",
             "donate",
+            "mihomoClash",
             "uiSettingsPanel",
             "mihomoImport",
             "mihomoProxyTools",
@@ -873,6 +874,7 @@
         "routingTemplates",
         "github",
         "donate",
+        "mihomoClash",
         "uiSettingsPanel",
         "mihomoImport",
         "mihomoProxyTools",
@@ -881,7 +883,6 @@
         "commandsList",
         "coresStatus",
         "jsonEditor",
-        "mihomoClash",
         "restartLog"
       ],
       "lazy_runtime_inventory": {

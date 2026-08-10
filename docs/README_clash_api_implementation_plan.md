@@ -1,6 +1,6 @@
 # Clash API в Xkeen UI: план реализации операторского контура Mihomo
 
-Статус на **10 августа 2026 года**: **PR 1–3, PR 6–7 и локально доступная часть PR 8 закрыты; PR 4–5 функционально собраны и работают на aarch64-панели, но после acceptance-аудита переведены в статус «частично закрыт / требуется доработка»**. Без роутера PR 8 усилен stateful fake Mihomo, нагрузочными/error/recovery и responsive/accessibility gates; hardware acceptance aarch64/mipsle, WS/no-gevent и реальные CPU/RAM/network/mutation проверки честно отложены.
+Статус на **10 августа 2026 года**: **PR 1–3, PR 6–7, локально доступная часть PR 8 и PR 9 закрыты; PR 4–5 функционально собраны и работают на aarch64-панели, но после acceptance-аудита переведены в статус «частично закрыт / требуется доработка»**. Без роутера PR 8 усилен stateful fake Mihomo, нагрузочными/error/recovery и responsive/accessibility gates; PR 9 закрыт локальными REST/WS/fake/browser контрактами. Hardware acceptance aarch64/mipsle, WS/no-gevent и реальные CPU/RAM/network/mutation проверки честно отложены.
 Дата последнего аудита: **10 августа 2026 года**.
 
 Визуальный corrective gate перед следующим функциональным этапом: **реализован в исходниках 10 августа 2026 года, router acceptance ожидает поставки новой сборки**. Runtime shell уплотнён без повторных `Operator runtime`/`Mihomo`, постоянные искусственные `min-height` удалены, группы переведены на keyboard-accessible disclosure и по умолчанию все свёрнуты; добавлены массовое сворачивание/раскрытие и адаптивная 3/2/1-колоночная summary-сетка. Полный перечень причин и критериев — в разделе «Корректирующий визуальный проход Clash/Mihomo» документа [`panel-operator-redesign-completion-plan.md`](panel-operator-redesign-completion-plan.md).
@@ -13,12 +13,12 @@
 | --- | --- |
 | Установленная панель | `BUILD.json.version=ee9bf8e`, Python service активен; `gevent` и `geventwebsocket` установлены |
 | Core/API | Mihomo `alpha-978d25a`; `/version`, `/configs`, `/proxies`, `/group`, `/providers/proxies`, `/connections` → `200` |
-| REST facade | `/status`, `/proxy-groups`, `/connections` → `200`, schema v1; 15 групп, 16 providers, 387 group-node occurrences; snapshot не truncated |
+| REST facade | `/status`, `/proxy-groups`, `/connections` подтверждены на установленной панели; `/rules`, объединённый `/providers` и explicit provider actions добавлены в PR 9 и проверены локально через stateful fake Mihomo |
 | Operator workspace | Lazy workspace и groups UI реально загружаются; status показывает version/mode, filter и responsive layout работают. В исходниках выполнен corrective density/disclosure pass; установленная сборка его ещё не содержит |
 | Connections | REST/WS/HTTP fallback, overview, table/mobile records, filters/sort/inspector, cached device enrichment и guarded disconnect one/all реализованы в исходниках PR 6–7; установленная сборка ещё требует обновления и router acceptance |
 | Security | Активный controller слушает LAN на `:9090` без `secret`; backend ходит к нему через loopback и `/status.security` возвращает `tcp_lan_unprotected`, но UI предупреждение ещё не отображает |
 | Device enrichment | Существующий Keenetic device map на роутере возвращает 13 устройств без ошибки, но Clash connections route его не подключает; `source_name` пуст |
-| Tests | Clash targeted: `77 passed, 1 skipped`; Ruff: success; frontend verify: success; groups Playwright: `1 passed`; после синхронизации inventories pytest shards дали `920 passed, 10 skipped`, `234 passed`, отдельно inventory/frontend contracts `20 passed` |
+| Tests | PR 9 targeted backend/frontend: `91 passed`; Ruff, `node --check`, `git diff --check` и `frontend:verify` успешны; PR 9 Playwright: `3 passed`. Исторические router/full-suite числа ниже сохранены как audit baseline |
 
 Найденный acceptance-дефект: CSS задавал `display:grid` для `#mihomo-clash-panel-config` и тем самым переопределял HTML `hidden`; одновременно оставался видимым и ready-state блок. В рабочем дереве добавлен scoped `[hidden] { display:none !important; }` contract и тест, но эта правка ещё должна войти в поставляемую сборку и пройти повторный browser acceptance.
 
@@ -815,13 +815,33 @@ Acceptance baseline: на aarch64 существующий `get_xray_device_name
 
 ### Этап 6. Rules, providers и logs (P1)
 
+Статус на 10 августа 2026 года: **рекомендуемый PR 9 закрыт локально; требуется только повторный acceptance на живом aarch64/mipsle-роутере**. Реализованы bounded read-only rules, compact proxy/rule provider state и explicit update/healthcheck, а также отдельный on-demand structured log stream. Mode switch, disconnect-after-select и temporary rule disable намеренно не включены: для них сохраняется отдельный UX/security review.
+
 Задачи:
 
-- [ ] Добавить read-only rules и cross-link из connection details.
-- [ ] Добавить provider status/update/healthcheck с ручным запуском.
-- [ ] Добавить on-demand structured logs с pause/filter/ring buffer.
+- [x] Добавить read-only rules и cross-link из connection details.
+- [x] Добавить provider status/update/healthcheck с ручным запуском.
+- [x] Добавить on-demand structured logs с pause/filter/ring buffer.
 - [ ] После UX review добавить mode switch и optional disconnect-after-select.
 - [ ] Отдельно решить, нужен ли temporary rule disable; не включать его скрыто вместе с viewer.
+
+Что закрыто в рекомендуемом PR 9:
+
+- allow-listed client/facade добавляет только `GET /rules`, `GET /providers/proxies`, `GET /providers/rules`, explicit `PUT` provider update и proxy-provider healthcheck; browser не задаёт upstream host/path/method, а dynamic names percent-encode-ятся как один segment;
+- DTO v1 сохраняет фактический rule index, нормализует `type/payload/target/size/extra.disabled`, ограничивает список 4096 правилами и не отдаёт raw provider URL/path; proxy/rule providers объединяются в bounded список с freshness/count/alive/failed/vehicle/format/healthcheck;
+- mutation перед вызовом Mihomo повторно сверяет kind/name и доступность healthcheck по свежему provider snapshot, использует session + CSRF, per-subject/global guard и sanitized audit без имени provider;
+- вкладка «Правила» выполняет поиск по index/type/payload/target, показывает compact providers и получает cross-link из inspector соединения; provider update/healthcheck требуют явного confirm, после action обновляют provider state и инвалидируют groups cache, чтобы следующий вход выполнил ровно один свежий refresh;
+- runtime logs открывают отдельный same-origin WS только по кнопке, используют отдельный one-time scope `mihomo-clash-logs`, normalized envelope v1 и credential redaction; browser хранит максимум 500 строк, поддерживает level/search/pause/clear и закрывает socket при закрытии drawer, смене subview/top-level или hidden document;
+- lazy interaction gate устраняет race первого клика по subview до загрузки feature chunk; responsive mobile records, keyboard path и возврат focus после закрытия log drawer остаются в Operator contract;
+- rule disable, mode switch, automatic provider refresh и disconnect-after-select отсутствуют; persistent YAML по-прежнему меняется только существующим config workflow.
+
+Локальная проверка закрытия PR 9:
+
+- targeted backend/frontend suite: `91 passed`; полный `pytest` после синхронизации generated inventories: `1202 passed`;
+- Ruff для изменённых Python файлов: `All checks passed`; `node --check`, `git diff --check` и `npm run frontend:verify` успешны;
+- Playwright `e2e/mihomo_clash_rules.spec.mjs` → `3 passed`: rules/filter/cross-link, explicit provider actions, on-demand logs/ring buffer/pause/lifecycle и mobile/no-overflow;
+- stateful fake Mihomo проверяет реальные discovery/client/routes для `/rules`, обоих provider kinds, update, healthcheck и NDJSON log stream без обращения к живому роутеру;
+- real-router provider mutations и log stream не запускались: schema/transport/performance для фактической версии Mihomo должны быть подтверждены после появления роутера, без сохранения raw rules/logs/secret в артефакты.
 
 Критерий выхода:
 
@@ -869,13 +889,13 @@ Acceptance baseline: на aarch64 существующий `get_xray_device_name
 - Playwright PR 8 покрывает 500 connections/100 DOM rows, нулевой polling в hidden/config, 10 циклов subview без размножения poller/listeners, dark/light и полный viewport matrix, keyboard/inspector/Escape, reduced motion, labels/touch targets;
 - массовый latency batch ограничен 24 уникальными probes, cadence 180 ms, максимум 3 workers и 4 busy retries; backend global/session concurrency согласован с тремя workers, а session budget снижен до 48/min, что устраняет прежний retry-storm contract;
 - WS concurrency дополнительно проверяется race-safe тестом: максимум 8 глобально и один stream на client key;
-- `npm run e2e:mihomo-clash` объединяет groups, connections и PR 8 acceptance; тот же набор добавлен в Linux CI после установки Chromium.
+- `npm run e2e:mihomo-clash` объединяет groups, connections, PR 8 acceptance и PR 9 rules/providers/logs; тот же набор добавлен в Linux CI после установки Chromium.
 
 Локальная проверка PR 8:
 
 - stateful fake Mihomo TCP/Unix integration: `5 passed`;
 - targeted backend/frontend/security: `30 passed`;
-- `npm run e2e:mihomo-clash` → `10 passed`;
+- на закрытии PR 8 `npm run e2e:mihomo-clash` давал `10 passed`; после добавления PR 9 актуальный набор содержит `13` сценариев;
 - полный `pytest` → `1192 passed`; `npm run frontend:verify`, Ruff и `git diff --check` прошли;
 - все тесты используют disposable local state и fake/redacted данные; пользовательский router/config/traffic не затрагиваются.
 
@@ -972,7 +992,7 @@ Acceptance baseline: на aarch64 существующий `get_xray_device_name
 6. **PR 6 — connections WS/fallback backend** — закрыт локально: same-origin tokenized stream, HTTP fallback contract, guarded disconnect one/all; router WS/no-gevent acceptance остаётся Этапом 8;
 7. **PR 7 — connections/overview UI + device enrichment** — закрыт локально: lifecycle-aware WS/fallback UI, overview/table/mobile/inspector, cached device map и confirmed disconnect UX; router acceptance остаётся Этапом 8;
 8. **PR 8 — performance, responsive, accessibility, router acceptance** — локальная часть закрыта: stateful fake Mihomo, load/error/recovery, responsive/a11y/lifecycle gate и CI workflow; hardware acceptance остаётся отложенным до доступа к роутеру;
-9. **PR 9 — P1 rules/providers/logs**;
+9. **PR 9 — P1 rules/providers/logs** — закрыт локально; router acceptance остаётся отложенным hardware gate;
 10. **PR 10 — safe templates, migration UX и финальная документация**.
 
 Не объединять generic relay, UI, template migration и destructive actions в один большой PR.

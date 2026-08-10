@@ -25,6 +25,8 @@ def test_contract_fixture_set_is_complete_and_redacted():
         "proxies.json",
         "group.json",
         "providers-proxies.json",
+        "providers-rules.json",
+        "rules.json",
         "connections-01.json",
         "connections-02.json",
         "connections-03.json",
@@ -164,6 +166,77 @@ def test_proxy_groups_dto_does_not_guess_provider_when_names_collide():
     assert node["provider"] == ""
     assert node["provider_candidates"] == ["demo-provider", "second-provider"]
     assert node["provider_ambiguous"] is True
+
+
+def test_rules_and_providers_dtos_are_bounded_and_drop_raw_source_fields():
+    from services.mihomo_clash_dto import (
+        build_mihomo_clash_providers_dto,
+        build_mihomo_clash_rules_dto,
+    )
+
+    proxy_payload = fixture("providers-proxies.json")
+    proxy_payload["providers"]["demo-provider"].update(
+        {"url": "https://credential.invalid/list", "path": "/private/provider.yaml", "healthCheck": {"enable": True}}
+    )
+    rules = build_mihomo_clash_rules_dto(fixture("rules.json"))
+    providers = build_mihomo_clash_providers_dto(
+        proxy_payload,
+        fixture("providers-rules.json"),
+    )
+
+    assert rules["rules"][0] == {
+        "index": 7,
+        "type": "DomainSuffix",
+        "payload": "example.invalid",
+        "target": "AUTO",
+        "disabled": None,
+        "size": None,
+    }
+    assert [item["kind"] for item in providers["providers"]] == ["proxy", "rule"]
+    assert rules["rules"][2]["index"] == 9
+    assert rules["rules"][2]["disabled"] is False
+    assert providers["providers"][0]["healthcheck"] is True
+    assert providers["providers"][1]["count"] == 42
+    serialized = json.dumps([rules, providers])
+    assert "credential.invalid" not in serialized
+    assert "/private/provider.yaml" not in serialized
+
+
+def test_structured_log_dto_redacts_secret_headers_and_sensitive_fields():
+    from services.mihomo_clash_dto import build_mihomo_clash_log_entry_dto
+
+    entry = build_mihomo_clash_log_entry_dto(
+        {
+            "time": "2026-08-10T10:00:00Z",
+            "level": "warning",
+            "message": "dial failed Authorization=fixture-secret Bearer fixture-secret",
+            "fields": {
+                "host": "example.invalid",
+                "token": "fixture-secret",
+                "detail": "password=fixture-secret",
+            },
+        },
+        sequence=7,
+        secret="fixture-secret",
+    )
+
+    assert entry["sequence"] == 7
+    assert entry["level"] == "warning"
+    assert entry["fields"] == {"host": "example.invalid", "detail": "password=[redacted]"}
+    assert "fixture-secret" not in json.dumps(entry)
+
+    list_fields = build_mihomo_clash_log_entry_dto(
+        {
+            "level": "info",
+            "message": "list fields",
+            "fields": [
+                {"key": "network", "value": "tcp"},
+                {"name": "token", "value": "fixture-secret"},
+            ],
+        },
+        secret="fixture-secret",
+    )
+    assert list_fields["fields"] == {"network": "tcp"}
 
 
 def test_delay_dto_normalizes_proxy_and_group_results():

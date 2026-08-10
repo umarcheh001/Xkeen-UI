@@ -25,6 +25,8 @@ class StubClient:
         self.provider_delays: list[tuple[str, str, str]] = []
         self.disconnected: list[str] = []
         self.disconnected_all = 0
+        self.provider_updates: list[tuple[str, str]] = []
+        self.provider_healthchecks: list[str] = []
 
     def request_json(self, operation: str):
         self.operations.append(operation)
@@ -58,6 +60,18 @@ class StubClient:
 
     def disconnect_all_connections(self):
         self.disconnected_all += 1
+        if self.error:
+            raise self.error
+        return MihomoClashJSONResponse(None, 204, 1, 0)
+
+    def update_provider(self, kind: str, name: str):
+        self.provider_updates.append((kind, name))
+        if self.error:
+            raise self.error
+        return MihomoClashJSONResponse(None, 204, 1, 0)
+
+    def healthcheck_provider(self, name: str):
+        self.provider_healthchecks.append(name)
         if self.error:
             raise self.error
         return MihomoClashJSONResponse(None, 204, 1, 0)
@@ -124,6 +138,11 @@ def test_status_route_returns_versioned_redacted_dto():
     assert body["api"]["secret_configured"] is True
     assert body["capabilities"]["status"] is True
     assert body["capabilities"]["proxy_groups"] is None
+    assert body["capabilities"]["rules"] is True
+    assert body["capabilities"]["providers"] is True
+    assert body["capabilities"]["provider_update"] is True
+    assert body["capabilities"]["provider_healthcheck"] is True
+    assert body["capabilities"]["logs"] is True
     assert body["security"] == {
         "mode": "tcp_authenticated",
         "recommended_transport": "unix",
@@ -242,6 +261,71 @@ def test_proxy_groups_route_returns_versioned_normalized_payload():
     assert body["capabilities"]["proxy_select"] is True
     assert body["telemetry"]["providers"]["size_bytes"] == 100
     assert client.operations == ["proxies", "providers_proxies"]
+
+
+def test_rules_and_providers_routes_return_safe_versioned_dtos():
+    client = StubClient(
+        responses={
+            "rules": MihomoClashJSONResponse(
+                {"rules": [{"type": "DomainSuffix", "payload": "example.test", "proxy": "AUTO", "secret": "drop"}]},
+                200, 2, 120,
+            ),
+            "providers_proxies": MihomoClashJSONResponse(
+                {"providers": {"proxy-one": {"name": "proxy-one", "healthCheck": {"enable": True}, "proxies": [{"name": "node", "alive": True}], "url": "https://secret.invalid"}}},
+                200, 3, 220,
+            ),
+            "providers_rules": MihomoClashJSONResponse(
+                {"providers": {"rules-one": {"name": "rules-one", "ruleCount": 9, "behavior": "domain", "path": "/private/rules"}}},
+                200, 4, 180,
+            ),
+        }
+    )
+    http = make_app(ready_discovery(), client).test_client()
+
+    rules = http.get("/api/mihomo/clash/rules")
+    providers = http.get("/api/mihomo/clash/providers")
+    serialized = json.dumps([rules.get_json(), providers.get_json()])
+
+    assert rules.status_code == 200
+    assert rules.get_json()["rules"][0]["target"] == "AUTO"
+    assert rules.get_json()["capabilities"]["rules"] is True
+    assert providers.status_code == 200
+    assert [item["kind"] for item in providers.get_json()["providers"]] == ["proxy", "rule"]
+    assert providers.get_json()["capabilities"]["provider_update"] is True
+    assert "secret.invalid" not in serialized
+    assert "/private/rules" not in serialized
+
+
+def test_provider_actions_revalidate_kind_name_and_healthcheck():
+    proxy_payload = {
+        "providers": {
+            "proxy/one": {
+                "name": "proxy/one",
+                "healthCheck": {"enable": True},
+                "proxies": [{"name": "node", "alive": True}],
+            }
+        }
+    }
+    rule_payload = {"providers": {"rules-one": {"name": "rules-one", "ruleCount": 2}}}
+    client = StubClient(
+        responses={
+            "providers_proxies": MihomoClashJSONResponse(proxy_payload, 200, 1, 100),
+            "providers_rules": MihomoClashJSONResponse(rule_payload, 200, 1, 100),
+        }
+    )
+    http = make_app(ready_discovery(), client).test_client()
+
+    updated_proxy = http.post("/api/mihomo/clash/providers/proxy/proxy%2Fone/update")
+    updated_rule = http.post("/api/mihomo/clash/providers/rule/rules-one/update")
+    checked = http.post("/api/mihomo/clash/providers/proxy/proxy%2Fone/healthcheck")
+    stale = http.post("/api/mihomo/clash/providers/rule/missing/update")
+
+    assert updated_proxy.status_code == 200
+    assert updated_rule.status_code == 200
+    assert checked.status_code == 200
+    assert stale.status_code == 409
+    assert client.provider_updates == [("proxy", "proxy/one"), ("rule", "rules-one")]
+    assert client.provider_healthchecks == ["proxy/one"]
 
 
 def test_proxy_select_is_reconciled_against_fresh_snapshot():
@@ -642,6 +726,14 @@ def test_routes_registry_registers_mihomo_clash_facade(monkeypatch):
         rules.setdefault(rule.rule, set()).update(rule.methods or ())
     assert "GET" in rules["/api/mihomo/clash/status"]
     assert "GET" in rules["/api/mihomo/clash/proxy-groups"]
+    assert "GET" in rules["/api/mihomo/clash/rules"]
+    assert "GET" in rules["/api/mihomo/clash/providers"]
+    assert "POST" in rules[
+        "/api/mihomo/clash/providers/<kind>/<path:provider_name>/update"
+    ]
+    assert "POST" in rules[
+        "/api/mihomo/clash/providers/proxy/<path:provider_name>/healthcheck"
+    ]
     assert "PUT" in rules["/api/mihomo/clash/proxy-groups/<path:group_name>"]
     assert "POST" in rules["/api/mihomo/clash/delay"]
     assert "GET" in rules["/api/mihomo/clash/connections"]

@@ -5,6 +5,7 @@
       "type": "Proxy",
       "vehicleType": "HTTP",
       "updatedAt": "2026-08-09T15:59:00Z",
+      "healthCheck": {"enable": true},
       "proxies": [
         {
           "name": "node-b",

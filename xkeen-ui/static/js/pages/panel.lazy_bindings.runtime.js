@@ -598,6 +598,19 @@ export function wirePanelLazyFeatureClicks() {
       return;
     }
 
+    const mihomoClashTrigger = raw.closest('[data-mihomo-clash-subview], [data-mihomo-clash-action]');
+    if (mihomoClashTrigger && !isPanelLazyFeatureReady('mihomoClash')) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      ensurePanelLazyFeature('mihomoClash').then((ready) => {
+        if (!ready) return;
+        const api = getPanelLazyFeatureApi('mihomoClash');
+        if (api && typeof api.activate === 'function') api.activate({ reason: 'interaction' });
+        fireDeferredClick(mihomoClashTrigger);
+      });
+      return;
+    }
+
     const settingsBtn = raw.closest('#ui-settings-open-btn');
     if (settingsBtn && !isPanelLazyFeatureReady('uiSettingsPanel')) {
       event.preventDefault();

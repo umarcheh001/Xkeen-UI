@@ -13,6 +13,7 @@ CLIENT = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "cl
 STATE = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "state.js"
 GROUPS = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "groups.js"
 CONNECTIONS = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "connections.js"
+RULES = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "rules.js"
 LAZY = ROOT / "xkeen-ui" / "static" / "js" / "pages" / "panel.lazy_bindings.runtime.js"
 VIEW_RUNTIME = ROOT / "xkeen-ui" / "static" / "js" / "pages" / "panel.view_runtime.js"
 INVENTORY = ROOT / "docs" / "panel-operator-icon-inventory.json"
@@ -72,6 +73,8 @@ def test_mihomo_clash_feature_is_lazy_and_not_in_eager_feature_registry():
     assert "getPanelLazyFeatureApi('mihomoClash')" in runtime
     assert "getMihomoClashFeatureApi()" in runtime
     assert "mihomoClash" not in eager
+    assert "const mihomoClashTrigger = raw.closest('[data-mihomo-clash-subview], [data-mihomo-clash-action]');" in lazy
+    assert "fireDeferredClick(mihomoClashTrigger);" in lazy
 
 
 def test_workspace_lifecycle_aborts_network_outside_runtime_subviews():
@@ -113,7 +116,7 @@ def test_workspace_status_matrix_and_accessibility_contract_are_explicit():
     for fragment in (
         'role="status" aria-live="polite" aria-atomic="true"',
         'role="tabpanel"',
-        'aria-disabled="true"',
+        'aria-disabled',
         'aria-busy',
         '.xk-mihomo-runtime-panel[hidden]',
         '.xk-mihomo-config-subview[hidden]',
@@ -277,3 +280,49 @@ def test_connections_lifecycle_stops_socket_polling_and_requests_when_hidden():
         "document.addEventListener('visibilitychange'",
     ):
         assert fragment in feature or fragment in connections
+
+
+def test_rules_providers_and_logs_have_bounded_on_demand_contract():
+    markup = _mihomo_markup()
+    client = _text(CLIENT)
+    feature = _text(FEATURE)
+    rules = _text(RULES)
+    state = _text(STATE)
+    css = _text(CSS)
+
+    for fragment in (
+        'id="mihomo-clash-panel-rules"',
+        'id="mihomo-clash-rules-filter"',
+        'id="mihomo-clash-provider-kind"',
+        'id="mihomo-clash-logs-drawer"',
+        "fetchMihomoClashRules",
+        "fetchMihomoClashProviders",
+        "updateMihomoClashProvider",
+        "healthcheckMihomoClashProvider",
+        "invalidateMihomoClashGroups",
+        "mihomoClashLogsWsUrl",
+        "MAX_RULE_ROWS = 300",
+        "MAX_LOG_ROWS = 500",
+        "requestMihomoClashWsToken",
+        "scope: 'mihomo-clash-logs'",
+        "deactivateMihomoClashRules();",
+        "abortRequests(); logsOpen = false; closeLogs();",
+        ".xk-mihomo-rules-layout",
+        ".xk-mihomo-logs-drawer[hidden]",
+    ):
+        assert fragment in markup or fragment in client or fragment in feature or fragment in rules or fragment in css
+
+    assert "if (value === 'rules') return 'control';" not in state
+    assert 'aria-disabled="true" title="Просмотр правил' not in markup
+    assert "PATCH /rules" not in client
+    assert "PATCH /configs" not in client
+
+
+def test_connection_inspector_cross_links_to_rules_without_persistent_mutation():
+    markup = _mihomo_markup()
+    connections = _text(CONNECTIONS)
+    feature = _text(FEATURE)
+
+    assert 'id="mihomo-clash-connection-rule-link"' in markup
+    assert "xkeen:mihomo-clash-open-rule" in connections
+    assert "focusMihomoClashRule" in feature

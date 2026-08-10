@@ -57,4 +57,5 @@ jobs:
           e2e/mihomo_clash_groups.spec.mjs
           e2e/mihomo_clash_connections.spec.mjs
           e2e/mihomo_clash_pr8_acceptance.spec.mjs
+          e2e/mihomo_clash_rules.spec.mjs
           --reporter=line

@@ -55,6 +55,8 @@ class FakeMihomoState:
     forced_status: dict[str, int] = field(default_factory=dict)
     generation: int = 0
     selected: dict[str, str] = field(default_factory=lambda: {"AUTO": "node-a"})
+    provider_updates: list[tuple[str, str]] = field(default_factory=list)
+    provider_healthchecks: list[str] = field(default_factory=list)
     disconnected_ids: set[str] = field(default_factory=set)
     requests: list[dict[str, Any]] = field(default_factory=list)
     lock: threading.Lock = field(default_factory=threading.Lock)
@@ -182,12 +184,30 @@ class FakeMihomo(AbstractContextManager["FakeMihomo"]):
                     return None
                 return parsed.path, parsed.query
 
+            def _send_log_stream(self) -> None:
+                frames = [
+                    {"time": "2026-08-10T10:02:00Z", "level": "info", "message": "fixture request", "fields": {"network": "tcp"}},
+                    {"time": "2026-08-10T10:02:01Z", "level": "warning", "message": f"Bearer {state.secret}", "fields": {"secret": state.secret, "host": "fixture.test"}},
+                ]
+                raw = b"\n".join(json.dumps(frame).encode("utf-8") for frame in frames) + b"\n"
+                self.send_response(200)
+                self.send_header("Content-Type", "application/x-ndjson")
+                self.send_header("Content-Length", str(len(raw)))
+                self.end_headers()
+                try:
+                    self.wfile.write(raw)
+                    self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+
             def do_GET(self):  # noqa: N802
                 prepared = self._prepare()
                 if prepared is None:
                     return
                 path, _query = prepared
-                if path == "/version":
+                if path == "/logs":
+                    self._send_log_stream()
+                elif path == "/version":
                     self._send(200, {"version": "Mihomo Meta fake-pr8"})
                 elif path == "/configs":
                     self._send(200, {"mode": "rule", "tun": {"enable": True}})
@@ -205,9 +225,59 @@ class FakeMihomo(AbstractContextManager["FakeMihomo"]):
                         },
                     )
                 elif path == "/providers/proxies":
-                    self._send(200, {"providers": {}})
+                    self._send(
+                        200,
+                        {
+                            "providers": {
+                                "fixture-proxy": {
+                                    "name": "fixture-proxy",
+                                    "type": "Proxy",
+                                    "vehicleType": "HTTP",
+                                    "updatedAt": "2026-08-10T10:00:00Z",
+                                    "healthCheck": {"enable": True},
+                                    "proxies": [
+                                        {"name": "node-a", "alive": True},
+                                        {"name": "node-b", "alive": False},
+                                    ],
+                                }
+                            }
+                        },
+                    )
+                elif path == "/providers/rules":
+                    self._send(
+                        200,
+                        {
+                            "providers": {
+                                "fixture-rules": {
+                                    "name": "fixture-rules",
+                                    "type": "Rule",
+                                    "vehicleType": "HTTP",
+                                    "updatedAt": "2026-08-10T10:01:00Z",
+                                    "behavior": "domain",
+                                    "format": "mrs",
+                                    "ruleCount": 12,
+                                }
+                            }
+                        },
+                    )
+                elif path == "/rules":
+                    self._send(
+                        200,
+                        {
+                            "rules": [
+                                {"type": "DomainSuffix", "payload": "example.test", "proxy": "AUTO"},
+                                {"type": "RuleSet", "payload": "fixture-rules", "proxy": "DIRECT"},
+                                {"type": "Match", "payload": "", "proxy": "AUTO"},
+                            ]
+                        },
+                    )
                 elif path == "/connections":
                     self._send(200, state.snapshot())
+                elif path.startswith("/providers/proxies/") and path.endswith("/healthcheck"):
+                    provider = unquote(path.removeprefix("/providers/proxies/").removesuffix("/healthcheck").rstrip("/"))
+                    with state.lock:
+                        state.provider_healthchecks.append(provider)
+                    self._send(204)
                 elif path.endswith("/delay") or path.endswith("/healthcheck"):
                     self._send(200, {"delay": 42})
                 else:
@@ -218,6 +288,18 @@ class FakeMihomo(AbstractContextManager["FakeMihomo"]):
                 if prepared is None:
                     return
                 path, _query = prepared
+                if path.startswith("/providers/proxies/"):
+                    provider = unquote(path.removeprefix("/providers/proxies/"))
+                    with state.lock:
+                        state.provider_updates.append(("proxy", provider))
+                    self._send(204)
+                    return
+                if path.startswith("/providers/rules/"):
+                    provider = unquote(path.removeprefix("/providers/rules/"))
+                    with state.lock:
+                        state.provider_updates.append(("rule", provider))
+                    self._send(204)
+                    return
                 if not path.startswith("/proxies/"):
                     self._send(404, {"message": "missing"})
                     return

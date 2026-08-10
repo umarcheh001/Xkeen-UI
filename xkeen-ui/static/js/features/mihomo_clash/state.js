@@ -29,6 +29,5 @@ export function mihomoClashStateCopy(state) {
 
 export function normalizeMihomoClashSubview(name) {
   const value = String(name || '').trim().toLowerCase();
-  if (value === 'rules') return 'control';
   return MIHOMO_CLASH_SUBVIEWS.includes(value) ? value : 'control';
 }
