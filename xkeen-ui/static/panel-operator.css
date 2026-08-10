@@ -16947,7 +16947,14 @@ body.panel-page .xk-mihomo-connections-view-tab.is-active {
   color: var(--op-text) !important;
 }
 
-body.panel-page #mihomo-clash-closed-clear { margin-left: auto; }
+body.panel-page #mihomo-clash-closed-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-left: auto;
+  white-space: nowrap;
+}
 body.panel-page #mihomo-clash-closed-clear[hidden],
 body.panel-page #mihomo-clash-disconnect-all[hidden] { display: none !important; }
 
