@@ -77,13 +77,21 @@ class StubClient:
         return MihomoClashJSONResponse(None, 204, 1, 0)
 
 
-def make_app(discovery, client: StubClient, *, audit_logger=None, device_map_factory=None) -> Flask:
+def make_app(
+    discovery,
+    client: StubClient,
+    *,
+    audit_logger=None,
+    device_map_factory=None,
+    mihomo_config_file="/safe/mihomo/config.yaml",
+    mihomo_root="/safe/mihomo",
+) -> Flask:
     app = Flask(__name__)
     app.config["TESTING"] = True
     app.register_blueprint(
         create_mihomo_clash_blueprint(
-            mihomo_config_file="/safe/mihomo/config.yaml",
-            mihomo_root="/safe/mihomo",
+            mihomo_config_file=mihomo_config_file,
+            mihomo_root=mihomo_root,
             discovery_factory=lambda _config, _root: discovery,
             client_factory=lambda _target: client,
             audit_logger=audit_logger,
@@ -307,6 +315,40 @@ def test_rules_and_providers_routes_return_safe_versioned_dtos():
     assert "secret.invalid" not in serialized
     assert "/private/rules" not in serialized
 
+
+
+def test_rule_provider_content_route_is_bounded_searchable_and_redacted(tmp_path: Path):
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        "rule-providers:\n"
+        "  local/rules:\n"
+        "    type: inline\n"
+        "    behavior: domain\n"
+        "    payload: [example.test, +.filtered.test]\n",
+        encoding="utf-8",
+    )
+    http = make_app(
+        ready_discovery(),
+        StubClient(),
+        mihomo_config_file=str(config),
+        mihomo_root=str(tmp_path),
+    ).test_client()
+
+    response = http.get(
+        "/api/mihomo/clash/providers/rule/local%2Frules/content?q=FILTER&limit=1&offset=0"
+    )
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body["rules"] == ["+.filtered.test"]
+    assert body["provider"]["name"] == "local/rules"
+    assert body["limit"] == 1
+    assert "path" not in json.dumps(body).lower()
+
+    missing = http.get("/api/mihomo/clash/providers/rule/missing/content")
+    assert missing.status_code == 404
+    assert missing.get_json()["code"] == "provider_not_found"
+    assert str(tmp_path) not in json.dumps(missing.get_json())
 
 def test_provider_actions_revalidate_kind_name_and_healthcheck():
     proxy_payload = {

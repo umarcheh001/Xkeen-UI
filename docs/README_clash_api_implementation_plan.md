@@ -1,9 +1,11 @@
 # Clash API в Xkeen UI: план реализации операторского контура Mihomo
 
-Статус на **10 августа 2026 года**: **PR 1–3, PR 6–7, локально доступная часть PR 8, PR 9 и рекомендуемый PR 10 закрыты; PR 4–5 функционально собраны и работают на aarch64-панели, но после acceptance-аудита переведены в статус «частично закрыт / требуется доработка»**. Без роутера PR 8 усилен stateful fake Mihomo, нагрузочными/error/recovery и responsive/accessibility gates; PR 9 закрыт локальными REST/WS/fake/browser контрактами. Hardware acceptance aarch64/mipsle, WS/no-gevent и реальные CPU/RAM/network/mutation проверки честно отложены.
+Статус на **10 августа 2026 года**: **PR 1–3, PR 6–7, локально доступная часть PR 8, PR 9, рекомендуемый PR 10 и post-MVP PR 11–12 закрыты; PR 4–5 функционально собраны и работают на aarch64-панели, но после acceptance-аудита переведены в статус «частично закрыт / требуется доработка»**. Без роутера PR 8 усилен stateful fake Mihomo, нагрузочными/error/recovery и responsive/accessibility gates; PR 9, PR 11 и PR 12 закрыты локальными backend/frontend/browser контрактами. Hardware acceptance aarch64/mipsle, WS/no-gevent и реальные CPU/RAM/network/mutation проверки честно отложены.
 Дата последнего аудита: **10 августа 2026 года**.
 
 Post-MVP **PR 11 — Connections UX+** реализован локально 10 августа 2026 года: добавлены ограниченная памятью браузера история недавно закрытых соединений, расширенный allowlisted inspector, быстрые фильтры по значениям, копирование и сортировка по заголовкам. История не сохраняется на диск и ограничена 300 строками; router acceptance остаётся в общем hardware gate.
+
+Post-MVP **PR 12 — Rule-provider inspector** реализован локально 10 августа 2026 года: rule-provider открывается по имени из активного config в read-only инспекторе с server-side поиском и пагинацией. Поддержаны inline, YAML, Text и MRS; пути ограничены каталогом Mihomo, MRS декодируется через argv-вызов ядра в private temporary directory с bounded FIFO, а разобранный результат кэшируется по mtime/size. Browser не получает filesystem path, URL или stderr; router acceptance остаётся в общем hardware gate.
 
 Визуальный corrective gate перед следующим функциональным этапом: **реализован в исходниках 10 августа 2026 года, router acceptance ожидает поставки новой сборки**. Runtime shell уплотнён без повторных `Operator runtime`/`Mihomo`, постоянные искусственные `min-height` удалены, группы переведены на keyboard-accessible disclosure и по умолчанию все свёрнуты; добавлены массовое сворачивание/раскрытие и адаптивная 3/2/1-колоночная summary-сетка. Полный перечень причин и критериев — в разделе «Корректирующий визуальный проход Clash/Mihomo» документа [`panel-operator-redesign-completion-plan.md`](panel-operator-redesign-completion-plan.md).
 
@@ -845,6 +847,15 @@ Acceptance baseline: на aarch64 существующий `get_xray_device_name
 - stateful fake Mihomo проверяет реальные discovery/client/routes для `/rules`, обоих provider kinds, update, healthcheck и NDJSON log stream без обращения к живому роутеру;
 - real-router provider mutations и log stream не запускались: schema/transport/performance для фактической версии Mihomo должны быть подтверждены после появления роутера, без сохранения raw rules/logs/secret в артефакты.
 
+Post-MVP PR 12 — Rule-provider inspector от 10 августа 2026 года:
+
+- [x] Просмотр inline/YAML/Text/MRS в отдельном read-only inspector внутри вкладки «Правила».
+- [x] Server-side case-insensitive поиск, страницы по 200 строк, максимум 500 строк в ответе и 20 000 разобранных правил в process cache.
+- [x] Provider выбирается только по имени из активного YAML: request не принимает путь; canonical path обязан оставаться внутри Mihomo root и указывать на обычный файл.
+- [x] Text/YAML читаются с byte/row/line limits, bounded YAML loader и `O_NOFOLLOW`; MRS конвертируется одним процессом за раз из bounded snapshot через `mihomo convert-ruleset` без shell в private `0700` temporary directory с `0600` input и FIFO, timeout, ограничением вывода до записи на диск и гарантированной очисткой.
+- [x] LRU-кэш ограничен восемью entries и инвалидируется по `mtime_ns + size`; inline key строится из bounded payload. Ответ не содержит filesystem path, provider URL, secret или converter stderr.
+- [x] Добавлены unit/route/frontend/Playwright contracts для форматов, поиска, лимитов, cache invalidation, traversal/symlink и lifecycle.
+
 Post-PR 9 UI hotfix от 10 августа 2026 года:
 
 - заголовки карточек rules/providers выровнены по нижней границе с учётом `select`; прежний geometry gate кнопки «Логи» стал неактуален после переноса логов в самостоятельную вкладку ниже;
@@ -1026,6 +1037,7 @@ Post-PR 10 навигационная доработка от 10 августа 
 9. **PR 9 — P1 rules/providers/logs** — закрыт локально; router acceptance остаётся отложенным hardware gate;
 10. **PR 10 — safe templates, автоматический setup/migration UX, schema hover и финальная документация** — закрыт локально; новый и обновившийся пользователь получает помощник при отсутствующем controller, а новая router-сборка и hardware acceptance остаются отложенным gate Этапа 8.
 11. **PR 11 — Connections UX+** — закрыт локально: недавно закрытые соединения (до 300 строк в памяти браузера), расширенный allowlisted inspector, фильтр по клику, копирование host/IP/цепочки и сортировка по заголовкам; router acceptance остаётся отложенным hardware gate Этапа 8.
+12. **PR 12 — Rule-provider inspector** — закрыт локально: read-only просмотр inline/YAML/Text/MRS, server-side поиск и лимиты, confinement путей/безопасные temporary files и bounded cache по mtime/size; router acceptance остаётся отложенным hardware gate Этапа 8.
 
 Не объединять generic relay, UI, template migration и destructive actions в один большой PR.
 

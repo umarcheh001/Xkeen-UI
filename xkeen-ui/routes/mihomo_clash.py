@@ -19,6 +19,10 @@ from services.mihomo_clash_dto import (
     build_mihomo_clash_status_dto,
 )
 from services.mihomo_clash_guard import MihomoClashActionGuard, MihomoClashActionRejected
+from services.mihomo_rule_provider_inspector import (
+    RuleProviderInspectorError,
+    inspect_rule_provider,
+)
 from services.mihomo_clash_devices import get_mihomo_clash_device_map
 from services.request_limits import PayloadTooLargeError, read_request_json_limited
 from services.mihomo_clash_target import (
@@ -406,6 +410,35 @@ def create_mihomo_clash_blueprint(
                 "size_bytes": rule_result.size_bytes,
             },
         }
+        return jsonify(payload), 200
+
+    @bp.get("/api/mihomo/clash/providers/rule/<path:provider_name>/content")
+    def api_mihomo_clash_rule_provider_content(provider_name: str):
+        try:
+            payload = inspect_rule_provider(
+                config_file=mihomo_config_file,
+                mihomo_root=root,
+                provider_name=provider_name,
+                query=request.args.get("q", ""),
+                limit=request.args.get("limit", 200),
+                offset=request.args.get("offset", 0),
+            )
+        except RuleProviderInspectorError as exc:
+            return error_response(
+                exc.message,
+                exc.status,
+                ok=False,
+                code=exc.code,
+                retryable=False,
+            )
+        except Exception:
+            return error_response(
+                "Не удалось прочитать rule-provider Mihomo.",
+                500,
+                ok=False,
+                code="mihomo_rule_provider_inspection_failed",
+                retryable=False,
+            )
         return jsonify(payload), 200
 
     @bp.post("/api/mihomo/clash/providers/<kind>/<path:provider_name>/update")

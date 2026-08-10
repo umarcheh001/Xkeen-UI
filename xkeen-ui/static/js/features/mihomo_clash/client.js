@@ -112,6 +112,18 @@ export function fetchMihomoClashProviders(options = {}) {
   });
 }
 
+export function fetchMihomoRuleProviderContent(name, options = {}) {
+  const params = new URLSearchParams();
+  const query = String(options.query || '').trim();
+  if (query) params.set('q', query);
+  params.set('limit', String(Math.max(1, Math.min(500, Number(options.limit) || 200))));
+  params.set('offset', String(Math.max(0, Number(options.offset) || 0)));
+  return requestJSON(`${PROVIDERS_ENDPOINT}/rule/${encodeURIComponent(String(name || ''))}/content?${params}`, {
+    method: 'GET', cache: 'no-store', credentials: 'same-origin',
+    timeoutMs: 20000, retry: 0, signal: options.signal,
+  });
+}
+
 export function updateMihomoClashProvider(kind, name, options = {}) {
   const providerKind = String(kind || '');
   return requestJSON(`${PROVIDERS_ENDPOINT}/${encodeURIComponent(providerKind)}/${encodeURIComponent(String(name || ''))}/update`, {
@@ -199,6 +211,7 @@ export const mihomoClashClientApi = Object.freeze({
   fetchConnections: fetchMihomoClashConnections,
   fetchRules: fetchMihomoClashRules,
   fetchProviders: fetchMihomoClashProviders,
+  fetchRuleProviderContent: fetchMihomoRuleProviderContent,
   updateProvider: updateMihomoClashProvider,
   healthcheckProvider: healthcheckMihomoClashProvider,
   disconnectConnection: disconnectMihomoClashConnection,

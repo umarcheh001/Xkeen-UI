@@ -1132,6 +1132,22 @@
             <div id="mihomo-clash-providers-empty" class="xk-mihomo-rules-empty">Providers не настроены.</div>
           </section>
         </div>
+        <aside id="mihomo-clash-provider-inspector" class="xk-mihomo-provider-inspector" aria-labelledby="mihomo-clash-provider-inspector-title" hidden>
+          <div class="xk-mihomo-provider-inspector-head">
+            <div><h3 id="mihomo-clash-provider-inspector-title">Rule-provider</h3><span id="mihomo-clash-provider-inspector-meta">Загрузка содержимого…</span></div>
+            <button type="button" class="btn-secondary btn-icon" data-mihomo-provider-inspector-close aria-label="Закрыть просмотр rule-provider">{{ op_icon('close') }}</button>
+          </div>
+          <div class="xk-mihomo-provider-inspector-toolbar">
+            <label for="mihomo-clash-provider-filter">{{ op_icon('search') }}<input id="mihomo-clash-provider-filter" type="search" placeholder="Поиск внутри provider" autocomplete="off"></label>
+            <span>Read-only · до 500 строк</span>
+          </div>
+          <ol id="mihomo-clash-provider-rules" class="xk-mihomo-provider-rules"></ol>
+          <div id="mihomo-clash-provider-rules-empty" class="xk-mihomo-rules-empty">Rule-provider не содержит правил.</div>
+          <div class="xk-mihomo-provider-inspector-pager" aria-label="Страницы rule-provider">
+            <button type="button" id="mihomo-clash-provider-previous" class="btn-secondary" disabled>{{ op_icon('back') }}<span>Назад</span></button>
+            <button type="button" id="mihomo-clash-provider-next" class="btn-secondary" disabled><span>Дальше</span>{{ op_icon('forward') }}</button>
+          </div>
+        </aside>
       </div>
     </div>
 

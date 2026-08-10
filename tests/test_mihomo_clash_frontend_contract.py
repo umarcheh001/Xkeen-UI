@@ -380,3 +380,29 @@ def test_connection_inspector_cross_links_to_rules_without_persistent_mutation()
     assert 'id="mihomo-clash-connection-rule-link"' in markup
     assert "xkeen:mihomo-clash-open-rule" in connections
     assert "focusMihomoClashRule" in feature
+
+
+def test_rule_provider_inspector_is_read_only_bounded_and_searchable():
+    markup = _mihomo_markup()
+    client = _text(CLIENT)
+    rules = _text(RULES)
+    css = _text(CSS)
+
+    for fragment in (
+        'id="mihomo-clash-provider-inspector"',
+        'id="mihomo-clash-provider-filter"',
+        'id="mihomo-clash-provider-rules"',
+        'id="mihomo-clash-provider-previous"',
+        'id="mihomo-clash-provider-next"',
+        'data-mihomo-provider-inspect',
+        'fetchMihomoRuleProviderContent',
+        "/rule/${encodeURIComponent(String(name || ''))}/content",
+        'PROVIDER_PAGE_SIZE = 200',
+        'Read-only · до 500 строк',
+        '.xk-mihomo-provider-inspector[hidden]',
+    ):
+        assert fragment in markup or fragment in client or fragment in rules or fragment in css
+
+    assert "params.set('limit'" in client
+    assert "params.set('offset'" in client
+    assert "method: 'GET'" in client

@@ -37,6 +37,20 @@ function providersPayload() {
 }
 
 
+function providerContentPayload(url) {
+  const request = new URL(url);
+  const query = String(request.searchParams.get('q') || '').trim().toLowerCase();
+  const allRules = ['example.test', '+.filtered.test', 'DOMAIN-SUFFIX,fixture.test'];
+  const rules = query ? allRules.filter((rule) => rule.toLowerCase().includes(query)) : allRules;
+  return {
+    ok: true, schema_version: 1,
+    provider: { name: 'fixture-rules', type: 'http', behavior: 'domain', format: 'mrs' },
+    rules, query, offset: 0, limit: 200, total_rules: allRules.length, matched_rules: rules.length,
+    truncated: false, cache: { hit: false, key: 'mtime' }, source: { size_bytes: 512, mtime_ns: 1 },
+  };
+}
+
+
 function connectionsPayload() {
   return {
     ok: true, schema_version: 1, download_total: 0, upload_total: 0, memory: 1024,
@@ -60,7 +74,10 @@ async function mockPr9(page) {
     return route.fulfill({ json: { ok: true, schema_version: 1, groups: [], providers: [] } });
   });
   await page.route('**/api/mihomo/clash/rules', (route) => route.fulfill({ json: rulesPayload() }));
-  await page.route(/\/api\/mihomo\/clash\/providers(?:\/.*)?$/, (route) => {
+  await page.route(/\/api\/mihomo\/clash\/providers(?:\/.*)?(?:\?.*)?$/, (route) => {
+    if (new URL(route.request().url()).pathname.endsWith('/content')) {
+      return route.fulfill({ json: providerContentPayload(route.request().url()) });
+    }
     if (route.request().method() === 'POST') {
       actions.push(decodeURIComponent(new URL(route.request().url()).pathname));
       return route.fulfill({ json: { ok: true, schema_version: 1 } });
@@ -98,6 +115,14 @@ test('rules search, connection cross-link and provider actions stay explicit', a
   await page.locator('#mihomo-clash-provider-kind').selectOption('rule');
   await expect(page.locator('#mihomo-clash-providers-list .xk-mihomo-provider')).toHaveCount(1);
   await page.locator('#mihomo-clash-provider-kind').selectOption('all');
+
+  await page.locator('[data-provider-key="rule:fixture-rules"] [data-mihomo-provider-inspect]').click();
+  await expect(page.locator('#mihomo-clash-provider-inspector')).toBeVisible();
+  await expect(page.locator('#mihomo-clash-provider-inspector-meta')).toContainText('MRS');
+  await expect(page.locator('#mihomo-clash-provider-rules li')).toHaveCount(3);
+  await page.locator('#mihomo-clash-provider-filter').fill('filtered');
+  await expect(page.locator('#mihomo-clash-provider-rules li')).toHaveCount(1);
+  await expect(page.locator('#mihomo-clash-provider-rules')).toContainText('+.filtered.test');
 
   await page.locator('[data-provider-key="proxy:proxy/fixture"] [data-mihomo-provider-healthcheck]').click();
   await page.locator('#confirm-modal-ok-btn').click();

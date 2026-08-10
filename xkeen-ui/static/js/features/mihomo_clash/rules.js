@@ -2,6 +2,7 @@ import { iconHtml } from '../../ui/operator_icons.js';
 import { confirmMihomoAction } from '../mihomo_runtime.js';
 import {
   fetchMihomoClashProviders,
+  fetchMihomoRuleProviderContent,
   fetchMihomoClashRules,
   healthcheckMihomoClashProvider,
   updateMihomoClashProvider,
@@ -9,6 +10,7 @@ import {
 import { invalidateMihomoClashGroups } from './groups.js';
 
 const MAX_RULE_ROWS = 300;
+const PROVIDER_PAGE_SIZE = 200;
 
 let root = null;
 let active = false;
@@ -20,6 +22,12 @@ let requests = new Set();
 let query = '';
 let providerKind = 'all';
 let pendingProvider = '';
+let inspectedProvider = '';
+let inspectorPayload = null;
+let inspectorQuery = '';
+let inspectorOffset = 0;
+let inspectorRequest = null;
+let inspectorSearchTimer = 0;
 
 function byId(id) { return document.getElementById(id); }
 function escapeHtml(value) {
@@ -89,6 +97,7 @@ function renderProviders() {
       <div class="xk-mihomo-provider-copy"><strong>${escapeHtml(provider.name)}</strong><small>${provider.kind === 'proxy' ? 'Proxy provider' : 'Rule provider'} · ${escapeHtml(provider.vehicle_type || provider.type || '—')}</small></div>
       <div class="xk-mihomo-provider-state"><strong>${escapeHtml(state)}</strong><small>${escapeHtml(provider.updated_at || 'Время обновления неизвестно')}</small></div>
       <div class="xk-mihomo-provider-actions">
+        ${provider.kind === 'rule' ? `<button type="button" class="btn-secondary btn-icon" data-mihomo-provider-inspect aria-label="Просмотреть rule-provider ${escapeHtml(provider.name)}">${iconHtml('preview')}</button>` : ''}
         ${provider.healthcheck ? `<button type="button" class="btn-secondary btn-icon" data-mihomo-provider-healthcheck aria-label="Проверить provider ${escapeHtml(provider.name)}" ${pending || !healthcheckEnabled ? 'disabled' : ''}>${iconHtml(pending ? 'loading' : 'ping')}</button>` : ''}
         <button type="button" class="btn-secondary btn-icon" data-mihomo-provider-update aria-label="Обновить provider ${escapeHtml(provider.name)}" ${pendingProvider || !updateEnabled ? 'disabled' : ''}>${iconHtml(pending ? 'loading' : 'refresh')}</button>
       </div>
@@ -98,9 +107,93 @@ function renderProviders() {
   if (count) count.textContent = `${providersPayload?.total_providers || 0} providers`;
 }
 
+function providerByKey(key) {
+  return (providersPayload?.providers || []).find((item) => providerKey(item) === key) || null;
+}
+
+function formatSize(value) {
+  const bytes = Math.max(0, Number(value) || 0);
+  if (bytes < 1024) return `${bytes} Б`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes >= 10240 ? 0 : 1)} КБ`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
+}
+
+function renderProviderInspector() {
+  const inspector = byId('mihomo-clash-provider-inspector');
+  const title = byId('mihomo-clash-provider-inspector-title');
+  const meta = byId('mihomo-clash-provider-inspector-meta');
+  const list = byId('mihomo-clash-provider-rules');
+  const empty = byId('mihomo-clash-provider-rules-empty');
+  const previous = byId('mihomo-clash-provider-previous');
+  const next = byId('mihomo-clash-provider-next');
+  if (!inspector || !list || !empty) return;
+  inspector.hidden = !inspectedProvider;
+  if (!inspectedProvider) return;
+  const provider = inspectorPayload?.provider || {};
+  if (title) title.textContent = provider.name || inspectedProvider;
+  const source = inspectorPayload?.source || {};
+  const cache = inspectorPayload?.cache || {};
+  if (meta) meta.textContent = inspectorPayload
+    ? `${String(provider.format || '—').toUpperCase()} · ${provider.behavior || '—'} · ${inspectorPayload.total_rules || 0} правил · ${formatSize(source.size_bytes)}${cache.hit ? ' · кэш' : ''}`
+    : 'Загрузка содержимого…';
+  const rules = Array.isArray(inspectorPayload?.rules) ? inspectorPayload.rules : [];
+  list.innerHTML = rules.map((rule, index) => `<li><span>${inspectorOffset + index + 1}</span><code>${escapeHtml(rule)}</code></li>`).join('');
+  empty.hidden = rules.length > 0 || !inspectorPayload;
+  if (!rules.length && inspectorPayload) empty.textContent = inspectorQuery
+    ? 'Совпадений в пределах безопасного лимита нет.' : 'Rule-provider не содержит правил.';
+  if (previous) previous.disabled = !inspectorPayload || inspectorOffset <= 0;
+  if (next) next.disabled = !inspectorPayload || inspectorOffset + rules.length >= (inspectorPayload.matched_rules || 0);
+}
+
+async function loadProviderInspector({ reset = false } = {}) {
+  if (!active || !inspectedProvider) return;
+  if (reset) inspectorOffset = 0;
+  if (inspectorRequest) { try { inspectorRequest.abort(); } catch (error) {} }
+  const controller = new AbortController();
+  inspectorRequest = controller;
+  inspectorPayload = null; renderProviderInspector();
+  try {
+    const payload = await fetchMihomoRuleProviderContent(inspectedProvider, {
+      query: inspectorQuery, limit: PROVIDER_PAGE_SIZE, offset: inspectorOffset, signal: controller.signal,
+    });
+    if (!active || controller.signal.aborted || inspectedProvider !== payload?.provider?.name) return;
+    inspectorPayload = payload;
+    renderProviderInspector();
+    setNotice(payload.truncated
+      ? `Rule-provider показан частично: ${payload.matched_rules} совпадений, по ${payload.limit} на страницу.`
+      : `Rule-provider ${payload.provider.name}: ${payload.matched_rules} правил.`, 'neutral');
+  } catch (error) {
+    if (!controller.signal.aborted && active) {
+      inspectorPayload = { rules: [], matched_rules: 0, total_rules: 0, provider: { name: inspectedProvider } };
+      renderProviderInspector();
+      setNotice(error?.data?.error || 'Не удалось открыть содержимое rule-provider.', 'danger');
+    }
+  } finally { if (inspectorRequest === controller) inspectorRequest = null; }
+}
+
+function openProviderInspector(provider) {
+  if (!provider || provider.kind !== 'rule') return;
+  inspectedProvider = provider.name;
+  inspectorPayload = null; inspectorOffset = 0; inspectorQuery = '';
+  const input = byId('mihomo-clash-provider-filter');
+  if (input) input.value = '';
+  renderProviderInspector();
+  void loadProviderInspector({ reset: true });
+}
+
+function closeProviderInspector() {
+  window.clearTimeout(inspectorSearchTimer);
+  if (inspectorRequest) { try { inspectorRequest.abort(); } catch (error) {} }
+  inspectorRequest = null; inspectedProvider = ''; inspectorPayload = null; inspectorOffset = 0;
+  renderProviderInspector();
+}
+
 function abortRequests() {
   for (const controller of requests) { try { controller.abort(); } catch (error) {} }
   requests.clear();
+  if (inspectorRequest) { try { inspectorRequest.abort(); } catch (error) {} }
+  inspectorRequest = null;
+  window.clearTimeout(inspectorSearchTimer);
 }
 
 async function loadRuntime(runGeneration) {
@@ -159,10 +252,19 @@ function bind() {
   byId('mihomo-clash-rules-filter')?.addEventListener('input', (event) => { query = event.target.value || ''; renderRules(); });
   byId('mihomo-clash-provider-kind')?.addEventListener('change', (event) => { providerKind = event.target.value || 'all'; renderProviders(); });
   byId('mihomo-clash-rules-refresh')?.addEventListener('click', () => { if (active) void loadRuntime(generation); });
+  byId('mihomo-clash-provider-filter')?.addEventListener('input', (event) => {
+    inspectorQuery = event.target.value || '';
+    window.clearTimeout(inspectorSearchTimer);
+    inspectorSearchTimer = window.setTimeout(() => void loadProviderInspector({ reset: true }), 250);
+  });
+  byId('mihomo-clash-provider-previous')?.addEventListener('click', () => { inspectorOffset = Math.max(0, inspectorOffset - PROVIDER_PAGE_SIZE); void loadProviderInspector(); });
+  byId('mihomo-clash-provider-next')?.addEventListener('click', () => { inspectorOffset += PROVIDER_PAGE_SIZE; void loadProviderInspector(); });
   root.addEventListener('click', (event) => {
+    if (event.target.closest?.('[data-mihomo-provider-inspector-close]')) { closeProviderInspector(); return; }
     const card = event.target.closest?.('[data-provider-key]');
     if (!card) return;
-    const provider = (providersPayload?.providers || []).find((item) => providerKey(item) === card.dataset.providerKey);
+    const provider = providerByKey(card.dataset.providerKey);
+    if (event.target.closest?.('[data-mihomo-provider-inspect]')) { openProviderInspector(provider); return; }
     if (event.target.closest?.('[data-mihomo-provider-update]')) void providerAction(provider, 'update');
     if (event.target.closest?.('[data-mihomo-provider-healthcheck]')) void providerAction(provider, 'healthcheck');
   });
@@ -171,7 +273,7 @@ function bind() {
 export function initMihomoClashRules() {
   root = byId('mihomo-clash-rules');
   if (!root) return false;
-  bind(); renderRules(); renderProviders(); return true;
+  bind(); renderRules(); renderProviders(); renderProviderInspector(); return true;
 }
 
 export function activateMihomoClashRules(nextCapabilities = {}) {
@@ -182,7 +284,7 @@ export function activateMihomoClashRules(nextCapabilities = {}) {
 }
 
 export function deactivateMihomoClashRules() {
-  active = false; generation += 1; abortRequests(); root?.setAttribute('aria-busy', 'false'); return true;
+  active = false; generation += 1; abortRequests(); closeProviderInspector(); root?.setAttribute('aria-busy', 'false'); return true;
 }
 
 export function focusMihomoClashRule(rule, payload = '') {
