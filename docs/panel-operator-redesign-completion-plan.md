@@ -409,7 +409,7 @@ XKEEN_CAPTURE_UI=1 npx playwright test e2e/panel_operator_ui.spec.mjs --project=
 - [x] гарантировать быстрый переход к `Конфигурации`: переключатель остаётся в compact workspace bar, editor не находится после сотен обязательно раскрытых rows;
 - [x] добавить функциональные E2E assertions для keyboard accordion flow, collapse-all и прямого перехода в конфигурацию;
 - [ ] добавить полный visual/geometry matrix для ready/loading/empty/error, 15/387 fixture, dark/light, 1920/1440/1024/390 px и no-overflow;
-- [x] обновить cache-buster `panel-operator.css` до `20260810e`;
+- [x] обновить cache-buster `panel-operator.css` до `20260810f` (включая post-PR 9 выравнивание карточек rules/providers и кнопки «Логи»);
 - [ ] проверить исправленную поставляемую сборку на реальной панели до закрытия этого прохода.
 
 Критерий выхода: при 1440×900 оператор видит compact runtime summary и начало полезного содержимого без искусственной пустоты; список 15 групп сканируется без прокрутки через сотни строк, раскрытие узлов осознанно и доступно с клавиатуры, а `Конфигурация` остаётся достижимой одним действием из видимого workspace bar.

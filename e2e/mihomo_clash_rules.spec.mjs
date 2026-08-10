@@ -85,6 +85,23 @@ test('rules search, connection cross-link and provider actions stay explicit', a
 
   await expect(page.locator('#mihomo-clash-rules-rows tr')).toHaveCount(3);
   await expect(page.locator('#mihomo-clash-providers-list .xk-mihomo-provider')).toHaveCount(2);
+  const layout = await page.evaluate(() => {
+    const ruleHead = document.querySelector('.xk-mihomo-rules-section .xk-mihomo-rules-section-head').getBoundingClientRect();
+    const providerHead = document.querySelector('.xk-mihomo-providers-section .xk-mihomo-rules-section-head').getBoundingClientRect();
+    const button = document.querySelector('#mihomo-clash-logs-open').getBoundingClientRect();
+    const icon = document.querySelector('#mihomo-clash-logs-open .xk-action-icon').getBoundingClientRect();
+    const label = document.querySelector('#mihomo-clash-logs-open .xk-action-label').getBoundingClientRect();
+    return {
+      headerBottomDelta: Math.abs(ruleHead.bottom - providerHead.bottom),
+      iconInside: icon.left >= button.left && icon.right <= button.right && icon.top >= button.top && icon.bottom <= button.bottom,
+      labelInside: label.left >= button.left && label.right <= button.right && label.top >= button.top && label.bottom <= button.bottom,
+      centerDelta: Math.abs((icon.top + icon.bottom) / 2 - (label.top + label.bottom) / 2),
+    };
+  });
+  expect(layout.headerBottomDelta).toBeLessThanOrEqual(1);
+  expect(layout.iconInside).toBe(true);
+  expect(layout.labelInside).toBe(true);
+  expect(layout.centerDelta).toBeLessThanOrEqual(1);
   await page.locator('#mihomo-clash-rules-filter').fill('fixture-rules');
   await expect(page.locator('#mihomo-clash-rules-rows tr')).toHaveCount(1);
   await page.locator('#mihomo-clash-provider-kind').selectOption('rule');

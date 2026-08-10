@@ -17036,6 +17036,22 @@ body.panel-page .xk-mihomo-rules-search .xk-action-icon {
 body.panel-page .xk-mihomo-rules-search input { width: 100%; padding-left: 31px !important; }
 body.panel-page .xk-mihomo-rules-count { margin-left: auto; color: var(--op-muted); white-space: nowrap; }
 
+body.panel-page #mihomo-clash-logs-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 72px;
+  padding: 0 10px !important;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+body.panel-page #mihomo-clash-logs-open .xk-action-label {
+  display: inline-block;
+  line-height: 1;
+}
+
 body.panel-page .xk-mihomo-rules-notice {
   min-height: 18px;
   color: var(--op-muted);
@@ -17064,7 +17080,7 @@ body.panel-page .xk-mihomo-rules-section-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 38px;
+  min-height: calc(var(--op-control-h) + 10px);
   padding: 5px 8px;
   border-bottom: 1px solid var(--op-border);
   background: var(--op-surface-2);

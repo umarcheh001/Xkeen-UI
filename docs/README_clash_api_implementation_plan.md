@@ -843,6 +843,11 @@ Acceptance baseline: на aarch64 существующий `get_xray_device_name
 - stateful fake Mihomo проверяет реальные discovery/client/routes для `/rules`, обоих provider kinds, update, healthcheck и NDJSON log stream без обращения к живому роутеру;
 - real-router provider mutations и log stream не запускались: schema/transport/performance для фактической версии Mihomo должны быть подтверждены после появления роутера, без сохранения raw rules/logs/secret в артефакты.
 
+Post-PR 9 UI hotfix от 10 августа 2026 года:
+
+- заголовки карточек rules/providers выровнены по нижней границе с учётом `select`, а кнопка «Логи» получила явный inline-flex contract: иконка и подпись центрированы и не выходят за control bounds;
+- Playwright PR 9 дополнен geometry regression gate для обеих карточек и содержимого кнопки; целевой suite повторно прошёл (`3 passed`).
+
 Критерий выхода:
 
 - P1 streams живут только пока соответствующий subview/drawer открыт;
