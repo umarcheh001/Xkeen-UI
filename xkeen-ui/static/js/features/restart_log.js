@@ -117,6 +117,12 @@ let restartLogModuleApi = null;
       failureText: 'конфиг применён, но перезапуск xkeen завершился ошибкой',
       bucket: 'mihomo',
     },
+    'mihomo-security-migration': {
+      label: 'Mihomo security',
+      successText: 'безопасная миграция применена, xkeen перезапущен',
+      failureText: 'миграция сохранена, но перезапуск xkeen завершился ошибкой',
+      bucket: 'mihomo',
+    },
     'mihomo-profile-activate': {
       label: 'Mihomo',
       successText: 'профиль активирован, xkeen перезапущен',

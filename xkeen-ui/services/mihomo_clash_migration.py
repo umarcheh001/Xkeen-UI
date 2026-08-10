@@ -1,0 +1,128 @@
+"""Opt-in migration helpers for an unsafe Mihomo external controller.
+
+The migration is deliberately conservative: it only changes the top-level
+controller binding and never rewrites a user's YAML silently.  Unix socket is
+preferred because it requires no browser-visible credential; TCP fallback is
+loopback-only and gets a generated secret at apply time.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import re
+import secrets
+from dataclasses import dataclass
+
+
+_CONTROLLER_RE = re.compile(
+    r"^(?P<indent>\s*)external-controller\s*:\s*.*$", re.MULTILINE
+)
+_UNIX_RE = re.compile(
+    r"^(?P<indent>\s*)external-controller-unix\s*:\s*.*$", re.MULTILINE
+)
+_SECRET_RE = re.compile(r"^(?P<indent>\s*)secret\s*:\s*.*$", re.MULTILINE)
+
+
+@dataclass(frozen=True)
+class MigrationPreview:
+    content: str
+    transport: str
+    changes: tuple[str, ...]
+
+    @property
+    def preview_id(self) -> str:
+        digest = hashlib.sha256()
+        digest.update(self.transport.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(self.content.encode("utf-8"))
+        return digest.hexdigest()
+
+    def public_dict(self) -> dict[str, object]:
+        return {
+            "transport": self.transport,
+            "changes": list(self.changes),
+            "content": self.content,
+            "preview_id": self.preview_id,
+        }
+
+
+def _replace_or_insert(
+    text: str, pattern: re.Pattern[str], line: str
+) -> tuple[str, bool]:
+    match = pattern.search(text)
+    if match:
+        return text[: match.start()] + f"{match.group('indent')}{line}" + text[
+            match.end() :
+        ], True
+    return text.rstrip() + "\n" + line + "\n", False
+
+
+def _replace_if_present(
+    text: str, pattern: re.Pattern[str], line: str
+) -> tuple[str, bool]:
+    match = pattern.search(text)
+    if not match:
+        return text, False
+    return text[: match.start()] + f"{match.group('indent')}{line}" + text[
+        match.end() :
+    ], True
+
+
+def build_safe_mihomo_config(
+    text: str, *, prefer_unix: bool = True
+) -> MigrationPreview:
+    """Return a preview without exposing/generated secrets.
+
+    Unix is the default.  The TCP path is useful on installations where the
+    core cannot create a socket; its secret is generated only during apply.
+    """
+
+    original = str(text or "")
+    changes: list[str] = []
+    if prefer_unix:
+        updated, existed = _replace_or_insert(
+            original, _UNIX_RE, "external-controller-unix: ./mihomo-api.sock"
+        )
+        if not existed:
+            changes.append("Добавить external-controller-unix внутри корня Mihomo")
+        updated, existed_tcp = _replace_if_present(
+            updated,
+            _CONTROLLER_RE,
+            "# external-controller отключён: используется Unix socket",
+        )
+        if existed_tcp:
+            changes.append("Отключить LAN/TCP controller")
+        updated, existed_secret = _replace_if_present(
+            updated, _SECRET_RE, "# secret не требуется для Unix socket"
+        )
+        if existed_secret:
+            changes.append("Удалить secret из runtime-конфига")
+        return MigrationPreview(updated, "unix", tuple(changes))
+
+    updated, existed = _replace_or_insert(
+        original, _CONTROLLER_RE, "external-controller: 127.0.0.1:9090"
+    )
+    if not existed:
+        changes.append("Добавить loopback TCP controller")
+    if _SECRET_RE.search(updated):
+        updated = _SECRET_RE.sub(
+            lambda m: f"{m.group('indent')}secret: __XKEEN_GENERATED_SECRET__",
+            updated,
+            count=1,
+        )
+    else:
+        updated = updated.rstrip() + "\nsecret: __XKEEN_GENERATED_SECRET__\n"
+    changes.append("Сгенерировать непустой secret при применении")
+    return MigrationPreview(updated, "tcp-loopback", tuple(changes))
+
+
+def materialize_generated_secret(text: str) -> str:
+    token = secrets.token_urlsafe(24)
+    return str(text or "").replace("__XKEEN_GENERATED_SECRET__", token)
+
+
+__all__ = [
+    "MigrationPreview",
+    "build_safe_mihomo_config",
+    "materialize_generated_secret",
+]

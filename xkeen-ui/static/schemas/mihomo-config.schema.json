@@ -120,6 +120,17 @@
       "description": "Адрес RESTful API для управления Mihomo (dashboard zashboard/yacd/metacubexd). По соображениям безопасности на публичных интерфейсах используйте `external-controller-tls` + `secret`.",
       "examples": ["0.0.0.0:9090", "127.0.0.1:9090"]
     },
+    "external-controller-unix": {
+      "type": "string",
+      "title": "Локальный Unix socket Clash API",
+      "description": "Путь к Unix-сокету External Controller (Clash API) Mihomo. Для Xkeen UI рекомендуется `./mihomo-api.sock`: панель подключается к API через локальный backend, поэтому отдельный TCP-порт в LAN не открывается. После добавления параметра перезапустите Mihomo.",
+      "default": "./mihomo-api.sock",
+      "examples": ["./mihomo-api.sock"],
+      "x-ui-explain": "Создаёт локальный файл-сокет, через который Xkeen UI управляет Mihomo без публикации порта 9090 в домашней сети.",
+      "x-ui-use-case": "Используйте для встроенного раздела «Mihomo → Управление». Это рекомендуемый и наиболее безопасный transport для панели на том же роутере.",
+      "x-ui-example": "external-controller-unix: ./mihomo-api.sock",
+      "x-ui-warning": "Путь должен находиться внутри каталога Mihomo. После изменения нужен перезапуск ядра. Не добавляйте публичный `external-controller: 0.0.0.0:9090` без непустого `secret`."
+    },
     "external-controller-tls": {
       "type": "string",
       "description": "Адрес RESTful API с TLS. Требует сертификата, заданного через `tls.certificate`/`tls.private-key`.",

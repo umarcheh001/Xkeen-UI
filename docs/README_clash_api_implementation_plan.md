@@ -1,6 +1,6 @@
 # Clash API в Xkeen UI: план реализации операторского контура Mihomo
 
-Статус на **10 августа 2026 года**: **PR 1–3, PR 6–7, локально доступная часть PR 8 и PR 9 закрыты; PR 4–5 функционально собраны и работают на aarch64-панели, но после acceptance-аудита переведены в статус «частично закрыт / требуется доработка»**. Без роутера PR 8 усилен stateful fake Mihomo, нагрузочными/error/recovery и responsive/accessibility gates; PR 9 закрыт локальными REST/WS/fake/browser контрактами. Hardware acceptance aarch64/mipsle, WS/no-gevent и реальные CPU/RAM/network/mutation проверки честно отложены.
+Статус на **10 августа 2026 года**: **PR 1–3, PR 6–7, локально доступная часть PR 8, PR 9 и рекомендуемый PR 10 закрыты; PR 4–5 функционально собраны и работают на aarch64-панели, но после acceptance-аудита переведены в статус «частично закрыт / требуется доработка»**. Без роутера PR 8 усилен stateful fake Mihomo, нагрузочными/error/recovery и responsive/accessibility gates; PR 9 закрыт локальными REST/WS/fake/browser контрактами. Hardware acceptance aarch64/mipsle, WS/no-gevent и реальные CPU/RAM/network/mutation проверки честно отложены.
 Дата последнего аудита: **10 августа 2026 года**.
 
 Визуальный corrective gate перед следующим функциональным этапом: **реализован в исходниках 10 августа 2026 года, router acceptance ожидает поставки новой сборки**. Runtime shell уплотнён без повторных `Operator runtime`/`Mihomo`, постоянные искусственные `min-height` удалены, группы переведены на keyboard-accessible disclosure и по умолчанию все свёрнуты; добавлены массовое сворачивание/раскрытие и адаптивная 3/2/1-колоночная summary-сетка. Полный перечень причин и критериев — в разделе «Корректирующий визуальный проход Clash/Mihomo» документа [`panel-operator-redesign-completion-plan.md`](panel-operator-redesign-completion-plan.md).
@@ -856,14 +856,32 @@ Post-PR 9 UI hotfix от 10 августа 2026 года:
 
 ### Этап 7. Безопасные шаблоны и rollout
 
+Статус на 10 августа 2026 года: **рекомендуемый PR 10 закрыт локально**. Новые templates/generator Unix-first, существующий YAML не меняется при установке, а небезопасный LAN controller получает warning и opt-in preview/apply workflow с validate + backup + explicit restart. Router acceptance новой поставки остаётся частью отложенного hardware gate Этапа 8.
+
 Задачи:
 
-- [ ] Обновить bundled templates: loopback/Unix-first controller и non-empty generated secret там, где нужен TCP.
-- [ ] Добавить validator warning для LAN bind без secret.
-- [ ] Предложить opt-in diff/patch для существующего config, с backup + validate + explicit restart.
-- [ ] Сохранить Zashboard как optional external tool, но убрать его из основного runtime workflow.
-- [ ] Обновить root README, install notes, Android behavior и security guidance.
-- [ ] Добавить release note и feature flag для первого rollout при необходимости.
+- [x] Обновить bundled templates: loopback/Unix-first controller и non-empty generated secret там, где нужен TCP.
+- [x] Добавить validator warning для LAN bind без secret.
+- [x] Предложить opt-in diff/patch для существующего config, с backup + validate + explicit restart.
+- [x] Сохранить Zashboard как optional external tool, но убрать его из основного runtime workflow.
+- [x] Обновить root README, install notes, Android behavior и security guidance.
+- [x] Добавить release note; отдельный feature flag по итогам review не требуется, поскольку UI lazy, а migration строго opt-in.
+
+Что закрыто в рекомендуемом PR 10:
+
+- bundled `custom.yaml`, `zkeen.yaml`, `template.yaml` и generator skeleton используют `external-controller-unix: ./mihomo-api.sock`; installer продолжает обновлять только bundled templates и не переписывает активный `config.yaml`;
+- если в активном конфиге controller отсутствует, status facade возвращает `setup_required`, а **Mihomo → Управление** показывает понятную карточку **«Настроить автоматически»** вместо требования вручную дописывать YAML;
+- мастер первичной настройки строит non-mutating preview, добавляет Unix socket только после подтверждения и заранее включает необходимый restart; при смене transport preview обновляется автоматически;
+- status security signal `tcp_lan_unprotected` теперь отображается заметным warning с переходом к миграции;
+- migration preview не пишет на диск, поддерживает Unix-first и loopback TCP + generated secret, а apply требует confirm, запускает `mihomo -t`, создаёт обычный backup через `save_config` и перезапускает только по отдельной галке;
+- `mihomo-config.schema.json` описывает `external-controller-unix`, поэтому YAML hover объясняет локальный socket, рекомендуемое значение `./mihomo-api.sock` и отсутствие публичного порта 9090;
+- root install/security guidance, Android behavior и release note обновлены; Zashboard сохранён как optional external tool;
+- отдельный rollout feature flag не добавлен: runtime lazy-loaded, endpoints session/CSRF protected, а изменение YAML невозможно без opt-in apply.
+
+Локальная проверка PR 10:
+
+- targeted migration/backend/frontend contracts: `127 passed`; Ruff, `node --check`, `git diff --check`, `npm run frontend:verify` и `npm run frontend:build` прошли;
+- живой router config/traffic в PR 10 не изменялся; Unix socket creation, restart и rollback подтверждаются после поставки на aarch64/mipsle.
 
 Критерий выхода:
 
@@ -998,7 +1016,7 @@ Post-PR 9 UI hotfix от 10 августа 2026 года:
 7. **PR 7 — connections/overview UI + device enrichment** — закрыт локально: lifecycle-aware WS/fallback UI, overview/table/mobile/inspector, cached device map и confirmed disconnect UX; router acceptance остаётся Этапом 8;
 8. **PR 8 — performance, responsive, accessibility, router acceptance** — локальная часть закрыта: stateful fake Mihomo, load/error/recovery, responsive/a11y/lifecycle gate и CI workflow; hardware acceptance остаётся отложенным до доступа к роутеру;
 9. **PR 9 — P1 rules/providers/logs** — закрыт локально; router acceptance остаётся отложенным hardware gate;
-10. **PR 10 — safe templates, migration UX и финальная документация**.
+10. **PR 10 — safe templates, автоматический setup/migration UX, schema hover и финальная документация** — закрыт локально; новый и обновившийся пользователь получает помощник при отсутствующем controller, а новая router-сборка и hardware acceptance остаются отложенным gate Этапа 8.
 
 Не объединять generic relay, UI, template migration и destructive actions в один большой PR.
 

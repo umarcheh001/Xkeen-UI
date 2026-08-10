@@ -16670,6 +16670,68 @@ body.panel-page .xk-mihomo-runtime[data-tone="danger"] .xk-mihomo-status-label.i
   color: var(--op-danger) !important;
 }
 
+body.panel-page .xk-mihomo-security-warning {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--op-warning-border, rgba(245, 158, 11, .55));
+  border-radius: var(--op-radius-md, 12px);
+  background: var(--op-warning-soft, rgba(245, 158, 11, .1));
+}
+
+body.panel-page .xk-mihomo-security-warning[hidden],
+body.panel-page .xk-mihomo-migration[hidden] { display: none !important; }
+
+body.panel-page .xk-mihomo-security-warning > div { display: grid; gap: 3px; }
+body.panel-page .xk-mihomo-security-warning span { color: var(--op-text-muted); }
+body.panel-page .xk-mihomo-security-warning code {
+  width: fit-content;
+  max-width: 100%;
+  padding: 3px 6px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-xs, 6px);
+  background: var(--op-code-bg, rgba(0, 0, 0, .16));
+  color: var(--op-text-strong);
+  overflow-wrap: anywhere;
+}
+
+body.panel-page .xk-mihomo-migration {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 14px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-md, 12px);
+  background: var(--op-surface-raised, var(--op-surface));
+}
+
+body.panel-page .xk-mihomo-migration-head,
+body.panel-page .xk-mihomo-migration-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+body.panel-page .xk-mihomo-migration h3,
+body.panel-page .xk-mihomo-migration p { margin: 0; }
+body.panel-page .xk-mihomo-migration p { color: var(--op-text-muted); }
+body.panel-page .xk-mihomo-migration pre {
+  max-height: 320px;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-sm, 8px);
+  background: var(--op-code-bg, rgba(0, 0, 0, .16));
+  white-space: pre;
+}
+
+body.panel-page #mihomo-clash-migration-status[data-tone="danger"] { color: var(--op-danger); }
+
 body.panel-page .xk-mihomo-status-label.is-retry-suggested:hover:not(:disabled),
 body.panel-page .xk-mihomo-status-label.is-retry-suggested:focus-visible {
   background: color-mix(in srgb, currentColor 10%, transparent) !important;
@@ -17608,6 +17670,12 @@ body.panel-page .xk-mihomo-groups-empty {
 }
 
 @media (max-width: 820px) {
+  body.panel-page .xk-mihomo-security-warning { grid-template-columns: auto minmax(0, 1fr); }
+  body.panel-page .xk-mihomo-security-warning > button { grid-column: 1 / -1; justify-self: stretch; }
+  body.panel-page .xk-mihomo-migration-head,
+  body.panel-page .xk-mihomo-migration-actions { align-items: stretch; flex-direction: column; }
+  body.panel-page .xk-mihomo-migration-actions > button { width: 100%; }
+
   body.panel-page .xk-mihomo-workspace-head {
     display: grid;
     align-items: stretch;

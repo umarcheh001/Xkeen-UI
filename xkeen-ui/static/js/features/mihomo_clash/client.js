@@ -6,6 +6,8 @@ const DELAY_ENDPOINT = '/api/mihomo/clash/delay';
 const CONNECTIONS_ENDPOINT = '/api/mihomo/clash/connections';
 const RULES_ENDPOINT = '/api/mihomo/clash/rules';
 const PROVIDERS_ENDPOINT = '/api/mihomo/clash/providers';
+const MIGRATION_PREVIEW_ENDPOINT = '/api/mihomo/security/migration-preview';
+const MIGRATION_APPLY_ENDPOINT = '/api/mihomo/security/migration-apply';
 const WS_TOKEN_ENDPOINT = '/api/ws-token';
 
 function httpApi() {
@@ -173,6 +175,22 @@ export function mihomoClashLogsWsUrl(token) {
   return url.toString();
 }
 
+export function previewMihomoClashMigration(transport, options = {}) {
+  return requestJSON(MIGRATION_PREVIEW_ENDPOINT, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ transport: String(transport || 'unix') }),
+    credentials: 'same-origin', timeoutMs: 12000, retry: 0, signal: options.signal,
+  });
+}
+
+export function applyMihomoClashMigration(transport, previewId, restart, options = {}) {
+  return requestJSON(MIGRATION_APPLY_ENDPOINT, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ transport: String(transport || 'unix'), preview_id: String(previewId || ''), confirmed: true, restart: !!restart }),
+    credentials: 'same-origin', timeoutMs: 30000, retry: 0, signal: options.signal,
+  });
+}
+
 export const mihomoClashClientApi = Object.freeze({
   fetchStatus: fetchMihomoClashStatus,
   fetchGroups: fetchMihomoClashGroups,
@@ -186,4 +204,6 @@ export const mihomoClashClientApi = Object.freeze({
   disconnectConnection: disconnectMihomoClashConnection,
   disconnectAllConnections: disconnectAllMihomoClashConnections,
   requestWsToken: requestMihomoClashWsToken,
+  previewMigration: previewMihomoClashMigration,
+  applyMigration: applyMihomoClashMigration,
 });

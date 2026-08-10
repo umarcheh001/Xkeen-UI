@@ -977,6 +977,39 @@
       <span id="mihomo-clash-status-mode">Режим —</span>
     </div>
 
+    <div id="mihomo-clash-security-warning" class="xk-mihomo-security-warning" role="alert" hidden>
+      {{ op_icon('alert') }}
+      <div>
+        <strong id="mihomo-clash-assistant-title">Нужна настройка Mihomo API</strong>
+        <span id="mihomo-clash-assistant-message">Панель безопасно добавит локальный Unix socket в активный config.yaml после вашего подтверждения.</span>
+        <code id="mihomo-clash-assistant-value">external-controller-unix: ./mihomo-api.sock</code>
+      </div>
+      <button id="mihomo-clash-assistant-button" type="button" class="btn-primary" data-mihomo-clash-action="migration-preview">Настроить автоматически</button>
+    </div>
+
+    <section id="mihomo-clash-migration" class="xk-mihomo-migration" aria-labelledby="mihomo-clash-migration-title" hidden>
+      <div class="xk-mihomo-migration-head">
+        <div><h3 id="mihomo-clash-migration-title">Автоматическая настройка Mihomo API</h3><p id="mihomo-clash-migration-description">Панель подготовит изменение; активный config.yaml не меняется до отдельного подтверждения.</p></div>
+        <button type="button" class="btn-secondary btn-icon" data-mihomo-clash-action="migration-close" aria-label="Закрыть миграцию">{{ op_icon('close') }}</button>
+      </div>
+      <label for="mihomo-clash-migration-transport">Transport</label>
+      <select id="mihomo-clash-migration-transport">
+        <option value="unix">Unix socket (рекомендуется)</option>
+        <option value="tcp-loopback">TCP loopback + generated secret</option>
+      </select>
+      <ul id="mihomo-clash-migration-changes"></ul>
+      <pre id="mihomo-clash-migration-preview" tabindex="0"></pre>
+      <label class="dt-switch" for="mihomo-clash-migration-restart">
+        <input id="mihomo-clash-migration-restart" type="checkbox">
+        <span class="dt-switch-slider" aria-hidden="true"></span><span id="mihomo-clash-migration-restart-label" class="dt-switch-label">Перезапустить после backup, validate и save</span>
+      </label>
+      <div class="xk-mihomo-migration-actions">
+        <button type="button" class="btn-secondary" data-mihomo-clash-action="migration-refresh">Обновить preview</button>
+        <button id="mihomo-clash-migration-apply" type="button" class="btn-primary" data-mihomo-clash-action="migration-apply">Сохранить настройку</button>
+      </div>
+      <div id="mihomo-clash-migration-status" role="status" aria-live="polite"></div>
+    </section>
+
     <div id="mihomo-clash-panel-control" class="xk-mihomo-runtime-panel" data-mihomo-clash-panel="control" role="tabpanel" aria-labelledby="mihomo-clash-tab-control">
       <div class="xk-mihomo-runtime-state" id="mihomo-clash-control-state">
         <span class="xk-mihomo-runtime-state-icon">{{ op_icon('loading') }}</span>

@@ -82,6 +82,7 @@ def _security_posture(discovery: MihomoClashDiscovery) -> dict[str, Any]:
     diagnostic_codes = {item.code for item in discovery.diagnostics}
     transport = discovery.target.transport if discovery.target else None
     lan_without_secret = "secret_missing_on_lan_bind" in diagnostic_codes
+    setup_required = "controller_missing" in diagnostic_codes and not discovery.configured
 
     if transport == "unix":
         mode = "unix_socket"
@@ -97,8 +98,10 @@ def _security_posture(discovery: MihomoClashDiscovery) -> dict[str, Any]:
     return {
         "mode": mode,
         "recommended_transport": "unix",
+        "recommended_value": "external-controller-unix: ./mihomo-api.sock",
         "panel_password_reuse": False,
         "migration_required": lan_without_secret,
+        "setup_required": setup_required,
     }
 
 

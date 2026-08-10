@@ -1,7 +1,7 @@
 #######################################################################################################
 # Описание:
-# Веб-интерфейс доступен по адресу http://192.168.1.1:9090/ui (192.168.1.1 = IP роутера).
-# После добавления сервера и запуска mihomo необходимо зайти в веб-интерфейс и выбрать нужное подключение для селекторов.
+# Встроенная панель XKeen управляет Mihomo через локальный Unix socket; controller не открыт в LAN.
+# Zashboard остаётся optional: для него настройте отдельный защищённый browser-reachable controller осознанно.
 # Группа "Заблок. сервисы" содержит список доменов большинства заблокированных ресурсов.
 # Остальные группы YouTube/Discord и тд имеют приоритет над группой "Заблок. сервисы".
 #######################################################################################################
@@ -23,7 +23,7 @@ tproxy-port: 5001
 routing-mark: 255
 find-process-mode: off
 unified-delay: true
-external-controller: 0.0.0.0:9090
+external-controller-unix: ./mihomo-api.sock
 external-ui: zashboard
 external-ui-url: https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip
 profile: { store-selected: true }

@@ -53,6 +53,7 @@ def _assert_beginner_meta(node: dict, label: str) -> None:
         "redir-port",
         "tproxy-port",
         "allow-lan",
+        "external-controller-unix",
         "proxies",
         "proxy-providers",
         "proxy-groups",
@@ -291,6 +292,29 @@ console.log(JSON.stringify(result));
     assert payload["path"] == expected_path
     assert "Простыми словами:" in payload["plain"]
     assert expected_substring in payload["plain"]
+
+
+def test_mihomo_yaml_hover_explains_recommended_panel_unix_socket():
+    doc_with_marker = "external-controller-unix__CURSOR__: ./mihomo-api.sock\n"
+    script = f"""
+import fs from 'node:fs';
+import {{ hoverYamlTextFromSchema }} from './xkeen-ui/static/js/ui/yaml_schema.js';
+
+const schema = JSON.parse(fs.readFileSync('./xkeen-ui/static/schemas/mihomo-config.schema.json', 'utf8'));
+const marker = '__CURSOR__';
+const docWithMarker = {json.dumps(doc_with_marker)};
+const offset = docWithMarker.indexOf(marker);
+const doc = docWithMarker.replace(marker, '');
+const result = hoverYamlTextFromSchema(doc, schema, {{ offset, beginnerMode: true }});
+console.log(JSON.stringify(result));
+"""
+
+    payload = _run_node_json(script)
+    assert payload is not None
+    assert payload["path"] == "external-controller-unix"
+    assert "Простыми словами:" in payload["plain"]
+    assert "./mihomo-api.sock" in payload["plain"]
+    assert "без публикации порта 9090" in payload["plain"]
 
 
 @pytest.mark.parametrize(

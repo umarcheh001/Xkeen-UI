@@ -127,6 +127,36 @@ def test_workspace_status_matrix_and_accessibility_contract_are_explicit():
         assert fragment in markup or fragment in css or fragment in _text(FEATURE)
 
 
+def test_security_warning_and_opt_in_migration_contract_are_explicit():
+    markup = _mihomo_markup()
+    feature = _text(FEATURE)
+    client = _text(CLIENT)
+    css = _text(CSS)
+
+    for fragment in (
+        'id="mihomo-clash-security-warning"',
+        'id="mihomo-clash-assistant-title"',
+        'id="mihomo-clash-assistant-value"',
+        'id="mihomo-clash-assistant-button"',
+        'Настроить автоматически',
+        'data-mihomo-clash-action="migration-preview"',
+        'id="mihomo-clash-migration-preview"',
+        'id="mihomo-clash-migration-restart"',
+        'data-mihomo-clash-action="migration-apply"',
+        "payload?.security?.migration_required",
+        "payload?.security?.setup_required",
+        "external-controller-unix: ./mihomo-api.sock",
+        "restart.checked = nextAssistantKind === 'setup'",
+        "previewMihomoClashMigration",
+        "applyMihomoClashMigration",
+        "confirmed: true",
+        ".xk-mihomo-security-warning[hidden]",
+    ):
+        assert fragment in markup or fragment in feature or fragment in client or fragment in css
+
+    assert "window.confirm(" in feature
+
+
 def test_groups_ui_has_compact_filter_select_and_bounded_delay_contract():
     markup = _mihomo_markup()
     client = _text(CLIENT)

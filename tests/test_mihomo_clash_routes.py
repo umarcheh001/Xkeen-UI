@@ -146,8 +146,10 @@ def test_status_route_returns_versioned_redacted_dto():
     assert body["security"] == {
         "mode": "tcp_authenticated",
         "recommended_transport": "unix",
+        "recommended_value": "external-controller-unix: ./mihomo-api.sock",
         "panel_password_reuse": False,
         "migration_required": False,
+        "setup_required": False,
     }
     assert body["telemetry"]["version"]["size_bytes"] == 40
     assert "fixture-secret" not in serialized
@@ -166,6 +168,14 @@ def test_status_route_reports_missing_controller_as_operational_state():
     assert body["ok"] is False
     assert body["state"] == "controller_missing"
     assert body["capabilities"]["status"] is False
+    assert body["security"] == {
+        "mode": "not_ready",
+        "recommended_transport": "unix",
+        "recommended_value": "external-controller-unix: ./mihomo-api.sock",
+        "panel_password_reuse": False,
+        "migration_required": False,
+        "setup_required": True,
+    }
 
 
 def test_status_route_marks_lan_controller_without_secret_for_migration():
@@ -188,8 +198,10 @@ def test_status_route_marks_lan_controller_without_secret_for_migration():
     assert body["security"] == {
         "mode": "tcp_lan_unprotected",
         "recommended_transport": "unix",
+        "recommended_value": "external-controller-unix: ./mihomo-api.sock",
         "panel_password_reuse": False,
         "migration_required": True,
+        "setup_required": False,
     }
 
 
