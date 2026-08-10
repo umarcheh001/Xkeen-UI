@@ -17014,6 +17014,24 @@ body.panel-page .xk-mihomo-connections-table td small {
   white-space: nowrap;
 }
 
+body.panel-page .xk-mihomo-device-name {
+  display: inline-flex;
+  max-width: 190px;
+  margin-left: 6px;
+  padding: 1px 6px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--op-success) 38%, var(--op-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--op-success) 10%, transparent);
+  color: color-mix(in srgb, var(--op-success) 72%, var(--op-text));
+  font: inherit;
+  font-size: .86em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+
 body.panel-page .xk-mihomo-connections-table td strong {
   font-size: calc(11.5px * var(--xk-font-scale, 1));
   font-weight: 620;

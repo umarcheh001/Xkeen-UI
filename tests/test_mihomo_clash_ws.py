@@ -169,13 +169,15 @@ def test_logs_ws_normalizes_redacts_and_closes_after_bounded_stream():
         mihomo_root="/safe",
         discovery_factory=lambda *_args: discovery(),
         client_factory=lambda _target: StubLogClient(
-            [{"time": "fixture", "level": "warning", "message": "Bearer fixture-secret", "fields": {"secret": "fixture-secret", "host": "example.test"}}]
+            [{"time": "fixture", "level": "warning", "message": "Bearer fixture-secret from 192.0.2.10:5000", "fields": {"secret": "fixture-secret", "host": "example.test"}}]
         ),
+        device_map_factory=lambda: {"192.0.2.10": {"name": "Laptop"}},
     )
 
     assert ws.messages[0]["type"] == "mihomo-clash-logs"
-    assert ws.messages[0]["payload"]["message"] == "Bearer [redacted]"
+    assert ws.messages[0]["payload"]["message"] == "Bearer [redacted] from 192.0.2.10:5000"
     assert ws.messages[0]["payload"]["fields"] == {"host": "example.test"}
+    assert ws.messages[0]["payload"]["devices"] == [{"ip": "192.0.2.10", "name": "Laptop"}]
     assert "fixture-secret" not in json.dumps(ws.messages)
     assert ws.closed is True
 

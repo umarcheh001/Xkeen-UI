@@ -294,6 +294,7 @@ def test_connections_ui_has_live_fallback_overview_and_guarded_actions():
         "activateMihomoClashConnections",
         "deactivateMihomoClashConnections",
         '.xk-mihomo-connections-table',
+        'class="xk-mihomo-device-name"',
         '.xk-mihomo-connection-close:hover:not(:disabled)',
         'background: var(--op-danger-soft) !important;',
         'content: attr(data-label);',
@@ -341,12 +342,15 @@ def test_rules_providers_and_logs_have_bounded_on_demand_contract():
         "mihomoClashLogsWsUrl",
         "MAX_RULE_ROWS = 300",
         "MAX_LOG_ROWS = 500",
+        "annotatedLogText",
+        "row?.devices",
         "requestMihomoClashWsToken",
         "scope: 'mihomo-clash-logs'",
         "deactivateMihomoClashRules();",
         "deactivateMihomoClashLogs();",
         ".xk-mihomo-rules-layout",
         ".xk-mihomo-logs-workspace",
+        ".xk-mihomo-device-name",
     ):
         assert fragment in markup or fragment in client or fragment in feature or fragment in rules or fragment in logs or fragment in css
 

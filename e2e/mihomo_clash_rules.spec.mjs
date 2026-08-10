@@ -161,13 +161,14 @@ test('structured logs use a full workspace tab, one on-demand socket, ring buffe
     for (let index = 0; index < 505; index += 1) {
       socket.emit({
         type: 'mihomo-clash-logs', schema_version: 1, state: 'live', sequence: index + 1,
-        payload: { sequence: index + 1, time: `t-${index}`, level: index % 2 ? 'info' : 'warning', message: `fixture-${index}`, fields: { network: 'tcp' } },
+        payload: { sequence: index + 1, time: `t-${index}`, level: index % 2 ? 'info' : 'warning', message: `fixture-${index} 192.0.2.10:5000`, fields: { network: 'tcp' }, devices: [{ ip: '192.0.2.10', name: 'Ноутбук' }] },
       });
     }
   });
   await expect(page.locator('#mihomo-clash-logs-list li')).toHaveCount(500);
   await expect(page.locator('#mihomo-clash-logs-list')).not.toContainText('fixture-0');
   await expect(page.locator('#mihomo-clash-logs-list')).toContainText('fixture-504');
+  await expect(page.locator('#mihomo-clash-logs-list li').last().locator('.xk-mihomo-device-name')).toHaveText('Ноутбук');
 
   await page.locator('#mihomo-clash-logs-pause').click();
   await page.evaluate(() => window.__pr9LogSockets[0].emit({

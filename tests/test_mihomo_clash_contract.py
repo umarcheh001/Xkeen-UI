@@ -239,6 +239,40 @@ def test_structured_log_dto_redacts_secret_headers_and_sensitive_fields():
     assert list_fields["fields"] == {"network": "tcp"}
 
 
+def test_structured_log_dto_enriches_only_router_known_ips():
+    from services.mihomo_clash_dto import build_mihomo_clash_log_entry_dto
+
+    entry = build_mihomo_clash_log_entry_dto(
+        {
+            "level": "info",
+            "message": "accepted 192.0.2.10:51432 from [fd00::10]:443; ignored 203.0.113.9",
+            "fields": {"source": "192.0.2.10", "invalid": "999.999.999.999"},
+        },
+        device_map={
+            "192.0.2.10": {"name": "Ноутбук"},
+            "fd00::10": {"name": "Телефон"},
+        },
+    )
+
+    assert entry["devices"] == [
+        {"ip": "192.0.2.10", "name": "Ноутбук"},
+        {"ip": "fd00::10", "name": "Телефон"},
+    ]
+    assert "203.0.113.9" in entry["message"]
+
+
+def test_structured_log_dto_bounds_device_aliases():
+    from services.mihomo_clash_dto import build_mihomo_clash_log_entry_dto
+
+    ips = [f"192.0.2.{index}" for index in range(1, 12)]
+    entry = build_mihomo_clash_log_entry_dto(
+        {"message": " ".join(ips)},
+        device_map={ip: {"name": f"device-{index}"} for index, ip in enumerate(ips)},
+    )
+
+    assert len(entry["devices"]) == 8
+
+
 def test_delay_dto_normalizes_proxy_and_group_results():
     from services.mihomo_clash_dto import build_mihomo_clash_delay_dto
 

@@ -89,6 +89,9 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   await expect(page.locator('#mihomo-clash-connections-rows tr')).toHaveCount(2);
   await expect(page.locator('#mihomo-clash-connections-rows')).toContainText('Laptop');
   await expect(page.locator('#mihomo-clash-connections-rows')).toContainText('AUTO → node-a');
+  const firstSource = page.locator('[data-connection-id="connection-one"] td').first();
+  await expect(firstSource).toContainText('192.0.2.1:5000');
+  await expect(firstSource.locator('.xk-mihomo-device-name')).toHaveText('Laptop');
 
   const closeButton = page.locator('[data-mihomo-connection-close="connection-one"]');
   await expect(closeButton).toHaveAttribute('data-tooltip', 'Завершить соединение');

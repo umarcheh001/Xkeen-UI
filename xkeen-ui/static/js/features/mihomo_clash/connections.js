@@ -75,7 +75,12 @@ function destination(row) {
 function source(row) {
   const metadata = row?.metadata || {};
   const address = metadata.source_port ? `${metadata.source_ip}:${metadata.source_port}` : metadata.source_ip;
-  return { name: metadata.source_name || address || '—', address: metadata.source_name ? address : '' };
+  return { name: metadata.source_name || '', address: address || '—' };
+}
+
+function deviceNameMarkup(name, ip) {
+  if (!name) return '';
+  return `<span class="xk-mihomo-device-name" title="Имя устройства для ${escapeHtml(ip)}">${escapeHtml(name)}</span>`;
 }
 
 function routeText(row) {
@@ -161,7 +166,7 @@ function rowMarkup(row) {
   const route = routeText(row);
   const rule = [row?.rule, row?.rule_payload].filter(Boolean).join(' · ') || 'Правило —';
   return `<tr data-connection-id="${escapeHtml(row.id)}" tabindex="0" aria-label="Открыть детали соединения ${escapeHtml(destination(row))}">
-    <td data-label="Источник"><strong>${escapeHtml(origin.name)}</strong>${origin.address ? `<small>${escapeHtml(origin.address)}</small>` : ''}<small>${escapeHtml(network)}</small></td>
+    <td data-label="Источник"><strong>${escapeHtml(origin.address)}${deviceNameMarkup(origin.name, metadata.source_ip)}</strong><small>${escapeHtml(network)}</small></td>
     <td data-label="Назначение"><strong>${escapeHtml(destination(row))}</strong><small>${escapeHtml(metadata.destination_ip || '')}</small></td>
     <td data-label="Маршрут"><strong>${escapeHtml(route)}</strong><small>${escapeHtml(rule)}</small></td>
     <td data-label="Трафик"><strong>${escapeHtml(traffic)}</strong></td>
@@ -194,7 +199,7 @@ function renderInspector() {
   if (!row) { details.innerHTML = ''; return; }
   const metadata = row.metadata || {};
   const fields = [
-    ['Источник', source(row).name], ['IP источника', metadata.source_ip], ['Назначение', destination(row)],
+    ['Устройство', source(row).name], ['IP источника', metadata.source_ip], ['Назначение', destination(row)],
     ['IP назначения', metadata.destination_ip], ['Сеть', metadata.network], ['Тип', metadata.type],
     ['Inbound', metadata.inbound_name], ['Процесс', metadata.process], ['Правило', row.rule],
     ['Payload правила', row.rule_payload], ['Цепочка', routeText(row)],

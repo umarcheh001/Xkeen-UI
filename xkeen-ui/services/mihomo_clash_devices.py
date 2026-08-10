@@ -13,6 +13,7 @@ DEFAULT_DEVICE_MAP_TTL_SECONDS = 30.0
 _LOCK = threading.Lock()
 _CACHED_AT = 0.0
 _CACHED_MAP: dict[str, Any] = {}
+_CACHE_READY = False
 
 
 def get_mihomo_clash_device_map(
@@ -23,11 +24,11 @@ def get_mihomo_clash_device_map(
 ) -> dict[str, Any]:
     """Return one process-wide cached map without querying RCI per frame."""
 
-    global _CACHED_AT, _CACHED_MAP
+    global _CACHED_AT, _CACHED_MAP, _CACHE_READY
     now = float(clock())
     ttl = max(1.0, float(ttl_seconds))
     with _LOCK:
-        if _CACHED_MAP and now - _CACHED_AT < ttl:
+        if _CACHE_READY and now - _CACHED_AT < ttl:
             return dict(_CACHED_MAP)
         try:
             state = state_factory(refresh_router=True)
@@ -37,14 +38,16 @@ def get_mihomo_clash_device_map(
             next_map = {}
         _CACHED_AT = now
         _CACHED_MAP = next_map
+        _CACHE_READY = True
         return dict(_CACHED_MAP)
 
 
 def reset_mihomo_clash_device_map_cache() -> None:
-    global _CACHED_AT, _CACHED_MAP
+    global _CACHED_AT, _CACHED_MAP, _CACHE_READY
     with _LOCK:
         _CACHED_AT = 0.0
         _CACHED_MAP = {}
+        _CACHE_READY = False
 
 
 __all__ = [

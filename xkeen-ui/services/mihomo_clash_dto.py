@@ -12,6 +12,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from services.mihomo_clash_target import MihomoClashDiscovery
+from services.xray_device_names import normalize_ip
 
 
 MIHOMO_CLASH_SCHEMA_VERSION = 1
@@ -22,6 +23,7 @@ MAX_DELAY_RESULTS = 1024
 MAX_RULES = 4096
 MAX_PROVIDERS = 512
 MAX_LOG_FIELDS = 32
+MAX_LOG_DEVICES = 8
 MIHOMO_CLASH_CAPABILITY_KEYS = (
     "status",
     "proxy_groups",
@@ -45,6 +47,9 @@ _SENSITIVE_LOG_KEY = re.compile(
 _SENSITIVE_LOG_VALUE = re.compile(
     r"(?i)\b(Bearer\s+)[^\s,;]+|\b(secret|token|password|authorization|cookie)\s*([=:])\s*[^\s,;]+"
 )
+_LOG_IPV4_CANDIDATE = re.compile(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?")
+_LOG_BRACKETED_IPV6_CANDIDATE = re.compile(r"\[[0-9a-fA-F:%]+\](?::\d{1,5})?")
+_LOG_BARE_IPV6_CANDIDATE = re.compile(r"(?<![\w:])[0-9a-fA-F]*:[0-9a-fA-F:]+(?:%[\w.-]+)?(?![\w:])")
 
 
 def _mapping(value: Any) -> Mapping[str, Any]:
@@ -372,11 +377,33 @@ def _redact_log_text(value: Any, *, secret: str = "", limit: int = 2048) -> str:
     return _SENSITIVE_LOG_VALUE.sub(replace_sensitive, text)[:limit]
 
 
+def _log_device_aliases(values: Sequence[str], device_map: Mapping[str, Any]) -> list[dict[str, str]]:
+    """Return only router-known IPs actually present in this normalized frame."""
+
+    aliases: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for value in values:
+        for pattern in (_LOG_IPV4_CANDIDATE, _LOG_BRACKETED_IPV6_CANDIDATE, _LOG_BARE_IPV6_CANDIDATE):
+            for match in pattern.finditer(value):
+                ip = normalize_ip(match.group(0))
+                if not ip or ip in seen:
+                    continue
+                name = _device_name(device_map, ip)
+                if not name or name == ip:
+                    continue
+                aliases.append({"ip": ip, "name": name})
+                seen.add(ip)
+                if len(aliases) >= MAX_LOG_DEVICES:
+                    return aliases
+    return aliases
+
+
 def build_mihomo_clash_log_entry_dto(
     payload: Any,
     *,
     sequence: int = 0,
     secret: str = "",
+    device_map: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Normalize one structured log frame and redact credential-shaped data."""
 
@@ -405,12 +432,15 @@ def build_mihomo_clash_log_entry_dto(
     level = _text(raw.get("level"), 16).lower()
     if level not in {"debug", "info", "warning", "error"}:
         level = "info"
+    message = _redact_log_text(raw.get("message"), secret=secret)
+    devices = device_map if isinstance(device_map, Mapping) else {}
     return {
         "sequence": max(0, int(sequence)),
         "time": _text(raw.get("time"), 96),
         "level": level,
-        "message": _redact_log_text(raw.get("message"), secret=secret),
+        "message": message,
         "fields": fields,
+        "devices": _log_device_aliases([message, *fields.values()], devices),
     }
 
 

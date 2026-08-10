@@ -24,8 +24,40 @@ function escapeHtml(value) {
 }
 
 function searchText(row) {
-  return [row?.level, row?.message, ...Object.entries(row?.fields || {}).flat()]
+  return [row?.level, row?.message, ...Object.entries(row?.fields || {}).flat(),
+    ...(row?.devices || []).flatMap((device) => [device?.ip, device?.name])]
     .join(' ').toLocaleLowerCase('ru');
+}
+
+function annotatedLogText(value, devices) {
+  const text = String(value ?? '');
+  const aliases = (Array.isArray(devices) ? devices : [])
+    .map((device) => ({ ip: String(device?.ip || ''), name: String(device?.name || '') }))
+    .filter((device) => device.ip && device.name)
+    .sort((a, b) => b.ip.length - a.ip.length);
+  if (!aliases.length) return escapeHtml(text);
+  let cursor = 0;
+  let html = '';
+  while (cursor < text.length) {
+    let next = null;
+    for (const alias of aliases) {
+      let index = text.indexOf(alias.ip, cursor);
+      while (index >= 0) {
+        const left = index > 0 ? text[index - 1] : '';
+        const right = text[index + alias.ip.length] || '';
+        if (!/[\w.]/u.test(left) && !/[\w.]/u.test(right)) break;
+        index = text.indexOf(alias.ip, index + alias.ip.length);
+      }
+      if (index >= 0 && (!next || index < next.index || (index === next.index && alias.ip.length > next.alias.ip.length))) {
+        next = { index, alias };
+      }
+    }
+    if (!next) { html += escapeHtml(text.slice(cursor)); break; }
+    html += escapeHtml(text.slice(cursor, next.index + next.alias.ip.length));
+    html += `<span class="xk-mihomo-device-name" title="Имя устройства для ${escapeHtml(next.alias.ip)}">${escapeHtml(next.alias.name)}</span>`;
+    cursor = next.index + next.alias.ip.length;
+  }
+  return html;
 }
 
 function filteredRows() {
@@ -52,8 +84,8 @@ function render() {
     return `<li data-log-level="${escapeHtml(row.level)}">
       <time>${escapeHtml(row.time || '—')}</time>
       <strong>${escapeHtml(row.level || 'info')}</strong>
-      <span>${escapeHtml(row.message || '—')}</span>
-      ${fields ? `<small>${escapeHtml(fields)}</small>` : ''}
+      <span>${annotatedLogText(row.message || '—', row.devices)}</span>
+      ${fields ? `<small>${annotatedLogText(fields, row.devices)}</small>` : ''}
     </li>`;
   }).join('');
   list.hidden = visible.length === 0;
