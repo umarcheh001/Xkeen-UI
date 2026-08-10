@@ -62,9 +62,24 @@ export function selectMihomoClashProxy(group, name, options = {}) {
   return requestJSON(`${GROUPS_ENDPOINT}/${encodeURIComponent(String(group || ''))}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: String(name || '') }),
+    body: JSON.stringify({
+      name: String(name || ''),
+      disconnect_affected: options.disconnectAffected === true,
+    }),
     credentials: 'same-origin',
     timeoutMs: 12000,
+    retry: 0,
+    signal: options.signal,
+  });
+}
+
+export function unfixMihomoClashProxy(group, options = {}) {
+  return requestJSON(`${GROUPS_ENDPOINT}/${encodeURIComponent(String(group || ''))}/fixed`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ disconnect_affected: options.disconnectAffected === true }),
+    credentials: 'same-origin',
+    timeoutMs: 20000,
     retry: 0,
     signal: options.signal,
   });
@@ -207,6 +222,7 @@ export const mihomoClashClientApi = Object.freeze({
   fetchStatus: fetchMihomoClashStatus,
   fetchGroups: fetchMihomoClashGroups,
   selectProxy: selectMihomoClashProxy,
+  unfixProxy: unfixMihomoClashProxy,
   testDelay: testMihomoClashDelay,
   fetchConnections: fetchMihomoClashConnections,
   fetchRules: fetchMihomoClashRules,

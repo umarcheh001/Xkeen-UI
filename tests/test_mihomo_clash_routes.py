@@ -21,6 +21,7 @@ class StubClient:
         self.error = error
         self.operations: list[str] = []
         self.selections: list[tuple[str, str]] = []
+        self.unfixed: list[str] = []
         self.delays: list[tuple[str, str, str]] = []
         self.provider_delays: list[tuple[str, str, str]] = []
         self.disconnected: list[str] = []
@@ -36,6 +37,12 @@ class StubClient:
 
     def select_proxy(self, group_name: str, proxy_name: str):
         self.selections.append((group_name, proxy_name))
+        if self.error:
+            raise self.error
+        return MihomoClashJSONResponse(None, 204, 1, 0)
+
+    def unfix_proxy(self, group_name: str):
+        self.unfixed.append(group_name)
         if self.error:
             raise self.error
         return MihomoClashJSONResponse(None, 204, 1, 0)
@@ -244,14 +251,15 @@ def test_status_route_maps_unreachable_core_without_disclosing_target():
     assert "/private/mihomo.sock" not in serialized
 
 
-def groups_payload(now: str = "node-a"):
+def groups_payload(now: str = "node-a", *, group_type: str = "Selector", fixed: str = ""):
     return {
         "proxies": {
             "GLOBAL": {"type": "Selector", "all": ["AUTO"], "now": "AUTO"},
             "AUTO": {
-                "type": "Selector",
+                "type": group_type,
                 "all": ["node-a", "node-b"],
                 "now": now,
+                "fixed": fixed,
             },
             "node-a": {"name": "node-a", "type": "VLESS", "alive": True},
             "node-b": {"name": "node-b", "type": "Trojan", "alive": True},
@@ -447,6 +455,66 @@ def test_proxy_select_rejects_non_json_and_does_not_touch_upstream():
     assert response.status_code == 400
     assert response.get_json()["code"] == "invalid_proxy_selection"
     assert client.selections == []
+
+
+def test_proxy_unfix_is_version_gated_reconciled_and_disconnects_only_affected_connections():
+    before = groups_payload(now="node-b", group_type="URLTest", fixed="node-b")
+    after = groups_payload(now="node-a", group_type="URLTest", fixed="")
+    connection_payload = {
+        "connections": [
+            {"id": "affected", "chains": ["node-b", "AUTO"], "metadata": {}},
+            {"id": "other", "chains": ["DIRECT"], "metadata": {}},
+        ]
+    }
+    snapshots = iter([
+        MihomoClashJSONResponse(before, 200, 1, 100),
+        MihomoClashJSONResponse(after, 200, 1, 100),
+    ])
+    client = StubClient(responses={
+        "version": MihomoClashJSONResponse({"version": "Mihomo Meta v1.19.29"}, 200, 1, 40),
+        "connections_snapshot": MihomoClashJSONResponse(connection_payload, 200, 1, 100),
+    })
+    original_request = client.request_json
+
+    def request_json(operation):
+        if operation == "proxies":
+            client.operations.append(operation)
+            return next(snapshots)
+        return original_request(operation)
+
+    client.request_json = request_json
+    response = make_app(ready_discovery(), client).test_client().delete(
+        "/api/mihomo/clash/proxy-groups/AUTO/fixed",
+        json={"disconnect_affected": True},
+    )
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body["reconciled"] is True
+    assert body["group"]["fixed"] == ""
+    assert body["connections"] == {
+        "requested": True,
+        "matched": 1,
+        "disconnected": 1,
+        "failed": 0,
+        "truncated": False,
+    }
+    assert client.unfixed == ["AUTO"]
+    assert client.disconnected == ["affected"]
+
+
+def test_proxy_unfix_rejects_old_mihomo_before_mutation():
+    client = StubClient(responses={
+        "version": MihomoClashJSONResponse({"version": "v1.18.8"}, 200, 1, 40),
+    })
+    response = make_app(ready_discovery(), client).test_client().delete(
+        "/api/mihomo/clash/proxy-groups/AUTO/fixed",
+        json={},
+    )
+
+    assert response.status_code == 409
+    assert response.get_json()["code"] == "proxy_unfix_not_supported"
+    assert client.unfixed == []
 
 
 def test_delay_route_forwards_only_scope_name_and_preset_id():

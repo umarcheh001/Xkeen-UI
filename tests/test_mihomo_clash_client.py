@@ -243,6 +243,20 @@ def test_select_proxy_encodes_one_path_segment_and_sends_bounded_json_body():
     ]
 
 
+def test_unfix_proxy_uses_allowlisted_delete_path():
+    endpoints = {"proxy_unfix": MihomoClashEndpoint("DELETE", "/proxies/{name}", 2, 1024)}
+    encoded = "/proxies/auto%2Fgroup"
+    with tcp_server({f"DELETE {encoded}": (204, "text/plain", b"")}) as (port, handler):
+        response = client_for_port(port, endpoints, secret="backend-only").unfix_proxy("auto/group")
+
+    assert response.status == 204
+    assert handler.seen == [{
+        "method": "DELETE",
+        "path": encoded,
+        "authorization": "Bearer backend-only",
+    }]
+
+
 def test_disconnect_operations_are_dedicated_and_encode_one_id_segment():
     endpoints = {
         "connection_disconnect": MihomoClashEndpoint(

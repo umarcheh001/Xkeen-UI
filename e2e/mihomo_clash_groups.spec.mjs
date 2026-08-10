@@ -6,14 +6,14 @@ function statusPayload() {
     ok: true,
     state: 'ready',
     schema_version: 1,
-    core: { version: 'test-1.0' },
+    core: { version: 'Mihomo Meta v1.19.29' },
     runtime: { mode: 'rule' },
-    capabilities: { status: true, proxy_groups: true, proxy_select: true, proxy_delay: true },
+    capabilities: { status: true, proxy_groups: true, proxy_select: true, proxy_unfix: true, proxy_delay: true, connection_disconnect: true },
   };
 }
 
 
-function groupsPayload(now = 'node-a') {
+function groupsPayload(now = 'node-a', fixed = '', includeReliabilityFixture = false) {
   return {
     ok: true,
     schema_version: 1,
@@ -24,6 +24,7 @@ function groupsPayload(now = 'node-a') {
         name: 'AUTO',
         type: 'Selector',
         now,
+        fixed,
         hidden: false,
         selectable: true,
         nodes: [
@@ -36,10 +37,23 @@ function groupsPayload(now = 'node-a') {
         name: 'HIDDEN',
         type: 'URLTest',
         now: 'hidden-node',
+        fixed: 'hidden-node',
         hidden: true,
         selectable: true,
         nodes: [{ name: 'hidden-node', type: 'VLESS', alive: null, udp: null, provider: '', provider_candidates: [], delay_ms: null }],
       },
+      ...(includeReliabilityFixture ? [{
+        name: 'FALLBACK',
+        type: 'Fallback',
+        now: 'node-b',
+        fixed: 'node-a',
+        hidden: false,
+        selectable: true,
+        nodes: [
+          { name: 'node-a', type: 'VLESS', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: 120 },
+          { name: 'node-b', type: 'Trojan', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: 80 },
+        ],
+      }] : []),
     ],
   };
 }
@@ -59,12 +73,19 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
       await route.fulfill({ json: { ok: true, schema_version: 1, group: groupsPayload(current).groups[0], reconciled: true } });
       return;
     }
+    if (request.method() === 'DELETE') {
+      current = 'hidden-node';
+      await route.fulfill({ json: { ok: true, schema_version: 1, group: { ...groupsPayload(current, '').groups[1], fixed: '' }, reconciled: true, connections: { disconnected: 0, failed: 0 } } });
+      return;
+    }
     await route.fulfill({ json: groupsPayload(current) });
   });
   await page.route('**/api/mihomo/clash/delay', async (route) => {
     const data = route.request().postDataJSON();
     delays.push(data);
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Keep the mocked request pending long enough to assert the transient
+    // loading icon without racing a fast local route fulfilment.
+    await new Promise((resolve) => setTimeout(resolve, 500));
     await route.fulfill({ json: { ok: true, schema_version: 1, results: [{ name: data.name, delay_ms: 44 }] } });
   });
 
@@ -119,6 +140,8 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await expect(page.locator('.xk-mihomo-node-row')).toHaveCount(1);
 
   await page.locator('[data-mihomo-group-select][data-node="node-b"]').click();
+  await expect(page.locator('#confirm-modal-title')).toContainText('Переключить группу');
+  await page.locator('#confirm-modal-ok-btn').click();
   await expect(page.locator('[data-node-name="node-b"]')).toHaveClass(/is-current/);
   expect(selections).toEqual(['node-b']);
 
@@ -138,6 +161,59 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await expect(page.locator('[data-node-name="DIRECT"] .xk-mihomo-node-delay')).toHaveText('44 мс');
   expect(delays).toContainEqual({ scope: 'proxy', name: 'node-a', preset: 'google' });
   expect(delays).toContainEqual({ scope: 'proxy', name: 'DIRECT', preset: 'google' });
+});
+
+
+test('automatic fixed group shows lock, unfix action, sorting and timeout hiding', async ({ page }) => {
+  let fixed = 'hidden-node';
+  let delayAttempts = 0;
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, async (route) => {
+    if (route.request().method() === 'DELETE') {
+      fixed = '';
+      return route.fulfill({ json: { ok: true, schema_version: 1, group: { ...groupsPayload('hidden-node', '', true).groups[1], fixed: '' }, reconciled: true, connections: { disconnected: 0, failed: 0 } } });
+    }
+    return route.fulfill({ json: groupsPayload('node-a', fixed, true) });
+  });
+  await page.route('**/api/mihomo/clash/delay', async (route) => {
+    delayAttempts += 1;
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    return route.fulfill({ status: 504, json: { ok: false, code: 'upstream_timeout' } });
+  });
+
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.locator('#mihomo-clash-show-hidden').check();
+  await page.locator('[data-group-name="HIDDEN"] [data-mihomo-group-toggle]').click();
+  await expect(page.locator('[data-group-name="HIDDEN"]')).toContainText('Зафиксирован: hidden-node');
+  await expect(page.locator('[data-node-name="hidden-node"]')).toHaveClass(/is-fixed/);
+  await expect(page.locator('[data-group-name="FALLBACK"] [data-node-name="node-b"]')).toHaveClass(/is-current/);
+  await expect(page.locator('[data-group-name="FALLBACK"] [data-node-name="node-b"]')).not.toHaveClass(/is-fixed/);
+  await expect(page.locator('[data-group-name="FALLBACK"] [data-node-name="node-a"]')).toHaveClass(/is-fixed/);
+  await expect(page.locator('[data-group-name="FALLBACK"] [data-node-name="node-a"]')).not.toHaveClass(/is-current/);
+  await page.locator('[data-group-name="FALLBACK"] [data-mihomo-group-toggle]').click();
+  await expect(page.locator('[data-group-name="HIDDEN"] [data-mihomo-group-unfix]')).toBeVisible();
+  await page.locator('[data-group-name="HIDDEN"] [data-mihomo-group-unfix]').click();
+  await expect(page.locator('#confirm-modal-title')).toContainText('Вернуть автоматический выбор');
+  await page.locator('#confirm-modal-ok-btn').click();
+  await expect(page.locator('[data-group-name="HIDDEN"] [data-mihomo-group-unfix]')).toHaveCount(0);
+
+  await page.locator('#mihomo-clash-groups-sort').selectOption('name');
+  await page.locator('[data-group-name="AUTO"] [data-mihomo-group-toggle]').click();
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-node-row').first()).toHaveAttribute('data-node-name', 'node-a');
+  for (let index = 0; index < 3; index += 1) {
+    await page.locator('[data-group-name="AUTO"] [data-mihomo-node-delay][data-node="node-b"]').click();
+    if (index < 2) {
+      await expect(page.locator('[data-group-name="AUTO"] [data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('таймаут');
+    } else {
+      await expect(page.locator('[data-group-name="AUTO"] [data-node-name="node-b"]')).toHaveCount(0);
+    }
+    expect(delayAttempts).toBe(index + 1);
+  }
+  await expect(page.locator('[data-group-name="AUTO"] [data-node-name="node-b"]')).toHaveCount(0);
+  await expect(page.locator('#mihomo-clash-show-timeout-hidden')).toContainText('1');
+  await page.locator('#mihomo-clash-show-timeout-hidden').click();
+  await expect(page.locator('[data-group-name="AUTO"] [data-node-name="node-b"]')).toHaveCount(1);
 });
 
 

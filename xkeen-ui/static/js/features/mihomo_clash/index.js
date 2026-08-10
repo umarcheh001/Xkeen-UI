@@ -103,7 +103,7 @@ function renderStatus(state, payload = null) {
   setHidden(stateBox, state === 'ready');
   setHidden(content, state !== 'ready');
   if (state === 'ready' && active && visible && currentSubview === 'control') {
-    activateMihomoClashGroups();
+    activateMihomoClashGroups(payload?.capabilities || {});
   } else {
     deactivateMihomoClashGroups();
   }

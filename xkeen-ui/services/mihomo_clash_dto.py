@@ -28,6 +28,7 @@ MIHOMO_CLASH_CAPABILITY_KEYS = (
     "status",
     "proxy_groups",
     "proxy_select",
+    "proxy_unfix",
     "proxy_delay",
     "connections_snapshot",
     "connections_stream",

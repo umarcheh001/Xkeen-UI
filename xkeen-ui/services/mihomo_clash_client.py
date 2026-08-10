@@ -85,6 +85,7 @@ MIHOMO_CLASH_ENDPOINTS: Mapping[str, MihomoClashEndpoint] = MappingProxyType(
             "GET", "/logs?level=debug&format=structured", 300.0, 64 * 1024, stream=True
         ),
         "proxy_select": MihomoClashEndpoint("PUT", "/proxies/{name}", 5.0, 64 * 1024),
+        "proxy_unfix": MihomoClashEndpoint("DELETE", "/proxies/{name}", 5.0, 64 * 1024),
         "proxy_delay": MihomoClashEndpoint("GET", "/proxies/{name}/delay", 8.0, 512 * 1024),
         "group_delay": MihomoClashEndpoint("GET", "/group/{name}/delay", 8.0, 2 * 1024 * 1024),
         "provider_proxy_delay": MihomoClashEndpoint(
@@ -225,6 +226,16 @@ class MihomoClashClient:
             spec,
             path=self._named_path(spec, group_name),
             body=body,
+            expect_json=False,
+        )
+
+    def unfix_proxy(self, group_name: str) -> MihomoClashJSONResponse:
+        """Return one supported automatic group to its strategy selection."""
+
+        spec = self._endpoint("proxy_unfix", stream=False)
+        return self._request(
+            spec,
+            path=self._named_path(spec, group_name),
             expect_json=False,
         )
 

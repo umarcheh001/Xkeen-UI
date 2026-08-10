@@ -21,6 +21,7 @@ class MihomoClashActionPolicy:
 MIHOMO_CLASH_ACTION_POLICIES: Mapping[str, MihomoClashActionPolicy] = MappingProxyType(
     {
         "proxy-select": MihomoClashActionPolicy(4, 1, 30, 60.0),
+        "proxy-unfix": MihomoClashActionPolicy(2, 1, 20, 60.0),
         # One browser batch may use all three workers; the matching global cap
         # still protects the router when several sessions start a batch.
         "delay": MihomoClashActionPolicy(3, 3, 48, 60.0),

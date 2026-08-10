@@ -1,8 +1,10 @@
 import { iconHtml } from '../../ui/operator_icons.js';
+import { confirmMihomoAction } from '../mihomo_runtime.js';
 import {
   fetchMihomoClashGroups,
   selectMihomoClashProxy,
   testMihomoClashDelay,
+  unfixMihomoClashProxy,
 } from './client.js';
 
 const SELECTABLE_TYPES = new Set(['selector', 'select', 'urltest', 'fallback', 'smart']);
@@ -12,6 +14,8 @@ const MAX_DELAY_CONCURRENCY = 3;
 const MAX_BUSY_RETRIES = 4;
 const MAX_DELAY_BATCH_ITEMS = 24;
 const DELAY_BATCH_CADENCE_MS = 180;
+const TIMEOUT_HIDE_THRESHOLD = 3;
+const AUTOMATIC_TYPES = new Set(['urltest', 'fallback', 'smart']);
 
 let root = null;
 let active = false;
@@ -21,10 +25,14 @@ let showHidden = false;
 let request = null;
 let requestSequence = 0;
 let selection = null;
+let capabilities = {};
+let sortMode = 'config';
+let showTimeoutHidden = false;
 let delayRun = null;
 const collapsedGroups = new Set();
 let disclosureSeeded = false;
 const latestDelays = new Map();
+const timeoutCounts = new Map();
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -45,6 +53,25 @@ function errorCode(error) {
 
 function wait(milliseconds) {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+function notify(message, kind = 'info') {
+  try {
+    if (window.XKeen?.ui && typeof window.XKeen.ui.toast === 'function') {
+      window.XKeen.ui.toast(String(message || ''), kind);
+      return;
+    }
+    if (typeof window.toast === 'function') window.toast(String(message || ''), kind);
+  } catch (error) {}
+}
+
+function connectionResultCopy(result) {
+  const connections = result && result.connections;
+  if (!connections || connections.requested !== true) return '';
+  const copy = ` Завершено соединений: ${connections.disconnected || 0}`
+    + (connections.failed ? `, ошибок: ${connections.failed}` : '')
+    + (connections.truncated ? '. Список был ограничен.' : '.');
+  return copy;
 }
 
 function delayTone(delay) {
@@ -86,11 +113,35 @@ function filteredGroups() {
     if (group.hidden && !showHidden) return result;
     const groupMatches = !query || [group.name, group.type, group.now].join(' ').toLocaleLowerCase('ru').includes(query);
     const nodes = Array.isArray(group.nodes)
-      ? group.nodes.filter((node) => groupMatches || nodeSearchText(node).includes(query))
+      ? group.nodes.filter((node) => (
+        (showTimeoutHidden || (timeoutCounts.get(delayKey(node.name, node.provider)) || 0) < TIMEOUT_HIDE_THRESHOLD)
+        && (groupMatches || nodeSearchText(node).includes(query))
+      ))
       : [];
-    if (groupMatches || nodes.length) result.push({ ...group, nodes });
+    if (groupMatches || nodes.length) result.push({ ...group, nodes: sortNodes(group, nodes) });
     return result;
   }, []);
+}
+
+function nodeDelayValue(node) {
+  const result = nodeDelayResult(node);
+  return result && Number.isFinite(result.delay) ? result.delay : (Number.isFinite(node.delay_ms) ? node.delay_ms : Number.POSITIVE_INFINITY);
+}
+
+function sortNodes(group, nodes) {
+  if (sortMode === 'config') return [...nodes];
+  const indexed = nodes.map((node, index) => ({ node, index }));
+  indexed.sort((left, right) => {
+    const leftCurrent = left.node.name === group.now ? 1 : 0;
+    const rightCurrent = right.node.name === group.now ? 1 : 0;
+    if (leftCurrent !== rightCurrent) return rightCurrent - leftCurrent;
+    let comparison = 0;
+    if (sortMode === 'name') comparison = String(left.node.name).localeCompare(String(right.node.name), 'ru', { sensitivity: 'base' });
+    if (sortMode === 'delay') comparison = nodeDelayValue(left.node) - nodeDelayValue(right.node);
+    if (sortMode === 'availability') comparison = Number(right.node.alive === true) - Number(left.node.alive === true);
+    return comparison || left.index - right.index;
+  });
+  return indexed.map((item) => item.node);
 }
 
 function providerCopy(node) {
@@ -114,7 +165,7 @@ function renderNodeProbe(node) {
   return checking
     ? `<button type="button" class="xk-mihomo-node-probe is-pending" ${probeData}
         aria-label="Проверяем задержку узла ${escapeHtml(node.name)}" aria-busy="true" data-tooltip-silent="1" disabled>${iconHtml('loading')}</button>`
-    : node.alive === false && !delaySucceeded
+    : !runValue && node.alive === false && !delaySucceeded
     ? `<button type="button" class="xk-mihomo-node-probe xk-mihomo-node-unavailable" ${probeData}
         aria-label="${escapeHtml(probeLabel)}" data-tooltip-silent="1">${iconHtml('server-off')}</button>`
     : `<button type="button" class="xk-mihomo-node-probe xk-mihomo-node-delay" ${probeData}
@@ -123,6 +174,7 @@ function renderNodeProbe(node) {
 
 function renderNode(group, node) {
   const selected = group.now === node.name;
+  const fixed = group.fixed === node.name;
   const selectPending = selection && selection.group === group.name && selection.node === node.name;
   const checking = nodeDelayResult(node)?.state === 'pending';
   const selectable = !!group.selectable && SELECTABLE_TYPES.has(String(group.type || '').toLowerCase());
@@ -131,12 +183,12 @@ function renderNode(group, node) {
     : (node.alive === false ? 'недоступен' : 'нет данных');
   const meta = [node.type || 'unknown', providerCopy(node), node.udp === true ? 'UDP' : ''].filter(Boolean).join(' · ');
   return `
-    <li class="xk-mihomo-node-row${selected ? ' is-current' : ''}${checking ? ' is-checking' : ''}" data-node-key="${escapeHtml(encodeURIComponent(delayKey(node.name, node.provider)))}" data-node-name="${escapeHtml(node.name)}" data-alive="${escapeHtml(alive)}">
+    <li class="xk-mihomo-node-row${selected ? ' is-current' : ''}${fixed ? ' is-fixed' : ''}${checking ? ' is-checking' : ''}" data-node-key="${escapeHtml(encodeURIComponent(delayKey(node.name, node.provider)))}" data-node-name="${escapeHtml(node.name)}" data-alive="${escapeHtml(alive)}">
       <button type="button" class="xk-mihomo-node-select" data-mihomo-group-select="1"
         data-group="${escapeHtml(group.name)}" data-node="${escapeHtml(node.name)}"
         aria-pressed="${selected ? 'true' : 'false'}" ${!selectable || selected || selectPending || selection ? 'disabled' : ''}>
         <span class="xk-mihomo-node-main">
-          <strong>${escapeHtml(node.name)}</strong>
+          <strong>${fixed ? iconHtml('lock') : ''}${escapeHtml(node.name)}</strong>
           <small>${escapeHtml(meta)}</small>
         </span>
       </button>
@@ -148,7 +200,8 @@ function groupSummary(group) {
   const nodes = Array.isArray(group.nodes) ? group.nodes : [];
   const aliveCount = nodes.filter((node) => node.alive === true).length;
   const selectable = !!group.selectable && SELECTABLE_TYPES.has(String(group.type || '').toLowerCase());
-  const mode = selectable ? 'ручной выбор' : 'автоматически';
+  const automatic = AUTOMATIC_TYPES.has(String(group.type || '').toLowerCase());
+  const mode = automatic ? (group.fixed ? 'зафиксирован' : 'автоматически') : (selectable ? 'ручной выбор' : 'автоматически');
   return `${group.type || 'Unknown'} · ${mode} · ${aliveCount}/${nodes.length} доступны`;
 }
 
@@ -159,6 +212,11 @@ function renderGroup(group) {
   // of the active filter.
   const collapsed = collapsedGroups.has(group.name) && !filterText.trim();
   const panelId = `mihomo-group-${encodeURIComponent(group.name).replace(/%/g, '-').replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  const automatic = AUTOMATIC_TYPES.has(String(group.type || '').toLowerCase());
+  const canUnfix = automatic && !!group.fixed && capabilities.proxy_unfix === true;
+  const fixedLabel = automatic && group.fixed
+    ? `<span class="xk-mihomo-group-fixed">${iconHtml('lock')}Зафиксирован: <strong>${escapeHtml(group.fixed)}</strong></span>`
+    : '';
   return `
     <section class="xk-mihomo-group" data-group-name="${escapeHtml(group.name)}">
       <header class="xk-mihomo-group-head${collapsed ? ' is-collapsed' : ''}">
@@ -170,9 +228,13 @@ function renderGroup(group) {
         <div class="xk-mihomo-group-title">
           <div><strong>${escapeHtml(group.name)}</strong>${group.hidden ? '<span class="xk-mihomo-group-flag">hidden</span>' : ''}</div>
           <small>${escapeHtml(groupSummary(group))}</small>
+          ${fixedLabel}
         </div>
-        ${collapsed ? '' : `<button type="button" class="btn-secondary xk-mihomo-group-test" data-mihomo-group-delay="1"
-          data-group="${escapeHtml(group.name)}">${iconHtml('ping')}<span>Тест группы</span></button>`}
+        <div class="xk-mihomo-group-actions">
+          ${canUnfix ? `<button type="button" class="btn-secondary xk-mihomo-group-unfix" data-mihomo-group-unfix="1" data-group="${escapeHtml(group.name)}">${iconHtml('lock')}<span>Вернуть автоматический выбор</span></button>` : ''}
+          ${collapsed ? '' : `<button type="button" class="btn-secondary xk-mihomo-group-test" data-mihomo-group-delay="1"
+            data-group="${escapeHtml(group.name)}">${iconHtml('ping')}<span>Тест группы</span></button>`}
+        </div>
       </header>
       <div id="${panelId}" class="xk-mihomo-group-body" ${collapsed ? 'hidden' : ''}>
         <ul class="xk-mihomo-node-list" aria-label="Узлы группы ${escapeHtml(group.name)}">
@@ -188,6 +250,7 @@ function render() {
   const count = document.getElementById('mihomo-clash-groups-count');
   const hiddenToggle = document.getElementById('mihomo-clash-show-hidden');
   const collapseButton = document.getElementById('mihomo-clash-groups-collapse');
+  const timeoutButton = document.getElementById('mihomo-clash-show-timeout-hidden');
   if (!list) return;
   const visibleGroups = filteredGroups();
   const visibleNodes = visibleGroups.reduce((sum, group) => sum + (group.nodes || []).length, 0);
@@ -197,6 +260,17 @@ function render() {
   );
   if (count) count.textContent = `${visibleGroups.length} групп · ${visibleNodes} узлов`;
   if (hiddenToggle) hiddenToggle.checked = showHidden;
+  const hiddenTimeoutCount = new Set(
+    groups().flatMap((group) => group.nodes || [])
+      .map((node) => delayKey(node.name, node.provider))
+      .filter((key) => (timeoutCounts.get(key) || 0) >= TIMEOUT_HIDE_THRESHOLD),
+  ).size;
+  if (timeoutButton) {
+    timeoutButton.hidden = hiddenTimeoutCount === 0;
+    timeoutButton.setAttribute('aria-pressed', showTimeoutHidden ? 'true' : 'false');
+    const value = timeoutButton.querySelector('span');
+    if (value) value.textContent = String(hiddenTimeoutCount);
+  }
   syncDelayControls(visibleExpandedNodes);
   if (collapseButton) {
     const allCollapsed = visibleGroups.length > 0 && visibleGroups.every((group) => collapsedGroups.has(group.name));
@@ -283,17 +357,63 @@ async function selectProxy(group, node) {
   if (!active || selection || delayRun) return;
   const previous = groups().find((item) => item.name === group);
   if (!previous || previous.now === node) return;
+  const disconnectAffected = document.getElementById('mihomo-clash-disconnect-after-select')?.checked === true;
+  const accepted = await confirmMihomoAction({
+    title: `Переключить группу «${group}»?`,
+    message: disconnectAffected
+      ? `Выбрать «${node}» и после успешного переключения завершить только соединения, затронутые группой «${group}»?`
+      : `Выбрать «${node}» для группы «${group}»? Текущие соединения продолжат работу.`,
+    okText: 'Переключить',
+    cancelText: 'Отменить',
+    danger: disconnectAffected,
+  }, `Переключить ${group} на ${node}?`);
+  if (!accepted || !active) return;
   selection = { group, node };
   render();
   try {
-    const result = await selectMihomoClashProxy(group, node);
+    const result = await selectMihomoClashProxy(group, node, { disconnectAffected });
     if (!active) return;
     if (result && result.group) replaceGroup(result.group);
     render();
+    notify(`Группа «${group}» переключена на «${node}».${connectionResultCopy(result)}`, 'success');
     if (!result || !result.reconciled) await refreshMihomoClashGroups();
   } catch (error) {
     const stale = error && error.data && error.data.code === 'proxy_selection_not_available';
     if (stale) await refreshMihomoClashGroups();
+    notify(error?.message || 'Не удалось переключить группу Mihomo.', 'error');
+  } finally {
+    selection = null;
+    render();
+  }
+}
+
+async function unfixProxy(groupName) {
+  if (!active || selection || delayRun || capabilities.proxy_unfix !== true) return;
+  const group = groups().find((item) => item.name === groupName);
+  if (!group?.fixed || !AUTOMATIC_TYPES.has(String(group.type || '').toLowerCase())) return;
+  const disconnectAffected = document.getElementById('mihomo-clash-disconnect-after-select')?.checked === true;
+  const accepted = await confirmMihomoAction({
+    title: 'Вернуть автоматический выбор?',
+    message: disconnectAffected
+      ? `Снять фиксацию «${group.fixed}» в группе «${group.name}» и завершить затронутые соединения после успешного изменения?`
+      : `Снять фиксацию «${group.fixed}» в группе «${group.name}»? Mihomo снова будет выбирать узел автоматически.`,
+    okText: 'Вернуть автоматический выбор',
+    cancelText: 'Отменить',
+    danger: disconnectAffected,
+  }, `Снять фиксацию группы ${group.name}?`);
+  if (!accepted || !active) return;
+  selection = { group: group.name, node: group.fixed, unfix: true };
+  render();
+  try {
+    const result = await unfixMihomoClashProxy(group.name, { disconnectAffected });
+    if (!active) return;
+    if (result?.group) replaceGroup(result.group);
+    render();
+    notify(`Для группы «${group.name}» возвращён автоматический выбор.${connectionResultCopy(result)}`, 'success');
+    if (!result?.reconciled) await refreshMihomoClashGroups();
+  } catch (error) {
+    if (errorCode(error) === 'proxy_unfix_not_available') await refreshMihomoClashGroups();
+    notify(error?.message || 'Не удалось вернуть автоматический выбор.', 'error');
   } finally {
     selection = null;
     render();
@@ -347,6 +467,8 @@ async function probeDelay(scope, name, provider = '') {
     for (const key of keys) {
       if (!delayRun.results.has(key) || delayRun.results.get(key).state === 'pending') {
         delayRun.results.set(key, { state: 'failed' });
+      } else if (delayRun.results.get(key).state === 'done') {
+        timeoutCounts.delete(key);
       }
     }
   } catch (error) {
@@ -359,10 +481,13 @@ async function probeDelay(scope, name, provider = '') {
     );
     for (const key of keys) {
       delayRun.results.set(key, { state: timedOut ? 'timeout' : 'failed' });
+      if (timedOut) timeoutCounts.set(key, Math.min(TIMEOUT_HIDE_THRESHOLD, (timeoutCounts.get(key) || 0) + 1));
+      else timeoutCounts.delete(key);
     }
   } finally {
     if (delayRun) delayRun.completed += 1;
-    renderDelayNodes(keys);
+    if (!showTimeoutHidden && keys.some((key) => (timeoutCounts.get(key) || 0) >= TIMEOUT_HIDE_THRESHOLD)) render();
+    else renderDelayNodes(keys);
   }
 }
 
@@ -393,7 +518,8 @@ async function runDelayQueue(items) {
       }
     }
   };
-  await Promise.all(Array.from({ length: Math.min(MAX_DELAY_CONCURRENCY, boundedItems.length) }, worker));
+  const workers = Array.from({ length: Math.min(MAX_DELAY_CONCURRENCY, boundedItems.length) }, worker);
+  for (const workerPromise of workers) await workerPromise;
   if (!delayRun) return;
   const finished = delayRun;
   for (const [key, value] of finished.results) latestDelays.set(key, value);
@@ -444,6 +570,11 @@ function bind() {
     render();
   });
   root.addEventListener('change', (event) => {
+    if (event.target?.id === 'mihomo-clash-groups-sort') {
+      sortMode = String(event.target.value || 'config');
+      render();
+      return;
+    }
     if (event.target?.id !== 'mihomo-clash-show-hidden') return;
     showHidden = !!event.target.checked;
     if (showHidden) {
@@ -454,7 +585,7 @@ function bind() {
     render();
   });
   root.addEventListener('click', (event) => {
-    const target = event.target?.closest?.('[data-mihomo-groups-collapse], [data-mihomo-group-toggle], [data-mihomo-group-select], [data-mihomo-node-delay], [data-mihomo-group-delay], [data-mihomo-delay-visible]');
+    const target = event.target?.closest?.('[data-mihomo-groups-collapse], [data-mihomo-group-toggle], [data-mihomo-group-select], [data-mihomo-group-unfix], [data-mihomo-node-delay], [data-mihomo-group-delay], [data-mihomo-delay-visible], #mihomo-clash-show-timeout-hidden');
     if (!target) return;
     if (target.hasAttribute('data-mihomo-groups-collapse')) {
       const visibleGroups = filteredGroups();
@@ -472,6 +603,8 @@ function bind() {
       render();
     }
     if (target.hasAttribute('data-mihomo-group-select')) void selectProxy(target.dataset.group, target.dataset.node);
+    if (target.hasAttribute('data-mihomo-group-unfix')) void unfixProxy(target.dataset.group);
+    if (target.id === 'mihomo-clash-show-timeout-hidden') { showTimeoutHidden = !showTimeoutHidden; render(); }
     if (target.hasAttribute('data-mihomo-node-delay')) {
       const provider = String(target.dataset.provider || '');
       void runDelayQueue([provider
@@ -492,9 +625,10 @@ export function initMihomoClashGroups() {
   return true;
 }
 
-export function activateMihomoClashGroups() {
+export function activateMihomoClashGroups(nextCapabilities = {}) {
   if (!initMihomoClashGroups()) return false;
   active = true;
+  capabilities = nextCapabilities || {};
   if (!payload) void refreshMihomoClashGroups();
   return true;
 }

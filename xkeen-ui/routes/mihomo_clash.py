@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -36,6 +37,9 @@ ClientFactory = Callable[[Any], MihomoClashClient]
 DeviceMapFactory = Callable[[], Mapping[str, Any]]
 MAX_ACTION_BODY_BYTES = 8 * 1024
 MAX_ACTION_NAME_CHARS = 256
+MAX_AFFECTED_DISCONNECTS = 24
+MIHOMO_PROXY_UNFIX_MIN_VERSION = (1, 18, 9)
+AUTOMATIC_GROUP_TYPES = {"urltest", "fallback", "smart"}
 AuditLogger = Callable[..., Any]
 ActionGuard = MihomoClashActionGuard
 
@@ -45,6 +49,7 @@ def _capabilities(
     status: bool | None,
     proxy_groups: bool | None = None,
     proxy_select: bool | None = None,
+    proxy_unfix: bool | None = None,
     proxy_delay: bool | None = None,
     connections_snapshot: bool | None = None,
     connections_stream: bool | None = None,
@@ -60,6 +65,7 @@ def _capabilities(
         "status": status,
         "proxy_groups": proxy_groups,
         "proxy_select": proxy_select,
+        "proxy_unfix": proxy_unfix,
         "proxy_delay": proxy_delay,
         "connections_snapshot": connections_snapshot,
         "connections_stream": connections_stream,
@@ -80,6 +86,49 @@ def _ws_runtime_available() -> bool:
         "yes",
         "on",
     }
+
+
+def _mihomo_version_tuple(version_payload: Any) -> tuple[int, int, int] | None:
+    value = str((version_payload or {}).get("version") if isinstance(version_payload, Mapping) else version_payload or "")
+    match = re.search(r"(?<!\d)v?(\d+)\.(\d+)\.(\d+)(?!\d)", value, re.IGNORECASE)
+    if not match:
+        return None
+    return tuple(int(part) for part in match.groups())
+
+
+def _supports_proxy_unfix(version_payload: Any) -> bool:
+    version = _mihomo_version_tuple(version_payload)
+    return bool(version and version >= MIHOMO_PROXY_UNFIX_MIN_VERSION)
+
+
+def _affected_connection_ids(payload: Any, group: str) -> tuple[list[str], bool]:
+    snapshot = build_mihomo_clash_connections_dto(payload, max_rows=1000)
+    matches = [
+        str(item.get("id"))
+        for item in snapshot.get("connections", [])
+        if group in item.get("chains", []) and item.get("id")
+    ]
+    # If Mihomo returned more than our DTO ceiling, the omitted tail may also
+    # contain affected connections. Surface that explicitly instead of
+    # implying the optional disconnect was exhaustive.
+    truncated = (
+        snapshot.get("truncated") is True
+        or snapshot.get("total_connections", 0) > 1000
+        or len(matches) > MAX_AFFECTED_DISCONNECTS
+    )
+    return matches[:MAX_AFFECTED_DISCONNECTS], truncated
+
+
+def _disconnect_captured_connections(client: MihomoClashClient, ids: list[str]) -> tuple[int, int]:
+    disconnected = 0
+    failed = 0
+    for connection_id in ids:
+        try:
+            client.disconnect_connection(connection_id)
+            disconnected += 1
+        except Exception:
+            failed += 1
+    return disconnected, failed
 
 
 def _security_posture(discovery: MihomoClashDiscovery) -> dict[str, Any]:
@@ -124,6 +173,7 @@ def _status_payload(
         config_payload=config_payload,
         capabilities=_capabilities(
             status=status_capability,
+            proxy_unfix=_supports_proxy_unfix(version_payload) if status_capability else False,
             connections_snapshot=status_capability,
             connections_stream=_ws_runtime_available() if status_capability else False,
             connection_disconnect=status_capability,
@@ -573,6 +623,7 @@ def create_mihomo_clash_blueprint(
                 code="payload_too_large",
             )
         selected = _action_name(body or {}, "name")
+        disconnect_affected = (body or {}).get("disconnect_affected") is True
         group = str(group_name or "").strip()
         if not selected or not group or len(group) > MAX_ACTION_NAME_CHARS:
             return error_response(
@@ -619,8 +670,14 @@ def create_mihomo_clash_blueprint(
                     ok=False,
                     code="proxy_selection_not_available",
                 )
+            affected_ids: list[str] = []
+            affected_truncated = False
+            if disconnect_affected:
+                connections = client.request_json("connections_snapshot")
+                affected_ids, affected_truncated = _affected_connection_ids(connections.payload, group)
             client.select_proxy(group, selected)
             refreshed = client.request_json("proxies")
+            disconnected, disconnect_failed = _disconnect_captured_connections(client, affected_ids)
         except MihomoClashClientError as exc:
             _audit_action("proxy-select", False, group=group, error_code=exc.code)
             return _safe_client_error(exc)
@@ -644,8 +701,95 @@ def create_mihomo_clash_blueprint(
                 "schema_version": 1,
                 "group": current,
                 "reconciled": bool(current and current.get("now") == selected),
+                "connections": {
+                    "requested": disconnect_affected,
+                    "matched": len(affected_ids),
+                    "disconnected": disconnected,
+                    "failed": disconnect_failed,
+                    "truncated": affected_truncated,
+                },
             }
         ), 200
+
+    @bp.delete("/api/mihomo/clash/proxy-groups/<path:group_name>/fixed")
+    def api_mihomo_clash_proxy_unfix(group_name: str):
+        try:
+            body = _read_action_body() or {}
+        except PayloadTooLargeError:
+            return error_response("Тело запроса слишком большое.", 413, ok=False, code="payload_too_large")
+        group = str(group_name or "").strip()
+        disconnect_affected = body.get("disconnect_affected") is True
+        if not group or len(group) > MAX_ACTION_NAME_CHARS or any(ord(char) < 32 for char in group):
+            return error_response("Некорректная группа Mihomo.", 400, ok=False, code="invalid_proxy_group")
+
+        lease, rejected_response = _acquire_action("proxy-unfix")
+        if rejected_response:
+            return rejected_response
+        client, unavailable = _client_or_response()
+        if unavailable:
+            lease.release()
+            return unavailable
+        try:
+            version = client.request_json("version")
+            if not _supports_proxy_unfix(version.payload):
+                return error_response(
+                    "Установленная версия Mihomo не поддерживает возврат автоматического выбора.",
+                    409,
+                    ok=False,
+                    code="proxy_unfix_not_supported",
+                )
+            before = client.request_json("proxies")
+            groups_before = build_mihomo_clash_proxy_groups_dto(before.payload).get("groups", [])
+            candidate = next((item for item in groups_before if item.get("name") == group), None)
+            if (
+                not candidate
+                or str(candidate.get("type") or "").lower() not in AUTOMATIC_GROUP_TYPES
+                or not candidate.get("fixed")
+            ):
+                return error_response(
+                    "Группа больше не зафиксирована или не поддерживает автоматический выбор.",
+                    409,
+                    ok=False,
+                    code="proxy_unfix_not_available",
+                )
+            affected_ids: list[str] = []
+            affected_truncated = False
+            if disconnect_affected:
+                connections = client.request_json("connections_snapshot")
+                affected_ids, affected_truncated = _affected_connection_ids(connections.payload, group)
+            client.unfix_proxy(group)
+            refreshed = client.request_json("proxies")
+            disconnected, disconnect_failed = _disconnect_captured_connections(client, affected_ids)
+        except MihomoClashClientError as exc:
+            _audit_action("proxy-unfix", False, group=group, error_code=exc.code)
+            return _safe_client_error(exc)
+        except Exception:
+            _audit_action("proxy-unfix", False, group=group, error_code="internal_error")
+            return error_response(
+                "Не удалось вернуть автоматический выбор Mihomo.",
+                500,
+                ok=False,
+                code="mihomo_clash_proxy_unfix_failed",
+            )
+        finally:
+            lease.release()
+
+        groups_after = build_mihomo_clash_proxy_groups_dto(refreshed.payload).get("groups", [])
+        current = next((item for item in groups_after if item.get("name") == group), None)
+        _audit_action("proxy-unfix", True, group=group)
+        return jsonify({
+            "ok": True,
+            "schema_version": 1,
+            "group": current,
+            "reconciled": bool(current and not current.get("fixed")),
+            "connections": {
+                "requested": disconnect_affected,
+                "matched": len(affected_ids),
+                "disconnected": disconnected,
+                "failed": disconnect_failed,
+                "truncated": affected_truncated,
+            },
+        }), 200
 
     @bp.post("/api/mihomo/clash/delay")
     def api_mihomo_clash_delay():
