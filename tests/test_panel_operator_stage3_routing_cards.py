@@ -191,6 +191,7 @@ def test_dat_file_picker_uses_its_listbox_contract_without_an_overlapping_toolti
     assert "trigger.setAttribute('aria-expanded', open ? 'true' : 'false')" in combo
     assert "host.getAttribute('aria-haspopup') === 'listbox'" in tooltips
     assert "el.getAttribute('aria-haspopup') === 'listbox'" in tooltips
+    assert '.routing-dat-item.is-dat-picker-open > .routing-dat-found' in OPERATOR_CSS.read_text(encoding="utf-8")
 
 
 def test_stage3_css_is_flat_dense_and_kept_inside_canonical_sections():
@@ -207,7 +208,7 @@ def test_stage3_css_is_flat_dense_and_kept_inside_canonical_sections():
         ".routing-dat-help-popover",
         "position: static !important;",
         "z-index: 60;",
-        ".routing-dat-combo.is-open .routing-dat-found",
+        ".routing-dat-item.is-dat-picker-open > .routing-dat-found",
         ".routing-dat-actions-inline",
         "grid-template-columns: repeat(4, minmax(0, 1fr));",
         ':is(.routing-dat-meta, #routing-dat-status)',

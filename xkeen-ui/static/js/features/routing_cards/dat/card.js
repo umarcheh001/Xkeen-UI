@@ -125,23 +125,6 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     return false;
   }
 
-  function chooseBest(kind, candidates) {
-    const k = String(kind || '').toLowerCase();
-    const list = Array.isArray(candidates) ? candidates.slice() : [];
-    const prio = (k === 'geosite')
-      ? ['geosite.dat', 'geosite_v2fly.dat', 'geosite_refilter.dat', 'geosite_zkeen.dat', 'zkeen.dat']
-      : ['geoip.dat', 'geoip_v2fly.dat', 'geoip_refilter.dat', 'geoip_zkeenip.dat', 'zkeenip.dat'];
-    const lower = list.map((x) => String(x || '').toLowerCase());
-    for (let i = 0; i < prio.length; i++) {
-      const want = prio[i];
-      const j = lower.indexOf(want);
-      if (j >= 0) return list[j];
-    }
-    if (list.length === 1) return list[0];
-    list.sort((a, b) => String(a).localeCompare(String(b)));
-    return list[0] || '';
-  }
-
   function formatCandidates(cands, maxItems) {
     const list = Array.isArray(cands) ? cands.slice() : [];
     const max = Math.max(1, Number(maxItems || 3));
@@ -189,44 +172,19 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const p = prefs && prefs[k] ? prefs[k] : null;
     if (!p) return { dir: '', name: '', candidates: [], entries: [] };
 
-    // Dir: migrate old default (/opt/etc/xray) -> /opt/etc/xray/dat
-    let dir = String(p.dir || '').trim();
-    if (!dir) dir = (DEFAULTS[k] && DEFAULTS[k].dir) ? DEFAULTS[k].dir : '';
-    if (dir === '/opt/etc/xray') dir = (DEFAULTS[k] && DEFAULTS[k].dir) ? DEFAULTS[k].dir : dir;
+    // Discovery is read-only: refreshing metadata must never replace a path
+    // explicitly entered by the operator.
+    const dir = String(p.dir || '').trim() || ((DEFAULTS[k] && DEFAULTS[k].dir) ? DEFAULTS[k].dir : '');
 
-    let entries = await listEntriesForDir(dir, k);
-    let candidates = entries.map((e) => String((e && e.name) || '')).filter(Boolean);
-
-    // If user points to /.../xray, try /.../xray/dat
-    if ((!candidates || !candidates.length) && /\/xray\/?$/.test(dir) && !/\/xray\/dat$/.test(dir)) {
-      const alt = dir.replace(/\/+$/g, '') + '/dat';
-      const altEntries = await listEntriesForDir(alt, k);
-      const altCand = altEntries.map((e) => String((e && e.name) || '')).filter(Boolean);
-      if (altCand && altCand.length) {
-        dir = alt;
-        entries = altEntries;
-        candidates = altCand;
-      }
-    }
+    const entries = await listEntriesForDir(dir, k);
+    const candidates = entries.map((e) => String((e && e.name) || '')).filter(Boolean);
 
     // Update datalist suggestions
     if (els && els.list) setDatalist(els.list, candidates);
 
-    // Name: keep user's choice, but auto-pick when it's default and missing
-    let name = String(p.name || '').trim();
-    if (!name) name = (DEFAULTS[k] && DEFAULTS[k].name) ? DEFAULTS[k].name : '';
-
-    const lower = candidates.map((x) => String(x || '').toLowerCase());
-    const idx = lower.indexOf(String(name).toLowerCase());
-    if (idx >= 0) {
-      name = candidates[idx];
-    } else {
-      const isDefaultName = String(name).toLowerCase() === String((DEFAULTS[k] && DEFAULTS[k].name) || '').toLowerCase();
-      if (isDefaultName && candidates && candidates.length) {
-        const chosen = chooseBest(k, candidates);
-        if (chosen) name = chosen;
-      }
-    }
+    // Keep the saved filename as well. Detected files are suggestions in the
+    // full-width picker; choosing one is the only action allowed to change it.
+    const name = String(p.name || '').trim() || ((DEFAULTS[k] && DEFAULTS[k].name) ? DEFAULTS[k].name : '');
 
     // Apply to inputs
     try {
@@ -234,7 +192,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       if (els && els.name && String(els.name.value || '') !== String(name || '')) els.name.value = name;
     } catch (e) {}
 
-    // Persist into prefs object
+    // Preserve the current values in the prefs object. This makes refreshes
+    // idempotent and prevents panel updates from resetting custom locations.
     try {
       p.dir = dir;
       p.name = name;

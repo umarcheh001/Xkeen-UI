@@ -69,6 +69,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       if (!root) return;
       if (open) root.classList.add('is-open');
       else root.classList.remove('is-open');
+      const item = root.closest ? root.closest('.routing-dat-item') : null;
+      if (item) item.classList.toggle('is-dat-picker-open', !!open);
       const trigger = root.querySelector('.routing-dat-combo-btn');
       if (trigger) trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
     } catch (e) {}
@@ -81,6 +83,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         const k = String((root && (root.getAttribute('data-kind') || (root.dataset && root.dataset.kind))) || '').toLowerCase();
         if (ex && k === ex) return;
         root.classList.remove('is-open');
+        const item = root.closest ? root.closest('.routing-dat-item') : null;
+        if (item) item.classList.remove('is-dat-picker-open');
         const trigger = root.querySelector('.routing-dat-combo-btn');
         if (trigger) trigger.setAttribute('aria-expanded', 'false');
       });

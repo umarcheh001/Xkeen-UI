@@ -1842,6 +1842,19 @@ def test_routing_dat_prefs_backfill_blank_values_with_defaults():
     assert "if (!String(merged.name || '').trim()) merged.name = DEFAULTS[k].name;" in text
 
 
+def test_routing_dat_refresh_preserves_custom_paths_and_names():
+    card_text = Path('xkeen-ui/static/js/features/routing_cards/dat/card.js').read_text(encoding='utf-8')
+    css_text = Path('xkeen-ui/static/panel-operator.css').read_text(encoding='utf-8')
+
+    assert 'Discovery is read-only' in card_text
+    assert "const dir = String(p.dir || '').trim()" in card_text
+    assert "const name = String(p.name || '').trim()" in card_text
+    assert "dir = alt;" not in card_text
+    assert "if (chosen) name = chosen;" not in card_text
+    assert '.routing-dat-item.is-dat-picker-open > .routing-dat-found' in css_text
+    assert 'overflow-wrap: anywhere;' in css_text
+
+
 def test_panel_shell_dat_fallback_rehydrates_current_card_before_deferring_and_dispatches_input_change():
     text = Path('xkeen-ui/static/js/pages/panel_shell.shared.js').read_text(encoding='utf-8')
     card_text = Path('xkeen-ui/static/js/features/routing_cards/dat/card.js').read_text(encoding='utf-8')

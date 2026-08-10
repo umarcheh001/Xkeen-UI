@@ -892,7 +892,12 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
               refs.name.dispatchEvent(new Event('change', { bubbles: true }));
             }
           } catch (error) {}
-          try { found.parentElement && found.parentElement.classList.remove('is-open'); } catch (error) {}
+          try {
+            const itemRoot = found.closest && found.closest('.routing-dat-item');
+            const comboRoot = itemRoot && itemRoot.querySelector('.routing-dat-combo');
+            if (itemRoot) itemRoot.classList.remove('is-dat-picker-open');
+            if (comboRoot) comboRoot.classList.remove('is-open');
+          } catch (error) {}
           try { refreshRoutingDatFallback(); } catch (error) {}
         });
         found.appendChild(btn);
@@ -1123,7 +1128,13 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
         renderRoutingDatFallbackList(kind, refs, entries);
         try {
           const root = refs.browse && typeof refs.browse.closest === 'function' ? refs.browse.closest('.routing-dat-combo') : null;
-          if (root) root.classList.toggle('is-open');
+          const itemRoot = root && typeof root.closest === 'function' ? root.closest('.routing-dat-item') : null;
+          if (root) {
+            const opening = !root.classList.contains('is-open');
+            root.classList.toggle('is-open', opening);
+            if (itemRoot) itemRoot.classList.toggle('is-dat-picker-open', opening);
+            refs.browse.setAttribute('aria-expanded', opening ? 'true' : 'false');
+          }
         } catch (error) {}
       });
     });

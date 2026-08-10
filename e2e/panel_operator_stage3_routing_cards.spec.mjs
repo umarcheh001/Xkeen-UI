@@ -342,7 +342,7 @@ test.describe('Operator Console Stage 3 routing cards', () => {
             ok: true,
             items: [
               { name: 'geosite_refilter.dat', type: 'file', size: 1024, mtime: 1_777_777_777 },
-              { name: 'geosite_v2fly.dat', type: 'file', size: 2048, mtime: 1_777_777_778 },
+              { name: 'geosite_v2fly_with-a-very-long-user-defined-release-name.dat', type: 'file', size: 2048, mtime: 1_777_777_778 },
             ],
           }),
         });
@@ -355,9 +355,14 @@ test.describe('Operator Console Stage 3 routing cards', () => {
       await expect(page.locator('#routing-dat-geosite-found [role="option"]')).toHaveCount(2);
       const datOpenGeometry = await collectDatCardGeometry(page);
       expect(datOpenGeometry.foundPosition).toBe('static');
+      expect(datOpenGeometry.found.width).toBeGreaterThan(datOpenGeometry.combo.width * 1.6);
+      expect(Math.abs(datOpenGeometry.found.width - datOpenGeometry.inspector.width)).toBeLessThanOrEqual(30);
       expect(datOpenGeometry.found.bottom).toBeLessThanOrEqual(datOpenGeometry.geoip.top + 0.5);
       expect(datOpenGeometry.pageOverflow).toBeLessThanOrEqual(1);
-      await page.keyboard.press('Escape');
+      const longDatName = page.locator('#routing-dat-geosite-found .routing-dat-found-name').last();
+      expect(await longDatName.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+      await page.locator('#routing-dat-geosite-found [role="option"]').last().click();
+      await expect(page.locator('#routing-dat-geosite-name')).toHaveValue('geosite_v2fly_with-a-very-long-user-defined-release-name.dat');
       await expect(page.locator('#routing-dat-geosite-browse')).toHaveAttribute('aria-expanded', 'false');
 
       await page.locator('#routing-dat-refresh-btn').click();
@@ -366,6 +371,19 @@ test.describe('Operator Console Stage 3 routing cards', () => {
       await expect(page.locator('#routing-dat-status')).toHaveAttribute('data-state', 'loading');
       await expect(page.locator('#routing-dat-refresh-btn')).toHaveAttribute('aria-busy', 'false');
       await expect(page.locator('#routing-dat-status')).toHaveAttribute('data-state', 'ok');
+
+      const customGeoSiteDir = '/opt/custom/geodata/keep-this-path';
+      const customGeoSiteName = 'my-company-geosite-release.dat';
+      await page.locator('#routing-dat-geosite-dir').fill(customGeoSiteDir);
+      await page.locator('#routing-dat-geosite-name').fill(customGeoSiteName);
+      await page.locator('#routing-dat-refresh-btn').click();
+      await expect(page.locator('#routing-dat-status')).toHaveAttribute('data-state', 'ok');
+      await expect(page.locator('#routing-dat-geosite-dir')).toHaveValue(customGeoSiteDir);
+      await expect(page.locator('#routing-dat-geosite-name')).toHaveValue(customGeoSiteName);
+      expect(await page.evaluate(() => {
+        const prefs = JSON.parse(localStorage.getItem('xk.routing.dat.prefs.v1') || '{}');
+        return prefs.geosite;
+      })).toMatchObject({ dir: customGeoSiteDir, name: customGeoSiteName });
 
       const helpLink = page.locator('#routing-help-body .links a').first();
       const helpVisual = await helpLink.evaluate((node) => {

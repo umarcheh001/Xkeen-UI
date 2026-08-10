@@ -1643,8 +1643,6 @@ body.panel-page .routing-dat-combo-btn {
 
 body.panel-page .routing-dat-found {
   display: none;
-  grid-column: 1 / -1;
-  grid-row: 2;
   position: static !important;
   inset: auto !important;
   z-index: auto;
@@ -1659,8 +1657,10 @@ body.panel-page .routing-dat-found {
   box-shadow: none !important;
 }
 
-body.panel-page .routing-dat-combo.is-open .routing-dat-found {
+body.panel-page .routing-dat-item.is-dat-picker-open > .routing-dat-found {
   display: block;
+  width: 100%;
+  margin-top: 6px;
 }
 
 body.panel-page .routing-dat-found-item {
@@ -1692,12 +1692,12 @@ body.panel-page .routing-dat-found-item.is-current {
 
 body.panel-page .routing-dat-found-name {
   min-width: 0;
-  overflow: hidden;
   color: inherit !important;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: calc(11px * var(--xk-font-scale, 1));
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
 }
 
 body.panel-page .routing-dat-found-meta {
@@ -17460,6 +17460,16 @@ body.panel-page .xk-mihomo-groups-disconnect-toggle .dt-switch-slider {
   width: 30px;
   min-width: 30px;
   height: 16px;
+}
+
+/* Match the adjacent hidden-groups switch: the inactive thumb stays white
+ * enough to remain visible against the dark track. */
+body.panel-page .xk-mihomo-groups-disconnect-toggle .dt-switch-slider::after {
+  background: var(--op-text) !important;
+}
+
+body.panel-page .xk-mihomo-groups-disconnect-toggle input:checked + .dt-switch-slider::after {
+  background: #fff !important;
 }
 
 body.panel-page #mihomo-clash-groups-sort { min-width: 144px; }
