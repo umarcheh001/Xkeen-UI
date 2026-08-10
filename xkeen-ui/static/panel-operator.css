@@ -17129,11 +17129,7 @@ body.panel-page .xk-mihomo-node-probe.is-pending:disabled {
 body.panel-page .xk-mihomo-node-probe.is-pending .xk-action-icon {
   width: 14px;
   height: 14px;
-  animation: xk-mihomo-node-probe-spin .85s linear infinite;
-}
-
-@keyframes xk-mihomo-node-probe-spin {
-  to { transform: rotate(360deg); }
+  animation: xk-sub-pingall-spin .85s linear infinite;
 }
 
 body.panel-page .xk-mihomo-node-probe:hover:not(:disabled) {

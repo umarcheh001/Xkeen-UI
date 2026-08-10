@@ -194,7 +194,7 @@ def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
     assert 'xk-mihomo-group-current' not in groups
     assert 'xk-mihomo-node-marker' not in groups
     assert 'class="xk-mihomo-node-probe' in groups
-    assert "iconHtml('alert')" in groups
+    assert "iconHtml('server-off')" in groups
     assert 'data-tooltip="Проверить задержку"' not in groups
     assert 'data-tooltip-silent="1"' in groups
     assert "${collapsed ? '' : `<button type=\"button\" class=\"btn-secondary xk-mihomo-group-test\"" in groups
@@ -214,7 +214,7 @@ def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
     assert 'background: var(--op-accent-soft);' in css
     assert 'body.panel-page .xk-mihomo-node-unavailable' in css
     assert 'body.panel-page .xk-mihomo-node-probe:focus-visible' in css
-    assert 'xk-mihomo-node-probe-spin' in css
+    assert 'xk-sub-pingall-spin' in css
 
 
 def test_groups_lifecycle_stops_load_and_delay_work_outside_control_view():

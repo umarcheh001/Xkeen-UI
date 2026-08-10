@@ -114,7 +114,7 @@ function renderNodeProbe(node) {
         aria-label="Проверяем задержку узла ${escapeHtml(node.name)}" aria-busy="true" data-tooltip-silent="1" disabled>${iconHtml('loading')}</button>`
     : node.alive === false && !delaySucceeded
     ? `<button type="button" class="xk-mihomo-node-probe xk-mihomo-node-unavailable" ${probeData}
-        aria-label="${escapeHtml(probeLabel)}" data-tooltip-silent="1">${iconHtml('alert')}</button>`
+        aria-label="${escapeHtml(probeLabel)}" data-tooltip-silent="1">${iconHtml('server-off')}</button>`
     : `<button type="button" class="xk-mihomo-node-probe xk-mihomo-node-delay" ${probeData}
         data-delay-tone="${tone}" aria-label="${escapeHtml(probeLabel)}" data-tooltip-silent="1">${escapeHtml(delayLabel)}</button>`;
 }

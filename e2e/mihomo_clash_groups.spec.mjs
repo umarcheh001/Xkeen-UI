@@ -130,7 +130,9 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
     { scope: 'provider-proxy', name: 'node-b', provider: 'provider-one', preset: 'google' },
   );
 
-  await page.locator('[data-group-name="AUTO"] [data-mihomo-group-test]').click();
+  await page.locator('#mihomo-clash-groups-filter').fill('');
+  await expect(page.locator('[data-group-name="AUTO"] [data-mihomo-group-toggle]')).toHaveAttribute('aria-expanded', 'true');
+  await page.locator('[data-mihomo-delay-visible]').click();
   await expect(page.locator('[data-node-name="node-a"] .xk-mihomo-node-delay')).toHaveText('44 мс');
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('44 мс');
   await expect(page.locator('[data-node-name="DIRECT"] .xk-mihomo-node-delay')).toHaveText('44 мс');
@@ -176,7 +178,7 @@ test('Mihomo group disclosures keep the workspace compact and keyboard accessibl
   expect(nodeCard).toEqual({ radius: '6px', minHeight: '72px', hasSelectionDot: false });
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-probe')).toHaveCount(1);
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-probe')).not.toHaveAttribute('data-tooltip');
-  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-unavailable use')).toHaveAttribute('href', /#xk-alert$/);
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-unavailable use')).toHaveAttribute('href', /#xk-server-off$/);
 
   await page.locator('#mihomo-clash-groups-collapse').click();
   await expect(page.locator('[data-mihomo-group-toggle][aria-expanded="true"]')).toHaveCount(0);
