@@ -136,8 +136,13 @@ def test_stage1_flat_effect_and_geometry_contract_is_static():
         re.sub(r"/\*.*?\*/", "", css, flags=re.DOTALL),
         flags=re.DOTALL,
     )
-    assert len(pill_blocks) == 1
+    # Pills are intentionally reserved for the switch track, compact count
+    # badge, and device alias. Keep this as an explicit allow-list so a new
+    # rounded component cannot silently reintroduce legacy visual language.
+    assert len(pill_blocks) == 3
     assert ".fm-toggle-slider" in pill_blocks[0]
+    assert ".xk-mihomo-connections-view-tab span" in pill_blocks[1]
+    assert ".xk-mihomo-device-name" in pill_blocks[2]
 
     assert ")::before," in css
     assert ")::after {" in css
