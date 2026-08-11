@@ -305,12 +305,15 @@ function renderNodeProbe(node) {
   const probeLabel = `Проверить задержку узла ${node.name}`;
   const probeData = `data-mihomo-node-delay="1" data-node="${escapeHtml(node.name)}" data-provider="${escapeHtml(node.provider || '')}"`;
   const checking = status.state === 'pending';
+  const content = status.state === 'unavailable'
+    ? `<span class="xk-visually-hidden">${escapeHtml(status.label)}</span>${iconHtml('server-off')}`
+    : escapeHtml(status.label);
   return checking
     ? `<button type="button" class="xk-mihomo-node-probe is-pending" ${probeData}
         aria-label="Проверяем задержку узла ${escapeHtml(node.name)}" aria-busy="true" data-tooltip-silent="1" disabled>${iconHtml('loading')}</button>`
     : `<button type="button" class="xk-mihomo-node-probe xk-mihomo-node-delay" ${probeData}
         data-delay-tone="${escapeHtml(status.state)}" aria-label="${escapeHtml(probeLabel)}: ${escapeHtml(status.label)}"
-        data-tooltip="${escapeHtml(status.tooltip)}">${escapeHtml(status.label)}</button>`;
+        data-tooltip="${escapeHtml(status.tooltip)}">${content}</button>`;
 }
 
 function renderNode(group, node) {

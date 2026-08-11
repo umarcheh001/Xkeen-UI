@@ -318,10 +318,25 @@ test('Mihomo group disclosures keep the workspace compact and keyboard accessibl
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-probe')).toHaveCount(1);
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('недоступен');
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveAttribute('data-delay-tone', 'unavailable');
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay use')).toHaveAttribute('href', /#xk-server-off$/);
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveAttribute(
+    'aria-label',
+    /недоступен/,
+  );
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveAttribute(
     'data-tooltip',
     /alive=false/,
   );
+  const unavailablePlacement = await page.locator('[data-node-name="node-b"]').evaluate((card) => {
+    const cardBox = card.getBoundingClientRect();
+    const probeBox = card.querySelector('.xk-mihomo-node-probe')?.getBoundingClientRect();
+    return probeBox ? {
+      rightInset: Math.round(cardBox.right - probeBox.right),
+      bottomInset: Math.round(cardBox.bottom - probeBox.bottom),
+      iconOnlyWidth: Math.round(probeBox.width),
+    } : null;
+  });
+  expect(unavailablePlacement).toEqual({ rightInset: 9, bottomInset: 7, iconOnlyWidth: 24 });
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-unavailable')).toHaveCount(0);
   await page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay').click();
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('ошибка');
