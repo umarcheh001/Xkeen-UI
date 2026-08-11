@@ -90,15 +90,51 @@ function nodeDelayResult(node) {
   return (delayRun && delayRun.results.get(key)) || latestDelays.get(key);
 }
 
-function delayCopy(node) {
-  const runValue = nodeDelayResult(node);
-  if (runValue && runValue.state === 'pending') return 'проверка';
-  if (runValue && runValue.state === 'timeout') return 'таймаут';
-  if (runValue && runValue.state === 'failed') return 'ошибка';
-  if (runValue && runValue.state === 'cancelled') return 'отменено';
-  if (!runValue && node.alive === false) return 'недоступен';
-  const delay = runValue && Number.isFinite(runValue.delay) ? runValue.delay : node.delay_ms;
-  return Number.isFinite(delay) ? `${delay} мс` : '—';
+function nodeProbeStatus(node) {
+  const result = nodeDelayResult(node);
+  if (result?.state === 'pending') {
+    return { state: 'pending', label: 'проверка', tooltip: 'Выполняется проверка задержки узла.' };
+  }
+  if (result?.state === 'timeout') {
+    return { state: 'timeout', label: 'таймаут', tooltip: 'Проверка задержки превысила допустимое время ожидания.' };
+  }
+  if (result?.state === 'failed') {
+    return {
+      state: 'failed',
+      label: 'ошибка',
+      tooltip: 'Ручная проверка задержки не вернула пригодный результат. Нажмите, чтобы повторить.',
+    };
+  }
+  if (result?.state === 'cancelled') {
+    return { state: 'cancelled', label: 'отменено', tooltip: 'Проверка задержки была отменена.' };
+  }
+  if (result && Number.isFinite(result.delay)) {
+    const delay = result.delay;
+    return {
+      state: delayTone(delay),
+      label: `${delay} мс`,
+      tooltip: `Последняя измеренная задержка: ${delay} мс. Нажмите, чтобы проверить снова.`,
+    };
+  }
+  if (node.availability === 'unavailable' || node.alive === false) {
+    return {
+      state: 'unavailable',
+      label: 'недоступен',
+      tooltip: 'Последняя фоновая healthcheck Mihomo вернула alive=false. Нажмите, чтобы выполнить ручную проверку задержки.',
+    };
+  }
+  if (Number.isFinite(node.delay_ms)) {
+    return {
+      state: delayTone(node.delay_ms),
+      label: `${node.delay_ms} мс`,
+      tooltip: `Последняя измеренная задержка: ${node.delay_ms} мс. Нажмите, чтобы проверить снова.`,
+    };
+  }
+  return {
+    state: 'unknown',
+    label: '—',
+    tooltip: 'Mihomo ещё не сообщил результат healthcheck. Нажмите, чтобы проверить задержку.',
+  };
 }
 
 function nodeSearchText(node) {
@@ -265,24 +301,16 @@ function nodeConnectionSummary(node) {
 }
 
 function renderNodeProbe(node) {
-  const runValue = nodeDelayResult(node);
-  const delay = runValue && Number.isFinite(runValue.delay) ? runValue.delay : node.delay_ms;
-  const delaySucceeded = runValue && runValue.state === 'done' && Number.isFinite(runValue.delay);
-  const tone = runValue
-    ? (delaySucceeded ? delayTone(delay) : runValue.state)
-    : (node.alive === false ? 'failed' : delayTone(delay));
-  const delayLabel = delayCopy(node);
+  const status = nodeProbeStatus(node);
   const probeLabel = `Проверить задержку узла ${node.name}`;
   const probeData = `data-mihomo-node-delay="1" data-node="${escapeHtml(node.name)}" data-provider="${escapeHtml(node.provider || '')}"`;
-  const checking = runValue && runValue.state === 'pending';
+  const checking = status.state === 'pending';
   return checking
     ? `<button type="button" class="xk-mihomo-node-probe is-pending" ${probeData}
         aria-label="Проверяем задержку узла ${escapeHtml(node.name)}" aria-busy="true" data-tooltip-silent="1" disabled>${iconHtml('loading')}</button>`
-    : !runValue && node.alive === false && !delaySucceeded
-    ? `<button type="button" class="xk-mihomo-node-probe xk-mihomo-node-unavailable" ${probeData}
-        aria-label="${escapeHtml(probeLabel)}" data-tooltip-silent="1">${iconHtml('server-off')}</button>`
     : `<button type="button" class="xk-mihomo-node-probe xk-mihomo-node-delay" ${probeData}
-        data-delay-tone="${tone}" aria-label="${escapeHtml(probeLabel)}" data-tooltip-silent="1">${escapeHtml(delayLabel)}</button>`;
+        data-delay-tone="${escapeHtml(status.state)}" aria-label="${escapeHtml(probeLabel)}: ${escapeHtml(status.label)}"
+        data-tooltip="${escapeHtml(status.tooltip)}">${escapeHtml(status.label)}</button>`;
 }
 
 function renderNode(group, node) {
@@ -291,9 +319,9 @@ function renderNode(group, node) {
   const selectPending = selection && selection.group === group.name && selection.node === node.name;
   const checking = nodeDelayResult(node)?.state === 'pending';
   const selectable = !!group.selectable && SELECTABLE_TYPES.has(String(group.type || '').toLowerCase());
-  const alive = nodeDelayResult(node)?.state === 'done' || node.alive === true
+  const alive = nodeDelayResult(node)?.state === 'done' || node.availability === 'available' || node.alive === true
     ? 'доступен'
-    : (node.alive === false ? 'недоступен' : 'нет данных');
+    : (node.availability === 'unavailable' || node.alive === false ? 'недоступен' : 'нет данных');
   const countryCode = nodeCountryCode(node.name);
   const displayName = nodeDisplayName(node, countryCode);
   const protocol = [node.type || 'unknown', node.network, node.security].filter(Boolean).join(' · ');

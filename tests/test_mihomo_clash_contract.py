@@ -149,6 +149,8 @@ def test_proxy_groups_dto_retains_order_and_provider_enrichment():
     assert auto["nodes"][1]["provider_candidates"] == ["demo-provider"]
     assert auto["nodes"][1]["provider_ambiguous"] is False
     assert auto["nodes"][0]["delay_ms"] == 87
+    assert auto["nodes"][0]["availability"] == "available"
+    assert auto["nodes"][1]["availability"] == "unavailable"
 
 
 def test_proxy_groups_dto_does_not_guess_provider_when_names_collide():

@@ -259,10 +259,13 @@ def _node_dto(
                 return value
         return None
 
+    alive = _optional_bool(raw.get("alive"))
+    availability = "available" if alive is True else ("unavailable" if alive is False else "unknown")
     return {
         "name": _text(raw.get("name") or name, 256),
         "type": _text(raw.get("type"), 64),
-        "alive": _optional_bool(raw.get("alive")),
+        "alive": alive,
+        "availability": availability,
         "udp": _optional_bool(raw.get("udp")),
         "xudp": _optional_bool(raw.get("xudp")),
         "provider": provider,

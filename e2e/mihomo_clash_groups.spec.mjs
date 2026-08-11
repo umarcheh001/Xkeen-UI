@@ -29,7 +29,7 @@ function groupsPayload(now = 'node-a', fixed = '', includeReliabilityFixture = f
         selectable: true,
         nodes: [
           { name: 'node-a', type: 'VLESS', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: 82, server: 'edge.example.test', port: 443, network: 'xhttp', security: 'tls', host: 'cdn.example.test', path: '/api/v2/' },
-          { name: 'node-b', type: 'Trojan', alive: false, udp: true, provider: 'provider-one', provider_candidates: ['provider-one'], delay_ms: null },
+          { name: 'node-b', type: 'Trojan', alive: false, udp: true, provider: 'provider-one', provider_candidates: ['provider-one'], delay_ms: 999 },
           { name: 'DIRECT', type: 'Direct', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: null },
         ],
       },
@@ -279,6 +279,10 @@ test('automatic fixed group shows lock, unfix action, sorting and timeout hiding
 test('Mihomo group disclosures keep the workspace compact and keyboard accessible', async ({ page }) => {
   await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
   await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: groupsPayload() }));
+  await page.route('**/api/mihomo/clash/delay', (route) => route.fulfill({
+    status: 502,
+    json: { ok: false, code: 'upstream_unreachable' },
+  }));
 
   await page.goto('/');
   await page.locator('.top-tab-btn[data-view="mihomo"]').click();
@@ -312,8 +316,20 @@ test('Mihomo group disclosures keep the workspace compact and keyboard accessibl
   }));
   expect(nodeCard).toEqual({ radius: '6px', minHeight: '82px', hasSelectionDot: false });
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-probe')).toHaveCount(1);
-  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-probe')).not.toHaveAttribute('data-tooltip');
-  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-unavailable use')).toHaveAttribute('href', /#xk-server-off$/);
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('недоступен');
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveAttribute('data-delay-tone', 'unavailable');
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveAttribute(
+    'data-tooltip',
+    /alive=false/,
+  );
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-unavailable')).toHaveCount(0);
+  await page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay').click();
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('ошибка');
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveAttribute('data-delay-tone', 'failed');
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveAttribute(
+    'data-tooltip',
+    /Ручная проверка/,
+  );
 
   await page.locator('#mihomo-clash-groups-collapse').click();
   await expect(page.locator('[data-mihomo-group-toggle][aria-expanded="true"]')).toHaveCount(0);
