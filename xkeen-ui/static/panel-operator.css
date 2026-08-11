@@ -16888,6 +16888,48 @@ body.panel-page .xk-mihomo-connections {
   min-width: 0;
 }
 
+@media (min-width: 821px) {
+  body.panel-page .xk-mihomo-connections {
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+    height: calc(100dvh - 230px);
+    min-height: 420px;
+  }
+
+  body.panel-page .xk-mihomo-connection-inspector {
+    min-height: 0;
+    max-height: min(32dvh, 260px);
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (min-width: 1100px) {
+  body.panel-page .xk-mihomo-connections:has(.xk-mihomo-connection-inspector:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr) minmax(340px, .42fr);
+    grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  }
+
+  body.panel-page .xk-mihomo-connections:has(.xk-mihomo-connection-inspector:not([hidden])) > :is(
+    .xk-mihomo-connections-summary,
+    .xk-mihomo-connections-view-tabs,
+    .xk-mihomo-connections-toolbar,
+    .xk-mihomo-connections-notice
+  ) {
+    grid-column: 1 / -1;
+  }
+
+  body.panel-page .xk-mihomo-connections:has(.xk-mihomo-connection-inspector:not([hidden])) .xk-mihomo-connections-table-wrap {
+    grid-column: 1;
+    grid-row: 5;
+  }
+
+  body.panel-page .xk-mihomo-connections:has(.xk-mihomo-connection-inspector:not([hidden])) .xk-mihomo-connection-inspector {
+    grid-column: 2;
+    grid-row: 5;
+    max-height: none;
+  }
+}
+
 body.panel-page .xk-mihomo-connections-summary {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -17044,9 +17086,12 @@ body.panel-page .xk-mihomo-connections-notice[data-tone="danger"] { color: var(-
 
 body.panel-page .xk-mihomo-connections-table-wrap {
   min-width: 0;
-  overflow-x: auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--op-border);
   border-radius: var(--op-control-radius);
+  scrollbar-gutter: stable;
 }
 
 body.panel-page .xk-mihomo-connections-table {
@@ -17057,6 +17102,9 @@ body.panel-page .xk-mihomo-connections-table {
 }
 
 body.panel-page .xk-mihomo-connections-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   padding: 7px 8px;
   border-bottom: 1px solid var(--op-border);
   background: var(--op-surface-2);
@@ -17144,15 +17192,16 @@ body.panel-page .xk-mihomo-closed-mark { color: var(--op-muted); font-size: calc
 body.panel-page .xk-mihomo-device-name {
   display: inline-flex;
   max-width: 190px;
-  margin-left: 6px;
-  padding: 1px 6px;
+  margin-left: 7px;
+  padding-left: 7px;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--op-success) 38%, var(--op-border));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--op-success) 10%, transparent);
-  color: color-mix(in srgb, var(--op-success) 72%, var(--op-text));
+  border-left: 1px solid var(--op-border-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--op-data-muted);
   font: inherit;
   font-size: .86em;
+  font-weight: 550;
   line-height: 1.2;
   text-overflow: ellipsis;
   vertical-align: 1px;

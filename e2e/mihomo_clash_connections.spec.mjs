@@ -99,6 +99,19 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   const firstSource = page.locator('[data-connection-id="connection-one"] td').first();
   await expect(firstSource).toContainText('192.0.2.1:5000');
   await expect(firstSource.locator('.xk-mihomo-device-name')).toHaveText('Laptop');
+  const deviceStyle = await firstSource.locator('.xk-mihomo-device-name').evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      background: style.backgroundColor,
+      borderRadius: style.borderRadius,
+      borderLeftStyle: style.borderLeftStyle,
+    };
+  });
+  expect(deviceStyle).toEqual({
+    background: 'rgba(0, 0, 0, 0)',
+    borderRadius: '0px',
+    borderLeftStyle: 'solid',
+  });
 
   await firstSource.locator('.xk-mihomo-device-name').click();
   await expect(page.locator('#mihomo-clash-connections-filter')).toHaveValue('Laptop');
@@ -154,6 +167,36 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   await page.locator('#mihomo-clash-tab-config').click();
   await expect(page.locator('#mihomo-clash-runtime')).toBeHidden();
   await expect(page.locator('#mihomo-clash-stream-state')).toHaveText('Пауза');
+});
+
+
+test('Mihomo connections fill the desktop viewport and scroll inside the table', async ({ page }) => {
+  const ids = Array.from({ length: 60 }, (_, index) => `scroll-${index}`);
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route('**/api/mihomo/clash/connections', (route) => route.fulfill({ json: connectionsPayload(ids) }));
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.locator('#mihomo-clash-tab-connections').click();
+  await expect(page.locator('#mihomo-clash-connections-rows tr')).toHaveCount(60);
+
+  const layout = await page.evaluate(() => {
+    const workspace = document.querySelector('#mihomo-clash-connections');
+    const tableWrap = document.querySelector('#mihomo-clash-connections-table-wrap');
+    const tableHead = document.querySelector('.xk-mihomo-connections-table th');
+    const workspaceRect = workspace.getBoundingClientRect();
+    const wrapStyle = getComputedStyle(tableWrap);
+    return {
+      workspaceHeight: workspaceRect.height,
+      viewportHeight: window.innerHeight,
+      overflowY: wrapStyle.overflowY,
+      scrollable: tableWrap.scrollHeight > tableWrap.clientHeight,
+      stickyHead: getComputedStyle(tableHead).position,
+    };
+  });
+  expect(layout.workspaceHeight).toBeCloseTo(Math.max(420, layout.viewportHeight - 230), 0);
+  expect(layout.overflowY).toBe('auto');
+  expect(layout.scrollable).toBe(true);
+  expect(layout.stickyHead).toBe('sticky');
 });
 
 
