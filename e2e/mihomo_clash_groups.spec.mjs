@@ -156,11 +156,17 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await page.locator('#mihomo-clash-groups-filter').fill('');
   await expect(page.locator('[data-group-name="AUTO"] [data-mihomo-group-toggle]')).toHaveAttribute('aria-expanded', 'true');
   await page.locator('[data-mihomo-delay-visible]').click();
+  await expect(page.locator('#mihomo-clash-test-visible')).toHaveAttribute('data-mihomo-delay-testing', 'true');
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test')).not.toHaveAttribute('data-mihomo-delay-testing', 'true');
   await expect(page.locator('[data-node-name="node-a"] .xk-mihomo-node-delay')).toHaveText('44 мс');
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('44 мс');
   await expect(page.locator('[data-node-name="DIRECT"] .xk-mihomo-node-delay')).toHaveText('44 мс');
   expect(delays).toContainEqual({ scope: 'proxy', name: 'node-a', preset: 'google' });
   expect(delays).toContainEqual({ scope: 'proxy', name: 'DIRECT', preset: 'google' });
+
+  await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test').click();
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test')).toHaveAttribute('data-mihomo-delay-testing', 'true');
+  await expect(page.locator('#mihomo-clash-test-visible')).not.toHaveAttribute('data-mihomo-delay-testing', 'true');
 });
 
 

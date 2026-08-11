@@ -231,6 +231,24 @@ def test_frontend_asset_helper_prefers_current_build_wrappers_when_they_are_mode
         else:
             os.environ["XKEEN_UI_FRONTEND_SOURCE_FALLBACK"] = previous
 
+def test_frontend_asset_helper_revisions_stable_bridge_urls_by_file_timestamp(monkeypatch):
+    ui_assets = _import_ui_assets_module()
+    helper = ui_assets.FrontendAssetHelper(static_folder=str(STATIC_DIR))
+    calls = []
+
+    def fake_url_for(endpoint, **kwargs):
+        calls.append((endpoint, kwargs))
+        return f"/{endpoint}/{kwargs['filename']}?v={kwargs['v']}"
+
+    monkeypatch.setattr(ui_assets, "url_for", fake_url_for)
+    expected = helper.resolve_frontend_page_entry_filename("panel")
+    url = helper.frontend_page_entry_url("panel")
+    revision = (STATIC_DIR / expected).stat().st_mtime_ns
+
+    assert url == f"/static/{expected}?v={revision}"
+    assert calls == [("static", {"filename": expected, "v": str(revision)})]
+
+
 def test_frontend_asset_helper_exposes_stage3_bridge_resolution_for_current_wrappers():
     ui_assets = _import_ui_assets_module()
     previous = os.environ.get("XKEEN_UI_FRONTEND_SOURCE_FALLBACK")

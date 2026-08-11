@@ -271,7 +271,6 @@ function render() {
     const value = timeoutButton.querySelector('span');
     if (value) value.textContent = String(hiddenTimeoutCount);
   }
-  syncDelayControls(visibleExpandedNodes);
   if (collapseButton) {
     const allCollapsed = visibleGroups.length > 0 && visibleGroups.every((group) => collapsedGroups.has(group.name));
     collapseButton.dataset.mode = allCollapsed ? 'expand' : 'collapse';
@@ -282,6 +281,7 @@ function render() {
   list.innerHTML = visibleGroups.length
     ? visibleGroups.map(renderGroup).join('')
     : '<div class="xk-mihomo-groups-empty">Группы или узлы по текущему фильтру не найдены.</div>';
+  syncDelayControls(visibleExpandedNodes);
 }
 
 function syncDelayControls(visibleExpandedNodes) {
@@ -292,9 +292,25 @@ function syncDelayControls(visibleExpandedNodes) {
       (sum, group) => sum + (collapsedGroups.has(group.name) && !filterText.trim() ? 0 : (group.nodes || []).length),
       0,
     );
-  // Clicks during a running check are ignored by runDelayQueue(). Keeping the
-  // controls visually stable avoids a page-wide disabled-state flash.
-  if (runButton) runButton.disabled = !visibleCount;
+  const busy = !!delayRun;
+  const source = delayRun?.source || {};
+  if (runButton) {
+    const testing = busy && source.type === 'visible';
+    runButton.disabled = testing || !visibleCount;
+    runButton.setAttribute('aria-busy', testing ? 'true' : 'false');
+    runButton.dataset.mihomoDelayTesting = testing ? 'true' : 'false';
+  }
+  if (!root) return;
+  // The backend queue rejects an overlapping request. Keep unrelated controls
+  // unchanged, so the only altered button is the action actually in progress.
+  root.querySelectorAll('[data-mihomo-group-delay]').forEach((button) => {
+    const testing = busy
+      && source.type === 'group'
+      && source.group === String(button.dataset.group || '');
+    button.disabled = testing;
+    button.setAttribute('aria-busy', testing ? 'true' : 'false');
+    button.dataset.mihomoDelayTesting = testing ? 'true' : 'false';
+  });
 }
 
 function renderDelayNodes(keys) {
@@ -488,15 +504,17 @@ async function probeDelay(scope, name, provider = '') {
     if (delayRun) delayRun.completed += 1;
     if (!showTimeoutHidden && keys.some((key) => (timeoutCounts.get(key) || 0) >= TIMEOUT_HIDE_THRESHOLD)) render();
     else renderDelayNodes(keys);
+    syncDelayControls();
   }
 }
 
-async function runDelayQueue(items) {
+async function runDelayQueue(items, source = {}) {
   if (!active || delayRun || !items.length) return;
   const boundedItems = items.slice(0, MAX_DELAY_BATCH_ITEMS);
   delayRun = {
     controller: typeof AbortController === 'function' ? new AbortController() : null,
     results: new Map(),
+    source,
     total: boundedItems.length,
     completed: 0,
     cancelled: false,
@@ -508,6 +526,7 @@ async function runDelayQueue(items) {
   }
   const affectedKeys = [...delayRun.results.keys()];
   renderDelayNodes(affectedKeys);
+  syncDelayControls();
   let cursor = 0;
   const worker = async () => {
     while (delayRun && !delayRun.cancelled && cursor < boundedItems.length) {
@@ -525,6 +544,7 @@ async function runDelayQueue(items) {
   for (const [key, value] of finished.results) latestDelays.set(key, value);
   delayRun = null;
   renderDelayNodes([...finished.results.keys()]);
+  syncDelayControls();
 }
 
 function cancelDelayQueue() {
@@ -609,10 +629,19 @@ function bind() {
       const provider = String(target.dataset.provider || '');
       void runDelayQueue([provider
         ? { scope: 'provider-proxy', name: target.dataset.node, provider }
-        : { scope: 'proxy', name: target.dataset.node }]);
+        : { scope: 'proxy', name: target.dataset.node }], {
+        type: 'node',
+        node: String(target.dataset.node || ''),
+        provider,
+      });
     }
-    if (target.hasAttribute('data-mihomo-group-delay')) void runDelayQueue(groupNodeQueue(target.dataset.group));
-    if (target.hasAttribute('data-mihomo-delay-visible')) void runDelayQueue(visibleNodeQueue());
+    if (target.hasAttribute('data-mihomo-group-delay')) {
+      void runDelayQueue(groupNodeQueue(target.dataset.group), {
+        type: 'group',
+        group: String(target.dataset.group || ''),
+      });
+    }
+    if (target.hasAttribute('data-mihomo-delay-visible')) void runDelayQueue(visibleNodeQueue(), { type: 'visible' });
   });
 }
 

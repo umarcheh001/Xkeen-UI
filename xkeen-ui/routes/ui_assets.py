@@ -505,7 +505,15 @@ class FrontendAssetHelper:
         return self.get_build_bridge_resolution(entry_name).selected_filename
 
     def frontend_page_entry_url(self, entry_name: str) -> str:
-        return url_for("static", filename=self.resolve_frontend_page_entry_filename(entry_name))
+        filename = self.resolve_frontend_page_entry_filename(entry_name)
+        # Bridge files intentionally keep stable names.  Give every deployment
+        # a revisioned URL anyway, otherwise a browser may combine an old bridge
+        # with newly installed source modules until the user performs Ctrl+F5.
+        try:
+            revision = os.stat(str(Path(self.static_folder) / filename)).st_mtime_ns
+        except OSError:
+            revision = 0
+        return url_for("static", filename=filename, v=str(revision))
 
     def frontend_page_config(
         self,

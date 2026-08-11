@@ -189,6 +189,9 @@ def test_groups_ui_has_compact_filter_select_and_bounded_delay_contract():
         "disconnect_affected",
         "provider-proxy",
         "groupNodeQueue",
+        "source.type === 'visible'",
+        "source.type === 'group'",
+        "mihomoDelayTesting",
         "is-pending",
         "selection = { group, node",
         ".xk-mihomo-node-row.is-current",
@@ -264,6 +267,9 @@ def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
     assert 'body.panel-page .xk-mihomo-node-unavailable' in css
     assert 'body.panel-page .xk-mihomo-node-probe:focus-visible' in css
     assert 'xk-sub-pingall-spin' in css
+    assert 'data-mihomo-delay-testing="true"' in css
+    assert 'xk-mihomo-delay-action-pulse' not in css
+    assert 'cursor: progress;' in css
 
 
 def test_groups_lifecycle_stops_load_and_delay_work_outside_control_view():

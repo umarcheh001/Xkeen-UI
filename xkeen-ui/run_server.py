@@ -1,4 +1,15 @@
 #!/opt/bin/python3
+
+# The Mihomo facade performs bounded HTTP probes which may wait up to several
+# seconds.  Patch before importing the Flask app so a slow upstream probe does
+# not block gevent's event loop and make the rest of the panel appear frozen.
+try:
+    from gevent import monkey as gevent_monkey
+
+    gevent_monkey.patch_all()
+except Exception:
+    pass
+
 import os
 
 GEVENT_AVAILABLE = True
