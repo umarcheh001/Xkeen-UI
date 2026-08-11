@@ -109,11 +109,25 @@ test('rules search, connection cross-link and provider actions stay explicit', a
   const layout = await page.evaluate(() => {
     const ruleHead = document.querySelector('.xk-mihomo-rules-section .xk-mihomo-rules-section-head').getBoundingClientRect();
     const providerHead = document.querySelector('.xk-mihomo-providers-section .xk-mihomo-rules-section-head').getBoundingClientRect();
+    const rules = document.querySelector('#mihomo-clash-rules').getBoundingClientRect();
+    const ruleSection = document.querySelector('.xk-mihomo-rules-section').getBoundingClientRect();
+    const providerSection = document.querySelector('.xk-mihomo-providers-section').getBoundingClientRect();
+    const providerList = document.querySelector('#mihomo-clash-providers-list');
+    const tableWrap = document.querySelector('.xk-mihomo-rules-table-wrap');
     return {
       headerBottomDelta: Math.abs(ruleHead.bottom - providerHead.bottom),
+      workspaceHeight: rules.height,
+      viewportHeight: window.innerHeight,
+      sectionHeightDelta: Math.abs(ruleSection.height - providerSection.height),
+      providerListOverflow: getComputedStyle(providerList).overflowY,
+      tableMaxHeight: getComputedStyle(tableWrap).maxHeight,
     };
   });
   expect(layout.headerBottomDelta).toBeLessThanOrEqual(1);
+  expect(layout.workspaceHeight).toBeCloseTo(Math.max(420, layout.viewportHeight - 230), 0);
+  expect(layout.sectionHeightDelta).toBeLessThanOrEqual(1);
+  expect(layout.providerListOverflow).toBe('auto');
+  expect(layout.tableMaxHeight).toBe('none');
   await page.locator('#mihomo-clash-rules-filter').fill('fixture-rules');
   await expect(page.locator('#mihomo-clash-rules-rows tr')).toHaveCount(1);
   await page.locator('#mihomo-clash-provider-kind').selectOption('rule');
@@ -181,6 +195,9 @@ test('HTTP provider batch confirms count, limits concurrency, reports progress a
   await page.locator('.top-tab-btn[data-view="mihomo"]').click();
   await page.locator('#mihomo-clash-tab-rules').click();
   await expect(page.locator('#mihomo-clash-providers-update-http')).toContainText('Обновить HTTP (8)');
+  await expect.poll(() => page.locator('#mihomo-clash-providers-list').evaluate((list) => (
+    list.scrollHeight > list.clientHeight && getComputedStyle(list).overflowY === 'auto'
+  ))).toBe(true);
   await page.locator('#mihomo-clash-providers-update-http').click();
   await expect(page.locator('#confirm-modal-title')).toContainText('8');
   await expect(page.locator('#confirm-modal-message')).toContainText('8 HTTP providers');

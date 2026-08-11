@@ -17265,6 +17265,47 @@ body.panel-page .xk-mihomo-rules-layout {
   min-width: 0;
 }
 
+/* Keep the two rule panes usable on tall desktop screens instead of capping
+   the table at a fixed viewport fraction. */
+@media (min-width: 821px) {
+  body.panel-page .xk-mihomo-rules {
+    grid-template-rows: auto auto minmax(0, 1fr);
+    height: calc(100dvh - 230px);
+    min-height: 420px;
+  }
+
+  body.panel-page .xk-mihomo-rules-layout {
+    min-height: 0;
+  }
+
+  body.panel-page :is(.xk-mihomo-rules-section, .xk-mihomo-providers-section) {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  body.panel-page .xk-mihomo-rules-table-wrap,
+  body.panel-page .xk-mihomo-providers-list {
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  body.panel-page .xk-mihomo-rules-table-wrap { max-height: none; }
+
+  body.panel-page .xk-mihomo-providers-list {
+    grid-row: 2;
+    align-content: start;
+    scrollbar-gutter: stable;
+  }
+
+  body.panel-page .xk-mihomo-providers-section > .xk-mihomo-rules-empty {
+    grid-row: 2;
+    align-self: center;
+    z-index: 1;
+  }
+}
+
 body.panel-page :is(.xk-mihomo-rules-section, .xk-mihomo-providers-section) {
   min-width: 0;
   overflow: hidden;
@@ -17306,8 +17347,14 @@ body.panel-page #mihomo-clash-providers-update-http .xk-action-icon { width: 14p
 body.panel-page #mihomo-clash-providers-update-http[aria-busy="true"] .xk-action-icon { animation: xk-sub-pingall-spin .85s linear infinite; }
 
 body.panel-page .xk-mihomo-rules-table-wrap {
-  max-height: min(60vh, 640px);
+  max-height: none;
   overflow: auto;
+}
+
+@media (max-width: 820px) {
+  body.panel-page .xk-mihomo-rules-table-wrap {
+    max-height: min(60vh, 640px);
+  }
 }
 
 body.panel-page .xk-mihomo-rules-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
