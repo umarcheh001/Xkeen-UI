@@ -195,16 +195,13 @@ test('server cards replace provider emoji with one rectangular country flag', as
   await page.locator('[data-group-name="AUTO"] [data-mihomo-group-toggle]').click();
   const card = page.locator('[data-node-name="🇩🇪 DE Germany.01"]');
   await expect(card.locator('.xk-mihomo-node-country[data-country="DE"]')).toHaveCount(1);
-  await expect(card.locator('.xk-mihomo-node-country[data-country="DE"]')).toHaveCSS(
-    'background-image',
-    /linear-gradient/,
-  );
+  await expect(card.locator('.xk-mihomo-node-country[data-country="DE"] svg')).toHaveCount(1);
   await expect(card.locator('.xk-mihomo-node-main strong')).toContainText('Germany.01');
   await expect(card.locator('.xk-mihomo-node-main strong')).not.toContainText('🇩🇪');
   await expect(card.locator('.xk-mihomo-node-main strong')).not.toContainText('DE Germany');
 });
 
-test('complex country flags use the shared CSS flag artwork', async ({ page }) => {
+test('complex country flags use complete inline SVG artwork', async ({ page }) => {
   const names = ['JP Japan', 'IL Israel', 'KZ Kazakhstan'];
   const data = groupsPayload(names[0]);
   data.groups[0].nodes = names.map((name) => ({ name, type: 'VLESS', alive: true, udp: true }));
@@ -220,7 +217,7 @@ test('complex country flags use the shared CSS flag artwork', async ({ page }) =
   for (const code of ['JP', 'IL', 'KZ']) {
     const flag = page.locator(`.xk-mihomo-node-country[data-country="${code}"]`);
     await expect(flag).toHaveCount(1);
-    await expect(flag.locator('svg')).toHaveCount(0);
+    await expect(flag.locator('svg')).toHaveCount(1);
     await expect(flag).toHaveCSS('width', '20px');
     await expect(flag).toHaveCSS('height', '14px');
   }

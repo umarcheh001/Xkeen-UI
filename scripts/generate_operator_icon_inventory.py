@@ -166,7 +166,7 @@ def build_payload() -> dict[str, object]:
         "items": items,
         "documented_exceptions": {
             "content_and_status": [
-                "country flags in static/js/features/outbounds.js",
+                "country flags in static/js/features/outbounds.js and static/js/features/mihomo_clash/groups.js",
                 "Monaco/Codemirror vendor internals",
                 "textual keyboard shortcuts and non-interactive status text",
             ],
