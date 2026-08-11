@@ -108,8 +108,8 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
     };
   });
   expect(deviceStyle).toEqual({
-    background: 'rgba(0, 0, 0, 0)',
-    borderRadius: '0px',
+    background: 'rgb(236, 238, 242)',
+    borderRadius: '999px',
     borderLeftStyle: 'solid',
   });
 

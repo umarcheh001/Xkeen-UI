@@ -15,6 +15,7 @@ let query = '';
 let rows = [];
 let socket = null;
 let controller = null;
+let renderFrame = 0;
 
 function byId(id) { return document.getElementById(id); }
 
@@ -114,6 +115,14 @@ function setPaused(nextPaused) {
   render();
 }
 
+function scheduleRender() {
+  if (renderFrame) return;
+  renderFrame = window.requestAnimationFrame(() => {
+    renderFrame = 0;
+    if (active && !paused) render();
+  });
+}
+
 function closeStream() {
   const currentSocket = socket;
   socket = null;
@@ -156,7 +165,10 @@ async function openStream(runGeneration) {
         || !message.payload) return;
       rows.push(message.payload);
       if (rows.length > MAX_LOG_ROWS) rows.splice(0, rows.length - MAX_LOG_ROWS);
-      if (!paused) render();
+      // A busy Mihomo instance can deliver hundreds of records in one event
+      // loop turn. Rebuilding the whole 500-row list for every record makes
+      // the controls temporarily unresponsive, so coalesce paints per frame.
+      if (!paused) scheduleRender();
       else setState(`Пауза · ${rows.length}/${MAX_LOG_ROWS}`, 'warning');
     };
     nextSocket.onerror = () => setState('Ошибка потока логов.', 'danger');
@@ -206,6 +218,8 @@ export function activateMihomoClashLogs(nextCapabilities = {}) {
 export function deactivateMihomoClashLogs() {
   active = false;
   generation += 1;
+  if (renderFrame) window.cancelAnimationFrame(renderFrame);
+  renderFrame = 0;
   closeStream();
   root?.setAttribute('aria-busy', 'false');
   return true;
