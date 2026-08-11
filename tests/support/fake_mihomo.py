@@ -273,6 +273,13 @@ class FakeMihomo(AbstractContextManager["FakeMihomo"]):
                     )
                 elif path == "/connections":
                     self._send(200, state.snapshot())
+                elif path == "/memory":
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(b'{"inuse":0,"oslimit":0}\n')
+                    self.wfile.flush()
+                    self.wfile.write(b'{"inuse":33554432,"oslimit":0}\n')
                 elif path.startswith("/providers/proxies/") and path.endswith("/healthcheck"):
                     provider = unquote(path.removeprefix("/providers/proxies/").removesuffix("/healthcheck").rstrip("/"))
                     with state.lock:

@@ -203,10 +203,12 @@ def handle_mihomo_clash_connections_request(
                 break
             client = client_factory(discovery.target)
             raw_frame = client.request_json("connections_snapshot").payload
+            memory_frame = client.request_memory().payload
             sequence += 1
             payload = build_mihomo_clash_connections_dto(
                 raw_frame,
                 device_map=device_map_factory(),
+                memory=memory_frame.get("inuse") if isinstance(memory_frame, dict) else 0,
             )
             if not _send(ws, _envelope(sequence=sequence, state="live", payload=payload)):
                 break

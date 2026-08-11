@@ -96,6 +96,12 @@ MIHOMO_CLASH_ENDPOINTS: Mapping[str, MihomoClashEndpoint] = MappingProxyType(
             512 * 1024,
         ),
         "connections_snapshot": MihomoClashEndpoint("GET", "/connections", 5.0),
+        # Mihomo exposes core heap usage as an NDJSON stream.  A plain HTTP
+        # request deliberately reports zero in its first frame for legacy
+        # dashboard compatibility, so callers must consume the next frame.
+        "memory_stream": MihomoClashEndpoint(
+            "GET", "/memory", 4.0, 64 * 1024, stream=True
+        ),
         "connection_disconnect": MihomoClashEndpoint(
             "DELETE",
             "/connections/{name}",
@@ -324,6 +330,32 @@ class MihomoClashClient:
             expect_json=False,
         )
 
+    def request_memory(self) -> MihomoClashJSONResponse:
+        """Read the first non-zero Mihomo core-memory sample.
+
+        ``GET /memory`` is a streaming endpoint.  Mihomo intentionally emits
+        ``{"inuse": 0}`` first and the real value one second later, therefore
+        treating it as an ordinary JSON endpoint makes the panel permanently
+        display zero bytes.
+        """
+
+        started = time.monotonic()
+        last_payload: Any = {"inuse": 0}
+        for index, payload in enumerate(self.iter_json_frames("memory_stream")):
+            last_payload = payload
+            if index >= 1 or self._memory_inuse(payload) > 0:
+                break
+        return MihomoClashJSONResponse(
+            payload=last_payload,
+            status=200,
+            elapsed_ms=round((time.monotonic() - started) * 1000.0, 1),
+            size_bytes=len(
+                json.dumps(last_payload, ensure_ascii=False, separators=(",", ":")).encode(
+                    "utf-8"
+                )
+            ),
+        )
+
     def disconnect_all_connections(self) -> MihomoClashJSONResponse:
         """Close all connections through the dedicated allow-listed operation."""
 
@@ -469,6 +501,18 @@ class MihomoClashClient:
                     pass
             if connection is not None:
                 connection.close()
+
+    @staticmethod
+    def _memory_inuse(payload: Any) -> int:
+        if not isinstance(payload, Mapping):
+            return 0
+        value = payload.get("inuse")
+        if isinstance(value, bool):
+            return 0
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            return 0
 
     def _endpoint(self, operation: str, *, stream: bool) -> MihomoClashEndpoint:
         try:

@@ -646,6 +646,7 @@ def build_mihomo_clash_connections_dto(
     connections_payload: Any,
     *,
     device_map: Mapping[str, Any] | None = None,
+    memory: Any | None = None,
     max_rows: int = MAX_CONNECTION_ROWS,
 ) -> dict[str, Any]:
     """Normalize a bounded connection snapshot for browser consumption."""
@@ -669,7 +670,10 @@ def build_mihomo_clash_connections_dto(
         "schema_version": MIHOMO_CLASH_SCHEMA_VERSION,
         "download_total": _nonnegative_int(payload.get("downloadTotal")),
         "upload_total": _nonnegative_int(payload.get("uploadTotal")),
-        "memory": _nonnegative_int(payload.get("memory")),
+        # Memory is supplied by Mihomo's dedicated /memory stream.  Keep the
+        # legacy payload field as a compatibility fallback for older fixtures
+        # and alternative Clash-compatible cores.
+        "memory": _nonnegative_int(payload.get("memory") if memory is None else memory),
         "total_connections": len(source),
         "truncated": len(source) > limit,
         "connections": rows,

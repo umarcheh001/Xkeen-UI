@@ -184,7 +184,7 @@ function renderSummary() {
   setText('mihomo-clash-upload-rate', formatBytes(rates.upload, '/с'));
   setText('mihomo-clash-download-total', `всего ${formatBytes(snapshot?.download_total || 0)}`);
   setText('mihomo-clash-upload-total', `всего ${formatBytes(snapshot?.upload_total || 0)}`);
-  setText('mihomo-clash-memory', formatBytes(snapshot?.memory || 0));
+  setText('mihomo-clash-memory', snapshot?.memory == null ? '—' : formatBytes(snapshot.memory));
   const disconnectAll = byId('mihomo-clash-disconnect-all');
   if (disconnectAll) disconnectAll.disabled = pendingAll || !(snapshot?.total_connections > 0) || capabilities.connection_disconnect === false;
 }

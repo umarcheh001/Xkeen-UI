@@ -39,6 +39,11 @@ class StubClient:
             raise self.error
         return MihomoClashJSONResponse(self.responses.pop(0), 200, 1, 100)
 
+    def request_memory(self):
+        if self.error:
+            raise self.error
+        return MihomoClashJSONResponse({"inuse": 4096}, 200, 1, 16)
+
 
 class StubLogClient:
     def __init__(self, frames=None, error=None):
@@ -128,6 +133,7 @@ def test_ws_streams_versioned_bounded_dto_and_stops_when_browser_closes(monkeypa
     assert message["sequence"] == 1
     assert message["state"] == "live"
     assert message["payload"]["connections"][0]["id"] == "one"
+    assert message["payload"]["memory"] == 4096
     assert ws.closed is True
 
 

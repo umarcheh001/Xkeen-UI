@@ -1104,6 +1104,7 @@ def create_mihomo_clash_blueprint(
             return unavailable
         try:
             snapshot = client.request_json("connections_snapshot")
+            memory = client.request_memory()
         except MihomoClashClientError as exc:
             return _safe_client_error(exc)
         except Exception:
@@ -1118,6 +1119,7 @@ def create_mihomo_clash_blueprint(
         payload = build_mihomo_clash_connections_dto(
             snapshot.payload,
             device_map=device_map_factory(),
+            memory=memory.payload.get("inuse") if isinstance(memory.payload, dict) else 0,
         )
         payload["ok"] = True
         payload["capabilities"] = _capabilities(

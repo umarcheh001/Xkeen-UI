@@ -37,6 +37,14 @@ class StubClient:
             raise self.error
         return self.responses[operation]
 
+    def request_memory(self):
+        if self.error:
+            raise self.error
+        return self.responses.get(
+            "memory",
+            MihomoClashJSONResponse({"inuse": 200}, 200, 1, 16),
+        )
+
     def select_proxy(self, group_name: str, proxy_name: str):
         self.selections.append((group_name, proxy_name))
         if self.error:
@@ -739,6 +747,7 @@ def test_connections_route_returns_bounded_normalized_snapshot():
     assert body["schema_version"] == 1
     assert body["connections"][0]["id"] == "connection-1"
     assert body["connections"][0]["metadata"]["source_name"] == "Laptop"
+    assert body["memory"] == 200
     assert body["capabilities"]["connections_snapshot"] is True
     assert body["capabilities"]["connections_stream"] is False
     assert body["capabilities"]["connection_disconnect"] is True

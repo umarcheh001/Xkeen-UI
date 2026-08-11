@@ -311,6 +311,7 @@ def test_connections_ui_has_live_fallback_overview_and_guarded_actions():
         'id="mihomo-clash-closed-clear"',
         'id="mihomo-clash-disconnect-all"',
         'id="mihomo-clash-connection-inspector"',
+        'Память Mihomo',
         "requestMihomoClashWsToken",
         "scope: 'mihomo-clash'",
         "HTTP_FALLBACK_INTERVAL_MS = 2000",
@@ -334,6 +335,7 @@ def test_connections_ui_has_live_fallback_overview_and_guarded_actions():
         '.xk-mihomo-connection-close:hover:not(:disabled)',
         'background: var(--op-danger-soft) !important;',
         'content: attr(data-label);',
+        "snapshot?.memory == null ? '—' : formatBytes(snapshot.memory)",
     ):
         assert fragment in markup or fragment in client or fragment in feature or fragment in connections or fragment in css
 

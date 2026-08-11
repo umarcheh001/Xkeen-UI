@@ -293,6 +293,20 @@ def test_disconnect_operations_are_dedicated_and_encode_one_id_segment():
     ]
 
 
+def test_memory_request_skips_mihomo_legacy_zero_first_frame():
+    endpoints = {
+        "memory_stream": MihomoClashEndpoint(
+            "GET", "/memory", 2, 1024, stream=True
+        )
+    }
+    body = b'{"inuse":0,"oslimit":0}\n{"inuse":33554432,"oslimit":0}\n'
+    with tcp_server({"/memory": (200, "application/json", body)}) as (port, handler):
+        response = client_for_port(port, endpoints).request_memory()
+
+    assert response.payload == {"inuse": 33554432, "oslimit": 0}
+    assert handler.seen[0]["path"] == "/memory"
+
+
 def test_provider_proxy_delay_encodes_provider_and_node_segments():
     endpoints = {
         "provider_proxy_delay": MihomoClashEndpoint(
