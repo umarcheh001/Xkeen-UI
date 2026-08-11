@@ -45,7 +45,7 @@ class StubLogClient:
         self.frames = list(frames or [])
         self.error = error
 
-    def iter_json_frames(self, operation: str):
+    def iter_json_frames(self, operation: str, **_kwargs):
         assert operation == "logs_stream"
         if self.error:
             raise self.error
@@ -208,6 +208,33 @@ def test_ws_stream_limit_allows_one_per_client_and_releases_after_close():
     clash_ws._release_stream("192.0.2.1")
     assert clash_ws._acquire_stream("192.0.2.1") is True
     clash_ws._release_stream("192.0.2.1")
+
+
+def test_logs_and_connections_do_not_block_each_other_for_same_client():
+    with clash_ws._STREAM_LOCK:
+        clash_ws._ACTIVE_STREAMS.clear()
+    assert clash_ws._acquire_stream("192.0.2.1", "logs") is True
+    assert clash_ws._acquire_stream("192.0.2.1", "connections") is True
+    assert clash_ws._acquire_stream("192.0.2.1", "logs") is False
+    assert clash_ws._acquire_stream("192.0.2.1", "connections") is False
+    clash_ws._release_stream("192.0.2.1", "logs")
+    clash_ws._release_stream("192.0.2.1", "connections")
+
+
+def test_new_same_kind_stream_supersedes_old_lease_without_releasing_new_one():
+    with clash_ws._STREAM_LOCK:
+        clash_ws._ACTIVE_STREAMS.clear()
+    first = clash_ws._acquire_stream_lease("192.0.2.1", "logs")
+    second = clash_ws._acquire_stream_lease(
+        "192.0.2.1", "logs", replace_existing=True
+    )
+    assert first is not None and second is not None
+    assert first.cancelled.is_set() is True
+    assert second.cancelled.is_set() is False
+    clash_ws._release_stream("192.0.2.1", "logs", first)
+    assert clash_ws._ACTIVE_STREAMS[second.key] is second
+    clash_ws._release_stream("192.0.2.1", "logs", second)
+    assert second.key not in clash_ws._ACTIVE_STREAMS
 
 
 def test_ws_global_limit_is_race_safe():

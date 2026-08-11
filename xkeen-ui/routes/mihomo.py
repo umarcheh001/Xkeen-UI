@@ -135,6 +135,15 @@ from services.mihomo_clash_migration import (
     materialize_generated_secret,
 )
 from services.mihomo_clash_target import discover_mihomo_clash_target
+from services.mihomo_panel_switch import (
+    build_switch_preview,
+    load_state as load_panel_switch_state,
+    mark_mode as mark_panel_switch_mode,
+    public_status as panel_switch_public_status,
+    recover_external_config,
+    remember_external_config,
+    state_path as panel_switch_state_path,
+)
 from utils.fs import load_text, save_text
 
 # Background command jobs (used to avoid long-running HTTP requests)
@@ -1077,6 +1086,31 @@ def create_mihomo_blueprint(
             )
         return transport, None
 
+    def _panel_switch_path():
+        return panel_switch_state_path(ui_state_dir, MIHOMO_CONFIG_FILE)
+
+    def _panel_switch_state(config_text: str) -> Dict[str, Any]:
+        path = _panel_switch_path()
+        state = load_panel_switch_state(path)
+        if state.get("external_directives"):
+            return state
+        candidates = []
+        backup_dir = os.path.join(os.path.dirname(MIHOMO_CONFIG_FILE), "backup")
+        try:
+            names = sorted(
+                (os.path.join(backup_dir, name) for name in os.listdir(backup_dir) if name.endswith(".yaml")),
+                key=lambda name: os.path.getmtime(name),
+                reverse=True,
+            )
+            for name in names[:40]:
+                content = load_text(name, default="")
+                if content:
+                    candidates.append(content)
+        except OSError:
+            pass
+        candidates.append(config_text)
+        return recover_external_config(path, candidates)
+
     @bp.post("/api/mihomo/security/migration-preview")
     def api_mihomo_security_migration_preview():
         """Return a redacted summary; keep the complete user config server-side."""
@@ -1129,6 +1163,8 @@ def create_mihomo_blueprint(
         if not ok_yaml:
             return _mihomo_yaml_invalid()
         try:
+            switch_path = _panel_switch_path()
+            remember_external_config(switch_path, supplied)
             ensure_mihomo_layout()
             validation_log = validate_config(new_content=content) or ""
             exit_match = re.search(r"\[exit code:\s*(-?\d+)\]", validation_log)
@@ -1156,6 +1192,7 @@ def create_mihomo_blueprint(
                         "retryable": True,
                     }
                 ), 503
+            mark_panel_switch_mode(switch_path, "xkeen")
 
             discovery = discover_mihomo_clash_target(
                 MIHOMO_CONFIG_FILE,
@@ -1184,6 +1221,115 @@ def create_mihomo_blueprint(
                 status=400,
             )
 
+    @bp.get("/api/mihomo/security/panel-mode")
+    def api_mihomo_security_panel_mode():
+        supplied = load_text(MIHOMO_CONFIG_FILE, default="") or ""
+        state = _panel_switch_state(supplied)
+        return jsonify({"ok": True, **panel_switch_public_status(supplied, state)}), 200
+
+    @bp.post("/api/mihomo/security/panel-switch-preview")
+    def api_mihomo_security_panel_switch_preview():
+        data = request.get_json(silent=True) or {}
+        target = str(data.get("target") or "").strip().lower()
+        supplied, invalid = _mihomo_clash_setup_input()
+        if invalid:
+            return invalid
+        state = _panel_switch_state(supplied)
+        if target == "xkeen":
+            remember_external_config(_panel_switch_path(), supplied, force=True)
+            state = load_panel_switch_state(_panel_switch_path())
+        try:
+            preview = build_switch_preview(supplied, state, target)
+        except ValueError as exc:
+            code = str(exc)
+            message = (
+                "Не найдена сохранённая конфигурация прежней панели."
+                if code == "external_panel_backup_missing"
+                else "Недопустимый режим панели."
+            )
+            return _api_error(message, 409 if code == "external_panel_backup_missing" else 400, ok=False, code=code)
+        return jsonify({
+            "ok": True,
+            "target": preview.target,
+            "preview_id": preview.preview_id,
+            "panel_name": preview.panel_name,
+            "restart_required": True,
+        }), 200
+
+    @bp.post("/api/mihomo/security/panel-switch")
+    def api_mihomo_security_panel_switch():
+        data = request.get_json(silent=True) or {}
+        if data.get("confirmed") is not True:
+            return _api_error("Требуется подтверждение переключения панели.", 400, ok=False, code="panel_switch_confirmation_required")
+        target = str(data.get("target") or "").strip().lower()
+        supplied, invalid = _mihomo_clash_setup_input()
+        if invalid:
+            return invalid
+        switch_path = _panel_switch_path()
+        state = _panel_switch_state(supplied)
+        if target == "xkeen":
+            remember_external_config(switch_path, supplied, force=True)
+            state = load_panel_switch_state(switch_path)
+        try:
+            preview = build_switch_preview(supplied, state, target)
+        except ValueError as exc:
+            return _api_error("Не удалось подготовить переключение панели.", 409, ok=False, code=str(exc))
+        if not secrets.compare_digest(str(data.get("preview_id") or ""), preview.preview_id):
+            return _api_error("Конфигурация изменилась. Повторите переключение.", 409, ok=False, code="panel_switch_preview_stale")
+        ok_yaml, _yaml_err = validate_yaml_syntax(preview.content)
+        if not ok_yaml:
+            return _mihomo_yaml_invalid(stage="panel-switch")
+        ensure_mihomo_layout()
+        validation_log = validate_config(new_content=preview.content) or ""
+        exit_match = re.search(r"\[exit code:\s*(-?\d+)\]", validation_log)
+        if not exit_match or int(exit_match.group(1)) != 0:
+            return _api_error("Mihomo не подтвердил конфигурацию. Ничего не изменено.", 400, ok=False, code="panel_switch_validation_failed")
+        saved = False
+        try:
+            backup = save_config(preview.content)
+            saved = True
+            restarted = bool(restart_xkeen(source=f"mihomo-panel-{target}"))
+        except Exception:
+            if not saved:
+                return _api_error(
+                    "Не удалось сохранить настройки. Активная панель не изменена.",
+                    500,
+                    ok=False,
+                    code="panel_switch_save_failed",
+                )
+            restarted = False
+        if not restarted:
+            # Transactional rollback: a failed target must not strand the user.
+            rolled_back = False
+            rollback_restarted = False
+            try:
+                save_config(supplied)
+                rolled_back = True
+                rollback_restarted = bool(restart_xkeen(source="mihomo-panel-switch-rollback"))
+            except Exception:
+                pass
+            return jsonify({
+                "ok": False,
+                "code": "panel_switch_restart_failed",
+                "error": (
+                    "Mihomo не запустился с новыми настройками; прежняя конфигурация восстановлена."
+                    if rolled_back
+                    else "Mihomo не запустился, и автоматическое восстановление не удалось. Воспользуйтесь резервной копией config.yaml."
+                ),
+                "switched": False,
+                "rolled_back": rolled_back,
+                "rollback_restarted": rollback_restarted,
+            }), 503
+        mark_panel_switch_mode(switch_path, target)
+        backup_name = str(getattr(backup, "filename", "") or "")
+        return jsonify({
+            "ok": True,
+            "switched": True,
+            "mode": target,
+            "panel_name": preview.panel_name,
+            "backup": backup_name or None,
+            "external_url": "/mihomo_panel/ui/" if target == "external" else None,
+        }), 200
     @bp.post("/api/mihomo/preview")
     def api_mihomo_preview():
         """Generate Mihomo config preview from UI state without saving or restart."""

@@ -405,7 +405,15 @@ async function openSocket(runGeneration) {
       try { message = JSON.parse(event.data); } catch (error) { return; }
       if (message?.type !== 'mihomo-clash-connections' || Number(message.schema_version) !== 1) return;
       if (message.state === 'live' && applySnapshot(message.payload, Number(message.received_at_ms) || Date.now())) return;
-      if (message.state === 'error') setNotice(`Live stream: ${message.error?.code || 'ошибка'}.`, 'warning');
+      if (message.state === 'error') {
+        const code = String(message.error?.code || 'stream_failed');
+        if (code === 'stream_busy') {
+          setStreamState('reconnecting', 'Переподключение');
+          setNotice('Предыдущий поток завершается. Подключаемся повторно…', 'neutral');
+        } else {
+          setNotice(`Live stream: ${code}.`, 'warning');
+        }
+      }
     };
     socket.onerror = () => {};
     socket.onclose = () => {

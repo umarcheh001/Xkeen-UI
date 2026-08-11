@@ -9,6 +9,7 @@ let root = null;
 let active = false;
 let generation = 0;
 let capabilities = {};
+let runtime = {};
 let paused = false;
 let level = 'all';
 let query = '';
@@ -16,6 +17,8 @@ let rows = [];
 let socket = null;
 let controller = null;
 let renderFrame = 0;
+let reconnectTimer = 0;
+let reconnectAttempt = 0;
 
 function byId(id) { return document.getElementById(id); }
 
@@ -98,11 +101,14 @@ function render() {
   if (visible.length) {
     list.scrollTop = followTail ? list.scrollHeight : previousScrollTop;
   }
+  const silent = String(runtime?.log_level || '').toLowerCase() === 'silent';
   empty.textContent = rows.length && !visible.length
     ? 'Записи по текущему фильтру не найдены.'
-    : 'Новые записи появятся здесь в реальном времени.';
+    : (silent
+      ? 'В config.yaml задан log-level: silent. Логи работают, но Mihomo почти не создаёт новых записей.'
+      : 'Новые записи появятся здесь в реальном времени. История до открытия вкладки не загружается.');
   if (paused) setState(`Пауза · ${rows.length}/${MAX_LOG_ROWS}`, 'warning');
-  else if (socket) setState(`Live · ${rows.length}/${MAX_LOG_ROWS}`, 'positive');
+  else if (socket) setState(`Live · ${rows.length}/${MAX_LOG_ROWS}${silent ? ' · silent' : ''}`, 'positive');
   const pause = byId('mihomo-clash-logs-pause');
   if (pause) {
     pause.setAttribute('aria-pressed', paused ? 'true' : 'false');
@@ -128,6 +134,8 @@ function closeStream() {
   socket = null;
   if (controller) { try { controller.abort(); } catch (error) {} }
   controller = null;
+  if (reconnectTimer) window.clearTimeout(reconnectTimer);
+  reconnectTimer = 0;
   if (currentSocket) {
     currentSocket.onopen = null;
     currentSocket.onmessage = null;
@@ -135,6 +143,14 @@ function closeStream() {
     currentSocket.onclose = null;
     try { currentSocket.close(); } catch (error) {}
   }
+}
+
+function scheduleReconnect(runGeneration, delay) {
+  if (!active || generation !== runGeneration || reconnectTimer) return;
+  reconnectTimer = window.setTimeout(() => {
+    reconnectTimer = 0;
+    if (active && generation === runGeneration) void openStream(runGeneration);
+  }, Math.max(250, Number(delay) || 750));
 }
 
 async function openStream(runGeneration) {
@@ -154,15 +170,20 @@ async function openStream(runGeneration) {
     if (!active || generation !== runGeneration || !token) return;
     const nextSocket = new WebSocket(mihomoClashLogsWsUrl(token));
     socket = nextSocket;
-    nextSocket.onopen = () => render();
+    nextSocket.onopen = () => { reconnectAttempt = 0; render(); };
     nextSocket.onmessage = (event) => {
       if (!active || generation !== runGeneration || socket !== nextSocket) return;
       let message = null;
       try { message = JSON.parse(event.data); } catch (error) { return; }
-      if (message?.type !== 'mihomo-clash-logs'
-        || message.state !== 'live'
-        || Number(message.schema_version) !== 1
-        || !message.payload) return;
+      if (message?.type !== 'mihomo-clash-logs' || Number(message.schema_version) !== 1) return;
+      if (message.state === 'error') {
+        const code = String(message?.error?.code || 'stream_failed');
+        setState(code === 'stream_busy'
+          ? 'Предыдущий поток завершается · повторяем подключение…'
+          : 'Поток прерван · повторяем подключение…', 'warning');
+        return;
+      }
+      if (message.state !== 'live' || !message.payload) return;
       rows.push(message.payload);
       if (rows.length > MAX_LOG_ROWS) rows.splice(0, rows.length - MAX_LOG_ROWS);
       // A busy Mihomo instance can deliver hundreds of records in one event
@@ -171,13 +192,22 @@ async function openStream(runGeneration) {
       if (!paused) scheduleRender();
       else setState(`Пауза · ${rows.length}/${MAX_LOG_ROWS}`, 'warning');
     };
-    nextSocket.onerror = () => setState('Ошибка потока логов.', 'danger');
+    nextSocket.onerror = () => setState('Соединение с логами прервано.', 'warning');
     nextSocket.onclose = () => {
       if (socket === nextSocket) socket = null;
-      if (active) setState('Поток завершён. Откройте вкладку повторно.', 'warning');
+      if (active && generation === runGeneration) {
+        reconnectAttempt += 1;
+        const delay = Math.min(5000, 500 * (2 ** Math.min(3, reconnectAttempt - 1)));
+        setState('Переподключение потока логов…', 'neutral');
+        scheduleReconnect(runGeneration, delay);
+      }
     };
   } catch (error) {
-    if (!requestController.signal.aborted) setState('Не удалось открыть поток логов.', 'danger');
+    if (!requestController.signal.aborted && active && generation === runGeneration) {
+      reconnectAttempt += 1;
+      setState('Не удалось открыть поток · повторяем…', 'warning');
+      scheduleReconnect(runGeneration, Math.min(5000, 500 * (2 ** Math.min(3, reconnectAttempt - 1))));
+    }
   } finally {
     if (controller === requestController) controller = null;
   }
@@ -204,12 +234,14 @@ export function initMihomoClashLogs() {
   return true;
 }
 
-export function activateMihomoClashLogs(nextCapabilities = {}) {
+export function activateMihomoClashLogs(nextCapabilities = {}, nextRuntime = {}) {
   if (!root && !initMihomoClashLogs()) return false;
   deactivateMihomoClashLogs();
   active = true;
   paused = false;
   capabilities = nextCapabilities || {};
+  runtime = nextRuntime || {};
+  reconnectAttempt = 0;
   generation += 1;
   void openStream(generation);
   return true;

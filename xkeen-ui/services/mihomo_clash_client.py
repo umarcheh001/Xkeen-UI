@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import http.client
 import json
+import select
 import socket
 import time
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Iterator, Mapping
+from typing import Any, Callable, Iterator, Mapping
 from urllib.parse import quote, urlencode
 
 from services.mihomo_clash_stream import (
@@ -405,7 +406,13 @@ class MihomoClashClient:
             if connection is not None:
                 connection.close()
 
-    def iter_json_frames(self, operation: str = "connections_stream") -> Iterator[Any]:
+    def iter_json_frames(
+        self,
+        operation: str = "connections_stream",
+        *,
+        should_stop: Callable[[], bool] | None = None,
+        stop_poll_seconds: float = 0.5,
+    ) -> Iterator[Any]:
         """Yield bounded NDJSON frames and always close the upstream socket."""
 
         spec = self._endpoint(operation, stream=True)
@@ -418,6 +425,18 @@ class MihomoClashClient:
             response = connection.getresponse()
             self._validate_response(response, require_json=True)
             while True:
+                if should_stop is not None and should_stop():
+                    break
+                # A quiet `/logs` response may not produce bytes for minutes.
+                # Poll the socket before reading so a superseded browser stream
+                # can cancel its upstream request without waiting for a log line.
+                raw_socket = getattr(connection, "sock", None)
+                if should_stop is not None and raw_socket is not None:
+                    readable, _, _ = select.select(
+                        [raw_socket], [], [], max(0.05, float(stop_poll_seconds))
+                    )
+                    if not readable:
+                        continue
                 chunk = response.read1(READ_CHUNK_BYTES)
                 if not chunk:
                     break

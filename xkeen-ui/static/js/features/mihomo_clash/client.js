@@ -8,6 +8,9 @@ const RULES_ENDPOINT = '/api/mihomo/clash/rules';
 const PROVIDERS_ENDPOINT = '/api/mihomo/clash/providers';
 const MIGRATION_PREVIEW_ENDPOINT = '/api/mihomo/security/migration-preview';
 const MIGRATION_APPLY_ENDPOINT = '/api/mihomo/security/migration-apply';
+const PANEL_MODE_ENDPOINT = '/api/mihomo/security/panel-mode';
+const PANEL_SWITCH_PREVIEW_ENDPOINT = '/api/mihomo/security/panel-switch-preview';
+const PANEL_SWITCH_ENDPOINT = '/api/mihomo/security/panel-switch';
 const WS_TOKEN_ENDPOINT = '/api/ws-token';
 
 function httpApi() {
@@ -45,6 +48,28 @@ export async function fetchMihomoClashStatus(options = {}) {
     signal: options && options.signal ? options.signal : undefined,
   };
   return requestJSON(STATUS_ENDPOINT, init);
+}
+
+export function fetchMihomoPanelMode() {
+  return requestJSON(PANEL_MODE_ENDPOINT, {
+    method: 'GET', cache: 'no-store', credentials: 'same-origin', timeoutMs: 5000, retry: 0,
+  });
+}
+
+export function previewMihomoPanelSwitch(target) {
+  return requestJSON(PANEL_SWITCH_PREVIEW_ENDPOINT, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target: String(target || '') }),
+    credentials: 'same-origin', timeoutMs: 10000, retry: 0,
+  });
+}
+
+export function switchMihomoPanel(target, previewId) {
+  return requestJSON(PANEL_SWITCH_ENDPOINT, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target: String(target || ''), preview_id: String(previewId || ''), confirmed: true }),
+    credentials: 'same-origin', timeoutMs: 60000, retry: 0,
+  });
 }
 
 export function fetchMihomoClashGroups(options = {}) {

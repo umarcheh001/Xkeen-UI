@@ -16684,6 +16684,15 @@ body.panel-page .xk-mihomo-security-warning {
 
 body.panel-page .xk-mihomo-security-warning[hidden],
 body.panel-page .xk-mihomo-migration[hidden] { display: none !important; }
+body.panel-page .xk-mihomo-panel-switch {
+  min-height: 30px;
+  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+body.panel-page .xk-mihomo-panel-switch[hidden] { display: none !important; }
 
 body.panel-page .xk-mihomo-security-warning > div { display: grid; gap: 3px; }
 body.panel-page .xk-mihomo-security-warning span { color: var(--op-text-muted); }

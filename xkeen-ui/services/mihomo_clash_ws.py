@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+from dataclasses import dataclass, field
 from typing import Any, Callable
 from urllib.parse import parse_qs, urlsplit
 
@@ -38,7 +39,13 @@ def _send(ws: Any, payload: dict[str, Any]) -> bool:
 
 
 _STREAM_LOCK = threading.Lock()
-_ACTIVE_STREAMS: dict[str, int] = {}
+@dataclass
+class _StreamLease:
+    key: str
+    cancelled: threading.Event = field(default_factory=threading.Event)
+
+
+_ACTIVE_STREAMS: dict[str, _StreamLease] = {}
 MAX_ACTIVE_STREAMS = 8
 
 
@@ -94,22 +101,45 @@ def _log_envelope(
     return message
 
 
-def _acquire_stream(client_key: str) -> bool:
-    key = str(client_key or "unknown")[:128]
-    with _STREAM_LOCK:
-        if sum(_ACTIVE_STREAMS.values()) >= MAX_ACTIVE_STREAMS or _ACTIVE_STREAMS.get(key, 0) >= 1:
-            return False
-        _ACTIVE_STREAMS[key] = _ACTIVE_STREAMS.get(key, 0) + 1
-        return True
+def _stream_key(client_key: str, stream_kind: str) -> str:
+    client = str(client_key or "unknown")[:96]
+    kind = str(stream_kind or "default").strip().lower()[:24] or "default"
+    return f"{client}:{kind}"
 
 
-def _release_stream(client_key: str) -> None:
-    key = str(client_key or "unknown")[:128]
+def _acquire_stream_lease(
+    client_key: str,
+    stream_kind: str = "default",
+    *,
+    replace_existing: bool = False,
+) -> _StreamLease | None:
+    key = _stream_key(client_key, stream_kind)
     with _STREAM_LOCK:
-        remaining = max(0, _ACTIVE_STREAMS.get(key, 0) - 1)
-        if remaining:
-            _ACTIVE_STREAMS[key] = remaining
-        else:
+        previous = _ACTIVE_STREAMS.get(key)
+        if previous is not None:
+            if not replace_existing:
+                return None
+            previous.cancelled.set()
+        elif len(_ACTIVE_STREAMS) >= MAX_ACTIVE_STREAMS:
+            return None
+        lease = _StreamLease(key=key)
+        _ACTIVE_STREAMS[key] = lease
+        return lease
+
+
+def _acquire_stream(client_key: str, stream_kind: str = "default") -> bool:
+    return _acquire_stream_lease(client_key, stream_kind) is not None
+
+
+def _release_stream(
+    client_key: str,
+    stream_kind: str = "default",
+    lease: _StreamLease | None = None,
+) -> None:
+    key = _stream_key(client_key, stream_kind)
+    with _STREAM_LOCK:
+        current = _ACTIVE_STREAMS.get(key)
+        if lease is None or current is lease:
             _ACTIVE_STREAMS.pop(key, None)
 
 
@@ -145,7 +175,8 @@ def handle_mihomo_clash_connections_request(
         return []
 
     client_key = str(environ.get("REMOTE_ADDR") or "unknown")
-    if not _acquire_stream(client_key):
+    lease = _acquire_stream_lease(client_key, "connections", replace_existing=True)
+    if lease is None:
         _send(ws, _envelope(sequence=0, state="error", error={"code": "stream_busy"}))
         _close_ws(ws)
         return []
@@ -154,6 +185,8 @@ def handle_mihomo_clash_connections_request(
     ws_debug("mihomo clash connections stream opened", client=environ.get("REMOTE_ADDR", "unknown"))
     try:
         while True:
+            if lease.cancelled.is_set():
+                break
             # The official GET endpoint is a bounded snapshot. Polling it inside
             # this one browser stream also works for Unix sockets and avoids a
             # second WebSocket implementation/credential path on the router.
@@ -198,7 +231,7 @@ def handle_mihomo_clash_connections_request(
         )
     finally:
         _close_ws(ws)
-        _release_stream(client_key)
+        _release_stream(client_key, "connections", lease)
         ws_debug("mihomo clash connections stream closed", frames=sequence)
     return []
 
@@ -235,7 +268,8 @@ def handle_mihomo_clash_logs_request(
         return []
 
     client_key = str(environ.get("REMOTE_ADDR") or "unknown")
-    if not _acquire_stream(client_key):
+    lease = _acquire_stream_lease(client_key, "logs", replace_existing=True)
+    if lease is None:
         _send(ws, _log_envelope(sequence=0, state="error", error={"code": "stream_busy"}))
         _close_ws(ws)
         return []
@@ -255,7 +289,12 @@ def handle_mihomo_clash_logs_request(
             )
             return []
         client = client_factory(discovery.target)
-        for raw_frame in client.iter_json_frames("logs_stream"):
+        for raw_frame in client.iter_json_frames(
+            "logs_stream",
+            should_stop=lease.cancelled.is_set,
+        ):
+            if lease.cancelled.is_set():
+                break
             sequence += 1
             entry = build_mihomo_clash_log_entry_dto(
                 raw_frame,
@@ -286,7 +325,7 @@ def handle_mihomo_clash_logs_request(
         )
     finally:
         _close_ws(ws)
-        _release_stream(client_key)
+        _release_stream(client_key, "logs", lease)
         ws_debug("mihomo clash logs stream closed", frames=sequence)
     return []
 

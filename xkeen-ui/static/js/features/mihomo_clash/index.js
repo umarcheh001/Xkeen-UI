@@ -1,7 +1,10 @@
 import {
   applyMihomoClashMigration,
+  fetchMihomoPanelMode,
   fetchMihomoClashStatus,
   previewMihomoClashMigration,
+  previewMihomoPanelSwitch,
+  switchMihomoPanel,
 } from './client.js';
 import {
   activateMihomoClashGroups,
@@ -40,6 +43,8 @@ let requestSequence = 0;
 let migrationBusy = false;
 let migrationPreviewId = '';
 let assistantKind = '';
+let panelMode = null;
+let panelSwitchBusy = false;
 
 function byId(id) {
   return document.getElementById(id);
@@ -118,7 +123,7 @@ function renderStatus(state, payload = null) {
     deactivateMihomoClashRules();
   }
   if (state === 'ready' && active && visible && currentSubview === 'logs') {
-    activateMihomoClashLogs(payload?.capabilities || {});
+    activateMihomoClashLogs(payload?.capabilities || {}, payload?.runtime || {});
   } else if (currentSubview !== 'logs' || state !== 'loading') {
     deactivateMihomoClashLogs();
   }
@@ -144,6 +149,66 @@ function renderStatus(state, payload = null) {
   setText('mihomo-clash-assistant-value', 'Ваши группы, узлы и подписки не изменятся');
   assistantKind = nextAssistantKind;
   setHidden(warning, !nextAssistantKind);
+  void refreshPanelMode();
+}
+
+function renderPanelSwitch() {
+  const button = byId('mihomo-clash-panel-switch');
+  if (!button || !panelMode) return;
+  const external = panelMode.mode === 'external';
+  const available = external ? panelMode.can_enable_xkeen : panelMode.can_restore_external;
+  setHidden(button, !available);
+  button.disabled = panelSwitchBusy;
+  const panelName = String(panelMode.panel_name || 'прежнюю панель');
+  setText('mihomo-clash-panel-switch-label', external ? 'Вернуться в Xkeen Clash API' : `Вернуть ${panelName}`);
+  button.setAttribute('data-tooltip', external
+    ? 'Создать backup, включить защищённый Xkeen Clash API и перезапустить Mihomo'
+    : `Создать backup и вернуть ${panelName} одной кнопкой`);
+}
+
+async function refreshPanelMode() {
+  try {
+    panelMode = await fetchMihomoPanelMode();
+    renderPanelSwitch();
+  } catch (error) {
+    panelMode = null;
+    setHidden(byId('mihomo-clash-panel-switch'), true);
+  }
+}
+
+async function togglePanelMode() {
+  if (panelSwitchBusy) return false;
+  if (!panelMode) await refreshPanelMode();
+  if (!panelMode) return false;
+  const target = panelMode.mode === 'external' ? 'xkeen' : 'external';
+  const panelName = String(panelMode.panel_name || 'прежнюю панель');
+  const question = target === 'external'
+    ? `Вернуть ${panelName}? Панель создаст backup, восстановит прежний controller и перезапустит Mihomo.`
+    : 'Вернуться в Xkeen Clash API? Панель создаст backup, включит локальный API и перезапустит Mihomo.';
+  if (!window.confirm(question)) return false;
+  panelSwitchBusy = true;
+  renderPanelSwitch();
+  try {
+    const preview = await previewMihomoPanelSwitch(target);
+    const result = await switchMihomoPanel(target, preview?.preview_id);
+    panelMode = { ...panelMode, ...result };
+    renderPanelSwitch();
+    if (target === 'external' && result?.external_url) {
+      window.location.assign(String(result.external_url));
+      return true;
+    }
+    window.setTimeout(() => void refreshMihomoClashStatus({ reason: 'panel-switch' }), 500);
+    return true;
+  } catch (error) {
+    const message = error?.data?.rolled_back
+      ? 'Переключение не удалось, прежняя конфигурация автоматически восстановлена.'
+      : (error?.message || 'Не удалось переключить панель.');
+    try { window.toast(message, 'error'); } catch (toastError) { window.alert(message); }
+    return false;
+  } finally {
+    panelSwitchBusy = false;
+    renderPanelSwitch();
+  }
 }
 
 function migrationTransport() {
@@ -342,6 +407,7 @@ function bindWorkspace() {
     if (action === 'migration-refresh') void refreshMigrationPreview();
     if (action === 'migration-apply') void applyMigration();
     if (action === 'migration-close') setHidden(byId('mihomo-clash-migration'), true);
+    if (action === 'panel-switch') void togglePanelMode();
   });
   root.addEventListener('change', (event) => {
     if (event.target?.id === 'mihomo-clash-migration-transport') {
