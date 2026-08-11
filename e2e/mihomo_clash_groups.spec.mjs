@@ -222,6 +222,35 @@ test('complex country flags use complete inline SVG artwork', async ({ page }) =
   }
 });
 
+test('visible delay test probes every node beyond the old eight-item limit and reports progress', async ({ page }) => {
+  const names = Array.from({ length: 12 }, (_, index) => `bulk-node-${index + 1}`);
+  const data = groupsPayload(names[0]);
+  data.groups[0].nodes = names.map((name) => ({
+    name, type: 'VLESS', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: null,
+  }));
+  const probed = [];
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: data }));
+  await page.route('**/api/mihomo/clash/delay', async (route) => {
+    const body = route.request().postDataJSON();
+    probed.push(body.name);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    await route.fulfill({ json: { ok: true, schema_version: 1, results: [{ name: body.name, delay_ms: 50 }] } });
+  });
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-complete-delay-queue' });
+  });
+  await page.locator('[data-group-name="AUTO"] [data-mihomo-group-toggle]').click();
+  await page.locator('#mihomo-clash-test-visible').click();
+  await expect(page.locator('#mihomo-clash-test-visible .xk-action-label')).toContainText(/Проверка \d+\/12/);
+  await expect.poll(() => probed.length, { timeout: 10_000 }).toBe(12);
+  await expect(page.locator('#mihomo-clash-test-visible .xk-action-label')).toHaveText('Тест видимых');
+  expect(probed).toEqual(names);
+});
+
 
 test('automatic fixed group shows lock, unfix action, sorting and timeout hiding', async ({ page }) => {
   let fixed = 'hidden-node';

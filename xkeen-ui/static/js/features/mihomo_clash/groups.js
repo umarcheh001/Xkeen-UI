@@ -12,7 +12,6 @@ const SELECTABLE_TYPES = new Set(['selector', 'select', 'urltest', 'fallback', '
 // low-power routers; browser-side parallelism only creates a long busy queue.
 const MAX_DELAY_CONCURRENCY = 1;
 const MAX_BUSY_RETRIES = 2;
-const MAX_DELAY_BATCH_ITEMS = 8;
 const DELAY_BATCH_CADENCE_MS = 120;
 const TIMEOUT_HIDE_THRESHOLD = 3;
 const AUTOMATIC_TYPES = new Set(['urltest', 'fallback', 'smart']);
@@ -386,7 +385,7 @@ function renderGroup(group) {
         <div class="xk-mihomo-group-actions">
           ${canUnfix ? `<button type="button" class="btn-secondary xk-mihomo-group-unfix" data-mihomo-group-unfix="1" data-group="${escapeHtml(group.name)}">${iconHtml('lock')}<span>Вернуть автоматический выбор</span></button>` : ''}
           ${collapsed ? '' : `<button type="button" class="btn-secondary xk-mihomo-group-test" data-mihomo-group-delay="1"
-            data-group="${escapeHtml(group.name)}">${iconHtml('ping')}<span>Тест группы</span></button>`}
+            data-group="${escapeHtml(group.name)}">${iconHtml('ping')}<span class="xk-action-label">Тест группы</span></button>`}
         </div>
       </header>
       <div id="${panelId}" class="xk-mihomo-group-body" ${collapsed ? 'hidden' : ''}>
@@ -437,11 +436,18 @@ function render() {
   syncDelayControls(visibleExpandedNodes);
 }
 
-function setDelayActionTesting(button, testing) {
+function setDelayActionTesting(button, testing, progress = null) {
   if (!button) return;
   button.disabled = testing;
   button.setAttribute('aria-busy', testing ? 'true' : 'false');
   button.dataset.mihomoDelayTesting = testing ? 'true' : 'false';
+  const label = button.querySelector('.xk-action-label');
+  if (label) {
+    if (!label.dataset.defaultLabel) label.dataset.defaultLabel = String(label.textContent || '').trim();
+    label.textContent = testing && progress
+      ? `Проверка ${Math.min(progress.completed, progress.total)}/${progress.total}`
+      : label.dataset.defaultLabel;
+  }
   const existing = button.querySelector('.xk-mihomo-delay-spinner');
   if (testing && !existing) {
     const spinner = document.createElement('span');
@@ -465,7 +471,7 @@ function syncDelayControls(visibleExpandedNodes) {
   const source = delayRun?.source || {};
   if (runButton) {
     const testing = busy && source.type === 'visible';
-    setDelayActionTesting(runButton, testing);
+    setDelayActionTesting(runButton, testing, delayRun);
     runButton.disabled = testing || !visibleCount;
   }
   if (!root) return;
@@ -475,7 +481,7 @@ function syncDelayControls(visibleExpandedNodes) {
     const testing = busy
       && source.type === 'group'
       && source.group === String(button.dataset.group || '');
-    setDelayActionTesting(button, testing);
+    setDelayActionTesting(button, testing, delayRun);
   });
 }
 
@@ -684,16 +690,16 @@ async function probeDelay(scope, name, provider = '') {
 
 async function runDelayQueue(items, source = {}) {
   if (!active || delayRun || !items.length) return;
-  const boundedItems = items.slice(0, MAX_DELAY_BATCH_ITEMS);
+  const queueItems = [...items];
   delayRun = {
     controller: typeof AbortController === 'function' ? new AbortController() : null,
     results: new Map(),
     source,
-    total: boundedItems.length,
+    total: queueItems.length,
     completed: 0,
     cancelled: false,
   };
-  for (const item of boundedItems) {
+  for (const item of queueItems) {
     for (const key of delayKeysForProbe(item.scope, item.name, item.provider)) {
       delayRun.results.set(key, { state: 'pending' });
     }
@@ -703,15 +709,15 @@ async function runDelayQueue(items, source = {}) {
   syncDelayControls();
   let cursor = 0;
   const worker = async () => {
-    while (delayRun && !delayRun.cancelled && cursor < boundedItems.length) {
-      const item = boundedItems[cursor++];
+    while (delayRun && !delayRun.cancelled && cursor < queueItems.length) {
+      const item = queueItems[cursor++];
       await probeDelay(item.scope, item.name, item.provider);
-      if (delayRun && !delayRun.cancelled && cursor < boundedItems.length) {
+      if (delayRun && !delayRun.cancelled && cursor < queueItems.length) {
         await wait(DELAY_BATCH_CADENCE_MS);
       }
     }
   };
-  const workers = Array.from({ length: Math.min(MAX_DELAY_CONCURRENCY, boundedItems.length) }, worker);
+  const workers = Array.from({ length: Math.min(MAX_DELAY_CONCURRENCY, queueItems.length) }, worker);
   for (const workerPromise of workers) await workerPromise;
   if (!delayRun) return;
   const finished = delayRun;

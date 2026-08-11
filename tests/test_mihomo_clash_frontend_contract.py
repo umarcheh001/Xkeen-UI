@@ -161,7 +161,7 @@ def test_security_warning_and_one_click_setup_contract_are_explicit():
     assert 'timeoutMs: 45000' in client
 
 
-def test_groups_ui_has_compact_filter_select_and_bounded_delay_contract():
+def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract():
     markup = _mihomo_markup()
     client = _text(CLIENT)
     groups = _text(GROUPS)
@@ -182,7 +182,6 @@ def test_groups_ui_has_compact_filter_select_and_bounded_delay_contract():
         "testMihomoClashDelay",
         "MAX_DELAY_CONCURRENCY = 1",
         "MAX_BUSY_RETRIES = 2",
-        "MAX_DELAY_BATCH_ITEMS = 8",
         "DELAY_BATCH_CADENCE_MS = 120",
         "TIMEOUT_HIDE_THRESHOLD = 3",
         "data-mihomo-group-unfix",
@@ -193,6 +192,8 @@ def test_groups_ui_has_compact_filter_select_and_bounded_delay_contract():
         "source.type === 'group'",
         "mihomoDelayTesting",
         "setDelayActionTesting",
+        "queueItems = [...items]",
+        "`Проверка ${Math.min(progress.completed, progress.total)}/${progress.total}`",
         "xk-mihomo-delay-spinner",
         "matchingCards",
         "is-pending",
@@ -203,6 +204,8 @@ def test_groups_ui_has_compact_filter_select_and_bounded_delay_contract():
         assert fragment in markup or fragment in client or fragment in groups or fragment in css
 
     assert "optimistic" not in groups.lower()
+    assert "MAX_DELAY_BATCH_ITEMS" not in groups
+    assert ".slice(0," not in groups
     assert "encodeURIComponent" in client
 
 
@@ -249,25 +252,27 @@ def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
     assert 'xk-mihomo-group-current' not in groups
     assert 'xk-mihomo-node-marker' not in groups
     assert 'class="xk-mihomo-node-probe' in groups
-    assert "iconHtml('server-off')" in groups
+    assert "status.state === 'unavailable'" in groups
+    assert "? 'server-off'" in groups
+    assert "status.state === 'failed' ? 'alert'" in groups
     assert 'data-tooltip="Проверить задержку"' not in groups
     assert 'data-tooltip-silent="1"' in groups
     assert "${collapsed ? '' : `<button type=\"button\" class=\"btn-secondary xk-mihomo-group-test\"" in groups
     assert 'setMessage(' not in groups
     assert 'mihomo-clash-groups-message' not in markup
-    assert 'aria-label="${escapeHtml(probeLabel)}"' in groups
+    assert 'aria-label="${escapeHtml(probeLabel)}: ${escapeHtml(status.label)}"' in groups
     assert "iconHtml('loading')" in groups
-    assert "delaySucceeded ? delayTone(delay)" in groups
-    assert "node.alive === false ? 'failed'" in groups
+    assert "state: 'unavailable'" in groups
+    assert "node.availability === 'unavailable' || node.alive === false" in groups
     assert "node.alive === true" in groups
     assert 'grid-template-columns: repeat(auto-fill, minmax(min(100%, 232px), 1fr));' in css
-    assert 'grid-auto-rows: minmax(72px, auto);' in css
+    assert 'grid-auto-rows: minmax(82px, auto);' in css
     assert 'border-radius: var(--op-control-radius);' in css
     assert 'background: var(--op-editor);' in css
     assert '.xk-mihomo-node-delay::before' not in css
     assert '.xk-mihomo-node-row.is-current::before' not in css
     assert 'background: var(--op-accent-soft);' in css
-    assert 'body.panel-page .xk-mihomo-node-unavailable' in css
+    assert '[data-delay-tone="unavailable"]' in css
     assert 'body.panel-page .xk-mihomo-node-probe:focus-visible' in css
     assert 'xk-sub-pingall-spin' in css
     assert 'data-mihomo-delay-testing="true"' in css
