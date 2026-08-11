@@ -199,6 +199,45 @@ def test_proxy_groups_dto_adds_display_safe_transport_details_by_provider():
     assert node["path"] == "/api/v2/"
 
 
+def test_proxy_groups_dto_keeps_shared_details_for_ambiguous_provider_membership():
+    from services.mihomo_clash_dto import build_mihomo_clash_proxy_groups_dto
+
+    providers = fixture("providers-proxies.json")
+    providers["providers"]["second-provider"] = {
+        "name": "second-provider",
+        "proxies": [{"name": "node-b", "type": "VLESS", "alive": True}],
+    }
+    common = {"server": "shared.example.test", "port": 443, "network": "xhttp"}
+    dto = build_mihomo_clash_proxy_groups_dto(
+        fixture("proxies.json"),
+        providers,
+        {"providers": {
+            "demo-provider": {"node-b": common},
+            "second-provider": {"node-b": common},
+        }},
+    )
+
+    node = next(item for item in dto["groups"][0]["nodes"] if item["name"] == "node-b")
+    assert node["provider_ambiguous"] is True
+    assert node["server"] == "shared.example.test"
+    assert node["network"] == "xhttp"
+
+
+def test_proxy_groups_dto_uses_safe_runtime_details_as_fallback():
+    from services.mihomo_clash_dto import build_mihomo_clash_proxy_groups_dto
+
+    proxies = fixture("proxies.json")
+    proxies["proxies"]["node-a"].update({
+        "server": "runtime.example.test", "port": 8443, "network": "ws", "tls": "tls",
+    })
+    dto = build_mihomo_clash_proxy_groups_dto(proxies)
+    node = dto["groups"][0]["nodes"][0]
+    assert node["server"] == "runtime.example.test"
+    assert node["port"] == 8443
+    assert node["network"] == "ws"
+    assert node["security"] == "tls"
+
+
 def test_rules_and_providers_dtos_are_bounded_and_drop_raw_source_fields():
     from services.mihomo_clash_dto import (
         build_mihomo_clash_providers_dto,

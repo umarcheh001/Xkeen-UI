@@ -246,6 +246,19 @@ def _node_dto(
         providers.insert(0, explicit_provider)
     provider = explicit_provider or (providers[0] if len(providers) == 1 else "")
     details = _mapping(proxy_details)
+    # Some Mihomo builds expose these harmless connection fields directly in
+    # /proxies or /providers/proxies. Prefer the config-derived copy, but use
+    # the runtime value when the provider cache path is unavailable.
+    def detail_value(key: str, *raw_keys: str) -> Any:
+        value = details.get(key)
+        if value not in (None, ""):
+            return value
+        for raw_key in raw_keys or (key,):
+            value = raw.get(raw_key)
+            if value not in (None, ""):
+                return value
+        return None
+
     return {
         "name": _text(raw.get("name") or name, 256),
         "type": _text(raw.get("type"), 64),
@@ -256,14 +269,14 @@ def _node_dto(
         "provider_candidates": providers,
         "provider_ambiguous": not explicit_provider and len(providers) > 1,
         "delay_ms": _last_delay(raw),
-        "server": _text(details.get("server"), 256),
-        "port": _optional_nonnegative_int(details.get("port")),
-        "network": _text(details.get("network"), 64),
-        "security": _text(details.get("security"), 64),
-        "sni": _text(details.get("sni"), 256),
-        "host": _text(details.get("host"), 256),
-        "path": _text(details.get("path"), 512),
-        "flow": _text(details.get("flow"), 128),
+        "server": _text(detail_value("server"), 256),
+        "port": _optional_nonnegative_int(detail_value("port")),
+        "network": _text(detail_value("network"), 64),
+        "security": _text(detail_value("security", "security", "tls"), 64),
+        "sni": _text(detail_value("sni", "sni", "servername", "server-name"), 256),
+        "host": _text(detail_value("host"), 256),
+        "path": _text(detail_value("path"), 512),
+        "flow": _text(detail_value("flow"), 128),
     }
 
 
@@ -305,10 +318,23 @@ def build_mihomo_clash_proxy_groups_dto(
             raw_node = _mapping(proxies.get(node_name)) or provider_nodes.get(node_name, {})
             provider_hints = membership.get(node_name, [])
             explicit_provider = _text(raw_node.get("provider-name"), 256)
-            detail_key = explicit_provider or (provider_hints[0] if len(provider_hints) == 1 else "")
-            detail = _mapping(_mapping(proxy_details).get("providers")).get(detail_key, {})
-            if isinstance(detail, Mapping):
-                detail = _mapping(detail).get(node_name, {})
+            provider_details = _mapping(_mapping(proxy_details).get("providers"))
+            detail_keys = [explicit_provider] if explicit_provider else list(provider_hints)
+            candidates = [
+                _mapping(_mapping(provider_details.get(detail_key)).get(node_name))
+                for detail_key in detail_keys
+                if detail_key
+            ]
+            candidates = [candidate for candidate in candidates if candidate]
+            # A node can appear in several proxy providers. In that case the
+            # old code discarded details completely. Provider templates often
+            # repeat the same endpoint, so collapse identical candidates and
+            # retain their shared technical data.
+            unique_candidates: list[dict[str, Any]] = []
+            for candidate in candidates:
+                if candidate not in unique_candidates:
+                    unique_candidates.append(candidate)
+            detail = unique_candidates[0] if len(unique_candidates) == 1 else {}
             if not detail:
                 detail = _mapping(_mapping(proxy_details).get("local")).get(node_name, {})
             nodes.append(_node_dto(node_name, raw_node, provider_hints, _mapping(detail)))

@@ -17948,6 +17948,21 @@ body.panel-page .xk-mihomo-node-country {
   box-shadow: none;
 }
 
+body.panel-page .xk-mihomo-node-country > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+body.panel-page .xk-mihomo-node-country:has(> svg) {
+  background: transparent !important;
+}
+
+body.panel-page .xk-mihomo-node-country:has(> svg)::before,
+body.panel-page .xk-mihomo-node-country:has(> svg)::after {
+  display: none !important;
+}
+
 body.panel-page .xk-mihomo-node-main strong .xk-action-icon {
   display: inline-block;
   width: 12px;

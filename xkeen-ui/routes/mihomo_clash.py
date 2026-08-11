@@ -222,8 +222,14 @@ def _proxy_transport_details(raw: Any) -> dict[str, Any]:
         security = "tls"
     if not security and str(tls or "").strip().lower() in {"tls", "true"}:
         security = "tls"
-    options = raw.get(f"{network}-opts") if network else None
-    options = options if isinstance(options, Mapping) else {}
+    option_keys = [f"{network}-opts"] if network else []
+    option_keys.extend(("ws-opts", "http-opts", "h2-opts", "grpc-opts", "xhttp-opts"))
+    options: Mapping[str, Any] = {}
+    for key in option_keys:
+        candidate = raw.get(key)
+        if isinstance(candidate, Mapping):
+            options = candidate
+            break
     headers = options.get("headers") if isinstance(options.get("headers"), Mapping) else {}
     return {
         "server": raw.get("server"),
@@ -231,59 +237,176 @@ def _proxy_transport_details(raw: Any) -> dict[str, Any]:
         "network": network,
         "security": security,
         "sni": raw.get("servername") or raw.get("sni") or raw.get("server-name"),
-        "host": options.get("host") or headers.get("Host") or headers.get("host"),
-        "path": options.get("path"),
+        "host": raw.get("host") or options.get("host") or headers.get("Host") or headers.get("host"),
+        "path": raw.get("path") or options.get("path") or options.get("service-name"),
         "flow": raw.get("flow"),
     }
 
 
+def _yaml_display_scalar(value: Any) -> str:
+    text = str(value or "").strip()
+    if " #" in text:
+        text = text.split(" #", 1)[0].rstrip()
+    if len(text) >= 2 and text[:1] == text[-1:] and text[:1] in {"'", '"'}:
+        text = text[1:-1]
+        if value and str(value).strip().startswith("'"):
+            text = text.replace("''", "'")
+    return text.strip()
+
+
+def _fallback_proxy_rows(text: str) -> dict[str, dict[str, Any]]:
+    """Extract card-safe scalar fields without requiring PyYAML on routers."""
+    rows: dict[str, dict[str, Any]] = {}
+    in_proxies = False
+    section_indent = -1
+    current: dict[str, Any] | None = None
+    current_indent = -1
+    nested_key = ""
+    for raw_line in str(text or "").replace("\r\n", "\n").replace("\r", "\n").splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(raw_line) - len(raw_line.lstrip(" "))
+        if not in_proxies:
+            if re.match(r"^\s*proxies\s*:\s*(?:#.*)?$", raw_line):
+                in_proxies = True
+                section_indent = indent
+            continue
+        if indent <= section_indent and not stripped.startswith("-"):
+            break
+        item = re.match(r"^-\s*name\s*:\s*(.+?)\s*$", stripped)
+        if item:
+            current = {"name": _yaml_display_scalar(item.group(1))}
+            current_indent = indent
+            nested_key = ""
+            if current["name"]:
+                rows[current["name"]] = current
+            continue
+        if current is None or indent <= current_indent:
+            continue
+        pair = re.match(r"^([A-Za-z0-9_-]+)\s*:\s*(.*?)\s*$", stripped)
+        if not pair:
+            continue
+        key = pair.group(1).lower()
+        value = _yaml_display_scalar(pair.group(2))
+        if not value:
+            if key.endswith("-opts"):
+                nested_key = key
+            elif key == "headers" and nested_key.endswith("-opts"):
+                nested_key = f"{nested_key}/headers"
+            continue
+        if key in {"server", "port", "network", "security", "tls", "servername", "sni", "server-name", "flow"}:
+            current[key] = value
+        elif key in {"path", "service-name"} and "-opts" in nested_key:
+            current["path"] = value
+        elif key == "host" and "-opts" in nested_key:
+            current["host"] = value
+    return {name: _proxy_transport_details(row) for name, row in rows.items()}
+
+
+def _fallback_provider_specs(text: str) -> dict[str, str]:
+    specs: dict[str, str] = {}
+    in_section = False
+    section_indent = -1
+    current = ""
+    current_indent = -1
+    for raw_line in str(text or "").replace("\r\n", "\n").replace("\r", "\n").splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(raw_line) - len(raw_line.lstrip(" "))
+        if not in_section:
+            if re.match(r"^\s*proxy-providers\s*:\s*(?:#.*)?$", raw_line):
+                in_section = True
+                section_indent = indent
+            continue
+        if indent <= section_indent:
+            break
+        provider = re.match(r"^([^:#][^:]*)\s*:\s*(?:#.*)?$", stripped)
+        if provider and indent > section_indent:
+            current = _yaml_display_scalar(provider.group(1))
+            current_indent = indent
+            specs.setdefault(current, "")
+            continue
+        path_match = re.match(r"^path\s*:\s*(.+?)\s*$", stripped, re.IGNORECASE)
+        if current and indent > current_indent and path_match:
+            specs[current] = _yaml_display_scalar(path_match.group(1))
+    return specs
+
+
 def _load_proxy_transport_index(config_file: str, mihomo_root: str) -> dict[str, Any]:
     """Read only display-safe proxy fields from the active config/provider cache."""
-    if _yaml is None:
-        return {}
     try:
         root_path = Path(mihomo_root).expanduser().resolve(strict=True)
         config_path = Path(config_file).expanduser().resolve(strict=True)
         config_path.relative_to(root_path)
         if config_path.stat().st_size > MAX_PROXY_DETAIL_CONFIG_BYTES:
             return {}
-        config = _yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        config_text = config_path.read_text(encoding="utf-8")
+        config = _yaml.safe_load(config_text) if _yaml is not None else None
+        config = config or {}
     except Exception:
         return {}
-    if not isinstance(config, Mapping):
+    if config and not isinstance(config, Mapping):
         return {}
 
-    local: dict[str, Any] = {}
-    for raw in config.get("proxies") or []:
-        if isinstance(raw, Mapping) and str(raw.get("name") or "").strip():
-            local[str(raw.get("name")).strip()] = _proxy_transport_details(raw)
+    local: dict[str, Any] = _fallback_proxy_rows(config_text)
+    if isinstance(config, Mapping):
+        for raw in config.get("proxies") or []:
+            if isinstance(raw, Mapping) and str(raw.get("name") or "").strip():
+                local[str(raw.get("name")).strip()] = _proxy_transport_details(raw)
 
     providers: dict[str, Any] = {}
-    configured = config.get("proxy-providers")
-    if isinstance(configured, Mapping):
-        for provider_name, spec in configured.items():
+    configured: Mapping[str, Any] = config.get("proxy-providers") if isinstance(config, Mapping) else {}
+    if not isinstance(configured, Mapping):
+        configured = {}
+    fallback_specs = _fallback_provider_specs(config_text)
+    provider_names = list(dict.fromkeys([*configured.keys(), *fallback_specs.keys()]))
+    if provider_names:
+        for provider_name in provider_names:
+            spec = configured.get(provider_name, {})
             if not isinstance(spec, Mapping):
-                continue
-            configured_path = str(spec.get("path") or "").strip()
-            if not configured_path:
-                continue
+                spec = {}
+            provider_name_text = str(provider_name)
+            configured_path = str(spec.get("path") or fallback_specs.get(provider_name_text) or "").strip()
+            path_candidates = [configured_path] if configured_path else []
+            # Mihomo's default HTTP-provider cache location. It is also the
+            # path generated by Xkeen, but older/custom configs may omit path.
+            path_candidates.extend((
+                f"proxy_providers/{provider_name_text}.yaml",
+                f"providers/{provider_name_text}.yaml",
+            ))
             try:
-                provider_path = Path(configured_path).expanduser()
-                if not provider_path.is_absolute():
-                    provider_path = root_path / provider_path
-                provider_path = provider_path.resolve(strict=True)
+                provider_path = None
+                for raw_path in path_candidates:
+                    candidate_path = Path(raw_path).expanduser()
+                    if not candidate_path.is_absolute():
+                        candidate_path = root_path / candidate_path
+                    try:
+                        candidate_path = candidate_path.resolve(strict=True)
+                        candidate_path.relative_to(root_path)
+                        provider_path = candidate_path
+                        break
+                    except (OSError, ValueError):
+                        continue
+                if provider_path is None:
+                    continue
                 provider_path.relative_to(root_path)
                 if provider_path.stat().st_size > MAX_PROXY_DETAIL_CONFIG_BYTES:
                     continue
-                content = _yaml.safe_load(provider_path.read_text(encoding="utf-8")) or {}
-                rows = content.get("proxies") if isinstance(content, Mapping) else None
-                if not isinstance(rows, list):
-                    continue
-                providers[str(provider_name)] = {
-                    str(raw.get("name")).strip(): _proxy_transport_details(raw)
-                    for raw in rows
-                    if isinstance(raw, Mapping) and str(raw.get("name") or "").strip()
-                }
+                provider_text = provider_path.read_text(encoding="utf-8")
+                provider_rows = _fallback_proxy_rows(provider_text)
+                if _yaml is not None:
+                    content = _yaml.safe_load(provider_text) or {}
+                    rows = content.get("proxies") if isinstance(content, Mapping) else None
+                    if isinstance(rows, list):
+                        provider_rows.update({
+                            str(raw.get("name")).strip(): _proxy_transport_details(raw)
+                            for raw in rows
+                            if isinstance(raw, Mapping) and str(raw.get("name") or "").strip()
+                        })
+                if provider_rows:
+                    providers[provider_name_text] = provider_rows
             except Exception:
                 continue
     return {"local": local, "providers": providers}
