@@ -22,9 +22,10 @@ MIHOMO_CLASH_ACTION_POLICIES: Mapping[str, MihomoClashActionPolicy] = MappingPro
     {
         "proxy-select": MihomoClashActionPolicy(4, 1, 30, 60.0),
         "proxy-unfix": MihomoClashActionPolicy(2, 1, 20, 60.0),
-        # One browser batch may use all three workers; the matching global cap
-        # still protects the router when several sessions start a batch.
-        "delay": MihomoClashActionPolicy(3, 3, 48, 60.0),
+        # Mihomo delay checks are CPU/network-heavy on router hardware. Keep
+        # one in flight globally so concurrent browser tabs cannot starve UI
+        # status polling or create an upstream busy queue.
+        "delay": MihomoClashActionPolicy(1, 1, 24, 60.0),
         # HTTP fallback uses this endpoint at a documented two-second cadence.
         # The rolling limit bounds accidental hot loops while leaving room for
         # manual refreshes and a reconnect bootstrap.

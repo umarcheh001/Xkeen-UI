@@ -180,10 +180,10 @@ def test_groups_ui_has_compact_filter_select_and_bounded_delay_contract():
         "selectMihomoClashProxy",
         "unfixMihomoClashProxy",
         "testMihomoClashDelay",
-        "MAX_DELAY_CONCURRENCY = 3",
-        "MAX_BUSY_RETRIES = 4",
-        "MAX_DELAY_BATCH_ITEMS = 24",
-        "DELAY_BATCH_CADENCE_MS = 180",
+        "MAX_DELAY_CONCURRENCY = 1",
+        "MAX_BUSY_RETRIES = 2",
+        "MAX_DELAY_BATCH_ITEMS = 8",
+        "DELAY_BATCH_CADENCE_MS = 120",
         "TIMEOUT_HIDE_THRESHOLD = 3",
         "data-mihomo-group-unfix",
         "disconnect_affected",
@@ -192,6 +192,9 @@ def test_groups_ui_has_compact_filter_select_and_bounded_delay_contract():
         "source.type === 'visible'",
         "source.type === 'group'",
         "mihomoDelayTesting",
+        "setDelayActionTesting",
+        "xk-mihomo-delay-spinner",
+        "matchingCards",
         "is-pending",
         "selection = { group, node",
         ".xk-mihomo-node-row.is-current",
@@ -269,6 +272,9 @@ def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
     assert 'xk-sub-pingall-spin' in css
     assert 'data-mihomo-delay-testing="true"' in css
     assert 'xk-mihomo-delay-action-pulse' not in css
+    assert '@keyframes xk-mihomo-delay-spin' in css
+    assert 'xk-mihomo-delay-spinner' in css
+    assert 'animation: xk-mihomo-delay-spin .72s linear infinite !important;' in css
     assert 'cursor: progress;' in css
 
 

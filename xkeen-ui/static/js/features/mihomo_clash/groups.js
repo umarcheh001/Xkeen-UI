@@ -8,12 +8,12 @@ import {
 } from './client.js';
 
 const SELECTABLE_TYPES = new Set(['selector', 'select', 'urltest', 'fallback', 'smart']);
-// Keep a bounded browser queue. The backend guard intentionally serializes
-// each authenticated subject, so workers retry short `action_busy` responses.
-const MAX_DELAY_CONCURRENCY = 3;
-const MAX_BUSY_RETRIES = 4;
-const MAX_DELAY_BATCH_ITEMS = 24;
-const DELAY_BATCH_CADENCE_MS = 180;
+// Probe one target at a time. Mihomo itself serializes delay checks on
+// low-power routers; browser-side parallelism only creates a long busy queue.
+const MAX_DELAY_CONCURRENCY = 1;
+const MAX_BUSY_RETRIES = 2;
+const MAX_DELAY_BATCH_ITEMS = 8;
+const DELAY_BATCH_CADENCE_MS = 120;
 const TIMEOUT_HIDE_THRESHOLD = 3;
 const AUTOMATIC_TYPES = new Set(['urltest', 'fallback', 'smart']);
 
@@ -284,6 +284,22 @@ function render() {
   syncDelayControls(visibleExpandedNodes);
 }
 
+function setDelayActionTesting(button, testing) {
+  if (!button) return;
+  button.disabled = testing;
+  button.setAttribute('aria-busy', testing ? 'true' : 'false');
+  button.dataset.mihomoDelayTesting = testing ? 'true' : 'false';
+  const existing = button.querySelector('.xk-mihomo-delay-spinner');
+  if (testing && !existing) {
+    const spinner = document.createElement('span');
+    spinner.className = 'xk-mihomo-delay-spinner';
+    spinner.setAttribute('aria-hidden', 'true');
+    button.prepend(spinner);
+  } else if (!testing && existing) {
+    existing.remove();
+  }
+}
+
 function syncDelayControls(visibleExpandedNodes) {
   const runButton = document.getElementById('mihomo-clash-test-visible');
   const visibleCount = Number.isFinite(visibleExpandedNodes)
@@ -296,9 +312,8 @@ function syncDelayControls(visibleExpandedNodes) {
   const source = delayRun?.source || {};
   if (runButton) {
     const testing = busy && source.type === 'visible';
+    setDelayActionTesting(runButton, testing);
     runButton.disabled = testing || !visibleCount;
-    runButton.setAttribute('aria-busy', testing ? 'true' : 'false');
-    runButton.dataset.mihomoDelayTesting = testing ? 'true' : 'false';
   }
   if (!root) return;
   // The backend queue rejects an overlapping request. Keep unrelated controls
@@ -307,9 +322,7 @@ function syncDelayControls(visibleExpandedNodes) {
     const testing = busy
       && source.type === 'group'
       && source.group === String(button.dataset.group || '');
-    button.disabled = testing;
-    button.setAttribute('aria-busy', testing ? 'true' : 'false');
-    button.dataset.mihomoDelayTesting = testing ? 'true' : 'false';
+    setDelayActionTesting(button, testing);
   });
 }
 
@@ -318,16 +331,24 @@ function renderDelayNodes(keys) {
   const keySet = new Set(keys || []);
   if (!keySet.size) return;
   const cards = new Map();
-  root.querySelectorAll('[data-node-key]').forEach((card) => cards.set(card.dataset.nodeKey, card));
+  root.querySelectorAll('[data-node-key]').forEach((card) => {
+    const key = card.dataset.nodeKey;
+    if (!key) return;
+    const matches = cards.get(key) || [];
+    matches.push(card);
+    cards.set(key, matches);
+  });
   for (const group of filteredGroups()) {
     for (const node of group.nodes || []) {
       const nodeKey = delayKey(node.name, node.provider);
       if (!keySet.has(nodeKey)) continue;
-      const card = cards.get(encodeURIComponent(nodeKey));
-      const probe = card?.querySelector('.xk-mihomo-node-probe');
-      if (!card || !probe) continue;
-      probe.outerHTML = renderNodeProbe(node);
-      card.classList.toggle('is-checking', nodeDelayResult(node)?.state === 'pending');
+      const matchingCards = cards.get(encodeURIComponent(nodeKey)) || [];
+      for (const card of matchingCards) {
+        const probe = card.querySelector('.xk-mihomo-node-probe');
+        if (!probe) continue;
+        probe.outerHTML = renderNodeProbe(node);
+        card.classList.toggle('is-checking', nodeDelayResult(node)?.state === 'pending');
+      }
     }
   }
 }

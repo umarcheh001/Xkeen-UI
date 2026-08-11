@@ -157,6 +157,7 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await expect(page.locator('[data-group-name="AUTO"] [data-mihomo-group-toggle]')).toHaveAttribute('aria-expanded', 'true');
   await page.locator('[data-mihomo-delay-visible]').click();
   await expect(page.locator('#mihomo-clash-test-visible')).toHaveAttribute('data-mihomo-delay-testing', 'true');
+  await expect(page.locator('#mihomo-clash-test-visible .xk-mihomo-delay-spinner')).toBeVisible();
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test')).not.toHaveAttribute('data-mihomo-delay-testing', 'true');
   await expect(page.locator('[data-node-name="node-a"] .xk-mihomo-node-delay')).toHaveText('44 мс');
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('44 мс');
@@ -166,6 +167,7 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
 
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test').click();
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test')).toHaveAttribute('data-mihomo-delay-testing', 'true');
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-delay-spinner')).toBeVisible();
   await expect(page.locator('#mihomo-clash-test-visible')).not.toHaveAttribute('data-mihomo-delay-testing', 'true');
 });
 

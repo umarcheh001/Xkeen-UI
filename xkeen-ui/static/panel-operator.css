@@ -17549,20 +17549,19 @@ body.panel-page :is(#mihomo-clash-test-visible, .xk-mihomo-groups-collapse, .xk-
   line-height: 1;
 }
 
-/* Delay checks can take a few seconds. Only the control that started the
- * run gets a spinner; all other controls stay visually unchanged. */
+/* Delay checks must not depend on the legacy global spinner definition:
+ * it can be cached independently from this late-loaded Mihomo stylesheet. */
+@keyframes xk-mihomo-delay-spin {
+  to { transform: rotate(1turn); }
+}
+
 body.panel-page :is(#mihomo-clash-test-visible, .xk-mihomo-group-test)[data-mihomo-delay-testing="true"] {
-  position: relative;
   opacity: 1 !important;
   cursor: progress;
 }
 
-body.panel-page :is(#mihomo-clash-test-visible, .xk-mihomo-group-test)[data-mihomo-delay-testing="true"] .xk-action-icon {
-  display: none;
-}
-
-body.panel-page :is(#mihomo-clash-test-visible, .xk-mihomo-group-test)[data-mihomo-delay-testing="true"]::before {
-  content: "";
+body.panel-page .xk-mihomo-delay-spinner {
+  display: inline-block !important;
   box-sizing: border-box;
   flex: 0 0 12px;
   width: 12px;
@@ -17570,7 +17569,9 @@ body.panel-page :is(#mihomo-clash-test-visible, .xk-mihomo-group-test)[data-miho
   border: 2px solid color-mix(in srgb, var(--op-accent-hover) 28%, transparent);
   border-top-color: var(--op-accent-hover);
   border-radius: 50%;
-  animation: xk-sub-pingall-spin .8s linear infinite;
+  animation: xk-mihomo-delay-spin .72s linear infinite !important;
+  transform-origin: center;
+  will-change: transform;
 }
 
 body.panel-page .xk-mihomo-groups-list {
@@ -17879,9 +17880,12 @@ body.panel-page .xk-mihomo-node-probe.is-pending:disabled {
 }
 
 body.panel-page .xk-mihomo-node-probe.is-pending .xk-action-icon {
+  display: block;
   width: 14px;
   height: 14px;
-  animation: xk-sub-pingall-spin .85s linear infinite;
+  animation: xk-mihomo-delay-spin .72s linear infinite !important;
+  transform-origin: center;
+  will-change: transform;
 }
 
 body.panel-page .xk-mihomo-node-probe:hover:not(:disabled) {
@@ -17938,7 +17942,8 @@ body.panel-page .xk-mihomo-groups-empty {
   body.panel-page .xk-mihomo-runtime[aria-busy="true"] .xk-action-icon {
     animation: none !important;
   }
-  body.panel-page :is(#mihomo-clash-test-visible, .xk-mihomo-group-test)[data-mihomo-delay-testing="true"]::before {
+  body.panel-page .xk-mihomo-delay-spinner,
+  body.panel-page .xk-mihomo-node-probe.is-pending .xk-action-icon {
     animation: none !important;
   }
 }
