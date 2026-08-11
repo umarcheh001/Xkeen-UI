@@ -341,6 +341,11 @@ test('Mihomo group disclosures keep the workspace compact and keyboard accessibl
   await page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay').click();
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('ошибка');
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveAttribute('data-delay-tone', 'failed');
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay use')).toHaveAttribute('href', /#xk-alert$/);
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveAttribute(
+    'aria-label',
+    /ошибка/,
+  );
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveAttribute(
     'data-tooltip',
     /Ручная проверка/,

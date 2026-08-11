@@ -305,8 +305,11 @@ function renderNodeProbe(node) {
   const probeLabel = `Проверить задержку узла ${node.name}`;
   const probeData = `data-mihomo-node-delay="1" data-node="${escapeHtml(node.name)}" data-provider="${escapeHtml(node.provider || '')}"`;
   const checking = status.state === 'pending';
-  const content = status.state === 'unavailable'
-    ? `<span class="xk-visually-hidden">${escapeHtml(status.label)}</span>${iconHtml('server-off')}`
+  const statusIcon = status.state === 'unavailable'
+    ? 'server-off'
+    : (status.state === 'failed' ? 'alert' : '');
+  const content = statusIcon
+    ? `<span class="xk-visually-hidden">${escapeHtml(status.label)}</span>${iconHtml(statusIcon)}`
     : escapeHtml(status.label);
   return checking
     ? `<button type="button" class="xk-mihomo-node-probe is-pending" ${probeData}
