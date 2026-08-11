@@ -724,6 +724,11 @@
           "path": "static/js/features/routing_jsonc_preserve.js",
           "globals": [],
           "lazy_features": []
+        },
+        {
+          "path": "static/js/features/resource_monitor.js",
+          "globals": [],
+          "lazy_features": []
         }
       ],
       "direct_init_globals": [],
