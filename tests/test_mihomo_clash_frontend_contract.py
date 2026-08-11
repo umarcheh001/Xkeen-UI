@@ -427,10 +427,11 @@ def test_rule_provider_inspector_is_read_only_bounded_and_searchable():
         'id="mihomo-clash-provider-previous"',
         'id="mihomo-clash-provider-next"',
         'data-mihomo-provider-inspect',
+        'Открыть содержимое rule-provider',
         'fetchMihomoRuleProviderContent',
         "/rule/${encodeURIComponent(String(name || ''))}/content",
         'PROVIDER_PAGE_SIZE = 200',
-        'Read-only · до 500 строк',
+        'Поиск по всему файлу · read-only · до 500 строк',
         '.xk-mihomo-provider-inspector[hidden]',
     ):
         assert fragment in markup or fragment in client or fragment in rules or fragment in css

@@ -132,6 +132,27 @@
         <div class="header-right panel-shell-right" data-xk-shell-zone="global-actions" data-xk-shell-group="actions">
           <div class="panel-shell-summary" data-xk-shell-slot="summary">
 
+            <button
+              type="button"
+              id="xk-resource-monitor"
+              class="xk-resource-monitor"
+              aria-label="Ресурсы роутера: загрузка данных"
+              title="Ресурсы роутера обновляются каждые 5 секунд"
+              data-state="loading"
+            >
+              <span class="xk-resource-monitor-item">
+                <span class="xk-resource-monitor-label">CPU</span>
+                <strong id="xk-resource-cpu">—</strong>
+                <span class="xk-resource-meter" aria-hidden="true"><i id="xk-resource-cpu-meter"></i></span>
+              </span>
+              <span class="xk-resource-monitor-item">
+                <span class="xk-resource-monitor-label">RAM</span>
+                <strong id="xk-resource-memory">—</strong>
+                <span class="xk-resource-meter" aria-hidden="true"><i id="xk-resource-memory-meter"></i></span>
+              </span>
+              <span id="xk-resource-monitor-stale" class="xk-resource-monitor-stale" hidden>нет данных</span>
+            </button>
+
             <div
               class="xk-global-header-activity"
               data-xk-global-spinner-anchor
@@ -1161,7 +1182,7 @@
           </div>
           <div class="xk-mihomo-provider-inspector-toolbar">
             <label for="mihomo-clash-provider-filter">{{ op_icon('search') }}<input id="mihomo-clash-provider-filter" type="search" placeholder="Поиск внутри provider" autocomplete="off"></label>
-            <span>Read-only · до 500 строк</span>
+            <span>Поиск по всему файлу · read-only · до 500 строк</span>
           </div>
           <ol id="mihomo-clash-provider-rules" class="xk-mihomo-provider-rules"></ol>
           <div id="mihomo-clash-provider-rules-empty" class="xk-mihomo-rules-empty">Rule-provider не содержит правил.</div>

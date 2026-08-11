@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import selectors
 import shutil
 import stat
@@ -133,20 +134,156 @@ def _read_bounded(
 
 
 def _load_config(config_file: str) -> Mapping[str, Any]:
-    if _yaml is None:
-        raise RuleProviderInspectorError(
-            "yaml_parser_unavailable",
-            "Просмотр provider недоступен: на роутере нет YAML parser.",
-            503,
-        )
     raw = _read_bounded(Path(config_file), MAX_CONFIG_BYTES, code="config_too_large")
     try:
-        parsed = _safe_load_yaml(raw.decode("utf-8"))
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise RuleProviderInspectorError("config_invalid", "Активный config.yaml не удалось разобрать.", 409) from exc
+    if _yaml is None:
+        return {"rule-providers": _fallback_rule_provider_specs(text)}
+    try:
+        parsed = _safe_load_yaml(text)
     except (UnicodeDecodeError, ValueError, TypeError) as exc:
         raise RuleProviderInspectorError("config_invalid", "Активный config.yaml не удалось разобрать.", 409) from exc
     except Exception as exc:
         raise RuleProviderInspectorError("config_invalid", "Активный config.yaml не удалось разобрать.", 409) from exc
     return parsed if isinstance(parsed, Mapping) else {}
+
+
+def _display_scalar(value: Any) -> str:
+    text = str(value or "").strip()
+    if " #" in text:
+        text = text.split(" #", 1)[0].rstrip()
+    if len(text) >= 2 and text[:1] == text[-1:] and text[:1] in {"'", '"'}:
+        quote = text[:1]
+        text = text[1:-1]
+        if quote == "'":
+            text = text.replace("''", "'")
+    return text.strip()
+
+
+def _flow_parts(value: str) -> list[str]:
+    """Split a small YAML flow collection without implementing YAML itself."""
+
+    parts: list[str] = []
+    start = 0
+    depth = 0
+    quote = ""
+    escaped = False
+    for index, char in enumerate(value):
+        if quote:
+            if quote == '"' and char == "\\" and not escaped:
+                escaped = True
+                continue
+            if char == quote and not escaped:
+                quote = ""
+            escaped = False
+            continue
+        if char in {"'", '"'}:
+            quote = char
+        elif char in "[{(":
+            depth += 1
+        elif char in "]})":
+            depth = max(0, depth - 1)
+        elif char == "," and depth == 0:
+            parts.append(value[start:index].strip())
+            start = index + 1
+    parts.append(value[start:].strip())
+    return [part for part in parts if part]
+
+
+def _flow_mapping(value: str) -> dict[str, Any]:
+    text = str(value or "").strip()
+    if text.startswith("{") and text.endswith("}"):
+        text = text[1:-1]
+    result: dict[str, Any] = {}
+    for part in _flow_parts(text):
+        key, separator, raw_value = part.partition(":")
+        if not separator:
+            continue
+        key = _display_scalar(key)
+        raw_value = raw_value.strip()
+        if raw_value.startswith("[") and raw_value.endswith("]"):
+            result[key] = [_display_scalar(item) for item in _flow_parts(raw_value[1:-1])]
+        else:
+            result[key] = _display_scalar(raw_value)
+    return result
+
+
+def _fallback_rule_provider_specs(text: str) -> dict[str, dict[str, Any]]:
+    """Extract rule-provider specs when PyYAML is absent on small routers.
+
+    This intentionally understands only the bounded scalar/flow subset used by
+    Mihomo provider configuration.  It resolves local merge anchors, but never
+    interprets arbitrary YAML tags or constructs objects.
+    """
+
+    lines = str(text or "").replace("\r\n", "\n").replace("\r", "\n").splitlines()
+    anchors: dict[str, dict[str, Any]] = {}
+    anchor_pattern = re.compile(r"&([A-Za-z0-9_.-]+)\s*(\{.*\})\s*(?:#.*)?$")
+    for line in lines:
+        match = anchor_pattern.search(line)
+        if match:
+            anchors[match.group(1)] = _flow_mapping(match.group(2))
+
+    providers: dict[str, dict[str, Any]] = {}
+    in_section = False
+    section_indent = -1
+    current: dict[str, Any] | None = None
+    current_indent = -1
+    payload_indent = -1
+    for raw_line in lines:
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(raw_line) - len(raw_line.lstrip(" "))
+        if not in_section:
+            if re.match(r"^\s*rule-providers\s*:\s*(?:#.*)?$", raw_line):
+                in_section = True
+                section_indent = indent
+            continue
+        if indent <= section_indent:
+            break
+
+        provider_match = re.match(r"^([^:#][^:]*)\s*:\s*(.*)$", stripped)
+        if indent == section_indent + 2 and provider_match:
+            name = _display_scalar(provider_match.group(1))
+            remainder = provider_match.group(2).strip()
+            current = {}
+            current_indent = indent
+            payload_indent = -1
+            if remainder.startswith("{"):
+                flow = _flow_mapping(remainder.split(" #", 1)[0])
+                merge = str(flow.pop("<<", ""))
+                if merge.startswith("*"):
+                    current.update(anchors.get(merge[1:], {}))
+                current.update(flow)
+            providers[name] = current
+            continue
+        if current is None or indent <= current_indent:
+            continue
+        if payload_indent >= 0 and indent > payload_indent and stripped.startswith("-"):
+            current.setdefault("payload", []).append(_display_scalar(stripped[1:]))
+            continue
+        pair = re.match(r"^([A-Za-z0-9_<>=.-]+)\s*:\s*(.*?)\s*$", stripped)
+        if not pair:
+            continue
+        key, raw_value = pair.group(1), pair.group(2)
+        raw_value = raw_value.split(" #", 1)[0].strip()
+        if key == "payload" and not raw_value:
+            current["payload"] = []
+            payload_indent = indent
+            continue
+        if key == "<<" and raw_value.startswith("*"):
+            merged = dict(anchors.get(raw_value[1:], {}))
+            merged.update(current)
+            current.clear()
+            current.update(merged)
+        elif raw_value.startswith("[") and raw_value.endswith("]"):
+            current[key] = [_display_scalar(item) for item in _flow_parts(raw_value[1:-1])]
+        else:
+            current[key] = _display_scalar(raw_value)
+    return providers
 
 
 def _safe_load_yaml(text: str) -> Any:

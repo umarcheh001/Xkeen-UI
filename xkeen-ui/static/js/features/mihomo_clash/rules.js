@@ -166,12 +166,12 @@ function renderProviders() {
     const state = provider.kind === 'proxy'
       ? `${provider.alive ?? 0} доступны · ${provider.failed ?? 0} недоступны`
       : `${provider.count || 0} правил · ${provider.behavior || provider.format || 'rule set'}`;
-    return `<article class="xk-mihomo-provider" data-provider-key="${escapeHtml(key)}">
+    return `<article class="xk-mihomo-provider${provider.kind === 'rule' ? ' is-inspectable' : ''}" data-provider-key="${escapeHtml(key)}" ${provider.kind === 'rule' ? 'tabindex="0" role="button" aria-label="Открыть содержимое rule-provider"' : ''}>
       <div class="xk-mihomo-provider-copy"><strong>${escapeHtml(provider.name)}</strong><small>${provider.kind === 'proxy' ? 'Proxy provider' : 'Rule provider'} · ${escapeHtml(provider.vehicle_type || provider.type || '—')}</small></div>
       <div class="xk-mihomo-provider-state"><strong>${escapeHtml(state)}</strong><small>${escapeHtml(formatRelativeTime(provider.updated_at))}</small></div>
       ${providerSubscriptionHtml(provider)}
       <div class="xk-mihomo-provider-actions">
-        ${provider.kind === 'rule' ? `<button type="button" class="btn-secondary btn-icon" data-mihomo-provider-inspect aria-label="Просмотреть rule-provider ${escapeHtml(provider.name)}">${iconHtml('preview')}</button>` : ''}
+        ${provider.kind === 'rule' ? `<button type="button" class="btn-secondary btn-icon" data-mihomo-provider-inspect title="Просмотреть содержимое" aria-label="Просмотреть содержимое rule-provider ${escapeHtml(provider.name)}">${iconHtml('preview')}</button>` : ''}
         ${provider.healthcheck ? `<button type="button" class="btn-secondary btn-icon" data-mihomo-provider-healthcheck aria-label="Проверить provider ${escapeHtml(provider.name)}" ${pending || !healthcheckEnabled ? 'disabled' : ''}>${iconHtml(pending ? 'loading' : 'ping')}</button>` : ''}
         <button type="button" class="btn-secondary btn-icon" data-mihomo-provider-update aria-label="Обновить provider ${escapeHtml(provider.name)}" ${pendingProviders.size || providerBatch?.running || !updateEnabled ? 'disabled' : ''}>${iconHtml(pending ? 'loading' : 'refresh')}</button>
       </div>
@@ -393,6 +393,16 @@ function bind() {
     if (event.target.closest?.('[data-mihomo-provider-inspect]')) { openProviderInspector(provider); return; }
     if (event.target.closest?.('[data-mihomo-provider-update]')) void providerAction(provider, 'update');
     if (event.target.closest?.('[data-mihomo-provider-healthcheck]')) void providerAction(provider, 'healthcheck');
+    if (provider?.kind === 'rule' && !event.target.closest?.('button, select, input, a')) openProviderInspector(provider);
+  });
+  root.addEventListener('keydown', (event) => {
+    if (!['Enter', ' '].includes(event.key)) return;
+    const card = event.target.closest?.('[data-provider-key].is-inspectable');
+    if (!card || event.target.closest?.('button, select, input, a')) return;
+    const provider = providerByKey(card.dataset.providerKey);
+    if (!provider) return;
+    event.preventDefault();
+    openProviderInspector(provider);
   });
 }
 

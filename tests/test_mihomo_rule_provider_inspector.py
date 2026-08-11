@@ -69,6 +69,41 @@ def test_yaml_text_and_default_hashed_http_provider_are_supported(tmp_path: Path
     assert inspect(tmp_path, config, "http-default")["rules"] == ["auto.test"]
 
 
+def test_router_fallback_parser_resolves_rule_anchors_without_pyyaml(tmp_path: Path, monkeypatch):
+    url = "https://example.invalid/akamai.mrs"
+    import hashlib
+
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    provider = rules / hashlib.md5(url.encode()).hexdigest()
+    provider.write_bytes(b"fixture-mrs")
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        "ruleset-anchor:\n"
+        "  a1: &domain { type: http, format: mrs, behavior: domain, interval: 86400 }\n"
+        "  a2: &inline { type: inline, behavior: classical }\n"
+        "rule-providers:\n"
+        f"  akamai@domain: {{ <<: *domain, url: {url} }}\n"
+        "  quic@inline: { <<: *inline, payload: ['AND,((DST-PORT,443),(NETWORK,UDP))'] }\n"
+        "rules:\n  - MATCH,DIRECT\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(inspector_service, "_yaml", None)
+    monkeypatch.setattr(inspector_service, "_parse_mrs", lambda path, behavior, binary, info: ["+.akamai.test"])
+
+    mrs = inspect(tmp_path, config, "akamai@domain")
+    inline = inspect(tmp_path, config, "quic@inline")
+
+    assert mrs["provider"] == {
+        "name": "akamai@domain",
+        "type": "http",
+        "behavior": "domain",
+        "format": "mrs",
+    }
+    assert mrs["rules"] == ["+.akamai.test"]
+    assert inline["rules"] == ["AND,((DST-PORT,443),(NETWORK,UDP))"]
+
+
 def test_symlink_traversal_directory_and_oversized_query_are_rejected(tmp_path: Path):
     outside = tmp_path.parent / "outside-provider.txt"
     outside.write_text("secret.test\n", encoding="utf-8")

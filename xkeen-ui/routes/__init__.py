@@ -58,6 +58,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     from .remotefs.blueprint import create_remotefs_blueprint
     from .fileops import create_fileops_blueprint
     from .storage_usb import create_storage_usb_blueprint
+    from .system_resources import create_system_resources_blueprint
 
     # Keep registration order stable.
     app.register_blueprint(create_utils_blueprint())
@@ -65,6 +66,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     app.register_blueprint(create_ws_support_blueprint())
     app.register_blueprint(create_ws_streams_blueprint())
     app.register_blueprint(create_capabilities_blueprint())
+    app.register_blueprint(create_system_resources_blueprint())
 
     app.register_blueprint(create_xkeen_lists_blueprint(restart_xkeen=ctx.restart_xkeen))
     app.register_blueprint(

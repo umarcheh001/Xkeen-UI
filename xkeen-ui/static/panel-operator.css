@@ -17419,6 +17419,13 @@ body.panel-page .xk-mihomo-rules-table td small { color: var(--op-warning); font
 
 body.panel-page .xk-mihomo-providers-list { display: grid; gap: 6px; padding: 7px; }
 body.panel-page .xk-mihomo-provider { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 8px; padding: 7px; border: 1px solid var(--op-border); border-radius: 5px; background: var(--op-editor); }
+body.panel-page .xk-mihomo-provider.is-inspectable { cursor: pointer; }
+body.panel-page .xk-mihomo-provider.is-inspectable:hover,
+body.panel-page .xk-mihomo-provider.is-inspectable:focus-visible {
+  border-color: var(--op-accent);
+  background: color-mix(in srgb, var(--op-accent) 6%, var(--op-editor));
+  outline: none;
+}
 body.panel-page :is(.xk-mihomo-provider-copy, .xk-mihomo-provider-state) { min-width: 0; }
 body.panel-page :is(.xk-mihomo-provider-copy, .xk-mihomo-provider-state) :is(strong, small) { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 body.panel-page .xk-mihomo-provider-copy strong { color: var(--op-text); font-size: calc(11px * var(--xk-font-scale, 1)); }
@@ -18389,9 +18396,57 @@ body.panel-page .xk-mihomo-provider-rules code {
   white-space: pre-wrap;
 }
 body.panel-page .xk-mihomo-provider-inspector-pager { justify-content: flex-end; border-top: 1px solid var(--op-border); border-bottom: 0; }
+body.panel-page .xk-mihomo-provider-inspector-pager > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 96px;
+  white-space: nowrap;
+}
+body.panel-page .xk-mihomo-provider-inspector-pager > button .xk-action-icon {
+  position: static;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  transform: none;
+}
 body.panel-page .xk-mihomo-provider-actions { display: flex; align-items: center; gap: 4px; }
 @media (max-width: 480px) {
   body.panel-page .xk-mihomo-provider-inspector-toolbar { align-items: stretch; flex-direction: column; }
   body.panel-page .xk-mihomo-provider-inspector-toolbar label { max-width: none; min-width: 0; }
   body.panel-page .xk-mihomo-provider-rules li { grid-template-columns: 40px minmax(0, 1fr); }
+}
+
+/* Lightweight router resource telemetry. */
+body.panel-page .xk-resource-monitor {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--op-control-h);
+  padding: 3px 8px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-control-radius);
+  background: var(--op-surface-2);
+  color: var(--op-text);
+  cursor: pointer;
+}
+body.panel-page .xk-resource-monitor:hover,
+body.panel-page .xk-resource-monitor:focus-visible { border-color: var(--op-border-strong); outline: none; }
+body.panel-page .xk-resource-monitor-item { display: grid; grid-template-columns: auto auto; align-items: center; gap: 2px 5px; min-width: 58px; }
+body.panel-page .xk-resource-monitor-label { color: var(--op-muted); font-size: calc(8px * var(--xk-font-scale, 1)); font-weight: 650; }
+body.panel-page .xk-resource-monitor strong { color: var(--op-data); font: 650 calc(10px * var(--xk-font-scale, 1))/1 var(--op-font-mono); text-align: right; }
+body.panel-page .xk-resource-meter { grid-column: 1 / -1; display: block; width: 100%; height: 2px; overflow: hidden; border-radius: 2px; background: var(--op-border); }
+body.panel-page .xk-resource-meter i { display: block; width: 0; height: 100%; background: var(--op-success); transition: width .25s ease; }
+body.panel-page .xk-resource-monitor[data-cpu-tone="warning"] #xk-resource-cpu-meter,
+body.panel-page .xk-resource-monitor[data-memory-tone="warning"] #xk-resource-memory-meter { background: var(--op-warning); }
+body.panel-page .xk-resource-monitor[data-cpu-tone="danger"] #xk-resource-cpu-meter,
+body.panel-page .xk-resource-monitor[data-memory-tone="danger"] #xk-resource-memory-meter { background: var(--op-danger); }
+body.panel-page .xk-resource-monitor-stale { color: var(--op-warning); font-size: calc(8px * var(--xk-font-scale, 1)); }
+body.panel-page .xk-resource-monitor[data-state="stale"] :is(strong, .xk-resource-meter) { opacity: .55; }
+@media (max-width: 860px) {
+  body.panel-page .xk-resource-monitor { gap: 5px; padding-inline: 6px; }
+  body.panel-page .xk-resource-monitor-item { min-width: 48px; }
+  body.panel-page .xk-resource-monitor-label { display: none; }
 }
