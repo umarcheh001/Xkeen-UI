@@ -168,6 +168,37 @@ def test_proxy_groups_dto_does_not_guess_provider_when_names_collide():
     assert node["provider_ambiguous"] is True
 
 
+def test_proxy_groups_dto_adds_display_safe_transport_details_by_provider():
+    from services.mihomo_clash_dto import build_mihomo_clash_proxy_groups_dto
+
+    dto = build_mihomo_clash_proxy_groups_dto(
+        fixture("proxies.json"),
+        fixture("providers-proxies.json"),
+        {
+            "providers": {
+                "demo-provider": {
+                    "node-b": {
+                        "server": "edge.example.test",
+                        "port": 443,
+                        "network": "xhttp",
+                        "security": "tls",
+                        "host": "cdn.example.test",
+                        "path": "/api/v2/",
+                    }
+                }
+            }
+        },
+    )
+
+    node = next(item for item in dto["groups"][0]["nodes"] if item["name"] == "node-b")
+    assert node["server"] == "edge.example.test"
+    assert node["port"] == 443
+    assert node["network"] == "xhttp"
+    assert node["security"] == "tls"
+    assert node["host"] == "cdn.example.test"
+    assert node["path"] == "/api/v2/"
+
+
 def test_rules_and_providers_dtos_are_bounded_and_drop_raw_source_fields():
     from services.mihomo_clash_dto import (
         build_mihomo_clash_providers_dto,

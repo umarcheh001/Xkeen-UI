@@ -17451,6 +17451,13 @@ body.panel-page .xk-mihomo-logs-workspace {
   background: var(--op-surface);
 }
 
+@media (min-width: 821px) {
+  body.panel-page .xk-mihomo-logs-workspace {
+    height: calc(100dvh - 230px);
+    min-height: 420px;
+  }
+}
+
 body.panel-page .xk-mihomo-logs-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--op-border); background: var(--op-surface-2); }
 body.panel-page .xk-mihomo-logs-head h3 { margin: 0; font-size: calc(13px * var(--xk-font-scale, 1)); }
 body.panel-page .xk-mihomo-logs-head span { color: var(--op-muted); font-size: calc(10px * var(--xk-font-scale, 1)); }
@@ -17458,7 +17465,7 @@ body.panel-page #mihomo-clash-logs-state[data-tone="positive"] { color: var(--op
 body.panel-page #mihomo-clash-logs-state[data-tone="warning"] { color: var(--op-warning); }
 body.panel-page #mihomo-clash-logs-state[data-tone="danger"] { color: var(--op-danger); }
 body.panel-page .xk-mihomo-logs-filters { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--op-border); }
-body.panel-page .xk-mihomo-logs-list { min-height: 0; margin: 0; padding: 0; overflow: auto; background: var(--op-editor); list-style: none; }
+body.panel-page .xk-mihomo-logs-list { min-height: 0; margin: 0; padding: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; background: var(--op-editor); list-style: none; }
 body.panel-page .xk-mihomo-logs-list[hidden] { display: none; }
 body.panel-page .xk-mihomo-logs-list li { display: grid; grid-template-columns: 172px 70px minmax(0, 1fr); gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--op-border); color: var(--op-text); font: calc(10.5px * var(--xk-font-scale, 1))/1.4 "SFMono-Regular", Consolas, monospace; }
 body.panel-page .xk-mihomo-logs-list li time,
@@ -17818,7 +17825,7 @@ body.panel-page .xk-mihomo-group-flag {
 body.panel-page .xk-mihomo-node-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 232px), 1fr));
-  grid-auto-rows: minmax(72px, auto);
+  grid-auto-rows: minmax(82px, auto);
   gap: 8px;
   align-items: stretch;
   align-content: start;
@@ -17837,7 +17844,7 @@ body.panel-page .xk-mihomo-node-row {
   align-self: stretch;
   gap: 5px;
   min-width: 0;
-  min-height: 72px;
+  min-height: 82px;
   height: 100%;
   padding: 7px 8px 7px 9px;
   overflow: hidden;
@@ -17915,10 +17922,30 @@ body.panel-page .xk-mihomo-node-main :is(strong, small) {
 }
 
 body.panel-page .xk-mihomo-node-main strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   color: var(--op-text);
   font-size: calc(10.5px * var(--xk-font-scale, 1));
   font-weight: 620;
   line-height: 1.2;
+}
+
+body.panel-page .xk-mihomo-node-main strong > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page .xk-mihomo-node-country {
+  width: 20px;
+  height: 14px;
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--op-text) 28%, transparent);
+  border-radius: 3px;
+  box-shadow: none;
 }
 
 body.panel-page .xk-mihomo-node-main strong .xk-action-icon {
@@ -17934,6 +17961,13 @@ body.panel-page .xk-mihomo-node-main small {
   color: var(--op-data-muted);
   font-size: calc(9.5px * var(--xk-font-scale, 1));
   line-height: 1.2;
+}
+
+body.panel-page .xk-mihomo-node-main .xk-mihomo-node-endpoint {
+  color: var(--op-data-faint);
+  font-size: calc(9.5px * var(--xk-font-scale, 1));
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 body.panel-page .xk-mihomo-node-probe {

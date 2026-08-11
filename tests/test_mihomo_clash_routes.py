@@ -6,6 +6,7 @@ from pathlib import Path
 from flask import Flask
 
 from routes.mihomo_clash import create_mihomo_clash_blueprint
+from routes.mihomo_clash import _load_proxy_transport_index
 from services.mihomo_clash_client import MihomoClashClientError, MihomoClashJSONResponse
 from services.mihomo_clash_guard import MihomoClashActionRejected
 from services.mihomo_clash_target import (
@@ -265,6 +266,45 @@ def groups_payload(now: str = "node-a", *, group_type: str = "Selector", fixed: 
             "node-b": {"name": "node-b", "type": "Trojan", "alive": True},
         }
     }
+
+
+def test_proxy_transport_index_reads_local_and_provider_cards(tmp_path: Path):
+    provider_dir = tmp_path / "providers"
+    provider_dir.mkdir()
+    (provider_dir / "demo.yaml").write_text(
+        "proxies:\n"
+        "  - name: provider-node\n"
+        "    type: vless\n"
+        "    server: 203.0.113.20\n"
+        "    port: 443\n"
+        "    network: xhttp\n"
+        "    tls: true\n"
+        "    servername: cdn.example.test\n"
+        "    xhttp-opts:\n"
+        "      path: /api/v2/\n"
+        "      host: cdn.example.test\n",
+        encoding="utf-8",
+    )
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        "proxies:\n"
+        "  - name: local-node\n"
+        "    type: trojan\n"
+        "    server: 198.51.100.10\n"
+        "    port: 8443\n"
+        "    network: ws\n"
+        "    ws-opts: {path: /ws}\n"
+        "proxy-providers:\n"
+        "  demo: {type: file, path: providers/demo.yaml}\n",
+        encoding="utf-8",
+    )
+
+    details = _load_proxy_transport_index(str(config), str(tmp_path))
+    assert details["local"]["local-node"]["server"] == "198.51.100.10"
+    assert details["local"]["local-node"]["path"] == "/ws"
+    assert details["providers"]["demo"]["provider-node"]["network"] == "xhttp"
+    assert details["providers"]["demo"]["provider-node"]["security"] == "tls"
+    assert details["providers"]["demo"]["provider-node"]["host"] == "cdn.example.test"
 
 
 def test_proxy_groups_route_returns_versioned_normalized_payload():

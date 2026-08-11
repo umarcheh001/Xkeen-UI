@@ -77,6 +77,10 @@ function render() {
   const list = byId('mihomo-clash-logs-list');
   const empty = byId('mihomo-clash-logs-empty');
   if (!list || !empty) return;
+  const previousScrollTop = list.scrollTop;
+  const followTail = list.hidden
+    || list.scrollHeight <= list.clientHeight
+    || list.scrollHeight - list.clientHeight - list.scrollTop <= 24;
   const visible = filteredRows();
   list.innerHTML = visible.map((row) => {
     const fields = Object.entries(row.fields || {})
@@ -90,6 +94,9 @@ function render() {
   }).join('');
   list.hidden = visible.length === 0;
   empty.hidden = visible.length > 0;
+  if (visible.length) {
+    list.scrollTop = followTail ? list.scrollHeight : previousScrollTop;
+  }
   empty.textContent = rows.length && !visible.length
     ? 'Записи по текущему фильтру не найдены.'
     : 'Новые записи появятся здесь в реальном времени.';

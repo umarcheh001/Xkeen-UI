@@ -369,7 +369,7 @@
       "tabler_asset": "chevron-down",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L225",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L306",
           "control_type": "runtime-action",
           "accessible_label": "Раскрыть"
         },
@@ -1806,7 +1806,7 @@
           "accessible_label": "Загрузка"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L167",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L242",
           "control_type": "runtime-action",
           "accessible_label": "Загрузка"
         },
@@ -1857,17 +1857,17 @@
       "tabler_asset": "lock",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L191",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L271",
           "control_type": "runtime-action",
           "accessible_label": "Ограничить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L218",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L299",
           "control_type": "runtime-action",
           "accessible_label": "Ограничить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L234",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L315",
           "control_type": "runtime-action",
           "accessible_label": "Ограничить"
         },
@@ -2148,7 +2148,7 @@
       "tabler_asset": "stopwatch",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L236",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L317",
           "control_type": "runtime-action",
           "accessible_label": "Проверить задержку"
         },
@@ -2826,7 +2826,7 @@
       "tabler_asset": "server-off",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L170",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L245",
           "control_type": "runtime-action",
           "accessible_label": "server-off"
         }

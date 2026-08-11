@@ -256,11 +256,33 @@ test('structured logs use a full workspace tab, one on-demand socket, ring buffe
   await expect(page.locator('#mihomo-clash-logs-list')).not.toContainText('fixture-0');
   await expect(page.locator('#mihomo-clash-logs-list')).toContainText('fixture-504');
   await expect(page.locator('#mihomo-clash-logs-list li').last().locator('.xk-mihomo-device-name')).toHaveText('Ноутбук');
+  const logLayout = await page.locator('#mihomo-clash-logs').evaluate((workspace) => {
+    const list = workspace.querySelector('#mihomo-clash-logs-list');
+    return {
+      workspaceHeight: workspace.getBoundingClientRect().height,
+      viewportHeight: window.innerHeight,
+      overflowY: getComputedStyle(list).overflowY,
+      scrollable: list.scrollHeight > list.clientHeight,
+      followsTail: Math.abs(list.scrollHeight - list.clientHeight - list.scrollTop) <= 1,
+    };
+  });
+  expect(logLayout.workspaceHeight).toBeCloseTo(Math.max(420, logLayout.viewportHeight - 230), 0);
+  expect(logLayout.overflowY).toBe('auto');
+  expect(logLayout.scrollable).toBe(true);
+  expect(logLayout.followsTail).toBe(true);
+
+  await page.locator('#mihomo-clash-logs-list').evaluate((list) => { list.scrollTop = 0; });
+  await page.evaluate(() => window.__pr9LogSockets[0].emit({
+    type: 'mihomo-clash-logs', schema_version: 1, state: 'live', sequence: 506,
+    payload: { sequence: 506, time: 'after-scroll', level: 'info', message: 'keep-position', fields: {} },
+  }));
+  await expect(page.locator('#mihomo-clash-logs-list')).toContainText('keep-position');
+  await expect.poll(() => page.locator('#mihomo-clash-logs-list').evaluate((list) => list.scrollTop)).toBe(0);
 
   await page.locator('#mihomo-clash-logs-pause').click();
   await page.evaluate(() => window.__pr9LogSockets[0].emit({
-    type: 'mihomo-clash-logs', schema_version: 1, state: 'live', sequence: 506,
-    payload: { sequence: 506, time: 'paused', level: 'error', message: 'while-paused', fields: {} },
+    type: 'mihomo-clash-logs', schema_version: 1, state: 'live', sequence: 507,
+    payload: { sequence: 507, time: 'paused', level: 'error', message: 'while-paused', fields: {} },
   }));
   await expect(page.locator('#mihomo-clash-logs-list')).not.toContainText('while-paused');
   await page.locator('#mihomo-clash-logs-pause').click();

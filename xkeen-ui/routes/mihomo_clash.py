@@ -31,6 +31,11 @@ from services.mihomo_clash_target import (
     discover_mihomo_clash_target,
 )
 
+try:
+    import yaml as _yaml
+except Exception:  # pragma: no cover - optional on very small router builds
+    _yaml = None
+
 
 DiscoveryFactory = Callable[[str, str], MihomoClashDiscovery]
 ClientFactory = Callable[[Any], MihomoClashClient]
@@ -40,6 +45,7 @@ MAX_ACTION_NAME_CHARS = 256
 MAX_AFFECTED_DISCONNECTS = 24
 MIHOMO_PROXY_UNFIX_MIN_VERSION = (1, 18, 9)
 AUTOMATIC_GROUP_TYPES = {"urltest", "fallback", "smart"}
+MAX_PROXY_DETAIL_CONFIG_BYTES = 4 * 1024 * 1024
 AuditLogger = Callable[..., Any]
 ActionGuard = MihomoClashActionGuard
 
@@ -204,6 +210,83 @@ def _safe_client_error(exc: MihomoClashClientError):
         ok=False,
         **exc.public_dict(),
     )
+
+
+def _proxy_transport_details(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, Mapping):
+        return {}
+    network = str(raw.get("network") or "").strip()
+    security = str(raw.get("security") or "").strip()
+    tls = raw.get("tls")
+    if not security and isinstance(tls, bool) and tls:
+        security = "tls"
+    if not security and str(tls or "").strip().lower() in {"tls", "true"}:
+        security = "tls"
+    options = raw.get(f"{network}-opts") if network else None
+    options = options if isinstance(options, Mapping) else {}
+    headers = options.get("headers") if isinstance(options.get("headers"), Mapping) else {}
+    return {
+        "server": raw.get("server"),
+        "port": raw.get("port"),
+        "network": network,
+        "security": security,
+        "sni": raw.get("servername") or raw.get("sni") or raw.get("server-name"),
+        "host": options.get("host") or headers.get("Host") or headers.get("host"),
+        "path": options.get("path"),
+        "flow": raw.get("flow"),
+    }
+
+
+def _load_proxy_transport_index(config_file: str, mihomo_root: str) -> dict[str, Any]:
+    """Read only display-safe proxy fields from the active config/provider cache."""
+    if _yaml is None:
+        return {}
+    try:
+        root_path = Path(mihomo_root).expanduser().resolve(strict=True)
+        config_path = Path(config_file).expanduser().resolve(strict=True)
+        config_path.relative_to(root_path)
+        if config_path.stat().st_size > MAX_PROXY_DETAIL_CONFIG_BYTES:
+            return {}
+        config = _yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}
+    if not isinstance(config, Mapping):
+        return {}
+
+    local: dict[str, Any] = {}
+    for raw in config.get("proxies") or []:
+        if isinstance(raw, Mapping) and str(raw.get("name") or "").strip():
+            local[str(raw.get("name")).strip()] = _proxy_transport_details(raw)
+
+    providers: dict[str, Any] = {}
+    configured = config.get("proxy-providers")
+    if isinstance(configured, Mapping):
+        for provider_name, spec in configured.items():
+            if not isinstance(spec, Mapping):
+                continue
+            configured_path = str(spec.get("path") or "").strip()
+            if not configured_path:
+                continue
+            try:
+                provider_path = Path(configured_path).expanduser()
+                if not provider_path.is_absolute():
+                    provider_path = root_path / provider_path
+                provider_path = provider_path.resolve(strict=True)
+                provider_path.relative_to(root_path)
+                if provider_path.stat().st_size > MAX_PROXY_DETAIL_CONFIG_BYTES:
+                    continue
+                content = _yaml.safe_load(provider_path.read_text(encoding="utf-8")) or {}
+                rows = content.get("proxies") if isinstance(content, Mapping) else None
+                if not isinstance(rows, list):
+                    continue
+                providers[str(provider_name)] = {
+                    str(raw.get("name")).strip(): _proxy_transport_details(raw)
+                    for raw in rows
+                    if isinstance(raw, Mapping) and str(raw.get("name") or "").strip()
+                }
+            except Exception:
+                continue
+    return {"local": local, "providers": providers}
 
 
 def _read_action_body() -> Mapping[str, Any] | None:
@@ -387,7 +470,8 @@ def create_mihomo_clash_blueprint(
                 code="mihomo_clash_proxy_groups_failed",
             )
 
-        payload = build_mihomo_clash_proxy_groups_dto(proxies.payload, providers.payload)
+        details = _load_proxy_transport_index(mihomo_config_file, root)
+        payload = build_mihomo_clash_proxy_groups_dto(proxies.payload, providers.payload, details)
         payload["ok"] = True
         payload["capabilities"] = _capabilities(
             status=True,

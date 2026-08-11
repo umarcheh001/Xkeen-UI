@@ -151,6 +151,81 @@ function providerCopy(node) {
   return 'local';
 }
 
+const NODE_COUNTRY_NAMES = Object.freeze({
+  AE: 'United Arab Emirates', AU: 'Australia', BR: 'Brazil', CA: 'Canada', CH: 'Switzerland',
+  CN: 'China', CZ: 'Czechia', DE: 'Germany', ES: 'Spain', FI: 'Finland', FR: 'France',
+  GB: 'United Kingdom', HK: 'Hong Kong', ID: 'Indonesia', IL: 'Israel', IN: 'India',
+  IT: 'Italy', JP: 'Japan', KR: 'South Korea', KZ: 'Kazakhstan', LV: 'Latvia',
+  MY: 'Malaysia', NL: 'Netherlands', NO: 'Norway', PL: 'Poland', RU: 'Russia',
+  SE: 'Sweden', SG: 'Singapore', TH: 'Thailand', TR: 'Turkey', TW: 'Taiwan',
+  UA: 'Ukraine', US: 'United States', VN: 'Vietnam',
+});
+
+const NODE_COUNTRY_RULES = Object.freeze([
+  [/\b(HONG\s*KONG|HKG)\b/i, 'HK'], [/\b(SINGAPORE)\b/i, 'SG'],
+  [/\b(JAPAN|TOKYO|OSAKA)\b/i, 'JP'], [/\b(KOREA|SEOUL)\b/i, 'KR'],
+  [/\b(UNITED\s*STATES|USA|NEW\s*YORK|LOS\s*ANGELES|CHICAGO)\b/i, 'US'],
+  [/\b(UNITED\s*KINGDOM|GREAT\s*BRITAIN|LONDON)\b/i, 'GB'],
+  [/\b(GERMANY|DEUTSCHLAND|BERLIN|FRANKFURT)\b/i, 'DE'],
+  [/\b(SWITZERLAND|SWISS|ZURICH|ZÜRICH|GENEVA)\b/i, 'CH'],
+  [/\b(CZECHIA|CZECH\s*REPUBLIC|PRAGUE|PRAHA)\b/i, 'CZ'],
+  [/\b(LATVIA|RIGA)\b/i, 'LV'], [/\b(SWEDEN|STOCKHOLM)\b/i, 'SE'],
+  [/\b(NETHERLANDS|AMSTERDAM|HOLLAND)\b/i, 'NL'], [/\b(FRANCE|PARIS)\b/i, 'FR'],
+  [/\b(SPAIN|MADRID)\b/i, 'ES'], [/\b(INDIA|MUMBAI|DELHI)\b/i, 'IN'],
+  [/\b(TURKEY|ISTANBUL)\b/i, 'TR'], [/\b(KAZAKHSTAN|ALMATY|ASTANA)\b/i, 'KZ'],
+  [/\b(ISRAEL|TEL\s*AVIV)\b/i, 'IL'], [/\b(RUSSIA|MOSCOW|SAINT\s*PETERSBURG)\b/i, 'RU'],
+  [/\b(ITALY|MILAN|ROME)\b/i, 'IT'], [/\b(CANADA|TORONTO|MONTREAL)\b/i, 'CA'],
+  [/\b(AUSTRALIA|SYDNEY|MELBOURNE)\b/i, 'AU'], [/\b(FINLAND|HELSINKI)\b/i, 'FI'],
+  [/\b(NORWAY|OSLO)\b/i, 'NO'], [/\b(POLAND|WARSAW)\b/i, 'PL'],
+  [/\b(UKRAINE|KYIV|KIEV)\b/i, 'UA'], [/\b(BRAZIL|SAO\s*PAULO)\b/i, 'BR'],
+  [/\b(CHINA|BEIJING|SHANGHAI)\b/i, 'CN'], [/\b(TAIWAN|TAIPEI)\b/i, 'TW'],
+  [/\b(VIETNAM|HANOI)\b/i, 'VN'], [/\b(THAILAND|BANGKOK)\b/i, 'TH'],
+  [/\b(MALAYSIA|KUALA\s*LUMPUR)\b/i, 'MY'], [/\b(INDONESIA|JAKARTA)\b/i, 'ID'],
+  [/\b(UAE|DUBAI|ABU\s*DHABI)\b/i, 'AE'],
+]);
+
+function nodeCountryCode(name) {
+  const value = String(name || '');
+  const indicators = Array.from(value);
+  for (let index = 0; index < indicators.length - 1; index += 1) {
+    const first = indicators[index].codePointAt(0);
+    const second = indicators[index + 1].codePointAt(0);
+    if (first >= 0x1F1E6 && first <= 0x1F1FF && second >= 0x1F1E6 && second <= 0x1F1FF) {
+      const code = String.fromCharCode(65 + first - 0x1F1E6, 65 + second - 0x1F1E6);
+      if (NODE_COUNTRY_NAMES[code]) return code;
+    }
+  }
+  const normalized = value.replace(/[_.\/-]+/g, ' ');
+  const token = normalized.match(/^(?:\s*)([A-Z]{2,3})(?=\s|$)/)?.[1];
+  const aliases = { UK: 'GB', UAE: 'AE', USA: 'US', SH: 'CH' };
+  const tokenCode = aliases[token] || token;
+  if (NODE_COUNTRY_NAMES[tokenCode]) return tokenCode;
+  return NODE_COUNTRY_RULES.find(([rule]) => rule.test(normalized))?.[1] || '';
+}
+
+function nodeDisplayName(node, countryCode) {
+  let value = String(node.name || '').trim();
+  if (!countryCode) return value;
+  // A provider-supplied emoji is replaced by our rectangular flag, rather
+  // than being rendered beside it as a duplicate country marker.
+  value = value.replace(/^(?:(?:[\u{1F1E6}-\u{1F1FF}]{2})|\uFE0F|\u200D|\s)+/gu, '').trim();
+  const aliases = countryCode === 'GB' ? 'GB|UK' : countryCode;
+  return value.replace(new RegExp(`^(?:${aliases})(?=$|[\\s._:-])(?:[\\s._:-]+)?`, 'i'), '').trim() || String(node.name || '').trim();
+}
+
+function nodeFlagHtml(countryCode) {
+  if (!countryCode) return '';
+  const label = NODE_COUNTRY_NAMES[countryCode] || countryCode;
+  return `<span class="xk-sub-node-country xk-mihomo-node-country" data-country="${countryCode}" role="img" aria-label="${escapeHtml(label)}" data-tooltip="${escapeHtml(label)}"></span>`;
+}
+
+function nodeConnectionSummary(node) {
+  const endpoint = [node.server, node.port].filter((value) => value !== '' && value != null).join(':');
+  const route = [node.path ? `path=${node.path}` : '', node.host ? `host=${node.host}` : ''].filter(Boolean).join(' · ');
+  const extra = [node.sni ? `SNI=${node.sni}` : '', node.flow ? `flow=${node.flow}` : ''].filter(Boolean).join(' · ');
+  return [endpoint, route, extra].filter(Boolean).join(' · ');
+}
+
 function renderNodeProbe(node) {
   const runValue = nodeDelayResult(node);
   const delay = runValue && Number.isFinite(runValue.delay) ? runValue.delay : node.delay_ms;
@@ -181,15 +256,21 @@ function renderNode(group, node) {
   const alive = nodeDelayResult(node)?.state === 'done' || node.alive === true
     ? 'доступен'
     : (node.alive === false ? 'недоступен' : 'нет данных');
-  const meta = [node.type || 'unknown', providerCopy(node), node.udp === true ? 'UDP' : ''].filter(Boolean).join(' · ');
+  const countryCode = nodeCountryCode(node.name);
+  const displayName = nodeDisplayName(node, countryCode);
+  const protocol = [node.type || 'unknown', node.network, node.security].filter(Boolean).join(' · ');
+  const meta = [protocol, providerCopy(node), node.udp === true ? 'UDP' : ''].filter(Boolean).join(' · ');
+  const endpoint = [node.server, node.port].filter((value) => value !== '' && value != null).join(':');
+  const connectionSummary = nodeConnectionSummary(node);
   return `
     <li class="xk-mihomo-node-row${selected ? ' is-current' : ''}${fixed ? ' is-fixed' : ''}${checking ? ' is-checking' : ''}" data-node-key="${escapeHtml(encodeURIComponent(delayKey(node.name, node.provider)))}" data-node-name="${escapeHtml(node.name)}" data-alive="${escapeHtml(alive)}">
       <button type="button" class="xk-mihomo-node-select" data-mihomo-group-select="1"
         data-group="${escapeHtml(group.name)}" data-node="${escapeHtml(node.name)}"
         aria-pressed="${selected ? 'true' : 'false'}" ${!selectable || selected || selectPending || selection ? 'disabled' : ''}>
-        <span class="xk-mihomo-node-main">
-          <strong>${fixed ? iconHtml('lock') : ''}${escapeHtml(node.name)}</strong>
+        <span class="xk-mihomo-node-main" ${connectionSummary ? `data-tooltip="${escapeHtml(connectionSummary)}"` : ''}>
+          <strong>${fixed ? iconHtml('lock') : ''}${nodeFlagHtml(countryCode)}<span>${escapeHtml(displayName)}</span></strong>
           <small>${escapeHtml(meta)}</small>
+          ${endpoint ? `<small class="xk-mihomo-node-endpoint">${escapeHtml(endpoint)}</small>` : ''}
         </span>
       </button>
       ${renderNodeProbe(node)}

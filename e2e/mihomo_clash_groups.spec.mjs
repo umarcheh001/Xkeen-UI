@@ -28,7 +28,7 @@ function groupsPayload(now = 'node-a', fixed = '', includeReliabilityFixture = f
         hidden: false,
         selectable: true,
         nodes: [
-          { name: 'node-a', type: 'VLESS', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: 82 },
+          { name: 'node-a', type: 'VLESS', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: 82, server: 'edge.example.test', port: 443, network: 'xhttp', security: 'tls', host: 'cdn.example.test', path: '/api/v2/' },
           { name: 'node-b', type: 'Trojan', alive: false, udp: true, provider: 'provider-one', provider_candidates: ['provider-one'], delay_ms: null },
           { name: 'DIRECT', type: 'Direct', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: null },
         ],
@@ -121,6 +121,12 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
 
   await page.locator('[data-group-name="AUTO"] [data-mihomo-group-toggle]').click();
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test')).toBeVisible();
+  await expect(page.locator('[data-node-name="node-a"]')).toContainText('VLESS · xhttp · tls');
+  await expect(page.locator('[data-node-name="node-a"]')).toContainText('edge.example.test:443');
+  await expect(page.locator('[data-node-name="node-a"] .xk-mihomo-node-main')).toHaveAttribute(
+    'data-tooltip',
+    'edge.example.test:443 · path=/api/v2/ · host=cdn.example.test',
+  );
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-node-row').evaluateAll((nodes) => {
     nodes.forEach((node, index) => { node.dataset.renderIdentity = String(index); });
   });
@@ -169,6 +175,29 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test')).toHaveAttribute('data-mihomo-delay-testing', 'true');
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-delay-spinner')).toBeVisible();
   await expect(page.locator('#mihomo-clash-test-visible')).not.toHaveAttribute('data-mihomo-delay-testing', 'true');
+});
+
+test('server cards replace provider emoji with one rectangular country flag', async ({ page }) => {
+  const data = groupsPayload('🇩🇪 DE Germany.01');
+  data.groups[0].now = '🇩🇪 DE Germany.01';
+  data.groups[0].nodes = [{
+    name: '🇩🇪 DE Germany.01', type: 'VLESS', alive: true, udp: true,
+    provider: 'provider-one', provider_candidates: ['provider-one'], delay_ms: 40,
+  }];
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: data }));
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-country' });
+  });
+  await page.locator('[data-group-name="AUTO"] [data-mihomo-group-toggle]').click();
+  const card = page.locator('[data-node-name="🇩🇪 DE Germany.01"]');
+  await expect(card.locator('.xk-mihomo-node-country[data-country="DE"]')).toHaveCount(1);
+  await expect(card.locator('.xk-mihomo-node-main strong')).toContainText('Germany.01');
+  await expect(card.locator('.xk-mihomo-node-main strong')).not.toContainText('🇩🇪');
+  await expect(card.locator('.xk-mihomo-node-main strong')).not.toContainText('DE Germany');
 });
 
 
@@ -259,7 +288,7 @@ test('Mihomo group disclosures keep the workspace compact and keyboard accessibl
     minHeight: getComputedStyle(row).minHeight,
     hasSelectionDot: !!row.querySelector('.xk-mihomo-node-marker'),
   }));
-  expect(nodeCard).toEqual({ radius: '6px', minHeight: '72px', hasSelectionDot: false });
+  expect(nodeCard).toEqual({ radius: '6px', minHeight: '82px', hasSelectionDot: false });
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-probe')).toHaveCount(1);
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-probe')).not.toHaveAttribute('data-tooltip');
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-unavailable use')).toHaveAttribute('href', /#xk-server-off$/);

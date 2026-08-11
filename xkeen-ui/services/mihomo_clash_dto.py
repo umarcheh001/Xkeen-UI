@@ -238,12 +238,14 @@ def _node_dto(
     name: str,
     raw: Mapping[str, Any],
     provider_hints: Sequence[str] = (),
+    proxy_details: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     explicit_provider = _text(raw.get("provider-name"), 256)
     providers = _string_list(provider_hints, limit=32, item_limit=256)
     if explicit_provider and explicit_provider not in providers:
         providers.insert(0, explicit_provider)
     provider = explicit_provider or (providers[0] if len(providers) == 1 else "")
+    details = _mapping(proxy_details)
     return {
         "name": _text(raw.get("name") or name, 256),
         "type": _text(raw.get("type"), 64),
@@ -254,12 +256,21 @@ def _node_dto(
         "provider_candidates": providers,
         "provider_ambiguous": not explicit_provider and len(providers) > 1,
         "delay_ms": _last_delay(raw),
+        "server": _text(details.get("server"), 256),
+        "port": _optional_nonnegative_int(details.get("port")),
+        "network": _text(details.get("network"), 64),
+        "security": _text(details.get("security"), 64),
+        "sni": _text(details.get("sni"), 256),
+        "host": _text(details.get("host"), 256),
+        "path": _text(details.get("path"), 512),
+        "flow": _text(details.get("flow"), 128),
     }
 
 
 def build_mihomo_clash_proxy_groups_dto(
     proxies_payload: Any,
     providers_payload: Any = None,
+    proxy_details: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Normalize groups and provider summaries while retaining operator order."""
 
@@ -292,7 +303,15 @@ def build_mihomo_clash_proxy_groups_dto(
         nodes: list[dict[str, Any]] = []
         for node_name in node_names:
             raw_node = _mapping(proxies.get(node_name)) or provider_nodes.get(node_name, {})
-            nodes.append(_node_dto(node_name, raw_node, membership.get(node_name, [])))
+            provider_hints = membership.get(node_name, [])
+            explicit_provider = _text(raw_node.get("provider-name"), 256)
+            detail_key = explicit_provider or (provider_hints[0] if len(provider_hints) == 1 else "")
+            detail = _mapping(_mapping(proxy_details).get("providers")).get(detail_key, {})
+            if isinstance(detail, Mapping):
+                detail = _mapping(detail).get(node_name, {})
+            if not detail:
+                detail = _mapping(_mapping(proxy_details).get("local")).get(node_name, {})
+            nodes.append(_node_dto(node_name, raw_node, provider_hints, _mapping(detail)))
 
         group_type = _text(group.get("type"), 64)
         selectable = group_type.lower() in {"selector", "select", "urltest", "fallback", "smart"}
