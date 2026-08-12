@@ -12,6 +12,22 @@ from typing import List
 
 
 _META_KEY_RE = re.compile(r"[^A-Za-z0-9_.-]+")
+_RESTART_SOURCE_RE = re.compile(
+    r"^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s+source=([^\s]+)",
+    re.IGNORECASE,
+)
+_HIDDEN_OPERATION_SOURCES = frozenset({"mihomo-clash"})
+
+
+def _operation_source(line: object) -> str:
+    match = _RESTART_SOURCE_RE.match(str(line or "").strip())
+    if not match:
+        return ""
+    return match.group(1).strip().lower()
+
+
+def _is_hidden_operation_source(source: object) -> bool:
+    return str(source or "").strip().lower() in _HIDDEN_OPERATION_SOURCES
 
 
 def _format_meta_key(key: object) -> str:
@@ -42,6 +58,11 @@ def _format_restart_meta(meta: dict[str, object]) -> str:
 
 def append_restart_log(log_file: str, ok: bool, source: str = "api", **meta: object) -> None:
     """Append a single line about restart result to the restart log."""
+    # Clash API reads, health checks and delay probes are high-frequency
+    # diagnostics, not Xkeen lifecycle operations.  Keep them out of this
+    # journal; they have dedicated Connections/Logs screens in the panel.
+    if _is_hidden_operation_source(source):
+        return
     line = "[{ts}] source={src} result={res}{meta}\n".format(
         ts=time.strftime("%Y-%m-%d %H:%M:%S"),
         src=_format_meta_value(source or "api") or "api",
@@ -103,7 +124,15 @@ def read_restart_log(log_file: str, limit: int = 100) -> List[str]:
     try:
         with open(log_file, "r") as f:
             lines = f.readlines()
-        return lines[-limit:]
+        # Also hide already persisted Clash audit noise after an upgrade.  The
+        # limit applies to visible operations so useful older entries are not
+        # displaced by hundreds of hidden probe records.
+        visible = [
+            line
+            for line in lines
+            if not _is_hidden_operation_source(_operation_source(line))
+        ]
+        return visible[-limit:]
     except Exception:
         return []
 

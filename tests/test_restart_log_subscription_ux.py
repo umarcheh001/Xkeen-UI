@@ -116,6 +116,48 @@ def test_append_restart_log_swallows_broadcast_failures(monkeypatch, tmp_path):
     assert log_file.read_text(encoding="utf-8").startswith("[")
 
 
+def test_restart_log_excludes_mihomo_clash_audit_noise(monkeypatch, tmp_path):
+    from services import restart_log
+    from services import events as events_module
+
+    captured: list[dict] = []
+    monkeypatch.setattr(events_module, "broadcast_event", lambda payload: captured.append(dict(payload)))
+
+    log_file = tmp_path / "restart.log"
+    log_file.write_text(
+        "[2026-08-12 02:17:23] source=mihomo-clash result=FAIL action=delay\n"
+        "[2026-08-12 02:17:24] source=routing result=OK\n",
+        encoding="utf-8",
+    )
+
+    restart_log.append_restart_log(str(log_file), True, source="mihomo-clash", action="delay")
+
+    assert restart_log.read_restart_log(str(log_file), limit=100) == [
+        "[2026-08-12 02:17:24] source=routing result=OK\n"
+    ]
+    assert captured == []
+
+
+def test_restart_log_visible_limit_is_applied_after_clash_filter(tmp_path):
+    from services import restart_log
+
+    log_file = tmp_path / "restart.log"
+    log_file.write_text(
+        "[2026-08-12 02:00:00] source=routing result=OK\n"
+        + "".join(
+            f"[2026-08-12 02:00:{index:02d}] source=mihomo-clash result=OK action=delay\n"
+            for index in range(1, 20)
+        )
+        + "[2026-08-12 02:01:00] source=core-switch result=OK\n",
+        encoding="utf-8",
+    )
+
+    assert restart_log.read_restart_log(str(log_file), limit=2) == [
+        "[2026-08-12 02:00:00] source=routing result=OK\n",
+        "[2026-08-12 02:01:00] source=core-switch result=OK\n",
+    ]
+
+
 def test_restart_log_renders_summary_above_block():
     panel_src = _read("xkeen-ui/templates/panel.html")
     restart_log_src = _read("xkeen-ui/static/js/features/restart_log.js")
