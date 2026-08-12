@@ -68,6 +68,7 @@ MIHOMO_CLASH_ENDPOINTS: Mapping[str, MihomoClashEndpoint] = MappingProxyType(
     {
         "version": MihomoClashEndpoint("GET", "/version", 2.0, 64 * 1024),
         "configs": MihomoClashEndpoint("GET", "/configs", 3.0, 512 * 1024),
+        "runtime_mode": MihomoClashEndpoint("PATCH", "/configs", 5.0, 64 * 1024),
         "proxies": MihomoClashEndpoint("GET", "/proxies", 5.0),
         "groups": MihomoClashEndpoint("GET", "/group", 5.0),
         "providers_proxies": MihomoClashEndpoint("GET", "/providers/proxies", 8.0),
@@ -219,6 +220,34 @@ class MihomoClashClient:
                 status=400,
             )
         return self._request(spec, path=spec.path, expect_json=True)
+
+    def set_runtime_mode(self, mode: str) -> MihomoClashJSONResponse:
+        """Switch only Mihomo's in-memory routing mode.
+
+        The caller cannot supply an arbitrary config patch.  Keeping the
+        allowlist here prevents the facade from becoming a generic `/configs`
+        relay and deliberately leaves config.yaml unchanged.
+        """
+
+        normalized = str(mode or "").strip().lower()
+        if normalized not in {"rule", "global", "direct"}:
+            raise MihomoClashClientError(
+                "runtime_mode_invalid",
+                "The requested Mihomo runtime mode is invalid.",
+                status=400,
+            )
+        spec = self._endpoint("runtime_mode", stream=False)
+        body = json.dumps(
+            {"mode": normalized},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return self._request(
+            spec,
+            path=spec.path,
+            body=body,
+            expect_json=False,
+        )
 
     def select_proxy(self, group_name: str, proxy_name: str) -> MihomoClashJSONResponse:
         """Select one group member without exposing a generic method/path relay."""

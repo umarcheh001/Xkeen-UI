@@ -30,6 +30,7 @@ class StubClient:
         self.disconnected_all = 0
         self.provider_updates: list[tuple[str, str]] = []
         self.provider_healthchecks: list[str] = []
+        self.runtime_modes: list[str] = []
 
     def request_json(self, operation: str):
         self.operations.append(operation)
@@ -91,6 +92,15 @@ class StubClient:
         self.provider_healthchecks.append(name)
         if self.error:
             raise self.error
+        return MihomoClashJSONResponse(None, 204, 1, 0)
+
+    def set_runtime_mode(self, mode: str):
+        self.runtime_modes.append(mode)
+        if self.error:
+            raise self.error
+        current = self.responses.get("configs")
+        if current and isinstance(current.payload, dict):
+            current.payload["mode"] = mode
         return MihomoClashJSONResponse(None, 204, 1, 0)
 
 
@@ -162,6 +172,7 @@ def test_status_route_returns_versioned_redacted_dto():
     assert body["api"]["transport"] == "tcp"
     assert body["api"]["secret_configured"] is True
     assert body["capabilities"]["status"] is True
+    assert body["capabilities"]["runtime_mode_switch"] is True
     assert body["capabilities"]["proxy_groups"] is None
     assert body["capabilities"]["rules"] is True
     assert body["capabilities"]["providers"] is True
@@ -180,6 +191,57 @@ def test_status_route_returns_versioned_redacted_dto():
     assert "fixture-secret" not in serialized
     assert "upstream-leak" not in serialized
     assert client.operations == ["version", "configs"]
+
+
+def test_runtime_mode_route_switches_only_allowlisted_mode_and_reconciles():
+    client = StubClient(
+        responses={
+            "configs": MihomoClashJSONResponse(
+                payload={"mode": "rule", "secret": "must-not-leak"},
+                status=200,
+                elapsed_ms=1,
+                size_bytes=32,
+            ),
+        }
+    )
+    response = make_app(ready_discovery(), client).test_client().put(
+        "/api/mihomo/clash/runtime-mode",
+        json={"mode": "GLOBAL"},
+    )
+
+    body = response.get_json()
+    assert response.status_code == 200
+    assert body == {
+        "ok": True,
+        "schema_version": 1,
+        "mode": "global",
+        "previous_mode": "rule",
+        "changed": True,
+        "reconciled": True,
+        "persistent": False,
+    }
+    assert client.runtime_modes == ["global"]
+    assert client.operations == ["configs", "configs"]
+    assert "must-not-leak" not in json.dumps(body)
+
+
+def test_runtime_mode_route_rejects_arbitrary_config_patch_before_upstream():
+    client = StubClient()
+    response = make_app(ready_discovery(), client).test_client().put(
+        "/api/mihomo/clash/runtime-mode",
+        json={"mode": "rule", "allow-lan": True},
+    )
+    assert response.status_code == 400
+    assert response.get_json()["code"] == "invalid_runtime_mode_payload"
+    assert client.runtime_modes == []
+
+    invalid = make_app(ready_discovery(), client).test_client().put(
+        "/api/mihomo/clash/runtime-mode",
+        json={"mode": "script"},
+    )
+    assert invalid.status_code == 400
+    assert invalid.get_json()["code"] == "invalid_runtime_mode"
+    assert client.operations == []
 
 
 def test_status_route_reports_missing_controller_as_operational_state():
@@ -941,6 +1003,7 @@ def test_routes_registry_registers_mihomo_clash_facade(monkeypatch):
     for rule in app.url_map.iter_rules():
         rules.setdefault(rule.rule, set()).update(rule.methods or ())
     assert "GET" in rules["/api/mihomo/clash/status"]
+    assert "PUT" in rules["/api/mihomo/clash/runtime-mode"]
     assert "GET" in rules["/api/mihomo/clash/proxy-groups"]
     assert "GET" in rules["/api/mihomo/clash/rules"]
     assert "GET" in rules["/api/mihomo/clash/providers"]

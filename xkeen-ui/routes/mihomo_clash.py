@@ -53,6 +53,7 @@ ActionGuard = MihomoClashActionGuard
 def _capabilities(
     *,
     status: bool | None,
+    runtime_mode_switch: bool | None = None,
     proxy_groups: bool | None = None,
     proxy_select: bool | None = None,
     proxy_unfix: bool | None = None,
@@ -69,6 +70,7 @@ def _capabilities(
 ) -> dict[str, bool | None]:
     return {
         "status": status,
+        "runtime_mode_switch": runtime_mode_switch,
         "proxy_groups": proxy_groups,
         "proxy_select": proxy_select,
         "proxy_unfix": proxy_unfix,
@@ -183,6 +185,7 @@ def _status_payload(
         config_payload=config_payload,
         capabilities=_capabilities(
             status=status_capability,
+            runtime_mode_switch=status_capability,
             proxy_unfix=_supports_proxy_unfix(version_payload) if status_capability else False,
             connections_snapshot=status_capability,
             connections_stream=_ws_runtime_available() if status_capability else False,
@@ -484,7 +487,7 @@ def create_mihomo_clash_blueprint(
         safe_metadata = {
             key: value
             for key, value in metadata.items()
-            if key in {"group", "scope", "preset", "provider_kind", "error_code"}
+            if key in {"group", "scope", "preset", "provider_kind", "error_code", "mode", "previous_mode"}
             and isinstance(value, (str, int, bool))
         }
         try:
@@ -574,6 +577,100 @@ def create_mihomo_clash_blueprint(
                 },
             )
         ), 200
+
+    @bp.put("/api/mihomo/clash/runtime-mode")
+    def api_mihomo_clash_runtime_mode():
+        try:
+            body = _read_action_body()
+        except PayloadTooLargeError:
+            return error_response(
+                "Тело запроса слишком большое.",
+                413,
+                ok=False,
+                code="payload_too_large",
+            )
+        if not isinstance(body, Mapping) or set(body) != {"mode"}:
+            return error_response(
+                "Ожидается только поле mode.",
+                400,
+                ok=False,
+                code="invalid_runtime_mode_payload",
+            )
+        mode = body.get("mode")
+        if not isinstance(mode, str) or mode.strip().lower() not in {"rule", "global", "direct"}:
+            return error_response(
+                "Допустимые режимы Mihomo: rule, global или direct.",
+                400,
+                ok=False,
+                code="invalid_runtime_mode",
+            )
+        mode = mode.strip().lower()
+
+        lease, rejected_response = _acquire_action("runtime-mode")
+        if rejected_response:
+            return rejected_response
+        client, unavailable = _client_or_response()
+        if unavailable:
+            lease.release()
+            return unavailable
+        previous_mode = ""
+        try:
+            before = client.request_json("configs")
+            if isinstance(before.payload, Mapping):
+                previous_mode = str(before.payload.get("mode") or "").strip().lower()
+            if previous_mode != mode:
+                client.set_runtime_mode(mode)
+            after = client.request_json("configs")
+            current_mode = (
+                str(after.payload.get("mode") or "").strip().lower()
+                if isinstance(after.payload, Mapping)
+                else ""
+            )
+        except MihomoClashClientError as exc:
+            _audit_action(
+                "runtime-mode",
+                False,
+                mode=mode,
+                previous_mode=previous_mode,
+                error_code=exc.code,
+            )
+            return _safe_client_error(exc)
+        except Exception:
+            _audit_action(
+                "runtime-mode",
+                False,
+                mode=mode,
+                previous_mode=previous_mode,
+                error_code="internal_error",
+            )
+            return error_response(
+                "Не удалось переключить режим Mihomo.",
+                500,
+                ok=False,
+                code="mihomo_clash_runtime_mode_failed",
+            )
+        finally:
+            lease.release()
+
+        reconciled = current_mode == mode
+        _audit_action(
+            "runtime-mode",
+            reconciled,
+            mode=mode,
+            previous_mode=previous_mode,
+            **({} if reconciled else {"error_code": "runtime_mode_not_applied"}),
+        )
+        return jsonify(
+            {
+                "ok": reconciled,
+                "schema_version": 1,
+                "mode": current_mode,
+                "previous_mode": previous_mode,
+                "changed": previous_mode != current_mode,
+                "reconciled": reconciled,
+                "persistent": False,
+            }
+        ), (200 if reconciled else 409)
 
     @bp.get("/api/mihomo/clash/proxy-groups")
     def api_mihomo_clash_proxy_groups():

@@ -1,6 +1,7 @@
 import { getMihomoCoreHttpApi } from '../mihomo_runtime.js';
 
 const STATUS_ENDPOINT = '/api/mihomo/clash/status';
+const RUNTIME_MODE_ENDPOINT = '/api/mihomo/clash/runtime-mode';
 const GROUPS_ENDPOINT = '/api/mihomo/clash/proxy-groups';
 const DELAY_ENDPOINT = '/api/mihomo/clash/delay';
 const CONNECTIONS_ENDPOINT = '/api/mihomo/clash/connections';
@@ -48,6 +49,18 @@ export async function fetchMihomoClashStatus(options = {}) {
     signal: options && options.signal ? options.signal : undefined,
   };
   return requestJSON(STATUS_ENDPOINT, init);
+}
+
+export function setMihomoClashRuntimeMode(mode, options = {}) {
+  return requestJSON(RUNTIME_MODE_ENDPOINT, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: String(mode || '').toLowerCase() }),
+    credentials: 'same-origin',
+    timeoutMs: 8000,
+    retry: 0,
+    signal: options.signal,
+  });
 }
 
 export function fetchMihomoPanelMode() {
@@ -249,6 +262,7 @@ export function applyMihomoClashMigration(transport, previewId, options = {}) {
 
 export const mihomoClashClientApi = Object.freeze({
   fetchStatus: fetchMihomoClashStatus,
+  setRuntimeMode: setMihomoClashRuntimeMode,
   fetchGroups: fetchMihomoClashGroups,
   selectProxy: selectMihomoClashProxy,
   unfixProxy: unfixMihomoClashProxy,

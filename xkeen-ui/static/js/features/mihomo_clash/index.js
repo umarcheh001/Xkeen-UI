@@ -5,7 +5,9 @@ import {
   previewMihomoClashMigration,
   previewMihomoPanelSwitch,
   switchMihomoPanel,
+  setMihomoClashRuntimeMode,
 } from './client.js';
+import { confirmMihomoAction } from '../mihomo_runtime.js';
 import {
   activateMihomoClashGroups,
   deactivateMihomoClashGroups,
@@ -45,6 +47,14 @@ let migrationPreviewId = '';
 let assistantKind = '';
 let panelMode = null;
 let panelSwitchBusy = false;
+let runtimeMode = '';
+let runtimeModeBusy = false;
+const RUNTIME_MODES = new Set(['rule', 'global', 'direct']);
+const RUNTIME_MODE_LABELS = Object.freeze({
+  rule: 'По правилам',
+  global: 'Через GLOBAL',
+  direct: 'Напрямую',
+});
 
 function byId(id) {
   return document.getElementById(id);
@@ -67,6 +77,88 @@ function setHidden(element, hidden) {
   if (!element) return;
   element.hidden = !!hidden;
   element.setAttribute('aria-hidden', hidden ? 'true' : 'false');
+}
+
+function closeRuntimeModeMenu({ focus = false } = {}) {
+  const menu = byId('mihomo-clash-mode-menu');
+  const trigger = byId('mihomo-clash-status-mode');
+  setHidden(menu, true);
+  trigger?.setAttribute('aria-expanded', 'false');
+  if (focus) trigger?.focus();
+}
+
+function renderRuntimeModeSwitch(payload = statusPayload) {
+  const nextMode = String(payload?.runtime?.mode || runtimeMode || '').toLowerCase();
+  runtimeMode = RUNTIME_MODES.has(nextMode) ? nextMode : '';
+  const trigger = byId('mihomo-clash-status-mode');
+  const supported = payload?.capabilities?.runtime_mode_switch === true;
+  if (trigger) {
+    trigger.disabled = runtimeModeBusy || !supported || !runtimeMode;
+    trigger.setAttribute('aria-label', runtimeMode
+      ? `Текущий режим Mihomo: ${RUNTIME_MODE_LABELS[runtimeMode]}. Изменить режим маршрутизации`
+      : 'Режим Mihomo недоступен');
+  }
+  setText('mihomo-clash-status-mode-value', runtimeMode ? RUNTIME_MODE_LABELS[runtimeMode] : 'Режим —');
+  document.querySelectorAll('[data-mihomo-runtime-mode]').forEach((button) => {
+    const selected = button.dataset.mihomoRuntimeMode === runtimeMode;
+    button.setAttribute('aria-checked', selected ? 'true' : 'false');
+    button.classList.toggle('is-current', selected);
+    button.disabled = runtimeModeBusy;
+  });
+  if (!supported) closeRuntimeModeMenu();
+}
+
+function toggleRuntimeModeMenu() {
+  const menu = byId('mihomo-clash-mode-menu');
+  const trigger = byId('mihomo-clash-status-mode');
+  if (!menu || !trigger || trigger.disabled) return;
+  const opening = menu.hidden;
+  setHidden(menu, !opening);
+  trigger.setAttribute('aria-expanded', opening ? 'true' : 'false');
+  if (opening) menu.querySelector(`[data-mihomo-runtime-mode="${runtimeMode}"]`)?.focus();
+}
+
+async function changeRuntimeMode(nextMode) {
+  const mode = String(nextMode || '').toLowerCase();
+  if (runtimeModeBusy || !RUNTIME_MODES.has(mode) || mode === runtimeMode) {
+    closeRuntimeModeMenu();
+    return false;
+  }
+  const copy = {
+    rule: ['По правилам', 'Новый трафик снова будет распределяться по правилам Mihomo.'],
+    global: ['Через GLOBAL', 'Весь новый трафик устройств сети будет направлен через стратегию GLOBAL.'],
+    direct: ['Напрямую', 'Весь новый трафик устройств сети обойдёт правила и прокси.'],
+  }[mode];
+  if (mode !== 'rule') {
+    const accepted = await confirmMihomoAction({
+      title: `Включить режим «${copy[0]}»?`,
+      message: copy[1],
+      details: 'Уже открытые соединения могут продолжить прежний маршрут. config.yaml не изменяется.',
+      okText: 'Переключить',
+      cancelText: 'Отменить',
+      danger: mode === 'direct',
+    }, `Переключить Mihomo в режим ${mode}?`);
+    if (!accepted) return false;
+  }
+  closeRuntimeModeMenu();
+  runtimeModeBusy = true;
+  renderRuntimeModeSwitch();
+  try {
+    const result = await setMihomoClashRuntimeMode(mode);
+    if (!result?.reconciled || result?.mode !== mode) throw new Error('Mihomo не подтвердил новый режим.');
+    runtimeMode = mode;
+    if (statusPayload?.runtime) statusPayload.runtime.mode = mode;
+    renderRuntimeModeSwitch();
+    try { window.toast(`Режим Mihomo: ${copy[0]}. config.yaml не изменён.`, 'success'); } catch (error) {}
+    return true;
+  } catch (error) {
+    try { window.toast(error?.message || 'Не удалось переключить режим Mihomo.', 'error'); } catch (toastError) {}
+    await refreshMihomoClashStatus({ reason: 'runtime-mode-error' });
+    return false;
+  } finally {
+    runtimeModeBusy = false;
+    renderRuntimeModeSwitch();
+  }
 }
 
 function stateTone(state) {
@@ -97,11 +189,10 @@ function renderStatus(state, payload = null) {
   setText('mihomo-clash-control-message', copy[2]);
 
   const version = payload && payload.core ? String(payload.core.version || '') : '';
-  const mode = payload && payload.runtime ? String(payload.runtime.mode || '') : '';
   // `/version` already returns a branded value such as “Mihomo Meta v1.19.12”.
   // Prefixing it again made the compact status strip repeat “Mihomo”.
   setText('mihomo-clash-status-version', version || 'Версия —');
-  setText('mihomo-clash-status-mode', mode ? mode.toUpperCase() : 'Режим —');
+  renderRuntimeModeSwitch(payload);
 
   const stateBox = byId('mihomo-clash-control-state');
   const content = byId('mihomo-clash-control-content');
@@ -395,7 +486,7 @@ function bindWorkspace() {
   if (!root || root.dataset.mihomoClashWorkspaceBound === '1') return;
   root.dataset.mihomoClashWorkspaceBound = '1';
   root.addEventListener('click', (event) => {
-    const target = event.target && event.target.closest ? event.target.closest('[data-mihomo-clash-subview], [data-mihomo-clash-action]') : null;
+    const target = event.target && event.target.closest ? event.target.closest('[data-mihomo-clash-subview], [data-mihomo-clash-action], [data-mihomo-runtime-mode]') : null;
     if (!target) return;
     if (target.getAttribute('aria-disabled') === 'true') return;
     const subview = target.dataset.mihomoClashSubview;
@@ -408,6 +499,9 @@ function bindWorkspace() {
     if (action === 'migration-apply') void applyMigration();
     if (action === 'migration-close') setHidden(byId('mihomo-clash-migration'), true);
     if (action === 'panel-switch') void togglePanelMode();
+    if (action === 'mode-menu') toggleRuntimeModeMenu();
+    const mode = target.dataset.mihomoRuntimeMode;
+    if (mode) void changeRuntimeMode(mode);
   });
   root.addEventListener('change', (event) => {
     if (event.target?.id === 'mihomo-clash-migration-transport') {
@@ -416,6 +510,23 @@ function bindWorkspace() {
     }
   });
   root.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !byId('mihomo-clash-mode-menu')?.hidden) {
+      event.preventDefault();
+      closeRuntimeModeMenu({ focus: true });
+      return;
+    }
+    const modeItem = event.target?.closest?.('[data-mihomo-runtime-mode]');
+    if (modeItem && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+      event.preventDefault();
+      const items = Array.from(byId('mihomo-clash-mode-menu')?.querySelectorAll('[data-mihomo-runtime-mode]:not(:disabled)') || []);
+      if (!items.length) return;
+      const index = items.indexOf(modeItem);
+      const nextIndex = event.key === 'Home' ? 0
+        : event.key === 'End' ? items.length - 1
+          : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      items[nextIndex]?.focus();
+      return;
+    }
     const tab = event.target && event.target.closest ? event.target.closest('[data-mihomo-clash-subview]') : null;
     if (!tab) return;
     if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
@@ -425,6 +536,9 @@ function bindWorkspace() {
       event.preventDefault();
       if (tab.getAttribute('aria-disabled') !== 'true') applySubview(tab.dataset.mihomoClashSubview, { reason: 'keyboard' });
     }
+  });
+  document.addEventListener('click', (event) => {
+    if (!event.target?.closest?.('#mihomo-clash-mode-switch')) closeRuntimeModeMenu();
   });
   root.addEventListener('xkeen:mihomo-clash-open-rule', (event) => {
     applySubview('rules', { reason: 'connection-rule' });
@@ -480,6 +594,7 @@ export function activateMihomoClashWorkspace(options = {}) {
 
 export function deactivateMihomoClashWorkspace() {
   active = false;
+  closeRuntimeModeMenu();
   abortStatusRequest();
   deactivateMihomoClashGroups();
   deactivateMihomoClashConnections();

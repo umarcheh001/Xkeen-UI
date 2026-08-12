@@ -240,6 +240,30 @@ def test_runtime_status_strip_avoids_redundant_branding_and_ready_state_retry():
     assert "is-retry-suggested" in index
 
 
+def test_runtime_status_mode_is_a_capability_gated_compact_switch():
+    markup = _mihomo_markup()
+    index = _text(FEATURE)
+    client = _text(CLIENT)
+    css = _text(CSS)
+
+    for fragment in (
+        'id="mihomo-clash-status-mode"',
+        'id="mihomo-clash-mode-menu"',
+        'data-mihomo-runtime-mode="rule"',
+        'data-mihomo-runtime-mode="global"',
+        'data-mihomo-runtime-mode="direct"',
+        'role="menuitemradio"',
+        'config.yaml не изменяется',
+        "runtime_mode_switch === true",
+        "setMihomoClashRuntimeMode",
+        "mode !== 'rule'",
+        "confirmMihomoAction",
+        "'/api/mihomo/clash/runtime-mode'",
+        '.xk-mihomo-mode-menu[hidden]',
+    ):
+        assert fragment in markup or fragment in index or fragment in client or fragment in css
+
+
 def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
     markup = _mihomo_markup()
     groups = _text(GROUPS)

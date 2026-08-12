@@ -16908,6 +16908,142 @@ body.panel-page .xk-mihomo-status-separator {
   background: var(--op-border);
 }
 
+body.panel-page .xk-mihomo-mode-switch {
+  position: relative;
+}
+
+body.panel-page .xk-mihomo-mode-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--op-text);
+  font: inherit;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 700;
+  cursor: pointer;
+}
+
+body.panel-page .xk-mihomo-mode-trigger:hover:not(:disabled),
+body.panel-page .xk-mihomo-mode-trigger:focus-visible,
+body.panel-page .xk-mihomo-mode-trigger[aria-expanded="true"] {
+  background: var(--op-surface-2);
+  color: var(--op-text-strong);
+}
+
+body.panel-page .xk-mihomo-mode-trigger:disabled {
+  padding-inline: 0;
+  cursor: default;
+  opacity: 1;
+}
+
+body.panel-page .xk-mihomo-mode-trigger:disabled .xk-action-icon {
+  display: none;
+}
+
+body.panel-page .xk-mihomo-mode-trigger .xk-action-icon {
+  width: 13px;
+  height: 13px;
+  transition: transform 140ms ease;
+}
+
+body.panel-page .xk-mihomo-mode-trigger[aria-expanded="true"] .xk-action-icon {
+  transform: rotate(180deg);
+}
+
+body.panel-page .xk-mihomo-mode-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 7px);
+  right: 0;
+  display: grid;
+  width: min(310px, calc(100vw - 28px));
+  padding: 7px;
+  border: 1px solid var(--op-border-strong);
+  border-radius: 9px;
+  background: var(--op-surface-2);
+  box-shadow: var(--op-shadow-float);
+}
+
+body.panel-page .xk-mihomo-mode-menu[hidden] {
+  display: none !important;
+}
+
+body.panel-page .xk-mihomo-mode-menu-head {
+  display: grid;
+  gap: 2px;
+  padding: 5px 7px 8px;
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page .xk-mihomo-mode-menu-head strong {
+  color: var(--op-text-strong);
+  font-size: calc(12px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .xk-mihomo-mode-menu-head small,
+body.panel-page .xk-mihomo-mode-menu > p {
+  color: var(--op-muted);
+  font-size: calc(10px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .xk-mihomo-mode-menu > button {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: 0;
+  padding: 8px 9px 8px 29px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--op-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+body.panel-page .xk-mihomo-mode-menu > button::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: 10px;
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--op-border-strong);
+  border-radius: 50%;
+}
+
+body.panel-page .xk-mihomo-mode-menu > button.is-current::before {
+  border-color: var(--op-accent);
+  background: var(--op-accent);
+  box-shadow: inset 0 0 0 2px var(--op-surface-2);
+}
+
+body.panel-page .xk-mihomo-mode-menu > button:hover,
+body.panel-page .xk-mihomo-mode-menu > button:focus-visible,
+body.panel-page .xk-mihomo-mode-menu > button.is-current {
+  background: var(--op-accent-soft);
+}
+
+body.panel-page .xk-mihomo-mode-menu > button span {
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  font-weight: 700;
+}
+
+body.panel-page .xk-mihomo-mode-menu > button small {
+  color: var(--op-muted);
+  font-size: calc(10px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .xk-mihomo-mode-menu > p {
+  margin: 5px 7px 2px;
+  line-height: 1.35;
+}
+
 body.panel-page .xk-mihomo-runtime[aria-busy="true"] .xk-mihomo-runtime-state-icon .xk-action-icon {
   animation: xk-sub-pingall-spin .9s linear infinite;
 }

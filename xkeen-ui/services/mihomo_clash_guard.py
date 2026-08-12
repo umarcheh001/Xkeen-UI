@@ -21,6 +21,7 @@ class MihomoClashActionPolicy:
 MIHOMO_CLASH_ACTION_POLICIES: Mapping[str, MihomoClashActionPolicy] = MappingProxyType(
     {
         "proxy-select": MihomoClashActionPolicy(4, 1, 30, 60.0),
+        "runtime-mode": MihomoClashActionPolicy(1, 1, 12, 60.0),
         "proxy-unfix": MihomoClashActionPolicy(2, 1, 20, 60.0),
         # Mihomo delay checks are CPU/network-heavy on router hardware. Keep
         # one in flight globally so concurrent browser tabs cannot starve UI

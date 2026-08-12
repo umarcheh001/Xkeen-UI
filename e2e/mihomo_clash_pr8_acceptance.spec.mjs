@@ -19,6 +19,7 @@ function statusPayload({ stream = false } = {}) {
     runtime: { mode: 'rule' },
     capabilities: {
       status: true,
+      runtime_mode_switch: true,
       proxy_groups: true,
       proxy_select: true,
       proxy_delay: true,
@@ -28,6 +29,54 @@ function statusPayload({ stream = false } = {}) {
     },
   };
 }
+
+
+test('compact runtime mode switch confirms overrides and stays in the status strip', async ({ page }) => {
+  let mode = 'rule';
+  const changes = [];
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({
+    json: { ...statusPayload(), runtime: { mode } },
+  }));
+  await page.route('**/api/mihomo/clash/proxy-groups', (route) => route.fulfill({ json: groupsPayload(3) }));
+  await page.route('**/api/mihomo/clash/runtime-mode', async (route) => {
+    const nextMode = route.request().postDataJSON().mode;
+    changes.push(nextMode);
+    const previousMode = mode;
+    mode = nextMode;
+    await route.fulfill({
+      json: {
+        ok: true, schema_version: 1, mode, previous_mode: previousMode,
+        changed: mode !== previousMode, reconciled: true, persistent: false,
+      },
+    });
+  });
+
+  await openMihomo(page, 'dark', VIEWPORTS[4]);
+  const trigger = page.locator('#mihomo-clash-status-mode');
+  await expect(trigger).toBeVisible();
+  await expect(page.locator('#mihomo-clash-status-mode-value')).toHaveText('По правилам');
+
+  await trigger.click();
+  await expect(page.locator('#mihomo-clash-mode-menu')).toBeVisible();
+  await page.locator('[data-mihomo-runtime-mode="direct"]').click();
+  await expect(page.locator('#confirm-modal-title')).toContainText('Напрямую');
+  await expect(page.locator('#confirm-modal-message')).toContainText('обойдёт правила и прокси');
+  await page.locator('#confirm-modal-ok-btn').click();
+
+  await expect(page.locator('#mihomo-clash-status-mode-value')).toHaveText('Напрямую');
+  expect(changes).toEqual(['direct']);
+  const metrics = await page.evaluate(() => ({
+    overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    modeSwitches: document.querySelectorAll('#mihomo-clash-mode-switch').length,
+  }));
+  expect(metrics.overflow).toBeLessThanOrEqual(1);
+  expect(metrics.modeSwitches).toBe(1);
+
+  await trigger.click();
+  await page.locator('[data-mihomo-runtime-mode="rule"]').click();
+  await expect(page.locator('#mihomo-clash-status-mode-value')).toHaveText('По правилам');
+  expect(changes).toEqual(['direct', 'rule']);
+});
 
 
 function groupsPayload(count = 120) {

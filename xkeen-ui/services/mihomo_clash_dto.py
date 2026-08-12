@@ -26,6 +26,7 @@ MAX_LOG_FIELDS = 32
 MAX_LOG_DEVICES = 8
 MIHOMO_CLASH_CAPABILITY_KEYS = (
     "status",
+    "runtime_mode_switch",
     "proxy_groups",
     "proxy_select",
     "proxy_unfix",

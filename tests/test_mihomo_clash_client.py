@@ -67,6 +67,29 @@ class _FixtureHandler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
         self.wfile.flush()
 
+    def do_PATCH(self):  # noqa: N802
+        length = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(length)
+        self.__class__.seen.append(
+            {
+                "method": "PATCH",
+                "path": self.path,
+                "authorization": self.headers.get("Authorization") or "",
+                "content_type": self.headers.get("Content-Type") or "",
+                "body": body.decode("utf-8"),
+            }
+        )
+        status, content_type, payload = self.__class__.responses.get(
+            f"PATCH {self.path}",
+            (404, "application/json", b'{"error":"missing"}'),
+        )
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+        self.wfile.flush()
+
     def do_DELETE(self):  # noqa: N802
         self.__class__.seen.append(
             {
@@ -255,6 +278,26 @@ def test_unfix_proxy_uses_allowlisted_delete_path():
         "path": encoded,
         "authorization": "Bearer backend-only",
     }]
+
+
+def test_runtime_mode_patch_is_dedicated_and_strictly_allowlisted():
+    endpoints = {"runtime_mode": MihomoClashEndpoint("PATCH", "/configs", 2, 1024)}
+    with tcp_server({"PATCH /configs": (204, "text/plain", b"")}) as (port, handler):
+        client = client_for_port(port, endpoints, secret="backend-only")
+        response = client.set_runtime_mode("GLOBAL")
+
+    assert response.status == 204
+    assert handler.seen == [{
+        "method": "PATCH",
+        "path": "/configs",
+        "authorization": "Bearer backend-only",
+        "content_type": "application/json",
+        "body": '{"mode":"global"}',
+    }]
+
+    with pytest.raises(MihomoClashClientError) as captured:
+        client.set_runtime_mode("script")
+    assert captured.value.code == "runtime_mode_invalid"
 
 
 def test_disconnect_operations_are_dedicated_and_encode_one_id_segment():

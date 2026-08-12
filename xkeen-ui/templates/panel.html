@@ -1000,7 +1000,18 @@
       <span class="xk-mihomo-status-separator" aria-hidden="true"></span>
       <span id="mihomo-clash-status-version">Mihomo —</span>
       <span class="xk-mihomo-status-separator" aria-hidden="true"></span>
-      <span id="mihomo-clash-status-mode">Режим —</span>
+      <div class="xk-mihomo-mode-switch" id="mihomo-clash-mode-switch">
+        <button type="button" id="mihomo-clash-status-mode" class="xk-mihomo-mode-trigger" data-mihomo-clash-action="mode-menu" aria-haspopup="menu" aria-expanded="false" disabled>
+          <span id="mihomo-clash-status-mode-value">Режим —</span>{{ op_icon('chevron-down') }}
+        </button>
+        <div id="mihomo-clash-mode-menu" class="xk-mihomo-mode-menu" role="menu" aria-label="Режим маршрутизации Mihomo" hidden>
+          <div class="xk-mihomo-mode-menu-head"><strong>Режим маршрутизации</strong><small>Для всего нового трафика сети</small></div>
+          <button type="button" role="menuitemradio" data-mihomo-runtime-mode="rule" aria-checked="false"><span>По правилам</span><small>Использовать список правил</small></button>
+          <button type="button" role="menuitemradio" data-mihomo-runtime-mode="global" aria-checked="false"><span>Через GLOBAL</span><small>Весь трафик через выбранную стратегию</small></button>
+          <button type="button" role="menuitemradio" data-mihomo-runtime-mode="direct" aria-checked="false"><span>Напрямую</span><small>Обойти правила и прокси</small></button>
+          <p>Временный runtime-режим: config.yaml не изменяется.</p>
+        </div>
+      </div>
       <span class="xk-mihomo-status-separator" aria-hidden="true"></span>
       <button type="button" id="mihomo-clash-panel-switch" class="btn-secondary xk-mihomo-panel-switch" data-mihomo-clash-action="panel-switch" hidden>
         {{ op_icon('restore') }}<span id="mihomo-clash-panel-switch-label">Вернуть прежнюю панель</span>
