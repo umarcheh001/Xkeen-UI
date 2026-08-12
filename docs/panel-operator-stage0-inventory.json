@@ -224,7 +224,7 @@
     },
     {
       "control_id": null,
-      "control_locator": "div.commands-header@L1222",
+      "control_locator": "div.commands-header@L1233",
       "toggle_key": "mihomo-card",
       "target_id": "mihomo-body",
       "target_present": true,
@@ -236,7 +236,7 @@
     },
     {
       "control_id": null,
-      "control_locator": "div.commands-header@L1488",
+      "control_locator": "div.commands-header@L1499",
       "toggle_key": "xkeen-settings",
       "target_id": "xkeen-body",
       "target_present": true,
@@ -3587,7 +3587,7 @@
       {
         "index": 18,
         "locator": "#mihomo-profiles-panel",
-        "line": 1354,
+        "line": 1365,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3600,7 +3600,7 @@
       {
         "index": 19,
         "locator": "#view-xkeen",
-        "line": 1485,
+        "line": 1496,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3613,7 +3613,7 @@
       {
         "index": 20,
         "locator": "#view-commands",
-        "line": 1600,
+        "line": 1611,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3626,7 +3626,7 @@
       {
         "index": 21,
         "locator": "#terminal-open-shell-btn",
-        "line": 1615,
+        "line": 1626,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3639,7 +3639,7 @@
       {
         "index": 22,
         "locator": "#terminal-open-pty-btn",
-        "line": 1616,
+        "line": 1627,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3652,7 +3652,7 @@
       {
         "index": 23,
         "locator": "#core-xray-stable-release",
-        "line": 1642,
+        "line": 1653,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3665,7 +3665,7 @@
       {
         "index": 24,
         "locator": "#core-xray-update-btn",
-        "line": 1645,
+        "line": 1656,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3678,7 +3678,7 @@
       {
         "index": 25,
         "locator": "#core-xray-prerelease-release",
-        "line": 1647,
+        "line": 1658,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3691,7 +3691,7 @@
       {
         "index": 26,
         "locator": "#core-xray-prerelease-update-btn",
-        "line": 1650,
+        "line": 1661,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3704,7 +3704,7 @@
       {
         "index": 27,
         "locator": "#core-mihomo-stable-release",
-        "line": 1663,
+        "line": 1674,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3717,7 +3717,7 @@
       {
         "index": 28,
         "locator": "#core-mihomo-update-btn",
-        "line": 1666,
+        "line": 1677,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3730,7 +3730,7 @@
       {
         "index": 29,
         "locator": "#core-mihomo-prerelease-release",
-        "line": 1668,
+        "line": 1679,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3743,7 +3743,7 @@
       {
         "index": 30,
         "locator": "#core-mihomo-prerelease-update-btn",
-        "line": 1671,
+        "line": 1682,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3756,7 +3756,7 @@
       {
         "index": 31,
         "locator": "#view-files",
-        "line": 1847,
+        "line": 1858,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3769,7 +3769,7 @@
       {
         "index": 32,
         "locator": "#fm-volumes-btn",
-        "line": 1852,
+        "line": 1863,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3782,7 +3782,7 @@
       {
         "index": 33,
         "locator": "#fm-disabled-note",
-        "line": 1858,
+        "line": 1869,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3794,8 +3794,8 @@
       },
       {
         "index": 34,
-        "locator": "button.btn-secondary.fm-disconnect-btn@L1879",
-        "line": 1879,
+        "locator": "button.btn-secondary.fm-disconnect-btn@L1890",
+        "line": 1890,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3807,8 +3807,8 @@
       },
       {
         "index": 35,
-        "locator": "button.btn-secondary.fm-disconnect-btn@L1899",
-        "line": 1899,
+        "locator": "button.btn-secondary.fm-disconnect-btn@L1910",
+        "line": 1910,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3821,7 +3821,7 @@
       {
         "index": 36,
         "locator": "#view-xray-logs",
-        "line": 1939,
+        "line": 1950,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3833,8 +3833,8 @@
       },
       {
         "index": 37,
-        "locator": "span.small@L2019",
-        "line": 2019,
+        "locator": "span.small@L2030",
+        "line": 2030,
         "kind": "presentation-geometry",
         "source": "opacity:0.85;",
         "declarations": [
@@ -3847,7 +3847,7 @@
       {
         "index": 38,
         "locator": "#terminal-overlay",
-        "line": 2098,
+        "line": 2109,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3860,7 +3860,7 @@
       {
         "index": 39,
         "locator": "#inbounds-apply-socks-row",
-        "line": 2378,
+        "line": 2389,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -3872,8 +3872,8 @@
       },
       {
         "index": 40,
-        "locator": "div.xk-modal-gap-12@L2379",
-        "line": 2379,
+        "locator": "div.xk-modal-gap-12@L2390",
+        "line": 2390,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:flex-start; flex-wrap: wrap;",
         "declarations": [
@@ -3893,8 +3893,8 @@
       },
       {
         "index": 41,
-        "locator": "label.routing-rule-field.xk-modal-m-0@L2380",
-        "line": 2380,
+        "locator": "label.routing-rule-field.xk-modal-m-0@L2391",
+        "line": 2391,
         "kind": "presentation-geometry",
         "source": "min-width: 220px;",
         "declarations": [
@@ -3907,7 +3907,7 @@
       {
         "index": 42,
         "locator": "#inbounds-apply-warn",
-        "line": 2390,
+        "line": 2401,
         "kind": "mixed-state-and-presentation",
         "source": "display:none; color: var(--warning, #f59e0b);",
         "declarations": [
@@ -3924,7 +3924,7 @@
       {
         "index": 43,
         "locator": "#inbounds-apply-error",
-        "line": 2392,
+        "line": 2403,
         "kind": "mixed-state-and-presentation",
         "source": "display:none; color: var(--danger, #ef4444);",
         "declarations": [
@@ -3940,8 +3940,8 @@
       },
       {
         "index": 44,
-        "locator": "div.xk-editor-workbench-toolbar.xk-editor-workbench-toolbar--snapshot.xk-modal-gap-12@L2578",
-        "line": 2578,
+        "locator": "div.xk-editor-workbench-toolbar.xk-editor-workbench-toolbar--snapshot.xk-modal-gap-12@L2589",
+        "line": 2589,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:flex-start; justify-content:space-between;",
         "declarations": [
@@ -3961,8 +3961,8 @@
       },
       {
         "index": 45,
-        "locator": "div.modal-actions.xk-editor-workbench-actions@L2592",
-        "line": 2592,
+        "locator": "div.modal-actions.xk-editor-workbench-actions@L2603",
+        "line": 2603,
         "kind": "presentation-geometry",
         "source": "justify-content: space-between;",
         "declarations": [
@@ -3974,8 +3974,8 @@
       },
       {
         "index": 46,
-        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-10@L2594",
-        "line": 2594,
+        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-10@L2605",
+        "line": 2605,
         "kind": "presentation-geometry",
         "source": "display:flex;",
         "declarations": [
@@ -3987,8 +3987,8 @@
       },
       {
         "index": 47,
-        "locator": "div.xk-modal-gap-10@L2617",
-        "line": 2617,
+        "locator": "div.xk-modal-gap-10@L2628",
+        "line": 2628,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:flex-start; justify-content:space-between;",
         "declarations": [
@@ -4008,8 +4008,8 @@
       },
       {
         "index": 48,
-        "locator": "div.modal-actions@L2638",
-        "line": 2638,
+        "locator": "div.modal-actions@L2649",
+        "line": 2649,
         "kind": "presentation-geometry",
         "source": "justify-content: space-between;",
         "declarations": [
@@ -4021,8 +4021,8 @@
       },
       {
         "index": 49,
-        "locator": "div.xk-modal-gap-10@L2639",
-        "line": 2639,
+        "locator": "div.xk-modal-gap-10@L2650",
+        "line": 2650,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-wrap: wrap;",
         "declarations": [
@@ -4038,8 +4038,8 @@
       },
       {
         "index": 50,
-        "locator": "div.xk-modal-gap-10@L2645",
-        "line": 2645,
+        "locator": "div.xk-modal-gap-10@L2656",
+        "line": 2656,
         "kind": "presentation-geometry",
         "source": "display:flex;",
         "declarations": [
@@ -4051,8 +4051,8 @@
       },
       {
         "index": 51,
-        "locator": "div.xk-modal-gap-10@L2694",
-        "line": 2694,
+        "locator": "div.xk-modal-gap-10@L2705",
+        "line": 2705,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -4069,7 +4069,7 @@
       {
         "index": 52,
         "locator": "#outbounds-gen-cred-trojan",
-        "line": 2834,
+        "line": 2845,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4082,7 +4082,7 @@
       {
         "index": 53,
         "locator": "#outbounds-gen-cred-vmess",
-        "line": 2839,
+        "line": 2850,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4095,7 +4095,7 @@
       {
         "index": 54,
         "locator": "#outbounds-gen-cred-ss",
-        "line": 2844,
+        "line": 2855,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4108,7 +4108,7 @@
       {
         "index": 55,
         "locator": "#outbounds-gen-cred-ss-pass",
-        "line": 2855,
+        "line": 2866,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4121,7 +4121,7 @@
       {
         "index": 56,
         "locator": "#outbounds-gen-cred-hy2",
-        "line": 2860,
+        "line": 2871,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4134,7 +4134,7 @@
       {
         "index": 57,
         "locator": "#outbounds-gen-field-ss-plugin",
-        "line": 2946,
+        "line": 2957,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4147,7 +4147,7 @@
       {
         "index": 58,
         "locator": "#outbounds-gen-field-hy2-insecure",
-        "line": 2951,
+        "line": 2962,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4160,7 +4160,7 @@
       {
         "index": 59,
         "locator": "#outbounds-gen-field-hy2-obfs",
-        "line": 2959,
+        "line": 2970,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4173,7 +4173,7 @@
       {
         "index": 60,
         "locator": "#outbounds-gen-field-hy2-obfspwd",
-        "line": 2967,
+        "line": 2978,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4186,7 +4186,7 @@
       {
         "index": 61,
         "locator": "#outbounds-gen-field-hy2-pinsha256",
-        "line": 2972,
+        "line": 2983,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4198,8 +4198,8 @@
       },
       {
         "index": 62,
-        "locator": "div.xk-card-desc@L3157",
-        "line": 3157,
+        "locator": "div.xk-card-desc@L3168",
+        "line": 3168,
         "kind": "presentation-geometry",
         "source": "opacity:0.75;",
         "declarations": [
@@ -4212,7 +4212,7 @@
       {
         "index": 63,
         "locator": "#mihomo-proxy-tools-no-proxies",
-        "line": 3262,
+        "line": 3273,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4224,8 +4224,8 @@
       },
       {
         "index": 64,
-        "locator": "p.modal-hint.xk-modal-m-0.xk-modal-mt-8@L3492",
-        "line": 3492,
+        "locator": "p.modal-hint.xk-modal-m-0.xk-modal-mt-8@L3503",
+        "line": 3503,
         "kind": "presentation-geometry",
         "source": "opacity:0.75; font-size: 0.85rem;",
         "declarations": [
@@ -4241,8 +4241,8 @@
       },
       {
         "index": 65,
-        "locator": "div.xk-editor-workbench-title.xk-modal-gap-2@L3508",
-        "line": 3508,
+        "locator": "div.xk-editor-workbench-title.xk-modal-gap-2@L3519",
+        "line": 3519,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column;",
         "declarations": [
@@ -4259,7 +4259,7 @@
       {
         "index": 66,
         "locator": "#fm-editor-subtitle",
-        "line": 3510,
+        "line": 3521,
         "kind": "presentation-geometry",
         "source": "font-size: 0.82rem; opacity:0.75;",
         "declarations": [
@@ -4275,8 +4275,8 @@
       },
       {
         "index": 67,
-        "locator": "div.xk-editor-workbench-header-tools.xk-modal-gap-10@L3512",
-        "line": 3512,
+        "locator": "div.xk-editor-workbench-header-tools.xk-modal-gap-10@L3523",
+        "line": 3523,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -4293,7 +4293,7 @@
       {
         "index": 68,
         "locator": "#fm-editor-warning",
-        "line": 3524,
+        "line": 3535,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4306,7 +4306,7 @@
       {
         "index": 69,
         "locator": "#fm-editor-error",
-        "line": 3525,
+        "line": 3536,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4318,8 +4318,8 @@
       },
       {
         "index": 70,
-        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-8@L3530",
-        "line": 3530,
+        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-8@L3541",
+        "line": 3541,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -4335,8 +4335,8 @@
       },
       {
         "index": 71,
-        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-8@L3533",
-        "line": 3533,
+        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-8@L3544",
+        "line": 3544,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -4353,7 +4353,7 @@
       {
         "index": 72,
         "locator": "#github-catalog-error",
-        "line": 3569,
+        "line": 3580,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4365,8 +4365,8 @@
       },
       {
         "index": 73,
-        "locator": "div.xk-modal-gap-8@L3574",
-        "line": 3574,
+        "locator": "div.xk-modal-gap-8@L3585",
+        "line": 3585,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -4386,8 +4386,8 @@
       },
       {
         "index": 74,
-        "locator": "div.xk-modal-gap-8@L3579",
-        "line": 3579,
+        "locator": "div.xk-modal-gap-8@L3590",
+        "line": 3590,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -4404,7 +4404,7 @@
       {
         "index": 75,
         "locator": "#routing-dat-contents-ipfilter",
-        "line": 3795,
+        "line": 3806,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4417,7 +4417,7 @@
       {
         "index": 76,
         "locator": "#routing-dat-contents-search-items-more",
-        "line": 3801,
+        "line": 3812,
         "kind": "state-visibility-hook",
         "source": "display:none",
         "declarations": [
@@ -4429,8 +4429,8 @@
       },
       {
         "index": 77,
-        "locator": "div.modal-actions.xk-dat-modal-actions@L3809",
-        "line": 3809,
+        "locator": "div.modal-actions.xk-dat-modal-actions@L3820",
+        "line": 3820,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -4443,7 +4443,7 @@
       {
         "index": 78,
         "locator": "#mihomo-validation-summary-wrap",
-        "line": 3851,
+        "line": 3862,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4456,7 +4456,7 @@
       {
         "index": 79,
         "locator": "#mihomo-validation-explain-wrap",
-        "line": 3856,
+        "line": 3867,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4469,7 +4469,7 @@
       {
         "index": 80,
         "locator": "#mihomo-validation-side-panel",
-        "line": 3863,
+        "line": 3874,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4482,7 +4482,7 @@
       {
         "index": 81,
         "locator": "#mihomo-validation-log-wrap",
-        "line": 3864,
+        "line": 3875,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4494,8 +4494,8 @@
       },
       {
         "index": 82,
-        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L3890",
-        "line": 3890,
+        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L3901",
+        "line": 3901,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-wrap:wrap;",
         "declarations": [
@@ -4512,7 +4512,7 @@
       {
         "index": 83,
         "locator": "#ssh-profiles-list",
-        "line": 3897,
+        "line": 3908,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column;",
         "declarations": [
@@ -4528,8 +4528,8 @@
       },
       {
         "index": 84,
-        "locator": "hr.xk-modal-m-0.xk-modal-mt-12.xk-modal-mb-12@L3899",
-        "line": 3899,
+        "locator": "hr.xk-modal-m-0.xk-modal-mt-12.xk-modal-mb-12@L3910",
+        "line": 3910,
         "kind": "presentation-geometry",
         "source": "border:0; border-top:1px solid #334155;",
         "declarations": [
@@ -4545,8 +4545,8 @@
       },
       {
         "index": 85,
-        "locator": "div.xk-modal-gap-8@L3901",
-        "line": 3901,
+        "locator": "div.xk-modal-gap-8@L3912",
+        "line": 3912,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column;",
         "declarations": [
@@ -4562,8 +4562,8 @@
       },
       {
         "index": 86,
-        "locator": "label@L3902",
-        "line": 3902,
+        "locator": "label@L3913",
+        "line": 3913,
         "kind": "presentation-geometry",
         "source": "opacity:.85;",
         "declarations": [
@@ -4576,7 +4576,7 @@
       {
         "index": 87,
         "locator": "#ssh-command-preview",
-        "line": 3903,
+        "line": 3914,
         "kind": "presentation-geometry",
         "source": "width:100%;",
         "declarations": [
@@ -4588,8 +4588,8 @@
       },
       {
         "index": 88,
-        "locator": "div.xk-modal-gap-8@L3904",
-        "line": 3904,
+        "locator": "div.xk-modal-gap-8@L3915",
+        "line": 3915,
         "kind": "presentation-geometry",
         "source": "display:flex; justify-content:flex-end; flex-wrap:wrap;",
         "declarations": [
@@ -4609,8 +4609,8 @@
       },
       {
         "index": 89,
-        "locator": "div.xk-modal-gap-8@L3946",
-        "line": 3946,
+        "locator": "div.xk-modal-gap-8@L3957",
+        "line": 3957,
         "kind": "presentation-geometry",
         "source": "display:flex; justify-content:flex-end;",
         "declarations": [
@@ -4627,7 +4627,7 @@
       {
         "index": 90,
         "locator": "#ssh-confirm-text",
-        "line": 3962,
+        "line": 3973,
         "kind": "presentation-geometry",
         "source": "white-space:pre-wrap;",
         "declarations": [
@@ -4639,8 +4639,8 @@
       },
       {
         "index": 91,
-        "locator": "div.modal-actions@L3964",
-        "line": 3964,
+        "locator": "div.modal-actions@L3975",
+        "line": 3975,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -4652,8 +4652,8 @@
       },
       {
         "index": 92,
-        "locator": "div.modal-body.xk-modal-gap-10@L3977",
-        "line": 3977,
+        "locator": "div.modal-body.xk-modal-gap-10@L3988",
+        "line": 3988,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column;",
         "declarations": [
@@ -4670,7 +4670,7 @@
       {
         "index": 93,
         "locator": "#ssh-transfer-help",
-        "line": 3978,
+        "line": 3989,
         "kind": "presentation-geometry",
         "source": "opacity:.85;",
         "declarations": [
@@ -4683,7 +4683,7 @@
       {
         "index": 94,
         "locator": "#ssh-transfer-text",
-        "line": 3979,
+        "line": 3990,
         "kind": "presentation-geometry",
         "source": "min-height:280px;",
         "declarations": [
@@ -4695,8 +4695,8 @@
       },
       {
         "index": 95,
-        "locator": "div.xk-modal-gap-8@L3984",
-        "line": 3984,
+        "locator": "div.xk-modal-gap-8@L3995",
+        "line": 3995,
         "kind": "presentation-geometry",
         "source": "display:flex; justify-content:flex-end;",
         "declarations": [
@@ -4712,8 +4712,8 @@
       },
       {
         "index": 96,
-        "locator": "div.xk-modal-gap-8@L4003",
-        "line": 4003,
+        "locator": "div.xk-modal-gap-8@L4014",
+        "line": 4014,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -4730,7 +4730,7 @@
       {
         "index": 97,
         "locator": "#fm-conn-profile",
-        "line": 4004,
+        "line": 4015,
         "kind": "presentation-geometry",
         "source": "flex:1;",
         "declarations": [
@@ -4743,7 +4743,7 @@
       {
         "index": 98,
         "locator": "#fm-key-file-label",
-        "line": 4035,
+        "line": 4046,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4756,7 +4756,7 @@
       {
         "index": 99,
         "locator": "#fm-key-file",
-        "line": 4036,
+        "line": 4047,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4769,7 +4769,7 @@
       {
         "index": 100,
         "locator": "#fm-key-path-label",
-        "line": 4038,
+        "line": 4049,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4782,7 +4782,7 @@
       {
         "index": 101,
         "locator": "#fm-key-path",
-        "line": 4039,
+        "line": 4050,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4795,7 +4795,7 @@
       {
         "index": 102,
         "locator": "#fm-passphrase-label",
-        "line": 4041,
+        "line": 4052,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4808,7 +4808,7 @@
       {
         "index": 103,
         "locator": "#fm-passphrase",
-        "line": 4042,
+        "line": 4053,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4820,8 +4820,8 @@
       },
       {
         "index": 104,
-        "locator": "div.xk-modal-gap-8@L4045",
-        "line": 4045,
+        "locator": "div.xk-modal-gap-8@L4056",
+        "line": 4056,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -4838,7 +4838,7 @@
       {
         "index": 105,
         "locator": "#fm-hostkey-policy",
-        "line": 4046,
+        "line": 4057,
         "kind": "presentation-geometry",
         "source": "flex:1;",
         "declarations": [
@@ -4851,7 +4851,7 @@
       {
         "index": 106,
         "locator": "#fm-hostkey-row",
-        "line": 4055,
+        "line": 4066,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -4868,7 +4868,7 @@
       {
         "index": 107,
         "locator": "#fm-hostkey-fp",
-        "line": 4056,
+        "line": 4067,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px; opacity:.85; flex:1;",
         "declarations": [
@@ -4888,8 +4888,8 @@
       },
       {
         "index": 108,
-        "locator": "div.xk-modal-gap-10@L4074",
-        "line": 4074,
+        "locator": "div.xk-modal-gap-10@L4085",
+        "line": 4085,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -4905,8 +4905,8 @@
       },
       {
         "index": 109,
-        "locator": "span@L4076",
-        "line": 4076,
+        "locator": "span@L4087",
+        "line": 4087,
         "kind": "presentation-geometry",
         "source": "opacity:.85;",
         "declarations": [
@@ -4919,7 +4919,7 @@
       {
         "index": 110,
         "locator": "#fm-connect-warn",
-        "line": 4080,
+        "line": 4091,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4931,8 +4931,8 @@
       },
       {
         "index": 111,
-        "locator": "div.modal-actions@L4082",
-        "line": 4082,
+        "locator": "div.modal-actions@L4093",
+        "line": 4093,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -4945,7 +4945,7 @@
       {
         "index": 112,
         "locator": "#fm-knownhosts-path",
-        "line": 4098,
+        "line": 4109,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px; opacity:.85;",
         "declarations": [
@@ -4961,8 +4961,8 @@
       },
       {
         "index": 113,
-        "locator": "div.form-row.xk-modal-gap-8.xk-modal-m-0@L4100",
-        "line": 4100,
+        "locator": "div.form-row.xk-modal-gap-8.xk-modal-m-0@L4111",
+        "line": 4111,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -4982,8 +4982,8 @@
       },
       {
         "index": 114,
-        "locator": "label@L4101",
-        "line": 4101,
+        "locator": "label@L4112",
+        "line": 4112,
         "kind": "presentation-geometry",
         "source": "min-width:170px;",
         "declarations": [
@@ -4996,7 +4996,7 @@
       {
         "index": 115,
         "locator": "#fm-knownhosts-remove-host",
-        "line": 4102,
+        "line": 4113,
         "kind": "presentation-geometry",
         "source": "flex:1; min-width:260px;",
         "declarations": [
@@ -5012,8 +5012,8 @@
       },
       {
         "index": 116,
-        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L4106",
-        "line": 4106,
+        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L4117",
+        "line": 4117,
         "kind": "presentation-geometry",
         "source": "display:flex; justify-content:flex-end; flex-wrap:wrap;",
         "declarations": [
@@ -5034,7 +5034,7 @@
       {
         "index": 117,
         "locator": "#fm-knownhosts-hashed-hint",
-        "line": 4111,
+        "line": 4122,
         "kind": "mixed-state-and-presentation",
         "source": "display:none; opacity:.75;",
         "declarations": [
@@ -5051,7 +5051,7 @@
       {
         "index": 118,
         "locator": "#fm-knownhosts-body",
-        "line": 4112,
+        "line": 4123,
         "kind": "presentation-geometry",
         "source": "max-height:380px; overflow:auto;",
         "declarations": [
@@ -5067,8 +5067,8 @@
       },
       {
         "index": 119,
-        "locator": "div.status.xk-modal-mt-10@L4113",
-        "line": 4113,
+        "locator": "div.status.xk-modal-mt-10@L4124",
+        "line": 4124,
         "kind": "presentation-geometry",
         "source": "opacity:.75;",
         "declarations": [
@@ -5080,8 +5080,8 @@
       },
       {
         "index": 120,
-        "locator": "div.modal-actions@L4115",
-        "line": 4115,
+        "locator": "div.modal-actions@L4126",
+        "line": 4126,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5094,7 +5094,7 @@
       {
         "index": 121,
         "locator": "#fm-create-dest",
-        "line": 4134,
+        "line": 4145,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -5106,8 +5106,8 @@
       },
       {
         "index": 122,
-        "locator": "label.xk-modal-gap-8@L4137",
-        "line": 4137,
+        "locator": "label.xk-modal-gap-8@L4148",
+        "line": 4148,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5124,7 +5124,7 @@
       {
         "index": 123,
         "locator": "#fm-create-createonly-row",
-        "line": 4143,
+        "line": 4154,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5140,8 +5140,8 @@
       },
       {
         "index": 124,
-        "locator": "div.modal-actions@L4150",
-        "line": 4150,
+        "locator": "div.modal-actions@L4161",
+        "line": 4161,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5154,7 +5154,7 @@
       {
         "index": 125,
         "locator": "#fm-rename-src",
-        "line": 4171,
+        "line": 4182,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -5166,8 +5166,8 @@
       },
       {
         "index": 126,
-        "locator": "div.status.xk-modal-mt-10@L4173",
-        "line": 4173,
+        "locator": "div.status.xk-modal-mt-10@L4184",
+        "line": 4184,
         "kind": "presentation-geometry",
         "source": "opacity:.8;",
         "declarations": [
@@ -5179,8 +5179,8 @@
       },
       {
         "index": 127,
-        "locator": "div.modal-actions@L4176",
-        "line": 4176,
+        "locator": "div.modal-actions@L4187",
+        "line": 4187,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5192,8 +5192,8 @@
       },
       {
         "index": 128,
-        "locator": "div.fm-form-grid@L4191",
-        "line": 4191,
+        "locator": "div.fm-form-grid@L4202",
+        "line": 4202,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 160px 1fr;",
         "declarations": [
@@ -5206,7 +5206,7 @@
       {
         "index": 129,
         "locator": "#fm-archive-src",
-        "line": 4193,
+        "line": 4204,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -5219,7 +5219,7 @@
       {
         "index": 130,
         "locator": "#fm-archive-list",
-        "line": 4196,
+        "line": 4207,
         "kind": "presentation-geometry",
         "source": "max-height:180px;",
         "declarations": [
@@ -5231,8 +5231,8 @@
       },
       {
         "index": 131,
-        "locator": "label.xk-modal-gap-8@L4208",
-        "line": 4208,
+        "locator": "label.xk-modal-gap-8@L4219",
+        "line": 4219,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5248,8 +5248,8 @@
       },
       {
         "index": 132,
-        "locator": "div.modal-actions@L4215",
-        "line": 4215,
+        "locator": "div.modal-actions@L4226",
+        "line": 4226,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5261,8 +5261,8 @@
       },
       {
         "index": 133,
-        "locator": "div.fm-form-grid@L4230",
-        "line": 4230,
+        "locator": "div.fm-form-grid@L4241",
+        "line": 4241,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 160px 1fr;",
         "declarations": [
@@ -5275,7 +5275,7 @@
       {
         "index": 134,
         "locator": "#fm-extract-archive",
-        "line": 4232,
+        "line": 4243,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -5287,8 +5287,8 @@
       },
       {
         "index": 135,
-        "locator": "div.xk-modal-gap-8@L4238",
-        "line": 4238,
+        "locator": "div.xk-modal-gap-8@L4249",
+        "line": 4249,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -5309,7 +5309,7 @@
       {
         "index": 136,
         "locator": "#fm-extract-dest-here-btn",
-        "line": 4239,
+        "line": 4250,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -5326,7 +5326,7 @@
       {
         "index": 137,
         "locator": "#fm-extract-dest-other-btn",
-        "line": 4240,
+        "line": 4251,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -5343,7 +5343,7 @@
       {
         "index": 138,
         "locator": "#fm-extract-dest-pick-btn",
-        "line": 4241,
+        "line": 4252,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -5359,8 +5359,8 @@
       },
       {
         "index": 139,
-        "locator": "span@L4242",
-        "line": 4242,
+        "locator": "span@L4253",
+        "line": 4253,
         "kind": "presentation-geometry",
         "source": "opacity:.7; font-size:12px;",
         "declarations": [
@@ -5376,8 +5376,8 @@
       },
       {
         "index": 140,
-        "locator": "label.xk-modal-gap-8@L4246",
-        "line": 4246,
+        "locator": "label.xk-modal-gap-8@L4257",
+        "line": 4257,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5393,8 +5393,8 @@
       },
       {
         "index": 141,
-        "locator": "label.xk-modal-gap-8@L4252",
-        "line": 4252,
+        "locator": "label.xk-modal-gap-8@L4263",
+        "line": 4263,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5410,8 +5410,8 @@
       },
       {
         "index": 142,
-        "locator": "label.xk-modal-gap-8@L4258",
-        "line": 4258,
+        "locator": "label.xk-modal-gap-8@L4269",
+        "line": 4269,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5427,8 +5427,8 @@
       },
       {
         "index": 143,
-        "locator": "label.xk-modal-gap-8@L4264",
-        "line": 4264,
+        "locator": "label.xk-modal-gap-8@L4275",
+        "line": 4275,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5444,8 +5444,8 @@
       },
       {
         "index": 144,
-        "locator": "div.status.xk-modal-mt-10@L4269",
-        "line": 4269,
+        "locator": "div.status.xk-modal-mt-10@L4280",
+        "line": 4280,
         "kind": "presentation-geometry",
         "source": "opacity:.75;",
         "declarations": [
@@ -5457,8 +5457,8 @@
       },
       {
         "index": 145,
-        "locator": "div.modal-actions@L4272",
-        "line": 4272,
+        "locator": "div.modal-actions@L4283",
+        "line": 4283,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5470,8 +5470,8 @@
       },
       {
         "index": 146,
-        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L4287",
-        "line": 4287,
+        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L4298",
+        "line": 4298,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -5492,7 +5492,7 @@
       {
         "index": 147,
         "locator": "#fm-folder-picker-up-btn",
-        "line": 4288,
+        "line": 4299,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -5509,7 +5509,7 @@
       {
         "index": 148,
         "locator": "#fm-folder-picker-home-btn",
-        "line": 4289,
+        "line": 4300,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -5526,7 +5526,7 @@
       {
         "index": 149,
         "locator": "#fm-folder-picker-path",
-        "line": 4290,
+        "line": 4301,
         "kind": "presentation-geometry",
         "source": "flex:1; min-width:220px;",
         "declarations": [
@@ -5543,7 +5543,7 @@
       {
         "index": 150,
         "locator": "#fm-folder-picker-status",
-        "line": 4292,
+        "line": 4303,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; opacity:.85;",
         "declarations": [
@@ -5560,7 +5560,7 @@
       {
         "index": 151,
         "locator": "#fm-folder-picker-list",
-        "line": 4293,
+        "line": 4304,
         "kind": "presentation-geometry",
         "source": "max-height:420px; overflow:auto; padding:0;",
         "declarations": [
@@ -5580,8 +5580,8 @@
       },
       {
         "index": 152,
-        "locator": "div.modal-actions@L4296",
-        "line": 4296,
+        "locator": "div.modal-actions@L4307",
+        "line": 4307,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5593,8 +5593,8 @@
       },
       {
         "index": 153,
-        "locator": "div.fm-form-grid@L4311",
-        "line": 4311,
+        "locator": "div.fm-form-grid@L4322",
+        "line": 4322,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 120px 1fr;",
         "declarations": [
@@ -5607,7 +5607,7 @@
       {
         "index": 154,
         "locator": "#fm-archive-list-path",
-        "line": 4313,
+        "line": 4324,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -5619,8 +5619,8 @@
       },
       {
         "index": 155,
-        "locator": "div.xk-modal-gap-8.xk-modal-m-0.xk-modal-mb-6@L4317",
-        "line": 4317,
+        "locator": "div.xk-modal-gap-8.xk-modal-m-0.xk-modal-mb-6@L4328",
+        "line": 4328,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5637,7 +5637,7 @@
       {
         "index": 156,
         "locator": "#fm-archive-list-filter",
-        "line": 4318,
+        "line": 4329,
         "kind": "presentation-geometry",
         "source": "flex:1; min-width:200px;",
         "declarations": [
@@ -5654,7 +5654,7 @@
       {
         "index": 157,
         "locator": "#fm-archive-list-body",
-        "line": 4322,
+        "line": 4333,
         "kind": "presentation-geometry",
         "source": "max-height:420px; overflow:auto; padding:0;",
         "declarations": [
@@ -5675,7 +5675,7 @@
       {
         "index": 158,
         "locator": "#fm-archive-list-meta",
-        "line": 4326,
+        "line": 4337,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; opacity:.8;",
         "declarations": [
@@ -5691,8 +5691,8 @@
       },
       {
         "index": 159,
-        "locator": "div.modal-actions.xk-modal-gap-10@L4330",
-        "line": 4330,
+        "locator": "div.modal-actions.xk-modal-gap-10@L4341",
+        "line": 4341,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5704,8 +5704,8 @@
       },
       {
         "index": 160,
-        "locator": "div.status.xk-modal-m-0@L4352",
-        "line": 4352,
+        "locator": "div.status.xk-modal-m-0@L4363",
+        "line": 4363,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -5717,8 +5717,8 @@
       },
       {
         "index": 161,
-        "locator": "div.modal-actions@L4356",
-        "line": 4356,
+        "locator": "div.modal-actions@L4367",
+        "line": 4367,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5730,8 +5730,8 @@
       },
       {
         "index": 162,
-        "locator": "div.xk-modal-gap-2@L4367",
-        "line": 4367,
+        "locator": "div.xk-modal-gap-2@L4378",
+        "line": 4378,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column;",
         "declarations": [
@@ -5748,7 +5748,7 @@
       {
         "index": 163,
         "locator": "#fm-props-modal-meta",
-        "line": 4369,
+        "line": 4380,
         "kind": "presentation-geometry",
         "source": "padding:0; background:transparent; border:none; opacity:.75; font-size:0.82rem;",
         "declarations": [
@@ -5776,8 +5776,8 @@
       },
       {
         "index": 164,
-        "locator": "div.modal-actions@L4376",
-        "line": 4376,
+        "locator": "div.modal-actions@L4387",
+        "line": 4387,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5789,8 +5789,8 @@
       },
       {
         "index": 165,
-        "locator": "div.xk-modal-gap-2@L4386",
-        "line": 4386,
+        "locator": "div.xk-modal-gap-2@L4397",
+        "line": 4397,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column;",
         "declarations": [
@@ -5807,7 +5807,7 @@
       {
         "index": 166,
         "locator": "#fm-hash-meta",
-        "line": 4388,
+        "line": 4399,
         "kind": "presentation-geometry",
         "source": "padding:0; background:transparent; border:none; opacity:.75; font-size:0.82rem;",
         "declarations": [
@@ -5835,8 +5835,8 @@
       },
       {
         "index": 167,
-        "locator": "div.fm-form-grid@L4393",
-        "line": 4393,
+        "locator": "div.fm-form-grid@L4404",
+        "line": 4404,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 120px 1fr auto; align-items:center;",
         "declarations": [
@@ -5852,8 +5852,8 @@
       },
       {
         "index": 168,
-        "locator": "div.modal-actions@L4408",
-        "line": 4408,
+        "locator": "div.modal-actions@L4419",
+        "line": 4419,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5865,8 +5865,8 @@
       },
       {
         "index": 169,
-        "locator": "div.fm-form-grid@L4422",
-        "line": 4422,
+        "locator": "div.fm-form-grid@L4433",
+        "line": 4433,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 160px 1fr;",
         "declarations": [
@@ -5879,7 +5879,7 @@
       {
         "index": 170,
         "locator": "#fm-chmod-src",
-        "line": 4424,
+        "line": 4435,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -5892,7 +5892,7 @@
       {
         "index": 171,
         "locator": "#fm-chmod-list",
-        "line": 4427,
+        "line": 4438,
         "kind": "presentation-geometry",
         "source": "max-height:160px;",
         "declarations": [
@@ -5904,8 +5904,8 @@
       },
       {
         "index": 172,
-        "locator": "div.status.xk-modal-m-0@L4433",
-        "line": 4433,
+        "locator": "div.status.xk-modal-m-0@L4444",
+        "line": 4444,
         "kind": "presentation-geometry",
         "source": "opacity:.8;",
         "declarations": [
@@ -5917,8 +5917,8 @@
       },
       {
         "index": 173,
-        "locator": "div.modal-actions@L4460",
-        "line": 4460,
+        "locator": "div.modal-actions@L4471",
+        "line": 4471,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5930,8 +5930,8 @@
       },
       {
         "index": 174,
-        "locator": "div.fm-form-grid@L4475",
-        "line": 4475,
+        "locator": "div.fm-form-grid@L4486",
+        "line": 4486,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 160px 1fr;",
         "declarations": [
@@ -5944,7 +5944,7 @@
       {
         "index": 175,
         "locator": "#fm-chown-src",
-        "line": 4477,
+        "line": 4488,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -5957,7 +5957,7 @@
       {
         "index": 176,
         "locator": "#fm-chown-list",
-        "line": 4480,
+        "line": 4491,
         "kind": "presentation-geometry",
         "source": "max-height:160px;",
         "declarations": [
@@ -5969,8 +5969,8 @@
       },
       {
         "index": 177,
-        "locator": "div.status.xk-modal-m-0@L4489",
-        "line": 4489,
+        "locator": "div.status.xk-modal-m-0@L4500",
+        "line": 4500,
         "kind": "presentation-geometry",
         "source": "opacity:.8;",
         "declarations": [
@@ -5982,8 +5982,8 @@
       },
       {
         "index": 178,
-        "locator": "div.modal-actions@L4493",
-        "line": 4493,
+        "locator": "div.modal-actions@L4504",
+        "line": 4504,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5995,8 +5995,8 @@
       },
       {
         "index": 179,
-        "locator": "div.status.xk-modal-mt-10@L4511",
-        "line": 4511,
+        "locator": "div.status.xk-modal-mt-10@L4522",
+        "line": 4522,
         "kind": "presentation-geometry",
         "source": "opacity:.8;",
         "declarations": [
@@ -6008,8 +6008,8 @@
       },
       {
         "index": 180,
-        "locator": "div.modal-actions@L4513",
-        "line": 4513,
+        "locator": "div.modal-actions@L4524",
+        "line": 4524,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6021,8 +6021,8 @@
       },
       {
         "index": 181,
-        "locator": "label.xk-modal-gap-8@L4531",
-        "line": 4531,
+        "locator": "label.xk-modal-gap-8@L4542",
+        "line": 4542,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -6038,8 +6038,8 @@
       },
       {
         "index": 182,
-        "locator": "span@L4532",
-        "line": 4532,
+        "locator": "span@L4543",
+        "line": 4543,
         "kind": "presentation-geometry",
         "source": "opacity:.85;",
         "declarations": [
@@ -6051,8 +6051,8 @@
       },
       {
         "index": 183,
-        "locator": "div.modal-actions@L4541",
-        "line": 4541,
+        "locator": "div.modal-actions@L4552",
+        "line": 4552,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6065,7 +6065,7 @@
       {
         "index": 184,
         "locator": "#fm-bookmarks-error",
-        "line": 4560,
+        "line": 4571,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -6078,7 +6078,7 @@
       {
         "index": 185,
         "locator": "#fm-download-multi-desc",
-        "line": 4584,
+        "line": 4595,
         "kind": "presentation-geometry",
         "source": "opacity:.9;",
         "declarations": [
@@ -6090,8 +6090,8 @@
       },
       {
         "index": 186,
-        "locator": "div.xk-modal-gap-10@L4586",
-        "line": 4586,
+        "locator": "div.xk-modal-gap-10@L4597",
+        "line": 4597,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column;",
         "declarations": [
@@ -6107,8 +6107,8 @@
       },
       {
         "index": 187,
-        "locator": "label.xk-modal-gap-10@L4587",
-        "line": 4587,
+        "locator": "label.xk-modal-gap-10@L4598",
+        "line": 4598,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:flex-start;",
         "declarations": [
@@ -6124,8 +6124,8 @@
       },
       {
         "index": 188,
-        "locator": "div@L4590",
-        "line": 4590,
+        "locator": "div@L4601",
+        "line": 4601,
         "kind": "presentation-geometry",
         "source": "font-weight:600;",
         "declarations": [
@@ -6137,8 +6137,8 @@
       },
       {
         "index": 189,
-        "locator": "div@L4591",
-        "line": 4591,
+        "locator": "div@L4602",
+        "line": 4602,
         "kind": "presentation-geometry",
         "source": "font-size:12px; opacity:.8;",
         "declarations": [
@@ -6154,8 +6154,8 @@
       },
       {
         "index": 190,
-        "locator": "label.xk-modal-gap-10@L4595",
-        "line": 4595,
+        "locator": "label.xk-modal-gap-10@L4606",
+        "line": 4606,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:flex-start;",
         "declarations": [
@@ -6171,8 +6171,8 @@
       },
       {
         "index": 191,
-        "locator": "div@L4598",
-        "line": 4598,
+        "locator": "div@L4609",
+        "line": 4609,
         "kind": "presentation-geometry",
         "source": "font-weight:600;",
         "declarations": [
@@ -6185,7 +6185,7 @@
       {
         "index": 192,
         "locator": "#fm-download-multi-queue-hint",
-        "line": 4599,
+        "line": 4610,
         "kind": "presentation-geometry",
         "source": "font-size:12px; opacity:.8;",
         "declarations": [
@@ -6201,8 +6201,8 @@
       },
       {
         "index": 193,
-        "locator": "label.xk-modal-gap-8.xk-modal-mt-12@L4604",
-        "line": 4604,
+        "locator": "label.xk-modal-gap-8.xk-modal-mt-12@L4615",
+        "line": 4615,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -6218,8 +6218,8 @@
       },
       {
         "index": 194,
-        "locator": "span@L4606",
-        "line": 4606,
+        "locator": "span@L4617",
+        "line": 4617,
         "kind": "presentation-geometry",
         "source": "font-size:12px; opacity:.9;",
         "declarations": [
@@ -6235,8 +6235,8 @@
       },
       {
         "index": 195,
-        "locator": "div.modal-actions.xk-modal-gap-10@L4609",
-        "line": 4609,
+        "locator": "div.modal-actions.xk-modal-gap-10@L4620",
+        "line": 4620,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6248,8 +6248,8 @@
       },
       {
         "index": 196,
-        "locator": "div.modal-actions@L4630",
-        "line": 4630,
+        "locator": "div.modal-actions@L4641",
+        "line": 4641,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6261,8 +6261,8 @@
       },
       {
         "index": 197,
-        "locator": "div.xk-modal-gap-8.xk-modal-mb-8@L4645",
-        "line": 4645,
+        "locator": "div.xk-modal-gap-8.xk-modal-mb-8@L4656",
+        "line": 4656,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;",
         "declarations": [
@@ -6286,8 +6286,8 @@
       },
       {
         "index": 198,
-        "locator": "div.xk-modal-gap-8@L4646",
-        "line": 4646,
+        "locator": "div.xk-modal-gap-8@L4657",
+        "line": 4657,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -6307,8 +6307,8 @@
       },
       {
         "index": 199,
-        "locator": "label.xk-modal-gap-6@L4647",
-        "line": 4647,
+        "locator": "label.xk-modal-gap-6@L4658",
+        "line": 4658,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; opacity:.9;",
         "declarations": [
@@ -6328,8 +6328,8 @@
       },
       {
         "index": 200,
-        "locator": "span@L4648",
-        "line": 4648,
+        "locator": "span@L4659",
+        "line": 4659,
         "kind": "presentation-geometry",
         "source": "font-size:12px;",
         "declarations": [
@@ -6342,7 +6342,7 @@
       {
         "index": 201,
         "locator": "#fm-ops-filter",
-        "line": 4649,
+        "line": 4660,
         "kind": "presentation-geometry",
         "source": "height:32px;",
         "declarations": [
@@ -6354,8 +6354,8 @@
       },
       {
         "index": 202,
-        "locator": "div.xk-modal-gap-8@L4657",
-        "line": 4657,
+        "locator": "div.xk-modal-gap-8@L4668",
+        "line": 4668,
         "kind": "presentation-geometry",
         "source": "display:flex; justify-content:flex-end; flex-wrap:wrap;",
         "declarations": [
@@ -6376,7 +6376,7 @@
       {
         "index": 203,
         "locator": "#fm-ops-summary",
-        "line": 4662,
+        "line": 4673,
         "kind": "presentation-geometry",
         "source": "font-size:12px; opacity:.85;",
         "declarations": [
@@ -6392,8 +6392,8 @@
       },
       {
         "index": 204,
-        "locator": "div.xk-modal-gap-10.xk-modal-mb-10@L4676",
-        "line": 4676,
+        "locator": "div.xk-modal-gap-10.xk-modal-mb-10@L4687",
+        "line": 4687,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;",
         "declarations": [
@@ -6417,8 +6417,8 @@
       },
       {
         "index": 205,
-        "locator": "div.xk-modal-gap-8@L4677",
-        "line": 4677,
+        "locator": "div.xk-modal-gap-8@L4688",
+        "line": 4688,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -6439,7 +6439,7 @@
       {
         "index": 206,
         "locator": "#fm-volumes-spinner",
-        "line": 4679,
+        "line": 4690,
         "kind": "presentation-geometry",
         "source": "opacity:.85;",
         "declarations": [
@@ -6452,7 +6452,7 @@
       {
         "index": 207,
         "locator": "#fm-volumes-summary",
-        "line": 4681,
+        "line": 4692,
         "kind": "presentation-geometry",
         "source": "font-size:12px; opacity:.85;",
         "declarations": [
@@ -6468,8 +6468,8 @@
       },
       {
         "index": 208,
-        "locator": "div.status.xk-modal-mt-10@L4685",
-        "line": 4685,
+        "locator": "div.status.xk-modal-mt-10@L4696",
+        "line": 4696,
         "kind": "presentation-geometry",
         "source": "opacity:.75;",
         "declarations": [
@@ -6481,8 +6481,8 @@
       },
       {
         "index": 209,
-        "locator": "div.modal-actions@L4750",
-        "line": 4750,
+        "locator": "div.modal-actions@L4761",
+        "line": 4761,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6495,8 +6495,8 @@
     ]
   },
   "dom_contract": {
-    "id_count": 1086,
-    "unique_id_count": 1086,
+    "id_count": 1089,
+    "unique_id_count": 1089,
     "duplicate_ids": [],
     "ids": [
       "backups-clear-snapshots-btn",
@@ -6916,6 +6916,8 @@
       "mihomo-clash-migration-status",
       "mihomo-clash-migration-title",
       "mihomo-clash-migration-transport",
+      "mihomo-clash-mode-menu",
+      "mihomo-clash-mode-switch",
       "mihomo-clash-panel-config",
       "mihomo-clash-panel-connections",
       "mihomo-clash-panel-control",
@@ -6951,6 +6953,7 @@
       "mihomo-clash-show-timeout-hidden",
       "mihomo-clash-status-label",
       "mihomo-clash-status-mode",
+      "mihomo-clash-status-mode-value",
       "mihomo-clash-status-strip",
       "mihomo-clash-status-version",
       "mihomo-clash-stream-state",
@@ -7586,7 +7589,7 @@
       "xray-snapshot-status",
       "xray-snapshot-title"
     ],
-    "data_attribute_count": 486,
+    "data_attribute_count": 490,
     "data_attributes": [
       {
         "locator": "header.panel-header.panel-header-shell@L81",
@@ -8254,6 +8257,26 @@
         "value": "retry"
       },
       {
+        "locator": "#mihomo-clash-status-mode",
+        "name": "data-mihomo-clash-action",
+        "value": "mode-menu"
+      },
+      {
+        "locator": "button@L1009",
+        "name": "data-mihomo-runtime-mode",
+        "value": "rule"
+      },
+      {
+        "locator": "button@L1010",
+        "name": "data-mihomo-runtime-mode",
+        "value": "global"
+      },
+      {
+        "locator": "button@L1011",
+        "name": "data-mihomo-runtime-mode",
+        "value": "direct"
+      },
+      {
         "locator": "#mihomo-clash-panel-switch",
         "name": "data-mihomo-clash-action",
         "value": "panel-switch"
@@ -8264,7 +8287,7 @@
         "value": "migration-preview"
       },
       {
-        "locator": "button.btn-secondary.btn-icon@L1026",
+        "locator": "button.btn-secondary.btn-icon@L1037",
         "name": "data-mihomo-clash-action",
         "value": "migration-close"
       },
@@ -8279,12 +8302,12 @@
         "value": "control"
       },
       {
-        "locator": "button.btn-secondary@L1056",
+        "locator": "button.btn-secondary@L1067",
         "name": "data-mihomo-clash-action",
         "value": "retry"
       },
       {
-        "locator": "button.btn-secondary@L1057",
+        "locator": "button.btn-secondary@L1068",
         "name": "data-mihomo-clash-action",
         "value": "open-config"
       },
@@ -8314,27 +8337,27 @@
         "value": "closed"
       },
       {
-        "locator": "button@L1126",
+        "locator": "button@L1137",
         "name": "data-mihomo-connection-sort",
         "value": "source"
       },
       {
-        "locator": "button@L1127",
+        "locator": "button@L1138",
         "name": "data-mihomo-connection-sort",
         "value": "destination"
       },
       {
-        "locator": "button@L1128",
+        "locator": "button@L1139",
         "name": "data-mihomo-connection-sort",
         "value": "route"
       },
       {
-        "locator": "button@L1129",
+        "locator": "button@L1140",
         "name": "data-mihomo-connection-sort",
         "value": "traffic"
       },
       {
-        "locator": "button@L1130",
+        "locator": "button@L1141",
         "name": "data-mihomo-connection-sort",
         "value": "age"
       },
@@ -8349,7 +8372,7 @@
         "value": ""
       },
       {
-        "locator": "button.btn-secondary.btn-icon@L1143",
+        "locator": "button.btn-secondary.btn-icon@L1154",
         "name": "data-mihomo-connection-inspector-close",
         "value": ""
       },
@@ -8359,7 +8382,7 @@
         "value": "rules"
       },
       {
-        "locator": "button.btn-secondary.btn-icon@L1185",
+        "locator": "button.btn-secondary.btn-icon@L1196",
         "name": "data-mihomo-provider-inspector-close",
         "value": ""
       },
@@ -8374,7 +8397,7 @@
         "value": "config"
       },
       {
-        "locator": "div.commands-header@L1222",
+        "locator": "div.commands-header@L1233",
         "name": "data-xk-toggle",
         "value": "mihomo-card"
       },
@@ -8389,7 +8412,7 @@
         "value": "Сохранить и перезапустить mihomo"
       },
       {
-        "locator": "summary.terminal-tool-btn.xk-mihomo-menu-trigger@L1254",
+        "locator": "summary.terminal-tool-btn.xk-mihomo-menu-trigger@L1265",
         "name": "data-tooltip",
         "value": "Меню"
       },
@@ -8439,37 +8462,37 @@
         "value": "JSON-схема Mihomo пока не загружена."
       },
       {
-        "locator": "button.btn-secondary.log-btn.btn-icon@L1473",
+        "locator": "button.btn-secondary.log-btn.btn-icon@L1484",
         "name": "data-xk-restart-log-filter",
         "value": "all"
       },
       {
-        "locator": "button.btn-secondary.log-btn.btn-icon@L1474",
+        "locator": "button.btn-secondary.log-btn.btn-icon@L1485",
         "name": "data-xk-restart-log-filter",
         "value": "errors"
       },
       {
-        "locator": "button.btn-secondary.log-btn.btn-icon@L1475",
+        "locator": "button.btn-secondary.log-btn.btn-icon@L1486",
         "name": "data-xk-restart-log-action",
         "value": "refresh"
       },
       {
-        "locator": "button.btn-secondary.log-btn.btn-icon@L1476",
+        "locator": "button.btn-secondary.log-btn.btn-icon@L1487",
         "name": "data-xk-restart-log-action",
         "value": "clear"
       },
       {
-        "locator": "button.btn-secondary.log-btn.btn-icon@L1477",
+        "locator": "button.btn-secondary.log-btn.btn-icon@L1488",
         "name": "data-xk-restart-log-action",
         "value": "copy"
       },
       {
-        "locator": "div.restart-log-summary@L1480",
+        "locator": "div.restart-log-summary@L1491",
         "name": "data-xk-restart-log-summary",
         "value": "1"
       },
       {
-        "locator": "pre.log-block@L1481",
+        "locator": "pre.log-block@L1492",
         "name": "data-xk-restart-log",
         "value": "1"
       },
@@ -8479,7 +8502,7 @@
         "value": "xkeen"
       },
       {
-        "locator": "div.commands-header@L1488",
+        "locator": "div.commands-header@L1499",
         "name": "data-xk-toggle",
         "value": "xkeen-settings"
       },
@@ -8504,37 +8527,37 @@
         "value": "Сохранить файл xkeen.json."
       },
       {
-        "locator": "button.btn-secondary.log-btn.btn-icon@L1588",
+        "locator": "button.btn-secondary.log-btn.btn-icon@L1599",
         "name": "data-xk-restart-log-filter",
         "value": "all"
       },
       {
-        "locator": "button.btn-secondary.log-btn.btn-icon@L1589",
+        "locator": "button.btn-secondary.log-btn.btn-icon@L1600",
         "name": "data-xk-restart-log-filter",
         "value": "errors"
       },
       {
-        "locator": "button.btn-secondary.log-btn.btn-icon@L1590",
+        "locator": "button.btn-secondary.log-btn.btn-icon@L1601",
         "name": "data-xk-restart-log-action",
         "value": "refresh"
       },
       {
-        "locator": "button.btn-secondary.log-btn.btn-icon@L1591",
+        "locator": "button.btn-secondary.log-btn.btn-icon@L1602",
         "name": "data-xk-restart-log-action",
         "value": "clear"
       },
       {
-        "locator": "button.btn-secondary.log-btn.btn-icon@L1592",
+        "locator": "button.btn-secondary.log-btn.btn-icon@L1603",
         "name": "data-xk-restart-log-action",
         "value": "copy"
       },
       {
-        "locator": "div.restart-log-summary@L1595",
+        "locator": "div.restart-log-summary@L1606",
         "name": "data-xk-restart-log-summary",
         "value": "1"
       },
       {
-        "locator": "pre.log-block@L1596",
+        "locator": "pre.log-block@L1607",
         "name": "data-xk-restart-log",
         "value": "1"
       },
@@ -8604,227 +8627,227 @@
         "value": "Запустить обновление Mihomo до pre-release через терминал с авто-вводом версии."
       },
       {
-        "locator": "div.commands-column@L1691",
+        "locator": "div.commands-column@L1702",
         "name": "data-command-column",
         "value": "{{ loop.index }}"
       },
       {
-        "locator": "div.command-group{%.if._tone@L1696",
+        "locator": "div.command-group{%.if._tone@L1707",
         "name": "data-tone",
         "value": "{{ _tone or 'neutral' }}"
       },
       {
-        "locator": "div.command-item@L1706",
+        "locator": "div.command-item@L1717",
         "name": "data-action",
         "value": "run"
       },
       {
-        "locator": "div.command-item@L1706",
+        "locator": "div.command-item@L1717",
         "name": "data-command",
         "value": "xkeen {{ cmd.flag }}"
       },
       {
-        "locator": "div.command-item@L1706",
+        "locator": "div.command-item@L1717",
         "name": "data-flag",
         "value": "{{ cmd.flag }}"
       },
       {
-        "locator": "div.command-item@L1706",
+        "locator": "div.command-item@L1717",
         "name": "data-label",
         "value": "xkeen {{ cmd.flag }}"
       },
       {
-        "locator": "div.command-item@L1706",
+        "locator": "div.command-item@L1717",
         "name": "data-tooltip",
         "value": "{{ cmd.desc }}"
       },
       {
-        "locator": "div.command-group.tone-info@L1725",
+        "locator": "div.command-group.tone-info@L1736",
         "name": "data-tone",
         "value": "info"
       },
       {
-        "locator": "div.command-item@L1732",
+        "locator": "div.command-item@L1743",
         "name": "data-action",
         "value": "run"
       },
       {
-        "locator": "div.command-item@L1732",
+        "locator": "div.command-item@L1743",
         "name": "data-command",
         "value": "sysmon --full"
       },
       {
-        "locator": "div.command-item@L1732",
+        "locator": "div.command-item@L1743",
         "name": "data-flag",
         "value": "__sysmon_full"
       },
       {
-        "locator": "div.command-item@L1732",
+        "locator": "div.command-item@L1743",
         "name": "data-label",
         "value": "sysmon --full"
       },
       {
-        "locator": "div.command-item@L1732",
+        "locator": "div.command-item@L1743",
         "name": "data-tooltip",
         "value": "Мониторинг (расширенно): сеть/DNS/HTTPS/conntrack/ошибки интерфейсов/логи"
       },
       {
-        "locator": "div.command-item@L1745",
+        "locator": "div.command-item@L1756",
         "name": "data-action",
         "value": "run"
       },
       {
-        "locator": "div.command-item@L1745",
+        "locator": "div.command-item@L1756",
         "name": "data-command",
         "value": "entware-backup"
       },
       {
-        "locator": "div.command-item@L1745",
+        "locator": "div.command-item@L1756",
         "name": "data-flag",
         "value": "__entware_backup"
       },
       {
-        "locator": "div.command-item@L1745",
+        "locator": "div.command-item@L1756",
         "name": "data-label",
         "value": "entware-backup"
       },
       {
-        "locator": "div.command-item@L1745",
+        "locator": "div.command-item@L1756",
         "name": "data-tooltip",
         "value": "Создать tar.gz-бэкап Entware (/opt) на выбранный накопитель"
       },
       {
-        "locator": "div.command-item@L1758",
+        "locator": "div.command-item@L1769",
         "name": "data-action",
         "value": "run"
       },
       {
-        "locator": "div.command-item@L1758",
+        "locator": "div.command-item@L1769",
         "name": "data-command",
         "value": "storage-dashboard"
       },
       {
-        "locator": "div.command-item@L1758",
+        "locator": "div.command-item@L1769",
         "name": "data-flag",
         "value": "__storage_dashboard"
       },
       {
-        "locator": "div.command-item@L1758",
+        "locator": "div.command-item@L1769",
         "name": "data-label",
         "value": "storage-dashboard"
       },
       {
-        "locator": "div.command-item@L1758",
+        "locator": "div.command-item@L1769",
         "name": "data-tooltip",
         "value": "Дашборд хранилища: разделы, размеры, тип FS, использование, swap"
       },
       {
-        "locator": "div.command-item@L1771",
+        "locator": "div.command-item@L1782",
         "name": "data-action",
         "value": "run"
       },
       {
-        "locator": "div.command-item@L1771",
+        "locator": "div.command-item@L1782",
         "name": "data-command",
         "value": "device-locks"
       },
       {
-        "locator": "div.command-item@L1771",
+        "locator": "div.command-item@L1782",
         "name": "data-flag",
         "value": "__device_lock_detector"
       },
       {
-        "locator": "div.command-item@L1771",
+        "locator": "div.command-item@L1782",
         "name": "data-label",
         "value": "device-locks"
       },
       {
-        "locator": "div.command-item@L1771",
+        "locator": "div.command-item@L1782",
         "name": "data-tooltip",
         "value": "Детектор блокировок: какие процессы удерживают диски"
       },
       {
-        "locator": "div.command-item@L1784",
+        "locator": "div.command-item@L1795",
         "name": "data-action",
         "value": "run"
       },
       {
-        "locator": "div.command-item@L1784",
+        "locator": "div.command-item@L1795",
         "name": "data-command",
         "value": "memory-check"
       },
       {
-        "locator": "div.command-item@L1784",
+        "locator": "div.command-item@L1795",
         "name": "data-flag",
         "value": "__memory_check"
       },
       {
-        "locator": "div.command-item@L1784",
+        "locator": "div.command-item@L1795",
         "name": "data-label",
         "value": "memory-check"
       },
       {
-        "locator": "div.command-item@L1784",
+        "locator": "div.command-item@L1795",
         "name": "data-tooltip",
         "value": "Диагностика памяти: RAM, swap, буферы, предупреждения, топ процессов"
       },
       {
-        "locator": "div.command-item@L1797",
+        "locator": "div.command-item@L1808",
         "name": "data-action",
         "value": "run"
       },
       {
-        "locator": "div.command-item@L1797",
+        "locator": "div.command-item@L1808",
         "name": "data-command",
         "value": "version-check"
       },
       {
-        "locator": "div.command-item@L1797",
+        "locator": "div.command-item@L1808",
         "name": "data-flag",
         "value": "__version_check"
       },
       {
-        "locator": "div.command-item@L1797",
+        "locator": "div.command-item@L1808",
         "name": "data-label",
         "value": "version-check"
       },
       {
-        "locator": "div.command-item@L1797",
+        "locator": "div.command-item@L1808",
         "name": "data-tooltip",
         "value": "Проверка версий: xkeen, xkeen-ui, xray, mihomo — сравнение с GitHub"
       },
       {
-        "locator": "div.command-item@L1810",
+        "locator": "div.command-item@L1821",
         "name": "data-action",
         "value": "run"
       },
       {
-        "locator": "div.command-item@L1810",
+        "locator": "div.command-item@L1821",
         "name": "data-command",
         "value": "backup-monitor"
       },
       {
-        "locator": "div.command-item@L1810",
+        "locator": "div.command-item@L1821",
         "name": "data-flag",
         "value": "__backup_monitor"
       },
       {
-        "locator": "div.command-item@L1810",
+        "locator": "div.command-item@L1821",
         "name": "data-label",
         "value": "backup-monitor"
       },
       {
-        "locator": "div.command-item@L1810",
+        "locator": "div.command-item@L1821",
         "name": "data-tooltip",
         "value": "Монитор бэкапов: список архивов, валидация, статус последнего бэкапа"
       },
       {
-        "locator": "button.btn-secondary.log-btn.btn-icon@L1835",
+        "locator": "button.btn-secondary.log-btn.btn-icon@L1846",
         "name": "data-xk-restart-log-filter",
         "value": "all"
       },
       {
-        "locator": "button.btn-secondary.log-btn.btn-icon@L1836",
+        "locator": "button.btn-secondary.log-btn.btn-icon@L1847",
         "name": "data-xk-restart-log-filter",
         "value": "errors"
       },
@@ -8844,7 +8867,7 @@
         "value": "copy"
       },
       {
-        "locator": "div.restart-log-summary@L1842",
+        "locator": "div.restart-log-summary@L1853",
         "name": "data-xk-restart-log-summary",
         "value": "1"
       },
@@ -8859,7 +8882,7 @@
         "value": "files"
       },
       {
-        "locator": "section.card.fm-card@L1848",
+        "locator": "section.card.fm-card@L1859",
         "name": "data-fm-workspace",
         "value": "1"
       },
@@ -8869,72 +8892,72 @@
         "value": "1"
       },
       {
-        "locator": "div.fm-panel@L1872",
+        "locator": "div.fm-panel@L1883",
         "name": "data-side",
         "value": "left"
       },
       {
-        "locator": "div.fm-panel@L1872",
+        "locator": "div.fm-panel@L1883",
         "name": "data-state",
         "value": "loading"
       },
       {
-        "locator": "option@L1876",
+        "locator": "option@L1887",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "button.btn-secondary.fm-connect-btn@L1878",
+        "locator": "button.btn-secondary.fm-connect-btn@L1889",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "button.btn-secondary.fm-disconnect-btn@L1879",
+        "locator": "button.btn-secondary.fm-disconnect-btn@L1890",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "div.fm-panel@L1892",
+        "locator": "div.fm-panel@L1903",
         "name": "data-side",
         "value": "right"
       },
       {
-        "locator": "div.fm-panel@L1892",
+        "locator": "div.fm-panel@L1903",
         "name": "data-state",
         "value": "loading"
       },
       {
-        "locator": "option@L1896",
+        "locator": "option@L1907",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "button.btn-secondary.fm-connect-btn@L1898",
+        "locator": "button.btn-secondary.fm-connect-btn@L1909",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "button.btn-secondary.fm-disconnect-btn@L1899",
+        "locator": "button.btn-secondary.fm-disconnect-btn@L1910",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "span@L1925",
+        "locator": "span@L1936",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "span@L1926",
+        "locator": "span@L1937",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "span@L1927",
+        "locator": "span@L1938",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "span@L1928",
+        "locator": "span@L1939",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
@@ -8949,37 +8972,37 @@
         "value": "unknown"
       },
       {
-        "locator": "button.btn-secondary.log-btn.btn-icon@L2043",
+        "locator": "button.btn-secondary.log-btn.btn-icon@L2054",
         "name": "data-xk-restart-log-filter",
         "value": "all"
       },
       {
-        "locator": "button.btn-secondary.log-btn.btn-icon@L2044",
+        "locator": "button.btn-secondary.log-btn.btn-icon@L2055",
         "name": "data-xk-restart-log-filter",
         "value": "errors"
       },
       {
-        "locator": "button.btn-secondary.log-btn.btn-icon@L2045",
+        "locator": "button.btn-secondary.log-btn.btn-icon@L2056",
         "name": "data-xk-restart-log-action",
         "value": "refresh"
       },
       {
-        "locator": "button.btn-secondary.log-btn.btn-icon@L2046",
+        "locator": "button.btn-secondary.log-btn.btn-icon@L2057",
         "name": "data-xk-restart-log-action",
         "value": "clear"
       },
       {
-        "locator": "button.btn-secondary.log-btn.btn-icon@L2047",
+        "locator": "button.btn-secondary.log-btn.btn-icon@L2058",
         "name": "data-xk-restart-log-action",
         "value": "copy"
       },
       {
-        "locator": "div.restart-log-summary@L2050",
+        "locator": "div.restart-log-summary@L2061",
         "name": "data-xk-restart-log-summary",
         "value": "1"
       },
       {
-        "locator": "pre.log-block@L2051",
+        "locator": "pre.log-block@L2062",
         "name": "data-xk-restart-log",
         "value": "1"
       },
@@ -8989,7 +9012,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "div.modal-content.xray-context-modal-content@L2057",
+        "locator": "div.modal-content.xray-context-modal-content@L2068",
         "name": "data-modal-key",
         "value": "xray-log-context"
       },
@@ -9004,7 +9027,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "div.modal-content.xray-devices-modal-content@L2074",
+        "locator": "div.modal-content.xray-devices-modal-content@L2085",
         "name": "data-modal-key",
         "value": "xray-log-devices"
       },
@@ -9019,57 +9042,57 @@
         "value": "stopped"
       },
       {
-        "locator": "div.terminal-menu-section@L2111",
+        "locator": "div.terminal-menu-section@L2122",
         "name": "data-collapsible",
         "value": "1"
       },
       {
-        "locator": "div.terminal-menu-section@L2111",
+        "locator": "div.terminal-menu-section@L2122",
         "name": "data-section",
         "value": "session"
       },
       {
-        "locator": "div.terminal-menu-section@L2123",
+        "locator": "div.terminal-menu-section@L2134",
         "name": "data-collapsible",
         "value": "1"
       },
       {
-        "locator": "div.terminal-menu-section@L2123",
+        "locator": "div.terminal-menu-section@L2134",
         "name": "data-section",
         "value": "signals"
       },
       {
-        "locator": "button.terminal-signals-item.terminal-pty-only@L2127",
+        "locator": "button.terminal-signals-item.terminal-pty-only@L2138",
         "name": "data-terminal-signal",
         "value": "INT"
       },
       {
-        "locator": "button.terminal-signals-item.terminal-pty-only@L2128",
+        "locator": "button.terminal-signals-item.terminal-pty-only@L2139",
         "name": "data-terminal-signal",
         "value": "TERM"
       },
       {
-        "locator": "button.terminal-signals-item.terminal-pty-only@L2129",
+        "locator": "button.terminal-signals-item.terminal-pty-only@L2140",
         "name": "data-terminal-signal",
         "value": "HUP"
       },
       {
-        "locator": "button.terminal-signals-item.terminal-tool-btn-danger.terminal-pty-only@L2130",
+        "locator": "button.terminal-signals-item.terminal-tool-btn-danger.terminal-pty-only@L2141",
         "name": "data-terminal-signal",
         "value": "KILL"
       },
       {
-        "locator": "button.terminal-signals-item.terminal-pty-only@L2131",
+        "locator": "button.terminal-signals-item.terminal-pty-only@L2142",
         "name": "data-terminal-signal",
         "value": "QUIT"
       },
       {
-        "locator": "div.terminal-menu-section@L2136",
+        "locator": "div.terminal-menu-section@L2147",
         "name": "data-collapsible",
         "value": "1"
       },
       {
-        "locator": "div.terminal-menu-section@L2136",
+        "locator": "div.terminal-menu-section@L2147",
         "name": "data-section",
         "value": "tools"
       },
@@ -9099,12 +9122,12 @@
         "value": "confirm-compact-form"
       },
       {
-        "locator": "button.core-option.xk-core-option@L2303",
+        "locator": "button.core-option.xk-core-option@L2314",
         "name": "data-core",
         "value": "xray"
       },
       {
-        "locator": "button.core-option.xk-core-option@L2314",
+        "locator": "button.core-option.xk-core-option@L2325",
         "name": "data-core",
         "value": "mihomo"
       },
@@ -9129,7 +9152,7 @@
         "value": "confirm-compact-form"
       },
       {
-        "locator": "div.modal-content.xk-modal-width.xk-modal-width-760@L2355",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-760@L2366",
         "name": "data-modal-key",
         "value": "inbounds-apply"
       },
@@ -9144,47 +9167,47 @@
         "value": "drawer-help"
       },
       {
-        "locator": "div.modal-content.xk-modal-width.xk-modal-width-980@L2407",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-980@L2418",
         "name": "data-modal-key",
         "value": "routing-balancer-help"
       },
       {
-        "locator": "a@L2415",
+        "locator": "a@L2426",
         "name": "data-help-target",
         "value": "xk-bhelp-what"
       },
       {
-        "locator": "a@L2416",
+        "locator": "a@L2427",
         "name": "data-help-target",
         "value": "xk-bhelp-quickstart"
       },
       {
-        "locator": "a@L2417",
+        "locator": "a@L2428",
         "name": "data-help-target",
         "value": "xk-bhelp-manual"
       },
       {
-        "locator": "a@L2418",
+        "locator": "a@L2429",
         "name": "data-help-target",
         "value": "xk-bhelp-subscriptions"
       },
       {
-        "locator": "a@L2419",
+        "locator": "a@L2430",
         "name": "data-help-target",
         "value": "xk-bhelp-balancer"
       },
       {
-        "locator": "a@L2420",
+        "locator": "a@L2431",
         "name": "data-help-target",
         "value": "xk-bhelp-rules"
       },
       {
-        "locator": "a@L2421",
+        "locator": "a@L2432",
         "name": "data-help-target",
         "value": "xk-bhelp-forced"
       },
       {
-        "locator": "a@L2422",
+        "locator": "a@L2433",
         "name": "data-help-target",
         "value": "xk-bhelp-troubles"
       },
@@ -9199,7 +9222,7 @@
         "value": "editor-workbench"
       },
       {
-        "locator": "div.modal-content.xk-modal-width.xk-modal-width-980@L2572",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-980@L2583",
         "name": "data-modal-key",
         "value": "xray-snapshot-preview"
       },
@@ -9224,7 +9247,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "div.modal-content.xk-modal-width.xk-modal-width-860@L2602",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-860@L2613",
         "name": "data-modal-key",
         "value": "routing-templates"
       },
@@ -9269,7 +9292,7 @@
         "value": "confirm-compact-form"
       },
       {
-        "locator": "div.modal-content.xk-modal-width.xk-modal-width-560@L2655",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-560@L2666",
         "name": "data-modal-key",
         "value": "routing-template-save"
       },
@@ -9284,7 +9307,7 @@
         "value": "editor-workbench"
       },
       {
-        "locator": "div.modal-content.xk-modal-width.xk-modal-width-860@L2691",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-860@L2702",
         "name": "data-modal-key",
         "value": "routing-template-edit"
       },
@@ -9309,7 +9332,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "div.modal-content.xk-gen-modal@L2744",
+        "locator": "div.modal-content.xk-gen-modal@L2755",
         "name": "data-modal-key",
         "value": "outbounds-generator-premium-v1-content"
       },
@@ -9349,7 +9372,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "div.modal-content@L3012",
+        "locator": "div.modal-content@L3023",
         "name": "data-modal-key",
         "value": "outbounds-pool-premium-v2-content"
       },
@@ -9374,7 +9397,7 @@
         "value": "editor-workbench"
       },
       {
-        "locator": "div.modal-content.xk-mi-modal@L3111",
+        "locator": "div.modal-content.xk-mi-modal@L3122",
         "name": "data-modal-key",
         "value": "mihomo-import"
       },
@@ -9419,7 +9442,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "div.modal-content.xk-pt-modal.xk-modal-width@L3216",
+        "locator": "div.modal-content.xk-pt-modal.xk-modal-width@L3227",
         "name": "data-modal-key",
         "value": "mihomo-proxy-tools"
       },
@@ -9454,7 +9477,7 @@
         "value": "editor-workbench"
       },
       {
-        "locator": "div.modal-content.xk-hw-modal.xk-modal-width@L3359",
+        "locator": "div.modal-content.xk-hw-modal.xk-modal-width@L3370",
         "name": "data-modal-key",
         "value": "mihomo-hwid"
       },
@@ -9529,42 +9552,42 @@
         "value": "confirm-compact-form"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L3602",
+        "locator": "button.donate-address.xk-tooltip@L3613",
         "name": "data-copy",
         "value": "UQBm03wCEyD99CkEjjrfbtk08WrlgKqfyQGoueAwvhMEYV7L"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L3602",
+        "locator": "button.donate-address.xk-tooltip@L3613",
         "name": "data-tooltip",
         "value": "Копировать"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L3610",
+        "locator": "button.donate-address.xk-tooltip@L3621",
         "name": "data-copy",
         "value": "UQBm03wCEyD99CkEjjrfbtk08WrlgKqfyQGoueAwvhMEYV7L"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L3610",
+        "locator": "button.donate-address.xk-tooltip@L3621",
         "name": "data-tooltip",
         "value": "Копировать"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L3618",
+        "locator": "button.donate-address.xk-tooltip@L3629",
         "name": "data-copy",
         "value": "bc1quhqk7l53vgmm9djyfktl6sflcvk83wgw0zqka6"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L3618",
+        "locator": "button.donate-address.xk-tooltip@L3629",
         "name": "data-tooltip",
         "value": "Копировать"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L3626",
+        "locator": "button.donate-address.xk-tooltip@L3637",
         "name": "data-copy",
         "value": "0x8BA4b535ef7C990B96bc982083f9bFB392134F5e"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L3626",
+        "locator": "button.donate-address.xk-tooltip@L3637",
         "name": "data-tooltip",
         "value": "Копировать"
       },
@@ -9579,7 +9602,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "div.modal-content.xk-ui-settings-modal-content@L3645",
+        "locator": "div.modal-content.xk-ui-settings-modal-content@L3656",
         "name": "data-modal-key",
         "value": "ui-settings"
       },
@@ -9719,7 +9742,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "button.modal-close@L3833",
+        "locator": "button.modal-close@L3844",
         "name": "data-dismiss",
         "value": "mihomo-validation"
       },
@@ -9729,12 +9752,12 @@
         "value": "0"
       },
       {
-        "locator": "button.btn-primary@L3876",
+        "locator": "button.btn-primary@L3887",
         "name": "data-dismiss",
         "value": "mihomo-validation"
       },
       {
-        "locator": "button.btn-primary@L3876",
+        "locator": "button.btn-primary@L3887",
         "name": "data-operator-dismiss-duplicate",
         "value": "true"
       },
@@ -9914,7 +9937,7 @@
         "value": "confirm-compact-form"
       },
       {
-        "locator": "div.status.xk-modal-mt-10@L4511",
+        "locator": "div.status.xk-modal-mt-10@L4522",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
@@ -9974,42 +9997,42 @@
         "value": "drawer-help"
       },
       {
-        "locator": "li@L4722",
+        "locator": "li@L4733",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L4723",
+        "locator": "li@L4734",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L4725",
+        "locator": "li@L4736",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L4726",
+        "locator": "li@L4737",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L4727",
+        "locator": "li@L4738",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L4742",
+        "locator": "li@L4753",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L4743",
+        "locator": "li@L4754",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L4744",
+        "locator": "li@L4755",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
@@ -10179,7 +10202,7 @@
       "#outbounds-file-code",
       ".xk-mihomo-topbar .xk-routing-active-inline"
     ],
-    "js_referenced_template_id_count": 1029,
+    "js_referenced_template_id_count": 1032,
     "js_referenced_template_ids": {
       "backups-clear-snapshots-btn": [
         "xkeen-ui/static/js/features/backups.js"
@@ -11418,6 +11441,12 @@
       "mihomo-clash-migration-transport": [
         "xkeen-ui/static/js/features/mihomo_clash/index.js"
       ],
+      "mihomo-clash-mode-menu": [
+        "xkeen-ui/static/js/features/mihomo_clash/index.js"
+      ],
+      "mihomo-clash-mode-switch": [
+        "xkeen-ui/static/js/features/mihomo_clash/index.js"
+      ],
       "mihomo-clash-panel-config": [
         "xkeen-ui/static/js/features/mihomo_clash/index.js"
       ],
@@ -11503,6 +11532,9 @@
         "xkeen-ui/static/js/features/mihomo_clash/index.js"
       ],
       "mihomo-clash-status-mode": [
+        "xkeen-ui/static/js/features/mihomo_clash/index.js"
+      ],
+      "mihomo-clash-status-mode-value": [
         "xkeen-ui/static/js/features/mihomo_clash/index.js"
       ],
       "mihomo-clash-status-version": [
