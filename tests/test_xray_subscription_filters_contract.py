@@ -350,6 +350,9 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "/api/xray/latency-jobs/" in outbounds_src
     assert "xk-sub-node-ping" in outbounds_src
     assert "xk-sub-node-latency" in outbounds_src
+    assert "function xrayNodeProbeHtml(options) {" in outbounds_src
+    assert 'data-probe-tone="${escapeHtml(tone)}"' in outbounds_src
+    assert "tone === 'check-failed' || tone === 'error'" in outbounds_src
     assert "xk-sub-pingall-spinner" in outbounds_src
     assert "xk-sub-pingall-glyph" in outbounds_src
     assert "const connectionSummary = [endpoint, detail].filter(Boolean).join(' · ');" in outbounds_src

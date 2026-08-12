@@ -169,9 +169,12 @@ def test_stage3_dat_and_outbound_rows_have_explicit_state_semantics():
         'class="xk-sub-node-meta xk-sub-node-protocol"',
         'class="xk-sub-node-endpoint-cell"',
         'class="xk-sub-node-health-cell"',
-        'class="xk-sub-node-actions"',
     ):
         assert outbounds.count(fragment) == 2
+    # The main Xray card now uses the latency value itself as the probe action,
+    # while the subscription editor keeps an actions slot for exclusion.
+    assert outbounds.count('class="xk-sub-node-actions"') == 1
+    assert 'class="xk-xray-node-probe xk-sub-node-latency xk-sub-node-ping' in outbounds
     assert "const protocolSummary = [protocol, transport, security]" in outbounds
     assert "const connectionSummary = [endpoint, detail].filter(Boolean).join(' · ');" in outbounds
     assert 'aria-label="Технические параметры" ${connectionSummary ? `data-tooltip="${connectionSummaryHtml}"` : \'\'}' in outbounds

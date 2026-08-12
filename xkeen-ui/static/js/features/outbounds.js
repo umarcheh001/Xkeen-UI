@@ -1116,13 +1116,22 @@ let outboundsModuleApi = null;
         const latencyHasDelay = !!(latencyEntry && latencyEntry.delay_ms != null && latencyEntry.delay_ms !== '' && Number.isFinite(Number(latencyEntry.delay_ms)) && Number(latencyEntry.delay_ms) >= 0);
         const latencyStatus = String(latencyEntry && latencyEntry.status || '').trim().toLowerCase();
         const showRuntimeActiveInsteadOfFail = isActiveRoute && !pingBusy && canPing && !latencyHasDelay && latencyStatus === 'error';
-        const latencyLabel = escapeHtml(showRuntimeActiveInsteadOfFail ? 'активен' : subsNodeLatencyLabel(latencyEntry, pingBusy, canPing));
-        const latencyTooltip = escapeHtml(showRuntimeActiveInsteadOfFail
+        const latencyLabel = showRuntimeActiveInsteadOfFail ? 'активен' : subsNodeLatencyLabel(latencyEntry, pingBusy, canPing);
+        const latencyTooltip = showRuntimeActiveInsteadOfFail
           ? `${outboundsActiveRuntimeText()}. Последний ping этого узла завершился ошибкой, но Xray сейчас выбирает его по логам.`
-          : subsNodeLatencyTooltip(latencyEntry, pingBusy, canPing));
+          : subsNodeLatencyTooltip(latencyEntry, pingBusy, canPing);
         const latencyClass = showRuntimeActiveInsteadOfFail ? 'is-active-route' : subsNodeLatencyTone(latencyEntry, pingBusy, canPing);
         const activeTooltip = isActiveRoute ? escapeHtml(outboundsActiveRuntimeText()) : '';
         const finalStateLabel = isActiveRoute ? 'сейчас' : stateLabel;
+        const probeHtml = xrayNodeProbeHtml({
+          nodeKey: keyText,
+          label: latencyLabel,
+          tone: latencyClass,
+          tooltip: latencyTooltip,
+          pending: pingBusy,
+          canPing,
+          extraClass: 'xk-outbounds-node-ping',
+        });
         rows.push(`
           <div class="xk-sub-node-item xk-outbounds-node-item is-enabled ${isActiveRoute ? 'is-active-route' : ''}" data-node-key="${key}" ${activeTooltip ? `title="${activeTooltip}"` : ''}>
             <div class="xk-sub-node-main">
@@ -1137,13 +1146,8 @@ let outboundsModuleApi = null;
             </div>
             <div class="xk-sub-node-side">
               <div class="xk-sub-node-health-cell">
-                <div class="xk-sub-node-latency ${latencyClass}" data-tooltip="${latencyTooltip}">${latencyLabel}</div>
+                ${probeHtml}
                 <div class="xk-sub-node-state is-enabled ${isActiveRoute ? 'is-active-route' : ''}">${finalStateLabel}</div>
-              </div>
-              <div class="xk-sub-node-actions">
-                <button type="button" class="btn-secondary btn-compact xk-sub-node-ping xk-outbounds-node-ping ${pingBusy ? 'is-busy' : ''}" data-node-key="${key}" title="Проверить задержку" data-tooltip="${escapeHtml(canPing ? 'Проверить задержку этого proxy-узла.' : 'Узел нельзя проверить: не найден tag.')}" aria-label="Проверить задержку" ${canPing ? '' : 'disabled'}>
-                  ${iconHtml('ping', 'xk-sub-icon-glyph')}
-                </button>
               </div>
             </div>
           </div>
@@ -6073,7 +6077,7 @@ let outboundsModuleApi = null;
       if (!canPing) return 'n/a';
       const hasDelay = !!(entry && entry.delay_ms != null && entry.delay_ms !== '');
       const delay = hasDelay ? Number(entry.delay_ms) : NaN;
-      if (Number.isFinite(delay) && delay >= 0) return `${Math.round(delay)} ms`;
+      if (Number.isFinite(delay) && delay >= 0) return `${Math.round(delay)} мс`;
       const status = String(entry && entry.status || '').trim().toLowerCase();
       if (status === 'error') return 'нет ответа';
       return '—';
@@ -6118,9 +6122,35 @@ let outboundsModuleApi = null;
         });
         parts.push(`История:\n${rows.join('\n')}`);
       } else {
-        parts.push('Нажми кнопку рядом, чтобы выполнить проверку.');
+        parts.push('Нажми индикатор задержки, чтобы выполнить проверку.');
       }
       return parts.join('\n');
+    }
+
+    function xrayNodeProbeHtml(options) {
+      const opts = options && typeof options === 'object' ? options : {};
+      const nodeKey = escapeHtml(String(opts.nodeKey || ''));
+      const nodeTag = escapeHtml(String(opts.nodeTag || ''));
+      const label = String(opts.label || '—');
+      const tone = String(opts.tone || 'is-idle').replace(/^is-/, '') || 'idle';
+      const tooltip = escapeHtml(String(opts.tooltip || 'Проверить задержку узла.'));
+      const pending = !!opts.pending;
+      const canPing = !!opts.canPing;
+      const extraClass = escapeHtml(String(opts.extraClass || ''));
+      const statusIcon = pending
+        ? 'loading'
+        : (tone === 'check-failed' || tone === 'error'
+          ? 'alert'
+          : (tone === 'unavailable' ? 'server-off' : (tone === 'idle' ? 'ping' : '')));
+      const content = statusIcon
+        ? `<span class="xk-visually-hidden">${escapeHtml(label)}</span>${iconHtml(statusIcon)}`
+        : escapeHtml(label);
+      const disabled = pending || !canPing;
+      return `<button type="button" class="xk-xray-node-probe xk-sub-node-latency xk-sub-node-ping ${extraClass}${pending ? ' is-busy' : ''}"
+        data-node-key="${nodeKey}" ${nodeTag ? `data-node-tag="${nodeTag}"` : ''}
+        data-probe-tone="${escapeHtml(tone)}" data-tooltip="${tooltip}"
+        aria-label="${escapeHtml(pending ? 'Проверяется задержка узла' : `Проверить задержку узла: ${label}`)}"
+        ${pending ? 'aria-busy="true"' : ''} ${disabled ? 'disabled' : ''}>${content}</button>`;
     }
 
     function subsShortUrl(url) {
@@ -7124,8 +7154,8 @@ let outboundsModuleApi = null;
         const pingStateKey = subsNodePingStateKey(subId, String(node && node.key ? node.key : ''));
         const pingBusy = !!_subscriptionNodePingState[pingStateKey];
         const latencyEntry = subsNodeLatencyEntry(sub, String(node && node.key ? node.key : ''));
-        const latencyLabel = escapeHtml(subsNodeLatencyLabel(latencyEntry, pingBusy, canPing));
-        const latencyTooltip = escapeHtml(subsNodeLatencyTooltip(latencyEntry, pingBusy, canPing));
+        const latencyLabel = subsNodeLatencyLabel(latencyEntry, pingBusy, canPing);
+        const latencyTooltip = subsNodeLatencyTooltip(latencyEntry, pingBusy, canPing);
         const latencyClass = subsNodeLatencyTone(latencyEntry, pingBusy, canPing);
         const toggleTitle = manualExcluded ? 'Вернуть узел' : 'Исключить узел';
         const toggleTooltip = manualExcluded
@@ -7135,6 +7165,15 @@ let outboundsModuleApi = null;
           ? 'btn-secondary btn-compact xk-sub-node-toggle xk-sub-node-toggle-restore'
           : 'btn-danger btn-compact xk-sub-node-toggle';
         const toggleIcon = manualExcluded ? iconHtml('restore') : iconHtml('x');
+        const probeHtml = xrayNodeProbeHtml({
+          nodeKey: String(node && node.key ? node.key : ''),
+          nodeTag,
+          label: latencyLabel,
+          tone: latencyClass,
+          tooltip: latencyTooltip,
+          pending: pingBusy,
+          canPing,
+        });
         rows.push(`
           <div class="xk-sub-node-item ${enabled ? 'is-enabled' : 'is-disabled'}" data-node-key="${key}">
             <div class="xk-sub-node-main">
@@ -7149,13 +7188,10 @@ let outboundsModuleApi = null;
             </div>
             <div class="xk-sub-node-side">
               <div class="xk-sub-node-health-cell">
-                <div class="xk-sub-node-latency ${latencyClass}" data-tooltip="${latencyTooltip}">${latencyLabel}</div>
+                ${probeHtml}
                 <div class="xk-sub-node-state ${enabled ? 'is-enabled' : 'is-disabled'}">${reasonLabel}</div>
               </div>
               <div class="xk-sub-node-actions">
-                <button type="button" class="btn-secondary btn-compact xk-sub-node-ping ${pingBusy ? 'is-busy' : ''}" data-node-key="${key}" data-node-tag="${escapeHtml(nodeTag)}" title="Проверить задержку" data-tooltip="${escapeHtml(canPing ? 'Проверить задержку узла через текущий generated fragment.' : 'Этот узел сейчас не входит в generated fragment, поэтому проверка недоступна.')}" aria-label="Проверить задержку" ${canPing ? '' : 'disabled'}>
-                  ${iconHtml('ping', 'xk-sub-icon-glyph')}
-                </button>
                 <button type="button" class="${toggleClass}" data-node-key="${key}" data-node-action="${manualExcluded ? 'include' : 'exclude'}" title="${escapeHtml(toggleTitle)}" data-tooltip="${escapeHtml(toggleTooltip)}" aria-label="${escapeHtml(toggleTitle)}">
                   ${toggleIcon}
                 </button>

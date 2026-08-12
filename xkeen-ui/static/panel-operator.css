@@ -11890,6 +11890,100 @@ body.panel-page #outbounds-subscriptions-modal :is(.xk-sub-node-ping, .xk-sub-no
   height: 12px;
 }
 
+/* Xray server cards share Mihomo's quiet latency control: the value itself is
+ * the action, while failures use compact status icons instead of a second
+ * ping button. This leaves more room for the server name and endpoint. */
+body.panel-page .xk-xray-node-probe,
+body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: auto;
+  min-width: 28px;
+  height: 22px;
+  min-height: 22px !important;
+  padding: 0 5px !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--op-muted) !important;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: calc(9px * var(--xk-font-scale, 1));
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transform: none !important;
+}
+
+body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe:hover:not(:disabled) {
+  background: var(--op-surface-2) !important;
+  color: var(--op-text) !important;
+}
+
+body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe:focus-visible {
+  outline: 2px solid var(--op-accent-hover);
+  outline-offset: 2px;
+}
+
+body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe:disabled {
+  opacity: 0.74;
+  cursor: default;
+}
+
+body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe[data-probe-tone="fast"] { color: var(--op-success) !important; }
+body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe[data-probe-tone="mid"] { color: var(--op-accent-hover) !important; }
+body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe[data-probe-tone="slow"] { color: var(--op-warning) !important; }
+body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe[data-probe-tone="active-route"] { color: var(--op-warning) !important; }
+body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe:is([data-probe-tone="check-failed"], [data-probe-tone="error"], [data-probe-tone="unavailable"]) {
+  width: 24px;
+  min-width: 24px;
+  padding: 0 !important;
+  color: var(--op-danger) !important;
+}
+
+body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe .xk-action-icon {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe.is-busy:disabled {
+  opacity: 1;
+  color: var(--op-accent-hover) !important;
+  cursor: wait;
+}
+
+body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe.is-busy .xk-action-icon {
+  animation: xk-sub-pingall-spin .72s linear infinite !important;
+  transform-origin: center;
+}
+
+body.panel-page .routing-side-card--outbounds .xk-sub-node-health-cell,
+body.panel-page #outbounds-subscriptions-modal .xk-sub-node-health-cell {
+  align-items: center;
+}
+
+body.panel-page .routing-side-card--outbounds .xk-sub-node-state.is-enabled,
+body.panel-page #outbounds-subscriptions-modal .xk-sub-node-state.is-enabled {
+  display: none;
+}
+
+body.panel-page .routing-side-card--outbounds .xk-sub-node-side {
+  min-width: 28px;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-node-side {
+  min-width: 30px;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-node-actions {
+  justify-self: end;
+}
+
+
 /* Core selector: a compact system dialog with explicit engine state. It keeps
  * the operator palette and flat surfaces while making the restart consequence
  * and the selected/current distinction readable at a glance. */
