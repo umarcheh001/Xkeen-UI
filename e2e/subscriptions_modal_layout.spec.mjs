@@ -711,6 +711,41 @@ test('subscriptions modal presents nodes as a compact server tile grid on deskto
   expect(layout.overlaps).toEqual([]);
 });
 
+test('Xray latency values use the same color scale as Mihomo', async ({ page }) => {
+  const nodes = buildDemoNodes().slice(0, 3);
+  const subscription = buildDemoSubscription(nodes, {
+    node_latency: {
+      [nodes[0].key]: { status: 'ok', delay_ms: 200, checked_at: 1777777777 },
+      [nodes[1].key]: { status: 'ok', delay_ms: 500, checked_at: 1777777777 },
+      [nodes[2].key]: { status: 'ok', delay_ms: 900, checked_at: 1777777777 },
+    },
+  });
+
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscriptions: [subscription] }),
+    });
+  });
+
+  await openSubscriptionsModal(page);
+  await page.locator('tr[data-sub-id="demo-sub"]').click();
+
+  const probes = page.locator('#outbounds-subscriptions-nodes-list .xk-xray-node-probe');
+  await expect(probes).toHaveCount(3);
+  await expect(probes.nth(0)).toHaveAttribute('data-probe-tone', 'good');
+  await expect(probes.nth(1)).toHaveAttribute('data-probe-tone', 'warning');
+  await expect(probes.nth(2)).toHaveAttribute('data-probe-tone', 'bad');
+
+  const colors = await probes.evaluateAll((items) => items.map((item) => window.getComputedStyle(item).color));
+  expect(new Set(colors).size).toBe(3);
+});
+
 test('subscriptions servers expand into a resized modal and keep compact actions', async ({ page }) => {
   await page.setViewportSize({ width: 1400, height: 1200 });
   const nodes = Array.from({ length: 30 }, (_, index) => ({

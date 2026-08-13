@@ -6060,9 +6060,10 @@ let outboundsModuleApi = null;
       const status = String(entry && entry.status || '').trim().toLowerCase();
       if (status === 'error') return 'is-check-failed';
       if (Number.isFinite(delay) && delay >= 0) {
-        if (delay <= 250) return 'is-fast';
-        if (delay <= 700) return 'is-mid';
-        return 'is-slow';
+        // Keep Xray latency semantics identical to Mihomo cards.
+        if (delay <= 250) return 'is-good';
+        if (delay <= 650) return 'is-warning';
+        return 'is-bad';
       }
       return 'is-idle';
     }

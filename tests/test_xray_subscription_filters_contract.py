@@ -352,6 +352,9 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "xk-sub-node-latency" in outbounds_src
     assert "function xrayNodeProbeHtml(options) {" in outbounds_src
     assert 'data-probe-tone="${escapeHtml(tone)}"' in outbounds_src
+    assert "if (delay <= 250) return 'is-good';" in outbounds_src
+    assert "if (delay <= 650) return 'is-warning';" in outbounds_src
+    assert "return 'is-bad';" in outbounds_src
     assert "tone === 'check-failed' || tone === 'error'" in outbounds_src
     assert "xk-sub-pingall-spinner" in outbounds_src
     assert "xk-sub-pingall-glyph" in outbounds_src

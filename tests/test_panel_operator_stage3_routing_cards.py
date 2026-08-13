@@ -153,6 +153,7 @@ def test_stage3_dat_and_outbound_rows_have_explicit_state_semantics():
     dat_api = DAT_API_JS.read_text(encoding="utf-8")
     inbounds = INBOUNDS_JS.read_text(encoding="utf-8")
     outbounds = OUTBOUNDS_JS.read_text(encoding="utf-8")
+    styles = OPERATOR_CSS.read_text(encoding="utf-8")
 
     assert 'id="routing-dat-status" class="status" role="status" aria-live="polite" data-state="idle"' in template
     assert template.count('role="status" aria-live="polite"') >= 6
@@ -175,6 +176,9 @@ def test_stage3_dat_and_outbound_rows_have_explicit_state_semantics():
     # while the subscription editor keeps an actions slot for exclusion.
     assert outbounds.count('class="xk-sub-node-actions"') == 1
     assert 'class="xk-xray-node-probe xk-sub-node-latency xk-sub-node-ping' in outbounds
+    assert '[data-probe-tone="good"] { color: var(--op-success) !important; }' in styles
+    assert '[data-probe-tone="warning"] { color: var(--op-warning) !important; }' in styles
+    assert '[data-probe-tone="bad"] { color: var(--op-danger) !important; }' in styles
     assert "const protocolSummary = [protocol, transport, security]" in outbounds
     assert 'class="xk-sub-node-meta xk-sub-node-protocol" aria-label="Технические параметры">' in outbounds
     assert 'class="xk-sub-node-endpoint-cell" aria-label="Endpoint">' in outbounds

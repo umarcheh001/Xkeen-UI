@@ -11961,9 +11961,11 @@ body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-moda
   cursor: default;
 }
 
-body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe[data-probe-tone="fast"] { color: var(--op-success) !important; }
-body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe[data-probe-tone="mid"] { color: var(--op-accent-hover) !important; }
-body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe[data-probe-tone="slow"] { color: var(--op-warning) !important; }
+/* Match Mihomo's latency scale across every Xray server card:
+ * <= 250 ms is good, <= 650 ms is warning, and anything slower is bad. */
+body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe[data-probe-tone="good"] { color: var(--op-success) !important; }
+body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe[data-probe-tone="warning"] { color: var(--op-warning) !important; }
+body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe[data-probe-tone="bad"] { color: var(--op-danger) !important; }
 body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe[data-probe-tone="active-route"] { color: var(--op-warning) !important; }
 body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe:is([data-probe-tone="check-failed"], [data-probe-tone="error"], [data-probe-tone="unavailable"]) {
   width: 24px;
