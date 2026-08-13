@@ -63,7 +63,10 @@ async function collectLayout(page) {
       header: rect('.panel-header'),
       shellMain: rect('.panel-header-shell-main'),
       identity: rect('.panel-shell-identity'),
+      core: rect('.panel-shell-center'),
       globalActions: rect('.panel-shell-right'),
+      summary: rect('.panel-shell-summary'),
+      actionButtons: rect('.panel-shell-actions'),
       rail: rect('.top-tabs.header-tabs'),
       serviceRow: rect('.xkeen-ctrl-row'),
       workspace: rect('.layout-2col.routing-layout'),
@@ -205,6 +208,13 @@ test.describe('Operator Console Stage 2 shell and workspace contract', () => {
         expect(layout.header.right).toBeLessThanOrEqual(viewport.width + 0.5);
         expect(layout.identity.width).toBeGreaterThan(0);
         expect(layout.globalActions.width).toBeGreaterThan(0);
+
+        if (viewport.width > 720) {
+          expect(layout.core.right, `core vs summary ${viewport.width}x${viewport.height}`)
+            .toBeLessThanOrEqual((layout.summary?.x ?? layout.actionButtons.x) + 0.5);
+          expect(layout.summary?.right ?? layout.core.right, `summary vs actions ${viewport.width}x${viewport.height}`)
+            .toBeLessThanOrEqual(layout.actionButtons.x + 0.5);
+        }
 
         if (viewport.width > 720) {
           expect(layout.shellMain.height).toBeLessThanOrEqual(51);

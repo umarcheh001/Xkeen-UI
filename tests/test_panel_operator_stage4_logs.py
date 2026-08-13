@@ -57,9 +57,9 @@ def test_logs_toolbar_distinguishes_screen_cleanup_and_file_deletion():
 
     for fragment in (
         "body.panel-page .panel-shell-center .panel-shell-badges {",
-        "position: absolute;",
-        "left: calc(100% + 8px);",
-        "transform: translateY(-50%);",
+        "position: static;",
+        "left: auto;",
+        "transform: none;",
         "body.panel-page .panel-shell-center {",
         "background: transparent;",
         "body.panel-page .panel-shell-center .service-core-text {",

@@ -351,18 +351,19 @@ body.panel-page :is(.header-main, .panel-header-shell-main) {
 }
 
 body.panel-page .panel-shell-identity {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
   min-width: 0;
+  width: 100%;
 }
 
 body.panel-page .header-center {
-  position: absolute;
-  left: 50%;
-  justify-self: center;
-  transform: translateX(-50%);
-  z-index: 1;
+  position: static;
+  left: auto;
+  justify-self: end;
+  transform: none;
 }
 
 body.panel-page :is(
@@ -563,9 +564,10 @@ body.panel-page .last-load-chip {
   transform: none !important;
 }
 
-/* The core selector stays on the physical center line.  The active-log status
- * is an adjacent, independent indicator so neither control looks fused into a
- * legacy pill. */
+/* Keep the core and log state immediately before the dynamic summary. Unlike
+ * the old absolutely-centred layout, both controls now participate in the
+ * header flow: a wider resource/last-load summary moves them left instead of
+ * painting over them. */
 body.panel-page .panel-shell-center {
   min-height: 30px;
   padding: 0;
@@ -583,13 +585,13 @@ body.panel-page .panel-shell-center .service-core-text {
 }
 
 body.panel-page .panel-shell-center .panel-shell-badges {
-  position: absolute;
-  top: 50%;
-  left: calc(100% + 8px);
+  position: static;
+  top: auto;
+  left: auto;
   margin: 0;
   padding: 0;
   border: 0;
-  transform: translateY(-50%);
+  transform: none;
 }
 
 :is(body.panel-page, html[data-theme="light"] body.panel-page) #xray-logs-badge {
