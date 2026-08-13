@@ -299,6 +299,8 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
 
   await page.locator('#mihomo-clash-show-hidden').check();
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('HIDDEN');
+  await expect(page.locator('[data-group-name="HIDDEN"] .xk-mihomo-group-icon--default')).toHaveCount(1);
+  await expect(page.locator('[data-group-name="HIDDEN"] .xk-mihomo-group-icon--default use')).toHaveAttribute('href', /#xk-dns$/);
   await expect(page.locator('[data-group-name="HIDDEN"] .xk-mihomo-group-head')).toHaveAttribute('aria-expanded', 'false');
   await page.locator('#mihomo-clash-groups-filter').fill('node-b');
   await expect(page.locator('.xk-mihomo-node-row')).toHaveCount(1);

@@ -18179,6 +18179,12 @@ body.panel-page .xk-mihomo-group-icon img {
   object-fit: contain;
 }
 
+body.panel-page .xk-mihomo-group-default-icon {
+  width: 25px;
+  height: 25px;
+  color: var(--op-muted);
+}
+
 body.panel-page .xk-mihomo-group-body[hidden] {
   display: none !important;
 }

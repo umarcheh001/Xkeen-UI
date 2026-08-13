@@ -987,6 +987,11 @@
       "tabler_asset": "network",
       "usage": [
         {
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L363",
+          "control_type": "runtime-action",
+          "accessible_label": "Показать доменные имена"
+        },
+        {
           "location": "xkeen-ui/static/js/features/outbounds.js:L512",
           "control_type": "runtime-action",
           "accessible_label": "Показать доменные имена"
@@ -1867,12 +1872,12 @@
           "accessible_label": "Ограничить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L381",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L383",
           "control_type": "runtime-action",
           "accessible_label": "Ограничить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L395",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L397",
           "control_type": "runtime-action",
           "accessible_label": "Ограничить"
         },
@@ -2153,7 +2158,7 @@
       "tabler_asset": "stopwatch",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L397",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L399",
           "control_type": "runtime-action",
           "accessible_label": "Проверить задержку"
         },

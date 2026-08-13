@@ -359,7 +359,9 @@ function groupSummary(group) {
 
 function groupIconHtml(group) {
   const icon = String(group.icon || '').trim();
-  if (!icon) return '';
+  if (!icon) {
+    return `<span class="xk-mihomo-group-icon xk-mihomo-group-icon--default" aria-hidden="true">${iconHtml('dns', 'xk-mihomo-group-default-icon')}</span>`;
+  }
   return `<span class="xk-mihomo-group-icon"><img src="${escapeHtml(icon)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
 }
 
