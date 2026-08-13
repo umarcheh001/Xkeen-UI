@@ -292,13 +292,6 @@ function nodeFlagHtml(countryCode) {
   return `<span class="xk-sub-node-country xk-mihomo-node-country" data-country="${countryCode}" role="img" aria-label="${escapeHtml(label)}" data-tooltip="${escapeHtml(label)}">${svg}</span>`;
 }
 
-function nodeConnectionSummary(node) {
-  const endpoint = [node.server, node.port].filter((value) => value !== '' && value != null).join(':');
-  const route = [node.path ? `path=${node.path}` : '', node.host ? `host=${node.host}` : ''].filter(Boolean).join(' · ');
-  const extra = [node.sni ? `SNI=${node.sni}` : '', node.flow ? `flow=${node.flow}` : ''].filter(Boolean).join(' · ');
-  return [endpoint, route, extra].filter(Boolean).join(' · ');
-}
-
 function renderNodeProbe(node) {
   const status = nodeProbeStatus(node);
   const probeLabel = `Проверить задержку узла ${node.name}`;
@@ -332,13 +325,12 @@ function renderNode(group, node) {
   const protocol = [node.type || 'unknown', node.network, node.security].filter(Boolean).join(' · ');
   const meta = [protocol, providerCopy(node), node.udp === true ? 'UDP' : ''].filter(Boolean).join(' · ');
   const endpoint = [node.server, node.port].filter((value) => value !== '' && value != null).join(':');
-  const connectionSummary = nodeConnectionSummary(node);
   return `
     <li class="xk-mihomo-node-row${selected ? ' is-current' : ''}${fixed ? ' is-fixed' : ''}${checking ? ' is-checking' : ''}" data-node-key="${escapeHtml(encodeURIComponent(delayKey(node.name, node.provider)))}" data-node-name="${escapeHtml(node.name)}" data-alive="${escapeHtml(alive)}">
       <button type="button" class="xk-mihomo-node-select" data-mihomo-group-select="1"
         data-group="${escapeHtml(group.name)}" data-node="${escapeHtml(node.name)}"
         aria-pressed="${selected ? 'true' : 'false'}" ${!selectable || selected || selectPending || selection ? 'disabled' : ''}>
-        <span class="xk-mihomo-node-main" ${connectionSummary ? `data-tooltip="${escapeHtml(connectionSummary)}"` : ''}>
+        <span class="xk-mihomo-node-main">
           <strong>${fixed ? iconHtml('lock') : ''}${nodeFlagHtml(countryCode)}<span>${escapeHtml(displayName)}</span></strong>
           <small>${escapeHtml(meta)}</small>
           ${endpoint ? `<small class="xk-mihomo-node-endpoint">${escapeHtml(endpoint)}</small>` : ''}

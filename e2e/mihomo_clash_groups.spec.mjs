@@ -281,10 +281,7 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test')).toBeVisible();
   await expect(page.locator('[data-node-name="node-a"]')).toContainText('VLESS · xhttp · tls');
   await expect(page.locator('[data-node-name="node-a"]')).toContainText('edge.example.test:443');
-  await expect(page.locator('[data-node-name="node-a"] .xk-mihomo-node-main')).toHaveAttribute(
-    'data-tooltip',
-    'edge.example.test:443 · path=/api/v2/ · host=cdn.example.test',
-  );
+  await expect(page.locator('[data-node-name="node-a"] .xk-mihomo-node-main')).not.toHaveAttribute('data-tooltip');
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-node-row').evaluateAll((nodes) => {
     nodes.forEach((node, index) => { node.dataset.renderIdentity = String(index); });
   });

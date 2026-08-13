@@ -320,6 +320,7 @@ def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
     assert 'class="xk-mihomo-node-alive"' not in groups
     assert 'title="${escapeHtml(node.name)}"' not in groups
     assert 'title="${escapeHtml(meta)}"' not in groups
+    assert 'data-tooltip="${escapeHtml(connectionSummary)}"' not in groups
     assert 'xk-mihomo-group-current' not in groups
     assert 'xk-mihomo-node-marker' not in groups
     assert 'class="xk-mihomo-node-probe' in groups
