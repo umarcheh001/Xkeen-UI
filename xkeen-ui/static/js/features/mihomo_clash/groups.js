@@ -80,17 +80,17 @@ function delayTone(delay) {
   return 'bad';
 }
 
-function delayKey(name, provider = '') {
-  return `${String(provider || '')}\u0000${String(name || '')}`;
+function delayKey(groupName, name, provider = '') {
+  return `${String(groupName || '')}\u0000${String(provider || '')}\u0000${String(name || '')}`;
 }
 
-function nodeDelayResult(node) {
-  const key = delayKey(node.name, node.provider);
+function nodeDelayResult(group, node) {
+  const key = delayKey(group.name, node.name, node.provider);
   return (delayRun && delayRun.results.get(key)) || latestDelays.get(key);
 }
 
-function nodeProbeStatus(node) {
-  const result = nodeDelayResult(node);
+function nodeProbeStatus(group, node) {
+  const result = nodeDelayResult(group, node);
   if (result?.state === 'pending') {
     return { state: 'pending', label: 'проверка', tooltip: 'Выполняется проверка задержки узла.' };
   }
@@ -149,7 +149,7 @@ function filteredGroups() {
     const groupMatches = !query || [group.name, group.type, group.now].join(' ').toLocaleLowerCase('ru').includes(query);
     const nodes = Array.isArray(group.nodes)
       ? group.nodes.filter((node) => (
-        (showTimeoutHidden || (timeoutCounts.get(delayKey(node.name, node.provider)) || 0) < TIMEOUT_HIDE_THRESHOLD)
+        (showTimeoutHidden || (timeoutCounts.get(delayKey(group.name, node.name, node.provider)) || 0) < TIMEOUT_HIDE_THRESHOLD)
         && (groupMatches || nodeSearchText(node).includes(query))
       ))
       : [];
@@ -158,8 +158,8 @@ function filteredGroups() {
   }, []);
 }
 
-function nodeDelayValue(node) {
-  const result = nodeDelayResult(node);
+function nodeDelayValue(group, node) {
+  const result = nodeDelayResult(group, node);
   return result && Number.isFinite(result.delay) ? result.delay : (Number.isFinite(node.delay_ms) ? node.delay_ms : Number.POSITIVE_INFINITY);
 }
 
@@ -172,7 +172,7 @@ function sortNodes(group, nodes) {
     if (leftCurrent !== rightCurrent) return rightCurrent - leftCurrent;
     let comparison = 0;
     if (sortMode === 'name') comparison = String(left.node.name).localeCompare(String(right.node.name), 'ru', { sensitivity: 'base' });
-    if (sortMode === 'delay') comparison = nodeDelayValue(left.node) - nodeDelayValue(right.node);
+    if (sortMode === 'delay') comparison = nodeDelayValue(group, left.node) - nodeDelayValue(group, right.node);
     if (sortMode === 'availability') comparison = Number(right.node.alive === true) - Number(left.node.alive === true);
     return comparison || left.index - right.index;
   });
@@ -292,10 +292,10 @@ function nodeFlagHtml(countryCode) {
   return `<span class="xk-sub-node-country xk-mihomo-node-country" data-country="${countryCode}" role="img" aria-label="${escapeHtml(label)}" data-tooltip="${escapeHtml(label)}">${svg}</span>`;
 }
 
-function renderNodeProbe(node) {
-  const status = nodeProbeStatus(node);
+function renderNodeProbe(group, node) {
+  const status = nodeProbeStatus(group, node);
   const probeLabel = `Проверить задержку узла ${node.name}`;
-  const probeData = `data-mihomo-node-delay="1" data-node="${escapeHtml(node.name)}" data-provider="${escapeHtml(node.provider || '')}"`;
+  const probeData = `data-mihomo-node-delay="1" data-group="${escapeHtml(group.name)}" data-node="${escapeHtml(node.name)}" data-provider="${escapeHtml(node.provider || '')}"`;
   const checking = status.state === 'pending';
   const statusIcon = status.state === 'unavailable'
     ? 'server-off'
@@ -315,9 +315,9 @@ function renderNode(group, node) {
   const selected = group.now === node.name;
   const fixed = group.fixed === node.name;
   const selectPending = selection && selection.group === group.name && selection.node === node.name;
-  const checking = nodeDelayResult(node)?.state === 'pending';
+  const checking = nodeDelayResult(group, node)?.state === 'pending';
   const selectable = !!group.selectable && SELECTABLE_TYPES.has(String(group.type || '').toLowerCase());
-  const alive = nodeDelayResult(node)?.state === 'done' || node.availability === 'available' || node.alive === true
+  const alive = nodeDelayResult(group, node)?.state === 'done' || node.availability === 'available' || node.alive === true
     ? 'доступен'
     : (node.availability === 'unavailable' || node.alive === false ? 'недоступен' : 'нет данных');
   const countryCode = nodeCountryCode(node.name);
@@ -326,7 +326,7 @@ function renderNode(group, node) {
   const meta = [protocol, providerCopy(node), node.udp === true ? 'UDP' : ''].filter(Boolean).join(' · ');
   const endpoint = [node.server, node.port].filter((value) => value !== '' && value != null).join(':');
   return `
-    <li class="xk-mihomo-node-row${selected ? ' is-current' : ''}${fixed ? ' is-fixed' : ''}${checking ? ' is-checking' : ''}" data-node-key="${escapeHtml(encodeURIComponent(delayKey(node.name, node.provider)))}" data-node-name="${escapeHtml(node.name)}" data-alive="${escapeHtml(alive)}">
+    <li class="xk-mihomo-node-row${selected ? ' is-current' : ''}${fixed ? ' is-fixed' : ''}${checking ? ' is-checking' : ''}" data-node-key="${escapeHtml(encodeURIComponent(delayKey(group.name, node.name, node.provider)))}" data-node-name="${escapeHtml(node.name)}" data-alive="${escapeHtml(alive)}">
       <button type="button" class="xk-mihomo-node-select" data-mihomo-group-select="1"
         data-group="${escapeHtml(group.name)}" data-node="${escapeHtml(node.name)}"
         aria-pressed="${selected ? 'true' : 'false'}" ${!selectable || selected || selectPending || selection ? 'disabled' : ''}>
@@ -336,7 +336,7 @@ function renderNode(group, node) {
           ${endpoint ? `<small class="xk-mihomo-node-endpoint">${escapeHtml(endpoint)}</small>` : ''}
         </span>
       </button>
-      ${renderNodeProbe(node)}
+      ${renderNodeProbe(group, node)}
     </li>`;
 }
 
@@ -417,7 +417,7 @@ function render() {
   if (hiddenToggle) hiddenToggle.checked = showHidden;
   const hiddenTimeoutCount = new Set(
     groups().flatMap((group) => group.nodes || [])
-      .map((node) => delayKey(node.name, node.provider))
+      .map((node) => delayKey(group.name, node.name, node.provider))
       .filter((key) => (timeoutCounts.get(key) || 0) >= TIMEOUT_HIDE_THRESHOLD),
   ).size;
   if (timeoutButton) {
@@ -502,14 +502,14 @@ function renderDelayNodes(keys) {
   });
   for (const group of filteredGroups()) {
     for (const node of group.nodes || []) {
-      const nodeKey = delayKey(node.name, node.provider);
+      const nodeKey = delayKey(group.name, node.name, node.provider);
       if (!keySet.has(nodeKey)) continue;
       const matchingCards = cards.get(encodeURIComponent(nodeKey)) || [];
       for (const card of matchingCards) {
         const probe = card.querySelector('.xk-mihomo-node-probe');
         if (!probe) continue;
-        probe.outerHTML = renderNodeProbe(node);
-        card.classList.toggle('is-checking', nodeDelayResult(node)?.state === 'pending');
+        probe.outerHTML = renderNodeProbe(group, node);
+        card.classList.toggle('is-checking', nodeDelayResult(group, node)?.state === 'pending');
       }
     }
   }
@@ -621,11 +621,11 @@ async function unfixProxy(groupName) {
   }
 }
 
-function delayKeysForProbe(scope, name, provider = '') {
-  if (scope !== 'group') return [delayKey(name, provider)];
+function delayKeysForProbe(scope, name, provider = '', groupName = '') {
+  if (scope !== 'group') return [delayKey(groupName, name, provider)];
   const group = groups().find((item) => item.name === name);
   return group && Array.isArray(group.nodes)
-    ? group.nodes.map((node) => delayKey(node.name, node.provider))
+    ? group.nodes.map((node) => delayKey(group.name, node.name, node.provider))
     : [];
 }
 
@@ -638,17 +638,17 @@ function applyDelayResults(results, provider = '', groupName = '') {
       ? group.nodes.filter((node) => node.name === item.name)
       : [];
     const keys = matchingNodes.length
-      ? matchingNodes.map((node) => delayKey(node.name, node.provider))
-      : [delayKey(item.name, provider)];
+      ? matchingNodes.map((node) => delayKey(group.name, node.name, node.provider))
+      : [delayKey(groupName, item.name, provider)];
     for (const key of keys) {
       delayRun.results.set(key, { state: 'done', delay: Number(item.delay_ms) });
     }
   }
 }
 
-async function probeDelay(scope, name, provider = '') {
+async function probeDelay(scope, name, provider = '', groupName = '') {
   if (!delayRun || delayRun.cancelled) return;
-  const keys = delayKeysForProbe(scope, name, provider);
+  const keys = delayKeysForProbe(scope, name, provider, groupName);
   for (const key of keys) delayRun.results.set(key, { state: 'pending' });
   try {
     let result = null;
@@ -664,7 +664,7 @@ async function probeDelay(scope, name, provider = '') {
       }
     }
     if (!delayRun || delayRun.cancelled) return;
-    applyDelayResults(result && result.results, provider, scope === 'group' ? name : '');
+    applyDelayResults(result && result.results, provider, scope === 'group' ? name : groupName);
     for (const key of keys) {
       if (!delayRun.results.has(key) || delayRun.results.get(key).state === 'pending') {
         delayRun.results.set(key, { state: 'failed' });
@@ -705,7 +705,7 @@ async function runDelayQueue(items, source = {}) {
     cancelled: false,
   };
   for (const item of queueItems) {
-    for (const key of delayKeysForProbe(item.scope, item.name, item.provider)) {
+    for (const key of delayKeysForProbe(item.scope, item.name, item.provider, item.group)) {
       delayRun.results.set(key, { state: 'pending' });
     }
   }
@@ -716,7 +716,7 @@ async function runDelayQueue(items, source = {}) {
   const worker = async () => {
     while (delayRun && !delayRun.cancelled && cursor < queueItems.length) {
       const item = queueItems[cursor++];
-      await probeDelay(item.scope, item.name, item.provider);
+      await probeDelay(item.scope, item.name, item.provider, item.group);
       if (delayRun && !delayRun.cancelled && cursor < queueItems.length) {
         await wait(DELAY_BATCH_CADENCE_MS);
       }
@@ -741,29 +741,29 @@ function cancelDelayQueue() {
   }
 }
 
-function nodeQueue(nodes) {
+function nodeQueue(nodes, groupName) {
   const names = new Set();
   const items = [];
   for (const node of nodes || []) {
-    const key = delayKey(node.name, node.provider);
+    const key = delayKey(groupName, node.name, node.provider);
     if (names.has(key)) continue;
     names.add(key);
     items.push(node.provider
-      ? { scope: 'provider-proxy', name: node.name, provider: node.provider }
-      : { scope: 'proxy', name: node.name });
+      ? { scope: 'provider-proxy', name: node.name, provider: node.provider, group: groupName }
+      : { scope: 'proxy', name: node.name, group: groupName });
   }
   return items;
 }
 
 function visibleNodeQueue() {
-  return nodeQueue(filteredGroups().flatMap((group) => (
-    collapsedGroups.has(group.name) && !filterText.trim() ? [] : (group.nodes || [])
-  )));
+  return filteredGroups().flatMap((group) => (
+    collapsedGroups.has(group.name) && !filterText.trim() ? [] : nodeQueue(group.nodes, group.name)
+  ));
 }
 
 function groupNodeQueue(name) {
   const group = groups().find((item) => item.name === name);
-  return nodeQueue(group?.nodes || []);
+  return nodeQueue(group?.nodes || [], group?.name || name);
 }
 
 function bind() {
@@ -813,8 +813,8 @@ function bind() {
     if (target.hasAttribute('data-mihomo-node-delay')) {
       const provider = String(target.dataset.provider || '');
       void runDelayQueue([provider
-        ? { scope: 'provider-proxy', name: target.dataset.node, provider }
-        : { scope: 'proxy', name: target.dataset.node }], {
+        ? { scope: 'provider-proxy', name: target.dataset.node, provider, group: target.dataset.group }
+        : { scope: 'proxy', name: target.dataset.node, group: target.dataset.group }], {
         type: 'node',
         node: String(target.dataset.node || ''),
         provider,

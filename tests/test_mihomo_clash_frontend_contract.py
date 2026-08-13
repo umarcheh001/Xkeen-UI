@@ -189,6 +189,8 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
         "disconnect_affected",
         "provider-proxy",
         "groupNodeQueue",
+        "delayKey(groupName, name, provider = '')",
+        "delayKey(group.name, node.name, node.provider)",
         "source.type === 'visible'",
         "source.type === 'group'",
         "mihomoDelayTesting",

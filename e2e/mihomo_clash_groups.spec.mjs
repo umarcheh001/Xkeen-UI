@@ -410,6 +410,43 @@ test('visible delay test probes every node beyond the old eight-item limit and r
 });
 
 
+test('group delay test keeps shared node progress inside the selected group', async ({ page }) => {
+  const data = groupsPayload();
+  data.groups.push({
+    name: 'DUPLICATE',
+    type: 'Selector',
+    now: 'node-a',
+    fixed: '',
+    hidden: false,
+    selectable: true,
+    nodes: data.groups[0].nodes.map((node) => ({ ...node })),
+  });
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: data }));
+  await page.route('**/api/mihomo/clash/delay', async (route) => {
+    const body = route.request().postDataJSON();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await route.fulfill({ json: { ok: true, schema_version: 1, results: [{ name: body.name, delay_ms: 50 }] } });
+  });
+
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-group-delay-scope' });
+  });
+  await expect(page.locator('#mihomo-clash-groups-list')).toContainText('AUTO');
+  await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
+  await page.locator('[data-group-name="DUPLICATE"] .xk-mihomo-group-head').click();
+  await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test').click();
+
+  await expect(page.locator('[data-group-name="AUTO"] [data-node-name="node-a"] .xk-mihomo-node-probe')).toHaveClass(/is-pending/);
+  await expect(page.locator('[data-group-name="DUPLICATE"] [data-node-name="node-a"] .xk-mihomo-node-probe')).not.toHaveClass(/is-pending/);
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test')).toHaveAttribute('data-mihomo-delay-testing', 'true');
+  await expect(page.locator('[data-group-name="DUPLICATE"] .xk-mihomo-group-test')).not.toHaveAttribute('data-mihomo-delay-testing', 'true');
+});
+
+
 test('automatic fixed group shows lock, unfix action, sorting and timeout hiding', async ({ page }) => {
   let fixed = 'hidden-node';
   let delayAttempts = 0;
