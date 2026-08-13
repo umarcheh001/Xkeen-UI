@@ -2,9 +2,9 @@ import { test, expect } from './fixtures.mjs';
 
 function buildDemoNodes() {
   const specs = [
-    ['de-XXX-Germany.98.1016', 'xhttp', 'tls', '195.133.25.89', 443, 'path=/api/v2/'],
-    ['se-YYY-Sweden.e026', 'xhttp', 'tls', '103.88.240.173', 443, 'path=/api/v2/'],
-    ['nl-YYY-Netherlands.0005', 'xhttp', 'tls', '176.124.210.220', 443, 'path=/api/v2/'],
+    ['🇩🇪 de-XXX-Germany.98.1016', 'xhttp', 'tls', '195.133.25.89', 443, 'path=/api/v2/'],
+    ['🇸🇪 se-YYY-Sweden.e026', 'xhttp', 'tls', '103.88.240.173', 443, 'path=/api/v2/'],
+    ['🇳🇱 nl-YYY-Netherlands.0005', 'xhttp', 'tls', '176.124.210.220', 443, 'path=/api/v2/'],
     ['us-XXX-New-York.6f10', 'xhttp', 'tls', '72.56.242.135', 443, 'path=/api/v2/'],
     ['es-XXX-Spain.94da', 'xhttp', 'tls', '72.56.244.88', 443, 'path=/api/v2/'],
     ['in-XXX-India.0b95', 'xhttp', 'tls', '72.56.6.163', 443, 'path=/api/v2/'],
@@ -709,6 +709,33 @@ test('subscriptions modal presents nodes as a compact server tile grid on deskto
   expect(layout.endpointDisplays.every((display) => display !== 'none')).toBe(true);
   expect(layout.clippedEndpoints).toEqual([]);
   expect(layout.overlaps).toEqual([]);
+});
+
+test('Xray server cards do not duplicate a country flag from the provider name', async ({ page }) => {
+  const nodes = buildDemoNodes().slice(0, 3);
+  const subscription = buildDemoSubscription(nodes);
+
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscriptions: [subscription] }),
+    });
+  });
+
+  await openSubscriptionsModal(page);
+  await page.locator('tr[data-sub-id="demo-sub"]').click();
+
+  const cards = page.locator('#outbounds-subscriptions-nodes-list .xk-sub-node-item');
+  await expect(cards).toHaveCount(3);
+  await expect(cards.nth(0).locator('.xk-sub-node-country')).toHaveAttribute('data-country', 'DE');
+  await expect(cards.nth(0).locator('.xk-sub-node-title-text')).toHaveText('de-XXX-Germany.98.1016');
+  await expect(cards.nth(1).locator('.xk-sub-node-title-text')).toHaveText('se-YYY-Sweden.e026');
+  await expect(cards.nth(2).locator('.xk-sub-node-title-text')).toHaveText('nl-YYY-Netherlands.0005');
 });
 
 test('Xray latency values use the same color scale as Mihomo', async ({ page }) => {

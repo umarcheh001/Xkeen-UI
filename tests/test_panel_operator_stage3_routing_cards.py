@@ -185,7 +185,7 @@ def test_stage3_dat_and_outbound_rows_have_explicit_state_semantics():
     assert 'data-tooltip="${protocolSummary}"' not in outbounds
     assert 'data-tooltip="${connectionSummaryHtml}"' not in outbounds
     assert 'deprecatedTransportNote ? `data-tooltip=' not in outbounds
-    assert "return raw;" in outbounds
+    assert "return info ? (stripLeadingFlagTokens(raw) || raw) : raw;" in outbounds
 
 
 def test_dat_file_picker_uses_its_listbox_contract_without_an_overlapping_tooltip():

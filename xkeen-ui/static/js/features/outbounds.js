@@ -1736,7 +1736,11 @@ let outboundsModuleApi = null;
 
     function nodeDisplayNameWithCountry(node, fallback) {
       const raw = String((node && (node.name || node.tag)) || fallback || 'node').trim() || String(fallback || 'node');
-      return raw;
+      // The card already renders a dedicated rectangular flag badge. Remove
+      // only a leading flag emoji from the provider name so the country is not
+      // shown twice; keep textual codes and the rest of the name untouched.
+      const info = nodeCountryFlagInfo(node);
+      return info ? (stripLeadingFlagTokens(raw) || raw) : raw;
     }
 
     const COUNTRY_FLAG_SVG = Object.freeze({

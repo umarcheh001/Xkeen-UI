@@ -169,6 +169,7 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     assert "list_subscriptions(ui_state_dir)" in routes_src
     assert "function nodeCountryFlagInfo(node) {" in outbounds_src
     assert "function nodeDisplayNameWithCountry(node, fallback) {" in outbounds_src
+    assert "return info ? (stripLeadingFlagTokens(raw) || raw) : raw;" in outbounds_src
     assert "'subscription_node_name'," in outbounds_src
     country_candidates_src = outbounds_src.split("function nodeCountryTextCandidates(node) {", 1)[1].split("];", 1)[0]
     assert "'sni'," not in country_candidates_src
