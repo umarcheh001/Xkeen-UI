@@ -444,6 +444,8 @@ test('group delay test keeps shared node progress inside the selected group', as
   await expect(page.locator('[data-group-name="DUPLICATE"] [data-node-name="node-a"] .xk-mihomo-node-probe')).not.toHaveClass(/is-pending/);
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test')).toHaveAttribute('data-mihomo-delay-testing', 'true');
   await expect(page.locator('[data-group-name="DUPLICATE"] .xk-mihomo-group-test')).not.toHaveAttribute('data-mihomo-delay-testing', 'true');
+  await expect(page.locator('[data-group-name="AUTO"] [data-node-name="node-a"] .xk-mihomo-node-delay')).toHaveText('50 мс');
+  await expect(page.locator('[data-group-name="DUPLICATE"] [data-node-name="node-a"] .xk-mihomo-node-delay')).toHaveText('50 мс');
 });
 
 

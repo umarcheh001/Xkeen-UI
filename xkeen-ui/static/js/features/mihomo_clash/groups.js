@@ -84,9 +84,13 @@ function delayKey(groupName, name, provider = '') {
   return `${String(groupName || '')}\u0000${String(provider || '')}\u0000${String(name || '')}`;
 }
 
+function latestDelayKey(name, provider = '') {
+  return `${String(provider || '')}\u0000${String(name || '')}`;
+}
+
 function nodeDelayResult(group, node) {
   const key = delayKey(group.name, node.name, node.provider);
-  return (delayRun && delayRun.results.get(key)) || latestDelays.get(key);
+  return (delayRun && delayRun.results.get(key)) || latestDelays.get(latestDelayKey(node.name, node.provider));
 }
 
 function nodeProbeStatus(group, node) {
@@ -643,6 +647,13 @@ function applyDelayResults(results, provider = '', groupName = '') {
     for (const key of keys) {
       delayRun.results.set(key, { state: 'done', delay: Number(item.delay_ms) });
     }
+    if (matchingNodes.length) {
+      for (const node of matchingNodes) {
+        latestDelays.set(latestDelayKey(node.name, node.provider), { state: 'done', delay: Number(item.delay_ms) });
+      }
+    } else {
+      latestDelays.set(latestDelayKey(item.name, provider), { state: 'done', delay: Number(item.delay_ms) });
+    }
   }
 }
 
@@ -726,9 +737,8 @@ async function runDelayQueue(items, source = {}) {
   for (const workerPromise of workers) await workerPromise;
   if (!delayRun) return;
   const finished = delayRun;
-  for (const [key, value] of finished.results) latestDelays.set(key, value);
   delayRun = null;
-  renderDelayNodes([...finished.results.keys()]);
+  render();
   syncDelayControls();
 }
 
