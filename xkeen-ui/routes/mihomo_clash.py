@@ -1039,6 +1039,7 @@ def create_mihomo_clash_blueprint(
                 affected_ids, affected_truncated = _affected_connection_ids(connections.payload, group)
             client.select_proxy(group, selected)
             refreshed = client.request_json("proxies")
+            refreshed_providers = client.request_json("providers_proxies")
             disconnected, disconnect_failed = _disconnect_captured_connections(client, affected_ids)
         except MihomoClashClientError as exc:
             _audit_action("proxy-select", False, group=group, error_code=exc.code)
@@ -1054,7 +1055,11 @@ def create_mihomo_clash_blueprint(
         finally:
             lease.release()
 
-        groups = build_mihomo_clash_proxy_groups_dto(refreshed.payload).get("groups", [])
+        groups = build_mihomo_clash_proxy_groups_dto(
+            refreshed.payload,
+            refreshed_providers.payload,
+            _load_proxy_transport_index(mihomo_config_file, root),
+        ).get("groups", [])
         current = next((item for item in groups if item.get("name") == group), None)
         _audit_action("proxy-select", True, group=group)
         return jsonify(
@@ -1121,6 +1126,7 @@ def create_mihomo_clash_blueprint(
                 affected_ids, affected_truncated = _affected_connection_ids(connections.payload, group)
             client.unfix_proxy(group)
             refreshed = client.request_json("proxies")
+            refreshed_providers = client.request_json("providers_proxies")
             disconnected, disconnect_failed = _disconnect_captured_connections(client, affected_ids)
         except MihomoClashClientError as exc:
             _audit_action("proxy-unfix", False, group=group, error_code=exc.code)
@@ -1136,7 +1142,11 @@ def create_mihomo_clash_blueprint(
         finally:
             lease.release()
 
-        groups_after = build_mihomo_clash_proxy_groups_dto(refreshed.payload).get("groups", [])
+        groups_after = build_mihomo_clash_proxy_groups_dto(
+            refreshed.payload,
+            refreshed_providers.payload,
+            _load_proxy_transport_index(mihomo_config_file, root),
+        ).get("groups", [])
         current = next((item for item in groups_after if item.get("name") == group), None)
         _audit_action("proxy-unfix", True, group=group)
         return jsonify({

@@ -642,6 +642,19 @@ def test_proxy_select_is_reconciled_against_fresh_snapshot():
     client = StubClient(
         responses={
             "proxies": MihomoClashJSONResponse(groups_payload(now="node-b"), 200, 2, 200),
+            "providers_proxies": MihomoClashJSONResponse(
+                {
+                    "providers": {
+                        "demo-provider": {
+                            "name": "demo-provider",
+                            "proxies": [{"name": "node-b", "type": "VLESS", "alive": True}],
+                        }
+                    }
+                },
+                200,
+                2,
+                100,
+            ),
         }
     )
     response = make_app(
@@ -657,9 +670,11 @@ def test_proxy_select_is_reconciled_against_fresh_snapshot():
     assert response.status_code == 200
     assert body["ok"] is True
     assert body["group"]["now"] == "node-b"
+    node = next(item for item in body["group"]["nodes"] if item["name"] == "node-b")
+    assert node["provider"] == "demo-provider"
     assert body["reconciled"] is True
     assert client.selections == [("AUTO", "node-b")]
-    assert client.operations == ["proxies", "proxies"]
+    assert client.operations == ["proxies", "proxies", "providers_proxies"]
     assert audit_events == [
         (
             True,
@@ -714,6 +729,7 @@ def test_proxy_unfix_is_version_gated_reconciled_and_disconnects_only_affected_c
     client = StubClient(responses={
         "version": MihomoClashJSONResponse({"version": "Mihomo Meta v1.19.29"}, 200, 1, 40),
         "connections_snapshot": MihomoClashJSONResponse(connection_payload, 200, 1, 100),
+        "providers_proxies": MihomoClashJSONResponse({"providers": {}}, 200, 1, 100),
     })
     original_request = client.request_json
 
