@@ -12206,7 +12206,7 @@ body.panel-page #core-modal .xk-core-option.active,
 body.panel-page #core-modal .xk-core-option.is-current:not(.active),
 html[data-theme="light"] body.panel-page #core-modal .xk-core-option {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 14px;
+  grid-template-columns: 34px minmax(0, 1fr);
   align-items: center;
   gap: 9px;
   min-height: 48px;
@@ -16995,6 +16995,7 @@ body.panel-page .xk-mihomo-mode-menu {
   top: calc(100% + 7px);
   right: 0;
   display: grid;
+  gap: 4px;
   width: min(310px, calc(100vw - 28px));
   padding: 7px;
   border: 1px solid var(--op-border-strong);
@@ -17011,6 +17012,7 @@ body.panel-page .xk-mihomo-mode-menu-head {
   display: grid;
   gap: 2px;
   padding: 5px 7px 8px;
+  margin-bottom: 2px;
   border-bottom: 1px solid var(--op-border);
 }
 

@@ -306,9 +306,24 @@ def test_runtime_status_mode_is_a_capability_gated_compact_switch():
         "confirmMihomoAction",
         "'/api/mihomo/clash/runtime-mode'",
         '.xk-mihomo-mode-menu[hidden]',
+        'gap: 4px;',
+        'margin-bottom: 2px;',
         'height: var(--op-control-h)',
     ):
         assert fragment in markup or fragment in index or fragment in client or fragment in css
+
+
+def test_core_switch_modal_keeps_only_core_cards_without_redundant_status_chrome():
+    markup = _text(ROOT / "xkeen-ui/templates/panel.html")
+    modal = markup[markup.index('id="core-modal"'):markup.index('id="confirm-modal"')]
+
+    assert 'xk-core-engine-list' in modal
+    assert 'data-core="xray"' in modal
+    assert 'data-core="mihomo"' in modal
+    assert 'Выберите активное ядро' not in modal
+    assert 'class="xk-core-lead"' not in modal
+    assert 'class="xk-core-option-state"' not in modal
+    assert 'class="xk-core-option-indicator"' not in modal
 
 
 def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():

@@ -2329,14 +2329,6 @@
           <button type="button" class="modal-close" id="core-modal-close-btn" aria-label="Закрыть" title="Закрыть">{{ op_icon('close') }}</button>
         </div>
         <div class="modal-body xk-core-modal-body">
-          <div class="xk-core-lead">
-            <span class="xk-core-lead-icon" aria-hidden="true">{{ op_icon('restart') }}</span>
-            <span class="xk-core-lead-copy">
-              <strong>Выберите активное ядро</strong>
-              <small>После переключения сервис xkeen перезапустится.</small>
-            </span>
-            <span class="xk-core-lead-chip">рестарт</span>
-          </div>
           <div class="core-select-row xk-core-engine-list" role="radiogroup" aria-label="Выбор ядра XKeen">
             <div class="xk-core-engine-row">
               <button type="button" class="core-option xk-core-option" data-core="xray" role="radio" aria-checked="false">
@@ -2345,9 +2337,7 @@
                   <span class="xk-core-option-title">Xray</span>
                   <span class="xk-core-option-note">Ядро прокси-сервиса</span>
                 </span>
-                <span class="xk-core-option-indicator" aria-hidden="true"><span></span></span>
               </button>
-              <span class="xk-core-option-state" aria-hidden="true">Доступно</span>
             </div>
             <div class="xk-core-engine-row">
               <button type="button" class="core-option xk-core-option" data-core="mihomo" role="radio" aria-checked="false">
@@ -2356,9 +2346,7 @@
                   <span class="xk-core-option-title">Mihomo</span>
                   <span class="xk-core-option-note">Ядро прокси-сервиса</span>
                 </span>
-                <span class="xk-core-option-indicator" aria-hidden="true"><span></span></span>
               </button>
-              <span class="xk-core-option-state" aria-hidden="true">Доступно</span>
             </div>
           </div>
           <p id="core-modal-status" class="modal-hint xk-core-status" role="status" aria-live="polite"></p>
