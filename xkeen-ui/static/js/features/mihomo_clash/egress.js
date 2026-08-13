@@ -1,0 +1,167 @@
+import { fetchMihomoClashEgressInfo } from './client.js';
+
+const LOCAL_CACHE_MS = 5 * 60 * 1000;
+const VISIBILITY_STORAGE_KEY = 'xkeen:mihomo-clash-egress-visible';
+
+let initialized = false;
+let active = false;
+let request = null;
+let requestSequence = 0;
+let payload = null;
+let loadedAt = 0;
+let expanded = false;
+
+function byId(id) {
+  return document.getElementById(id);
+}
+
+function setText(id, value) {
+  const element = byId(id);
+  if (element) element.textContent = String(value ?? '');
+}
+
+function locationCopy(info) {
+  return [info.city, info.region, info.country].filter(Boolean).join(', ') || '—';
+}
+
+function storedVisibility() {
+  try {
+    return window.localStorage.getItem(VISIBILITY_STORAGE_KEY) === '1';
+  } catch (error) {
+    return false;
+  }
+}
+
+function storeVisibility(value) {
+  try {
+    window.localStorage.setItem(VISIBILITY_STORAGE_KEY, value ? '1' : '0');
+  } catch (error) {}
+}
+
+function applyVisibility(value, options = {}) {
+  expanded = value === true;
+  const root = byId('mihomo-clash-egress');
+  const toggle = byId('mihomo-clash-egress-toggle');
+  if (root) root.hidden = !expanded;
+  if (toggle) {
+    toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    toggle.setAttribute('aria-pressed', expanded ? 'true' : 'false');
+    toggle.setAttribute('data-tooltip', expanded
+      ? 'Скрыть сведения о публичном IP через Mihomo'
+      : 'Показать сведения о публичном IP через Mihomo');
+  }
+  if (options.persist === true) storeVisibility(expanded);
+  if (!expanded) abortRequest();
+  if (expanded && active && options.refresh !== false) void refresh();
+}
+
+function render(info = payload) {
+  const root = byId('mihomo-clash-egress');
+  if (!root) return;
+  if (!info) {
+    setText('mihomo-clash-egress-country', '—');
+    setText('mihomo-clash-egress-ip', 'Проверяем…');
+    setText('mihomo-clash-egress-version', 'через Mihomo');
+    setText('mihomo-clash-egress-location', '—');
+    setText('mihomo-clash-egress-provider', '—');
+    setText('mihomo-clash-egress-asn', '—');
+    setText('mihomo-clash-egress-timezone', '—');
+    return;
+  }
+  setText('mihomo-clash-egress-country', info.country_code || '—');
+  setText('mihomo-clash-egress-ip', info.ip || '—');
+  setText('mihomo-clash-egress-version', [info.ip_version, info.cached ? 'кэш' : 'обновлено'].filter(Boolean).join(' · '));
+  setText('mihomo-clash-egress-location', locationCopy(info));
+  setText('mihomo-clash-egress-provider', info.organization || '—');
+  setText('mihomo-clash-egress-asn', info.asn || '—');
+  setText('mihomo-clash-egress-timezone', info.timezone || '—');
+  setText('mihomo-clash-egress-notice', 'Результат следует правилу для ipapi.co и может отличаться для других доменов.');
+}
+
+function abortRequest() {
+  requestSequence += 1;
+  request?.abort();
+  request = null;
+}
+
+async function refresh(options = {}) {
+  if (!active || !expanded) return false;
+  const forceRefresh = options.forceRefresh === true;
+  if (!forceRefresh && payload && Date.now() - loadedAt < LOCAL_CACHE_MS) {
+    render(payload);
+    return true;
+  }
+  abortRequest();
+  const sequence = ++requestSequence;
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  request = controller;
+  const root = byId('mihomo-clash-egress');
+  const button = byId('mihomo-clash-egress-refresh');
+  root?.setAttribute('aria-busy', 'true');
+  if (button) button.disabled = true;
+  setText('mihomo-clash-egress-notice', forceRefresh ? 'Повторно проверяем IP через Mihomo…' : 'Проверяем IP выхода через Mihomo…');
+  try {
+    const next = await fetchMihomoClashEgressInfo({
+      forceRefresh,
+      signal: controller?.signal,
+    });
+    if (!active || sequence !== requestSequence) return false;
+    payload = next && typeof next === 'object' ? next : null;
+    loadedAt = Date.now();
+    render(payload);
+    return true;
+  } catch (error) {
+    if (controller?.signal.aborted || sequence !== requestSequence) return false;
+    if (payload) {
+      render(payload);
+      setText('mihomo-clash-egress-notice', `${error?.message || 'Не удалось обновить IP выхода.'} Показан последний результат.`);
+    } else {
+      setText('mihomo-clash-egress-ip', 'Недоступно');
+      setText('mihomo-clash-egress-version', 'проверка не выполнена');
+      setText('mihomo-clash-egress-notice', error?.message || 'Не удалось определить IP выхода через Mihomo.');
+    }
+    return false;
+  } finally {
+    if (sequence === requestSequence) request = null;
+    root?.setAttribute('aria-busy', 'false');
+    if (button) button.disabled = false;
+  }
+}
+
+export function initMihomoClashEgress() {
+  if (initialized) return true;
+  if (!byId('mihomo-clash-egress')) return false;
+  initialized = true;
+  expanded = storedVisibility();
+  byId('mihomo-clash-egress-toggle')?.addEventListener('click', () => {
+    applyVisibility(!expanded, { persist: true });
+  });
+  byId('mihomo-clash-egress-refresh')?.addEventListener('click', () => {
+    void refresh({ forceRefresh: true });
+  });
+  document.addEventListener('xkeen:mihomo-egress-invalidated', () => {
+    payload = null;
+    loadedAt = 0;
+    if (active && expanded) window.setTimeout(() => void refresh({ forceRefresh: true }), 350);
+  });
+  render(null);
+  applyVisibility(expanded, { refresh: false });
+  return true;
+}
+
+export function activateMihomoClashEgress() {
+  if (!initMihomoClashEgress()) return false;
+  active = true;
+  const toggle = byId('mihomo-clash-egress-toggle');
+  if (toggle) toggle.hidden = false;
+  applyVisibility(expanded);
+  return true;
+}
+
+export function deactivateMihomoClashEgress() {
+  active = false;
+  abortRequest();
+  const toggle = byId('mihomo-clash-egress-toggle');
+  if (toggle) toggle.hidden = true;
+  return true;
+}

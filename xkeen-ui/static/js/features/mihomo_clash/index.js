@@ -14,6 +14,11 @@ import {
   initMihomoClashGroups,
 } from './groups.js';
 import {
+  activateMihomoClashEgress,
+  deactivateMihomoClashEgress,
+  initMihomoClashEgress,
+} from './egress.js';
+import {
   activateMihomoClashConnections,
   deactivateMihomoClashConnections,
   initMihomoClashConnections,
@@ -200,8 +205,10 @@ function renderStatus(state, payload = null) {
   setHidden(content, state !== 'ready');
   if (state === 'ready' && active && visible && currentSubview === 'control') {
     activateMihomoClashGroups(payload?.capabilities || {});
+    activateMihomoClashEgress();
   } else {
     deactivateMihomoClashGroups();
+    deactivateMihomoClashEgress();
   }
   if (state === 'ready' && active && visible && currentSubview === 'connections') {
     activateMihomoClashConnections(payload?.capabilities || {});
@@ -454,6 +461,7 @@ function applySubview(name, options = {}) {
   if (next === 'config') {
     abortStatusRequest();
     deactivateMihomoClashGroups();
+    deactivateMihomoClashEgress();
     deactivateMihomoClashConnections();
     deactivateMihomoClashRules();
     deactivateMihomoClashLogs();
@@ -464,6 +472,7 @@ function applySubview(name, options = {}) {
     } catch (error) {}
   } else if (active && visible) {
     if (next !== 'control') deactivateMihomoClashGroups();
+    if (next !== 'control') deactivateMihomoClashEgress();
     if (next !== 'connections') deactivateMihomoClashConnections();
     if (next !== 'rules') deactivateMihomoClashRules();
     if (next !== 'logs') deactivateMihomoClashLogs();
@@ -554,6 +563,7 @@ function bindVisibility() {
     if (!visible) {
       abortStatusRequest();
       deactivateMihomoClashGroups();
+      deactivateMihomoClashEgress();
       deactivateMihomoClashConnections();
       deactivateMihomoClashRules();
       deactivateMihomoClashLogs();
@@ -572,6 +582,7 @@ export function initMihomoClashWorkspace() {
   bindWorkspace();
   bindVisibility();
   initMihomoClashGroups();
+  initMihomoClashEgress();
   initMihomoClashConnections();
   initMihomoClashRules();
   initMihomoClashLogs();
@@ -597,6 +608,7 @@ export function deactivateMihomoClashWorkspace() {
   closeRuntimeModeMenu();
   abortStatusRequest();
   deactivateMihomoClashGroups();
+  deactivateMihomoClashEgress();
   deactivateMihomoClashConnections();
   deactivateMihomoClashRules();
   deactivateMihomoClashLogs();

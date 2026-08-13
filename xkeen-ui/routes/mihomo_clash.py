@@ -25,6 +25,7 @@ from services.mihomo_rule_provider_inspector import (
     inspect_rule_provider,
 )
 from services.mihomo_clash_devices import get_mihomo_clash_device_map
+from services.mihomo_egress_info import MihomoEgressInfoError, get_mihomo_egress_info
 from services.request_limits import PayloadTooLargeError, read_request_json_limited
 from services.mihomo_clash_target import (
     MihomoClashDiscovery,
@@ -40,6 +41,7 @@ except Exception:  # pragma: no cover - optional on very small router builds
 DiscoveryFactory = Callable[[str, str], MihomoClashDiscovery]
 ClientFactory = Callable[[Any], MihomoClashClient]
 DeviceMapFactory = Callable[[], Mapping[str, Any]]
+EgressInfoFactory = Callable[..., Mapping[str, Any]]
 MAX_ACTION_BODY_BYTES = 8 * 1024
 MAX_ACTION_NAME_CHARS = 256
 MAX_AFFECTED_DISCONNECTS = 24
@@ -464,6 +466,7 @@ def create_mihomo_clash_blueprint(
     audit_logger: AuditLogger | None = None,
     action_guard: ActionGuard | None = None,
     device_map_factory: DeviceMapFactory = get_mihomo_clash_device_map,
+    egress_info_factory: EgressInfoFactory = get_mihomo_egress_info,
 ) -> Blueprint:
     bp = Blueprint("mihomo_clash", __name__)
     root = str(mihomo_root or Path(mihomo_config_file).parent)
@@ -577,6 +580,46 @@ def create_mihomo_clash_blueprint(
                 },
             )
         ), 200
+
+    @bp.get("/api/mihomo/clash/egress-info")
+    def api_mihomo_clash_egress_info():
+        client, unavailable = _client_or_response()
+        if unavailable:
+            return unavailable
+        try:
+            configs = client.request_json("configs")
+            config = configs.payload if isinstance(configs.payload, Mapping) else {}
+            proxy_port = config.get("mixed-port") or config.get("port")
+            force_refresh = str(request.args.get("refresh") or "").strip().lower() in {
+                "1", "true", "yes", "on",
+            }
+            info = dict(egress_info_factory(proxy_port, force_refresh=force_refresh))
+        except MihomoEgressInfoError as exc:
+            return error_response(
+                str(exc),
+                exc.status,
+                ok=False,
+                code=exc.code,
+                retryable=exc.status >= 500,
+            )
+        except MihomoClashClientError as exc:
+            return _safe_client_error(exc)
+        except Exception:
+            return error_response(
+                "Не удалось определить IP выхода Mihomo.",
+                502,
+                ok=False,
+                code="mihomo_egress_info_failed",
+                retryable=True,
+            )
+
+        return jsonify({
+            "ok": True,
+            "schema_version": 1,
+            "route_scope": "mihomo_proxy",
+            "lookup_host": "ipapi.co",
+            **info,
+        }), 200
 
     @bp.put("/api/mihomo/clash/runtime-mode")
     def api_mihomo_clash_runtime_mode():

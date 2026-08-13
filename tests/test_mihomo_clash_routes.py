@@ -112,6 +112,7 @@ def make_app(
     device_map_factory=None,
     mihomo_config_file="/safe/mihomo/config.yaml",
     mihomo_root="/safe/mihomo",
+    egress_info_factory=None,
 ) -> Flask:
     app = Flask(__name__)
     app.config["TESTING"] = True
@@ -122,6 +123,7 @@ def make_app(
             discovery_factory=lambda _config, _root: discovery,
             client_factory=lambda _target: client,
             audit_logger=audit_logger,
+            **({"egress_info_factory": egress_info_factory} if egress_info_factory else {}),
             **({"device_map_factory": device_map_factory} if device_map_factory else {}),
         )
     )
@@ -191,6 +193,50 @@ def test_status_route_returns_versioned_redacted_dto():
     assert "fixture-secret" not in serialized
     assert "upstream-leak" not in serialized
     assert client.operations == ["version", "configs"]
+
+
+def test_egress_info_route_uses_mihomo_mixed_port_and_safe_dto():
+    client = StubClient(responses={
+        "configs": MihomoClashJSONResponse(
+            payload={"mixed-port": 7890, "secret": "drop"},
+            status=200,
+            elapsed_ms=1,
+            size_bytes=32,
+        ),
+    })
+    calls = []
+
+    def lookup(port, *, force_refresh=False):
+        calls.append((port, force_refresh))
+        return {
+            "ip": "203.0.113.8",
+            "ip_version": "IPv4",
+            "city": "Helsinki",
+            "region": "Uusimaa",
+            "country": "Finland",
+            "country_code": "FI",
+            "asn": "AS64500",
+            "organization": "Example Network",
+            "timezone": "Europe/Helsinki",
+            "cached": False,
+            "cache_age_seconds": 0,
+            "checked_at": 1786610000,
+        }
+
+    response = make_app(
+        ready_discovery(), client, egress_info_factory=lookup,
+    ).test_client().get("/api/mihomo/clash/egress-info?refresh=1")
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body["ok"] is True
+    assert body["route_scope"] == "mihomo_proxy"
+    assert body["lookup_host"] == "ipapi.co"
+    assert body["ip"] == "203.0.113.8"
+    assert body["organization"] == "Example Network"
+    assert body["timezone"] == "Europe/Helsinki"
+    assert calls == [(7890, True)]
+    assert client.operations == ["configs"]
 
 
 def test_runtime_mode_route_switches_only_allowlisted_mode_and_reconciles():
@@ -1003,6 +1049,7 @@ def test_routes_registry_registers_mihomo_clash_facade(monkeypatch):
     for rule in app.url_map.iter_rules():
         rules.setdefault(rule.rule, set()).update(rule.methods or ())
     assert "GET" in rules["/api/mihomo/clash/status"]
+    assert "GET" in rules["/api/mihomo/clash/egress-info"]
     assert "PUT" in rules["/api/mihomo/clash/runtime-mode"]
     assert "GET" in rules["/api/mihomo/clash/proxy-groups"]
     assert "GET" in rules["/api/mihomo/clash/rules"]

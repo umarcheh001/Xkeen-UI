@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any
+from urllib.parse import urlsplit
 
 from services.mihomo_clash_target import MihomoClashDiscovery
 from services.xray_device_names import normalize_ip
@@ -87,6 +88,26 @@ def _optional_nonnegative_int(value: Any) -> int | None:
     except (TypeError, ValueError, OverflowError):
         return None
     return max(0, number)
+
+
+def _group_icon_url(value: Any) -> str:
+    """Keep only a bounded HTTPS icon URL supplied by a proxy group.
+
+    Mihomo returns the configured ``icon`` field verbatim through ``/proxies``.
+    It is rendered by the browser, so do not turn arbitrary config strings into
+    an external request (or an executable ``data:``/``javascript:`` URL).
+    """
+
+    url = _text(value, 2048)
+    if not url:
+        return ""
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return ""
+    if parsed.scheme.lower() != "https" or not parsed.netloc:
+        return ""
+    return url
 
 
 def _mapping_value_casefold(mapping: Mapping[str, Any], *keys: str) -> Any:
@@ -351,6 +372,7 @@ def build_mihomo_clash_proxy_groups_dto(
                 "type": group_type,
                 "now": _text(group.get("now"), 256),
                 "fixed": _text(group.get("fixed"), 256),
+                "icon": _group_icon_url(group.get("icon")),
                 "alive": _optional_bool(group.get("alive")),
                 "hidden": bool(group.get("hidden")) if isinstance(group.get("hidden"), bool) else False,
                 "selectable": selectable,

@@ -15,6 +15,7 @@ GROUPS = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "gr
 CONNECTIONS = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "connections.js"
 RULES = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "rules.js"
 LOGS = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "logs.js"
+EGRESS = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "egress.js"
 LAZY = ROOT / "xkeen-ui" / "static" / "js" / "pages" / "panel.lazy_bindings.runtime.js"
 VIEW_RUNTIME = ROOT / "xkeen-ui" / "static" / "js" / "pages" / "panel.view_runtime.js"
 INVENTORY = ROOT / "docs" / "panel-operator-icon-inventory.json"
@@ -221,6 +222,41 @@ def test_groups_start_collapsed_and_keep_labelled_actions_on_one_baseline():
     assert "> span:not(.xk-action-icon)" in css
 
 
+def test_control_view_has_cached_mihomo_routed_egress_card():
+    markup = _mihomo_markup()
+    feature = _text(FEATURE)
+    client = _text(CLIENT)
+    egress = _text(EGRESS)
+    css = _text(CSS)
+
+    for fragment in (
+        'id="mihomo-clash-egress"',
+        'id="mihomo-clash-egress-toggle"',
+        'data-mihomo-clash-action="egress-toggle"',
+        'aria-controls="mihomo-clash-egress"',
+        'aria-expanded="false"',
+        'id="mihomo-clash-egress-ip"',
+        'id="mihomo-clash-egress-provider"',
+        'id="mihomo-clash-egress-asn"',
+        'id="mihomo-clash-egress-timezone"',
+        'data-mihomo-clash-action="egress-refresh"',
+        "fetchMihomoClashEgressInfo",
+        "EGRESS_INFO_ENDPOINT",
+        "forceRefresh === true ? '?refresh=1' : ''",
+        "LOCAL_CACHE_MS = 5 * 60 * 1000",
+        "VISIBILITY_STORAGE_KEY = 'xkeen:mihomo-clash-egress-visible'",
+        "window.localStorage.setItem",
+        "if (!active || !expanded) return false;",
+        "xkeen:mihomo-egress-invalidated",
+        "activateMihomoClashEgress();",
+        "deactivateMihomoClashEgress();",
+        '.xk-mihomo-egress-details',
+    ):
+        assert fragment in markup or fragment in feature or fragment in client or fragment in egress or fragment in css
+
+    assert "http://ip-api.com" not in markup + feature + client + egress
+
+
 def test_groups_toolbar_has_no_manual_refresh_action():
     markup = _mihomo_markup()
     groups = _text(GROUPS)
@@ -248,6 +284,8 @@ def test_runtime_status_mode_is_a_capability_gated_compact_switch():
 
     for fragment in (
         'id="mihomo-clash-status-mode"',
+        'class="btn-secondary xk-mihomo-mode-trigger"',
+        'data-tooltip="Временно меняет режим маршрутизации Mihomo для новых соединений; config.yaml не изменяется"',
         'id="mihomo-clash-mode-menu"',
         'data-mihomo-runtime-mode="rule"',
         'data-mihomo-runtime-mode="global"',
@@ -260,6 +298,7 @@ def test_runtime_status_mode_is_a_capability_gated_compact_switch():
         "confirmMihomoAction",
         "'/api/mihomo/clash/runtime-mode'",
         '.xk-mihomo-mode-menu[hidden]',
+        'height: var(--op-control-h)',
     ):
         assert fragment in markup or fragment in index or fragment in client or fragment in css
 

@@ -153,6 +153,19 @@ def test_proxy_groups_dto_retains_order_and_provider_enrichment():
     assert auto["nodes"][1]["availability"] == "unavailable"
 
 
+def test_proxy_groups_dto_exposes_only_safe_https_group_icon_urls():
+    from services.mihomo_clash_dto import build_mihomo_clash_proxy_groups_dto
+
+    proxies = fixture("proxies.json")
+    proxies["proxies"]["AUTO"]["icon"] = "https://cdn.example.test/icons/auto.png"
+    dto = build_mihomo_clash_proxy_groups_dto(proxies)
+    assert dto["groups"][0]["icon"] == "https://cdn.example.test/icons/auto.png"
+
+    for unsafe in ("http://cdn.example.test/icon.png", "data:image/svg+xml,boom", "javascript:alert(1)"):
+        proxies["proxies"]["AUTO"]["icon"] = unsafe
+        assert build_mihomo_clash_proxy_groups_dto(proxies)["groups"][0]["icon"] == ""
+
+
 def test_proxy_groups_dto_does_not_guess_provider_when_names_collide():
     from services.mihomo_clash_dto import build_mihomo_clash_proxy_groups_dto
 

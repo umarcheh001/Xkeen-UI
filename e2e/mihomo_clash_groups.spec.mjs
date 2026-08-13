@@ -59,6 +59,89 @@ function groupsPayload(now = 'node-a', fixed = '', includeReliabilityFixture = f
 }
 
 
+function egressPayload(cached = false) {
+  return {
+    ok: true,
+    schema_version: 1,
+    route_scope: 'mihomo_proxy',
+    lookup_host: 'ipapi.co',
+    ip: '198.51.100.25',
+    ip_version: 'IPv4',
+    city: 'Helsinki',
+    region: 'Uusimaa',
+    country: 'Finland',
+    country_code: 'FI',
+    asn: 'AS64500',
+    organization: 'Example Network',
+    timezone: 'Europe/Helsinki',
+    cached,
+  };
+}
+
+
+test('Mihomo egress card shows routed IP, refreshes and stays compact on mobile', async ({ page }) => {
+  const egressRequests = [];
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: groupsPayload() }));
+  await page.route('**/api/mihomo/clash/egress-info*', (route) => {
+    egressRequests.push(route.request().url());
+    return route.fulfill({ json: egressPayload(egressRequests.length > 1) });
+  });
+
+  await page.goto('/');
+  await page.evaluate(() => localStorage.removeItem('xkeen:mihomo-clash-egress-visible'));
+  await page.reload();
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-egress-card' });
+  });
+
+  await expect(page.locator('#mihomo-clash-egress-toggle')).toBeVisible();
+  await expect(page.locator('#mihomo-clash-egress-toggle')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#mihomo-clash-egress')).toBeHidden();
+  expect(egressRequests).toHaveLength(0);
+
+  await page.locator('#mihomo-clash-egress-toggle').click();
+  await expect(page.locator('#mihomo-clash-egress-toggle')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#mihomo-clash-egress')).toBeVisible();
+  await expect(page.locator('#mihomo-clash-egress-ip')).toHaveText('198.51.100.25');
+  await expect(page.locator('#mihomo-clash-egress-country')).toHaveText('FI');
+  await expect(page.locator('#mihomo-clash-egress-location')).toHaveText('Helsinki, Uusimaa, Finland');
+  await expect(page.locator('#mihomo-clash-egress-provider')).toHaveText('Example Network');
+  await expect(page.locator('#mihomo-clash-egress-asn')).toHaveText('AS64500');
+  await expect(page.locator('#mihomo-clash-egress-timezone')).toHaveText('Europe/Helsinki');
+  await expect(page.locator('#mihomo-clash-egress-notice')).toContainText('ipapi.co');
+
+  const desktopColumns = await page.locator('.xk-mihomo-egress-details').evaluate(
+    (details) => getComputedStyle(details).gridTemplateColumns.split(' ').length,
+  );
+  expect(desktopColumns).toBe(2);
+
+  await page.locator('#mihomo-clash-egress-refresh').click();
+  await expect.poll(() => egressRequests.filter((url) => url.includes('refresh=1')).length).toBe(1);
+  await expect(page.locator('#mihomo-clash-egress-version')).toContainText('кэш');
+
+  expect(await page.evaluate(() => localStorage.getItem('xkeen:mihomo-clash-egress-visible'))).toBe('1');
+  await page.reload();
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-egress-persisted' });
+  });
+  await expect(page.locator('#mihomo-clash-egress-toggle')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#mihomo-clash-egress')).toBeVisible();
+  await expect(page.locator('#mihomo-clash-egress-ip')).toHaveText('198.51.100.25');
+
+  await page.setViewportSize({ width: 430, height: 800 });
+  const mobileLayout = await page.locator('.xk-mihomo-egress-details').evaluate((details) => ({
+    columns: getComputedStyle(details).gridTemplateColumns.split(' ').length,
+    pageOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  }));
+  expect(mobileLayout).toEqual({ columns: 1, pageOverflow: false });
+});
+
+
 test('Mihomo groups workspace filters, confirms selection and uses provider delay scope', async ({ page }) => {
   let current = 'node-a';
   const selections = [];

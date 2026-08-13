@@ -3,6 +3,7 @@ import { getMihomoCoreHttpApi } from '../mihomo_runtime.js';
 const STATUS_ENDPOINT = '/api/mihomo/clash/status';
 const RUNTIME_MODE_ENDPOINT = '/api/mihomo/clash/runtime-mode';
 const GROUPS_ENDPOINT = '/api/mihomo/clash/proxy-groups';
+const EGRESS_INFO_ENDPOINT = '/api/mihomo/clash/egress-info';
 const DELAY_ENDPOINT = '/api/mihomo/clash/delay';
 const CONNECTIONS_ENDPOINT = '/api/mihomo/clash/connections';
 const RULES_ENDPOINT = '/api/mihomo/clash/rules';
@@ -87,6 +88,18 @@ export function switchMihomoPanel(target, previewId) {
 
 export function fetchMihomoClashGroups(options = {}) {
   return requestJSON(GROUPS_ENDPOINT, {
+    method: 'GET',
+    cache: 'no-store',
+    credentials: 'same-origin',
+    timeoutMs: 10000,
+    retry: 0,
+    signal: options.signal,
+  });
+}
+
+export function fetchMihomoClashEgressInfo(options = {}) {
+  const query = options.forceRefresh === true ? '?refresh=1' : '';
+  return requestJSON(`${EGRESS_INFO_ENDPOINT}${query}`, {
     method: 'GET',
     cache: 'no-store',
     credentials: 'same-origin',

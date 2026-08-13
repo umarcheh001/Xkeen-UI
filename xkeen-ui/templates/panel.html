@@ -1001,7 +1001,7 @@
       <span id="mihomo-clash-status-version">Mihomo —</span>
       <span class="xk-mihomo-status-separator" aria-hidden="true"></span>
       <div class="xk-mihomo-mode-switch" id="mihomo-clash-mode-switch">
-        <button type="button" id="mihomo-clash-status-mode" class="xk-mihomo-mode-trigger" data-mihomo-clash-action="mode-menu" aria-haspopup="menu" aria-expanded="false" disabled>
+        <button type="button" id="mihomo-clash-status-mode" class="btn-secondary xk-mihomo-mode-trigger" data-mihomo-clash-action="mode-menu" aria-haspopup="menu" aria-expanded="false" data-tooltip="Временно меняет режим маршрутизации Mihomo для новых соединений; config.yaml не изменяется" disabled>
           <span id="mihomo-clash-status-mode-value">Режим —</span>{{ op_icon('chevron-down') }}
         </button>
         <div id="mihomo-clash-mode-menu" class="xk-mihomo-mode-menu" role="menu" aria-label="Режим маршрутизации Mihomo" hidden>
@@ -1013,6 +1013,9 @@
         </div>
       </div>
       <span class="xk-mihomo-status-separator" aria-hidden="true"></span>
+      <button type="button" id="mihomo-clash-egress-toggle" class="btn-secondary xk-mihomo-panel-switch xk-mihomo-egress-toggle" data-mihomo-clash-action="egress-toggle" aria-controls="mihomo-clash-egress" aria-expanded="false" aria-pressed="false" data-tooltip="Показать сведения о публичном IP через Mihomo" hidden>
+        {{ op_icon('preview') }}<span>IP выхода</span>
+      </button>
       <button type="button" id="mihomo-clash-panel-switch" class="btn-secondary xk-mihomo-panel-switch" data-mihomo-clash-action="panel-switch" hidden>
         {{ op_icon('restore') }}<span id="mihomo-clash-panel-switch-label">Вернуть прежнюю панель</span>
       </button>
@@ -1069,6 +1072,28 @@
         </div>
       </div>
       <div id="mihomo-clash-control-content" class="xk-mihomo-groups" hidden>
+        <section id="mihomo-clash-egress" class="xk-mihomo-egress" aria-labelledby="mihomo-clash-egress-title" aria-busy="false" hidden>
+          <div class="xk-mihomo-egress-head">
+            <div>
+              <h3 id="mihomo-clash-egress-title">IP выхода</h3>
+              <p>Проверка выполняется через HTTP/mixed-port Mihomo и следует текущим правилам.</p>
+            </div>
+            <button type="button" id="mihomo-clash-egress-refresh" class="btn-secondary btn-icon" data-mihomo-clash-action="egress-refresh" aria-label="Обновить IP выхода" data-tooltip="Повторно проверить внешний IP через Mihomo">{{ op_icon('refresh') }}</button>
+          </div>
+          <div class="xk-mihomo-egress-grid">
+            <div class="xk-mihomo-egress-primary">
+              <span id="mihomo-clash-egress-country" class="xk-mihomo-egress-country" aria-hidden="true"></span>
+              <div><span>Публичный адрес</span><strong id="mihomo-clash-egress-ip">Проверяем…</strong><small id="mihomo-clash-egress-version">через Mihomo</small></div>
+            </div>
+            <dl class="xk-mihomo-egress-details">
+              <div><dt>Расположение</dt><dd id="mihomo-clash-egress-location">—</dd></div>
+              <div><dt>Провайдер</dt><dd id="mihomo-clash-egress-provider">—</dd></div>
+              <div><dt>ASN</dt><dd id="mihomo-clash-egress-asn">—</dd></div>
+              <div><dt>Часовой пояс</dt><dd id="mihomo-clash-egress-timezone">—</dd></div>
+            </dl>
+          </div>
+          <p id="mihomo-clash-egress-notice" class="xk-mihomo-egress-notice" role="status" aria-live="polite">Результат зависит от правила для сервиса проверки и может отличаться для других доменов.</p>
+        </section>
         <div id="mihomo-clash-groups" aria-busy="false">
           <div class="xk-mihomo-groups-toolbar" role="toolbar" aria-label="Управление группами Mihomo">
             <label class="xk-mihomo-groups-search" for="mihomo-clash-groups-filter">

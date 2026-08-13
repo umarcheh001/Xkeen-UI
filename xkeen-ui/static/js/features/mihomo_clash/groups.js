@@ -357,6 +357,17 @@ function groupSummary(group) {
   return `${group.type || 'Unknown'} · ${mode} · ${aliveCount}/${nodes.length} доступны`;
 }
 
+function groupIconHtml(group) {
+  const icon = String(group.icon || '').trim();
+  if (!icon) return '';
+  return `<span class="xk-mihomo-group-icon" data-tooltip="Иконка группы ${escapeHtml(group.name)}"><img src="${escapeHtml(icon)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
+}
+
+function groupSelectionHtml(group, collapsed) {
+  if (!collapsed || !group.now) return '';
+  return `<span class="xk-mihomo-group-selection" title="Текущий выбор">Выбрано: <strong>${escapeHtml(group.now)}</strong></span>`;
+}
+
 function renderGroup(group) {
   const nodes = Array.isArray(group.nodes) ? group.nodes : [];
   // A search result must never stay hidden inside a previously collapsed group.
@@ -377,9 +388,11 @@ function renderGroup(group) {
           ${iconHtml('chevron-down')}
           <span class="xk-visually-hidden">${collapsed ? 'Развернуть' : 'Свернуть'} группу ${escapeHtml(group.name)}</span>
         </button>
+        ${groupIconHtml(group)}
         <div class="xk-mihomo-group-title">
           <div><strong>${escapeHtml(group.name)}</strong>${group.hidden ? '<span class="xk-mihomo-group-flag">hidden</span>' : ''}</div>
           <small>${escapeHtml(groupSummary(group))}</small>
+          ${groupSelectionHtml(group, collapsed)}
           ${fixedLabel}
         </div>
         <div class="xk-mihomo-group-actions">
@@ -572,6 +585,7 @@ async function selectProxy(group, node) {
     if (result && result.group) replaceGroup(result.group);
     render();
     notify(`Группа «${group}» переключена на «${node}».${connectionResultCopy(result)}`, 'success');
+    document.dispatchEvent(new CustomEvent('xkeen:mihomo-egress-invalidated', { detail: { reason: 'proxy-select' } }));
     if (!result || !result.reconciled) await refreshMihomoClashGroups();
   } catch (error) {
     const stale = error && error.data && error.data.code === 'proxy_selection_not_available';
@@ -606,6 +620,7 @@ async function unfixProxy(groupName) {
     if (result?.group) replaceGroup(result.group);
     render();
     notify(`Для группы «${group.name}» возвращён автоматический выбор.${connectionResultCopy(result)}`, 'success');
+    document.dispatchEvent(new CustomEvent('xkeen:mihomo-egress-invalidated', { detail: { reason: 'proxy-unfix' } }));
     if (!result?.reconciled) await refreshMihomoClashGroups();
   } catch (error) {
     if (errorCode(error) === 'proxy_unfix_not_available') await refreshMihomoClashGroups();
