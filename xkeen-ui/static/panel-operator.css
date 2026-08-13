@@ -3148,40 +3148,36 @@ body.panel-page tbody tr:hover {
   background: var(--op-surface-2) !important;
 }
 
-/* Ports and exclusions: natural cards, bounded editors and one compact footer. */
+/* Ports and exclusions: a balanced editor matrix with a single, predictable
+ * card and editing-area height.  Descriptions reserve the same space, so the
+ * grid does not jump when a file has a longer explanation. */
 body.panel-page #view-xkeen .xkeen-files-grid {
-  align-items: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
   gap: 10px;
 }
 
 body.panel-page #view-xkeen .xkeen-mini-editor {
-  --xk-mini-editor-min: 156px;
-  --xk-mini-editor-height: clamp(156px, 20dvh, 220px);
-  --xk-mini-editor-max: 220px;
-  align-self: start;
-  display: grid;
-  grid-template-rows: auto auto auto;
-  align-content: start;
+  --xk-mini-editor-height: clamp(210px, 27dvh, 290px);
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
   gap: 0;
-  height: auto !important;
-  min-height: 0 !important;
+  height: clamp(352px, 40dvh, 430px) !important;
+  min-height: 352px !important;
   padding: 10px;
 }
 
 body.panel-page #view-xkeen .xkeen-mini-editor--ip-list {
-  --xk-mini-editor-min: 168px;
-  --xk-mini-editor-height: clamp(168px, 22dvh, 240px);
-  --xk-mini-editor-max: 240px;
+  --xk-mini-editor-height: clamp(210px, 27dvh, 290px);
 }
 
 body.panel-page #view-xkeen .xkeen-mini-editor--policy {
-  --xk-mini-editor-min: 220px;
-  --xk-mini-editor-height: clamp(220px, 28dvh, 320px);
-  --xk-mini-editor-max: 320px;
+  --xk-mini-editor-height: clamp(210px, 27dvh, 290px);
 }
 
 body.panel-page #view-xkeen .xkeen-mini-head {
-  min-height: 0;
+  min-height: 74px;
   margin: 0;
 }
 
@@ -3193,11 +3189,12 @@ body.panel-page #view-xkeen .xkeen-mini-head h3 {
 }
 
 body.panel-page #view-xkeen .xkeen-mini-head .xk-card-desc {
-  display: block;
+  display: -webkit-box;
   margin: 0 0 8px;
-  overflow: visible;
+  overflow: hidden;
   line-height: 1.4;
-  -webkit-line-clamp: unset;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 body.panel-page #view-xkeen .xkeen-mini-editor :is(
@@ -3207,13 +3204,13 @@ body.panel-page #view-xkeen .xkeen-mini-editor :is(
 ) {
   width: 100%;
   height: var(--xk-mini-editor-height) !important;
-  min-height: var(--xk-mini-editor-min) !important;
-  max-height: var(--xk-mini-editor-max) !important;
-  flex: none;
+  min-height: 0 !important;
+  max-height: none !important;
+  flex: 1 1 auto;
 }
 
 body.panel-page #view-xkeen .xkeen-mini-editor .xkeen-textarea {
-  resize: vertical;
+  resize: none;
 }
 
 body.panel-page #view-xkeen .xkeen-mini-editor :is(
@@ -3232,7 +3229,7 @@ body.panel-page #view-xkeen .xkeen-mini-footer {
   gap: 10px;
   min-width: 0;
   min-height: 40px;
-  margin-top: 8px;
+  margin-top: auto;
   padding-top: 7px;
   border-top: 1px solid var(--op-border);
 }
@@ -3255,10 +3252,45 @@ body.panel-page #view-xkeen .xkeen-mini-footer .actions {
 }
 
 body.panel-page #view-xkeen .xkeen-mini-footer .actions > button {
-  width: auto;
-  min-width: 88px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  width: 118px;
+  min-width: 118px;
+  min-height: 30px;
   flex: 0 0 auto;
-  padding-inline: 10px;
+  /* `.btn-icon` normally removes all padding; restore balanced horizontal
+   * insets for this labelled variant. */
+  padding: 0 10px !important;
+}
+
+body.panel-page #view-xkeen .xk-mini-save-btn .xk-action-icon {
+  /* Generic icon-only buttons centre the SVG with `margin: auto`; this button
+   * has a label, so that auto margin would push the label to the far edge. */
+  margin: 0 !important;
+  width: 14px;
+  height: 14px;
+}
+
+@media (max-width: 900px) {
+  body.panel-page #view-xkeen .xkeen-files-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.panel-page #view-xkeen .xkeen-mini-editor {
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  body.panel-page #view-xkeen .xkeen-mini-editor :is(
+    .xkeen-textarea,
+    .CodeMirror,
+    .xkeen-cm6-host
+  ) {
+    height: clamp(190px, 32dvh, 260px) !important;
+    flex: none;
+  }
 }
 
 /* Commands: a balanced three-column catalog with a stable command / purpose / action
