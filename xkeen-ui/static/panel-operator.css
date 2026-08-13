@@ -2666,7 +2666,7 @@ body.panel-page .routing-rule-card.is-target-block {
 body.panel-page .routing-rule-card.is-disabled {
   --routing-record-tone: var(--op-warning);
   opacity: 1;
-  background: var(--op-warning-soft) !important;
+  background: color-mix(in srgb, var(--op-warning) 12%, var(--op-surface)) !important;
 }
 
 body.panel-page .routing-rule-card::before,
@@ -2771,6 +2771,22 @@ body.panel-page :is(#routing-rules-body, .routing-rule-card.is-pointer-ghost) .r
   border-color: var(--op-border) !important;
   background: var(--op-surface) !important;
   color: var(--op-data-muted) !important;
+}
+
+body.panel-page #routing-rules-body .routing-rule-card.is-disabled .routing-rule-enable-btn {
+  width: auto;
+  min-width: 132px;
+  padding: 0 10px !important;
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent) !important;
+  color: #fff !important;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-weight: 650;
+}
+
+body.panel-page #routing-rules-body .routing-rule-card.is-disabled .routing-rule-enable-btn:hover {
+  border-color: var(--op-accent-hover) !important;
+  background: var(--op-accent-hover) !important;
 }
 
 body.panel-page .routing-rule-body {

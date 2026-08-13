@@ -2476,11 +2476,6 @@ import { setIcon } from '../../../ui/operator_icons.js';
       stateBadge.textContent = 'отключено';
       metaRow.appendChild(stateBadge);
 
-      const rawBadge = document.createElement('span');
-      rawBadge.className = 'routing-rule-badge is-disabled-origin';
-      rawBadge.textContent = '// RAW JSONC';
-      metaRow.appendChild(rawBadge);
-
       const typeBadge = document.createElement('span');
       typeBadge.className = 'routing-rule-badge is-type';
       typeBadge.textContent = String(safeRule && safeRule.type ? safeRule.type : 'field');
@@ -2501,37 +2496,17 @@ import { setIcon } from '../../../ui/operator_icons.js';
       match.className = 'routing-rule-empty routing-rule-summary';
       match.textContent = sum.match;
 
-      const statusRow = document.createElement('div');
-      statusRow.className = 'routing-rule-disabled-status';
-
-      const statusLead = document.createElement('span');
-      statusLead.className = 'routing-rule-disabled-status-chip';
-      statusLead.textContent = 'RAW JSONC';
-
-      const statusText = document.createElement('span');
-      statusText.className = 'routing-rule-disabled-status-text';
-      statusText.textContent = 'Правило отключено комментарием и хранится в исходном JSONC без удаления.';
-
-      statusRow.appendChild(statusLead);
-      statusRow.appendChild(statusText);
-
-      const note = document.createElement('div');
-      note.className = 'routing-rule-disabled-note';
-      note.textContent = 'Пока блок не раскомментирован, это правило не участвует в маршрутизации.';
-
       main.appendChild(title);
       main.appendChild(metaRow);
-      main.appendChild(statusRow);
       main.appendChild(match);
-      main.appendChild(note);
 
       const actions = document.createElement('div');
       actions.className = 'routing-rule-actions';
 
       const enableBtn = document.createElement('button');
       enableBtn.type = 'button';
-      enableBtn.className = 'routing-rule-toggle';
-      enableBtn.textContent = 'Вернуть правило';
+      enableBtn.className = 'routing-rule-toggle routing-rule-enable-btn';
+      enableBtn.textContent = 'Раскомментировать';
       enableBtn.setAttribute('title', 'Раскомментировать правило в RAW JSONC');
       enableBtn.setAttribute('aria-label', 'Раскомментировать правило в RAW JSONC');
       enableBtn.addEventListener('click', async () => {
@@ -2551,15 +2526,6 @@ import { setIcon } from '../../../ui/operator_icons.js';
       head.appendChild(actions);
       card.appendChild(head);
 
-      const body = document.createElement('div');
-      body.className = 'routing-rule-body';
-
-      const pre = document.createElement('pre');
-      pre.className = 'routing-json-pre';
-      updateJsonPreview(pre, safeRule);
-      body.appendChild(pre);
-
-      card.appendChild(body);
       return card;
     };
 

@@ -2129,9 +2129,9 @@ def test_routing_rule_cards_do_not_render_duplicate_json_preview_under_extra_fie
     assert "body.appendChild(pre);" not in active_card
     assert "updateJsonPreview(pre, rule || {});" not in active_card
 
-    assert "const pre = document.createElement('pre');" in disabled_card
-    assert "updateJsonPreview(pre, safeRule);" in disabled_card
-    assert "body.appendChild(pre);" in disabled_card
+    assert "const pre = document.createElement('pre');" not in disabled_card
+    assert "updateJsonPreview(pre, safeRule);" not in disabled_card
+    assert "body.appendChild(pre);" not in disabled_card
 
 
 def test_codemirror_lint_tooltips_are_scrollable_and_width_limited_inside_editor():
