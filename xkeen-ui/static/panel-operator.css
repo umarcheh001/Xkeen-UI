@@ -18110,12 +18110,22 @@ body.panel-page .xk-mihomo-group:has(.xk-mihomo-group-body:not([hidden])) {
 
 body.panel-page .xk-mihomo-group-head {
   display: grid;
-  grid-template-columns: 28px auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  min-height: 46px;
-  padding: 5px 7px;
+  min-height: 56px;
+  padding: 7px 9px;
   background: var(--op-surface-2);
+  cursor: pointer;
+}
+
+body.panel-page .xk-mihomo-group-head:hover {
+  background: color-mix(in srgb, var(--op-accent) 5%, var(--op-surface-2));
+}
+
+body.panel-page .xk-mihomo-group-head:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--op-accent) 65%, transparent);
+  outline-offset: -2px;
 }
 
 body.panel-page .xk-mihomo-group-actions {
@@ -18139,43 +18149,6 @@ body.panel-page .xk-mihomo-group-head:not(.is-collapsed) {
   border-bottom: 1px solid var(--op-border);
 }
 
-body.panel-page .xk-mihomo-group-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  min-width: 26px;
-  height: 26px;
-  min-height: 26px;
-  padding: 0 !important;
-  border-color: transparent !important;
-  background: transparent !important;
-  color: var(--op-muted) !important;
-}
-
-body.panel-page .xk-mihomo-group-toggle .xk-action-icon {
-  width: 14px;
-  height: 14px;
-  transition: transform .14s ease;
-}
-
-body.panel-page .xk-mihomo-group-toggle[aria-expanded="true"] .xk-action-icon {
-  transform: rotate(180deg);
-}
-
-/* The disclosure arrow is a compact target, so give it a quiet surface cue
- * on hover without competing with the selected-server indigo state. */
-body.panel-page .xk-mihomo-group-toggle:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--op-accent) 12%, transparent) !important;
-  color: var(--op-accent) !important;
-}
-
-body.panel-page .xk-mihomo-group-toggle:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--op-accent) 65%, transparent);
-  outline-offset: 2px;
-  border-radius: 5px;
-}
-
 /* Mihomo's `proxy-groups[].icon` is an optional HTTPS URL.  The fixed,
  * neutral tile keeps arbitrary source dimensions from disturbing the dense
  * router dashboard and also makes transparent PNGs/SVGs readable. */
@@ -18183,19 +18156,26 @@ body.panel-page .xk-mihomo-group-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  min-width: 32px;
-  height: 26px;
+  box-sizing: border-box;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 4px;
   overflow: hidden;
-  border: 1px solid var(--op-border);
-  border-radius: 5px;
-  background: var(--op-surface);
+  border: 1px solid color-mix(in srgb, var(--op-border-strong) 72%, var(--op-surface-2));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--op-surface) 76%, var(--op-surface-2));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 8%, transparent), 0 1px 2px color-mix(in srgb, black 20%, transparent);
 }
 
 body.panel-page .xk-mihomo-group-icon img {
   display: block;
-  width: 100%;
-  height: 100%;
+  width: 30px;
+  height: 30px;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
   object-fit: contain;
 }
 
@@ -18684,7 +18664,7 @@ body.panel-page .xk-mihomo-groups-empty {
   }
 
   body.panel-page .xk-mihomo-group-head {
-    grid-template-columns: 28px minmax(0, 1fr) 38px;
+    grid-template-columns: 40px minmax(0, 1fr) 38px;
     gap: 6px;
   }
 

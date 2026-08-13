@@ -327,6 +327,9 @@ def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
     assert "? 'server-off'" in groups
     assert "status.state === 'failed' ? 'alert'" in groups
     assert 'data-tooltip="Проверить задержку"' not in groups
+    assert 'data-mihomo-group-toggle' not in groups
+    assert 'data-tooltip="Иконка группы' not in groups
+    assert 'class="xk-mihomo-group-head${collapsed ?' in groups
     assert 'data-tooltip-silent="1"' in groups
     assert "${collapsed ? '' : `<button type=\"button\" class=\"btn-secondary xk-mihomo-group-test\"" in groups
     assert 'setMessage(' not in groups
@@ -340,6 +343,10 @@ def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
     assert 'grid-auto-rows: minmax(82px, auto);' in css
     assert 'border-radius: var(--op-control-radius);' in css
     assert 'background: var(--op-editor);' in css
+    assert 'width: 40px;' in css
+    assert 'height: 40px;' in css
+    assert 'border-radius: 12px;' in css
+    assert 'box-shadow: inset 0 1px 0' in css
     assert '.xk-mihomo-node-delay::before' not in css
     assert '.xk-mihomo-node-row.is-current::before' not in css
     assert 'background: var(--op-accent-soft);' in css

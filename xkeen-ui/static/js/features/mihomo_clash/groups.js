@@ -360,12 +360,12 @@ function groupSummary(group) {
 function groupIconHtml(group) {
   const icon = String(group.icon || '').trim();
   if (!icon) return '';
-  return `<span class="xk-mihomo-group-icon" data-tooltip="Иконка группы ${escapeHtml(group.name)}"><img src="${escapeHtml(icon)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
+  return `<span class="xk-mihomo-group-icon"><img src="${escapeHtml(icon)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
 }
 
 function groupSelectionHtml(group, collapsed) {
   if (!collapsed || !group.now) return '';
-  return `<span class="xk-mihomo-group-selection" title="Текущий выбор">Выбрано: <strong>${escapeHtml(group.now)}</strong></span>`;
+  return `<span class="xk-mihomo-group-selection">Выбрано: <strong>${escapeHtml(group.now)}</strong></span>`;
 }
 
 function renderGroup(group) {
@@ -382,12 +382,8 @@ function renderGroup(group) {
     : '';
   return `
     <section class="xk-mihomo-group" data-group-name="${escapeHtml(group.name)}">
-      <header class="xk-mihomo-group-head${collapsed ? ' is-collapsed' : ''}">
-        <button type="button" class="xk-mihomo-group-toggle" data-mihomo-group-toggle="1"
-          data-group="${escapeHtml(group.name)}" aria-expanded="${collapsed ? 'false' : 'true'}" aria-controls="${panelId}">
-          ${iconHtml('chevron-down')}
-          <span class="xk-visually-hidden">${collapsed ? 'Развернуть' : 'Свернуть'} группу ${escapeHtml(group.name)}</span>
-        </button>
+      <header class="xk-mihomo-group-head${collapsed ? ' is-collapsed' : ''}" data-group="${escapeHtml(group.name)}"
+        role="button" tabindex="0" aria-expanded="${collapsed ? 'false' : 'true'}" aria-controls="${panelId}">
         ${groupIconHtml(group)}
         <div class="xk-mihomo-group-title">
           <div><strong>${escapeHtml(group.name)}</strong>${group.hidden ? '<span class="xk-mihomo-group-flag">hidden</span>' : ''}</div>
@@ -800,7 +796,7 @@ function bind() {
     render();
   });
   root.addEventListener('click', (event) => {
-    const target = event.target?.closest?.('[data-mihomo-groups-collapse], [data-mihomo-group-toggle], [data-mihomo-group-select], [data-mihomo-group-unfix], [data-mihomo-node-delay], [data-mihomo-group-delay], [data-mihomo-delay-visible], #mihomo-clash-show-timeout-hidden');
+    const target = event.target?.closest?.('[data-mihomo-groups-collapse], .xk-mihomo-group-head, [data-mihomo-group-select], [data-mihomo-group-unfix], [data-mihomo-node-delay], [data-mihomo-group-delay], [data-mihomo-delay-visible], #mihomo-clash-show-timeout-hidden');
     if (!target) return;
     if (target.hasAttribute('data-mihomo-groups-collapse')) {
       const visibleGroups = filteredGroups();
@@ -811,7 +807,7 @@ function bind() {
       }
       render();
     }
-    if (target.hasAttribute('data-mihomo-group-toggle')) {
+    if (target.classList.contains('xk-mihomo-group-head')) {
       const name = String(target.dataset.group || '');
       if (collapsedGroups.has(name)) collapsedGroups.delete(name);
       else collapsedGroups.add(name);
@@ -837,6 +833,17 @@ function bind() {
       });
     }
     if (target.hasAttribute('data-mihomo-delay-visible')) void runDelayQueue(visibleNodeQueue(), { type: 'visible' });
+  });
+  root.addEventListener('keydown', (event) => {
+    if (!['Enter', ' '].includes(event.key)) return;
+    const header = event.target?.closest?.('.xk-mihomo-group-head');
+    if (!header || !root.contains(header)) return;
+    event.preventDefault();
+    const name = String(header.dataset.group || '');
+    if (collapsedGroups.has(name)) collapsedGroups.delete(name);
+    else collapsedGroups.add(name);
+    render();
+    document.querySelector(`[data-group-name="${CSS.escape(name)}"] .xk-mihomo-group-head`)?.focus();
   });
 }
 

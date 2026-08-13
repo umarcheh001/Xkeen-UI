@@ -374,11 +374,6 @@
       "tabler_asset": "chevron-down",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L388",
-          "control_type": "runtime-action",
-          "accessible_label": "Раскрыть"
-        },
-        {
           "location": "xkeen-ui/static/js/features/outbounds.js:L5693",
           "control_type": "runtime-action",
           "accessible_label": "Раскрыть"
@@ -1877,7 +1872,7 @@
           "accessible_label": "Ограничить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L399",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L395",
           "control_type": "runtime-action",
           "accessible_label": "Ограничить"
         },
@@ -2158,7 +2153,7 @@
       "tabler_asset": "stopwatch",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L401",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L397",
           "control_type": "runtime-action",
           "accessible_label": "Проверить задержку"
         },
