@@ -332,7 +332,10 @@ body.panel-page :is(code, pre, textarea) {
   gap: 0;
   margin: 0 0 10px;
   padding: 0;
-  overflow: visible;
+  /* Full-width tabs and the control row are painted by child elements. Clip
+   * them to the outer frame so their square background cannot cover the
+   * header's lower rounded corners. */
+  overflow: hidden !important;
   border: 1px solid var(--op-border) !important;
   border-radius: var(--op-radius-lg) !important;
   background: var(--op-surface) !important;
@@ -759,6 +762,14 @@ body.panel-page .top-tabs.header-tabs .top-tab-btn:focus-visible {
   border-radius: 0 !important;
   background: var(--op-surface-2) !important;
   box-shadow: none !important;
+}
+
+/* Clip the full-bleed control surface to its own lower corners.  The parent
+ * header intentionally remains overflow-visible for floating helpers. */
+body.panel-page .xkeen-ctrl-row {
+  border-bottom-left-radius: calc(var(--op-radius-lg) - 1px) !important;
+  border-bottom-right-radius: calc(var(--op-radius-lg) - 1px) !important;
+  overflow: hidden;
 }
 
 body.panel-page .xkeen-ctrl-group,
@@ -1445,12 +1456,38 @@ body.panel-page .commands-header:hover > span:last-child {
   border-radius: var(--op-radius) !important;
   background: var(--op-surface) !important;
   box-shadow: none !important;
+  /* Bodies use a full-width surface colour.  Contain that paint in the card
+   * so a collapsed header or an expanded DAT form cannot square off the
+   * lower corners of the parent frame. */
+  overflow: hidden;
+}
+
+/* These controls intentionally open a panel outside of the card. Restore
+ * visible overflow only while one of those panels is open. */
+body.panel-page .routing-side-card:has(.xk-card-help-popover[open]),
+body.panel-page .routing-side-card:has(.outbounds-tag-menu[open]) {
+  overflow: visible;
 }
 
 body.panel-page .routing-side-card > .commands-header {
   min-height: 42px;
   padding: 7px 9px 7px 12px;
+  /* A collapsed card is visually just this header. Clip its fill as well as
+   * its contents, otherwise the legacy background layer keeps square ends. */
+  overflow: hidden;
   cursor: pointer;
+}
+
+/* A collapsed inspector has no body to provide the card's lower corners; the
+ * header is therefore the visible surface and needs the same radius. */
+body.panel-page .routing-side-card:has(> [id$="-body"][hidden]) > .commands-header,
+body.panel-page .routing-side-card:not(:has(> [id$="-body"])) > .commands-header,
+body.panel-page .routing-side-card > .commands-header[aria-expanded="false"] {
+  border-radius: var(--op-radius) !important;
+}
+
+body.panel-page .routing-side-card:has(> [id$="-body"]:not([hidden])) > .commands-header {
+  border-radius: var(--op-radius) var(--op-radius) 0 0 !important;
 }
 
 body.panel-page .routing-side-card > .commands-header:is(:hover, :focus-visible, [aria-expanded="true"]) {
