@@ -155,6 +155,7 @@ let outboundsModuleApi = null;
       const btn = $(id);
       if (!btn) return;
       const on = !!enabled;
+      try { if (btn.type === 'checkbox') btn.checked = on; } catch (e) {}
       try { btn.classList.toggle('is-active', on); } catch (e) {}
       try { btn.setAttribute('aria-pressed', on ? 'true' : 'false'); } catch (e) {}
     }
@@ -163,7 +164,8 @@ let outboundsModuleApi = null;
       const btn = $(id);
       if (!btn) return false;
       try {
-        return String(btn.getAttribute('aria-pressed') || '').toLowerCase() === 'true'
+        return !!btn.checked
+          || String(btn.getAttribute('aria-pressed') || '').toLowerCase() === 'true'
           || btn.classList.contains('is-active');
       } catch (e) {}
       return false;
@@ -173,8 +175,9 @@ let outboundsModuleApi = null;
       const btn = $(id);
       if (!btn) return;
       if (btn.dataset && btn.dataset.xkEntwareMarkWired === '1') return;
-      btn.addEventListener('click', () => {
-        const next = !isEntwareMarkEnabled(id);
+      const eventName = btn.type === 'checkbox' ? 'change' : 'click';
+      btn.addEventListener(eventName, () => {
+        const next = !!btn.checked;
         setEntwareMarkButton(id, next);
         try {
           if (typeof onChange === 'function') onChange(next);
@@ -5713,14 +5716,14 @@ let outboundsModuleApi = null;
                       <span id="outbounds-subscriptions-transport-filter-note" class="xk-sub-field-note" hidden></span>
                     </label>
                     <div class="xk-sub-controls">
-                      <label class="xk-sub-check" aria-label="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><input id="outbounds-subscriptions-enabled" type="checkbox" checked title="Автообновление" aria-label="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><span class="xk-sub-check-icon" aria-hidden="true">${iconHtml('refresh')}</span></label>
-                      <label class="xk-sub-check" aria-label="Пинг observatory" data-tooltip="Добавлять tag prefix подписки в observatory через subjectSelector для leastPing-проверок. Xray сопоставляет его по началу generated tag."><input id="outbounds-subscriptions-ping" type="checkbox" checked title="Пинг observatory" aria-label="Пинг observatory" data-tooltip="Добавлять tag prefix подписки в 07_observatory.json через subjectSelector для LeastPing."><span class="xk-sub-check-icon" aria-hidden="true">${iconHtml('ping')}</span></label>
-                      <label class="xk-sub-check" aria-label="Обновить сразу" data-tooltip="После сохранения сразу скачать подписку и создать фрагмент."><input id="outbounds-subscriptions-refresh-now" type="checkbox" checked title="Обновить сразу" aria-label="Обновить сразу" data-tooltip="Сразу скачать подписку после сохранения."><span class="xk-sub-check-icon" aria-hidden="true">${iconHtml('download')}</span></label>
-                      <label class="xk-sub-check xk-sub-auto-rule-check" aria-label="Общий leastPing pool" data-tooltip="Добавлять tag prefix этой подписки в общий auto-managed leastPing pool и держать служебное правило xk_auto_leastPing. Выключи, если подписка должна работать только через выбранные ниже balancer-ы.">
+                      <label class="dt-switch xk-sub-check" aria-label="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><input id="outbounds-subscriptions-enabled" type="checkbox" checked title="Автообновление" aria-label="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Автообн.</span></label>
+                      <label class="dt-switch xk-sub-check" aria-label="Пинг observatory" data-tooltip="Добавлять tag prefix подписки в observatory через subjectSelector для leastPing-проверок. Xray сопоставляет его по началу generated tag."><input id="outbounds-subscriptions-ping" type="checkbox" checked title="Пинг observatory" aria-label="Пинг observatory" data-tooltip="Добавлять tag prefix подписки в 07_observatory.json через subjectSelector для LeastPing."><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Пинг</span></label>
+                      <label class="dt-switch xk-sub-check" aria-label="Обновить сразу" data-tooltip="После сохранения сразу скачать подписку и создать фрагмент."><input id="outbounds-subscriptions-refresh-now" type="checkbox" checked title="Обновить сразу" aria-label="Обновить сразу" data-tooltip="Сразу скачать подписку после сохранения."><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Сразу</span></label>
+                      <label class="dt-switch xk-sub-check xk-sub-auto-rule-check" aria-label="Общий leastPing pool" data-tooltip="Добавлять tag prefix этой подписки в общий auto-managed leastPing pool и держать служебное правило xk_auto_leastPing. Выключи, если подписка должна работать только через выбранные ниже balancer-ы.">
                         <input id="outbounds-subscriptions-routing-auto-rule" type="checkbox" checked title="Общий leastPing pool" aria-label="Общий leastPing pool" data-tooltip="Добавлять tag prefix этой подписки в общий auto-managed leastPing pool.">
-                        <span class="xk-sub-check-icon" aria-hidden="true">${iconHtml('pool')}</span>
+                        <span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Pool</span>
                       </label>
-                      <button type="button" id="outbounds-subscriptions-entware-mark-btn" class="xk-entware-mark-toggle xk-entware-mark-toggle--sub" aria-label="Entware mark 255" aria-pressed="false" title="Добавлять sockopt.mark=255 для проксирования Entware" data-tooltip="Добавлять sockopt.mark=255 во все generated proxy-outbound подписки.">${iconHtml('bolt', 'xk-sub-mark-icon')}<span>mark 255</span></button>
+                      <label class="dt-switch xk-sub-check xk-sub-mark-switch" aria-label="Entware mark 255" data-tooltip="Добавлять sockopt.mark=255 во все generated proxy-outbound подписки."><input id="outbounds-subscriptions-entware-mark-btn" type="checkbox" title="Добавлять sockopt.mark=255 для проксирования Entware" aria-label="Entware mark 255"><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">mark 255</span></label>
                       <label class="xk-sub-routing-mode" for="outbounds-subscriptions-routing-mode" data-tooltip="Как панель должна подвязывать подписку к маршрутизации. Безопасно сохраняет vless-reality рядом с подпиской. Жёстко переводит совместимые auto-правила на общий balancerTag пула. Только подписка ведёт служебный pool только через generated nodes и не требует одиночный outbound в 04_outbounds.json.">
                         <span class="xk-sub-inline-label">Применение</span>
                         <select id="outbounds-subscriptions-routing-mode" class="xray-log-filter" title="Режим маршрутизации подписки" data-tooltip="Безопасно: leastPing-balancer и fallback синхронизируются, а vless-reality остаётся. Жёстко: auto-правила на vless-reality переезжают в balancerTag пула. Только подписка: служебный pool работает только через generated nodes; одиночный outbound в 04_outbounds.json не нужен.">

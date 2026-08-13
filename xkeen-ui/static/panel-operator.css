@@ -4399,11 +4399,20 @@ body.panel-page .fm-filter-wrap {
 }
 
 body.panel-page :is(.fm-root-btn, .fm-up-btn, .fm-refresh-btn, .fm-filter-clear-btn) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 30px;
   min-width: 30px;
   height: 30px;
   min-height: 30px;
   padding: 0 !important;
+}
+
+/* The generic icon-button rule uses automatic SVG margins. In the compact
+ * navigation toolbar those margins can leave the glyph pinned to one side. */
+body.panel-page :is(.fm-root-btn, .fm-up-btn, .fm-refresh-btn, .fm-filter-clear-btn) .xk-action-icon {
+  margin: 0 !important;
 }
 
 body.panel-page .fm-list,
@@ -11324,8 +11333,7 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-controls {
   background: transparent;
 }
 
-body.panel-page #outbounds-subscriptions-modal .xk-sub-check,
-body.panel-page #outbounds-subscriptions-modal .xk-entware-mark-toggle--sub {
+body.panel-page #outbounds-subscriptions-modal .xk-sub-check {
   justify-content: flex-start;
   width: 100%;
   min-width: 0;
@@ -11341,15 +11349,7 @@ body.panel-page #outbounds-subscriptions-modal .xk-entware-mark-toggle--sub {
   white-space: nowrap;
 }
 
-body.panel-page #outbounds-subscriptions-modal .xk-sub-check:has(input:checked),
-body.panel-page #outbounds-subscriptions-modal .xk-entware-mark-toggle--sub[aria-pressed="true"] {
-  border-color: var(--op-accent-border) !important;
-  background: var(--op-accent-soft) !important;
-  color: var(--op-text) !important;
-}
-
-body.panel-page #outbounds-subscriptions-modal .xk-sub-controls > .xk-sub-check,
-body.panel-page #outbounds-subscriptions-modal .xk-sub-controls > .xk-entware-mark-toggle--sub {
+body.panel-page #outbounds-subscriptions-modal .xk-sub-controls > .xk-sub-check {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -11357,37 +11357,39 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-controls > .xk-entware-ma
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-check {
-  gap: 6px;
+  gap: 7px;
   cursor: pointer;
   position: relative;
 }
 
-/* Keep the state control close to the left edge without pulling its semantic
- * icon away from the visual centre of the button. */
 body.panel-page #outbounds-subscriptions-modal .xk-sub-check > input[type="checkbox"] {
   position: absolute;
-  left: 10px;
+  opacity: 0;
+  pointer-events: none;
 }
 
-body.panel-page #outbounds-subscriptions-modal .xk-sub-check-icon {
-  display: inline-flex;
-  flex: 0 0 auto;
+body.panel-page #outbounds-subscriptions-modal .xk-sub-check .dt-switch-slider {
+  width: 30px;
+  min-width: 30px;
+  height: 16px;
 }
 
-body.panel-page #outbounds-subscriptions-modal .xk-sub-check-icon .xk-action-icon {
-  width: 14px;
-  height: 14px;
+body.panel-page #outbounds-subscriptions-modal .xk-sub-check .dt-switch-slider::after {
+  background: var(--op-text) !important;
 }
 
-body.panel-page #outbounds-subscriptions-modal .xk-entware-mark-toggle--sub {
-  gap: 5px;
+body.panel-page #outbounds-subscriptions-modal .xk-sub-check input:checked + .dt-switch-slider::after {
+  background: #fff !important;
 }
 
-body.panel-page #outbounds-subscriptions-modal .xk-entware-mark-toggle--sub > span {
+body.panel-page #outbounds-subscriptions-modal .xk-sub-switch-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-body.panel-page #outbounds-subscriptions-modal input[type="checkbox"] {
+body.panel-page #outbounds-subscriptions-modal input[type="checkbox"]:not(.xk-sub-check > input) {
   -webkit-appearance: none;
   appearance: none;
   display: inline-grid;
@@ -11404,7 +11406,7 @@ body.panel-page #outbounds-subscriptions-modal input[type="checkbox"] {
   cursor: pointer;
 }
 
-body.panel-page #outbounds-subscriptions-modal input[type="checkbox"]::before {
+body.panel-page #outbounds-subscriptions-modal input[type="checkbox"]:not(.xk-sub-check > input)::before {
   content: "";
   width: 7px;
   height: 4px;
@@ -11414,17 +11416,17 @@ body.panel-page #outbounds-subscriptions-modal input[type="checkbox"]::before {
   transform: translateY(-1px) rotate(-45deg) scale(0.7);
 }
 
-body.panel-page #outbounds-subscriptions-modal input[type="checkbox"]:checked {
+body.panel-page #outbounds-subscriptions-modal input[type="checkbox"]:not(.xk-sub-check > input):checked {
   border-color: var(--op-accent);
   background: var(--op-accent);
 }
 
-body.panel-page #outbounds-subscriptions-modal input[type="checkbox"]:checked::before {
+body.panel-page #outbounds-subscriptions-modal input[type="checkbox"]:not(.xk-sub-check > input):checked::before {
   opacity: 1;
   transform: translateY(-1px) rotate(-45deg) scale(1);
 }
 
-body.panel-page #outbounds-subscriptions-modal input[type="checkbox"]:focus-visible {
+body.panel-page #outbounds-subscriptions-modal input[type="checkbox"]:not(.xk-sub-check > input):focus-visible {
   outline: 2px solid var(--op-accent-border);
   outline-offset: 2px;
 }
