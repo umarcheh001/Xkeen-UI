@@ -3260,37 +3260,13 @@ body.panel-page #view-xkeen .xkeen-mini-footer .actions > button {
   min-width: 118px;
   min-height: 30px;
   flex: 0 0 auto;
-  /* `.btn-icon` normally removes all padding; restore balanced horizontal
-   * insets for this labelled variant. */
   padding: 0 10px !important;
 }
 
 body.panel-page #view-xkeen .xk-mini-save-btn .xk-action-icon {
-  /* Generic icon-only buttons centre the SVG with `margin: auto`; this button
-   * has a label, so that auto margin would push the label to the far edge. */
   margin: 0 !important;
   width: 14px;
   height: 14px;
-}
-
-@media (max-width: 900px) {
-  body.panel-page #view-xkeen .xkeen-files-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  body.panel-page #view-xkeen .xkeen-mini-editor {
-    height: auto !important;
-    min-height: 0 !important;
-  }
-
-  body.panel-page #view-xkeen .xkeen-mini-editor :is(
-    .xkeen-textarea,
-    .CodeMirror,
-    .xkeen-cm6-host
-  ) {
-    height: clamp(190px, 32dvh, 260px) !important;
-    flex: none;
-  }
 }
 
 /* Commands: a balanced three-column catalog with a stable command / purpose / action
@@ -18920,6 +18896,26 @@ body.panel-page .xk-mihomo-provider-actions { display: flex; align-items: center
   body.panel-page .xk-mihomo-provider-inspector-toolbar { align-items: stretch; flex-direction: column; }
   body.panel-page .xk-mihomo-provider-inspector-toolbar label { max-width: none; min-width: 0; }
   body.panel-page .xk-mihomo-provider-rules li { grid-template-columns: 40px minmax(0, 1fr); }
+}
+
+@media (max-width: 900px) {
+  body.panel-page #view-xkeen .xkeen-files-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.panel-page #view-xkeen .xkeen-mini-editor {
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  body.panel-page #view-xkeen .xkeen-mini-editor :is(
+    .xkeen-textarea,
+    .CodeMirror,
+    .xkeen-cm6-host
+  ) {
+    height: clamp(190px, 32dvh, 260px) !important;
+    flex: none;
+  }
 }
 
 /* Lightweight router resource telemetry. */

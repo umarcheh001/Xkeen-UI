@@ -25,7 +25,8 @@ def test_stage4_ports_preserve_runtime_hooks_in_compact_footers():
 
     assert view.count('class="xkeen-mini-footer"') == 4
     assert view.count("op_icon('save')") == 4
-    assert view.count('class="btn-icon" aria-label="Сохранить') == 4
+    assert view.count('class="btn-icon xk-mini-save-btn" aria-label="Сохранить') == 4
+    assert view.count('<span>Сохранить</span>') == 4
     assert 'class="xk-action-label">Сохранить</span>' not in view
     assert view.count('role="status" aria-live="polite"') == 4
     assert view.count('xkeen-mini-editor--port-list') == 2
@@ -51,23 +52,20 @@ def test_stage4_ports_override_legacy_fixed_geometry_in_workspace_section():
     ]
 
     for fragment in (
-        "align-items: start;",
-        "height: auto !important;",
-        "min-height: 0 !important;",
-        "--xk-mini-editor-min: 156px;",
-        "--xk-mini-editor-max: 220px;",
-        "--xk-mini-editor-min: 168px;",
-        "--xk-mini-editor-max: 240px;",
-        "--xk-mini-editor-min: 220px;",
-        "--xk-mini-editor-max: 320px;",
+        "align-items: stretch;",
+        "height: clamp(352px, 40dvh, 430px) !important;",
+        "min-height: 352px !important;",
+        "min-height: 74px;",
+        "margin-top: auto;",
         ".xkeen-mini-footer",
         "border-top: 1px solid var(--op-border);",
         "flex: 0 0 auto;",
+        ".xk-mini-save-btn .xk-action-icon",
     ):
         assert fragment in ports
 
     assert "height: clamp(360px, 42vh, 520px)" not in ports
-    assert "margin-top: auto" not in ports
+    assert "margin-top: auto" in ports
     assert "final fixes" not in css[css.index("* 8. RESPONSIVE") :].lower()
 
 

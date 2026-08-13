@@ -2730,22 +2730,22 @@
         },
         {
           "location": "xkeen-ui/templates/panel.html:L1550",
-          "control_type": "icon-only",
+          "control_type": "text+icon",
           "accessible_label": "Сохранить port_proxying.lst"
         },
         {
           "location": "xkeen-ui/templates/panel.html:L1572",
-          "control_type": "icon-only",
+          "control_type": "text+icon",
           "accessible_label": "Сохранить port_exclude.lst"
         },
         {
           "location": "xkeen-ui/templates/panel.html:L1592",
-          "control_type": "icon-only",
+          "control_type": "text+icon",
           "accessible_label": "Сохранить ip_exclude.lst"
         },
         {
           "location": "xkeen-ui/templates/panel.html:L1614",
-          "control_type": "icon-only",
+          "control_type": "text+icon",
           "accessible_label": "Сохранить xkeen.json"
         },
         {
