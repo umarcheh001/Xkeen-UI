@@ -59,6 +59,7 @@ def _assert_beginner_meta(node: dict, label: str) -> None:
         "proxy-groups",
         "rule-providers",
         "rules",
+        "listeners",
         "tun",
         "sniffer",
     ],
@@ -315,6 +316,36 @@ console.log(JSON.stringify(result));
     assert "Простыми словами:" in payload["plain"]
     assert "./mihomo-api.sock" in payload["plain"]
     assert "без публикации порта 9090" in payload["plain"]
+
+
+def test_mihomo_yaml_hover_explains_listener_fields_inside_array():
+    doc_with_marker = "\n".join([
+        "listeners:",
+        "  - name: xkeen-ui-egress-check",
+        "    type: mixed",
+        "    listen__CURSOR__: 127.0.0.1",
+        "    port: 17890",
+        "    udp: false",
+        "",
+    ])
+    script = f"""
+import fs from 'node:fs';
+import {{ hoverYamlTextFromSchema }} from './xkeen-ui/static/js/ui/yaml_schema.js';
+
+const schema = JSON.parse(fs.readFileSync('./xkeen-ui/static/schemas/mihomo-config.schema.json', 'utf8'));
+const marker = '__CURSOR__';
+const docWithMarker = {json.dumps(doc_with_marker)};
+const offset = docWithMarker.indexOf(marker);
+const doc = docWithMarker.replace(marker, '');
+const result = hoverYamlTextFromSchema(doc, schema, {{ offset, beginnerMode: true }});
+console.log(JSON.stringify(result));
+"""
+
+    payload = _run_node_json(script)
+    assert payload is not None
+    assert payload["path"] == "listeners[0].listen"
+    assert "Простыми словами:" in payload["plain"]
+    assert "127.0.0.1" in payload["plain"]
 
 
 @pytest.mark.parametrize(

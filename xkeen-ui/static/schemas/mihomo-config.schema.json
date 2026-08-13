@@ -702,16 +702,81 @@
 
     "listeners": {
       "type": "array",
-      "description": "Дополнительные слушатели (inbound)",
+      "title": "Дополнительные listeners (inbound)",
+      "description": "Дополнительные входящие listeners Mihomo. Каждый listener открывает локальный HTTP/SOCKS/mixed или системный redir/tproxy/tun вход и передаёт трафик в правила Mihomo либо в указанную группу/прокси.",
+      "x-ui-explain": "Listener — это локальная точка входа в Mihomo. Приложение или роутер подключается к ней, а дальше трафик обрабатывают ваши rules и proxy-groups.",
+      "x-ui-use-case": "Для проверки IP из Xkeen UI используйте `type: mixed`, `listen: 127.0.0.1`, отдельный `port` и `udp: false`: такой listener доступен только самому роутеру.",
+      "x-ui-example": "listeners:\n  - name: xkeen-ui-egress-check\n    type: mixed\n    listen: 127.0.0.1\n    port: 17890\n    udp: false",
+      "x-ui-warning": "Не указывайте `0.0.0.0` или LAN-адрес без необходимости: HTTP/SOCKS/mixed listener станет доступен устройствам сети. Выберите свободный порт 1–65535.",
       "items": {
         "type": "object",
+        "title": "Один listener Mihomo",
+        "description": "Настройки одной дополнительной точки входа в Mihomo.",
+        "x-ui-explain": "Эта запись задаёт имя, тип, адрес и порт listener. `rule` оставляет маршрутизацию по rules, а `proxy` направляет трафик сразу в конкретный proxy/group.",
+        "x-ui-use-case": "Для локальной служебной проверки обычно достаточно `name`, `type: mixed`, `listen: 127.0.0.1`, `port` и `udp: false`.",
+        "x-ui-example": "- name: local-mixed\n  type: mixed\n  listen: 127.0.0.1\n  port: 17890\n  udp: false",
+        "x-ui-warning": "Не используйте одновременно `rule` и `proxy`: выберите один способ маршрутизации. Имя должно быть уникальным.",
         "properties": {
-          "name": { "type": "string" },
-          "type": { "type": "string", "enum": ["http", "socks", "mixed", "redir", "tproxy", "tunnel", "tun", "shadowsocks", "vmess"] },
-          "port": { "type": "integer" },
-          "listen": { "type": "string" },
-          "rule": { "type": "string" },
-          "proxy": { "type": "string" }
+          "name": {
+            "type": "string",
+            "description": "Уникальное имя listener. Оно появляется в логах и помогает отличить служебный вход от обычного proxy-порта.",
+            "x-ui-explain": "Понятная метка для этого входа. На сетевые настройки сама по себе не влияет.",
+            "x-ui-use-case": "Используйте понятное имя, например `xkeen-ui-egress-check` или `local-mixed`.",
+            "x-ui-example": "name: xkeen-ui-egress-check",
+            "x-ui-warning": "Не повторяйте имя другого listener — диагностика и логи станут неоднозначными."
+          },
+          "type": {
+            "type": "string",
+            "enum": ["http", "socks", "mixed", "redir", "tproxy", "tunnel", "tun", "shadowsocks", "vmess"],
+            "description": "Протокол входа: `mixed` принимает HTTP и SOCKS5, `http` — только HTTP proxy, `socks` — только SOCKS5. `redir`/`tproxy`/`tun` предназначены для системного перехвата трафика.",
+            "x-ui-explain": "Тип определяет, как приложения или систем�� подключаются к Mihomo. Для локальной проверки обычно удобнее `mixed`.",
+            "x-ui-use-case": "Выберите `mixed` для универсального локального proxy-входа; `redir`/`tproxy`/`tun` настраивайте только для сценариев перехвата трафика роутером.",
+            "x-ui-example": "type: mixed",
+            "x-ui-warning": "`redir`, `tproxy` и `tun` требуют дополнительных системных правил и прав. Не заменяйте ими обычный `mixed` listener для диагностики."
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535,
+            "description": "TCP-порт listener. Он должен быть свободен на адресе из `listen`.",
+            "x-ui-explain": "Номер порта, на который будет подключаться приложение или локальная проверка.",
+            "x-ui-use-case": "Для служебного loopback-listener выберите свободный нестандартный порт, например `17890`.",
+            "x-ui-example": "port: 17890",
+            "x-ui-warning": "Порт не должен конфликтовать с panel, DNS, SSH или другим listener Mihomo."
+          },
+          "listen": {
+            "type": "string",
+            "description": "Адрес, на котором listener принимает соединения. `127.0.0.1` ограничивает доступ самим роутером; `0.0.0.0` слушает все IPv4-интерфейсы.",
+            "x-ui-explain": "Определяет, кто сможет подключиться к listener: только роутер или вся локальная сеть.",
+            "x-ui-use-case": "Для Xkeen UI и служебных проверок используйте только `127.0.0.1`.",
+            "x-ui-example": "listen: 127.0.0.1",
+            "x-ui-warning": "`0.0.0.0` открывает listener в LAN. Не используйте его для HTTP/SOCKS/mixed без осознанной защиты и доверенной сети."
+          },
+          "udp": {
+            "type": "boolean",
+            "default": true,
+            "description": "Разрешает UDP через listener, если выбранный тип и маршрут его поддерживают.",
+            "x-ui-explain": "В��лючает передачу UDP вместе с TCP через этот вход.",
+            "x-ui-use-case": "Для HTTP-проверки IP можно оставить `false`; для обычного SOCKS/mixed proxy при необходимости используйте `true`.",
+            "x-ui-example": "udp: false",
+            "x-ui-warning": "UDP может быть не нужен для служебного listener и увеличивает поверхность работы входа."
+          },
+          "rule": {
+            "type": "string",
+            "description": "Режим маршрутизации listener через rules Mihomo. Используйте вместе с rules, а не с `proxy`.",
+            "x-ui-explain": "Трафик из listener пройдёт через обычные правила маршрутизации Mihomo.",
+            "x-ui-use-case": "Укажите, когда listener должен вести себя как остальной трафик и подчиняться `rules`.",
+            "x-ui-example": "rule: MATCH,PROXY",
+            "x-ui-warning": "Не задавайте одновременно `rule` и `proxy`: это разные способы выбрать маршрут."
+          },
+          "proxy": {
+            "type": "string",
+            "description": "Имя proxy или proxy-group, через который listener отправляет трафик напрямую, минуя обычный выбор rules.",
+            "x-ui-explain": "Жёстко назначает этому listener конкретную группу или узел.",
+            "x-ui-use-case": "Используйте, только если служебный вход всегда должен идти через один известный proxy/group.",
+            "x-ui-example": "proxy: PROXY",
+            "x-ui-warning": "Не задавайте одновременно `proxy` и `rule`; при смене имени группы listener перестанет работать."
+          }
         }
       }
     },
