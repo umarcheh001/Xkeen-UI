@@ -43,4 +43,4 @@ def test_xray_preflight_operator_layer_is_flat_and_state_aware():
 
 def test_xray_preflight_stylesheet_cache_key_is_current():
     template = TEMPLATE.read_text(encoding="utf-8")
-    assert "filename='panel-operator.css', v='20260811h'" in template
+    assert "filename='panel-operator.css', v='20260813a'" in template
