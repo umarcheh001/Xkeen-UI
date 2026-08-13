@@ -193,6 +193,7 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
         "latestDelayKey(name, provider = '')",
         "latestDelays.get(latestDelayKey(node.name, node.provider))",
         "delayKey(group.name, node.name, node.provider)",
+        "groups().flatMap((group) => (group.nodes || []).map((node) =>",
         "source.type === 'visible'",
         "source.type === 'group'",
         "mihomoDelayTesting",

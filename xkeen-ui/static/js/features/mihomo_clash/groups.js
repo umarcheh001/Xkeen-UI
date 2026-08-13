@@ -420,8 +420,9 @@ function render() {
   if (count) count.textContent = `${visibleGroups.length} групп · ${visibleNodes} узлов`;
   if (hiddenToggle) hiddenToggle.checked = showHidden;
   const hiddenTimeoutCount = new Set(
-    groups().flatMap((group) => group.nodes || [])
-      .map((node) => delayKey(group.name, node.name, node.provider))
+    groups().flatMap((group) => (group.nodes || []).map((node) => (
+      delayKey(group.name, node.name, node.provider)
+    )))
       .filter((key) => (timeoutCounts.get(key) || 0) >= TIMEOUT_HIDE_THRESHOLD),
   ).size;
   if (timeoutButton) {
