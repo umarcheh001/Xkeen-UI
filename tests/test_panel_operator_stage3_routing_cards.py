@@ -176,8 +176,11 @@ def test_stage3_dat_and_outbound_rows_have_explicit_state_semantics():
     assert outbounds.count('class="xk-sub-node-actions"') == 1
     assert 'class="xk-xray-node-probe xk-sub-node-latency xk-sub-node-ping' in outbounds
     assert "const protocolSummary = [protocol, transport, security]" in outbounds
-    assert "const connectionSummary = [endpoint, detail].filter(Boolean).join(' · ');" in outbounds
-    assert 'aria-label="Технические параметры" ${connectionSummary ? `data-tooltip="${connectionSummaryHtml}"` : \'\'}' in outbounds
+    assert 'class="xk-sub-node-meta xk-sub-node-protocol" aria-label="Технические параметры">' in outbounds
+    assert 'class="xk-sub-node-endpoint-cell" aria-label="Endpoint">' in outbounds
+    assert 'data-tooltip="${protocolSummary}"' not in outbounds
+    assert 'data-tooltip="${connectionSummaryHtml}"' not in outbounds
+    assert 'deprecatedTransportNote ? `data-tooltip=' not in outbounds
     assert "return raw;" in outbounds
 
 

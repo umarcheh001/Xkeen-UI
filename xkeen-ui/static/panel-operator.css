@@ -11860,19 +11860,40 @@ body.panel-page #outbounds-subscriptions-modal :is(.xk-sub-node-ping, .xk-sub-no
   background: var(--op-surface-2) !important;
 }
 
-/* Probe is a circular utility action, while exclusion stays a compact square
- * to make the two destructive/diagnostic actions distinguishable at a glance. */
+/* Probe is a circular utility action. Exclusion is deliberately quieter and
+ * smaller: it should remain easy to find without becoming the visual focus of
+ * every server card. */
 body.panel-page #outbounds-subscriptions-modal .xk-sub-node-ping.btn-compact {
   border-radius: 50% !important;
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-node-toggle.btn-compact {
-  border-radius: var(--op-radius-sm) !important;
+  width: 22px;
+  min-width: 22px;
+  height: 22px !important;
+  min-height: 22px !important;
+  max-height: 22px !important;
+  border-color: transparent !important;
+  border-radius: 5px !important;
+  background: transparent !important;
+  color: var(--op-data-faint) !important;
 }
 
-body.panel-page #outbounds-subscriptions-modal :is(.xk-sub-node-ping, .xk-sub-node-toggle).btn-compact:hover:not([disabled]) {
+body.panel-page #outbounds-subscriptions-modal .xk-sub-node-ping.btn-compact:hover:not([disabled]) {
   border-color: var(--op-accent-border) !important;
   background: var(--op-accent-soft) !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-node-toggle.btn-compact:hover:not([disabled]) {
+  border-color: color-mix(in srgb, var(--op-danger) 34%, transparent) !important;
+  background: var(--op-danger-soft) !important;
+  color: var(--op-danger) !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-node-toggle-restore.btn-compact:hover:not([disabled]) {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent) !important;
 }
 
 body.panel-page #outbounds-subscriptions-modal #outbounds-subscriptions-nodes-pingall.xk-sub-icon-btn.btn-compact {
@@ -11885,9 +11906,15 @@ body.panel-page #outbounds-subscriptions-modal #outbounds-subscriptions-nodes-pi
   background: var(--op-surface-2) !important;
 }
 
-body.panel-page #outbounds-subscriptions-modal :is(.xk-sub-node-ping, .xk-sub-node-toggle) .xk-action-icon {
+body.panel-page #outbounds-subscriptions-modal .xk-sub-node-ping .xk-action-icon {
   width: 12px;
   height: 12px;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-node-toggle .xk-action-icon {
+  width: 10px;
+  height: 10px;
+  stroke-width: 1.8;
 }
 
 /* Xray server cards share Mihomo's quiet latency control: the value itself is

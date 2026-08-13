@@ -339,8 +339,7 @@ test('main outbounds card keeps proxy nodes inside scrollable panel', async ({ p
   expect(layout.globalMarker).toEqual({ width: 20, height: 14, radius: '3px' });
   expect(layout.latency.radius).toBe('6px');
   expect(layout.latency.backgroundImage).toBe('none');
-  expect(layout.technicalTooltips.every(({ protocol, endpoint }) => protocol === endpoint)).toBe(true);
-  expect(layout.technicalTooltips.some(({ protocol }) => protocol.includes('path=/api/v2/'))).toBe(true);
+  expect(layout.technicalTooltips.every(({ protocol, endpoint }) => !protocol && !endpoint)).toBe(true);
   expect(layout.overlaps).toEqual([]);
 });
 
@@ -771,6 +770,7 @@ test('subscriptions servers expand into a resized modal and keep compact actions
         width: Math.round(exclude.getBoundingClientRect().width),
         height: Math.round(exclude.getBoundingClientRect().height),
         radius: window.getComputedStyle(exclude).borderRadius,
+        background: window.getComputedStyle(exclude).backgroundColor,
       } : null,
     };
   });
@@ -779,12 +779,13 @@ test('subscriptions servers expand into a resized modal and keep compact actions
   expect(layout.body.scrollHeight).toBeLessThanOrEqual(layout.body.clientHeight + 1);
   expect(layout.list.height).toBeGreaterThan(350);
   expect(layout.list.scrollHeight).toBeGreaterThan(layout.list.clientHeight);
-  expect(layout.ping.width).toBe(layout.ping.height);
-  expect(layout.ping.width).toBeGreaterThanOrEqual(24);
-  expect(layout.ping.radius).toBe('50%');
+  expect(layout.ping.width).toBeGreaterThanOrEqual(28);
+  expect(layout.ping.height).toBe(22);
+  expect(layout.ping.radius).toBe('4px');
   expect(layout.exclude.width).toBe(layout.exclude.height);
-  expect(layout.exclude.width).toBeGreaterThanOrEqual(24);
+  expect(layout.exclude.width).toBe(22);
   expect(layout.exclude.radius).not.toBe('50%');
+  expect(layout.exclude.background).toBe('rgba(0, 0, 0, 0)');
 });
 
 test('subscriptions advanced settings keep a consistent inner gutter', async ({ page }) => {

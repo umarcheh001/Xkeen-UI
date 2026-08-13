@@ -355,8 +355,8 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "tone === 'check-failed' || tone === 'error'" in outbounds_src
     assert "xk-sub-pingall-spinner" in outbounds_src
     assert "xk-sub-pingall-glyph" in outbounds_src
-    assert "const connectionSummary = [endpoint, detail].filter(Boolean).join(' · ');" in outbounds_src
-    assert "data-tooltip=\"${connectionSummaryHtml}\"" in outbounds_src
+    assert "const connectionSummary = [endpoint, detail].filter(Boolean).join(' · ');" not in outbounds_src
+    assert "data-tooltip=\"${connectionSummaryHtml}\"" not in outbounds_src
     assert "btn.setAttribute('data-tooltip', tooltip);" in outbounds_src
     assert "btn.setAttribute('aria-busy', 'true');" in outbounds_src
     assert "btn.removeAttribute('aria-busy');" in outbounds_src
