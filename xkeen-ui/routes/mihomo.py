@@ -66,6 +66,10 @@ from services.mihomo_proxy_config import (
     rename_proxy_in_config,
     replace_proxy_in_config,
 )
+from services.mihomo_egress_setup import (
+    MihomoEgressSetupError,
+    build_mihomo_egress_setup,
+)
 from services.mihomo_xray_json import (
     convert_subscription_text as _xray_convert_subscription_text,
     format_proxies_section as _xray_format_proxies_section,
@@ -1220,6 +1224,127 @@ def create_mihomo_blueprint(
                 exc=exc,
                 status=400,
             )
+
+    @bp.post("/api/mihomo/security/egress-listener-preview")
+    def api_mihomo_security_egress_listener_preview():
+        """Prepare a redacted, loopback-only egress listener change."""
+        supplied, invalid = _mihomo_clash_setup_input()
+        if invalid:
+            return invalid
+        try:
+            preview = build_mihomo_egress_setup(supplied)
+        except MihomoEgressSetupError:
+            return _api_error(
+                "Не удалось безопасно подготовить локальный proxy-listener.",
+                409,
+                ok=False,
+                code="egress_listener_preview_failed",
+            )
+        return jsonify({
+            "ok": True,
+            "preview": preview.public_dict(),
+            "restart_required": bool(preview.changes),
+            "already_configured": not bool(preview.changes),
+        }), 200
+
+    @bp.post("/api/mihomo/security/egress-listener-apply")
+    def api_mihomo_security_egress_listener_apply():
+        """Back up, validate, save and transactionally restart Mihomo."""
+        data = request.get_json(silent=True) or {}
+        if data.get("confirmed") is not True:
+            return _api_error(
+                "Требуется подтверждение настройки проверки IP.",
+                400,
+                ok=False,
+                code="egress_listener_confirmation_required",
+            )
+        supplied, invalid = _mihomo_clash_setup_input()
+        if invalid:
+            return invalid
+        try:
+            preview = build_mihomo_egress_setup(supplied)
+        except MihomoEgressSetupError:
+            return _api_error(
+                "Не удалось безопасно подготовить локальный proxy-listener.",
+                409,
+                ok=False,
+                code="egress_listener_preview_failed",
+            )
+        if not secrets.compare_digest(
+            str(data.get("preview_id") or ""), preview.preview_id
+        ):
+            return _api_error(
+                "Конфигурация изменилась. Повторите настройку.",
+                409,
+                ok=False,
+                code="egress_listener_preview_stale",
+            )
+        if not preview.changes:
+            return jsonify({
+                "ok": True,
+                "configured": True,
+                "already_configured": True,
+                "port": preview.port,
+                "restarted": False,
+            }), 200
+
+        ok_yaml, _yaml_err = validate_yaml_syntax(preview.content)
+        if not ok_yaml:
+            return _mihomo_yaml_invalid(stage="egress-listener")
+        ensure_mihomo_layout()
+        validation_log = validate_config(new_content=preview.content) or ""
+        exit_match = re.search(r"\[exit code:\s*(-?\d+)\]", validation_log)
+        if not exit_match or int(exit_match.group(1)) != 0:
+            return _api_error(
+                "Mihomo не подтвердил конфигурацию. Ничего не изменено.",
+                400,
+                ok=False,
+                code="egress_listener_validation_failed",
+            )
+
+        saved = False
+        try:
+            backup = save_config(preview.content)
+            saved = True
+            restarted = bool(restart_xkeen(source="mihomo-egress-listener"))
+        except Exception:
+            restarted = False
+        if not restarted:
+            rolled_back = False
+            rollback_restarted = False
+            if saved:
+                try:
+                    save_config(supplied)
+                    rolled_back = True
+                    rollback_restarted = bool(
+                        restart_xkeen(source="mihomo-egress-listener-rollback")
+                    )
+                except Exception:
+                    pass
+            return jsonify({
+                "ok": False,
+                "code": "egress_listener_restart_failed",
+                "error": (
+                    "Mihomo не запустился; прежняя конфигурация восстановлена."
+                    if rolled_back
+                    else "Mihomo не запустился, автоматическое восстановление не удалось."
+                ),
+                "configured": False,
+                "rolled_back": rolled_back,
+                "rollback_restarted": rollback_restarted,
+            }), 503
+
+        backup_name = str(getattr(backup, "filename", "") or "")
+        return jsonify({
+            "ok": True,
+            "configured": True,
+            "already_configured": False,
+            "port": preview.port,
+            "listen": "127.0.0.1",
+            "backup": backup_name or None,
+            "restarted": True,
+            "changes": list(preview.changes),
+        }), 200
 
     @bp.get("/api/mihomo/security/panel-mode")
     def api_mihomo_security_panel_mode():

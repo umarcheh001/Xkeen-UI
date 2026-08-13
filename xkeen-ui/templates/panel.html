@@ -1092,7 +1092,10 @@
               <div><dt>Часовой пояс</dt><dd id="mihomo-clash-egress-timezone">—</dd></div>
             </dl>
           </div>
-          <p id="mihomo-clash-egress-notice" class="xk-mihomo-egress-notice" role="status" aria-live="polite">Результат зависит от правила для сервиса проверки и может отличаться для других доменов.</p>
+          <div class="xk-mihomo-egress-footer">
+            <p id="mihomo-clash-egress-notice" class="xk-mihomo-egress-notice" role="status" aria-live="polite">Результат зависит от правила для сервиса проверки и может отличаться для других доменов.</p>
+            <button type="button" id="mihomo-clash-egress-setup" class="btn-secondary" data-mihomo-clash-action="egress-setup" hidden>{{ op_icon('tools') }}<span>Настроить автоматически</span></button>
+          </div>
         </section>
         <div id="mihomo-clash-groups" aria-busy="false">
           <div class="xk-mihomo-groups-toolbar" role="toolbar" aria-label="Управление группами Mihomo">

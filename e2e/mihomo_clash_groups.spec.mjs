@@ -142,6 +142,60 @@ test('Mihomo egress card shows routed IP, refreshes and stays compact on mobile'
 });
 
 
+test('Mihomo egress card offers confirmed automatic loopback listener setup', async ({ page }) => {
+  let configured = false;
+  const setupCalls = [];
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: groupsPayload() }));
+  await page.route('**/api/mihomo/clash/egress-info*', (route) => {
+    if (configured) return route.fulfill({ json: egressPayload(false) });
+    return route.fulfill({
+      status: 409,
+      json: {
+        ok: false,
+        code: 'mihomo_proxy_port_unavailable',
+        error: 'HTTP/mixed-port Mihomo не настроен.',
+        setup_available: true,
+        setup_endpoint: '/api/mihomo/security/egress-listener-preview',
+      },
+    });
+  });
+  await page.route('**/api/mihomo/security/egress-listener-preview', (route) => {
+    setupCalls.push('preview');
+    return route.fulfill({ json: {
+      ok: true,
+      restart_required: true,
+      preview: { preview_id: 'preview-1', port: 17890, listen: '127.0.0.1' },
+    } });
+  });
+  await page.route('**/api/mihomo/security/egress-listener-apply', (route) => {
+    setupCalls.push(route.request().postDataJSON());
+    configured = true;
+    return route.fulfill({ json: { ok: true, configured: true, restarted: true, port: 17890 } });
+  });
+
+  await page.goto('/');
+  await page.evaluate(() => localStorage.setItem('xkeen:mihomo-clash-egress-visible', '1'));
+  await page.reload();
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-egress-auto-setup' });
+  });
+
+  await expect(page.locator('#mihomo-clash-egress-setup')).toBeVisible();
+  await page.locator('#mihomo-clash-egress-setup').click();
+  await expect(page.locator('#confirm-modal-title')).toContainText('проверку IP выхода');
+  await expect(page.locator('#confirm-modal-message')).toContainText('127.0.0.1');
+  await page.locator('#confirm-modal-ok-btn').click();
+  await expect(page.locator('#mihomo-clash-egress-ip')).toHaveText('198.51.100.25');
+  expect(setupCalls).toEqual([
+    'preview',
+    { preview_id: 'preview-1', confirmed: true },
+  ]);
+});
+
+
 test('Mihomo groups workspace filters, confirms selection and uses provider delay scope', async ({ page }) => {
   let current = 'node-a';
   const selections = [];

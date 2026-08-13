@@ -26,6 +26,7 @@ from services.mihomo_rule_provider_inspector import (
 )
 from services.mihomo_clash_devices import get_mihomo_clash_device_map
 from services.mihomo_egress_info import MihomoEgressInfoError, get_mihomo_egress_info
+from services.mihomo_egress_setup import configured_egress_proxy_port
 from services.request_limits import PayloadTooLargeError, read_request_json_limited
 from services.mihomo_clash_target import (
     MihomoClashDiscovery,
@@ -589,18 +590,28 @@ def create_mihomo_clash_blueprint(
         try:
             configs = client.request_json("configs")
             config = configs.payload if isinstance(configs.payload, Mapping) else {}
-            proxy_port = config.get("mixed-port") or config.get("port")
+            try:
+                config_text = Path(mihomo_config_file).read_text(encoding="utf-8")
+            except OSError:
+                config_text = ""
+            proxy_port = configured_egress_proxy_port(config_text, config)
             force_refresh = str(request.args.get("refresh") or "").strip().lower() in {
                 "1", "true", "yes", "on",
             }
             info = dict(egress_info_factory(proxy_port, force_refresh=force_refresh))
         except MihomoEgressInfoError as exc:
+            setup_available = exc.code == "mihomo_proxy_port_unavailable"
             return error_response(
                 str(exc),
                 exc.status,
                 ok=False,
                 code=exc.code,
                 retryable=exc.status >= 500,
+                setup_available=setup_available,
+                setup_endpoint=(
+                    "/api/mihomo/security/egress-listener-preview"
+                    if setup_available else None
+                ),
             )
         except MihomoClashClientError as exc:
             return _safe_client_error(exc)

@@ -1,4 +1,9 @@
-import { fetchMihomoClashEgressInfo } from './client.js';
+import {
+  applyMihomoEgressListener,
+  fetchMihomoClashEgressInfo,
+  previewMihomoEgressListener,
+} from './client.js';
+import { confirmMihomoAction } from '../mihomo_runtime.js';
 
 const LOCAL_CACHE_MS = 5 * 60 * 1000;
 const VISIBILITY_STORAGE_KEY = 'xkeen:mihomo-clash-egress-visible';
@@ -10,6 +15,7 @@ let requestSequence = 0;
 let payload = null;
 let loadedAt = 0;
 let expanded = false;
+let setupBusy = false;
 
 function byId(id) {
   return document.getElementById(id);
@@ -18,6 +24,13 @@ function byId(id) {
 function setText(id, value) {
   const element = byId(id);
   if (element) element.textContent = String(value ?? '');
+}
+
+function setSetupVisible(value) {
+  const button = byId('mihomo-clash-egress-setup');
+  if (!button) return;
+  button.hidden = value !== true;
+  button.disabled = setupBusy;
 }
 
 function locationCopy(info) {
@@ -108,6 +121,7 @@ async function refresh(options = {}) {
     if (!active || sequence !== requestSequence) return false;
     payload = next && typeof next === 'object' ? next : null;
     loadedAt = Date.now();
+    setSetupVisible(false);
     render(payload);
     return true;
   } catch (error) {
@@ -120,10 +134,45 @@ async function refresh(options = {}) {
       setText('mihomo-clash-egress-version', 'проверка не выполнена');
       setText('mihomo-clash-egress-notice', error?.message || 'Не удалось определить IP выхода через Mihomo.');
     }
+    setSetupVisible(error?.data?.setup_available === true);
     return false;
   } finally {
     if (sequence === requestSequence) request = null;
     root?.setAttribute('aria-busy', 'false');
+    if (button) button.disabled = false;
+  }
+}
+
+async function setupListener() {
+  if (setupBusy || !active || !expanded) return false;
+  setupBusy = true;
+  setSetupVisible(true);
+  try {
+    const preview = await previewMihomoEgressListener();
+    const details = preview?.preview || {};
+    const confirmed = await confirmMihomoAction({
+      title: 'Настроить проверку IP выхода?',
+      message: 'Панель создаст backup, добавит proxy-listener только на 127.0.0.1 и перезапустит Mihomo. Доступ из локальной сети открыт не будет.',
+      details: ['Изменение проходит проверку Mihomo; при неудачном запуске прежний конфиг восстанавливается автоматически.'],
+      okText: 'Настроить и перезапустить',
+      cancelText: 'Отмена',
+      danger: false,
+    }, 'Настроить локальную проверку IP и перезапустить Mihomo?');
+    if (!confirmed) return false;
+    setText('mihomo-clash-egress-notice', 'Создаём backup, проверяем конфигурацию и перезапускаем Mihomo…');
+    await applyMihomoEgressListener(details.preview_id);
+    payload = null;
+    loadedAt = 0;
+    setSetupVisible(false);
+    window.setTimeout(() => void refresh({ forceRefresh: true }), 1000);
+    return true;
+  } catch (error) {
+    setText('mihomo-clash-egress-notice', error?.message || 'Не ��далось автоматически настроить проверку IP.');
+    setSetupVisible(true);
+    return false;
+  } finally {
+    setupBusy = false;
+    const button = byId('mihomo-clash-egress-setup');
     if (button) button.disabled = false;
   }
 }
@@ -138,6 +187,9 @@ export function initMihomoClashEgress() {
   });
   byId('mihomo-clash-egress-refresh')?.addEventListener('click', () => {
     void refresh({ forceRefresh: true });
+  });
+  byId('mihomo-clash-egress-setup')?.addEventListener('click', () => {
+    void setupListener();
   });
   document.addEventListener('xkeen:mihomo-egress-invalidated', () => {
     payload = null;

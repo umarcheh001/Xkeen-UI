@@ -13,6 +13,8 @@ const MIGRATION_APPLY_ENDPOINT = '/api/mihomo/security/migration-apply';
 const PANEL_MODE_ENDPOINT = '/api/mihomo/security/panel-mode';
 const PANEL_SWITCH_PREVIEW_ENDPOINT = '/api/mihomo/security/panel-switch-preview';
 const PANEL_SWITCH_ENDPOINT = '/api/mihomo/security/panel-switch';
+const EGRESS_LISTENER_PREVIEW_ENDPOINT = '/api/mihomo/security/egress-listener-preview';
+const EGRESS_LISTENER_APPLY_ENDPOINT = '/api/mihomo/security/egress-listener-apply';
 const WS_TOKEN_ENDPOINT = '/api/ws-token';
 
 function httpApi() {
@@ -105,6 +107,23 @@ export function fetchMihomoClashEgressInfo(options = {}) {
     credentials: 'same-origin',
     timeoutMs: 10000,
     retry: 0,
+    signal: options.signal,
+  });
+}
+
+export function previewMihomoEgressListener(options = {}) {
+  return requestJSON(EGRESS_LISTENER_PREVIEW_ENDPOINT, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: '{}', credentials: 'same-origin', timeoutMs: 12000, retry: 0,
+    signal: options.signal,
+  });
+}
+
+export function applyMihomoEgressListener(previewId, options = {}) {
+  return requestJSON(EGRESS_LISTENER_APPLY_ENDPOINT, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ preview_id: String(previewId || ''), confirmed: true }),
+    credentials: 'same-origin', timeoutMs: 60000, retry: 0,
     signal: options.signal,
   });
 }

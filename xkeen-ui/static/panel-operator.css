@@ -17143,6 +17143,25 @@ body.panel-page .xk-mihomo-egress-head {
   gap: 10px;
 }
 
+body.panel-page .xk-mihomo-egress-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+body.panel-page .xk-mihomo-egress-footer > .xk-mihomo-egress-notice { min-width: 0; }
+
+body.panel-page #mihomo-clash-egress-setup {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+body.panel-page #mihomo-clash-egress-setup[hidden] { display: none !important; }
+
 body.panel-page .xk-mihomo-egress-head h3 {
   margin: 0;
   color: var(--op-text-strong);

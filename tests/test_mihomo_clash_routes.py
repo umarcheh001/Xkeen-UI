@@ -239,6 +239,52 @@ def test_egress_info_route_uses_mihomo_mixed_port_and_safe_dto():
     assert client.operations == ["configs"]
 
 
+def test_egress_info_route_finds_private_listener_in_active_config(tmp_path):
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        "listeners:\n  - name: xkeen-ui-egress-check\n    type: mixed\n    port: 17890\n    listen: 127.0.0.1\n    udp: false\n    users: []\n",
+        encoding="utf-8",
+    )
+    client = StubClient(responses={
+        "configs": MihomoClashJSONResponse(
+            payload={"mode": "rule"}, status=200, elapsed_ms=1, size_bytes=16,
+        ),
+    })
+    calls = []
+
+    def lookup(port, *, force_refresh=False):
+        calls.append((port, force_refresh))
+        return {"ip": "203.0.113.8", "ip_version": "IPv4"}
+
+    response = make_app(
+        ready_discovery(), client,
+        mihomo_config_file=str(config), mihomo_root=str(tmp_path),
+        egress_info_factory=lookup,
+    ).test_client().get("/api/mihomo/clash/egress-info")
+    assert response.status_code == 200
+    assert calls == [(17890, False)]
+
+
+def test_egress_info_missing_port_offers_safe_automatic_setup(tmp_path):
+    config = tmp_path / "config.yaml"
+    config.write_text("mode: rule\n", encoding="utf-8")
+    client = StubClient(responses={
+        "configs": MihomoClashJSONResponse(
+            payload={"mode": "rule"}, status=200, elapsed_ms=1, size_bytes=16,
+        ),
+    })
+
+    response = make_app(
+        ready_discovery(), client,
+        mihomo_config_file=str(config), mihomo_root=str(tmp_path),
+    ).test_client().get("/api/mihomo/clash/egress-info")
+    body = response.get_json()
+    assert response.status_code == 409
+    assert body["code"] == "mihomo_proxy_port_unavailable"
+    assert body["setup_available"] is True
+    assert body["setup_endpoint"] == "/api/mihomo/security/egress-listener-preview"
+
+
 def test_runtime_mode_route_switches_only_allowlisted_mode_and_reconciles():
     client = StubClient(
         responses={
