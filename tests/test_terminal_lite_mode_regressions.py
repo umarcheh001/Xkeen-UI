@@ -13,6 +13,17 @@ def test_tooltips_do_not_convert_form_field_aria_labels_into_portal_tooltips():
     assert 'if (!ensurePortalRefs()) return;' in text
 
 
+def test_portal_tooltips_require_pointer_hover_instead_of_keyboard_focus():
+    text = Path('xkeen-ui/static/js/ui/tooltips_auto.js').read_text(encoding='utf-8')
+    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+
+    assert "'pointermove'" in text
+    assert "e.pointerType !== 'mouse'" in text
+    assert "'focusin'" not in text
+    assert 'button[data-tooltip]:focus-visible::after' not in styles
+    assert '[data-tooltip]:not(button):not(input):not(textarea):not(select):focus-visible::after' not in styles
+
+
 def test_lite_terminal_skips_xterm_boot_and_keeps_pre_output_visible():
     text = Path('xkeen-ui/static/js/terminal/modules/terminal_controller.js').read_text(encoding='utf-8')
 

@@ -371,10 +371,15 @@
       }
     }
 
-    // Delegated hover/focus events
+    // Show a visual tooltip only after the pointer actually moves over its
+    // owner.  ``mouseover`` also fires when a modal is inserted underneath a
+    // stationary pointer, which made the close-button tooltip appear as soon
+    // as some confirmation dialogs opened.  Labels remain available through
+    // aria-label for keyboard and assistive-technology users.
     document.addEventListener(
-      'mouseover',
+      'pointermove',
       (e) => {
+        if (e && e.pointerType && e.pointerType !== 'mouse') return;
         const el = findTooltipEl(e.target);
         if (!el) return;
         if (el === currentEl) return;
@@ -393,16 +398,6 @@
         const still = related ? findTooltipEl(related) : null;
         if (still && still === currentEl) return;
         hide();
-      },
-      true
-    );
-
-    document.addEventListener(
-      'focusin',
-      (e) => {
-        const el = findTooltipEl(e.target);
-        if (!el) return;
-        showFor(el);
       },
       true
     );

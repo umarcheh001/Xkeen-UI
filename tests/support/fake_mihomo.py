@@ -54,6 +54,7 @@ class FakeMihomoState:
     delay_seconds: float = 0.0
     forced_status: dict[str, int] = field(default_factory=dict)
     generation: int = 0
+    mode: str = "rule"
     selected: dict[str, str] = field(default_factory=lambda: {"AUTO": "node-a"})
     provider_updates: list[tuple[str, str]] = field(default_factory=list)
     provider_healthchecks: list[str] = field(default_factory=list)
@@ -210,7 +211,7 @@ class FakeMihomo(AbstractContextManager["FakeMihomo"]):
                 elif path == "/version":
                     self._send(200, {"version": "Mihomo Meta fake-pr8"})
                 elif path == "/configs":
-                    self._send(200, {"mode": "rule", "tun": {"enable": True}})
+                    self._send(200, {"mode": state.mode, "tun": {"enable": True}})
                 elif path in {"/proxies", "/group"}:
                     now = state.selected.get("AUTO", "node-a")
                     self._send(
@@ -316,6 +317,28 @@ class FakeMihomo(AbstractContextManager["FakeMihomo"]):
                     state.selected[unquote(path.removeprefix("/proxies/"))] = str(body.get("name") or "")
                 self._send(204)
 
+            def do_PATCH(self):  # noqa: N802
+                prepared = self._prepare()
+                if prepared is None:
+                    return
+                path, _query = prepared
+                if path != "/configs":
+                    self._send(404, {"message": "missing"})
+                    return
+                size = int(self.headers.get("Content-Length") or 0)
+                try:
+                    body = json.loads(self.rfile.read(size) or b"{}")
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    self._send(400, {"message": "invalid json"})
+                    return
+                mode = str(body.get("mode") or "").lower()
+                if mode not in {"rule", "global", "direct"}:
+                    self._send(400, {"message": "invalid mode"})
+                    return
+                with state.lock:
+                    state.mode = mode
+                self._send(204)
+
             def do_DELETE(self):  # noqa: N802
                 prepared = self._prepare()
                 if prepared is None:
@@ -323,6 +346,13 @@ class FakeMihomo(AbstractContextManager["FakeMihomo"]):
                 path, _query = prepared
                 if path == "/connections":
                     state.disconnect_all()
+                elif path.startswith("/proxies/"):
+                    # Mihomo's "unfix" endpoint is relevant for automatic
+                    # proxy groups.  The fixture has no persisted fixed state,
+                    # so accepting it is sufficient to exercise the facade and
+                    # UI reconciliation flow locally.
+                    self._send(204)
+                    return
                 elif path.startswith("/connections/"):
                     requested = unquote(path.removeprefix("/connections/"))
                     if not state.disconnect(requested):

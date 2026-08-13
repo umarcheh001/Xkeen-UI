@@ -2507,9 +2507,7 @@ button[data-tooltip]::before {
 }
 
 button[data-tooltip]:hover::after,
-button[data-tooltip]:hover::before,
-button[data-tooltip]:focus-visible::after,
-button[data-tooltip]:focus-visible::before {
+button[data-tooltip]:hover::before {
   opacity: 1;
 }
 
@@ -2574,9 +2572,7 @@ button[data-tooltip]:focus-visible::before {
 }
 
 [data-tooltip]:not(button):not(input):not(textarea):not(select):hover::after,
-[data-tooltip]:not(button):not(input):not(textarea):not(select):hover::before,
-[data-tooltip]:not(button):not(input):not(textarea):not(select):focus-visible::after,
-[data-tooltip]:not(button):not(input):not(textarea):not(select):focus-visible::before {
+[data-tooltip]:not(button):not(input):not(textarea):not(select):hover::before {
   opacity: 1;
 }
 
