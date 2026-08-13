@@ -12680,10 +12680,17 @@ body.panel-page #routing-dat-contents-modal .dat-contents-pager-inline {
 
 body.panel-page #routing-dat-contents-modal .dat-contents-pager-inline .btn-secondary,
 body.panel-page #routing-dat-contents-modal .dat-contents-toolbar > .btn-secondary {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
   width: 30px;
   min-width: 30px;
   min-height: 30px;
   padding: 0;
+}
+
+body.panel-page #routing-dat-contents-modal :is(.dat-contents-pager-inline .btn-secondary, .dat-contents-toolbar > .btn-secondary) .xk-action-icon {
+  margin: 0;
 }
 
 body.panel-page #routing-dat-contents-modal .dat-contents-tags-list,

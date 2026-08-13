@@ -337,6 +337,8 @@ def test_modal_action_icons_are_inline_and_duplicate_dismiss_controls_are_presen
     for fragment in (
         '.modal-actions :is(button, .btn-primary, .btn-secondary):has(.xk-action-icon)',
         '#routing-dat-contents-modal .xk-dat-controls .btn-secondary:has(.xk-action-icon)',
+        '#routing-dat-contents-modal .dat-contents-pager-inline .btn-secondary',
+        'justify-content: center;',
         'align-items: center;',
         'gap: 7px;',
         '[data-operator-dismiss-duplicate="true"]',
