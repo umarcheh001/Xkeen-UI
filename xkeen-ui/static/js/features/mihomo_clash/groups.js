@@ -30,6 +30,10 @@ let showTimeoutHidden = false;
 let delayRun = null;
 const collapsedGroups = new Set();
 let disclosureSeeded = false;
+// A probe result belongs to the card in the group that initiated it. Keep
+// terminal states here so a timeout/error is not replaced by the initial
+// Mihomo healthcheck value after the queue has finished.
+const groupDelays = new Map();
 const latestDelays = new Map();
 const timeoutCounts = new Map();
 
@@ -90,7 +94,9 @@ function latestDelayKey(name, provider = '') {
 
 function nodeDelayResult(group, node) {
   const key = delayKey(group.name, node.name, node.provider);
-  return (delayRun && delayRun.results.get(key)) || latestDelays.get(latestDelayKey(node.name, node.provider));
+  return (delayRun && delayRun.results.get(key))
+    || groupDelays.get(key)
+    || latestDelays.get(latestDelayKey(node.name, node.provider));
 }
 
 function nodeProbeStatus(group, node) {
@@ -698,6 +704,12 @@ async function probeDelay(scope, name, provider = '', groupName = '') {
       else timeoutCounts.delete(key);
     }
   } finally {
+    if (delayRun && !delayRun.cancelled) {
+      for (const key of keys) {
+        const result = delayRun.results.get(key);
+        if (result && result.state !== 'pending') groupDelays.set(key, result);
+      }
+    }
     if (delayRun) delayRun.completed += 1;
     if (!showTimeoutHidden && keys.some((key) => (timeoutCounts.get(key) || 0) >= TIMEOUT_HIDE_THRESHOLD)) render();
     else renderDelayNodes(keys);
