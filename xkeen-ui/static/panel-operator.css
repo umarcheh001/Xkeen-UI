@@ -18185,7 +18185,7 @@ body.panel-page .xk-mihomo-group-head {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  min-height: 56px;
+  min-height: 70px;
   padding: 7px 9px;
   background: var(--op-surface-2);
   cursor: pointer;
@@ -18262,6 +18262,10 @@ body.panel-page .xk-mihomo-group-body[hidden] {
 }
 
 body.panel-page .xk-mihomo-group-title {
+  display: grid;
+  grid-template-rows: auto auto minmax(12px, auto);
+  align-content: center;
+  gap: 3px;
   min-width: 0;
 }
 
@@ -18293,7 +18297,6 @@ body.panel-page .xk-mihomo-group-fixed {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-top: 3px;
   color: var(--op-warning);
   font-size: calc(9.5px * var(--xk-font-scale, 1));
 }
@@ -18301,7 +18304,6 @@ body.panel-page .xk-mihomo-group-fixed {
 body.panel-page .xk-mihomo-group-selection {
   display: block;
   overflow: hidden;
-  margin-top: 3px;
   color: var(--op-accent);
   font-size: calc(10px * var(--xk-font-scale, 1));
   text-overflow: ellipsis;

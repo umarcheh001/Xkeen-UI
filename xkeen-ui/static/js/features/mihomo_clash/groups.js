@@ -368,7 +368,17 @@ function groupIconHtml(group) {
 }
 
 function groupSelectionHtml(group, collapsed) {
-  if (!collapsed || !group.now) return '';
+  const automatic = AUTOMATIC_TYPES.has(String(group.type || '').toLowerCase());
+  if (automatic && group.fixed) {
+    return `<span class="xk-mihomo-group-fixed">${iconHtml('lock')}Зафиксирован: <strong>${escapeHtml(group.fixed)}</strong></span>`;
+  }
+  if (!collapsed) return '';
+  if (automatic) {
+    return group.now
+      ? `<span class="xk-mihomo-group-selection">Автовыбор: <strong>${escapeHtml(group.now)}</strong></span>`
+      : '<span class="xk-mihomo-group-selection">Автовыбор по задержке</span>';
+  }
+  if (!group.now) return '<span class="xk-mihomo-group-selection">Выбор недоступен</span>';
   return `<span class="xk-mihomo-group-selection">Выбрано: <strong>${escapeHtml(group.now)}</strong></span>`;
 }
 
@@ -381,9 +391,6 @@ function renderGroup(group) {
   const panelId = `mihomo-group-${encodeURIComponent(group.name).replace(/%/g, '-').replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   const automatic = AUTOMATIC_TYPES.has(String(group.type || '').toLowerCase());
   const canUnfix = automatic && !!group.fixed && capabilities.proxy_unfix === true;
-  const fixedLabel = automatic && group.fixed
-    ? `<span class="xk-mihomo-group-fixed">${iconHtml('lock')}Зафиксирован: <strong>${escapeHtml(group.fixed)}</strong></span>`
-    : '';
   return `
     <section class="xk-mihomo-group" data-group-name="${escapeHtml(group.name)}">
       <header class="xk-mihomo-group-head${collapsed ? ' is-collapsed' : ''}" data-group="${escapeHtml(group.name)}"
@@ -393,7 +400,6 @@ function renderGroup(group) {
           <div><strong>${escapeHtml(group.name)}</strong>${group.hidden ? '<span class="xk-mihomo-group-flag">hidden</span>' : ''}</div>
           <small>${escapeHtml(groupSummary(group))}</small>
           ${groupSelectionHtml(group, collapsed)}
-          ${fixedLabel}
         </div>
         <div class="xk-mihomo-group-actions">
           ${canUnfix ? `<button type="button" class="btn-secondary xk-mihomo-group-unfix" data-mihomo-group-unfix="1" data-group="${escapeHtml(group.name)}">${iconHtml('lock')}<span>Вернуть автоматический выбор</span></button>` : ''}
