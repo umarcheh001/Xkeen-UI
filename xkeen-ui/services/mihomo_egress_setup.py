@@ -26,6 +26,13 @@ _TOP_LEVEL_PROXY_PORT_RE = re.compile(
     r"^(?:mixed-port|port)[ \t]*:[ \t]*(?P<port>\d+)[ \t]*(?:#.*)?$",
     re.MULTILINE,
 )
+# Keep the generated private listener in the small top-level API/UI settings
+# block, rather than silently appending it after a potentially long rules list.
+_API_UI_SETTING_RE = re.compile(
+    r"^(?:external-controller-unix|external-controller|secret|external-ui|external-ui-url|profile)[ \t]*:.*$",
+    re.MULTILINE,
+)
+_RULES_RE = re.compile(r"^rules[ \t]*:.*$", re.MULTILINE)
 
 
 class MihomoEgressSetupError(ValueError):
@@ -177,6 +184,19 @@ def _listener_yaml(port: int, *, indent: str = "") -> str:
     )
 
 
+def _insert_listeners_block(text: str, block: str) -> str:
+    """Place a new listeners block after the active API/UI settings when known."""
+
+    matches = list(_API_UI_SETTING_RE.finditer(text))
+    if matches:
+        anchor = matches[-1]
+        return text[: anchor.end()] + "\n\n" + block + text[anchor.end() :]
+    rules = _RULES_RE.search(text)
+    if rules:
+        return text[: rules.start()].rstrip() + "\n\n" + block + "\n" + text[rules.start() :]
+    return text.rstrip() + "\n\n" + block
+
+
 def build_mihomo_egress_setup(text: str) -> MihomoEgressSetupPreview:
     original = str(text or "")
     config = _loaded(original)
@@ -203,7 +223,10 @@ def build_mihomo_egress_setup(text: str) -> MihomoEgressSetupPreview:
         replacement = "listeners:\n" + _listener_yaml(port, indent="  ")
         content = prefix + replacement + suffix.lstrip("\r\n")
     else:
-        content = original.rstrip() + "\n\nlisteners:\n" + _listener_yaml(port, indent="  ")
+        content = _insert_listeners_block(
+            original,
+            "listeners:\n" + _listener_yaml(port, indent="  "),
+        )
 
     # Validate the generated document when PyYAML is available and ensure the
     # exact listener can be found again before any caller writes it.

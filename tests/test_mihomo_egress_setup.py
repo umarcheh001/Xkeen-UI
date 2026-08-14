@@ -42,6 +42,7 @@ def test_egress_setup_adds_only_loopback_listener_without_global_mixed_port():
     assert "users: []" in preview.content
     assert "allow-lan: true" in preview.content
     assert "redir-port: 5000" in preview.content
+    assert preview.content.index("listeners:") < preview.content.index("rules:")
     assert configured_egress_proxy_port(preview.content) == 17890
     assert "content" not in preview.public_dict()
 

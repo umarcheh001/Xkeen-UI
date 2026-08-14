@@ -161,6 +161,11 @@ async function setupListener() {
     if (!confirmed) return false;
     setText('mihomo-clash-egress-notice', 'Создаём backup, проверяем конфигурацию и перезапускаем Mihomo…');
     await applyMihomoEgressListener(details.preview_id);
+    try {
+      document.dispatchEvent(new CustomEvent('xkeen:mihomo-config-changed', {
+        detail: { reason: 'egress-listener-setup' },
+      }));
+    } catch (error) {}
     payload = null;
     loadedAt = 0;
     setSetupVisible(false);
