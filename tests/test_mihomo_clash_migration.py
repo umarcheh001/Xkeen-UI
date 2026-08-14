@@ -33,6 +33,9 @@ def test_unix_preview_is_non_mutating_and_removes_lan_controller():
     preview = build_safe_mihomo_config(source)
     assert preview.transport == "unix"
     assert "external-controller-unix: ./mihomo-api.sock" in preview.content
+    assert preview.content.index("external-controller-unix") < preview.content.index(
+        "# external-controller отключён"
+    )
     assert "external-controller: 0.0.0.0:9090" not in preview.content
     assert "old-secret" not in preview.content
     assert "old-secret" in source

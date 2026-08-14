@@ -61,6 +61,30 @@ def _replace_or_insert(
     return text.rstrip() + "\n" + line + "\n", False
 
 
+def _replace_or_insert_near(
+    text: str,
+    pattern: re.Pattern[str],
+    line: str,
+    anchor: re.Pattern[str],
+) -> tuple[str, bool]:
+    """Replace a top-level setting or add it next to its companion.
+
+    Keeping API transport settings together makes the generated change visible
+    where users expect it in config.yaml instead of silently appending it after
+    the rules section.
+    """
+
+    match = pattern.search(text)
+    if match:
+        return text[: match.start()] + f"{match.group('indent')}{line}" + text[
+            match.end() :
+        ], True
+    anchor_match = anchor.search(text)
+    if anchor_match:
+        return text[: anchor_match.start()] + line + "\n" + text[anchor_match.start() :], False
+    return text.rstrip() + "\n" + line + "\n", False
+
+
 def _replace_if_present(
     text: str, pattern: re.Pattern[str], line: str
 ) -> tuple[str, bool]:
@@ -84,8 +108,11 @@ def build_safe_mihomo_config(
     original = str(text or "")
     changes: list[str] = []
     if prefer_unix:
-        updated, existed = _replace_or_insert(
-            original, _UNIX_RE, "external-controller-unix: ./mihomo-api.sock"
+        updated, existed = _replace_or_insert_near(
+            original,
+            _UNIX_RE,
+            "external-controller-unix: ./mihomo-api.sock",
+            _CONTROLLER_RE,
         )
         if not existed:
             changes.append("Добавить локальный Unix socket Mihomo API")

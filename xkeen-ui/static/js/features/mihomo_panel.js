@@ -1789,7 +1789,7 @@ let mihomoPanelModuleApi = null;
 
   async function loadLiveConfigIntoEditor() {
     try {
-      const res = await fetch('/api/mihomo-config');
+      const res = await fetch('/api/mihomo-config', { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
         return {
@@ -1867,6 +1867,13 @@ let mihomoPanelModuleApi = null;
       return false;
     }
   };
+
+  async function reloadFromDiskIfClean() {
+    if (isEditorDirty()) return { ok: false, skipped: 'dirty' };
+    const result = await loadLiveConfigIntoEditor();
+    if (result.ok) setStatus('config.yaml обновлён после автоматической настройки API.', false, true);
+    return result;
+  }
 
   MP.saveConfig = async function saveConfig() {
     const content = String(getEditorText() || '');
@@ -3569,6 +3576,7 @@ let mihomoPanelModuleApi = null;
   MP.getEditorText = getEditorText;
   MP.setEditorText = setEditorText;
   MP.refreshEditor = refreshEditorIfAny;
+  MP.reloadFromDiskIfClean = reloadFromDiskIfClean;
   MP.isEditorDirty = isEditorDirty;
 })();
 
@@ -3597,6 +3605,10 @@ export function loadMihomoPanel(...args) {
 
 export function onShowMihomoPanel(...args) {
   return callMihomoPanelApi('refreshEditor', ...args);
+}
+
+export function reloadMihomoPanelFromDiskIfClean(...args) {
+  return callMihomoPanelApi('reloadFromDiskIfClean', ...args);
 }
 
 export function saveMihomoPanel(...args) {
@@ -3682,6 +3694,7 @@ export const mihomoPanelApi = Object.freeze({
   openZashboardUi: openMihomoZashboardUi,
   getEditorText: getMihomoPanelEditorText,
   setEditorText: setMihomoPanelEditorText,
+  reloadFromDiskIfClean: reloadMihomoPanelFromDiskIfClean,
   isEditorDirty: isMihomoPanelEditorDirty,
   dispose: disposeMihomoPanel,
 });

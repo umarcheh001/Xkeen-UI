@@ -385,6 +385,11 @@ async function applyMigration() {
   setMigrationStatus('Создаём backup, проверяем конфиг и перезапускаем Mihomo…');
   try {
     const payload = await applyMihomoClashMigration(migrationTransport(), migrationPreviewId);
+    try {
+      document.dispatchEvent(new CustomEvent('xkeen:mihomo-config-changed', {
+        detail: { reason: 'security-migration' },
+      }));
+    } catch (error) {}
     setMigrationStatus(payload?.api_ready
       ? 'Готово. Mihomo API подключён и защищён.'
       : 'Настройка сохранена. Проверяем подключение Mihomo API…');
