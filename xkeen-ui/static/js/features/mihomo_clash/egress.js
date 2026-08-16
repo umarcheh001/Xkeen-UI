@@ -4,6 +4,7 @@ import {
   previewMihomoEgressListener,
 } from './client.js';
 import { confirmMihomoAction } from '../mihomo_runtime.js';
+import { mihomoCountryFlag } from './groups.js';
 
 const LOCAL_CACHE_MS = 5 * 60 * 1000;
 const VISIBILITY_STORAGE_KEY = 'xkeen:mihomo-clash-egress-visible';
@@ -24,6 +25,30 @@ function byId(id) {
 function setText(id, value) {
   const element = byId(id);
   if (element) element.textContent = String(value ?? '');
+}
+
+function renderCountry(info) {
+  const element = byId('mihomo-clash-egress-country');
+  if (!element) return;
+  const flag = mihomoCountryFlag(info?.country_code);
+  const label = String(info?.country || flag.label || flag.code || 'Страна не определена');
+  element.replaceChildren();
+  element.removeAttribute('data-country');
+  element.removeAttribute('role');
+  element.removeAttribute('aria-label');
+  element.removeAttribute('title');
+  if (!flag.code) {
+    element.textContent = '—';
+    element.setAttribute('aria-hidden', 'true');
+    return;
+  }
+  element.removeAttribute('aria-hidden');
+  element.setAttribute('data-country', flag.code);
+  element.setAttribute('role', 'img');
+  element.setAttribute('aria-label', label);
+  element.setAttribute('title', label);
+  if (flag.svg) element.innerHTML = flag.svg;
+  else element.textContent = flag.code;
 }
 
 function setSetupVisible(value) {
@@ -72,7 +97,7 @@ function render(info = payload) {
   const root = byId('mihomo-clash-egress');
   if (!root) return;
   if (!info) {
-    setText('mihomo-clash-egress-country', '—');
+    renderCountry(null);
     setText('mihomo-clash-egress-ip', 'Проверяем…');
     setText('mihomo-clash-egress-version', 'через Mihomo');
     setText('mihomo-clash-egress-location', '—');
@@ -81,14 +106,17 @@ function render(info = payload) {
     setText('mihomo-clash-egress-timezone', '—');
     return;
   }
-  setText('mihomo-clash-egress-country', info.country_code || '—');
+  renderCountry(info);
   setText('mihomo-clash-egress-ip', info.ip || '—');
   setText('mihomo-clash-egress-version', [info.ip_version, info.cached ? 'кэш' : 'обновлено'].filter(Boolean).join(' · '));
   setText('mihomo-clash-egress-location', locationCopy(info));
   setText('mihomo-clash-egress-provider', info.organization || '—');
   setText('mihomo-clash-egress-asn', info.asn || '—');
   setText('mihomo-clash-egress-timezone', info.timezone || '—');
-  setText('mihomo-clash-egress-notice', 'Результат следует правилу для ipapi.co и может отличаться для других доменов.');
+  setText(
+    'mihomo-clash-egress-notice',
+    'Это публичный IP после маршрутизации и NAT. Проверено через ipapi.co; для других доменов маршрут может отличаться.',
+  );
 }
 
 function abortRequest() {

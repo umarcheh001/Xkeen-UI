@@ -17314,6 +17314,13 @@ body.panel-page .xk-mihomo-egress-country {
   font-size: calc(10px * var(--xk-font-scale, 1));
   font-weight: 800;
   letter-spacing: .06em;
+  overflow: hidden;
+  padding: 0;
+}
+
+body.panel-page .xk-mihomo-egress-country .xk-sub-node-country-svg {
+  width: 100%;
+  height: 100%;
 }
 
 body.panel-page .xk-mihomo-egress-primary > div {

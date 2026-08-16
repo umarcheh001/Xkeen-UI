@@ -114,7 +114,8 @@ test('Mihomo egress card shows routed IP, refreshes and stays compact on mobile'
   await expect(page.locator('#mihomo-clash-egress-toggle')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('#mihomo-clash-egress')).toBeVisible();
   await expect(page.locator('#mihomo-clash-egress-ip')).toHaveText('198.51.100.25');
-  await expect(page.locator('#mihomo-clash-egress-country')).toHaveText('FI');
+  await expect(page.locator('#mihomo-clash-egress-country[data-country="FI"]')).toHaveAttribute('aria-label', 'Finland');
+  await expect(page.locator('#mihomo-clash-egress-country svg')).toHaveCount(1);
   await expect(page.locator('#mihomo-clash-egress-location')).toHaveText('Helsinki, Uusimaa, Finland');
   await expect(page.locator('#mihomo-clash-egress-provider')).toHaveText('Example Network');
   await expect(page.locator('#mihomo-clash-egress-asn')).toHaveText('AS64500');

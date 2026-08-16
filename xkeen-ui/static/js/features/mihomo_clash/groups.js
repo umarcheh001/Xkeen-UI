@@ -492,6 +492,15 @@ function nodeFlagHtml(countryCode) {
   return `<span class="xk-sub-node-country xk-mihomo-node-country" data-country="${countryCode}" role="img" aria-label="${escapeHtml(label)}" data-tooltip="${escapeHtml(label)}">${svg}</span>`;
 }
 
+export function mihomoCountryFlag(countryCode) {
+  const code = String(countryCode || '').trim().toUpperCase();
+  return {
+    code,
+    label: NODE_COUNTRY_NAMES[code] || code,
+    svg: NODE_FLAG_SVG[code] || '',
+  };
+}
+
 function renderNodeProbe(group, node) {
   const status = nodeProbeStatus(group, node);
   const probeLabel = `Проверить задержку узла ${node.name}`;
