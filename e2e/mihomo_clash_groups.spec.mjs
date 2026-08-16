@@ -354,6 +354,52 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await expect(page.locator('#mihomo-clash-test-visible')).not.toHaveAttribute('data-mihomo-delay-testing', 'true');
 });
 
+
+test('Mihomo latency becomes no data after five minutes and groups refresh on return', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-08-16T10:15:30Z') });
+  let groupRequests = 0;
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => {
+    groupRequests += 1;
+    return route.fulfill({ json: groupsPayload() });
+  });
+  await page.route('**/api/mihomo/clash/delay', (route) => {
+    const data = route.request().postDataJSON();
+    return route.fulfill({
+      json: { ok: true, schema_version: 1, results: [{ name: data.name, delay_ms: 44 }] },
+    });
+  });
+
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-delay-freshness' });
+  });
+  await expect(page.locator('#mihomo-clash-groups-list')).toContainText('AUTO');
+  await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
+  const latency = page.locator('[data-group-name="AUTO"] [data-node-name="node-a"] .xk-mihomo-node-delay');
+  const unavailable = page.locator('[data-group-name="AUTO"] [data-node-name="node-b"] .xk-mihomo-node-delay');
+  await expect(latency).toHaveText('82 мс');
+  await expect(unavailable).toHaveText('недоступен');
+
+  await latency.click();
+  await expect(latency).toHaveText('44 мс');
+  await page.clock.fastForward((5 * 60 * 1000) + 100);
+  await expect(latency).toHaveText('нет данных');
+  await expect(latency).toHaveAttribute('data-delay-tone', 'stale');
+  await expect(unavailable).toHaveText('нет данных');
+  await expect(unavailable).toHaveAttribute('data-delay-tone', 'stale');
+  await latency.hover();
+  await expect(page.locator('#mihomo-clash-delay-history-popover')).toContainText('44 мс');
+
+  const requestsBeforeReturn = groupRequests;
+  await page.locator('.top-tab-btn[data-view="routing"]').click();
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await expect.poll(() => groupRequests).toBeGreaterThan(requestsBeforeReturn);
+  await expect(latency).toHaveText('нет данных');
+});
+
 test('server cards replace provider emoji with one rectangular country flag', async ({ page }) => {
   const data = groupsPayload('🇩🇪 DE Germany.01');
   data.groups[0].now = '🇩🇪 DE Germany.01';

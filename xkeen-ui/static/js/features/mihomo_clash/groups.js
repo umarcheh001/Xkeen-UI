@@ -16,6 +16,10 @@ const DELAY_BATCH_CADENCE_MS = 120;
 const TIMEOUT_HIDE_THRESHOLD = 3;
 const MAX_DELAY_HISTORY = 10;
 const DELAY_HISTORY_HOVER_MS = 350;
+// A latency number is a point-in-time observation, not a live status. Keep it
+// visible for one default Mihomo health-check interval, then ask the operator
+// to measure again instead of presenting an old value as current.
+const DELAY_FRESHNESS_TTL_MS = 5 * 60 * 1000;
 const AUTOMATIC_TYPES = new Set(['urltest', 'fallback', 'smart']);
 
 let root = null;
@@ -31,6 +35,8 @@ let sortMode = 'config';
 let showTimeoutHidden = false;
 let delayRun = null;
 let lastDelaySummary = null;
+let payloadLoadedAt = 0;
+let delayFreshnessTimer = 0;
 const collapsedGroups = new Set();
 let disclosureSeeded = false;
 // A probe result belongs to the card in the group that initiated it. Keep
@@ -99,6 +105,32 @@ function latestDelayKey(name, provider = '') {
   return `${String(provider || '')}\u0000${String(name || '')}`;
 }
 
+function measurementTimestamp(value, fallback = 0) {
+  let timestamp = Number.NaN;
+  if (Number.isFinite(value)) timestamp = Number(value);
+  else if (value) timestamp = Date.parse(String(value));
+  if (!Number.isFinite(timestamp) || timestamp <= 0) timestamp = Number(fallback);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return 0;
+  // A router clock slightly ahead of the browser must not keep a result fresh
+  // beyond the TTL. The payload load time is a stable local fallback.
+  if (timestamp > Date.now()) {
+    const fallbackTimestamp = Number(fallback);
+    return Number.isFinite(fallbackTimestamp) && fallbackTimestamp > 0
+      ? fallbackTimestamp
+      : Date.now();
+  }
+  return timestamp;
+}
+
+function isFreshMeasurement(value, fallback = 0) {
+  const timestamp = measurementTimestamp(value, fallback);
+  return timestamp > 0 && Date.now() < timestamp + DELAY_FRESHNESS_TTL_MS;
+}
+
+function isPayloadFresh() {
+  return isFreshMeasurement(payloadLoadedAt);
+}
+
 function effectiveDelayNode(node) {
   let current = node;
   const visited = new Set();
@@ -135,6 +167,18 @@ function delayHistoryForNode(node) {
   return Number.isFinite(effectiveNode?.delay_ms)
     ? [{ delay: Number(effectiveNode.delay_ms), measuredAt: '' }]
     : [];
+}
+
+function latestNodeMeasurement(node) {
+  const effectiveNode = effectiveDelayNode(node);
+  const history = delayHistoryForNode(effectiveNode);
+  const latest = history[history.length - 1];
+  if (!latest || !Number.isFinite(latest.delay)) return null;
+  return {
+    delay: Number(latest.delay),
+    measuredAt: latest.measuredAt,
+    timestamp: measurementTimestamp(latest.measuredAt, payloadLoadedAt),
+  };
 }
 
 function rememberDelayMeasurement(identity, delay, measuredAt = new Date().toISOString()) {
@@ -252,18 +296,60 @@ function scheduleDelayHistory(owner, immediate = false) {
   }, immediate ? 0 : DELAY_HISTORY_HOVER_MS);
 }
 
+function clearDelayFreshnessTimer() {
+  if (delayFreshnessTimer) window.clearTimeout(delayFreshnessTimer);
+  delayFreshnessTimer = 0;
+}
+
+function scheduleDelayFreshnessRender() {
+  clearDelayFreshnessTimer();
+  if (!active) return;
+  const now = Date.now();
+  let nextExpiry = Number.POSITIVE_INFINITY;
+  const consider = (value, fallback = 0) => {
+    const timestamp = measurementTimestamp(value, fallback);
+    const expiry = timestamp + DELAY_FRESHNESS_TTL_MS;
+    if (timestamp > 0 && expiry > now && expiry < nextExpiry) nextExpiry = expiry;
+  };
+  for (const result of [...groupDelays.values(), ...latestDelays.values()]) {
+    if (result?.state !== 'pending') consider(result?.measuredAt);
+  }
+  consider(payloadLoadedAt);
+  for (const group of groups()) {
+    for (const node of group.nodes || []) {
+      const measurement = latestNodeMeasurement(node);
+      if (measurement) consider(measurement.timestamp);
+    }
+  }
+  if (!Number.isFinite(nextExpiry)) return;
+  delayFreshnessTimer = window.setTimeout(() => {
+    delayFreshnessTimer = 0;
+    if (active) render();
+  }, Math.max(1, nextExpiry - now + 25));
+}
+
+function freshDelayResult(result) {
+  if (!result) return null;
+  if (result.state === 'pending') return result;
+  return isFreshMeasurement(result.measuredAt) ? result : null;
+}
+
 function nodeDelayResult(group, node) {
   const key = delayKey(group.name, node.name, node.provider);
   const effectiveNode = effectiveDelayNode(node);
   const effectiveIdentity = latestDelayKey(effectiveNode?.name, effectiveNode?.provider);
-  return (delayRun && delayRun.results.get(key))
-    || groupDelays.get(key)
-    || latestDelays.get(effectiveIdentity);
+  const candidates = [
+    delayRun && delayRun.results.get(key),
+    groupDelays.get(key),
+    latestDelays.get(effectiveIdentity),
+  ];
+  return candidates.map(freshDelayResult).find(Boolean) || null;
 }
 
 function nodeProbeStatus(group, node) {
   const result = nodeDelayResult(group, node);
   const effectiveNode = effectiveDelayNode(node);
+  const measurement = latestNodeMeasurement(effectiveNode);
   const chainCopy = effectiveNode !== node && effectiveNode?.name
     ? ` Текущий узел цепочки: ${effectiveNode.name}.`
     : '';
@@ -312,23 +398,33 @@ function nodeProbeStatus(group, node) {
       tooltip: `Последняя измеренная задержка: ${delay} мс.${chainCopy} Нажмите, чтобы проверить снова.`,
     };
   }
-  if (effectiveNode.availability === 'unavailable' || effectiveNode.alive === false) {
+  if (
+    (effectiveNode.availability === 'unavailable' || effectiveNode.alive === false)
+    && isPayloadFresh()
+  ) {
     return {
       state: 'unavailable',
       label: 'недоступен',
       tooltip: `Последняя фоновая healthcheck Mihomo вернула alive=false.${chainCopy} Нажмите, чтобы выполнить ручную проверку задержки.`,
     };
   }
-  if (Number.isFinite(effectiveNode.delay_ms)) {
+  if (measurement && isFreshMeasurement(measurement.timestamp)) {
     return {
-      state: delayTone(effectiveNode.delay_ms),
-      label: `${effectiveNode.delay_ms} мс`,
-      tooltip: `Последняя измеренная задержка: ${effectiveNode.delay_ms} мс.${chainCopy} Нажмите, чтобы проверить снова.`,
+      state: delayTone(measurement.delay),
+      label: `${measurement.delay} мс`,
+      tooltip: `Последняя измеренная задержка: ${measurement.delay} мс.${chainCopy} Нажмите, чтобы проверить снова.`,
+    };
+  }
+  if (measurement) {
+    return {
+      state: 'stale',
+      label: 'нет данных',
+      tooltip: `Последнее измерение старше 5 минут и больше не считается актуальным.${chainCopy} Нажмите, чтобы проверить задержку снова.`,
     };
   }
   return {
     state: 'unknown',
-    label: '—',
+    label: 'нет данных',
     tooltip: 'Mihomo ещё не сообщил результат healthcheck. Нажмите, чтобы проверить задержку.',
   };
 }
@@ -357,10 +453,12 @@ function filteredGroups() {
 
 function nodeDelayValue(group, node) {
   const result = nodeDelayResult(group, node);
-  const effectiveNode = effectiveDelayNode(node);
+  const measurement = latestNodeMeasurement(node);
   return result && Number.isFinite(result.delay)
     ? result.delay
-    : (Number.isFinite(effectiveNode.delay_ms) ? effectiveNode.delay_ms : Number.POSITIVE_INFINITY);
+    : (measurement && isFreshMeasurement(measurement.timestamp)
+      ? measurement.delay
+      : Number.POSITIVE_INFINITY);
 }
 
 function sortNodes(group, nodes) {
@@ -373,7 +471,9 @@ function sortNodes(group, nodes) {
     let comparison = 0;
     if (sortMode === 'name') comparison = String(left.node.name).localeCompare(String(right.node.name), 'ru', { sensitivity: 'base' });
     if (sortMode === 'delay') comparison = nodeDelayValue(group, left.node) - nodeDelayValue(group, right.node);
-    if (sortMode === 'availability') comparison = Number(right.node.alive === true) - Number(left.node.alive === true);
+    if (sortMode === 'availability' && isPayloadFresh()) {
+      comparison = Number(right.node.alive === true) - Number(left.node.alive === true);
+    }
     return comparison || left.index - right.index;
   });
   return indexed.map((item) => item.node);
@@ -513,9 +613,10 @@ function renderNodeProbe(group, node) {
     ? `<span class="xk-visually-hidden">${escapeHtml(status.label)}</span>${iconHtml(statusIcon)}`
     : escapeHtml(status.label);
   const hasLatencyHistory = ['good', 'warning', 'bad'].includes(status.state)
-    && delayHistoryForNode(node).length > 0;
-  const historyData = hasLatencyHistory ? 'data-mihomo-delay-history="1" data-tooltip-silent="1"' : '';
-  const tooltipData = hasLatencyHistory ? '' : `data-tooltip="${escapeHtml(status.tooltip)}"`;
+    || status.state === 'stale';
+  const hasHistoryEntries = hasLatencyHistory && delayHistoryForNode(node).length > 0;
+  const historyData = hasHistoryEntries ? 'data-mihomo-delay-history="1" data-tooltip-silent="1"' : '';
+  const tooltipData = hasHistoryEntries ? '' : `data-tooltip="${escapeHtml(status.tooltip)}"`;
   return checking
     ? `<button type="button" class="xk-mihomo-node-probe is-pending" ${probeData}
         aria-label="Проверяем задержку узла ${escapeHtml(node.name)}" aria-busy="true" data-tooltip-silent="1" disabled>${iconHtml('loading')}</button>`
@@ -531,9 +632,12 @@ function renderNode(group, node) {
   const checking = nodeDelayResult(group, node)?.state === 'pending';
   const selectable = !!group.selectable && SELECTABLE_TYPES.has(String(group.type || '').toLowerCase());
   const effectiveNode = effectiveDelayNode(node);
-  const alive = nodeDelayResult(group, node)?.state === 'done' || effectiveNode.availability === 'available' || effectiveNode.alive === true
+  const alive = nodeDelayResult(group, node)?.state === 'done'
+    || (isPayloadFresh() && (effectiveNode.availability === 'available' || effectiveNode.alive === true))
     ? 'доступен'
-    : (effectiveNode.availability === 'unavailable' || effectiveNode.alive === false ? 'недоступен' : 'нет данных');
+    : (isPayloadFresh() && (effectiveNode.availability === 'unavailable' || effectiveNode.alive === false)
+      ? 'недоступен'
+      : 'нет данных');
   const countryCode = nodeCountryCode(node.name);
   const displayName = nodeDisplayName(node, countryCode);
   const protocol = [node.type || 'unknown', node.network, node.security].filter(Boolean).join(' · ');
@@ -556,11 +660,13 @@ function renderNode(group, node) {
 
 function groupSummary(group) {
   const nodes = Array.isArray(group.nodes) ? group.nodes : [];
-  const aliveCount = nodes.filter((node) => node.alive === true).length;
   const selectable = !!group.selectable && SELECTABLE_TYPES.has(String(group.type || '').toLowerCase());
   const automatic = AUTOMATIC_TYPES.has(String(group.type || '').toLowerCase());
   const mode = automatic ? (group.fixed ? 'зафиксирован' : 'автоматически') : (selectable ? 'ручной выбор' : 'автоматически');
-  return `${group.type || 'Unknown'} · ${mode} · ${aliveCount}/${nodes.length} доступны`;
+  const availability = isPayloadFresh()
+    ? `${nodes.filter((node) => node.alive === true).length}/${nodes.length} доступны`
+    : `${nodes.length} узлов · нет актуальных данных`;
+  return `${group.type || 'Unknown'} · ${mode} · ${availability}`;
 }
 
 function groupIconHtml(group) {
@@ -622,6 +728,7 @@ function renderGroup(group) {
 function render() {
   if (!root) return;
   hideDelayHistory();
+  scheduleDelayFreshnessRender();
   const list = document.getElementById('mihomo-clash-groups-list');
   const count = document.getElementById('mihomo-clash-groups-count');
   const hiddenToggle = document.getElementById('mihomo-clash-show-hidden');
@@ -759,6 +866,7 @@ export async function refreshMihomoClashGroups() {
   try {
     const next = await fetchMihomoClashGroups({ signal: controller?.signal });
     if (!active || sequence !== requestSequence) return false;
+    payloadLoadedAt = Date.now();
     payload = next && typeof next === 'object' ? next : { groups: [] };
     seedDelayHistories(groups());
     if (!disclosureSeeded) {
@@ -907,12 +1015,16 @@ function delayFailureState(error) {
 
 function setTargetResult(target, result) {
   if (!delayRun || !target?.key) return;
-  delayRun.results.set(target.key, result);
-  groupDelays.set(target.key, result);
-  if (result.state === 'done') {
-    latestDelays.set(target.identity, result);
+  const measuredAt = result?.state === 'pending'
+    ? 0
+    : measurementTimestamp(result?.measuredAt, Date.now());
+  const timedResult = { ...result, measuredAt };
+  delayRun.results.set(target.key, timedResult);
+  groupDelays.set(target.key, timedResult);
+  if (timedResult.state === 'done') {
+    latestDelays.set(target.identity, timedResult);
     timeoutCounts.delete(target.key);
-  } else if (result.state === 'timeout') {
+  } else if (timedResult.state === 'timeout') {
     timeoutCounts.set(
       target.key,
       Math.min(TIMEOUT_HIDE_THRESHOLD, (timeoutCounts.get(target.key) || 0) + 1),
@@ -1217,7 +1329,10 @@ export function activateMihomoClashGroups(nextCapabilities = {}) {
   if (!initMihomoClashGroups()) return false;
   active = true;
   capabilities = nextCapabilities || {};
-  if (!payload) void refreshMihomoClashGroups();
+  // Re-read Mihomo whenever the operator returns to Clash API. This mirrors
+  // the useful part of Zashboard's lifecycle and updates alive/group state;
+  // the freshness TTL still prevents old core history from looking current.
+  void refreshMihomoClashGroups();
   return true;
 }
 
@@ -1226,6 +1341,7 @@ export function deactivateMihomoClashGroups() {
   abortLoad();
   cancelDelayQueue();
   delayRun = null;
+  clearDelayFreshnessTimer();
   hideDelayHistory();
   selection = null;
   render();
