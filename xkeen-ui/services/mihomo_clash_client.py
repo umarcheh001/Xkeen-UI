@@ -92,7 +92,7 @@ MIHOMO_CLASH_ENDPOINTS: Mapping[str, MihomoClashEndpoint] = MappingProxyType(
         "group_delay": MihomoClashEndpoint("GET", "/group/{name}/delay", 8.0, 2 * 1024 * 1024),
         "provider_proxy_delay": MihomoClashEndpoint(
             "GET",
-            "/providers/proxies/{provider}/proxies/{name}/healthcheck",
+            "/providers/proxies/{provider}/{name}/healthcheck",
             8.0,
             512 * 1024,
         ),

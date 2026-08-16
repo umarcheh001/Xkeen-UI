@@ -18102,6 +18102,22 @@ body.panel-page .xk-mihomo-groups-count {
   white-space: nowrap;
 }
 
+body.panel-page .xk-mihomo-delay-summary {
+  margin: 7px 0 0;
+  padding: 6px 8px;
+  border: 1px solid var(--op-border);
+  border-radius: 6px;
+  background: var(--op-surface);
+  color: var(--op-muted);
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-variant-numeric: tabular-nums;
+}
+
+body.panel-page .xk-mihomo-delay-summary[data-tone="success"] { color: var(--op-success); }
+body.panel-page .xk-mihomo-delay-summary[data-tone="warning"] { color: var(--op-warning); }
+body.panel-page .xk-mihomo-delay-summary[data-tone="danger"] { color: var(--op-danger); }
+body.panel-page .xk-mihomo-delay-summary[hidden] { display: none !important; }
+
 /* The legacy base sheet makes inline SVG block-level. Keep all labelled
  * groups actions on a single baseline, including the collapse control. */
 body.panel-page :is(#mihomo-clash-test-visible, .xk-mihomo-groups-collapse, .xk-mihomo-group-test) {
@@ -18572,6 +18588,80 @@ body.panel-page .xk-mihomo-node-delay[data-delay-tone="failed"],
 body.panel-page .xk-mihomo-node-delay[data-delay-tone="unavailable"],
 body.panel-page .xk-mihomo-node-delay[data-delay-tone="timeout"] {
   color: var(--op-danger) !important;
+}
+
+body.panel-page .xk-mihomo-delay-history-popover {
+  position: fixed;
+  z-index: 2147483001;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 238px;
+  max-width: min(330px, calc(100vw - 20px));
+  max-height: min(390px, calc(100vh - 20px));
+  padding: 9px 10px 8px;
+  overflow: auto;
+  border: 1px solid var(--op-border-strong);
+  border-radius: 8px;
+  background: var(--op-surface-2);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .34);
+  color: var(--op-text);
+  pointer-events: none;
+}
+
+body.panel-page .xk-mihomo-delay-history-popover[hidden] {
+  display: none !important;
+}
+
+body.panel-page .xk-mihomo-delay-history-title {
+  margin-bottom: 6px;
+  color: var(--op-text);
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 700;
+}
+
+body.panel-page .xk-mihomo-delay-history-list {
+  display: grid;
+  gap: 3px;
+}
+
+body.panel-page .xk-mihomo-delay-history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 14px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
+
+body.panel-page .xk-mihomo-delay-history-row time {
+  overflow: hidden;
+  color: var(--op-data-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page .xk-mihomo-delay-history-row strong {
+  color: var(--op-muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+body.panel-page .xk-mihomo-delay-history-row strong[data-delay-tone="good"] { color: var(--op-success); }
+body.panel-page .xk-mihomo-delay-history-row strong[data-delay-tone="warning"] { color: var(--op-warning); }
+body.panel-page .xk-mihomo-delay-history-row strong[data-delay-tone="bad"] { color: var(--op-danger); }
+
+body.panel-page .xk-mihomo-delay-history-empty,
+body.panel-page .xk-mihomo-delay-history-hint {
+  color: var(--op-muted);
+  font-size: calc(9.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .xk-mihomo-delay-history-hint {
+  margin-top: 7px;
+  padding-top: 6px;
+  border-top: 1px solid var(--op-border);
 }
 
 @media (prefers-reduced-motion: reduce) {

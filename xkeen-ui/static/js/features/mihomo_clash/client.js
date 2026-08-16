@@ -166,7 +166,9 @@ export function testMihomoClashDelay(scope, name, options = {}) {
       ...(options.provider ? { provider: String(options.provider) } : {}),
     }),
     credentials: 'same-origin',
-    timeoutMs: 12000,
+    // The backend may retry a transient Google probe failure once through the
+    // allow-listed Cloudflare preset while holding the same guarded action.
+    timeoutMs: 18000,
     retry: 0,
     signal: options.signal,
   });

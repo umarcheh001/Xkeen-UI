@@ -174,6 +174,7 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
             'id="mihomo-clash-groups-sort"',
             'id="mihomo-clash-disconnect-after-select"',
             'id="mihomo-clash-show-timeout-hidden"',
+            'id="mihomo-clash-delay-summary"',
             'class="dt-switch xk-mihomo-groups-hidden-toggle"',
             'dt-switch-slider',
             'data-mihomo-delay-visible',
@@ -189,6 +190,12 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
         "disconnect_affected",
         "provider-proxy",
         "groupNodeQueue",
+        "groupDelayQueue",
+        "scope: 'group'",
+        "nodeQueueFromGroups",
+        "buildDelaySummary",
+        "fallbackItems",
+        "Cloudflare fallback",
         "delayKey(groupName, name, provider = '')",
         "latestDelayKey(name, provider = '')",
         "latestDelays.get(latestDelayKey(node.name, node.provider))",
@@ -201,6 +208,7 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
         "queueItems = [...items]",
         "`Проверка ${Math.min(progress.completed, progress.total)}/${progress.total}`",
         "xk-mihomo-delay-spinner",
+        ".xk-mihomo-delay-summary",
         "matchingCards",
         "is-pending",
         "selection = { group, node",
@@ -354,6 +362,10 @@ def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
     assert 'xk-mihomo-group-icon--default' in groups
     assert "iconHtml('dns', 'xk-mihomo-group-default-icon')" in groups
     assert 'data-tooltip-silent="1"' in groups
+    assert 'MAX_DELAY_HISTORY = 10' in groups
+    assert "delayHistoryPopover.id = 'mihomo-clash-delay-history-popover'" in groups
+    assert 'class="xk-mihomo-delay-history-row"' in groups
+    assert 'rememberDelayMeasurement(target.identity' in groups
     assert "${collapsed ? '' : `<button type=\"button\" class=\"btn-secondary xk-mihomo-group-test\"" in groups
     assert 'setMessage(' not in groups
     assert 'mihomo-clash-groups-message' not in markup
@@ -376,6 +388,8 @@ def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
     assert 'background: var(--op-accent-soft);' in css
     assert '[data-delay-tone="unavailable"]' in css
     assert 'body.panel-page .xk-mihomo-node-probe:focus-visible' in css
+    assert 'body.panel-page .xk-mihomo-delay-history-popover' in css
+    assert 'body.panel-page .xk-mihomo-delay-history-row strong[data-delay-tone="good"]' in css
     assert 'xk-sub-pingall-spin' in css
     assert 'data-mihomo-delay-testing="true"' in css
     assert 'xk-mihomo-delay-action-pulse' not in css

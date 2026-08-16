@@ -21,6 +21,7 @@ MAX_GROUPS = 256
 MAX_GROUP_NODES = 1024
 MAX_CONNECTION_ROWS = 250
 MAX_DELAY_RESULTS = 1024
+MAX_DELAY_HISTORY = 10
 MAX_RULES = 4096
 MAX_PROVIDERS = 512
 MAX_LOG_FIELDS = 32
@@ -167,10 +168,18 @@ def _string_list(value: Any, *, limit: int = 256, item_limit: int = 256) -> list
     return result
 
 
-def _last_delay(proxy: Mapping[str, Any]) -> int | None:
+def _delay_history(proxy: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Return a small, display-safe tail of Mihomo's latency history.
+
+    Mihomo keeps timestamped health-check results on each proxy.  The panel only
+    needs the recent tail for its hover card, so do not forward the unbounded raw
+    array or any unknown fields an API-compatible core may add to its entries.
+    """
+
     history = proxy.get("history")
     if not isinstance(history, Sequence) or isinstance(history, (str, bytes, bytearray)):
-        return None
+        return []
+    result: list[dict[str, Any]] = []
     for entry in reversed(history):
         item = _mapping(entry)
         if "delay" not in item:
@@ -179,8 +188,15 @@ def _last_delay(proxy: Mapping[str, Any]) -> int | None:
             delay = int(item.get("delay"))
         except (TypeError, ValueError, OverflowError):
             continue
-        return max(0, delay)
-    return None
+        normalized: dict[str, Any] = {"delay_ms": max(0, delay)}
+        measured_at = _text(item.get("time"), 96)
+        if measured_at:
+            normalized["measured_at"] = measured_at
+        result.append(normalized)
+        if len(result) >= MAX_DELAY_HISTORY:
+            break
+    result.reverse()
+    return result
 
 
 def build_mihomo_clash_status_dto(
@@ -283,6 +299,7 @@ def _node_dto(
 
     alive = _optional_bool(raw.get("alive"))
     availability = "available" if alive is True else ("unavailable" if alive is False else "unknown")
+    delay_history = _delay_history(raw)
     return {
         "name": _text(raw.get("name") or name, 256),
         "type": _text(raw.get("type"), 64),
@@ -293,7 +310,8 @@ def _node_dto(
         "provider": provider,
         "provider_candidates": providers,
         "provider_ambiguous": not explicit_provider and len(providers) > 1,
-        "delay_ms": _last_delay(raw),
+        "delay_ms": delay_history[-1]["delay_ms"] if delay_history else None,
+        "delay_history": delay_history,
         "server": _text(detail_value("server"), 256),
         "port": _optional_nonnegative_int(detail_value("port")),
         "network": _text(detail_value("network"), 64),

@@ -1200,11 +1200,36 @@ def create_mihomo_clash_blueprint(
         if unavailable:
             lease.release()
             return unavailable
-        try:
+        effective_preset = preset
+        fallback_used = False
+
+        def _request_delay(delay_preset: str):
             if scope == "provider-proxy":
-                result = client.request_provider_proxy_delay(provider, name, preset=preset)
-            else:
-                result = client.request_delay(scope, name, preset=preset)
+                return client.request_provider_proxy_delay(provider, name, preset=delay_preset)
+            return client.request_delay(scope, name, preset=delay_preset)
+
+        try:
+            try:
+                result = _request_delay(preset)
+            except MihomoClashClientError as primary_error:
+                # A second allow-listed target helps when the probe service or
+                # its route is temporarily unavailable. Never retry semantic
+                # failures such as 404/authorization/invalid payloads.
+                fallback_preset = "cloudflare" if preset == "google" else None
+                if (
+                    fallback_preset is None
+                    or not (
+                        primary_error.code in {"upstream_timeout", "upstream_unreachable"}
+                        or (
+                            primary_error.code == "upstream_http_error"
+                            and primary_error.retryable
+                        )
+                    )
+                ):
+                    raise
+                effective_preset = fallback_preset
+                fallback_used = True
+                result = _request_delay(fallback_preset)
         except MihomoClashClientError as exc:
             _audit_action(
                 "delay",
@@ -1251,7 +1276,9 @@ def create_mihomo_clash_blueprint(
                 code="upstream_delay_invalid",
             )
         payload["ok"] = True
-        _audit_action("delay", True, scope=scope, preset=preset)
+        payload["effective_preset"] = effective_preset
+        payload["fallback_used"] = fallback_used
+        _audit_action("delay", True, scope=scope, preset=effective_preset)
         return jsonify(payload), 200
 
     @bp.get("/api/mihomo/clash/connections")

@@ -149,8 +149,36 @@ def test_proxy_groups_dto_retains_order_and_provider_enrichment():
     assert auto["nodes"][1]["provider_candidates"] == ["demo-provider"]
     assert auto["nodes"][1]["provider_ambiguous"] is False
     assert auto["nodes"][0]["delay_ms"] == 87
+    assert auto["nodes"][0]["delay_history"] == [
+        {"measured_at": "2026-08-09T16:00:00Z", "delay_ms": 87}
+    ]
     assert auto["nodes"][0]["availability"] == "available"
     assert auto["nodes"][1]["availability"] == "unavailable"
+
+
+def test_proxy_groups_dto_bounds_and_sanitizes_delay_history():
+    from services.mihomo_clash_dto import build_mihomo_clash_proxy_groups_dto
+
+    proxies = fixture("proxies.json")
+    proxies["proxies"]["node-a"]["history"] = [
+        {
+            "time": f"2026-08-16T12:00:{index:02d}Z",
+            "delay": index * 10,
+            "secret": "must-not-leak",
+        }
+        for index in range(12)
+    ] + [{"time": "ignored", "delay": "not-a-number"}]
+
+    node = build_mihomo_clash_proxy_groups_dto(proxies)["groups"][0]["nodes"][0]
+
+    assert len(node["delay_history"]) == 10
+    assert node["delay_history"][0] == {
+        "measured_at": "2026-08-16T12:00:02Z",
+        "delay_ms": 20,
+    }
+    assert node["delay_history"][-1]["delay_ms"] == 110
+    assert node["delay_ms"] == 110
+    assert "secret" not in json.dumps(node["delay_history"])
 
 
 def test_proxy_groups_dto_exposes_only_safe_https_group_icon_urls():

@@ -798,9 +798,59 @@ def test_delay_route_forwards_only_scope_name_and_preset_id():
         "scope": "proxy",
         "name": "node-a",
         "preset": "google",
+        "effective_preset": "google",
+        "fallback_used": False,
         "results": [{"name": "node-a", "delay_ms": 87}],
         "truncated": False,
     }
+    assert client.delays == [("proxy", "node-a", "google")]
+
+
+def test_delay_route_retries_transient_google_failure_with_allowlisted_cloudflare():
+    class FallbackClient(StubClient):
+        def request_delay(self, scope: str, name: str, *, preset: str):
+            self.delays.append((scope, name, preset))
+            if preset == "google":
+                raise MihomoClashClientError(
+                    "upstream_timeout",
+                    "private target timed out",
+                    status=504,
+                    retryable=True,
+                )
+            return MihomoClashJSONResponse({"delay": 91}, 200, 3, 20)
+
+    client = FallbackClient()
+    response = make_app(ready_discovery(), client).test_client().post(
+        "/api/mihomo/clash/delay",
+        json={"scope": "proxy", "name": "node-a", "preset": "google"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["results"] == [{"name": "node-a", "delay_ms": 91}]
+    assert response.get_json()["effective_preset"] == "cloudflare"
+    assert response.get_json()["fallback_used"] is True
+    assert client.delays == [
+        ("proxy", "node-a", "google"),
+        ("proxy", "node-a", "cloudflare"),
+    ]
+
+
+def test_delay_route_does_not_retry_semantic_google_failure():
+    client = StubClient(
+        error=MihomoClashClientError(
+            "endpoint_not_supported",
+            "private upstream path",
+            status=502,
+            upstream_status=404,
+        )
+    )
+    response = make_app(ready_discovery(), client).test_client().post(
+        "/api/mihomo/clash/delay",
+        json={"scope": "proxy", "name": "node-a", "preset": "google"},
+    )
+
+    assert response.status_code == 502
+    assert response.get_json()["code"] == "endpoint_not_supported"
     assert client.delays == [("proxy", "node-a", "google")]
 
 

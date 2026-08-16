@@ -14,6 +14,8 @@ const MAX_DELAY_CONCURRENCY = 1;
 const MAX_BUSY_RETRIES = 2;
 const DELAY_BATCH_CADENCE_MS = 120;
 const TIMEOUT_HIDE_THRESHOLD = 3;
+const MAX_DELAY_HISTORY = 10;
+const DELAY_HISTORY_HOVER_MS = 350;
 const AUTOMATIC_TYPES = new Set(['urltest', 'fallback', 'smart']);
 
 let root = null;
@@ -28,6 +30,7 @@ let capabilities = {};
 let sortMode = 'config';
 let showTimeoutHidden = false;
 let delayRun = null;
+let lastDelaySummary = null;
 const collapsedGroups = new Set();
 let disclosureSeeded = false;
 // A probe result belongs to the card in the group that initiated it. Keep
@@ -35,7 +38,11 @@ let disclosureSeeded = false;
 // Mihomo healthcheck value after the queue has finished.
 const groupDelays = new Map();
 const latestDelays = new Map();
+const delayHistories = new Map();
 const timeoutCounts = new Map();
+let delayHistoryPopover = null;
+let delayHistoryOwner = null;
+let delayHistoryTimer = 0;
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -92,6 +99,143 @@ function latestDelayKey(name, provider = '') {
   return `${String(provider || '')}\u0000${String(name || '')}`;
 }
 
+function normalizedDelayHistory(history) {
+  if (!Array.isArray(history)) return [];
+  return history.reduce((items, entry) => {
+    const delay = Number(entry?.delay_ms);
+    if (!Number.isFinite(delay)) return items;
+    items.push({
+      delay: Math.max(0, Math.round(delay)),
+      measuredAt: String(entry?.measured_at || ''),
+    });
+    return items;
+  }, []).slice(-MAX_DELAY_HISTORY);
+}
+
+function delayHistoryForNode(node) {
+  const identity = latestDelayKey(node?.name, node?.provider);
+  const measured = delayHistories.get(identity) || normalizedDelayHistory(node?.delay_history);
+  if (measured.length) return measured;
+  return Number.isFinite(node?.delay_ms)
+    ? [{ delay: Number(node.delay_ms), measuredAt: '' }]
+    : [];
+}
+
+function rememberDelayMeasurement(identity, delay, measuredAt = new Date().toISOString()) {
+  if (!identity || !Number.isFinite(delay)) return;
+  const existing = delayHistories.get(identity) || [];
+  const next = [...existing, {
+    delay: Math.max(0, Math.round(Number(delay))),
+    measuredAt: String(measuredAt || ''),
+  }].slice(-MAX_DELAY_HISTORY);
+  delayHistories.set(identity, next);
+}
+
+function seedDelayHistories(groupItems) {
+  for (const group of groupItems || []) {
+    for (const node of group.nodes || []) {
+      const history = normalizedDelayHistory(node.delay_history);
+      const identity = latestDelayKey(node.name, node.provider);
+      if (!history.length) continue;
+      const combined = [...(delayHistories.get(identity) || []), ...history];
+      const unique = combined.filter((entry, index, entries) => (
+        entries.findIndex((candidate) => (
+          candidate.delay === entry.delay && candidate.measuredAt === entry.measuredAt
+        )) === index
+      ));
+      unique.sort((left, right) => {
+        const leftTime = Date.parse(left.measuredAt);
+        const rightTime = Date.parse(right.measuredAt);
+        if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) return 0;
+        return leftTime - rightTime;
+      });
+      delayHistories.set(identity, unique.slice(-MAX_DELAY_HISTORY));
+    }
+  }
+}
+
+function formatDelayHistoryTime(value) {
+  if (!value) return 'время неизвестно';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  const pad = (number) => String(number).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+    + ` ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function ensureDelayHistoryPopover() {
+  if (delayHistoryPopover?.isConnected) return delayHistoryPopover;
+  delayHistoryPopover = document.createElement('div');
+  delayHistoryPopover.id = 'mihomo-clash-delay-history-popover';
+  delayHistoryPopover.className = 'xk-mihomo-delay-history-popover';
+  delayHistoryPopover.setAttribute('role', 'tooltip');
+  delayHistoryPopover.hidden = true;
+  document.body.appendChild(delayHistoryPopover);
+  return delayHistoryPopover;
+}
+
+function hideDelayHistory() {
+  if (delayHistoryTimer) window.clearTimeout(delayHistoryTimer);
+  delayHistoryTimer = 0;
+  delayHistoryOwner?.removeAttribute?.('aria-describedby');
+  delayHistoryOwner = null;
+  if (delayHistoryPopover) delayHistoryPopover.hidden = true;
+}
+
+function positionDelayHistory(owner, popover) {
+  const rect = owner.getBoundingClientRect();
+  const box = popover.getBoundingClientRect();
+  const margin = 10;
+  const gap = 8;
+  const viewportWidth = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 1);
+  const viewportHeight = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 1);
+  const fitsTop = rect.top >= box.height + gap + margin;
+  const position = fitsTop ? 'top' : 'bottom';
+  let left = rect.right - box.width;
+  left = Math.max(margin, Math.min(left, viewportWidth - box.width - margin));
+  let top = position === 'top' ? rect.top - box.height - gap : rect.bottom + gap;
+  top = Math.max(margin, Math.min(top, viewportHeight - box.height - margin));
+  popover.dataset.position = position;
+  popover.style.left = `${Math.round(left)}px`;
+  popover.style.top = `${Math.round(top)}px`;
+}
+
+function showDelayHistory(owner) {
+  if (!owner?.isConnected) return;
+  const provider = String(owner.dataset.provider || '');
+  const group = groups().find((candidate) => candidate.name === String(owner.dataset.group || ''));
+  const node = group?.nodes?.find((candidate) => (
+    candidate.name === String(owner.dataset.node || '')
+    && String(candidate.provider || '') === provider
+  ));
+  if (!node) return;
+  const history = delayHistoryForNode(node);
+  const popover = ensureDelayHistoryPopover();
+  const rows = history.length
+    ? history.map((entry) => `
+      <div class="xk-mihomo-delay-history-row">
+        <time datetime="${escapeHtml(entry.measuredAt)}">${escapeHtml(formatDelayHistoryTime(entry.measuredAt))}</time>
+        <strong data-delay-tone="${escapeHtml(delayTone(entry.delay))}">${escapeHtml(entry.delay)} мс</strong>
+      </div>`).join('')
+    : '<div class="xk-mihomo-delay-history-empty">История измерений пока пуста.</div>';
+  popover.innerHTML = `
+    <div class="xk-mihomo-delay-history-title">История задержки</div>
+    <div class="xk-mihomo-delay-history-list">${rows}</div>
+    <div class="xk-mihomo-delay-history-hint">Нажмите на значение, чтобы проверить снова.</div>`;
+  popover.hidden = false;
+  owner.setAttribute('aria-describedby', popover.id);
+  positionDelayHistory(owner, popover);
+}
+
+function scheduleDelayHistory(owner, immediate = false) {
+  hideDelayHistory();
+  delayHistoryOwner = owner;
+  delayHistoryTimer = window.setTimeout(() => {
+    delayHistoryTimer = 0;
+    if (delayHistoryOwner === owner) showDelayHistory(owner);
+  }, immediate ? 0 : DELAY_HISTORY_HOVER_MS);
+}
+
 function nodeDelayResult(group, node) {
   const key = delayKey(group.name, node.name, node.provider);
   return (delayRun && delayRun.results.get(key))
@@ -112,6 +256,27 @@ function nodeProbeStatus(group, node) {
       state: 'failed',
       label: 'ошибка',
       tooltip: 'Ручная проверка задержки не вернула пригодный результат. Нажмите, чтобы повторить.',
+    };
+  }
+  if (result?.state === 'unsupported') {
+    return {
+      state: 'failed',
+      label: 'не поддерживается',
+      tooltip: 'Текущий Mihomo не поддерживает этот endpoint проверки. Обновите core или повторите через групповой тест.',
+    };
+  }
+  if (result?.state === 'unreachable') {
+    return {
+      state: 'failed',
+      label: 'API недоступен',
+      tooltip: 'Mihomo API или оба разрешённых адреса проверки временно недоступны. Нажмите, чтобы повторить.',
+    };
+  }
+  if (result?.state === 'invalid') {
+    return {
+      state: 'failed',
+      label: 'нет результата',
+      tooltip: 'Mihomo ответил без пригодного значения задержки. Нажмите, чтобы повторить.',
     };
   }
   if (result?.state === 'cancelled') {
@@ -313,12 +478,16 @@ function renderNodeProbe(group, node) {
   const content = statusIcon
     ? `<span class="xk-visually-hidden">${escapeHtml(status.label)}</span>${iconHtml(statusIcon)}`
     : escapeHtml(status.label);
+  const hasLatencyHistory = ['good', 'warning', 'bad'].includes(status.state)
+    && delayHistoryForNode(node).length > 0;
+  const historyData = hasLatencyHistory ? 'data-mihomo-delay-history="1" data-tooltip-silent="1"' : '';
+  const tooltipData = hasLatencyHistory ? '' : `data-tooltip="${escapeHtml(status.tooltip)}"`;
   return checking
     ? `<button type="button" class="xk-mihomo-node-probe is-pending" ${probeData}
         aria-label="Проверяем задержку узла ${escapeHtml(node.name)}" aria-busy="true" data-tooltip-silent="1" disabled>${iconHtml('loading')}</button>`
     : `<button type="button" class="xk-mihomo-node-probe xk-mihomo-node-delay" ${probeData}
         data-delay-tone="${escapeHtml(status.state)}" aria-label="${escapeHtml(probeLabel)}: ${escapeHtml(status.label)}"
-        data-tooltip="${escapeHtml(status.tooltip)}">${content}</button>`;
+        ${historyData} ${tooltipData}>${content}</button>`;
 }
 
 function renderNode(group, node) {
@@ -417,11 +586,13 @@ function renderGroup(group) {
 
 function render() {
   if (!root) return;
+  hideDelayHistory();
   const list = document.getElementById('mihomo-clash-groups-list');
   const count = document.getElementById('mihomo-clash-groups-count');
   const hiddenToggle = document.getElementById('mihomo-clash-show-hidden');
   const collapseButton = document.getElementById('mihomo-clash-groups-collapse');
   const timeoutButton = document.getElementById('mihomo-clash-show-timeout-hidden');
+  const delaySummary = document.getElementById('mihomo-clash-delay-summary');
   if (!list) return;
   const visibleGroups = filteredGroups();
   const visibleNodes = visibleGroups.reduce((sum, group) => sum + (group.nodes || []).length, 0);
@@ -442,6 +613,11 @@ function render() {
     timeoutButton.setAttribute('aria-pressed', showTimeoutHidden ? 'true' : 'false');
     const value = timeoutButton.querySelector('span');
     if (value) value.textContent = String(hiddenTimeoutCount);
+  }
+  if (delaySummary) {
+    delaySummary.hidden = !lastDelaySummary;
+    delaySummary.textContent = lastDelaySummary?.text || '';
+    delaySummary.dataset.tone = lastDelaySummary?.tone || '';
   }
   if (collapseButton) {
     const allCollapsed = visibleGroups.length > 0 && visibleGroups.every((group) => collapsedGroups.has(group.name));
@@ -549,6 +725,7 @@ export async function refreshMihomoClashGroups() {
     const next = await fetchMihomoClashGroups({ signal: controller?.signal });
     if (!active || sequence !== requestSequence) return false;
     payload = next && typeof next === 'object' ? next : { groups: [] };
+    seedDelayHistories(groups());
     if (!disclosureSeeded) {
       for (const group of groups()) collapsedGroups.add(group.name);
       disclosureSeeded = true;
@@ -567,6 +744,7 @@ export async function refreshMihomoClashGroups() {
 function replaceGroup(group) {
   if (!payload || !Array.isArray(payload.groups) || !group || !group.name) return;
   payload.groups = payload.groups.map((item) => item.name === group.name ? { ...item, ...group } : item);
+  seedDelayHistories([group]);
 }
 
 async function selectProxy(group, node) {
@@ -638,115 +816,208 @@ async function unfixProxy(groupName) {
   }
 }
 
-function delayKeysForProbe(scope, name, provider = '', groupName = '') {
-  if (scope !== 'group') return [delayKey(groupName, name, provider)];
-  const group = groups().find((item) => item.name === name);
-  return group && Array.isArray(group.nodes)
-    ? group.nodes.map((node) => delayKey(group.name, node.name, node.provider))
-    : [];
+function delayTarget(groupName, node) {
+  return {
+    group: String(groupName || ''),
+    name: String(node?.name || ''),
+    provider: String(node?.provider || ''),
+    key: delayKey(groupName, node?.name, node?.provider),
+    identity: latestDelayKey(node?.name, node?.provider),
+  };
 }
 
-function applyDelayResults(results, provider = '', groupName = '') {
-  if (!delayRun) return;
-  for (const item of Array.isArray(results) ? results : []) {
-    if (!item || !item.name || !Number.isFinite(item.delay_ms)) continue;
-    const group = groupName ? groups().find((candidate) => candidate.name === groupName) : null;
-    const matchingNodes = group && Array.isArray(group.nodes)
-      ? group.nodes.filter((node) => node.name === item.name)
-      : [];
-    const keys = matchingNodes.length
-      ? matchingNodes.map((node) => delayKey(group.name, node.name, node.provider))
-      : [delayKey(groupName, item.name, provider)];
-    for (const key of keys) {
-      delayRun.results.set(key, { state: 'done', delay: Number(item.delay_ms) });
-    }
-    if (matchingNodes.length) {
-      for (const node of matchingNodes) {
-        latestDelays.set(latestDelayKey(node.name, node.provider), { state: 'done', delay: Number(item.delay_ms) });
+function uniqueTargets(targets) {
+  const seen = new Set();
+  return (targets || []).filter((target) => {
+    if (!target?.key || seen.has(target.key)) return false;
+    seen.add(target.key);
+    return true;
+  });
+}
+
+function nodeQueueFromGroups(groupItems) {
+  const byIdentity = new Map();
+  for (const group of groupItems || []) {
+    for (const node of group.nodes || []) {
+      const target = delayTarget(group.name, node);
+      if (!target.name) continue;
+      let item = byIdentity.get(target.identity);
+      if (!item) {
+        item = {
+          scope: target.provider ? 'provider-proxy' : 'proxy',
+          name: target.name,
+          provider: target.provider,
+          targets: [],
+        };
+        byIdentity.set(target.identity, item);
       }
-    } else {
-      latestDelays.set(latestDelayKey(item.name, provider), { state: 'done', delay: Number(item.delay_ms) });
+      item.targets.push(target);
     }
+  }
+  return [...byIdentity.values()].map((item) => ({ ...item, targets: uniqueTargets(item.targets) }));
+}
+
+function delayFailureState(error) {
+  const code = errorCode(error) || String(error?.code || '');
+  if (
+    code === 'upstream_timeout'
+    || error?.name === 'TimeoutError'
+    || error?.isTimeout === true
+  ) return 'timeout';
+  if (code === 'endpoint_not_supported') return 'unsupported';
+  if (code === 'upstream_unreachable') return 'unreachable';
+  if (code === 'upstream_delay_invalid') return 'invalid';
+  return 'failed';
+}
+
+function setTargetResult(target, result) {
+  if (!delayRun || !target?.key) return;
+  delayRun.results.set(target.key, result);
+  groupDelays.set(target.key, result);
+  if (result.state === 'done') {
+    latestDelays.set(target.identity, result);
+    timeoutCounts.delete(target.key);
+  } else if (result.state === 'timeout') {
+    timeoutCounts.set(
+      target.key,
+      Math.min(TIMEOUT_HIDE_THRESHOLD, (timeoutCounts.get(target.key) || 0) + 1),
+    );
+  } else {
+    timeoutCounts.delete(target.key);
   }
 }
 
-async function probeDelay(scope, name, provider = '', groupName = '') {
-  if (!delayRun || delayRun.cancelled) return;
-  const keys = delayKeysForProbe(scope, name, provider, groupName);
-  for (const key of keys) delayRun.results.set(key, { state: 'pending' });
+function applyDelayResults(results, item) {
+  if (!delayRun) return new Set();
+  const completedIdentities = new Set();
+  for (const result of Array.isArray(results) ? results : []) {
+    if (!result?.name || !Number.isFinite(result.delay_ms)) continue;
+    const matching = (item.targets || []).filter((target) => target.name === result.name);
+    for (const target of matching) {
+      setTargetResult(target, { state: 'done', delay: Number(result.delay_ms) });
+      if (!completedIdentities.has(target.identity)) {
+        rememberDelayMeasurement(target.identity, Number(result.delay_ms));
+      }
+      completedIdentities.add(target.identity);
+    }
+  }
+  return completedIdentities;
+}
+
+function syncDelayProgress() {
+  if (!delayRun) return;
+  let completed = 0;
+  for (const targets of delayRun.identities.values()) {
+    if (targets.every((target) => delayRun.results.get(target.key)?.state !== 'pending')) completed += 1;
+  }
+  delayRun.completed = completed;
+}
+
+async function requestDelay(item) {
+  let busyRetries = 0;
+  while (delayRun && !delayRun.cancelled) {
+    try {
+      return await testMihomoClashDelay(item.scope, item.name, {
+        provider: item.provider,
+        signal: delayRun.controller?.signal,
+      });
+    } catch (error) {
+      if (errorCode(error) !== 'action_busy' || busyRetries >= MAX_BUSY_RETRIES) throw error;
+      busyRetries += 1;
+      await wait(150 + (busyRetries * 35));
+    }
+  }
+  return null;
+}
+
+async function probeDelay(item, { terminalOnError = true } = {}) {
+  if (!delayRun || delayRun.cancelled) return false;
+  const keys = (item.targets || []).map((target) => target.key);
   try {
-    let result = null;
-    let busyRetries = 0;
-    while (delayRun && !delayRun.cancelled) {
-      try {
-        result = await testMihomoClashDelay(scope, name, { provider, signal: delayRun.controller?.signal });
-        break;
-      } catch (error) {
-        if (errorCode(error) !== 'action_busy' || busyRetries >= MAX_BUSY_RETRIES) throw error;
-        busyRetries += 1;
-        await wait(150 + (busyRetries * 35));
+    const result = await requestDelay(item);
+    if (!delayRun || delayRun.cancelled || !result) return false;
+    if (result.fallback_used === true) delayRun.fallbacks += 1;
+    applyDelayResults(result.results, item);
+    if (item.scope !== 'group') {
+      for (const target of item.targets || []) {
+        if (delayRun.results.get(target.key)?.state === 'pending') {
+          setTargetResult(target, { state: 'invalid' });
+        }
       }
     }
-    if (!delayRun || delayRun.cancelled) return;
-    applyDelayResults(result && result.results, provider, scope === 'group' ? name : groupName);
-    for (const key of keys) {
-      if (!delayRun.results.has(key) || delayRun.results.get(key).state === 'pending') {
-        delayRun.results.set(key, { state: 'failed' });
-      } else if (delayRun.results.get(key).state === 'done') {
-        timeoutCounts.delete(key);
-      }
-    }
+    return true;
   } catch (error) {
-    if (!delayRun || delayRun.cancelled) return;
-    const timedOut = error && (
-      error.code === 'timeout'
-      || error.name === 'TimeoutError'
-      || error.isTimeout === true
-      || (error.data && error.data.code === 'upstream_timeout')
-    );
-    for (const key of keys) {
-      delayRun.results.set(key, { state: timedOut ? 'timeout' : 'failed' });
-      if (timedOut) timeoutCounts.set(key, Math.min(TIMEOUT_HIDE_THRESHOLD, (timeoutCounts.get(key) || 0) + 1));
-      else timeoutCounts.delete(key);
+    if (!delayRun || delayRun.cancelled) return false;
+    if (terminalOnError) {
+      const state = delayFailureState(error);
+      for (const target of item.targets || []) setTargetResult(target, { state });
     }
+    return false;
   } finally {
-    if (delayRun && !delayRun.cancelled) {
-      for (const key of keys) {
-        const result = delayRun.results.get(key);
-        if (result && result.state !== 'pending') groupDelays.set(key, result);
-      }
-    }
-    if (delayRun) delayRun.completed += 1;
+    syncDelayProgress();
     if (!showTimeoutHidden && keys.some((key) => (timeoutCounts.get(key) || 0) >= TIMEOUT_HIDE_THRESHOLD)) render();
     else renderDelayNodes(keys);
     syncDelayControls();
   }
 }
 
+function buildDelaySummary(finished) {
+  const counts = { done: 0, timeout: 0, skipped: 0, failed: 0 };
+  for (const targets of finished.identities.values()) {
+    const state = finished.results.get(targets[0]?.key)?.state || 'failed';
+    if (state === 'done') counts.done += 1;
+    else if (state === 'timeout') counts.timeout += 1;
+    else if (state === 'cancelled') counts.skipped += 1;
+    else counts.failed += 1;
+  }
+  const elapsedSeconds = Math.max(0, (performance.now() - finished.startedAt) / 1000).toFixed(1);
+  const fallbackCopy = finished.fallbacks ? ` · Cloudflare fallback: ${finished.fallbacks}` : '';
+  return {
+    text: `Успешно: ${counts.done} · Ошибка: ${counts.failed} · Таймаут: ${counts.timeout} · Пропущено: ${counts.skipped} · ${elapsedSeconds} с${fallbackCopy}`,
+    tone: counts.failed || counts.timeout ? (counts.done ? 'warning' : 'danger') : 'success',
+  };
+}
+
 async function runDelayQueue(items, source = {}) {
   if (!active || delayRun || !items.length) return;
   const queueItems = [...items];
-  delayRun = {
-    controller: typeof AbortController === 'function' ? new AbortController() : null,
-    results: new Map(),
-    source,
-    total: queueItems.length,
-    completed: 0,
-    cancelled: false,
-  };
+  const identities = new Map();
+  const results = new Map();
   for (const item of queueItems) {
-    for (const key of delayKeysForProbe(item.scope, item.name, item.provider, item.group)) {
-      delayRun.results.set(key, { state: 'pending' });
+    for (const target of item.targets || []) {
+      const targets = identities.get(target.identity) || [];
+      targets.push(target);
+      identities.set(target.identity, uniqueTargets(targets));
+      results.set(target.key, { state: 'pending' });
     }
   }
-  const affectedKeys = [...delayRun.results.keys()];
-  renderDelayNodes(affectedKeys);
+  delayRun = {
+    controller: typeof AbortController === 'function' ? new AbortController() : null,
+    results,
+    identities,
+    source,
+    total: identities.size,
+    completed: 0,
+    fallbacks: 0,
+    startedAt: performance.now(),
+    cancelled: false,
+  };
+  lastDelaySummary = null;
+  renderDelayNodes([...results.keys()]);
   syncDelayControls();
   let cursor = 0;
   const worker = async () => {
     while (delayRun && !delayRun.cancelled && cursor < queueItems.length) {
       const item = queueItems[cursor++];
-      await probeDelay(item.scope, item.name, item.provider, item.group);
+      if (item.scope === 'group') {
+        await probeDelay(item, { terminalOnError: false });
+        const missingItems = (item.fallbackItems || []).filter((fallbackItem) => (
+          fallbackItem.targets.some((target) => delayRun?.results.get(target.key)?.state === 'pending')
+        ));
+        queueItems.push(...missingItems);
+      } else {
+        await probeDelay(item);
+      }
       if (delayRun && !delayRun.cancelled && cursor < queueItems.length) {
         await wait(DELAY_BATCH_CADENCE_MS);
       }
@@ -755,7 +1026,14 @@ async function runDelayQueue(items, source = {}) {
   const workers = Array.from({ length: Math.min(MAX_DELAY_CONCURRENCY, queueItems.length) }, worker);
   for (const workerPromise of workers) await workerPromise;
   if (!delayRun) return;
+  for (const targets of delayRun.identities.values()) {
+    for (const target of targets) {
+      if (delayRun.results.get(target.key)?.state === 'pending') setTargetResult(target, { state: 'invalid' });
+    }
+  }
+  syncDelayProgress();
   const finished = delayRun;
+  lastDelaySummary = buildDelaySummary(finished);
   delayRun = null;
   render();
   syncDelayControls();
@@ -770,34 +1048,50 @@ function cancelDelayQueue() {
   }
 }
 
-function nodeQueue(nodes, groupName) {
-  const names = new Set();
-  const items = [];
-  for (const node of nodes || []) {
-    const key = delayKey(groupName, node.name, node.provider);
-    if (names.has(key)) continue;
-    names.add(key);
-    items.push(node.provider
-      ? { scope: 'provider-proxy', name: node.name, provider: node.provider, group: groupName }
-      : { scope: 'proxy', name: node.name, group: groupName });
-  }
-  return items;
-}
-
 function visibleNodeQueue() {
-  return filteredGroups().flatMap((group) => (
-    collapsedGroups.has(group.name) && !filterText.trim() ? [] : nodeQueue(group.nodes, group.name)
+  const visibleGroups = filteredGroups().filter((group) => (
+    !collapsedGroups.has(group.name) || filterText.trim()
   ));
+  return nodeQueueFromGroups(visibleGroups);
 }
 
 function groupNodeQueue(name) {
   const group = groups().find((item) => item.name === name);
-  return nodeQueue(group?.nodes || [], group?.name || name);
+  return group ? nodeQueueFromGroups([group]) : [];
+}
+
+function groupDelayQueue(name) {
+  const group = groups().find((item) => item.name === name);
+  if (!group) return [];
+  const fallbackItems = groupNodeQueue(name);
+  const targets = fallbackItems.flatMap((item) => item.targets || []);
+  return [{ scope: 'group', name: group.name, targets, fallbackItems }];
 }
 
 function bind() {
   if (!root || root.dataset.bound === '1') return;
   root.dataset.bound = '1';
+  root.addEventListener('pointerover', (event) => {
+    if (event.pointerType && event.pointerType !== 'mouse') return;
+    const owner = event.target?.closest?.('[data-mihomo-delay-history]');
+    if (!owner || !root.contains(owner) || owner === delayHistoryOwner) return;
+    scheduleDelayHistory(owner);
+  });
+  root.addEventListener('pointerout', (event) => {
+    const owner = event.target?.closest?.('[data-mihomo-delay-history]');
+    if (!owner || owner !== delayHistoryOwner) return;
+    if (event.relatedTarget && owner.contains(event.relatedTarget)) return;
+    hideDelayHistory();
+  });
+  root.addEventListener('focusin', (event) => {
+    const owner = event.target?.closest?.('[data-mihomo-delay-history]');
+    if (owner && root.contains(owner)) scheduleDelayHistory(owner, true);
+  });
+  root.addEventListener('focusout', (event) => {
+    if (event.target?.closest?.('[data-mihomo-delay-history]')) hideDelayHistory();
+  });
+  window.addEventListener('scroll', hideDelayHistory, true);
+  window.addEventListener('resize', hideDelayHistory, true);
   root.addEventListener('input', (event) => {
     if (event.target?.id !== 'mihomo-clash-groups-filter') return;
     filterText = String(event.target.value || '');
@@ -821,6 +1115,7 @@ function bind() {
   root.addEventListener('click', (event) => {
     const target = event.target?.closest?.('[data-mihomo-groups-collapse], .xk-mihomo-group-head, [data-mihomo-group-select], [data-mihomo-group-unfix], [data-mihomo-node-delay], [data-mihomo-group-delay], [data-mihomo-delay-visible], #mihomo-clash-show-timeout-hidden');
     if (!target) return;
+    hideDelayHistory();
     if (target.hasAttribute('data-mihomo-groups-collapse')) {
       const visibleGroups = filteredGroups();
       const shouldExpand = target.dataset.mode === 'expand';
@@ -841,16 +1136,20 @@ function bind() {
     if (target.id === 'mihomo-clash-show-timeout-hidden') { showTimeoutHidden = !showTimeoutHidden; render(); }
     if (target.hasAttribute('data-mihomo-node-delay')) {
       const provider = String(target.dataset.provider || '');
-      void runDelayQueue([provider
-        ? { scope: 'provider-proxy', name: target.dataset.node, provider, group: target.dataset.group }
-        : { scope: 'proxy', name: target.dataset.node, group: target.dataset.group }], {
+      const node = groups()
+        .find((group) => group.name === String(target.dataset.group || ''))
+        ?.nodes?.find((candidate) => candidate.name === String(target.dataset.node || '')
+          && String(candidate.provider || '') === provider);
+      if (!node) return;
+      const item = nodeQueueFromGroups([{ name: target.dataset.group, nodes: [node] }])[0];
+      void runDelayQueue([item], {
         type: 'node',
         node: String(target.dataset.node || ''),
         provider,
       });
     }
     if (target.hasAttribute('data-mihomo-group-delay')) {
-      void runDelayQueue(groupNodeQueue(target.dataset.group), {
+      void runDelayQueue(groupDelayQueue(target.dataset.group), {
         type: 'group',
         group: String(target.dataset.group || ''),
       });
@@ -892,6 +1191,7 @@ export function deactivateMihomoClashGroups() {
   abortLoad();
   cancelDelayQueue();
   delayRun = null;
+  hideDelayHistory();
   selection = null;
   render();
 }

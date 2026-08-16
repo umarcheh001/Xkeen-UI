@@ -354,13 +354,13 @@ def test_provider_proxy_delay_encodes_provider_and_node_segments():
     endpoints = {
         "provider_proxy_delay": MihomoClashEndpoint(
             "GET",
-            "/providers/proxies/{provider}/proxies/{name}/healthcheck",
+            "/providers/proxies/{provider}/{name}/healthcheck",
             2,
             1024,
         )
     }
     expected = (
-        "/providers/proxies/provider%2Fone/proxies/node%2Fone/healthcheck"
+        "/providers/proxies/provider%2Fone/node%2Fone/healthcheck"
         "?url=https%3A%2F%2Fwww.gstatic.com%2Fgenerate_204&timeout=5000&expected=204"
     )
     with tcp_server({expected: (200, "application/json", b'{"delay":42}')}) as (port, handler):

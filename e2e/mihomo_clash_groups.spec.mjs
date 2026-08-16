@@ -29,7 +29,14 @@ function groupsPayload(now = 'node-a', fixed = '', includeReliabilityFixture = f
         hidden: false,
         selectable: true,
         nodes: [
-          { name: 'node-a', type: 'VLESS', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: 82, server: 'edge.example.test', port: 443, network: 'xhttp', security: 'tls', host: 'cdn.example.test', path: '/api/v2/' },
+          {
+            name: 'node-a', type: 'VLESS', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: 82,
+            delay_history: [
+              { measured_at: '2026-08-16T10:15:20Z', delay_ms: 79 },
+              { measured_at: '2026-08-16T10:15:27Z', delay_ms: 82 },
+            ],
+            server: 'edge.example.test', port: 443, network: 'xhttp', security: 'tls', host: 'cdn.example.test', path: '/api/v2/',
+          },
           { name: 'node-b', type: 'Trojan', alive: false, udp: true, provider: 'provider-one', provider_candidates: ['provider-one'], delay_ms: 999 },
           { name: 'DIRECT', type: 'Direct', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: null },
         ],
@@ -282,6 +289,15 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await expect(page.locator('[data-node-name="node-a"]')).toContainText('VLESS · xhttp · tls');
   await expect(page.locator('[data-node-name="node-a"]')).toContainText('edge.example.test:443');
   await expect(page.locator('[data-node-name="node-a"] .xk-mihomo-node-main')).not.toHaveAttribute('data-tooltip');
+  await page.locator('[data-mihomo-node-delay][data-node="node-a"]').hover();
+  await expect(page.locator('#mihomo-clash-delay-history-popover')).toBeVisible();
+  await expect(page.locator('#mihomo-clash-delay-history-popover .xk-mihomo-delay-history-row')).toHaveCount(2);
+  await expect(page.locator('#mihomo-clash-delay-history-popover')).toContainText('2026-08-16');
+  await expect(page.locator('#mihomo-clash-delay-history-popover')).toContainText(':15:20');
+  await expect(page.locator('#mihomo-clash-delay-history-popover')).toContainText('79 мс');
+  await expect(page.locator('#mihomo-clash-delay-history-popover')).toContainText('82 мс');
+  await page.locator('[data-node-name="node-a"] .xk-mihomo-node-main').hover();
+  await expect(page.locator('#mihomo-clash-delay-history-popover')).toBeHidden();
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-node-row').evaluateAll((nodes) => {
     nodes.forEach((node, index) => { node.dataset.renderIdentity = String(index); });
   });
@@ -293,6 +309,9 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   expect(await page.locator('#mihomo-clash-test-visible').evaluate((button) => button.disabled)).toBe(false);
   expect(await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test').evaluate((button) => button.disabled)).toBe(false);
   await expect(page.locator('[data-node-name="node-a"] .xk-mihomo-node-delay')).toHaveText('44 мс');
+  await page.locator('[data-mihomo-node-delay][data-node="node-a"]').hover();
+  await expect(page.locator('#mihomo-clash-delay-history-popover .xk-mihomo-delay-history-row')).toHaveCount(3);
+  await expect(page.locator('#mihomo-clash-delay-history-popover')).toContainText('44 мс');
 
   await page.locator('#mihomo-clash-show-hidden').check();
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('HIDDEN');
@@ -407,6 +426,98 @@ test('visible delay test probes every node beyond the old eight-item limit and r
   await expect.poll(() => probed.length, { timeout: 10_000 }).toBe(12);
   await expect(page.locator('#mihomo-clash-test-visible .xk-action-label')).toHaveText('Тест видимых');
   expect(probed).toEqual(names);
+});
+
+
+test('group delay uses one batch request and probes only results omitted by Mihomo', async ({ page }) => {
+  const data = groupsPayload();
+  const requests = [];
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: data }));
+  await page.route('**/api/mihomo/clash/delay', async (route) => {
+    const body = route.request().postDataJSON();
+    requests.push(body);
+    if (body.scope === 'group') {
+      return route.fulfill({
+        json: {
+          ok: true,
+          schema_version: 1,
+          results: [
+            { name: 'node-a', delay_ms: 51 },
+            { name: 'node-b', delay_ms: 63 },
+          ],
+          effective_preset: 'google',
+          fallback_used: false,
+        },
+      });
+    }
+    return route.fulfill({
+      json: {
+        ok: true,
+        schema_version: 1,
+        results: [{ name: body.name, delay_ms: 7 }],
+        effective_preset: 'cloudflare',
+        fallback_used: true,
+      },
+    });
+  });
+
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-group-delay-batch' });
+  });
+  await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
+  await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test').click();
+
+  await expect(page.locator('[data-node-name="node-a"] .xk-mihomo-node-delay')).toHaveText('51 мс');
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('63 мс');
+  await expect(page.locator('[data-node-name="DIRECT"] .xk-mihomo-node-delay')).toHaveText('7 мс');
+  await expect(page.locator('#mihomo-clash-delay-summary')).toContainText('Успешно: 3');
+  expect(requests).toEqual([
+    { scope: 'group', name: 'AUTO', preset: 'google' },
+    { scope: 'proxy', name: 'DIRECT', preset: 'google' },
+  ]);
+});
+
+
+test('visible delay de-duplicates the same provider node across expanded groups', async ({ page }) => {
+  const data = groupsPayload();
+  data.groups.push({
+    name: 'DUPLICATE',
+    type: 'Selector',
+    now: 'node-a',
+    fixed: '',
+    hidden: false,
+    selectable: true,
+    nodes: data.groups[0].nodes.map((node) => ({ ...node })),
+  });
+  const requests = [];
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: data }));
+  await page.route('**/api/mihomo/clash/delay', async (route) => {
+    const body = route.request().postDataJSON();
+    requests.push(body);
+    return route.fulfill({ json: { ok: true, results: [{ name: body.name, delay_ms: 45 }] } });
+  });
+
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-visible-delay-deduplication' });
+  });
+  await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
+  await page.locator('[data-group-name="DUPLICATE"] .xk-mihomo-group-head').click();
+  await page.locator('#mihomo-clash-test-visible').click();
+
+  await expect(page.locator('#mihomo-clash-delay-summary')).toContainText('Успешно: 3');
+  expect(requests).toHaveLength(3);
+  expect(requests.filter((item) => item.name === 'node-b')).toEqual([
+    { scope: 'provider-proxy', name: 'node-b', provider: 'provider-one', preset: 'google' },
+  ]);
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText(['45 мс', '45 мс']);
 });
 
 
@@ -565,16 +676,16 @@ test('Mihomo group disclosures keep the workspace compact and keyboard accessibl
   expect(unavailablePlacement).toEqual({ rightInset: 9, bottomInset: 7, iconOnlyWidth: 24 });
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-unavailable')).toHaveCount(0);
   await page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay').click();
-  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('ошибка');
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('API недоступен');
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveAttribute('data-delay-tone', 'failed');
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay use')).toHaveAttribute('href', /#xk-alert$/);
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveAttribute(
     'aria-label',
-    /ошибка/,
+    /API недоступен/,
   );
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveAttribute(
     'data-tooltip',
-    /Ручная проверка/,
+    /оба разрешённых адреса/,
   );
 
   await page.locator('#mihomo-clash-groups-collapse').click();
