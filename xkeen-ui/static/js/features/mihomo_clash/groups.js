@@ -373,38 +373,38 @@ function nodeProbeStatus(group, node) {
     return { state: 'pending', label: 'проверка', tooltip: 'Выполняется проверка задержки узла.' };
   }
   if (result?.state === 'timeout') {
-    return { state: 'timeout', label: 'таймаут', tooltip: 'Проверка задержки превысила допустимое время ожидания.' };
+    return { state: 'timeout', label: 'таймаут', tooltip: 'Превышено время ожидания. Нажмите, чтобы повторить.' };
   }
   if (result?.state === 'failed') {
     return {
       state: 'failed',
       label: 'ошибка',
-      tooltip: 'Ручная проверка задержки не вернула пригодный результат. Нажмите, чтобы повторить.',
+      tooltip: 'Не удалось измерить задержку. Нажмите, чтобы повторить.',
     };
   }
   if (result?.state === 'unsupported') {
     return {
       state: 'failed',
       label: 'не поддерживается',
-      tooltip: 'Текущий Mihomo не поддерживает этот endpoint проверки. Обновите core или повторите через групповой тест.',
+      tooltip: 'Этот Mihomo не поддерживает проверку. Обновите core или запустите тест группы.',
     };
   }
   if (result?.state === 'unreachable') {
     return {
       state: 'failed',
       label: 'API недоступен',
-      tooltip: 'Mihomo API или оба разрешённых адреса проверки временно недоступны. Нажмите, чтобы повторить.',
+      tooltip: 'Mihomo API недоступен. Нажмите, чтобы повторить.',
     };
   }
   if (result?.state === 'invalid') {
     return {
       state: 'failed',
       label: 'нет результата',
-      tooltip: 'Mihomo ответил без пригодного значения задержки. Нажмите, чтобы повторить.',
+      tooltip: 'Mihomo не вернул задержку. Нажмите, чтобы повторить.',
     };
   }
   if (result?.state === 'cancelled') {
-    return { state: 'cancelled', label: 'отменено', tooltip: 'Проверка задержки была отменена.' };
+    return { state: 'cancelled', label: 'отменено', tooltip: 'Проверка отменена. Нажмите, чтобы повторить.' };
   }
   if (result && Number.isFinite(result.delay)) {
     const delay = result.delay;
@@ -421,7 +421,7 @@ function nodeProbeStatus(group, node) {
     return {
       state: 'unavailable',
       label: 'недоступен',
-      tooltip: `Последняя фоновая healthcheck Mihomo вернула alive=false.${chainCopy} Нажмите, чтобы выполнить ручную проверку задержки.`,
+      tooltip: `Фоновая проверка: узел недоступен.${chainCopy} Нажмите, чтобы проверить снова.`,
     };
   }
   if (measurement && isFreshMeasurement(measurement.timestamp)) {
@@ -435,13 +435,13 @@ function nodeProbeStatus(group, node) {
     return {
       state: 'stale',
       label: 'нет данных',
-      tooltip: `Последнее измерение старше 5 минут и больше не считается актуальным.${chainCopy} Нажмите, чтобы проверить задержку снова.`,
+      tooltip: `Данные старше 5 минут.${chainCopy} Нажмите, чтобы проверить снова.`,
     };
   }
   return {
     state: 'unknown',
     label: 'нет данных',
-    tooltip: 'Mihomo ещё не сообщил результат healthcheck. Нажмите, чтобы проверить задержку.',
+    tooltip: 'Задержка ещё не измерена. Нажмите, чтобы проверить.',
   };
 }
 
@@ -622,9 +622,16 @@ function renderNodeProbe(group, node) {
   const probeLabel = `Проверить задержку узла ${node.name}`;
   const probeData = `data-mihomo-node-delay="1" data-group="${escapeHtml(group.name)}" data-node="${escapeHtml(node.name)}" data-provider="${escapeHtml(node.provider || '')}"`;
   const checking = status.state === 'pending';
-  const statusIcon = status.state === 'unavailable'
-    ? 'server-off'
-    : (status.state === 'failed' ? 'alert' : '');
+  // Match the compact latency affordance used by Zashboard: an empty
+  // measurement is a neutral action icon, not a repeated "нет данных" label.
+  // Keep confirmed health-check failures and manual probe errors visually
+  // distinct; their full state remains available to screen readers/tooltips.
+  const statusIcon = {
+    unavailable: 'server-off',
+    failed: 'alert',
+    unknown: 'bolt',
+    stale: 'bolt',
+  }[status.state] || '';
   const content = statusIcon
     ? `<span class="xk-visually-hidden">${escapeHtml(status.label)}</span>${iconHtml(statusIcon)}`
     : escapeHtml(status.label);

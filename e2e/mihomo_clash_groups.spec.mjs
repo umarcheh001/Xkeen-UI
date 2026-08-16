@@ -508,8 +508,10 @@ test('Mihomo latency becomes no data after five minutes and groups refresh on re
   await page.clock.fastForward((5 * 60 * 1000) + 100);
   await expect(latency).toHaveText('нет данных');
   await expect(latency).toHaveAttribute('data-delay-tone', 'stale');
+  await expect(latency.locator('use')).toHaveAttribute('href', /#xk-bolt$/);
   await expect(unavailable).toHaveText('нет данных');
   await expect(unavailable).toHaveAttribute('data-delay-tone', 'stale');
+  await expect(unavailable.locator('use')).toHaveAttribute('href', /#xk-bolt$/);
   await latency.hover();
   await expect(page.locator('#mihomo-clash-delay-history-popover')).toContainText('44 мс');
 
@@ -895,7 +897,7 @@ test('Mihomo group disclosures keep the workspace compact and keyboard accessibl
   );
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveAttribute(
     'data-tooltip',
-    /alive=false/,
+    'Фоновая проверка: узел недоступен. Нажмите, чтобы проверить снова.',
   );
   const unavailablePlacement = await page.locator('[data-node-name="node-b"]').evaluate((card) => {
     const cardBox = card.getBoundingClientRect();
@@ -918,7 +920,7 @@ test('Mihomo group disclosures keep the workspace compact and keyboard accessibl
   );
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveAttribute(
     'data-tooltip',
-    /оба разрешённых адреса/,
+    'Mihomo API недоступен. Нажмите, чтобы повторить.',
   );
 
   await page.locator('#mihomo-clash-groups-collapse').click();
