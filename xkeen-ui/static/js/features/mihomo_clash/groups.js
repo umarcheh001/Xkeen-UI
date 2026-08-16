@@ -99,6 +99,21 @@ function latestDelayKey(name, provider = '') {
   return `${String(provider || '')}\u0000${String(name || '')}`;
 }
 
+function effectiveDelayNode(node) {
+  let current = node;
+  const visited = new Set();
+  while (current?.name && !visited.has(current.name)) {
+    visited.add(current.name);
+    const nestedGroup = groups().find((candidate) => candidate.name === current.name);
+    const selectedName = String(nestedGroup?.now || '');
+    if (!selectedName || selectedName === current.name) break;
+    const selectedNode = (nestedGroup.nodes || []).find((candidate) => candidate.name === selectedName);
+    if (!selectedNode) break;
+    current = selectedNode;
+  }
+  return current || node;
+}
+
 function normalizedDelayHistory(history) {
   if (!Array.isArray(history)) return [];
   return history.reduce((items, entry) => {
@@ -113,11 +128,12 @@ function normalizedDelayHistory(history) {
 }
 
 function delayHistoryForNode(node) {
-  const identity = latestDelayKey(node?.name, node?.provider);
-  const measured = delayHistories.get(identity) || normalizedDelayHistory(node?.delay_history);
+  const effectiveNode = effectiveDelayNode(node);
+  const identity = latestDelayKey(effectiveNode?.name, effectiveNode?.provider);
+  const measured = delayHistories.get(identity) || normalizedDelayHistory(effectiveNode?.delay_history);
   if (measured.length) return measured;
-  return Number.isFinite(node?.delay_ms)
-    ? [{ delay: Number(node.delay_ms), measuredAt: '' }]
+  return Number.isFinite(effectiveNode?.delay_ms)
+    ? [{ delay: Number(effectiveNode.delay_ms), measuredAt: '' }]
     : [];
 }
 
@@ -238,13 +254,19 @@ function scheduleDelayHistory(owner, immediate = false) {
 
 function nodeDelayResult(group, node) {
   const key = delayKey(group.name, node.name, node.provider);
+  const effectiveNode = effectiveDelayNode(node);
+  const effectiveIdentity = latestDelayKey(effectiveNode?.name, effectiveNode?.provider);
   return (delayRun && delayRun.results.get(key))
     || groupDelays.get(key)
-    || latestDelays.get(latestDelayKey(node.name, node.provider));
+    || latestDelays.get(effectiveIdentity);
 }
 
 function nodeProbeStatus(group, node) {
   const result = nodeDelayResult(group, node);
+  const effectiveNode = effectiveDelayNode(node);
+  const chainCopy = effectiveNode !== node && effectiveNode?.name
+    ? ` Текущий узел цепочки: ${effectiveNode.name}.`
+    : '';
   if (result?.state === 'pending') {
     return { state: 'pending', label: 'проверка', tooltip: 'Выполняется проверка задержки узла.' };
   }
@@ -287,21 +309,21 @@ function nodeProbeStatus(group, node) {
     return {
       state: delayTone(delay),
       label: `${delay} мс`,
-      tooltip: `Последняя измеренная задержка: ${delay} мс. Нажмите, чтобы проверить снова.`,
+      tooltip: `Последняя измеренная задержка: ${delay} мс.${chainCopy} Нажмите, чтобы проверить снова.`,
     };
   }
-  if (node.availability === 'unavailable' || node.alive === false) {
+  if (effectiveNode.availability === 'unavailable' || effectiveNode.alive === false) {
     return {
       state: 'unavailable',
       label: 'недоступен',
-      tooltip: 'Последняя фоновая healthcheck Mihomo вернула alive=false. Нажмите, чтобы выполнить ручную проверку задержки.',
+      tooltip: `Последняя фоновая healthcheck Mihomo вернула alive=false.${chainCopy} Нажмите, чтобы выполнить ручную проверку задержки.`,
     };
   }
-  if (Number.isFinite(node.delay_ms)) {
+  if (Number.isFinite(effectiveNode.delay_ms)) {
     return {
-      state: delayTone(node.delay_ms),
-      label: `${node.delay_ms} мс`,
-      tooltip: `Последняя измеренная задержка: ${node.delay_ms} мс. Нажмите, чтобы проверить снова.`,
+      state: delayTone(effectiveNode.delay_ms),
+      label: `${effectiveNode.delay_ms} мс`,
+      tooltip: `Последняя измеренная задержка: ${effectiveNode.delay_ms} мс.${chainCopy} Нажмите, чтобы проверить снова.`,
     };
   }
   return {
@@ -335,7 +357,10 @@ function filteredGroups() {
 
 function nodeDelayValue(group, node) {
   const result = nodeDelayResult(group, node);
-  return result && Number.isFinite(result.delay) ? result.delay : (Number.isFinite(node.delay_ms) ? node.delay_ms : Number.POSITIVE_INFINITY);
+  const effectiveNode = effectiveDelayNode(node);
+  return result && Number.isFinite(result.delay)
+    ? result.delay
+    : (Number.isFinite(effectiveNode.delay_ms) ? effectiveNode.delay_ms : Number.POSITIVE_INFINITY);
 }
 
 function sortNodes(group, nodes) {
@@ -496,9 +521,10 @@ function renderNode(group, node) {
   const selectPending = selection && selection.group === group.name && selection.node === node.name;
   const checking = nodeDelayResult(group, node)?.state === 'pending';
   const selectable = !!group.selectable && SELECTABLE_TYPES.has(String(group.type || '').toLowerCase());
-  const alive = nodeDelayResult(group, node)?.state === 'done' || node.availability === 'available' || node.alive === true
+  const effectiveNode = effectiveDelayNode(node);
+  const alive = nodeDelayResult(group, node)?.state === 'done' || effectiveNode.availability === 'available' || effectiveNode.alive === true
     ? 'доступен'
-    : (node.availability === 'unavailable' || node.alive === false ? 'недоступен' : 'нет данных');
+    : (effectiveNode.availability === 'unavailable' || effectiveNode.alive === false ? 'недоступен' : 'нет данных');
   const countryCode = nodeCountryCode(node.name);
   const displayName = nodeDisplayName(node, countryCode);
   const protocol = [node.type || 'unknown', node.network, node.security].filter(Boolean).join(' · ');

@@ -482,6 +482,72 @@ test('group delay uses one batch request and probes only results omitted by Miho
 });
 
 
+test('nested group card inherits the delay of its selected terminal proxy', async ({ page }) => {
+  const data = groupsPayload();
+  data.groups = [
+    {
+      name: 'YouTube',
+      type: 'Selector',
+      now: 'Blocked services',
+      fixed: '',
+      hidden: false,
+      selectable: true,
+      nodes: [{
+        name: 'Blocked services', type: 'Selector', alive: true, udp: true,
+        provider: '', provider_candidates: [], delay_ms: null, delay_history: [],
+      }],
+    },
+    {
+      name: 'Blocked services',
+      type: 'Selector',
+      now: 'XXX Germany.98.1016',
+      fixed: '',
+      hidden: false,
+      selectable: true,
+      nodes: [{
+        name: 'XXX Germany.98.1016', type: 'VLESS', alive: true, udp: true,
+        provider: '', provider_candidates: [], delay_ms: null, delay_history: [],
+      }],
+    },
+  ];
+  const requests = [];
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: data }));
+  await page.route('**/api/mihomo/clash/delay', async (route) => {
+    const body = route.request().postDataJSON();
+    requests.push(body);
+    await route.fulfill({
+      json: {
+        ok: true,
+        schema_version: 1,
+        results: [{ name: 'XXX Germany.98.1016', delay_ms: 205 }],
+      },
+    });
+  });
+
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-nested-group-delay' });
+  });
+  await page.locator('[data-group-name="Blocked services"] .xk-mihomo-group-head').click();
+  await page.locator('[data-group-name="Blocked services"] .xk-mihomo-group-test').click();
+  await expect(page.locator(
+    '[data-group-name="Blocked services"] [data-node-name="XXX Germany.98.1016"] .xk-mihomo-node-delay',
+  )).toHaveText('205 мс');
+
+  await page.locator('[data-group-name="YouTube"] .xk-mihomo-group-head').click();
+  const nestedProbe = page.locator(
+    '[data-group-name="YouTube"] [data-node-name="Blocked services"] .xk-mihomo-node-delay',
+  );
+  await expect(nestedProbe).toHaveText('205 мс');
+  await nestedProbe.hover();
+  await expect(page.locator('#mihomo-clash-delay-history-popover')).toContainText('205 мс');
+  expect(requests).toEqual([{ scope: 'group', name: 'Blocked services', preset: 'google' }]);
+});
+
+
 test('visible delay de-duplicates the same provider node across expanded groups', async ({ page }) => {
   const data = groupsPayload();
   data.groups.push({
