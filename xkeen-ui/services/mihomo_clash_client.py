@@ -314,11 +314,12 @@ class MihomoClashClient:
                 "expected": delay_preset.expected,
             }
         )
-        return self._request(
+        response = self._request(
             spec,
             path=f"{self._named_path(spec, name)}?{query}",
             expect_json=True,
         )
+        return self._reject_zero_delay(response) if normalized_scope == "proxy" else response
 
     def request_provider_proxy_delay(
         self,
@@ -347,7 +348,30 @@ class MihomoClashClient:
                 "expected": delay_preset.expected,
             }
         )
-        return self._request(spec, path=f"{path}?{query}", expect_json=True)
+        return self._reject_zero_delay(
+            self._request(spec, path=f"{path}?{query}", expect_json=True)
+        )
+
+    @staticmethod
+    def _reject_zero_delay(response: MihomoClashJSONResponse) -> MihomoClashJSONResponse:
+        """Treat Mihomo's zero sentinel as a retryable probe timeout."""
+
+        payload = response.payload if isinstance(response.payload, Mapping) else {}
+        raw_delay = payload.get("delay")
+        if isinstance(raw_delay, bool):
+            return response
+        try:
+            delay = float(raw_delay)
+        except (TypeError, ValueError, OverflowError):
+            return response
+        if delay == 0:
+            raise MihomoClashClientError(
+                "upstream_timeout",
+                "The Mihomo delay probe timed out.",
+                status=504,
+                retryable=True,
+            )
+        return response
 
     def disconnect_connection(self, connection_id: str) -> MihomoClashJSONResponse:
         """Close exactly one validated connection id."""

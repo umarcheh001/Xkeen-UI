@@ -191,14 +191,11 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
         "disconnect_affected",
         "provider-proxy",
         "groupNodeQueue",
-        "groupDelayQueue",
-        "scope: 'group'",
         "nodeQueueFromGroups",
         "buildDelaySummary",
         "scheduleDelayFreshnessRender",
         "payloadLoadedAt = Date.now()",
         "label: 'нет данных'",
-        "fallbackItems",
         "Cloudflare fallback",
         "delayKey(groupName, name, provider = '')",
         "latestDelayKey(name, provider = '')",
@@ -213,6 +210,8 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
         "mihomoDelayTesting",
         "setDelayActionTesting",
         "queueItems = [...items]",
+        "delay <= 0",
+        "await refreshMihomoClashGroups();",
         "`Проверка ${Math.min(progress.completed, progress.total)}/${progress.total}`",
         "xk-mihomo-delay-spinner",
         ".xk-mihomo-delay-summary",
@@ -398,6 +397,9 @@ def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
     assert '.xk-mihomo-node-row.is-current::before' not in css
     assert 'background: var(--op-accent-soft);' in css
     assert '[data-delay-tone="unavailable"]' in css
+    assert "groupDelayQueue" not in groups
+    assert "scope: 'group'" not in groups
+    assert "fallbackItems" not in groups
     assert 'body.panel-page .xk-mihomo-node-probe:focus-visible' in css
     assert 'body.panel-page .xk-mihomo-delay-history-popover' in css
     assert 'body.panel-page .xk-mihomo-delay-history-row strong[data-delay-tone="good"]' in css

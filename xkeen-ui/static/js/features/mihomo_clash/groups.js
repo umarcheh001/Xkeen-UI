@@ -107,7 +107,7 @@ function connectionResultCopy(result) {
 }
 
 function delayTone(delay) {
-  if (!Number.isFinite(delay)) return 'unknown';
+  if (!Number.isFinite(delay) || delay <= 0) return 'unknown';
   if (delay <= 250) return 'good';
   if (delay <= 650) return 'warning';
   return 'bad';
@@ -166,7 +166,7 @@ function normalizedDelayHistory(history) {
   if (!Array.isArray(history)) return [];
   return history.reduce((items, entry) => {
     const delay = Number(entry?.delay_ms);
-    if (!Number.isFinite(delay)) return items;
+    if (!Number.isFinite(delay) || delay <= 0) return items;
     items.push({
       delay: Math.max(0, Math.round(delay)),
       measuredAt: String(entry?.measured_at || ''),
@@ -180,7 +180,7 @@ function delayHistoryForNode(node) {
   const identity = latestDelayKey(effectiveNode?.name, effectiveNode?.provider);
   const measured = delayHistories.get(identity) || normalizedDelayHistory(effectiveNode?.delay_history);
   if (measured.length) return measured;
-  return Number.isFinite(effectiveNode?.delay_ms)
+  return Number.isFinite(effectiveNode?.delay_ms) && Number(effectiveNode.delay_ms) > 0
     ? [{ delay: Number(effectiveNode.delay_ms), measuredAt: '' }]
     : [];
 }
@@ -198,7 +198,7 @@ function latestNodeMeasurement(node) {
 }
 
 function rememberDelayMeasurement(identity, delay, measuredAt = new Date().toISOString()) {
-  if (!identity || !Number.isFinite(delay)) return;
+  if (!identity || !Number.isFinite(delay) || delay <= 0) return;
   const existing = delayHistories.get(identity) || [];
   const next = [...existing, {
     delay: Math.max(0, Math.round(Number(delay))),
@@ -989,12 +989,13 @@ async function unfixProxy(groupName) {
 }
 
 function delayTarget(groupName, node) {
+  const effectiveNode = effectiveDelayNode(node);
   return {
     group: String(groupName || ''),
-    name: String(node?.name || ''),
-    provider: String(node?.provider || ''),
+    name: String(effectiveNode?.name || ''),
+    provider: String(effectiveNode?.provider || ''),
     key: delayKey(groupName, node?.name, node?.provider),
-    identity: latestDelayKey(node?.name, node?.provider),
+    identity: latestDelayKey(effectiveNode?.name, effectiveNode?.provider),
   };
 }
 
@@ -1069,10 +1070,15 @@ function applyDelayResults(results, item) {
   for (const result of Array.isArray(results) ? results : []) {
     if (!result?.name || !Number.isFinite(result.delay_ms)) continue;
     const matching = (item.targets || []).filter((target) => target.name === result.name);
+    const delay = Number(result.delay_ms);
     for (const target of matching) {
-      setTargetResult(target, { state: 'done', delay: Number(result.delay_ms) });
-      if (!completedIdentities.has(target.identity)) {
-        rememberDelayMeasurement(target.identity, Number(result.delay_ms));
+      if (delay <= 0) {
+        setTargetResult(target, { state: 'timeout' });
+      } else {
+        setTargetResult(target, { state: 'done', delay });
+        if (!completedIdentities.has(target.identity)) {
+          rememberDelayMeasurement(target.identity, delay);
+        }
       }
       completedIdentities.add(target.identity);
     }
@@ -1106,7 +1112,7 @@ async function requestDelay(item) {
   return null;
 }
 
-async function probeDelay(item, { terminalOnError = true } = {}) {
+async function probeDelay(item) {
   if (!delayRun || delayRun.cancelled) return false;
   const keys = (item.targets || []).map((target) => target.key);
   try {
@@ -1114,20 +1120,16 @@ async function probeDelay(item, { terminalOnError = true } = {}) {
     if (!delayRun || delayRun.cancelled || !result) return false;
     if (result.fallback_used === true) delayRun.fallbacks += 1;
     applyDelayResults(result.results, item);
-    if (item.scope !== 'group') {
-      for (const target of item.targets || []) {
-        if (delayRun.results.get(target.key)?.state === 'pending') {
-          setTargetResult(target, { state: 'invalid' });
-        }
+    for (const target of item.targets || []) {
+      if (delayRun.results.get(target.key)?.state === 'pending') {
+        setTargetResult(target, { state: 'invalid' });
       }
     }
     return true;
   } catch (error) {
     if (!delayRun || delayRun.cancelled) return false;
-    if (terminalOnError) {
-      const state = delayFailureState(error);
-      for (const target of item.targets || []) setTargetResult(target, { state });
-    }
+    const state = delayFailureState(error);
+    for (const target of item.targets || []) setTargetResult(target, { state });
     return false;
   } finally {
     syncDelayProgress();
@@ -1185,15 +1187,7 @@ async function runDelayQueue(items, source = {}) {
   const worker = async () => {
     while (delayRun && !delayRun.cancelled && cursor < queueItems.length) {
       const item = queueItems[cursor++];
-      if (item.scope === 'group') {
-        await probeDelay(item, { terminalOnError: false });
-        const missingItems = (item.fallbackItems || []).filter((fallbackItem) => (
-          fallbackItem.targets.some((target) => delayRun?.results.get(target.key)?.state === 'pending')
-        ));
-        queueItems.push(...missingItems);
-      } else {
-        await probeDelay(item);
-      }
+      await probeDelay(item);
       if (delayRun && !delayRun.cancelled && cursor < queueItems.length) {
         await wait(DELAY_BATCH_CADENCE_MS);
       }
@@ -1213,6 +1207,9 @@ async function runDelayQueue(items, source = {}) {
   delayRun = null;
   render();
   syncDelayControls();
+  // Reconcile Mihomo's alive/history snapshot after all explicit probes. This
+  // read has no group-delay side effects and must not replace terminal results.
+  await refreshMihomoClashGroups();
 }
 
 function cancelDelayQueue() {
@@ -1234,14 +1231,6 @@ function visibleNodeQueue() {
 function groupNodeQueue(name) {
   const group = groups().find((item) => item.name === name);
   return group ? nodeQueueFromGroups([group]) : [];
-}
-
-function groupDelayQueue(name) {
-  const group = groups().find((item) => item.name === name);
-  if (!group) return [];
-  const fallbackItems = groupNodeQueue(name);
-  const targets = fallbackItems.flatMap((item) => item.targets || []);
-  return [{ scope: 'group', name: group.name, targets, fallbackItems }];
 }
 
 function bind() {
@@ -1325,7 +1314,7 @@ function bind() {
       });
     }
     if (target.hasAttribute('data-mihomo-group-delay')) {
-      void runDelayQueue(groupDelayQueue(target.dataset.group), {
+      void runDelayQueue(groupNodeQueue(target.dataset.group), {
         type: 'group',
         group: String(target.dataset.group || ''),
       });

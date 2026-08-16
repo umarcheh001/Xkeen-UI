@@ -373,6 +373,40 @@ def test_provider_proxy_delay_encodes_provider_and_node_segments():
     assert handler.seen[0]["path"] == expected
 
 
+@pytest.mark.parametrize("scope", ["proxy", "provider-proxy"])
+def test_single_proxy_delay_zero_is_a_retryable_timeout(scope: str):
+    endpoints = {
+        "proxy_delay": MihomoClashEndpoint("GET", "/proxies/{name}/delay", 2, 1024),
+        "provider_proxy_delay": MihomoClashEndpoint(
+            "GET",
+            "/providers/proxies/{provider}/{name}/healthcheck",
+            2,
+            1024,
+        ),
+    }
+    if scope == "provider-proxy":
+        expected_path = (
+            "/providers/proxies/provider/node/healthcheck"
+            "?url=https%3A%2F%2Fwww.gstatic.com%2Fgenerate_204&timeout=5000&expected=204"
+        )
+    else:
+        expected_path = (
+            "/proxies/node/delay"
+            "?url=https%3A%2F%2Fwww.gstatic.com%2Fgenerate_204&timeout=5000&expected=204"
+        )
+    with tcp_server({expected_path: (200, "application/json", b'{"delay":0}')}) as (port, _handler):
+        client = client_for_port(port, endpoints)
+        with pytest.raises(MihomoClashClientError) as captured:
+            if scope == "provider-proxy":
+                client.request_provider_proxy_delay("provider", "node")
+            else:
+                client.request_delay("proxy", "node")
+
+    assert captured.value.code == "upstream_timeout"
+    assert captured.value.status == 504
+    assert captured.value.retryable is True
+
+
 def test_delay_uses_backend_preset_and_never_accepts_arbitrary_url():
     endpoints = {"proxy_delay": MihomoClashEndpoint("GET", "/proxies/{name}/delay", 2, 1024)}
     expected_path = (

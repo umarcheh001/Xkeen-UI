@@ -598,35 +598,28 @@ test('visible delay test probes every node beyond the old eight-item limit and r
 });
 
 
-test('group delay uses one batch request and probes only results omitted by Mihomo', async ({ page }) => {
+test('group delay probes unique nodes without group endpoint and reconciles the snapshot', async ({ page }) => {
   const data = groupsPayload();
   const requests = [];
+  let groupReads = 0;
   await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
-  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: data }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => {
+    groupReads += 1;
+    return route.fulfill({ json: data });
+  });
   await page.route('**/api/mihomo/clash/delay', async (route) => {
     const body = route.request().postDataJSON();
     requests.push(body);
-    if (body.scope === 'group') {
-      return route.fulfill({
-        json: {
-          ok: true,
-          schema_version: 1,
-          results: [
-            { name: 'node-a', delay_ms: 51 },
-            { name: 'node-b', delay_ms: 63 },
-          ],
-          effective_preset: 'google',
-          fallback_used: false,
-        },
-      });
-    }
     return route.fulfill({
       json: {
         ok: true,
         schema_version: 1,
-        results: [{ name: body.name, delay_ms: 7 }],
-        effective_preset: 'cloudflare',
-        fallback_used: true,
+        results: [{
+          name: body.name,
+          delay_ms: body.name === 'node-a' ? 51 : body.name === 'node-b' ? 0 : 7,
+        }],
+        effective_preset: 'google',
+        fallback_used: false,
       },
     });
   });
@@ -638,14 +631,18 @@ test('group delay uses one batch request and probes only results omitted by Miho
     mod.activateMihomoClashWorkspace({ reason: 'e2e-group-delay-batch' });
   });
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
+  const readsBeforeTest = groupReads;
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test').click();
 
   await expect(page.locator('[data-node-name="node-a"] .xk-mihomo-node-delay')).toHaveText('51 мс');
-  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('63 мс');
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('таймаут');
   await expect(page.locator('[data-node-name="DIRECT"] .xk-mihomo-node-delay')).toHaveText('7 мс');
-  await expect(page.locator('#mihomo-clash-delay-summary')).toContainText('Успешно: 3');
+  await expect(page.locator('#mihomo-clash-delay-summary')).toContainText('Успешно: 2');
+  await expect(page.locator('#mihomo-clash-delay-summary')).toContainText('Таймаут: 1');
+  await expect.poll(() => groupReads).toBeGreaterThan(readsBeforeTest);
   expect(requests).toEqual([
-    { scope: 'group', name: 'AUTO', preset: 'google' },
+    { scope: 'proxy', name: 'node-a', preset: 'google' },
+    { scope: 'provider-proxy', name: 'node-b', provider: 'provider-one', preset: 'google' },
     { scope: 'proxy', name: 'DIRECT', preset: 'google' },
   ]);
 });
@@ -713,7 +710,12 @@ test('nested group card inherits the delay of its selected terminal proxy', asyn
   await expect(nestedProbe).toHaveText('205 мс');
   await nestedProbe.hover();
   await expect(page.locator('#mihomo-clash-delay-history-popover')).toContainText('205 мс');
-  expect(requests).toEqual([{ scope: 'group', name: 'Blocked services', preset: 'google' }]);
+  await page.locator('[data-group-name="YouTube"] .xk-mihomo-group-test').click();
+  await expect(page.locator('#mihomo-clash-delay-summary')).toContainText('Успешно: 1');
+  expect(requests).toEqual([
+    { scope: 'proxy', name: 'XXX Germany.98.1016', preset: 'google' },
+    { scope: 'proxy', name: 'XXX Germany.98.1016', preset: 'google' },
+  ]);
 });
 
 

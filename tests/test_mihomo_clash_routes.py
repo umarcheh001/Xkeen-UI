@@ -887,6 +887,31 @@ def test_delay_route_retries_transient_google_failure_with_allowlisted_cloudflar
     ]
 
 
+def test_delay_route_reports_zero_delay_as_timeout_after_fallback():
+    class ZeroDelayClient(StubClient):
+        def request_delay(self, scope: str, name: str, *, preset: str):
+            self.delays.append((scope, name, preset))
+            raise MihomoClashClientError(
+                "upstream_timeout",
+                "zero delay sentinel",
+                status=504,
+                retryable=True,
+            )
+
+    client = ZeroDelayClient()
+    response = make_app(ready_discovery(), client).test_client().post(
+        "/api/mihomo/clash/delay",
+        json={"scope": "proxy", "name": "node-a", "preset": "google"},
+    )
+
+    assert response.status_code == 504
+    assert response.get_json()["code"] == "upstream_timeout"
+    assert client.delays == [
+        ("proxy", "node-a", "google"),
+        ("proxy", "node-a", "cloudflare"),
+    ]
+
+
 def test_delay_route_does_not_retry_semantic_google_failure():
     client = StubClient(
         error=MihomoClashClientError(
