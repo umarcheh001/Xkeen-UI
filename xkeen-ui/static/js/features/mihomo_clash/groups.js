@@ -21,6 +21,7 @@ const DELAY_HISTORY_HOVER_MS = 350;
 // to measure again instead of presenting an old value as current.
 const DELAY_FRESHNESS_TTL_MS = 5 * 60 * 1000;
 const AUTOMATIC_TYPES = new Set(['urltest', 'fallback', 'smart']);
+const COLLAPSED_GROUPS_STORAGE_KEY = 'xkeen:mihomo-clash-collapsed-groups';
 
 let root = null;
 let active = false;
@@ -39,7 +40,9 @@ let lastDelaySummary = null;
 let payloadLoadedAt = 0;
 let delayFreshnessTimer = 0;
 const collapsedGroups = new Set();
-let disclosureSeeded = false;
+const knownDisclosureGroups = new Set();
+let pickerGroup = '';
+const pickerQueries = new Map();
 // A probe result belongs to the card in the group that initiated it. Keep
 // terminal states here so a timeout/error is not replaced by the initial
 // Mihomo healthcheck value after the queue has finished.
@@ -58,6 +61,35 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function readCollapsedGroupPreferences() {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(COLLAPSED_GROUPS_STORAGE_KEY) || '{}');
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function persistCollapsedGroups() {
+  try {
+    const value = Object.create(null);
+    for (const group of allGroups()) value[group.name] = collapsedGroups.has(group.name);
+    window.localStorage.setItem(COLLAPSED_GROUPS_STORAGE_KEY, JSON.stringify(value));
+  } catch (error) {}
+}
+
+function seedCollapsedGroups(groupItems) {
+  const preferences = readCollapsedGroupPreferences();
+  for (const group of groupItems || []) {
+    const name = String(group?.name || '');
+    if (!name || knownDisclosureGroups.has(name)) continue;
+    knownDisclosureGroups.add(name);
+    // A new group starts compact. An explicit saved `false` is the only state
+    // that expands it on the next page load.
+    if (preferences[name] !== false) collapsedGroups.add(name);
+  }
 }
 
 function groups() {
@@ -700,19 +732,92 @@ function groupIconHtml(group) {
   return `<span class="xk-mihomo-group-icon"><img src="${escapeHtml(icon)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
 }
 
-function groupSelectionHtml(group, collapsed) {
+function groupFixedStatusHtml(group) {
   const automatic = AUTOMATIC_TYPES.has(String(group.type || '').toLowerCase());
   if (automatic && group.fixed) {
     return `<span class="xk-mihomo-group-fixed">${iconHtml('lock')}Зафиксирован: <strong>${escapeHtml(group.fixed)}</strong></span>`;
   }
-  if (!collapsed) return '';
-  if (automatic) {
-    return group.now
-      ? `<span class="xk-mihomo-group-selection">Автовыбор: <strong>${escapeHtml(group.now)}</strong></span>`
-      : '<span class="xk-mihomo-group-selection">Автовыбор по задержке</span>';
+  return '';
+}
+
+function pickerNodeIconHtml(node) {
+  const countryCode = nodeCountryCode(node?.name);
+  if (countryCode) return nodeFlagHtml(countryCode);
+  const icon = String(node?.icon || '').trim();
+  if (icon) {
+    return `<span class="xk-mihomo-picker-node-icon"><img src="${escapeHtml(icon)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
   }
-  if (!group.now) return '<span class="xk-mihomo-group-selection">Выбор недоступен</span>';
-  return `<span class="xk-mihomo-group-selection">Выбрано: <strong>${escapeHtml(group.now)}</strong></span>`;
+  return `<span class="xk-mihomo-picker-node-icon xk-mihomo-picker-node-icon--default" aria-hidden="true">${iconHtml('dns')}</span>`;
+}
+
+function pickerNodes(group) {
+  const query = String(pickerQueries.get(group.name) || '').trim().toLocaleLowerCase('ru');
+  const nodes = Array.isArray(group.nodes) ? group.nodes : [];
+  return sortNodes(group, nodes.filter((node) => (
+    (showTimeoutHidden || (timeoutCounts.get(delayKey(group.name, node.name, node.provider)) || 0) < TIMEOUT_HIDE_THRESHOLD)
+    && (!query || nodeSearchText(node).includes(query))
+  )));
+}
+
+function renderPickerOption(group, node) {
+  const selected = group.now === node.name;
+  const selectPending = selection && selection.group === group.name && selection.node === node.name;
+  const selectable = !!group.selectable && SELECTABLE_TYPES.has(String(group.type || '').toLowerCase());
+  const countryCode = nodeCountryCode(node.name);
+  const displayName = nodeDisplayName(node, countryCode);
+  return `
+    <li class="xk-mihomo-picker-option${selected ? ' is-current' : ''}" role="none"
+      data-node-key="${escapeHtml(encodeURIComponent(delayKey(group.name, node.name, node.provider)))}"
+      data-node-name="${escapeHtml(node.name)}">
+      <button type="button" class="xk-mihomo-picker-select" data-mihomo-group-select="1"
+        data-group="${escapeHtml(group.name)}" data-node="${escapeHtml(node.name)}"
+        role="option" aria-selected="${selected ? 'true' : 'false'}"
+        ${!selectable || selected || selectPending || selection ? 'disabled' : ''}>
+        ${pickerNodeIconHtml(node)}
+        <span>${escapeHtml(displayName)}</span>
+        ${selected ? `<span class="xk-visually-hidden">Текущий выбор</span>${iconHtml('check')}` : ''}
+      </button>
+      ${renderNodeProbe(group, node)}
+    </li>`;
+}
+
+function renderPickerOptions(group) {
+  const nodes = pickerNodes(group);
+  return nodes.length
+    ? nodes.map((node) => renderPickerOption(group, node)).join('')
+    : '<li class="xk-mihomo-picker-empty">Ничего не найдено.</li>';
+}
+
+function renderCollapsedPicker(group, panelId) {
+  const selectedNode = (group.nodes || []).find((node) => node.name === group.now);
+  const selectedCountryCode = nodeCountryCode(selectedNode?.name);
+  const selectedName = selectedNode
+    ? nodeDisplayName(selectedNode, selectedCountryCode)
+    : (group.now || 'Выберите узел');
+  const open = pickerGroup === group.name;
+  const query = String(pickerQueries.get(group.name) || '');
+  const pickerId = `${panelId}-picker`;
+  return `
+    <div class="xk-mihomo-group-picker" data-mihomo-group-picker="${escapeHtml(group.name)}">
+      <button type="button" class="xk-mihomo-picker-trigger" data-mihomo-picker-toggle="1"
+        data-group="${escapeHtml(group.name)}" role="combobox" aria-haspopup="listbox"
+        aria-expanded="${open ? 'true' : 'false'}" aria-controls="${pickerId}">
+        ${selectedNode ? pickerNodeIconHtml(selectedNode) : `<span class="xk-mihomo-picker-node-icon xk-mihomo-picker-node-icon--default" aria-hidden="true">${iconHtml('dns')}</span>`}
+        <span class="xk-mihomo-picker-value">${escapeHtml(selectedName)}</span>
+        ${iconHtml('chevron-down', 'xk-mihomo-picker-chevron')}
+      </button>
+      ${open ? `<div id="${pickerId}" class="xk-mihomo-picker-popover">
+        <label class="xk-mihomo-picker-search">
+          ${iconHtml('search')}
+          <span class="xk-visually-hidden">Поиск узла в группе ${escapeHtml(group.name)}</span>
+          <input type="search" data-mihomo-picker-search="1" data-group="${escapeHtml(group.name)}"
+            value="${escapeHtml(query)}" placeholder="Найти узел" autocomplete="off">
+        </label>
+        <ul class="xk-mihomo-picker-options" role="listbox" aria-label="Узлы группы ${escapeHtml(group.name)}">
+          ${renderPickerOptions(group)}
+        </ul>
+      </div>` : ''}
+    </div>`;
 }
 
 function renderGroup(group) {
@@ -732,7 +837,7 @@ function renderGroup(group) {
         <div class="xk-mihomo-group-title">
           <div><strong>${escapeHtml(group.name)}</strong>${group.hidden ? '<span class="xk-mihomo-group-flag">hidden</span>' : ''}</div>
           <small>${escapeHtml(groupSummary(group))}</small>
-          ${groupSelectionHtml(group, collapsed)}
+          ${groupFixedStatusHtml(group)}
         </div>
         <div class="xk-mihomo-group-actions">
           ${canUnfix ? `<button type="button" class="btn-secondary xk-mihomo-group-unfix" data-mihomo-group-unfix="1" data-group="${escapeHtml(group.name)}">${iconHtml('lock')}<span>Вернуть автоматический выбор</span></button>` : ''}
@@ -740,16 +845,18 @@ function renderGroup(group) {
             data-group="${escapeHtml(group.name)}">${iconHtml('ping')}<span class="xk-action-label">Тест группы</span></button>`}
         </div>
       </header>
+      ${collapsed ? renderCollapsedPicker(group, panelId) : ''}
       <div id="${panelId}" class="xk-mihomo-group-body" ${collapsed ? 'hidden' : ''}>
-        <ul class="xk-mihomo-node-list" aria-label="Узлы группы ${escapeHtml(group.name)}">
+        ${collapsed ? '' : `<ul class="xk-mihomo-node-list" aria-label="Узлы группы ${escapeHtml(group.name)}">
           ${nodes.length ? nodes.map((node) => renderNode(group, node)).join('') : '<li class="xk-mihomo-groups-empty">Нет узлов по текущему фильтру.</li>'}
-        </ul>
+        </ul>`}
       </div>
     </section>`;
 }
 
 function render() {
   if (!root) return;
+  if (pickerGroup && (!collapsedGroups.has(pickerGroup) || filterText.trim())) pickerGroup = '';
   hideDelayHistory();
   scheduleDelayFreshnessRender();
   const list = document.getElementById('mihomo-clash-groups-list');
@@ -892,10 +999,7 @@ export async function refreshMihomoClashGroups() {
     payloadLoadedAt = Date.now();
     payload = next && typeof next === 'object' ? next : { groups: [] };
     seedDelayHistories(allGroups());
-    if (!disclosureSeeded) {
-      for (const group of allGroups()) collapsedGroups.add(group.name);
-      disclosureSeeded = true;
-    }
+    seedCollapsedGroups(allGroups());
     render();
     return true;
   } catch (error) {
@@ -934,6 +1038,7 @@ async function selectProxy(group, node) {
     danger: disconnectAffected,
   }, `Переключить ${group} на ${node}?`);
   if (!accepted || !active) return;
+  pickerGroup = '';
   selection = { group, node };
   render();
   try {
@@ -1258,9 +1363,19 @@ function bind() {
   window.addEventListener('scroll', hideDelayHistory, true);
   window.addEventListener('resize', hideDelayHistory, true);
   root.addEventListener('input', (event) => {
-    if (event.target?.id !== 'mihomo-clash-groups-filter') return;
-    filterText = String(event.target.value || '');
-    render();
+    if (event.target?.id === 'mihomo-clash-groups-filter') {
+      filterText = String(event.target.value || '');
+      pickerGroup = '';
+      render();
+      return;
+    }
+    if (event.target?.hasAttribute?.('data-mihomo-picker-search')) {
+      const groupName = String(event.target.dataset.group || '');
+      pickerQueries.set(groupName, String(event.target.value || ''));
+      const group = groups().find((item) => item.name === groupName);
+      const options = event.target.closest('.xk-mihomo-picker-popover')?.querySelector('.xk-mihomo-picker-options');
+      if (group && options) options.innerHTML = renderPickerOptions(group);
+    }
   });
   root.addEventListener('change', (event) => {
     if (event.target?.id === 'mihomo-clash-groups-sort') {
@@ -1274,12 +1389,19 @@ function bind() {
       for (const group of groups()) {
         if (group.hidden) collapsedGroups.add(group.name);
       }
+      persistCollapsedGroups();
     }
     render();
   });
   root.addEventListener('click', (event) => {
-    const target = event.target?.closest?.('[data-mihomo-groups-collapse], .xk-mihomo-group-head, [data-mihomo-group-select], [data-mihomo-group-unfix], [data-mihomo-node-delay], [data-mihomo-group-delay], [data-mihomo-delay-visible], #mihomo-clash-show-timeout-hidden');
-    if (!target) return;
+    const target = event.target?.closest?.('[data-mihomo-groups-collapse], .xk-mihomo-group-head, [data-mihomo-picker-toggle], [data-mihomo-group-select], [data-mihomo-group-unfix], [data-mihomo-node-delay], [data-mihomo-group-delay], [data-mihomo-delay-visible], #mihomo-clash-show-timeout-hidden');
+    if (!target) {
+      if (pickerGroup && !event.target?.closest?.('[data-mihomo-group-picker]')) {
+        pickerGroup = '';
+        render();
+      }
+      return;
+    }
     hideDelayHistory();
     if (target.hasAttribute('data-mihomo-groups-collapse')) {
       const visibleGroups = filteredGroups();
@@ -1288,13 +1410,24 @@ function bind() {
         if (shouldExpand) collapsedGroups.delete(group.name);
         else collapsedGroups.add(group.name);
       }
+      pickerGroup = '';
+      persistCollapsedGroups();
       render();
     }
     if (target.classList.contains('xk-mihomo-group-head')) {
+      if (event.target?.closest?.('button, input, select, a')) return;
       const name = String(target.dataset.group || '');
       if (collapsedGroups.has(name)) collapsedGroups.delete(name);
       else collapsedGroups.add(name);
+      pickerGroup = '';
+      persistCollapsedGroups();
       render();
+    }
+    if (target.hasAttribute('data-mihomo-picker-toggle')) {
+      const name = String(target.dataset.group || '');
+      pickerGroup = pickerGroup === name ? '' : name;
+      render();
+      if (pickerGroup) root.querySelector('[data-mihomo-picker-search]')?.focus();
     }
     if (target.hasAttribute('data-mihomo-group-select')) void selectProxy(target.dataset.group, target.dataset.node);
     if (target.hasAttribute('data-mihomo-group-unfix')) void unfixProxy(target.dataset.group);
@@ -1322,6 +1455,15 @@ function bind() {
     if (target.hasAttribute('data-mihomo-delay-visible')) void runDelayQueue(visibleNodeQueue(), { type: 'visible' });
   });
   root.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && pickerGroup) {
+      event.preventDefault();
+      const name = pickerGroup;
+      pickerGroup = '';
+      pickerQueries.delete(name);
+      render();
+      root.querySelector(`[data-mihomo-picker-toggle][data-group="${CSS.escape(name)}"]`)?.focus();
+      return;
+    }
     if (!['Enter', ' '].includes(event.key)) return;
     const header = event.target?.closest?.('.xk-mihomo-group-head');
     if (!header || !root.contains(header)) return;
@@ -1329,6 +1471,8 @@ function bind() {
     const name = String(header.dataset.group || '');
     if (collapsedGroups.has(name)) collapsedGroups.delete(name);
     else collapsedGroups.add(name);
+    if (pickerGroup === name) pickerGroup = '';
+    persistCollapsedGroups();
     render();
     document.querySelector(`[data-group-name="${CSS.escape(name)}"] .xk-mihomo-group-head`)?.focus();
   });
@@ -1368,6 +1512,7 @@ export function deactivateMihomoClashGroups() {
   delayRun = null;
   clearDelayFreshnessTimer();
   hideDelayHistory();
+  pickerGroup = '';
   selection = null;
   render();
 }

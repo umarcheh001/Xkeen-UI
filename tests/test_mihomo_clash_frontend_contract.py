@@ -229,12 +229,26 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
     assert "encodeURIComponent" in client
 
 
-def test_groups_start_collapsed_and_keep_labelled_actions_on_one_baseline():
+def test_groups_start_collapsed_persist_lazy_picker_and_keep_actions_on_one_baseline():
     markup = _mihomo_markup()
     groups = _text(GROUPS)
     css = _text(CSS)
 
-    assert "for (const group of allGroups()) collapsedGroups.add(group.name);" in groups
+    for fragment in (
+        "COLLAPSED_GROUPS_STORAGE_KEY = 'xkeen:mihomo-clash-collapsed-groups'",
+        "readCollapsedGroupPreferences",
+        "persistCollapsedGroups",
+        "if (preferences[name] !== false) collapsedGroups.add(name);",
+        "renderCollapsedPicker(group, panelId)",
+        "collapsed ? renderCollapsedPicker(group, panelId) : ''",
+        "data-mihomo-picker-search",
+        "role=\"combobox\"",
+        ".xk-mihomo-group-picker",
+        ".xk-mihomo-picker-option",
+    ):
+        assert fragment in groups or fragment in css
+    assert "nodes.map((node) => renderNode(group, node))" in groups
+    assert "collapsed ? renderCollapsedPicker(group, panelId) : ''" in groups
     assert 'id="mihomo-clash-groups-collapse"' in markup
     assert ".xk-mihomo-groups-collapse" in css
     assert "display: inline-flex !important;" in css

@@ -18192,8 +18192,9 @@ body.panel-page .xk-mihomo-groups-list {
 }
 
 body.panel-page .xk-mihomo-group {
+  position: relative;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--op-border);
   border-radius: var(--op-radius);
   background: var(--op-surface);
@@ -18282,6 +18283,203 @@ body.panel-page .xk-mihomo-group-default-icon {
 
 body.panel-page .xk-mihomo-group-body[hidden] {
   display: none !important;
+}
+
+/* A collapsed group renders only this compact picker. Node cards are not
+ * mounted until the group is expanded, which keeps large router configs from
+ * paying the DOM/layout cost for hundreds of hidden cards. */
+body.panel-page .xk-mihomo-group-picker {
+  position: relative;
+  z-index: 3;
+  padding: 0 8px 8px;
+  background: var(--op-surface-2);
+}
+
+body.panel-page .xk-mihomo-picker-trigger {
+  display: grid !important;
+  grid-template-columns: 20px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 7px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 34px !important;
+  padding: 5px 8px !important;
+  border: 1px solid var(--op-border-strong) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-editor) !important;
+  color: var(--op-text) !important;
+  text-align: left;
+  box-shadow: none !important;
+}
+
+body.panel-page .xk-mihomo-picker-trigger:hover,
+body.panel-page .xk-mihomo-picker-trigger[aria-expanded="true"] {
+  border-color: var(--op-accent-border) !important;
+  background: color-mix(in srgb, var(--op-accent) 5%, var(--op-editor)) !important;
+}
+
+body.panel-page .xk-mihomo-picker-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--op-accent) 65%, transparent);
+  outline-offset: 1px;
+}
+
+body.panel-page .xk-mihomo-picker-value {
+  min-width: 0;
+  overflow: hidden;
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page .xk-mihomo-picker-trigger .xk-mihomo-picker-chevron {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  color: var(--op-muted);
+  transition: transform .15s ease;
+}
+
+body.panel-page .xk-mihomo-picker-trigger[aria-expanded="true"] .xk-mihomo-picker-chevron {
+  transform: rotate(180deg);
+}
+
+body.panel-page .xk-mihomo-picker-node-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  overflow: hidden;
+  border-radius: 4px;
+  color: var(--op-muted);
+}
+
+body.panel-page .xk-mihomo-picker-node-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+body.panel-page .xk-mihomo-picker-node-icon .xk-action-icon {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+}
+
+body.panel-page .xk-mihomo-picker-popover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% - 5px);
+  left: 8px;
+  right: 8px;
+  overflow: hidden;
+  border: 1px solid var(--op-border-strong);
+  border-radius: var(--op-control-radius);
+  background: var(--op-editor);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .32);
+}
+
+body.panel-page .xk-mihomo-picker-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 6px;
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page .xk-mihomo-picker-search > .xk-action-icon {
+  position: absolute;
+  left: 14px;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  color: var(--op-muted);
+  pointer-events: none;
+}
+
+body.panel-page .xk-mihomo-picker-search input {
+  width: 100%;
+  min-height: 32px;
+  padding-left: 29px !important;
+  background: var(--op-surface) !important;
+}
+
+body.panel-page .xk-mihomo-picker-options {
+  max-height: min(310px, 45vh);
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+body.panel-page .xk-mihomo-picker-option {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-width: 0;
+  min-height: 34px;
+  border-radius: 4px;
+}
+
+body.panel-page .xk-mihomo-picker-option:hover {
+  background: var(--op-surface-2);
+}
+
+body.panel-page .xk-mihomo-picker-option.is-current {
+  background: var(--op-accent-soft);
+}
+
+body.panel-page .xk-mihomo-picker-select {
+  display: grid !important;
+  grid-template-columns: 20px minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 34px !important;
+  padding: 5px 4px 5px 6px !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--op-text) !important;
+  text-align: left;
+  box-shadow: none !important;
+}
+
+body.panel-page .xk-mihomo-picker-select > span:not(.xk-mihomo-picker-node-icon):not(.xk-visually-hidden) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page .xk-mihomo-picker-select > .xk-action-icon {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  color: var(--op-accent);
+}
+
+body.panel-page .xk-mihomo-picker-select:disabled {
+  opacity: 1;
+}
+
+body.panel-page .xk-mihomo-picker-option .xk-mihomo-node-probe {
+  position: static;
+  grid-column: 2;
+  grid-row: 1;
+  margin-right: 3px;
+}
+
+body.panel-page .xk-mihomo-picker-empty {
+  padding: 11px 9px;
+  color: var(--op-muted);
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  text-align: center;
 }
 
 body.panel-page .xk-mihomo-group-title {

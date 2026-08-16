@@ -284,6 +284,9 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await expect(page.locator('#mihomo-clash-groups-list')).not.toContainText('HIDDEN');
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head')).toHaveAttribute('aria-expanded', 'false');
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test')).toHaveCount(0);
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-node-row')).toHaveCount(0);
+  await expect(page.locator('[data-group-name="AUTO"] [data-mihomo-picker-toggle]')).toHaveAttribute('role', 'combobox');
+  await expect(page.locator('[data-group-name="AUTO"] [data-mihomo-picker-toggle]')).toContainText('node-a');
   await expect(page.locator('#mihomo-clash-groups-collapse')).toHaveText('Развернуть');
   await expect(page.locator('#mihomo-clash-test-visible')).toBeDisabled();
   const collapseGeometry = await page.locator('#mihomo-clash-groups-collapse').evaluate((button) => {
@@ -303,6 +306,17 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
     labelRightOfIcon: true,
     verticallyAligned: true,
   });
+
+  await page.locator('[data-group-name="AUTO"] [data-mihomo-picker-toggle]').click();
+  await expect(page.locator('[data-group-name="AUTO"] [data-mihomo-picker-search]')).toBeFocused();
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-picker-option')).toHaveCount(3);
+  await page.locator('[data-group-name="AUTO"] [data-mihomo-picker-search]').fill('provider-one');
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-picker-option')).toHaveCount(1);
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-picker-option')).toContainText('node-b');
+  await page.locator('[data-group-name="AUTO"] [data-mihomo-picker-search]').fill('');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-picker-popover')).toHaveCount(0);
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-node-row')).toHaveCount(0);
 
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test')).toBeVisible();
@@ -340,6 +354,7 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await expect(page.locator('[data-group-name="HIDDEN"] .xk-mihomo-group-head')).toHaveAttribute('aria-expanded', 'false');
   await page.locator('#mihomo-clash-groups-filter').fill('node-b');
   await expect(page.locator('.xk-mihomo-node-row')).toHaveCount(1);
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head')).toHaveAttribute('aria-expanded', 'true');
 
   await page.locator('[data-mihomo-group-select][data-node="node-b"]').click();
   await expect(page.locator('#confirm-modal-title')).toContainText('Переключить группу');
@@ -371,6 +386,44 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test')).toHaveAttribute('data-mihomo-delay-testing', 'true');
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-delay-spinner')).toBeVisible();
   await expect(page.locator('#mihomo-clash-test-visible')).not.toHaveAttribute('data-mihomo-delay-testing', 'true');
+});
+
+
+test('Mihomo group disclosure state survives reload without mounting collapsed cards', async ({ page }) => {
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: groupsPayload() }));
+
+  await page.goto('/');
+  await page.evaluate(() => localStorage.removeItem('xkeen:mihomo-clash-collapsed-groups'));
+  await page.reload();
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-disclosure-persistence' });
+  });
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-node-row')).toHaveCount(0);
+
+  await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-node-row')).toHaveCount(3);
+  await expect.poll(() => page.evaluate(() => JSON.parse(
+    localStorage.getItem('xkeen:mihomo-clash-collapsed-groups') || '{}',
+  ).AUTO)).toBe(false);
+
+  await page.reload();
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-disclosure-restored' });
+  });
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-node-row')).toHaveCount(3);
+
+  await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
+  await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-node-row')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => JSON.parse(
+    localStorage.getItem('xkeen:mihomo-clash-collapsed-groups') || '{}',
+  ).AUTO)).toBe(true);
 });
 
 
@@ -818,6 +871,7 @@ test('automatic fixed group shows lock, unfix action, sorting and timeout hiding
   await page.locator('.top-tab-btn[data-view="mihomo"]').click();
   await page.locator('#mihomo-clash-show-hidden').check();
   await page.locator('[data-group-name="HIDDEN"] .xk-mihomo-group-head').click();
+  await page.locator('[data-group-name="FALLBACK"] .xk-mihomo-group-head').click();
   await expect(page.locator('[data-group-name="HIDDEN"]')).toContainText('Зафиксирован: hidden-node');
   await expect(page.locator('[data-node-name="hidden-node"]')).toHaveClass(/is-fixed/);
   await expect(page.locator('[data-group-name="FALLBACK"] [data-node-name="node-b"]')).toHaveClass(/is-current/);
