@@ -25,6 +25,7 @@ const AUTOMATIC_TYPES = new Set(['urltest', 'fallback', 'smart']);
 let root = null;
 let active = false;
 let payload = null;
+let runtimeMode = '';
 let filterText = '';
 let showHidden = false;
 let request = null;
@@ -60,7 +61,22 @@ function escapeHtml(value) {
 }
 
 function groups() {
-  return payload && Array.isArray(payload.groups) ? payload.groups : [];
+  if (!payload || typeof payload !== 'object') return [];
+  if (runtimeMode === 'global') {
+    return payload.global_group && typeof payload.global_group === 'object'
+      ? [payload.global_group]
+      : [];
+  }
+  return Array.isArray(payload.groups) ? payload.groups : [];
+}
+
+function allGroups() {
+  if (!payload || typeof payload !== 'object') return [];
+  const items = Array.isArray(payload.groups) ? [...payload.groups] : [];
+  if (payload.global_group && typeof payload.global_group === 'object') {
+    items.push(payload.global_group);
+  }
+  return items;
 }
 
 function errorCode(error) {
@@ -136,7 +152,7 @@ function effectiveDelayNode(node) {
   const visited = new Set();
   while (current?.name && !visited.has(current.name)) {
     visited.add(current.name);
-    const nestedGroup = groups().find((candidate) => candidate.name === current.name);
+    const nestedGroup = allGroups().find((candidate) => candidate.name === current.name);
     const selectedName = String(nestedGroup?.now || '');
     if (!selectedName || selectedName === current.name) break;
     const selectedNode = (nestedGroup.nodes || []).find((candidate) => candidate.name === selectedName);
@@ -868,9 +884,9 @@ export async function refreshMihomoClashGroups() {
     if (!active || sequence !== requestSequence) return false;
     payloadLoadedAt = Date.now();
     payload = next && typeof next === 'object' ? next : { groups: [] };
-    seedDelayHistories(groups());
+    seedDelayHistories(allGroups());
     if (!disclosureSeeded) {
-      for (const group of groups()) collapsedGroups.add(group.name);
+      for (const group of allGroups()) collapsedGroups.add(group.name);
       disclosureSeeded = true;
     }
     render();
@@ -885,7 +901,13 @@ export async function refreshMihomoClashGroups() {
 }
 
 function replaceGroup(group) {
-  if (!payload || !Array.isArray(payload.groups) || !group || !group.name) return;
+  if (!payload || !group || !group.name) return;
+  if (group.name === 'GLOBAL') {
+    payload.global_group = { ...(payload.global_group || {}), ...group };
+    seedDelayHistories([group]);
+    return;
+  }
+  if (!Array.isArray(payload.groups)) return;
   payload.groups = payload.groups.map((item) => item.name === group.name ? { ...item, ...group } : item);
   seedDelayHistories([group]);
 }
@@ -1325,15 +1347,22 @@ export function initMihomoClashGroups() {
   return true;
 }
 
-export function activateMihomoClashGroups(nextCapabilities = {}) {
+export function activateMihomoClashGroups(nextCapabilities = {}, nextRuntimeMode = '') {
   if (!initMihomoClashGroups()) return false;
   active = true;
   capabilities = nextCapabilities || {};
+  runtimeMode = String(nextRuntimeMode || '').toLowerCase();
   // Re-read Mihomo whenever the operator returns to Clash API. This mirrors
   // the useful part of Zashboard's lifecycle and updates alive/group state;
   // the freshness TTL still prevents old core history from looking current.
   void refreshMihomoClashGroups();
   return true;
+}
+
+export function setMihomoClashGroupsRuntimeMode(nextRuntimeMode = '') {
+  runtimeMode = String(nextRuntimeMode || '').toLowerCase();
+  render();
+  return runtimeMode;
 }
 
 export function deactivateMihomoClashGroups() {
@@ -1357,4 +1386,5 @@ export const mihomoClashGroupsApi = Object.freeze({
   deactivate: deactivateMihomoClashGroups,
   invalidate: invalidateMihomoClashGroups,
   refresh: refreshMihomoClashGroups,
+  setRuntimeMode: setMihomoClashGroupsRuntimeMode,
 });

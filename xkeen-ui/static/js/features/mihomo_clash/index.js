@@ -12,6 +12,7 @@ import {
   activateMihomoClashGroups,
   deactivateMihomoClashGroups,
   initMihomoClashGroups,
+  setMihomoClashGroupsRuntimeMode,
 } from './groups.js';
 import {
   activateMihomoClashEgress,
@@ -153,6 +154,7 @@ async function changeRuntimeMode(nextMode) {
     if (!result?.reconciled || result?.mode !== mode) throw new Error('Mihomo не подтвердил новый режим.');
     runtimeMode = mode;
     if (statusPayload?.runtime) statusPayload.runtime.mode = mode;
+    setMihomoClashGroupsRuntimeMode(mode);
     renderRuntimeModeSwitch();
     try { window.toast(`Режим Mihomo: ${copy[0]}. config.yaml не изменён.`, 'success'); } catch (error) {}
     return true;
@@ -204,7 +206,7 @@ function renderStatus(state, payload = null) {
   setHidden(stateBox, state === 'ready');
   setHidden(content, state !== 'ready');
   if (state === 'ready' && active && visible && currentSubview === 'control') {
-    activateMihomoClashGroups(payload?.capabilities || {});
+    activateMihomoClashGroups(payload?.capabilities || {}, runtimeMode);
     activateMihomoClashEgress();
   } else {
     deactivateMihomoClashGroups();

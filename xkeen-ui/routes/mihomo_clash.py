@@ -142,6 +142,21 @@ def _disconnect_captured_connections(client: MihomoClashClient, ids: list[str]) 
     return disconnected, failed
 
 
+def _proxy_group_from_dto(payload: Mapping[str, Any], name: str) -> Mapping[str, Any] | None:
+    """Find a regular policy group or the separate runtime GLOBAL selector."""
+
+    if name == "GLOBAL":
+        candidate = payload.get("global_group")
+        return candidate if isinstance(candidate, Mapping) else None
+    groups = payload.get("groups")
+    if not isinstance(groups, list):
+        return None
+    return next(
+        (item for item in groups if isinstance(item, Mapping) and item.get("name") == name),
+        None,
+    )
+
+
 def _security_posture(discovery: MihomoClashDiscovery) -> dict[str, Any]:
     diagnostic_codes = {item.code for item in discovery.diagnostics}
     transport = discovery.target.transport if discovery.target else None
@@ -1005,11 +1020,8 @@ def create_mihomo_clash_blueprint(
             return unavailable
         try:
             before = client.request_json("proxies")
-            before_groups = build_mihomo_clash_proxy_groups_dto(before.payload).get("groups", [])
-            candidate_group = next(
-                (item for item in before_groups if item.get("name") == group),
-                None,
-            )
+            before_payload = build_mihomo_clash_proxy_groups_dto(before.payload)
+            candidate_group = _proxy_group_from_dto(before_payload, group)
             candidate_names = {
                 item.get("name")
                 for item in (candidate_group or {}).get("nodes", [])
@@ -1055,12 +1067,12 @@ def create_mihomo_clash_blueprint(
         finally:
             lease.release()
 
-        groups = build_mihomo_clash_proxy_groups_dto(
+        groups_payload = build_mihomo_clash_proxy_groups_dto(
             refreshed.payload,
             refreshed_providers.payload,
             _load_proxy_transport_index(mihomo_config_file, root),
-        ).get("groups", [])
-        current = next((item for item in groups if item.get("name") == group), None)
+        )
+        current = _proxy_group_from_dto(groups_payload, group)
         _audit_action("proxy-select", True, group=group)
         return jsonify(
             {

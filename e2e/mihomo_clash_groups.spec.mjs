@@ -67,6 +67,25 @@ function groupsPayload(now = 'node-a', fixed = '', includeReliabilityFixture = f
 }
 
 
+function globalGroupPayload(now = 'AUTO') {
+  return {
+    name: 'GLOBAL',
+    type: 'Selector',
+    icon: '',
+    now,
+    fixed: '',
+    hidden: false,
+    selectable: true,
+    node_count: 2,
+    nodes_truncated: false,
+    nodes: [
+      { name: 'AUTO', type: 'Selector', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: null },
+      { name: 'DIRECT', type: 'Direct', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: null },
+    ],
+  };
+}
+
+
 function egressPayload(cached = false) {
   return {
     ok: true,
@@ -352,6 +371,107 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test')).toHaveAttribute('data-mihomo-delay-testing', 'true');
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-delay-spinner')).toBeVisible();
   await expect(page.locator('#mihomo-clash-test-visible')).not.toHaveAttribute('data-mihomo-delay-testing', 'true');
+});
+
+
+test('Mihomo GLOBAL selector follows runtime mode and reconciles selection locally', async ({ page }) => {
+  let runtimeMode = 'rule';
+  let globalNow = 'AUTO';
+  let groupGets = 0;
+  const modeRequests = [];
+  const selections = [];
+
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({
+    json: {
+      ...statusPayload(),
+      runtime: { mode: runtimeMode },
+      capabilities: {
+        ...statusPayload().capabilities,
+        runtime_mode_switch: true,
+      },
+    },
+  }));
+  await page.route('**/api/mihomo/clash/runtime-mode', async (route) => {
+    const previousMode = runtimeMode;
+    const data = route.request().postDataJSON();
+    runtimeMode = data.mode;
+    modeRequests.push(runtimeMode);
+    await route.fulfill({
+      json: {
+        ok: true,
+        schema_version: 1,
+        mode: runtimeMode,
+        previous_mode: previousMode,
+        changed: previousMode !== runtimeMode,
+        reconciled: true,
+        persistent: false,
+      },
+    });
+  });
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, async (route) => {
+    const request = route.request();
+    if (request.method() === 'PUT') {
+      expect(new URL(request.url()).pathname).toBe('/api/mihomo/clash/proxy-groups/GLOBAL');
+      const data = request.postDataJSON();
+      globalNow = data.name;
+      selections.push(globalNow);
+      await route.fulfill({
+        json: {
+          ok: true,
+          schema_version: 1,
+          group: globalGroupPayload(globalNow),
+          reconciled: true,
+          connections: { requested: false, matched: 0, disconnected: 0, failed: 0, truncated: false },
+        },
+      });
+      return;
+    }
+    groupGets += 1;
+    await route.fulfill({
+      json: {
+        ...groupsPayload(),
+        global_group: globalGroupPayload(globalNow),
+      },
+    });
+  });
+
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-global-selector' });
+  });
+
+  await expect(page.locator('[data-group-name="AUTO"]')).toBeVisible();
+  await expect(page.locator('[data-group-name="GLOBAL"]')).toHaveCount(0);
+
+  await page.locator('#mihomo-clash-status-mode').click();
+  await page.locator('[data-mihomo-runtime-mode="global"]').click();
+  await expect(page.locator('#confirm-modal-title')).toContainText('Включить режим');
+  await page.locator('#confirm-modal-ok-btn').click();
+
+  await expect(page.locator('#mihomo-clash-status-mode-value')).toHaveText('Через GLOBAL');
+  await expect(page.locator('#mihomo-clash-groups-list .xk-mihomo-group')).toHaveCount(1);
+  await expect(page.locator('[data-group-name="GLOBAL"]')).toBeVisible();
+  await expect(page.locator('[data-group-name="AUTO"]')).toHaveCount(0);
+
+  await page.locator('[data-group-name="GLOBAL"] .xk-mihomo-group-head').click();
+  const groupGetsBeforeSelection = groupGets;
+  await page.locator('[data-group-name="GLOBAL"] [data-mihomo-group-select][data-node="DIRECT"]').click();
+  await expect(page.locator('#confirm-modal-title')).toContainText('Переключить группу');
+  await page.locator('#confirm-modal-ok-btn').click();
+
+  await expect(page.locator('[data-group-name="GLOBAL"] [data-node-name="DIRECT"]')).toHaveClass(/is-current/);
+  expect(groupGets).toBe(groupGetsBeforeSelection);
+
+  await page.locator('#mihomo-clash-status-mode').click();
+  await page.locator('[data-mihomo-runtime-mode="rule"]').click();
+
+  await expect(page.locator('#mihomo-clash-status-mode-value')).toHaveText('По правилам');
+  await expect(page.locator('[data-group-name="AUTO"]')).toBeVisible();
+  await expect(page.locator('[data-group-name="GLOBAL"]')).toHaveCount(0);
+  expect(modeRequests).toEqual(['global', 'rule']);
+  expect(selections).toEqual(['DIRECT']);
 });
 
 

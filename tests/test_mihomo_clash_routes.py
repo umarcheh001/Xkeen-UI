@@ -526,6 +526,10 @@ def test_proxy_groups_route_returns_versioned_normalized_payload():
     assert body["ok"] is True
     assert body["schema_version"] == 1
     assert body["groups"][0]["name"] == "AUTO"
+    assert all(group["name"] != "GLOBAL" for group in body["groups"])
+    assert body["global_group"]["name"] == "GLOBAL"
+    assert body["global_group"]["now"] == "AUTO"
+    assert [node["name"] for node in body["global_group"]["nodes"]] == ["AUTO"]
     assert body["capabilities"]["proxy_groups"] is True
     assert body["capabilities"]["proxy_select"] is True
     assert body["telemetry"]["providers"]["size_bytes"] == 100
@@ -681,6 +685,54 @@ def test_proxy_select_is_reconciled_against_fresh_snapshot():
             {"source": "mihomo-clash", "action": "proxy-select", "group": "AUTO"},
         )
     ]
+
+
+def test_global_proxy_select_is_reconciled_against_fresh_snapshot():
+    client = StubClient(
+        responses={
+            "proxies": MihomoClashJSONResponse(groups_payload(), 200, 2, 200),
+            "providers_proxies": MihomoClashJSONResponse(
+                {"providers": {}}, 200, 2, 100
+            ),
+        }
+    )
+    response = make_app(ready_discovery(), client).test_client().put(
+        "/api/mihomo/clash/proxy-groups/GLOBAL",
+        json={"name": "AUTO"},
+    )
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body["ok"] is True
+    assert body["group"]["name"] == "GLOBAL"
+    assert body["group"]["now"] == "AUTO"
+    assert body["reconciled"] is True
+    assert client.selections == [("GLOBAL", "AUTO")]
+    assert client.operations == ["proxies", "proxies", "providers_proxies"]
+
+
+def test_global_proxy_select_rejects_stale_choice_or_missing_selector_before_mutation():
+    missing_global = groups_payload()
+    missing_global["proxies"].pop("GLOBAL")
+
+    for payload, selection in (
+        (groups_payload(), "removed-group"),
+        (missing_global, "AUTO"),
+    ):
+        client = StubClient(
+            responses={
+                "proxies": MihomoClashJSONResponse(payload, 200, 2, 200),
+            }
+        )
+        response = make_app(ready_discovery(), client).test_client().put(
+            "/api/mihomo/clash/proxy-groups/GLOBAL",
+            json={"name": selection},
+        )
+
+        assert response.status_code == 409
+        assert response.get_json()["code"] == "proxy_selection_not_available"
+        assert client.selections == []
+        assert client.operations == ["proxies"]
 
 
 def test_proxy_select_rejects_stale_or_unknown_choice_before_mutation():

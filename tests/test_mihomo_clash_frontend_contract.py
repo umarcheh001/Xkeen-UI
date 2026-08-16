@@ -203,7 +203,7 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
         "delayKey(groupName, name, provider = '')",
         "latestDelayKey(name, provider = '')",
         "function effectiveDelayNode(node)",
-        "const nestedGroup = groups().find((candidate) => candidate.name === current.name)",
+        "const nestedGroup = allGroups().find((candidate) => candidate.name === current.name)",
         "visited.has(current.name)",
         "latestDelays.get(effectiveIdentity)",
         "delayKey(group.name, node.name, node.provider)",
@@ -235,7 +235,7 @@ def test_groups_start_collapsed_and_keep_labelled_actions_on_one_baseline():
     groups = _text(GROUPS)
     css = _text(CSS)
 
-    assert "for (const group of groups()) collapsedGroups.add(group.name);" in groups
+    assert "for (const group of allGroups()) collapsedGroups.add(group.name);" in groups
     assert 'id="mihomo-clash-groups-collapse"' in markup
     assert ".xk-mihomo-groups-collapse" in css
     assert "display: inline-flex !important;" in css

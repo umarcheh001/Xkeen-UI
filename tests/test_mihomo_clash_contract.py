@@ -143,6 +143,14 @@ def test_proxy_groups_dto_retains_order_and_provider_enrichment():
     )
 
     assert [group["name"] for group in dto["groups"]] == ["AUTO"]
+    assert all(group["name"] != "GLOBAL" for group in dto["groups"])
+    assert dto["global_group"]["name"] == "GLOBAL"
+    assert dto["global_group"]["type"] == "Selector"
+    assert dto["global_group"]["now"] == "AUTO"
+    assert [node["name"] for node in dto["global_group"]["nodes"]] == [
+        "AUTO",
+        "DIRECT",
+    ]
     auto = next(group for group in dto["groups"] if group["name"] == "AUTO")
     assert auto["now"] == "node-a"
     assert auto["nodes"][1]["provider"] == "demo-provider"

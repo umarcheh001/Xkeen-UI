@@ -335,23 +335,7 @@ def build_mihomo_clash_proxy_groups_dto(
     global_entry = _mapping(proxies.get("GLOBAL"))
     preferred = _string_list(global_entry.get("all"), limit=MAX_GROUPS + 1)
 
-    candidate_names: list[str] = []
-    for name in preferred:
-        item = _mapping(proxies.get(name))
-        if item.get("all") is not None and name not in candidate_names:
-            candidate_names.append(name)
-    for raw_name, raw_proxy in proxies.items():
-        name = _text(raw_name, 256)
-        item = _mapping(raw_proxy)
-        if name != "GLOBAL" and item.get("all") is not None and name not in candidate_names:
-            candidate_names.append(name)
-        if len(candidate_names) > MAX_GROUPS:
-            break
-    groups_truncated = len(candidate_names) > MAX_GROUPS
-    group_names = candidate_names[:MAX_GROUPS]
-
-    groups: list[dict[str, Any]] = []
-    for name in group_names[:MAX_GROUPS]:
+    def build_group(name: str) -> dict[str, Any]:
         group = _mapping(proxies.get(name))
         candidate_node_names = _string_list(group.get("all"), limit=MAX_GROUP_NODES + 1)
         nodes_truncated = len(candidate_node_names) > MAX_GROUP_NODES
@@ -384,25 +368,45 @@ def build_mihomo_clash_proxy_groups_dto(
 
         group_type = _text(group.get("type"), 64)
         selectable = group_type.lower() in {"selector", "select", "urltest", "fallback", "smart"}
-        groups.append(
-            {
-                "name": name,
-                "type": group_type,
-                "now": _text(group.get("now"), 256),
-                "fixed": _text(group.get("fixed"), 256),
-                "icon": _group_icon_url(group.get("icon")),
-                "alive": _optional_bool(group.get("alive")),
-                "hidden": bool(group.get("hidden")) if isinstance(group.get("hidden"), bool) else False,
-                "selectable": selectable,
-                "node_count": len(node_names),
-                "nodes_truncated": nodes_truncated,
-                "nodes": nodes,
-            }
-        )
+        return {
+            "name": name,
+            "type": group_type,
+            "now": _text(group.get("now"), 256),
+            "fixed": _text(group.get("fixed"), 256),
+            "icon": _group_icon_url(group.get("icon")),
+            "alive": _optional_bool(group.get("alive")),
+            "hidden": bool(group.get("hidden")) if isinstance(group.get("hidden"), bool) else False,
+            "selectable": selectable,
+            "node_count": len(node_names),
+            "nodes_truncated": nodes_truncated,
+            "nodes": nodes,
+        }
+
+    candidate_names: list[str] = []
+    for name in preferred:
+        item = _mapping(proxies.get(name))
+        if item.get("all") is not None and name not in candidate_names:
+            candidate_names.append(name)
+    for raw_name, raw_proxy in proxies.items():
+        name = _text(raw_name, 256)
+        item = _mapping(raw_proxy)
+        if name != "GLOBAL" and item.get("all") is not None and name not in candidate_names:
+            candidate_names.append(name)
+        if len(candidate_names) > MAX_GROUPS:
+            break
+    groups_truncated = len(candidate_names) > MAX_GROUPS
+    group_names = candidate_names[:MAX_GROUPS]
+
+    groups = [build_group(name) for name in group_names[:MAX_GROUPS]]
+    global_group = build_group("GLOBAL") if global_entry.get("all") is not None else None
 
     return {
         "schema_version": MIHOMO_CLASH_SCHEMA_VERSION,
         "groups": groups,
+        # GLOBAL is a runtime-mode selector, not a regular policy group. Keep
+        # it separate so clients can expose it only while mode=global without
+        # changing the long-standing ordering/count contract of ``groups``.
+        "global_group": global_group,
         "providers": providers,
         "truncated": groups_truncated,
     }
