@@ -13,7 +13,6 @@ const SELECTABLE_TYPES = new Set(['selector', 'select', 'urltest', 'fallback', '
 const MAX_DELAY_CONCURRENCY = 1;
 const MAX_BUSY_RETRIES = 2;
 const DELAY_BATCH_CADENCE_MS = 120;
-const TIMEOUT_HIDE_THRESHOLD = 3;
 const MAX_DELAY_HISTORY = 10;
 const DELAY_HISTORY_HOVER_MS = 350;
 // A latency number is a point-in-time observation, not a live status. Keep it
@@ -35,6 +34,9 @@ let selection = null;
 let capabilities = {};
 let sortMode = 'config';
 let showTimeoutHidden = false;
+let hideUnavailable = false;
+let consecutiveTimeouts = 3;
+let settingsUnsubscribe = null;
 let delayRun = null;
 let lastDelaySummary = null;
 let payloadLoadedAt = 0;
@@ -49,7 +51,6 @@ const pickerQueries = new Map();
 const groupDelays = new Map();
 const latestDelays = new Map();
 const delayHistories = new Map();
-const timeoutCounts = new Map();
 let delayHistoryPopover = null;
 let delayHistoryOwner = null;
 let delayHistoryTimer = 0;
@@ -151,6 +152,80 @@ function delayKey(groupName, name, provider = '') {
 
 function latestDelayKey(name, provider = '') {
   return `${String(provider || '')}\u0000${String(name || '')}`;
+}
+
+function clampConsecutiveTimeouts(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 3;
+  return Math.max(1, Math.min(10, Math.round(parsed)));
+}
+
+function applyMihomoUiSettings(settings) {
+  const previousHideUnavailable = hideUnavailable;
+  const previousConsecutiveTimeouts = consecutiveTimeouts;
+  const mihomo = settings?.mihomo && typeof settings.mihomo === 'object'
+    ? settings.mihomo
+    : {};
+  hideUnavailable = mihomo.hideUnavailable === true;
+  consecutiveTimeouts = clampConsecutiveTimeouts(mihomo.consecutiveTimeouts);
+  if (
+    root
+    && (hideUnavailable !== previousHideUnavailable
+      || consecutiveTimeouts !== previousConsecutiveTimeouts)
+  ) {
+    showTimeoutHidden = false;
+    render();
+  }
+}
+
+function bindMihomoUiSettings() {
+  const settingsApi = window.XKeen?.ui?.settings;
+  if (!settingsApi) return;
+  try {
+    if (typeof settingsApi.get === 'function') applyMihomoUiSettings(settingsApi.get());
+    if (!settingsUnsubscribe && typeof settingsApi.subscribe === 'function') {
+      settingsUnsubscribe = settingsApi.subscribe((settings) => applyMihomoUiSettings(settings));
+    }
+    if (typeof settingsApi.fetchOnce === 'function') {
+      void settingsApi.fetchOnce().then(applyMihomoUiSettings).catch(() => {});
+    }
+  } catch (error) {}
+}
+
+function hasConsecutiveTimeouts(node, threshold = consecutiveTimeouts) {
+  const history = Array.isArray(node?.delay_history) ? node.delay_history : [];
+  const count = clampConsecutiveTimeouts(threshold);
+  if (history.length < count) return false;
+  return history.slice(-count).every((entry) => {
+    if (!entry || typeof entry !== 'object' || typeof entry.delay_ms === 'boolean') return false;
+    const delay = Number(entry.delay_ms);
+    return Number.isFinite(delay) && delay === 0;
+  });
+}
+
+function unavailableVisibilityState() {
+  const hidden = new Set();
+  const protectedIdentities = new Set();
+  if (!hideUnavailable) return { hidden, protectedIdentities };
+
+  for (const group of groups()) {
+    for (const node of group.nodes || []) {
+      if (node.name === group.now || node.name === group.fixed) {
+        protectedIdentities.add(latestDelayKey(node.name, node.provider));
+      }
+    }
+  }
+  for (const group of groups()) {
+    for (const node of group.nodes || []) {
+      const identity = latestDelayKey(node.name, node.provider);
+      // A successful explicit probe is an immediate recovery signal even if
+      // the following /proxies refresh has not exposed the new history entry
+      // yet.  Timeout state itself still comes exclusively from delay_history.
+      if (freshDelayResult(latestDelays.get(identity))?.state === 'done') protectedIdentities.add(identity);
+      if (!protectedIdentities.has(identity) && hasConsecutiveTimeouts(node)) hidden.add(identity);
+    }
+  }
+  return { hidden, protectedIdentities };
 }
 
 function measurementTimestamp(value, fallback = 0) {
@@ -485,12 +560,13 @@ function nodeSearchText(node) {
 
 function filteredGroups() {
   const query = filterText.trim().toLocaleLowerCase('ru');
+  const unavailable = unavailableVisibilityState().hidden;
   return groups().reduce((result, group) => {
     if (group.hidden && !showHidden) return result;
     const groupMatches = !query || [group.name, group.type, group.now].join(' ').toLocaleLowerCase('ru').includes(query);
     const nodes = Array.isArray(group.nodes)
       ? group.nodes.filter((node) => (
-        (showTimeoutHidden || (timeoutCounts.get(delayKey(group.name, node.name, node.provider)) || 0) < TIMEOUT_HIDE_THRESHOLD)
+        (showTimeoutHidden || !unavailable.has(latestDelayKey(node.name, node.provider)))
         && (groupMatches || nodeSearchText(node).includes(query))
       ))
       : [];
@@ -753,8 +829,9 @@ function pickerNodeIconHtml(node) {
 function pickerNodes(group) {
   const query = String(pickerQueries.get(group.name) || '').trim().toLocaleLowerCase('ru');
   const nodes = Array.isArray(group.nodes) ? group.nodes : [];
+  const unavailable = unavailableVisibilityState().hidden;
   return sortNodes(group, nodes.filter((node) => (
-    (showTimeoutHidden || (timeoutCounts.get(delayKey(group.name, node.name, node.provider)) || 0) < TIMEOUT_HIDE_THRESHOLD)
+    (showTimeoutHidden || !unavailable.has(latestDelayKey(node.name, node.provider)))
     && (!query || nodeSearchText(node).includes(query))
   )));
 }
@@ -874,12 +951,8 @@ function render() {
   );
   if (count) count.textContent = `${visibleGroups.length} групп · ${visibleNodes} узлов`;
   if (hiddenToggle) hiddenToggle.checked = showHidden;
-  const hiddenTimeoutCount = new Set(
-    groups().flatMap((group) => (group.nodes || []).map((node) => (
-      delayKey(group.name, node.name, node.provider)
-    )))
-      .filter((key) => (timeoutCounts.get(key) || 0) >= TIMEOUT_HIDE_THRESHOLD),
-  ).size;
+  const hiddenTimeoutCount = unavailableVisibilityState().hidden.size;
+  if (hiddenTimeoutCount === 0) showTimeoutHidden = false;
   if (timeoutButton) {
     timeoutButton.hidden = hiddenTimeoutCount === 0;
     timeoutButton.setAttribute('aria-pressed', showTimeoutHidden ? 'true' : 'false');
@@ -1158,14 +1231,8 @@ function setTargetResult(target, result) {
   groupDelays.set(target.key, timedResult);
   if (timedResult.state === 'done') {
     latestDelays.set(target.identity, timedResult);
-    timeoutCounts.delete(target.key);
   } else if (timedResult.state === 'timeout') {
-    timeoutCounts.set(
-      target.key,
-      Math.min(TIMEOUT_HIDE_THRESHOLD, (timeoutCounts.get(target.key) || 0) + 1),
-    );
-  } else {
-    timeoutCounts.delete(target.key);
+    latestDelays.delete(target.identity);
   }
 }
 
@@ -1238,8 +1305,7 @@ async function probeDelay(item) {
     return false;
   } finally {
     syncDelayProgress();
-    if (!showTimeoutHidden && keys.some((key) => (timeoutCounts.get(key) || 0) >= TIMEOUT_HIDE_THRESHOLD)) render();
-    else renderDelayNodes(keys);
+    renderDelayNodes(keys);
     syncDelayControls();
   }
 }
@@ -1482,6 +1548,7 @@ export function initMihomoClashGroups() {
   if (root) return true;
   root = document.getElementById('mihomo-clash-groups');
   if (!root) return false;
+  bindMihomoUiSettings();
   bind();
   render();
   return true;

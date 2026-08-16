@@ -44,6 +44,10 @@
       showActiveOutbound: false,
       showScenarioCard: true,
     },
+    mihomo: {
+      hideUnavailable: false,
+      consecutiveTimeouts: 3,
+    },
   };
 
   // Simple deep clone for JSON-like values.

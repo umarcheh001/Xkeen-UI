@@ -816,6 +816,32 @@ import { getFeatureApi } from '../features/feature_access.js';
       ],
     },
     {
+      key: 'mihomo',
+      navLabel: 'Mihomo',
+      eyebrow: 'Mihomo',
+      title: 'Узлы Clash API',
+      description: 'Параметры отображения узлов. История проверок остаётся в памяти Mihomo и не записывается панелью на flash.',
+      items: [
+        createServerSwitch(
+          'mihomo-hide-unavailable',
+          'mihomo.hideUnavailable',
+          'Скрывать недоступные узлы',
+          'Скрывает узел, когда последние N записей истории Mihomo — таймауты. Текущий и зафиксированный узлы всегда остаются видимыми.',
+          'Скрытие недоступных узлов сохранено.'
+        ),
+        createServerNumber(
+          'mihomo-consecutive-timeouts',
+          'mihomo.consecutiveTimeouts',
+          'Таймаутов подряд',
+          'Порог срабатывания по последним записям delay_history Mihomo.',
+          1,
+          10,
+          3,
+          'Порог таймаутов сохранён.'
+        ),
+      ],
+    },
+    {
       key: 'updates',
       navLabel: 'Обновления',
       eyebrow: 'Обновления',

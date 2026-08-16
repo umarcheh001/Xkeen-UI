@@ -850,9 +850,8 @@ test('group delay test keeps shared node progress inside the selected group', as
 });
 
 
-test('automatic fixed group shows lock, unfix action, sorting and timeout hiding', async ({ page }) => {
+test('automatic fixed group shows lock, unfix action and sorting', async ({ page }) => {
   let fixed = 'hidden-node';
-  let delayAttempts = 0;
   await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
   await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, async (route) => {
     if (route.request().method() === 'DELETE') {
@@ -860,11 +859,6 @@ test('automatic fixed group shows lock, unfix action, sorting and timeout hiding
       return route.fulfill({ json: { ok: true, schema_version: 1, group: { ...groupsPayload('hidden-node', '', true).groups[1], fixed: '' }, reconciled: true, connections: { disconnected: 0, failed: 0 } } });
     }
     return route.fulfill({ json: groupsPayload('node-a', fixed, true) });
-  });
-  await page.route('**/api/mihomo/clash/delay', async (route) => {
-    delayAttempts += 1;
-    await new Promise((resolve) => setTimeout(resolve, 40));
-    return route.fulfill({ status: 504, json: { ok: false, code: 'upstream_timeout' } });
   });
 
   await page.goto('/');
@@ -888,19 +882,81 @@ test('automatic fixed group shows lock, unfix action, sorting and timeout hiding
   await page.locator('#mihomo-clash-groups-sort').selectOption('name');
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-node-row').first()).toHaveAttribute('data-node-name', 'node-a');
-  for (let index = 0; index < 3; index += 1) {
-    await page.locator('[data-group-name="AUTO"] [data-mihomo-node-delay][data-node="node-b"]').click();
-    if (index < 2) {
-      await expect(page.locator('[data-group-name="AUTO"] [data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('таймаут');
-    } else {
-      await expect(page.locator('[data-group-name="AUTO"] [data-node-name="node-b"]')).toHaveCount(0);
-    }
-    expect(delayAttempts).toBe(index + 1);
-  }
-  await expect(page.locator('[data-group-name="AUTO"] [data-node-name="node-b"]')).toHaveCount(0);
-  await expect(page.locator('#mihomo-clash-show-timeout-hidden')).toContainText('1');
+});
+
+
+test('timeout hiding uses Mihomo history across groups and restores a node after success', async ({ page }) => {
+  let recovered = false;
+  const timeoutHistory = [
+    { measured_at: '2026-08-16T10:15:20Z', delay_ms: 70 },
+    { measured_at: '2026-08-16T10:15:21Z', delay_ms: 0 },
+    { measured_at: '2026-08-16T10:15:22Z', delay_ms: 0 },
+    { measured_at: '2026-08-16T10:15:23Z', delay_ms: 0 },
+  ];
+  const timeoutNode = (provider = 'provider-one') => ({
+    name: 'shared-timeout', type: 'VLESS', alive: false, udp: true, provider,
+    provider_candidates: provider ? [provider] : [], delay_ms: recovered ? 48 : 0,
+    delay_history: recovered
+      ? [...timeoutHistory, { measured_at: '2026-08-16T10:15:24Z', delay_ms: 48 }]
+      : timeoutHistory,
+  });
+  const currentTimeoutNode = () => ({
+    name: 'current-timeout', type: 'Trojan', alive: false, udp: true, provider: '',
+    provider_candidates: [], delay_ms: 0, delay_history: timeoutHistory,
+  });
+  const fixedTimeoutNode = () => ({
+    name: 'fixed-timeout', type: 'Trojan', alive: false, udp: true, provider: '',
+    provider_candidates: [], delay_ms: 0, delay_history: timeoutHistory,
+  });
+  const payloadWithHistory = () => ({
+    ok: true,
+    schema_version: 1,
+    truncated: false,
+    groups: [
+      {
+        name: 'AUTO', type: 'Selector', now: 'current-timeout', fixed: '', hidden: false, selectable: true,
+        nodes: [currentTimeoutNode(), timeoutNode(), { name: 'healthy', type: 'VLESS', alive: true, provider: '', provider_candidates: [], delay_ms: 20, delay_history: [{ measured_at: '2026-08-16T10:15:23Z', delay_ms: 20 }] }],
+      },
+      {
+        name: 'FALLBACK', type: 'Fallback', now: 'healthy', fixed: 'fixed-timeout', hidden: false, selectable: true,
+        nodes: [timeoutNode(), fixedTimeoutNode(), { name: 'healthy', type: 'VLESS', alive: true, provider: '', provider_candidates: [], delay_ms: 20, delay_history: [{ measured_at: '2026-08-16T10:15:23Z', delay_ms: 20 }] }],
+      },
+    ],
+  });
+
+  await page.route('**/api/ui-settings', async (route) => {
+    const settings = {
+      schemaVersion: 2,
+      editor: {}, format: {}, logs: { view: {} }, routing: {},
+      mihomo: { hideUnavailable: true, consecutiveTimeouts: 3 },
+    };
+    return route.fulfill({ json: { ok: true, settings } });
+  });
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: payloadWithHistory() }));
+  await page.route('**/api/mihomo/clash/delay', async (route) => {
+    recovered = true;
+    return route.fulfill({ json: { ok: true, schema_version: 1, results: [{ name: 'shared-timeout', delay_ms: 48 }] } });
+  });
+
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await expect(page.locator('#mihomo-clash-groups-list')).toContainText('AUTO');
+  await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
+  await page.locator('[data-group-name="FALLBACK"] .xk-mihomo-group-head').click();
+
+  await expect(page.locator('[data-node-name="shared-timeout"]')).toHaveCount(0);
+  await expect(page.locator('[data-group-name="AUTO"] [data-node-name="current-timeout"]')).toHaveCount(1);
+  await expect(page.locator('[data-group-name="FALLBACK"] [data-node-name="fixed-timeout"]')).toHaveCount(1);
+  await expect(page.locator('#mihomo-clash-show-timeout-hidden')).toHaveText(/Скрыто:\s*1/);
+
   await page.locator('#mihomo-clash-show-timeout-hidden').click();
-  await expect(page.locator('[data-group-name="AUTO"] [data-node-name="node-b"]')).toHaveCount(1);
+  await expect(page.locator('[data-node-name="shared-timeout"]')).toHaveCount(2);
+  await page.locator('[data-group-name="AUTO"] [data-mihomo-node-delay][data-node="shared-timeout"]').click();
+  await expect(page.locator('[data-group-name="AUTO"] [data-node-name="shared-timeout"] .xk-mihomo-node-delay')).toHaveText('48 мс');
+
+  await expect(page.locator('[data-node-name="shared-timeout"]')).toHaveCount(2);
+  await expect(page.locator('#mihomo-clash-show-timeout-hidden')).toBeHidden();
 });
 
 

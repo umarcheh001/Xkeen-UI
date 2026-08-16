@@ -94,6 +94,13 @@ DEFAULTS: Dict[str, Any] = {
         # Default ON to preserve the existing panel layout.
         "showScenarioCard": True,
     },
+    "mihomo": {
+        # Hide nodes only after Mihomo itself reports a stable run of timeout
+        # samples.  The samples remain in Mihomo's in-memory delay history;
+        # ui-settings persists only these two preferences.
+        "hideUnavailable": False,
+        "consecutiveTimeouts": 3,
+    },
 }
 
 
@@ -163,6 +170,10 @@ def _canonical_empty() -> Dict[str, Any]:
             "autoApply": bool(DEFAULTS["routing"]["autoApply"]),
             "showActiveOutbound": bool(DEFAULTS["routing"]["showActiveOutbound"]),
             "showScenarioCard": bool(DEFAULTS["routing"]["showScenarioCard"]),
+        },
+        "mihomo": {
+            "hideUnavailable": bool(DEFAULTS["mihomo"]["hideUnavailable"]),
+            "consecutiveTimeouts": int(DEFAULTS["mihomo"]["consecutiveTimeouts"]),
         },
     }
 
@@ -463,9 +474,38 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 rep.warnings.append({"path": f"routing.{k}", "warning": "unknown key dropped"})
                 rep.changed = True
 
+    # ---- mihomo ----
+    mihomo_raw = raw.get("mihomo")
+    if mihomo_raw is None:
+        pass
+    elif not isinstance(mihomo_raw, dict):
+        rep.warnings.append({"path": "mihomo", "warning": "must be an object; reset"})
+        rep.changed = True
+    else:
+        hide_unavailable = mihomo_raw.get("hideUnavailable")
+        if hide_unavailable is not None:
+            if _is_bool(hide_unavailable):
+                out["mihomo"]["hideUnavailable"] = bool(hide_unavailable)
+            else:
+                rep.warnings.append({"path": "mihomo.hideUnavailable", "warning": "invalid type; ignored"})
+                rep.changed = True
+
+        consecutive_timeouts = mihomo_raw.get("consecutiveTimeouts")
+        if consecutive_timeouts is not None:
+            if _is_int(consecutive_timeouts) and 1 <= int(consecutive_timeouts) <= 10:
+                out["mihomo"]["consecutiveTimeouts"] = int(consecutive_timeouts)
+            else:
+                rep.warnings.append({"path": "mihomo.consecutiveTimeouts", "warning": "invalid value; ignored"})
+                rep.changed = True
+
+        for k in mihomo_raw.keys():
+            if k not in ("hideUnavailable", "consecutiveTimeouts"):
+                rep.warnings.append({"path": f"mihomo.{k}", "warning": "unknown key dropped"})
+                rep.changed = True
+
     # ---- top-level unknown keys ----
     for k in raw.keys():
-        if k not in ("schemaVersion", "editor", "format", "logs", "routing"):
+        if k not in ("schemaVersion", "editor", "format", "logs", "routing", "mihomo"):
             rep.warnings.append({"path": k, "warning": "unknown key dropped"})
             rep.changed = True
 
@@ -675,8 +715,36 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
             if p:
                 out["routing"] = p
 
+    # mihomo
+    if "mihomo" in patch:
+        mihomo_patch = patch.get("mihomo")
+        if not isinstance(mihomo_patch, dict):
+            rep.errors.append({"path": "mihomo", "error": "must be an object"})
+        else:
+            p: Dict[str, Any] = {}
+            if "hideUnavailable" in mihomo_patch:
+                v = mihomo_patch.get("hideUnavailable")
+                if _is_bool(v):
+                    p["hideUnavailable"] = bool(v)
+                else:
+                    rep.errors.append({"path": "mihomo.hideUnavailable", "error": "must be boolean"})
+
+            if "consecutiveTimeouts" in mihomo_patch:
+                v = mihomo_patch.get("consecutiveTimeouts")
+                if _is_int(v) and 1 <= int(v) <= 10:
+                    p["consecutiveTimeouts"] = int(v)
+                else:
+                    rep.errors.append({"path": "mihomo.consecutiveTimeouts", "error": "must be int 1..10"})
+
+            for k in mihomo_patch.keys():
+                if k not in ("hideUnavailable", "consecutiveTimeouts"):
+                    rep.warnings.append({"path": f"mihomo.{k}", "warning": "unknown key dropped"})
+
+            if p:
+                out["mihomo"] = p
+
     for k in patch.keys():
-        if k not in ("schemaVersion", "editor", "format", "logs", "routing"):
+        if k not in ("schemaVersion", "editor", "format", "logs", "routing", "mihomo"):
             rep.warnings.append({"path": k, "warning": "unknown key dropped"})
 
     return out, rep

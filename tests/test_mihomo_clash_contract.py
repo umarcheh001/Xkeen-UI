@@ -189,6 +189,22 @@ def test_proxy_groups_dto_bounds_and_sanitizes_delay_history():
     assert "secret" not in json.dumps(node["delay_history"])
 
 
+def test_proxy_groups_dto_preserves_zero_delay_timeout_sentinels():
+    from services.mihomo_clash_dto import build_mihomo_clash_proxy_groups_dto
+
+    proxies = fixture("proxies.json")
+    proxies["proxies"]["node-a"]["history"] = [
+        {"time": "2026-08-16T12:00:00Z", "delay": 75},
+        {"time": "2026-08-16T12:01:00Z", "delay": 0},
+        {"time": "2026-08-16T12:02:00Z", "delay": 0},
+        {"time": "2026-08-16T12:03:00Z", "delay": 0},
+    ]
+
+    node = build_mihomo_clash_proxy_groups_dto(proxies)["groups"][0]["nodes"][0]
+
+    assert [entry["delay_ms"] for entry in node["delay_history"]] == [75, 0, 0, 0]
+
+
 def test_proxy_groups_dto_exposes_only_safe_https_group_icon_urls():
     from services.mihomo_clash_dto import build_mihomo_clash_proxy_groups_dto
 

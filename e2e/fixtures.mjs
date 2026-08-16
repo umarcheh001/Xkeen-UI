@@ -34,6 +34,10 @@ const DEFAULT_UI_SETTINGS = {
     showActiveOutbound: false,
     showScenarioCard: true,
   },
+  mihomo: {
+    hideUnavailable: false,
+    consecutiveTimeouts: 3,
+  },
 };
 
 

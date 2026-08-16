@@ -110,7 +110,7 @@
           "accessible_label": "Предупреждение"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L663",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L739",
           "control_type": "runtime-action",
           "accessible_label": "Предупреждение"
         },
@@ -259,7 +259,7 @@
       "tabler_asset": "bolt",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L664",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L740",
           "control_type": "runtime-action",
           "accessible_label": "Быстрое действие"
         },
@@ -348,7 +348,7 @@
           "accessible_label": "Подтвердить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L778",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L855",
           "control_type": "runtime-action",
           "accessible_label": "Подтвердить"
         },
@@ -379,7 +379,7 @@
       "tabler_asset": "chevron-down",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L807",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L884",
           "control_type": "runtime-action",
           "accessible_label": "Раскрыть"
         },
@@ -997,17 +997,17 @@
       "tabler_asset": "network",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L730",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L806",
           "control_type": "runtime-action",
           "accessible_label": "Показать доменные имена"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L750",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L826",
           "control_type": "runtime-action",
           "accessible_label": "Показать доменные имена"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L805",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L882",
           "control_type": "runtime-action",
           "accessible_label": "Показать доменные имена"
         },
@@ -1699,7 +1699,7 @@
           "accessible_label": "Информация"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L122",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L123",
           "control_type": "runtime-action",
           "accessible_label": "Информация"
         },
@@ -1831,7 +1831,7 @@
           "accessible_label": "Загрузка"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L677",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L753",
           "control_type": "runtime-action",
           "accessible_label": "Загрузка"
         },
@@ -1882,17 +1882,17 @@
       "tabler_asset": "lock",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L707",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L783",
           "control_type": "runtime-action",
           "accessible_label": "Ограничить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L738",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L814",
           "control_type": "runtime-action",
           "accessible_label": "Ограничить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L843",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L920",
           "control_type": "runtime-action",
           "accessible_label": "Ограничить"
         },
@@ -2173,7 +2173,7 @@
       "tabler_asset": "stopwatch",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L845",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L922",
           "control_type": "runtime-action",
           "accessible_label": "Проверить задержку"
         },
@@ -2820,7 +2820,7 @@
           "accessible_label": "Поиск"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L811",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L888",
           "control_type": "runtime-action",
           "accessible_label": "Поиск"
         },
@@ -2846,7 +2846,7 @@
       "tabler_asset": "server-off",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L662",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L738",
           "control_type": "runtime-action",
           "accessible_label": "server-off"
         },
