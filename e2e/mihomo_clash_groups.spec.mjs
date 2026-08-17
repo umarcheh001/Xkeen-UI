@@ -396,6 +396,60 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
 });
 
 
+test('collapsed picker stays above sibling cards and shows nested group icon and effective delay', async ({ page }) => {
+  const data = groupsPayload();
+  const blockedIcon = 'https://cdn.example.test/icons/blocked.png';
+  data.groups = [
+    {
+      name: 'YouTube', type: 'Selector', icon: '', now: 'BLOCKED', fixed: '', hidden: false, selectable: true,
+      nodes: [
+        { name: 'BLOCKED', type: 'Selector', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: null },
+        ...data.groups[0].nodes,
+      ],
+    },
+    {
+      name: 'BLOCKED', type: 'Selector', icon: blockedIcon, now: 'node-a', fixed: '', hidden: false, selectable: true,
+      nodes: data.groups[0].nodes,
+    },
+    {
+      name: 'Discord', type: 'Selector', icon: '', now: 'BLOCKED', fixed: '', hidden: false, selectable: true,
+      nodes: [{ name: 'BLOCKED', type: 'Selector', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: null }],
+    },
+    {
+      name: 'Twitch', type: 'Selector', icon: '', now: 'BLOCKED', fixed: '', hidden: false, selectable: true,
+      nodes: [{ name: 'BLOCKED', type: 'Selector', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: null }],
+    },
+  ];
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: data }));
+
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  const youtube = page.locator('[data-group-name="YouTube"]');
+  const trigger = youtube.locator('[data-mihomo-picker-toggle]');
+  await expect(trigger.locator('.xk-mihomo-picker-node-icon--group img')).toHaveAttribute('src', blockedIcon);
+  await expect(trigger.locator('.xk-mihomo-picker-delay')).toHaveText('82 мс');
+
+  await trigger.click();
+  await expect(youtube.locator('.xk-mihomo-picker-popover')).toBeVisible();
+  const layering = await youtube.evaluate((card) => {
+    const popover = card.querySelector('.xk-mihomo-picker-popover');
+    const sibling = document.querySelector('[data-group-name="Discord"]');
+    const popoverBox = popover.getBoundingClientRect();
+    const siblingBox = sibling.getBoundingClientRect();
+    const x = Math.max(popoverBox.left, siblingBox.left) + 12;
+    const y = Math.max(popoverBox.top, siblingBox.top) + 12;
+    return {
+      cardZ: Number(getComputedStyle(card).zIndex),
+      overlapsSibling: x < Math.min(popoverBox.right, siblingBox.right)
+        && y < Math.min(popoverBox.bottom, siblingBox.bottom),
+      hitInsideOpenPicker: popover.contains(document.elementFromPoint(x, y)),
+    };
+  });
+  expect(layering).toEqual({ cardZ: 30, overlapsSibling: true, hitInsideOpenPicker: true });
+});
+
+
 test('Mihomo group disclosure state survives reload without mounting collapsed cards', async ({ page }) => {
   await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
   await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: groupsPayload() }));

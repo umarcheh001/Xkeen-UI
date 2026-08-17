@@ -69,7 +69,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260816a') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260817a') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -1181,14 +1181,27 @@
         </div>
         <aside id="mihomo-clash-connection-inspector" class="xk-mihomo-connection-inspector" aria-labelledby="mihomo-clash-connection-inspector-title" hidden>
           <div class="xk-mihomo-connection-inspector-head">
-            <h3 id="mihomo-clash-connection-inspector-title">Детали соединения</h3>
+            <div class="xk-mihomo-connection-inspector-identity">
+              <span>Детали соединения</span>
+              <h3 id="mihomo-clash-connection-inspector-title">—</h3>
+              <small id="mihomo-clash-connection-inspector-source"></small>
+            </div>
             <div class="xk-mihomo-connection-inspector-actions">
-              <button type="button" id="mihomo-clash-connection-rule-link" class="btn-secondary" data-mihomo-connection-rule-link hidden>{{ op_icon('list-details') }}<span>Найти правило</span></button>
-              <button type="button" id="mihomo-clash-connection-copy" class="btn-secondary" data-mihomo-connection-copy-all>{{ op_icon('duplicate') }}<span>Копировать детали</span></button>
+              <button type="button" id="mihomo-clash-connection-rule-link" class="btn-secondary btn-icon" data-mihomo-connection-rule-link aria-label="Найти правило" title="Найти правило" hidden>{{ op_icon('list-details') }}</button>
+              <button type="button" id="mihomo-clash-connection-copy" class="btn-secondary btn-icon" data-mihomo-connection-copy-all aria-label="Копировать детали" title="Копировать детали">{{ op_icon('duplicate') }}</button>
               <button type="button" class="btn-secondary btn-icon" data-mihomo-connection-inspector-close aria-label="Закрыть детали">{{ op_icon('close') }}</button>
             </div>
           </div>
-          <dl id="mihomo-clash-connection-inspector-details"></dl>
+          <div class="xk-mihomo-connection-inspector-body">
+            <dl id="mihomo-clash-connection-inspector-summary" class="xk-mihomo-connection-inspector-summary" aria-label="Сводка соединения"></dl>
+            <section class="xk-mihomo-connection-metadata" aria-labelledby="mihomo-clash-connection-metadata-title">
+              <h4 id="mihomo-clash-connection-metadata-title">Метаданные</h4>
+              <dl id="mihomo-clash-connection-inspector-details"></dl>
+            </section>
+          </div>
+          <div class="xk-mihomo-connection-inspector-footer">
+            <button type="button" id="mihomo-clash-connection-inspector-disconnect" class="btn-danger" hidden>{{ op_icon('close') }}<span>Завершить соединение</span></button>
+          </div>
         </aside>
       </div>
     </div>

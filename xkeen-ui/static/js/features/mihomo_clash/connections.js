@@ -74,6 +74,15 @@ function formatAge(row) {
   return `${Math.floor(seconds / 86400)} д`;
 }
 
+function formatTimestamp(value) {
+  const parsed = Date.parse(String(value || ''));
+  if (!Number.isFinite(parsed)) return String(value || '—');
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).format(new Date(parsed)).replace(',', ' ·');
+}
+
 function destination(row) {
   const metadata = row?.metadata || {};
   const host = metadata.sniff_host || metadata.host || metadata.destination_ip || '—';
@@ -300,19 +309,49 @@ function renderViewTabs() {
 
 function renderInspector() {
   const inspector = byId('mihomo-clash-connection-inspector');
+  const summary = byId('mihomo-clash-connection-inspector-summary');
   const details = byId('mihomo-clash-connection-inspector-details');
-  if (!inspector || !details) return;
+  if (!inspector || !summary || !details) return;
   const ruleLink = byId('mihomo-clash-connection-rule-link');
+  const title = byId('mihomo-clash-connection-inspector-title');
+  const sourceCopy = byId('mihomo-clash-connection-inspector-source');
+  const disconnect = byId('mihomo-clash-connection-inspector-disconnect');
   const row = selectedRow();
   inspector.hidden = !row;
   if (ruleLink) ruleLink.hidden = !row?.rule;
   const copyAll = byId('mihomo-clash-connection-copy');
   if (copyAll) copyAll.hidden = !row;
-  if (!row) { details.innerHTML = ''; return; }
+  if (!row) {
+    if (title) title.textContent = '—';
+    if (sourceCopy) sourceCopy.textContent = '';
+    if (disconnect) disconnect.hidden = true;
+    summary.innerHTML = '';
+    details.innerHTML = '';
+    return;
+  }
   const metadata = row.metadata || {};
+  const origin = source(row);
+  const closed = closedConnections.has(row.id);
+  if (title) title.textContent = destination(row);
+  if (sourceCopy) sourceCopy.textContent = [origin.name, origin.address].filter(Boolean).join(' · ');
+  inspector.dataset.connectionState = closed ? 'closed' : 'active';
+  if (disconnect) {
+    disconnect.hidden = closed || capabilities.connection_disconnect === false;
+    disconnect.disabled = Boolean(pendingId);
+    disconnect.dataset.mihomoConnectionClose = row.id;
+    disconnect.innerHTML = `${pendingId === row.id ? iconHtml('loading') : iconHtml('close')}<span>${pendingId === row.id ? 'Завершение…' : 'Завершить соединение'}</span>`;
+  }
+  const rule = [row.rule, row.rule_payload].filter(Boolean).join(' · ') || '—';
+  const traffic = `↓ ${formatBytes(row.download || 0)} · ↑ ${formatBytes(row.upload || 0)}`;
+  const summaryFields = [
+    ['Состояние', closed ? 'Недавно закрыто' : 'Активно', 'status'],
+    ['Цепочка', routeMarkup(row), 'route'],
+    ['Правило', filterButton(row.rule_payload || row.rule, 'правилу', escapeHtml(rule)), 'rule'],
+    ['Трафик', escapeHtml(traffic), 'traffic'],
+  ];
+  summary.innerHTML = summaryFields.map(([label, value, kind]) => `<div data-summary-kind="${kind}"><dt>${escapeHtml(label)}</dt><dd>${value}</dd></div>`).join('');
   const fields = [
-    ['Состояние', closedConnections.has(row.id) ? 'Недавно закрыто' : 'Активно'],
-    ['Устройство', source(row).name, source(row).name],
+    ['Устройство', origin.name, origin.name],
     ['IP источника', metadata.source_ip, metadata.source_ip],
     ['Порт источника', metadata.source_port],
     ['Назначение', destination(row), destinationHost(row)],
@@ -325,13 +364,11 @@ function renderInspector() {
     ['Inbound адрес', [metadata.inbound_ip, metadata.inbound_port].filter(Boolean).join(':')],
     ['Inbound user', metadata.inbound_user],
     ['Процесс', metadata.process], ['Путь процесса', metadata.process_path], ['UID', metadata.uid],
-    ['Правило', row.rule, row.rule], ['Payload правила', row.rule_payload, row.rule_payload],
-    ['Цепочка', routeText(row), (row.chains || [])[0] || routeText(row)],
     ['Provider chain', (row.provider_chains || []).join(' → ')],
-    ['Получено', formatBytes(row.download || 0)], ['Отдано', formatBytes(row.upload || 0)],
-    ['Начало', row.start], ['Закрыто', row.closed_at],
+    ['Начало', formatTimestamp(row.start), '', row.start],
+    ['Закрыто', formatTimestamp(row.closed_at), '', row.closed_at],
   ].filter(([, value]) => value !== null && value !== undefined && value !== '');
-  details.innerHTML = fields.map(([label, value, filterValue]) => `<div><dt>${escapeHtml(label)}</dt><dd><span>${filterValue ? filterButton(filterValue, label, escapeHtml(value)) : escapeHtml(value)}</span>${copyButton(value, label)}</dd></div>`).join('');
+  details.innerHTML = fields.map(([label, value, filterValue, copyValue]) => `<div><dt>${escapeHtml(label)}</dt><dd><span>${filterValue ? filterButton(filterValue, label, escapeHtml(value)) : escapeHtml(value)}</span>${copyButton(copyValue || value, label)}</dd></div>`).join('');
 }
 
 function render() { renderSummary(); renderViewTabs(); renderRows(); renderInspector(); }
@@ -491,14 +528,14 @@ async function disconnectOne(id) {
     okText: 'Завершить', cancelText: 'Оставить', danger: true,
   }, 'Завершить выбранное соединение?');
   if (!ok || !active) return;
-  pendingId = id; renderRows();
+  pendingId = id; renderRows(); renderInspector();
   try {
     await disconnectMihomoClashConnection(id);
     setNotice('Команда отправлена. Строка исчезнет после подтверждённого snapshot.', 'positive');
     if (!ws) void pollSnapshot(generation, true);
   } catch (error) {
     setNotice('Не удалось завершить соединение; подтверждённая строка сохранена.', 'danger');
-  } finally { pendingId = ''; renderRows(); }
+  } finally { pendingId = ''; renderRows(); renderInspector(); }
 }
 
 async function disconnectAll() {

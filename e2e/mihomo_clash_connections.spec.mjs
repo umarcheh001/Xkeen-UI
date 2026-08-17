@@ -163,13 +163,34 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
 
   await page.locator('[data-connection-id="connection-one"]').click();
   await expect(page.locator('#mihomo-clash-connection-inspector')).toBeVisible();
-  await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('DomainSuffix');
+  await expect(page.locator('#mihomo-clash-connection-inspector-title')).toHaveText('docs.example:443');
+  await expect(page.locator('#mihomo-clash-connection-inspector-source')).toHaveText('Laptop · 192.0.2.1:5000');
+  await expect(page.locator('#mihomo-clash-connection-inspector-summary > div')).toHaveCount(4);
+  await expect(page.locator('#mihomo-clash-connection-inspector-summary')).toContainText('↓ 200 Б · ↑ 100 Б');
+  await expect(page.locator('#mihomo-clash-connection-inspector-disconnect')).toBeVisible();
+  await expect(page.locator('#mihomo-clash-connection-inspector-summary')).toContainText('DomainSuffix');
   await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('normal-redir');
   await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('/usr/bin/browser');
+  const inspectorLayout = await page.locator('#mihomo-clash-connection-inspector').evaluate((element) => {
+    const details = element.querySelector('#mihomo-clash-connection-inspector-details');
+    const metadataRows = [...details.children];
+    const actions = [...element.querySelectorAll('.xk-mihomo-connection-inspector-actions > button')];
+    return {
+      display: getComputedStyle(element).display,
+      columns: getComputedStyle(details).gridTemplateColumns.split(' ').length,
+      rowsSeparated: metadataRows.every((row) => getComputedStyle(row).display === 'grid'),
+      iconActions: actions.every((button) => button.classList.contains('btn-icon')
+        && Math.abs(button.getBoundingClientRect().width - button.getBoundingClientRect().height) <= 2),
+      overflow: element.scrollWidth > element.clientWidth,
+    };
+  });
+  expect(inspectorLayout).toEqual({
+    display: 'grid', columns: 1, rowsSeparated: true, iconActions: true, overflow: false,
+  });
   await page.locator('#mihomo-clash-connection-copy').click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('Источник: 192.0.2.1:5000');
 
-  await page.locator('[data-mihomo-connection-close="connection-one"]').click();
+  await page.locator('#mihomo-clash-connection-inspector-disconnect').click();
   await expect(page.locator('#confirm-modal')).not.toHaveClass(/hidden/);
   await page.locator('#confirm-modal-ok-btn').click();
   await expect.poll(() => disconnects).toEqual(['connection-one']);
@@ -184,7 +205,7 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   await expect(page.locator('[data-connection-id="connection-one"]')).toHaveAttribute('data-connection-state', 'closed');
   await expect(page.locator('[data-connection-id="connection-one"]')).toContainText('Закрыто');
   await page.locator('[data-connection-id="connection-one"]').click();
-  await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('Недавно закрыто');
+  await expect(page.locator('#mihomo-clash-connection-inspector-summary')).toContainText('Недавно закрыто');
   await page.locator('#mihomo-clash-closed-clear').click();
   await expect(page.locator('#mihomo-clash-closed-count')).toHaveText('0');
 
@@ -236,11 +257,20 @@ test('Mihomo connections mobile table becomes records without horizontal overflo
   });
   await page.locator('#mihomo-clash-tab-connections').click();
   await expect(page.locator('[data-connection-id="mobile-one"]')).toBeVisible();
+  await page.locator('[data-connection-id="mobile-one"]').click();
+  await expect(page.locator('#mihomo-clash-connection-inspector')).toBeVisible();
   const layout = await page.locator('[data-connection-id="mobile-one"]').evaluate((row) => ({
     display: getComputedStyle(row).display,
     overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
   }));
   expect(layout).toEqual({ display: 'grid', overflow: false });
+  const inspectorLayout = await page.locator('#mihomo-clash-connection-inspector').evaluate((inspector) => ({
+    width: inspector.getBoundingClientRect().width,
+    viewport: document.documentElement.clientWidth,
+    overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  }));
+  expect(inspectorLayout.width).toBeLessThanOrEqual(inspectorLayout.viewport);
+  expect(inspectorLayout.overflow).toBe(false);
 });
 
 

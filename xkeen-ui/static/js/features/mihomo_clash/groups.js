@@ -814,6 +814,14 @@ function groupFixedStatusHtml(group) {
 }
 
 function pickerNodeIconHtml(node) {
+  const nestedGroup = allGroups().find((group) => group.name === node?.name);
+  const groupIcon = String(nestedGroup?.icon || '').trim();
+  if (groupIcon) {
+    return `<span class="xk-mihomo-picker-node-icon xk-mihomo-picker-node-icon--group"><img src="${escapeHtml(groupIcon)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
+  }
+  if (nestedGroup) {
+    return `<span class="xk-mihomo-picker-node-icon xk-mihomo-picker-node-icon--default" aria-hidden="true">${iconHtml('dns')}</span>`;
+  }
   const countryCode = mihomoNodeCountryCode(node?.name);
   if (countryCode) return nodeFlagHtml(countryCode);
   const icon = String(node?.icon || '').trim();
@@ -821,6 +829,30 @@ function pickerNodeIconHtml(node) {
     return `<span class="xk-mihomo-picker-node-icon"><img src="${escapeHtml(icon)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
   }
   return `<span class="xk-mihomo-picker-node-icon xk-mihomo-picker-node-icon--default" aria-hidden="true">${iconHtml('dns')}</span>`;
+}
+
+function pickerSelectedDelayHtml(group, node) {
+  if (!node || !canProbeNode(node)) return '';
+  const status = nodeProbeStatus(group, node);
+  const measurement = latestNodeMeasurement(node);
+  const displayStatus = status.state === 'stale' && measurement
+    ? {
+      ...status,
+      label: `${measurement.delay} мс`,
+      tooltip: `Последняя измеренная задержка: ${measurement.delay} мс. Данные старше 5 минут. Нажмите, чтобы проверить снова.`,
+    }
+    : status;
+  const statusIcon = {
+    pending: 'loading',
+    unavailable: 'server-off',
+    failed: 'alert',
+    unknown: 'bolt',
+  }[displayStatus.state] || '';
+  const content = statusIcon
+    ? `<span class="xk-visually-hidden">${escapeHtml(displayStatus.label)}</span>${iconHtml(statusIcon)}`
+    : escapeHtml(displayStatus.label);
+  return `<span class="xk-mihomo-picker-delay" data-delay-tone="${escapeHtml(displayStatus.state)}"
+    aria-label="Задержка выбранного узла: ${escapeHtml(displayStatus.label)}" data-tooltip="${escapeHtml(displayStatus.tooltip)}">${content}</span>`;
 }
 
 function pickerNodes(group) {
@@ -881,6 +913,7 @@ function renderCollapsedPicker(group, panelId) {
         aria-expanded="${open ? 'true' : 'false'}" aria-controls="${pickerId}" ${locked ? 'aria-disabled="true" disabled data-tooltip="LoadBalance управляется автоматически."' : ''}>
         ${selectedNode ? pickerNodeIconHtml(selectedNode) : `<span class="xk-mihomo-picker-node-icon xk-mihomo-picker-node-icon--default" aria-hidden="true">${iconHtml('dns')}</span>`}
         <span class="xk-mihomo-picker-value">${escapeHtml(selectedName)}</span>
+        ${pickerSelectedDelayHtml(group, selectedNode)}
         ${iconHtml('chevron-down', 'xk-mihomo-picker-chevron')}
       </button>
       ${open ? `<div id="${pickerId}" class="xk-mihomo-picker-popover">
