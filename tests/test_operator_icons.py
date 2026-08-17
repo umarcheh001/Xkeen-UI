@@ -142,7 +142,7 @@ def test_i6_guard_rejects_action_emoji_and_feature_local_svg_except_documented_c
     allowed_inline_svg = {
         ROOT / "xkeen-ui/static/js/ui/operator_icons.js",
         ROOT / "xkeen-ui/static/js/features/outbounds.js",  # content country flags
-        ROOT / "xkeen-ui/static/js/features/mihomo_clash/groups.js",  # content country flags
+        ROOT / "xkeen-ui/static/js/features/mihomo_clash/visuals.js",  # shared Mihomo content country flags
     }
     for path in (ROOT / "xkeen-ui/static/js").rglob("*.js"):
         if "vendor" in path.parts or "frontend-build" in path.parts or path in allowed_inline_svg:
