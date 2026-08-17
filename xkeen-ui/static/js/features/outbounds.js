@@ -49,6 +49,13 @@ let outboundsModuleApi = null;
     let _outboundsLoadSeq = 0;
     let _outboundsNodesLoadSeq = 0;
     let _outboundsActiveLoadSeq = 0;
+    let _xrayDelayHistoryPopover = null;
+    let _xrayDelayHistoryOwner = null;
+    let _xrayDelayHistoryTimer = 0;
+    let _xrayDelayHistoryBound = false;
+
+    const XRAY_DELAY_HISTORY_HOVER_MS = 350;
+    const XRAY_DELAY_HISTORY_LIMIT = 10;
 
     const IDS = {
       fragmentSelect: 'outbounds-fragment-select',
@@ -1074,6 +1081,7 @@ let outboundsModuleApi = null;
     }
 
     function outboundsRenderNodeList() {
+      xrayHideDelayHistory();
       const panel = $(OUTBOUND_NODE_IDS.panel);
       const caption = $(OUTBOUND_NODE_IDS.caption);
       const summary = $(OUTBOUND_NODE_IDS.summary);
@@ -1128,6 +1136,8 @@ let outboundsModuleApi = null;
           tooltip: latencyTooltip,
           pending: pingBusy,
           canPing,
+          entry: latencyEntry,
+          scope: 'outbounds',
           extraClass: 'xk-outbounds-node-ping',
         });
         rows.push(`
@@ -1208,7 +1218,7 @@ let outboundsModuleApi = null;
         const delay = Number(data.delay_ms || (data.entry && data.entry.delay_ms));
         if (statusEl) {
           setOutboundsStatus(statusEl, Number.isFinite(delay) && delay >= 0
-            ? `Задержка proxy-узла: ${Math.round(delay)} ms.`
+            ? `Задержка proxy-узла: ${Math.round(delay)} мс.`
             : 'Проверка proxy-узла завершена.', 'success');
         }
         return true;
@@ -5894,6 +5904,7 @@ let outboundsModuleApi = null;
     function subsShow(show) {
       const modal = subsEnsureModal();
       if (!modal) return;
+      if (!show) xrayHideDelayHistory();
       try {
         if (show) modal.classList.remove('hidden');
         else modal.classList.add('hidden');
@@ -6087,47 +6098,159 @@ let outboundsModuleApi = null;
     }
 
     function subsNodeLatencyTooltip(entry, pending, canPing) {
-      if (pending) return 'Проверяю задержку узла через текущий generated fragment…';
-      if (!canPing) return 'Узел сейчас не входит в generated fragment, поэтому проверка задержки недоступна.';
-      const parts = [];
+      if (pending) return 'Проверяем задержку…';
+      if (!canPing) return 'Проверка задержки недоступна.';
       const hasDelay = !!(entry && entry.delay_ms != null && entry.delay_ms !== '');
       const delay = hasDelay ? Number(entry.delay_ms) : NaN;
-      const checkedAt = Number(entry && entry.checked_at);
       const status = String(entry && entry.status || '').trim().toLowerCase();
-      const error = String(entry && entry.error || '').trim();
-      const probeUrl = String(entry && entry.probe_url || '').trim();
       if (Number.isFinite(delay) && delay >= 0) {
-        parts.push(`Последняя задержка: ${Math.round(delay)} ms`);
-      } else if (status === 'error') {
-        parts.push(subsProbeFailureTooltip(error));
-      } else {
-        parts.push('Пока нет данных по задержке.');
+        return `${Math.round(delay)} мс · нажмите, чтобы проверить снова.`;
       }
-      if (Number.isFinite(checkedAt) && checkedAt > 0) {
-        parts.push(`Проверено: ${subsFormatTime(checkedAt)}`);
-      }
-      if (probeUrl) {
-        parts.push(`Probe URL: ${probeUrl}`);
-      }
-      const history = Array.isArray(entry && entry.history) ? entry.history : [];
-      if (history.length) {
-        const rows = history.slice(0, 5).map((item) => {
-          const rowDelay = Number(item && item.delay_ms);
-          const rowStatus = String(item && item.status || '').trim().toLowerCase();
-          const rowError = String(item && item.error || '').trim();
-          const rowChecked = subsFormatClockTime(item && item.checked_at);
-          const rowValue = Number.isFinite(rowDelay) && rowDelay >= 0
-            ? `${Math.round(rowDelay)} ms`
-            : (rowStatus === 'error'
-              ? `нет ответа (${subsProbeFailureInfo(rowError).summary})`
-              : rowStatus || '—');
-          return `${rowChecked} · ${rowValue}`;
+      if (status === 'error') return 'Нет ответа. Нажмите, чтобы повторить.';
+      return 'Задержка не измерена. Нажмите, чтобы проверить.';
+    }
+
+    function xrayDelayTone(delay) {
+      const value = Number(delay);
+      if (!Number.isFinite(value) || value < 0) return 'failed';
+      if (value <= 250) return 'good';
+      if (value <= 650) return 'warning';
+      return 'bad';
+    }
+
+    function xrayDelayHistoryEntries(entry) {
+      if (!entry || typeof entry !== 'object') return [];
+      const rawHistory = Array.isArray(entry.history) && entry.history.length
+        ? entry.history
+        : [entry];
+      return rawHistory.reduce((rows, item) => {
+        if (!item || typeof item !== 'object') return rows;
+        const delay = Number(item.delay_ms);
+        const status = String(item.status || '').trim().toLowerCase();
+        const checkedAt = Number(item.checked_at);
+        if (!(Number.isFinite(delay) && delay >= 0) && !status && !(Number.isFinite(checkedAt) && checkedAt > 0)) return rows;
+        rows.push({
+          delay: Number.isFinite(delay) && delay >= 0 ? Math.round(delay) : null,
+          status: status || (Number.isFinite(delay) && delay >= 0 ? 'ok' : 'unknown'),
+          checkedAt: Number.isFinite(checkedAt) && checkedAt > 0 ? checkedAt : 0,
         });
-        parts.push(`История:\n${rows.join('\n')}`);
-      } else {
-        parts.push('Нажми индикатор задержки, чтобы выполнить проверку.');
+        return rows;
+      }, []).slice(0, XRAY_DELAY_HISTORY_LIMIT);
+    }
+
+    function xrayFormatDelayHistoryTime(value) {
+      const seconds = Number(value);
+      if (!Number.isFinite(seconds) || seconds <= 0) return 'время неизвестно';
+      const date = new Date(seconds * 1000);
+      if (Number.isNaN(date.getTime())) return 'время неизвестно';
+      const pad = (number) => String(number).padStart(2, '0');
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+        + ` ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    }
+
+    function xrayDelayEntryForOwner(owner) {
+      const scope = String(owner?.dataset?.xrayDelayScope || '');
+      const nodeKey = String(owner?.dataset?.nodeKey || '');
+      if (!nodeKey) return null;
+      if (scope === 'outbounds') return outboundsNodeLatencyEntry(nodeKey);
+      if (scope === 'subscription') {
+        const sub = subsFindById(owner?.dataset?.subId || '');
+        return subsNodeLatencyEntry(sub, nodeKey);
       }
-      return parts.join('\n');
+      return null;
+    }
+
+    function xrayEnsureDelayHistoryPopover() {
+      if (_xrayDelayHistoryPopover?.isConnected) return _xrayDelayHistoryPopover;
+      _xrayDelayHistoryPopover = document.createElement('div');
+      _xrayDelayHistoryPopover.id = 'xray-delay-history-popover';
+      _xrayDelayHistoryPopover.className = 'xk-xray-delay-history-popover';
+      _xrayDelayHistoryPopover.setAttribute('role', 'tooltip');
+      _xrayDelayHistoryPopover.hidden = true;
+      document.body.appendChild(_xrayDelayHistoryPopover);
+      return _xrayDelayHistoryPopover;
+    }
+
+    function xrayHideDelayHistory() {
+      if (_xrayDelayHistoryTimer) window.clearTimeout(_xrayDelayHistoryTimer);
+      _xrayDelayHistoryTimer = 0;
+      _xrayDelayHistoryOwner?.removeAttribute?.('aria-describedby');
+      _xrayDelayHistoryOwner = null;
+      if (_xrayDelayHistoryPopover) _xrayDelayHistoryPopover.hidden = true;
+    }
+
+    function xrayPositionDelayHistory(owner, popover) {
+      const rect = owner.getBoundingClientRect();
+      const box = popover.getBoundingClientRect();
+      const margin = 10;
+      const gap = 8;
+      const viewportWidth = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 1);
+      const viewportHeight = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 1);
+      const position = rect.top >= box.height + gap + margin ? 'top' : 'bottom';
+      let left = rect.right - box.width;
+      left = Math.max(margin, Math.min(left, viewportWidth - box.width - margin));
+      let top = position === 'top' ? rect.top - box.height - gap : rect.bottom + gap;
+      top = Math.max(margin, Math.min(top, viewportHeight - box.height - margin));
+      popover.dataset.position = position;
+      popover.style.left = `${Math.round(left)}px`;
+      popover.style.top = `${Math.round(top)}px`;
+    }
+
+    function xrayShowDelayHistory(owner) {
+      if (!owner?.isConnected) return;
+      const history = xrayDelayHistoryEntries(xrayDelayEntryForOwner(owner));
+      if (!history.length) return;
+      const popover = xrayEnsureDelayHistoryPopover();
+      const rows = history.map((entry) => {
+        const hasDelay = Number.isFinite(entry.delay);
+        const label = hasDelay ? `${entry.delay} мс` : 'нет ответа';
+        const tone = hasDelay ? xrayDelayTone(entry.delay) : 'failed';
+        return `<div class="xk-xray-delay-history-row">
+          <time>${escapeHtml(xrayFormatDelayHistoryTime(entry.checkedAt))}</time>
+          <strong data-delay-tone="${escapeHtml(tone)}">${escapeHtml(label)}</strong>
+        </div>`;
+      }).join('');
+      popover.innerHTML = `<div class="xk-xray-delay-history-title">История задержки</div>
+        <div class="xk-xray-delay-history-list">${rows}</div>
+        <div class="xk-xray-delay-history-hint">Нажмите на значение, чтобы проверить снова.</div>`;
+      popover.hidden = false;
+      owner.setAttribute('aria-describedby', popover.id);
+      xrayPositionDelayHistory(owner, popover);
+    }
+
+    function xrayScheduleDelayHistory(owner, immediate) {
+      xrayHideDelayHistory();
+      _xrayDelayHistoryOwner = owner;
+      _xrayDelayHistoryTimer = window.setTimeout(() => {
+        _xrayDelayHistoryTimer = 0;
+        if (_xrayDelayHistoryOwner === owner) xrayShowDelayHistory(owner);
+      }, immediate ? 0 : XRAY_DELAY_HISTORY_HOVER_MS);
+    }
+
+    function wireXrayDelayHistory() {
+      if (_xrayDelayHistoryBound) return;
+      _xrayDelayHistoryBound = true;
+      document.addEventListener('pointerover', (event) => {
+        if (event.pointerType && event.pointerType !== 'mouse') return;
+        const owner = event.target?.closest?.('[data-xray-delay-history]');
+        if (!owner || owner === _xrayDelayHistoryOwner) return;
+        xrayScheduleDelayHistory(owner, false);
+      });
+      document.addEventListener('pointerout', (event) => {
+        const owner = event.target?.closest?.('[data-xray-delay-history]');
+        if (!owner || owner !== _xrayDelayHistoryOwner) return;
+        if (event.relatedTarget && owner.contains(event.relatedTarget)) return;
+        xrayHideDelayHistory();
+      });
+      document.addEventListener('focusin', (event) => {
+        const owner = event.target?.closest?.('[data-xray-delay-history]');
+        if (owner) xrayScheduleDelayHistory(owner, true);
+      });
+      document.addEventListener('focusout', (event) => {
+        if (event.target?.closest?.('[data-xray-delay-history]')) xrayHideDelayHistory();
+      });
+      window.addEventListener('scroll', xrayHideDelayHistory, true);
+      window.addEventListener('resize', xrayHideDelayHistory, true);
     }
 
     function xrayNodeProbeHtml(options) {
@@ -6140,18 +6263,24 @@ let outboundsModuleApi = null;
       const pending = !!opts.pending;
       const canPing = !!opts.canPing;
       const extraClass = escapeHtml(String(opts.extraClass || ''));
+      const scope = escapeHtml(String(opts.scope || ''));
+      const subId = escapeHtml(String(opts.subId || ''));
+      const hasHistory = xrayDelayHistoryEntries(opts.entry).length > 0;
       const statusIcon = pending
         ? 'loading'
         : (tone === 'check-failed' || tone === 'error'
           ? 'alert'
-          : (tone === 'unavailable' ? 'server-off' : (tone === 'idle' ? 'ping' : '')));
+          : (tone === 'unavailable' ? 'server-off' : (tone === 'idle' ? 'bolt' : '')));
       const content = statusIcon
         ? `<span class="xk-visually-hidden">${escapeHtml(label)}</span>${iconHtml(statusIcon)}`
         : escapeHtml(label);
       const disabled = pending || !canPing;
+      const historyData = hasHistory
+        ? `data-xray-delay-history="1" data-xray-delay-scope="${scope}" data-tooltip-silent="1"`
+        : `data-tooltip="${tooltip}"`;
       return `<button type="button" class="xk-xray-node-probe xk-sub-node-latency xk-sub-node-ping ${extraClass}${pending ? ' is-busy' : ''}"
-        data-node-key="${nodeKey}" ${nodeTag ? `data-node-tag="${nodeTag}"` : ''}
-        data-probe-tone="${escapeHtml(tone)}" data-tooltip="${tooltip}"
+        data-node-key="${nodeKey}" ${nodeTag ? `data-node-tag="${nodeTag}"` : ''} ${subId ? `data-sub-id="${subId}"` : ''}
+        data-probe-tone="${escapeHtml(tone)}" ${historyData}
         aria-label="${escapeHtml(pending ? 'Проверяется задержка узла' : `Проверить задержку узла: ${label}`)}"
         ${pending ? 'aria-busy="true"' : ''} ${disabled ? 'disabled' : ''}>${content}</button>`;
     }
@@ -7090,6 +7219,7 @@ let outboundsModuleApi = null;
     }
 
     function subsRenderNodeList() {
+      xrayHideDelayHistory();
       const panel = $(SUB_IDS.nodesPanel);
       const caption = $(SUB_IDS.nodesCaption);
       const summary = $(SUB_IDS.nodesSummary);
@@ -7173,6 +7303,9 @@ let outboundsModuleApi = null;
           tooltip: latencyTooltip,
           pending: pingBusy,
           canPing,
+          entry: latencyEntry,
+          scope: 'subscription',
+          subId,
         });
         rows.push(`
           <div class="xk-sub-node-item ${enabled ? 'is-enabled' : 'is-disabled'}" data-node-key="${key}">
@@ -7297,7 +7430,7 @@ let outboundsModuleApi = null;
         }
         const delay = Number(data.delay_ms || (data.entry && data.entry.delay_ms));
         const msg = Number.isFinite(delay) && delay >= 0
-          ? `Задержка узла: ${Math.round(delay)} ms.`
+          ? `Задержка узла: ${Math.round(delay)} мс.`
           : 'Проверка узла завершена.';
         subsSetStatus(msg, false, true);
         return true;
@@ -8228,6 +8361,7 @@ let outboundsModuleApi = null;
       };
 
       safeInitStep('settings', () => wireOutboundsSettings());
+      safeInitStep('delay-history', () => wireXrayDelayHistory());
       safeInitStep('active-display', () => outboundsApplyActiveDisplaySetting(null, { render: false }));
       void outboundsEnsureSettingsLoaded();
 

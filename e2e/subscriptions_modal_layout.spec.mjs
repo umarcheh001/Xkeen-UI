@@ -219,7 +219,7 @@ test('main outbounds card keeps proxy nodes inside scrollable panel', async ({ p
   await expect(page.locator('#outbounds-nodes-list .xk-outbounds-node-item')).toHaveCount(nodes.length);
   await expect(page.locator('#outbounds-active-node-status')).toContainText('Сейчас/последний выбор');
   await expect(page.locator('#outbounds-nodes-list .xk-outbounds-node-item.is-active-route')).toHaveCount(1);
-  await expect(page.locator('#outbounds-nodes-list .xk-outbounds-node-item.is-active-route')).toContainText(nodes[1].name);
+  await expect(page.locator('#outbounds-nodes-list .xk-outbounds-node-item.is-active-route')).toContainText('se-YYY-Sweden.e026');
   await page.waitForTimeout(250);
 
   const layout = await page.evaluate(() => {
@@ -329,7 +329,7 @@ test('main outbounds card keeps proxy nodes inside scrollable panel', async ({ p
   expect(layout.cardHeights.every((height) => height >= 72 && height <= 100)).toBe(true);
   expect(layout.detailsHidden).toBe(true);
   expect(layout.pingButtons.every((button) => (
-    button.width === button.height && button.width >= 28 && button.radius === '50%'
+    button.width >= 24 && button.height === 22 && button.radius === '4px'
   ))).toBe(true);
   expect(layout.pingAll.width).toBe(layout.pingAll.height);
   expect(layout.pingAll.width).toBeGreaterThanOrEqual(28);
@@ -337,7 +337,7 @@ test('main outbounds card keeps proxy nodes inside scrollable panel', async ({ p
   expect(layout.summary.radius).toBe('6px');
   expect(layout.summary.backgroundImage).toBe('none');
   expect(layout.globalMarker).toEqual({ width: 20, height: 14, radius: '3px' });
-  expect(layout.latency.radius).toBe('6px');
+  expect(layout.latency.radius).toBe('4px');
   expect(layout.latency.backgroundImage).toBe('none');
   expect(layout.technicalTooltips.every(({ protocol, endpoint }) => !protocol && !endpoint)).toBe(true);
   expect(layout.overlaps).toEqual([]);
@@ -771,6 +771,61 @@ test('Xray latency values use the same color scale as Mihomo', async ({ page }) 
 
   const colors = await probes.evaluateAll((items) => items.map((item) => window.getComputedStyle(item).color));
   expect(new Set(colors).size).toBe(3);
+});
+
+test('Xray server cards use Mihomo-style latency icons, concise hints and history', async ({ page }) => {
+  const nodes = buildDemoNodes().slice(0, 3);
+  const checkedAt = 1777777777;
+  const subscription = buildDemoSubscription(nodes, {
+    node_latency: {
+      [nodes[0].key]: {
+        status: 'ok', delay_ms: 180, checked_at: checkedAt,
+        history: [
+          { status: 'ok', delay_ms: 180, checked_at: checkedAt },
+          { status: 'ok', delay_ms: 240, checked_at: checkedAt - 60 },
+        ],
+      },
+      [nodes[1].key]: {
+        status: 'error', error: 'timeout', checked_at: checkedAt,
+        history: [{ status: 'error', error: 'timeout', checked_at: checkedAt }],
+      },
+    },
+  });
+
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscriptions: [subscription] }),
+    });
+  });
+
+  await openSubscriptionsModal(page);
+  await page.locator('tr[data-sub-id="demo-sub"]').click();
+
+  const probes = page.locator('#outbounds-subscriptions-nodes-list .xk-xray-node-probe');
+  const measured = probes.nth(0);
+  const failed = probes.nth(1);
+  const idle = probes.nth(2);
+
+  await expect(measured).toHaveText('180 мс');
+  await expect(measured).toHaveAttribute('data-xray-delay-history', '1');
+  await expect(measured).toHaveAttribute('data-tooltip-silent', '1');
+  await expect(failed.locator('use')).toHaveAttribute('href', /#xk-alert$/);
+  await expect(idle.locator('use')).toHaveAttribute('href', /#xk-bolt$/);
+  await expect(idle).toHaveAttribute('data-tooltip', 'Задержка не измерена. Нажмите, чтобы проверить.');
+
+  await measured.hover();
+  const history = page.locator('#xray-delay-history-popover');
+  await expect(history).toBeVisible();
+  await expect(history).toContainText('История задержки');
+  await expect(history).toContainText('180 мс');
+  await expect(history).toContainText('240 мс');
+  await expect(history.locator('.xk-xray-delay-history-row')).toHaveCount(2);
 });
 
 test('subscriptions servers expand into a resized modal and keep compact actions', async ({ page }) => {

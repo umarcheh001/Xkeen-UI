@@ -12077,6 +12077,79 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-node-actions {
   justify-self: end;
 }
 
+/* Xray uses the same compact, structured latency history as Mihomo. The
+ * content is a point-in-time diagnostic, not an action menu, so it follows
+ * the owner without accepting pointer input. */
+body.panel-page .xk-xray-delay-history-popover {
+  position: fixed;
+  z-index: 2147483001;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 238px;
+  max-width: min(330px, calc(100vw - 20px));
+  max-height: min(390px, calc(100vh - 20px));
+  padding: 9px 10px 8px;
+  overflow: auto;
+  border: 1px solid var(--op-border-strong);
+  border-radius: 8px;
+  background: var(--op-surface-2);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .34);
+  color: var(--op-text);
+  pointer-events: none;
+}
+
+body.panel-page .xk-xray-delay-history-popover[hidden] {
+  display: none !important;
+}
+
+body.panel-page .xk-xray-delay-history-title {
+  margin-bottom: 6px;
+  color: var(--op-text);
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 700;
+}
+
+body.panel-page .xk-xray-delay-history-list {
+  display: grid;
+  gap: 3px;
+}
+
+body.panel-page .xk-xray-delay-history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 14px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
+
+body.panel-page .xk-xray-delay-history-row time {
+  overflow: hidden;
+  color: var(--op-data-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page .xk-xray-delay-history-row strong {
+  color: var(--op-muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+body.panel-page .xk-xray-delay-history-row strong[data-delay-tone="good"] { color: var(--op-success); }
+body.panel-page .xk-xray-delay-history-row strong[data-delay-tone="warning"] { color: var(--op-warning); }
+body.panel-page .xk-xray-delay-history-row strong:is([data-delay-tone="bad"], [data-delay-tone="failed"]) { color: var(--op-danger); }
+
+body.panel-page .xk-xray-delay-history-hint {
+  margin-top: 7px;
+  padding-top: 6px;
+  border-top: 1px solid var(--op-border);
+  color: var(--op-muted);
+  font-size: calc(9.5px * var(--xk-font-scale, 1));
+}
+
 
 /* Core selector: a compact system dialog with explicit engine state. It keeps
  * the operator palette and flat surfaces while making the restart consequence
