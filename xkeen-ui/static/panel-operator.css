@@ -18412,21 +18412,12 @@ body.panel-page .xk-mihomo-groups-count {
   white-space: nowrap;
 }
 
-body.panel-page .xk-mihomo-delay-summary {
-  margin: 7px 0 0;
-  padding: 6px 8px;
-  border: 1px solid var(--op-border);
-  border-radius: 6px;
-  background: var(--op-surface);
-  color: var(--op-muted);
-  font-size: calc(11px * var(--xk-font-scale, 1));
-  font-variant-numeric: tabular-nums;
+/* Match Zashboard's top-end notification placement in the operator panel
+ * without changing toast placement on the other Xkeen pages. */
+body.panel-page #toast-container {
+  top: 16px;
+  bottom: auto;
 }
-
-body.panel-page .xk-mihomo-delay-summary[data-tone="success"] { color: var(--op-success); }
-body.panel-page .xk-mihomo-delay-summary[data-tone="warning"] { color: var(--op-warning); }
-body.panel-page .xk-mihomo-delay-summary[data-tone="danger"] { color: var(--op-danger); }
-body.panel-page .xk-mihomo-delay-summary[hidden] { display: none !important; }
 
 /* The legacy base sheet makes inline SVG block-level. Keep all labelled
  * groups actions on a single baseline, including the collapse control. */

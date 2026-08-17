@@ -174,7 +174,6 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
             'id="mihomo-clash-groups-sort"',
             'id="mihomo-clash-disconnect-after-select"',
             'id="mihomo-clash-show-timeout-hidden"',
-            'id="mihomo-clash-delay-summary"',
             'class="dt-switch xk-mihomo-groups-hidden-toggle"',
             'dt-switch-slider',
             'data-mihomo-delay-visible',
@@ -193,6 +192,9 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
         "groupNodeQueue",
         "nodeQueueFromGroups",
         "buildDelaySummary",
+        "showDelaySummary",
+        "toastXkeen",
+        "mihomo-clash-delay-result",
         "scheduleDelayFreshnessRender",
         "payloadLoadedAt = Date.now()",
         "label: 'нет данных'",
@@ -214,7 +216,6 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
         "await refreshMihomoClashGroups();",
         "`Проверка ${Math.min(progress.completed, progress.total)}/${progress.total}`",
         "xk-mihomo-delay-spinner",
-        ".xk-mihomo-delay-summary",
         "matchingCards",
         "is-pending",
         "selection = { group, node",
@@ -227,6 +228,11 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
     assert "MAX_DELAY_BATCH_ITEMS" not in groups
     assert ".slice(0," not in groups
     assert "encodeURIComponent" in client
+    assert 'id="mihomo-clash-delay-summary"' not in markup
+    assert ".xk-mihomo-delay-summary" not in css
+    assert "body.panel-page #toast-container" in css
+    assert "top: 16px" in css
+    assert "bottom: auto" in css
 
 
 def test_groups_start_collapsed_persist_lazy_picker_and_keep_actions_on_one_baseline():

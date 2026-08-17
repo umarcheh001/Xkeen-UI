@@ -751,13 +751,19 @@ test('group delay probes unique nodes without group endpoint and reconciles the 
   await expect(page.locator('[data-node-name="node-a"] .xk-mihomo-node-delay')).toHaveText('51 мс');
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('таймаут');
   await expect(page.locator('[data-node-name="DIRECT"] .xk-mihomo-node-delay')).toHaveCount(0);
-  await expect(page.locator('#mihomo-clash-delay-summary')).toContainText('Успешно: 1');
-  await expect(page.locator('#mihomo-clash-delay-summary')).toContainText('Таймаут: 1');
+  const resultToast = page.locator('#toast-container .toast');
+  await expect(resultToast).toContainText('Успешно: 1');
+  await expect(resultToast).toContainText('Таймаут: 1');
+  await expect(resultToast).toHaveClass(/toast-warning/);
+  const toastBox = await resultToast.boundingBox();
+  expect(toastBox?.y).toBeLessThan(80);
+  await expect(page.locator('#mihomo-clash-delay-summary')).toHaveCount(0);
   await expect.poll(() => groupReads).toBeGreaterThan(readsBeforeTest);
   expect(requests).toEqual([
     { scope: 'proxy', name: 'node-a', preset: 'auto' },
     { scope: 'provider-proxy', name: 'node-b', provider: 'provider-one', preset: 'auto' },
   ]);
+  await expect(resultToast).toHaveCount(0, { timeout: 7_000 });
 });
 
 
@@ -824,7 +830,7 @@ test('nested group card inherits the delay of its selected terminal proxy', asyn
   await nestedProbe.hover();
   await expect(page.locator('#mihomo-clash-delay-history-popover')).toContainText('205 мс');
   await page.locator('[data-group-name="YouTube"] .xk-mihomo-group-test').click();
-  await expect(page.locator('#mihomo-clash-delay-summary')).toContainText('Успешно: 1');
+  await expect(page.locator('#toast-container .toast')).toContainText('Успешно: 1');
   expect(requests).toEqual([
     { scope: 'proxy', name: 'XXX Germany.98.1016', preset: 'auto' },
     { scope: 'proxy', name: 'XXX Germany.98.1016', preset: 'auto' },
@@ -862,7 +868,7 @@ test('visible delay de-duplicates the same provider node across expanded groups'
   await page.locator('[data-group-name="DUPLICATE"] .xk-mihomo-group-head').click();
   await page.locator('#mihomo-clash-test-visible').click();
 
-  await expect(page.locator('#mihomo-clash-delay-summary')).toContainText('Успешно: 2');
+  await expect(page.locator('#toast-container .toast')).toContainText('Успешно: 2');
   expect(requests).toHaveLength(2);
   expect(requests.filter((item) => item.name === 'node-b')).toEqual([
     { scope: 'provider-proxy', name: 'node-b', provider: 'provider-one', preset: 'auto' },

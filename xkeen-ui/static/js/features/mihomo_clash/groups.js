@@ -1,5 +1,6 @@
 import { iconHtml } from '../../ui/operator_icons.js';
 import { confirmMihomoAction } from '../mihomo_runtime.js';
+import { toastXkeen } from '../xkeen_runtime.js';
 import { mihomoCountryFlag, mihomoNodeCountryCode, mihomoNodeDisplayName } from './visuals.js';
 import {
   fetchMihomoClashGroups,
@@ -53,7 +54,6 @@ let hideUnavailable = false;
 let consecutiveTimeouts = 3;
 let settingsUnsubscribe = null;
 let delayRun = null;
-let lastDelaySummary = null;
 let payloadLoadedAt = 0;
 let delayFreshnessTimer = 0;
 const collapsedGroups = new Set();
@@ -977,7 +977,6 @@ function render() {
   const latencyPresetSelect = document.getElementById('mihomo-clash-latency-preset');
   const collapseButton = document.getElementById('mihomo-clash-groups-collapse');
   const timeoutButton = document.getElementById('mihomo-clash-show-timeout-hidden');
-  const delaySummary = document.getElementById('mihomo-clash-delay-summary');
   if (!list) return;
   const visibleGroups = filteredGroups();
   const visibleNodes = visibleGroups.reduce((sum, group) => sum + (group.nodes || []).length, 0);
@@ -998,11 +997,6 @@ function render() {
     timeoutButton.setAttribute('aria-pressed', showTimeoutHidden ? 'true' : 'false');
     const value = timeoutButton.querySelector('span');
     if (value) value.textContent = String(hiddenTimeoutCount);
-  }
-  if (delaySummary) {
-    delaySummary.hidden = !lastDelaySummary;
-    delaySummary.textContent = lastDelaySummary?.text || '';
-    delaySummary.dataset.tone = lastDelaySummary?.tone || '';
   }
   if (collapseButton) {
     const allCollapsed = visibleGroups.length > 0 && visibleGroups.every((group) => collapsedGroups.has(group.name));
@@ -1380,6 +1374,16 @@ function buildDelaySummary(finished) {
   };
 }
 
+function showDelaySummary(summary) {
+  if (!summary?.text) return;
+  toastXkeen({
+    id: 'mihomo-clash-delay-result',
+    message: summary.text,
+    kind: summary.tone,
+    durationMs: summary.tone === 'success' ? 4000 : 5200,
+  });
+}
+
 async function runDelayQueue(items, source = {}) {
   if (!active || delayRun || !items.length) return;
   const queueItems = [...items];
@@ -1404,7 +1408,6 @@ async function runDelayQueue(items, source = {}) {
     startedAt: performance.now(),
     cancelled: false,
   };
-  lastDelaySummary = null;
   renderDelayNodes([...results.keys()]);
   syncDelayControls();
   let cursor = 0;
@@ -1427,10 +1430,10 @@ async function runDelayQueue(items, source = {}) {
   }
   syncDelayProgress();
   const finished = delayRun;
-  lastDelaySummary = buildDelaySummary(finished);
   delayRun = null;
   render();
   syncDelayControls();
+  showDelaySummary(buildDelaySummary(finished));
   // Reconcile Mihomo's alive/history snapshot after all explicit probes. This
   // read has no group-delay side effects and must not replace terminal results.
   await refreshMihomoClashGroups();
