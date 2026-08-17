@@ -17701,6 +17701,83 @@ body.panel-page .xk-mihomo-connections-table td small {
   font-size: calc(10px * var(--xk-font-scale, 1));
 }
 
+body.panel-page .xk-mihomo-connection-route-filter {
+  max-width: 100%;
+  text-decoration: none !important;
+}
+
+body.panel-page .xk-mihomo-connection-route {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  gap: 5px;
+  overflow: hidden;
+}
+
+body.panel-page .xk-mihomo-connection-route-hop {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 5px;
+  overflow: hidden;
+}
+
+body.panel-page .xk-mihomo-connection-route-hop > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page .xk-mihomo-connection-route-arrow {
+  flex: 0 0 auto;
+  color: var(--op-data-faint);
+}
+
+body.panel-page .xk-mihomo-connection-route-icon,
+body.panel-page .xk-mihomo-connection-flag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 16px;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+body.panel-page .xk-mihomo-connection-route-icon img {
+  display: block;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+body.panel-page .xk-mihomo-connection-route-icon.is-default {
+  border: 1px solid var(--op-border);
+  background: var(--op-surface-3);
+  color: var(--op-muted);
+}
+
+body.panel-page .xk-mihomo-connection-route-icon .xk-action-icon {
+  width: 11px;
+  height: 11px;
+  margin: 0;
+}
+
+body.panel-page .xk-mihomo-connection-flag {
+  height: 14px;
+  border: 1px solid color-mix(in srgb, var(--op-border-strong) 78%, transparent);
+  box-shadow: 0 1px 1px color-mix(in srgb, black 18%, transparent);
+}
+
+body.panel-page .xk-mihomo-connection-flag .xk-sub-node-country-svg {
+  display: block;
+  width: 20px;
+  height: 14px;
+}
+
 body.panel-page .xk-mihomo-connection-close .xk-action-icon { width: 14px; height: 14px; }
 body.panel-page .xk-mihomo-connection-close:hover:not(:disabled),
 body.panel-page .xk-mihomo-connection-close:focus-visible:not(:disabled) {

@@ -466,6 +466,11 @@ def test_connections_ui_has_live_fallback_overview_and_guarded_actions():
         "data-mihomo-connection-sort",
         "data-mihomo-connection-filter",
         "data-mihomo-connection-copy",
+        "fetchMihomoClashGroups",
+        "rebuildRouteVisuals",
+        "routeHopMarkup",
+        'class="xk-mihomo-connection-route-icon"',
+        'class="xk-mihomo-connection-flag"',
         "navigator.clipboard.writeText",
         "disconnectMihomoClashConnection",
         "disconnectAllMihomoClashConnections",
@@ -476,6 +481,8 @@ def test_connections_ui_has_live_fallback_overview_and_guarded_actions():
         '.xk-mihomo-connections-table',
         'class="xk-mihomo-device-name"',
         '.xk-mihomo-connection-close:hover:not(:disabled)',
+        '.xk-mihomo-connection-route-hop',
+        '.xk-mihomo-connection-flag .xk-sub-node-country-svg',
         'background: var(--op-danger-soft) !important;',
         'content: attr(data-label);',
         "snapshot?.memory == null ? '—' : formatBytes(snapshot.memory)",
@@ -491,7 +498,7 @@ def test_connections_lifecycle_stops_socket_polling_and_requests_when_hidden():
     connections = _text(CONNECTIONS)
     for fragment in (
         "deactivateMihomoClashConnections();",
-        "clearScheduled(); abortRequest(); closeSocket();",
+        "clearScheduled(); abortRequest(); abortVisualRequest(); closeSocket();",
         "if (!active || runGeneration !== generation)",
         "document.addEventListener('visibilitychange'",
     ):

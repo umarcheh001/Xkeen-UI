@@ -4,9 +4,11 @@ import {
   disconnectAllMihomoClashConnections,
   disconnectMihomoClashConnection,
   fetchMihomoClashConnections,
+  fetchMihomoClashGroups,
   mihomoClashConnectionsWsUrl,
   requestMihomoClashWsToken,
 } from './client.js';
+import { mihomoCountryFlag, mihomoNodeCountryCode, mihomoNodeDisplayName } from './visuals.js';
 
 const HTTP_FALLBACK_INTERVAL_MS = 2000;
 const MAX_RECONNECT_DELAY_MS = 15000;
@@ -27,12 +29,14 @@ let connectionView = 'active';
 let closedConnections = new Map();
 let ws = null;
 let request = null;
+let visualRequest = null;
 let timer = 0;
 let generation = 0;
 let reconnectAttempt = 0;
 let selectedId = '';
 let pendingId = '';
 let pendingAll = false;
+let routeVisuals = new Map();
 
 function byId(id) { return document.getElementById(id); }
 
@@ -95,6 +99,50 @@ function deviceNameMarkup(name, ip) {
 function routeText(row) {
   const chains = Array.isArray(row?.chains) ? row.chains : [];
   return chains.length ? chains.join(' → ') : '—';
+}
+
+function rebuildRouteVisuals(next) {
+  routeVisuals = new Map();
+  const groups = [
+    ...(Array.isArray(next?.groups) ? next.groups : []),
+    ...(next?.global_group && typeof next.global_group === 'object' ? [next.global_group] : []),
+  ];
+  for (const group of groups) {
+    const name = String(group?.name || '');
+    if (name) routeVisuals.set(name, { icon: String(group?.icon || ''), kind: 'group' });
+    for (const node of Array.isArray(group?.nodes) ? group.nodes : []) {
+      const nodeName = String(node?.name || '');
+      if (nodeName && !routeVisuals.has(nodeName)) routeVisuals.set(nodeName, { icon: String(node?.icon || ''), kind: 'node' });
+    }
+  }
+}
+
+function routeHopMarkup(name) {
+  const rawName = String(name || '');
+  const visual = routeVisuals.get(rawName) || {};
+  let marker = '';
+  let displayName = rawName;
+  if (visual.kind === 'group' && visual.icon) {
+    marker = `<span class="xk-mihomo-connection-route-icon"><img src="${escapeHtml(visual.icon)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
+  } else if (visual.kind === 'group') {
+    marker = `<span class="xk-mihomo-connection-route-icon is-default" aria-hidden="true">${iconHtml('dns')}</span>`;
+  } else {
+    const countryCode = mihomoNodeCountryCode(rawName);
+    const flag = mihomoCountryFlag(countryCode);
+    displayName = mihomoNodeDisplayName(rawName, countryCode);
+    if (flag.svg) {
+      marker = `<span class="xk-mihomo-connection-flag" data-country="${escapeHtml(flag.code)}" role="img" aria-label="${escapeHtml(flag.label)}" title="${escapeHtml(flag.label)}">${flag.svg}</span>`;
+    } else if (visual.icon) {
+      marker = `<span class="xk-mihomo-connection-route-icon"><img src="${escapeHtml(visual.icon)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
+    }
+  }
+  return `<span class="xk-mihomo-connection-route-hop">${marker}<span>${escapeHtml(displayName || rawName)}</span></span>`;
+}
+
+function routeMarkup(row) {
+  const chains = Array.isArray(row?.chains) ? row.chains : [];
+  if (!chains.length) return '—';
+  return `<span class="xk-mihomo-connection-route">${chains.map((name, index) => `${index ? '<span class="xk-mihomo-connection-route-arrow" aria-hidden="true">→</span>' : ''}${routeHopMarkup(name)}`).join('')}</span>`;
 }
 
 function searchText(row) {
@@ -211,7 +259,7 @@ function rowMarkup(row) {
   return `<tr data-connection-id="${escapeHtml(row.id)}" data-connection-state="${closed ? 'closed' : 'active'}" tabindex="0" aria-label="Открыть детали соединения ${escapeHtml(destination(row))}">
     <td data-label="Источник"><strong>${filterButton(sourceFilter, 'источнику', `${escapeHtml(origin.address)}${deviceNameMarkup(origin.name, metadata.source_ip)}`)}</strong><small>${filterButton(metadata.network, 'протоколу', escapeHtml(network))}</small></td>
     <td data-label="Назначение"><strong>${filterButton(destinationHost(row), 'назначению', escapeHtml(destination(row)))}</strong><small>${escapeHtml(metadata.destination_ip || '')}</small></td>
-    <td data-label="Маршрут"><strong>${filterButton((row?.chains || [])[0] || route, 'маршруту', escapeHtml(route))}</strong><small>${filterButton(row?.rule_payload || row?.rule, 'правилу', escapeHtml(rule))}</small></td>
+    <td data-label="Маршрут"><strong>${filterButton((row?.chains || [])[0] || route, 'маршруту', routeMarkup(row), 'xk-mihomo-connection-route-filter')}</strong><small>${filterButton(row?.rule_payload || row?.rule, 'правилу', escapeHtml(rule))}</small></td>
     <td data-label="Трафик"><strong>${escapeHtml(traffic)}</strong></td>
     <td data-label="Возраст"><strong>${escapeHtml(formatAge(row))}</strong></td>
     <td data-label="Действие">${closed ? '<span class="xk-mihomo-closed-mark">Закрыто</span>' : `<button type="button" class="btn-secondary btn-icon xk-mihomo-connection-close" data-mihomo-connection-close="${escapeHtml(row.id)}" aria-label="Завершить соединение" title="Завершить соединение" ${pendingId ? 'disabled' : ''}>${pendingId === row.id ? iconHtml('loading') : iconHtml('close')}</button>`}</td>
@@ -335,6 +383,11 @@ function clearScheduled() { if (timer) window.clearTimeout(timer); timer = 0; }
 function abortRequest() {
   if (request) { try { request.abort(); } catch (error) {} }
   request = null;
+}
+
+function abortVisualRequest() {
+  if (visualRequest) { try { visualRequest.abort(); } catch (error) {} }
+  visualRequest = null;
 }
 
 function closeSocket() {
@@ -580,6 +633,16 @@ async function startRuntime() {
   root?.setAttribute('aria-busy', 'true');
   const controller = typeof AbortController === 'function' ? new AbortController() : null;
   request = controller;
+  const visualsController = typeof AbortController === 'function' ? new AbortController() : null;
+  visualRequest = visualsController;
+  void fetchMihomoClashGroups({ signal: visualsController?.signal })
+    .then((next) => {
+      if (!active || runGeneration !== generation) return;
+      rebuildRouteVisuals(next);
+      renderRows();
+    })
+    .catch(() => {})
+    .finally(() => { if (visualRequest === visualsController) visualRequest = null; });
   try {
     const bootstrap = await fetchMihomoClashConnections({ signal: controller?.signal });
     if (!active || runGeneration !== generation) return;
@@ -611,6 +674,7 @@ export function activateMihomoClashConnections(nextCapabilities = {}) {
   generation += 1;
   reconnectAttempt = 0;
   previousTotals = null;
+  routeVisuals = new Map();
   void startRuntime();
   return true;
 }
@@ -618,7 +682,7 @@ export function activateMihomoClashConnections(nextCapabilities = {}) {
 export function deactivateMihomoClashConnections() {
   active = false;
   generation += 1;
-  clearScheduled(); abortRequest(); closeSocket();
+  clearScheduled(); abortRequest(); abortVisualRequest(); closeSocket();
   setStreamState('paused', 'Пауза');
   root?.setAttribute('aria-busy', 'false');
   return true;

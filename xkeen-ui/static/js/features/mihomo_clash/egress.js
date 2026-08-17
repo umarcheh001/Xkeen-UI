@@ -4,7 +4,7 @@ import {
   previewMihomoEgressListener,
 } from './client.js';
 import { confirmMihomoAction } from '../mihomo_runtime.js';
-import { mihomoCountryFlag } from './groups.js';
+import { mihomoCountryFlag } from './visuals.js';
 
 const LOCAL_CACHE_MS = 5 * 60 * 1000;
 const VISIBILITY_STORAGE_KEY = 'xkeen:mihomo-clash-egress-visible';

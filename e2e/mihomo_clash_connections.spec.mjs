@@ -58,11 +58,29 @@ function connectionsPayload(ids = ['connection-one', 'connection-two']) {
       upload: 100 + index,
       download: 200 + index,
       start: new Date(Date.now() - (index + 1) * 60000).toISOString(),
-      chains: ['AUTO', index ? 'node-b' : 'node-a'],
+      chains: ['DE AUTO', index ? 'node-b' : '🇩🇪 node-a'],
       provider_chains: [],
       rule: 'DomainSuffix',
       rule_payload: 'example',
     })),
+  };
+}
+
+
+function groupsPayload() {
+  return {
+    ok: true,
+    schema_version: 1,
+    groups: [{
+      name: 'DE AUTO', type: 'Selector', now: '🇩🇪 node-a', icon: 'https://icons.example/auto.svg',
+      nodes: [
+        { name: '🇩🇪 node-a', type: 'VLESS', alive: true },
+        { name: 'node-b', type: 'Trojan', alive: true },
+      ],
+    }],
+    global_group: null,
+    providers: [],
+    truncated: false,
   };
 }
 
@@ -72,6 +90,7 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   let ids = ['connection-one', 'connection-two'];
   const disconnects = [];
   await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route('**/api/mihomo/clash/proxy-groups', (route) => route.fulfill({ json: groupsPayload() }));
   await page.route(/\/api\/mihomo\/clash\/connections(?:\/.*)?$/, async (route) => {
     const request = route.request();
     if (request.method() === 'DELETE') {
@@ -95,7 +114,12 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   await expect(page.locator('#mihomo-clash-connection-count')).toHaveText('2');
   await expect(page.locator('#mihomo-clash-connections-rows tr')).toHaveCount(2);
   await expect(page.locator('#mihomo-clash-connections-rows')).toContainText('Laptop');
-  await expect(page.locator('#mihomo-clash-connections-rows')).toContainText('AUTO → node-a');
+  await expect(page.locator('#mihomo-clash-connections-rows')).toContainText('DE AUTO');
+  await expect(page.locator('#mihomo-clash-connections-rows')).toContainText('node-a');
+  const firstRoute = page.locator('[data-connection-id="connection-one"] [data-label="Маршрут"]');
+  await expect(firstRoute.locator('.xk-mihomo-connection-route-icon img')).toHaveAttribute('src', 'https://icons.example/auto.svg');
+  await expect(firstRoute.locator('.xk-mihomo-connection-flag')).toHaveAttribute('data-country', 'DE');
+  await expect(firstRoute.locator('.xk-mihomo-connection-flag')).toHaveAttribute('aria-label', 'Germany');
   const firstSource = page.locator('[data-connection-id="connection-one"] td').first();
   await expect(firstSource).toContainText('192.0.2.1:5000');
   await expect(firstSource.locator('.xk-mihomo-device-name')).toHaveText('Laptop');
