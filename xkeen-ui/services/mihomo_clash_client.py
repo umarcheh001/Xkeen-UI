@@ -50,6 +50,14 @@ class MihomoClashDelayPreset:
 
 MIHOMO_CLASH_DELAY_PRESETS: Mapping[str, MihomoClashDelayPreset] = MappingProxyType(
     {
+        # ``auto`` intentionally resolves to the conservative default.  The
+        # route may retry the other allow-listed service, but an arbitrary URL
+        # can never cross this client boundary.
+        "auto": MihomoClashDelayPreset(
+            "https://www.gstatic.com/generate_204",
+            5000,
+            "204",
+        ),
         "google": MihomoClashDelayPreset(
             "https://www.gstatic.com/generate_204",
             5000,
@@ -280,7 +288,7 @@ class MihomoClashClient:
         scope: str,
         name: str,
         *,
-        preset: str = "google",
+        preset: str = "auto",
     ) -> MihomoClashJSONResponse:
         """Run one allow-listed proxy/group delay probe.
 
@@ -326,7 +334,7 @@ class MihomoClashClient:
         provider: str,
         name: str,
         *,
-        preset: str = "google",
+        preset: str = "auto",
     ) -> MihomoClashJSONResponse:
         """Probe one provider-scoped proxy to avoid same-name collisions."""
 

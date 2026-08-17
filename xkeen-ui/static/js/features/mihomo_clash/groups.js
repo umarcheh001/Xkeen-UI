@@ -7,7 +7,7 @@ import {
   unfixMihomoClashProxy,
 } from './client.js';
 
-const SELECTABLE_TYPES = new Set(['selector', 'select', 'urltest', 'fallback', 'smart']);
+const SELECTABLE_TYPES = new Set(['selector', 'select', 'urltest', 'fallback', 'smart', 'loadbalance', 'load-balance']);
 // Probe one target at a time. Mihomo itself serializes delay checks on
 // low-power routers; browser-side parallelism only creates a long busy queue.
 const MAX_DELAY_CONCURRENCY = 1;
@@ -19,7 +19,20 @@ const DELAY_HISTORY_HOVER_MS = 350;
 // visible for one default Mihomo health-check interval, then ask the operator
 // to measure again instead of presenting an old value as current.
 const DELAY_FRESHNESS_TTL_MS = 5 * 60 * 1000;
-const AUTOMATIC_TYPES = new Set(['urltest', 'fallback', 'smart']);
+const AUTOMATIC_TYPES = new Set(['urltest', 'fallback', 'smart', 'loadbalance', 'load-balance']);
+const LOCKED_SELECTION_TYPES = new Set(['loadbalance', 'load-balance']);
+const NO_DELAY_TYPES = new Set(['direct', 'reject', 'reject-drop', 'rejectdrop', 'dns', 'pass', 'relay']);
+const NO_SORT_TYPES = new Set([
+  ...NO_DELAY_TYPES,
+  'compatible',
+  'selector',
+  'select',
+  'fallback',
+  'urltest',
+  'smart',
+  'loadbalance',
+  'load-balance',
+]);
 const COLLAPSED_GROUPS_STORAGE_KEY = 'xkeen:mihomo-clash-collapsed-groups';
 
 let root = null;
@@ -33,6 +46,7 @@ let requestSequence = 0;
 let selection = null;
 let capabilities = {};
 let sortMode = 'config';
+let latencyPreset = 'auto';
 let showTimeoutHidden = false;
 let hideUnavailable = false;
 let consecutiveTimeouts = 3;
@@ -73,16 +87,40 @@ function readCollapsedGroupPreferences() {
   }
 }
 
-function persistCollapsedGroups() {
+function collapsedGroupSnapshot() {
+  const value = Object.create(null);
+  for (const group of allGroups()) value[group.name] = collapsedGroups.has(group.name);
+  return value;
+}
+
+function persistMihomoViewSettings(patch = {}) {
+  const settingsApi = window.XKeen?.ui?.settings;
+  if (!settingsApi) return;
+  const mihomoPatch = { ...patch };
   try {
-    const value = Object.create(null);
-    for (const group of allGroups()) value[group.name] = collapsedGroups.has(group.name);
-    window.localStorage.setItem(COLLAPSED_GROUPS_STORAGE_KEY, JSON.stringify(value));
+    settingsApi.patchLocal?.({ mihomo: mihomoPatch });
+    if (typeof settingsApi.patch === 'function') {
+      void settingsApi.patch({ mihomo: mihomoPatch }).catch(() => {});
+    }
   } catch (error) {}
 }
 
+function persistCollapsedGroups() {
+  const value = collapsedGroupSnapshot();
+  persistMihomoViewSettings({ collapsedGroups: value });
+  // Keep one release of local fallback for deployments where /api/ui-settings
+  // is temporarily unavailable. Server settings remain the primary source.
+  try { window.localStorage.setItem(COLLAPSED_GROUPS_STORAGE_KEY, JSON.stringify(value)); } catch (error) {}
+}
+
 function seedCollapsedGroups(groupItems) {
-  const preferences = readCollapsedGroupPreferences();
+  const settings = window.XKeen?.ui?.settings?.get?.();
+  const serverPreferences = settings?.mihomo?.collapsedGroups;
+  const preferences = serverPreferences
+    && typeof serverPreferences === 'object'
+    && Object.keys(serverPreferences).length
+    ? serverPreferences
+    : readCollapsedGroupPreferences();
   for (const group of groupItems || []) {
     const name = String(group?.name || '');
     if (!name || knownDisclosureGroups.has(name)) continue;
@@ -163,16 +201,36 @@ function clampConsecutiveTimeouts(value) {
 function applyMihomoUiSettings(settings) {
   const previousHideUnavailable = hideUnavailable;
   const previousConsecutiveTimeouts = consecutiveTimeouts;
+  const previousSortMode = sortMode;
+  const previousLatencyPreset = latencyPreset;
+  let collapsedChanged = false;
   const mihomo = settings?.mihomo && typeof settings.mihomo === 'object'
     ? settings.mihomo
     : {};
   hideUnavailable = mihomo.hideUnavailable === true;
   consecutiveTimeouts = clampConsecutiveTimeouts(mihomo.consecutiveTimeouts);
-  if (
-    root
-    && (hideUnavailable !== previousHideUnavailable
-      || consecutiveTimeouts !== previousConsecutiveTimeouts)
-  ) {
+  sortMode = ['config', 'name', 'delay', 'availability'].includes(String(mihomo.proxySortOrder || ''))
+    ? String(mihomo.proxySortOrder)
+    : 'config';
+  latencyPreset = ['auto', 'google', 'cloudflare'].includes(String(mihomo.latencyPreset || ''))
+    ? String(mihomo.latencyPreset)
+    : 'auto';
+  if (mihomo.collapsedGroups && typeof mihomo.collapsedGroups === 'object') {
+    for (const [name, collapsed] of Object.entries(mihomo.collapsedGroups)) {
+      const previous = collapsedGroups.has(name);
+      if (collapsed === true) collapsedGroups.add(name);
+      else if (collapsed === false) collapsedGroups.delete(name);
+      if (previous !== collapsedGroups.has(name)) collapsedChanged = true;
+      knownDisclosureGroups.add(name);
+    }
+  }
+  if (root && (
+    hideUnavailable !== previousHideUnavailable
+    || consecutiveTimeouts !== previousConsecutiveTimeouts
+    || sortMode !== previousSortMode
+    || latencyPreset !== previousLatencyPreset
+    || collapsedChanged
+  )) {
     showTimeoutHidden = false;
     render();
   }
@@ -558,6 +616,32 @@ function nodeSearchText(node) {
     .toLocaleLowerCase('ru');
 }
 
+function nodeType(node) {
+  return String(node?.type || '').trim().toLowerCase();
+}
+
+function canProbeNode(node) {
+  return !!node && !NO_DELAY_TYPES.has(nodeType(node));
+}
+
+function isTimedOutNode(group, node) {
+  if (nodeDelayResult(group, node)?.state === 'timeout') return true;
+  const effectiveNode = effectiveDelayNode(node);
+  const history = Array.isArray(effectiveNode?.delay_history) ? effectiveNode.delay_history : [];
+  if (!history.length) return false;
+  const delay = Number(history[history.length - 1]?.delay_ms);
+  return Number.isFinite(delay) && delay === 0;
+}
+
+function groupLocksSelection(group) {
+  return LOCKED_SELECTION_TYPES.has(String(group?.type || '').trim().toLowerCase());
+}
+
+function nodeSelectionDisabled(group, node) {
+  if (groupLocksSelection(group)) return true;
+  return AUTOMATIC_TYPES.has(String(group?.type || '').trim().toLowerCase()) && isTimedOutNode(group, node);
+}
+
 function filteredGroups() {
   const query = filterText.trim().toLocaleLowerCase('ru');
   const unavailable = unavailableVisibilityState().hidden;
@@ -587,8 +671,13 @@ function nodeDelayValue(group, node) {
 
 function sortNodes(group, nodes) {
   if (sortMode === 'config') return [...nodes];
-  const indexed = nodes.map((node, index) => ({ node, index }));
-  indexed.sort((left, right) => {
+  const sortable = [];
+  const fixedPositions = new Map();
+  nodes.forEach((node, index) => {
+    if (NO_SORT_TYPES.has(nodeType(node))) fixedPositions.set(index, node);
+    else sortable.push({ node, index });
+  });
+  sortable.sort((left, right) => {
     const leftCurrent = left.node.name === group.now ? 1 : 0;
     const rightCurrent = right.node.name === group.now ? 1 : 0;
     if (leftCurrent !== rightCurrent) return rightCurrent - leftCurrent;
@@ -600,7 +689,13 @@ function sortNodes(group, nodes) {
     }
     return comparison || left.index - right.index;
   });
-  return indexed.map((item) => item.node);
+  const result = new Array(nodes.length);
+  for (const [index, node] of fixedPositions) result[index] = node;
+  let sortIndex = 0;
+  for (let index = 0; index < result.length; index += 1) {
+    if (!result[index]) result[index] = sortable[sortIndex++].node;
+  }
+  return result;
 }
 
 function providerCopy(node) {
@@ -726,6 +821,7 @@ export function mihomoCountryFlag(countryCode) {
 }
 
 function renderNodeProbe(group, node) {
+  if (!canProbeNode(node)) return '';
   const status = nodeProbeStatus(group, node);
   const probeLabel = `Проверить задержку узла ${node.name}`;
   const probeData = `data-mihomo-node-delay="1" data-group="${escapeHtml(group.name)}" data-node="${escapeHtml(node.name)}" data-provider="${escapeHtml(node.provider || '')}"`;
@@ -762,6 +858,7 @@ function renderNode(group, node) {
   const selectPending = selection && selection.group === group.name && selection.node === node.name;
   const checking = nodeDelayResult(group, node)?.state === 'pending';
   const selectable = !!group.selectable && SELECTABLE_TYPES.has(String(group.type || '').toLowerCase());
+  const selectionDisabled = nodeSelectionDisabled(group, node);
   const effectiveNode = effectiveDelayNode(node);
   const alive = nodeDelayResult(group, node)?.state === 'done'
     || (isPayloadFresh() && (effectiveNode.availability === 'available' || effectiveNode.alive === true))
@@ -775,10 +872,11 @@ function renderNode(group, node) {
   const meta = [protocol, providerCopy(node), node.udp === true ? 'UDP' : ''].filter(Boolean).join(' · ');
   const endpoint = [node.server, node.port].filter((value) => value !== '' && value != null).join(':');
   return `
-    <li class="xk-mihomo-node-row${selected ? ' is-current' : ''}${fixed ? ' is-fixed' : ''}${checking ? ' is-checking' : ''}" data-node-key="${escapeHtml(encodeURIComponent(delayKey(group.name, node.name, node.provider)))}" data-node-name="${escapeHtml(node.name)}" data-alive="${escapeHtml(alive)}">
+    <li class="xk-mihomo-node-row${selected ? ' is-current' : ''}${fixed ? ' is-fixed' : ''}${checking ? ' is-checking' : ''}${selectionDisabled ? ' is-selection-disabled' : ''}" data-node-key="${escapeHtml(encodeURIComponent(delayKey(group.name, node.name, node.provider)))}" data-node-name="${escapeHtml(node.name)}" data-alive="${escapeHtml(alive)}">
       <button type="button" class="xk-mihomo-node-select" data-mihomo-group-select="1"
         data-group="${escapeHtml(group.name)}" data-node="${escapeHtml(node.name)}"
-        aria-pressed="${selected ? 'true' : 'false'}" ${!selectable || selected || selectPending || selection ? 'disabled' : ''}>
+        aria-pressed="${selected ? 'true' : 'false'}" ${selectionDisabled ? 'aria-disabled="true" data-tooltip="Этот узел нельзя зафиксировать в автоматической группе."' : ''}
+        ${!selectable || selected || selectPending || selection || selectionDisabled ? 'disabled' : ''}>
         <span class="xk-mihomo-node-main">
           <strong>${fixed ? iconHtml('lock') : ''}${nodeFlagHtml(countryCode)}<span>${escapeHtml(displayName)}</span></strong>
           <small>${escapeHtml(meta)}</small>
@@ -840,6 +938,7 @@ function renderPickerOption(group, node) {
   const selected = group.now === node.name;
   const selectPending = selection && selection.group === group.name && selection.node === node.name;
   const selectable = !!group.selectable && SELECTABLE_TYPES.has(String(group.type || '').toLowerCase());
+  const selectionDisabled = nodeSelectionDisabled(group, node);
   const countryCode = nodeCountryCode(node.name);
   const displayName = nodeDisplayName(node, countryCode);
   return `
@@ -849,7 +948,8 @@ function renderPickerOption(group, node) {
       <button type="button" class="xk-mihomo-picker-select" data-mihomo-group-select="1"
         data-group="${escapeHtml(group.name)}" data-node="${escapeHtml(node.name)}"
         role="option" aria-selected="${selected ? 'true' : 'false'}"
-        ${!selectable || selected || selectPending || selection ? 'disabled' : ''}>
+        ${selectionDisabled ? 'aria-disabled="true" data-tooltip="Этот узел нельзя зафиксировать в автоматической группе."' : ''}
+        ${!selectable || selected || selectPending || selection || selectionDisabled ? 'disabled' : ''}>
         ${pickerNodeIconHtml(node)}
         <span>${escapeHtml(displayName)}</span>
         ${selected ? `<span class="xk-visually-hidden">Текущий выбор</span>${iconHtml('check')}` : ''}
@@ -874,11 +974,12 @@ function renderCollapsedPicker(group, panelId) {
   const open = pickerGroup === group.name;
   const query = String(pickerQueries.get(group.name) || '');
   const pickerId = `${panelId}-picker`;
+  const locked = groupLocksSelection(group);
   return `
     <div class="xk-mihomo-group-picker" data-mihomo-group-picker="${escapeHtml(group.name)}">
       <button type="button" class="xk-mihomo-picker-trigger" data-mihomo-picker-toggle="1"
         data-group="${escapeHtml(group.name)}" role="combobox" aria-haspopup="listbox"
-        aria-expanded="${open ? 'true' : 'false'}" aria-controls="${pickerId}">
+        aria-expanded="${open ? 'true' : 'false'}" aria-controls="${pickerId}" ${locked ? 'aria-disabled="true" disabled data-tooltip="LoadBalance управляется автоматически."' : ''}>
         ${selectedNode ? pickerNodeIconHtml(selectedNode) : `<span class="xk-mihomo-picker-node-icon xk-mihomo-picker-node-icon--default" aria-hidden="true">${iconHtml('dns')}</span>`}
         <span class="xk-mihomo-picker-value">${escapeHtml(selectedName)}</span>
         ${iconHtml('chevron-down', 'xk-mihomo-picker-chevron')}
@@ -906,6 +1007,7 @@ function renderGroup(group) {
   const panelId = `mihomo-group-${encodeURIComponent(group.name).replace(/%/g, '-').replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   const automatic = AUTOMATIC_TYPES.has(String(group.type || '').toLowerCase());
   const canUnfix = automatic && !!group.fixed && capabilities.proxy_unfix === true;
+  const canTestGroup = nodes.some(canProbeNode);
   return `
     <section class="xk-mihomo-group" data-group-name="${escapeHtml(group.name)}">
       <header class="xk-mihomo-group-head${collapsed ? ' is-collapsed' : ''}" data-group="${escapeHtml(group.name)}"
@@ -918,7 +1020,7 @@ function renderGroup(group) {
         </div>
         <div class="xk-mihomo-group-actions">
           ${canUnfix ? `<button type="button" class="btn-secondary xk-mihomo-group-unfix" data-mihomo-group-unfix="1" data-group="${escapeHtml(group.name)}">${iconHtml('lock')}<span>Вернуть автоматический выбор</span></button>` : ''}
-          ${collapsed ? '' : `<button type="button" class="btn-secondary xk-mihomo-group-test" data-mihomo-group-delay="1"
+          ${collapsed || !canTestGroup ? '' : `<button type="button" class="btn-secondary xk-mihomo-group-test" data-mihomo-group-delay="1"
             data-group="${escapeHtml(group.name)}">${iconHtml('ping')}<span class="xk-action-label">Тест группы</span></button>`}
         </div>
       </header>
@@ -939,6 +1041,8 @@ function render() {
   const list = document.getElementById('mihomo-clash-groups-list');
   const count = document.getElementById('mihomo-clash-groups-count');
   const hiddenToggle = document.getElementById('mihomo-clash-show-hidden');
+  const sortSelect = document.getElementById('mihomo-clash-groups-sort');
+  const latencyPresetSelect = document.getElementById('mihomo-clash-latency-preset');
   const collapseButton = document.getElementById('mihomo-clash-groups-collapse');
   const timeoutButton = document.getElementById('mihomo-clash-show-timeout-hidden');
   const delaySummary = document.getElementById('mihomo-clash-delay-summary');
@@ -946,11 +1050,15 @@ function render() {
   const visibleGroups = filteredGroups();
   const visibleNodes = visibleGroups.reduce((sum, group) => sum + (group.nodes || []).length, 0);
   const visibleExpandedNodes = visibleGroups.reduce(
-    (sum, group) => sum + (collapsedGroups.has(group.name) && !filterText.trim() ? 0 : (group.nodes || []).length),
+    (sum, group) => sum + (collapsedGroups.has(group.name) && !filterText.trim()
+      ? 0
+      : (group.nodes || []).filter(canProbeNode).length),
     0,
   );
   if (count) count.textContent = `${visibleGroups.length} групп · ${visibleNodes} узлов`;
   if (hiddenToggle) hiddenToggle.checked = showHidden;
+  if (sortSelect) sortSelect.value = sortMode;
+  if (latencyPresetSelect) latencyPresetSelect.value = latencyPreset;
   const hiddenTimeoutCount = unavailableVisibilityState().hidden.size;
   if (hiddenTimeoutCount === 0) showTimeoutHidden = false;
   if (timeoutButton) {
@@ -1005,7 +1113,9 @@ function syncDelayControls(visibleExpandedNodes) {
   const visibleCount = Number.isFinite(visibleExpandedNodes)
     ? visibleExpandedNodes
     : filteredGroups().reduce(
-      (sum, group) => sum + (collapsedGroups.has(group.name) && !filterText.trim() ? 0 : (group.nodes || []).length),
+      (sum, group) => sum + (collapsedGroups.has(group.name) && !filterText.trim()
+        ? 0
+        : (group.nodes || []).filter(canProbeNode).length),
       0,
     );
   const busy = !!delayRun;
@@ -1100,6 +1210,15 @@ async function selectProxy(group, node) {
   if (!active || selection || delayRun) return;
   const previous = groups().find((item) => item.name === group);
   if (!previous || previous.now === node) return;
+  const candidate = (previous.nodes || []).find((item) => item.name === node);
+  if (groupLocksSelection(previous)) {
+    notify('LoadBalance управляется автоматически; ручной выбор заблокирован.', 'warning');
+    return;
+  }
+  if (AUTOMATIC_TYPES.has(String(previous.type || '').toLowerCase()) && isTimedOutNode(previous, candidate)) {
+    notify('Нельзя зафиксировать таймаутный узел в автоматической группе.', 'warning');
+    return;
+  }
   const disconnectAffected = document.getElementById('mihomo-clash-disconnect-after-select')?.checked === true;
   const accepted = await confirmMihomoAction({
     title: `Переключить группу «${group}»?`,
@@ -1190,6 +1309,7 @@ function nodeQueueFromGroups(groupItems) {
   const byIdentity = new Map();
   for (const group of groupItems || []) {
     for (const node of group.nodes || []) {
+      if (!canProbeNode(node)) continue;
       const target = delayTarget(group.name, node);
       if (!target.name) continue;
       let item = byIdentity.get(target.identity);
@@ -1273,6 +1393,7 @@ async function requestDelay(item) {
     try {
       return await testMihomoClashDelay(item.scope, item.name, {
         provider: item.provider,
+        preset: latencyPreset,
         signal: delayRun.controller?.signal,
       });
     } catch (error) {
@@ -1446,6 +1567,15 @@ function bind() {
   root.addEventListener('change', (event) => {
     if (event.target?.id === 'mihomo-clash-groups-sort') {
       sortMode = String(event.target.value || 'config');
+      persistMihomoViewSettings({ proxySortOrder: sortMode });
+      render();
+      return;
+    }
+    if (event.target?.id === 'mihomo-clash-latency-preset') {
+      latencyPreset = ['google', 'cloudflare'].includes(String(event.target.value || ''))
+        ? String(event.target.value)
+        : 'auto';
+      persistMihomoViewSettings({ latencyPreset });
       render();
       return;
     }

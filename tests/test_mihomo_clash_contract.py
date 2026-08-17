@@ -305,6 +305,21 @@ def test_proxy_groups_dto_uses_safe_runtime_details_as_fallback():
     assert node["security"] == "tls"
 
 
+def test_loadbalance_group_is_automatic_but_exposed_for_fixed_state_cleanup():
+    from services.mihomo_clash_dto import build_mihomo_clash_proxy_groups_dto
+
+    proxies = fixture("proxies.json")
+    proxies["proxies"]["AUTO"].update({
+        "type": "LoadBalance",
+        "fixed": "node-a",
+    })
+    group = build_mihomo_clash_proxy_groups_dto(proxies)["groups"][0]
+
+    assert group["selectable"] is False
+    assert group["selection_locked"] is True
+    assert group["fixed"] == "node-a"
+
+
 def test_rules_and_providers_dtos_are_bounded_and_drop_raw_source_fields():
     from services.mihomo_clash_dto import (
         build_mihomo_clash_providers_dto,

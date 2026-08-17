@@ -162,7 +162,7 @@ export function testMihomoClashDelay(scope, name, options = {}) {
     body: JSON.stringify({
       scope: String(scope || ''),
       name: String(name || ''),
-      preset: String(options.preset || 'google'),
+      preset: String(options.preset || 'auto'),
       ...(options.provider ? { provider: String(options.provider) } : {}),
     }),
     credentials: 'same-origin',

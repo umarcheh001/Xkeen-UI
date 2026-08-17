@@ -752,6 +752,58 @@ def test_proxy_select_rejects_stale_or_unknown_choice_before_mutation():
     assert client.operations == ["proxies"]
 
 
+def test_proxy_select_rejects_timeout_for_automatic_group_before_mutation():
+    payload = groups_payload(group_type="URLTest")
+    payload["proxies"]["node-b"]["history"] = [
+        {"time": "2026-08-17T00:00:00Z", "delay": 0}
+    ]
+    client = StubClient(responses={
+        "proxies": MihomoClashJSONResponse(payload, 200, 2, 200),
+    })
+
+    response = make_app(ready_discovery(), client).test_client().put(
+        "/api/mihomo/clash/proxy-groups/AUTO",
+        json={"name": "node-b"},
+    )
+
+    assert response.status_code == 409
+    assert response.get_json()["code"] == "proxy_selection_timed_out"
+    assert client.selections == []
+
+
+def test_loadbalance_selection_is_locked_but_fixed_state_can_be_removed():
+    locked = groups_payload(now="node-a", group_type="LoadBalance", fixed="node-a")
+    unlocked = groups_payload(now="node-b", group_type="LoadBalance", fixed="")
+    snapshots = iter([
+        MihomoClashJSONResponse(locked, 200, 1, 100),
+        MihomoClashJSONResponse(locked, 200, 1, 100),
+        MihomoClashJSONResponse(unlocked, 200, 1, 100),
+    ])
+    client = StubClient(responses={
+        "version": MihomoClashJSONResponse({"version": "Mihomo Meta v1.19.29"}, 200, 1, 40),
+        "providers_proxies": MihomoClashJSONResponse({"providers": {}}, 200, 1, 100),
+    })
+    original_request = client.request_json
+
+    def request_json(operation):
+        if operation == "proxies":
+            client.operations.append(operation)
+            return next(snapshots)
+        return original_request(operation)
+
+    client.request_json = request_json
+    http = make_app(ready_discovery(), client).test_client()
+    selected = http.put("/api/mihomo/clash/proxy-groups/AUTO", json={"name": "node-b"})
+    assert selected.status_code == 409
+    assert selected.get_json()["code"] == "proxy_selection_locked"
+    assert client.selections == []
+
+    removed = http.delete("/api/mihomo/clash/proxy-groups/AUTO/fixed", json={})
+    assert removed.status_code == 200
+    assert removed.get_json()["reconciled"] is True
+    assert client.unfixed == ["AUTO"]
+
+
 def test_proxy_select_rejects_non_json_and_does_not_touch_upstream():
     client = StubClient()
     response = make_app(ready_discovery(), client).test_client().put(
@@ -858,11 +910,11 @@ def test_delay_route_forwards_only_scope_name_and_preset_id():
     assert client.delays == [("proxy", "node-a", "google")]
 
 
-def test_delay_route_retries_transient_google_failure_with_allowlisted_cloudflare():
+def test_delay_route_retries_transient_auto_failure_with_allowlisted_cloudflare():
     class FallbackClient(StubClient):
         def request_delay(self, scope: str, name: str, *, preset: str):
             self.delays.append((scope, name, preset))
-            if preset == "google":
+            if preset == "auto":
                 raise MihomoClashClientError(
                     "upstream_timeout",
                     "private target timed out",
@@ -874,7 +926,7 @@ def test_delay_route_retries_transient_google_failure_with_allowlisted_cloudflar
     client = FallbackClient()
     response = make_app(ready_discovery(), client).test_client().post(
         "/api/mihomo/clash/delay",
-        json={"scope": "proxy", "name": "node-a", "preset": "google"},
+        json={"scope": "proxy", "name": "node-a", "preset": "auto"},
     )
 
     assert response.status_code == 200
@@ -882,7 +934,7 @@ def test_delay_route_retries_transient_google_failure_with_allowlisted_cloudflar
     assert response.get_json()["effective_preset"] == "cloudflare"
     assert response.get_json()["fallback_used"] is True
     assert client.delays == [
-        ("proxy", "node-a", "google"),
+        ("proxy", "node-a", "auto"),
         ("proxy", "node-a", "cloudflare"),
     ]
 
@@ -901,15 +953,32 @@ def test_delay_route_reports_zero_delay_as_timeout_after_fallback():
     client = ZeroDelayClient()
     response = make_app(ready_discovery(), client).test_client().post(
         "/api/mihomo/clash/delay",
-        json={"scope": "proxy", "name": "node-a", "preset": "google"},
+        json={"scope": "proxy", "name": "node-a", "preset": "auto"},
     )
 
     assert response.status_code == 504
     assert response.get_json()["code"] == "upstream_timeout"
     assert client.delays == [
-        ("proxy", "node-a", "google"),
+        ("proxy", "node-a", "auto"),
         ("proxy", "node-a", "cloudflare"),
     ]
+
+
+def test_explicit_google_preset_does_not_switch_targets_on_transient_failure():
+    client = StubClient(error=MihomoClashClientError(
+        "upstream_timeout",
+        "google timed out",
+        status=504,
+        retryable=True,
+    ))
+    response = make_app(ready_discovery(), client).test_client().post(
+        "/api/mihomo/clash/delay",
+        json={"scope": "proxy", "name": "node-a", "preset": "google"},
+    )
+
+    assert response.status_code == 504
+    assert response.get_json()["code"] == "upstream_timeout"
+    assert client.delays == [("proxy", "node-a", "google")]
 
 
 def test_delay_route_does_not_retry_semantic_google_failure():

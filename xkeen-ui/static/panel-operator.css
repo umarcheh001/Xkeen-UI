@@ -18608,6 +18608,14 @@ body.panel-page .xk-mihomo-node-row.is-current.is-fixed {
   background: color-mix(in srgb, var(--op-warning) 9%, var(--op-accent-soft));
 }
 
+body.panel-page .xk-mihomo-node-row.is-selection-disabled:not(.is-current) {
+  opacity: .72;
+}
+
+body.panel-page .xk-mihomo-node-row.is-selection-disabled .xk-mihomo-node-select {
+  cursor: not-allowed;
+}
+
 body.panel-page .xk-mihomo-node-select {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr);

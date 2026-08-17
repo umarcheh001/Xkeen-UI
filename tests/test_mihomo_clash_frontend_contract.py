@@ -186,7 +186,7 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
         "MAX_BUSY_RETRIES = 2",
         "DELAY_BATCH_CADENCE_MS = 120",
         "DELAY_FRESHNESS_TTL_MS = 5 * 60 * 1000",
-        "TIMEOUT_HIDE_THRESHOLD = 3",
+        "consecutiveTimeouts = 3",
         "data-mihomo-group-unfix",
         "disconnect_affected",
         "provider-proxy",
@@ -204,7 +204,7 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
         "visited.has(current.name)",
         "latestDelays.get(effectiveIdentity)",
         "delayKey(group.name, node.name, node.provider)",
-        "groups().flatMap((group) => (group.nodes || []).map((node) =>",
+        "for (const group of groupItems || [])",
         "source.type === 'visible'",
         "source.type === 'group'",
         "mihomoDelayTesting",
@@ -390,7 +390,7 @@ def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
     assert "delayHistoryPopover.id = 'mihomo-clash-delay-history-popover'" in groups
     assert 'class="xk-mihomo-delay-history-row"' in groups
     assert 'rememberDelayMeasurement(target.identity' in groups
-    assert "${collapsed ? '' : `<button type=\"button\" class=\"btn-secondary xk-mihomo-group-test\"" in groups
+    assert "${collapsed || !canTestGroup ? '' : `<button type=\"button\" class=\"btn-secondary xk-mihomo-group-test\"" in groups
     assert 'setMessage(' not in groups
     assert 'mihomo-clash-groups-message' not in markup
     assert 'aria-label="${escapeHtml(probeLabel)}: ${escapeHtml(status.label)}"' in groups

@@ -47,6 +47,9 @@
     mihomo: {
       hideUnavailable: false,
       consecutiveTimeouts: 3,
+      proxySortOrder: 'config',
+      collapsedGroups: {},
+      latencyPreset: 'auto',
     },
   };
 

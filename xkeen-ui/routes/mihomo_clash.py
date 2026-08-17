@@ -47,7 +47,7 @@ MAX_ACTION_BODY_BYTES = 8 * 1024
 MAX_ACTION_NAME_CHARS = 256
 MAX_AFFECTED_DISCONNECTS = 24
 MIHOMO_PROXY_UNFIX_MIN_VERSION = (1, 18, 9)
-AUTOMATIC_GROUP_TYPES = {"urltest", "fallback", "smart"}
+AUTOMATIC_GROUP_TYPES = {"urltest", "fallback", "smart", "loadbalance", "load-balance"}
 MAX_PROXY_DETAIL_CONFIG_BYTES = 4 * 1024 * 1024
 AuditLogger = Callable[..., Any]
 ActionGuard = MihomoClashActionGuard
@@ -1029,7 +1029,6 @@ def create_mihomo_clash_blueprint(
             }
             if (
                 not candidate_group
-                or not candidate_group.get("selectable")
                 or selected not in candidate_names
             ):
                 _audit_action(
@@ -1044,6 +1043,57 @@ def create_mihomo_clash_blueprint(
                     ok=False,
                     code="proxy_selection_not_available",
                 )
+            candidate_type = str(candidate_group.get("type") or "").lower()
+            if candidate_group.get("selection_locked") or candidate_type in {"loadbalance", "load-balance"}:
+                _audit_action(
+                    "proxy-select",
+                    False,
+                    group=group,
+                    error_code="selection_locked",
+                )
+                return error_response(
+                    "LoadBalance управляется автоматически и не поддерживает ручной выбор.",
+                    409,
+                    ok=False,
+                    code="proxy_selection_locked",
+                )
+            if not candidate_group.get("selectable"):
+                _audit_action(
+                    "proxy-select",
+                    False,
+                    group=group,
+                    error_code="selection_not_available",
+                )
+                return error_response(
+                    "Группа не поддерживает ручной выбор.",
+                    409,
+                    ok=False,
+                    code="proxy_selection_not_available",
+                )
+            if candidate_type in AUTOMATIC_GROUP_TYPES:
+                selected_node = next(
+                    (
+                        item
+                        for item in candidate_group.get("nodes", [])
+                        if isinstance(item, Mapping) and item.get("name") == selected
+                    ),
+                    None,
+                )
+                history = (selected_node or {}).get("delay_history")
+                latest = history[-1] if isinstance(history, list) and history else {}
+                if isinstance(latest, Mapping) and latest.get("delay_ms") == 0:
+                    _audit_action(
+                        "proxy-select",
+                        False,
+                        group=group,
+                        error_code="selection_timed_out",
+                    )
+                    return error_response(
+                        "Нельзя зафиксировать таймаутный узел в автоматической группе.",
+                        409,
+                        ok=False,
+                        code="proxy_selection_timed_out",
+                    )
             affected_ids: list[str] = []
             affected_truncated = False
             if disconnect_affected:
@@ -1189,7 +1239,7 @@ def create_mihomo_clash_blueprint(
         body = body or {}
         scope = body.get("scope") if isinstance(body.get("scope"), str) else ""
         name = _action_name(body, "name")
-        preset = body.get("preset", "google")
+        preset = body.get("preset", "auto")
         provider = _action_name(body, "provider") if scope == "provider-proxy" else None
         if (
             not name
@@ -1227,7 +1277,7 @@ def create_mihomo_clash_blueprint(
                 # A second allow-listed target helps when the probe service or
                 # its route is temporarily unavailable. Never retry semantic
                 # failures such as 404/authorization/invalid payloads.
-                fallback_preset = "cloudflare" if preset == "google" else None
+                fallback_preset = "cloudflare" if preset == "auto" else None
                 if (
                     fallback_preset is None
                     or not (

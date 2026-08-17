@@ -657,19 +657,8 @@ import { getFeatureApi } from '../features/feature_access.js';
       navLabel: 'Редактор',
       eyebrow: 'Редактор',
       title: 'Редактор и форматирование',
-      description: 'Общие настройки редактора хранятся в /api/ui-settings и переиспользуются модулем маршрутизации и помощниками редактора.',
+      description: 'Здесь остаются параметры, которых нет рядом с редакторами. Движок выбирается в панели самого редактора.',
       items: [
-        createServerSelect(
-          'editor-engine',
-          'editor.engine',
-          'Предпочтительный движок редактора',
-          'Выбирает общий движок для JSON-редакторов.',
-          [
-            { value: 'codemirror', label: 'CodeMirror' },
-            { value: 'monaco', label: 'Monaco' },
-          ],
-          'Настройка движка редактора сохранена.'
-        ),
         createServerSwitch(
           'format-prefer-prettier',
           'format.preferPrettier',
@@ -820,7 +809,7 @@ import { getFeatureApi } from '../features/feature_access.js';
       navLabel: 'Mihomo',
       eyebrow: 'Mihomo',
       title: 'Узлы Clash API',
-      description: 'Параметры отображения узлов. История проверок остаётся в памяти Mihomo и не записывается панелью на flash.',
+      description: 'Здесь остаются параметры без собственного элемента на карточке Clash API. Сортировка, цель проверки задержки и свёрнутость групп настраиваются прямо в рабочей области и сохраняются автоматически.',
       items: [
         createServerSwitch(
           'mihomo-hide-unavailable',

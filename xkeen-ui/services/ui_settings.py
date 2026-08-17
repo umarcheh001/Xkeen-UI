@@ -40,6 +40,8 @@ _MAX_VIEW_KEYS = 80
 _MAX_VIEW_KEY_LEN = 64
 _MAX_VIEW_VALUE_CHARS = 8 * 1024
 _MAX_VIEW_NESTED_KEYS = 50
+_MAX_MIHOMO_COLLAPSED_GROUPS = 256
+_MAX_MIHOMO_GROUP_NAME_LEN = 256
 
 
 DEFAULTS: Dict[str, Any] = {
@@ -100,6 +102,12 @@ DEFAULTS: Dict[str, Any] = {
         # ui-settings persists only these two preferences.
         "hideUnavailable": False,
         "consecutiveTimeouts": 3,
+        # Clash API workspace presentation preferences. Latency history stays
+        # in Mihomo; only bounded UI state is written to panel settings.
+        "proxySortOrder": "config",
+        "collapsedGroups": {},
+        # The browser sends only an allow-listed preset id, never a custom URL.
+        "latencyPreset": "auto",
     },
 }
 
@@ -174,8 +182,45 @@ def _canonical_empty() -> Dict[str, Any]:
         "mihomo": {
             "hideUnavailable": bool(DEFAULTS["mihomo"]["hideUnavailable"]),
             "consecutiveTimeouts": int(DEFAULTS["mihomo"]["consecutiveTimeouts"]),
+            "proxySortOrder": str(DEFAULTS["mihomo"]["proxySortOrder"]),
+            "collapsedGroups": {},
+            "latencyPreset": str(DEFAULTS["mihomo"]["latencyPreset"]),
         },
     }
+
+
+def _sanitize_mihomo_collapsed_groups(
+    value: Any,
+    *,
+    report: SettingsReport,
+    patch: bool = False,
+) -> Dict[str, bool] | None:
+    """Return a bounded group-name -> collapsed mapping."""
+
+    if not isinstance(value, dict):
+        if patch:
+            report.errors.append({"path": "mihomo.collapsedGroups", "error": "must be an object"})
+            return None
+        report.warnings.append({"path": "mihomo.collapsedGroups", "warning": "must be an object"})
+        report.changed = True
+        return {}
+
+    out: Dict[str, bool] = {}
+    for raw_name, collapsed in list(value.items())[:_MAX_MIHOMO_COLLAPSED_GROUPS]:
+        if not isinstance(raw_name, str):
+            report.warnings.append({"path": "mihomo.collapsedGroups", "warning": "non-string group dropped"})
+            report.changed = True
+            continue
+        name = raw_name.replace("\x00", "").strip()
+        if not name or len(name) > _MAX_MIHOMO_GROUP_NAME_LEN or not _is_bool(collapsed):
+            report.warnings.append({"path": "mihomo.collapsedGroups", "warning": "invalid group state dropped"})
+            report.changed = True
+            continue
+        out[name] = bool(collapsed)
+    if len(value) > _MAX_MIHOMO_COLLAPSED_GROUPS:
+        report.warnings.append({"path": "mihomo.collapsedGroups", "warning": "too many groups; truncated"})
+        report.changed = True
+    return out
 
 
 def _sanitize_view(view_in: Any, *, report: SettingsReport) -> Dict[str, Any]:
@@ -498,8 +543,40 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 rep.warnings.append({"path": "mihomo.consecutiveTimeouts", "warning": "invalid value; ignored"})
                 rep.changed = True
 
+        proxy_sort_order = mihomo_raw.get("proxySortOrder")
+        if proxy_sort_order is not None:
+            normalized_sort_order = _as_lower_str(proxy_sort_order)
+            if normalized_sort_order in {"config", "name", "delay", "availability"}:
+                out["mihomo"]["proxySortOrder"] = normalized_sort_order
+            else:
+                rep.warnings.append({"path": "mihomo.proxySortOrder", "warning": "invalid value; ignored"})
+                rep.changed = True
+
+        if "collapsedGroups" in mihomo_raw:
+            collapsed_groups = _sanitize_mihomo_collapsed_groups(
+                mihomo_raw.get("collapsedGroups"),
+                report=rep,
+            )
+            if collapsed_groups is not None:
+                out["mihomo"]["collapsedGroups"] = collapsed_groups
+
+        latency_preset = mihomo_raw.get("latencyPreset")
+        if latency_preset is not None:
+            normalized_latency_preset = _as_lower_str(latency_preset)
+            if normalized_latency_preset in {"auto", "google", "cloudflare"}:
+                out["mihomo"]["latencyPreset"] = normalized_latency_preset
+            else:
+                rep.warnings.append({"path": "mihomo.latencyPreset", "warning": "invalid value; ignored"})
+                rep.changed = True
+
         for k in mihomo_raw.keys():
-            if k not in ("hideUnavailable", "consecutiveTimeouts"):
+            if k not in (
+                "hideUnavailable",
+                "consecutiveTimeouts",
+                "proxySortOrder",
+                "collapsedGroups",
+                "latencyPreset",
+            ):
                 rep.warnings.append({"path": f"mihomo.{k}", "warning": "unknown key dropped"})
                 rep.changed = True
 
@@ -736,8 +813,37 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 else:
                     rep.errors.append({"path": "mihomo.consecutiveTimeouts", "error": "must be int 1..10"})
 
+            if "proxySortOrder" in mihomo_patch:
+                v = _as_lower_str(mihomo_patch.get("proxySortOrder"))
+                if v in {"config", "name", "delay", "availability"}:
+                    p["proxySortOrder"] = v
+                else:
+                    rep.errors.append({"path": "mihomo.proxySortOrder", "error": "unsupported sort order"})
+
+            if "collapsedGroups" in mihomo_patch:
+                v = _sanitize_mihomo_collapsed_groups(
+                    mihomo_patch.get("collapsedGroups"),
+                    report=rep,
+                    patch=True,
+                )
+                if v is not None:
+                    p["collapsedGroups"] = v
+
+            if "latencyPreset" in mihomo_patch:
+                v = _as_lower_str(mihomo_patch.get("latencyPreset"))
+                if v in {"auto", "google", "cloudflare"}:
+                    p["latencyPreset"] = v
+                else:
+                    rep.errors.append({"path": "mihomo.latencyPreset", "error": "unsupported preset"})
+
             for k in mihomo_patch.keys():
-                if k not in ("hideUnavailable", "consecutiveTimeouts"):
+                if k not in (
+                    "hideUnavailable",
+                    "consecutiveTimeouts",
+                    "proxySortOrder",
+                    "collapsedGroups",
+                    "latencyPreset",
+                ):
                     rep.warnings.append({"path": f"mihomo.{k}", "warning": "unknown key dropped"})
 
             if p:

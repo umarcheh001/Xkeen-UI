@@ -367,7 +367,15 @@ def build_mihomo_clash_proxy_groups_dto(
             nodes.append(_node_dto(node_name, raw_node, provider_hints, _mapping(detail)))
 
         group_type = _text(group.get("type"), 64)
-        selectable = group_type.lower() in {"selector", "select", "urltest", "fallback", "smart"}
+        normalized_group_type = group_type.lower()
+        selection_locked = normalized_group_type in {"loadbalance", "load-balance"}
+        selectable = normalized_group_type in {
+            "selector",
+            "select",
+            "urltest",
+            "fallback",
+            "smart",
+        }
         return {
             "name": name,
             "type": group_type,
@@ -377,6 +385,7 @@ def build_mihomo_clash_proxy_groups_dto(
             "alive": _optional_bool(group.get("alive")),
             "hidden": bool(group.get("hidden")) if isinstance(group.get("hidden"), bool) else False,
             "selectable": selectable,
+            "selection_locked": selection_locked,
             "node_count": len(node_names),
             "nodes_truncated": nodes_truncated,
             "nodes": nodes,
