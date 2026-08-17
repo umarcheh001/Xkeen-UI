@@ -19508,11 +19508,7 @@ body.panel-page .xk-mihomo-provider-inspector[aria-busy="true"]::after {
   background: var(--op-accent);
   content: "";
   pointer-events: none;
-  animation: xk-mihomo-provider-page-loading .85s ease-in-out infinite;
-}
-@keyframes xk-mihomo-provider-page-loading {
-  0%, 100% { opacity: .25; transform: scaleX(.25); }
-  50% { opacity: 1; transform: scaleX(1); }
+  opacity: .85;
 }
 body.panel-page .xk-mihomo-provider-inspector-head,
 body.panel-page .xk-mihomo-provider-inspector-toolbar,
