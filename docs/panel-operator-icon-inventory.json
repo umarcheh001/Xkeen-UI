@@ -1871,7 +1871,7 @@
           "accessible_label": "Загрузка"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/rules.js:L152",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/rules.js:L153",
           "control_type": "runtime-action",
           "accessible_label": "Загрузка"
         },
@@ -2213,7 +2213,7 @@
           "accessible_label": "Проверить задержку"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/rules.js:L175",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/rules.js:L176",
           "control_type": "runtime-action",
           "accessible_label": "Проверить задержку"
         },
@@ -2296,7 +2296,7 @@
           "accessible_label": "Предпросмотр"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/rules.js:L174",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/rules.js:L175",
           "control_type": "runtime-action",
           "accessible_label": "Предпросмотр"
         },
@@ -2374,7 +2374,7 @@
           "accessible_label": "Обновить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/rules.js:L152",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/rules.js:L153",
           "control_type": "runtime-action",
           "accessible_label": "Обновить"
         },

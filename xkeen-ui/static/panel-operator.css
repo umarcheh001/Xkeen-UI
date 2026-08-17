@@ -19492,11 +19492,28 @@ body.panel-page .xk-mihomo-groups-empty {
 
 /* Mihomo PR 12: bounded rule-provider inspector. */
 body.panel-page .xk-mihomo-provider-inspector {
+  position: relative;
   margin-top: 8px;
   border: 1px solid var(--op-border);
   background: var(--op-surface-1);
 }
 body.panel-page .xk-mihomo-provider-inspector[hidden] { display: none !important; }
+body.panel-page .xk-mihomo-provider-inspector[aria-busy="true"]::after {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--op-accent);
+  content: "";
+  pointer-events: none;
+  animation: xk-mihomo-provider-page-loading .85s ease-in-out infinite;
+}
+@keyframes xk-mihomo-provider-page-loading {
+  0%, 100% { opacity: .25; transform: scaleX(.25); }
+  50% { opacity: 1; transform: scaleX(1); }
+}
 body.panel-page .xk-mihomo-provider-inspector-head,
 body.panel-page .xk-mihomo-provider-inspector-toolbar,
 body.panel-page .xk-mihomo-provider-inspector-pager {

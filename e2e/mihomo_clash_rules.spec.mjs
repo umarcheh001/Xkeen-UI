@@ -40,13 +40,19 @@ function providersPayload() {
 function providerContentPayload(url) {
   const request = new URL(url);
   const query = String(request.searchParams.get('q') || '').trim().toLowerCase();
-  const allRules = ['example.test', '+.filtered.test', 'DOMAIN-SUFFIX,fixture.test'];
-  const rules = query ? allRules.filter((rule) => rule.toLowerCase().includes(query)) : allRules;
+  const offset = Math.max(0, Number(request.searchParams.get('offset')) || 0);
+  const limit = Math.max(1, Number(request.searchParams.get('limit')) || 200);
+  const allRules = [
+    'example.test', '+.filtered.test', 'DOMAIN-SUFFIX,fixture.test',
+    ...Array.from({ length: 397 }, (_, index) => `page-rule-${index + 4}.test`),
+  ];
+  const matched = query ? allRules.filter((rule) => rule.toLowerCase().includes(query)) : allRules;
+  const rules = matched.slice(offset, offset + limit);
   return {
     ok: true, schema_version: 1,
     provider: { name: 'fixture-rules', type: 'http', behavior: 'domain', format: 'mrs' },
-    rules, query, offset: 0, limit: 200, total_rules: allRules.length, matched_rules: rules.length,
-    truncated: false, cache: { hit: false, key: 'mtime' }, source: { size_bytes: 512, mtime_ns: 1 },
+    rules, query, offset, limit, total_rules: allRules.length, matched_rules: matched.length,
+    truncated: offset + rules.length < matched.length, cache: { hit: false, key: 'mtime' }, source: { size_bytes: 512, mtime_ns: 1 },
   };
 }
 
@@ -137,7 +143,21 @@ test('rules search, connection cross-link and provider actions stay explicit', a
   await page.locator('[data-provider-key="rule:fixture-rules"] [data-mihomo-provider-inspect]').click();
   await expect(page.locator('#mihomo-clash-provider-inspector')).toBeVisible();
   await expect(page.locator('#mihomo-clash-provider-inspector-meta')).toContainText('MRS');
-  await expect(page.locator('#mihomo-clash-provider-rules li')).toHaveCount(3);
+  await expect(page.locator('#mihomo-clash-provider-rules li')).toHaveCount(200);
+  const inspectorHeight = await page.locator('#mihomo-clash-provider-inspector').evaluate((element) => element.getBoundingClientRect().height);
+  await page.route(/\/api\/mihomo\/clash\/providers\/rule\/fixture-rules\/content(?:\?.*)?$/, async (route) => {
+    const request = new URL(route.request().url());
+    if (request.searchParams.get('offset') === '200') await new Promise((resolve) => setTimeout(resolve, 180));
+    return route.fulfill({ json: providerContentPayload(route.request().url()) });
+  });
+  await page.locator('#mihomo-clash-provider-next').click();
+  await expect(page.locator('#mihomo-clash-provider-inspector')).toHaveAttribute('aria-busy', 'true');
+  await expect(page.locator('#mihomo-clash-provider-rules li')).toHaveCount(200);
+  await expect(page.locator('#mihomo-clash-provider-rules li').first()).toContainText('example.test');
+  await expect.poll(() => page.locator('#mihomo-clash-provider-inspector').evaluate((element) => element.getBoundingClientRect().height)).toBeCloseTo(inspectorHeight, 0);
+  await expect(page.locator('#mihomo-clash-provider-rules li').first()).toContainText('page-rule-201.test');
+  await expect(page.locator('#mihomo-clash-provider-inspector')).toHaveAttribute('aria-busy', 'false');
+  await expect.poll(() => page.locator('#mihomo-clash-provider-inspector').evaluate((element) => element.getBoundingClientRect().height)).toBeCloseTo(inspectorHeight, 0);
   await page.locator('#mihomo-clash-provider-filter').fill('filtered');
   await expect(page.locator('#mihomo-clash-provider-rules li')).toHaveCount(1);
   await expect(page.locator('#mihomo-clash-provider-rules')).toContainText('+.filtered.test');

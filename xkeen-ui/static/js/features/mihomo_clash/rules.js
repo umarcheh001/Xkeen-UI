@@ -31,6 +31,7 @@ let inspectorQuery = '';
 let inspectorOffset = 0;
 let inspectorRequest = null;
 let inspectorSearchTimer = 0;
+let inspectorLoading = false;
 
 function byId(id) { return document.getElementById(id); }
 function escapeHtml(value) {
@@ -186,7 +187,7 @@ function providerByKey(key) {
   return (providersPayload?.providers || []).find((item) => providerKey(item) === key) || null;
 }
 
-function renderProviderInspector() {
+function renderProviderInspector({ resetListScroll = false } = {}) {
   const inspector = byId('mihomo-clash-provider-inspector');
   const title = byId('mihomo-clash-provider-inspector-title');
   const meta = byId('mihomo-clash-provider-inspector-meta');
@@ -197,20 +198,23 @@ function renderProviderInspector() {
   if (!inspector || !list || !empty) return;
   inspector.hidden = !inspectedProvider;
   if (!inspectedProvider) return;
+  inspector.setAttribute('aria-busy', inspectorLoading ? 'true' : 'false');
   const provider = inspectorPayload?.provider || {};
   if (title) title.textContent = provider.name || inspectedProvider;
   const source = inspectorPayload?.source || {};
   const cache = inspectorPayload?.cache || {};
   if (meta) meta.textContent = inspectorPayload
-    ? `${String(provider.format || '—').toUpperCase()} · ${provider.behavior || '—'} · ${inspectorPayload.total_rules || 0} правил · ${formatSize(source.size_bytes)}${cache.hit ? ' · кэш' : ''}`
+    ? `${String(provider.format || '—').toUpperCase()} · ${provider.behavior || '—'} · ${inspectorPayload.total_rules || 0} правил · ${formatSize(source.size_bytes)}${cache.hit ? ' · кэш' : ''}${inspectorLoading ? ' · обновление…' : ''}`
     : 'Загрузка содержимого…';
   const rules = Array.isArray(inspectorPayload?.rules) ? inspectorPayload.rules : [];
-  list.innerHTML = rules.map((rule, index) => `<li><span>${inspectorOffset + index + 1}</span><code>${escapeHtml(rule)}</code></li>`).join('');
+  const renderedOffset = Math.max(0, Number(inspectorPayload?.offset) || 0);
+  list.innerHTML = rules.map((rule, index) => `<li><span>${renderedOffset + index + 1}</span><code>${escapeHtml(rule)}</code></li>`).join('');
+  if (resetListScroll) list.scrollTop = 0;
   empty.hidden = rules.length > 0 || !inspectorPayload;
   if (!rules.length && inspectorPayload) empty.textContent = inspectorQuery
     ? 'Совпадений в пределах безопасного лимита нет.' : 'Rule-provider не содержит правил.';
-  if (previous) previous.disabled = !inspectorPayload || inspectorOffset <= 0;
-  if (next) next.disabled = !inspectorPayload || inspectorOffset + rules.length >= (inspectorPayload.matched_rules || 0);
+  if (previous) previous.disabled = inspectorLoading || !inspectorPayload || inspectorOffset <= 0;
+  if (next) next.disabled = inspectorLoading || !inspectorPayload || inspectorOffset + rules.length >= (inspectorPayload.matched_rules || 0);
 }
 
 async function loadProviderInspector({ reset = false } = {}) {
@@ -219,30 +223,53 @@ async function loadProviderInspector({ reset = false } = {}) {
   if (inspectorRequest) { try { inspectorRequest.abort(); } catch (error) {} }
   const controller = new AbortController();
   inspectorRequest = controller;
-  inspectorPayload = null; renderProviderInspector();
+  const requestedProvider = inspectedProvider;
+  const requestedQuery = inspectorQuery;
+  const requestedOffset = inspectorOffset;
+  inspectorLoading = true;
+  // Keep the confirmed page mounted while the next one is fetched. Clearing
+  // the payload here collapses the inspector for one frame and makes the
+  // entire Rules workspace visibly jump.
+  renderProviderInspector();
   try {
-    const payload = await fetchMihomoRuleProviderContent(inspectedProvider, {
-      query: inspectorQuery, limit: PROVIDER_PAGE_SIZE, offset: inspectorOffset, signal: controller.signal,
+    const payload = await fetchMihomoRuleProviderContent(requestedProvider, {
+      query: requestedQuery, limit: PROVIDER_PAGE_SIZE, offset: requestedOffset, signal: controller.signal,
     });
-    if (!active || controller.signal.aborted || inspectedProvider !== payload?.provider?.name) return;
+    if (!active || controller.signal.aborted
+      || inspectedProvider !== requestedProvider
+      || inspectorQuery !== requestedQuery
+      || inspectorOffset !== requestedOffset
+      || requestedProvider !== payload?.provider?.name) return;
     inspectorPayload = payload;
-    renderProviderInspector();
+    inspectorLoading = false;
+    renderProviderInspector({ resetListScroll: true });
     setNotice(payload.truncated
       ? `Rule-provider показан частично: ${payload.matched_rules} совпадений, по ${payload.limit} на страницу.`
       : `Rule-provider ${payload.provider.name}: ${payload.matched_rules} правил.`, 'neutral');
   } catch (error) {
     if (!controller.signal.aborted && active) {
-      inspectorPayload = { rules: [], matched_rules: 0, total_rules: 0, provider: { name: inspectedProvider } };
+      if (!inspectorPayload) {
+        inspectorPayload = { rules: [], matched_rules: 0, total_rules: 0, offset: requestedOffset, provider: { name: inspectedProvider } };
+      }
+      inspectorLoading = false;
       renderProviderInspector();
       setNotice(error?.data?.error || 'Не удалось открыть содержимое rule-provider.', 'danger');
     }
-  } finally { if (inspectorRequest === controller) inspectorRequest = null; }
+  } finally {
+    if (inspectorRequest === controller) {
+      inspectorRequest = null;
+      if (inspectorLoading) {
+        inspectorLoading = false;
+        renderProviderInspector();
+      }
+    }
+  }
 }
 
 function openProviderInspector(provider) {
   if (!provider || provider.kind !== 'rule') return;
   inspectedProvider = provider.name;
-  inspectorPayload = null; inspectorOffset = 0; inspectorQuery = '';
+  inspectorPayload = null; inspectorOffset = 0; inspectorQuery = ''; inspectorLoading = false;
   const input = byId('mihomo-clash-provider-filter');
   if (input) input.value = '';
   renderProviderInspector();
@@ -252,7 +279,7 @@ function openProviderInspector(provider) {
 function closeProviderInspector() {
   window.clearTimeout(inspectorSearchTimer);
   if (inspectorRequest) { try { inspectorRequest.abort(); } catch (error) {} }
-  inspectorRequest = null; inspectedProvider = ''; inspectorPayload = null; inspectorOffset = 0;
+  inspectorRequest = null; inspectedProvider = ''; inspectorPayload = null; inspectorOffset = 0; inspectorLoading = false;
   renderProviderInspector();
 }
 
