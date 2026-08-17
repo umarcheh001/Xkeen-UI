@@ -310,6 +310,13 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await page.locator('[data-group-name="AUTO"] [data-mihomo-picker-toggle]').click();
   await expect(page.locator('[data-group-name="AUTO"] [data-mihomo-picker-search]')).toBeFocused();
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-picker-option')).toHaveCount(3);
+  const pickerSpacing = await page.locator('[data-group-name="AUTO"] .xk-mihomo-picker-option').evaluateAll((options) => ({
+    rowGap: options[1].getBoundingClientRect().top - options[0].getBoundingClientRect().bottom,
+    triggerGap: options[0].closest('.xk-mihomo-picker-popover').getBoundingClientRect().top
+      - options[0].closest('.xk-mihomo-group-picker').querySelector('[data-mihomo-picker-toggle]').getBoundingClientRect().bottom,
+  }));
+  expect(pickerSpacing.rowGap).toBeGreaterThanOrEqual(4);
+  expect(pickerSpacing.triggerGap).toBeGreaterThanOrEqual(4);
   await page.locator('[data-group-name="AUTO"] [data-mihomo-picker-search]').fill('provider-one');
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-picker-option')).toHaveCount(1);
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-picker-option')).toContainText('node-b');
