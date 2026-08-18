@@ -10324,10 +10324,12 @@
         "xkeen-ui/static/js/features/cores_status.js"
       ],
       "core-mihomo-prerelease-update-btn": [
-        "xkeen-ui/static/js/features/cores_status.js"
+        "xkeen-ui/static/js/features/cores_status.js",
+        "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
       ],
       "core-mihomo-update-btn": [
-        "xkeen-ui/static/js/features/cores_status.js"
+        "xkeen-ui/static/js/features/cores_status.js",
+        "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
       ],
       "core-modal": [
         "xkeen-ui/static/js/features/service_status.js"
@@ -10360,13 +10362,16 @@
         "xkeen-ui/static/js/features/cores_status.js"
       ],
       "core-xray-prerelease-update-btn": [
-        "xkeen-ui/static/js/features/cores_status.js"
+        "xkeen-ui/static/js/features/cores_status.js",
+        "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
       ],
       "core-xray-update-btn": [
-        "xkeen-ui/static/js/features/cores_status.js"
+        "xkeen-ui/static/js/features/cores_status.js",
+        "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
       ],
       "cores-check-btn": [
-        "xkeen-ui/static/js/features/cores_status.js"
+        "xkeen-ui/static/js/features/cores_status.js",
+        "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
       ],
       "cores-checked-at": [
         "xkeen-ui/static/js/features/cores_status.js"

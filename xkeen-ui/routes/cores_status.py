@@ -147,10 +147,13 @@ def _is_update_available(installed_version: Optional[str], latest_tag: Optional[
     latest = _norm_ver(latest_tag)
     if not installed or not latest:
         return False
-    cmp_res = _cmp_versions(latest, installed)
-    if cmp_res != 0:
-        return cmp_res > 0
-    return latest != installed
+    # A moving alpha build id (for example ``alpha-978d25a``) cannot be
+    # ordered against a stable semantic version. Treating any unequal opaque
+    # strings as an update made the stable action appear even when we could
+    # not prove that it was newer.
+    if _parse_version_key(installed) is None or _parse_version_key(latest) is None:
+        return False
+    return _cmp_versions(latest, installed) > 0
 
 
 def _run_cmd(cmd: List[str], *, timeout_s: float = 2.5) -> Tuple[int, str]:
@@ -603,6 +606,45 @@ def _compute_update_available(installed: Dict[str, Dict[str, Any]], latest: Dict
     }
 
 
+def _compute_prerelease_update_available(
+    installed: Dict[str, Dict[str, Any]],
+    latest: Dict[str, Any],
+) -> Dict[str, bool]:
+    result: Dict[str, bool] = {"xray": False, "mihomo": False}
+    for core in result:
+        installed_core = installed.get(core, {}) if isinstance(installed.get(core), dict) else {}
+        if not bool(installed_core.get("installed")):
+            continue
+        installed_version = _norm_ver(installed_core.get("version"))
+        if not installed_version:
+            continue
+
+        latest_core = latest.get(core, {}) if isinstance(latest.get(core), dict) else {}
+        prerelease = latest_core.get("prerelease") if isinstance(latest_core.get("prerelease"), dict) else {}
+        prerelease_tag = str(prerelease.get("display_tag") or prerelease.get("tag") or "").strip()
+        if not prerelease_tag:
+            continue
+
+        install = prerelease.get("install") if isinstance(prerelease.get("install"), dict) else {}
+        if core == "mihomo" and str(install.get("mode") or "").strip() == "direct_asset":
+            if install.get("supported") is False:
+                continue
+            build_ids = {
+                _norm_ver(str(build_id or "")).lower()
+                for build_id in (install.get("build_ids") or [])
+                if _norm_ver(str(build_id or ""))
+            }
+            # Mihomo alpha builds use opaque commit ids. GitHub's current
+            # prerelease snapshot is authoritative; a different build id is
+            # therefore installable, while the same id is already current.
+            if build_ids:
+                result[core] = installed_version.lower() not in build_ids
+                continue
+
+        result[core] = _is_update_available(installed_version, prerelease_tag)
+    return result
+
+
 def _cache_checked_ts(cached: Optional[dict]) -> Optional[float]:
     if not isinstance(cached, dict):
         return None
@@ -648,6 +690,7 @@ def _build_updates_response(
         "latest": latest_data,
         "installed": installed,
         "update_available": _compute_update_available(installed, latest_data),
+        "prerelease_update_available": _compute_prerelease_update_available(installed, latest_data),
         "checked_ts": checked_ts,
         "ttl_s": ttl_s,
         "stale": bool(stale),

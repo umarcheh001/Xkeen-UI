@@ -221,9 +221,13 @@ let coresStatusModuleApi = null;
   }
 
   async function runXkeenCommand(flag) {
-    const btn = findCommandButton(flag);
-    if (btn) {
-      try { btn.click(); return true; } catch (e) {}
+    const commandItem = findCommandButton(flag);
+    const actionButton = commandItem && commandItem.querySelector('.command-item-action');
+    if (actionButton && !actionButton.disabled) {
+      try {
+        actionButton.click();
+        return true;
+      } catch (e) {}
     }
 
     const label = `xkeen ${flag}`;
@@ -632,15 +636,21 @@ let coresStatusModuleApi = null;
     }
   }
 
-  function configurePrereleaseAction(btn, release, installedVersion, { flag, coreLabel } = {}) {
+  function configurePrereleaseAction(btn, release, installedCore, isUpdateAvailable, { flag, coreLabel } = {}) {
     if (!btn) return;
     const tag = String((release && release.tag) || '').trim();
     const releaseInstall = (release && release.install && typeof release.install === 'object') ? release.install : null;
+    const isInstalled = !!(installedCore && installedCore.installed);
+    const installedVersion = isInstalled ? installedCore.version : '';
     const installedToken = normalizeVersionCompareToken(installedVersion);
     const releaseToken = normalizeVersionCompareToken((release && (release.display_tag || release.tag)) || '');
     const buildIds = normalizePrereleaseBuildIds(releaseInstall);
     const installedIsCurrentDirect = !!installedToken && buildIds.includes(installedToken);
-    const shouldShow = !!tag && !installedIsCurrentDirect && (!installedToken || installedToken !== releaseToken);
+    const shouldShow = isInstalled
+      && !!isUpdateAvailable
+      && !!tag
+      && !installedIsCurrentDirect
+      && (!installedToken || installedToken !== releaseToken);
     show(btn, shouldShow);
     if (!shouldShow) {
       btn.removeAttribute('data-prerelease-tag');
@@ -735,13 +745,22 @@ let coresStatusModuleApi = null;
 
     const pillX = $('core-pill-xray');
     const pillM = $('core-pill-mihomo');
-    if (pillX) pillX.classList.toggle('not-installed', !xray.installed);
-    if (pillM) pillM.classList.toggle('not-installed', !mihomo.installed);
+    if (pillX) {
+      pillX.classList.toggle('not-installed', !xray.installed);
+      show(pillX, !!xray.installed);
+    }
+    if (pillM) {
+      pillM.classList.toggle('not-installed', !mihomo.installed);
+      show(pillM, !!mihomo.installed);
+    }
   }
 
   function applyUpdates(payload) {
     const latest = (payload && payload.latest) ? payload.latest : {};
     const upd = (payload && payload.update_available) ? payload.update_available : {};
+    const preUpd = (payload && payload.prerelease_update_available)
+      ? payload.prerelease_update_available
+      : {};
     const installed = (payload && payload.installed) ? payload.installed : lastInstalled;
     const checkedTs = payload && payload.checked_ts ? payload.checked_ts : null;
     const stale = !!(payload && payload.stale);
@@ -771,23 +790,24 @@ let coresStatusModuleApi = null;
     const xUpdateBtn = $('core-xray-update-btn');
     const xPreUpdateBtn = $('core-xray-prerelease-update-btn');
     const pillX = $('core-pill-xray');
+    const xInstalled = !!(installed && installed.xray && installed.xray.installed);
 
     applyReleaseLink(xLatestEl, xStable, {
       versionSelector: '.core-latest-ver',
       preferV: true,
       title: 'Открыть стабильный релиз на GitHub',
     });
-    setReleaseVisible('xray', 'stable', !!(xStable && xStable.tag));
+    setReleaseVisible('xray', 'stable', xInstalled && !!(xStable && xStable.tag));
     applyReleaseLink(xPreEl, xPre, {
       versionSelector: '.core-prerelease-ver',
       title: 'Открыть pre-release на GitHub',
     });
-    setReleaseVisible('xray', 'prerelease', !!(xPre && xPre.tag));
-    configurePrereleaseAction(xPreUpdateBtn, xPre, installed && installed.xray ? installed.xray.version : '', {
+    setReleaseVisible('xray', 'prerelease', xInstalled && !!(xPre && xPre.tag));
+    configurePrereleaseAction(xPreUpdateBtn, xPre, installed && installed.xray, !!preUpd.xray, {
       flag: '-ux',
       coreLabel: 'Xray',
     });
-    show(xUpdateBtn, !!upd.xray);
+    show(xUpdateBtn, xInstalled && !!upd.xray);
     setPillState(pillX, { hasUpdate: !!upd.xray, hasError: globalFailure || x.ok === false });
     setCoreState('xray', releaseErrorLabel(x) || (globalFailure ? 'GitHub недоступен' : ''));
 
@@ -799,23 +819,24 @@ let coresStatusModuleApi = null;
     const mUpdateBtn = $('core-mihomo-update-btn');
     const mPreUpdateBtn = $('core-mihomo-prerelease-update-btn');
     const pillM = $('core-pill-mihomo');
+    const mInstalled = !!(installed && installed.mihomo && installed.mihomo.installed);
 
     applyReleaseLink(mLatestEl, mStable, {
       versionSelector: '.core-latest-ver',
       preferV: true,
       title: 'Открыть стабильный релиз на GitHub',
     });
-    setReleaseVisible('mihomo', 'stable', !!(mStable && mStable.tag));
+    setReleaseVisible('mihomo', 'stable', mInstalled && !!(mStable && mStable.tag));
     applyReleaseLink(mPreEl, mPre, {
       versionSelector: '.core-prerelease-ver',
       title: 'Открыть pre-release на GitHub',
     });
-    setReleaseVisible('mihomo', 'prerelease', !!(mPre && mPre.tag));
-    configurePrereleaseAction(mPreUpdateBtn, mPre, installed && installed.mihomo ? installed.mihomo.version : '', {
+    setReleaseVisible('mihomo', 'prerelease', mInstalled && !!(mPre && mPre.tag));
+    configurePrereleaseAction(mPreUpdateBtn, mPre, installed && installed.mihomo, !!preUpd.mihomo, {
       flag: '-um',
       coreLabel: 'Mihomo',
     });
-    show(mUpdateBtn, !!upd.mihomo);
+    show(mUpdateBtn, mInstalled && !!upd.mihomo);
     setPillState(pillM, { hasUpdate: !!upd.mihomo, hasError: globalFailure || m.ok === false });
     setCoreState('mihomo', releaseErrorLabel(m) || (globalFailure ? 'GitHub недоступен' : ''));
   }

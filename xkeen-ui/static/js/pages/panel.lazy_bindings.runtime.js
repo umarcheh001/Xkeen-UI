@@ -666,7 +666,14 @@ export function wirePanelLazyFeatureClicks() {
       return;
     }
 
-    const commandsAction = raw.closest('.command-item, #cores-check-btn, #core-xray-update-btn, #core-mihomo-update-btn');
+    const commandsAction = raw.closest([
+      '.command-item',
+      '#cores-check-btn',
+      '#core-xray-update-btn',
+      '#core-xray-prerelease-update-btn',
+      '#core-mihomo-update-btn',
+      '#core-mihomo-prerelease-update-btn',
+    ].join(', '));
     if (commandsAction && (!isPanelLazyFeatureReady('commandsList') || !isPanelLazyFeatureReady('coresStatus'))) {
       event.preventDefault();
       event.stopImmediatePropagation();

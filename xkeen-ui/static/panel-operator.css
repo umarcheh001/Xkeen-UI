@@ -3576,7 +3576,9 @@ body.panel-page #view-commands .core-prerelease {
 }
 
 body.panel-page #view-commands .core-update-action {
-  display: inline-flex !important;
+  /* Keep this non-important: cores_status.js uses inline display:none when
+     the core is absent or the advertised release is not a real update. */
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 5px;

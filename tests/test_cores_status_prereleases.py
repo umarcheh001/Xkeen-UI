@@ -85,6 +85,64 @@ def test_is_update_available_uses_version_order_not_raw_inequality():
     assert cores_status._is_update_available("25.10.15", "26.3.27") is True
     assert cores_status._is_update_available("26.4.25", "26.3.27") is False
     assert cores_status._is_update_available("1.0.0-rc1", "1.0.0") is True
+    assert cores_status._is_update_available("1.19.30", "v1.19.30") is False
+    assert cores_status._is_update_available("alpha-978d25a", "v1.19.30") is False
+
+
+def test_update_availability_requires_the_matching_core_to_be_installed():
+    installed = {
+        "xray": {"installed": False, "version": None},
+        "mihomo": {"installed": True, "version": "1.18.2"},
+    }
+    latest = {
+        "xray": {"stable": {"tag": "v99.0.0"}},
+        "mihomo": {"stable": {"tag": "v1.19.30"}},
+    }
+
+    assert cores_status._compute_update_available(installed, latest) == {
+        "xray": False,
+        "mihomo": True,
+    }
+
+
+def test_prerelease_update_availability_handles_semver_and_mihomo_build_ids():
+    installed = {
+        "xray": {"installed": True, "version": "26.6.1"},
+        "mihomo": {"installed": True, "version": "alpha-old"},
+    }
+    latest = {
+        "xray": {"prerelease": {"tag": "v26.7.28"}},
+        "mihomo": {
+            "prerelease": {
+                "tag": "Prerelease-Alpha",
+                "display_tag": "alpha-new",
+                "install": {
+                    "mode": "direct_asset",
+                    "supported": True,
+                    "build_ids": ["alpha-new"],
+                },
+            }
+        },
+    }
+
+    assert cores_status._compute_prerelease_update_available(installed, latest) == {
+        "xray": True,
+        "mihomo": True,
+    }
+
+    installed["xray"]["version"] = "26.7.28"
+    installed["mihomo"]["version"] = "alpha-new"
+    assert cores_status._compute_prerelease_update_available(installed, latest) == {
+        "xray": False,
+        "mihomo": False,
+    }
+
+    installed["xray"] = {"installed": False, "version": None}
+    installed["mihomo"] = {"installed": False, "version": None}
+    assert cores_status._compute_prerelease_update_available(installed, latest) == {
+        "xray": False,
+        "mihomo": False,
+    }
 
 
 def test_parse_mihomo_version_supports_alpha_build_output():
@@ -340,6 +398,9 @@ def test_commands_panel_has_dedicated_prerelease_links_and_styles():
     assert 'id="core-mihomo-prerelease-update-btn"' in template
     assert '.commands-status-row .core-prerelease {' in styles
     assert '.commands-status-row .btn-prerelease-action {' in styles
+    assert '.core-update-action {\n  /* Keep this non-important:' in (
+        ROOT / "xkeen-ui" / "static" / "panel-operator.css"
+    ).read_text(encoding="utf-8")
     assert 'function buildPrereleaseUpdateCommand(flag, tag, coreLabel)' in script
     assert 'function buildPrereleaseVersionSummaryCommand(flag, coreLabel)' in script
     assert 'function buildMihomoPrereleaseInstallCommand(tag, installMeta, coreLabel)' in script
@@ -364,3 +425,16 @@ def test_commands_panel_has_dedicated_prerelease_links_and_styles():
     assert 'btn.dataset.tooltip = btn.title;' in script
     assert "const xPre = x.prerelease || null;" in script
     assert "const mPre = m.prerelease || null;" in script
+
+
+def test_core_update_actions_click_the_real_command_buttons_and_are_lazy_wired():
+    script = (ROOT / "xkeen-ui" / "static" / "js" / "features" / "cores_status.js").read_text(encoding="utf-8")
+    lazy_runtime = (
+        ROOT / "xkeen-ui" / "static" / "js" / "pages" / "panel.lazy_bindings.runtime.js"
+    ).read_text(encoding="utf-8")
+
+    assert "commandItem.querySelector('.command-item-action')" in script
+    assert "actionButton.click()" in script
+    assert "commandItem.click()" not in script
+    assert "#core-xray-prerelease-update-btn" in lazy_runtime
+    assert "#core-mihomo-prerelease-update-btn" in lazy_runtime

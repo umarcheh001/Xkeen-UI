@@ -131,6 +131,7 @@ test.describe('Operator Console Stage 4 commands', () => {
             mihomo: { installed: true, version: 'alpha-test' },
           },
           update_available: { xray: false, mihomo: false },
+          prerelease_update_available: { xray: false, mihomo: false },
         }),
       });
     });
@@ -140,6 +141,67 @@ test.describe('Operator Console Stage 4 commands', () => {
     await expect(page.locator('#core-mihomo-state')).toHaveText('GitHub недоступен');
     await expect(page.locator('#core-pill-xray')).toHaveClass(/has-error/);
     await expect(page.locator('#core-pill-mihomo')).toHaveClass(/has-error/);
+  });
+
+  test('actions stay hidden for current cores and the absent core is not shown', async ({ page }) => {
+    await page.route('**/api/cores/versions', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          cores: {
+            xray: { installed: false, version: null },
+            mihomo: { installed: true, version: '1.19.30' },
+          },
+        }),
+      });
+    });
+    await page.route('**/api/cores/updates*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          refreshing: false,
+          stale: false,
+          latest: {
+            // A stale release for an absent core must not leak into the UI.
+            xray: {
+              ok: true,
+              stable: { tag: 'v99.0.0', url: 'https://example.test/xray' },
+              prerelease: { tag: 'v100.0.0-rc1', url: 'https://example.test/xray-pre' },
+            },
+            mihomo: {
+              ok: true,
+              stable: { tag: 'v1.19.30', url: 'https://example.test/mihomo' },
+              prerelease: {
+                tag: 'Prerelease-Alpha',
+                display_tag: 'alpha-current',
+                url: 'https://example.test/mihomo-pre',
+                install: {
+                  mode: 'direct_asset',
+                  supported: true,
+                  build_ids: ['1.19.30'],
+                },
+              },
+            },
+          },
+          installed: {
+            xray: { installed: false, version: null },
+            mihomo: { installed: true, version: '1.19.30' },
+          },
+          update_available: { xray: false, mihomo: false },
+          prerelease_update_available: { xray: false, mihomo: false },
+        }),
+      });
+    });
+
+    await openCommands(page, 'dark', { width: 1440, height: 900 });
+    await expect(page.locator('#core-pill-xray')).toBeHidden();
+    await expect(page.locator('#core-pill-mihomo')).toBeVisible();
+    await expect(page.locator('#core-mihomo-update-btn')).toBeHidden();
+    await expect(page.locator('#core-mihomo-prerelease-update-btn')).toBeHidden();
   });
 
   test('stable and pre-release updates are grouped and visibly distinct', async ({ page }) => {
@@ -182,6 +244,7 @@ test.describe('Operator Console Stage 4 commands', () => {
             mihomo: { installed: true, version: 'alpha-978d25a' },
           },
           update_available: { xray: true, mihomo: true },
+          prerelease_update_available: { xray: true, mihomo: true },
         }),
       });
     });
@@ -216,4 +279,106 @@ test.describe('Operator Console Stage 4 commands', () => {
     expect(geometry.prereleaseKind).toBe('Pre-release');
     expect(geometry.prereleaseBorder).not.toBe(geometry.stableBorder);
   });
+
+  for (const core of [
+    { name: 'xray', flag: '-ux' },
+    { name: 'mihomo', flag: '-um' },
+  ]) {
+    test(`${core.name} stable update delegates to its executable command action`, async ({ page }) => {
+      await page.route('**/api/cores/versions', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ok: true,
+            cores: {
+              xray: { installed: true, version: '26.6.1' },
+              mihomo: { installed: true, version: 'alpha-978d25a' },
+            },
+          }),
+        });
+      });
+      await page.route('**/api/cores/updates*', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ok: true,
+            refreshing: false,
+            stale: false,
+            latest: {
+              xray: { ok: true, stable: { tag: 'v26.7.28', url: 'https://example.test/xray' } },
+              mihomo: { ok: true, stable: { tag: 'v1.19.30', url: 'https://example.test/mihomo' } },
+            },
+            installed: {
+              xray: { installed: true, version: '26.6.1' },
+              mihomo: { installed: true, version: 'alpha-978d25a' },
+            },
+            update_available: { xray: true, mihomo: true },
+            prerelease_update_available: { xray: false, mihomo: false },
+          }),
+        });
+      });
+
+      await openCommands(page, 'dark', { width: 1440, height: 900 });
+      const command = page.locator(`.command-item[data-flag="${core.flag}"]`);
+      await expect(command).not.toHaveAttribute('aria-busy', 'true');
+      await page.locator(`#core-${core.name}-update-btn`).click();
+      await expect(command).toHaveAttribute('aria-busy', 'true');
+    });
+  }
+
+  for (const core of ['xray', 'mihomo']) {
+    test(`${core} pre-release install opens the executable terminal flow`, async ({ page }) => {
+      await page.route('**/api/cores/versions', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ok: true,
+            cores: {
+              xray: { installed: true, version: '26.6.1' },
+              mihomo: { installed: true, version: 'alpha-978d25a' },
+            },
+          }),
+        });
+      });
+      await page.route('**/api/cores/updates*', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ok: true,
+            refreshing: false,
+            stale: false,
+            latest: {
+              xray: {
+                ok: true,
+                stable: { tag: 'v26.7.28', url: 'https://example.test/xray' },
+                prerelease: { tag: 'v26.8.0-rc1', url: 'https://example.test/xray-pre' },
+              },
+              mihomo: {
+                ok: true,
+                stable: { tag: 'v1.19.30', url: 'https://example.test/mihomo' },
+                prerelease: { tag: 'pre-alpha-9a9c4c6', url: 'https://example.test/mihomo-pre' },
+              },
+            },
+            installed: {
+              xray: { installed: true, version: '26.6.1' },
+              mihomo: { installed: true, version: 'alpha-978d25a' },
+            },
+            update_available: { xray: true, mihomo: true },
+            prerelease_update_available: { xray: true, mihomo: true },
+          }),
+        });
+      });
+
+      await openCommands(page, 'dark', { width: 1440, height: 900 });
+      const install = page.locator(`#core-${core}-prerelease-update-btn`);
+      await expect(install).toBeEnabled();
+      await install.click();
+      await expect(install).toBeDisabled();
+      await expect(page.locator('#terminal-overlay')).toBeVisible();
+    });
+  }
 });
