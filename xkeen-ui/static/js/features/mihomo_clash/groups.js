@@ -659,7 +659,6 @@ function nodeProbeStatus(group, node) {
     return {
       state: 'stale',
       label: `${measurement.delay} мс`,
-      ageLabel: measurementAgeLabel(measurement.timestamp),
       tooltip: `Последняя задержка: ${measurement.delay} мс · ${measurementAgeLabel(measurement.timestamp)} назад (устарела).${chainCopy} Нажмите, чтобы проверить снова.`,
     };
   }
@@ -799,9 +798,7 @@ function renderNodeProbe(group, node) {
   }[status.state] || '';
   const content = statusIcon
     ? `<span class="xk-visually-hidden">${escapeHtml(status.label)}</span>${iconHtml(statusIcon)}`
-    : `<span>${escapeHtml(status.label)}</span>${status.state === 'stale' && status.ageLabel
-      ? `<small class="xk-mihomo-delay-age">${escapeHtml(status.ageLabel)}</small>`
-      : ''}`;
+    : escapeHtml(status.label);
   const hasLatencyHistory = ['good', 'warning', 'bad'].includes(status.state)
     || status.state === 'stale';
   const hasHistoryEntries = hasLatencyHistory && delayHistoryForNode(node).length > 0;
@@ -906,9 +903,7 @@ function pickerSelectedDelayHtml(group, node) {
   }[displayStatus.state] || '';
   const content = statusIcon
     ? `<span class="xk-visually-hidden">${escapeHtml(displayStatus.label)}</span>${iconHtml(statusIcon)}`
-    : `<span>${escapeHtml(displayStatus.label)}</span>${displayStatus.state === 'stale' && displayStatus.ageLabel
-      ? `<small class="xk-mihomo-delay-age">${escapeHtml(displayStatus.ageLabel)}</small>`
-      : ''}`;
+    : escapeHtml(displayStatus.label);
   return `<span class="xk-mihomo-picker-delay" data-delay-tone="${escapeHtml(displayStatus.state)}"
     aria-label="Задержка выбранного узла: ${escapeHtml(displayStatus.label)}" data-tooltip="${escapeHtml(displayStatus.tooltip)}">${content}</span>`;
 }

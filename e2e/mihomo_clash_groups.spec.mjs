@@ -620,14 +620,10 @@ test('Mihomo latency stays visible but is marked stale after five minutes and gr
   await latency.click();
   await expect(latency).toHaveText('44 мс');
   await page.clock.fastForward((5 * 60 * 1000) + 100);
-  await expect(latency).toContainText('44 мс');
-  await expect(latency).toContainText('5м');
+  await expect(latency).toHaveText('44 мс');
   await expect(latency).toHaveAttribute('data-delay-tone', 'stale');
-  await expect(latency.locator('.xk-mihomo-delay-age')).toHaveText('5м');
-  await expect(unavailable).toContainText('999 мс');
-  await expect(unavailable).toContainText('5м');
+  await expect(unavailable).toHaveText('999 мс');
   await expect(unavailable).toHaveAttribute('data-delay-tone', 'stale');
-  await expect(unavailable.locator('.xk-mihomo-delay-age')).toHaveText('5м');
   await latency.hover();
   await expect(page.locator('#mihomo-clash-delay-history-popover')).toContainText('44 мс');
 

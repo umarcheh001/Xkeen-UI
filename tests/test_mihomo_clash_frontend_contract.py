@@ -201,7 +201,7 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
         "mihomo-clash-delay-result",
         "scheduleDelayFreshnessRender",
         "payloadLoadedAt = Date.now()",
-        "ageLabel: measurementAgeLabel",
+        "tooltip: `Последняя задержка:",
         "Cloudflare fallback",
         "delayKey(groupName, name, provider = '')",
         "latestDelayKey(name, provider = '')",
@@ -388,7 +388,7 @@ def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
     assert "unavailable: 'server-off'" in groups
     assert "failed: 'alert'" in groups
     assert "unknown: 'bolt'" in groups
-    assert "xk-mihomo-delay-age" in groups
+    assert "xk-mihomo-delay-age" not in groups
     assert 'data-tooltip="Проверить задержку"' not in groups
     assert 'data-mihomo-group-toggle' not in groups
     assert 'data-tooltip="Иконка группы' not in groups
