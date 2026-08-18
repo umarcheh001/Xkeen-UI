@@ -183,6 +183,7 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
         "testMihomoClashDelay",
         "MAX_DELAY_CONCURRENCY = 1",
         "MAX_BUSY_RETRIES = 2",
+        "MAX_RATE_LIMIT_RETRIES = 10",
         "DELAY_BATCH_CADENCE_MS = 120",
         "DELAY_FRESHNESS_TTL_MS = 5 * 60 * 1000",
         "consecutiveTimeouts = 3",

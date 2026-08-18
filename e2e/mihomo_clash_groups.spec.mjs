@@ -711,6 +711,39 @@ test('visible delay test probes every node beyond the old eight-item limit and r
   expect(probed).toEqual(names);
 });
 
+test('visible delay test waits for the backend rolling limit instead of failing the remaining nodes', async ({ page }) => {
+  const names = ['node-a', 'node-b'];
+  const data = groupsPayload(names[0]);
+  data.groups[0].nodes = names.map((name) => ({
+    name, type: 'VLESS', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: null,
+  }));
+  let nodeBAttempts = 0;
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: data }));
+  await page.route('**/api/mihomo/clash/delay', async (route) => {
+    const body = route.request().postDataJSON();
+    if (body.name === 'node-b' && nodeBAttempts++ === 0) {
+      return route.fulfill({
+        status: 429,
+        headers: { 'Retry-After': '0.001' },
+        json: { ok: false, code: 'action_rate_limited', retry_after_seconds: 0.001 },
+      });
+    }
+    return route.fulfill({ json: { ok: true, schema_version: 1, results: [{ name: body.name, delay_ms: 52 }] } });
+  });
+
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-delay-rate-limit' });
+  });
+  await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
+  await page.locator('#mihomo-clash-test-visible').click();
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('52 мс');
+  expect(nodeBAttempts).toBe(2);
+});
+
 
 test('group delay probes unique nodes without group endpoint and reconciles the snapshot', async ({ page }) => {
   const data = groupsPayload();

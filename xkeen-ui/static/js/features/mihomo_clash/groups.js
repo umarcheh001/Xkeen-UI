@@ -14,6 +14,7 @@ const SELECTABLE_TYPES = new Set(['selector', 'select', 'urltest', 'fallback', '
 // low-power routers; browser-side parallelism only creates a long busy queue.
 const MAX_DELAY_CONCURRENCY = 1;
 const MAX_BUSY_RETRIES = 2;
+const MAX_RATE_LIMIT_RETRIES = 10;
 const DELAY_BATCH_CADENCE_MS = 120;
 const MAX_DELAY_HISTORY = 10;
 const DELAY_HISTORY_HOVER_MS = 350;
@@ -1267,6 +1268,14 @@ function delayFailureState(error) {
   return 'failed';
 }
 
+function delayRetryAfterMs(error) {
+  if (errorCode(error) !== 'action_rate_limited') return 0;
+  const seconds = Number(error?.data?.retry_after_seconds);
+  if (!Number.isFinite(seconds) || seconds <= 0) return 1000;
+  // Add a small cushion so a request does not land on the rolling-window edge.
+  return Math.min(61_000, Math.max(1000, Math.ceil(seconds * 1000) + 50));
+}
+
 function setTargetResult(target, result) {
   if (!delayRun || !target?.key) return;
   const measuredAt = result?.state === 'pending'
@@ -1315,6 +1324,7 @@ function syncDelayProgress() {
 
 async function requestDelay(item) {
   let busyRetries = 0;
+  let rateLimitRetries = 0;
   while (delayRun && !delayRun.cancelled) {
     try {
       return await testMihomoClashDelay(item.scope, item.name, {
@@ -1323,9 +1333,19 @@ async function requestDelay(item) {
         signal: delayRun.controller?.signal,
       });
     } catch (error) {
-      if (errorCode(error) !== 'action_busy' || busyRetries >= MAX_BUSY_RETRIES) throw error;
-      busyRetries += 1;
-      await wait(150 + (busyRetries * 35));
+      const code = errorCode(error);
+      if (code === 'action_busy' && busyRetries < MAX_BUSY_RETRIES) {
+        busyRetries += 1;
+        await wait(150 + (busyRetries * 35));
+        continue;
+      }
+      const retryAfterMs = delayRetryAfterMs(error);
+      if (retryAfterMs > 0 && rateLimitRetries < MAX_RATE_LIMIT_RETRIES) {
+        rateLimitRetries += 1;
+        await wait(retryAfterMs);
+        continue;
+      }
+      throw error;
     }
   }
   return null;
