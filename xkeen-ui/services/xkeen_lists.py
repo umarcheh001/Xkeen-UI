@@ -115,3 +115,9 @@ def set_list_content(kind: str, content: str) -> None:
         raise KeyError(f"Unsupported kind: {kind}")
     path = _KIND_TO_PATH[kind]
     save_text(path, content)
+    if kind == KIND_CONFIG:
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            # Best effort on filesystems/platforms without POSIX modes.
+            pass

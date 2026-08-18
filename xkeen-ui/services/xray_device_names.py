@@ -17,6 +17,7 @@ from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from core.paths import UI_STATE_DIR
 from services.io.atomic import _atomic_write_json
+from services.keenetic_rci import build_rci_request
 
 
 DEVICE_NAMES_FILENAME = "device-names.json"
@@ -175,10 +176,9 @@ def extract_device_entries_from_device_list(data: Any) -> DeviceMap:
 
 
 def _fetch_router_device_list(timeout: float = DEFAULT_RCI_TIMEOUT) -> Any:
-    req = urllib.request.Request(
+    req = build_rci_request(
         RCI_DEVICE_LIST_URL,
-        headers={"Accept": "application/json", "User-Agent": "XKeen-UI"},
-        method="GET",
+        user_agent="XKeen-UI",
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - local router RCI
         raw = resp.read(1024 * 1024)

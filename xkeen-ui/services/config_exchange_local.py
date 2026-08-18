@@ -9,18 +9,40 @@ Invariants:
 
 from __future__ import annotations
 
+import json
 import os
 import time
 from typing import Any, Dict, List
 
 from services.xkeen_lists import PORT_PROXYING_FILE, PORT_EXCLUDE_FILE, IP_EXCLUDE_FILE, XKEEN_CONFIG_FILE
+from services.keenetic_rci import load_rci_token, redact_rci_token
 from services.xray_config_files import ROUTING_FILE, OUTBOUNDS_FILE
 from utils.fs import load_text, save_text
 from utils.jsonio import load_json, save_json
+from utils.jsonc import strip_json_comments_text
 
 
 def _xray_config_dir() -> str:
     return os.path.dirname(ROUTING_FILE)
+
+
+def _preserve_local_rci_token(content: str, path: str) -> str:
+    """Keep the router-local credential when applying a redacted bundle."""
+    local_token = load_rci_token(path)
+    if not local_token:
+        return content
+    try:
+        parsed = json.loads(strip_json_comments_text(content))
+        if not isinstance(parsed, dict):
+            return content
+        xkeen = parsed.get("xkeen")
+        if not isinstance(xkeen, dict):
+            xkeen = {}
+            parsed["xkeen"] = xkeen
+        xkeen["rci_token"] = local_token
+        return json.dumps(parsed, ensure_ascii=False, indent=2) + "\n"
+    except Exception:
+        return content
 
 
 def build_user_configs_bundle(
@@ -59,6 +81,14 @@ def build_user_configs_bundle(
     }
     for logical_path, real_path in lst_files.items():
         content = load_text(real_path, default="")
+        if real_path == XKEEN_CONFIG_FILE and content:
+            try:
+                parsed = json.loads(strip_json_comments_text(content))
+                content = json.dumps(redact_rci_token(parsed), ensure_ascii=False, indent=2) + "\n"
+            except Exception:
+                # An invalid JSONC file must not be exported verbatim because it
+                # can still contain an RCI credential.  Keep the bundle safe.
+                content = "{}\n"
         files.append({"path": logical_path, "kind": "text", "content": content})
 
     bundle: Dict[str, Any] = {
@@ -121,4 +151,6 @@ def apply_user_configs_bundle(bundle: Dict[str, Any]) -> None:
         else:
             if not isinstance(content, str):
                 content = str(content)
+            if real_path == XKEEN_CONFIG_FILE:
+                content = _preserve_local_rci_token(content, real_path)
             save_text(real_path, content)

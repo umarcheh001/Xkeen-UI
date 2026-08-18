@@ -354,7 +354,22 @@ get_firmware_version() {
   fw=""
 
   if has_cmd curl; then
-    json=$(curl -fsL --connect-timeout 2 --max-time 5 "http://localhost:79/rci/show/version" 2>/dev/null)
+    xkeen_config_file="${XKEEN_CONFIG_FILE:-/opt/etc/xkeen/xkeen.json}"
+    rci_token=""
+    if [ -r "$xkeen_config_file" ]; then
+      rci_token=$(sed \
+        -e ':a; s:/\*[^*]*\*[^/]*\*/::g; ta' \
+        -e 's/^[[:space:]]*\/\/.*$//' \
+        -e 's/[[:space:]]\{1,\}\/\/.*$//' \
+        "$xkeen_config_file" 2>/dev/null \
+        | sed -n 's/.*"rci_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+        | head -n 1)
+    fi
+    if [ -n "$rci_token" ]; then
+      json=$(curl -fsL --connect-timeout 2 --max-time 5 -H "X-Ndma-Tkn: $rci_token" "http://localhost:79/rci/show/version" 2>/dev/null)
+    else
+      json=$(curl -fsL --connect-timeout 2 --max-time 5 "http://localhost:79/rci/show/version" 2>/dev/null)
+    fi
     if [ -n "$json" ]; then
       fw=$(printf '%s' "$json" | tr ',' '\n' | \
         sed -n 's/^[[:space:]]*"title"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | \

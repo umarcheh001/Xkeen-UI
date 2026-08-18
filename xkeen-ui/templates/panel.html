@@ -1616,7 +1616,7 @@
               <div class="xkeen-mini-head">
                 <h3>xkeen.json</h3>
                 <p class="small xk-card-desc">
-                  Пользовательские политики портов для разных устройств (используются в роутинге через <code>source</code>).<br>
+                  Для KeeneticOS 5.2+ здесь должен быть <code>"xkeen": { "rci_token": "..." }</code>; токен создаётся в разделе «Пользователи и доступ» роутера.<br>Пользовательские политики портов для разных устройств (используются в роутинге через <code>source</code>).<br>
                   Имена policy должны совпадать с политиками в роутере и работают только при наличии дефолтной политики <code>xkeen</code>.<br>
                   <code>port</code>: <code>""</code> — все, <code>80,443,596:599</code> — список/диапазоны, <code>!7777</code> — исключить.
                 </p>
@@ -1625,7 +1625,7 @@
                         class="xkeen-textarea xkeen-json-textarea"
                         spellcheck="false"
                         rows="8"
-                        placeholder="{\n  \"example\": true\n}\n"></textarea>
+                        placeholder="{\n  \"xkeen\": {\n    \"rci_token\": \"\"\n  }\n}\n"></textarea>
               <div class="xkeen-mini-footer">
                 <div id="xkeen-config-status" class="status" role="status" aria-live="polite"></div>
                 <div class="actions">

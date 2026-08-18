@@ -345,16 +345,39 @@ cleanup_failed_backups() {
 #  RCI helpers (Keenetic router API)
 # ---------------------------------------------------------------------------
 
+XKEEN_CONFIG_FILE="${XKEEN_CONFIG_FILE:-/opt/etc/xkeen/xkeen.json}"
+get_rci_token() {
+  [ -r "$XKEEN_CONFIG_FILE" ] || return 0
+  sed \
+    -e ':a; s:/\*[^*]*\*[^/]*\*/::g; ta' \
+    -e 's/^[[:space:]]*\/\/.*$//' \
+    -e 's/[[:space:]]\{1,\}\/\/.*$//' \
+    "$XKEEN_CONFIG_FILE" 2>/dev/null \
+    | sed -n 's/.*"rci_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+    | head -n 1
+}
+RCI_TOKEN="$(get_rci_token)"
+
 rci_request() {
   endpoint="$1"
-  curl -fsS "http://localhost:79/rci/$endpoint" 2>/dev/null
+  if [ -n "$RCI_TOKEN" ]; then
+    curl -fsS -H "X-Ndma-Tkn: $RCI_TOKEN" "http://localhost:79/rci/$endpoint" 2>/dev/null
+  else
+    curl -fsS "http://localhost:79/rci/$endpoint" 2>/dev/null
+  fi
 }
 
 rci_parse() {
   command="$1"
-  curl -fsS -H "Content-Type: application/json" \
-    -d "[{\"parse\":\"$command\"}]" \
-    "http://localhost:79/rci/" 2>/dev/null
+  if [ -n "$RCI_TOKEN" ]; then
+    curl -fsS -H "X-Ndma-Tkn: $RCI_TOKEN" -H "Content-Type: application/json" \
+      -d "[{\"parse\":\"$command\"}]" \
+      "http://localhost:79/rci/" 2>/dev/null
+  else
+    curl -fsS -H "Content-Type: application/json" \
+      -d "[{\"parse\":\"$command\"}]" \
+      "http://localhost:79/rci/" 2>/dev/null
+  fi
 }
 
 # ---------------------------------------------------------------------------

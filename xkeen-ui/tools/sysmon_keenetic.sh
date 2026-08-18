@@ -33,6 +33,21 @@ done
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# KeeneticOS 5.2+ protects the local RCI endpoint with the token stored by
+# XKeen in xkeen.json.  Older firmware accepts the same request without it.
+XKEEN_CONFIG_FILE="${XKEEN_CONFIG_FILE:-/opt/etc/xkeen/xkeen.json}"
+get_rci_token() {
+  [ -r "$XKEEN_CONFIG_FILE" ] || return 0
+  sed \
+    -e ':a; s:/\*[^*]*\*[^/]*\*/::g; ta' \
+    -e 's/^[[:space:]]*\/\/.*$//' \
+    -e 's/[[:space:]]\{1,\}\/\/.*$//' \
+    "$XKEEN_CONFIG_FILE" 2>/dev/null \
+    | sed -n 's/.*"rci_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+    | head -n 1
+}
+RCI_TOKEN="$(get_rci_token)"
+
 # --- Keenetic RCI helpers (borrowed from KeenKit, trimmed; no firmware/OTA actions) ---
 rci_request() {
   # Usage: rci_request "show/version"
@@ -41,11 +56,19 @@ rci_request() {
   [ -z "$ep" ] && return 1
   url="http://127.0.0.1:79/rci/${ep}"
   if have curl; then
-    curl -fsS --max-time 2 "$url" 2>/dev/null
+    if [ -n "$RCI_TOKEN" ]; then
+      curl -fsS --max-time 2 -H "X-Ndma-Tkn: $RCI_TOKEN" "$url" 2>/dev/null
+    else
+      curl -fsS --max-time 2 "$url" 2>/dev/null
+    fi
     return $?
   fi
   if have wget; then
-    wget -q -T 2 -O - "$url" 2>/dev/null
+    if [ -n "$RCI_TOKEN" ]; then
+      wget -q -T 2 --header="X-Ndma-Tkn: $RCI_TOKEN" -O - "$url" 2>/dev/null
+    else
+      wget -q -T 2 -O - "$url" 2>/dev/null
+    fi
     return $?
   fi
   return 1

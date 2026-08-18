@@ -349,6 +349,41 @@ def _register_api_blueprints(app, ctx: "AppContext"):
     register_blueprints(app, ctx)
 
 
+def _check_keenetic_rci_access() -> Dict[str, Any]:
+    """Log a secret-free startup diagnostic for KeeneticOS 5.2+ RCI."""
+    from core.logging import core_log_once
+    from services.keenetic_rci import probe_rci_access
+
+    status = probe_rci_access()
+    if status.state == "available" and status.token_configured:
+        core_log_once(
+            "info",
+            "keenetic_rci_token_loaded",
+            "RCI access token loaded and accepted",
+        )
+    elif status.state == "token_required":
+        core_log_once(
+            "warning",
+            "keenetic_rci_token_required",
+            "RCI requires an access token; some router integrations are unavailable",
+            http_status=status.http_status,
+        )
+    elif status.state == "invalid_token":
+        core_log_once(
+            "warning",
+            "keenetic_rci_token_invalid",
+            "Configured RCI access token was rejected; some router integrations are unavailable",
+            http_status=status.http_status,
+        )
+
+    return {
+        "state": status.state,
+        "ok": status.ok,
+        "token_configured": status.token_configured,
+        "http_status": status.http_status,
+    }
+
+
 def create_app(*, ws_runtime: bool = False):
     """Create and configure the Flask application.
 
@@ -370,6 +405,11 @@ def create_app(*, ws_runtime: bool = False):
     UI_WS_LOG = env["UI_WS_LOG"]
 
     _cleanup_legacy_global_theme_files(ui_state_dir=UI_STATE_DIR)
+
+    try:
+        _check_keenetic_rci_access()
+    except Exception:  # noqa: BLE001 - diagnostics must never block startup
+        pass
 
     xray_ctx = _init_xray_startup_migrations(
         base_etc_dir=BASE_ETC_DIR,
