@@ -781,6 +781,36 @@ test('visible delay test waits for the backend rolling limit instead of failing 
   expect(nodeBAttempts).toBe(2);
 });
 
+test('retryable Mihomo 503 is shown as a node timeout instead of a panel error', async ({ page }) => {
+  const data = groupsPayload('node-a');
+  data.groups[0].nodes = [{
+    name: 'node-a', type: 'VLESS', alive: false, udp: true,
+    provider: '', provider_candidates: [], delay_ms: 0,
+  }];
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: data }));
+  await page.route('**/api/mihomo/clash/delay', (route) => route.fulfill({
+    status: 502,
+    json: {
+      ok: false,
+      code: 'upstream_http_error',
+      retryable: true,
+      upstream_status: 503,
+    },
+  }));
+
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-delay-503-timeout' });
+  });
+  await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
+  const latency = page.locator('[data-node-name="node-a"] .xk-mihomo-node-delay');
+  await latency.click();
+  await expect(latency).toHaveText('таймаут');
+});
+
 
 test('group delay probes unique nodes without group endpoint and reconciles the snapshot', async ({ page }) => {
   const data = groupsPayload();

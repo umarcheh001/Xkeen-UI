@@ -1326,6 +1326,10 @@ function delayFailureState(error) {
   const code = errorCode(error) || String(error?.code || '');
   if (
     code === 'upstream_timeout'
+    // Current Mihomo returns HTTP 503 when an individual outbound completes
+    // a delay probe without a usable result. Treat that retryable response as
+    // a probe timeout, not as a panel/API failure.
+    || (code === 'upstream_http_error' && error?.data?.retryable === true)
     || error?.name === 'TimeoutError'
     || error?.isTimeout === true
   ) return 'timeout';
