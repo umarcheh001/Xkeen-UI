@@ -679,6 +679,15 @@ def _device_name(device_map: Mapping[str, Any], source_ip: str) -> str:
     return _text(raw, 96)
 
 
+def _connection_asn(value: Any) -> str:
+    """Normalize Mihomo's optional ASN metadata without inventing a lookup."""
+
+    asn = _text(value, 96).upper()
+    if asn.isdigit():
+        return f"AS{asn}"
+    return asn
+
+
 def _connection_dto(raw_connection: Any, device_map: Mapping[str, Any]) -> dict[str, Any] | None:
     connection = _mapping(raw_connection)
     connection_id = _text(connection.get("id"), 160)
@@ -692,9 +701,13 @@ def _connection_dto(raw_connection: Any, device_map: Mapping[str, Any]) -> dict[
             "network": _text(metadata.get("network"), 24).lower(),
             "type": _text(metadata.get("type"), 48),
             "source_ip": source_ip,
+            "source_geoip": _string_list(metadata.get("sourceGeoIP"), limit=8, item_limit=32),
+            "source_ip_asn": _connection_asn(metadata.get("sourceIPASN")),
             "source_port": _text(metadata.get("sourcePort"), 16),
             "source_name": _device_name(device_map, source_ip),
             "destination_ip": _text(metadata.get("destinationIP"), 64),
+            "destination_geoip": _string_list(metadata.get("destinationGeoIP"), limit=8, item_limit=32),
+            "destination_ip_asn": _connection_asn(metadata.get("destinationIPASN")),
             "destination_port": _text(metadata.get("destinationPort"), 16),
             "host": _text(metadata.get("host"), 512),
             "sniff_host": _text(metadata.get("sniffHost"), 512),

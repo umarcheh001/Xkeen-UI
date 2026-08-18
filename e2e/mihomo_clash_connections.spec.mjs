@@ -41,7 +41,11 @@ function connectionsPayload(ids = ['connection-one', 'connection-two']) {
         source_ip: `192.0.2.${index + 1}`,
         source_port: '5000',
         source_name: index ? 'Phone' : 'Laptop',
+        source_geoip: ['PRIVATE'],
+        source_ip_asn: '',
         destination_ip: '198.51.100.10',
+        destination_geoip: ['US'],
+        destination_ip_asn: 'AS64500',
         destination_port: '443',
         host: index ? 'video.example' : 'docs.example',
         sniff_host: '',
@@ -51,9 +55,9 @@ function connectionsPayload(ids = ['connection-one', 'connection-two']) {
         inbound_port: '7890',
         remote_destination: '198.51.100.10:443',
         dns_mode: 'normal-redir',
-        process: 'browser',
-        process_path: '/usr/bin/browser',
-        uid: 1000,
+        process: index ? 'browser' : '',
+        process_path: index ? '/usr/bin/browser' : '',
+        uid: index ? 1000 : 0,
       },
       upload: 100 + index,
       download: 200 + index,
@@ -170,7 +174,10 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   await expect(page.locator('#mihomo-clash-connection-inspector-disconnect')).toBeVisible();
   await expect(page.locator('#mihomo-clash-connection-inspector-summary')).toContainText('DomainSuffix');
   await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('normal-redir');
-  await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('/usr/bin/browser');
+  await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('AS64500');
+  await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('Не определён (Mihomo: 0)');
+  await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('Длительность');
+  await expect(page.locator('#mihomo-clash-connection-inspector-details')).not.toContainText('Закрыто—');
   const inspectorLayout = await page.locator('#mihomo-clash-connection-inspector').evaluate((element) => {
     const details = element.querySelector('#mihomo-clash-connection-inspector-details');
     const metadataRows = [...details.children];
@@ -206,6 +213,8 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   await expect(page.locator('[data-connection-id="connection-one"]')).toContainText('Закрыто');
   await page.locator('[data-connection-id="connection-one"]').click();
   await expect(page.locator('#mihomo-clash-connection-inspector-summary')).toContainText('Недавно закрыто');
+  await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('Закрыто');
+  await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('Длительность сеанса');
   await page.locator('#mihomo-clash-closed-clear').click();
   await expect(page.locator('#mihomo-clash-closed-count')).toHaveText('0');
 

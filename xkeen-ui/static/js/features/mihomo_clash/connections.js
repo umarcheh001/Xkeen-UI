@@ -67,11 +67,20 @@ function startTime(row) {
 function formatAge(row) {
   const started = startTime(row);
   if (!started) return '—';
-  const seconds = Math.max(0, Math.floor((Date.now() - started) / 1000));
+  const closedAt = Date.parse(String(row?.closed_at || ''));
+  const ended = Number.isFinite(closedAt) ? closedAt : Date.now();
+  const seconds = Math.max(0, Math.floor((ended - started) / 1000));
   if (seconds < 60) return `${seconds} с`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)} мин`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)} ч ${Math.floor((seconds % 3600) / 60)} мин`;
   return `${Math.floor(seconds / 86400)} д`;
+}
+
+function uidDisplay(metadata) {
+  const value = metadata?.uid;
+  if (value === null || value === undefined || value === '') return '';
+  if (Number(value) === 0) return 'Не определён (Mihomo: 0)';
+  return String(value);
 }
 
 function formatTimestamp(value) {
@@ -159,6 +168,9 @@ function searchText(row) {
   return [
     row?.id, metadata.source_name, metadata.source_ip, metadata.host, metadata.sniff_host,
     metadata.destination_ip, metadata.remote_destination, metadata.dns_mode,
+    metadata.source_ip_asn, metadata.destination_ip_asn,
+    ...(Array.isArray(metadata.source_geoip) ? metadata.source_geoip : []),
+    ...(Array.isArray(metadata.destination_geoip) ? metadata.destination_geoip : []),
     metadata.inbound_ip, metadata.inbound_name, metadata.process, metadata.process_path,
     row?.rule, row?.rule_payload, row?.closed_at,
     ...(row?.chains || []), ...(row?.provider_chains || []),
@@ -356,6 +368,8 @@ function renderInspector() {
     ['Порт источника', metadata.source_port],
     ['Назначение', destination(row), destinationHost(row)],
     ['IP назначения', metadata.destination_ip, metadata.destination_ip],
+    ['ASN назначения', metadata.destination_ip_asn, metadata.destination_ip_asn],
+    ['Геолокация назначения', (Array.isArray(metadata.destination_geoip) ? metadata.destination_geoip : []).join(' · ')],
     ['Порт назначения', metadata.destination_port],
     ['Удалённый адрес', metadata.remote_destination, metadata.remote_destination],
     ['Сеть', metadata.network, metadata.network], ['Тип', metadata.type],
@@ -363,10 +377,17 @@ function renderInspector() {
     ['Inbound', metadata.inbound_name],
     ['Inbound адрес', [metadata.inbound_ip, metadata.inbound_port].filter(Boolean).join(':')],
     ['Inbound user', metadata.inbound_user],
-    ['Процесс', metadata.process], ['Путь процесса', metadata.process_path], ['UID', metadata.uid],
+    ['Процесс', metadata.process], ['Путь процесса', metadata.process_path], ['UID', uidDisplay(metadata)],
+    ['ASN источника', metadata.source_ip_asn, metadata.source_ip_asn],
+    ['Геолокация источника', (Array.isArray(metadata.source_geoip) ? metadata.source_geoip : []).join(' · ')],
     ['Provider chain', (row.provider_chains || []).join(' → ')],
     ['Начало', formatTimestamp(row.start), '', row.start],
-    ['Закрыто', formatTimestamp(row.closed_at), '', row.closed_at],
+    ...(closed
+      ? [
+        ['Закрыто', formatTimestamp(row.closed_at), '', row.closed_at],
+        ['Длительность сеанса', formatAge(row)],
+      ]
+      : [['Длительность', formatAge(row)]]),
   ].filter(([, value]) => value !== null && value !== undefined && value !== '');
   details.innerHTML = fields.map(([label, value, filterValue, copyValue]) => `<div><dt>${escapeHtml(label)}</dt><dd><span>${filterValue ? filterButton(filterValue, label, escapeHtml(value)) : escapeHtml(value)}</span>${copyButton(copyValue || value, label)}</dd></div>`).join('');
 }
@@ -590,10 +611,14 @@ function inspectorCopyText(row) {
     `Назначение: ${destination(row)}`,
     metadata.destination_ip ? `IP назначения: ${metadata.destination_ip}` : '',
     metadata.remote_destination ? `Удалённый адрес: ${metadata.remote_destination}` : '',
+    metadata.destination_ip_asn ? `ASN назначения: ${metadata.destination_ip_asn}` : '',
+    Array.isArray(metadata.destination_geoip) && metadata.destination_geoip.length ? `Геолокация назначения: ${metadata.destination_geoip.join(' · ')}` : '',
     metadata.network ? `Сеть: ${metadata.network}` : '',
     metadata.dns_mode ? `DNS режим: ${metadata.dns_mode}` : '',
     metadata.inbound_name ? `Inbound: ${metadata.inbound_name}` : '',
     metadata.process || metadata.process_path ? `Процесс: ${metadata.process || metadata.process_path}` : '',
+    uidDisplay(metadata) ? `UID: ${uidDisplay(metadata)}` : '',
+    metadata.source_ip_asn ? `ASN источника: ${metadata.source_ip_asn}` : '',
     row.rule ? `Правило: ${row.rule}${row.rule_payload ? ` · ${row.rule_payload}` : ''}` : '',
     `Цепочка: ${routeText(row)}`,
     `Трафик: ↓ ${formatBytes(row.download || 0)} · ↑ ${formatBytes(row.upload || 0)}`,
