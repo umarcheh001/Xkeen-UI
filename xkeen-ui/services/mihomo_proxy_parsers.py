@@ -686,7 +686,7 @@ def parse_wireguard(conf_text: str, custom_name: Optional[str] = None) -> ProxyP
             return
         yaml_lines.append(f"  reserved: {_yaml_str(raw)}")
 
-    amz: Dict[str, str] = {}
+    amz: Dict[str, Any] = {}
     for key in (
         "jc",
         "jmin",
@@ -712,6 +712,49 @@ def parse_wireguard(conf_text: str, custom_name: Optional[str] = None) -> ProxyP
         value = _first_value(key)
         if value != "":
             amz[key] = _strip_optional_quotes(value)
+
+    # Mihomo v1.19.30 added a separate AmneziaWG v3 implementation.  AWG
+    # .conf files do not normally carry Mihomo's implementation selector, so
+    # infer ``version: 3`` as soon as a v3/v3.1-only option is present.  The
+    # v3.1 additions still use version 3 in Mihomo.
+    v3_scalar_keys = {
+        "header-protection-key": ("headerprotectionkey",),
+        "content-padding-addition": ("contentpaddingaddition",),
+        "rekey-after-time": ("rekeyaftertime",),
+        "rekey-timeout": ("rekeytimeout",),
+        "reject-after-time": ("rejectaftertime",),
+        "keepalive-timeout": ("keepalivetimeout",),
+        "max-handshake-attempts": ("maxhandshakeattempts",),
+    }
+    has_v3_option = False
+    for yaml_key, source_keys in v3_scalar_keys.items():
+        value = _first_value(*source_keys)
+        if value != "":
+            amz[yaml_key] = _strip_optional_quotes(value)
+            has_v3_option = True
+
+    for yaml_key, source_key in (
+        ("random-trailers", "randomtrailers"),
+        ("disable-cookies", "disablecookies"),
+    ):
+        value = _first_value(source_key)
+        if value != "":
+            parsed_bool = _parse_bool_scalar(_strip_optional_quotes(value))
+            if parsed_bool is None:
+                raise ValueError(f"Invalid AmneziaWG boolean option: {source_key}")
+            amz[yaml_key] = parsed_bool
+            has_v3_option = True
+
+    version = _strip_optional_quotes(_first_value("version", "awgversion", "amneziaversion"))
+    if has_v3_option:
+        # Mihomo selects both AWG 3.0 and 3.1 with the integer value 3.
+        amz = {"version": 3, **amz}
+    elif version:
+        normalized_version = version.strip().lower().lstrip("v")
+        if normalized_version in {"3", "3.0", "3.1"}:
+            amz = {"version": 3, **amz}
+        elif re.fullmatch(r"\d+", normalized_version):
+            amz = {"version": int(normalized_version), **amz}
 
     yaml_lines: List[str] = []
     yaml_lines.append(f"- name: {_yaml_str(name)}")
@@ -745,7 +788,10 @@ def parse_wireguard(conf_text: str, custom_name: Optional[str] = None) -> ProxyP
     if amz:
         yaml_lines.append("  amnezia-wg-option:")
         for k, v in amz.items():
-            _append_yaml_scalar(k, v, indent=4, allow_empty=True)
+            if isinstance(v, bool):
+                yaml_lines.append(f"    {k}: {'true' if v else 'false'}")
+            else:
+                _append_yaml_scalar(k, v, indent=4, allow_empty=True)
 
     yaml = "\n".join(yaml_lines) + "\n"
     return ProxyParseResult(name=name, yaml=yaml)

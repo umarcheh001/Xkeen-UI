@@ -288,6 +288,72 @@ def test_reality_opts_completion_suggests_support_x25519mlkem768():
     assert "support-x25519mlkem768" in result["labels"]
 
 
+def test_amnezia_wg_v31_schema_completion_and_hover():
+    result = _run_completion(
+        "\n".join([
+            "proxies:",
+            "  - name: awg-v31",
+            "    type: wireguard",
+            "    server: awg.example.com",
+            "    port: 443",
+            "    ip: 10.8.0.2",
+            "    private-key: client-key",
+            "    public-key: server-key",
+            "    amnezia-wg-option:",
+            "      random-__CURSOR__",
+            "",
+        ])
+    )
+
+    assert result is not None
+    assert result["context"]["kind"] == "key"
+    assert "random-trailers" in result["labels"]
+
+    result = _run_completion(
+        "\n".join([
+            "proxies:",
+            "  - name: awg-v31",
+            "    type: wireguard",
+            "    amnezia-wg-option:",
+            "      disable-__CURSOR__",
+            "",
+        ])
+    )
+
+    assert result is not None
+    assert "disable-cookies" in result["labels"]
+
+    hover = _run_hover(
+        "\n".join([
+            "proxies:",
+            "  - name: awg-v31",
+            "    type: wireguard",
+            "    amnezia-wg-option:",
+            "      ver__CURSOR__sion: 3",
+            "",
+        ])
+    )
+
+    assert hover is not None
+    assert hover["path"] == "proxies[0].amnezia-wg-option.version"
+    assert "3.1" in hover["plain"]
+    assert "AWG 3.x" in hover["plain"]
+
+
+def test_amnezia_wg_v31_proxy_snippet_is_available():
+    result = _run_completion("proxies:\n  - __CURSOR__\n")
+
+    assert result is not None
+    assert any("AmneziaWG 3 / 3.1" in label for label in result["labels"])
+
+    applied = _apply_completion("proxies:\n  - __CURSOR__\n", "proxy: AmneziaWG 3 / 3.1")
+    assert applied is not None
+    assert "type: wireguard" in applied["applied"]
+    assert "amnezia-wg-option:" in applied["applied"]
+    assert "version: 3" in applied["applied"]
+    assert "random-trailers: true" in applied["applied"]
+
+
 def test_proxy_hover_explains_documented_vless_tls_fields():
     result = _run_hover(
         "\n".join([

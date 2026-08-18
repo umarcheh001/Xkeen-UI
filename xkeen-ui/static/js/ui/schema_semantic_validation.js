@@ -463,6 +463,53 @@ function validateMihomoProxyCompat(target, proxies) {
       }));
     }
 
+    const amnezia = isPlainObject(proxy['amnezia-wg-option']) ? proxy['amnezia-wg-option'] : null;
+    if (amnezia) {
+      const awgPath = path.concat('amnezia-wg-option');
+      const version = Number(amnezia.version);
+      const v3Keys = [
+        'header-protection-key', 'content-padding-addition', 'rekey-after-time',
+        'rekey-timeout', 'reject-after-time', 'keepalive-timeout',
+        'max-handshake-attempts', 'random-trailers', 'disable-cookies',
+      ];
+      const presentV3Keys = v3Keys.filter((field) => Object.prototype.hasOwnProperty.call(amnezia, field));
+
+      if (type && type !== 'wireguard') {
+        pushDiagnostic(target, createYamlDiagnostic(awgPath, `Блок \`amnezia-wg-option\` поддерживается только у \`type: wireguard\`, а сейчас указан \`${type}\`.`, {
+          source: 'mihomo-semantic',
+          code: 'proxy-amnezia-type',
+        }));
+      }
+
+      if (presentV3Keys.length && version !== 3) {
+        pushDiagnostic(target, createYamlDiagnostic(awgPath.concat('version'), `Параметры AWG 3.x (${presentV3Keys.map((field) => `\`${field}\``).join(', ')}) требуют целое \`version: 3\`. Для AWG 3.1 также используется \`3\`, не \`3.1\`.`, {
+          source: 'mihomo-semantic',
+          code: 'proxy-amnezia-v3-version',
+        }));
+      }
+
+      if (version === 3) {
+        ['j1', 'j2', 'j3', 'itime'].forEach((field) => {
+          if (!Object.prototype.hasOwnProperty.call(amnezia, field)) return;
+          pushDiagnostic(target, createYamlDiagnostic(awgPath.concat(field), `Поле \`${field}\` относится только к legacy AWG 1.5 и несовместимо с реализацией \`version: 3\`.`, {
+            source: 'mihomo-semantic',
+            code: 'proxy-amnezia-v3-legacy-field',
+          }));
+        });
+      }
+
+      if (version === 3 && cleanName(amnezia['header-protection-key'])) {
+        ['s1', 's2', 's3', 's4'].forEach((field) => {
+          const value = Number(amnezia[field]);
+          if (Number.isFinite(value) && value >= 12) return;
+          pushDiagnostic(target, createYamlDiagnostic(awgPath.concat(field), `Header protection AWG 3 требует \`${field}\` не меньше 12 в актуальной реализации AmneziaWG.`, {
+            source: 'mihomo-semantic',
+            code: 'proxy-amnezia-header-padding',
+          }));
+        });
+      }
+    }
+
     if (tls && !cleanName(proxy.servername) && ['vless', 'vmess', 'trojan'].includes(type) && (
       looksLikeIpLiteral(server) || !!wsHost || !!xhttpHost || h2Hosts.length
     )) {

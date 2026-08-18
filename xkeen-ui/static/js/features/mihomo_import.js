@@ -2385,7 +2385,7 @@ let mihomoImportModuleApi = null;
 
     if (!rawText.trim()) {
       let msg = 'Вставь ссылку узла или https-подписку.';
-      if (mode === 'wireguard') msg = 'Вставь WireGuard (.conf) и нажми «Преобразовать».';
+      if (mode === 'wireguard') msg = 'Вставь WireGuard / AmneziaWG 3.x (.conf) и нажми «Преобразовать».';
       else if (mode === 'openvpn') msg = 'Вставь OpenVPN (.ovpn) и нажми «Преобразовать».';
       else if (mode === 'tailscale') msg = 'Вставь Tailscale-параметры и нажми «Преобразовать».';
       setStatus(msg, true);
@@ -2405,7 +2405,7 @@ let mihomoImportModuleApi = null;
 
     // Config modes: parse whole textarea as a single config.
     if (mode === 'wireguard' || mode === 'openvpn' || mode === 'tailscale') {
-      const label = mode === 'wireguard' ? 'WireGuard' : (mode === 'openvpn' ? 'OpenVPN' : 'Tailscale');
+      const label = mode === 'wireguard' ? 'WireGuard / AmneziaWG 3.x' : (mode === 'openvpn' ? 'OpenVPN' : 'Tailscale');
       setStatus('Разбираю ' + label + '…', false, null, { busy: true });
       try {
         let out = await parseConfigViaApi(mode, rawText, null);

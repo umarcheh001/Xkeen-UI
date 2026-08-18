@@ -310,6 +310,15 @@ const MIHOMO_PROXIES_SNIPPETS = [
     monacoSnippet: 'name: "${1:ss-proxy}"\ntype: ss\nserver: ${2:example.com}\nport: ${3:8388}\ncipher: ${4|2022-blake3-aes-128-gcm,2022-blake3-aes-256-gcm,aes-128-gcm,aes-256-gcm,chacha20-ietf-poly1305|}\npassword: "${5:your-password}"\nudp: true$0',
   },
   {
+    id: 'mihomo-proxy-amnezia-wg3',
+    label: 'proxy: AmneziaWG 3 / 3.1',
+    detail: 'Mihomo v1.19.30+ · proxies[]',
+    documentation: 'WireGuard outbound с AWG 3.x. И AWG 3.0, и AWG 3.1 выбираются целым `version: 3`; значения должны совпадать с серверным конфигом.',
+    warning: 'Не генерируйте параметры AWG наугад. HeaderProtectionKey и server-side параметры должны совпадать с сервером; AWG 3.1 в Mihomo использует version: 3, а не 3.1.',
+    insertText: 'name: "amnezia-wg3"\ntype: wireguard\nserver: vpn.example.com\nport: 443\nip: 10.8.0.2\nprivate-key: "<client-private-key>"\npublic-key: "<server-public-key>"\nallowed-ips:\n  - 0.0.0.0/0\nudp: true\namnezia-wg-option:\n  version: 3\n  s1: 32\n  s2: 32\n  s3: 32\n  s4: 32\n  header-protection-key: "<shared-header-protection-key>"\n  content-padding-addition: "0-32"\n  random-trailers: true\n  disable-cookies: true',
+    monacoSnippet: 'name: "${1:amnezia-wg3}"\ntype: wireguard\nserver: ${2:vpn.example.com}\nport: ${3:443}\nip: ${4:10.8.0.2}\nprivate-key: "${5:<client-private-key>}"\npublic-key: "${6:<server-public-key>}"\nallowed-ips:\n  - 0.0.0.0/0\nudp: true\namnezia-wg-option:\n  version: 3\n  s1: ${7:32}\n  s2: ${8:32}\n  s3: ${9:32}\n  s4: ${10:32}\n  header-protection-key: "${11:<shared-header-protection-key>}"\n  content-padding-addition: "${12:0-32}"\n  random-trailers: ${13|true,false|}\n  disable-cookies: ${14|true,false|}$0',
+  },
+  {
     id: 'mihomo-proxy-openvpn',
     label: 'proxy: openvpn',
     detail: 'Mihomo · proxies[]',

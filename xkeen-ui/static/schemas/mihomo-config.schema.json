@@ -901,8 +901,8 @@
             { "type": "string" },
             { "type": "array", "items": { "type": "string" } }
           ],
-          "description": "Приватный ключ клиента для mTLS: PEM-содержимое или путь к файлу. Используется вместе с `certificate`.",
-          "examples": ["/opt/etc/mihomo/client.key"]
+          "description": "Приватный ключ клиента: для WireGuard — обязательный base64-ключ интерфейса; для mTLS — PEM-содержимое или путь к файлу вместе с `certificate`.",
+          "examples": ["eCtXsJZ27+4PbhDkHnB923tkUn2Gj59wZw5wFA75MnU=", "/opt/etc/mihomo/client.key"]
         },
         "client-fingerprint": {
           "type": "string",
@@ -1034,6 +1034,61 @@
           "description": "DNS-серверы, связанные с прокси-туннелем.",
           "examples": [["1.1.1.1", "8.8.8.8"]]
         },
+        "ip": {
+          "type": "string",
+          "description": "Локальный IPv4-адрес клиента в WireGuard-туннеле. CIDR можно опустить; Mihomo использует /32.",
+          "examples": ["172.16.0.2", "10.8.0.2/32"]
+        },
+        "ipv6": {
+          "type": "string",
+          "description": "Локальный IPv6-адрес клиента в WireGuard-туннеле. CIDR можно опустить; Mihomo использует /128.",
+          "examples": ["fd01:5ca1:ab1e::2", "fd01:5ca1:ab1e::2/128"]
+        },
+        "public-key": {
+          "type": "string",
+          "description": "Base64-публичный ключ WireGuard/AmneziaWG сервера (peer)."
+        },
+        "pre-shared-key": {
+          "type": "string",
+          "description": "Необязательный base64 pre-shared key WireGuard peer."
+        },
+        "allowed-ips": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Сети, направляемые через WireGuard peer. Для полного туннеля обычно 0.0.0.0/0 и ::/0.",
+          "examples": [["0.0.0.0/0", "::/0"]]
+        },
+        "reserved": {
+          "oneOf": [
+            { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "integer", "minimum": 0, "maximum": 255 } },
+            { "type": "string" }
+          ],
+          "description": "Три reserved-байта WireGuard; нужны некоторым WARP-узлам. Mihomo принимает массив или строковое представление.",
+          "examples": [[209, 98, 59]]
+        },
+        "persistent-keepalive": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Интервал keepalive WireGuard peer в секундах; 0 отключает периодические keepalive."
+        },
+        "workers": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Число worker-ов WireGuard userspace-реализации. Обычно поле не требуется."
+        },
+        "refresh-server-ip-interval": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Интервал повторного DNS-резолва домена WireGuard-сервера в секундах."
+        },
+        "ip-stack": { "$ref": "#/definitions/wireGuardIPStack" },
+        "peers": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/wireGuardPeer" },
+          "description": "Полная форма WireGuard с несколькими peer. При её использовании server/port/public-key верхнего уровня игнорируются."
+        },
+        "amnezia-wg-option": { "$ref": "#/definitions/amneziaWGOption" },
 
         "hostname": {
           "type": "string",
@@ -1483,6 +1538,108 @@
         "sni": { "type": "string", "description": "SNI для download-settings." },
         "servername": { "type": "string", "description": "SNI для download-settings." },
         "client-fingerprint": { "type": "string", "description": "Клиентский TLS fingerprint." }
+      }
+    },
+
+    "wireGuardIPStack": {
+      "type": "object",
+      "description": "IP stack WireGuard outbound. auto выбирает доступную реализацию ядра Mihomo.",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["auto", "gvisor", "mips"],
+          "default": "auto",
+          "description": "Реализация IP stack. gvisor доступен только в сборках с соответствующим build tag."
+        },
+        "congestion-controller": {
+          "type": "string",
+          "enum": ["cubic", "reno", "bbr", "bbr3"],
+          "default": "cubic",
+          "description": "TCP congestion control для MIPS stack; на gVisor не действует."
+        }
+      }
+    },
+
+    "wireGuardPeer": {
+      "type": "object",
+      "description": "WireGuard peer для полной multi-peer формы.",
+      "required": ["server", "port", "public-key"],
+      "properties": {
+        "server": { "type": "string", "description": "Домен или IP peer-а." },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "public-key": { "type": "string", "description": "Base64-публичный ключ peer-а." },
+        "pre-shared-key": { "type": "string", "description": "Необязательный base64 PSK peer-а." },
+        "reserved": {
+          "oneOf": [
+            { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "integer", "minimum": 0, "maximum": 255 } },
+            { "type": "string" }
+          ]
+        },
+        "allowed-ips": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "amneziaWGRange": {
+      "oneOf": [
+        { "type": "integer", "minimum": 0 },
+        { "type": "string", "pattern": "^(?:\\d+)(?:-\\d+)?$" }
+      ],
+      "description": "Неотрицательное число или диапазон min-max."
+    },
+
+    "amneziaWGOption": {
+      "type": "object",
+      "description": "Обфускация AmneziaWG. AWG 3.0/3.1 поддерживаются начиная с Mihomo v1.19.30 и выбираются строго целым version: 3.",
+      "x-ui-explain": "Параметры маскировки WireGuard от DPI. Они должны соответствовать конфигурации AmneziaWG-сервера; случайные значения почти наверняка сломают handshake.",
+      "x-ui-use-case": "Используйте блок только для AmneziaWG-узла, когда сервер или выданный .conf содержит Jc/S*/H*/I* либо параметры AWG 3.",
+      "x-ui-example": "{ version: 3, header-protection-key: \"...\", content-padding-addition: \"0-32\", random-trailers: true }",
+      "x-ui-warning": "Для AWG 3/3.1 обязательно version: 3; не пишите 3.1. Ключ header protection и server-side параметры должны совпадать с сервером.",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "description": "Выбор реализации AmneziaWG: только 3 включает AWG 3.x. Для AWG 3.1 также указывается 3, а не 3.1.",
+          "examples": [2, 3]
+        },
+        "jc": { "type": "integer", "minimum": 0, "description": "Количество junk-пакетов перед handshake (AWG 1.0+)." },
+        "jmin": { "type": "integer", "minimum": 0, "description": "Минимальный размер junk-пакета (AWG 1.0+)." },
+        "jmax": { "type": "integer", "minimum": 0, "description": "Максимальный размер junk-пакета (AWG 1.0+)." },
+        "s1": { "type": "integer", "minimum": 0, "description": "Padding initial handshake-пакета." },
+        "s2": { "type": "integer", "minimum": 0, "description": "Padding response handshake-пакета." },
+        "s3": { "type": "integer", "minimum": 0, "description": "Padding cookie-пакета (AWG 1.5+)." },
+        "s4": { "type": "integer", "minimum": 0, "description": "Padding transport-пакета (AWG 1.5+)." },
+        "h1": { "$ref": "#/definitions/amneziaWGRange" },
+        "h2": { "$ref": "#/definitions/amneziaWGRange" },
+        "h3": { "$ref": "#/definitions/amneziaWGRange" },
+        "h4": { "$ref": "#/definitions/amneziaWGRange" },
+        "i1": { "type": "string", "description": "Первый custom signature packet." },
+        "i2": { "type": "string", "description": "Второй custom signature packet." },
+        "i3": { "type": "string", "description": "Третий custom signature packet." },
+        "i4": { "type": "string", "description": "Четвёртый custom signature packet." },
+        "i5": { "type": "string", "description": "Пятый custom signature packet." },
+        "j1": { "type": "string", "description": "Legacy junk chain, только AWG 1.5; удалён в AWG 2+." },
+        "j2": { "type": "string", "description": "Legacy junk chain, только AWG 1.5; удалён в AWG 2+." },
+        "j3": { "type": "string", "description": "Legacy junk chain, только AWG 1.5; удалён в AWG 2+." },
+        "itime": { "type": "integer", "minimum": 0, "description": "Legacy timing, только AWG 1.5." },
+        "header-protection-key": {
+          "type": "string",
+          "description": "Base64-ключ защиты заголовков AWG 3+. Должен совпадать на клиенте и сервере; требует version: 3 и подходящих S1-S4."
+        },
+        "content-padding-addition": { "$ref": "#/definitions/amneziaWGRange" },
+        "rekey-after-time": { "$ref": "#/definitions/amneziaWGRange" },
+        "rekey-timeout": { "$ref": "#/definitions/amneziaWGRange" },
+        "reject-after-time": { "$ref": "#/definitions/amneziaWGRange" },
+        "keepalive-timeout": { "$ref": "#/definitions/amneziaWGRange" },
+        "max-handshake-attempts": { "$ref": "#/definitions/amneziaWGRange" },
+        "random-trailers": {
+          "type": "boolean",
+          "default": false,
+          "description": "AWG 3.1+: добавлять случайные trailer-данные. В Mihomo требуется version: 3."
+        },
+        "disable-cookies": {
+          "type": "boolean",
+          "default": false,
+          "description": "AWG 3.1+: отключить cookie-механизм WireGuard. Требуется version: 3."
+        }
       }
     },
 

@@ -146,6 +146,78 @@ console.log(JSON.stringify({{
     assert not any(item["code"] == "proxies-reserved-name" for item in payload["diagnostics"])
 
 
+def test_mihomo_semantic_validation_checks_amnezia_wg_v3_contract():
+    script = """
+import { validateMihomoConfigSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const result = validateMihomoConfigSemantics({
+  proxies: [
+    {
+      name: 'broken-awg',
+      type: 'wireguard',
+      'amnezia-wg-option': {
+        version: 2,
+        s1: 4,
+        s2: 4,
+        s3: 4,
+        s4: 4,
+        'header-protection-key': 'key',
+        'random-trailers': true
+      }
+    },
+    {
+      name: 'legacy-mix',
+      type: 'wireguard',
+      'amnezia-wg-option': { version: 3, j1: '<r 10>' }
+    }
+  ]
+});
+
+console.log(JSON.stringify(result.map((item) => ({
+  code: item.code || '',
+  path: item.path || [],
+  message: item.message || ''
+}))));
+"""
+
+    payload = _run_node_json(script)
+    codes = [str(item["code"]) for item in payload]
+    messages = [str(item["message"]) for item in payload]
+
+    assert "proxy-amnezia-v3-version" in codes
+    assert "proxy-amnezia-v3-legacy-field" in codes
+    assert any("AWG 3.1" in message and "version: 3" in message for message in messages)
+
+
+def test_mihomo_semantic_validation_accepts_valid_amnezia_wg_v31_contract():
+    script = """
+import { validateMihomoConfigSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const result = validateMihomoConfigSemantics({
+  proxies: [{
+    name: 'awg-v31',
+    type: 'wireguard',
+    'amnezia-wg-option': {
+      version: 3,
+      s1: 32,
+      s2: 32,
+      s3: 32,
+      s4: 32,
+      'header-protection-key': 'key',
+      'content-padding-addition': '0-32',
+      'random-trailers': true,
+      'disable-cookies': true
+    }
+  }]
+});
+
+console.log(JSON.stringify(result.map((item) => item.code || '')));
+"""
+
+    payload = _run_node_json(script)
+    assert not any(str(code).startswith("proxy-amnezia-") for code in payload)
+
+
 def test_xray_semantic_validation_runtime_reports_missing_refs_and_duplicates():
     script = """
 import { validateXrayRoutingSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';

@@ -996,6 +996,45 @@ def test_mihomo_schema_tracks_xhttp_transport_and_multiplexing_fields():
     assert 'query-server-name' in download_props['ech-opts']['properties']
 
 
+def test_mihomo_schema_tracks_wireguard_and_amnezia_wg_v31_fields():
+    schema = json.loads(Path('xkeen-ui/static/schemas/mihomo-config.schema.json').read_text(encoding='utf-8'))
+    proxy_props = schema['definitions']['proxy']['properties']
+
+    for key in (
+        'ip', 'ipv6', 'public-key', 'pre-shared-key', 'allowed-ips', 'reserved',
+        'persistent-keepalive', 'ip-stack', 'peers', 'amnezia-wg-option',
+    ):
+        assert key in proxy_props
+
+    assert proxy_props['amnezia-wg-option']['$ref'] == '#/definitions/amneziaWGOption'
+    amnezia_props = schema['definitions']['amneziaWGOption']['properties']
+    for key in (
+        'version', 'header-protection-key', 'content-padding-addition',
+        'rekey-after-time', 'rekey-timeout', 'reject-after-time',
+        'keepalive-timeout', 'max-handshake-attempts', 'random-trailers',
+        'disable-cookies',
+    ):
+        assert key in amnezia_props
+
+    assert amnezia_props['version']['examples'] == [2, 3]
+    assert amnezia_props['random-trailers']['type'] == 'boolean'
+    assert amnezia_props['disable-cookies']['type'] == 'boolean'
+    assert '3.1' in amnezia_props['version']['description']
+
+
+def test_mihomo_import_and_generator_expose_amnezia_wg_v3_support():
+    panel = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
+    importer = Path('xkeen-ui/static/js/features/mihomo_import.js').read_text(encoding='utf-8')
+    generator = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
+    snippets = Path('xkeen-ui/static/js/ui/schema_snippets.js').read_text(encoding='utf-8')
+
+    assert 'WireGuard / AmneziaWG 3.x (.conf)' in panel
+    assert 'WireGuard / AmneziaWG 3.x' in importer
+    assert 'WireGuard / AmneziaWG 3.x конфиг' in generator
+    assert "id: 'mihomo-proxy-amnezia-wg3'" in snippets
+    assert "label: 'proxy: AmneziaWG 3 / 3.1'" in snippets
+
+
 def test_runtime_vendor_assets_exist_after_frontend_build():
     required = [
         Path('xkeen-ui/static/vendor/npm/@codemirror/merge/dist/index.js'),

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 import yaml
 from flask import Flask
 
@@ -38,6 +39,40 @@ Endpoint = 162.159.192.1:2480
 PersistentKeepalive = 25
 PresharedKey = 31aIhAPwktDGpH4JDhA8GNvjFXEf/a6+UaQRyOAiyfM=
 Reserved = [209, 98, 59]
+"""
+
+AMNEZIA_WG_V31_CONF = """
+[Interface]
+PrivateKey = eCtXsJZ27+4PbhDkHnB923tkUn2Gj59wZw5wFA75MnU=
+Address = 10.9.9.2/32
+DNS = 1.1.1.1
+MTU = 1280
+Jc = 4
+Jmin = 35
+Jmax = 95
+S1 = 32
+S2 = 32
+S3 = 32
+S4 = 32
+H1 = 148736594-370455131
+H2 = 621025620-1240228083
+H3 = 1504827942-1530367889
+H4 = 1629521638-1833671031
+HeaderProtectionKey = MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+ContentPaddingAddition = 0-32
+RekeyAfterTime = 110-130
+RekeyTimeout = 5
+RejectAfterTime = 180
+KeepaliveTimeout = 10
+MaxHandshakeAttempts = 18
+RandomTrailers = true
+DisableCookies = yes
+
+[Peer]
+PublicKey = Cr8hWlKvtDt7nrvf+f0brNQQzabAqrjfBvas9pmowjo=
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = awg.example.com:443
+PersistentKeepalive = 25
 """
 
 OPENVPN_AUTH_USER_PASS_CONF = """
@@ -117,6 +152,33 @@ def test_parse_wireguard_accepts_amnezia_wg_v2_options():
     assert "itime" not in amnezia
 
 
+def test_parse_wireguard_preserves_amnezia_wg_v3_and_v31_options():
+    result = parse_wireguard(AMNEZIA_WG_V31_CONF, custom_name="amnezia-v31")
+    proxy = _parsed_proxy(result.yaml)
+    amnezia = proxy["amnezia-wg-option"]
+
+    assert proxy["name"] == "amnezia-v31"
+    assert proxy["server"] == "awg.example.com"
+    assert proxy["port"] == 443
+    assert amnezia["version"] == 3
+    assert amnezia["header-protection-key"] == "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+    assert amnezia["content-padding-addition"] == "0-32"
+    assert amnezia["rekey-after-time"] == "110-130"
+    assert amnezia["rekey-timeout"] == 5
+    assert amnezia["reject-after-time"] == 180
+    assert amnezia["keepalive-timeout"] == 10
+    assert amnezia["max-handshake-attempts"] == 18
+    assert amnezia["random-trailers"] is True
+    assert amnezia["disable-cookies"] is True
+
+
+def test_parse_wireguard_rejects_invalid_amnezia_wg_v31_boolean():
+    invalid = AMNEZIA_WG_V31_CONF.replace("RandomTrailers = true", "RandomTrailers = perhaps")
+
+    with pytest.raises(ValueError, match="Invalid AmneziaWG boolean option"):
+        parse_wireguard(invalid)
+
+
 def test_mihomo_parse_wireguard_route_returns_amnezia_wg_v2_yaml(tmp_path):
     cfg = tmp_path / "config.yaml"
     cfg.write_text("proxies: []\n", encoding="utf-8")
@@ -174,6 +236,28 @@ def test_generator_wireguard_proxy_insert_preserves_amnezia_wg_v2_options():
     assert proxy["amnezia-wg-option"]["h4"] == "32345-32350"
     assert proxy["amnezia-wg-option"]["i5"] == ""
     assert "generator-awg" in parsed["proxy-groups"][0]["proxies"]
+
+
+def test_generator_wireguard_proxy_insert_preserves_amnezia_wg_v31_options():
+    base_config = "proxies: []\nproxy-groups: []\n"
+    state = {
+        "proxies": [
+            {
+                "kind": "wireguard",
+                "name": "generator-awg-v31",
+                "config": AMNEZIA_WG_V31_CONF,
+            }
+        ],
+    }
+
+    result = insert_proxies_from_state(base_config, state)
+    proxy = yaml.safe_load(result)["proxies"][0]
+    amnezia = proxy["amnezia-wg-option"]
+
+    assert amnezia["version"] == 3
+    assert amnezia["header-protection-key"].endswith("=")
+    assert amnezia["random-trailers"] is True
+    assert amnezia["disable-cookies"] is True
 
 
 def test_parse_openvpn_accepts_auth_user_pass_and_aes256():

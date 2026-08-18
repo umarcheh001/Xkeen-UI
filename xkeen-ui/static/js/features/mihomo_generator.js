@@ -2335,7 +2335,7 @@ function initEngineToggle() {
             <option value="ss">Shadowsocks ссылка</option>
             <option value="hysteria2">Hysteria2 ссылка</option>
             <option value="provider">Подписка (proxy-provider)</option>
-            <option value="wireguard">WireGuard конфиг</option>
+            <option value="wireguard">WireGuard / AmneziaWG 3.x конфиг</option>
             <option value="openvpn">OpenVPN .ovpn</option>
             <option value="tailscale">Tailscale параметры</option>
             <option value="yaml">YAML блок proxy</option>
@@ -2479,9 +2479,9 @@ function initEngineToggle() {
               dataArea.rows = 3;
             } else if (t === "wireguard") {
               typeBadge.textContent = "Тип: wireguard";
-              dataLabel.textContent = "WireGuard конфиг";
+              dataLabel.textContent = "WireGuard / AmneziaWG 3.x конфиг";
               dataArea.placeholder = "[Interface]\nAddress = ...";
-              dataArea.title = "Вставьте содержимое WireGuard-конфига (.conf): [Interface]/[Peer] и т.д.";
+              dataArea.title = "Вставьте содержимое WireGuard / AmneziaWG 3.x конфига (.conf): [Interface]/[Peer] и т.д.";
               dataArea.rows = 6;
             } else if (t === "openvpn") {
               typeBadge.textContent = "Тип: openvpn";
