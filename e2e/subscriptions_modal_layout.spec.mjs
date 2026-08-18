@@ -945,7 +945,7 @@ test('subscriptions advanced settings keep a consistent inner gutter', async ({ 
   expect(spacing.gridBottom).toBeGreaterThanOrEqual(12);
 });
 
-test('subscriptions form uses icon-only actions and themed advanced controls', async ({ page }) => {
+test('subscriptions form uses icon-only actions, visible switches, and themed advanced controls', async ({ page }) => {
   await page.route('**/api/xray/subscriptions', async (route) => {
     if (route.request().method() !== 'GET') {
       await route.fallback();
@@ -985,16 +985,16 @@ test('subscriptions form uses icon-only actions and themed advanced controls', a
         const input = document.getElementById(id);
         const label = input?.closest('.xk-sub-check');
         const labelRect = label?.getBoundingClientRect();
-        const inputRect = input?.getBoundingClientRect();
-        const iconRect = label?.querySelector('.xk-sub-check-icon')?.getBoundingClientRect();
+        const slider = label?.querySelector('.dt-switch-slider');
+        const sliderRect = slider?.getBoundingClientRect();
         return {
           id,
           label: label?.getAttribute('aria-label'),
           inputLabel: input?.getAttribute('aria-label'),
           text: String(label?.textContent || '').trim(),
-          icon: iconName(label),
-          inputOffset: inputRect && labelRect ? Math.round(inputRect.left - labelRect.left) : -1,
-          iconOffset: iconRect && labelRect ? Math.round(iconRect.left - labelRect.left) : -1,
+          inputOpacity: input ? window.getComputedStyle(input).opacity : '',
+          sliderOffset: sliderRect && labelRect ? Math.round(sliderRect.left - labelRect.left) : -1,
+          sliderWidth: sliderRect ? Math.round(sliderRect.width) : 0,
         };
       }),
       hasCaret: !!caret,
@@ -1008,14 +1008,14 @@ test('subscriptions form uses icon-only actions and themed advanced controls', a
     { id: 'outbounds-subscriptions-save-btn', label: 'Сохранить настройки', text: '', icon: 'save' },
   ]);
   expect(contract.checks).toEqual([
-    expect.objectContaining({ id: 'outbounds-subscriptions-enabled', label: 'Авто', inputLabel: 'Авто', text: '', icon: 'refresh' }),
-    expect.objectContaining({ id: 'outbounds-subscriptions-ping', label: 'Пинг', inputLabel: 'Пинг', text: '', icon: 'ping' }),
-    expect.objectContaining({ id: 'outbounds-subscriptions-refresh-now', label: 'Обновить', inputLabel: 'Обновить', text: '', icon: 'download' }),
-    expect.objectContaining({ id: 'outbounds-subscriptions-routing-auto-rule', label: 'Служебный пул', inputLabel: 'Служебный пул', text: '', icon: 'pool' }),
+    expect.objectContaining({ id: 'outbounds-subscriptions-enabled', label: 'Авто', inputLabel: 'Авто', text: 'Автообн.', inputOpacity: '0' }),
+    expect.objectContaining({ id: 'outbounds-subscriptions-ping', label: 'Пинг', inputLabel: 'Пинг', text: 'Пинг', inputOpacity: '0' }),
+    expect.objectContaining({ id: 'outbounds-subscriptions-refresh-now', label: 'Обновить', inputLabel: 'Обновить', text: 'Сразу', inputOpacity: '0' }),
+    expect.objectContaining({ id: 'outbounds-subscriptions-routing-auto-rule', label: 'Служебный пул', inputLabel: 'Служебный пул', text: 'Pool', inputOpacity: '0' }),
   ]);
   for (const check of contract.checks) {
-    expect(check.inputOffset).toBeGreaterThanOrEqual(9);
-    expect(check.iconOffset).toBeGreaterThan(check.inputOffset + 20);
+    expect(check.sliderOffset).toBeGreaterThanOrEqual(9);
+    expect(check.sliderWidth).toBeGreaterThanOrEqual(30);
   }
   expect(contract.hasCaret).toBe(true);
   expect(contract.advancedOpen).toBe(true);
@@ -1060,12 +1060,20 @@ test('subscriptions routing controls stay compact and balancers wrap as tiles', 
     const modeLabelRect = modeLabel?.getBoundingClientRect();
     const cardsMeta = cards.map((card) => {
       const cardRect = card.getBoundingClientRect();
-      const checkRect = card.querySelector('input')?.getBoundingClientRect();
+      const input = card.querySelector('input');
+      const checkRect = input?.getBoundingClientRect();
       const copyRect = card.querySelector('.xk-sub-balancer-copy')?.getBoundingClientRect();
+      const inputStyle = input ? window.getComputedStyle(input) : null;
+      const cardStyle = window.getComputedStyle(card);
       return {
         left: Math.round(cardRect.left),
         width: Math.round(cardRect.width),
         checkboxTop: checkRect && copyRect ? Math.round(checkRect.top - copyRect.top) : -99,
+        checked: !!input?.checked,
+        checkboxOpacity: inputStyle ? inputStyle.opacity : '',
+        checkboxWidth: checkRect ? Math.round(checkRect.width) : 0,
+        checkboxBackground: inputStyle ? inputStyle.backgroundColor : '',
+        cardBackground: cardStyle.backgroundColor,
       };
     });
     return {
@@ -1085,6 +1093,14 @@ test('subscriptions routing controls stay compact and balancers wrap as tiles', 
   expect(layout.columns).toBeGreaterThanOrEqual(2);
   expect(layout.cards.every((card) => card.width <= 282)).toBe(true);
   expect(layout.cards.every((card) => card.checkboxTop >= 0 && card.checkboxTop <= 6)).toBe(true);
+  expect(layout.cards.every((card) => card.checkboxOpacity === '1')).toBe(true);
+  expect(layout.cards.every((card) => card.checkboxWidth >= 16)).toBe(true);
+  const selectedCards = layout.cards.filter((card) => card.checked);
+  const unselectedCards = layout.cards.filter((card) => !card.checked);
+  expect(selectedCards.length).toBe(2);
+  expect(unselectedCards.length).toBeGreaterThan(0);
+  expect(selectedCards[0].checkboxBackground).not.toBe(unselectedCards[0].checkboxBackground);
+  expect(selectedCards[0].cardBackground).not.toBe(unselectedCards[0].cardBackground);
 });
 
 test('subscriptions diagnostics collapses and uses Operator controls', async ({ page }) => {
@@ -1252,22 +1268,25 @@ test('subscriptions modal checkboxes use the Operator accent in both themes', as
 
   await openSubscriptionsModal(page);
 
-  const readTheme = async (theme) => page.evaluate((nextTheme) => {
+  const readTheme = async (theme) => page.evaluate(async (nextTheme) => {
     document.documentElement.dataset.theme = nextTheme;
     const input = document.querySelector('#outbounds-subscriptions-enabled');
     const label = input ? input.closest('.xk-sub-check') : null;
+    const slider = label ? label.querySelector('.dt-switch-slider') : null;
+    if (slider) slider.style.transition = 'none';
+    await new Promise((resolve) => requestAnimationFrame(resolve));
     const bodyStyle = window.getComputedStyle(document.body);
     const inputStyle = input ? window.getComputedStyle(input) : null;
     const labelStyle = label ? window.getComputedStyle(label) : null;
+    const sliderStyle = slider ? window.getComputedStyle(slider) : null;
     const swatch = document.createElement('span');
     swatch.style.backgroundColor = bodyStyle.getPropertyValue('--op-accent').trim();
     document.body.appendChild(swatch);
     const resolvedAccent = window.getComputedStyle(swatch).backgroundColor;
     swatch.remove();
     return {
-      appearance: inputStyle ? inputStyle.appearance : '',
-      inputBackground: inputStyle ? inputStyle.backgroundColor : '',
-      inputBorder: inputStyle ? inputStyle.borderTopColor : '',
+      inputOpacity: inputStyle ? inputStyle.opacity : '',
+      sliderBackground: sliderStyle ? sliderStyle.backgroundColor : '',
       labelBackground: labelStyle ? labelStyle.backgroundColor : '',
       resolvedAccent,
     };
@@ -1277,9 +1296,8 @@ test('subscriptions modal checkboxes use the Operator accent in both themes', as
   const light = await readTheme('light');
 
   for (const state of [dark, light]) {
-    expect(state.appearance).toBe('none');
-    expect(state.inputBackground).toBe(state.resolvedAccent);
-    expect(state.inputBorder).toBe(state.resolvedAccent);
+    expect(state.inputOpacity).toBe('0');
+    expect(state.sliderBackground).toBe(state.resolvedAccent);
     expect(state.labelBackground).not.toBe('rgba(0, 0, 0, 0)');
   }
   expect(dark.resolvedAccent).not.toBe(light.resolvedAccent);

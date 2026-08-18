@@ -12,6 +12,7 @@ def _read(rel_path: str) -> str:
 
 def test_xray_subscription_form_exposes_regex_filters_and_payload_fields():
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
+    operator_styles_src = _read("xkeen-ui/static/panel-operator.css")
 
     assert "nameFilter: 'outbounds-subscriptions-name-filter'" in outbounds_src
     assert "typeFilter: 'outbounds-subscriptions-type-filter'" in outbounds_src
@@ -49,6 +50,12 @@ def test_xray_subscription_form_exposes_regex_filters_and_payload_fields():
     assert "function subsApplySubscriptionCopy(formState) {" in outbounds_src
     assert "function subsFilterSummary(sub) {" in outbounds_src
     assert "data.filtered_out_count" in outbounds_src
+    assert '.dt-switch.xk-sub-check > input[type="checkbox"]' in operator_styles_src
+    assert '.xk-sub-balancer-check > input[type="checkbox"]' in operator_styles_src
+    assert '.xk-sub-balancer-check:has(> input[type="checkbox"]:checked)' in operator_styles_src
+    assert 'opacity: 1;' in operator_styles_src.split(
+        '.xk-sub-balancer-check > input[type="checkbox"] {', 1
+    )[1].split('}', 1)[0]
 
 
 def test_outbounds_entware_mark_controls_are_wired_to_payloads():
