@@ -363,6 +363,9 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "if (delay <= 250) return 'is-good';" in outbounds_src
     assert "if (delay <= 650) return 'is-warning';" in outbounds_src
     assert "return 'is-bad';" in outbounds_src
+    assert "if (xrayDelayEntryIsStale(entry)) return 'is-stale';" in outbounds_src
+    assert "Последняя задержка: ${Math.round(delay)} мс${age} (устарела)." in outbounds_src
+    assert "const XRAY_DELAY_FRESHNESS_TTL_MS = 5 * 60 * 1000;" in outbounds_src
     assert "tone === 'check-failed' || tone === 'error'" in outbounds_src
     assert "xk-sub-pingall-spinner" in outbounds_src
     assert "xk-sub-pingall-glyph" in outbounds_src

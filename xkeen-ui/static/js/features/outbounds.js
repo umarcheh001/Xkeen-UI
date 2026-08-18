@@ -53,9 +53,11 @@ let outboundsModuleApi = null;
     let _xrayDelayHistoryOwner = null;
     let _xrayDelayHistoryTimer = 0;
     let _xrayDelayHistoryBound = false;
+    let _xrayDelayFreshnessTimer = 0;
 
     const XRAY_DELAY_HISTORY_HOVER_MS = 350;
     const XRAY_DELAY_HISTORY_LIMIT = 10;
+    const XRAY_DELAY_FRESHNESS_TTL_MS = 5 * 60 * 1000;
 
     const IDS = {
       fragmentSelect: 'outbounds-fragment-select',
@@ -1177,6 +1179,7 @@ let outboundsModuleApi = null;
         empty.textContent = 'Proxy-\u0443\u0437\u043b\u044b \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0438 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u044b.';
       }
       outboundsUpdatePingAllBtnState();
+      scheduleXrayDelayFreshnessRender();
 
       Array.from(listEl.querySelectorAll('.xk-outbounds-node-ping')).forEach((btn) => {
         btn.addEventListener('click', async (e) => {
@@ -6078,6 +6081,7 @@ let outboundsModuleApi = null;
       const status = String(entry && entry.status || '').trim().toLowerCase();
       if (status === 'error') return 'is-check-failed';
       if (Number.isFinite(delay) && delay >= 0) {
+        if (xrayDelayEntryIsStale(entry)) return 'is-stale';
         // Keep Xray latency semantics identical to Mihomo cards.
         if (delay <= 250) return 'is-good';
         if (delay <= 650) return 'is-warning';
@@ -6104,10 +6108,71 @@ let outboundsModuleApi = null;
       const delay = hasDelay ? Number(entry.delay_ms) : NaN;
       const status = String(entry && entry.status || '').trim().toLowerCase();
       if (Number.isFinite(delay) && delay >= 0) {
+        if (xrayDelayEntryIsStale(entry)) {
+          const checkedAt = xrayDelayCheckedAtMs(entry);
+          const age = checkedAt > 0 ? ` · ${xrayDelayAgeLabel(checkedAt)} назад` : '';
+          return `Последняя задержка: ${Math.round(delay)} мс${age} (устарела). Нажмите, чтобы проверить снова.`;
+        }
         return `${Math.round(delay)} мс · нажмите, чтобы проверить снова.`;
       }
       if (status === 'error') return 'Нет ответа. Нажмите, чтобы повторить.';
       return 'Задержка не измерена. Нажмите, чтобы проверить.';
+    }
+
+    function xrayDelayCheckedAtMs(entry) {
+      const raw = Number(entry && (entry.checked_at != null ? entry.checked_at : entry.checkedAt));
+      if (!Number.isFinite(raw) || raw <= 0) return 0;
+      return raw >= 1e12 ? raw : raw * 1000;
+    }
+
+    function xrayDelayEntryIsStale(entry, now = Date.now()) {
+      const checkedAt = xrayDelayCheckedAtMs(entry);
+      return checkedAt > 0 && Number(now) >= checkedAt + XRAY_DELAY_FRESHNESS_TTL_MS;
+    }
+
+    function xrayDelayAgeLabel(timestamp) {
+      const elapsed = Math.max(0, Date.now() - Number(timestamp || 0));
+      if (elapsed < 60 * 1000) return '<1м';
+      if (elapsed < 60 * 60 * 1000) return `${Math.floor(elapsed / (60 * 1000))}м`;
+      if (elapsed < 24 * 60 * 60 * 1000) return `${Math.floor(elapsed / (60 * 60 * 1000))}ч`;
+      return `${Math.floor(elapsed / (24 * 60 * 60 * 1000))}д`;
+    }
+
+    function xrayLatencyEntries() {
+      const entries = [];
+      const collect = (latency) => {
+        if (!latency || typeof latency !== 'object' || Array.isArray(latency)) return;
+        Object.values(latency).forEach((entry) => {
+          if (entry && typeof entry === 'object') entries.push(entry);
+        });
+      };
+      collect(_outboundsNodeLatency);
+      _subscriptions.forEach((sub) => collect(subsNodeLatencyMap(sub)));
+      return entries;
+    }
+
+    function scheduleXrayDelayFreshnessRender() {
+      if (_xrayDelayFreshnessTimer) window.clearTimeout(_xrayDelayFreshnessTimer);
+      _xrayDelayFreshnessTimer = 0;
+      const now = Date.now();
+      let nextExpiry = Number.POSITIVE_INFINITY;
+      xrayLatencyEntries().forEach((entry) => {
+        const delay = Number(entry && entry.delay_ms);
+        const checkedAt = xrayDelayCheckedAtMs(entry);
+        const expiry = checkedAt + XRAY_DELAY_FRESHNESS_TTL_MS;
+        if (Number.isFinite(delay) && delay >= 0 && checkedAt > 0 && expiry > now && expiry < nextExpiry) {
+          nextExpiry = expiry;
+        }
+      });
+      if (!Number.isFinite(nextExpiry)) return;
+      _xrayDelayFreshnessTimer = window.setTimeout(() => {
+        _xrayDelayFreshnessTimer = 0;
+        try { outboundsRenderNodeList(); } catch (e) {}
+        const modal = $(SUB_IDS.modal);
+        if (modal && !modal.classList.contains('hidden')) {
+          try { subsRenderNodeList(); } catch (e2) {}
+        }
+      }, Math.max(1, nextExpiry - now + 25));
     }
 
     function xrayDelayTone(delay) {
@@ -7369,6 +7434,7 @@ let outboundsModuleApi = null;
         empty.textContent = 'Нет совпадений по текущим фильтрам.';
       }
       empty.style.display = rows.length ? 'none' : 'block';
+      scheduleXrayDelayFreshnessRender();
 
       try { subsUpdatePingAllBtnState(); } catch (e) {}
 

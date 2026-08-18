@@ -739,6 +739,7 @@ test('Xray server cards do not duplicate a country flag from the provider name',
 });
 
 test('Xray latency values use the same color scale as Mihomo', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-05-03T03:09:37Z') });
   const nodes = buildDemoNodes().slice(0, 3);
   const subscription = buildDemoSubscription(nodes, {
     node_latency: {
@@ -774,6 +775,7 @@ test('Xray latency values use the same color scale as Mihomo', async ({ page }) 
 });
 
 test('Xray server cards use Mihomo-style latency icons, concise hints and history', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-05-03T03:09:37Z') });
   const nodes = buildDemoNodes().slice(0, 3);
   const checkedAt = 1777777777;
   const subscription = buildDemoSubscription(nodes, {
@@ -826,6 +828,72 @@ test('Xray server cards use Mihomo-style latency icons, concise hints and histor
   await expect(history).toContainText('180 мс');
   await expect(history).toContainText('240 мс');
   await expect(history.locator('.xk-xray-delay-history-row')).toHaveCount(2);
+});
+
+test('Xray latency stays visible but becomes muted after five minutes on cards and in subscriptions', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-08-18T20:00:00Z') });
+  const nodes = buildDemoNodes().slice(0, 1);
+  const checkedAt = Date.parse('2026-08-18T20:00:00Z') / 1000;
+  const nodeLatency = {
+    [nodes[0].key]: {
+      status: 'ok', delay_ms: 180, checked_at: checkedAt,
+      history: [{ status: 'ok', delay_ms: 180, checked_at: checkedAt }],
+    },
+  };
+  const subscription = buildDemoSubscription(nodes, { node_latency: nodeLatency });
+
+  await page.addInitScript(() => {
+    localStorage.setItem('xkeen.outbounds.fragment', '04_outbounds.json');
+  });
+  await page.route('**/api/outbounds/fragments', (route) => route.fulfill({
+    json: {
+      ok: true, dir: '/tmp/xray/configs', current: '04_outbounds.json',
+      items: [{ name: '04_outbounds.json' }],
+    },
+  }));
+  await page.route('**/api/outbounds**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({
+      json: {
+        ok: true,
+        file: '04_outbounds.json',
+        url: 'vless://demo@example.com:443?type=tcp&security=reality#demo',
+        config: { outbounds: [{ tag: 'proxy', protocol: 'vless' }] },
+      },
+    });
+  });
+  await page.route('**/api/xray/outbounds/nodes**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({ json: { ok: true, nodes, node_latency: nodeLatency } });
+  });
+  await page.route('**/api/xray/outbounds/active**', (route) => route.fulfill({
+    json: { ok: true, available: false, active: null, reason: 'no_match' },
+  }));
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({ json: { ok: true, subscriptions: [subscription] } });
+  });
+
+  await openOutboundsPanel(page);
+  const cardProbe = page.locator('#outbounds-nodes-list .xk-xray-node-probe');
+  await expect(cardProbe).toHaveText('180 мс');
+  await expect(cardProbe).toHaveAttribute('data-probe-tone', 'good');
+
+  await page.locator('#outbounds-subscriptions-btn').click();
+  await expect(page.locator('#outbounds-subscriptions-modal')).toBeVisible();
+  await page.locator('tr[data-sub-id="demo-sub"]').click();
+  const subscriptionProbe = page.locator('#outbounds-subscriptions-nodes-list .xk-xray-node-probe');
+  await expect(subscriptionProbe).toHaveText('180 мс');
+  await expect(subscriptionProbe).toHaveAttribute('data-probe-tone', 'good');
+
+  await page.clock.fastForward((5 * 60 * 1000) + 100);
+  await expect(cardProbe).toHaveText('180 мс');
+  await expect(cardProbe).toHaveAttribute('data-probe-tone', 'stale');
+  await expect(subscriptionProbe).toHaveText('180 мс');
+  await expect(subscriptionProbe).toHaveAttribute('data-probe-tone', 'stale');
+
+  const staleOpacity = await subscriptionProbe.evaluate((node) => window.getComputedStyle(node).opacity);
+  expect(Number(staleOpacity)).toBeLessThan(1);
 });
 
 test('subscriptions servers expand into a resized modal and keep compact actions', async ({ page }) => {

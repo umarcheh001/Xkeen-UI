@@ -12041,6 +12041,11 @@ body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-moda
 body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe[data-probe-tone="good"] { color: var(--op-success) !important; }
 body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe[data-probe-tone="warning"] { color: var(--op-warning) !important; }
 body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe[data-probe-tone="bad"] { color: var(--op-danger) !important; }
+body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe[data-probe-tone="stale"] {
+  color: var(--op-muted) !important;
+  font-weight: 600;
+  opacity: .68;
+}
 body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe[data-probe-tone="active-route"] { color: var(--op-warning) !important; }
 body.panel-page :is(.routing-side-card--outbounds, #outbounds-subscriptions-modal) .xk-xray-node-probe:is([data-probe-tone="check-failed"], [data-probe-tone="error"], [data-probe-tone="unavailable"]) {
   width: 24px;
