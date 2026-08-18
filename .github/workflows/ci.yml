@@ -17,6 +17,7 @@ concurrency:
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -49,9 +50,35 @@ jobs:
         run: node scripts/verify_frontend_build.mjs
 
       - name: Install Chromium for Mihomo local acceptance
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 15
+        env:
+          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
+        run: |
+          sudo tee /etc/apt/apt.conf.d/99xkeen-ci-timeouts >/dev/null <<'EOF'
+          Acquire::Retries "3";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          EOF
+
+          for attempt in 1 2 3; do
+            echo "Playwright Chromium install attempt ${attempt}/3"
+            if timeout --signal=TERM --kill-after=30s 4m \
+              npx playwright install --with-deps chromium; then
+              exit 0
+            else
+              rc=$?
+            fi
+
+            echo "Playwright install attempt ${attempt} failed (exit ${rc})."
+            if [ "$attempt" -eq 3 ]; then
+              exit "$rc"
+            fi
+
+            sleep $((attempt * 10))
+          done
 
       - name: Run Mihomo Clash local acceptance
+        timeout-minutes: 8
         run: >-
           npx playwright test
           e2e/mihomo_clash_groups.spec.mjs

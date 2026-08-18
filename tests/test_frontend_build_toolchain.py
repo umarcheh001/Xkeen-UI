@@ -81,6 +81,12 @@ def test_frontend_build_ci_and_status_docs_are_closed():
     assert 'npm ci' in workflow_text
     assert 'npm run frontend:build' in workflow_text
     assert 'verify_frontend_build.mjs' in workflow_text
+    assert 'timeout-minutes: 30' in workflow_text
+    assert 'PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT' in workflow_text
+    assert 'Acquire::https::Timeout "30"' in workflow_text
+    assert 'timeout-minutes: 15' in workflow_text
+    assert 'timeout --signal=TERM --kill-after=30s 4m' in workflow_text
+    assert 'for attempt in 1 2 3' in workflow_text
 
     readme_text = BUILD_WORKFLOW_DOC.read_text(encoding='utf-8')
     assert 'ci.yml' in readme_text

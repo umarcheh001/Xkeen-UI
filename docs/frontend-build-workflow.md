@@ -124,6 +124,7 @@ npm run frontend:verify
 ## Current CI and archive workflows
 
 - `.github/workflows/ci.yml` выполняет `npm ci`, `npm run frontend:build`, `python -m pytest -q` и `node scripts/verify_frontend_build.mjs`.
+- Установка Chromium для Playwright ограничена по времени, использует три попытки и короткие таймауты `apt`; весь CI job имеет верхний предел 30 минут, поэтому сбой внешнего зеркала не оставляет Action работающим бесконечно.
 - `.github/workflows/build-user-archive.yml` выполняет `npm ci`, `npm run frontend:build` и `node scripts/verify_frontend_build.mjs`.
 - Локальная полная проверка по-прежнему доступна через `npm run frontend:verify`.
 - CI и archive flow выровнены вокруг canonical `frontend:build`, который выполняет vendor sync, wrapper sync и stale-file pruning.
