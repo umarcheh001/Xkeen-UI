@@ -1030,6 +1030,10 @@ def create_mihomo_blueprint(
         data = request.get_json(silent=True) or {}
         content = data.get("content", "")
 
+        ok_yaml, _yaml_err = validate_yaml_syntax(content)
+        if not ok_yaml:
+            return _mihomo_yaml_invalid()
+
         try:
             # Сохраняем конфиг через mihomo_server_core, чтобы перед записью делался бэкап
             ensure_mihomo_layout()

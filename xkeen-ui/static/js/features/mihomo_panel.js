@@ -2067,11 +2067,15 @@ let mihomoPanelModuleApi = null;
       await clearRestartLogUi();
       await appendRestartLog('⏳ Запуск xkeen -restart (job)…\n');
 
-      // Backend endpoint: returns 202 + restart_job_id.
-      const res = await fetch('/api/mihomo/generate_apply', {
+      // This toolbar edits the active raw config.yaml. Do not send it through
+      // the generator endpoint: that endpoint also requires generator state
+      // (notably state.profile), which is not present on the routing editor.
+      // The raw config endpoint saves the exact editor contents and queues the
+      // same background xkeen restart job.
+      const res = await fetch('/api/mihomo-config?async=1', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ configOverride: content }),
+        body: JSON.stringify({ content, restart: true }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
