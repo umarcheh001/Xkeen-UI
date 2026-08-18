@@ -533,7 +533,33 @@ def test_proxy_groups_route_returns_versioned_normalized_payload():
     assert body["capabilities"]["proxy_groups"] is True
     assert body["capabilities"]["proxy_select"] is True
     assert body["telemetry"]["providers"]["size_bytes"] == 100
-    assert client.operations == ["proxies", "providers_proxies"]
+    assert sorted(client.operations) == ["providers_proxies", "proxies"]
+
+
+def test_proxy_groups_reads_independent_upstreams_concurrently():
+    import threading
+    import time
+
+    client = StubClient(
+        responses={
+            "proxies": MihomoClashJSONResponse(groups_payload(), 200, 2, 200),
+            "providers_proxies": MihomoClashJSONResponse({"providers": {}}, 200, 3, 100),
+        }
+    )
+    barrier = threading.Barrier(2)
+
+    def request_json(operation):
+        client.operations.append(operation)
+        barrier.wait(timeout=0.5)
+        time.sleep(0.01)
+        return client.responses[operation]
+
+    client.request_json = request_json
+    response = make_app(ready_discovery(), client).test_client().get(
+        "/api/mihomo/clash/proxy-groups"
+    )
+    assert response.status_code == 200
+    assert sorted(client.operations) == ["providers_proxies", "proxies"]
 
 
 def test_rules_and_providers_routes_return_safe_versioned_dtos():

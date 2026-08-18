@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -355,6 +356,37 @@ def _fallback_provider_specs(text: str) -> dict[str, str]:
     return specs
 
 
+def _duration_seconds(value: Any) -> int | None:
+    """Normalize Mihomo duration scalars without exposing config text."""
+
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        seconds = int(value)
+    else:
+        match = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*(ms|s|m|h)?\s*", str(value), re.IGNORECASE)
+        if not match:
+            return None
+        multiplier = {"ms": 0.001, "s": 1, "m": 60, "h": 3600}.get(
+            str(match.group(2) or "s").lower(), 1
+        )
+        seconds = int(float(match.group(1)) * multiplier)
+    return max(1, min(86_400, seconds)) if seconds > 0 else None
+
+
+def _healthcheck_interval(spec: Any) -> int | None:
+    if not isinstance(spec, Mapping):
+        return None
+    health = spec.get("health-check")
+    if not isinstance(health, Mapping):
+        health = spec.get("healthCheck")
+    if isinstance(health, Mapping):
+        interval = _duration_seconds(health.get("interval"))
+        if interval:
+            return interval
+    return _duration_seconds(spec.get("interval"))
+
+
 def _load_proxy_transport_index(config_file: str, mihomo_root: str) -> dict[str, Any]:
     """Read only display-safe proxy fields from the active config/provider cache."""
     try:
@@ -378,6 +410,7 @@ def _load_proxy_transport_index(config_file: str, mihomo_root: str) -> dict[str,
                 local[str(raw.get("name")).strip()] = _proxy_transport_details(raw)
 
     providers: dict[str, Any] = {}
+    provider_intervals: dict[str, int] = {}
     configured: Mapping[str, Any] = config.get("proxy-providers") if isinstance(config, Mapping) else {}
     if not isinstance(configured, Mapping):
         configured = {}
@@ -389,6 +422,9 @@ def _load_proxy_transport_index(config_file: str, mihomo_root: str) -> dict[str,
             if not isinstance(spec, Mapping):
                 spec = {}
             provider_name_text = str(provider_name)
+            interval = _healthcheck_interval(spec)
+            if interval:
+                provider_intervals[provider_name_text] = interval
             configured_path = str(spec.get("path") or fallback_specs.get(provider_name_text) or "").strip()
             path_candidates = [configured_path] if configured_path else []
             # Mihomo's default HTTP-provider cache location. It is also the
@@ -430,7 +466,23 @@ def _load_proxy_transport_index(config_file: str, mihomo_root: str) -> dict[str,
                     providers[provider_name_text] = provider_rows
             except Exception:
                 continue
-    return {"local": local, "providers": providers}
+    group_intervals: dict[str, int] = {}
+    if isinstance(config, Mapping):
+        raw_groups = config.get("proxy-groups")
+        if isinstance(raw_groups, list):
+            for raw_group in raw_groups:
+                if not isinstance(raw_group, Mapping):
+                    continue
+                group_name = str(raw_group.get("name") or "").strip()
+                interval = _healthcheck_interval(raw_group)
+                if group_name and interval:
+                    group_intervals[group_name] = interval
+    return {
+        "local": local,
+        "providers": providers,
+        "provider_intervals": provider_intervals,
+        "group_intervals": group_intervals,
+    }
 
 
 def _read_action_body() -> Mapping[str, Any] | None:
@@ -747,8 +799,23 @@ def create_mihomo_clash_blueprint(
         if unavailable:
             return unavailable
         try:
-            proxies = client.request_json("proxies")
-            providers = client.request_json("providers_proxies")
+            # These are independent read-only snapshots. Use separate clients
+            # so TCP/Unix connections are never shared across worker threads.
+            discovery = discovery_factory(mihomo_config_file, root)
+            if discovery.target is None:
+                return error_response(
+                    "Mihomo controller не настроен или заблокирован.",
+                    503,
+                    ok=False,
+                    code="mihomo_clash_target_unavailable",
+                    retryable=False,
+                )
+            with ThreadPoolExecutor(max_workers=2, thread_name_prefix="mihomo-groups") as executor:
+                proxies_future = executor.submit(client.request_json, "proxies")
+                providers_client = client_factory(discovery.target)
+                providers_future = executor.submit(providers_client.request_json, "providers_proxies")
+                proxies = proxies_future.result()
+                providers = providers_future.result()
         except MihomoClashClientError as exc:
             return _safe_client_error(exc)
         except Exception:

@@ -108,6 +108,17 @@ DEFAULTS: Dict[str, Any] = {
         "collapsedGroups": {},
         # The browser sends only an allow-listed preset id, never a custom URL.
         "latencyPreset": "auto",
+        # Keep point-in-time latency useful without presenting it as live.
+        # ``auto`` follows the provider/group health-check interval exposed by
+        # the safe Clash DTO and falls back to five minutes.
+        "latencyFreshness": "auto",
+        # Router-safe per-node probing remains the default. Operators can opt
+        # into Mihomo's one-request group endpoint for large groups.
+        "latencyTestMode": "safe",
+        # Preserve the long-standing Xkeen colours while making both cutoffs
+        # adjustable from the UI settings panel.
+        "latencyLowMs": 250,
+        "latencyMediumMs": 650,
     },
 }
 
@@ -185,6 +196,10 @@ def _canonical_empty() -> Dict[str, Any]:
             "proxySortOrder": str(DEFAULTS["mihomo"]["proxySortOrder"]),
             "collapsedGroups": {},
             "latencyPreset": str(DEFAULTS["mihomo"]["latencyPreset"]),
+            "latencyFreshness": str(DEFAULTS["mihomo"]["latencyFreshness"]),
+            "latencyTestMode": str(DEFAULTS["mihomo"]["latencyTestMode"]),
+            "latencyLowMs": int(DEFAULTS["mihomo"]["latencyLowMs"]),
+            "latencyMediumMs": int(DEFAULTS["mihomo"]["latencyMediumMs"]),
         },
     }
 
@@ -569,6 +584,40 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 rep.warnings.append({"path": "mihomo.latencyPreset", "warning": "invalid value; ignored"})
                 rep.changed = True
 
+        latency_freshness = mihomo_raw.get("latencyFreshness")
+        if latency_freshness is not None:
+            normalized_freshness = _as_lower_str(latency_freshness)
+            if normalized_freshness in {"auto", "5", "15", "30"}:
+                out["mihomo"]["latencyFreshness"] = normalized_freshness
+            else:
+                rep.warnings.append({"path": "mihomo.latencyFreshness", "warning": "invalid value; ignored"})
+                rep.changed = True
+
+        latency_test_mode = mihomo_raw.get("latencyTestMode")
+        if latency_test_mode is not None:
+            normalized_test_mode = _as_lower_str(latency_test_mode)
+            if normalized_test_mode in {"safe", "core"}:
+                out["mihomo"]["latencyTestMode"] = normalized_test_mode
+            else:
+                rep.warnings.append({"path": "mihomo.latencyTestMode", "warning": "invalid value; ignored"})
+                rep.changed = True
+
+        latency_low_ms = mihomo_raw.get("latencyLowMs")
+        if latency_low_ms is not None:
+            if _is_int(latency_low_ms) and 50 <= int(latency_low_ms) <= 5000:
+                out["mihomo"]["latencyLowMs"] = int(latency_low_ms)
+            else:
+                rep.warnings.append({"path": "mihomo.latencyLowMs", "warning": "invalid value; ignored"})
+                rep.changed = True
+
+        latency_medium_ms = mihomo_raw.get("latencyMediumMs")
+        if latency_medium_ms is not None:
+            if _is_int(latency_medium_ms) and 100 <= int(latency_medium_ms) <= 10000:
+                out["mihomo"]["latencyMediumMs"] = int(latency_medium_ms)
+            else:
+                rep.warnings.append({"path": "mihomo.latencyMediumMs", "warning": "invalid value; ignored"})
+                rep.changed = True
+
         for k in mihomo_raw.keys():
             if k not in (
                 "hideUnavailable",
@@ -576,6 +625,10 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 "proxySortOrder",
                 "collapsedGroups",
                 "latencyPreset",
+                "latencyFreshness",
+                "latencyTestMode",
+                "latencyLowMs",
+                "latencyMediumMs",
             ):
                 rep.warnings.append({"path": f"mihomo.{k}", "warning": "unknown key dropped"})
                 rep.changed = True
@@ -836,6 +889,34 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 else:
                     rep.errors.append({"path": "mihomo.latencyPreset", "error": "unsupported preset"})
 
+            if "latencyFreshness" in mihomo_patch:
+                v = _as_lower_str(mihomo_patch.get("latencyFreshness"))
+                if v in {"auto", "5", "15", "30"}:
+                    p["latencyFreshness"] = v
+                else:
+                    rep.errors.append({"path": "mihomo.latencyFreshness", "error": "unsupported freshness"})
+
+            if "latencyTestMode" in mihomo_patch:
+                v = _as_lower_str(mihomo_patch.get("latencyTestMode"))
+                if v in {"safe", "core"}:
+                    p["latencyTestMode"] = v
+                else:
+                    rep.errors.append({"path": "mihomo.latencyTestMode", "error": "unsupported test mode"})
+
+            if "latencyLowMs" in mihomo_patch:
+                v = mihomo_patch.get("latencyLowMs")
+                if _is_int(v) and 50 <= int(v) <= 5000:
+                    p["latencyLowMs"] = int(v)
+                else:
+                    rep.errors.append({"path": "mihomo.latencyLowMs", "error": "must be int 50..5000"})
+
+            if "latencyMediumMs" in mihomo_patch:
+                v = mihomo_patch.get("latencyMediumMs")
+                if _is_int(v) and 100 <= int(v) <= 10000:
+                    p["latencyMediumMs"] = int(v)
+                else:
+                    rep.errors.append({"path": "mihomo.latencyMediumMs", "error": "must be int 100..10000"})
+
             for k in mihomo_patch.keys():
                 if k not in (
                     "hideUnavailable",
@@ -843,6 +924,10 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                     "proxySortOrder",
                     "collapsedGroups",
                     "latencyPreset",
+                    "latencyFreshness",
+                    "latencyTestMode",
+                    "latencyLowMs",
+                    "latencyMediumMs",
                 ):
                     rep.warnings.append({"path": f"mihomo.{k}", "warning": "unknown key dropped"})
 

@@ -828,6 +828,50 @@ import { getFeatureApi } from '../features/feature_access.js';
           3,
           'Порог таймаутов сохранён.'
         ),
+        createServerSelect(
+          'mihomo-latency-freshness',
+          'mihomo.latencyFreshness',
+          'Актуальность задержки',
+          'Старое число остаётся видимым приглушённо. Авто использует интервал health-check provider/group и минимум 5 минут.',
+          [
+            { value: 'auto', label: 'Авто (health-check)' },
+            { value: '5', label: '5 минут' },
+            { value: '15', label: '15 минут' },
+            { value: '30', label: '30 минут' },
+          ],
+          'Срок актуальности задержки сохранён.'
+        ),
+        createServerSelect(
+          'mihomo-latency-test-mode',
+          'mihomo.latencyTestMode',
+          'Тест группы',
+          'Безопасный режим проверяет конечные узлы по одному. Core batch делегирует раскрытую группу одному запросу Mihomo.',
+          [
+            { value: 'safe', label: 'Безопасный для роутера' },
+            { value: 'core', label: 'Core batch' },
+          ],
+          'Режим теста группы сохранён.'
+        ),
+        createServerNumber(
+          'mihomo-latency-low',
+          'mihomo.latencyLowMs',
+          'Быстрая задержка, мс',
+          'Верхняя граница зелёного значения.',
+          50,
+          5000,
+          250,
+          'Зелёный порог задержки сохранён.'
+        ),
+        createServerNumber(
+          'mihomo-latency-medium',
+          'mihomo.latencyMediumMs',
+          'Средняя задержка, мс',
+          'Верхняя граница жёлтого значения; должна быть выше зелёного порога.',
+          100,
+          10000,
+          650,
+          'Жёлтый порог задержки сохранён.'
+        ),
       ],
     },
     {

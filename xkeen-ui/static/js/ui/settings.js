@@ -50,6 +50,10 @@
       proxySortOrder: 'config',
       collapsedGroups: {},
       latencyPreset: 'auto',
+      latencyFreshness: 'auto',
+      latencyTestMode: 'safe',
+      latencyLowMs: 250,
+      latencyMediumMs: 650,
     },
   };
 

@@ -10,6 +10,10 @@ def test_ui_settings_defaults_mihomo_timeout_hiding_to_disabled(tmp_path):
         "proxySortOrder": "config",
         "collapsedGroups": {},
         "latencyPreset": "auto",
+        "latencyFreshness": "auto",
+        "latencyTestMode": "safe",
+        "latencyLowMs": 250,
+        "latencyMediumMs": 650,
     }
 
 
@@ -25,6 +29,10 @@ def test_ui_settings_persists_mihomo_timeout_hiding_preferences(tmp_path):
         "proxySortOrder": "config",
         "collapsedGroups": {},
         "latencyPreset": "auto",
+        "latencyFreshness": "auto",
+        "latencyTestMode": "safe",
+        "latencyLowMs": 250,
+        "latencyMediumMs": 650,
     }
     assert ui_settings.load_settings(ui_state_dir=str(tmp_path))["mihomo"] == saved["mihomo"]
 
@@ -40,6 +48,10 @@ def test_ui_settings_persists_mihomo_timeout_hiding_preferences(tmp_path):
         "proxySortOrder": "config",
         "collapsedGroups": {},
         "latencyPreset": "auto",
+        "latencyFreshness": "auto",
+        "latencyTestMode": "safe",
+        "latencyLowMs": 250,
+        "latencyMediumMs": 650,
     }
 
 
@@ -76,6 +88,10 @@ def test_ui_settings_rejects_invalid_mihomo_timeout_hiding_preferences(tmp_path)
         "proxySortOrder": "config",
         "collapsedGroups": {},
         "latencyPreset": "auto",
+        "latencyFreshness": "auto",
+        "latencyTestMode": "safe",
+        "latencyLowMs": 250,
+        "latencyMediumMs": 650,
     }
 
 
@@ -98,6 +114,10 @@ def test_ui_settings_does_not_persist_mihomo_timeout_history(tmp_path):
         "proxySortOrder": "config",
         "collapsedGroups": {},
         "latencyPreset": "auto",
+        "latencyFreshness": "auto",
+        "latencyTestMode": "safe",
+        "latencyLowMs": 250,
+        "latencyMediumMs": 650,
     }
 
 
@@ -108,6 +128,10 @@ def test_ui_settings_persists_bounded_mihomo_workspace_preferences(tmp_path):
                 "proxySortOrder": "delay",
                 "collapsedGroups": {"AUTO": True, "Fallback": False},
                 "latencyPreset": "cloudflare",
+                "latencyFreshness": "15",
+                "latencyTestMode": "core",
+                "latencyLowMs": 400,
+                "latencyMediumMs": 800,
             }
         },
         ui_state_dir=str(tmp_path),
@@ -117,12 +141,20 @@ def test_ui_settings_persists_bounded_mihomo_workspace_preferences(tmp_path):
     assert patched["mihomo"]["proxySortOrder"] == "delay"
     assert patched["mihomo"]["collapsedGroups"] == {"AUTO": True, "Fallback": False}
     assert patched["mihomo"]["latencyPreset"] == "cloudflare"
+    assert patched["mihomo"]["latencyFreshness"] == "15"
+    assert patched["mihomo"]["latencyTestMode"] == "core"
+    assert patched["mihomo"]["latencyLowMs"] == 400
+    assert patched["mihomo"]["latencyMediumMs"] == 800
 
 
 def test_ui_settings_rejects_arbitrary_latency_url_and_invalid_workspace_state(tmp_path):
     invalid = (
         ({"mihomo": {"latencyPreset": "https://router/private"}}, "mihomo.latencyPreset"),
         ({"mihomo": {"proxySortOrder": "random"}}, "mihomo.proxySortOrder"),
+        ({"mihomo": {"latencyFreshness": "forever"}}, "mihomo.latencyFreshness"),
+        ({"mihomo": {"latencyTestMode": "parallel"}}, "mihomo.latencyTestMode"),
+        ({"mihomo": {"latencyLowMs": 20}}, "mihomo.latencyLowMs"),
+        ({"mihomo": {"latencyMediumMs": 20}}, "mihomo.latencyMediumMs"),
         ({"mihomo": {"collapsedGroups": []}}, "mihomo.collapsedGroups"),
     )
     for patch, path in invalid:

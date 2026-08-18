@@ -277,6 +277,7 @@ def _node_dto(
     raw: Mapping[str, Any],
     provider_hints: Sequence[str] = (),
     proxy_details: Mapping[str, Any] | None = None,
+    healthcheck_interval_seconds: int | None = None,
 ) -> dict[str, Any]:
     explicit_provider = _text(raw.get("provider-name"), 256)
     providers = _string_list(provider_hints, limit=32, item_limit=256)
@@ -312,6 +313,7 @@ def _node_dto(
         "provider_ambiguous": not explicit_provider and len(providers) > 1,
         "delay_ms": delay_history[-1]["delay_ms"] if delay_history else None,
         "delay_history": delay_history,
+        "healthcheck_interval_seconds": _optional_nonnegative_int(healthcheck_interval_seconds),
         "server": _text(detail_value("server"), 256),
         "port": _optional_nonnegative_int(detail_value("port")),
         "network": _text(detail_value("network"), 64),
@@ -341,6 +343,7 @@ def build_mihomo_clash_proxy_groups_dto(
         nodes_truncated = len(candidate_node_names) > MAX_GROUP_NODES
         node_names = candidate_node_names[:MAX_GROUP_NODES]
         nodes: list[dict[str, Any]] = []
+        provider_intervals = _mapping(_mapping(proxy_details).get("provider_intervals"))
         for node_name in node_names:
             raw_node = _mapping(proxies.get(node_name)) or provider_nodes.get(node_name, {})
             provider_hints = membership.get(node_name, [])
@@ -364,7 +367,23 @@ def build_mihomo_clash_proxy_groups_dto(
             detail = unique_candidates[0] if len(unique_candidates) == 1 else {}
             if not detail:
                 detail = _mapping(_mapping(proxy_details).get("local")).get(node_name, {})
-            nodes.append(_node_dto(node_name, raw_node, provider_hints, _mapping(detail)))
+            interval_candidates = [
+                _optional_nonnegative_int(provider_intervals.get(provider_name))
+                for provider_name in detail_keys
+            ]
+            interval_candidates = [value for value in interval_candidates if value]
+            healthcheck_interval = (
+                interval_candidates[0]
+                if interval_candidates and len(set(interval_candidates)) == 1
+                else None
+            )
+            nodes.append(_node_dto(
+                node_name,
+                raw_node,
+                provider_hints,
+                _mapping(detail),
+                healthcheck_interval_seconds=healthcheck_interval,
+            ))
 
         group_type = _text(group.get("type"), 64)
         normalized_group_type = group_type.lower()
@@ -388,6 +407,9 @@ def build_mihomo_clash_proxy_groups_dto(
             "selection_locked": selection_locked,
             "node_count": len(node_names),
             "nodes_truncated": nodes_truncated,
+            "healthcheck_interval_seconds": _optional_nonnegative_int(
+                _mapping(_mapping(proxy_details).get("group_intervals")).get(name)
+            ),
             "nodes": nodes,
         }
 

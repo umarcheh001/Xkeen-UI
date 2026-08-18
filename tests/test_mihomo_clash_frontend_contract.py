@@ -185,7 +185,10 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
         "MAX_BUSY_RETRIES = 2",
         "MAX_RATE_LIMIT_RETRIES = 10",
         "DELAY_BATCH_CADENCE_MS = 120",
-        "DELAY_FRESHNESS_TTL_MS = 5 * 60 * 1000",
+        "DEFAULT_DELAY_FRESHNESS_TTL_MS = 5 * 60 * 1000",
+        "measurementFreshnessTtlMs",
+        "latencyTestMode = 'safe'",
+        "coreGroupQueue",
         "consecutiveTimeouts = 3",
         "data-mihomo-group-unfix",
         "disconnect_affected",
@@ -198,7 +201,7 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
         "mihomo-clash-delay-result",
         "scheduleDelayFreshnessRender",
         "payloadLoadedAt = Date.now()",
-        "label: 'нет данных'",
+        "ageLabel: measurementAgeLabel",
         "Cloudflare fallback",
         "delayKey(groupName, name, provider = '')",
         "latestDelayKey(name, provider = '')",
@@ -385,7 +388,7 @@ def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
     assert "unavailable: 'server-off'" in groups
     assert "failed: 'alert'" in groups
     assert "unknown: 'bolt'" in groups
-    assert "stale: 'bolt'" in groups
+    assert "xk-mihomo-delay-age" in groups
     assert 'data-tooltip="Проверить задержку"' not in groups
     assert 'data-mihomo-group-toggle' not in groups
     assert 'data-tooltip="Иконка группы' not in groups
@@ -419,7 +422,7 @@ def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
     assert 'background: var(--op-accent-soft);' in css
     assert '[data-delay-tone="unavailable"]' in css
     assert "groupDelayQueue" not in groups
-    assert "scope: 'group'" not in groups
+    assert "scope: 'group'" in groups
     assert "fallbackItems" not in groups
     assert 'body.panel-page .xk-mihomo-node-probe:focus-visible' in css
     assert 'body.panel-page .xk-mihomo-delay-history-popover' in css

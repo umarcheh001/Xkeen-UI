@@ -21,6 +21,8 @@ def test_contextual_controls_are_not_duplicated_in_ui_settings():
     assert "'editor.engine'" not in settings_panel
     assert "'mihomo.proxySortOrder'" not in settings_panel
     assert "'mihomo.latencyPreset'" not in settings_panel
+    assert "'mihomo.latencyFreshness'" in settings_panel
+    assert "'mihomo.latencyTestMode'" in settings_panel
 
     assert 'id="mihomo-editor-engine-select"' in panel_template
     assert 'id="mihomo-clash-groups-sort"' in panel_template
@@ -34,4 +36,3 @@ def test_contextual_controls_keep_server_side_ui_settings_persistence():
     assert "await settingsApi.patch({ editor: { engine: _engine } });" in editor_engine
     assert "persistMihomoViewSettings({ proxySortOrder: sortMode });" in mihomo_groups
     assert "persistMihomoViewSettings({ latencyPreset });" in mihomo_groups
-

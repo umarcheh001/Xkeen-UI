@@ -164,6 +164,22 @@ def test_proxy_groups_dto_retains_order_and_provider_enrichment():
     assert auto["nodes"][1]["availability"] == "unavailable"
 
 
+def test_proxy_groups_dto_exposes_only_bounded_healthcheck_intervals():
+    from services.mihomo_clash_dto import build_mihomo_clash_proxy_groups_dto
+
+    dto = build_mihomo_clash_proxy_groups_dto(
+        fixture("proxies.json"),
+        fixture("providers-proxies.json"),
+        {
+            "provider_intervals": {"demo-provider": 900},
+            "group_intervals": {"AUTO": 300},
+        },
+    )
+    auto = dto["groups"][0]
+    assert auto["healthcheck_interval_seconds"] == 300
+    assert auto["nodes"][1]["healthcheck_interval_seconds"] == 900
+
+
 def test_proxy_groups_dto_bounds_and_sanitizes_delay_history():
     from services.mihomo_clash_dto import build_mihomo_clash_proxy_groups_dto
 
