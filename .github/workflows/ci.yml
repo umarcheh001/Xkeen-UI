@@ -62,8 +62,11 @@ jobs:
 
           for attempt in 1 2 3; do
             echo "Playwright Chromium install attempt ${attempt}/3"
-            if timeout --signal=TERM --kill-after=30s 4m \
-              npx playwright install --with-deps chromium; then
+            # Do not put a short hard timeout around --with-deps: terminating
+            # it midway through apt can leave its dpkg lock behind, making all
+            # retries fail. The step-level 15-minute timeout remains the
+            # overall guard.
+            if npx playwright install --with-deps chromium; then
               exit 0
             else
               rc=$?
