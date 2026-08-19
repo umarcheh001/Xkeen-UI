@@ -11,6 +11,14 @@ PYTHON_BIN="/opt/bin/python3"
 LOG_DIR="/opt/var/log"
 RUN_DIR="/opt/var/run"
 
+# Never reuse Entware's shared __pycache__. A power loss or interrupted package
+# upgrade can leave a stdlib .pyc truncated; Python then fails before the UI
+# process can start ("bad marshal data"). A private cache also keeps installer
+# and panel bytecode isolated from package-manager state.
+PYTHONPYCACHEPREFIX="${XKEEN_UI_PYTHONPYCACHEPREFIX:-/tmp/xkeen-ui-pycache}"
+export PYTHONPYCACHEPREFIX
+mkdir -p "$PYTHONPYCACHEPREFIX" 2>/dev/null || true
+
 is_our_ui_init_script() {
   _path="$1"
   [ -n "$_path" ] || return 1
@@ -798,11 +806,11 @@ cleanup_frontend_build_dir() {
 
   echo "[*] frontend-build cleanup: pruning stale generated files in $BUILD_DIR..."
 
-  CLEANUP_OUTPUT="$(
-    FRONTEND_BUILD_DIR="$BUILD_DIR" \
-    FRONTEND_BUILD_BRIDGE_MANIFEST="$BRIDGE_MANIFEST" \
-    FRONTEND_BUILD_RAW_MANIFEST="$RAW_MANIFEST" \
-    "$PYTHON_BIN" - <<'PY'
+  if CLEANUP_OUTPUT="$(
+      FRONTEND_BUILD_DIR="$BUILD_DIR" \
+      FRONTEND_BUILD_BRIDGE_MANIFEST="$BRIDGE_MANIFEST" \
+      FRONTEND_BUILD_RAW_MANIFEST="$RAW_MANIFEST" \
+      "$PYTHON_BIN" - <<'PY'
 import json
 from pathlib import Path
 import os
@@ -906,9 +914,11 @@ if deleted:
 if errors:
     print("errors=" + " | ".join(errors[:10]))
 PY
-  )"
-
-  CLEANUP_STATUS=$?
+  )"; then
+    CLEANUP_STATUS=0
+  else
+    CLEANUP_STATUS=$?
+  fi
   if [ "$CLEANUP_STATUS" -ne 0 ]; then
     echo "[!] frontend-build cleanup failed for $BUILD_DIR (exit $CLEANUP_STATUS). Keeping files as-is."
     return 0
@@ -1648,6 +1658,7 @@ PYTHON_BIN="/opt/bin/python3"
 RUN_SERVER="$UI_DIR/run_server.py"
 APP_PY="$UI_DIR/app.py"
 PANEL_PORT="__XKEEN_UI_PORT__"
+PYTHONPYCACHEPREFIX="${XKEEN_UI_PYTHONPYCACHEPREFIX:-/tmp/xkeen-ui-pycache}"
 
 LOG_DIR_DEFAULT="/opt/var/log/xkeen-ui"
 LOG_DIR="$LOG_DIR_DEFAULT"
@@ -1667,6 +1678,10 @@ start_service() {
   # PATH/LD_LIBRARY_PATH point at /opt/{bin,sbin,lib} and Python's native
   # extensions can dlopen() Entware libraries.
   [ -f "/opt/etc/profile" ] && . /opt/etc/profile >/dev/null 2>&1 || true
+  # Bypass potentially truncated Entware stdlib bytecode after interrupted
+  # upgrades. Keep the cache in a writable, panel-specific directory.
+  export PYTHONPYCACHEPREFIX
+  mkdir -p "$PYTHONPYCACHEPREFIX" 2>/dev/null || true
   case ":$PATH:" in
     *":/opt/bin:"*) ;;
     *) PATH="/opt/bin:/opt/sbin:$PATH"; export PATH ;;

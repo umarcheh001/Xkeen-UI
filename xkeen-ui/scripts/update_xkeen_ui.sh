@@ -125,6 +125,13 @@ if [ -z "$PY" ]; then
   exit 1
 fi
 
+# Keep helper imports away from Entware's shared __pycache__. Interrupted
+# package writes can leave stdlib .pyc files unreadable ("bad marshal data"),
+# which otherwise aborts the update before it can install the repaired UI.
+PYTHONPYCACHEPREFIX="${XKEEN_UI_PYTHONPYCACHEPREFIX:-/tmp/xkeen-ui-pycache}"
+export PYTHONPYCACHEPREFIX
+mkdir -p "$PYTHONPYCACHEPREFIX" 2>/dev/null || true
+
 # Persist the long-lived shell runner PID across helper Python processes.
 # DevTools status/lock reconciliation relies on this PID remaining stable even
 # while the script spawns short-lived JSON/progress helpers.

@@ -71,6 +71,35 @@ sh install.sh
 
 Установщик проверяет или устанавливает Python 3, Flask, WebSocket-зависимости, `lftp`, init-скрипт и при необходимости `xk-geodat`. Порт выбирается автоматически: `8088`, затем `8091`, затем диапазон `8100-8199`.
 
+### Восстановление после `bad marshal data`
+
+Ошибка вида `ValueError: bad marshal data` в `/opt/lib/python3.x/...` означает, что Python не может прочитать скомпилированный файл стандартной библиотеки (`.pyc`). Строка `frontend-build cleanup` перед traceback показывает только первый шаг установщика, которому понадобился новый процесс Python; frontend-файлы не являются причиной ошибки.
+
+Сначала проверьте запуск со свежим отдельным кэшем, не удаляя файлы Entware:
+
+```sh
+mkdir -p /tmp/xkeen-ui-pycache
+PYTHONPYCACHEPREFIX=/tmp/xkeen-ui-pycache \
+  /opt/bin/python3 -c 'import json, re; print("Python OK")'
+```
+
+Если команда напечатала `Python OK`, временно поднимите панель так:
+
+```sh
+PYTHONPYCACHEPREFIX=/tmp/xkeen-ui-pycache \
+  /opt/etc/init.d/S99xkeen-ui-umarcheh001 restart
+```
+
+Для старого init-скрипта можно сохранить обход до переустановки панели:
+
+```sh
+printf "\nexport PYTHONPYCACHEPREFIX='/tmp/xkeen-ui-pycache'\n" \
+  >> /opt/etc/xkeen-ui/devtools.env
+/opt/etc/init.d/S99xkeen-ui-umarcheh001 restart
+```
+
+После установки версии с исправлением отдельный кэш включается самим установщиком, self-update runner и init-скриптом. Если даже проверочная команда с `PYTHONPYCACHEPREFIX` падает, повреждён уже не только кэш: проверьте ошибки накопителя/файловой системы и переустановите пакет стандартной библиотеки Python через Entware. Перед продолжением сохраните `/opt/etc/xkeen-ui`, пользовательские конфиги Xray и Mihomo.
+
 ### Безопасность Mihomo controller
 
 Новые встроенные шаблоны используют `external-controller-unix: ./mihomo-api.sock`: Clash API не открывается в LAN, а веб-панель обращается к socket через same-origin backend facade. Существующий `config.yaml` установщик **не переписывает**, чтобы обновление панели не меняло пользовательский YAML без согласия.
