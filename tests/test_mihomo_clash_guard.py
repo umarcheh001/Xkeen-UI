@@ -9,9 +9,9 @@ from services.mihomo_clash_guard import (
 
 def test_default_delay_policy_protects_low_power_router_batches():
     policy = MIHOMO_CLASH_ACTION_POLICIES["delay"]
-    assert policy.max_global_concurrent == 1
-    assert policy.max_subject_concurrent == 1
-    assert policy.max_calls_per_window == 48
+    assert policy.max_global_concurrent == 5
+    assert policy.max_subject_concurrent == 5
+    assert policy.max_calls_per_window == 120
 
 
 def test_action_guard_limits_same_subject_concurrency_and_releases_lease():
@@ -32,17 +32,21 @@ def test_action_guard_limits_same_subject_concurrency_and_releases_lease():
     third.release()
 
 
-def test_delay_guard_allows_one_router_safe_probe_at_a_time():
+def test_delay_guard_allows_only_one_zashboard_sized_batch_at_a_time():
     guard = MihomoClashActionGuard()
-    lease, rejected = guard.try_acquire("delay", "operator")
-    assert lease is not None
-    assert rejected is None
+    leases = []
+    for _ in range(5):
+        lease, rejected = guard.try_acquire("delay", "operator")
+        assert lease is not None
+        assert rejected is None
+        leases.append(lease)
 
-    second, rejected = guard.try_acquire("delay", "operator")
-    assert second is None
+    overflow, rejected = guard.try_acquire("delay", "operator")
+    assert overflow is None
     assert rejected is not None
     assert rejected.code == "action_busy"
-    lease.release()
+    for lease in leases:
+        lease.release()
 
 
 def test_action_guard_enforces_global_concurrency_across_subjects():

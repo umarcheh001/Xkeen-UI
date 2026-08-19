@@ -45,7 +45,6 @@ class MihomoClashEndpoint:
 class MihomoClashDelayPreset:
     url: str
     timeout_ms: int
-    expected: str
 
 
 MIHOMO_CLASH_DELAY_PRESETS: Mapping[str, MihomoClashDelayPreset] = MappingProxyType(
@@ -56,17 +55,14 @@ MIHOMO_CLASH_DELAY_PRESETS: Mapping[str, MihomoClashDelayPreset] = MappingProxyT
         "auto": MihomoClashDelayPreset(
             "https://www.gstatic.com/generate_204",
             5000,
-            "204",
         ),
         "google": MihomoClashDelayPreset(
             "https://www.gstatic.com/generate_204",
             5000,
-            "204",
         ),
         "cloudflare": MihomoClashDelayPreset(
             "https://cp.cloudflare.com/",
             5000,
-            "204",
         ),
     }
 )
@@ -292,9 +288,10 @@ class MihomoClashClient:
     ) -> MihomoClashJSONResponse:
         """Run one allow-listed proxy/group delay probe.
 
-        The caller supplies only a preset id.  URL, timeout and expected HTTP
-        status remain backend constants and can never be turned into an SSRF
-        primitive by a browser request.
+        The caller supplies only a preset id. URL and timeout remain backend
+        constants and can never be turned into an SSRF primitive by a browser
+        request. Like Zashboard, an explicit ``expected`` status is omitted so
+        Mihomo applies its normal delay-probe response handling.
         """
 
         normalized_scope = str(scope or "").strip().lower()
@@ -319,7 +316,6 @@ class MihomoClashClient:
             {
                 "url": delay_preset.url,
                 "timeout": delay_preset.timeout_ms,
-                "expected": delay_preset.expected,
             }
         )
         response = self._request(
@@ -353,7 +349,6 @@ class MihomoClashClient:
             {
                 "url": delay_preset.url,
                 "timeout": delay_preset.timeout_ms,
-                "expected": delay_preset.expected,
             }
         )
         return self._reject_zero_delay(

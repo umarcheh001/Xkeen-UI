@@ -243,7 +243,7 @@ function renderStatus(state, payload = null) {
     setText('mihomo-clash-assistant-button', 'Включить API');
   } else if (nextAssistantKind === 'security') {
     setText('mihomo-clash-assistant-title', 'Mihomo API нужно защитить');
-    setText('mihomo-clash-assistant-message', 'Панель автоматически перенесёт API с открытого LAN-порта на локальный Unix socket с backup и проверкой.');
+    setText('mihomo-clash-assistant-message', 'Панель автоматически перенесёт API с открытого LAN-порта на локальный TCP с новым secret, backup и проверкой.');
     setText('mihomo-clash-assistant-button', 'Защитить автоматически');
   }
   setText('mihomo-clash-assistant-value', 'Ваши группы, узлы и подписки не изменятся');
@@ -312,7 +312,7 @@ async function togglePanelMode() {
 }
 
 function migrationTransport() {
-  return String(byId('mihomo-clash-migration-transport')?.value || 'unix');
+  return String(byId('mihomo-clash-migration-transport')?.value || 'tcp-loopback');
 }
 
 function setMigrationStatus(message, error = false) {

@@ -182,7 +182,11 @@ def build_switch_preview(text: str, state: Mapping[str, Any], target: str) -> Pa
     normalized = str(target or "").strip().lower()
     panel_name = str(state.get("panel_name") or panel_name_from_config(text))
     if normalized == "xkeen":
-        content = build_safe_mihomo_config(text, prefer_unix=True).content
+        # Keep the protected Xkeen facade on loopback TCP. This preserves the
+        # delay-probe behaviour of browser dashboards on embedded Mihomo builds
+        # while still closing LAN access and generating a private credential at
+        # apply time.
+        content = build_safe_mihomo_config(text, prefer_unix=False).content
         return PanelSwitchPreview("xkeen", content, panel_name)
     if normalized != "external":
         raise ValueError("panel_switch_target_invalid")
@@ -196,6 +200,14 @@ def build_switch_preview(text: str, state: Mapping[str, Any], target: str) -> Pa
 def public_status(text: str, state: Mapping[str, Any]) -> dict[str, Any]:
     directives = controller_directives(text)
     if any(re.match(r"^[ \t]*external-controller-unix[ \t]*:", line) for line in directives):
+        mode = "xkeen"
+    elif (
+        str(state.get("mode") or "") == "xkeen"
+        and has_tcp_controller(text)
+        and not has_browser_dashboard_controller(text)
+    ):
+        # Protected Xkeen mode uses loopback TCP. Honour the persisted switch
+        # marker so it is not mistaken for a pre-existing loopback dashboard.
         mode = "xkeen"
     elif has_browser_dashboard_controller(text):
         mode = "external"

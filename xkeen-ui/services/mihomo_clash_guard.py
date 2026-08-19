@@ -23,14 +23,9 @@ MIHOMO_CLASH_ACTION_POLICIES: Mapping[str, MihomoClashActionPolicy] = MappingPro
         "proxy-select": MihomoClashActionPolicy(4, 1, 30, 60.0),
         "runtime-mode": MihomoClashActionPolicy(1, 1, 12, 60.0),
         "proxy-unfix": MihomoClashActionPolicy(2, 1, 20, 60.0),
-        # Mihomo delay checks are CPU/network-heavy on router hardware. Keep
-        # one in flight globally so concurrent browser tabs cannot starve UI
-        # status polling or create an upstream busy queue.
-        # One expanded real-world workspace currently contains up to 24
-        # unique node identities. Leave another batch worth of headroom for
-        # the requested group -> visible -> single verification sequence;
-        # concurrency remains one, so this does not increase router load.
-        "delay": MihomoClashActionPolicy(1, 1, 48, 60.0),
+        # Match Zashboard's bounded five-worker latency queue. The guard still
+        # prevents additional tabs from growing this into an unbounded burst.
+        "delay": MihomoClashActionPolicy(5, 5, 120, 60.0),
         # HTTP fallback uses this endpoint at a documented two-second cadence.
         # The rolling limit bounds accidental hot loops while leaving room for
         # manual refreshes and a reconnect bootstrap.

@@ -181,8 +181,8 @@ def _security_posture(discovery: MihomoClashDiscovery) -> dict[str, Any]:
 
     return {
         "mode": mode,
-        "recommended_transport": "unix",
-        "recommended_value": "external-controller-unix: ./mihomo-api.sock",
+        "recommended_transport": "tcp-loopback",
+        "recommended_value": "external-controller: 127.0.0.1:9090 + secret",
         "panel_password_reuse": False,
         "migration_required": lan_without_secret,
         "setup_required": setup_required,

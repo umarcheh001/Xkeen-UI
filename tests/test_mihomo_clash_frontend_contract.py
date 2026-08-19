@@ -158,7 +158,7 @@ def test_security_warning_and_one_click_setup_contract_are_explicit():
     assert "window.confirm(" in feature
     assert 'id="mihomo-clash-migration-preview"' not in markup
     assert 'id="mihomo-clash-migration-restart"' not in markup
-    assert "body: JSON.stringify({ transport: String(transport || 'unix') })" in client
+    assert "body: JSON.stringify({ transport: String(transport || 'tcp-loopback') })" in client
     assert 'timeoutMs: 45000' in client
 
 
@@ -181,7 +181,8 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
         "selectMihomoClashProxy",
         "unfixMihomoClashProxy",
         "testMihomoClashDelay",
-        "MAX_DELAY_CONCURRENCY = 1",
+        "MAX_DELAY_CONCURRENCY = 5",
+        "providerCandidates[0]",
         "MAX_BUSY_RETRIES = 2",
         "MAX_RATE_LIMIT_RETRIES = 10",
         "DELAY_BATCH_CADENCE_MS = 120",

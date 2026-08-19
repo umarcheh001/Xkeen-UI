@@ -277,7 +277,7 @@ export function mihomoClashLogsWsUrl(token) {
 export function previewMihomoClashMigration(transport, options = {}) {
   return requestJSON(MIGRATION_PREVIEW_ENDPOINT, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ transport: String(transport || 'unix') }),
+    body: JSON.stringify({ transport: String(transport || 'tcp-loopback') }),
     credentials: 'same-origin', timeoutMs: 12000, retry: 0, signal: options.signal,
   });
 }
@@ -286,7 +286,7 @@ export function applyMihomoClashMigration(transport, previewId, options = {}) {
   return requestJSON(MIGRATION_APPLY_ENDPOINT, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      transport: String(transport || 'unix'),
+      transport: String(transport || 'tcp-loopback'),
       preview_id: String(previewId || ''),
       confirmed: true,
     }),

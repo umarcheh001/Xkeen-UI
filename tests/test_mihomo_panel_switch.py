@@ -33,7 +33,8 @@ def test_switch_preserves_dashboard_and_unrelated_config(tmp_path: Path):
     state = remember_external_config(state_file, EXTERNAL)
 
     xkeen = build_switch_preview(EXTERNAL, state, "xkeen")
-    assert "external-controller-unix: ./mihomo-api.sock" in xkeen.content
+    assert "external-controller: 127.0.0.1:9090" in xkeen.content
+    assert "__XKEEN_GENERATED_SECRET__" in xkeen.content
     assert "external-ui: zashboard" in xkeen.content
     assert "rules: []" in xkeen.content
     assert "keep-me" not in xkeen.content
@@ -67,6 +68,7 @@ def test_status_offers_both_directions_after_snapshot(tmp_path: Path):
 
     xkeen = build_switch_preview(EXTERNAL, state, "xkeen").content
     xkeen_status = public_status(xkeen, {**state, "mode": "xkeen"})
+    assert xkeen_status["mode"] == "xkeen"
     assert xkeen_status["can_restore_external"] is True
     assert xkeen_status["external_url"] == "/mihomo_panel/ui/"
 
@@ -120,7 +122,8 @@ def test_switch_endpoint_saves_and_can_return_to_external(tmp_path: Path, monkey
     })
     assert response.status_code == 200
     assert response.get_json()["mode"] == "xkeen"
-    assert "external-controller-unix" in saved[-1]
+    assert "external-controller: 127.0.0.1:9090" in saved[-1]
+    assert "__XKEEN_GENERATED_SECRET__" not in saved[-1]
 
 
 def test_failed_switch_immediately_restores_previous_config(tmp_path: Path, monkeypatch):

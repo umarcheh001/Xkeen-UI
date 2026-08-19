@@ -10,9 +10,9 @@ import {
 } from './client.js';
 
 const SELECTABLE_TYPES = new Set(['selector', 'select', 'urltest', 'fallback', 'smart', 'loadbalance', 'load-balance']);
-// Probe one target at a time. Mihomo itself serializes delay checks on
-// low-power routers; browser-side parallelism only creates a long busy queue.
-const MAX_DELAY_CONCURRENCY = 1;
+// Keep the same bounded worker count as Zashboard. This avoids a needlessly
+// long serial batch while the backend guard prevents an unbounded probe burst.
+const MAX_DELAY_CONCURRENCY = 5;
 const MAX_BUSY_RETRIES = 2;
 const MAX_RATE_LIMIT_RETRIES = 10;
 const DELAY_BATCH_CADENCE_MS = 120;
@@ -1266,10 +1266,19 @@ async function unfixProxy(groupName) {
 
 function delayTarget(groupName, node) {
   const effectiveNode = effectiveDelayNode(node);
+  const providerCandidates = Array.isArray(effectiveNode?.provider_candidates)
+    ? effectiveNode.provider_candidates
+    : [];
+  // Mihomo can omit provider-name when the same node is present in several
+  // providers. Zashboard resolves that case to the first provider containing
+  // the node and uses the provider-scoped healthcheck endpoint. Do the same
+  // instead of falling back to /proxies/{name}/delay, where provider-only or
+  // same-name nodes can incorrectly appear unavailable.
+  const probeProvider = String(effectiveNode?.provider || providerCandidates[0] || '');
   return {
     group: String(groupName || ''),
     name: String(effectiveNode?.name || ''),
-    provider: String(effectiveNode?.provider || ''),
+    provider: probeProvider,
     key: delayKey(groupName, node?.name, node?.provider),
     identity: latestDelayKey(effectiveNode?.name, effectiveNode?.provider),
   };

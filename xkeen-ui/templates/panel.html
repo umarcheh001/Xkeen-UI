@@ -1025,8 +1025,8 @@
       {{ op_icon('alert') }}
       <div>
         <strong id="mihomo-clash-assistant-title">Нужна настройка Mihomo API</strong>
-        <span id="mihomo-clash-assistant-message">Панель безопасно добавит локальный Unix socket в активный config.yaml после вашего подтверждения.</span>
-        <code id="mihomo-clash-assistant-value">external-controller-unix: ./mihomo-api.sock</code>
+        <span id="mihomo-clash-assistant-message">Панель безопасно перенесёт API на локальный TCP с новым secret после вашего подтверждения.</span>
+        <code id="mihomo-clash-assistant-value">external-controller: 127.0.0.1:9090</code>
       </div>
       <button id="mihomo-clash-assistant-button" type="button" class="btn-primary" data-mihomo-clash-action="migration-preview">Настроить автоматически</button>
     </div>
@@ -1049,8 +1049,8 @@
         <summary>Другой способ подключения</summary>
         <label for="mihomo-clash-migration-transport">Подключение</label>
         <select id="mihomo-clash-migration-transport">
-          <option value="unix">Unix socket (рекомендуется)</option>
-          <option value="tcp-loopback">Локальный TCP + новый secret</option>
+          <option value="tcp-loopback">Локальный TCP + новый secret (рекомендуется)</option>
+          <option value="unix">Unix socket</option>
         </select>
       </details>
       <div class="xk-mihomo-migration-actions">

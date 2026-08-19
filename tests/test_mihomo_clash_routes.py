@@ -183,8 +183,8 @@ def test_status_route_returns_versioned_redacted_dto():
     assert body["capabilities"]["logs"] is True
     assert body["security"] == {
         "mode": "tcp_authenticated",
-        "recommended_transport": "unix",
-        "recommended_value": "external-controller-unix: ./mihomo-api.sock",
+        "recommended_transport": "tcp-loopback",
+        "recommended_value": "external-controller: 127.0.0.1:9090 + secret",
         "panel_password_reuse": False,
         "migration_required": False,
         "setup_required": False,
@@ -349,8 +349,8 @@ def test_status_route_reports_missing_controller_as_operational_state():
     assert body["capabilities"]["status"] is False
     assert body["security"] == {
         "mode": "not_ready",
-        "recommended_transport": "unix",
-        "recommended_value": "external-controller-unix: ./mihomo-api.sock",
+        "recommended_transport": "tcp-loopback",
+        "recommended_value": "external-controller: 127.0.0.1:9090 + secret",
         "panel_password_reuse": False,
         "migration_required": False,
         "setup_required": True,
@@ -376,8 +376,8 @@ def test_status_route_marks_lan_controller_without_secret_for_migration():
     body = make_app(discovery, client).test_client().get("/api/mihomo/clash/status").get_json()
     assert body["security"] == {
         "mode": "tcp_lan_unprotected",
-        "recommended_transport": "unix",
-        "recommended_value": "external-controller-unix: ./mihomo-api.sock",
+        "recommended_transport": "tcp-loopback",
+        "recommended_value": "external-controller: 127.0.0.1:9090 + secret",
         "panel_password_reuse": False,
         "migration_required": True,
         "setup_required": False,

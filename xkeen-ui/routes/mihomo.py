@@ -1084,7 +1084,12 @@ def create_mihomo_blueprint(
         return supplied, None
 
     def _mihomo_clash_setup_transport(data: Dict[str, Any]) -> tuple[str, Any]:
-        transport = str(data.get("transport") or "unix").strip().lower()
+        # A loopback TCP controller follows the same Mihomo request path that
+        # external dashboards use, while a generated secret keeps it local and
+        # authenticated. Some embedded builds show unreliable concurrent delay
+        # probes over AF_UNIX, so automatic protection defaults to loopback TCP;
+        # Unix remains available as an explicit advanced choice.
+        transport = str(data.get("transport") or "tcp-loopback").strip().lower()
         if transport not in {"unix", "tcp-loopback"}:
             return "", _api_error(
                 "Недопустимый transport настройки.",
@@ -1134,7 +1139,7 @@ def create_mihomo_blueprint(
             {
                 "ok": True,
                 "preview": preview.public_dict(),
-                "recommended": transport == "unix",
+                "recommended": transport == "tcp-loopback",
                 "restart_required": True,
                 "initial_setup": not os.path.exists(MIHOMO_CONFIG_FILE),
             }
@@ -1405,17 +1410,22 @@ def create_mihomo_blueprint(
             return _api_error("Не удалось подготовить переключение панели.", 409, ok=False, code=str(exc))
         if not secrets.compare_digest(str(data.get("preview_id") or ""), preview.preview_id):
             return _api_error("Конфигурация изменилась. Повторите переключение.", 409, ok=False, code="panel_switch_preview_stale")
-        ok_yaml, _yaml_err = validate_yaml_syntax(preview.content)
+        content = (
+            materialize_generated_secret(preview.content)
+            if target == "xkeen"
+            else preview.content
+        )
+        ok_yaml, _yaml_err = validate_yaml_syntax(content)
         if not ok_yaml:
             return _mihomo_yaml_invalid(stage="panel-switch")
         ensure_mihomo_layout()
-        validation_log = validate_config(new_content=preview.content) or ""
+        validation_log = validate_config(new_content=content) or ""
         exit_match = re.search(r"\[exit code:\s*(-?\d+)\]", validation_log)
         if not exit_match or int(exit_match.group(1)) != 0:
             return _api_error("Mihomo не подтвердил конфигурацию. Ничего не изменено.", 400, ok=False, code="panel_switch_validation_failed")
         saved = False
         try:
-            backup = save_config(preview.content)
+            backup = save_config(content)
             saved = True
             restarted = bool(restart_xkeen(source=f"mihomo-panel-{target}"))
         except Exception:
