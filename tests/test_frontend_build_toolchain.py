@@ -85,7 +85,11 @@ def test_frontend_build_ci_and_status_docs_are_closed():
     assert 'PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT' in workflow_text
     assert 'Acquire::https::Timeout "30"' in workflow_text
     assert 'timeout-minutes: 15' in workflow_text
-    assert 'timeout --signal=TERM --kill-after=30s 4m' in workflow_text
+    # A short external timeout around --with-deps can interrupt apt and leave
+    # a dpkg lock behind, causing all retries to fail. The step timeout above
+    # is the bounded guard instead.
+    assert 'npx playwright install --with-deps chromium' in workflow_text
+    assert 'timeout --signal=TERM --kill-after=30s 4m' not in workflow_text
     assert 'for attempt in 1 2 3' in workflow_text
 
     readme_text = BUILD_WORKFLOW_DOC.read_text(encoding='utf-8')
