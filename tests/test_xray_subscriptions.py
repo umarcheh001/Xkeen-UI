@@ -146,6 +146,41 @@ def test_fetch_subscription_body_resolves_happ_connector_query_via_decryptor(mon
     assert headers["x-xkeen-happ-link"] == "happ://crypt4/demo-token"
 
 
+def test_fetch_subscription_body_resolves_happ_location_from_http_redirect(monkeypatch):
+    from services import xray_subscriptions as subs
+
+    source = "https://provider.example/subscription/happ"
+    deep_link = "happ://crypt4/full-profile-token"
+
+    def fail_with_redirect(_url, request_headers=None):
+        del request_headers
+        raise urllib.error.HTTPError(
+            source,
+            308,
+            "Permanent Redirect",
+            {"Location": deep_link},
+            None,
+        )
+
+    monkeypatch.setattr(subs, "_fetch_subscription_body_once", fail_with_redirect)
+    monkeypatch.setattr(
+        subs.happ_links,
+        "resolve_source",
+        lambda url, **_kwargs: {
+            "kind": "text",
+            "value": 'vless://user@full.example:443#Full%20profile',
+            "via": "decryptor",
+            "candidate": url,
+        },
+    )
+
+    body, headers = subs.fetch_subscription_body(source)
+
+    assert body == 'vless://user@full.example:443#Full%20profile'
+    assert headers["x-xkeen-happ-resolved"] == "decryptor"
+    assert headers["x-xkeen-happ-link"] == deep_link
+
+
 def test_fetch_subscription_body_decrypts_happ_sender_payload(monkeypatch):
     from services import xray_subscriptions as subs
 

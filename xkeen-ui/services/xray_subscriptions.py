@@ -1261,7 +1261,31 @@ def fetch_subscription_body(
             return str(resolved.get("body") or ""), dict(resolved.get("headers") or {})
         raise RuntimeError("happ_helper_empty")
 
-    body, headers = _fetch_subscription_body_once(url_s, request_headers=request_headers)
+    try:
+        body, headers = _fetch_subscription_body_once(url_s, request_headers=request_headers)
+    except urllib.error.HTTPError as exc:
+        # A number of Happ subscription endpoints intentionally answer with an
+        # HTTP redirect whose Location is a ``happ://crypt*`` deep-link.  The
+        # standard urllib redirect handler cannot follow a non-HTTP scheme and
+        # raises the original 3xx response instead.  Treat that Location as the
+        # subscription source and pass it through the same local decryptor path
+        # used for explicit Happ links.  Falling back to a guessed URL with the
+        # ``/happ`` suffix removed is not equivalent: providers may expose a
+        # smaller, legacy Xray profile there.
+        location = ""
+        if int(getattr(exc, "code", 0) or 0) in {301, 302, 303, 307, 308}:
+            try:
+                location = str((exc.headers or {}).get("Location") or "").strip()
+            except Exception:
+                location = ""
+        if happ_links.is_happ_deep_link(location):
+            resolved = _resolve_happ_subscription_source(
+                location,
+                request_headers=request_headers,
+            )
+            if resolved:
+                return str(resolved.get("body") or ""), dict(resolved.get("headers") or {})
+        raise
     try:
         decrypted_body = happ_payloads.decrypt_subscription_body(url_s, body, headers)
     except happ_payloads.HappPayloadError as exc:
