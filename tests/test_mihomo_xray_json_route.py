@@ -98,6 +98,62 @@ def test_parse_xray_json_url_fetched_through_fetcher(client):
     mock.assert_called_once_with("https://example.com/sub")
 
 
+def test_parse_xray_json_follows_happ_redirect_and_keeps_full_profile(client):
+    """Mihomo must use the same full Happ source as the Xray subscriptions UI."""
+
+    source = "https://provider.example/subscription/happ"
+    deep_link = "happ://crypt4/full-profile-token"
+    profiles = []
+    for index, (name, address) in enumerate(
+        [
+            ("Main node", "1.2.3.4"),
+            ("Анти «Белые списки» 90.63fc", "5.6.7.8"),
+            ("Анти «Белые списки» 97.9917", "9.10.11.12"),
+        ],
+        1,
+    ):
+        profile = json.loads(_SAMPLE_XRAY_SUBSCRIPTION)[0]
+        profile["remarks"] = name
+        outbound = profile["outbounds"][0]
+        outbound["settings"]["vnext"][0]["address"] = address
+        outbound["settings"]["vnext"][0]["users"][0]["id"] = (
+            f"00000000-0000-0000-0000-{index:012d}"
+        )
+        profiles.append(profile)
+    full_body = json.dumps(profiles, ensure_ascii=False)
+
+    redirect = urllib.error.HTTPError(
+        source,
+        308,
+        "Permanent Redirect",
+        {"Location": deep_link},
+        None,
+    )
+    with patch(
+        "services.xray_subscriptions._fetch_subscription_body_once",
+        side_effect=redirect,
+    ), patch(
+        "services.xray_subscriptions.happ_links.resolve_source",
+        return_value={
+            "kind": "text",
+            "value": full_body,
+            "via": "decryptor",
+            "candidate": deep_link,
+        },
+    ):
+        response = client.post("/api/mihomo/parse/xray-json", json={"url": source})
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["count"] == 3
+    assert [item["proxy_name"] for item in payload["proxies"]] == [
+        "Main node",
+        "Анти «Белые списки» 90.63fc",
+        "Анти «Белые списки» 97.9917",
+    ]
+    assert payload["skipped"] == []
+
+
 def test_parse_xray_json_returns_422_for_non_xray_body(client):
     r = client.post("/api/mihomo/parse/xray-json", json={"text": "<html>nope</html>"})
     assert r.status_code == 422
