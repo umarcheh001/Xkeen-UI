@@ -24,7 +24,8 @@ from .mihomo_proxy_parsers import (
     _yaml_str,
 )
 from .xray_subscriptions import (
-    _iter_json_proxy_outbounds,
+    _is_proxy_outbound,
+    _json_name_hint,
     _load_subscription_json,
 )
 
@@ -423,6 +424,41 @@ def _unique_name(base: str, used: Dict[str, int]) -> str:
 SubscriptionResult = Tuple[List[ProxyParseResult], List[Dict[str, str]]]
 
 
+def _iter_json_proxy_profiles(
+    obj: Any,
+    parent_name: str = "",
+) -> Iterable[List[Tuple[Dict[str, Any], str]]]:
+    """Yield the proxy outbounds belonging to each JSON profile wrapper."""
+
+    if isinstance(obj, list):
+        for item in obj:
+            yield from _iter_json_proxy_profiles(item, parent_name)
+        return
+    if not isinstance(obj, dict):
+        return
+
+    name_hint = _json_name_hint(obj) or parent_name
+    if _is_proxy_outbound(obj):
+        yield [(obj, name_hint)]
+        return
+
+    outbounds = obj.get("outbounds")
+    if isinstance(outbounds, list):
+        profile = [
+            (outbound, name_hint)
+            for outbound in outbounds
+            if _is_proxy_outbound(outbound)
+        ]
+        if profile:
+            yield profile
+        return
+
+    for key in ("configs", "items", "nodes", "profiles", "servers", "subscriptions"):
+        child = obj.get(key)
+        if isinstance(child, (dict, list)):
+            yield from _iter_json_proxy_profiles(child, name_hint)
+
+
 def convert_subscription_text(
     body: str,
     *,
@@ -439,8 +475,8 @@ def convert_subscription_text(
     if parsed is None:
         raise ValueError("not_xray_json")
 
-    items = list(_iter_json_proxy_outbounds(parsed))
-    if not items:
+    profiles = list(_iter_json_proxy_profiles(parsed))
+    if not profiles:
         return [], []
 
     used: Dict[str, int] = {}
@@ -452,23 +488,41 @@ def convert_subscription_text(
 
     proxies: List[ProxyParseResult] = []
     skipped: List[Dict[str, str]] = []
-    for idx, (outbound, name_hint) in enumerate(items):
-        base_name = (name_hint or "").strip() or _fallback_name(outbound, idx)
-        proto = str(outbound.get("protocol") or "").strip().lower()
-        try:
-            unique = _unique_name(base_name, used)
-            result = convert_outbound_to_mihomo(outbound, unique)
-        except Exception as exc:
-            skipped.append(
-                {"name": base_name, "reason": f"convert_error: {type(exc).__name__}: {exc}"}
-            )
-            continue
-        if result is None:
-            skipped.append(
-                {"name": base_name, "reason": f"unsupported_protocol: {proto or '?'}"}
-            )
-            continue
-        proxies.append(result)
+    # HAPP-style JSON may contain a synthetic selector profile whose
+    # ``outbounds`` are the same endpoints that are also published as
+    # individual named profiles.  Xray deliberately treats one JSON wrapper
+    # as one selectable node; Mihomo previously flattened every outbound and
+    # therefore imported the selector's 15 fallbacks plus the 16 real
+    # profiles (31 entries for the morinsq feed).  Prefer one convertible
+    # outbound per logical profile so both cores expose the same catalog.
+    item_idx = 0
+    for profile in profiles:
+        profile_errors: List[Dict[str, str]] = []
+        converted = False
+        for outbound, name_hint in profile:
+            base_name = (name_hint or "").strip() or _fallback_name(outbound, item_idx)
+            item_idx += 1
+            proto = str(outbound.get("protocol") or "").strip().lower()
+            trial_used = dict(used)
+            unique = _unique_name(base_name, trial_used)
+            try:
+                result = convert_outbound_to_mihomo(outbound, unique)
+            except Exception as exc:
+                profile_errors.append(
+                    {"name": base_name, "reason": f"convert_error: {type(exc).__name__}: {exc}"}
+                )
+                continue
+            if result is None:
+                profile_errors.append(
+                    {"name": base_name, "reason": f"unsupported_protocol: {proto or '?'}"}
+                )
+                continue
+            proxies.append(result)
+            used = trial_used
+            converted = True
+            break
+        if not converted:
+            skipped.extend(profile_errors)
     return proxies, skipped
 
 

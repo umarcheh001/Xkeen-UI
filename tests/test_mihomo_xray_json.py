@@ -271,6 +271,55 @@ def test_convert_subscription_text_dedupes_against_existing_names():
     assert proxies[1].name == "Germany_3"
 
 
+def test_convert_subscription_text_keeps_one_outbound_per_happ_profile():
+    """A selector profile with many fallbacks must not inflate the node list."""
+
+    finland = _outbound_vless_tcp_reality_vision()
+    finland["settings"]["vnext"][0]["address"] = "finland.example"
+    italy = _outbound_vless_tcp_reality_vision()
+    italy["settings"]["vnext"][0]["address"] = "italy.example"
+    selector_italy = json.loads(json.dumps(italy))
+    selector_italy["tag"] = "proxy-2"
+
+    body = json.dumps(
+        [
+            {
+                "remarks": "Автовыбор | Обычный VPN",
+                "outbounds": [finland, selector_italy],
+            },
+            _full_xray_config("Финляндия", finland),
+            _full_xray_config("Италия", italy),
+        ]
+    )
+
+    proxies, skipped = convert_subscription_text(body)
+
+    assert skipped == []
+    assert [proxy.name for proxy in proxies] == [
+        "Автовыбор | Обычный VPN",
+        "Финляндия",
+        "Италия",
+    ]
+    assert len(proxies) == 3
+
+
+def test_convert_subscription_text_profile_fallback_does_not_consume_name():
+    unsupported = {
+        "tag": "proxy",
+        "protocol": "shadowsocks",
+        "settings": {"servers": [{"address": "ss.example", "port": 443}]},
+    }
+    supported = _outbound_vless_tcp_reality_vision()
+    body = json.dumps(
+        [{"remarks": "Fallback profile", "outbounds": [unsupported, supported]}]
+    )
+
+    proxies, skipped = convert_subscription_text(body)
+
+    assert skipped == []
+    assert [proxy.name for proxy in proxies] == ["Fallback profile"]
+
+
 def test_convert_subscription_text_raises_for_non_json_body():
     with pytest.raises(ValueError, match="not_xray_json"):
         convert_subscription_text("<html>not json</html>")
