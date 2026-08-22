@@ -2534,6 +2534,44 @@ body.panel-page :is(#routing-status, #mihomo-status, .status) {
   font-size: calc(10.5px * var(--xk-font-scale, 1));
 }
 
+body.panel-page #inbounds-status .xk-inbounds-status-details-btn {
+  display: inline;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: currentColor;
+  font: inherit;
+  font-weight: 650;
+  line-height: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+body.panel-page #inbounds-status .xk-inbounds-status-details-btn:hover,
+body.panel-page #inbounds-status .xk-inbounds-status-details-btn:focus-visible {
+  background: transparent;
+  color: var(--op-text);
+  box-shadow: none;
+  transform: none;
+}
+
+body.panel-page #inbounds-status .xk-inbounds-status-details-text {
+  display: block;
+  margin-top: 4px;
+  color: var(--op-muted);
+  line-height: 1.4;
+}
+
+body.panel-page #inbounds-status .xk-inbounds-status-details-text[hidden] {
+  display: none;
+}
+
 /* Data sections, cards and tables become flat, scan-friendly records. */
 body.panel-page :is(.routing-rules-card, .commands-card, .fm-card) {
   overflow: hidden;

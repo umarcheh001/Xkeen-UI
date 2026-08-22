@@ -96,10 +96,144 @@ SOCKS_INBOUND_TEMPLATE = {
 }
 
 
+class PortConflictError(ValueError):
+    """Raised when two inbounds need the same socket protocol and port."""
+
+    def __init__(
+        self,
+        port: int,
+        first_tag: str,
+        second_tag: str,
+        first_networks: set[str],
+        second_networks: set[str],
+    ) -> None:
+        self.port = int(port)
+        self.first_tag = str(first_tag)
+        self.second_tag = str(second_tag)
+        self.first_networks = frozenset(first_networks)
+        self.second_networks = frozenset(second_networks)
+        self.overlap = frozenset(self.first_networks & self.second_networks)
+        overlap = ",".join(sorted(self.overlap)) or "unknown"
+        super().__init__(
+            f"port conflict: {self.port}/{overlap} used by "
+            f"{self.first_tag} and {self.second_tag}"
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "port": self.port,
+            "first": {
+                "tag": self.first_tag,
+                "networks": sorted(self.first_networks),
+            },
+            "second": {
+                "tag": self.second_tag,
+                "networks": sorted(self.second_networks),
+            },
+            "overlap": sorted(self.overlap),
+        }
+
+
 def build_socks_inbound(port: int) -> dict:
     cfg = copy.deepcopy(SOCKS_INBOUND_TEMPLATE)
     cfg["port"] = int(port)
     return cfg
+
+
+def _inbound_socket_networks(inbound: dict) -> set[str]:
+    """Return the socket protocols an inbound is expected to bind.
+
+    Xray can bind TCP and UDP to the same numeric port. A duplicate number is
+    therefore a conflict only when the socket protocols overlap. Transparent
+    proxy inbounds declare this through ``settings.network`` (legacy
+    dokodemo-door) or ``settings.allowedNetwork`` (tunnel). SOCKS can add a UDP
+    listener with ``settings.udp``. Other inbound transports default to TCP,
+    except the UDP-based KCP/QUIC transports.
+    """
+    settings = inbound.get("settings")
+    settings = settings if isinstance(settings, dict) else {}
+
+    explicit = settings.get("allowedNetwork")
+    if explicit is None:
+        explicit = settings.get("network")
+    if isinstance(explicit, str):
+        networks = {
+            item.strip().lower()
+            for item in explicit.split(",")
+            if item.strip().lower() in {"tcp", "udp"}
+        }
+        if networks:
+            return networks
+
+    protocol = str(inbound.get("protocol") or "").strip().lower()
+    if protocol == "socks":
+        networks = {"tcp"}
+        if settings.get("udp") is True:
+            networks.add("udp")
+        return networks
+
+    stream = inbound.get("streamSettings")
+    stream = stream if isinstance(stream, dict) else {}
+    transport = str(stream.get("network") or "").strip().lower()
+    if transport in {"kcp", "mkcp", "quic"}:
+        return {"udp"}
+
+    # Xray's regular inbound listener and tunnel/dokodemo default are TCP.
+    return {"tcp"}
+
+
+def _inbound_bind_address(inbound: dict) -> str | None:
+    """Return a normalized IP bind address, or ``None`` for a Unix socket."""
+    listen = str(inbound.get("listen") or "").strip()
+    if listen.startswith("@") or listen.startswith("/"):
+        return None
+    return listen.lower() or "0.0.0.0"
+
+
+def _bind_addresses_overlap(first: str, second: str) -> bool:
+    # Xray documents 0.0.0.0 and :: as all-interface listeners. Keep the
+    # preflight conservative for those values; distinct explicit addresses can
+    # legally reuse a port.
+    wildcards = {"0.0.0.0", "::"}
+    if first in wildcards or second in wildcards:
+        return True
+    return first == second
+
+
+def _inbound_ports(value: Any) -> set[int]:
+    """Best-effort parser for Xray's single/list/range port syntax."""
+    if isinstance(value, bool):
+        return set()
+    if isinstance(value, int):
+        return {value} if 1 <= value <= 65535 else set()
+    if not isinstance(value, str):
+        return set()
+
+    ports: set[int] = set()
+    for part in value.split(","):
+        token = part.strip()
+        if not token:
+            continue
+        for separator in ("-", ":"):
+            if separator not in token:
+                continue
+            left, right = token.split(separator, 1)
+            try:
+                start, end = int(left.strip()), int(right.strip())
+            except (TypeError, ValueError):
+                break
+            lo, hi = sorted((start, end))
+            if 1 <= lo <= hi <= 65535:
+                ports.update(range(lo, hi + 1))
+            break
+        else:
+            try:
+                port = int(token)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= port <= 65535:
+                ports.add(port)
+    return ports
 
 
 def _extract_inbounds(data: Any) -> list:
@@ -211,34 +345,31 @@ def merge_inbounds_preset(
         extras = [it for it in extras if not (isinstance(it, dict) and str(it.get("tag") or "") == "socks-in")]
         extras.append(build_socks_inbound(p))
 
-    # Validate port conflicts (basic safety).
-    # NOTE: preset system tags (redirect/tproxy) may legally share the same port
-    # (as in the default presets). We only prevent clashes when an "extra" inbound
-    # tries to reuse a port already used by another inbound.
+    # TCP and UDP have separate socket namespaces, so the same numeric port is
+    # valid when inbounds listen on disjoint protocols. This is how both the
+    # built-in Hybrid preset and user-defined redirect/TProxy pairs work.
     merged_inbounds = list(preset.get("inbounds") or []) + extras
-    ports: dict[int, str] = {}
+    listeners: dict[int, list[tuple[str, set[str], str]]] = {}
     for it in merged_inbounds:
         if not isinstance(it, dict):
             continue
-        port = it.get("port")
+        bind_address = _inbound_bind_address(it)
+        if bind_address is None:
+            continue
         tag = it.get("tag")
-        try:
-            port_i = int(port)
-        except Exception:
-            continue
-        if port_i <= 0:
-            continue
         t = str(tag) if isinstance(tag, str) and tag else "(no-tag)"
-
-        if port_i in ports:
-            prev = ports[port_i]
-            # Allow system tags to share port between themselves.
-            if (t in SYSTEM_TAGS) and (prev in SYSTEM_TAGS):
-                continue
-            # Otherwise it's a conflict.
-            raise ValueError(f"port conflict: {port_i} used by {prev} and {t}")
-
-        ports[port_i] = t
+        networks = _inbound_socket_networks(it)
+        for port_i in _inbound_ports(it.get("port")):
+            for prev_tag, prev_networks, prev_address in listeners.get(port_i, []):
+                if networks & prev_networks and _bind_addresses_overlap(bind_address, prev_address):
+                    raise PortConflictError(
+                        port_i,
+                        prev_tag,
+                        t,
+                        prev_networks,
+                        networks,
+                    )
+            listeners.setdefault(port_i, []).append((t, networks, bind_address))
 
     return {**base, "inbounds": merged_inbounds}
 

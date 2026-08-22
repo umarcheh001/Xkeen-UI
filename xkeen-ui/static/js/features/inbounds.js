@@ -57,11 +57,41 @@ let inboundsModuleApi = null;
       return document.getElementById(id);
     }
 
-    function setInboundsStatus(statusEl, message, tone) {
+    function setInboundsStatus(statusEl, message, tone, options) {
       if (!statusEl) return;
       const kind = String(tone || 'info').trim().toLowerCase();
       const state = kind === 'success' ? 'ok' : (kind === 'loading' ? 'loading' : (kind === 'warning' || kind === 'error' ? kind : ''));
       try { statusEl.textContent = String(message || ''); } catch (e) {}
+      try {
+        const details = options && options.details ? String(options.details).trim() : '';
+        if (details) {
+          const detailId = 'inbounds-status-detail-text';
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'xk-inbounds-status-details-btn';
+          button.textContent = 'Подробнее';
+          button.setAttribute('aria-expanded', 'false');
+          button.setAttribute('aria-controls', detailId);
+          button.setAttribute('data-tooltip', details);
+
+          const detail = document.createElement('span');
+          detail.id = detailId;
+          detail.className = 'xk-inbounds-status-details-text';
+          detail.textContent = details;
+          detail.hidden = true;
+
+          button.addEventListener('click', () => {
+            const expanded = button.getAttribute('aria-expanded') === 'true';
+            button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+            button.textContent = expanded ? 'Подробнее' : 'Скрыть';
+            detail.hidden = expanded;
+          });
+
+          statusEl.appendChild(document.createTextNode(' '));
+          statusEl.appendChild(button);
+          statusEl.appendChild(detail);
+        }
+      } catch (e1) {}
       try {
         statusEl.classList.toggle('success', kind === 'success');
         statusEl.classList.toggle('warning', kind === 'warning');
@@ -70,6 +100,34 @@ let inboundsModuleApi = null;
         else delete statusEl.dataset.state;
         statusEl.setAttribute('aria-busy', kind === 'loading' ? 'true' : 'false');
       } catch (e2) {}
+    }
+
+    function formatSaveError(data, status) {
+      const payload = data && typeof data === 'object' ? data : {};
+      const code = String(payload.code || payload.error || '').trim();
+      const detail = String(payload.error || '').trim();
+      const hint = String(payload.hint || '').trim();
+      if (code === 'port_conflict') {
+        const conflict = payload.conflict && typeof payload.conflict === 'object' ? payload.conflict : {};
+        const port = Number(conflict.port);
+        const overlap = Array.isArray(conflict.overlap)
+          ? conflict.overlap.map((item) => String(item || '').toUpperCase()).filter(Boolean).join('/')
+          : '';
+        const socketLabel = Number.isFinite(port) && port > 0
+          ? (String(Math.trunc(port)) + (overlap ? ('/' + overlap) : ''))
+          : '';
+        const message = socketLabel
+          ? ('Не удалось сохранить: конфликт порта ' + socketLabel + '.')
+          : 'Не удалось сохранить: конфликт порта.';
+        return {
+          message,
+          details: [detail, hint].filter(Boolean).join(' '),
+        };
+      }
+      return {
+        message: 'Save error: ' + (detail || status),
+        details: hint,
+      };
     }
 
     function getConfigShellApi() {
@@ -1021,9 +1079,9 @@ let inboundsModuleApi = null;
               try { if (!data || !data.restarted) { if (typeof showToast === 'function') showToast(msg, false); } } catch (e) {}
             }
           } else {
-            const msg = 'Save error: ' + ((data && data.error) || res.status);
-            if (statusEl) setInboundsStatus(statusEl, msg, 'error');
-            try { if (typeof showToast === 'function') showToast(msg, true); } catch (e) {}
+            const errorView = formatSaveError(data, res.status);
+            if (statusEl) setInboundsStatus(statusEl, errorView.message, 'error', { details: errorView.details });
+            try { if (typeof showToast === 'function') showToast(errorView.message, true); } catch (e) {}
           }
         } catch (e) {
           console.error(e);

@@ -44,6 +44,7 @@ from services.xray_config_files import (
 )
 from services.xray_inbounds import (
     MIXED_INBOUNDS,
+    PortConflictError,
     REDIRECT_INBOUNDS,
     TPROXY_INBOUNDS,
     detect_inbounds_mode,
@@ -1107,6 +1108,20 @@ def create_xray_configs_blueprint(
                     add_socks=add_socks,
                     socks_port=int(socks_port) if socks_port is not None and str(socks_port).strip() != "" else None,
                 )
+            except PortConflictError as e:
+                overlap = "/".join(str(item).upper() for item in sorted(e.overlap))
+                socket_label = f"{e.port}/{overlap}" if overlap else str(e.port)
+                message = (
+                    f"Порт {socket_label} одновременно используется inbound "
+                    f"«{e.first_tag}» и «{e.second_tag}»."
+                )
+                return _xray_error(
+                    message,
+                    400,
+                    code="port_conflict",
+                    hint="Измените порт либо разведите inbounds по TCP и UDP.",
+                    conflict=e.as_dict(),
+                )
             except ValueError as e:
                 msg = str(e)
                 code = "invalid"
@@ -1114,9 +1129,6 @@ def create_xray_configs_blueprint(
                 if "invalid socks_port" in msg:
                     code = "invalid_port"
                     hint = "Укажите порт 1…65535."
-                elif msg.startswith("port conflict"):
-                    code = "port_conflict"
-                    hint = "Выберите другой порт: текущий конфликтует с другим inbound."
                 return error_response(code, 400, ok=False, code=code, hint=hint)
             except Exception as e:
                 return _xray_exception(

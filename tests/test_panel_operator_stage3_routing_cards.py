@@ -78,6 +78,18 @@ def test_inbounds_mode_copy_uses_hybrid_label_and_compact_actions():
     assert ".routing-side-card--inbounds .xk-actions-inline > button:has(.xk-action-label)" in css
 
     for fragment in (
+        "function formatSaveError(data, status)",
+        "'Не удалось сохранить: конфликт порта '",
+        "className = 'xk-inbounds-status-details-btn'",
+        "button.setAttribute('data-tooltip', details)",
+        "button.setAttribute('aria-expanded', 'false')",
+        "detail.hidden = true",
+    ):
+        assert fragment in inbounds
+    assert "#inbounds-status .xk-inbounds-status-details-btn" in css
+    assert "#inbounds-status .xk-inbounds-status-details-text[hidden]" in css
+
+    for fragment in (
         'class="actions xk-actions-inline outbounds-actions"',
         '<span class="xk-action-label">Правка</span>',
         '<span class="xk-action-label">Подписки</span>',
