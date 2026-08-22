@@ -17,7 +17,7 @@ def test_mihomo_generator_reuses_late_scoped_operator_layer():
     panel_template = PANEL.read_text(encoding="utf-8")
     assert '<body class="panel-page mihomo-generator-page">' in template
     assert "filename='panel-operator.css', v='20260811h'" in template
-    assert "filename='panel-operator.css', v='20260822drag2'" in panel_template
+    assert "filename='panel-operator.css', v='20260822diag1'" in panel_template
     assert template.index("filename='panel-operator.css'") > template.index("</style>")
     for fragment in ('class="generator-field-card xk-op-field"', 'class="xk-op-field-label" for="profileSelect"', 'class="generator-action-row xk-op-action-row"', 'class="hint xk-card-desc xk-op-field-hint"'):
         assert fragment in template
