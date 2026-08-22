@@ -176,10 +176,30 @@ def _geodat_stat_meta(path: str) -> Dict[str, Any]:
 
 
 def _is_elf_binary(path: str) -> bool:
+    """Return whether *path* is an executable format supported by this host.
+
+    Production packages ship an ELF xk-geodat binary for the router, so ELF
+    remains the only accepted format on Linux.  A macOS development panel,
+    however, runs a locally compiled Mach-O helper to inspect its own DAT
+    fixtures.  Accepting it only on Darwin keeps the router-side guard against
+    accidentally downloaded HTML/text files while making the local viewer
+    usable without a router.
+
+    The historical function name is kept because routes and tests import it.
+    """
     try:
         with open(path, "rb") as f:
             magic = f.read(4)
-        return magic == b"\x7fELF"
+        if magic == b"\x7fELF":
+            return True
+        if sys.platform == "darwin":
+            # Mach-O 32/64-bit (both endian variants) and universal/fat files.
+            return magic in {
+                b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe",
+                b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe",
+                b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca",
+            }
+        return False
     except Exception:
         return False
 
@@ -274,5 +294,4 @@ def _geodat_run_help(bin_path: str) -> Tuple[bool, str]:
         return True, comb[:800]
 
     return True, (comb or out or err)[:800]
-
 

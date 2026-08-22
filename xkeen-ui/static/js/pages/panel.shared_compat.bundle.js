@@ -3,7 +3,7 @@ import '../core/xk_http.js';
 import '../core/xk_storage.js';
 import '../ui/shared_primitives.js';
 import '../ui/operator_icons.js';
-import '../ui/modal.js';
+import '../ui/modal.js?v=20260822drag2';
 import '../ui/confirm_modal.js';
 import '../ui/theme.js?v=20260324b';
 import '../ui/tooltips_auto.js?v=20260805g';

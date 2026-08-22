@@ -604,6 +604,29 @@ def test_confirm_modal_stacks_above_dynamic_editor_modal_z_indexes():
     assert '#confirm-modal {\n  z-index: 2147482990 !important;\n}' in styles
 
 
+def test_modal_drag_uses_frame_coalesced_compositor_transforms():
+    modal = Path('xkeen-ui/static/js/ui/modal.js').read_text(encoding='utf-8')
+    operator_css = Path('xkeen-ui/static/panel-operator.css').read_text(encoding='utf-8')
+    panel_compat = Path('xkeen-ui/static/js/pages/panel.shared_compat.bundle.js').read_text(encoding='utf-8')
+
+    drag_block = modal.split('function startDrag(e, modalEl, contentEl, handleEl) {', 1)[1].split(
+        '\n  // ---------------- Resize handling', 1
+    )[0]
+
+    assert "contentEl.style.transform = 'translate3d(0, 0, 0)';" in drag_block
+    assert "contentEl.style.willChange = 'transform';" in drag_block
+    assert 'requestAnimationFrame(() => {' in drag_block
+    assert 'drag.content.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;' in drag_block
+    assert "activeDrag.content.style.transform = 'none';" in drag_block
+    assert "activeDrag.modal.classList.remove('is-dragging');" in drag_block
+    assert '#routing-dat-contents-modal.xk-dat-modal-shell.is-dragging' in operator_css
+    assert 'backdrop-filter: none !important;' in operator_css
+    assert '.is-dragging .xk-dat-modal-body' in operator_css
+    assert 'visibility: hidden !important;' in operator_css
+    assert 'content-visibility: auto;' in operator_css
+    assert "import '../ui/modal.js?v=20260822drag2';" in panel_compat
+
+
 def test_codemirror6_source_bridge_is_opt_in_and_does_not_inject_importmap_dynamically():
     path = Path('xkeen-ui/static/js/pages/codemirror6.shared.js')
     text = path.read_text(encoding='utf-8')

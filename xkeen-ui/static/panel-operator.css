@@ -12545,6 +12545,28 @@ html[data-theme="light"] body.panel-page #routing-dat-contents-modal.xk-dat-moda
   -webkit-backdrop-filter: blur(5px) !important;
 }
 
+/* The DAT explorer contains a long, scrollable tag index. While it is being
+ * dragged, remove the backdrop sampling layer: it otherwise invalidates a
+ * large composited region every frame on Safari and low-power router clients. */
+body.panel-page #routing-dat-contents-modal.xk-dat-modal-shell.is-dragging,
+html[data-theme="light"] body.panel-page #routing-dat-contents-modal.xk-dat-modal-shell.is-dragging {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Moving a 1,400+ row DOM tree is still expensive even when the outer card is
+ * compositor-transformed. Keep the window silhouette and header visible, but
+ * suspend the master/detail workspace for the few frames in which it moves.
+ * Its layout box remains intact, so there is no jump when dragging ends. */
+body.panel-page #routing-dat-contents-modal.xk-dat-modal-shell.is-dragging .xk-dat-modal-body {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+body.panel-page #routing-dat-contents-modal.xk-dat-modal-shell.is-dragging .xk-dat-modal-content {
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28) !important;
+}
+
 body.panel-page #routing-dat-contents-modal .xk-dat-modal-kicker {
   display: none !important;
 }
@@ -12805,6 +12827,8 @@ body.panel-page #routing-dat-contents-modal .dat-tag-row {
   margin: 0;
   padding: 2px;
   border: 1px solid transparent !important;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 34px;
 }
 
 body.panel-page #routing-dat-contents-modal .dat-tag-row:hover {

@@ -674,7 +674,11 @@
       contentEl.style.height = Math.round(h) + 'px';
       contentEl.style.maxWidth = 'none';
       contentEl.style.maxHeight = 'none';
-      contentEl.style.transform = 'none';
+      // Keep the physical geometry stable and move it with a compositor
+      // transform below. Updating `left`/`top` on every pointer event makes
+      // large master/detail modals (notably the DAT index) repaint their
+      // entire scrollable content and feels jerky on lower-powered devices.
+      contentEl.style.transform = 'translate3d(0, 0, 0)';
       contentEl.dataset.xkDragged = '1';
     } catch (err2) {}
 
@@ -692,7 +696,17 @@
       offY: clientY - r.top,
       w,
       h,
+      baseX: Math.round(r.left),
+      baseY: Math.round(r.top),
+      targetX: Math.round(r.left),
+      targetY: Math.round(r.top),
+      raf: 0,
     };
+
+    try {
+      modalEl.classList.add('is-dragging');
+      contentEl.style.willChange = 'transform';
+    } catch (err2a) {}
 
     try {
       document.documentElement.style.userSelect = 'none';
@@ -714,20 +728,41 @@
     if (!drag || !drag.content) return;
     const clientX = (e && typeof e.clientX === 'number') ? e.clientX : 0;
     const clientY = (e && typeof e.clientY === 'number') ? e.clientY : 0;
-    let x = clientX - drag.offX;
-    let y = clientY - drag.offY;
-    const p = clampPos(x, y, drag.w, drag.h, PAD);
+    const p = clampPos(clientX - drag.offX, clientY - drag.offY, drag.w, drag.h, PAD);
+    drag.targetX = Math.round(p.x);
+    drag.targetY = Math.round(p.y);
+
+    // Pointer events may arrive more often than paint. Coalesce them into one
+    // GPU-friendly transform per frame instead of repeatedly forcing layout
+    // through `left`/`top`.
+    if (drag.raf) return;
     try {
-      drag.content.style.left = Math.round(p.x) + 'px';
-      drag.content.style.top = Math.round(p.y) + 'px';
+      drag.raf = requestAnimationFrame(() => {
+        if (!drag || !drag.content) return;
+        drag.raf = 0;
+        const dx = drag.targetX - drag.baseX;
+        const dy = drag.targetY - drag.baseY;
+        drag.content.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+      });
     } catch (err) {}
   }
 
   function endDrag() {
     if (!drag) return;
 
-    try { saveState(drag.modal, drag.content); } catch (e0) {}
-    try { refreshEmbeds(drag.content); } catch (e1) {}
+    const activeDrag = drag;
+    try {
+      if (activeDrag.raf) cancelAnimationFrame(activeDrag.raf);
+      activeDrag.raf = 0;
+      activeDrag.content.style.left = activeDrag.targetX + 'px';
+      activeDrag.content.style.top = activeDrag.targetY + 'px';
+      activeDrag.content.style.transform = 'none';
+      activeDrag.content.style.willChange = '';
+      activeDrag.modal.classList.remove('is-dragging');
+    } catch (e0) {}
+
+    try { saveState(activeDrag.modal, activeDrag.content); } catch (e1) {}
+    try { refreshEmbeds(activeDrag.content); } catch (e2) {}
 
     try {
       document.documentElement.style.userSelect = '';
@@ -739,7 +774,7 @@
       if (cap && cap.releasePointerCapture && drag.pointerId != null) {
         cap.releasePointerCapture(drag.pointerId);
       }
-    } catch (e2) {}
+    } catch (e3) {}
     drag = null;
   }
 

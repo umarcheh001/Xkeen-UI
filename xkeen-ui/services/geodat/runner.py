@@ -10,6 +10,7 @@ import subprocess
 import time
 from typing import Any, Dict, Tuple
 
+from core.paths import UI_STATE_DIR
 from services.fs_common.local import _local_allowed_roots, _local_resolve
 from services.geodat.install import _geodat_stat_meta
 
@@ -35,7 +36,17 @@ def _json_extract(text: str) -> Any:
 
 
 def _geodat_bin_path() -> str:
-    return (os.getenv('XKEEN_GEODAT_BIN', '') or '').strip() or '/opt/etc/xkeen-ui/bin/xk-geodat'
+    """Return the helper path for the active panel runtime.
+
+    On a router ``UI_STATE_DIR`` is ``/opt/etc/xkeen-ui``, preserving the
+    packaged path.  Local macOS/dev launches can use an isolated state root,
+    though; the old hard-coded router path then pointed at a different (or
+    absent) sandbox after a panel restart.
+    """
+    override = (os.getenv('XKEEN_GEODAT_BIN', '') or '').strip()
+    if override:
+        return override
+    return os.path.join(str(UI_STATE_DIR), 'bin', 'xk-geodat')
 
 
 def _geodat_timeout_s() -> int:
