@@ -283,6 +283,18 @@
       <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
       <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6" />
     </symbol>
+    <symbol id="xk-processes" viewBox="0 0 24 24">
+      <path d="M5 6a1 1 0 0 1 1 -1h12a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-12a1 1 0 0 1 -1 -1l0 -12" />
+      <path d="M9 9h6v6h-6l0 -6" />
+      <path d="M3 10h2" />
+      <path d="M3 14h2" />
+      <path d="M10 3v2" />
+      <path d="M14 3v2" />
+      <path d="M21 10h-2" />
+      <path d="M21 14h-2" />
+      <path d="M14 21v-2" />
+      <path d="M10 21v-2" />
+    </symbol>
     <symbol id="xk-quick-fix" viewBox="0 0 24 24">
       <path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6" />
     </symbol>
@@ -311,6 +323,12 @@
       <path d="M3.06 13a9 9 0 1 0 .49 -4.087" />
       <path d="M3 4.001v5h5" />
       <path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+    </symbol>
+    <symbol id="xk-retry" viewBox="0 0 24 24">
+      <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" />
+      <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />
+      <path d="M12 9l0 3" />
+      <path d="M12 15l.01 0" />
     </symbol>
     <symbol id="xk-save" viewBox="0 0 24 24">
       <path d="M6 4h10l4 4v10a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2" />

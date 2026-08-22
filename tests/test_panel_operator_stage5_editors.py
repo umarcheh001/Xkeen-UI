@@ -87,7 +87,7 @@ def test_stage5_all_static_modals_are_bound_to_one_of_the_four_family_frames():
     expected_counts = {
         "confirm-compact-form": 22,
         "editor-workbench": 7,
-        "master-detail": 18,
+        "master-detail": 19,
         "drawer-help": 3,
     }
     modal_pairs = __import__("re").findall(
@@ -95,7 +95,7 @@ def test_stage5_all_static_modals_are_bound_to_one_of_the_four_family_frames():
         template,
     )
 
-    assert len(modal_pairs) == 50
+    assert len(modal_pairs) == 51
     assert {family for _, family in modal_pairs} == set(expected_counts)
     assert {family: sum(mapped == family for _, mapped in modal_pairs) for family in expected_counts} == expected_counts
 

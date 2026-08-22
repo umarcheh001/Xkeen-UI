@@ -8,6 +8,7 @@ Entware router builds.
 from __future__ import annotations
 
 import os
+import shutil
 import threading
 import time
 from pathlib import Path
@@ -18,9 +19,13 @@ PROC_STAT = Path("/proc/stat")
 PROC_MEMINFO = Path("/proc/meminfo")
 PROC_LOADAVG = Path("/proc/loadavg")
 PROC_UPTIME = Path("/proc/uptime")
+PROC_NET_DEV = Path("/proc/net/dev")
+THERMAL_ZONE = Path("/sys/class/thermal/thermal_zone0/temp")
 
 _cpu_lock = threading.Lock()
 _previous_cpu: tuple[int, int] | None = None
+_network_lock = threading.Lock()
+_previous_network: tuple[float, dict[str, tuple[int, int]]] | None = None
 
 
 def _read_text(path: Path, *, limit: int = 64 * 1024) -> str:
@@ -85,13 +90,100 @@ def _memory(text: str) -> dict[str, int | float]:
     }
 
 
+def _network_counters(text: str) -> dict[str, tuple[int, int]]:
+    counters: dict[str, tuple[int, int]] = {}
+    for line in text.splitlines():
+        if ":" not in line:
+            continue
+        raw_name, raw_values = line.split(":", 1)
+        name = raw_name.strip()
+        values = raw_values.split()
+        if not name or len(values) < 9:
+            continue
+        try:
+            counters[name] = (max(0, int(values[0])), max(0, int(values[8])))
+        except ValueError:
+            continue
+    return counters
+
+
+def _network(text: str, *, now: float) -> dict[str, Any]:
+    global _previous_network
+    counters = _network_counters(text)
+    visible = {name: value for name, value in counters.items() if name != "lo"}
+    if not visible:
+        visible = counters
+
+    with _network_lock:
+        previous = _previous_network
+        _previous_network = (now, counters)
+
+    elapsed = max(0.0, now - previous[0]) if previous else 0.0
+    previous_counters = previous[1] if previous else {}
+    interfaces: list[dict[str, Any]] = []
+    for name, (received, sent) in sorted(visible.items()):
+        old_received, old_sent = previous_counters.get(name, (received, sent))
+        receive_rate = (received - old_received) / elapsed if elapsed and received >= old_received else 0.0
+        send_rate = (sent - old_sent) / elapsed if elapsed and sent >= old_sent else 0.0
+        interfaces.append({
+            "name": name[:32],
+            "received_bytes": received,
+            "sent_bytes": sent,
+            "receive_bytes_per_second": round(max(0.0, receive_rate), 1),
+            "send_bytes_per_second": round(max(0.0, send_rate), 1),
+        })
+
+    return {
+        "received_bytes": sum(item[0] for item in visible.values()),
+        "sent_bytes": sum(item[1] for item in visible.values()),
+        "receive_bytes_per_second": round(sum(item["receive_bytes_per_second"] for item in interfaces), 1),
+        "send_bytes_per_second": round(sum(item["send_bytes_per_second"] for item in interfaces), 1),
+        "interfaces": interfaces[:16],
+    }
+
+
+def _storage(disk_usage: Callable[[str], Any]) -> dict[str, int | float]:
+    usage = disk_usage("/")
+    total = max(0, int(usage.total))
+    used = max(0, min(total, int(usage.used)))
+    free = max(0, min(total, int(usage.free)))
+    return {
+        "total_bytes": total,
+        "used_bytes": used,
+        "free_bytes": free,
+        "percent": round(used * 100.0 / total, 1) if total else 0.0,
+    }
+
+
+def _temperature(text: str) -> float | None:
+    raw = text.strip().splitlines()[0] if text.strip() else ""
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    if abs(value) >= 1000:
+        value /= 1000.0
+    if value < -50 or value > 200:
+        return None
+    return round(value, 1)
+
+
+def _optional_read(reader: Callable[[Path], str], path: Path) -> str:
+    try:
+        return reader(path)
+    except (OSError, ValueError, KeyError):
+        return ""
+
+
 def sample_system_resources(
     *,
     reader: Callable[[Path], str] = _read_text,
     clock: Callable[[], float] = time.time,
+    disk_usage: Callable[[str], Any] = shutil.disk_usage,
 ) -> dict[str, Any]:
     """Return one bounded resource snapshot or raise ``OSError``/``ValueError``."""
 
+    now = clock()
     cpu = _cpu_counters(reader(PROC_STAT))
     memory = _memory(reader(PROC_MEMINFO))
     load_parts = reader(PROC_LOADAVG).split()
@@ -100,24 +192,49 @@ def sample_system_resources(
     while len(loads) < 3:
         loads.append(0.0)
     uptime = int(float(uptime_parts[0])) if uptime_parts else 0
-    return {
+    tasks = load_parts[3].split("/", 1) if len(load_parts) > 3 else []
+    try:
+        runnable_tasks = max(0, int(tasks[0]))
+        total_tasks = max(0, int(tasks[1]))
+    except (ValueError, IndexError):
+        runnable_tasks = total_tasks = 0
+
+    payload: dict[str, Any] = {
+        # Keep the original envelope version: the added diagnostic fields are
+        # optional and older panel clients can safely ignore them.
         "schema_version": 1,
-        "sampled_at": int(clock()),
+        "sampled_at": int(now),
         "cpu": {
             "percent": _cpu_percent(cpu),
             "cores": max(1, int(os.cpu_count() or 1)),
             "load_1m": loads[0],
             "load_5m": loads[1],
             "load_15m": loads[2],
+            "runnable_tasks": runnable_tasks,
+            "total_tasks": total_tasks,
         },
         "memory": memory,
         "uptime_seconds": max(0, uptime),
     }
 
+    network_text = _optional_read(reader, PROC_NET_DEV)
+    if network_text:
+        payload["network"] = _network(network_text, now=now)
+    try:
+        payload["storage"] = _storage(disk_usage)
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    temperature = _temperature(_optional_read(reader, THERMAL_ZONE))
+    if temperature is not None:
+        payload["temperature_celsius"] = temperature
+    return payload
+
 
 def reset_system_resource_sampler() -> None:
     """Reset the CPU delta baseline (used by tests)."""
 
-    global _previous_cpu
+    global _previous_cpu, _previous_network
     with _cpu_lock:
         _previous_cpu = None
+    with _network_lock:
+        _previous_network = None

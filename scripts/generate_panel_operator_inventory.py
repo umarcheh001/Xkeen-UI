@@ -47,6 +47,7 @@ VIEW_STATE_MATRIX = {
 }
 
 MODAL_FAMILIES = {
+    "xk-resource-dashboard-modal": "master-detail",
     "xray-context-modal": "master-detail",
     "xray-devices-modal": "master-detail",
     "terminal-history-modal": "drawer-help",
