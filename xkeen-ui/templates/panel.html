@@ -69,7 +69,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260822drag2') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260822diag1') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -339,8 +339,48 @@
             </article>
           </section>
 
+          <section class="xk-resource-overview" aria-label="Ключевые показатели">
+            <article class="xk-resource-stat" data-resource-stat="cpu">
+              <span>CPU</span><strong id="xk-resource-dashboard-cpu">—</strong><small id="xk-resource-dashboard-load">Load —</small>
+              <div class="xk-resource-stat-meter"><i id="xk-resource-dashboard-cpu-meter"></i></div>
+            </article>
+            <article class="xk-resource-stat" data-resource-stat="memory">
+              <span>Оперативная память</span><strong id="xk-resource-dashboard-memory">—</strong><small id="xk-resource-dashboard-memory-note">—</small>
+              <div class="xk-resource-stat-meter"><i id="xk-resource-dashboard-memory-meter"></i></div>
+            </article>
+            <article class="xk-resource-stat" data-resource-stat="storage">
+              <span>Диск Entware</span><strong id="xk-resource-dashboard-storage">—</strong><small id="xk-resource-dashboard-storage-note">—</small>
+              <div class="xk-resource-stat-meter"><i id="xk-resource-dashboard-storage-meter"></i></div>
+            </article>
+            <article class="xk-resource-stat" data-resource-stat="temperature">
+              <span>Температура</span><strong id="xk-resource-dashboard-temperature">—</strong><small id="xk-resource-dashboard-uptime">Аптайм —</small>
+              <div class="xk-resource-stat-meter"><i id="xk-resource-dashboard-temperature-meter"></i></div>
+            </article>
+          </section>
+
+          <section class="xk-resource-charts" aria-label="История показателей">
+            <article class="xk-resource-chart-card">
+              <header><div><strong>Нагрузка</strong><span>CPU и load average</span></div><div class="xk-resource-chart-legend"><span data-series="cpu">CPU</span><span data-series="load">Load</span></div></header>
+              <div class="xk-resource-chart-wrap"><canvas id="xk-resource-chart-cpu" role="img" aria-label="График загрузки CPU и load average"></canvas><div class="xk-resource-chart-empty">История накапливается</div></div>
+            </article>
+            <article class="xk-resource-chart-card">
+              <header><div><strong>Память</strong><span>RAM и swap</span></div><div class="xk-resource-chart-legend"><span data-series="memory">RAM</span><span data-series="swap">Swap</span></div></header>
+              <div class="xk-resource-chart-wrap"><canvas id="xk-resource-chart-memory" role="img" aria-label="График использования памяти и swap"></canvas><div class="xk-resource-chart-empty">История накапливается</div></div>
+            </article>
+            <article class="xk-resource-chart-card xk-resource-chart-card-wide">
+              <header><div><strong>Сетевая активность</strong><span>Суммарная скорость интерфейсов</span></div><div class="xk-resource-chart-legend"><span data-series="download">Приём</span><span data-series="upload">Отдача</span></div></header>
+              <div class="xk-resource-chart-wrap"><canvas id="xk-resource-chart-network" role="img" aria-label="График сетевой активности"></canvas><div class="xk-resource-chart-empty">История накапливается</div></div>
+            </article>
+          </section>
+
           <section class="xk-resource-panel xk-interface-panel" aria-labelledby="xk-interface-title">
-            <header><div><strong id="xk-interface-title">Интерфейсы</strong><span id="xk-interface-summary">WAN, LAN, Wi‑Fi и VPN</span></div></header>
+            <header>
+              <div><strong id="xk-interface-title">Интерфейсы</strong><span id="xk-interface-summary">WAN, LAN, Wi‑Fi и VPN</span></div>
+              <div class="xk-interface-filter" role="group" aria-label="Фильтр интерфейсов">
+                <button type="button" class="btn-secondary is-active" data-interface-filter="active">Активные</button>
+                <button type="button" class="btn-secondary" data-interface-filter="all">Все</button>
+              </div>
+            </header>
             <div class="xk-resource-table-wrap">
               <table class="xk-resource-table">
                 <thead><tr><th>Интерфейс</th><th>Состояние</th><th>Адрес</th><th>Приём</th><th>Отдача</th><th>Ошибки / drops</th></tr></thead>
@@ -365,40 +405,6 @@
               <button type="button" class="btn-secondary xk-process-button" id="xk-process-refresh">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить процессы</span></button>
             </div>
           </details>
-
-          <section class="xk-resource-overview" aria-label="Ключевые показатели">
-            <article class="xk-resource-stat" data-resource-stat="cpu">
-              <span>CPU</span><strong id="xk-resource-dashboard-cpu">—</strong><small id="xk-resource-dashboard-load">Load —</small>
-              <div class="xk-resource-stat-meter"><i id="xk-resource-dashboard-cpu-meter"></i></div>
-            </article>
-            <article class="xk-resource-stat" data-resource-stat="memory">
-              <span>Оперативная память</span><strong id="xk-resource-dashboard-memory">—</strong><small id="xk-resource-dashboard-memory-note">—</small>
-              <div class="xk-resource-stat-meter"><i id="xk-resource-dashboard-memory-meter"></i></div>
-            </article>
-            <article class="xk-resource-stat" data-resource-stat="storage">
-              <span>Системный диск</span><strong id="xk-resource-dashboard-storage">—</strong><small id="xk-resource-dashboard-storage-note">—</small>
-              <div class="xk-resource-stat-meter"><i id="xk-resource-dashboard-storage-meter"></i></div>
-            </article>
-            <article class="xk-resource-stat" data-resource-stat="temperature">
-              <span>Температура</span><strong id="xk-resource-dashboard-temperature">—</strong><small id="xk-resource-dashboard-uptime">Аптайм —</small>
-              <div class="xk-resource-stat-meter"><i id="xk-resource-dashboard-temperature-meter"></i></div>
-            </article>
-          </section>
-
-          <section class="xk-resource-charts" aria-label="История показателей">
-            <article class="xk-resource-chart-card">
-              <header><div><strong>Нагрузка</strong><span>CPU и load average</span></div><div class="xk-resource-chart-legend"><span data-series="cpu">CPU</span><span data-series="load">Load</span></div></header>
-              <div class="xk-resource-chart-wrap"><canvas id="xk-resource-chart-cpu" role="img" aria-label="График загрузки CPU и load average"></canvas><div class="xk-resource-chart-empty">История накапливается</div></div>
-            </article>
-            <article class="xk-resource-chart-card">
-              <header><div><strong>Память</strong><span>RAM и swap</span></div><div class="xk-resource-chart-legend"><span data-series="memory">RAM</span><span data-series="swap">Swap</span></div></header>
-              <div class="xk-resource-chart-wrap"><canvas id="xk-resource-chart-memory" role="img" aria-label="График использования памяти и swap"></canvas><div class="xk-resource-chart-empty">История накапливается</div></div>
-            </article>
-            <article class="xk-resource-chart-card xk-resource-chart-card-wide">
-              <header><div><strong>Сетевая активность</strong><span>Суммарная скорость интерфейсов</span></div><div class="xk-resource-chart-legend"><span data-series="download">Приём</span><span data-series="upload">Отдача</span></div></header>
-              <div class="xk-resource-chart-wrap"><canvas id="xk-resource-chart-network" role="img" aria-label="График сетевой активности"></canvas><div class="xk-resource-chart-empty">История накапливается</div></div>
-            </article>
-          </section>
 
           <section class="xk-resource-details" aria-label="Сведения о системе">
             <header><div><strong>Состояние системы</strong><span>Данные Linux procfs, без внешней телеметрии</span></div></header>

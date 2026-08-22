@@ -86,6 +86,28 @@ def test_process_normalizer_keeps_bounded_top_cpu_and_memory_fields():
     assert payload["items"][0]["memory_bytes"] == 4 * 1024 * 1024
 
 
+def test_process_normalizer_understands_real_keenetic_comm_and_kb_fields():
+    payload = normalize_processes(
+        {
+            "process": [
+                {
+                    "comm": "ndm",
+                    "pid": "415",
+                    "vm-size": "87592 kB",
+                    "vm-rss": "48156 kB",
+                    "object": {"id": "KeeneticOS core"},
+                    "statistics": {"cpu": {"cur": 2}},
+                }
+            ]
+        },
+        sampled_at=42,
+    )
+
+    assert payload["items"][0]["name"] == "ndm"
+    assert payload["items"][0]["memory_bytes"] == 48156 * 1024
+    assert payload["items"][0]["service"] == "KeeneticOS core"
+
+
 def test_light_snapshot_never_requests_processes():
     requested = []
     proc = {

@@ -11,6 +11,8 @@ let history = [];
 let rangeMinutes = 5;
 let processRequest = null;
 let processesLoaded = false;
+let interfaceFilter = "active";
+let latestInterfaces = null;
 
 function byId(id) {
   return document.getElementById(id);
@@ -387,7 +389,11 @@ function renderInterfaces(interfaces) {
   const summary = byId("xk-interface-summary");
   if (!body) return;
   body.replaceChildren();
-  const items = Array.isArray(interfaces?.items) ? interfaces.items : [];
+  latestInterfaces = interfaces;
+  const allItems = Array.isArray(interfaces?.items) ? interfaces.items : [];
+  const items = interfaceFilter === "all"
+    ? allItems
+    : allItems.filter((item) => item.online === true);
   if (!interfaces?.available || !items.length) {
     const row = document.createElement("tr");
     textCell(row, "Интерфейсы RCI недоступны", "xk-resource-table-empty");
@@ -397,8 +403,10 @@ function renderInterfaces(interfaces) {
     return;
   }
   if (summary) {
-    const online = items.filter((item) => item.online === true).length;
-    summary.textContent = `${online} активных · ${interfaces.count || items.length} всего`;
+    const online = allItems.filter((item) => item.online === true).length;
+    summary.textContent = interfaceFilter === "all"
+      ? `${online} активных · ${interfaces.count || allItems.length} всего`
+      : `${online} активных · скрыто ${Math.max(0, (interfaces.count || allItems.length) - online)}`;
   }
   items.forEach((item) => {
     const row = document.createElement("tr");
@@ -456,7 +464,13 @@ function renderProcesses(payload) {
   const status = byId("xk-process-status");
   if (!body) return;
   body.replaceChildren();
-  const items = Array.isArray(payload?.items) ? payload.items : [];
+  const allItems = Array.isArray(payload?.items) ? payload.items : [];
+  const useful = allItems.filter((item) =>
+    Number(item.cpu_percent || 0) > 0 ||
+    Number(item.memory_bytes || 0) > 0 ||
+    String(item.service || "").trim(),
+  );
+  const items = (useful.length ? useful : allItems).slice(0, 24);
   items.forEach((item) => {
     const row = document.createElement("tr");
     const identity = document.createElement("td");
@@ -482,7 +496,7 @@ function renderProcesses(payload) {
       second: "2-digit",
     });
     status.textContent = items.length
-      ? `Показано ${items.length} из ${payload?.count || items.length} · Top CPU/RAM · ${sampled}`
+      ? `Показано ${items.length} значимых из ${payload?.count || allItems.length} · Top CPU/RAM · ${sampled}`
       : "KeeneticOS не вернул процессов.";
     status.dataset.state = "ready";
   }
@@ -521,7 +535,7 @@ async function loadProcesses() {
   }
 }
 
-function drawChart(id, series, maxValue = null) {
+function drawChart(id, series, maxValue = null, valueFormatter = (value) => `${Math.round(value)}`) {
   const canvas = byId(id);
   if (!canvas) return;
   const wrap = canvas.parentElement;
@@ -540,25 +554,38 @@ function drawChart(id, series, maxValue = null) {
   if (!ctx) return;
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, width, height);
-  const pad = { top: 12, right: 10, bottom: 20, left: 30 };
+  const pad = { top: 10, right: 10, bottom: 22, left: 48 };
   const chartW = width - pad.left - pad.right;
   const chartH = height - pad.top - pad.bottom;
-  ctx.strokeStyle = "rgba(150,157,169,.16)";
+  const css = getComputedStyle(document.documentElement);
+  const textColor = css.getPropertyValue("--op-muted").trim() || "rgba(150,157,169,.8)";
+  ctx.strokeStyle = "rgba(150,157,169,.14)";
   ctx.lineWidth = 1;
   ctx.font = "10px ui-monospace, SFMono-Regular, monospace";
-  ctx.fillStyle = "rgba(150,157,169,.8)";
+  ctx.fillStyle = textColor;
+  const valuesMax = maxValue ?? Math.max(100, ...series.flatMap(([key]) => points.map((point) => Number(point[key]) || 0)), 1);
   for (let i = 0; i <= 3; i += 1) {
     const y = pad.top + (chartH * i) / 3;
     ctx.beginPath();
     ctx.moveTo(pad.left, y);
     ctx.lineTo(width - pad.right, y);
     ctx.stroke();
-    ctx.fillText(`${Math.round((maxValue ?? 100) * (1 - i / 3))}`, 2, y + 3);
+    ctx.fillText(valueFormatter(valuesMax * (1 - i / 3)), 2, y + 3);
+  }
+  if (points.length > 1) {
+    const tickIndexes = [0, Math.floor((points.length - 1) / 2), points.length - 1];
+    ctx.textAlign = "center";
+    tickIndexes.forEach((pointIndex) => {
+      const x = pad.left + chartW * pointIndex / (points.length - 1);
+      const label = new Date(points[pointIndex].at * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
+      ctx.fillText(label, x, height - 4);
+    });
+    ctx.textAlign = "start";
   }
   series.forEach(([key, color]) => {
     const values = points.map((point) => Number(point[key]) || 0);
     if (!values.length) return;
-    const max = maxValue ?? Math.max(100, ...values, 1);
+    const max = valuesMax;
     ctx.beginPath();
     values.forEach((value, index) => {
       const x =
@@ -567,8 +594,24 @@ function drawChart(id, series, maxValue = null) {
       const y = pad.top + chartH * (1 - Math.min(max, value) / max);
       index ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
     });
+    const lastX = pad.left + chartW;
+    ctx.lineTo(lastX, pad.top + chartH);
+    ctx.lineTo(pad.left, pad.top + chartH);
+    ctx.closePath();
+    const fill = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
+    fill.addColorStop(0, `${color}33`);
+    fill.addColorStop(1, `${color}02`);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.beginPath();
+    values.forEach((value, index) => {
+      const x = pad.left + chartW * (values.length === 1 ? 0.5 : index / (values.length - 1));
+      const y = pad.top + chartH * (1 - Math.min(max, value) / max);
+      index ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    });
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
+    ctx.lineJoin = "round";
     ctx.stroke();
   });
 }
@@ -592,6 +635,7 @@ function drawCharts() {
       ["send", "#d7a650"],
     ],
     max,
+    (value) => formatRate(value).replace("/с", ""),
   );
 }
 
@@ -669,6 +713,15 @@ export function initResourceMonitor() {
   byId("xk-process-refresh")?.addEventListener(
     "click",
     () => void loadProcesses(),
+  );
+  document.querySelectorAll("[data-interface-filter]").forEach((button) =>
+    button.addEventListener("click", () => {
+      interfaceFilter = button.dataset.interfaceFilter === "all" ? "all" : "active";
+      document.querySelectorAll("[data-interface-filter]").forEach((item) =>
+        item.classList.toggle("is-active", item === button),
+      );
+      renderInterfaces(latestInterfaces);
+    }),
   );
   document.querySelectorAll("[data-resource-range]").forEach((button) =>
     button.addEventListener("click", () => {

@@ -142,8 +142,11 @@ def _network(text: str, *, now: float) -> dict[str, Any]:
     }
 
 
-def _storage(disk_usage: Callable[[str], Any]) -> dict[str, int | float]:
-    usage = disk_usage("/")
+def _storage(disk_usage: Callable[[str], Any]) -> dict[str, int | float | str]:
+    # The firmware rootfs is a read-only image and normally reports 100% by
+    # design. Xkeen and Entware live on /opt; that is the actionable capacity.
+    path = "/opt" if os.path.isdir("/opt") else "/"
+    usage = disk_usage(path)
     total = max(0, int(usage.total))
     used = max(0, min(total, int(usage.used)))
     free = max(0, min(total, int(usage.free)))
@@ -152,6 +155,7 @@ def _storage(disk_usage: Callable[[str], Any]) -> dict[str, int | float]:
         "used_bytes": used,
         "free_bytes": free,
         "percent": round(used * 100.0 / total, 1) if total else 0.0,
+        "path": path,
     }
 
 

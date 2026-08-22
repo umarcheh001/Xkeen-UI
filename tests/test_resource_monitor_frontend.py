@@ -43,6 +43,10 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         "setProcessAction",
         'setProcessAction("retry", "Повторить")',
         "activateProcessAction",
+        'interfaceFilter = "active"',
+        'data-interface-filter',
+        'slice(0, 24)',
+        'ctx.createLinearGradient',
     ):
         assert fragment in script
     for fragment in (

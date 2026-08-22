@@ -111,6 +111,13 @@ def _integer(value: Any) -> int | None:
     return int(number) if number is not None else None
 
 
+def _kib(value: Any) -> int:
+    """Parse Keenetic process memory fields (for example ``"2048 kB"``)."""
+    if isinstance(value, str):
+        value = value.strip().split()[0] if value.strip() else ""
+    return _integer(value) or 0
+
+
 def _first(mapping: dict[str, Any], *keys: str) -> Any:
     for key in keys:
         if key in mapping and mapping[key] not in (None, ""):
@@ -349,17 +356,20 @@ def normalize_processes(payload: Any, *, sampled_at: int) -> dict[str, Any]:
     seen: set[tuple[int, str]] = set()
     for raw in _walk_processes(payload):
         pid = _integer(raw.get("pid")) or 0
-        name = str(raw.get("name") or raw.get("id") or "process").strip()[:96]
+        name = str(raw.get("comm") or raw.get("name") or raw.get("id") or "process").strip()[:96]
         identity = (pid, name)
         if identity in seen:
             continue
         seen.add(identity)
-        vm_kib = _integer(_first(raw, "vm-size", "vm_size", "rss", "memory")) or 0
+        # RSS is the useful "memory in use" value. Older fixtures only expose
+        # vm-size, so keep it as the bounded fallback.
+        vm_kib = _kib(_first(raw, "vm-rss", "vm_rss", "rss", "memory", "vm-size", "vm_size"))
         service = raw.get("service") if isinstance(raw.get("service"), dict) else {}
+        object_info = raw.get("object") if isinstance(raw.get("object"), dict) else {}
         items.append({
             "pid": pid,
             "name": name,
-            "service": str(raw.get("id") or "")[:128],
+            "service": str(object_info.get("id") or raw.get("id") or "")[:128],
             "state": str(raw.get("state") or service.get("state") or "")[:48],
             "cpu_percent": _nested_cpu(raw),
             "memory_bytes": vm_kib * 1024,

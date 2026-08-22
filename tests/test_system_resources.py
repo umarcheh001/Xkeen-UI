@@ -53,7 +53,7 @@ def test_resource_sampler_cpu_is_delta_based_after_first_sample():
     assert payload["cpu"]["percent"] == 80.0
 
 
-def test_resource_sampler_adds_optional_dashboard_telemetry():
+def test_resource_sampler_adds_optional_dashboard_telemetry(monkeypatch):
     samples = {
         "/proc/stat": "cpu 100 0 0 900\n",
         "/proc/meminfo": "MemTotal: 100 kB\nMemAvailable: 50 kB\nSwapTotal: 200 kB\nSwapFree: 150 kB\n",
@@ -69,6 +69,7 @@ def test_resource_sampler_adds_optional_dashboard_telemetry():
         free = 750
 
     reset_system_resource_sampler()
+    monkeypatch.setattr("services.system_resources.os.path.isdir", lambda path: path == "/opt")
     payload = sample_system_resources(
         reader=lambda path: samples[path.as_posix()],
         clock=lambda: 77.9,
@@ -80,6 +81,7 @@ def test_resource_sampler_adds_optional_dashboard_telemetry():
     assert payload["cpu"]["total_tasks"] == 42
     assert payload["network"]["interfaces"][0]["name"] == "eth0"
     assert payload["storage"]["percent"] == 25.0
+    assert payload["storage"]["path"] == "/opt"
     assert payload["temperature_celsius"] == 48.2
 
 
