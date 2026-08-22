@@ -266,6 +266,19 @@ def test_groups_start_collapsed_persist_lazy_picker_and_keep_actions_on_one_base
     assert "> span:not(.xk-action-icon)" in css
 
 
+def test_collapsed_group_fills_follow_the_card_corners():
+    css = _text(CSS)
+
+    assert (
+        "body.panel-page .xk-mihomo-group-head {" in css
+        and "border-radius: calc(var(--op-radius) - 1px) calc(var(--op-radius) - 1px) 0 0;" in css
+    )
+    assert (
+        "body.panel-page .xk-mihomo-group-picker {" in css
+        and "border-radius: 0 0 calc(var(--op-radius) - 1px) calc(var(--op-radius) - 1px);" in css
+    )
+
+
 def test_control_view_has_cached_mihomo_routed_egress_card():
     markup = _mihomo_markup()
     feature = _text(FEATURE)

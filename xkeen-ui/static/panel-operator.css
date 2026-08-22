@@ -18551,6 +18551,7 @@ body.panel-page .xk-mihomo-group-head {
   gap: 8px;
   min-height: 70px;
   padding: 7px 9px;
+  border-radius: calc(var(--op-radius) - 1px) calc(var(--op-radius) - 1px) 0 0;
   background: var(--op-surface-2);
   cursor: pointer;
 }
@@ -18632,6 +18633,7 @@ body.panel-page .xk-mihomo-group-picker {
   position: relative;
   z-index: 3;
   padding: 0 8px 8px;
+  border-radius: 0 0 calc(var(--op-radius) - 1px) calc(var(--op-radius) - 1px);
   background: var(--op-surface-2);
 }
 
