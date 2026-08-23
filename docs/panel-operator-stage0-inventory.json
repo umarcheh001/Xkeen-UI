@@ -369,7 +369,7 @@
           "narrow"
         ],
         "icon_inventory": {
-          "action_control_count": 22,
+          "action_control_count": 23,
           "operator_icon_control_count": 4,
           "close_control_count": 1,
           "close_icons": [
@@ -467,13 +467,13 @@
               "accessible_name": false
             },
             {
-              "control": "control@9542",
+              "control": "control@9563",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "xk-channel-action",
+              "control": "control@10441",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -485,25 +485,25 @@
               "accessible_name": false
             },
             {
-              "control": "xk-lte-action",
+              "control": "control@11402",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@12629",
+              "control": "control@11966",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@12821",
+              "control": "control@12386",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@13568",
+              "control": "control@13607",
               "icons": [
                 "processes"
               ],
@@ -515,6 +515,12 @@
               "icons": [
                 "refresh"
               ],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@14991",
+              "icons": [],
               "icon_only": false,
               "accessible_name": false
             }
@@ -6677,8 +6683,8 @@
     ]
   },
   "dom_contract": {
-    "id_count": 1184,
-    "unique_id_count": 1184,
+    "id_count": 1182,
+    "unique_id_count": 1182,
     "duplicate_ids": [],
     "ids": [
       "backups-clear-snapshots-btn",
@@ -7732,6 +7738,7 @@
       "xk-conntrack-usage",
       "xk-incidents-list",
       "xk-incidents-panel",
+      "xk-interface-panel",
       "xk-interface-rows",
       "xk-interface-summary",
       "xk-interface-title",
@@ -7745,12 +7752,8 @@
       "xk-internet-state",
       "xk-internet-summary",
       "xk-lte-action",
-      "xk-lte-band",
-      "xk-lte-cinr",
-      "xk-lte-operator",
+      "xk-lte-modems",
       "xk-lte-panel",
-      "xk-lte-rsrp",
-      "xk-lte-rsrq",
       "xk-lte-summary",
       "xk-process-action",
       "xk-process-panel",
@@ -7796,6 +7799,7 @@
       "xk-resource-monitor",
       "xk-resource-monitor-stale",
       "xk-router-freshness",
+      "xk-system-details",
       "xk-terminal-theme-link",
       "xk-update-link",
       "xkeen-arrow",
@@ -8361,7 +8365,7 @@
       {
         "locator": "#xk-lte-action",
         "name": "data-tooltip",
-        "value": "Проверить состояние LTE-модема через RCI"
+        "value": "Проверить состояние всех LTE-модемов через RCI"
       },
       {
         "locator": "button.btn-secondary.is-active@L388",
@@ -10805,7 +10809,7 @@
       "#outbounds-file-code",
       ".xk-mihomo-topbar .xk-routing-active-inline"
     ],
-    "js_referenced_template_id_count": 1114,
+    "js_referenced_template_id_count": 1110,
     "js_referenced_template_ids": {
       "backups-clear-snapshots-btn": [
         "xkeen-ui/static/js/features/backups.js"
@@ -14063,19 +14067,7 @@
       "xk-lte-action": [
         "xkeen-ui/static/js/features/resource_monitor.js"
       ],
-      "xk-lte-band": [
-        "xkeen-ui/static/js/features/resource_monitor.js"
-      ],
-      "xk-lte-cinr": [
-        "xkeen-ui/static/js/features/resource_monitor.js"
-      ],
-      "xk-lte-operator": [
-        "xkeen-ui/static/js/features/resource_monitor.js"
-      ],
-      "xk-lte-rsrp": [
-        "xkeen-ui/static/js/features/resource_monitor.js"
-      ],
-      "xk-lte-rsrq": [
+      "xk-lte-modems": [
         "xkeen-ui/static/js/features/resource_monitor.js"
       ],
       "xk-lte-summary": [
