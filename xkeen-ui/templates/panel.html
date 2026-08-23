@@ -324,7 +324,7 @@
               <div class="xk-internet-checks">
                 <div data-internet-check="internet"><i></i><span>Internet</span><strong id="xk-internet-check-internet">—</strong></div>
                 <div data-internet-check="gateway" data-tooltip="Шлюз — первый узел провайдера. Проверка показывает, доступен ли выход из вашей сети." data-tooltip-placement="bottom"><i></i><span>Gateway</span><strong id="xk-internet-check-gateway">—</strong></div>
-                <div data-internet-check="dns" data-tooltip="DNS преобразует имена сайтов в IP-адреса. Диагностика также учитывает ошибки зашифрованных DoH/DoT-транспортов в журнале роутера." data-tooltip-placement="bottom"><i></i><span>DNS</span><strong id="xk-internet-check-dns">—</strong></div>
+                <div id="xk-internet-check-dns-row" data-internet-check="dns" data-dns-toggle="false" role="button" tabindex="-1" aria-controls="xk-dns-guidance" aria-expanded="false" aria-disabled="true" data-tooltip="DNS преобразует имена сайтов в IP-адреса. Диагностика также учитывает ошибки зашифрованных DoH/DoT-транспортов в журнале роутера." data-tooltip-placement="bottom"><i></i><span>DNS</span><strong id="xk-internet-check-dns">—</strong></div>
                 <div data-internet-check="captive" data-tooltip="Captive portal — страница авторизации сети, например Wi‑Fi в отеле. «Нет перехвата» означает, что авторизация не требуется." data-tooltip-placement="bottom"><i></i><span>Captive</span><strong id="xk-internet-check-captive">—</strong></div>
               </div>
               <dl class="xk-internet-meta">
@@ -342,14 +342,17 @@
             </article>
           </section>
 
-          <section class="xk-resource-panel xk-dns-guidance" id="xk-dns-guidance" data-tone="unknown" aria-label="Диагностика зашифрованного DNS">
+          <section class="xk-resource-panel xk-dns-guidance" id="xk-dns-guidance" data-tone="unknown" aria-label="Диагностика зашифрованного DNS" hidden aria-hidden="true">
             <header><div><strong>Зашифрованный DNS</strong><span id="xk-dns-guidance-summary">Ожидание журнала роутера</span></div><span class="xk-resource-state-badge">DoH/DoT</span></header>
             <div class="xk-dns-guidance-body">
-              <p class="xk-dns-guidance-note">Графики ниже показывают ресурсы роутера, но не определяют доступность DNS-upstream. Причина и адрес проблемного сервера отображаются здесь.</p>
+              <div class="xk-dns-failure-heading">
+                <strong>Проблемные подключения</strong>
+                <span id="xk-dns-failure-count">—</span>
+              </div>
               <div class="xk-dns-failure-list" id="xk-dns-failure-list" aria-live="polite">Проверка не запускалась.</div>
               <div class="xk-dns-recommendations" id="xk-dns-recommendations" aria-hidden="true" hidden>
                 <strong>Что можно сделать</strong>
-                <p>Замените проблемный адрес на один из проверяемых DoH-профилей и повторите диагностику:</p>
+                <p>Попробуйте один из проверенных адресов, затем обновите диагностику:</p>
                 <ul>
                   <li><a href="https://one.one.one.one/dns-query" target="_blank" rel="noreferrer">one.one.one.one/dns-query</a></li>
                   <li><a href="https://dns.google/dns-query" target="_blank" rel="noreferrer">dns.google/dns-query</a></li>

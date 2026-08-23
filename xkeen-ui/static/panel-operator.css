@@ -19791,6 +19791,9 @@ body.panel-page [data-tone="danger"] > header .xk-resource-state-badge { backgro
 body.panel-page .xk-internet-checks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 7px 9px 5px; }
 body.panel-page .xk-internet-checks > div { display: grid; grid-template-columns: 8px minmax(0, 1fr); align-items: center; gap: 3px 6px; min-width: 0; padding: 2px 8px; border-left: 1px solid var(--op-border); }
 body.panel-page .xk-internet-checks > div:first-child { padding-left: 0; border-left: 0; }
+body.panel-page .xk-internet-checks > [data-internet-check="dns"][data-dns-toggle="true"] { cursor: pointer; }
+body.panel-page .xk-internet-checks > [data-internet-check="dns"][data-dns-toggle="true"]:hover { background: var(--op-surface-3); }
+body.panel-page .xk-internet-checks > [data-internet-check="dns"][data-dns-toggle="true"]:focus-visible { outline: 2px solid var(--op-accent); outline-offset: -2px; }
 body.panel-page .xk-internet-checks i { width: 7px; height: 7px; border-radius: 50%; background: var(--op-faint); }
 body.panel-page .xk-internet-checks [data-state="ok"] i { background: var(--op-success); box-shadow: 0 0 0 2px var(--op-success-soft); }
 body.panel-page .xk-internet-checks [data-state="failed"] i { background: var(--op-danger); box-shadow: 0 0 0 2px var(--op-danger-soft); }
@@ -19803,12 +19806,18 @@ body.panel-page .xk-internet-meta dd { margin: 2px 0 0; overflow: hidden; color:
 body.panel-page .xk-dns-guidance { grid-column: 1 / -1; }
 body.panel-page .xk-dns-guidance[data-tone="danger"] { border-color: var(--op-danger); }
 body.panel-page .xk-dns-guidance-body { display: grid; gap: 7px; padding: 8px 9px 9px; }
-body.panel-page .xk-dns-guidance-note,
+body.panel-page .xk-dns-failure-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+body.panel-page .xk-dns-failure-heading strong { color: var(--op-text); font-size: calc(10px * var(--xk-font-scale, 1)); }
+body.panel-page .xk-dns-failure-heading span { color: var(--op-muted); font-size: calc(9px * var(--xk-font-scale, 1)); }
 body.panel-page .xk-dns-recommendations p { margin: 0; color: var(--op-muted); font-size: calc(9px * var(--xk-font-scale, 1)); line-height: 1.45; }
 body.panel-page .xk-dns-failure-list { display: grid; gap: 4px; color: var(--op-muted); font-size: calc(9px * var(--xk-font-scale, 1)); }
-body.panel-page .xk-dns-failure { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; padding: 5px 7px; border: 1px solid var(--op-border); border-radius: var(--op-control-radius); background: var(--op-surface); }
-body.panel-page .xk-dns-failure code { overflow: hidden; color: var(--op-data); font: 600 calc(9px * var(--xk-font-scale, 1)) var(--op-font-mono); text-overflow: ellipsis; white-space: nowrap; }
-body.panel-page .xk-dns-failure span { color: var(--op-muted); }
+body.panel-page .xk-dns-failure { display: grid; gap: 3px; min-width: 0; padding: 6px 8px; border: 1px solid var(--op-border); border-radius: var(--op-control-radius); background: var(--op-surface); }
+body.panel-page .xk-dns-failure-head { display: flex; align-items: center; gap: 7px; min-width: 0; }
+body.panel-page .xk-dns-failure-transport { flex: 0 0 auto; padding: 2px 5px; border-radius: 4px; background: var(--op-danger-soft); color: var(--op-danger); font: 700 calc(8px * var(--xk-font-scale, 1))/1 var(--op-font-mono); letter-spacing: .04em; }
+body.panel-page .xk-dns-failure[data-transport="dot"] .xk-dns-failure-transport { background: var(--op-warning-soft); color: var(--op-warning); }
+body.panel-page .xk-dns-failure code { min-width: 0; overflow: hidden; color: var(--op-data); font: 600 calc(9px * var(--xk-font-scale, 1)) var(--op-font-mono); text-overflow: ellipsis; white-space: nowrap; }
+body.panel-page .xk-dns-failure-reason { color: var(--op-text); font-size: calc(9px * var(--xk-font-scale, 1)); line-height: 1.3; }
+body.panel-page .xk-dns-failure-technical { overflow: hidden; color: var(--op-muted); font-size: calc(8px * var(--xk-font-scale, 1)); line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 body.panel-page .xk-dns-recommendations { display: grid; gap: 5px; padding: 7px; border: 1px solid var(--op-warning); border-radius: var(--op-control-radius); background: var(--op-warning-soft); }
 body.panel-page .xk-dns-recommendations strong { color: var(--op-text); font-size: calc(10px * var(--xk-font-scale, 1)); }
 body.panel-page .xk-dns-recommendations ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 14px; margin: 0; padding-left: 17px; }
