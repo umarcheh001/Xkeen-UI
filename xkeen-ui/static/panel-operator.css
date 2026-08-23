@@ -19619,6 +19619,9 @@ body.panel-page .xk-mihomo-provider-rules {
   max-height: min(52vh, 520px);
   margin: 0;
   padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
   overflow: auto;
   list-style: none;
   counter-reset: none;
@@ -19626,6 +19629,7 @@ body.panel-page .xk-mihomo-provider-rules {
 body.panel-page .xk-mihomo-provider-rules li {
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr);
+  min-width: 0;
   border-bottom: 1px solid var(--op-border);
 }
 body.panel-page .xk-mihomo-provider-rules li > span {
@@ -19642,6 +19646,33 @@ body.panel-page .xk-mihomo-provider-rules code {
   color: var(--op-text);
   font: calc(10.5px * var(--xk-font-scale, 1))/1.45 var(--op-font-mono);
   white-space: pre-wrap;
+}
+
+/* A rule-provider commonly contains short domain entries.  Present them in
+   several reading columns on a wide screen so the inspector does not leave
+   most of its width unused.  Keep the source order left-to-right. */
+@media (min-width: 821px) {
+  body.panel-page .xk-mihomo-provider-rules {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.panel-page .xk-mihomo-provider-rules li:nth-child(odd) {
+    border-right: 1px solid var(--op-border);
+  }
+}
+
+@media (min-width: 1280px) {
+  body.panel-page .xk-mihomo-provider-rules {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  body.panel-page .xk-mihomo-provider-rules li:nth-child(odd) {
+    border-right: 0;
+  }
+
+  body.panel-page .xk-mihomo-provider-rules li:not(:nth-child(3n)) {
+    border-right: 1px solid var(--op-border);
+  }
 }
 body.panel-page .xk-mihomo-provider-inspector-pager { justify-content: flex-end; border-top: 1px solid var(--op-border); border-bottom: 0; }
 body.panel-page .xk-mihomo-provider-inspector-pager > button {

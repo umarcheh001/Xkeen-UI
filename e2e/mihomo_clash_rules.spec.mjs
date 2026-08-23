@@ -144,6 +144,12 @@ test('rules search, connection cross-link and provider actions stay explicit', a
   await expect(page.locator('#mihomo-clash-provider-inspector')).toBeVisible();
   await expect(page.locator('#mihomo-clash-provider-inspector-meta')).toContainText('MRS');
   await expect(page.locator('#mihomo-clash-provider-rules li')).toHaveCount(200);
+  const inspectorLayout = await page.locator('#mihomo-clash-provider-rules').evaluate((list) => ({
+    columns: getComputedStyle(list).gridTemplateColumns.split(' ').length,
+    display: getComputedStyle(list).display,
+  }));
+  expect(inspectorLayout.display).toBe('grid');
+  expect(inspectorLayout.columns).toBeGreaterThanOrEqual(2);
   const inspectorHeight = await page.locator('#mihomo-clash-provider-inspector').evaluate((element) => element.getBoundingClientRect().height);
   await page.route(/\/api\/mihomo\/clash\/providers\/rule\/fixture-rules\/content(?:\?.*)?$/, async (route) => {
     const request = new URL(route.request().url());
