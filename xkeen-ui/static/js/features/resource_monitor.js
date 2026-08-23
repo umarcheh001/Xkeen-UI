@@ -254,7 +254,8 @@ function renderDashboard(payload) {
   const swapTotal = Number(payload?.memory?.swap_total_bytes) || 0;
   const values = [cpu, memory, Number(storage.percent) || 0];
   const routerInternet = payload?.router?.internet || {};
-  const routerDnsError = routerInternet?.dns_diagnostics?.state === "error";
+  const routerDnsDiagnostics = routerInternet?.dns_diagnostics || {};
+  const routerDnsError = routerDnsDiagnostics.state === "error";
   const routerProblem = [
     routerInternet.internet,
     routerInternet.gateway,
@@ -270,18 +271,20 @@ function renderDashboard(payload) {
   if (health) health.dataset.tone = healthTone;
   const healthTitle = byId("xk-resource-health-title");
   const healthNote = byId("xk-resource-health-note");
-  if (healthTitle)
-    healthTitle.textContent =
-      healthTone === "danger"
-        ? "Нужна проверка системы"
-        : healthTone === "warning"
-          ? "Есть нагрузка выше обычной"
-          : "Система в норме";
-  if (healthNote)
-    healthNote.textContent =
-      healthTone === "normal"
-        ? "Критических сигналов не обнаружено"
-        : "Откройте графики и проверьте источник нагрузки";
+  let healthTitleText = "Система в норме";
+  let healthNoteText = "Критических сигналов не обнаружено";
+  if (routerDnsError) {
+    healthTitleText = "Проблема с зашифрованным DNS";
+    healthNoteText = "Графики показывают нагрузку роутера, а причина указана в блоке DNS ниже";
+  } else if (healthTone === "danger") {
+    healthTitleText = "Требуется проверка ресурсов";
+    healthNoteText = "Проверьте CPU, память, диск и температуру — один из показателей критический";
+  } else if (healthTone === "warning") {
+    healthTitleText = "Есть нагрузка выше обычной";
+    healthNoteText = "Сравните CPU/load и сетевую активность за выбранный интервал";
+  }
+  if (healthTitle) healthTitle.textContent = healthTitleText;
+  if (healthNote) healthNote.textContent = healthNoteText;
   const set = (id, value) => {
     const el = byId(id);
     if (el) el.textContent = value;
@@ -451,6 +454,47 @@ function renderInternet(internet, freshness, rci) {
   setCheck("gateway", available ? internet?.gateway : null);
   setCheck("dns", available ? dnsCheck : null, dnsError ? "Ошибка DoH/DoT" : "");
   setCheck("captive", available ? internet?.captive : null);
+}
+
+function renderDnsDiagnostics(diagnostics) {
+  const panel = byId("xk-dns-guidance");
+  if (!panel) return;
+  const state = diagnostics?.state || "unavailable";
+  const failures = Array.isArray(diagnostics?.failures) ? diagnostics.failures : [];
+  const summary = byId("xk-dns-guidance-summary");
+  const list = byId("xk-dns-failure-list");
+  const recommendations = byId("xk-dns-recommendations");
+  panel.dataset.tone = state === "error" ? "danger" : state === "ok" ? "normal" : "unknown";
+  if (summary) {
+    summary.textContent = state === "error"
+      ? diagnostics?.summary || "Обнаружены ошибки DoH/DoT"
+      : state === "ok"
+        ? "Ошибок зашифрованного DNS не обнаружено"
+        : "Журнал DNS недоступен";
+  }
+  if (list) {
+    list.replaceChildren();
+    if (state === "error" && failures.length) {
+      failures.slice(0, 8).forEach((failure) => {
+        const row = document.createElement("div");
+        row.className = "xk-dns-failure";
+        const target = document.createElement("code");
+        target.textContent = failure?.target || "upstream не указан в журнале";
+        const detail = document.createElement("span");
+        detail.textContent = `${failure?.transport || "DNS"} · ${failure?.reason || "ошибка соединения"}`;
+        row.append(target, detail);
+        list.appendChild(row);
+      });
+    } else {
+      list.textContent = state === "unavailable"
+        ? "Невозможно определить upstream без свежего журнала роутера."
+        : "Проблемные upstream не обнаружены.";
+    }
+  }
+  if (recommendations) {
+    recommendations.hidden = state !== "error";
+    recommendations.setAttribute("aria-hidden", state === "error" ? "false" : "true");
+  }
 }
 
 function renderConntrack(conntrack) {
@@ -672,7 +716,9 @@ function renderInterfaces(interfaces) {
 }
 
 function renderRouterDiagnostics(router) {
-  renderInternet(router?.internet, router?.freshness, router?.rci);
+  const internet = router?.internet;
+  renderInternet(internet, router?.freshness, router?.rci);
+  renderDnsDiagnostics(internet?.dns_diagnostics);
   renderConntrack(router?.conntrack);
   renderInterfaces(router?.interfaces);
   renderIncidents(router?.incidents);

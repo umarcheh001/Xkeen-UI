@@ -657,8 +657,34 @@ def normalize_dns_diagnostics(log_text: Any, *, sampled_at: int) -> dict[str, An
         elif raw_line.strip():
             logical_lines.append(raw_line.strip())
 
+    def extract_target(line: str, transport: str) -> str:
+        """Extract only a safe upstream label from a diagnostic record."""
+
+        quoted = re.findall(r"[\"']([^\"']+)[\"']", line)
+        for candidate in quoted:
+            value = candidate.strip()
+            if transport == "DoH" and value.lower().startswith(("https://", "http://")):
+                try:
+                    parsed = urllib.parse.urlsplit(value)
+                    if parsed.hostname:
+                        hostname = parsed.hostname
+                        if ":" in hostname and not hostname.startswith("["):
+                            hostname = f"[{hostname}]"
+                        try:
+                            port = f":{parsed.port}" if parsed.port else ""
+                        except ValueError:
+                            port = ""
+                        path = parsed.path or "/"
+                        return urllib.parse.urlunsplit((parsed.scheme.lower(), f"{hostname}{port}", path, "", ""))[:160]
+                except ValueError:
+                    continue
+            if transport == "DoT" and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.:-]{1,127}", value):
+                if value.lower() not in {"system", "proxy", "stubby"}:
+                    return value[:128]
+        return ""
+
     failures: list[dict[str, str]] = []
-    seen: set[tuple[str, str]] = set()
+    seen: set[tuple[str, str, str]] = set()
     for raw_line in logical_lines[-200:]:
         line = raw_line.strip()
         lower = line.lower()
@@ -703,11 +729,15 @@ def normalize_dns_diagnostics(log_text: Any, *, sampled_at: int) -> dict[str, An
 
         if not transport:
             continue
-        key = (transport, reason)
+        target = extract_target(line, transport)
+        key = (transport, target, reason)
         if key in seen:
             continue
         seen.add(key)
-        failures.append({"transport": transport, "reason": reason})
+        failure = {"transport": transport, "reason": reason}
+        if target:
+            failure["target"] = target
+        failures.append(failure)
 
     transports = sorted({item["transport"] for item in failures})
     if failures:

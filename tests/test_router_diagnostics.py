@@ -39,6 +39,8 @@ def test_normalize_dns_diagnostics_detects_doh_dot_transport_failures_without_ra
     assert payload["state"] == "error"
     assert payload["failure_count"] == 3
     assert {item["transport"] for item in payload["failures"]} == {"DoH", "DoT"}
+    assert "https://dns.google/dns-query" in {item.get("target") for item in payload["failures"]}
+    assert "8.8.8.8" in {item.get("target") for item in payload["failures"]}
     assert "dns.google" not in payload["summary"]
 
 
