@@ -339,8 +339,9 @@ def test_capabilities_read_nested_keenetic_comma_separated_components():
     assert payload["lte"] is True
 
 
-def test_channel_check_calculates_loss_latency_jitter_and_trace():
+def test_channel_check_calculates_loss_latency_jitter_and_trace(monkeypatch):
     calls = []
+    monkeypatch.setattr("services.router_diagnostics.Path.is_file", lambda path: False)
 
     def runner(command, **_kwargs):
         calls.append((command, _kwargs))
@@ -366,6 +367,26 @@ def test_channel_check_calculates_loss_latency_jitter_and_trace():
         {"number": 1, "responded": True, "address": "", "latency_ms": 1.0},
         {"number": 2, "responded": True, "address": "", "latency_ms": 12.0},
     ]
+
+
+def test_channel_check_prefers_keenetic_tcp_traceroute(monkeypatch):
+    calls = []
+    monkeypatch.setattr("services.router_diagnostics.Path.is_file", lambda path: path.as_posix() == "/usr/sbin/traceroute")
+
+    def runner(command, **kwargs):
+        calls.append((command, kwargs))
+        if command[0] == "ping":
+            return SimpleNamespace(stdout="64 bytes from 1.1.1.1: time=20.0 ms\n0% packet loss", stderr="")
+        return SimpleNamespace(stdout="traceroute to yandex.ru (5.255.255.77), 8 hops maximum, 52 byte packets.\n 1  yandex.ru (5.255.255.77)  56.077 ms  56.286 ms  56.859 ms", stderr="")
+
+    payload = channel_check("yandex.ru", include_trace=True, runner=runner, clock=lambda: 77)
+
+    command, kwargs = calls[1]
+    assert command == ["/usr/sbin/traceroute", "-c", "3", "-w", "1", "-s", "52", "-t", "8", "-T", "tcp", "yandex.ru"]
+    assert kwargs["timeout"] == 15
+    assert payload["trace_command"] == "keenetic-tcp"
+    assert payload["trace_state"] == "complete"
+    assert payload["trace_hops"][0]["address"] == "5.255.255.77"
 
 
 def test_channel_check_explains_filtered_traceroute_for_non_technical_users():

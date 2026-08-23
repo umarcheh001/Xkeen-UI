@@ -11,6 +11,7 @@ import json
 import copy
 import math
 import re
+import shutil
 import statistics
 import subprocess
 import threading
@@ -504,6 +505,15 @@ def _describe_trace(result: dict[str, Any], output: str) -> None:
         result["trace_note"] = "Команда не вернула сведения о маршруте. Технический ответ можно посмотреть ниже."
 
 
+def _trace_command(target: str, *, which: Callable[[str], str | None] = shutil.which) -> tuple[list[str], str, int]:
+    """Prefer KeeneticOS' TCP traceroute; fall back to portable BusyBox."""
+    keenetic_trace = "/usr/sbin/traceroute"
+    if Path(keenetic_trace).is_file():
+        return ([keenetic_trace, "-c", "3", "-w", "1", "-s", "52", "-t", "8", "-T", "tcp", target], "keenetic-tcp", 15)
+    portable_trace = which("traceroute") or "traceroute"
+    return ([portable_trace, "-n", "-m", "8", "-q", "1", "-w", "1", target], "traceroute", 12)
+
+
 def channel_check(
     target: str = "1.1.1.1",
     *,
@@ -531,20 +541,17 @@ def channel_check(
     result: dict[str, Any] = {"available": bool(samples) or loss < 100, "target": target, "sampled_at": started, "sent": count, "received": len(samples), "loss_percent": round(loss, 1), "latency_ms": average, "jitter_ms": jitter, "state": "good" if loss == 0 and (average is None or average < 120) else "warning" if loss < 25 else "bad"}
     if include_trace:
         try:
-            # BusyBox traceroute sends three probes per hop by default.  With
-            # eight hops and a one-second wait that can legitimately take 24
-            # seconds, so the previous 20-second subprocess limit killed an
-            # otherwise healthy trace.  One probe is enough for this compact
-            # diagnostics view and keeps the request bounded to roughly 8 s.
+            trace_command, trace_kind, trace_timeout = _trace_command(target)
             trace = runner(
-                ["traceroute", "-n", "-m", "8", "-q", "1", "-w", "1", target],
+                trace_command,
                 capture_output=True,
                 text=True,
-                timeout=12,
+                timeout=trace_timeout,
                 check=False,
             )
             result["trace"] = f"{getattr(trace, 'stdout', '')}\n{getattr(trace, 'stderr', '')}"[:16_384]
             _describe_trace(result, result["trace"])
+            result["trace_command"] = trace_kind
         except (OSError, subprocess.SubprocessError) as exc:
             result["trace"] = f"traceroute недоступен: {exc}"[:512]
             result["trace_state"] = "unavailable"
@@ -553,7 +560,7 @@ def channel_check(
             result["trace_hops"] = []
             result["trace_responded"] = 0
             result["trace_total_hops"] = 0
-        result["trace_command"] = "traceroute"
+            result["trace_command"] = "traceroute"
     return result
 
 
