@@ -18,7 +18,7 @@ def test_stage2_header_has_two_zones_without_replacing_runtime_nodes():
     assert 'data-xk-shell-zone="identity"' in template
     assert 'data-xk-shell-zone="global-actions"' in template
     assert 'class="top-tabs header-tabs" role="navigation" aria-label="Разделы панели"' in template
-    assert "filename='panel-operator.css', v='20260823diag3'" in template
+    assert "filename='panel-operator.css', v='20260823rulescols'" in template
 
     identity_start = template.index('class="panel-shell-identity"')
     actions_start = template.index('data-xk-shell-zone="global-actions"')
