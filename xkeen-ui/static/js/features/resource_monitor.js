@@ -5,6 +5,7 @@ const LTE_ENDPOINT = "/api/system/router/lte";
 const CHANNEL_ENDPOINT = "/api/system/router/channel-check";
 const POLL_MS = 5000;
 const HIDDEN_POLL_MS = 30000;
+const COLLAPSIBLE_PANEL_SELECTOR = "details.xk-collapsible-panel";
 // Stage-one used MAX_HISTORY = 360; the expanded ring now retains 24h at the
 // five-second cadence so the 1h/6h/24h controls have real history to show.
 const MAX_HISTORY = 17280;
@@ -23,6 +24,42 @@ let channelRequest = null;
 let interfaceFilter = "active";
 let latestInterfaces = null;
 const chartState = new Map();
+
+function syncCollapsiblePanelState(panel) {
+  if (!panel?.matches?.(COLLAPSIBLE_PANEL_SELECTOR)) return;
+  const open = Boolean(panel.open);
+  panel.classList.toggle("is-active", open);
+  panel.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+function syncCollapsiblePanels(node) {
+  if (!node) return;
+  if (node.matches?.(COLLAPSIBLE_PANEL_SELECTOR)) {
+    syncCollapsiblePanelState(node);
+  }
+  node.querySelectorAll?.(COLLAPSIBLE_PANEL_SELECTOR).forEach(
+    syncCollapsiblePanelState,
+  );
+}
+
+function bindCollapsiblePanelState() {
+  // The panel screen may append dashboard sections after this module has
+  // initialized. Delegate `toggle` from the document so late <details>
+  // elements still keep their visual and ARIA state in sync.
+  syncCollapsiblePanels(document);
+  document.addEventListener(
+    "toggle",
+    (event) => syncCollapsiblePanelState(event.target),
+    true,
+  );
+  if (typeof MutationObserver === "function") {
+    new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach(syncCollapsiblePanels);
+      });
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  }
+}
 
 // Keep the dashboard dependency-free for low-memory routers, but borrow the
 // useful workbench ideas from fan92rus/xkeen-ui: series controls, hover
@@ -1308,6 +1345,7 @@ export function initResourceMonitor() {
   if (!root || initialized) return false;
   initialized = true;
   bindChartInteractions();
+  bindCollapsiblePanelState();
   root.addEventListener("click", () => {
     setDashboardOpen(true);
     if (root.dataset.state !== "ready") void refresh();
@@ -1319,16 +1357,6 @@ export function initResourceMonitor() {
     "click",
     () => void refresh(),
   );
-  const syncCollapsiblePanelState = (panel) => {
-    if (!panel) return;
-    const open = panel.open;
-    panel.classList.toggle("is-active", open);
-    panel.setAttribute("aria-expanded", open ? "true" : "false");
-  };
-  root.querySelectorAll("details.xk-collapsible-panel").forEach((panel) => {
-    syncCollapsiblePanelState(panel);
-    panel.addEventListener("toggle", () => syncCollapsiblePanelState(panel));
-  });
   const processPanel = byId("xk-process-panel");
   const syncProcessPanelState = () => {
     if (!processPanel) return;

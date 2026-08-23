@@ -363,7 +363,7 @@
           "accessible_label": "Подтвердить"
         },
         {
-          "location": "xkeen-ui/static/js/features/resource_monitor.js:L852",
+          "location": "xkeen-ui/static/js/features/resource_monitor.js:L957",
           "control_type": "runtime-action",
           "accessible_label": "Подтвердить"
         },
@@ -1057,7 +1057,7 @@
           "accessible_label": "Показать доменные имена"
         },
         {
-          "location": "xkeen-ui/static/js/features/resource_monitor.js:L400",
+          "location": "xkeen-ui/static/js/features/resource_monitor.js:L437",
           "control_type": "runtime-action",
           "accessible_label": "Показать доменные имена"
         },
@@ -1901,7 +1901,7 @@
           "accessible_label": "Загрузка"
         },
         {
-          "location": "xkeen-ui/static/js/features/resource_monitor.js:L694",
+          "location": "xkeen-ui/static/js/features/resource_monitor.js:L731",
           "control_type": "runtime-action",
           "accessible_label": "Загрузка"
         },
@@ -2765,7 +2765,7 @@
       "tabler_asset": "refresh-alert",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/resource_monitor.js:L887",
+          "location": "xkeen-ui/static/js/features/resource_monitor.js:L992",
           "control_type": "runtime-action",
           "accessible_label": "retry"
         }
