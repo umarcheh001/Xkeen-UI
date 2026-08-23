@@ -44,6 +44,12 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
     ):
         assert f'id="{element_id}"' in template
     assert 'xk-collapsible-panel' in template
+    for tooltip in (
+        "Шлюз — первый узел провайдера.",
+        "DNS преобразует имена сайтов в IP-адреса.",
+        "Captive portal — страница авторизации сети",
+    ):
+        assert tooltip in template
     for fragment in (
         "setDashboardOpen(true)",
         "data-resource-range",
