@@ -20073,7 +20073,25 @@ body.panel-page .xk-channel-controls { display: flex; align-items: center; gap: 
 body.panel-page .xk-channel-controls input { min-width: 0; flex: 1 1 auto; height: 29px; padding: 0 8px; border: 1px solid var(--op-border); border-radius: var(--op-control-radius); background: var(--op-surface); color: var(--op-text); font: 600 calc(9px * var(--xk-font-scale, 1))/1 var(--op-font-mono); }
 body.panel-page .xk-channel-controls input:focus-visible { border-color: var(--op-accent-border); outline: 2px solid var(--op-accent-soft); }
 body.panel-page .xk-channel-controls button { min-height: 29px; }
-body.panel-page .xk-channel-trace { max-height: 125px; margin: 8px 10px 10px; overflow: auto; padding: 7px 8px; border: 1px solid var(--op-border); border-radius: var(--op-control-radius); background: var(--op-surface); color: var(--op-data); font: 500 calc(8px * var(--xk-font-scale, 1))/1.35 var(--op-font-mono); white-space: pre-wrap; }
+body.panel-page .xk-channel-trace-result { display: grid; gap: 7px; margin: 8px 10px 10px; }
+body.panel-page .xk-channel-trace-result[hidden] { display: none; }
+body.panel-page .xk-channel-trace-summary { display: flex; align-items: flex-start; gap: 8px; padding: 9px 10px; border: 1px solid var(--op-border); border-radius: var(--op-control-radius); background: var(--op-surface); }
+body.panel-page .xk-channel-trace-summary > div { display: grid; gap: 3px; min-width: 0; }
+body.panel-page .xk-channel-trace-summary strong { font-size: calc(10px * var(--xk-font-scale, 1)); }
+body.panel-page .xk-channel-trace-summary span:not(.xk-channel-trace-icon) { color: var(--op-muted); font-size: calc(9px * var(--xk-font-scale, 1)); line-height: 1.35; }
+body.panel-page .xk-channel-trace-icon { width: 9px; height: 9px; flex: 0 0 9px; margin-top: 3px; border-radius: 50%; background: var(--op-muted); box-shadow: 0 0 0 3px color-mix(in srgb, var(--op-muted) 12%, transparent); }
+body.panel-page .xk-channel-trace-result[data-state="complete"] .xk-channel-trace-icon { background: var(--op-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--op-success) 14%, transparent); }
+body.panel-page .xk-channel-trace-result:is([data-state="partial"], [data-state="filtered"]) .xk-channel-trace-icon { background: var(--op-warning); box-shadow: 0 0 0 3px color-mix(in srgb, var(--op-warning) 14%, transparent); }
+body.panel-page .xk-channel-trace-result[data-state="unavailable"] .xk-channel-trace-icon { background: var(--op-danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--op-danger) 14%, transparent); }
+body.panel-page .xk-channel-trace-hops { display: grid; gap: 3px; }
+body.panel-page .xk-channel-trace-hops[hidden] { display: none; }
+body.panel-page .xk-channel-trace-hops > div { display: grid; grid-template-columns: 55px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 5px 8px; border: 1px solid var(--op-border); border-radius: var(--op-control-radius); background: var(--op-surface); font-size: calc(8px * var(--xk-font-scale, 1)); }
+body.panel-page .xk-channel-trace-hops span { color: var(--op-muted); }
+body.panel-page .xk-channel-trace-hops strong { overflow: hidden; color: var(--op-data); font-family: var(--op-font-mono); text-overflow: ellipsis; white-space: nowrap; }
+body.panel-page .xk-channel-trace-technical { border: 1px solid var(--op-border); border-radius: var(--op-control-radius); background: var(--op-surface); }
+body.panel-page .xk-channel-trace-technical > summary { padding: 6px 8px; cursor: pointer; color: var(--op-muted); font-size: calc(8px * var(--xk-font-scale, 1)); }
+body.panel-page .xk-channel-trace-technical[open] > summary { border-bottom: 1px solid var(--op-border); }
+body.panel-page .xk-channel-trace { max-height: 125px; margin: 0; overflow: auto; padding: 7px 8px; border: 0; background: transparent; color: var(--op-data); font: 500 calc(8px * var(--xk-font-scale, 1))/1.35 var(--op-font-mono); white-space: pre-wrap; }
 body.panel-page .xk-stage2-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0 10px; margin: 0; padding: 0 10px 10px; }
 body.panel-page .xk-stage2-metrics > div { min-width: 0; padding-top: 7px; border-top: 1px solid var(--op-border); }
 body.panel-page .xk-stage2-metrics dt { color: var(--op-muted); font-size: calc(8px * var(--xk-font-scale, 1)); }

@@ -359,6 +359,28 @@ def test_channel_check_calculates_loss_latency_jitter_and_trace():
     assert payload["jitter_ms"] == 2.0
     assert payload["loss_percent"] == 0.0
     assert "gateway" in payload["trace"]
+    assert payload["trace_state"] == "complete"
+    assert payload["trace_summary"] == "Маршрут построен"
+    assert payload["trace_responded"] == 2
+    assert payload["trace_hops"] == [
+        {"number": 1, "responded": True, "address": "", "latency_ms": 1.0},
+        {"number": 2, "responded": True, "address": "", "latency_ms": 12.0},
+    ]
+
+
+def test_channel_check_explains_filtered_traceroute_for_non_technical_users():
+    def runner(command, **_kwargs):
+        if command[0] == "ping":
+            return SimpleNamespace(stdout="64 bytes from 1.1.1.1: time=20.0 ms\n0% packet loss", stderr="")
+        return SimpleNamespace(stdout="traceroute to 1.1.1.1, 3 hops max\n 1  *\n 2  *\n 3  *\n", stderr="")
+
+    payload = channel_check("1.1.1.1", include_trace=True, runner=runner, clock=lambda: 77)
+
+    assert payload["trace_state"] == "filtered"
+    assert payload["trace_summary"] == "Маршрут скрыт сетью"
+    assert payload["trace_responded"] == 0
+    assert payload["trace_total_hops"] == 3
+    assert "Ping до адреса прошёл" in payload["trace_note"]
 
 
 def test_channel_check_parses_busybox_packet_loss_wording():

@@ -459,6 +459,51 @@ def _ping_numbers(output: str) -> list[float]:
     return samples
 
 
+def _trace_hops(output: str) -> list[dict[str, Any]]:
+    """Convert BusyBox traceroute rows into a small presentation-safe DTO."""
+    hops: list[dict[str, Any]] = []
+    for line in str(output or "").splitlines():
+        match = re.match(r"^\s*(\d+)\s+(.+?)\s*$", line)
+        if not match:
+            continue
+        response = match.group(2).strip()
+        address_match = re.search(r"((?:\d{1,3}\.){3}\d{1,3}|[0-9A-Fa-f]*:[0-9A-Fa-f:]+)", response)
+        latency_match = re.search(r"([0-9]+(?:[.,][0-9]+)?)\s*ms\b", response, re.I)
+        hops.append({
+            "number": int(match.group(1)),
+            "responded": response.replace("*", "").strip() != "",
+            "address": address_match.group(1) if address_match else "",
+            "latency_ms": float(latency_match.group(1).replace(",", ".")) if latency_match else None,
+        })
+    return hops
+
+
+def _describe_trace(result: dict[str, Any], output: str) -> None:
+    hops = _trace_hops(output)
+    answered = sum(1 for hop in hops if hop["responded"])
+    total = len(hops)
+    result["trace_hops"] = hops
+    result["trace_responded"] = answered
+    result["trace_total_hops"] = total
+    if total and answered == 0:
+        result["trace_state"] = "filtered"
+        result["trace_summary"] = "Маршрут скрыт сетью"
+        ping_note = " Интернет при этом работает: Ping до адреса прошёл." if result.get("available") else ""
+        result["trace_note"] = f"Ни один из {total} промежуточных узлов не ответил. Оператор или роутеры по пути могут блокировать трассировку.{ping_note}"
+    elif total and answered < total:
+        result["trace_state"] = "partial"
+        result["trace_summary"] = "Маршрут получен частично"
+        result["trace_note"] = f"Ответили {answered} из {total} узлов. Пропуски обычно означают, что часть оборудования не отвечает на служебные запросы."
+    elif total:
+        result["trace_state"] = "complete"
+        result["trace_summary"] = "Маршрут построен"
+        result["trace_note"] = f"Получены ответы от всех {total} показанных узлов."
+    else:
+        result["trace_state"] = "unavailable"
+        result["trace_summary"] = "Трассировка не выполнена"
+        result["trace_note"] = "Команда не вернула сведения о маршруте. Технический ответ можно посмотреть ниже."
+
+
 def channel_check(
     target: str = "1.1.1.1",
     *,
@@ -499,8 +544,15 @@ def channel_check(
                 check=False,
             )
             result["trace"] = f"{getattr(trace, 'stdout', '')}\n{getattr(trace, 'stderr', '')}"[:16_384]
+            _describe_trace(result, result["trace"])
         except (OSError, subprocess.SubprocessError) as exc:
             result["trace"] = f"traceroute недоступен: {exc}"[:512]
+            result["trace_state"] = "unavailable"
+            result["trace_summary"] = "Трассировка недоступна"
+            result["trace_note"] = "Не удалось запустить системную команду traceroute."
+            result["trace_hops"] = []
+            result["trace_responded"] = 0
+            result["trace_total_hops"] = 0
         result["trace_command"] = "traceroute"
     return result
 

@@ -875,6 +875,10 @@ function renderIncidents(incidents) {
 function renderChannelCheck(payload) {
   const status = byId("xk-channel-status");
   const trace = byId("xk-channel-trace-output");
+  const traceResult = byId("xk-channel-trace-result");
+  const traceTitle = byId("xk-channel-trace-title");
+  const traceNote = byId("xk-channel-trace-note");
+  const traceHops = byId("xk-channel-trace-hops");
   const panel = byId("xk-channel-panel");
   if (panel) panel.dataset.state = payload?.state || "unknown";
   if (status) {
@@ -884,7 +888,31 @@ function renderChannelCheck(payload) {
   }
   if (trace) {
     trace.textContent = payload?.trace || "";
-    trace.hidden = !payload?.trace;
+  }
+  if (traceResult) {
+    const hasTrace = Boolean(payload?.trace);
+    traceResult.hidden = !hasTrace;
+    traceResult.dataset.state = payload?.trace_state || "unknown";
+    if (traceTitle) traceTitle.textContent = payload?.trace_summary || "Результат трассировки";
+    if (traceNote) traceNote.textContent = payload?.trace_note || "Подробный ответ команды доступен ниже.";
+    if (traceHops) {
+      traceHops.replaceChildren();
+      const answered = Array.isArray(payload?.trace_hops)
+        ? payload.trace_hops.filter((hop) => hop?.responded)
+        : [];
+      answered.forEach((hop) => {
+        const row = document.createElement("div");
+        const number = document.createElement("span");
+        const address = document.createElement("strong");
+        const latency = document.createElement("span");
+        number.textContent = `Шаг ${Number(hop.number) || "—"}`;
+        address.textContent = hop.address || "Узел ответил";
+        latency.textContent = hop.latency_ms == null ? "ответ получен" : `${hop.latency_ms} ms`;
+        row.append(number, address, latency);
+        traceHops.appendChild(row);
+      });
+      traceHops.hidden = answered.length === 0;
+    }
   }
   setStage2Button("xk-channel-action", "Проверить снова", { pressed: payload?.state === "good" });
 }
