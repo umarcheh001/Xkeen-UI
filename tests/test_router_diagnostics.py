@@ -229,7 +229,10 @@ def test_client_and_lte_samplers_use_current_keenetic_branches():
         if path == "show/ip/hotspot":
             return {"host": [{"hostname": "phone", "mac": "AA:01", "active": True}]}
         if path == "show/interface":
-            return {"UsbQmi0": {"id": "UsbQmi0", "mobile": "4G+", "operator": "Test", "rsrp": -101, "band": "3"}}
+            return {
+                "UsbQmi0": {"id": "UsbQmi0", "type": "UsbQmi", "mobile": "4G+", "operator": "Test", "rsrp": -101, "band": "3", "defaultgw": True},
+                "UsbQmi1": {"id": "UsbQmi1", "type": "UsbQmi", "mobile": "4G", "operator": "Backup", "rsrp": -87, "band": "7", "defaultgw": False},
+            }
         raise AssertionError(path)
 
     clients = sample_router_clients(rci_fetcher=fetch, clock=lambda: 42)
@@ -238,6 +241,8 @@ def test_client_and_lte_samplers_use_current_keenetic_branches():
     assert clients["available"] is True
     assert clients["source"] == "show/ip/hotspot"
     assert lte["available"] is True
+    assert lte["count"] == 2
+    assert [item["id"] for item in lte["items"]] == ["UsbQmi0", "UsbQmi1"]
     assert lte["technology"] == "4G+"
     assert requested == ["show/ip/hotspot", "show/interface"]
 
@@ -252,6 +257,56 @@ def test_optional_metrics_normalizers_keep_signal_values():
     assert lte["rsrp"] == -97
     assert lte["rsrq"] == -11
     assert lte["band"] == "B3"
+
+
+def test_lte_normalizer_keeps_rich_modem_details_and_ignores_nested_carriers():
+    payload = normalize_lte(
+        {
+            "UsbQmi0": {
+                "id": "UsbQmi0",
+                "type": "UsbQmi",
+                "description": "MAIN",
+                "operator": "Test",
+                "mobile": "4G+",
+                "connected": "yes",
+                "defaultgw": True,
+                "address": "192.0.2.2",
+                "mask": "255.255.255.252",
+                "rssi": "-70",
+                "rsrp": "-101",
+                "rsrq": "-11",
+                "cinr": "18",
+                "band": "3",
+                "bandwidth": "20",
+                "imei": "123456789012345",
+                "sim": "READY",
+                "ati": {"manufacturer": "Acme", "model": "Fast Modem"},
+                "carrier": {
+                    "1": {"active": True, "mobile": "4G", "band": "3", "bandwidth": "20"},
+                    "2": {"active": False, "mobile": "4G", "band": "7", "bandwidth": "10"},
+                },
+            }
+        },
+        sampled_at=42,
+    )
+
+    assert payload["count"] == 1
+    modem = payload["items"][0]
+    assert modem["name"] == "MAIN"
+    assert modem["model"] == "Fast Modem"
+    assert modem["connected"] is True
+    assert modem["address"] == "192.0.2.2"
+    assert modem["rssi"] == -70
+    assert modem["imei"] == "123456789012345"
+    assert modem["carriers"] == [{
+        "technology": "4G",
+        "band": "3",
+        "bandwidth": 20.0,
+        "earfcn": None,
+        "phy_cell_id": "",
+        "downlink_frequency": None,
+        "uplink_frequency": None,
+    }]
 
 
 def test_capabilities_read_nested_keenetic_comma_separated_components():

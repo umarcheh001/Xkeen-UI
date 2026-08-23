@@ -267,20 +267,108 @@ def normalize_clients(payload: Any, *, sampled_at: int) -> dict[str, Any]:
 
 
 def normalize_lte(payload: Any, *, sampled_at: int) -> dict[str, Any]:
+    """Normalize every modem exposed by a Keenetic RCI branch.
+
+    ``show/interface`` contains one top-level record per UsbQmi/UsbLte modem,
+    but it also contains nested carrier records.  The previous implementation
+    returned the first dictionary with a radio metric and therefore silently
+    discarded every modem after the first one.  Keep a compact compatibility
+    view at the top level while exposing the complete list in ``items``.
+    """
+
+    def modem_record(raw: dict[str, Any], *, top_level: bool) -> bool:
+        identity = " ".join(
+            str(value or "")
+            for value in (
+                _first(raw, "id", "interface-name", "type"),
+                raw.get("description"),
+                " ".join(str(item) for item in raw.get("traits", []) if item) if isinstance(raw.get("traits"), list) else "",
+            )
+        ).lower()
+        has_modem_identity = any(token in identity for token in ("usbqmi", "usblte", "usbmbim", "modem", "mobile"))
+        has_network_identity = any(key in raw for key in ("operator", "provider", "imei", "apn", "sim", "ati", "connection-state"))
+        has_radio_data = any(key in raw for key in ("rsrp", "rsrq", "cinr", "sinr", "rssi", "signal", "band", "mobile"))
+        return has_radio_data and (has_modem_identity or has_network_identity or top_level)
+
+    def active_carriers(raw: dict[str, Any]) -> list[dict[str, Any]]:
+        carriers = raw.get("carrier")
+        source = carriers.values() if isinstance(carriers, dict) else carriers if isinstance(carriers, list) else []
+        result: list[dict[str, Any]] = []
+        for carrier in source:
+            if not isinstance(carrier, dict) or _bool(carrier.get("active")) is False:
+                continue
+            result.append({
+                "technology": str(_first(carrier, "technology", "mobile", "mode", "rat") or "")[:32],
+                "band": str(_first(carrier, "band") or "")[:32],
+                "bandwidth": _signed_number(_first(carrier, "bandwidth")),
+                "earfcn": _integer(_first(carrier, "earfcn")),
+                "phy_cell_id": str(_first(carrier, "phy-cell-id", "phy_cell_id") or "")[:32],
+                "downlink_frequency": _integer(_first(carrier, "dl-freq", "downlink-frequency")),
+                "uplink_frequency": _integer(_first(carrier, "ul-freq", "uplink-frequency")),
+            })
+        return result[:8]
+
+    items: list[dict[str, Any]] = []
+    seen: set[str] = set()
     for raw in _walk_dicts(payload):
-        if any(key in raw for key in ("rsrp", "rsrq", "cinr", "sinr", "band", "operator")):
-            return {
-                "available": True,
-                "sampled_at": sampled_at,
-                "operator": str(_first(raw, "operator", "provider", "network") or "")[:96],
-                "technology": str(_first(raw, "technology", "mobile", "mode", "rat") or "")[:32],
-                "band": str(_first(raw, "band", "cell", "earfcn") or "")[:32],
-                "rsrp": _signed_number(_first(raw, "rsrp", "signal-rsrp")),
-                "rsrq": _signed_number(_first(raw, "rsrq", "signal-rsrq")),
-                "cinr": _signed_number(_first(raw, "cinr", "sinr", "signal-cinr")),
-                "signal": _signed_number(_first(raw, "signal", "rssi")),
-            }
-    return {"available": False, "sampled_at": sampled_at}
+        if not modem_record(raw, top_level=raw is payload):
+            continue
+        modem_id = str(_first(raw, "id", "interface-name") or "").strip()[:64]
+        dedupe_key = modem_id.lower() or f"{_first(raw, 'imei', 'operator', 'provider')}:{len(items)}"
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        ati = raw.get("ati") if isinstance(raw.get("ati"), dict) else {}
+        firmware = str(_first(raw, "fw", "firmware", "revision") or "")[:256]
+        item = {
+            "id": modem_id,
+            "name": str(_first(raw, "description", "name") or modem_id or "LTE-модем")[:96],
+            "operator": str(_first(raw, "operator", "provider", "network") or "")[:96],
+            "technology": str(_first(raw, "technology", "mobile", "mode", "rat") or "")[:32],
+            "connection_state": str(_first(raw, "connection-state", "state", "link") or "")[:32],
+            "connected": _bool(_first(raw, "connected", "link")),
+            "default_route": _bool(_first(raw, "defaultgw", "default-gateway")),
+            "address": str(_first(raw, "address", "ip", "ipv4") or "")[:64],
+            "mask": str(_first(raw, "mask", "netmask") or "")[:64],
+            "priority": _integer(_first(raw, "priority")),
+            "uptime": _integer(_first(raw, "uptime")),
+            "band": str(_first(raw, "band", "cell", "earfcn") or "")[:32],
+            "bandwidth": _signed_number(_first(raw, "bandwidth")),
+            "rsrp": _signed_number(_first(raw, "rsrp", "signal-rsrp")),
+            "rsrq": _signed_number(_first(raw, "rsrq", "signal-rsrq")),
+            "cinr": _signed_number(_first(raw, "cinr", "sinr", "signal-cinr")),
+            "rssi": _signed_number(_first(raw, "rssi", "signal")),
+            "signal_level": _integer(_first(raw, "signal-level", "signal_level")),
+            "imei": str(_first(raw, "imei") or "")[:32],
+            "sim": str(_first(raw, "sim", "sim-state") or "")[:32],
+            "apn": str(_first(raw, "apn") or "")[:96],
+            "roaming": _bool(_first(raw, "roaming")),
+            "base_station": str(_first(raw, "bssid", "base-station") or "")[:64],
+            "enb_id": str(_first(raw, "enb-id", "enb_id") or "")[:32],
+            "sector_id": str(_first(raw, "sector-id", "sector_id") or "")[:32],
+            "tac": str(_first(raw, "tac") or "")[:32],
+            "phy_cell_id": str(_first(raw, "phy-cell-id", "phy_cell_id") or "")[:32],
+            "earfcn": _integer(_first(raw, "earfcn")),
+            "distance": _integer(_first(raw, "distance")),
+            "model": str(_first(ati, "model") or _first(raw, "product", "model-name") or "")[:128],
+            "manufacturer": str(_first(ati, "manufacturer") or _first(raw, "manufacturer") or "")[:96],
+            "firmware": firmware,
+            "carriers": active_carriers(raw),
+        }
+        items.append(item)
+
+    items.sort(key=lambda item: (not bool(item.get("default_route")), str(item.get("id") or item.get("name") or "").lower()))
+    result: dict[str, Any] = {
+        "available": bool(items),
+        "sampled_at": sampled_at,
+        "count": len(items),
+        "items": items,
+    }
+    if items:
+        # Preserve the original single-modem contract for older frontends.
+        result.update({key: value for key, value in items[0].items() if key not in {"id", "name", "carriers"}})
+        result["signal"] = items[0].get("rssi")
+    return result
 
 
 def sample_router_clients(

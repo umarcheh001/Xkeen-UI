@@ -37,6 +37,7 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         "xk-channel-trace",
         "xk-lte-panel",
         "xk-lte-action",
+        "xk-lte-modems",
         "xk-incidents-list",
     ):
         assert f'id="{element_id}"' in template
@@ -57,6 +58,7 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         "loadProcesses",
         "loadClients",
         "loadLte",
+        'Array.isArray(payload?.items)',
         "runChannelCheck",
         "setProcessAction",
         'setProcessAction("retry", "Повторить")',

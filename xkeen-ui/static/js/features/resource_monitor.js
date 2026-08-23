@@ -712,13 +712,81 @@ async function loadClients() {
 function renderLte(payload) {
   const available = payload?.available === true;
   const set = (id, value) => { const element = byId(id); if (element) element.textContent = value; };
+  const root = byId("xk-lte-modems");
+  const items = Array.isArray(payload?.items) ? payload.items : available ? [payload] : [];
   const metric = (value, unit) => value == null || !Number.isFinite(Number(value)) ? "—" : `${Number(value).toFixed(0)} ${unit}`;
-  set("xk-lte-summary", available ? `${payload.technology || "LTE"}${payload.operator ? ` · ${payload.operator}` : ""}` : "LTE-модем не обнаружен");
-  set("xk-lte-operator", payload?.operator || "—");
-  set("xk-lte-rsrp", metric(payload?.rsrp, "dBm"));
-  set("xk-lte-rsrq", metric(payload?.rsrq, "dB"));
-  set("xk-lte-cinr", metric(payload?.cinr, "dB"));
-  set("xk-lte-band", payload?.band || "—");
+  const text = (value) => value == null || String(value).trim() === "" ? "—" : String(value);
+  const duration = (seconds) => {
+    const value = Number(seconds);
+    if (!Number.isFinite(value) || value < 0) return "—";
+    const days = Math.floor(value / 86400);
+    const hours = Math.floor((value % 86400) / 3600);
+    const minutes = Math.floor((value % 3600) / 60);
+    return [days ? `${days} д` : "", hours ? `${hours} ч` : "", `${minutes} мин`].filter(Boolean).join(" ");
+  };
+  const appendMetric = (list, label, value, options = {}) => {
+    if (options.optional && (value == null || String(value).trim() === "")) return;
+    const cell = document.createElement("div");
+    if (options.wide) cell.className = "is-wide";
+    const term = document.createElement("dt");
+    const description = document.createElement("dd");
+    term.textContent = label;
+    description.textContent = text(value);
+    if (options.title) description.title = text(options.title);
+    cell.append(term, description);
+    list.appendChild(cell);
+  };
+  set("xk-lte-summary", items.length ? `${items.length} ${items.length === 1 ? "модем" : items.length < 5 ? "модема" : "модемов"} · ${items.map((item) => item.operator || item.name || item.id).filter(Boolean).join(" / ")}` : "LTE-модемы не обнаружены");
+  if (root) {
+    root.replaceChildren();
+    if (!items.length) {
+      const empty = document.createElement("span");
+      empty.className = "xk-stage2-status";
+      empty.textContent = "KeeneticOS не вернул данные LTE-модемов.";
+      root.appendChild(empty);
+    }
+    items.forEach((item, index) => {
+      const card = document.createElement("article");
+      card.className = "xk-lte-modem";
+      if (item.default_route === true) card.dataset.primary = "true";
+      const header = document.createElement("header");
+      const heading = document.createElement("div");
+      const title = document.createElement("strong");
+      const subtitle = document.createElement("span");
+      const badge = document.createElement("span");
+      title.textContent = item.name || item.id || `Модем ${index + 1}`;
+      subtitle.textContent = [item.id, item.model].filter(Boolean).join(" · ") || "LTE-модем";
+      badge.className = "xk-lte-state";
+      const connected = item.connected === true || String(item.connection_state || "").toLowerCase() === "connected";
+      badge.dataset.state = connected ? "connected" : "offline";
+      badge.textContent = connected ? (item.default_route === true ? "Основной · подключён" : "Подключён") : (item.connection_state || "Не подключён");
+      heading.append(title, subtitle);
+      header.append(heading, badge);
+      const list = document.createElement("dl");
+      list.className = "xk-stage2-metrics xk-lte-metrics";
+      appendMetric(list, "Оператор", item.operator);
+      appendMetric(list, "Сеть", item.technology);
+      appendMetric(list, "RSRP", metric(item.rsrp, "dBm"));
+      appendMetric(list, "RSRQ", metric(item.rsrq, "dB"));
+      appendMetric(list, "CINR", metric(item.cinr, "dB"));
+      appendMetric(list, "RSSI", metric(item.rssi, "dBm"));
+      appendMetric(list, "Диапазон", item.band ? `B${String(item.band).replace(/^B/i, "")}` : "—");
+      appendMetric(list, "Полоса", metric(item.bandwidth, "МГц"));
+      appendMetric(list, "IP-адрес", item.address);
+      appendMetric(list, "Маска", item.mask);
+      appendMetric(list, "Базовая станция", item.base_station);
+      appendMetric(list, "Расстояние", item.distance == null ? "—" : metric(item.distance, "м"));
+      appendMetric(list, "IMEI", item.imei);
+      appendMetric(list, "SIM", item.sim);
+      appendMetric(list, "APN", item.apn);
+      appendMetric(list, "Аптайм", duration(item.uptime));
+      const carrierBands = Array.isArray(item.carriers) ? item.carriers.map((carrier) => carrier.band ? `B${carrier.band}${carrier.bandwidth == null ? "" : ` · ${carrier.bandwidth} МГц`}` : "").filter(Boolean).join("; ") : "";
+      appendMetric(list, "Агрегация несущих", carrierBands, { optional: true, wide: true });
+      appendMetric(list, "Прошивка модема", item.firmware, { optional: true, wide: true, title: item.firmware });
+      card.append(header, list);
+      root.appendChild(card);
+    });
+  }
   setStage2Button("xk-lte-action", available ? "Обновлено" : "Проверить ещё раз", { pressed: available });
 }
 
