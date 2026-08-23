@@ -303,10 +303,24 @@ function renderDashboard(payload) {
     "xk-resource-detail-network",
     `${formatBytes(network.received_bytes)} ↓ · ${formatBytes(network.sent_bytes)} ↑`,
   );
-  set(
-    "xk-resource-detail-interfaces",
-    (network.interfaces || []).map((item) => item.name).join(", ") || "—",
-  );
+  const interfacesDetail = byId("xk-resource-detail-interfaces");
+  if (interfacesDetail) {
+    interfacesDetail.replaceChildren();
+    const interfaceItems = Array.isArray(network.interfaces) ? network.interfaces : [];
+    if (!interfaceItems.length) {
+      interfacesDetail.textContent = "—";
+    } else {
+      interfaceItems.forEach((item) => {
+        const chip = document.createElement("span");
+        chip.className = "xk-resource-interface-chip";
+        chip.textContent = item?.name || "—";
+        const receive = formatOptionalBitRate(item?.receive_bytes_per_second);
+        const send = formatOptionalBitRate(item?.send_bytes_per_second);
+        chip.title = `${item?.name || "Интерфейс"} · ↓ ${receive} · ↑ ${send}`;
+        interfacesDetail.appendChild(chip);
+      });
+    }
+  }
   const freshness = byId("xk-resource-dashboard-freshness");
   if (freshness)
     freshness.textContent = `Обновлено ${new Date((Number(payload?.sampled_at) || Date.now() / 1000) * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
@@ -481,6 +495,67 @@ function setRefreshBusy(busy) {
   );
 }
 
+function interfaceErrorMetrics(item) {
+  return [
+    ["RX errors", item?.receive_errors],
+    ["RX drops", item?.receive_dropped],
+    ["TX errors", item?.send_errors],
+    ["TX drops", item?.send_dropped],
+  ].filter(([, value]) => value != null && Number.isFinite(Number(value)));
+}
+
+function toggleInterfaceErrorDetails(button, item) {
+  const row = button.closest("tr");
+  if (!row) return;
+  const current = row.nextElementSibling;
+  if (current?.classList.contains("xk-interface-error-detail")) {
+    current.remove();
+    button.setAttribute("aria-expanded", "false");
+    row.classList.remove("is-error-expanded");
+    return;
+  }
+  const detailRow = document.createElement("tr");
+  detailRow.className = "xk-interface-error-detail";
+  const detailCell = document.createElement("td");
+  detailCell.colSpan = 6;
+  const detail = document.createElement("div");
+  detail.className = "xk-interface-error-detail-body";
+  const title = document.createElement("strong");
+  title.textContent = `${item?.name || "Интерфейс"} · ошибки и drops`;
+  detail.appendChild(title);
+  interfaceErrorMetrics(item).forEach(([label, value]) => {
+    const metric = document.createElement("span");
+    metric.textContent = `${label}: ${Number(value).toLocaleString()}`;
+    detail.appendChild(metric);
+  });
+  detailCell.appendChild(detail);
+  detailRow.appendChild(detailCell);
+  row.after(detailRow);
+  button.setAttribute("aria-expanded", "true");
+  row.classList.add("is-error-expanded");
+}
+
+function appendInterfaceErrorCell(row, item, errorsAvailable, errors) {
+  const cell = document.createElement("td");
+  cell.className = errors ? "xk-interface-errors-cell" : "xk-resource-mono";
+  if (!errorsAvailable) {
+    cell.textContent = "—";
+  } else if (!errors) {
+    cell.textContent = "0";
+  } else {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "xk-interface-errors";
+    button.textContent = errors.toLocaleString();
+    button.title = "Показать ошибки и drops по направлениям";
+    button.setAttribute("aria-label", `${item?.name || "Интерфейс"}: показать ошибки и drops`);
+    button.setAttribute("aria-expanded", "false");
+    button.addEventListener("click", () => toggleInterfaceErrorDetails(button, item));
+    cell.appendChild(button);
+  }
+  row.appendChild(cell);
+}
+
 function renderInterfaces(interfaces) {
   const body = byId("xk-interface-rows");
   const summary = byId("xk-interface-summary");
@@ -539,11 +614,7 @@ function renderInterfaces(interfaces) {
     const errorValues = [item.receive_errors, item.send_errors, item.receive_dropped, item.send_dropped];
     const errorsAvailable = errorValues.some((value) => value != null && Number.isFinite(Number(value)));
     const errors = errorValues.reduce((total, value) => total + (Number(value) || 0), 0);
-    textCell(
-      row,
-      !errorsAvailable ? "—" : errors ? errors.toLocaleString() : "0",
-      errors ? "xk-interface-errors" : "xk-resource-mono",
-    );
+    appendInterfaceErrorCell(row, item, errorsAvailable, errors);
     body.appendChild(row);
   });
 }

@@ -76,6 +76,9 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         'aria-busy',
         'xk-channel-trace-output',
         'data-tooltip',
+        'toggleInterfaceErrorDetails',
+        'appendInterfaceErrorCell',
+        'xk-resource-interface-chip',
     ):
         assert fragment in script
     for fragment in (
@@ -95,5 +98,9 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         ".xk-stage2-action",
         ".xk-incident-row",
         "flex-flow: column nowrap",
+        ".xk-interface-errors",
+        ".xk-interface-error-detail",
+        ".xk-resource-detail-wide",
+        ".xk-resource-interface-chip",
     ):
         assert fragment in css
