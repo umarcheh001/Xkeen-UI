@@ -43,6 +43,7 @@ const CHARTS = Object.freeze({
   },
   network: {
     id: "xk-resource-chart-network",
+    minMax: 1024,
     axisFormat: formatCompactRate,
     valueFormat: formatRate,
     series: [
@@ -174,10 +175,11 @@ function render(payload) {
 
 function record(payload) {
   const network = payload?.network || {};
+  const cores = Math.max(1, Number(payload?.cpu?.cores) || 1);
   history.push({
     at: Number(payload?.sampled_at) || Math.round(Date.now() / 1000),
     cpu: clampPercent(payload?.cpu?.percent),
-    load: Math.min(100, (Number(payload?.cpu?.load_1m) || 0) * 100),
+    load: clampPercent(((Number(payload?.cpu?.load_1m) || 0) / cores) * 100),
     memory: clampPercent(payload?.memory?.percent),
     swap: Number(payload?.memory?.swap_total_bytes)
       ? clampPercent(
@@ -431,6 +433,37 @@ function setProcessAction(icon, label, { busy = false } = {}) {
     else action.textContent = label;
   }
   action.classList.toggle("is-busy", busy);
+  action.setAttribute("aria-busy", busy ? "true" : "false");
+  action.setAttribute(
+    "data-tooltip",
+    busy
+      ? "Загружаем Top CPU/RAM через RCI"
+      : label === "Загружено"
+        ? "Список процессов загружен. Нажмите, чтобы оставить секцию открытой"
+        : label === "Повторить"
+          ? "Не удалось загрузить процессы. Нажмите, чтобы повторить"
+          : "Открыть список процессов и загрузить Top CPU/RAM",
+  );
+}
+
+function setPressedGroup(selector, active) {
+  document.querySelectorAll(selector).forEach((item) => {
+    const selected = item === active;
+    item.classList.toggle("is-active", selected);
+    item.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
+}
+
+function setRefreshBusy(busy) {
+  const button = byId("xk-resource-dashboard-refresh");
+  if (!button) return;
+  button.classList.toggle("is-busy", busy);
+  button.disabled = busy;
+  button.setAttribute("aria-busy", busy ? "true" : "false");
+  button.setAttribute(
+    "data-tooltip",
+    busy ? "Обновляем телеметрию роутера…" : "Запросить свежую телеметрию роутера",
+  );
 }
 
 function renderInterfaces(interfaces) {
@@ -558,6 +591,13 @@ async function loadProcesses() {
   const status = byId("xk-process-status");
   const controller = new AbortController();
   processRequest = controller;
+  const refreshButton = byId("xk-process-refresh");
+  if (refreshButton) {
+    refreshButton.disabled = true;
+    refreshButton.classList.add("is-busy");
+    refreshButton.setAttribute("aria-busy", "true");
+    refreshButton.setAttribute("data-tooltip", "Обновляем список процессов…");
+  }
   if (status) {
     status.textContent = "Загрузка списка процессов через RCI…";
     status.dataset.state = "loading";
@@ -581,6 +621,12 @@ async function loadProcesses() {
     setProcessAction("retry", "Повторить");
   } finally {
     if (processRequest === controller) processRequest = null;
+    if (refreshButton) {
+      refreshButton.disabled = false;
+      refreshButton.classList.remove("is-busy");
+      refreshButton.setAttribute("aria-busy", "false");
+      refreshButton.setAttribute("data-tooltip", "Повторно запросить список процессов через RCI");
+    }
   }
 }
 
@@ -692,7 +738,8 @@ function drawChart(name, config) {
   const wrap = canvas.parentElement;
   const empty = wrap?.querySelector(".xk-resource-chart-empty");
   const points = chartPoints();
-  if (empty) empty.hidden = points.length > 1;
+  const hasHistory = points.length > 1;
+  if (empty) empty.hidden = hasHistory;
   const rect = canvas.getBoundingClientRect();
   if (rect.width < 2 || rect.height < 2) {
     renderChartStats(name, config, points);
@@ -719,7 +766,7 @@ function drawChart(name, config) {
     1,
     ...activeSeries.flatMap((series) => points.map((point) => Number(point[series.key]) || 0)),
   );
-  const valuesMax = config.fixedMax || niceChartMax(dataMax * 1.08);
+  const valuesMax = config.fixedMax || niceChartMax(Math.max(config.minMax || 1, dataMax * 1.08));
   if (config.bands) {
     const band = (from, to, color) => {
       const top = pad.top + chartH * (1 - to / valuesMax);
@@ -766,7 +813,7 @@ function drawChart(name, config) {
   const allCoordinates = points.map((point, index) => ({
     x: pad.left + chartW * (points.length === 1 ? 0.5 : index / (points.length - 1)),
   }));
-  activeSeries.forEach((series) => {
+  if (hasHistory) activeSeries.forEach((series) => {
     const values = points.map((point) => Number(point[series.key]) || 0);
     if (!values.length) return;
     const coordinates = values.map((value, index) => ({
@@ -799,7 +846,7 @@ function drawChart(name, config) {
     ctx.strokeStyle = css.getPropertyValue("--op-surface-2").trim() || "#1a1e25";
     ctx.stroke();
   });
-  if (runtime.hoverIndex !== null && allCoordinates[runtime.hoverIndex]) {
+  if (hasHistory && runtime.hoverIndex !== null && allCoordinates[runtime.hoverIndex]) {
     const index = runtime.hoverIndex;
     const x = allCoordinates[index].x;
     ctx.save();
@@ -900,6 +947,7 @@ async function refresh() {
   if (request) return;
   const controller = new AbortController();
   request = controller;
+  setRefreshBusy(true);
   try {
     const response = await fetch(ENDPOINT, {
       method: "GET",
@@ -916,6 +964,7 @@ async function refresh() {
     if (!controller.signal.aborted) renderUnavailable();
   } finally {
     if (request === controller) request = null;
+    setRefreshBusy(false);
     schedule();
   }
 }
@@ -937,7 +986,16 @@ export function initResourceMonitor() {
     () => void refresh(),
   );
   const processPanel = byId("xk-process-panel");
+  const syncProcessPanelState = () => {
+    if (!processPanel) return;
+    const open = processPanel.open;
+    processPanel.classList.toggle("is-active", open);
+    processPanel.setAttribute("aria-expanded", open ? "true" : "false");
+    byId("xk-process-action")?.setAttribute("aria-pressed", open ? "true" : "false");
+  };
+  syncProcessPanelState();
   processPanel?.addEventListener("toggle", () => {
+    syncProcessPanelState();
     if (processPanel.open && !processesLoaded) void loadProcesses();
   });
   const processAction = byId("xk-process-action");
@@ -960,18 +1018,14 @@ export function initResourceMonitor() {
   document.querySelectorAll("[data-interface-filter]").forEach((button) =>
     button.addEventListener("click", () => {
       interfaceFilter = button.dataset.interfaceFilter === "all" ? "all" : "active";
-      document.querySelectorAll("[data-interface-filter]").forEach((item) =>
-        item.classList.toggle("is-active", item === button),
-      );
+      setPressedGroup("[data-interface-filter]", button);
       renderInterfaces(latestInterfaces);
     }),
   );
   document.querySelectorAll("[data-resource-range]").forEach((button) =>
     button.addEventListener("click", () => {
       rangeMinutes = Number(button.dataset.resourceRange) || 5;
-      document
-        .querySelectorAll("[data-resource-range]")
-        .forEach((item) => item.classList.toggle("is-active", item === button));
+      setPressedGroup("[data-resource-range]", button);
       drawCharts();
     }),
   );

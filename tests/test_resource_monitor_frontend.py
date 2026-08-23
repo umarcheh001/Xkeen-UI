@@ -51,6 +51,11 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         'data-chart-toggle',
         'pointermove',
         'percentile(values, 95)',
+        'load_1m) || 0) / cores',
+        'setPressedGroup',
+        'setRefreshBusy',
+        'aria-pressed',
+        'data-tooltip',
     ):
         assert fragment in script
     for fragment in (
@@ -59,6 +64,8 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         ".xk-resource-chart-card",
         ".xk-resource-chart-tooltip",
         ".xk-resource-chart-stats",
+        '[aria-pressed="true"]',
+        "#xk-resource-dashboard-refresh.is-busy",
         ".xk-resource-health",
         ".xk-router-diagnostics",
         ".xk-resource-table",

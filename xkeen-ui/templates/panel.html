@@ -297,12 +297,12 @@
           </div>
           <div class="xk-resource-dashboard-actions">
             <div class="xk-resource-range" role="group" aria-label="Интервал графиков">
-              <button type="button" class="btn-secondary is-active" data-resource-range="5">5 мин</button>
-              <button type="button" class="btn-secondary" data-resource-range="15">15 мин</button>
-              <button type="button" class="btn-secondary" data-resource-range="30">30 мин</button>
+              <button type="button" class="btn-secondary is-active" data-resource-range="5" aria-pressed="true" data-tooltip="Показать последние 5 минут телеметрии">5 мин</button>
+              <button type="button" class="btn-secondary" data-resource-range="15" aria-pressed="false" data-tooltip="Показать последние 15 минут телеметрии">15 мин</button>
+              <button type="button" class="btn-secondary" data-resource-range="30" aria-pressed="false" data-tooltip="Показать последние 30 минут телеметрии">30 мин</button>
             </div>
-            <button type="button" class="btn-secondary btn-icon" id="xk-resource-dashboard-refresh" aria-label="Обновить телеметрию" title="Обновить телеметрию">{{ op_icon('refresh') }}</button>
-            <button type="button" class="modal-close" id="xk-resource-dashboard-close" aria-label="Закрыть" title="Закрыть">{{ op_icon('close') }}</button>
+            <button type="button" class="btn-secondary btn-icon" id="xk-resource-dashboard-refresh" aria-label="Обновить телеметрию" data-tooltip="Запросить свежую телеметрию роутера">{{ op_icon('refresh') }}</button>
+            <button type="button" class="modal-close" id="xk-resource-dashboard-close" aria-label="Закрыть" data-tooltip="Закрыть диагностику роутера">{{ op_icon('close') }}</button>
           </div>
         </div>
         <div class="modal-body xk-resource-dashboard-body">
@@ -359,17 +359,17 @@
           </section>
 
           <section class="xk-resource-charts" aria-label="История показателей">
-            <article class="xk-resource-chart-card" data-chart-card="cpu"><header><div><strong>Нагрузка</strong><span>CPU и load average · наведите для деталей</span></div><div class="xk-resource-chart-legend"><button type="button" data-chart-toggle="cpu" data-series="cpu" aria-pressed="true">CPU</button><button type="button" data-chart-toggle="cpu" data-series="load" aria-pressed="true">Load</button></div></header><div class="xk-resource-chart-wrap"><canvas id="xk-resource-chart-cpu" role="img" aria-label="График загрузки CPU и load average"></canvas><div class="xk-resource-chart-tooltip" role="status" aria-live="polite" hidden></div><div class="xk-resource-chart-empty">История накапливается</div></div><div class="xk-resource-chart-stats" id="xk-resource-chart-cpu-stats" aria-label="Статистика нагрузки"></div></article>
-            <article class="xk-resource-chart-card" data-chart-card="memory"><header><div><strong>Память</strong><span>RAM и swap · наведите для деталей</span></div><div class="xk-resource-chart-legend"><button type="button" data-chart-toggle="memory" data-series="memory" aria-pressed="true">RAM</button><button type="button" data-chart-toggle="memory" data-series="swap" aria-pressed="true">Swap</button></div></header><div class="xk-resource-chart-wrap"><canvas id="xk-resource-chart-memory" role="img" aria-label="График использования памяти и swap"></canvas><div class="xk-resource-chart-tooltip" role="status" aria-live="polite" hidden></div><div class="xk-resource-chart-empty">История накапливается</div></div><div class="xk-resource-chart-stats" id="xk-resource-chart-memory-stats" aria-label="Статистика памяти"></div></article>
-            <article class="xk-resource-chart-card xk-resource-chart-card-wide" data-chart-card="network"><header><div><strong>Сетевая активность</strong><span>Суммарная скорость интерфейсов · наведите для деталей</span></div><div class="xk-resource-chart-legend"><button type="button" data-chart-toggle="network" data-series="download" aria-pressed="true">Приём</button><button type="button" data-chart-toggle="network" data-series="upload" aria-pressed="true">Отдача</button></div></header><div class="xk-resource-chart-wrap"><canvas id="xk-resource-chart-network" role="img" aria-label="График сетевой активности"></canvas><div class="xk-resource-chart-tooltip" role="status" aria-live="polite" hidden></div><div class="xk-resource-chart-empty">История накапливается</div></div><div class="xk-resource-chart-stats" id="xk-resource-chart-network-stats" aria-label="Статистика сетевой активности"></div></article>
+            <article class="xk-resource-chart-card" data-chart-card="cpu"><header><div><strong>Нагрузка</strong><span>CPU и load average · наведите для деталей</span></div><div class="xk-resource-chart-legend"><button type="button" data-chart-toggle="cpu" data-series="cpu" aria-pressed="true" data-tooltip="Показать или скрыть загрузку CPU">CPU</button><button type="button" data-chart-toggle="cpu" data-series="load" aria-pressed="true" data-tooltip="Показать или скрыть load average">Load</button></div></header><div class="xk-resource-chart-wrap"><canvas id="xk-resource-chart-cpu" role="img" aria-label="График загрузки CPU и load average"></canvas><div class="xk-resource-chart-tooltip" role="status" aria-live="polite" hidden></div><div class="xk-resource-chart-empty">История накапливается</div></div><div class="xk-resource-chart-stats" id="xk-resource-chart-cpu-stats" aria-label="Статистика нагрузки"></div></article>
+            <article class="xk-resource-chart-card" data-chart-card="memory"><header><div><strong>Память</strong><span>RAM и swap · наведите для деталей</span></div><div class="xk-resource-chart-legend"><button type="button" data-chart-toggle="memory" data-series="memory" aria-pressed="true" data-tooltip="Показать или скрыть использование RAM">RAM</button><button type="button" data-chart-toggle="memory" data-series="swap" aria-pressed="true" data-tooltip="Показать или скрыть использование swap">Swap</button></div></header><div class="xk-resource-chart-wrap"><canvas id="xk-resource-chart-memory" role="img" aria-label="График использования памяти и swap"></canvas><div class="xk-resource-chart-tooltip" role="status" aria-live="polite" hidden></div><div class="xk-resource-chart-empty">История накапливается</div></div><div class="xk-resource-chart-stats" id="xk-resource-chart-memory-stats" aria-label="Ст��тистика памяти"></div></article>
+            <article class="xk-resource-chart-card xk-resource-chart-card-wide" data-chart-card="network"><header><div><strong>Сетевая активность</strong><span>Суммарная скорость интерфейсов · наведите для деталей</span></div><div class="xk-resource-chart-legend"><button type="button" data-chart-toggle="network" data-series="download" aria-pressed="true" data-tooltip="Показать или скрыть скорость приёма">Приём</button><button type="button" data-chart-toggle="network" data-series="upload" aria-pressed="true" data-tooltip="Показать или скрыть скорость отдачи">Отдача</button></div></header><div class="xk-resource-chart-wrap"><canvas id="xk-resource-chart-network" role="img" aria-label="График сетевой активности"></canvas><div class="xk-resource-chart-tooltip" role="status" aria-live="polite" hidden></div><div class="xk-resource-chart-empty">История накапливается</div></div><div class="xk-resource-chart-stats" id="xk-resource-chart-network-stats" aria-label="Статистика сетевой активности"></div></article>
           </section>
 
           <section class="xk-resource-panel xk-interface-panel" aria-labelledby="xk-interface-title">
             <header>
               <div><strong id="xk-interface-title">Интерфейсы</strong><span id="xk-interface-summary">WAN, LAN, Wi‑Fi и VPN</span></div>
               <div class="xk-interface-filter" role="group" aria-label="Фильтр интерфейсов">
-                <button type="button" class="btn-secondary is-active" data-interface-filter="active">Активные</button>
-                <button type="button" class="btn-secondary" data-interface-filter="all">Все</button>
+                <button type="button" class="btn-secondary is-active" data-interface-filter="active" aria-pressed="true" data-tooltip="Показывать только активные интерфейсы">Активные</button>
+                <button type="button" class="btn-secondary" data-interface-filter="all" aria-pressed="false" data-tooltip="Показывать все интерфейсы, включая неактивные">Все</button>
               </div>
             </header>
             <div class="xk-resource-table-wrap">
@@ -383,7 +383,7 @@
           <details class="xk-resource-panel xk-process-panel" id="xk-process-panel">
             <summary>
               <span><strong>Процессы</strong><small>Тяжёлый запрос RCI выполняется только по требованию</small></span>
-              <span class="btn-secondary xk-process-button" id="xk-process-action" role="button" tabindex="0">{{ op_icon('processes') }}<span class="xk-action-label">Показать процессы</span></span>
+              <span class="btn-secondary xk-process-button" id="xk-process-action" role="button" tabindex="0" aria-pressed="false" data-tooltip="Открыть список процессов и загрузить Top CPU/RAM">{{ op_icon('processes') }}<span class="xk-action-label">Показать процессы</span></span>
             </summary>
             <div class="xk-process-content">
               <div class="xk-process-status" id="xk-process-status">Откройте секцию, чтобы загрузить Top CPU и RAM.</div>
@@ -393,7 +393,7 @@
                   <tbody id="xk-process-rows"></tbody>
                 </table>
               </div>
-              <button type="button" class="btn-secondary xk-process-button" id="xk-process-refresh">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить процессы</span></button>
+              <button type="button" class="btn-secondary xk-process-button" id="xk-process-refresh" data-tooltip="Повторно запросить список процессов через RCI">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить процессы</span></button>
             </div>
           </details>
 
