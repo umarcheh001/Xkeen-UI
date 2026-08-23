@@ -47,12 +47,18 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         'data-interface-filter',
         'slice(0, 24)',
         'ctx.createLinearGradient',
+        'traceSmoothLine',
+        'data-chart-toggle',
+        'pointermove',
+        'percentile(values, 95)',
     ):
         assert fragment in script
     for fragment in (
         ".xk-resource-dashboard-content",
         ".xk-resource-overview",
         ".xk-resource-chart-card",
+        ".xk-resource-chart-tooltip",
+        ".xk-resource-chart-stats",
         ".xk-resource-health",
         ".xk-router-diagnostics",
         ".xk-resource-table",

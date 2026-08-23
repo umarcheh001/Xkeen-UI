@@ -13,6 +13,44 @@ let processRequest = null;
 let processesLoaded = false;
 let interfaceFilter = "active";
 let latestInterfaces = null;
+const chartState = new Map();
+
+// Keep the dashboard dependency-free for low-memory routers, but borrow the
+// useful workbench ideas from fan92rus/xkeen-ui: series controls, hover
+// inspection, smoothed lines and min/P95/max/current summaries.
+const CHARTS = Object.freeze({
+  cpu: {
+    id: "xk-resource-chart-cpu",
+    fixedMax: 100,
+    axisFormat: (value) => `${Math.round(value)}%`,
+    valueFormat: (value) => formatPercent(value),
+    bands: true,
+    series: [
+      { key: "cpu", label: "CPU", color: "#7477e8" },
+      { key: "load", label: "Load", color: "#4db68b" },
+    ],
+  },
+  memory: {
+    id: "xk-resource-chart-memory",
+    fixedMax: 100,
+    axisFormat: (value) => `${Math.round(value)}%`,
+    valueFormat: (value) => formatPercent(value),
+    bands: true,
+    series: [
+      { key: "memory", label: "RAM", color: "#4db68b" },
+      { key: "swap", label: "Swap", color: "#d7a650" },
+    ],
+  },
+  network: {
+    id: "xk-resource-chart-network",
+    axisFormat: formatCompactRate,
+    valueFormat: formatRate,
+    series: [
+      { key: "receive", label: "Приём", color: "#42a5e8" },
+      { key: "send", label: "Отдача", color: "#e58a35" },
+    ],
+  },
+});
 
 function byId(id) {
   return document.getElementById(id);
@@ -33,6 +71,17 @@ function formatBytes(value) {
 }
 function formatRate(value) {
   return `${formatBytes(value)}/с`;
+}
+function formatCompactRate(value) {
+  const amount = Math.max(0, Number(value) || 0);
+  const units = ["Б", "КБ", "МБ", "ГБ"];
+  let current = amount;
+  let unit = 0;
+  while (current >= 1024 && unit < units.length - 1) {
+    current /= 1024;
+    unit += 1;
+  }
+  return `${current.toFixed(current >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 function formatBitRate(value) {
   const amount = Math.max(0, Number(value) || 0);
@@ -535,16 +584,120 @@ async function loadProcesses() {
   }
 }
 
-function drawChart(id, series, maxValue = null, valueFormatter = (value) => `${Math.round(value)}`) {
-  const canvas = byId(id);
+function chartPoints() {
+  return history.slice(-Math.max(1, Math.round((rangeMinutes * 60) / 5)));
+}
+
+function percentile(values, value) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const index = Math.max(0, Math.ceil((value / 100) * sorted.length) - 1);
+  return sorted[index];
+}
+
+function niceChartMax(value) {
+  const maximum = Math.max(1, Number(value) || 0);
+  const power = 10 ** Math.floor(Math.log10(maximum));
+  const normalized = maximum / power;
+  const step = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  return step * power;
+}
+
+function chartRuntime(name) {
+  if (!chartState.has(name)) {
+    chartState.set(name, { disabled: new Set(), hoverIndex: null, frame: 0 });
+  }
+  return chartState.get(name);
+}
+
+function traceSmoothLine(ctx, coordinates) {
+  if (!coordinates.length) return;
+  ctx.moveTo(coordinates[0].x, coordinates[0].y);
+  for (let index = 1; index < coordinates.length; index += 1) {
+    const previous = coordinates[index - 1];
+    const current = coordinates[index];
+    const controlX = (previous.x + current.x) / 2;
+    ctx.bezierCurveTo(controlX, previous.y, controlX, current.y, current.x, current.y);
+  }
+}
+
+function renderChartStats(name, config, points) {
+  const root = byId(`${config.id}-stats`);
+  if (!root) return;
+  root.replaceChildren();
+  const heading = document.createElement("div");
+  heading.className = "xk-resource-chart-stats-row xk-resource-chart-stats-head";
+  ["", "мин", "P95", "макс", "сейчас"].forEach((label) => {
+    const cell = document.createElement("span");
+    cell.textContent = label;
+    heading.appendChild(cell);
+  });
+  root.appendChild(heading);
+  const runtime = chartRuntime(name);
+  config.series.forEach((series) => {
+    const values = points.map((point) => Math.max(0, Number(point[series.key]) || 0));
+    const row = document.createElement("div");
+    row.className = "xk-resource-chart-stats-row";
+    row.classList.toggle("is-disabled", runtime.disabled.has(series.key));
+    const label = document.createElement("span");
+    label.className = "xk-resource-chart-stats-label";
+    label.style.setProperty("--chart-series-color", series.color);
+    label.textContent = series.label;
+    row.appendChild(label);
+    const stats = values.length
+      ? [Math.min(...values), percentile(values, 95), Math.max(...values), values.at(-1)]
+      : [0, 0, 0, 0];
+    stats.forEach((value) => {
+      const cell = document.createElement("span");
+      cell.textContent = config.valueFormat(value);
+      row.appendChild(cell);
+    });
+    root.appendChild(row);
+  });
+}
+
+function renderChartTooltip(name, config, points, coordinates, width) {
+  const runtime = chartRuntime(name);
+  const canvas = byId(config.id);
+  const tooltip = canvas?.parentElement?.querySelector(".xk-resource-chart-tooltip");
+  const index = runtime.hoverIndex;
+  if (!tooltip || index === null || !points[index] || !coordinates[index]) {
+    if (tooltip) tooltip.hidden = true;
+    return;
+  }
+  tooltip.replaceChildren();
+  const time = document.createElement("strong");
+  time.textContent = new Date(points[index].at * 1000).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  tooltip.appendChild(time);
+  config.series.forEach((series) => {
+    if (runtime.disabled.has(series.key)) return;
+    const row = document.createElement("span");
+    row.style.setProperty("--chart-series-color", series.color);
+    row.textContent = `${series.label}: ${config.valueFormat(points[index][series.key])}`;
+    tooltip.appendChild(row);
+  });
+  const desiredLeft = coordinates[index].x + 12;
+  tooltip.style.left = `${Math.max(54, Math.min(width - 176, desiredLeft))}px`;
+  tooltip.style.top = "12px";
+  tooltip.hidden = false;
+}
+
+function drawChart(name, config) {
+  const canvas = byId(config.id);
   if (!canvas) return;
   const wrap = canvas.parentElement;
   const empty = wrap?.querySelector(".xk-resource-chart-empty");
-  const points = history.slice(
-    -Math.max(1, Math.round((rangeMinutes * 60) / 5)),
-  );
+  const points = chartPoints();
   if (empty) empty.hidden = points.length > 1;
   const rect = canvas.getBoundingClientRect();
+  if (rect.width < 2 || rect.height < 2) {
+    renderChartStats(name, config, points);
+    return;
+  }
   const dpr = Math.max(1, window.devicePixelRatio || 1);
   const width = Math.max(220, Math.floor(rect.width));
   const height = Math.max(120, Math.floor(rect.height));
@@ -554,89 +707,178 @@ function drawChart(id, series, maxValue = null, valueFormatter = (value) => `${M
   if (!ctx) return;
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, width, height);
-  const pad = { top: 10, right: 10, bottom: 22, left: 48 };
+  const pad = { top: 12, right: 14, bottom: 25, left: 54 };
   const chartW = width - pad.left - pad.right;
   const chartH = height - pad.top - pad.bottom;
   const css = getComputedStyle(document.documentElement);
   const textColor = css.getPropertyValue("--op-muted").trim() || "rgba(150,157,169,.8)";
-  ctx.strokeStyle = "rgba(150,157,169,.14)";
+  const gridColor = css.getPropertyValue("--op-border").trim() || "rgba(150,157,169,.14)";
+  const runtime = chartRuntime(name);
+  const activeSeries = config.series.filter((series) => !runtime.disabled.has(series.key));
+  const dataMax = Math.max(
+    1,
+    ...activeSeries.flatMap((series) => points.map((point) => Number(point[series.key]) || 0)),
+  );
+  const valuesMax = config.fixedMax || niceChartMax(dataMax * 1.08);
+  if (config.bands) {
+    const band = (from, to, color) => {
+      const top = pad.top + chartH * (1 - to / valuesMax);
+      const bottom = pad.top + chartH * (1 - from / valuesMax);
+      ctx.fillStyle = color;
+      ctx.fillRect(pad.left, top, chartW, bottom - top);
+    };
+    band(0, 75, "rgba(77,182,139,.025)");
+    band(75, 90, "rgba(215,166,80,.035)");
+    band(90, 100, "rgba(223,114,123,.045)");
+  }
+  ctx.strokeStyle = gridColor;
+  ctx.globalAlpha = 0.68;
   ctx.lineWidth = 1;
   ctx.font = "10px ui-monospace, SFMono-Regular, monospace";
   ctx.fillStyle = textColor;
-  const valuesMax = maxValue ?? Math.max(100, ...series.flatMap(([key]) => points.map((point) => Number(point[key]) || 0)), 1);
-  for (let i = 0; i <= 3; i += 1) {
-    const y = pad.top + (chartH * i) / 3;
+  for (let index = 0; index <= 4; index += 1) {
+    const y = pad.top + (chartH * index) / 4;
     ctx.beginPath();
     ctx.moveTo(pad.left, y);
     ctx.lineTo(width - pad.right, y);
     ctx.stroke();
-    ctx.fillText(valueFormatter(valuesMax * (1 - i / 3)), 2, y + 3);
+    ctx.globalAlpha = 1;
+    ctx.fillText(config.axisFormat(valuesMax * (1 - index / 4)), 2, y + 3);
+    ctx.globalAlpha = 0.68;
   }
   if (points.length > 1) {
-    const tickIndexes = [0, Math.floor((points.length - 1) / 2), points.length - 1];
-    ctx.textAlign = "center";
+    const tickIndexes = [...new Set([0, .25, .5, .75, 1].map((ratio) => Math.round((points.length - 1) * ratio)))];
     tickIndexes.forEach((pointIndex) => {
       const x = pad.left + chartW * pointIndex / (points.length - 1);
+      ctx.beginPath();
+      ctx.moveTo(x, pad.top);
+      ctx.lineTo(x, pad.top + chartH);
+      ctx.stroke();
       const label = new Date(points[pointIndex].at * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
-      ctx.fillText(label, x, height - 4);
+      ctx.globalAlpha = 1;
+      ctx.textAlign = pointIndex === 0 ? "left" : pointIndex === points.length - 1 ? "right" : "center";
+      ctx.fillText(label, x, height - 5);
+      ctx.globalAlpha = 0.68;
     });
     ctx.textAlign = "start";
   }
-  series.forEach(([key, color]) => {
-    const values = points.map((point) => Number(point[key]) || 0);
+  ctx.globalAlpha = 1;
+  const allCoordinates = points.map((point, index) => ({
+    x: pad.left + chartW * (points.length === 1 ? 0.5 : index / (points.length - 1)),
+  }));
+  activeSeries.forEach((series) => {
+    const values = points.map((point) => Number(point[series.key]) || 0);
     if (!values.length) return;
-    const max = valuesMax;
+    const coordinates = values.map((value, index) => ({
+      x: allCoordinates[index].x,
+      y: pad.top + chartH * (1 - Math.min(valuesMax, value) / valuesMax),
+    }));
     ctx.beginPath();
-    values.forEach((value, index) => {
-      const x =
-        pad.left +
-        chartW * (values.length === 1 ? 0.5 : index / (values.length - 1));
-      const y = pad.top + chartH * (1 - Math.min(max, value) / max);
-      index ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-    });
-    const lastX = pad.left + chartW;
-    ctx.lineTo(lastX, pad.top + chartH);
+    traceSmoothLine(ctx, coordinates);
+    ctx.lineTo(coordinates.at(-1).x, pad.top + chartH);
     ctx.lineTo(pad.left, pad.top + chartH);
     ctx.closePath();
     const fill = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
-    fill.addColorStop(0, `${color}33`);
-    fill.addColorStop(1, `${color}02`);
+    fill.addColorStop(0, `${series.color}2e`);
+    fill.addColorStop(1, `${series.color}03`);
     ctx.fillStyle = fill;
     ctx.fill();
     ctx.beginPath();
-    values.forEach((value, index) => {
-      const x = pad.left + chartW * (values.length === 1 ? 0.5 : index / (values.length - 1));
-      const y = pad.top + chartH * (1 - Math.min(max, value) / max);
-      index ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-    });
-    ctx.strokeStyle = color;
+    traceSmoothLine(ctx, coordinates);
+    ctx.strokeStyle = series.color;
     ctx.lineWidth = 2;
     ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+    const last = coordinates.at(-1);
+    ctx.beginPath();
+    ctx.arc(last.x, last.y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = series.color;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = css.getPropertyValue("--op-surface-2").trim() || "#1a1e25";
     ctx.stroke();
   });
+  if (runtime.hoverIndex !== null && allCoordinates[runtime.hoverIndex]) {
+    const index = runtime.hoverIndex;
+    const x = allCoordinates[index].x;
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = textColor;
+    ctx.globalAlpha = .7;
+    ctx.beginPath();
+    ctx.moveTo(x, pad.top);
+    ctx.lineTo(x, pad.top + chartH);
+    ctx.stroke();
+    ctx.restore();
+    activeSeries.forEach((series) => {
+      const value = Math.max(0, Number(points[index]?.[series.key]) || 0);
+      const y = pad.top + chartH * (1 - Math.min(valuesMax, value) / valuesMax);
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = series.color;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = css.getPropertyValue("--op-surface-2").trim() || "#1a1e25";
+      ctx.stroke();
+    });
+  }
+  runtime.geometry = { pad, chartW, points };
+  renderChartStats(name, config, points);
+  renderChartTooltip(name, config, points, allCoordinates, width);
 }
+
 function drawCharts() {
-  drawChart("xk-resource-chart-cpu", [
-    ["cpu", "#7477e8"],
-    ["load", "#4db68b"],
-  ]);
-  drawChart("xk-resource-chart-memory", [
-    ["memory", "#4db68b"],
-    ["swap", "#d7a650"],
-  ]);
-  const max = Math.max(
-    1,
-    ...history.map((point) => Math.max(point.receive, point.send)),
-  );
-  drawChart(
-    "xk-resource-chart-network",
-    [
-      ["receive", "#5bb8d5"],
-      ["send", "#d7a650"],
-    ],
-    max,
-    (value) => formatRate(value).replace("/с", ""),
-  );
+  Object.entries(CHARTS).forEach(([name, config]) => drawChart(name, config));
+}
+
+function scheduleChartDraw(name) {
+  const runtime = chartRuntime(name);
+  if (runtime.frame) return;
+  runtime.frame = requestAnimationFrame(() => {
+    runtime.frame = 0;
+    drawChart(name, CHARTS[name]);
+  });
+}
+
+function bindChartInteractions() {
+  Object.entries(CHARTS).forEach(([name, config]) => {
+    const canvas = byId(config.id);
+    if (!canvas || canvas.dataset.chartInteractive === "true") return;
+    canvas.dataset.chartInteractive = "true";
+    canvas.addEventListener("pointermove", (event) => {
+      const runtime = chartRuntime(name);
+      const geometry = runtime.geometry;
+      if (!geometry || geometry.points.length < 2) return;
+      const rect = canvas.getBoundingClientRect();
+      const relativeX = (event.clientX - rect.left) * (Math.max(220, rect.width) / Math.max(1, rect.width));
+      const ratio = Math.max(0, Math.min(1, (relativeX - geometry.pad.left) / geometry.chartW));
+      runtime.hoverIndex = Math.round(ratio * (geometry.points.length - 1));
+      scheduleChartDraw(name);
+    });
+    canvas.addEventListener("pointerleave", () => {
+      chartRuntime(name).hoverIndex = null;
+      scheduleChartDraw(name);
+    });
+  });
+  document.querySelectorAll("[data-chart-toggle]").forEach((button) => {
+    if (button.dataset.chartToggleBound === "true") return;
+    button.dataset.chartToggleBound = "true";
+    button.addEventListener("click", () => {
+      const name = button.dataset.chartToggle;
+      const key = button.dataset.series;
+      const config = CHARTS[name];
+      if (!config || !key) return;
+      const runtime = chartRuntime(name);
+      const enabledCount = config.series.filter((series) => !runtime.disabled.has(series.key)).length;
+      if (runtime.disabled.has(key)) runtime.disabled.delete(key);
+      else if (enabledCount > 1) runtime.disabled.add(key);
+      const enabled = !runtime.disabled.has(key);
+      button.classList.toggle("is-disabled", !enabled);
+      button.setAttribute("aria-pressed", enabled ? "true" : "false");
+      drawChart(name, config);
+    });
+  });
 }
 
 function renderUnavailable() {
@@ -682,6 +924,7 @@ export function initResourceMonitor() {
   const root = byId("xk-resource-monitor");
   if (!root || initialized) return false;
   initialized = true;
+  bindChartInteractions();
   root.addEventListener("click", () => {
     setDashboardOpen(true);
     if (root.dataset.state !== "ready") void refresh();
