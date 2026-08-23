@@ -29,17 +29,33 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         "xk-interface-rows",
         "xk-process-panel",
         "xk-process-action",
+        "xk-clients-panel",
+        "xk-clients-action",
+        "xk-client-rows",
+        "xk-channel-panel",
+        "xk-channel-action",
+        "xk-channel-trace",
+        "xk-lte-panel",
+        "xk-lte-action",
+        "xk-incidents-list",
     ):
         assert f'id="{element_id}"' in template
     for fragment in (
         "setDashboardOpen(true)",
         "data-resource-range",
         "MAX_HISTORY = 360",
+        "MAX_HISTORY = 17280",
         "drawCharts",
         "receive_bytes_per_second",
         "PROCESS_ENDPOINT = \"/api/system/processes\"",
+        "CLIENTS_ENDPOINT = \"/api/system/router/clients\"",
+        "LTE_ENDPOINT = \"/api/system/router/lte\"",
+        "CHANNEL_ENDPOINT = \"/api/system/router/channel-check\"",
         "renderRouterDiagnostics",
         "loadProcesses",
+        "loadClients",
+        "loadLte",
+        "runChannelCheck",
         "setProcessAction",
         'setProcessAction("retry", "Повторить")',
         "activateProcessAction",
@@ -55,6 +71,8 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         'setPressedGroup',
         'setRefreshBusy',
         'aria-pressed',
+        'aria-busy',
+        'xk-channel-trace-output',
         'data-tooltip',
     ):
         assert fragment in script
@@ -71,5 +89,8 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         ".xk-resource-table",
         ".xk-process-panel",
         ".xk-process-button",
+        ".xk-resource-stage2-grid",
+        ".xk-stage2-action",
+        ".xk-incident-row",
     ):
         assert fragment in css

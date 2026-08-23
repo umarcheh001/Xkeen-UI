@@ -141,3 +141,36 @@ def test_process_route_is_separate_and_no_store(monkeypatch):
     assert response.status_code == 200
     assert response.get_json()["ok"] is True
     assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_on_demand_router_routes_keep_rci_branches_separate(monkeypatch):
+    monkeypatch.setattr(resource_routes, "sample_router_clients", lambda: {"available": True, "top": [{"name": "laptop"}]})
+    monkeypatch.setattr(resource_routes, "sample_router_lte", lambda: {"available": False})
+    monkeypatch.setattr(resource_routes, "cached_router_capabilities", lambda: {"available": True, "lte": False})
+    monkeypatch.setattr(resource_routes, "channel_check", lambda target, include_trace=False: {"available": True, "target": target, "include_trace": include_trace})
+    app = Flask(__name__)
+    app.register_blueprint(create_system_resources_blueprint())
+    client = app.test_client()
+
+    clients = client.get("/api/system/router/clients")
+    lte = client.get("/api/system/router/lte")
+    capabilities = client.get("/api/system/router/capabilities")
+    channel = client.get("/api/system/router/channel-check?target=example.com&trace=1")
+
+    assert clients.status_code == 200
+    assert clients.get_json()["top"][0]["name"] == "laptop"
+    assert lte.get_json()["available"] is False
+    assert capabilities.get_json()["lte"] is False
+    assert channel.get_json()["include_trace"] is True
+    assert channel.headers["Cache-Control"] == "no-store"
+
+
+def test_channel_route_rejects_invalid_target(monkeypatch):
+    monkeypatch.setattr(resource_routes, "channel_check", lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("invalid target")))
+    app = Flask(__name__)
+    app.register_blueprint(create_system_resources_blueprint())
+
+    response = app.test_client().get("/api/system/router/channel-check?target=bad%20target")
+
+    assert response.status_code == 400
+    assert response.get_json()["code"] == "invalid_channel_target"

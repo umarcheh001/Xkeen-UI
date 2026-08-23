@@ -1,8 +1,13 @@
 const ENDPOINT = "/api/system/resources";
 const PROCESS_ENDPOINT = "/api/system/processes";
+const CLIENTS_ENDPOINT = "/api/system/router/clients";
+const LTE_ENDPOINT = "/api/system/router/lte";
+const CHANNEL_ENDPOINT = "/api/system/router/channel-check";
 const POLL_MS = 5000;
 const HIDDEN_POLL_MS = 30000;
-const MAX_HISTORY = 360;
+// Stage-one used MAX_HISTORY = 360; the expanded ring now retains 24h at the
+// five-second cadence so the 1h/6h/24h controls have real history to show.
+const MAX_HISTORY = 17280;
 
 let timer = 0;
 let request = null;
@@ -11,6 +16,10 @@ let history = [];
 let rangeMinutes = 5;
 let processRequest = null;
 let processesLoaded = false;
+let clientsRequest = null;
+let clientsLoaded = false;
+let lteRequest = null;
+let channelRequest = null;
 let interfaceFilter = "active";
 let latestInterfaces = null;
 const chartState = new Map();
@@ -539,6 +548,184 @@ function renderRouterDiagnostics(router) {
   renderInternet(router?.internet, router?.freshness, router?.rci);
   renderConntrack(router?.conntrack);
   renderInterfaces(router?.interfaces);
+  renderIncidents(router?.incidents);
+}
+
+function setStage2Button(id, label, { busy = false, pressed } = {}) {
+  const button = byId(id);
+  if (!button) return;
+  button.textContent = busy ? "Загрузка…" : label;
+  button.classList.toggle("is-busy", busy);
+  button.disabled = busy;
+  button.setAttribute("aria-busy", busy ? "true" : "false");
+  if (pressed !== undefined) {
+    button.classList.toggle("is-active", pressed);
+    button.setAttribute("aria-pressed", pressed ? "true" : "false");
+  }
+}
+
+function renderClients(payload) {
+  const body = byId("xk-client-rows");
+  const status = byId("xk-clients-status");
+  if (!body) return;
+  body.replaceChildren();
+  const items = (Array.isArray(payload?.top) ? payload.top : payload?.items || []).slice(0, 5);
+  if (!payload?.available || !items.length) {
+    const row = document.createElement("tr");
+    textCell(row, "Клиенты RCI недоступны", "xk-resource-table-empty");
+    row.firstElementChild.colSpan = 6;
+    body.appendChild(row);
+  } else {
+    items.forEach((item) => {
+      const row = document.createElement("tr");
+      const identity = document.createElement("td");
+      const name = document.createElement("strong");
+      const detail = document.createElement("small");
+      name.textContent = item.name || item.mac || item.ip || "Клиент";
+      detail.textContent = [item.ip, item.mac].filter(Boolean).join(" · ");
+      identity.append(name, detail);
+      row.appendChild(identity);
+      textCell(row, formatBytes(item.traffic_bytes), "xk-resource-mono");
+      textCell(row, formatBitRate(item.rx_rate), "xk-resource-mono");
+      textCell(row, formatBitRate(item.tx_rate), "xk-resource-mono");
+      textCell(row, item.rssi == null ? "—" : `${item.rssi} dBm`, "xk-resource-mono");
+      textCell(row, item.interface || "—", "xk-resource-mono");
+      body.appendChild(row);
+    });
+  }
+  if (status) {
+    const sampled = new Date((Number(payload?.sampled_at) || Date.now() / 1000) * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    status.textContent = payload?.available
+      ? `Показано ${items.length} из ${payload?.count || items.length} · ${sampled}`
+      : "KeeneticOS не вернул список клиентов.";
+    status.dataset.state = payload?.available ? "ready" : "error";
+  }
+  clientsLoaded = true;
+  setStage2Button("xk-clients-action", "Загружено", { pressed: true });
+}
+
+async function loadClients() {
+  if (clientsRequest) return;
+  const status = byId("xk-clients-status");
+  const controller = new AbortController();
+  clientsRequest = controller;
+  setStage2Button("xk-clients-action", "Загрузка…", { busy: true, pressed: true });
+  if (status) {
+    status.textContent = "Загрузка списка клиентов через RCI…";
+    status.dataset.state = "loading";
+  }
+  try {
+    const response = await fetch(CLIENTS_ENDPOINT, { method: "GET", cache: "no-store", credentials: "same-origin", signal: controller.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    renderClients(await response.json());
+  } catch (error) {
+    if (!controller.signal.aborted && status) {
+      status.textContent = "Не удалось получить клиентов. Проверьте доступ RCI и повторите.";
+      status.dataset.state = "error";
+    }
+    setStage2Button("xk-clients-action", "Повторить", { pressed: false });
+  } finally {
+    if (clientsRequest === controller) clientsRequest = null;
+    if (byId("xk-clients-action")) byId("xk-clients-action").disabled = false;
+  }
+}
+
+function renderLte(payload) {
+  const available = payload?.available === true;
+  const set = (id, value) => { const element = byId(id); if (element) element.textContent = value; };
+  const metric = (value, unit) => value == null || !Number.isFinite(Number(value)) ? "—" : `${Number(value).toFixed(0)} ${unit}`;
+  set("xk-lte-summary", available ? `${payload.technology || "LTE"}${payload.operator ? ` · ${payload.operator}` : ""}` : "LTE-модем не обнаружен");
+  set("xk-lte-operator", payload?.operator || "—");
+  set("xk-lte-rsrp", metric(payload?.rsrp, "dBm"));
+  set("xk-lte-rsrq", metric(payload?.rsrq, "dB"));
+  set("xk-lte-cinr", metric(payload?.cinr, "dB"));
+  set("xk-lte-band", payload?.band || "—");
+  setStage2Button("xk-lte-action", available ? "Обновлено" : "Проверить ещё раз", { pressed: available });
+}
+
+async function loadLte() {
+  if (lteRequest) return;
+  const controller = new AbortController();
+  lteRequest = controller;
+  setStage2Button("xk-lte-action", "Загрузка…", { busy: true, pressed: true });
+  const summary = byId("xk-lte-summary");
+  if (summary) summary.textContent = "Запрашиваем состояние модема…";
+  try {
+    const response = await fetch(LTE_ENDPOINT, { method: "GET", cache: "no-store", credentials: "same-origin", signal: controller.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    renderLte(await response.json());
+  } catch (error) {
+    if (summary) summary.textContent = "Не удалось получить данные LTE";
+    setStage2Button("xk-lte-action", "Повторить", { pressed: false });
+  } finally {
+    if (lteRequest === controller) lteRequest = null;
+    if (byId("xk-lte-action")) byId("xk-lte-action").disabled = false;
+  }
+}
+
+function renderIncidents(incidents) {
+  const root = byId("xk-incidents-list");
+  if (!root) return;
+  root.replaceChildren();
+  const items = Array.isArray(incidents) ? incidents.slice(0, 8) : [];
+  if (!items.length) {
+    const empty = document.createElement("span");
+    empty.className = "xk-stage2-status";
+    empty.textContent = "Пока без событий.";
+    root.appendChild(empty);
+    return;
+  }
+  items.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "xk-incident-row";
+    row.dataset.state = item.state || "normal";
+    const message = document.createElement("strong");
+    const at = document.createElement("time");
+    message.textContent = item.message || "Изменение состояния";
+    at.textContent = new Date((Number(item.at) || 0) * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    row.append(message, at);
+    root.appendChild(row);
+  });
+}
+
+function renderChannelCheck(payload) {
+  const status = byId("xk-channel-status");
+  const trace = byId("xk-channel-trace-output");
+  const panel = byId("xk-channel-panel");
+  if (panel) panel.dataset.state = payload?.state || "unknown";
+  if (status) {
+    if (!payload?.available && payload?.state === "unavailable") status.textContent = payload.error || "Команда ping недоступна на сервере.";
+    else status.textContent = `Потери ${Number(payload?.loss_percent || 0).toFixed(1)}% · RTT ${payload?.latency_ms == null ? "—" : `${payload.latency_ms} ms`} · jitter ${payload?.jitter_ms == null ? "—" : `${payload.jitter_ms} ms`}`;
+    status.dataset.state = payload?.state || "unknown";
+  }
+  if (trace) {
+    trace.textContent = payload?.trace || "";
+    trace.hidden = !payload?.trace;
+  }
+  setStage2Button("xk-channel-action", "Проверить снова", { pressed: payload?.state === "good" });
+}
+
+async function runChannelCheck() {
+  if (channelRequest) return;
+  const controller = new AbortController();
+  channelRequest = controller;
+  const target = byId("xk-channel-target")?.value?.trim() || "1.1.1.1";
+  const includeTrace = byId("xk-channel-trace")?.getAttribute("aria-pressed") === "true";
+  const query = `?target=${encodeURIComponent(target)}&trace=${includeTrace ? "1" : "0"}`;
+  setStage2Button("xk-channel-action", "Проверка…", { busy: true, pressed: true });
+  const status = byId("xk-channel-status");
+  if (status) { status.textContent = `Проверяем ${target}…`; status.dataset.state = "loading"; }
+  try {
+    const response = await fetch(`${CHANNEL_ENDPOINT}${query}`, { method: "GET", cache: "no-store", credentials: "same-origin", signal: controller.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    renderChannelCheck(await response.json());
+  } catch (error) {
+    if (!controller.signal.aborted && status) { status.textContent = "Проверка канала не выполнена."; status.dataset.state = "error"; }
+    setStage2Button("xk-channel-action", "Повторить", { pressed: false });
+  } finally {
+    if (channelRequest === controller) channelRequest = null;
+    if (byId("xk-channel-action")) byId("xk-channel-action").disabled = false;
+  }
 }
 
 function renderProcesses(payload) {
@@ -1015,6 +1202,41 @@ export function initResourceMonitor() {
     "click",
     () => void loadProcesses(),
   );
+  const clientsPanel = byId("xk-clients-panel");
+  const syncClientsPanelState = () => {
+    if (!clientsPanel) return;
+    const open = clientsPanel.open;
+    clientsPanel.classList.toggle("is-active", open);
+    clientsPanel.setAttribute("aria-expanded", open ? "true" : "false");
+    byId("xk-clients-action")?.setAttribute("aria-pressed", clientsLoaded || open ? "true" : "false");
+  };
+  syncClientsPanelState();
+  clientsPanel?.addEventListener("toggle", () => {
+    syncClientsPanelState();
+    if (clientsPanel.open && !clientsLoaded) void loadClients();
+  });
+  const clientsAction = byId("xk-clients-action");
+  const activateClientsAction = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!clientsPanel) return;
+    if (!clientsPanel.open) clientsPanel.open = true;
+    else void loadClients();
+  };
+  clientsAction?.addEventListener("click", activateClientsAction);
+  clientsAction?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") activateClientsAction(event);
+  });
+  byId("xk-lte-action")?.addEventListener("click", () => void loadLte());
+  byId("xk-channel-action")?.addEventListener("click", () => void runChannelCheck());
+  byId("xk-channel-trace")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    const button = event.currentTarget;
+    const active = button.getAttribute("aria-pressed") !== "true";
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+    button.classList.toggle("is-active", active);
+    button.setAttribute("data-tooltip", active ? "Traceroute будет выполнен вместе со следующей проверкой" : "Запускать только ping без трассировки");
+  });
   document.querySelectorAll("[data-interface-filter]").forEach((button) =>
     button.addEventListener("click", () => {
       interfaceFilter = button.dataset.interfaceFilter === "all" ? "all" : "active";
@@ -1063,4 +1285,7 @@ export const resourceMonitorApi = Object.freeze({
   init: initResourceMonitor,
   refresh,
   loadProcesses,
+  loadClients,
+  loadLte,
+  runChannelCheck,
 });

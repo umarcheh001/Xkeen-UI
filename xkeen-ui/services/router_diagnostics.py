@@ -10,6 +10,9 @@ from __future__ import annotations
 import json
 import copy
 import math
+import re
+import statistics
+import subprocess
 import threading
 import time
 import urllib.error
@@ -28,6 +31,10 @@ _interface_lock = threading.Lock()
 _previous_interfaces: tuple[float, dict[str, tuple[int, int]]] | None = None
 _snapshot_lock = threading.Lock()
 _cached_snapshot: tuple[float, dict[str, Any]] | None = None
+_capability_lock = threading.Lock()
+_cached_capabilities: tuple[float, dict[str, Any]] | None = None
+_incident_log: list[dict[str, Any]] = []
+_previous_health: str | None = None
 
 
 class RciUnavailable(RuntimeError):
@@ -106,6 +113,15 @@ def _number(value: Any) -> float | None:
     return max(0.0, result) if math.isfinite(result) else None
 
 
+def _signed_number(value: Any) -> float | None:
+    """Parse a finite metric without clamping signal values below zero."""
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if math.isfinite(result) else None
+
+
 def _integer(value: Any) -> int | None:
     number = _number(value)
     return int(number) if number is not None else None
@@ -123,6 +139,208 @@ def _first(mapping: dict[str, Any], *keys: str) -> Any:
         if key in mapping and mapping[key] not in (None, ""):
             return mapping[key]
     return None
+
+
+def _walk_dicts(payload: Any) -> Iterable[dict[str, Any]]:
+    """Yield nested RCI records without assuming one firmware response shape."""
+    if isinstance(payload, dict):
+        yield payload
+        for value in payload.values():
+            yield from _walk_dicts(value)
+    elif isinstance(payload, list):
+        for value in payload:
+            yield from _walk_dicts(value)
+
+
+def normalize_capabilities(payload: Any, *, sampled_at: int) -> dict[str, Any]:
+    """Reduce ``show/version`` to safe feature flags used by optional panels."""
+    source = payload if isinstance(payload, dict) else {}
+    text = json.dumps(source, ensure_ascii=False).lower()
+    components: list[str] = []
+    features: list[str] = []
+    for key, target in (("components", components), ("features", features)):
+        value = source.get(key)
+        if isinstance(value, (list, tuple)):
+            target.extend(str(item)[:64] for item in value)
+        elif isinstance(value, dict):
+            target.extend(str(item)[:64] for item in value.keys())
+    components.extend(re.findall(r"(?:wifi|wireless|lte|modem|mesh|usb)[a-z0-9_-]*", text))
+    all_names = {item.lower() for item in components + features}
+    return {
+        "available": bool(source),
+        "sampled_at": sampled_at,
+        "model": str(_first(source, "model", "product", "hw-id", "hardware") or "")[:96],
+        "firmware": str(_first(source, "version", "release", "firmware") or "")[:96],
+        "wifi": any("wifi" in item or "wireless" in item for item in all_names) or "wifi" in text or "wifimaster" in text,
+        "lte": any("lte" in item or "modem" in item for item in all_names) or "lte" in text or "modem" in text,
+        "mesh": "mesh" in text,
+        "components": sorted(set(components))[:64],
+        "features": sorted(set(features))[:64],
+    }
+
+
+def _counter(record: dict[str, Any], *keys: str) -> int:
+    return _integer(_first(record, *keys)) or 0
+
+
+def normalize_clients(payload: Any, *, sampled_at: int) -> dict[str, Any]:
+    """Normalize hotspot/device-list entries for Top-5 and Wi-Fi client views."""
+    items: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for raw in _walk_dicts(payload):
+        address = str(_first(raw, "mac", "mac-address", "mac_address") or "").strip()[:48]
+        ip = str(_first(raw, "ip", "address", "ipv4") or "").strip()[:64]
+        if not address and not ip:
+            continue
+        name = str(_first(raw, "name", "hostname", "host", "description", "id") or address or ip)[:96]
+        key = (address.lower(), ip.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        rx = _counter(raw, "rxbytes", "rx-bytes", "received-bytes", "download", "rx")
+        tx = _counter(raw, "txbytes", "tx-bytes", "sent-bytes", "upload", "tx")
+        items.append({
+            "name": name,
+            "mac": address,
+            "ip": ip,
+            "interface": str(_first(raw, "interface", "mws", "access-point", "ap") or "")[:64],
+            "rssi": int(_signed_number(_first(raw, "rssi", "signal", "signal-strength"))) if _signed_number(_first(raw, "rssi", "signal", "signal-strength")) is not None else None,
+            "rx_rate": _counter(raw, "rxrate", "rx-rate", "receive-rate"),
+            "tx_rate": _counter(raw, "txrate", "tx-rate", "send-rate"),
+            "received_bytes": rx,
+            "sent_bytes": tx,
+            "traffic_bytes": rx + tx,
+            "online": _bool(_first(raw, "online", "connected", "state")),
+        })
+    items.sort(key=lambda item: (-item["traffic_bytes"], item["name"].lower()))
+    wifi = [item for item in items if item.get("rssi") is not None or "wifi" in item.get("interface", "").lower() or "wifimaster" in item.get("interface", "").lower()]
+    return {"available": bool(items), "sampled_at": sampled_at, "count": len(items), "items": items[:100], "top": items[:5], "wifi": wifi[:64], "truncated": len(items) > 100}
+
+
+def normalize_lte(payload: Any, *, sampled_at: int) -> dict[str, Any]:
+    for raw in _walk_dicts(payload):
+        if any(key in raw for key in ("rsrp", "rsrq", "cinr", "sinr", "band", "operator")):
+            return {
+                "available": True,
+                "sampled_at": sampled_at,
+                "operator": str(_first(raw, "operator", "provider", "network") or "")[:96],
+                "technology": str(_first(raw, "technology", "mode", "rat") or "")[:32],
+                "band": str(_first(raw, "band", "cell", "earfcn") or "")[:32],
+                "rsrp": _signed_number(_first(raw, "rsrp", "signal-rsrp")),
+                "rsrq": _signed_number(_first(raw, "rsrq", "signal-rsrq")),
+                "cinr": _signed_number(_first(raw, "cinr", "sinr", "signal-cinr")),
+                "signal": _signed_number(_first(raw, "signal", "rssi")),
+            }
+    return {"available": False, "sampled_at": sampled_at}
+
+
+def sample_router_clients(
+    *,
+    rci_fetcher: Callable[[str], Any] = fetch_rci_json,
+    clock: Callable[[], float] = time.time,
+) -> dict[str, Any]:
+    """Fetch the rich client list only after the user opens the section."""
+    sampled_at = int(clock())
+    errors: list[str] = []
+    for path in ("show/ip/hotspot", "show/device-list"):
+        try:
+            payload = rci_fetcher(path)
+            result = normalize_clients(payload, sampled_at=sampled_at)
+            result["source"] = path
+            return result
+        except RciUnavailable as exc:
+            errors.append(exc.state)
+    return {"available": False, "sampled_at": sampled_at, "count": 0, "items": [], "top": [], "wifi": [], "state": errors[0] if errors else "unavailable"}
+
+
+def cached_router_capabilities(*, cache_ttl: float = 3600.0, clock: Callable[[], float] = time.time) -> dict[str, Any]:
+    global _cached_capabilities
+    now = clock()
+    with _capability_lock:
+        cached = _cached_capabilities
+        if cached is None or now - cached[0] >= max(60.0, cache_ttl):
+            try:
+                payload = normalize_capabilities(fetch_rci_json("show/version"), sampled_at=int(now))
+            except RciUnavailable as exc:
+                payload = {"available": False, "sampled_at": int(now), "state": exc.state, "wifi": False, "lte": False, "mesh": False, "components": [], "features": []}
+            _cached_capabilities = (now, payload)
+        return copy.deepcopy(_cached_capabilities[1])
+
+
+def sample_router_lte(
+    *,
+    rci_fetcher: Callable[[str], Any] = fetch_rci_json,
+    clock: Callable[[], float] = time.time,
+) -> dict[str, Any]:
+    """Probe optional modem branches on demand; LTE absence is not an error."""
+    sampled_at = int(clock())
+    for path in ("show/lte", "show/modem", "show/usb/modem"):
+        try:
+            result = normalize_lte(rci_fetcher(path), sampled_at=sampled_at)
+            result["source"] = path
+            if result.get("available"):
+                return result
+        except RciUnavailable:
+            continue
+    return {"available": False, "sampled_at": sampled_at}
+
+
+def _ping_numbers(output: str) -> list[float]:
+    samples: list[float] = []
+    for value in re.findall(r"(?:time|время)[=<]\s*([0-9]+(?:[.,][0-9]+)?)\s*ms", output, re.I):
+        try:
+            samples.append(float(value.replace(",", ".")))
+        except ValueError:
+            continue
+    return samples
+
+
+def channel_check(
+    target: str = "1.1.1.1",
+    *,
+    count: int = 4,
+    include_trace: bool = False,
+    runner: Callable[..., Any] = subprocess.run,
+    clock: Callable[[], float] = time.time,
+) -> dict[str, Any]:
+    """Run a bounded ping and optional trace only from an explicit user action."""
+    target = str(target or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,253}", target):
+        raise ValueError("invalid target")
+    count = max(1, min(8, int(count or 4)))
+    started = int(clock())
+    try:
+        ping = runner(["ping", "-c", str(count), "-W", "1", target], capture_output=True, text=True, timeout=12, check=False)
+        output = f"{getattr(ping, 'stdout', '')}\n{getattr(ping, 'stderr', '')}"[:16_384]
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {"available": False, "target": target, "sampled_at": started, "state": "unavailable", "error": str(exc)[:160]}
+    samples = _ping_numbers(output)
+    loss_match = re.search(r"([0-9]+(?:[.,][0-9]+)?)%\s*(?:packet )?loss", output, re.I)
+    loss = float(loss_match.group(1).replace(",", ".")) if loss_match else (0.0 if samples else 100.0)
+    average = round(statistics.fmean(samples), 1) if samples else None
+    jitter = round(statistics.pstdev(samples), 1) if len(samples) > 1 else 0.0 if samples else None
+    result: dict[str, Any] = {"available": bool(samples) or loss < 100, "target": target, "sampled_at": started, "sent": count, "received": len(samples), "loss_percent": round(loss, 1), "latency_ms": average, "jitter_ms": jitter, "state": "good" if loss == 0 and (average is None or average < 120) else "warning" if loss < 25 else "bad"}
+    if include_trace:
+        try:
+            trace = runner(["traceroute", "-m", "8", "-w", "1", target], capture_output=True, text=True, timeout=20, check=False)
+            result["trace"] = f"{getattr(trace, 'stdout', '')}\n{getattr(trace, 'stderr', '')}"[:16_384]
+        except (OSError, subprocess.SubprocessError) as exc:
+            result["trace"] = f"traceroute недоступен: {exc}"[:512]
+        result["trace_command"] = "traceroute"
+    return result
+
+
+def _record_incident(snapshot: dict[str, Any], *, now: int) -> None:
+    global _previous_health
+    internet = snapshot.get("internet") or {}
+    conntrack = snapshot.get("conntrack") or {}
+    state = "offline" if internet.get("available") is False or internet.get("internet") is False else "degraded" if conntrack.get("tone") in {"warning", "danger"} else "normal"
+    if state != _previous_health:
+        if _previous_health is not None:
+            _incident_log.insert(0, {"at": now, "state": state, "previous": _previous_health, "message": {"offline": "Связь с интернетом потеряна", "degraded": "Таблица соединений заполнена выше нормы", "normal": "Состояние восстановлено"}[state]})
+            del _incident_log[30:]
+        _previous_health = state
+    snapshot["incidents"] = copy.deepcopy(_incident_log)
 
 
 def normalize_internet_status(payload: Any) -> dict[str, Any]:
@@ -298,6 +516,7 @@ def sample_router_diagnostics(
         "available": bool(result["internet"].get("available") or result["interfaces"].get("available")),
         "state": "available" if not rci_states else rci_states[0],
     }
+    _record_incident(result, now=int(now))
     return result
 
 
@@ -397,8 +616,12 @@ def sample_router_processes(
 
 
 def reset_router_diagnostic_sampler() -> None:
-    global _previous_interfaces, _cached_snapshot
+    global _previous_interfaces, _cached_snapshot, _cached_capabilities, _incident_log, _previous_health
     with _interface_lock:
         _previous_interfaces = None
     with _snapshot_lock:
         _cached_snapshot = None
+    with _capability_lock:
+        _cached_capabilities = None
+    _incident_log = []
+    _previous_health = None

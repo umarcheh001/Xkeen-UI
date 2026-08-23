@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from pathlib import Path
 
 from services.router_diagnostics import (
+    channel_check,
     fetch_rci_json,
     normalize_internet_status,
     normalize_interfaces,
+    normalize_capabilities,
+    normalize_clients,
+    normalize_lte,
     normalize_processes,
     reset_router_diagnostic_sampler,
     sample_conntrack,
@@ -106,6 +111,54 @@ def test_process_normalizer_understands_real_keenetic_comm_and_kb_fields():
     assert payload["items"][0]["name"] == "ndm"
     assert payload["items"][0]["memory_bytes"] == 48156 * 1024
     assert payload["items"][0]["service"] == "KeeneticOS core"
+
+
+def test_client_normalizer_sorts_top_traffic_and_keeps_negative_rssi():
+    payload = normalize_clients(
+        {
+            "clients": [
+                {"hostname": "tablet", "mac": "AA:02", "ip": "192.0.2.2", "rssi": -61, "rxbytes": 500, "txbytes": 100, "rxrate": 24000},
+                {"hostname": "laptop", "mac": "AA:01", "ip": "192.0.2.1", "rssi": -48, "rxbytes": 900, "txbytes": 300, "interface": "WifiMaster0"},
+            ]
+        },
+        sampled_at=42,
+    )
+
+    assert payload["top"][0]["name"] == "laptop"
+    assert payload["top"][0]["traffic_bytes"] == 1200
+    assert payload["top"][0]["rssi"] == -48
+    assert payload["wifi"][0]["interface"] == "WifiMaster0"
+
+
+def test_optional_metrics_normalizers_keep_signal_values():
+    capabilities = normalize_capabilities({"model": "Hero", "version": "4.2", "components": ["WifiMaster0", "lte"]}, sampled_at=42)
+    lte = normalize_lte({"modem": {"operator": "Test", "rsrp": -97, "rsrq": -11, "cinr": 18, "band": "B3"}}, sampled_at=42)
+
+    assert capabilities["wifi"] is True
+    assert capabilities["lte"] is True
+    assert capabilities["model"] == "Hero"
+    assert lte["rsrp"] == -97
+    assert lte["rsrq"] == -11
+    assert lte["band"] == "B3"
+
+
+def test_channel_check_calculates_loss_latency_jitter_and_trace():
+    calls = []
+
+    def runner(command, **_kwargs):
+        calls.append(command[0])
+        if command[0] == "ping":
+            return SimpleNamespace(stdout="64 bytes from 1.1.1.1: time=10.0 ms\n64 bytes from 1.1.1.1: time=14.0 ms\n0% packet loss", stderr="")
+        return SimpleNamespace(stdout="1  gateway  1 ms\n2  target  12 ms", stderr="")
+
+    payload = channel_check("1.1.1.1", include_trace=True, runner=runner, clock=lambda: 77)
+
+    assert calls == ["ping", "traceroute"]
+    assert payload["received"] == 2
+    assert payload["latency_ms"] == 12.0
+    assert payload["jitter_ms"] == 2.0
+    assert payload["loss_percent"] == 0.0
+    assert "gateway" in payload["trace"]
 
 
 def test_light_snapshot_never_requests_processes():
