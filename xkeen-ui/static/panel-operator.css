@@ -19792,23 +19792,27 @@ body.panel-page .xk-interface-state { color: var(--op-muted); font: 700 calc(8px
 body.panel-page .xk-resource-table tr[data-state="online"] .xk-interface-state { color: var(--op-success); }
 body.panel-page .xk-resource-table tr[data-state="offline"] .xk-interface-state,
 body.panel-page .xk-interface-errors-cell { color: var(--op-danger); }
-body.panel-page .xk-interface-errors {
-  min-width: 34px;
-  padding: 2px 5px;
-  border: 1px solid transparent;
-  border-radius: var(--op-control-radius);
-  background: transparent;
-  color: var(--op-danger);
-  font: inherit;
+html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .xk-resource-table .xk-interface-errors {
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  appearance: none;
+  background: transparent !important;
+  color: var(--op-danger) !important;
+  box-shadow: none !important;
+  font: 700 calc(9px * var(--xk-font-scale, 1))/1.2 var(--op-font-mono);
   cursor: pointer;
   text-decoration: underline dotted;
   text-underline-offset: 2px;
 }
-body.panel-page .xk-interface-errors:hover,
-body.panel-page .xk-interface-errors:focus-visible {
-  border-color: var(--op-danger);
-  background: var(--op-danger-soft);
-  outline: none;
+html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .xk-resource-table .xk-interface-errors:hover,
+html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .xk-resource-table .xk-interface-errors:focus-visible,
+html:is([data-theme="dark"], [data-theme="light"]) body.panel-page .xk-resource-table .xk-interface-errors[aria-expanded="true"] {
+  background: transparent !important;
+  color: var(--op-danger-hover, var(--op-danger)) !important;
+  text-decoration-style: solid;
 }
 body.panel-page .xk-resource-table tr.is-error-expanded > td { border-bottom-color: transparent; }
 body.panel-page .xk-interface-error-detail > td { padding: 0 8px 7px; background: var(--op-surface); }
@@ -19996,6 +20000,16 @@ body.panel-page #xk-channel-trace.is-active { border-color: var(--op-accent-bord
 body.panel-page .xk-stage2-action { min-height: 28px; padding-inline: 10px; white-space: nowrap; }
 body.panel-page .xk-stage2-action.is-busy { opacity: .72; cursor: progress; }
 body.panel-page .xk-stage2-content { display: grid; gap: 7px; }
+body.panel-page .xk-collapsible-panel > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 46px; padding: 8px 10px; cursor: pointer; list-style: none; }
+body.panel-page .xk-collapsible-panel > summary::-webkit-details-marker { display: none; }
+body.panel-page .xk-collapsible-panel > summary > span:first-child { display: grid; gap: 2px; min-width: 0; }
+body.panel-page .xk-collapsible-panel > summary strong { color: var(--op-text); font-size: calc(11px * var(--xk-font-scale, 1)); }
+body.panel-page .xk-collapsible-panel > summary small { overflow: hidden; color: var(--op-muted); font-size: calc(9px * var(--xk-font-scale, 1)); text-overflow: ellipsis; white-space: nowrap; }
+body.panel-page .xk-collapsible-panel > summary:hover,
+body.panel-page .xk-collapsible-panel > summary:focus-visible { background: var(--op-surface-3); outline: none; }
+body.panel-page .xk-collapsible-panel[open] > summary { border-bottom: 1px solid var(--op-border); }
+body.panel-page .xk-collapsible-panel.is-active > summary { border-color: var(--op-accent-border); }
+body.panel-page .xk-resource-details > summary { min-height: 46px; }
 body.panel-page .xk-stage2-status { display: block; padding: 8px 10px 0; color: var(--op-muted); font-size: calc(9px * var(--xk-font-scale, 1)); }
 body.panel-page .xk-stage2-status[data-state="error"],
 body.panel-page #xk-channel-status[data-state="unavailable"],
@@ -20041,7 +20055,8 @@ body.panel-page .xk-incident-row[data-state="offline"] strong { color: var(--op-
 }
 @media (max-width: 560px) {
   body.panel-page .xk-stage2-panel > summary,
-  body.panel-page .xk-stage2-panel > header { align-items: flex-start; flex-direction: column; }
+  body.panel-page .xk-stage2-panel > header,
+  body.panel-page .xk-collapsible-panel > summary { align-items: flex-start; flex-direction: column; }
   body.panel-page .xk-stage2-action { align-self: stretch; }
   body.panel-page .xk-channel-controls { flex-wrap: wrap; }
   body.panel-page .xk-channel-controls input { flex-basis: 100%; }

@@ -1319,6 +1319,16 @@ export function initResourceMonitor() {
     "click",
     () => void refresh(),
   );
+  const syncCollapsiblePanelState = (panel) => {
+    if (!panel) return;
+    const open = panel.open;
+    panel.classList.toggle("is-active", open);
+    panel.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+  root.querySelectorAll("details.xk-collapsible-panel").forEach((panel) => {
+    syncCollapsiblePanelState(panel);
+    panel.addEventListener("toggle", () => syncCollapsiblePanelState(panel));
+  });
   const processPanel = byId("xk-process-panel");
   const syncProcessPanelState = () => {
     if (!processPanel) return;
@@ -1374,8 +1384,16 @@ export function initResourceMonitor() {
   clientsAction?.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") activateClientsAction(event);
   });
-  byId("xk-lte-action")?.addEventListener("click", () => void loadLte());
-  byId("xk-channel-action")?.addEventListener("click", () => void runChannelCheck());
+  byId("xk-lte-action")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    void loadLte();
+  });
+  byId("xk-channel-action")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    void runChannelCheck();
+  });
   byId("xk-channel-trace")?.addEventListener("click", (event) => {
     event.preventDefault();
     const button = event.currentTarget;
@@ -1385,7 +1403,9 @@ export function initResourceMonitor() {
     button.setAttribute("data-tooltip", active ? "Traceroute будет выполнен вместе со следующей проверкой" : "Запускать только ping без трассировки");
   });
   document.querySelectorAll("[data-interface-filter]").forEach((button) =>
-    button.addEventListener("click", () => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
       interfaceFilter = button.dataset.interfaceFilter === "all" ? "all" : "active";
       setPressedGroup("[data-interface-filter]", button);
       renderInterfaces(latestInterfaces);

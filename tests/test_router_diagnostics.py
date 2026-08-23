@@ -166,7 +166,7 @@ def test_client_normalizer_reads_real_hotspot_mws_shape():
                     "ip": "192.0.2.10",
                     "active": True,
                     "interface": {"id": "Bridge0", "name": "Home"},
-                    "mws": {"ap": "WifiMaster1/AccessPoint0", "rssi": -54, "txrate": 433},
+                    "mws": {"ap": "WifiMaster1/AccessPoint0", "rssi": -54, "txrate": 433, "rxrate": 96},
                     "rxbytes": 900,
                     "txbytes": 300,
                 }
@@ -178,10 +178,28 @@ def test_client_normalizer_reads_real_hotspot_mws_shape():
     item = payload["items"][0]
     assert item["interface"] == "WifiMaster1/AccessPoint0"
     assert item["rssi"] == -54
-    assert item["tx_rate"] == 433_000_000
-    assert item["rx_rate"] is None
+    assert item["rx_rate"] == 433_000_000
+    assert item["tx_rate"] == 96_000_000
     assert item["online"] is True
     assert payload["wifi"][0]["name"] == "phone"
+
+
+def test_client_normalizer_maps_keenetic_mws_txrate_to_client_receive():
+    payload = normalize_clients(
+        {
+            "host": [{
+                "hostname": "tv",
+                "mac": "AA:01",
+                "ip": "192.0.2.10",
+                "mws": {"ap": "WifiMaster0/AccessPoint0", "txrate": 270},
+            }]
+        },
+        sampled_at=42,
+    )
+
+    item = payload["items"][0]
+    assert item["rx_rate"] == 270_000_000
+    assert item["tx_rate"] is None
 
 
 def test_client_normalizer_prefers_compact_hostname_over_registration_name():

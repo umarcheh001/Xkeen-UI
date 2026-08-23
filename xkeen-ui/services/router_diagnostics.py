@@ -223,6 +223,29 @@ def _client_link_rate(value: Any) -> int | None:
     return round(parsed * 1_000_000) if parsed <= 10_000 else round(parsed)
 
 
+def _client_link_rates(record: dict[str, Any]) -> tuple[int | None, int | None]:
+    """Return receive/send PHY rates from the client's point of view.
+
+    Keenetic's nested ``mws`` object describes traffic relative to the access
+    point: ``txrate`` is AP → client (client receive), while ``rxrate`` is
+    client → AP (client send).  Alternative flat response shapes already use
+    client-oriented receive/send names and are kept as fallbacks.
+    """
+
+    mws = record.get("mws")
+    if isinstance(mws, dict):
+        receive = _first(mws, "txrate", "tx-rate", "transmit-rate")
+        send = _first(mws, "rxrate", "rx-rate", "receive-rate")
+    else:
+        receive = None
+        send = None
+    if receive is None:
+        receive = _first(record, "rxrate", "rx-rate", "receive-rate")
+    if send is None:
+        send = _first(record, "txrate", "tx-rate", "send-rate")
+    return _client_link_rate(receive), _client_link_rate(send)
+
+
 def normalize_clients(payload: Any, *, sampled_at: int) -> dict[str, Any]:
     """Normalize hotspot/device-list entries for Top-5 and Wi-Fi client views."""
     items: list[dict[str, Any]] = []
@@ -248,14 +271,15 @@ def normalize_clients(payload: Any, *, sampled_at: int) -> dict[str, Any]:
         rx = _counter(raw, "rxbytes", "rx-bytes", "received-bytes", "download", "rx")
         tx = _counter(raw, "txbytes", "tx-bytes", "sent-bytes", "upload", "tx")
         rssi_value = _signed_number(_client_nested_value(raw, "rssi"))
+        receive_rate, send_rate = _client_link_rates(raw)
         items.append({
             "name": name,
             "mac": address,
             "ip": ip,
             "interface": _client_interface(raw),
             "rssi": int(rssi_value) if rssi_value is not None else None,
-            "rx_rate": _client_link_rate(_client_nested_value(raw, "rxrate") or _first(raw, "rx-rate", "receive-rate")),
-            "tx_rate": _client_link_rate(_client_nested_value(raw, "txrate") or _first(raw, "tx-rate", "send-rate")),
+            "rx_rate": receive_rate,
+            "tx_rate": send_rate,
             "received_bytes": rx,
             "sent_bytes": tx,
             "traffic_bytes": rx + tx,

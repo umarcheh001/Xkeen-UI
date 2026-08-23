@@ -27,6 +27,7 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         "xk-internet-health",
         "xk-conntrack-panel",
         "xk-interface-rows",
+        "xk-interface-panel",
         "xk-process-panel",
         "xk-process-action",
         "xk-clients-panel",
@@ -39,8 +40,10 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         "xk-lte-action",
         "xk-lte-modems",
         "xk-incidents-list",
+        "xk-system-details",
     ):
         assert f'id="{element_id}"' in template
+    assert 'xk-collapsible-panel' in template
     for fragment in (
         "setDashboardOpen(true)",
         "data-resource-range",
@@ -74,6 +77,8 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         'load_1m) || 0) / cores',
         'setPressedGroup',
         'setRefreshBusy',
+        'syncCollapsiblePanelState',
+        'details.xk-collapsible-panel',
         'aria-pressed',
         'aria-busy',
         'xk-channel-trace-output',
@@ -97,10 +102,12 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         ".xk-process-panel",
         ".xk-process-button",
         ".xk-resource-stage2-grid",
+        ".xk-collapsible-panel",
         ".xk-stage2-action",
         ".xk-incident-row",
         "flex-flow: column nowrap",
         ".xk-interface-errors",
+        'background: transparent !important;',
         ".xk-interface-error-detail",
         ".xk-resource-detail-wide",
         ".xk-resource-interface-chip",
