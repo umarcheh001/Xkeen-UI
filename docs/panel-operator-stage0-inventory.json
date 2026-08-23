@@ -431,49 +431,49 @@
               "accessible_name": true
             },
             {
-              "control": "control@6649",
+              "control": "control@7088",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@6793",
+              "control": "control@7232",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@7571",
+              "control": "control@8010",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@7726",
+              "control": "control@8165",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@8578",
+              "control": "control@9017",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@8736",
+              "control": "control@9175",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@9563",
+              "control": "control@10002",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@10441",
+              "control": "control@10880",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -485,25 +485,25 @@
               "accessible_name": false
             },
             {
-              "control": "control@11402",
+              "control": "control@11841",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@11966",
+              "control": "control@12405",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@12386",
+              "control": "control@12825",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@13607",
+              "control": "control@14046",
               "icons": [
                 "processes"
               ],
@@ -519,7 +519,7 @@
               "accessible_name": false
             },
             {
-              "control": "control@14991",
+              "control": "control@15430",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -7870,7 +7870,7 @@
       "xray-snapshot-status",
       "xray-snapshot-title"
     ],
-    "data_attribute_count": 555,
+    "data_attribute_count": 561,
     "data_attributes": [
       {
         "locator": "header.panel-header.panel-header-shell@L81",
@@ -8208,14 +8208,44 @@
         "value": "gateway"
       },
       {
+        "locator": "div@L326",
+        "name": "data-tooltip",
+        "value": "Шлюз — первый узел провайдера. Проверка показывает, доступен ли выход из вашей сети."
+      },
+      {
+        "locator": "div@L326",
+        "name": "data-tooltip-placement",
+        "value": "bottom"
+      },
+      {
         "locator": "div@L327",
         "name": "data-internet-check",
         "value": "dns"
       },
       {
+        "locator": "div@L327",
+        "name": "data-tooltip",
+        "value": "DNS преобразует имена сайтов в IP-адреса. Без него сайты по именам могут не открываться."
+      },
+      {
+        "locator": "div@L327",
+        "name": "data-tooltip-placement",
+        "value": "bottom"
+      },
+      {
         "locator": "div@L328",
         "name": "data-internet-check",
         "value": "captive"
+      },
+      {
+        "locator": "div@L328",
+        "name": "data-tooltip",
+        "value": "Captive portal — страница авторизации сети, например Wi‑Fi в отеле. «Нет перехвата» означает, что авторизация не требуется."
+      },
+      {
+        "locator": "div@L328",
+        "name": "data-tooltip-placement",
+        "value": "bottom"
       },
       {
         "locator": "#xk-conntrack-panel",
