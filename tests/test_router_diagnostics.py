@@ -11,14 +11,81 @@ from services.router_diagnostics import (
     normalize_interfaces,
     normalize_capabilities,
     normalize_clients,
+    normalize_dns_diagnostics,
     normalize_lte,
     normalize_processes,
     reset_router_diagnostic_sampler,
     sample_conntrack,
+    sample_dns_diagnostics,
     sample_router_clients,
     sample_router_diagnostics,
     sample_router_lte,
 )
+
+
+def test_normalize_dns_diagnostics_detects_doh_dot_transport_failures_without_raw_logs():
+    payload = normalize_dns_diagnostics(
+        '\n'.join(
+            [
+                'https-dns-proxy: "https://dns.google/dns-query": CURLINFO_SSL_VERIFYRESULT: Error (unable to establish TLS connection)',
+                'stubby: "8.8.8.8": too many failed requests, try to reload process',
+                'ndm: Service: "DoT "System" proxy #1": unexpectedly stopped.',
+            ]
+        ),
+        sampled_at=42,
+    )
+
+    assert payload["available"] is True
+    assert payload["state"] == "error"
+    assert payload["failure_count"] == 3
+    assert {item["transport"] for item in payload["failures"]} == {"DoH", "DoT"}
+    assert "dns.google" not in payload["summary"]
+
+
+def test_sample_dns_diagnostics_uses_logread_then_dmesg_fallback():
+    commands = []
+
+    def runner(command, **_kwargs):
+        commands.append(command)
+        if command[0] == "logread":
+            return SimpleNamespace(stdout="", stderr="")
+        return SimpleNamespace(stdout='stubby: "8.8.8.8": too many failed\n requests', stderr="")
+
+    payload = sample_dns_diagnostics(runner=runner, clock=lambda: 42)
+
+    assert commands == [["logread", "-l", "160"], ["ndmc", "-c", "show log"]]
+    assert payload["state"] == "error"
+    assert payload["failures"][0]["transport"] == "DoT"
+
+
+def test_light_snapshot_marks_dns_failed_when_encrypted_transport_errors_are_recent():
+    proc = {
+        "/proc/sys/net/netfilter/nf_conntrack_count": "1",
+        "/proc/sys/net/netfilter/nf_conntrack_max": "10",
+    }
+
+    def fetch(path):
+        if path == "show/internet/status":
+            return {"internet": True, "gateway-accessible": True, "dns-accessible": True}
+        if path == "show/interface":
+            return []
+        raise AssertionError(path)
+
+    def runner(_command, **_kwargs):
+        return SimpleNamespace(
+            stdout='https-dns-proxy: CURLINFO_SSL_VERIFYRESULT: Error (unable to establish TLS connection)',
+            stderr="",
+        )
+
+    payload = sample_router_diagnostics(
+        reader=lambda path: proc[path.as_posix()],
+        rci_fetcher=fetch,
+        command_runner=runner,
+        clock=lambda: 100,
+    )
+
+    assert payload["internet"]["dns"] is True
+    assert payload["internet"]["dns_diagnostics"]["state"] == "error"
 
 
 def test_normalize_internet_status_handles_keenetic_accessibility_flags():

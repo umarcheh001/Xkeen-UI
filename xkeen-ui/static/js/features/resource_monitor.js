@@ -253,7 +253,15 @@ function renderDashboard(payload) {
   const network = payload?.network || {};
   const swapTotal = Number(payload?.memory?.swap_total_bytes) || 0;
   const values = [cpu, memory, Number(storage.percent) || 0];
-  const healthTone = values.some((v) => v >= 90)
+  const routerInternet = payload?.router?.internet || {};
+  const routerDnsError = routerInternet?.dns_diagnostics?.state === "error";
+  const routerProblem = [
+    routerInternet.internet,
+    routerInternet.gateway,
+    routerInternet.dns,
+    routerInternet.captive,
+  ].some((value) => value === false) || routerDnsError;
+  const healthTone = values.some((v) => v >= 90) || routerProblem
     ? "danger"
     : values.some((v) => v >= 75)
       ? "warning"
@@ -365,7 +373,7 @@ function renderDashboard(payload) {
   drawCharts();
 }
 
-function setCheck(name, value) {
+function setCheck(name, value, detail = "") {
   const row = document.querySelector(`[data-internet-check="${name}"]`);
   const label = byId(`xk-internet-check-${name}`);
   const state = value === true ? "ok" : value === false ? "failed" : "unknown";
@@ -373,6 +381,8 @@ function setCheck(name, value) {
   if (label) {
     if (name === "captive") {
       label.textContent = value === true ? "Нет перехвата" : value === false ? "Обнаружен" : "Нет данных";
+    } else if (detail && value === false) {
+      label.textContent = detail;
     } else {
       label.textContent = value === true ? "Доступен" : value === false ? "Нет связи" : "Нет данных";
     }
@@ -382,10 +392,13 @@ function setCheck(name, value) {
 function renderInternet(internet, freshness, rci) {
   const panel = byId("xk-internet-health");
   const available = internet?.available === true;
+  const dnsDiagnostics = internet?.dns_diagnostics || {};
+  const dnsError = dnsDiagnostics.state === "error";
+  const dnsCheck = dnsError ? false : internet?.dns;
   const checks = [
     internet?.internet,
     internet?.gateway,
-    internet?.dns,
+    dnsCheck,
     internet?.captive,
   ];
   const known = checks.filter((value) => typeof value === "boolean");
@@ -415,6 +428,8 @@ function renderInternet(internet, freshness, rci) {
       ? rci?.state === "unauthorized"
         ? "RCI отклонил токен доступа"
         : "Проверка KeeneticOS недоступна"
+      : dnsError
+        ? dnsDiagnostics.summary || "Ошибки зашифрованного DNS"
       : state === "normal"
         ? "Все проверки подключения пройдены"
         : "Одна или несколько проверок не пройдены",
@@ -434,7 +449,7 @@ function renderInternet(internet, freshness, rci) {
   );
   setCheck("internet", available ? internet?.internet : null);
   setCheck("gateway", available ? internet?.gateway : null);
-  setCheck("dns", available ? internet?.dns : null);
+  setCheck("dns", available ? dnsCheck : null, dnsError ? "Ошибка DoH/DoT" : "");
   setCheck("captive", available ? internet?.captive : null);
 }
 

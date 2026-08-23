@@ -67,6 +67,8 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         "LTE_ENDPOINT = \"/api/system/router/lte\"",
         "CHANNEL_ENDPOINT = \"/api/system/router/channel-check\"",
         "renderRouterDiagnostics",
+        "dns_diagnostics",
+        "Ошибка DoH/DoT",
         "formatOptionalBitRate",
         'value === true ? "Нет перехвата"',
         "loadProcesses",

@@ -568,10 +568,29 @@ def _record_incident(snapshot: dict[str, Any], *, now: int) -> None:
     global _previous_health
     internet = snapshot.get("internet") or {}
     conntrack = snapshot.get("conntrack") or {}
-    state = "offline" if internet.get("available") is False or internet.get("internet") is False else "degraded" if conntrack.get("tone") in {"warning", "danger"} else "normal"
+    dns = internet.get("dns_diagnostics") or {}
+    state = (
+        "offline"
+        if internet.get("available") is False or internet.get("internet") is False
+        else "degraded"
+        if conntrack.get("tone") in {"warning", "danger"} or dns.get("state") == "error"
+        else "normal"
+    )
     if state != _previous_health:
         if _previous_health is not None:
-            _incident_log.insert(0, {"at": now, "state": state, "previous": _previous_health, "message": {"offline": "Связь с интернетом потеряна", "degraded": "Таблица соединений заполнена выше нормы", "normal": "Состояние восстановлено"}[state]})
+            _incident_log.insert(
+                0,
+                {
+                    "at": now,
+                    "state": state,
+                    "previous": _previous_health,
+                    "message": {
+                        "offline": "Связь с интернетом потеряна",
+                        "degraded": "Зашифрованный DNS или таблица соединений работает с ошибками",
+                        "normal": "Состояние восстановлено",
+                    }[state],
+                },
+            )
             del _incident_log[30:]
         _previous_health = state
     snapshot["incidents"] = copy.deepcopy(_incident_log)
@@ -604,6 +623,135 @@ def normalize_internet_status(payload: Any) -> dict[str, Any]:
         "interface": str(_first(source, "interface") or gateway.get("interface") or "")[:64],
         "address": str(_first(source, "address") or gateway.get("address") or "")[:64],
     }
+
+
+def normalize_dns_diagnostics(log_text: Any, *, sampled_at: int) -> dict[str, Any]:
+    """Reduce recent router log lines to a safe encrypted-DNS health DTO.
+
+    Keenetic's ``dns-accessible`` flag only proves that *some* DNS lookup
+    succeeded.  It does not tell us that configured DoH/DoT upstreams are
+    healthy.  The log parser therefore looks for transport-specific failures
+    while deliberately returning short, non-sensitive explanations instead of
+    forwarding raw log lines to the browser.
+    """
+
+    text = str(log_text or "")
+    if not text.strip():
+        return {
+            "available": False,
+            "state": "unavailable",
+            "sampled_at": int(sampled_at),
+            "source": "",
+            "failure_count": 0,
+            "failures": [],
+            "summary": "Журнал DNS недоступен",
+        }
+
+    # ``ndmc`` wraps long records onto indented continuation lines.  Join
+    # those records before matching, otherwise the error marker can be split
+    # away from the process name.
+    logical_lines: list[str] = []
+    for raw_line in text.splitlines():
+        if raw_line[:1].isspace() and logical_lines:
+            logical_lines[-1] = f"{logical_lines[-1]} {raw_line.strip()}"
+        elif raw_line.strip():
+            logical_lines.append(raw_line.strip())
+
+    failures: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for raw_line in logical_lines[-200:]:
+        line = raw_line.strip()
+        lower = line.lower()
+        if not line:
+            continue
+
+        transport = ""
+        reason = ""
+        if "https-dns-proxy" in lower and (
+            "curlinfo_ssl_verifyresult" in lower
+            or "curl error" in lower
+            or "timed out" in lower
+            or "timeout" in lower
+            or "failed" in lower
+        ):
+            transport = "DoH"
+            reason = (
+                "TLS-соединение не установлено"
+                if "ssl_verifyresult" in lower
+                else "слишком много неудачных запросов"
+                if "too many failed requests" in lower
+                else "тайм-аут соединения"
+                if "timed out" in lower or "timeout" in lower
+                else "ошибка запроса"
+            )
+        elif "stubby" in lower and (
+            "too many failed requests" in lower
+            or "failed" in lower
+            or "timeout" in lower
+        ):
+            transport = "DoT"
+            reason = (
+                "слишком много неудачных запросов"
+                if "too many failed requests" in lower
+                else "тайм-аут соединения"
+                if "timeout" in lower
+                else "ошибка запроса"
+            )
+        elif "unexpectedly stopped" in lower and ("doh" in lower or "dot" in lower):
+            transport = "DoH" if "doh" in lower else "DoT"
+            reason = "прокси неожиданно остановился"
+
+        if not transport:
+            continue
+        key = (transport, reason)
+        if key in seen:
+            continue
+        seen.add(key)
+        failures.append({"transport": transport, "reason": reason})
+
+    transports = sorted({item["transport"] for item in failures})
+    if failures:
+        joined = "/".join(transports)
+        summary = f"Ошибки зашифрованного DNS ({joined})"
+        state = "error"
+    else:
+        summary = "Ошибок зашифрованного DNS не обнаружено"
+        state = "ok"
+    return {
+        "available": True,
+        "state": state,
+        "sampled_at": int(sampled_at),
+        "source": "log",
+        "failure_count": len(failures),
+        "failures": failures[:8],
+        "summary": summary,
+    }
+
+
+def sample_dns_diagnostics(
+    *,
+    runner: Callable[..., Any] = subprocess.run,
+    clock: Callable[[], float] = time.time,
+) -> dict[str, Any]:
+    """Read a bounded recent log window without making network requests."""
+
+    sampled_at = int(clock())
+    output = ""
+    for command in (("logread", "-l", "160"), ("ndmc", "-c", "show log"), ("dmesg",)):
+        try:
+            completed = runner(
+                list(command),
+                capture_output=True,
+                text=True,
+                timeout=2,
+                check=False,
+            )
+        except (OSError, UnicodeError, subprocess.SubprocessError):
+            continue
+        output = str(getattr(completed, "stdout", "") or "")[:65_536]
+        if output.strip():
+            break
+    return normalize_dns_diagnostics(output, sampled_at=sampled_at)
 
 
 def _read_nonnegative_int(path: Path, reader: Callable[[Path], str]) -> int | None:
@@ -776,6 +924,7 @@ def sample_router_diagnostics(
     *,
     reader: Callable[[Path], str] = lambda path: path.read_text(encoding="utf-8", errors="ignore"),
     rci_fetcher: Callable[[str], Any] = fetch_rci_json,
+    command_runner: Callable[..., Any] = subprocess.run,
     clock: Callable[[], float] = time.time,
 ) -> dict[str, Any]:
     """Return the lightweight diagnostics snapshot; individual branches may fail."""
@@ -793,6 +942,8 @@ def sample_router_diagnostics(
     except RciUnavailable as exc:
         rci_states.append(exc.state)
         result["internet"] = {"available": False}
+    dns_diagnostics = sample_dns_diagnostics(runner=command_runner, clock=clock)
+    result["internet"]["dns_diagnostics"] = dns_diagnostics
     try:
         interface_payload = rci_fetcher("show/interface")
         interface_stats: dict[str, Any] = {}
