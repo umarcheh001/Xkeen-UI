@@ -44,6 +44,7 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
     ):
         assert f'id="{element_id}"' in template
     assert 'xk-collapsible-panel' in template
+    assert 'class="btn-secondary xk-toggle-button" id="xk-channel-trace"' in template
     for tooltip in (
         "Шлюз — первый узел провайдера.",
         "DNS преобразует имена сайтов в IP-адреса.",
@@ -114,6 +115,8 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         ".xk-resource-stage2-grid",
         ".xk-collapsible-panel",
         ".xk-stage2-action",
+        ".xk-toggle-button",
+        'content: "Вкл.";',
         ".xk-incident-row",
         "flex-flow: column nowrap",
         ".xk-interface-errors",

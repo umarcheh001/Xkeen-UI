@@ -20028,6 +20028,28 @@ body.panel-page .xk-stage2-panel.is-active > summary,
 body.panel-page .xk-stage2-action[aria-pressed="true"],
 body.panel-page .xk-stage2-action.is-active,
 body.panel-page #xk-channel-trace.is-active { border-color: var(--op-accent-border); background: var(--op-accent-soft); color: var(--op-accent-hover); }
+/* Toggle state must remain unmistakable even when the generic button theme
+ * uses stronger background declarations.  Apply the same visual language to
+ * every selectable control in the diagnostics modal. */
+body.panel-page .xk-resource-dashboard-content :is(
+  .xk-toggle-button,
+  .xk-resource-range button,
+  .xk-interface-filter button
+)[aria-pressed="true"] {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+  box-shadow: inset 0 0 0 1px var(--op-accent-border), inset 3px 0 0 var(--op-accent) !important;
+  color: var(--op-accent-hover) !important;
+  font-weight: 700;
+}
+body.panel-page .xk-resource-dashboard-content .xk-toggle-button[aria-pressed="true"]::after {
+  content: "Вкл.";
+  margin-left: 5px;
+  color: var(--op-accent-hover);
+  font-size: calc(8px * var(--xk-font-scale, 1));
+  font-weight: 800;
+  letter-spacing: .02em;
+}
 body.panel-page .xk-stage2-action { min-height: 28px; padding-inline: 10px; white-space: nowrap; }
 body.panel-page .xk-stage2-action.is-busy { opacity: .72; cursor: progress; }
 body.panel-page .xk-stage2-content { display: grid; gap: 7px; }

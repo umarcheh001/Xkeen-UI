@@ -486,7 +486,18 @@ def channel_check(
     result: dict[str, Any] = {"available": bool(samples) or loss < 100, "target": target, "sampled_at": started, "sent": count, "received": len(samples), "loss_percent": round(loss, 1), "latency_ms": average, "jitter_ms": jitter, "state": "good" if loss == 0 and (average is None or average < 120) else "warning" if loss < 25 else "bad"}
     if include_trace:
         try:
-            trace = runner(["traceroute", "-m", "8", "-w", "1", target], capture_output=True, text=True, timeout=20, check=False)
+            # BusyBox traceroute sends three probes per hop by default.  With
+            # eight hops and a one-second wait that can legitimately take 24
+            # seconds, so the previous 20-second subprocess limit killed an
+            # otherwise healthy trace.  One probe is enough for this compact
+            # diagnostics view and keeps the request bounded to roughly 8 s.
+            trace = runner(
+                ["traceroute", "-n", "-m", "8", "-q", "1", "-w", "1", target],
+                capture_output=True,
+                text=True,
+                timeout=12,
+                check=False,
+            )
             result["trace"] = f"{getattr(trace, 'stdout', '')}\n{getattr(trace, 'stderr', '')}"[:16_384]
         except (OSError, subprocess.SubprocessError) as exc:
             result["trace"] = f"traceroute недоступен: {exc}"[:512]

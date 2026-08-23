@@ -343,14 +343,17 @@ def test_channel_check_calculates_loss_latency_jitter_and_trace():
     calls = []
 
     def runner(command, **_kwargs):
-        calls.append(command[0])
+        calls.append((command, _kwargs))
         if command[0] == "ping":
             return SimpleNamespace(stdout="64 bytes from 1.1.1.1: time=10.0 ms\n64 bytes from 1.1.1.1: time=14.0 ms\n0% packet loss", stderr="")
         return SimpleNamespace(stdout="1  gateway  1 ms\n2  target  12 ms", stderr="")
 
     payload = channel_check("1.1.1.1", include_trace=True, runner=runner, clock=lambda: 77)
 
-    assert calls == ["ping", "traceroute"]
+    assert [command[0] for command, _kwargs in calls] == ["ping", "traceroute"]
+    trace_command, trace_kwargs = calls[1]
+    assert trace_command == ["traceroute", "-n", "-m", "8", "-q", "1", "-w", "1", "1.1.1.1"]
+    assert trace_kwargs["timeout"] == 12
     assert payload["received"] == 2
     assert payload["latency_ms"] == 12.0
     assert payload["jitter_ms"] == 2.0
