@@ -16,6 +16,7 @@ import subprocess
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -158,13 +159,18 @@ def normalize_capabilities(payload: Any, *, sampled_at: int) -> dict[str, Any]:
     text = json.dumps(source, ensure_ascii=False).lower()
     components: list[str] = []
     features: list[str] = []
-    for key, target in (("components", components), ("features", features)):
-        value = source.get(key)
+    def extend_names(value: Any, target: list[str]) -> None:
         if isinstance(value, (list, tuple)):
-            target.extend(str(item)[:64] for item in value)
+            target.extend(str(item).strip()[:64] for item in value if str(item).strip())
         elif isinstance(value, dict):
-            target.extend(str(item)[:64] for item in value.keys())
-    components.extend(re.findall(r"(?:wifi|wireless|lte|modem|mesh|usb)[a-z0-9_-]*", text))
+            target.extend(str(item).strip()[:64] for item in value.keys() if str(item).strip())
+        elif isinstance(value, str):
+            target.extend(item.strip()[:64] for item in value.split(",") if item.strip())
+
+    for branch in _walk_dicts(source):
+        extend_names(branch.get("components"), components)
+        extend_names(branch.get("features"), features)
+    components.extend(re.findall(r"\b(?:wifi|wireless|lte|modem|mesh|usb)[a-z0-9_-]*", text))
     all_names = {item.lower() for item in components + features}
     return {
         "available": bool(source),
@@ -172,7 +178,7 @@ def normalize_capabilities(payload: Any, *, sampled_at: int) -> dict[str, Any]:
         "model": str(_first(source, "model", "product", "hw-id", "hardware") or "")[:96],
         "firmware": str(_first(source, "version", "release", "firmware") or "")[:96],
         "wifi": any("wifi" in item or "wireless" in item for item in all_names) or "wifi" in text or "wifimaster" in text,
-        "lte": any("lte" in item or "modem" in item for item in all_names) or "lte" in text or "modem" in text,
+        "lte": any("lte" in item or "modem" in item or "qmi" in item for item in all_names) or "lte" in text or "modem" in text or "usbqmi" in text,
         "mesh": "mesh" in text,
         "components": sorted(set(components))[:64],
         "features": sorted(set(features))[:64],
@@ -183,6 +189,40 @@ def _counter(record: dict[str, Any], *keys: str) -> int:
     return _integer(_first(record, *keys)) or 0
 
 
+def _client_nested_value(record: dict[str, Any], key: str) -> Any:
+    """Read a client metric from the host row or its Keenetic ``mws`` block."""
+
+    direct = record.get(key)
+    if direct not in (None, ""):
+        return direct
+    mws = record.get("mws")
+    return mws.get(key) if isinstance(mws, dict) else None
+
+
+def _client_interface(record: dict[str, Any]) -> str:
+    mws = record.get("mws")
+    if isinstance(mws, dict):
+        access_point = _first(mws, "ap", "access-point", "interface")
+        if access_point is not None:
+            return str(access_point)[:64]
+    interface = record.get("interface")
+    if isinstance(interface, dict):
+        return str(_first(interface, "id", "name", "description") or "")[:64]
+    return str(_first(record, "interface", "access-point", "ap") or "")[:64]
+
+
+def _client_link_rate(value: Any) -> int | None:
+    """Return RCI Wi-Fi link rate in bit/s (Keenetic reports it in Mbit/s)."""
+
+    parsed = _number(value)
+    if parsed is None:
+        return None
+    # Keenetic ``show associations``/hotspot mws values are small Mbit/s
+    # numbers (for example 192 or 2401). Preserve already-normalized bps
+    # values used by alternative firmware response shapes.
+    return round(parsed * 1_000_000) if parsed <= 10_000 else round(parsed)
+
+
 def normalize_clients(payload: Any, *, sampled_at: int) -> dict[str, Any]:
     """Normalize hotspot/device-list entries for Top-5 and Wi-Fi client views."""
     items: list[dict[str, Any]] = []
@@ -190,27 +230,36 @@ def normalize_clients(payload: Any, *, sampled_at: int) -> dict[str, Any]:
     for raw in _walk_dicts(payload):
         address = str(_first(raw, "mac", "mac-address", "mac_address") or "").strip()[:48]
         ip = str(_first(raw, "ip", "address", "ipv4") or "").strip()[:64]
+        # Nested RCI metadata contains interface/AP dictionaries with an IP or
+        # a MAC-like identifier of their own.  Only hotspot host rows have a
+        # stable client address *and* one of the host/device fields below.
         if not address and not ip:
             continue
-        name = str(_first(raw, "name", "hostname", "host", "description", "id") or address or ip)[:96]
+        if not address and not any(key in raw for key in ("hostname", "host", "active", "registered", "mws", "rxbytes", "txbytes")):
+            continue
+        # The user-visible Keenetic ``name`` can contain a long registration
+        # suffix (and, on older migrations, invalidly decoded text).  Prefer
+        # the compact DHCP hostname when it is present.
+        name = str(_first(raw, "hostname", "name", "host", "description", "id") or address or ip)[:96]
         key = (address.lower(), ip.lower())
         if key in seen:
             continue
         seen.add(key)
         rx = _counter(raw, "rxbytes", "rx-bytes", "received-bytes", "download", "rx")
         tx = _counter(raw, "txbytes", "tx-bytes", "sent-bytes", "upload", "tx")
+        rssi_value = _signed_number(_client_nested_value(raw, "rssi"))
         items.append({
             "name": name,
             "mac": address,
             "ip": ip,
-            "interface": str(_first(raw, "interface", "mws", "access-point", "ap") or "")[:64],
-            "rssi": int(_signed_number(_first(raw, "rssi", "signal", "signal-strength"))) if _signed_number(_first(raw, "rssi", "signal", "signal-strength")) is not None else None,
-            "rx_rate": _counter(raw, "rxrate", "rx-rate", "receive-rate"),
-            "tx_rate": _counter(raw, "txrate", "tx-rate", "send-rate"),
+            "interface": _client_interface(raw),
+            "rssi": int(rssi_value) if rssi_value is not None else None,
+            "rx_rate": _client_link_rate(_client_nested_value(raw, "rxrate") or _first(raw, "rx-rate", "receive-rate")),
+            "tx_rate": _client_link_rate(_client_nested_value(raw, "txrate") or _first(raw, "tx-rate", "send-rate")),
             "received_bytes": rx,
             "sent_bytes": tx,
             "traffic_bytes": rx + tx,
-            "online": _bool(_first(raw, "online", "connected", "state")),
+            "online": _bool(_first(raw, "active", "online", "connected", "link", "state")),
         })
     items.sort(key=lambda item: (-item["traffic_bytes"], item["name"].lower()))
     wifi = [item for item in items if item.get("rssi") is not None or "wifi" in item.get("interface", "").lower() or "wifimaster" in item.get("interface", "").lower()]
@@ -224,7 +273,7 @@ def normalize_lte(payload: Any, *, sampled_at: int) -> dict[str, Any]:
                 "available": True,
                 "sampled_at": sampled_at,
                 "operator": str(_first(raw, "operator", "provider", "network") or "")[:96],
-                "technology": str(_first(raw, "technology", "mode", "rat") or "")[:32],
+                "technology": str(_first(raw, "technology", "mobile", "mode", "rat") or "")[:32],
                 "band": str(_first(raw, "band", "cell", "earfcn") or "")[:32],
                 "rsrp": _signed_number(_first(raw, "rsrp", "signal-rsrp")),
                 "rsrq": _signed_number(_first(raw, "rsrq", "signal-rsrq")),
@@ -274,7 +323,10 @@ def sample_router_lte(
 ) -> dict[str, Any]:
     """Probe optional modem branches on demand; LTE absence is not an error."""
     sampled_at = int(clock())
-    for path in ("show/lte", "show/modem", "show/usb/modem"):
+    # Current KeeneticOS exposes UsbQmi/UsbLte radio metrics directly inside
+    # show/interface.  Older releases may still have one of the dedicated
+    # branches below.
+    for path in ("show/interface", "show/lte", "show/modem", "show/usb/modem"):
         try:
             result = normalize_lte(rci_fetcher(path), sampled_at=sampled_at)
             result["source"] = path
@@ -315,7 +367,7 @@ def channel_check(
     except (OSError, subprocess.SubprocessError) as exc:
         return {"available": False, "target": target, "sampled_at": started, "state": "unavailable", "error": str(exc)[:160]}
     samples = _ping_numbers(output)
-    loss_match = re.search(r"([0-9]+(?:[.,][0-9]+)?)%\s*(?:packet )?loss", output, re.I)
+    loss_match = re.search(r"([0-9]+(?:[.,][0-9]+)?)%\s*(?:packet\s+)?loss", output, re.I)
     loss = float(loss_match.group(1).replace(",", ".")) if loss_match else (0.0 if samples else 100.0)
     average = round(statistics.fmean(samples), 1) if samples else None
     jitter = round(statistics.pstdev(samples), 1) if len(samples) > 1 else 0.0 if samples else None
@@ -436,7 +488,50 @@ def _interface_online(item: dict[str, Any]) -> bool | None:
     return all(known)
 
 
-def normalize_interfaces(payload: Any, *, now: float) -> dict[str, Any]:
+_INTERFACE_COUNTER_KEYS = (
+    "rxbytes", "received-bytes", "received_bytes", "txbytes", "sent-bytes", "sent_bytes",
+    "rxspeed", "receive-speed", "txspeed", "send-speed", "rxerrors", "rx-errors",
+    "receive-errors", "txerrors", "tx-errors", "send-errors", "rxdropped", "rx-dropped",
+    "receive-dropped", "txdropped", "tx-dropped", "send-dropped",
+)
+
+
+def _has_interface_metrics(record: dict[str, Any]) -> bool:
+    return any(key in record and record[key] not in (None, "") for key in _INTERFACE_COUNTER_KEYS)
+
+
+def _interface_stat_targets(payload: Any) -> list[str]:
+    """Select active rows which need the cheap per-interface stat request."""
+
+    candidates: list[tuple[int, str]] = []
+    for raw in _interface_records(payload):
+        name = str(_first(raw, "id", "name", "interface-name") or "").strip()
+        if not name or _interface_online(raw) is not True or _has_interface_metrics(raw):
+            continue
+        kind = _interface_kind(raw, name)
+        # Master radio rows duplicate their active access-point counters on
+        # current KeeneticOS and do not expose a meaningful instantaneous
+        # bitrate of their own.  Query AP rows instead.
+        item_type = str(raw.get("type") or "").strip().lower()
+        if item_type == "wifimaster" or ("/" not in name and name.lower().startswith("wifimaster")):
+            continue
+        priority = 0 if _bool(raw.get("defaultgw")) is True else {"wan": 1, "vpn": 2, "wifi": 3, "lan": 4}.get(kind, 5)
+        candidates.append((priority, name))
+    targets: list[str] = []
+    for _priority, name in sorted(candidates, key=lambda item: (item[0], item[1].lower())):
+        if name not in targets:
+            targets.append(name)
+        if len(targets) >= 16:
+            break
+    return targets
+
+
+def normalize_interfaces(
+    payload: Any,
+    *,
+    now: float,
+    interface_stats: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     global _previous_interfaces
     normalized: list[dict[str, Any]] = []
     counters: dict[str, tuple[int, int]] = {}
@@ -444,9 +539,13 @@ def normalize_interfaces(payload: Any, *, now: float) -> dict[str, Any]:
         name = str(_first(raw, "id", "name", "interface-name") or "").strip()[:64]
         if not name:
             continue
-        received = _integer(_first(raw, "rxbytes", "received-bytes", "received_bytes")) or 0
-        sent = _integer(_first(raw, "txbytes", "sent-bytes", "sent_bytes")) or 0
-        counters[name] = (received, sent)
+        stat = (interface_stats or {}).get(name)
+        metrics = stat if isinstance(stat, dict) and _has_interface_metrics(stat) else raw
+        metrics_available = _has_interface_metrics(metrics)
+        received = _integer(_first(metrics, "rxbytes", "received-bytes", "received_bytes"))
+        sent = _integer(_first(metrics, "txbytes", "sent-bytes", "sent_bytes"))
+        if received is not None and sent is not None:
+            counters[name] = (received, sent)
         normalized.append({
             "name": name,
             "description": str(raw.get("description") or "")[:96],
@@ -457,14 +556,15 @@ def normalize_interfaces(payload: Any, *, now: float) -> dict[str, Any]:
             "connected": str(raw.get("connected") or "")[:24],
             "address": str(raw.get("address") or "")[:64],
             "default_gateway": _bool(raw.get("defaultgw")) is True,
+            "metrics_available": metrics_available,
             "received_bytes": received,
             "sent_bytes": sent,
-            "receive_bits_per_second": _integer(_first(raw, "rxspeed", "receive-speed")) or 0,
-            "send_bits_per_second": _integer(_first(raw, "txspeed", "send-speed")) or 0,
-            "receive_errors": _integer(_first(raw, "rxerrors", "rx-errors", "receive-errors")) or 0,
-            "send_errors": _integer(_first(raw, "txerrors", "tx-errors", "send-errors")) or 0,
-            "receive_dropped": _integer(_first(raw, "rxdropped", "rx-dropped", "receive-dropped")) or 0,
-            "send_dropped": _integer(_first(raw, "txdropped", "tx-dropped", "send-dropped")) or 0,
+            "receive_bits_per_second": _integer(_first(metrics, "rxspeed", "receive-speed")),
+            "send_bits_per_second": _integer(_first(metrics, "txspeed", "send-speed")),
+            "receive_errors": _integer(_first(metrics, "rxerrors", "rx-errors", "receive-errors")),
+            "send_errors": _integer(_first(metrics, "txerrors", "tx-errors", "send-errors")),
+            "receive_dropped": _integer(_first(metrics, "rxdropped", "rx-dropped", "receive-dropped")),
+            "send_dropped": _integer(_first(metrics, "txdropped", "tx-dropped", "send-dropped")),
         })
 
     with _interface_lock:
@@ -473,12 +573,16 @@ def normalize_interfaces(payload: Any, *, now: float) -> dict[str, Any]:
     elapsed = max(0.0, now - previous[0]) if previous else 0.0
     old = previous[1] if previous else {}
     for item in normalized:
-        if item["receive_bits_per_second"] or item["send_bits_per_second"] or not elapsed:
+        if item["receive_bits_per_second"] is not None or item["send_bits_per_second"] is not None or not elapsed:
             continue
-        old_rx, old_tx = old.get(item["name"], (item["received_bytes"], item["sent_bytes"]))
-        if item["received_bytes"] >= old_rx:
+        current = counters.get(item["name"])
+        previous_counter = old.get(item["name"])
+        if current is None or previous_counter is None:
+            continue
+        old_rx, old_tx = previous_counter
+        if item["received_bytes"] is not None and item["received_bytes"] >= old_rx:
             item["receive_bits_per_second"] = round((item["received_bytes"] - old_rx) * 8 / elapsed)
-        if item["sent_bytes"] >= old_tx:
+        if item["sent_bytes"] is not None and item["sent_bytes"] >= old_tx:
             item["send_bits_per_second"] = round((item["sent_bytes"] - old_tx) * 8 / elapsed)
 
     priority = {"wan": 0, "vpn": 1, "wifi": 2, "lan": 3}
@@ -508,7 +612,15 @@ def sample_router_diagnostics(
         rci_states.append(exc.state)
         result["internet"] = {"available": False}
     try:
-        result["interfaces"] = normalize_interfaces(rci_fetcher("show/interface"), now=now)
+        interface_payload = rci_fetcher("show/interface")
+        interface_stats: dict[str, Any] = {}
+        for name in _interface_stat_targets(interface_payload):
+            try:
+                encoded = urllib.parse.quote(name, safe="")
+                interface_stats[name] = rci_fetcher(f"show/interface/stat?name={encoded}")
+            except RciUnavailable:
+                continue
+        result["interfaces"] = normalize_interfaces(interface_payload, now=now, interface_stats=interface_stats)
     except RciUnavailable as exc:
         rci_states.append(exc.state)
         result["interfaces"] = {"available": False, "count": 0, "items": [], "truncated": False}

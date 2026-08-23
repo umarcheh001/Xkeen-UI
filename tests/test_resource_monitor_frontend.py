@@ -52,6 +52,8 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         "LTE_ENDPOINT = \"/api/system/router/lte\"",
         "CHANNEL_ENDPOINT = \"/api/system/router/channel-check\"",
         "renderRouterDiagnostics",
+        "formatOptionalBitRate",
+        'value === true ? "Нет перехвата"',
         "loadProcesses",
         "loadClients",
         "loadLte",
@@ -92,5 +94,6 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         ".xk-resource-stage2-grid",
         ".xk-stage2-action",
         ".xk-incident-row",
+        "flex-flow: column nowrap",
     ):
         assert fragment in css

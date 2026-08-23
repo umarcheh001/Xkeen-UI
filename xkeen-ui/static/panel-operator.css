@@ -19891,8 +19891,10 @@ body.panel-page .xk-resource-details dd { margin: 0; overflow: hidden; color: va
   body.panel-page .xk-resource-monitor-item { min-width: 48px; }
   body.panel-page .xk-resource-monitor-label { display: none; }
   body.panel-page .xk-resource-dashboard-content { width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
-  body.panel-page .xk-resource-dashboard-header { align-items: stretch; flex-direction: column; }
-  body.panel-page .xk-resource-dashboard-actions { justify-content: space-between; margin-left: 0; }
+  body.panel-page .xk-resource-dashboard-header { align-items: stretch; flex-flow: column nowrap; height: auto; min-height: 0; }
+  body.panel-page .xk-resource-dashboard-actions { width: 100%; min-width: 0; justify-content: flex-start; margin-left: 0; }
+  body.panel-page .xk-resource-range { min-width: 0; flex: 1 1 auto; overflow-x: auto; }
+  body.panel-page .xk-resource-dashboard-actions > :is(#xk-resource-dashboard-refresh, #xk-resource-dashboard-close) { flex: 0 0 auto; }
   body.panel-page .xk-resource-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   body.panel-page .xk-router-diagnostics { grid-template-columns: minmax(0, 1fr); }
   body.panel-page .xk-resource-details dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }

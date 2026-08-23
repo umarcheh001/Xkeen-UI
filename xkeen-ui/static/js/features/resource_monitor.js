@@ -104,6 +104,12 @@ function formatBitRate(value) {
   }
   return `${current.toFixed(current >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
+
+function formatOptionalBitRate(value) {
+  return value == null || !Number.isFinite(Number(value))
+    ? "—"
+    : formatBitRate(value);
+}
 function tone(percent) {
   if (percent >= 90) return "danger";
   if (percent >= 75) return "warning";
@@ -313,13 +319,13 @@ function setCheck(name, value) {
   const label = byId(`xk-internet-check-${name}`);
   const state = value === true ? "ok" : value === false ? "failed" : "unknown";
   if (row) row.dataset.state = state;
-  if (label)
-    label.textContent =
-      value === true
-        ? "Доступен"
-        : value === false
-          ? "Нет связи"
-          : "Нет данных";
+  if (label) {
+    if (name === "captive") {
+      label.textContent = value === true ? "Нет перехвата" : value === false ? "Обнаружен" : "Нет данных";
+    } else {
+      label.textContent = value === true ? "Доступен" : value === false ? "Нет связи" : "Нет данных";
+    }
+  }
 }
 
 function renderInternet(internet, freshness, rci) {
@@ -526,18 +532,16 @@ function renderInterfaces(interfaces) {
     textCell(row, item.address || "—", "xk-resource-mono");
     textCell(
       row,
-      formatBitRate(item.receive_bits_per_second),
+      formatOptionalBitRate(item.receive_bits_per_second),
       "xk-resource-mono",
     );
-    textCell(row, formatBitRate(item.send_bits_per_second), "xk-resource-mono");
-    const errors =
-      Number(item.receive_errors || 0) +
-      Number(item.send_errors || 0) +
-      Number(item.receive_dropped || 0) +
-      Number(item.send_dropped || 0);
+    textCell(row, formatOptionalBitRate(item.send_bits_per_second), "xk-resource-mono");
+    const errorValues = [item.receive_errors, item.send_errors, item.receive_dropped, item.send_dropped];
+    const errorsAvailable = errorValues.some((value) => value != null && Number.isFinite(Number(value)));
+    const errors = errorValues.reduce((total, value) => total + (Number(value) || 0), 0);
     textCell(
       row,
-      errors ? errors.toLocaleString() : "0",
+      !errorsAvailable ? "—" : errors ? errors.toLocaleString() : "0",
       errors ? "xk-interface-errors" : "xk-resource-mono",
     );
     body.appendChild(row);
@@ -572,7 +576,7 @@ function renderClients(payload) {
   const items = (Array.isArray(payload?.top) ? payload.top : payload?.items || []).slice(0, 5);
   if (!payload?.available || !items.length) {
     const row = document.createElement("tr");
-    textCell(row, "Клиенты RCI недоступны", "xk-resource-table-empty");
+    textCell(row, payload?.available ? "Активные клиенты не найдены" : "Клиенты RCI недоступны", "xk-resource-table-empty");
     row.firstElementChild.colSpan = 6;
     body.appendChild(row);
   } else {
@@ -586,8 +590,8 @@ function renderClients(payload) {
       identity.append(name, detail);
       row.appendChild(identity);
       textCell(row, formatBytes(item.traffic_bytes), "xk-resource-mono");
-      textCell(row, formatBitRate(item.rx_rate), "xk-resource-mono");
-      textCell(row, formatBitRate(item.tx_rate), "xk-resource-mono");
+      textCell(row, formatOptionalBitRate(item.rx_rate), "xk-resource-mono");
+      textCell(row, formatOptionalBitRate(item.tx_rate), "xk-resource-mono");
       textCell(row, item.rssi == null ? "—" : `${item.rssi} dBm`, "xk-resource-mono");
       textCell(row, item.interface || "—", "xk-resource-mono");
       body.appendChild(row);
@@ -600,8 +604,12 @@ function renderClients(payload) {
       : "KeeneticOS не вернул список клиентов.";
     status.dataset.state = payload?.available ? "ready" : "error";
   }
-  clientsLoaded = true;
-  setStage2Button("xk-clients-action", "Загружено", { pressed: true });
+  clientsLoaded = payload?.available === true;
+  setStage2Button(
+    "xk-clients-action",
+    clientsLoaded ? "Обновить" : "Повторить",
+    { pressed: clientsLoaded },
+  );
 }
 
 async function loadClients() {
