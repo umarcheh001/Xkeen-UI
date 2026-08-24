@@ -302,6 +302,61 @@ test('mihomo generator keeps its editor controls and subscription fields aligned
 });
 
 
+test('mihomo managed subscription confirmation stays clickable without an overlapping tooltip', async ({ page }) => {
+  let subscriptionPresent = true;
+  let deleteRequested = false;
+  await page.route('**/api/mihomo/subscriptions', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        subscriptions: subscriptionPresent ? [{
+          id: 'e2e-subscription',
+          url: 'https://example.invalid/subscription',
+          tag: 'xray-sub:e2e',
+          enabled: true,
+          interval_hours: 24,
+          last_count: 17,
+          last_ok: true,
+          next_update_ts: Date.now() / 1000 + 86400,
+        }] : [],
+      }),
+    });
+  });
+  await page.route('**/api/mihomo/subscriptions/e2e-subscription', async (route) => {
+    deleteRequested = true;
+    subscriptionPresent = false;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscription: { id: 'e2e-subscription' } }),
+    });
+  });
+
+  await page.goto('/mihomo_generator');
+  await waitForMihomoGeneratorPreview(page);
+
+  const deleteButton = page.getByRole('button', { name: 'Удалить запись автообновления' });
+  await expect(deleteButton).toBeVisible();
+  await expect(deleteButton).toHaveAttribute('data-tooltip-silent', '1');
+  await expect(deleteButton).not.toHaveAttribute('data-tooltip', /.+/);
+
+  await deleteButton.hover();
+  await expect(page.locator('#xk-tooltip-portal')).toBeHidden();
+  await deleteButton.click();
+
+  const confirm = page.locator('#confirm-modal');
+  await expect(confirm).toBeVisible();
+  const remove = confirm.getByRole('button', { name: 'Удалить', exact: true });
+  await expect(remove).toBeEnabled();
+  await remove.click();
+  await expect(confirm).toBeHidden();
+  await expect.poll(() => deleteRequested).toBeTruthy();
+  await expect(page.locator('.mihomo-managed-sub-item')).toHaveCount(0);
+});
+
+
 test('mihomo bulk import presents a guided operator flow without legacy blue chrome', async ({ page }) => {
   await page.goto('/mihomo_generator');
   await waitForMihomoGeneratorPreview(page);

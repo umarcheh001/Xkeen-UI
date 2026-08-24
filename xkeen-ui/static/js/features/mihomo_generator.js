@@ -1997,8 +1997,7 @@ function initEngineToggle() {
           btn.className = "btn btn-ghost btn-xs mihomo-managed-sub-icon-btn" + (extraClass ? " " + extraClass : "");
           btn.innerHTML = iconHtml(iconName);
           btn.setAttribute("aria-label", String(label || ""));
-          btn.setAttribute("title", String(label || ""));
-          btn.setAttribute("data-tooltip", String(label || ""));
+          btn.setAttribute("data-tooltip-silent", "1");
           btn.onclick = onClick;
           return btn;
         }

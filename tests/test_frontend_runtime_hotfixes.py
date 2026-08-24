@@ -197,6 +197,20 @@ def test_mihomo_generator_xray_subscription_prompt_uses_theme_confirm_modal():
     assert 'data-modal-key="mihomo-generator-confirm"' in template
 
 
+def test_mihomo_generator_managed_subscription_actions_do_not_leave_portal_tooltips_over_confirmations():
+    script = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
+
+    button_factory = script.split(
+        'function makeManagedSubIconButton(iconName, label, onClick, extraClass = "") {',
+        1,
+    )[1].split('\n        async function saveManagedSubscriptionSettings', 1)[0]
+
+    assert 'btn.setAttribute("aria-label", String(label || ""));' in button_factory
+    assert 'btn.setAttribute("data-tooltip-silent", "1");' in button_factory
+    assert 'btn.setAttribute("title", String(label || ""));' not in button_factory
+    assert 'btn.setAttribute("data-tooltip", String(label || ""));' not in button_factory
+
+
 def test_mihomo_generator_xray_subscription_prompt_is_scoped_to_generator_screen():
     script = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
     init = Path('xkeen-ui/static/js/pages/mihomo_generator.init.js').read_text(encoding='utf-8')
