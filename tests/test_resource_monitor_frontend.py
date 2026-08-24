@@ -27,10 +27,6 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         "xk-internet-health",
         "xk-internet-check-dns-row",
         "xk-dns-guidance",
-        "xk-dns-guidance-summary",
-        "xk-dns-failure-count",
-        "xk-dns-failure-list",
-        "xk-dns-recommendations",
         "xk-conntrack-panel",
         "xk-interface-rows",
         "xk-interface-panel",
@@ -56,6 +52,10 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
     assert 'data-dns-toggle="false"' in template
     assert 'aria-controls="xk-dns-guidance"' in template
     assert 'hidden aria-hidden="true"' in template
+    assert "Ошибки DNS (DoH/DoT)" in template
+    assert "Подробности — в журнале диагностики Keenetic." in template
+    assert "Проблемные подключения" not in template
+    assert "Что можно сделать" not in template
     assert "Графики показывают нагрузку роутера, а причина указана в блоке DNS ниже" not in script
     assert "Графики ниже показывают ресурсы роутера, но не определяют доступность DNS-upstream" not in template
     assert 'xk-collapsible-panel' in template
@@ -80,10 +80,6 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         "renderRouterDiagnostics",
         "dns_diagnostics",
         "Ошибка DoH/DoT",
-        "renderDnsDiagnostics",
-        "DNS_FAILURE_LABELS",
-        "formatDnsFailureCount",
-        "dnsFailureLabel",
         "syncDnsGuidanceState",
         "toggleDnsGuidance",
         "Проблема с зашифрованным DNS",
@@ -136,13 +132,7 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         ".xk-resource-health",
         ".xk-router-diagnostics",
         ".xk-dns-guidance",
-        ".xk-dns-failure-heading",
-        ".xk-dns-failure",
-        ".xk-dns-failure-head",
-        ".xk-dns-failure-transport",
-        ".xk-dns-failure-reason",
-        ".xk-dns-failure-technical",
-        ".xk-dns-recommendations",
+        ".xk-dns-guidance-dot",
         ".xk-resource-table",
         ".xk-process-panel",
         ".xk-process-button",

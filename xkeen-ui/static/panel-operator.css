@@ -19803,25 +19803,12 @@ body.panel-page .xk-internet-meta { display: grid; grid-template-columns: repeat
 body.panel-page .xk-internet-meta > div { min-width: 0; }
 body.panel-page .xk-internet-meta dt { color: var(--op-faint); font-size: calc(8px * var(--xk-font-scale, 1)); }
 body.panel-page .xk-internet-meta dd { margin: 2px 0 0; overflow: hidden; color: var(--op-data); font: 600 calc(9px * var(--xk-font-scale, 1))/1.2 var(--op-font-mono); text-overflow: ellipsis; white-space: nowrap; }
-body.panel-page .xk-dns-guidance { grid-column: 1 / -1; }
-body.panel-page .xk-dns-guidance[data-tone="danger"] { border-color: var(--op-danger); }
-body.panel-page .xk-dns-guidance-body { display: grid; gap: 7px; padding: 8px 9px 9px; }
-body.panel-page .xk-dns-failure-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-body.panel-page .xk-dns-failure-heading strong { color: var(--op-text); font-size: calc(10px * var(--xk-font-scale, 1)); }
-body.panel-page .xk-dns-failure-heading span { color: var(--op-muted); font-size: calc(9px * var(--xk-font-scale, 1)); }
-body.panel-page .xk-dns-recommendations p { margin: 0; color: var(--op-muted); font-size: calc(9px * var(--xk-font-scale, 1)); line-height: 1.45; }
-body.panel-page .xk-dns-failure-list { display: grid; gap: 4px; color: var(--op-muted); font-size: calc(9px * var(--xk-font-scale, 1)); }
-body.panel-page .xk-dns-failure { display: grid; gap: 3px; min-width: 0; padding: 6px 8px; border: 1px solid var(--op-border); border-radius: var(--op-control-radius); background: var(--op-surface); }
-body.panel-page .xk-dns-failure-head { display: flex; align-items: center; gap: 7px; min-width: 0; }
-body.panel-page .xk-dns-failure-transport { flex: 0 0 auto; padding: 2px 5px; border-radius: 4px; background: var(--op-danger-soft); color: var(--op-danger); font: 700 calc(8px * var(--xk-font-scale, 1))/1 var(--op-font-mono); letter-spacing: .04em; }
-body.panel-page .xk-dns-failure[data-transport="dot"] .xk-dns-failure-transport { background: var(--op-warning-soft); color: var(--op-warning); }
-body.panel-page .xk-dns-failure code { min-width: 0; overflow: hidden; color: var(--op-data); font: 600 calc(9px * var(--xk-font-scale, 1)) var(--op-font-mono); text-overflow: ellipsis; white-space: nowrap; }
-body.panel-page .xk-dns-failure-reason { color: var(--op-text); font-size: calc(9px * var(--xk-font-scale, 1)); line-height: 1.3; }
-body.panel-page .xk-dns-failure-technical { overflow: hidden; color: var(--op-muted); font-size: calc(8px * var(--xk-font-scale, 1)); line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
-body.panel-page .xk-dns-recommendations { display: grid; gap: 5px; padding: 7px; border: 1px solid var(--op-warning); border-radius: var(--op-control-radius); background: var(--op-warning-soft); }
-body.panel-page .xk-dns-recommendations strong { color: var(--op-text); font-size: calc(10px * var(--xk-font-scale, 1)); }
-body.panel-page .xk-dns-recommendations ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 14px; margin: 0; padding-left: 17px; }
-body.panel-page .xk-dns-recommendations a { color: var(--op-accent-hover); font: 600 calc(9px * var(--xk-font-scale, 1)) var(--op-font-mono); }
+body.panel-page .xk-dns-guidance { display: flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%; padding: 8px 10px; border: 1px solid var(--op-danger); border-radius: var(--op-radius); background: var(--op-danger-soft); }
+body.panel-page .xk-dns-guidance[hidden] { display: none; }
+body.panel-page .xk-dns-guidance-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--op-danger); box-shadow: 0 0 0 2px color-mix(in srgb, var(--op-danger) 18%, transparent); }
+body.panel-page .xk-dns-guidance > div { display: flex; flex-wrap: wrap; gap: 2px 7px; min-width: 0; }
+body.panel-page .xk-dns-guidance strong { color: var(--op-text); font-size: calc(10px * var(--xk-font-scale, 1)); }
+body.panel-page .xk-dns-guidance > div > span { color: var(--op-muted); font-size: calc(9px * var(--xk-font-scale, 1)); }
 body.panel-page .xk-conntrack-value { display: flex; align-items: baseline; gap: 8px; padding: 9px 9px 5px; }
 body.panel-page .xk-conntrack-value strong { color: var(--op-text-strong); font: 650 calc(18px * var(--xk-font-scale, 1))/1 var(--op-font-mono); }
 body.panel-page .xk-conntrack-value span,
@@ -20027,7 +20014,6 @@ body.panel-page .xk-resource-interface-chip {
   body.panel-page .xk-internet-checks { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 0; }
   body.panel-page .xk-internet-checks > div:nth-child(3) { padding-left: 0; border-left: 0; }
   body.panel-page .xk-internet-meta { grid-template-columns: minmax(0, 1fr); }
-  body.panel-page .xk-dns-recommendations ul { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Stage two diagnostics: on-demand panels keep heavy RCI calls out of the

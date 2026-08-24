@@ -485,113 +485,6 @@ function renderInternet(internet, freshness, rci) {
   syncDnsGuidanceState(available && dnsError);
 }
 
-const DNS_FAILURE_LABELS = {
-  "TLS-соединение не установлено": "Не удалось установить защищённое соединение",
-  "тайм-аут соединения": "Сервер не ответил вовремя",
-  "ошибка запроса": "Сервер вернул ошибку запроса",
-  "слишком много неудачных запросов": "Слишком много неудачных попыток",
-  "прокси неожиданно остановился": "DNS-прокси остановился",
-};
-
-function formatDnsFailureCount(value) {
-  const count = Math.max(0, Math.trunc(Number(value) || 0));
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  const noun = mod10 === 1 && mod100 !== 11
-    ? "ошибка"
-    : mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)
-      ? "ошибки"
-      : "ошибок";
-  return `${count} ${noun}`;
-}
-
-function dnsFailureLabel(reason) {
-  const technical = String(reason || "").trim();
-  return DNS_FAILURE_LABELS[technical] || technical || "Не удалось подключиться к DNS-серверу";
-}
-
-function renderDnsDiagnostics(diagnostics) {
-  const panel = byId("xk-dns-guidance");
-  if (!panel) return;
-  const state = diagnostics?.state || "unavailable";
-  const failures = Array.isArray(diagnostics?.failures) ? diagnostics.failures : [];
-  const summary = byId("xk-dns-guidance-summary");
-  const failureCount = byId("xk-dns-failure-count");
-  const list = byId("xk-dns-failure-list");
-  const recommendations = byId("xk-dns-recommendations");
-  const totalFailures = Math.max(
-    Math.trunc(Number(diagnostics?.failure_count) || 0),
-    failures.length,
-  );
-  const visibleFailures = Math.min(failures.length, 8);
-  panel.dataset.tone = state === "error" ? "danger" : state === "ok" ? "normal" : "unknown";
-  if (summary) {
-    summary.textContent = state === "error"
-      ? totalFailures
-        ? `В журнале найдено ${formatDnsFailureCount(totalFailures)}`
-        : diagnostics?.summary || "Обнаружены ошибки DoH/DoT"
-      : state === "ok"
-        ? "Ошибок зашифрованного DNS не обнаружено"
-        : "Журнал DNS недоступен";
-  }
-  if (failureCount) {
-    failureCount.textContent = state === "error"
-      ? visibleFailures < totalFailures
-        ? `Показано ${visibleFailures} из ${totalFailures}`
-        : formatDnsFailureCount(totalFailures)
-      : state === "ok"
-        ? "Ошибок нет"
-        : "Нет свежих данных";
-  }
-  if (list) {
-    list.replaceChildren();
-    if (state === "error" && failures.length) {
-      failures.slice(0, 8).forEach((failure) => {
-        const row = document.createElement("div");
-        row.className = "xk-dns-failure";
-        const transportText = String(failure?.transport || "DNS").trim() || "DNS";
-        const targetText = String(failure?.target || "Адрес upstream не указан").trim() || "Адрес upstream не указан";
-        const technicalReason = String(failure?.reason || "ошибка соединения").trim() || "ошибка соединения";
-        const friendlyReason = dnsFailureLabel(technicalReason);
-        row.dataset.transport = transportText.toLowerCase();
-        row.setAttribute(
-          "aria-label",
-          `${targetText}: ${friendlyReason}${friendlyReason === technicalReason ? "" : `. Техническая причина: ${technicalReason}`}`,
-        );
-        const head = document.createElement("div");
-        head.className = "xk-dns-failure-head";
-        const transport = document.createElement("span");
-        transport.className = "xk-dns-failure-transport";
-        transport.textContent = transportText;
-        const target = document.createElement("code");
-        target.textContent = targetText;
-        target.title = targetText;
-        head.append(transport, target);
-        const reason = document.createElement("strong");
-        reason.className = "xk-dns-failure-reason";
-        reason.textContent = friendlyReason;
-        reason.title = technicalReason;
-        row.append(head, reason);
-        if (friendlyReason !== technicalReason) {
-          const technical = document.createElement("span");
-          technical.className = "xk-dns-failure-technical";
-          technical.textContent = `В журнале: ${technicalReason}`;
-          row.appendChild(technical);
-        }
-        list.appendChild(row);
-      });
-    } else {
-      list.textContent = state === "unavailable"
-        ? "Невозможно определить upstream без свежего журнала роутера."
-        : "Проблемные upstream не обнаружены.";
-    }
-  }
-  if (recommendations) {
-    recommendations.hidden = state !== "error";
-    recommendations.setAttribute("aria-hidden", state === "error" ? "false" : "true");
-  }
-}
-
 function renderConntrack(conntrack) {
   const panel = byId("xk-conntrack-panel");
   const meter = byId("xk-conntrack-meter");
@@ -813,7 +706,6 @@ function renderInterfaces(interfaces) {
 function renderRouterDiagnostics(router) {
   const internet = router?.internet;
   renderInternet(internet, router?.freshness, router?.rci);
-  renderDnsDiagnostics(internet?.dns_diagnostics);
   renderConntrack(router?.conntrack);
   renderInterfaces(router?.interfaces);
   renderIncidents(router?.incidents);

@@ -342,30 +342,13 @@
             </article>
           </section>
 
-          <section class="xk-resource-panel xk-dns-guidance" id="xk-dns-guidance" data-tone="unknown" aria-label="Диагностика зашифрованного DNS" hidden aria-hidden="true">
-            <header><div><strong>Зашифрованный DNS</strong><span id="xk-dns-guidance-summary">Ожидание журнала роутера</span></div><span class="xk-resource-state-badge">DoH/DoT</span></header>
-            <div class="xk-dns-guidance-body">
-              <div class="xk-dns-failure-heading">
-                <strong>Проблемные подключения</strong>
-                <span id="xk-dns-failure-count">—</span>
-              </div>
-              <div class="xk-dns-failure-list" id="xk-dns-failure-list" aria-live="polite">Проверка не запускалась.</div>
-              <div class="xk-dns-recommendations" id="xk-dns-recommendations" aria-hidden="true" hidden>
-                <strong>Что можно сделать</strong>
-                <p>Попробуйте один из проверенных адресов, затем обновите диагностику:</p>
-                <ul>
-                  <li><a href="https://one.one.one.one/dns-query" target="_blank" rel="noreferrer">one.one.one.one/dns-query</a></li>
-                  <li><a href="https://dns.google/dns-query" target="_blank" rel="noreferrer">dns.google/dns-query</a></li>
-                  <li><a href="https://base.dns.mullvad.net/dns-query" target="_blank" rel="noreferrer">base.dns.mullvad.net/dns-query</a></li>
-                  <li><a href="https://doh.pub/dns-query" target="_blank" rel="noreferrer">doh.pub/dns-query</a></li>
-                  <li><a href="https://freedns.controld.com/x-oisd" target="_blank" rel="noreferrer">freedns.controld.com/x-oisd</a></li>
-                  <li><a href="https://ric.openbld.net/dns-query/oisd" target="_blank" rel="noreferrer">ric.openbld.net/dns-query/oisd</a></li>
-                  <li><a href="https://doh.dns.sb/dns-query" target="_blank" rel="noreferrer">doh.dns.sb/dns-query</a></li>
-                </ul>
-                <p>Если нужен собственный профиль, разверните личный DNS через AdGuard Home (AGH) и укажите его DoH/DoT-адрес в настройках роутера.</p>
-              </div>
+          <aside class="xk-dns-guidance" id="xk-dns-guidance" role="status" aria-live="polite" hidden aria-hidden="true">
+            <span class="xk-dns-guidance-dot" aria-hidden="true"></span>
+            <div>
+              <strong>Ошибки DNS (DoH/DoT)</strong>
+              <span>Подробности — в журнале диагностики Keenetic.</span>
             </div>
-          </section>
+          </aside>
 
           <section class="xk-resource-overview" aria-label="Ключевые показатели">
             <article class="xk-resource-stat" data-resource-stat="cpu">
