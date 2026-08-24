@@ -10295,11 +10295,12 @@ html[data-theme="light"] .xk-sub-draft-badge {
   display: block;
   width: 100%;
   min-width: 0;
-  padding: 1px 6px;
-  border-radius: 999px;
-  border: 1px solid rgba(125, 211, 252, 0.22);
-  background: rgba(8, 47, 73, 0.36);
-  color: #bae6fd;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted, #aeb6c6);
+  font-family: var(--xk-mono-font-family);
   font-size: 0.96em;
   line-height: 1.35;
   white-space: nowrap;
@@ -12064,12 +12065,6 @@ html[data-theme="light"] .xk-sub-diag-empty {
 
 html[data-theme="light"] .xk-sub-diag-list {
   color: #1d2b44;
-}
-
-html[data-theme="light"] .xk-sub-diag-url code {
-  border-color: rgba(59, 130, 246, 0.18);
-  background: rgba(239, 246, 255, 0.96);
-  color: #1d4ed8;
 }
 
 html[data-theme="light"] .xk-sub-diag-pre {

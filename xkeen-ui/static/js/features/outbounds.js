@@ -6376,12 +6376,7 @@ let outboundsModuleApi = null;
       if (!full) return '';
       const short = subsShortUrl(full) || full;
       const className = String(opts && opts.className || 'xk-sub-diag-url').trim() || 'xk-sub-diag-url';
-      const withTooltip = !!(opts && opts.tooltip);
-      const fullEscaped = escapeHtml(full);
       const shortEscaped = escapeHtml(short);
-      if (withTooltip) {
-        return `<span class="${escapeHtml(className)}" title="${fullEscaped}" aria-label="${fullEscaped}" data-full-url="${fullEscaped}"><code title="${fullEscaped}" aria-label="${fullEscaped}">${shortEscaped}</code></span>`;
-      }
       return `<span class="${escapeHtml(className)}"><code>${shortEscaped}</code></span>`;
     }
 
@@ -6412,7 +6407,7 @@ let outboundsModuleApi = null;
     }
 
     function subsRenderDiagnosticUrl(url) {
-      return subsRenderUrlToken(url, { tooltip: true });
+      return subsRenderUrlToken(url);
     }
 
     function subsRenderStatusUrl(url) {

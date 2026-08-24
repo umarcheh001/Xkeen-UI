@@ -1445,7 +1445,7 @@ test('subscriptions modal does not reserve an empty desktop canvas without nodes
   expect(layout.height).toBeGreaterThanOrEqual(layout.bodyScrollHeight);
 });
 
-test('subscriptions diagnostics keep long source links compact without horizontal scroll', async ({ page }) => {
+test('subscriptions diagnostics keep long source links compact and neutral without a tooltip', async ({ page }) => {
   const nodes = buildDemoNodes();
   const longSourceUrl = 'happ://crypt5/fzvdf6IVsHlFRwbbqoJGcN3Q96xpQiLGj3a2IAJF1PcBOQafyFLmnBB7JgOgXgyQCyUoemrxWpf9nw8ImicCMniTzOjk7tk6MZJxTFQFtlvIf8u36BlS8Kl4RPbkUUsy';
   const subscription = buildDemoSubscription(nodes, {
@@ -1477,6 +1477,7 @@ test('subscriptions diagnostics keep long source links compact without horizonta
     const groups = Array.from(document.querySelectorAll('#outbounds-subscriptions-diagnostics-body .xk-sub-diag-group'));
     const urlChip = document.querySelector('#outbounds-subscriptions-diagnostics-body .xk-sub-diag-url');
     const urlCode = urlChip ? urlChip.querySelector('code') : null;
+    const urlStyle = urlCode ? getComputedStyle(urlCode) : null;
     const maxGroupOverflow = groups.reduce((max, node) => (
       Math.max(max, Math.max(0, Math.round(node.scrollWidth - node.clientWidth)))
     ), 0);
@@ -1484,15 +1485,24 @@ test('subscriptions diagnostics keep long source links compact without horizonta
       bodyOverflow: body ? Math.max(0, Math.round(body.scrollWidth - body.clientWidth)) : 0,
       maxGroupOverflow,
       shortUrl: urlCode ? String(urlCode.textContent || '').trim() : '',
-      fullUrl: urlChip ? String(urlChip.getAttribute('data-full-url') || urlChip.getAttribute('title') || '') : '',
+      hasTooltip: !!(urlChip && (
+        urlChip.hasAttribute('title')
+        || urlChip.hasAttribute('data-tooltip')
+        || urlChip.querySelector('[title], [data-tooltip]')
+      )),
+      urlBackground: urlStyle ? urlStyle.backgroundColor : '',
+      urlBorderWidth: urlStyle ? urlStyle.borderTopWidth : '',
     };
   });
 
   expect(diagnostics.bodyOverflow).toBeLessThanOrEqual(4);
   expect(diagnostics.maxGroupOverflow).toBeLessThanOrEqual(4);
   expect(diagnostics.shortUrl.length).toBeGreaterThan(0);
-  expect(diagnostics.shortUrl.length).toBeLessThan(diagnostics.fullUrl.length);
+  expect(diagnostics.shortUrl.length).toBeLessThan(longSourceUrl.length);
   expect(diagnostics.shortUrl).toContain('crypt5');
+  expect(diagnostics.hasTooltip).toBe(false);
+  expect(diagnostics.urlBackground).toBe('rgba(0, 0, 0, 0)');
+  expect(diagnostics.urlBorderWidth).toBe('0px');
 });
 
 test('subscriptions modal ping-all button shows compact spinner while probing', async ({ page }) => {
