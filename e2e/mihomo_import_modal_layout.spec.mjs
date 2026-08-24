@@ -5,6 +5,7 @@ test('Mihomo import uses the resizable Operator workbench and stretches its YAML
   await page.goto('/');
   await page.locator('.top-tab-btn[data-view="mihomo"]').click();
   await expect(page.locator('#view-mihomo')).toBeVisible();
+  await page.locator('#mihomo-clash-tab-config').click();
   const menu = page.locator('.xk-mihomo-menu');
   await menu.locator('summary').click();
   await expect(page.locator('#mihomo-import-node-btn')).toBeVisible();
@@ -51,4 +52,36 @@ test('Mihomo import uses the resizable Operator workbench and stretches its YAML
   expect(after.contentHeight).toBeGreaterThan(before.contentHeight + 40);
   expect(after.previewHeight).toBeGreaterThan(before.previewHeight + 40);
   expect(after.editorHeight).toBeGreaterThanOrEqual(after.previewHeight - 2);
+});
+
+
+test('global error toasts stay above the Mihomo import modal', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.locator('#mihomo-clash-tab-config').click();
+  await page.locator('.xk-mihomo-menu summary').click();
+  await page.locator('#mihomo-import-node-btn').click();
+  await expect(page.locator('#mihomo-import-modal')).toBeVisible();
+
+  await page.evaluate(() => window.toast('Не удалось удалить подписку: тестовая ошибка.', 'error'));
+  const toast = page.locator('#toast-container .toast').last();
+  await expect(toast).toBeVisible();
+
+  const layers = await page.evaluate(() => {
+    const modal = document.querySelector('#mihomo-import-modal');
+    const container = document.querySelector('#toast-container');
+    const toast = container?.querySelector('.toast:last-child');
+    const toastRect = toast?.getBoundingClientRect();
+    const point = toastRect
+      ? document.elementFromPoint(toastRect.left + toastRect.width / 2, toastRect.top + toastRect.height / 2)
+      : null;
+    return {
+      modalZ: Number(getComputedStyle(modal).zIndex || 0),
+      toastZ: Number(getComputedStyle(container).zIndex || 0),
+      toastOwnsTopPoint: !!(point && point.closest('#toast-container')),
+    };
+  });
+
+  expect(layers.toastZ).toBeGreaterThan(layers.modalZ);
+  expect(layers.toastOwnsTopPoint).toBe(true);
 });

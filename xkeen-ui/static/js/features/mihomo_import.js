@@ -143,6 +143,21 @@ let mihomoImportModuleApi = null;
     } catch (e) {}
   }
 
+  function managedSubscriptionErrorMessage(prefix, error) {
+    const data = error && error.data && typeof error.data === 'object' ? error.data : {};
+    const code = String(data.code || data.error || '').trim();
+    const hint = String(data.hint || '').trim();
+    const fallback = String((error && error.message) || error || 'ошибка').trim();
+    const knownMessage = code === 'managed_proxy_not_found'
+      ? 'Связанные proxy-блоки уже отсутствуют в config.yaml. Уберите запись из автообновления кнопкой с разорванной цепочкой.'
+      : (code === 'remove_config_blocks_supported_only_for_config_source'
+        ? 'Эта запись создана генератором и не привязана к proxy-блокам текущего config.yaml. Удалите только автообновление кнопкой с разорванной цепочкой.'
+        : '');
+    const message = knownMessage || fallback;
+    const suffix = !knownMessage && hint && hint !== message ? ` ${hint}` : '';
+    return `${String(prefix || '').trim()}${message}${suffix}`.trim();
+  }
+
   function shortenStatusUrl(value, maxLen = 88) {
     const text = String(value || '').trim();
     if (!text || text.length <= maxLen) return text;
@@ -821,7 +836,7 @@ let mihomoImportModuleApi = null;
         false,
       );
     } catch (e) {
-      toastMsg('Не удалось удалить подписку: ' + (e && e.message ? e.message : String(e || 'ошибка')), true);
+      toastMsg(managedSubscriptionErrorMessage('Не удалось удалить подписку: ', e), true);
       await loadManagedXraySubscriptions(true);
     }
   }

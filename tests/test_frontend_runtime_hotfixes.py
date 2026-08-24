@@ -604,6 +604,31 @@ def test_confirm_modal_stacks_above_dynamic_editor_modal_z_indexes():
     assert '#confirm-modal {\n  z-index: 2147482990 !important;\n}' in styles
 
 
+def test_global_toasts_stay_visible_above_open_modals():
+    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    modal = Path('xkeen-ui/static/js/ui/modal.js').read_text(encoding='utf-8')
+
+    toast_block = styles.split('#toast-container {', 1)[1].split('}', 1)[0]
+    toast_item_block = styles.split('.toast {', 1)[1].split('}', 1)[0]
+
+    assert 'z-index: 2147483002;' in toast_block
+    assert 'pointer-events: none;' in toast_block
+    assert 'pointer-events: auto;' in toast_item_block
+    assert 'const Z_TOP_LIMIT = 2147483000;' in modal
+    assert 'above Z_TOP_LIMIT' in modal
+
+
+def test_mihomo_import_explains_stale_subscription_delete_failure():
+    importer = Path('xkeen-ui/static/js/features/mihomo_import.js').read_text(encoding='utf-8')
+
+    assert 'function managedSubscriptionErrorMessage(prefix, error) {' in importer
+    assert "code === 'managed_proxy_not_found'" in importer
+    assert "code === 'remove_config_blocks_supported_only_for_config_source'" in importer
+    assert 'Связанные proxy-блоки уже отсутствуют в config.yaml.' in importer
+    assert 'Эта запись создана генератором и не привязана к proxy-блокам текущего config.yaml.' in importer
+    assert "managedSubscriptionErrorMessage('Не удалось удалить подписку: ', e)" in importer
+
+
 def test_modal_drag_uses_frame_coalesced_compositor_transforms():
     modal = Path('xkeen-ui/static/js/ui/modal.js').read_text(encoding='utf-8')
     operator_css = Path('xkeen-ui/static/panel-operator.css').read_text(encoding='utf-8')

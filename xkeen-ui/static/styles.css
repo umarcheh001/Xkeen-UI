@@ -12600,10 +12600,18 @@ html[data-theme="light"] .dt-env-help-table thead th {
   position: fixed;
   right: 16px;
   bottom: 16px;
-  z-index: 80;
+  /*
+    Toasts are a global status portal. Modals receive dynamic z-index values
+    (and confirmations use a near-maximum floor), so a low layer here hides
+    the only explanation for failed actions performed inside an open modal.
+    Keep the portal above the entire modal stack while leaving the tooltip
+    portal (2147483646) as the top-most transient surface.
+  */
+  z-index: 2147483002;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  pointer-events: none;
 }
 
 .toast {
@@ -12631,6 +12639,7 @@ html[data-theme="light"] .dt-env-help-table thead th {
   display: flex;
   align-items: flex-start;
   gap: 8px;
+  pointer-events: auto;
   overflow: hidden;
   transition: opacity 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
   -webkit-backdrop-filter: var(--xk-tooltip-backdrop, none);

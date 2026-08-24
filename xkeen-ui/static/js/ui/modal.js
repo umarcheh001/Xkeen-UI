@@ -177,8 +177,9 @@
   // Modal positioning + drag
   // ---------------------------------------------------------------------------
   const PAD = 8;
-  // Put dragged/opened modals above toasts (#toast-container is z-index:80),
-  // and keep nested confirmations above the currently visible modal stack.
+  // Keep dragged/opened modals in a bounded stack. The global toast portal is
+  // deliberately rendered just above Z_TOP_LIMIT so action results stay
+  // readable while a modal remains open; confirmations still lead this stack.
   const Z_BASE = 90; // keep above .modal (60)
   const Z_CONFIRM_FLOOR = 130; // CSS fallback for #confirm-modal
   const Z_TOP_LIMIT = 2147483000; // leave room for tooltip/context-menu portals
