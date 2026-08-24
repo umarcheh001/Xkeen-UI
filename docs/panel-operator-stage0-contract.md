@@ -20,15 +20,15 @@
 | Область | Зафиксировано |
 | --- | ---: |
 | Top-level views | 6 |
-| Collapsible/accordion contracts | 10 |
+| Collapsible/accordion contracts | 12 |
 | Editor engine selectors | 8 |
 | Editor engines | CodeMirror, Monaco |
-| Modal IDs | 50 |
-| Inline `style` attributes | 282 |
-| Уникальные DOM IDs | 971 из 971 |
-| `data-*` attributes | 365 |
-| Изначально скрытые runtime nodes с ID | 156 |
-| DOM IDs со статической ссылкой из JS | 942 |
+| Modal IDs | 51 |
+| Inline `style` attributes | 209 |
+| Уникальные DOM IDs | 1188 из 1188 |
+| `data-*` attributes | 562 |
+| Изначально скрытые runtime nodes с ID | 151 |
+| DOM IDs со статической ссылкой из JS | 1116 |
 | Dark/light viewport baselines | 12 |
 
 Полные списки, начальные значения, locators и связи с JS-файлами хранятся в JSON snapshot. Любой дрейф заставляет тест inventory завершиться ошибкой до начала следующего визуального этапа.
@@ -52,6 +52,7 @@ Route-action `Mihomo Генератор` и modal-action `Поддержать` 
 
 | Control | Body | Начальное состояние |
 | --- | --- | --- |
+| `#xk-internet-check-dns-row` | `#xk-dns-guidance` | collapsed |
 | `#routing-dat-header` | `#routing-dat-body` | collapsed |
 | `#inbounds-header` | `#inbounds-body` | collapsed |
 | `#routing-scenario-header` | `#routing-scenario-body` | collapsed |
@@ -60,10 +61,9 @@ Route-action `Mihomo Генератор` и modal-action `Поддержать` 
 | `#routing-help-header` | `#routing-help-body` | collapsed |
 | `#routing-rules-header` | `#routing-rules-body` | collapsed |
 | `#routing-header` | `#routing-body` | expanded |
+| `#mihomo-clash-egress-toggle` | `#mihomo-clash-egress` | collapsed |
 | `[data-xk-toggle="mihomo-card"]` | `#mihomo-body` | expanded |
 | `[data-xk-toggle="xkeen-settings"]` | `#xkeen-body` | expanded |
-| `#mihomo-hwid-diag-toggle` | `#mihomo-hwid-diag-body` | collapsed |
-| `#mihomo-hwid-diag-compare-toggle` | `#mihomo-hwid-diag-compare-body` | collapsed |
 
 В Chromium проверяются доступные пользователю клики. `#routing-rules-header` в текущем E2E fixture скрыт из-за недоступного GUI-focus, поэтому для него runtime guard проверяет установленный wiring-marker `data-xk-collapse-wired="1"`, не меняя состояние приложения искусственно.
 
