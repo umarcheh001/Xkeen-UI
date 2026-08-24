@@ -59,7 +59,7 @@ from mihomo_server_core import (
     validate_config,
 )
 from services.mihomo_proxy_parsers import parse_wireguard
-from services.mihomo_proxy_parsers import parse_openvpn, parse_tailscale
+from services.mihomo_proxy_parsers import parse_openvpn, parse_proxy_uri, parse_tailscale
 from services.mihomo_node_import import build_mihomo_node_draft
 from services.mihomo_proxy_config import (
     apply_proxy_insert,
@@ -86,6 +86,8 @@ from services.mihomo_subscriptions import (
 from services.xray_subscriptions import (
     fetch_subscription_body_for_xray as _xray_fetch_subscription_body_raw,
     _happ_helper_error_message,
+    _subscription_body_source_probe as _xray_subscription_body_source_probe,
+    parse_subscription_links as _xray_parse_subscription_links,
 )
 
 
@@ -2419,13 +2421,40 @@ def create_mihomo_blueprint(
 
         def parse_xray_subscription(url: str, existing_names):
             body, _headers = _xray_fetch_subscription_body(url)
+            links = _xray_parse_subscription_links(body)
+            probe = _xray_subscription_body_source_probe(body)
+            if links and bool(probe.get("placeholder")):
+                kind = str(probe.get("placeholder_kind") or "")
+                raise ValueError(
+                    "Провайдер не принял клиент или HWID и вернул служебную заглушку вместо реальных узлов."
+                    if kind == "unsupported-client"
+                    else "Провайдер вернул HWID-заглушку вместо реальных узлов."
+                )
             try:
                 proxies, skipped = _xray_convert_subscription_text(
                     body,
                     existing_names=list(existing_names),
                 )
             except ValueError:
-                return None
+                if not links:
+                    return None
+                proxies = []
+                skipped = []
+                used_names = [str(name) for name in existing_names]
+                for link in links:
+                    try:
+                        parsed = parse_proxy_uri(link)
+                        unique_name = str(parsed.name or "PROXY").strip() or "PROXY"
+                        suffix = 2
+                        while unique_name in used_names:
+                            unique_name = f"{parsed.name or 'PROXY'}_{suffix}"
+                            suffix += 1
+                        if unique_name != parsed.name:
+                            parsed = parse_proxy_uri(link, custom_name=unique_name)
+                        proxies.append(parsed)
+                        used_names.append(parsed.name)
+                    except Exception as exc:
+                        skipped.append({"link": link, "reason": str(exc)})
             if not proxies:
                 raise ValueError("В подписке не найдено поддерживаемых узлов.")
             parsed_xray_sources.append((url, list(proxies)))

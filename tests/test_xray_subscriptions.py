@@ -336,6 +336,110 @@ def test_fetch_subscription_body_for_xray_retries_direct_url_with_happ_user_agen
     assert calls == [{}, {"User-Agent": "Happ/1.0"}]
 
 
+def test_fetch_subscription_body_for_xray_retries_unsupported_client_placeholder_with_device_headers(monkeypatch):
+    from services import xray_subscriptions as subs
+
+    blocked = (
+        "vless://00000000-0000-0000-0000-000000000000@subscription.blocked:443"
+        "?security=tls&type=tcp#%D0%9F%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B0"
+        "%20%D0%BD%D0%B5%20%D0%BF%D0%BE%D0%B4%D0%B4%D0%B5%D1%80%D0%B6%D0%B8%D0%B2"
+        "%D0%B0%D0%B5%D1%82%D1%81%D1%8F"
+    )
+    recovered = _vless("Recovered with headers")
+    calls = []
+
+    def fake_fetch(url, request_headers=None, _happ_depth=0):
+        headers = {str(k): str(v) for k, v in (request_headers or {}).items()}
+        calls.append(headers)
+        if not headers:
+            return blocked, {"content-type": "text/plain; charset=utf-8"}
+        return recovered, {"content-type": "text/plain; charset=utf-8"}
+
+    monkeypatch.setattr(subs, "fetch_subscription_body", fake_fetch)
+    monkeypatch.setattr(
+        "services.mihomo_hwid_sub.get_device_info",
+        lambda: {"headers": {"x-hwid": "hwid-demo", "User-Agent": "ClashMeta/1.19.24"}},
+    )
+
+    body, _headers, meta = subs.fetch_subscription_body_for_xray("happ://crypt5/demo-token")
+
+    assert body == recovered
+    assert meta["fetch_mode"] == "hwid"
+    assert calls == [
+        {},
+        {"x-hwid": "hwid-demo", "User-Agent": "ClashMeta/1.19.24"},
+    ]
+
+
+def test_unsupported_client_placeholder_is_not_built_as_a_proxy():
+    from services import xray_subscriptions as subs
+
+    blocked = (
+        "vless://00000000-0000-0000-0000-000000000000@subscription.blocked:443"
+        "?security=tls&type=tcp#unsupported%20client"
+    )
+
+    probe = subs._subscription_body_source_probe(blocked)
+
+    assert probe["has_source"] is False
+    assert probe["placeholder"] is True
+    assert probe["placeholder_kind"] == "unsupported-client"
+
+
+def test_fetch_subscription_body_for_xray_does_not_return_unsupported_client_placeholder(monkeypatch):
+    from services import xray_subscriptions as subs
+
+    blocked = (
+        "vless://00000000-0000-0000-0000-000000000000@subscription.blocked:443"
+        "?security=tls&type=tcp#%D0%9F%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B0"
+        "%20%D0%BD%D0%B5%20%D0%BF%D0%BE%D0%B4%D0%B4%D0%B5%D1%80%D0%B6%D0%B8%D0%B2"
+        "%D0%B0%D0%B5%D1%82%D1%81%D1%8F"
+    )
+
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url, request_headers=None, _happ_depth=0: (
+            blocked,
+            {"content-type": "text/plain; charset=utf-8"},
+        ),
+    )
+    monkeypatch.setattr(
+        "services.mihomo_hwid_sub.get_device_info",
+        lambda: {"headers": {"x-hwid": "hwid-demo", "User-Agent": "ClashMeta/1.19.24"}},
+    )
+
+    body, _headers, meta = subs.fetch_subscription_body_for_xray("happ://crypt5/demo-token")
+
+    assert body == blocked
+    assert meta["fetch_mode"] == "direct"
+    assert any("служебную заглушку" in warning for warning in meta["warnings"])
+
+
+def test_preview_subscription_does_not_expose_unsupported_client_placeholder_as_node(monkeypatch):
+    from services import xray_subscriptions as subs
+
+    blocked = (
+        "vless://00000000-0000-0000-0000-000000000000@subscription.blocked:443"
+        "?security=tls&type=tcp#unsupported%20client"
+    )
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body_for_xray",
+        lambda _url: (
+            blocked,
+            {"content-type": "text/plain; charset=utf-8"},
+            {"fetch_mode": "direct", "warnings": ["Провайдер вернул служебную заглушку."]},
+        ),
+    )
+
+    preview = subs.preview_subscription({"url": "happ://crypt5/demo-token"})
+
+    assert preview["count"] == 0
+    assert preview["nodes"] == []
+    assert preview["source_format"] == "unsupported-client-placeholder"
+
+
 def test_preview_subscription_rejects_html_install_landing_page(monkeypatch):
     from services import xray_subscriptions as subs
 

@@ -1362,6 +1362,15 @@ def _subscription_happ_resolution_warnings(headers: Dict[str, str] | None) -> Li
 
 
 _HWID_PLACEHOLDER_LINK_RE = re.compile(r"://[^\s#]*@?0\.0\.0\.0:1(?=$|[/?#])", re.IGNORECASE)
+_UNSUPPORTED_CLIENT_PLACEHOLDER_HOSTS = frozenset({"subscription.blocked"})
+_UNSUPPORTED_CLIENT_PLACEHOLDER_NAMES = frozenset(
+    {
+        "program is not supported",
+        "unsupported client",
+        "unsupported program",
+        "программа не поддерживается",
+    }
+)
 _SUBSCRIPTION_HTML_RE = re.compile(r"(?is)^\s*(?:<!doctype html|<html\b)")
 _SUBSCRIPTION_CLIENT_INSTALL_RE = re.compile(r"(?i)\b(?:happ|incy)://")
 
@@ -1373,15 +1382,47 @@ def _subscription_links_are_hwid_placeholders(links: List[str]) -> bool:
     return all(_HWID_PLACEHOLDER_LINK_RE.search(item) for item in items)
 
 
+def _subscription_link_is_unsupported_client_placeholder(link: Any) -> bool:
+    raw = str(link or "").strip()
+    if not raw:
+        return False
+    try:
+        parsed = urlparse(raw)
+        host = str(parsed.hostname or "").strip().lower().rstrip(".")
+        name = unquote(str(parsed.fragment or "")).strip().lower()
+    except Exception:
+        return False
+    return (
+        host in _UNSUPPORTED_CLIENT_PLACEHOLDER_HOSTS
+        or name in _UNSUPPORTED_CLIENT_PLACEHOLDER_NAMES
+    )
+
+
+def _subscription_links_are_unsupported_client_placeholders(links: List[str]) -> bool:
+    items = [str(item or "").strip() for item in (links or []) if str(item or "").strip()]
+    if not items:
+        return False
+    return all(_subscription_link_is_unsupported_client_placeholder(item) for item in items)
+
+
 def _subscription_body_source_probe(body: str) -> Dict[str, Any]:
     links = parse_subscription_links(body)
     if links:
-        placeholder = _subscription_links_are_hwid_placeholders(links)
+        hwid_placeholder = _subscription_links_are_hwid_placeholders(links)
+        unsupported_client_placeholder = _subscription_links_are_unsupported_client_placeholders(links)
+        placeholder = hwid_placeholder or unsupported_client_placeholder
         return {
             "has_source": not placeholder,
             "source_count": len(links),
             "placeholder": placeholder,
             "placeholder_count": len(links) if placeholder else 0,
+            "placeholder_kind": (
+                "unsupported-client"
+                if unsupported_client_placeholder
+                else "hwid"
+                if hwid_placeholder
+                else ""
+            ),
             "source_format": "links",
         }
     _outbounds, _errors, stats = build_subscription_json_outbounds(body, tag_prefix="sub")
@@ -1641,7 +1682,11 @@ def fetch_subscription_body_for_xray(url: str) -> Tuple[str, Dict[str, str], Dic
 
     warnings = list(happ_warnings) + _subscription_hwid_warning_messages(hwid_headers)
     if bool(probe.get("placeholder")):
-        warnings.append("Провайдер вернул HWID-заглушку вместо реальных узлов.")
+        warnings.append(
+            "Провайдер не принял клиент или HWID и вернул служебную заглушку вместо реальных узлов."
+            if str(probe.get("placeholder_kind") or "") == "unsupported-client"
+            else "Провайдер вернул HWID-заглушку вместо реальных узлов."
+        )
     meta["warnings"] = warnings
     return body, headers, meta
 
@@ -5225,9 +5270,11 @@ def preview_subscription(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     body, headers, fetch_meta = fetch_subscription_body_for_xray(url)
     links = parse_subscription_links(body)
-    placeholder_links = _subscription_links_are_hwid_placeholders(links)
+    hwid_placeholder_links = _subscription_links_are_hwid_placeholders(links)
+    unsupported_client_links = _subscription_links_are_unsupported_client_placeholders(links)
+    placeholder_links = hwid_placeholder_links or unsupported_client_links
     if links and placeholder_links:
-        source_format = "hwid-placeholder"
+        source_format = "unsupported-client-placeholder" if unsupported_client_links else "hwid-placeholder"
         outbounds, errors, stats = [], [], _placeholder_subscription_stats(links)
     elif links:
         source_format = "links"
@@ -5325,6 +5372,8 @@ def refresh_subscription(
         body, headers, fetch_meta = fetch_subscription_body_for_xray(str(sub.get("url") or ""))
         links = parse_subscription_links(body)
         placeholder_links = _subscription_links_are_hwid_placeholders(links)
+        unsupported_client_links = _subscription_links_are_unsupported_client_placeholders(links)
+        placeholder_links = placeholder_links or unsupported_client_links
         excluded_node_keys = _read_string_list_value(sub, EXCLUDED_NODE_KEYS_KEYS)
 
         def _build_with_exclusions(keys: List[str]):
@@ -5377,7 +5426,11 @@ def refresh_subscription(
             raise RuntimeError(landing_page_message)
         node_latency = _prune_node_latency_map(node_latency, preview_nodes)
         if placeholder_links and not outbounds:
-            raise RuntimeError("Провайдер вернул HWID-заглушку вместо реальных узлов.")
+            raise RuntimeError(
+                "Провайдер не принял клиент или HWID и вернул служебную заглушку вместо реальных узлов."
+                if unsupported_client_links
+                else "Провайдер вернул HWID-заглушку вместо реальных узлов."
+            )
         manual_exclusions_added = 0
         locked_excluded_keys, locked_added = _extend_manual_selection_exclusions_for_new_nodes(
             sub,

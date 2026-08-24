@@ -137,6 +137,60 @@ def test_import_draft_route_registers_xray_auto_update_when_requested(client):
     assert register.call_args.kwargs["proxy_yamls"] == [proxies[0].yaml]
 
 
+def test_import_draft_route_converts_base64_xray_links_from_happ_subscription(client):
+    http, _config_path = client
+    link = (
+        "vless://11111111-1111-1111-1111-111111111111@example.com:443"
+        "?encryption=none&security=tls&type=ws&path=%2Fws#Happ%20Node"
+    )
+    with patch(
+        "routes.mihomo._xray_fetch_subscription_body",
+        return_value=(link, {"content-type": "text/plain"}),
+    ), patch(
+        "routes.mihomo._xray_convert_subscription_text",
+        side_effect=ValueError("not_xray_json"),
+    ):
+        response = http.post(
+            "/api/mihomo/node/import-draft",
+            json={
+                "content": "proxies: []\n",
+                "source": "happ://crypt5/demo-token",
+                "mode": "subscription",
+                "groups": [],
+            },
+        )
+
+    assert response.status_code == 200
+    result = response.get_json()
+    assert result["inserted_kind"] == "proxy"
+    assert result["inserted_names"] == ["Happ Node"]
+    assert "server: example.com" in result["content"]
+
+
+def test_import_draft_route_rejects_unsupported_client_placeholder(client):
+    http, _config_path = client
+    blocked = (
+        "vless://00000000-0000-0000-0000-000000000000@subscription.blocked:443"
+        "?security=tls&type=tcp#unsupported%20client"
+    )
+    with patch(
+        "routes.mihomo._xray_fetch_subscription_body",
+        return_value=(blocked, {"content-type": "text/plain"}),
+    ):
+        response = http.post(
+            "/api/mihomo/node/import-draft",
+            json={
+                "content": "proxies: []\n",
+                "source": "happ://crypt5/demo-token",
+                "mode": "subscription",
+                "groups": [],
+            },
+        )
+
+    assert response.status_code == 400
+    assert "служебную заглушку" in response.get_json()["error"]
+
+
 def test_import_draft_route_rejects_invalid_mode(client):
     http, _config_path = client
     response = http.post(
