@@ -160,7 +160,9 @@ def write_build_json(dst_root: Path, *, version: str, update_url: str) -> None:
 
 def build_archive(src_root: Path, archive_path: Path) -> None:
     archive_path.parent.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(archive_path, "w:gz", format=tarfile.PAX_FORMAT) as tar:
+    # Keep the release archive максимально portable for BusyBox tar on Keenetic.
+    # The tree fits into classic tar limits, so we avoid PAX headers entirely.
+    with tarfile.open(archive_path, "w:gz", format=tarfile.USTAR_FORMAT) as tar:
         tar.add(src_root, arcname=PROJECT_DIRNAME, filter=normalize_archive_tarinfo)
 
 

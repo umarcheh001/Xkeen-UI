@@ -15,7 +15,7 @@ def test_local_user_archive_script_matches_ci_packaging_expectations():
     assert '"BUILD.json"' in script
     assert 'Path("opt/etc/mihomo/backup")' in script
     assert '["npm", "run", "frontend:build"]' in script
-    assert 'tarfile.open(archive_path, "w:gz", format=tarfile.PAX_FORMAT)' in script
+    assert 'tarfile.open(archive_path, "w:gz", format=tarfile.USTAR_FORMAT)' in script
     assert 'write_build_json(package_root, version=version, update_url=update_url)' in script
     assert 'filter=normalize_archive_tarinfo' in script
     assert 'happ-decrypt-universal' in script
