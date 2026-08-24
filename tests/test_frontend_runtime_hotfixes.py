@@ -1022,8 +1022,20 @@ def test_mihomo_schema_tracks_xhttp_transport_and_multiplexing_fields():
     assert 'ech-opts' in proxy_props
     assert 'certificate' in proxy_props
     assert 'private-key' in proxy_props
+    assert 'name-cert-verify' in proxy_props
+    assert 'health-check' in proxy_props
+    assert 'quic' in proxy_props
+    assert 'congestion-controller' in proxy_props
+    assert 'bbr-profile' in proxy_props
+    assert 'max-connections' in proxy_props
+    assert 'min-streams' in proxy_props
+    assert 'max-streams' in proxy_props
     assert 'support-x25519mlkem768' in proxy_props['reality-opts']['properties']
     assert 'spider-x' in proxy_props['reality-opts']['properties']
+
+    assert 'trusttunnel' in proxy_props['type']['enum']
+    assert proxy_props['congestion-controller']['enum'] == ['cubic', 'new_reno', 'bbr']
+    assert proxy_props['bbr-profile']['enum'] == ['standard', 'conservative', 'aggressive']
 
     grpc_props = proxy_props['grpc-opts']['properties']
     assert 'grpc-user-agent' in grpc_props

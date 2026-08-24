@@ -821,7 +821,7 @@
         },
         "type": {
           "type": "string",
-          "enum": ["ss", "ssr", "vmess", "vless", "trojan", "hysteria", "hysteria2", "wireguard", "openvpn", "tailscale", "tuic", "socks5", "http", "ssh", "snell", "anytls", "direct"],
+          "enum": ["ss", "ssr", "vmess", "vless", "trojan", "hysteria", "hysteria2", "wireguard", "openvpn", "tailscale", "tuic", "trusttunnel", "socks5", "http", "ssh", "snell", "anytls", "direct"],
           "description": "Тип протокола или встроенной политики. Помимо сетевых протоколов Mihomo поддерживает `direct`: трафик идёт напрямую, без `server` и `port`. `vless`+`reality` и `hysteria2` — современные рекомендуемые варианты."
         },
         "server": {
@@ -838,7 +838,7 @@
         },
         "password": {
           "type": "string",
-          "description": "Пароль — для ss/trojan/hysteria2/snell/tuic, а также OpenVPN auth-user-pass."
+          "description": "Пароль — для ss/trojan/hysteria2/snell/tuic/trusttunnel, а также OpenVPN auth-user-pass."
         },
         "uuid": {
           "type": "string",
@@ -864,6 +864,11 @@
           "type": "boolean",
           "default": false,
           "description": "Пропустить проверку TLS-сертификата сервера. Безопасно ТОЛЬКО для тестов/self-signed. На проде всегда `false`."
+        },
+        "name-cert-verify": {
+          "type": "string",
+          "description": "Имя хоста, по которому проверять TLS-сертификат вместо `server`/SNI. Полезно для TrustTunnel и других TLS-прокси за CDN.",
+          "examples": ["example.com"]
         },
         "sni": {
           "type": "string",
@@ -947,6 +952,43 @@
           "x-ui-example": "mptcp: false",
           "x-ui-warning": "Если сервер или ядро не поддерживает MPTCP, включение не ускорит трафик и может усложнить диагностику."
         },
+        "health-check": {
+          "type": "boolean",
+          "default": false,
+          "description": "Включить проверки доступности TrustTunnel-прокси. В доке Mihomo это показано как `health-check: true`."
+        },
+        "quic": {
+          "type": "boolean",
+          "default": false,
+          "description": "Включить QUIC-режим для TrustTunnel."
+        },
+        "congestion-controller": {
+          "type": "string",
+          "enum": ["cubic", "new_reno", "bbr"],
+          "default": "bbr",
+          "description": "QUIC congestion control algorithm для TrustTunnel."
+        },
+        "bbr-profile": {
+          "type": "string",
+          "enum": ["standard", "conservative", "aggressive"],
+          "default": "standard",
+          "description": "Профиль BBR для TrustTunnel, когда `congestion-controller: bbr`."
+        },
+        "max-connections": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Максимум подключений для TrustTunnel reuse."
+        },
+        "min-streams": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Минимум потоков в соединении перед открытием нового."
+        },
+        "max-streams": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Максимум потоков в соединении для TrustTunnel."
+        },
         "ip-version": {
           "type": "string",
           "enum": ["dual", "ipv4", "ipv6", "ipv4-prefer", "ipv6-prefer"],
@@ -1017,7 +1059,7 @@
         },
         "username": {
           "type": "string",
-          "description": "OpenVPN username для auth-user-pass режима."
+          "description": "OpenVPN username для auth-user-pass режима или TrustTunnel username."
         },
         "mtu": {
           "type": "integer",

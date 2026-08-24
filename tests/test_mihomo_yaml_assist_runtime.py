@@ -265,6 +265,55 @@ def test_proxy_key_completion_suggests_documented_vless_tls_fields():
     assert "alpn" in result["labels"]
 
 
+def test_trusttunnel_proxy_snippet_and_keys_are_available():
+    result = _run_completion("proxies:\n  - __CURSOR__\n")
+
+    assert result is not None
+    assert any("trusttunnel" in label for label in result["labels"])
+
+    applied = _apply_completion("proxies:\n  - __CURSOR__\n", "proxy: trusttunnel")
+    assert applied is not None
+    assert "type: trusttunnel" in applied["applied"]
+    assert "health-check: true" in applied["applied"]
+    assert "quic: true" in applied["applied"]
+
+    result = _run_completion(
+        "\n".join([
+            "proxies:",
+            "  - name: trusttunnel",
+            "    type: trusttunnel",
+            "    server: 1.2.3.4",
+            "    port: 443",
+            "    username: username",
+            "    password: password",
+            "    n__CURSOR__",
+            "",
+        ])
+    )
+
+    assert result is not None
+    assert result["context"]["kind"] == "key"
+    assert "name-cert-verify" in result["labels"]
+
+    result = _run_completion(
+        "\n".join([
+            "proxies:",
+            "  - name: trusttunnel",
+            "    type: trusttunnel",
+            "    server: 1.2.3.4",
+            "    port: 443",
+            "    username: username",
+            "    password: password",
+            "    q__CURSOR__",
+            "",
+        ])
+    )
+
+    assert result is not None
+    assert result["context"]["kind"] == "key"
+    assert "quic" in result["labels"]
+
+
 def test_reality_opts_completion_suggests_support_x25519mlkem768():
     result = _run_completion(
         "\n".join([

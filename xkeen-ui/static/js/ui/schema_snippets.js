@@ -334,6 +334,14 @@ const MIHOMO_PROXIES_SNIPPETS = [
     insertText: 'name: "tailscale"\ntype: tailscale\nhostname: xkeen\nstate-dir: ./tailscale\nudp: true\naccept-routes: true\nexit-node: auto:any',
     monacoSnippet: 'name: "${1:tailscale}"\ntype: tailscale\nhostname: ${2:xkeen}\nstate-dir: ${3:./tailscale}\nudp: true\naccept-routes: ${4|true,false|}\nexit-node: ${5:auto:any}$0',
   },
+  {
+    id: 'mihomo-proxy-trusttunnel',
+    label: 'proxy: trusttunnel',
+    detail: 'Mihomo · proxies[]',
+    documentation: 'TrustTunnel-прокси с QUIC и reuse options. В доке Mihomo используются health-check, name-cert-verify, quic и bbr-profile.',
+    insertText: 'name: "trusttunnel"\ntype: trusttunnel\nserver: 1.2.3.4\nport: 443\nusername: "username"\npassword: "password"\nhealth-check: true\nudp: true\nskip-cert-verify: true\nname-cert-verify: example.com\nquic: true\ncongestion-controller: bbr\nbbr-profile: standard\nmax-connections: 8\nmin-streams: 5\nmax-streams: 0',
+    monacoSnippet: 'name: "${1:trusttunnel}"\ntype: trusttunnel\nserver: ${2:1.2.3.4}\nport: ${3:443}\nusername: "${4:username}"\npassword: "${5:password}"\nhealth-check: true\nudp: true\nskip-cert-verify: true\nname-cert-verify: ${6:example.com}\nquic: true\ncongestion-controller: ${7|bbr,cubic,new_reno|}\nbbr-profile: ${8|standard,conservative,aggressive|}\nmax-connections: ${9:8}\nmin-streams: ${10:5}\nmax-streams: ${11:0}$0',
+  },
 ];
 
 /* ════════════════════════════════════════════════════════════
