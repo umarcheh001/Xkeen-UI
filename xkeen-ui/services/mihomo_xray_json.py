@@ -19,14 +19,18 @@ from .mihomo_proxy_parsers import (
     ProxyParseResult,
     _build_xhttp_opts,
     _mapping_bool,
+    parse_proxy_uri,
     _yaml_append_key,
     _yaml_list,
     _yaml_str,
 )
 from .xray_subscriptions import (
+    SubscriptionPlaceholderError,
     _is_proxy_outbound,
     _json_name_hint,
     _load_subscription_json,
+    _subscription_body_source_probe,
+    parse_subscription_links,
 )
 
 
@@ -524,6 +528,58 @@ def convert_subscription_text(
         if not converted:
             skipped.extend(profile_errors)
     return proxies, skipped
+
+
+def convert_subscription_source_text(
+    body: str,
+    *,
+    existing_names: Optional[Iterable[str]] = None,
+) -> Tuple[List[ProxyParseResult], List[Dict[str, str]], str]:
+    """Convert an Xray subscription body to Mihomo proxies.
+
+    Happ and ordinary Xray subscriptions are not limited to full Xray JSON:
+    they may contain plain/base64 share-URI lists.  The import UI uses this
+    broader entry point so both formats take the same static ``proxies`` path
+    and remain refreshable by the managed-subscription service.
+    """
+
+    try:
+        proxies, skipped = convert_subscription_text(
+            body,
+            existing_names=existing_names,
+        )
+        return proxies, skipped, "xray-json"
+    except ValueError as exc:
+        if str(exc or "") != "not_xray_json":
+            raise
+
+    links = parse_subscription_links(body)
+    if not links:
+        raise ValueError("not_xray_json")
+
+    probe = _subscription_body_source_probe(body)
+    if bool(probe.get("placeholder")):
+        raise SubscriptionPlaceholderError(str(probe.get("placeholder_kind") or ""))
+
+    used: Dict[str, int] = {}
+    for raw_name in existing_names or ():
+        name = str(raw_name or "").strip()
+        if name:
+            used[name] = 1
+
+    proxies: List[ProxyParseResult] = []
+    skipped: List[Dict[str, str]] = []
+    for link in links:
+        try:
+            parsed = parse_proxy_uri(link)
+            unique = _unique_name(str(parsed.name or "PROXY").strip() or "PROXY", used)
+            if unique != parsed.name:
+                parsed = parse_proxy_uri(link, custom_name=unique)
+            proxies.append(parsed)
+        except Exception as exc:
+            skipped.append({"name": str(link or "")[:180], "reason": str(exc or "parse_failed")})
+
+    return proxies, skipped, "share-links"
 
 
 def format_proxies_section(proxies: Iterable[ProxyParseResult]) -> str:

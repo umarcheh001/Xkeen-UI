@@ -320,7 +320,7 @@ def test_fetch_subscription_body_for_xray_retries_direct_url_with_happ_user_agen
     def fake_fetch(url, request_headers=None, _happ_depth=0):
         headers = {str(k): str(v) for k, v in (request_headers or {}).items()}
         calls.append(headers)
-        if headers.get("User-Agent") != "Happ/1.0":
+        if headers.get("User-Agent") != "Happ/3.18.3/Android/17771400994551771562":
             raise urllib.error.HTTPError(url, 502, "Bad Gateway", hdrs=None, fp=None)
         return (_vless("Recovered Direct"), {"content-type": "text/plain; charset=utf-8"})
 
@@ -333,7 +333,7 @@ def test_fetch_subscription_body_for_xray_retries_direct_url_with_happ_user_agen
     assert headers["content-type"] == "text/plain; charset=utf-8"
     assert meta["fetch_mode"] == "happ_ua"
     assert any("Happ User-Agent" in line for line in meta["warnings"])
-    assert calls == [{}, {"User-Agent": "Happ/1.0"}]
+    assert calls == [{}, {"User-Agent": "Happ/3.18.3/Android/17771400994551771562"}]
 
 
 def test_fetch_subscription_body_for_xray_retries_unsupported_client_placeholder_with_device_headers(monkeypatch):
@@ -386,7 +386,7 @@ def test_unsupported_client_placeholder_is_not_built_as_a_proxy():
     assert probe["placeholder_kind"] == "unsupported-client"
 
 
-def test_fetch_subscription_body_for_xray_does_not_return_unsupported_client_placeholder(monkeypatch):
+def test_fetch_subscription_body_for_xray_raises_for_unsupported_client_placeholder(monkeypatch):
     from services import xray_subscriptions as subs
 
     blocked = (
@@ -409,10 +409,33 @@ def test_fetch_subscription_body_for_xray_does_not_return_unsupported_client_pla
         lambda: {"headers": {"x-hwid": "hwid-demo", "User-Agent": "ClashMeta/1.19.24"}},
     )
 
-    body, _headers, meta = subs.fetch_subscription_body_for_xray("happ://crypt5/demo-token")
+    with pytest.raises(subs.SubscriptionPlaceholderError) as exc_info:
+        subs.fetch_subscription_body_for_xray("happ://crypt5/demo-token")
+
+    assert exc_info.value.kind == "unsupported-client"
+    assert "служебную заглушку" in str(exc_info.value)
+
+
+def test_fetch_subscription_body_for_xray_keeps_http_placeholder_warning(monkeypatch):
+    from services import xray_subscriptions as subs
+
+    blocked = (
+        "vless://00000000-0000-0000-0000-000000000000@subscription.blocked:443"
+        "?security=tls&type=tcp#unsupported%20client"
+    )
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url, request_headers=None, _happ_depth=0: (
+            blocked,
+            {"content-type": "text/plain; charset=utf-8"},
+        ),
+    )
+    monkeypatch.setattr("services.mihomo_hwid_sub.get_device_info", lambda: {"headers": {}})
+
+    body, _headers, meta = subs.fetch_subscription_body_for_xray("https://example.com/sub")
 
     assert body == blocked
-    assert meta["fetch_mode"] == "direct"
     assert any("служебную заглушку" in warning for warning in meta["warnings"])
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import urllib.error
 
@@ -330,13 +331,30 @@ def test_hwid_provider_payload_converts_xray_json_with_hysteria2_to_provider_yam
     assert proxy["obfs-password"] == "obfs-secret"
 
 
+def test_hwid_provider_payload_converts_base64_share_links_to_provider_yaml():
+    link = (
+        "vless://11111111-1111-1111-1111-111111111111@one.example:443"
+        "?encryption=none&security=tls&type=tcp#One"
+    )
+    encoded = base64.b64encode(link.encode("utf-8")).decode("ascii")
+
+    payload, meta = hwid.provider_payload_from_subscription_text(encoded)
+
+    assert meta["format"] == "share-links"
+    assert meta["converted"] is True
+    assert meta["proxy_count"] == 1
+    parsed = yaml.safe_load(payload)
+    assert parsed["proxies"][0]["name"] == "One"
+    assert parsed["proxies"][0]["server"] == "one.example"
+
+
 def test_hwid_fetch_provider_payload_prefers_happ_json_when_it_has_more_nodes(monkeypatch):
     calls = []
 
     def fake_fetch(url, *, headers, insecure, timeout, policy, max_bytes):
         calls.append(dict(headers or {}))
         ua = str((headers or {}).get("User-Agent") or "")
-        if ua == "Happ/1.0":
+        if ua == "Happ/3.18.3/Android/17771400994551771562":
             return (
                 json.dumps(
                     [
@@ -409,7 +427,7 @@ def test_hwid_fetch_provider_payload_prefers_happ_json_when_it_has_more_nodes(mo
 
     assert len(calls) == 2
     assert calls[0]["User-Agent"].startswith("ClashMeta/")
-    assert calls[1]["User-Agent"] == "Happ/1.0"
+    assert calls[1]["User-Agent"] == "Happ/3.18.3/Android/17771400994551771562"
     assert meta["happ_fallback_used"] is True
     assert meta["happ_fallback_original_count"] == 1
     parsed = yaml.safe_load(payload)
@@ -476,6 +494,69 @@ def test_hwid_fetch_provider_payload_resolves_html_install_page_via_helper(monke
     assert parsed["proxies"][0]["name"] == "Helper Node"
     assert meta["x-xkeen-happ-resolved"] == "helper"
     assert meta["x-xkeen-happ-link"] == "happ://crypt5/demo-token"
+
+
+def test_hwid_fetch_provider_payload_resolves_raw_happ_before_http_url_policy(monkeypatch):
+    monkeypatch.setattr(
+        hwid.happ_links,
+        "resolve_source",
+        lambda url, **kwargs: {
+            "kind": "text",
+            "value": (
+                "proxies:\n"
+                "  - name: Raw Happ\n"
+                "    type: vless\n"
+                "    server: raw.example.com\n"
+                "    port: 443\n"
+            ),
+            "headers": {},
+            "via": "decryptor",
+            "candidate": url,
+        },
+    )
+
+    payload, meta = hwid.fetch_provider_payload(
+        "happ://crypt5/demo-token",
+        headers={},
+    )
+
+    parsed = yaml.safe_load(payload)
+    assert parsed["proxies"][0]["name"] == "Raw Happ"
+    assert meta["x-xkeen-happ-resolved"] == "decryptor"
+
+
+def test_hwid_fetch_provider_payload_uses_xray_hwid_retries_for_resolved_happ_url(monkeypatch):
+    deep_link = "happ://crypt5/demo-token"
+    target = "https://provider.example/sub"
+    monkeypatch.setattr(
+        hwid.happ_links,
+        "resolve_source",
+        lambda url, **kwargs: {
+            "kind": "url",
+            "value": target,
+            "headers": {},
+            "via": "decryptor",
+            "candidate": deep_link,
+        },
+    )
+
+    encoded = base64.b64encode(
+        (
+            "vless://11111111-1111-1111-1111-111111111111@real.example:443"
+            "?encryption=none&security=tls&type=tcp#Real"
+        ).encode("utf-8")
+    ).decode("ascii")
+    monkeypatch.setattr(
+        "services.xray_subscriptions.fetch_subscription_body_for_xray",
+        lambda url: (encoded, {"content-type": "text/plain"}, {"fetch_mode": "happ_hwid"}),
+    )
+
+    payload, meta = hwid.fetch_provider_payload(deep_link, headers={})
+
+    parsed = yaml.safe_load(payload)
+    assert parsed["proxies"][0]["name"] == "Real"
+    assert meta["fetch_mode"] == "happ_hwid"
+    assert meta["x-xkeen-happ-link"] == deep_link
 
 
 def test_hwid_provider_entry_can_use_local_adapter_url_without_headers():

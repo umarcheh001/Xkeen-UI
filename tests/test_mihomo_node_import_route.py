@@ -115,8 +115,8 @@ def test_import_draft_route_registers_xray_auto_update_when_requested(client):
         "routes.mihomo._xray_fetch_subscription_body",
         return_value=("xray-json", {}),
     ), patch(
-        "routes.mihomo._xray_convert_subscription_text",
-        return_value=(proxies, []),
+        "routes.mihomo._xray_convert_subscription_source_text",
+        return_value=(proxies, [], "xray-json"),
     ), patch("routes.mihomo._mh_sub_sync_imported_xray_subscription") as register:
         response = http.post(
             "/api/mihomo/node/import-draft",
@@ -146,9 +146,6 @@ def test_import_draft_route_converts_base64_xray_links_from_happ_subscription(cl
     with patch(
         "routes.mihomo._xray_fetch_subscription_body",
         return_value=(link, {"content-type": "text/plain"}),
-    ), patch(
-        "routes.mihomo._xray_convert_subscription_text",
-        side_effect=ValueError("not_xray_json"),
     ):
         response = http.post(
             "/api/mihomo/node/import-draft",

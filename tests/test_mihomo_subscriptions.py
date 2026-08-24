@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 
 from mihomo_config_generator import build_full_config
@@ -289,6 +290,52 @@ def test_refresh_mihomo_provider_static_subscription_uses_provider_parser(tmp_pa
     sub = state["subscriptions"][0]
     assert sub["refresh_parser"] == "mihomo-provider"
     assert sub["proxy_names"] == ["New Node"]
+
+
+def test_refresh_config_subscription_supports_share_link_source(tmp_path, monkeypatch):
+    old_yaml = "- name: Old Node\n  type: vless\n  server: 1.1.1.1\n  port: 443\n"
+    config = (
+        "proxies:\n"
+        "  - name: Old Node\n"
+        "    type: vless\n"
+        "    server: 1.1.1.1\n"
+        "    port: 443\n"
+    )
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(config, encoding="utf-8")
+    saved = svc.sync_imported_xray_subscription(
+        str(tmp_path),
+        url="happ://crypt5/demo-token",
+        config_text=config,
+        proxy_yamls=[old_yaml],
+        groups=[],
+        refresh_parser="xray-json",
+    )
+
+    link = (
+        "vless://22222222-2222-2222-2222-222222222222@new.example:443"
+        "?encryption=none&security=tls&type=tcp#New%20Node"
+    )
+    encoded = base64.b64encode(link.encode("utf-8")).decode("ascii")
+    monkeypatch.setattr(
+        svc,
+        "fetch_subscription_body",
+        lambda url: (encoded, {}, {"fetch_mode": "happ_hwid"}),
+    )
+
+    result = svc.refresh_subscription(
+        str(tmp_path),
+        saved["id"],
+        mihomo_config_file=str(config_path),
+        save_callback=lambda text: config_path.write_text(text, encoding="utf-8"),
+    )
+
+    assert result["ok"] is True
+    assert result["count"] == 1
+    written = config_path.read_text(encoding="utf-8")
+    assert "Old Node" not in written
+    assert "New Node" in written
+    assert "new.example" in written
 
 
 def test_delete_config_subscription_can_detach_without_touching_config(tmp_path):

@@ -44,7 +44,7 @@ _HWID_RESPONSE_HEADER_KEYS = (
 )
 _HAPP_FALLBACK_UA_ENV = "XKEEN_MIHOMO_HWID_HAPP_USER_AGENT"
 _HAPP_FALLBACK_ENABLED_ENV = "XKEEN_MIHOMO_HWID_HAPP_FALLBACK"
-_HAPP_FALLBACK_DEFAULT_UA = "Happ/1.0"
+_HAPP_FALLBACK_DEFAULT_UA = "Happ/3.18.3/Android/17771400994551771562"
 _PROXY_URI_RE = re.compile(
     r"(?mi)^\s*(?:vless|vmess|trojan|ss|ssr|shadowsocks|hysteria2|hy2|hysteria|tuic|wireguard)://"
 )
@@ -901,6 +901,32 @@ def provider_payload_from_subscription_text(text: str) -> tuple[str, Dict[str, A
         except Exception:
             pass
 
+    decoded = _decode_base64_subscription_text(raw)
+    if decoded and decoded != raw:
+        try:
+            from services.mihomo_xray_json import (
+                SubscriptionPlaceholderError,
+                convert_subscription_source_text,
+                format_proxies_section,
+            )
+
+            proxies, skipped, source_format = convert_subscription_source_text(decoded)
+            if proxies:
+                return format_proxies_section(proxies), {
+                    "format": source_format,
+                    "converted": True,
+                    "proxy_section": True,
+                    "xray_json": source_format == "xray-json",
+                    "proxy_count": len(proxies),
+                    "skipped_count": len(skipped),
+                }
+        except SubscriptionPlaceholderError:
+            pass
+        except ValueError:
+            pass
+        except Exception:
+            pass
+
     proxies_section, top_level_keys = _yaml_extract_top_level_section(raw, "proxies")
     if proxies_section:
         converted = top_level_keys > 1
@@ -1088,6 +1114,46 @@ def _maybe_use_happ_fallback(
     return payload, meta
 
 
+def _fetch_resolved_happ_subscription(
+    source_url: str,
+    *,
+    resolved_url: str,
+    headers: Dict[str, str],
+    insecure: bool,
+    timeout: float,
+    policy: URLPolicy,
+    max_bytes: int,
+) -> tuple[str, Dict[str, Any]]:
+    """Fetch a decrypted Happ target with the same retry policy as Xray imports."""
+
+    try:
+        from services.xray_subscriptions import (
+            SubscriptionPlaceholderError,
+            fetch_subscription_body_for_xray,
+            _subscription_body_source_probe,
+        )
+
+        body, response_headers, fetch_meta = fetch_subscription_body_for_xray(source_url)
+        probe = _subscription_body_source_probe(body)
+        if bool(probe.get("placeholder")):
+            raise SubscriptionPlaceholderError(str(probe.get("placeholder_kind") or ""))
+        payload, meta = provider_payload_from_subscription_text(body)
+        meta.update(dict(fetch_meta or {}))
+        meta.setdefault("content_type", str((response_headers or {}).get("content-type") or ""))
+        return payload, meta
+    except SubscriptionPlaceholderError:
+        raise
+    except Exception:
+        return fetch_provider_payload(
+            resolved_url,
+            headers=headers,
+            insecure=insecure,
+            timeout=timeout,
+            policy=policy,
+            max_bytes=max_bytes,
+        )
+
+
 def fetch_provider_payload(
     url: str,
     *,
@@ -1101,10 +1167,6 @@ def fetch_provider_payload(
 
     u = (url or "").strip()
     effective_policy = policy or _hwid_subscription_policy()
-    ok_url, reason = is_url_allowed(u, effective_policy)
-    if not ok_url:
-        raise ValueError("url_blocked:" + reason)
-
     if happ_links.is_happ_deep_link(u):
         try:
             resolved = happ_links.resolve_source(u)
@@ -1125,15 +1187,20 @@ def fetch_provider_payload(
             for key, value in helper_headers.items():
                 if str(key or "").strip():
                     next_headers[str(key)] = str(value)
-            payload, meta = fetch_provider_payload(
-                u,
+            payload, meta = _fetch_resolved_happ_subscription(
+                (url or "").strip(),
+                resolved_url=u,
                 headers=next_headers,
                 insecure=insecure,
                 timeout=timeout,
-                policy=policy,
+                policy=effective_policy,
                 max_bytes=max_bytes,
             )
             return payload, _resolved_happ_provider_payload_meta(resolved, meta)
+
+    ok_url, reason = is_url_allowed(u, effective_policy)
+    if not ok_url:
+        raise ValueError("url_blocked:" + reason)
 
     req_headers = dict(headers or {})
     req_headers.setdefault("Accept", "text/yaml, text/plain, */*")

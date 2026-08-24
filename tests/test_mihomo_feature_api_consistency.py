@@ -95,6 +95,8 @@ def test_mihomo_menu_feature_flows_keep_editor_patch_integrations_and_single_sav
             "return `http://127.0.0.1:${port}/mihomo/provider.yaml?${params.toString()}`;",
             "const out = await buildSubscriptionProviderConfig(line, tmp, {",
             "providerStaticBulk: true,",
+            "providerMode === 'static_happ'",
+            "providerMode === 'static_happ' ? 'xray-json' : 'mihomo-provider'",
             "provider_proxies",
             "staticProviderProxies: true",
             "refresh_parser: group.refreshParser",

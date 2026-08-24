@@ -10,6 +10,7 @@ import pytest
 from flask import Flask
 
 from routes.mihomo import create_mihomo_blueprint
+from services.xray_subscriptions import SubscriptionPlaceholderError
 
 
 @pytest.fixture()
@@ -96,6 +97,67 @@ def test_parse_xray_json_url_fetched_through_fetcher(client):
     assert r.status_code == 200
     assert r.get_json()["ok"] is True
     mock.assert_called_once_with("https://example.com/sub")
+
+
+def test_parse_xray_json_url_converts_base64_share_link_subscription(client):
+    link = (
+        "vless://11111111-1111-1111-1111-111111111111@one.example:443"
+        "?encryption=none&security=tls&type=tcp#Happ%20One"
+    )
+    import base64
+
+    body = base64.b64encode(link.encode("utf-8")).decode("ascii")
+    with patch(
+        "routes.mihomo._xray_fetch_subscription_body_raw",
+        return_value=(body, {"content-type": "text/plain"}, {"fetch_mode": "happ_hwid"}),
+    ):
+        response = client.post(
+            "/api/mihomo/parse/xray-json",
+            json={"url": "happ://crypt5/demo-token"},
+        )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["source_format"] == "share-links"
+    assert payload["count"] == 1
+    assert payload["proxies"][0]["proxy_name"] == "Happ One"
+    assert "server: one.example" in payload["proxies"][0]["proxy_yaml"]
+
+
+def test_parse_xray_json_url_rejects_unsupported_client_placeholder(client):
+    blocked = (
+        "vless://00000000-0000-0000-0000-000000000000@subscription.blocked:443"
+        "?security=tls&type=tcp#unsupported%20client"
+    )
+    with patch(
+        "routes.mihomo._xray_fetch_subscription_body_raw",
+        return_value=(blocked, {"content-type": "text/plain"}, {}),
+    ):
+        response = client.post(
+            "/api/mihomo/parse/xray-json",
+            json={"url": "happ://crypt5/demo-token"},
+        )
+
+    assert response.status_code == 422
+    payload = response.get_json()
+    assert payload["code"] == "subscription_placeholder"
+    assert "служебную заглушку" in payload["error"]
+
+
+def test_parse_xray_json_surfaces_placeholder_from_fetch_retry_pipeline(client):
+    with patch(
+        "routes.mihomo._xray_fetch_subscription_body_raw",
+        side_effect=SubscriptionPlaceholderError("unsupported-client"),
+    ):
+        response = client.post(
+            "/api/mihomo/parse/xray-json",
+            json={"url": "happ://crypt5/demo-token"},
+        )
+
+    assert response.status_code == 422
+    payload = response.get_json()
+    assert payload["code"] == "subscription_placeholder"
+    assert "служебную заглушку" in payload["error"]
 
 
 def test_parse_xray_json_follows_happ_redirect_and_keeps_full_profile(client):

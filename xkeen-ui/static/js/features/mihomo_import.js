@@ -2081,7 +2081,8 @@ let mihomoImportModuleApi = null;
     const profile = (probe && probe.profile) || {};
     const providerName = String(profile.suggested_name || profile.profile_title || '').trim();
     const providerProxies = Array.isArray(probe && probe.provider_proxies) ? probe.provider_proxies : [];
-    if (options && options.staticProxies && providerProxies.length) {
+    const providerMode = String((probe && probe.provider_mode) || '').trim();
+    if (providerProxies.length && ((options && options.staticProxies) || providerMode === 'static_happ')) {
       const warnings = providerProbeWarningMessages(probe);
       return providerProxies
         .map((p) => ({
@@ -2089,10 +2090,10 @@ let mihomoImportModuleApi = null;
           proxy_name: String(p.proxy_name || p.proxyName || '').trim(),
           content: String(p.proxy_yaml || p.proxyYaml || p.content || '').trimEnd() + '\n',
           providerStaticBulk: true,
-          provider_mode: String((probe && probe.provider_mode) || '').trim(),
+          provider_mode: providerMode,
           provider_payload: (probe && probe.provider_payload) || null,
           provider_warnings: warnings,
-          refresh_parser: 'mihomo-provider',
+          refresh_parser: providerMode === 'static_happ' ? 'xray-json' : 'mihomo-provider',
         }))
         .filter((p) => p.proxy_name && String(p.content || '').trim());
     }
@@ -2221,7 +2222,12 @@ let mihomoImportModuleApi = null;
       .map((group) => ({ ...group, refreshParser: 'xray-json' }))
       .concat(
         groupProviderStaticOutputsByUri(_lastResult && _lastResult.outputs)
-          .map((group) => ({ ...group, refreshParser: 'mihomo-provider' })),
+          .map((group) => ({
+            ...group,
+            refreshParser: group.items.some((item) => item && item.refresh_parser === 'xray-json')
+              ? 'xray-json'
+              : 'mihomo-provider',
+          })),
       );
     if (!grouped.length) return [];
 

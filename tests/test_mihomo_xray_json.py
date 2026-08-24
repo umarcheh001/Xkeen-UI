@@ -8,7 +8,9 @@ import pytest
 import yaml
 
 from services.mihomo_xray_json import (
+    SubscriptionPlaceholderError,
     convert_outbound_to_mihomo,
+    convert_subscription_source_text,
     convert_subscription_text,
     format_proxies_section,
 )
@@ -328,6 +330,35 @@ def test_convert_subscription_text_raises_for_non_json_body():
 def test_convert_subscription_text_raises_for_share_link_body():
     with pytest.raises(ValueError, match="not_xray_json"):
         convert_subscription_text("vless://abc@1.2.3.4:443\nvless://def@5.6.7.8:443\n")
+
+
+def test_convert_subscription_source_text_parses_base64_share_links():
+    links = (
+        "vless://11111111-1111-1111-1111-111111111111@one.example:443"
+        "?encryption=none&security=tls&type=tcp#One\n"
+        "trojan://secret@two.example:443?security=tls&type=tcp#Two"
+    )
+    import base64
+
+    body = base64.b64encode(links.encode("utf-8")).decode("ascii")
+    proxies, skipped, source_format = convert_subscription_source_text(body)
+
+    assert source_format == "share-links"
+    assert skipped == []
+    assert [proxy.name for proxy in proxies] == ["One", "Two"]
+    assert "server: one.example" in proxies[0].yaml
+
+
+def test_convert_subscription_source_text_rejects_provider_placeholder():
+    blocked = (
+        "vless://00000000-0000-0000-0000-000000000000@subscription.blocked:443"
+        "?security=tls&type=tcp#unsupported%20client"
+    )
+
+    with pytest.raises(SubscriptionPlaceholderError) as exc_info:
+        convert_subscription_source_text(blocked)
+
+    assert exc_info.value.kind == "unsupported-client"
 
 
 def test_convert_subscription_text_skips_unsupported_outbounds():

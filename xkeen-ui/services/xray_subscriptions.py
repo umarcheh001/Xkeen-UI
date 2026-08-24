@@ -1375,6 +1375,19 @@ _SUBSCRIPTION_HTML_RE = re.compile(r"(?is)^\s*(?:<!doctype html|<html\b)")
 _SUBSCRIPTION_CLIENT_INSTALL_RE = re.compile(r"(?i)\b(?:happ|incy)://")
 
 
+class SubscriptionPlaceholderError(RuntimeError):
+    """The upstream returned an explicit rejection/HWID placeholder."""
+
+    def __init__(self, kind: str = "") -> None:
+        self.kind = str(kind or "").strip()
+        message = (
+            "Провайдер не принял клиент или HWID и вернул служебную заглушку вместо реальных узлов."
+            if self.kind == "unsupported-client"
+            else "Провайдер вернул HWID-заглушку вместо реальных узлов."
+        )
+        super().__init__(message)
+
+
 def _subscription_links_are_hwid_placeholders(links: List[str]) -> bool:
     items = [str(item or "").strip() for item in (links or []) if str(item or "").strip()]
     if not items:
@@ -1533,7 +1546,10 @@ def _happ_subscription_headers(headers: Dict[str, str] | None) -> Dict[str, str]
             ua = str(value or "").strip()
     if "happ" in ua.lower():
         return None
-    fallback_ua = str(os.environ.get("XKEEN_SUBSCRIPTION_HAPP_USER_AGENT") or "Happ/1.0").strip()
+    fallback_ua = str(
+        os.environ.get("XKEEN_SUBSCRIPTION_HAPP_USER_AGENT")
+        or "Happ/3.18.3/Android/17771400994551771562"
+    ).strip()
     if not fallback_ua:
         return None
     out = dict(headers or {})
@@ -1680,13 +1696,20 @@ def fetch_subscription_body_for_xray(url: str) -> Tuple[str, Dict[str, str], Dic
     if retry_errors:
         meta["hwid_fetch_error"] = "; ".join(retry_errors)[:700]
 
-    warnings = list(happ_warnings) + _subscription_hwid_warning_messages(hwid_headers)
     if bool(probe.get("placeholder")):
-        warnings.append(
-            "Провайдер не принял клиент или HWID и вернул служебную заглушку вместо реальных узлов."
-            if str(probe.get("placeholder_kind") or "") == "unsupported-client"
-            else "Провайдер вернул HWID-заглушку вместо реальных узлов."
-        )
+        kind = str(probe.get("placeholder_kind") or "")
+        # Raw Happ imports use the managed static-proxy path in Mihomo.  Do
+        # not hand the rejected base64 body to a proxy-provider: fail early so
+        # the UI can explain that this is a client/HWID gate, not an empty
+        # Clash subscription.  Ordinary HTTP subscriptions keep their legacy
+        # warning result for the Xray subscription workbench.
+        if happ_links.is_happ_deep_link(url):
+            raise SubscriptionPlaceholderError(kind)
+        warnings = list(happ_warnings) + _subscription_hwid_warning_messages(hwid_headers)
+        warnings.append(str(SubscriptionPlaceholderError(kind)))
+        meta["warnings"] = warnings
+        return body, headers, meta
+    warnings = list(happ_warnings) + _subscription_hwid_warning_messages(hwid_headers)
     meta["warnings"] = warnings
     return body, headers, meta
 

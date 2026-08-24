@@ -21,7 +21,7 @@ from urllib.parse import urlparse
 from mihomo_config_generator import build_full_config
 from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.mihomo_proxy_config import apply_proxy_insert
-from services.mihomo_xray_json import convert_subscription_text
+from services.mihomo_xray_json import convert_subscription_source_text, convert_subscription_text
 from services.url_policy import env_flag
 from services.xray_subscriptions import fetch_subscription_body_for_xray as fetch_subscription_body
 from utils.fs import load_text
@@ -966,7 +966,10 @@ def _refresh_config_subscription(
             new_blocks, skipped = _fetch_mihomo_provider_proxy_blocks(str(sub.get("url") or ""))
         else:
             body, _headers, _meta = _fetch_xray_subscription_body(str(sub.get("url") or ""))
-            proxies, skipped = convert_subscription_text(body, existing_names=existing_names)
+            proxies, skipped, _source_format = convert_subscription_source_text(
+                body,
+                existing_names=existing_names,
+            )
             if not proxies:
                 raise RuntimeError("no_supported_proxies")
             new_blocks = [str(getattr(proxy, "yaml", "") or "").strip() for proxy in proxies]
@@ -1095,7 +1098,7 @@ def refresh_subscription(
 
         try:
             body, _headers, _meta = _fetch_xray_subscription_body(str(sub.get("url") or ""))
-            proxies, skipped = convert_subscription_text(
+            proxies, skipped, _source_format = convert_subscription_source_text(
                 body,
                 existing_names=_existing_names_for_refresh(generator_state, skip_index=proxy_index),
             )

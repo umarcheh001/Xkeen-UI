@@ -525,6 +525,43 @@ def test_regular_provider_adapter_route_fetches_without_hwid_headers(monkeypatch
     assert denied.status_code == 403
 
 
+def test_regular_provider_probe_returns_raw_happ_as_static_proxies(monkeypatch, client):
+    payload = (
+        "proxies:\n"
+        "  - name: Happ One\n"
+        "    type: vless\n"
+        "    server: one.example\n"
+        "    port: 443\n"
+        "  - name: Happ Two\n"
+        "    type: trojan\n"
+        "    server: two.example\n"
+        "    port: 443\n"
+    )
+    monkeypatch.setattr(
+        mihomo,
+        "_mh_hwid_fetch_provider_payload",
+        lambda url, **kwargs: (
+            payload,
+            {"format": "share-links", "converted": True, "proxy_section": True},
+        ),
+    )
+
+    response = client.post(
+        "/api/mihomo/provider/probe",
+        json={"url": "happ://crypt5/demo-token"},
+    )
+
+    assert response.status_code == 200
+    result = response.get_json()
+    assert result["provider_mode"] == "static_happ"
+    assert result["provider_url"] == ""
+    assert result["provider_payload"]["node_count"] == 2
+    assert [item["proxy_name"] for item in result["provider_proxies"]] == [
+        "Happ One",
+        "Happ Two",
+    ]
+
+
 def test_regular_provider_probe_fetches_without_hwid_headers(monkeypatch, client):
     probe_calls = []
     fetch_calls = []

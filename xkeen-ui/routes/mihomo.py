@@ -59,7 +59,7 @@ from mihomo_server_core import (
     validate_config,
 )
 from services.mihomo_proxy_parsers import parse_wireguard
-from services.mihomo_proxy_parsers import parse_openvpn, parse_proxy_uri, parse_tailscale
+from services.mihomo_proxy_parsers import parse_openvpn, parse_tailscale
 from services.mihomo_node_import import build_mihomo_node_draft
 from services.mihomo_proxy_config import (
     apply_proxy_insert,
@@ -71,7 +71,8 @@ from services.mihomo_egress_setup import (
     build_mihomo_egress_setup,
 )
 from services.mihomo_xray_json import (
-    convert_subscription_text as _xray_convert_subscription_text,
+    SubscriptionPlaceholderError as _XraySubscriptionPlaceholderError,
+    convert_subscription_source_text as _xray_convert_subscription_source_text,
     format_proxies_section as _xray_format_proxies_section,
 )
 from services.mihomo_subscriptions import (
@@ -84,10 +85,9 @@ from services.mihomo_subscriptions import (
     update_subscription_settings as _mh_sub_update_subscription_settings,
 )
 from services.xray_subscriptions import (
+    SubscriptionPlaceholderError as _XrayFetchPlaceholderError,
     fetch_subscription_body_for_xray as _xray_fetch_subscription_body_raw,
     _happ_helper_error_message,
-    _subscription_body_source_probe as _xray_subscription_body_source_probe,
-    parse_subscription_links as _xray_parse_subscription_links,
 )
 
 
@@ -822,6 +822,65 @@ def create_mihomo_blueprint(
         url = (data.get("url") or "").strip()
         insecure = bool(data.get("insecure", False))
         prefer = (data.get("prefer") or "head_then_range_get").strip() or "head_then_range_get"
+
+        if happ_links.is_happ_deep_link(url):
+            timeout_ms = data.get("timeout_ms", 8000)
+            try:
+                timeout_ms = int(timeout_ms)
+            except Exception:
+                timeout_ms = 8000
+            timeout_s = max(1.0, min(float(timeout_ms) / 1000.0, 60.0))
+            try:
+                payload, meta = _mh_hwid_fetch_provider_payload(
+                    url,
+                    headers={},
+                    insecure=insecure,
+                    timeout=timeout_s,
+                    policy=_mihomo_provider_url_policy(),
+                )
+            except _XrayFetchPlaceholderError as exc:
+                return _mihomo_error(
+                    str(exc),
+                    status=422,
+                    code="subscription_placeholder",
+                    hint="Проверьте данные устройства/HWID и повторите импорт исходной Happ-ссылки.",
+                )
+            except Exception as exc:
+                return _mihomo_fetch_failed_response(_subscription_fetch_failure_reason(exc))
+
+            summary = _mihomo_provider_payload_summary(payload, meta)
+            provider_proxies = _mihomo_provider_payload_proxy_blocks(payload)
+            if not summary.get("has_nodes") or not provider_proxies:
+                return _mihomo_error(
+                    "В расшифрованной Happ-подписке не найдено поддерживаемых узлов Mihomo.",
+                    status=422,
+                    code="no_supported_proxies",
+                    hint="Если провайдер вернул заглушку, проверьте клиент/HWID. Иначе проверьте форматы узлов подписки.",
+                )
+            profile = {
+                "profile_title": "Happ",
+                "profile_title_raw": "Happ",
+                "profile_title_encoding": "plain",
+                "suggested_name": "Happ",
+            }
+            return jsonify(
+                {
+                    "ok": True,
+                    "probe": {"url": url, "http_status": 200},
+                    "profile": profile,
+                    "headers_used": {},
+                    "warnings": list(meta.get("warnings") or []),
+                    "hwid_response_headers": dict(meta.get("hwid_response_headers") or {}),
+                    "hwid_limit_info": _mh_hwid_extract_limit_info(
+                        meta.get("hwid_response_headers") or {}
+                    ),
+                    "provider_url": "",
+                    "provider_headers": {},
+                    "provider_mode": "static_happ",
+                    "provider_payload": summary,
+                    "provider_proxies": provider_proxies,
+                }
+            ), 200
 
         policy = _mihomo_provider_url_policy()
         reason = _mihomo_provider_policy_block_reason(url, policy)
@@ -2421,40 +2480,21 @@ def create_mihomo_blueprint(
 
         def parse_xray_subscription(url: str, existing_names):
             body, _headers = _xray_fetch_subscription_body(url)
-            links = _xray_parse_subscription_links(body)
-            probe = _xray_subscription_body_source_probe(body)
-            if links and bool(probe.get("placeholder")):
-                kind = str(probe.get("placeholder_kind") or "")
-                raise ValueError(
-                    "Провайдер не принял клиент или HWID и вернул служебную заглушку вместо реальных узлов."
-                    if kind == "unsupported-client"
-                    else "Провайдер вернул HWID-заглушку вместо реальных узлов."
-                )
             try:
-                proxies, skipped = _xray_convert_subscription_text(
+                proxies, skipped, _source_format = _xray_convert_subscription_source_text(
                     body,
                     existing_names=list(existing_names),
                 )
-            except ValueError:
-                if not links:
+            except _XraySubscriptionPlaceholderError as exc:
+                raise ValueError(
+                    "Провайдер не принял клиент или HWID и вернул служебную заглушку вместо реальных узлов."
+                    if str(getattr(exc, "kind", "") or "") == "unsupported-client"
+                    else "Провайдер вернул HWID-заглушку вместо реальных узлов."
+                ) from exc
+            except ValueError as exc:
+                if str(exc or "") == "not_xray_json":
                     return None
-                proxies = []
-                skipped = []
-                used_names = [str(name) for name in existing_names]
-                for link in links:
-                    try:
-                        parsed = parse_proxy_uri(link)
-                        unique_name = str(parsed.name or "PROXY").strip() or "PROXY"
-                        suffix = 2
-                        while unique_name in used_names:
-                            unique_name = f"{parsed.name or 'PROXY'}_{suffix}"
-                            suffix += 1
-                        if unique_name != parsed.name:
-                            parsed = parse_proxy_uri(link, custom_name=unique_name)
-                        proxies.append(parsed)
-                        used_names.append(parsed.name)
-                    except Exception as exc:
-                        skipped.append({"link": link, "reason": str(exc)})
+                raise
             if not proxies:
                 raise ValueError("В подписке не найдено поддерживаемых узлов.")
             parsed_xray_sources.append((url, list(proxies)))
@@ -2781,7 +2821,7 @@ def create_mihomo_blueprint(
 
     @bp.post("/api/mihomo/parse/xray-json")
     def api_mihomo_parse_xray_json():
-        """Detect/parse an Xray-style JSON subscription and return Mihomo proxies.
+        """Detect/parse an Xray JSON or share-link subscription into Mihomo proxies.
 
         Accepts ``{"url": ...}`` (server fetches via the SSRF-safe subscription
         fetcher) or ``{"text": ...}`` (caller-supplied body).  Optional
@@ -2823,6 +2863,13 @@ def create_mihomo_blueprint(
         if url and not text:
             try:
                 text, _headers = _xray_fetch_subscription_body(url)
+            except _XrayFetchPlaceholderError as e:
+                return _mihomo_error(
+                    str(e),
+                    status=422,
+                    code="subscription_placeholder",
+                    hint="Проверьте данные устройства/HWID и повторите импорт исходной Happ-ссылки.",
+                )
             except RuntimeError as e:
                 reason = str(e or "")
                 if reason.startswith("url_blocked:"):
@@ -2893,12 +2940,24 @@ def create_mihomo_blueprint(
                 )
 
         try:
-            proxies, skipped = _xray_convert_subscription_text(
+            proxies, skipped, source_format = _xray_convert_subscription_source_text(
                 text, existing_names=existing_names
+            )
+        except _XraySubscriptionPlaceholderError as e:
+            kind = str(getattr(e, "kind", "") or "")
+            return _mihomo_error(
+                (
+                    "Провайдер не принял клиент или HWID и вернул служебную заглушку вместо реальных узлов."
+                    if kind == "unsupported-client"
+                    else "Провайдер вернул HWID-заглушку вместо реальных узлов."
+                ),
+                status=422,
+                code="subscription_placeholder",
+                hint="Проверьте данные устройства/HWID и повторите импорт исходной Happ-ссылки.",
             )
         except ValueError:
             return _mihomo_error(
-                "Не похоже на Xray-JSON подписку.",
+                "Не похоже на Xray JSON или URI-подписку.",
                 status=422,
                 code="not_xray_json",
                 hint="Если это обычная Mihomo/Clash YAML-подписка — добавьте её как proxy-provider.",
@@ -2927,6 +2986,7 @@ def create_mihomo_blueprint(
             "proxies": [{"proxy_name": p.name, "proxy_yaml": p.yaml} for p in proxies],
             "proxies_yaml": _xray_format_proxies_section(proxies),
             "skipped": skipped,
+            "source_format": source_format,
         }), 200
 
 
