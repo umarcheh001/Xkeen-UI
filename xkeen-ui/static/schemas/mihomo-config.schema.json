@@ -251,11 +251,11 @@
 
     "tun": {
       "type": "object",
-      "description": "Виртуальное TUN-устройство для прозрачного проксирования. Mihomo создаёт сетевой интерфейс и перехватывает трафик через маршруты. Альтернатива гибридному режиму `redir-port` + `tproxy-port`. На Keenetic TUN работает ТОЛЬКО с XKeen-интеграцией (кастомные маршруты и policy-routing настраиваются скриптами XKeen) — нативный `auto-route: true` на Keenetic не сработает.",
+      "description": "Виртуальное TUN-устройство для прозрачного проксирования. Mihomo создаёт сетевой интерфейс и перехватывает трафик через маршруты. Альтернатива гибридному режиму `redir-port` + `tproxy-port`; на Linux/роутерах `auto-route` и `auto-redirect` могут настроить маршруты и перенаправление автоматически.",
       "x-ui-explain": "TUN — это «виртуальная сетевая карта»: Mihomo поднимает отдельный интерфейс и принимает весь IP-трафик, который туда маршрутизируется.",
-      "x-ui-use-case": "На десктопах — простой путь к прозрачному проксированию. На Keenetic TUN имеет смысл только с готовыми XKeen-скриптами; в остальных случаях на роутере чаще используют `redir-port` + `tproxy-port`.",
-      "x-ui-example": "tun:\n  enable: true\n  stack: gvisor\n  auto-route: true",
-      "x-ui-warning": "Одновременно включать `tun` и пару `redir-port` + `tproxy-port` обычно не нужно — это два разных режима перехвата.",
+      "x-ui-use-case": "Используйте TUN, когда нужны прозрачное проксирование и DNS-hijack без отдельных правил REDIRECT/TPROXY. На Keenetic проверьте совместимость с интеграцией XKeen и исключите локальные сети.",
+      "x-ui-example": "tun:\n  enable: true\n  stack: mixed\n  auto-route: true\n  auto-redirect: true",
+      "x-ui-warning": "Одновременно включать `tun` и пару `redir-port` + `tproxy-port` обычно не нужно — это два разных режима перехвата. Для `auto-redirect` требуется Linux, nftables/iptables и включённый `auto-route`.",
       "properties": {
         "enable": {
           "type": "boolean",
@@ -264,9 +264,9 @@
         },
         "stack": {
           "type": "string",
-          "enum": ["system", "gvisor", "mixed", "lwip"],
+          "enum": ["system", "gvisor", "mixed"],
           "default": "gvisor",
-          "description": "TCP-стек TUN. `gvisor` — пользовательский, безопасный, средняя производительность (рекомендуется для Keenetic); `system` — системный стек (быстрее, но только Linux/Android); `mixed` — системный для TCP + gvisor для UDP; `lwip` — lightweight IP."
+          "description": "Стек протоколов TUN. Доступны `system`, `gvisor` и `mixed`; по документации Mihomo рекомендуется `mixed`, если нет проблем. `system` использует системный стек, `gvisor` — пользовательский, `mixed` сочетает system для TCP и gvisor для UDP."
         },
         "device": {
           "type": "string",
@@ -277,7 +277,12 @@
         "auto-route": {
           "type": "boolean",
           "default": true,
-          "description": "Автоматически добавить default-маршрут через TUN. На Keenetic НЕ работает из коробки — маршруты настраиваются XKeen-скриптами, оставляйте `false`."
+          "description": "Автоматически добавить глобальные маршруты через TUN. На Linux/роутерах работает вместе с `auto-redirect`; при необходимости задайте `route-address` и `route-exclude-address`."
+        },
+        "auto-redirect": {
+          "type": "boolean",
+          "default": false,
+          "description": "Автоматически настроить перенаправление TCP через iptables/nftables (только Linux; требует `auto-route: true`)."
         },
         "auto-detect-interface": {
           "type": "boolean",
@@ -315,38 +320,131 @@
         },
         "inet4-route-address": {
           "type": "array",
-          "description": "Список IPv4 CIDR, которые будут маршрутизироваться через TUN (если не задано — используется `0.0.0.0/0`).",
+          "description": "Устаревший legacy-список IPv4 CIDR для маршрутизации через TUN. Используйте `route-address`.",
+          "deprecated": true,
           "items": { "type": "string", "examples": ["0.0.0.0/0", "10.0.0.0/8"] }
         },
         "inet6-route-address": {
           "type": "array",
-          "description": "Список IPv6 CIDR, которые будут маршрутизироваться через TUN.",
+          "description": "Устаревший legacy-список IPv6 CIDR для маршрутизации через TUN. Используйте `route-address`.",
+          "deprecated": true,
           "items": { "type": "string", "examples": ["::/0"] }
         },
         "inet4-route-exclude-address": {
           "type": "array",
-          "description": "IPv4 CIDR, исключаемые из TUN-маршрутизации (идут в обход прокси). Полезно для LAN и CGNAT-диапазонов.",
+          "description": "Устаревший legacy-список IPv4 CIDR, исключаемых из TUN-маршрутизации. Используйте `route-exclude-address`.",
+          "deprecated": true,
           "items": { "type": "string", "examples": ["192.168.0.0/16", "10.0.0.0/8", "172.16.0.0/12"] }
         },
         "inet6-route-exclude-address": {
           "type": "array",
-          "description": "IPv6 CIDR, исключаемые из TUN-маршрутизации.",
+          "description": "Устаревший legacy-список IPv6 CIDR, исключаемых из TUN-маршрутизации. Используйте `route-exclude-address`.",
+          "deprecated": true,
           "items": { "type": "string", "examples": ["fe80::/10", "fc00::/7"] }
+        },
+        "route-address": {
+          "type": "array",
+          "description": "Актуальный список целевых CIDR для маршрутизации через TUN. Работает с `auto-route`; по умолчанию используется весь трафик.",
+          "items": { "type": "string", "examples": ["0.0.0.0/1", "128.0.0.0/1", "::/1", "8000::/1"] }
+        },
+        "route-exclude-address": {
+          "type": "array",
+          "description": "Актуальный список CIDR, исключаемых из TUN-маршрутизации (например, LAN и локальные IPv6-сети).",
+          "items": { "type": "string", "examples": ["192.168.0.0/16", "fc00::/7"] }
+        },
+        "route-address-set": {
+          "type": "array",
+          "description": "Имена rule-set, чьи IP-CIDR добавляются в правила маршрутизации TUN (Linux; требуется nftables, `auto-route` и `auto-redirect`).",
+          "items": { "type": "string", "examples": ["private", "proxy-domains"] }
+        },
+        "route-exclude-address-set": {
+          "type": "array",
+          "description": "Имена rule-set, чьи IP-CIDR исключаются из маршрутизации TUN (Linux; требуется nftables).",
+          "items": { "type": "string", "examples": ["lan", "bypass"] }
+        },
+        "include-interface": {
+          "type": "array",
+          "description": "Захватывать только трафик указанных сетевых интерфейсов.",
+          "items": { "type": "string", "examples": ["eth0", "wlan0"] }
+        },
+        "exclude-interface": {
+          "type": "array",
+          "description": "Исключать трафик указанных сетевых интерфейсов.",
+          "items": { "type": "string", "examples": ["docker0", "br-lan"] }
         },
         "endpoint-independent-nat": {
           "type": "boolean",
           "default": false,
           "description": "Включить EIM/EIF NAT для UDP (Full Cone). Улучшает работу P2P/голосовых приложений, но увеличивает расход памяти."
         },
+        "udp-timeout": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 300,
+          "description": "Время жизни UDP NAT-состояния в секундах (по умолчанию 300)."
+        },
+        "gso": {
+          "type": "boolean",
+          "default": false,
+          "description": "Включить Generic Segmentation Offload (только Linux)."
+        },
+        "gso-max-size": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Максимальный размер сегмента GSO (только Linux, используется при `gso: true`).",
+          "examples": [65536]
+        },
+        "iproute2-table-index": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 2022,
+          "description": "Индекс таблицы маршрутизации iproute2, создаваемой `auto-route` (Linux)."
+        },
+        "iproute2-rule-index": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 9000,
+          "description": "Начальный индекс правила iproute2, создаваемого `auto-route` (Linux)."
+        },
         "include-uid": {
           "type": "array",
           "description": "Захватывать трафик только от указанных UID (только Linux). На роутере обычно не используется.",
           "items": { "type": "integer" }
         },
+        "include-uid-range": {
+          "type": "array",
+          "description": "Диапазоны UID для включения (Linux), например `1000:9999`.",
+          "items": { "type": "string", "pattern": "^[0-9]+:[0-9]+$" },
+          "examples": [["1000:9999"]]
+        },
         "exclude-uid": {
           "type": "array",
           "description": "Исключать трафик указанных UID. Пример: UID самого Mihomo для предотвращения петли.",
           "items": { "type": "integer" }
+        },
+        "exclude-uid-range": {
+          "type": "array",
+          "description": "Диапазоны UID для исключения (Linux), например `1000:9999`.",
+          "items": { "type": "string", "pattern": "^[0-9]+:[0-9]+$" },
+          "examples": [["1000:9999"]]
+        },
+        "include-mac-address": {
+          "type": "array",
+          "description": "MAC-адреса, трафик которых следует включать в TUN.",
+          "items": { "type": "string" },
+          "examples": [["00:11:22:33:44:55"]]
+        },
+        "exclude-mac-address": {
+          "type": "array",
+          "description": "MAC-адреса, трафик которых следует исключать из TUN.",
+          "items": { "type": "string" },
+          "examples": [["00:11:22:33:44:66"]]
+        },
+        "include-android-user": {
+          "type": "array",
+          "description": "Идентификаторы пользователей Android, трафик которых включается в TUN.",
+          "items": { "type": "integer" },
+          "examples": [[0, 10]]
         },
         "include-package": {
           "type": "array",
@@ -363,12 +461,12 @@
 
     "dns": {
       "type": "object",
-      "description": "Встроенный DNS-резолвер Mihomo. На Keenetic без TUN обычно НЕ используется (роутер имеет свой DNS через Keenetic Cloud/AdGuard Home), но с TUN-режимом `dns.enable: true` + `enhanced-mode: fake-ip` необходим для перехвата доменных запросов.",
+      "description": "Встроенный DNS-резолвер Mihomo. При `enable: false` Mihomo использует системный DNS. Режим `fake-ip` нужен для сценариев с перехватом fake-IP (например, TUN); для обычного резолвинга используйте `redir-host`.",
       "properties": {
         "enable": {
           "type": "boolean",
           "default": true,
-          "description": "Включить встроенный DNS. Для TUN-режима — обязательно `true`. Для режима без TUN часто устанавливают `false`, чтобы роутер сам обслуживал DNS."
+          "description": "Включить встроенный DNS Mihomo. При `false` запросы разрешаются системным DNS; включайте для использования nameserver/fallback, DNS-hijack и fake-IP."
         },
         "prefer-h3": {
           "type": "boolean",
@@ -393,9 +491,9 @@
         },
         "enhanced-mode": {
           "type": "string",
-          "enum": ["normal", "fake-ip", "redir-host"],
-          "default": "normal",
-          "description": "Режим обработки DNS. `normal` — обычный резолвинг в IP (без подмены), `fake-ip` — выдаёт фейковые IP из `fake-ip-range` и восстанавливает домен при подключении (рекомендуется для TUN), `redir-host` — возвращает домен вместо IP (работает только с sniff)."
+          "enum": ["fake-ip", "redir-host"],
+          "default": "redir-host",
+          "description": "Режим обработки DNS. `redir-host` (по умолчанию) возвращает реальные IP и сохраняет домен для маршрутизации; `fake-ip` выдаёт синтетические адреса из `fake-ip-range` и восстанавливает домен при подключении (обычно для TUN)."
         },
         "fake-ip-range": {
           "type": "string",
@@ -417,11 +515,22 @@
             ]
           }
         },
+        "fake-ip-range6": {
+          "type": "string",
+          "description": "IPv6 CIDR-диапазон для fake-IP. Используется только при включённом IPv6 и `enhanced-mode: fake-ip`.",
+          "examples": ["fdfe:dcba:9876::1/64"]
+        },
         "fake-ip-filter-mode": {
           "type": "string",
-          "enum": ["blacklist", "whitelist"],
+          "enum": ["blacklist", "whitelist", "rule"],
           "default": "blacklist",
-          "description": "`blacklist` — fake-ip применяется ко всем, кроме указанных в `fake-ip-filter`. `whitelist` — fake-ip только для доменов из фильтра (остальные резолвятся нормально)."
+          "description": "Режим фильтрации fake-IP: `blacklist` — fake-IP для всех, кроме совпавших доменов; `whitelist` — fake-IP только для совпавших; `rule` — `fake-ip-filter` интерпретируется как routing rules (GEOSITE, RULE-SET, DOMAIN*, MATCH) с действиями `fake-ip`/`real-ip`."
+        },
+        "fake-ip-ttl": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "TTL, возвращаемый для fake-IP. Обычно оставляйте значение по умолчанию; меняйте только при особой необходимости.",
+          "examples": [1]
         },
         "default-nameserver": {
           "type": "array",
@@ -474,7 +583,8 @@
             },
             "geosite": {
               "type": "array",
-              "description": "Домены из указанных geosite-категорий всегда резолвятся через fallback.",
+              "description": "Устаревший список geosite-категорий, для которых используется fallback. Предпочтительно задавать соответствующие политики через `nameserver-policy`.",
+              "deprecated": true,
               "items": { "type": "string", "examples": ["gfw", "geolocation-!cn"] }
             },
             "ipcidr": {
@@ -486,6 +596,11 @@
               "type": "array",
               "description": "Домены, всегда резолвящиеся через fallback.",
               "items": { "type": "string", "examples": ["+.google.com", "+.youtube.com"] }
+            },
+            "fallback-lazy-query": {
+              "type": "boolean",
+              "default": false,
+              "description": "Сначала проверить ответ nameserver по условиям фильтра и обращаться к fallback только при необходимости."
             }
           }
         },
@@ -509,6 +624,29 @@
               "https://1.1.1.1/dns-query"
             ]
           }
+        },
+        "proxy-server-nameserver-policy": {
+          "type": "object",
+          "description": "Политики DNS для доменов proxy-узлов. Формат такой же, как у `nameserver-policy`; действует только если задан `proxy-server-nameserver`.",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "array", "items": { "type": "string" } }
+            ]
+          }
+        },
+        "direct-nameserver": {
+          "type": "array",
+          "description": "DNS-серверы для повторного разрешения доменов при выходе DIRECT. Если не задан, используются nameserver-policy/nameserver/fallback.",
+          "items": {
+            "type": "string",
+            "examples": ["system", "dhcp://nwan0", "1.1.1.1"]
+          }
+        },
+        "direct-nameserver-follow-policy": {
+          "type": "boolean",
+          "default": false,
+          "description": "Следовать ли `nameserver-policy` при использовании `direct-nameserver`. Имеет эффект только если `direct-nameserver` задан."
         },
         "use-hosts": {
           "type": "boolean",

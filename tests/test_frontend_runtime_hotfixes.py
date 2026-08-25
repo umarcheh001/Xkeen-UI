@@ -1070,6 +1070,28 @@ def test_mihomo_schema_tracks_xhttp_transport_and_multiplexing_fields():
     assert 'query-server-name' in download_props['ech-opts']['properties']
 
 
+def test_mihomo_schema_tracks_current_dns_and_tun_options():
+    schema = json.loads(Path('xkeen-ui/static/schemas/mihomo-config.schema.json').read_text(encoding='utf-8'))
+    dns_props = schema['properties']['dns']['properties']
+    tun_props = schema['properties']['tun']['properties']
+
+    assert dns_props['enhanced-mode']['enum'] == ['fake-ip', 'redir-host']
+    assert dns_props['enhanced-mode']['default'] == 'redir-host'
+    assert dns_props['fake-ip-filter-mode']['enum'] == ['blacklist', 'whitelist', 'rule']
+    for key in ('fake-ip-range6', 'fake-ip-ttl', 'proxy-server-nameserver-policy',
+                'direct-nameserver', 'direct-nameserver-follow-policy'):
+        assert key in dns_props
+
+    assert tun_props['stack']['enum'] == ['system', 'gvisor', 'mixed']
+    for key in ('auto-redirect', 'route-address', 'route-exclude-address',
+                'route-address-set', 'route-exclude-address-set'):
+        assert key in tun_props
+    assert tun_props['inet4-route-address']['deprecated'] is True
+    assert tun_props['inet6-route-address']['deprecated'] is True
+    assert tun_props['inet4-route-exclude-address']['deprecated'] is True
+    assert tun_props['inet6-route-exclude-address']['deprecated'] is True
+
+
 def test_mihomo_schema_tracks_wireguard_and_amnezia_wg_v31_fields():
     schema = json.loads(Path('xkeen-ui/static/schemas/mihomo-config.schema.json').read_text(encoding='utf-8'))
     proxy_props = schema['definitions']['proxy']['properties']

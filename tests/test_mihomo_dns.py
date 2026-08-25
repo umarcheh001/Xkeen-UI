@@ -251,6 +251,8 @@ def test_http_contract_and_frontend(tmp_path: Path, monkeypatch):
     assert "Mihomo preflight" in template
     assert "Полный снимок" in template
     assert "Автооткат" in template
+    assert "Keenetic автоматически направляет запросы в Mihomo" in template
+    assert "192.168.1.1:1054" not in template
     assert "'/api/mihomo/dns'" in script
     assert "Включить защищённый DNS" in script
     assert "mihomo_dns.js" in bundle
