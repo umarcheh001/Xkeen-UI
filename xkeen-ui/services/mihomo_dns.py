@@ -212,6 +212,64 @@ def _remove_store_fake_ip(text: str) -> str:
     return text[:start] + "".join(kept_lines) + text[end:]
 
 
+_DNS_INSERT_BEFORE_SECTIONS = (
+    # These are the large, data-oriented sections that normally follow the
+    # scalar/runtime settings in a Mihomo config.  If ``profile`` is absent,
+    # placing DNS immediately before the first one keeps it in the same upper
+    # part of the document as the user-facing examples instead of appending it
+    # after providers and rules.
+    "sniffer",
+    "tun",
+    "hosts",
+    "proxies",
+    "proxy-providers",
+    "proxy-groups",
+    "listeners",
+    "rule-providers",
+    "rules",
+)
+
+
+def _insert_managed_dns_block(text: str, block: str) -> str:
+    """Insert the managed DNS section near the config's top-level settings.
+
+    Mihomo accepts top-level keys in any order, but keeping ``dns`` beside
+    ``profile``/``sniffer`` makes generated configs readable and matches the
+    conventional examples.  The previous implementation always appended the
+    block, which put it below proxy providers, groups and rules (often hundreds
+    of lines down).  Existing text is otherwise left untouched.
+    """
+
+    source = str(text or "")
+    managed = str(block or "").strip("\r\n")
+
+    # ``profile`` is the conventional anchor and is present in XKeen's stock
+    # templates.  ``_top_level_section`` gives us the start of the next
+    # top-level key, so inserting at its end preserves the whole profile block.
+    anchor = _top_level_section(source, "profile")
+    if anchor is None:
+        # Custom configs are allowed to omit profile.  Use the first structural
+        # section as a fallback; this still keeps DNS near the top while
+        # retaining the user's scalar settings above it.
+        sections = list(_TOP_LEVEL_KEY_RE.finditer(source))
+        for match in sections:
+            if match.group("key") in _DNS_INSERT_BEFORE_SECTIONS:
+                insertion_at = match.start()
+                break
+        else:
+            # A config containing only scalar settings has no better semantic
+            # anchor; append in that uncommon case.
+            insertion_at = len(source)
+    else:
+        insertion_at = anchor[1]
+
+    before = source[:insertion_at].rstrip("\r\n")
+    after = source[insertion_at:].lstrip("\r\n")
+    if after:
+        return f"{before}\n\n{managed}\n\n{after}"
+    return f"{before}\n\n{managed}\n"
+
+
 def build_enabled_config(text: str, group: Optional[str] = None) -> tuple[str, str]:
     original = str(text or "")
     if not original.strip():
@@ -229,7 +287,10 @@ def build_enabled_config(text: str, group: Optional[str] = None) -> tuple[str, s
             "Не найдена proxy-группа Mihomo. Сначала добавьте узел и группу.",
             code="proxy_group_missing",
         )
-    patched = _remove_store_fake_ip(original).rstrip() + "\n\n" + _managed_dns_block(selected)
+    # Keep the managed block near the top-level runtime settings (normally
+    # immediately after ``profile``), rather than at EOF after all providers,
+    # groups and rules.
+    patched = _insert_managed_dns_block(_remove_store_fake_ip(original), _managed_dns_block(selected))
     return patched, selected
 
 

@@ -40,7 +40,9 @@ def test_build_enabled_config_is_additive_routed_and_router_safe():
     assert "profile: { store-selected: true }" in content
     assert "https://8.8.8.8/dns-query#Заблок. сервисы&name-cert-verify=dns.google" in content
     assert "https://1.1.1.1/dns-query#Заблок. сервисы&name-cert-verify=cloudflare-dns.com" in content
-    assert content.index("rules:") < content.index(dns.MANAGED_BEGIN)
+    # The managed block is kept with the top-level runtime settings rather
+    # than appended after providers/groups/rules.
+    assert content.index("profile:") < content.index(dns.MANAGED_BEGIN) < content.index("proxy-groups:")
 
 
 def test_build_refuses_existing_user_dns_without_rewriting_it():
