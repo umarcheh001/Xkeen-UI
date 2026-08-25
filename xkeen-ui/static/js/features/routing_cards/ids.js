@@ -63,6 +63,7 @@ import { getRoutingCardsNamespace } from '../routing_cards_namespace.js';
     rulesReload: 'routing-rules-reload-btn',
     rulesApply: 'routing-rules-apply-btn',
     rulesAdd: 'routing-rules-add-btn',
+    dnsOverVless: 'routing-dns-over-vless-btn',
     rulesList: 'routing-rules-list',
     rulesEmpty: 'routing-rules-empty',
     domainStrategy: 'routing-domain-strategy',

@@ -3139,6 +3139,15 @@ body.panel-page #routing-rules-body .routing-rules-actions :is(.btn-icon, #routi
   padding: 0 !important;
 }
 
+body.panel-page #routing-rules-body .routing-rules-actions .routing-dns-over-vless-btn {
+  width: auto !important;
+  min-width: 58px !important;
+  height: var(--op-control-h) !important;
+  padding: 0 8px !important;
+  border-color: color-mix(in srgb, var(--op-accent) 45%, var(--op-border)) !important;
+  color: var(--op-text) !important;
+}
+
 body.panel-page #routing-rules-body :is(
   .routing-rules-summary,
   .routing-selector-count,

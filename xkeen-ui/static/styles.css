@@ -19425,6 +19425,94 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
   line-height: 1;
 }
 
+.routing-rules-actions .routing-dns-over-vless-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  min-width: 62px;
+  padding: 6px 9px;
+  color: #bfdbfe;
+  border-color: rgba(96, 165, 250, 0.42);
+}
+
+.routing-dns-over-vless-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #64748b;
+}
+
+.routing-dns-over-vless-dot[data-state="enabled"] { background: #34d399; box-shadow: 0 0 0 2px rgba(52, 211, 153, .15); }
+.routing-dns-over-vless-dot[data-state="blocked"] { background: #f59e0b; }
+
+.routing-dns-over-vless-modal-content { max-width: 760px; }
+.routing-dns-over-vless-body { display: grid; gap: 14px; }
+.routing-dns-over-vless-lead {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 14px;
+  border: 1px solid var(--modal-body-border);
+  border-radius: 12px;
+  background: var(--modal-body-bg);
+}
+.routing-dns-over-vless-lead-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  color: #bfdbfe;
+  background: rgba(37, 99, 235, .2);
+}
+.routing-dns-over-vless-lead-icon .xk-icon { width: 20px; height: 20px; }
+.routing-dns-over-vless-lead p { margin: 5px 0 0; color: var(--modal-muted); line-height: 1.45; }
+.routing-dns-over-vless-badge {
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: #bae6fd;
+  background: rgba(14, 116, 144, .22);
+}
+.routing-dns-over-vless-badge[data-state="enabled"] { color: #a7f3d0; background: rgba(5, 150, 105, .2); }
+.routing-dns-over-vless-badge[data-state="blocked"] { color: #fde68a; background: rgba(217, 119, 6, .2); }
+.routing-dns-over-vless-status { color: var(--modal-text); line-height: 1.5; }
+.routing-dns-over-vless-safety { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.routing-dns-over-vless-safety > div {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid var(--modal-body-border);
+  border-radius: 9px;
+}
+.routing-dns-over-vless-safety .xk-icon { width: 17px; height: 17px; color: #60a5fa; }
+.routing-dns-over-vless-safety span { display: grid; gap: 3px; }
+.routing-dns-over-vless-safety small { color: var(--modal-muted); line-height: 1.35; }
+.routing-dns-over-vless-details { display: grid; gap: 7px; margin: 0; padding-left: 20px; color: var(--modal-muted); }
+.routing-dns-over-vless-details li::marker { color: #60a5fa; }
+.routing-dns-over-vless-details li.is-warn::marker { color: #f59e0b; }
+.routing-dns-over-vless-warning { margin: 0; }
+.routing-dns-over-vless-links { margin: 0; color: var(--modal-muted); }
+.routing-dns-over-vless-links a { color: #7dd3fc; }
+.routing-dns-over-vless-actions { justify-content: flex-end; }
+
+@media (max-width: 720px) {
+  .routing-dns-over-vless-lead { grid-template-columns: auto 1fr; }
+  .routing-dns-over-vless-badge { grid-column: 1 / -1; justify-self: start; }
+  .routing-dns-over-vless-safety { grid-template-columns: 1fr; }
+}
+
 /* Visual indicator for unsaved changes (previously "*") */
 .routing-rules-actions #routing-rules-apply-btn.is-dirty {
   border-color: color-mix(in srgb, #f59e0b 60%, rgba(51,65,85,0.9));

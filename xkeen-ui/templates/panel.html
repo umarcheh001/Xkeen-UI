@@ -966,6 +966,7 @@
                 </label>
               </div>
               <div class="routing-rules-actions">
+                <button id="routing-dns-over-vless-btn" class="btn-secondary routing-dns-over-vless-btn" type="button" data-tooltip="DNS-over-VLESS: безопасная настройка DNS через Xray" aria-label="DNS-over-VLESS">{{ op_icon('dns') }}<span class="xk-action-label">DNS</span><span id="routing-dns-over-vless-dot" class="routing-dns-over-vless-dot" aria-hidden="true"></span></button>
                 <button id="routing-balancer-quick-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Быстрый старт: leastPing + observatory + сохранить+рестарт" aria-label="Быстрый старт балансировщика">{{ op_icon('quick-start') }}</button>
                 <button id="routing-balancer-help-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Справка по балансировщикам" aria-label="Справка по балансировщикам">{{ op_icon('help') }}</button>
                 <button id="routing-forced-rules-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Направить сервисы или IP через нужный прокси либо напрямую" aria-label="Маршрутизация сервисов и IP">{{ op_icon('lock') }}</button>
@@ -2550,6 +2551,41 @@
         <div class="modal-actions">
           <button type="button" id="confirm-modal-cancel-btn" data-operator-dismiss-duplicate="true">Отменить</button>
           <button type="button" id="confirm-modal-ok-btn" class="btn-danger">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="routing-dns-over-vless-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-labelledby="routing-dns-over-vless-title">
+      <div class="modal-content xk-modal-width xk-modal-width-760 routing-dns-over-vless-modal-content">
+        <div class="modal-header">
+          <span class="modal-title" id="routing-dns-over-vless-title">DNS-over-VLESS</span>
+          <button type="button" class="modal-close" id="routing-dns-over-vless-close" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body routing-dns-over-vless-body">
+          <div class="routing-dns-over-vless-lead">
+            <span class="routing-dns-over-vless-lead-icon" aria-hidden="true">{{ op_icon('dns') }}</span>
+            <div>
+              <strong>DNS через защищённый туннель Xray</strong>
+              <p>Панель подготовит отдельный DNS-фрагмент, добавит только два служебных правила и включит перехват DNS в Keenetic.</p>
+            </div>
+            <span id="routing-dns-over-vless-badge" class="routing-dns-over-vless-badge">Проверка…</span>
+          </div>
+
+          <div id="routing-dns-over-vless-status" class="routing-dns-over-vless-status" role="status" aria-live="polite">Проверяем текущую конфигурацию…</div>
+
+          <div class="routing-dns-over-vless-safety" aria-label="Защита операции">
+            <div>{{ op_icon('validate') }}<span><b>Xray preflight</b><small>Проверка во временном каталоге до записи</small></span></div>
+            <div>{{ op_icon('archive') }}<span><b>Полный снимок</b><small>DNS, routing, JSONC и состояние мастера</small></span></div>
+            <div>{{ op_icon('restore') }}<span><b>Автооткат</b><small>При ошибке старта или DNS-теста</small></span></div>
+          </div>
+
+          <ul id="routing-dns-over-vless-details" class="routing-dns-over-vless-details"></ul>
+          <p class="modal-hint routing-dns-over-vless-warning">Настройка применяется только при активном ядре Xray. Прокси-outbound и существующие правила не переписываются. Прямой fallback для DNS намеренно не используется, чтобы не допустить утечку или петлю.</p>
+          <p class="routing-dns-over-vless-links">Описание схемы: <a href="https://jameszero.net/4773.htm" target="_blank" rel="noopener noreferrer">упрощённый вариант</a> · <a href="https://jameszero.net/3398.htm" target="_blank" rel="noopener noreferrer">первая часть</a></p>
+        </div>
+        <div class="modal-actions routing-dns-over-vless-actions">
+          <button type="button" id="routing-dns-over-vless-cancel" class="btn-secondary" data-operator-dismiss-duplicate="true">Закрыть</button>
+          <button type="button" id="routing-dns-over-vless-apply" class="btn-primary" disabled>Проверяем…</button>
         </div>
       </div>
     </div>

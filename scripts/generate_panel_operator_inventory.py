@@ -54,6 +54,7 @@ MODAL_FAMILIES = {
     "core-modal": "confirm-compact-form",
     "confirm-modal": "confirm-compact-form",
     "inbounds-apply-modal": "confirm-compact-form",
+    "routing-dns-over-vless-modal": "confirm-compact-form",
     "routing-balancer-help-modal": "drawer-help",
     "xray-snapshot-modal": "editor-workbench",
     "routing-template-modal": "master-detail",

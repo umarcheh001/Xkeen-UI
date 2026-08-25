@@ -15,6 +15,7 @@ from .dat import register_dat_routes
 from .geodat import register_geodat_routes
 from .fragments import register_fragments_routes
 from .config import register_config_routes
+from .dns_over_vless import register_dns_over_vless_routes
 from .templates import register_templates_routes
 
 
@@ -44,6 +45,7 @@ def create_routing_blueprint(
     load_json: Callable[[str, Dict[str, Any]], Optional[Dict[str, Any]]],
     strip_json_comments_text: Callable[[str], str],
     restart_xkeen: Callable[..., bool],
+    UI_STATE_DIR: str = "",
     append_restart_log: Callable[..., None] | None = None,
     save_operation_diagnostic: Callable[..., None] | None = None,
 ) -> Blueprint:
@@ -71,6 +73,14 @@ def create_routing_blueprint(
         restart_xkeen=restart_xkeen,
         append_restart_log=append_restart_log,
         save_operation_diagnostic=save_operation_diagnostic,
+    )
+    register_dns_over_vless_routes(
+        bp,
+        xray_configs_dir=XRAY_CONFIGS_DIR,
+        routing_file=ROUTING_FILE,
+        ui_state_dir=UI_STATE_DIR,
+        restart_xkeen=restart_xkeen,
+        append_restart_log=append_restart_log,
     )
     register_templates_routes(
         bp,
