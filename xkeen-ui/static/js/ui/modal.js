@@ -353,21 +353,15 @@
       handleEl.style.userSelect = 'none';
     } catch (e) {}
 
-    // Remove tooltip specifically in the routing help modal.
-    // The panel's tooltip system can auto-generate hints from aria-label/title.
-    if (modalEl && modalEl.id === 'xkeen-routing-help-modal') {
-      try { handleEl.removeAttribute('title'); } catch (e2) {}
-      // Keep it focusable for keyboard, but remove label to avoid any tooltip.
-      try { handleEl.removeAttribute('aria-label'); } catch (e3) {}
-      try { handleEl.removeAttribute('role'); } catch (e3a) {}
-      try { handleEl.setAttribute('aria-hidden', 'true'); } catch (e4) {}
-      try { handleEl.dataset.xkNoTooltip = '1'; } catch (e5) {}
-    } else {
-      // For other modals keep a minimal label for accessibility (no visible tooltip).
-      try {
-        if (!handleEl.getAttribute('aria-label')) handleEl.setAttribute('aria-label', 'Resize');
-      } catch (e6) {}
-    }
+    // A resize affordance is not a semantic action and must never create a
+    // hover tooltip.  The tooltip portal can otherwise outlive a modal when
+    // the pointer remains stationary while the dialog closes or moves.
+    try { handleEl.removeAttribute('title'); } catch (e2) {}
+    try { handleEl.removeAttribute('data-tooltip'); } catch (e3) {}
+    try { handleEl.setAttribute('data-tooltip-silent', '1'); } catch (e4) {}
+    try {
+      if (!handleEl.getAttribute('aria-label')) handleEl.setAttribute('aria-label', 'Resize');
+    } catch (e5) {}
   }
 
   function isVisibleModal(modalEl) {

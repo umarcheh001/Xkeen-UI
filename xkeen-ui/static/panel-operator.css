@@ -13421,6 +13421,118 @@ body.panel-page .modal[data-operator-modal-family="confirm-compact-form"] .modal
   max-height: min(56dvh, 540px);
 }
 
+/* DNS-over-VLESS is a compact guarded action, not a resizable workbench.
+ * Older builds remembered a dragged height for this dialog; that left a
+ * large empty header/footer around a handful of status rows and also exposed
+ * a floating “Resize” tooltip. Keep its frame content-sized and opt out of
+ * the generic resizer without changing any runtime hooks. */
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-modal-content {
+  display: grid !important;
+  grid-template-rows: auto minmax(0, auto) auto;
+  width: min(760px, calc(100vw - 36px));
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: min(680px, calc(100dvh - 36px));
+  resize: none !important;
+}
+
+body.panel-page #routing-dns-over-vless-modal .modal-header {
+  min-height: 50px;
+  height: auto;
+  padding: 9px 12px !important;
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-body {
+  display: grid;
+  gap: 10px;
+  max-height: none;
+  overflow: auto;
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-lead {
+  gap: 10px;
+  padding: 10px;
+  border-color: var(--op-border);
+  border-radius: var(--op-radius);
+  background: var(--op-surface-2);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-lead-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--op-control-radius);
+  color: var(--op-accent-hover);
+  background: var(--op-accent-soft);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-badge {
+  padding: 4px 8px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-control-radius);
+  color: var(--op-muted);
+  background: var(--op-surface-3);
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-weight: 650;
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-badge[data-state="enabled"] {
+  border-color: color-mix(in srgb, var(--op-success) 48%, var(--op-border));
+  color: var(--op-success);
+  background: color-mix(in srgb, var(--op-success) 10%, var(--op-surface));
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-badge[data-state="blocked"] {
+  border-color: color-mix(in srgb, var(--op-warning) 48%, var(--op-border));
+  color: var(--op-warning);
+  background: color-mix(in srgb, var(--op-warning) 10%, var(--op-surface));
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-status {
+  padding: 0 2px;
+  color: var(--op-text);
+  line-height: 1.4;
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-safety {
+  gap: 6px;
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-safety > div {
+  min-height: 58px;
+  padding: 8px;
+  border-color: var(--op-border);
+  border-radius: var(--op-control-radius);
+  background: var(--op-surface-2);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-safety .xk-icon {
+  color: var(--op-muted);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-details {
+  gap: 4px;
+  padding-left: 18px;
+  color: var(--op-muted);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-warning,
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-links {
+  margin: 0;
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-links a {
+  color: var(--op-accent-hover);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-actions {
+  min-height: 50px;
+  height: auto;
+}
+
+body.panel-page #routing-dns-over-vless-modal .modal-resizer {
+  display: none !important;
+}
+
 body.panel-page .modal[data-operator-modal-family="editor-workbench"] .modal-content {
   grid-template-rows: 50px minmax(0, 1fr) 50px;
   width: min(1180px, calc(100vw - 36px));
@@ -14350,6 +14462,29 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
 
   body.panel-page .routing-dat-actions-inline {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.panel-page #routing-dns-over-vless-modal {
+    padding: 8px;
+  }
+
+  body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-modal-content {
+    width: min(100%, 520px);
+    max-width: 100%;
+    max-height: calc(100dvh - 16px);
+  }
+
+  body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-lead {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+
+  body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-badge {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-safety {
+    grid-template-columns: 1fr;
   }
 
   body.panel-page .routing-side-card .routing-dat-actions-inline > button {

@@ -26,6 +26,7 @@ import tempfile
 import threading
 import time
 import uuid
+import re
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Optional
 
@@ -44,6 +45,7 @@ PROXY_RULE_TAG = "xk_dns_over_vless_proxy"
 CAPTURE_RULE_TAG = "xk_dns_over_vless_capture"
 BALANCER_TAG = "xk-dns-over-vless"
 PROBE_DOMAIN = "example.com"
+DNS_PROBE_ATTEMPTS = 3
 
 _LOCK = threading.RLock()
 
@@ -230,7 +232,9 @@ def _select_target(runtime: Dict[str, Any]) -> Dict[str, Any]:
 def _managed_fragment() -> Dict[str, Any]:
     return {
         "dns": {
-            "servers": ["127.0.0.53"],
+            # Use an explicit public upstream; the DNS outbound carries these
+            # UDP requests through the selected VLESS route.
+            "servers": ["8.8.8.8"],
             "queryStrategy": "UseIP",
             "disableFallback": True,
             "tag": DNS_IN_TAG,
@@ -434,11 +438,14 @@ def _dns_override_status() -> tuple[Optional[bool], str]:
         return None, str(exc)
     if proc.returncode != 0:
         return None, str(proc.stderr or proc.stdout or "ndmc error").strip()
-    lines = [line.strip().lower() for line in str(proc.stdout or "").splitlines()]
-    if "opkg dns-override" in lines:
-        return True, "running-config"
-    if "no opkg dns-override" in lines:
+    # ndmc emits terminal erase-prefixes (``\x1b[K``) even when stdout is not
+    # a TTY.  Normalize those control sequences before inspecting the config.
+    clean = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", str(proc.stdout or ""))
+    lines = [line.strip().lower() for line in clean.splitlines()]
+    if any(line == "no opkg dns-override" or line.startswith("no opkg dns-override ") for line in lines):
         return False, "running-config"
+    if any(line == "opkg dns-override" or line.startswith("opkg dns-override ") for line in lines):
+        return True, "running-config"
     # Keenetic normally omits default/disabled commands from running-config.
     return False, "running-config (команда отсутствует)"
 
@@ -448,10 +455,14 @@ def _set_dns_override(enabled: bool) -> None:
     if not ndmc:
         raise DnsOverVlessError("Не найден ndmc; настройка Keenetic недоступна.", code="ndmc_missing")
     command = "opkg dns-override" if enabled else "no opkg dns-override"
-    payload = command + "\nsystem configuration save\n"
+
+    # ``ndmc -c`` accepts exactly one command.  Passing a newline-separated
+    # command stream (as the first implementation did) is parsed as a single
+    # malformed argument on KeeneticOS 5.x and returns error 7405602.  Apply
+    # the setting and persist it as two independent invocations instead.
     try:
         proc = subprocess.run(
-            [ndmc, "-c", payload],
+            [ndmc, "-c", command],
             capture_output=True,
             text=True,
             timeout=15,
@@ -460,8 +471,35 @@ def _set_dns_override(enabled: bool) -> None:
     except Exception as exc:
         raise DnsOverVlessError("Не удалось изменить DNS override Keenetic.", code="ndmc_failed", details=str(exc)) from exc
     output = f"{proc.stdout or ''}\n{proc.stderr or ''}".strip()
-    if proc.returncode != 0 or "% error" in output.lower() or "error:" in output.lower():
+    if proc.returncode != 0 or "% error" in output.lower() or "error:" in output.lower() or "command::base error" in output.lower():
         raise DnsOverVlessError("Keenetic отклонил команду DNS override.", code="ndmc_failed", details=output)
+
+    try:
+        save_proc = subprocess.run(
+            [ndmc, "-c", "system configuration save"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except Exception as exc:
+        raise DnsOverVlessError(
+            "Не удалось сохранить настройку DNS override Keenetic.",
+            code="ndmc_failed",
+            details=str(exc),
+        ) from exc
+    save_output = f"{save_proc.stdout or ''}\n{save_proc.stderr or ''}".strip()
+    if (
+        save_proc.returncode != 0
+        or "% error" in save_output.lower()
+        or "error:" in save_output.lower()
+        or "command::base error" in save_output.lower()
+    ):
+        raise DnsOverVlessError(
+            "Не удалось сохранить настройку DNS override Keenetic.",
+            code="ndmc_failed",
+            details=save_output,
+        )
 
 
 def _wait_for_port_53(*, should_be_free: bool, timeout: float = 8.0) -> bool:
@@ -603,27 +641,85 @@ def _wait_for_xray(timeout: float = 12.0) -> bool:
 
 
 def _dns_probe(domain: str = PROBE_DOMAIN, timeout: float = 7.0) -> Dict[str, Any]:
-    txid = random.randint(0, 65535)
+    """Probe the new listener with short retries while Xray warms up.
+
+    Large configs with observatory/balancers can take several seconds after
+    the service process appears before their inbounds accept packets.  A
+    single query sent immediately after ``_wait_for_xray`` was therefore
+    dropped on real routers even though the listener became healthy moments
+    later.  Keep the operation fail-closed, but retry the exact same local DNS
+    health check within the existing seven-second budget.
+    """
+
+    started = time.monotonic()
+    deadline = started + max(1.0, float(timeout or 0))
     labels = [label.encode("ascii") for label in domain.strip(".").split(".") if label]
     qname = b"".join(bytes([len(label)]) + label for label in labels) + b"\x00"
-    packet = struct.pack("!HHHHHH", txid, 0x0100, 1, 0, 0, 0) + qname + struct.pack("!HH", 1, 1)
-    started = time.monotonic()
+    attempts = 0
+    last_error = "timeout"
+    last_response: Dict[str, Any] = {}
+
+    # Keenetic's Xray listener may bind the LAN address (and IPv6 wildcard)
+    # rather than loopback.  Discover the local source address without sending
+    # traffic so the health check works on both variants.
+    probe_hosts: list[str] = []
+    configured_host = str(os.environ.get("XKEEN_DNS_PROBE_HOST") or "").strip()
+    if configured_host:
+        probe_hosts.append(configured_host)
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.settimeout(timeout)
-            sock.sendto(packet, ("127.0.0.1", 53))
-            data, _peer = sock.recvfrom(4096)
-    except Exception as exc:
-        return {"ok": False, "error": str(exc), "latency_ms": round((time.monotonic() - started) * 1000)}
-    if len(data) < 12:
-        return {"ok": False, "error": "короткий DNS-ответ"}
-    rid, flags, _qd, answers, _ns, _ar = struct.unpack("!HHHHHH", data[:12])
-    rcode = flags & 0x000F
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as route_sock:
+            route_sock.connect(("8.8.8.8", 53))
+            local_host = str(route_sock.getsockname()[0] or "").strip()
+            if local_host:
+                probe_hosts.append(local_host)
+    except Exception:
+        pass
+    probe_hosts.extend(("127.0.0.1", "127.0.0.53"))
+    probe_hosts = list(dict.fromkeys(host for host in probe_hosts if host))
+
+    while attempts < DNS_PROBE_ATTEMPTS and time.monotonic() < deadline:
+        attempts += 1
+        txid = random.randint(0, 65535)
+        packet = struct.pack("!HHHHHH", txid, 0x0100, 1, 0, 0, 0) + qname + struct.pack("!HH", 1, 1)
+        remaining = max(0.2, deadline - time.monotonic())
+        attempt_timeout = min(2.25, remaining)
+        data = b""
+        for host in probe_hosts:
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                    sock.settimeout(min(0.8, attempt_timeout))
+                    sock.sendto(packet, (host, 53))
+                    data, _peer = sock.recvfrom(4096)
+                break
+            except Exception as exc:
+                last_error = str(exc)
+                continue
+        if not data:
+            if attempts < DNS_PROBE_ATTEMPTS:
+                time.sleep(min(0.35, max(0.0, deadline - time.monotonic())))
+            continue
+        if len(data) < 12:
+            last_error = "короткий DNS-ответ"
+            continue
+        rid, flags, _qd, answers, _ns, _ar = struct.unpack("!HHHHHH", data[:12])
+        rcode = flags & 0x000F
+        last_response = {"answers": answers, "rcode": rcode}
+        if rid == txid and rcode == 0 and answers > 0:
+            return {
+                "ok": True,
+                "answers": answers,
+                "rcode": rcode,
+                "attempts": attempts,
+                "latency_ms": round((time.monotonic() - started) * 1000),
+            }
+        last_error = f"некорректный DNS-ответ (rcode={rcode}, answers={answers})"
+
     return {
-        "ok": rid == txid and rcode == 0 and answers > 0,
-        "answers": answers,
-        "rcode": rcode,
+        "ok": False,
+        "error": last_error,
+        "attempts": attempts,
         "latency_ms": round((time.monotonic() - started) * 1000),
+        **last_response,
     }
 
 

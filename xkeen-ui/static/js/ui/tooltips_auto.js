@@ -53,6 +53,17 @@
     return '';
   }
 
+  function isTooltipOwnerVisible(el) {
+    if (!el || !el.isConnected) return false;
+    try {
+      if (el.classList && el.classList.contains('hidden')) return false;
+      const style = window.getComputedStyle ? window.getComputedStyle(el) : null;
+      return !style || (style.display !== 'none' && style.visibility !== 'hidden');
+    } catch (e) {
+      return false;
+    }
+  }
+
   function isInteractiveEl(el) {
     if (!el || el.nodeType !== 1) return false;
     const tag = el.tagName;
@@ -281,6 +292,25 @@
         return;
       }
 
+      // Do not keep a bubble alive for an element that was hidden, detached
+      // from an open modal, or explicitly opted out after the tooltip was
+      // scheduled. This closes the small race where a modal is closed while
+      // the pointer remains stationary over its former resize handle.
+      try {
+        if (el.matches && el.matches('.modal-resizer, [data-tooltip-silent="1"], [data-xk-no-tooltip="1"]')) {
+          hide();
+          return;
+        }
+        const ownerModal = el.closest && el.closest('.modal');
+        if (ownerModal && !isTooltipOwnerVisible(ownerModal)) {
+          hide();
+          return;
+        }
+      } catch (e0) {
+        hide();
+        return;
+      }
+
       const tip = normalizeText(el.getAttribute(ATTR));
       if (!tip) {
         hide();
@@ -358,6 +388,10 @@
       try {
         const el = target.closest ? target.closest('[' + ATTR + ']') : null;
         if (!el) return null;
+        // Resize handles are purely geometric affordances.  They may carry an
+        // accessible label for keyboard/AT users, but must not render a hover
+        // bubble that can remain detached from its modal.
+        if (el.matches && el.matches('.modal-resizer, [data-tooltip-silent="1"], [data-xk-no-tooltip="1"]')) return null;
         if (SKIP_TAGS.has(el.tagName)) return null;
         // A listbox owns the disclosure affordance. Never let a legacy or
         // already-migrated tooltip cover the options while that trigger opens.
@@ -418,6 +452,24 @@
       if (e && e.key === 'Escape') hide();
     });
     document.addEventListener('pointerdown', hide, true);
+
+    // Programmatic modal closes do not necessarily produce pointer/focus
+    // events. Watch the lightweight class/style mutations used by the modal
+    // controller and clear a tooltip whose owner is no longer visible.
+    try {
+      const visibilityObserver = new MutationObserver(() => {
+        if (!currentEl) return;
+        try {
+          const ownerModal = currentEl.closest && currentEl.closest('.modal');
+          if (!document.documentElement.contains(currentEl) || (ownerModal && !isTooltipOwnerVisible(ownerModal))) hide();
+        } catch (e0) { hide(); }
+      });
+      visibilityObserver.observe(document.body || document.documentElement, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'style', 'hidden'],
+      });
+    } catch (e0) {}
   }
 
   if (document.readyState === 'loading') {

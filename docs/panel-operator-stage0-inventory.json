@@ -7951,7 +7951,7 @@
       "xray-snapshot-status",
       "xray-snapshot-title"
     ],
-    "data_attribute_count": 565,
+    "data_attribute_count": 568,
     "data_attributes": [
       {
         "locator": "header.panel-header.panel-header-shell@L81",
@@ -9872,6 +9872,21 @@
         "locator": "#confirm-modal-cancel-btn",
         "name": "data-operator-dismiss-duplicate",
         "value": "true"
+      },
+      {
+        "locator": "#routing-dns-over-vless-modal",
+        "name": "data-modal-nopos",
+        "value": "1"
+      },
+      {
+        "locator": "#routing-dns-over-vless-modal",
+        "name": "data-modal-noresize",
+        "value": "1"
+      },
+      {
+        "locator": "#routing-dns-over-vless-modal",
+        "name": "data-modal-remember",
+        "value": "0"
       },
       {
         "locator": "#routing-dns-over-vless-modal",
