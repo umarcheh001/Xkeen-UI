@@ -1467,6 +1467,14 @@
           {{ op_icon('restart') }}
         </button>
 
+        <button id="mihomo-dns-btn"
+                type="button"
+                class="terminal-tool-btn btn-secondary mihomo-dns-btn"
+                data-tooltip="Защищённый DNS: настроить Mihomo и Keenetic автоматически"
+                aria-label="Защищённый DNS Mihomo">
+          {{ op_icon('dns') }}<span class="xk-action-label">DNS</span><span id="mihomo-dns-dot" class="routing-dns-over-vless-dot" aria-hidden="true"></span>
+        </button>
+
         <details class="dt-log-menu xk-mihomo-menu">
           <summary class="terminal-tool-btn xk-mihomo-menu-trigger" data-tooltip="Меню" aria-label="Меню">{{ op_icon('more') }}</summary>
 
@@ -2586,6 +2594,41 @@
         <div class="modal-actions routing-dns-over-vless-actions">
           <button type="button" id="routing-dns-over-vless-cancel" class="btn-secondary" data-operator-dismiss-duplicate="true">Закрыть</button>
           <button type="button" id="routing-dns-over-vless-apply" class="btn-primary" disabled>Проверяем…</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="mihomo-dns-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" data-modal-noresize="1" data-modal-nopos="1" data-modal-remember="0" role="dialog" aria-modal="true" aria-labelledby="mihomo-dns-title">
+      <div class="modal-content xk-modal-width xk-modal-width-760 routing-dns-over-vless-modal-content mihomo-dns-modal-content">
+        <div class="modal-header">
+          <span class="modal-title" id="mihomo-dns-title">Защищённый DNS Mihomo</span>
+          <button type="button" class="modal-close" id="mihomo-dns-close" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body routing-dns-over-vless-body mihomo-dns-body">
+          <div class="routing-dns-over-vless-lead">
+            <span class="routing-dns-over-vless-lead-icon" aria-hidden="true">{{ op_icon('dns') }}</span>
+            <div>
+              <strong>DNS через защищённый маршрут Mihomo</strong>
+              <p>Панель сама добавит совместимый DNS-блок, направит публичный DoH через вашу proxy-группу и переключит DNS Keenetic.</p>
+            </div>
+            <span id="mihomo-dns-badge" class="routing-dns-over-vless-badge">Проверка…</span>
+          </div>
+
+          <div id="mihomo-dns-status" class="routing-dns-over-vless-status" role="status" aria-live="polite">Проверяем текущую конфигурацию…</div>
+
+          <div class="routing-dns-over-vless-safety" aria-label="Защита операции">
+            <div>{{ op_icon('validate') }}<span><b>Mihomo preflight</b><small>Проверка временного YAML до записи</small></span></div>
+            <div>{{ op_icon('backup') }}<span><b>Полный снимок</b><small>Исходный config.yaml и DNS override</small></span></div>
+            <div>{{ op_icon('restore') }}<span><b>Автооткат</b><small>При ошибке старта или DNS-теста</small></span></div>
+          </div>
+
+          <ul id="mihomo-dns-details" class="routing-dns-over-vless-details"></ul>
+          <p class="modal-hint routing-dns-over-vless-warning">Пользовательский раздел <code>dns:</code> не перезаписывается. Для совместимости с TProxy используется <code>redir-host</code>; <code>store-fake-ip</code> удаляется только из подготовленной конфигурации.</p>
+          <p class="routing-dns-over-vless-links">После включения устройства продолжают использовать адрес роутера как DNS; отдельная ручная настройка <code>192.168.1.1:1054</code> не нужна.</p>
+        </div>
+        <div class="modal-actions routing-dns-over-vless-actions">
+          <button type="button" id="mihomo-dns-cancel" class="btn-secondary" data-operator-dismiss-duplicate="true">Закрыть</button>
+          <button type="button" id="mihomo-dns-apply" class="btn-primary" disabled>Проверяем…</button>
         </div>
       </div>
     </div>

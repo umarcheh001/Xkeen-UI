@@ -19507,6 +19507,24 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
 .routing-dns-over-vless-links a { color: #7dd3fc; }
 .routing-dns-over-vless-actions { justify-content: flex-end; }
 
+.xk-mihomo-toolbararea .mihomo-dns-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  min-width: 62px;
+  padding: 0 9px;
+  color: #bfdbfe;
+  border-color: rgba(96, 165, 250, 0.42);
+}
+
+.xk-mihomo-toolbararea .mihomo-dns-btn .xk-icon {
+  width: 17px;
+  height: 17px;
+}
+
 @media (max-width: 720px) {
   .routing-dns-over-vless-lead { grid-template-columns: auto 1fr; }
   .routing-dns-over-vless-badge { grid-column: 1 / -1; justify-self: start; }

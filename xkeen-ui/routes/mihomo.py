@@ -70,6 +70,11 @@ from services.mihomo_egress_setup import (
     MihomoEgressSetupError,
     build_mihomo_egress_setup,
 )
+from services.mihomo_dns import (
+    MihomoDnsError,
+    apply_action as apply_mihomo_dns_action,
+    get_status as get_mihomo_dns_status,
+)
 from services.mihomo_xray_json import (
     SubscriptionPlaceholderError as _XraySubscriptionPlaceholderError,
     convert_subscription_source_text as _xray_convert_subscription_source_text,
@@ -1415,6 +1420,70 @@ def create_mihomo_blueprint(
             "restarted": True,
             "changes": list(preview.changes),
         }), 200
+
+    @bp.get("/api/mihomo/dns")
+    def api_mihomo_dns_status():
+        """Return the guarded one-click DNS assistant state."""
+        try:
+            return jsonify(get_mihomo_dns_status(
+                config_file=MIHOMO_CONFIG_FILE,
+                ui_state_dir=ui_state_dir,
+            )), 200
+        except MihomoDnsError as exc:
+            return _api_error(
+                str(exc),
+                409,
+                ok=False,
+                code=exc.code,
+                details=exc.details,
+            )
+        except Exception:
+            return _api_error(
+                "Не удалось проверить DNS Mihomo.",
+                500,
+                ok=False,
+                code="mihomo_dns_status_failed",
+            )
+
+    @bp.post("/api/mihomo/dns")
+    def api_mihomo_dns_apply():
+        """Validate, snapshot, apply/revert, restart and health-check DNS."""
+        data = request.get_json(silent=True) or {}
+        action = str(data.get("action") or "").strip().lower()
+        if data.get("confirmed") is not True:
+            return _api_error(
+                "Требуется подтверждение настройки DNS Mihomo.",
+                400,
+                ok=False,
+                code="mihomo_dns_confirmation_required",
+            )
+        try:
+            result = apply_mihomo_dns_action(
+                action,
+                config_file=MIHOMO_CONFIG_FILE,
+                ui_state_dir=ui_state_dir,
+                validate_config=validate_config,
+                save_config=save_config,
+                restart_xkeen=restart_xkeen,
+            )
+            return jsonify(result), 200
+        except MihomoDnsError as exc:
+            return _api_error(
+                str(exc),
+                409,
+                ok=False,
+                code=exc.code,
+                details=exc.details,
+                rolled_back=True,
+            )
+        except Exception:
+            return _api_error(
+                "Не удалось применить DNS Mihomo; выполнен откат.",
+                500,
+                ok=False,
+                code="mihomo_dns_apply_failed",
+                rolled_back=True,
+            )
 
     @bp.get("/api/mihomo/security/panel-mode")
     def api_mihomo_security_panel_mode():
