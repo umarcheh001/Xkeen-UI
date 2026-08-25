@@ -862,6 +862,27 @@ def create_xray_configs_blueprint(
                 _append_unique_tag(tags, seen, tag)
         return tags
 
+    def _collect_config_outbound_tags(*, all_fragments: bool) -> list[str]:
+        """Collect real outbound tags from every active Xray fragment.
+
+        ``list_xray_fragments('outbounds')`` intentionally only lists files
+        whose names contain ``outbounds``.  Feature-owned fragments (for
+        example ``02_dns_over_vless.json``) can still declare outbounds and
+        must be visible to the routing semantic validator.  Otherwise a valid
+        ``outboundTag: dns-out`` is reported as a missing outbound until a
+        hard reload (or never, when the fragment has no conventional name).
+        """
+        tags: list[str] = []
+        seen: set[str] = set()
+        for path in _iter_semantic_tag_context_paths(all_fragments=all_fragments):
+            try:
+                obj = _load_xray_fragment_obj(path)
+            except Exception:
+                continue
+            for tag in _outbound_tags_from_config(obj, proxy_only=False):
+                _append_unique_tag(tags, seen, tag)
+        return tags
+
     def _collect_dns_semantic_tags(*, all_fragments: bool) -> list[str]:
         tags: list[str] = []
         seen: set[str] = set()
@@ -1391,6 +1412,14 @@ def create_xray_configs_blueprint(
             default_path=OUTBOUNDS_FILE,
             all_fragments=all_fragments,
         )
+        # Include outbounds declared by feature-owned/non-conventional
+        # fragments (notably DNS-over-VLESS's dns-out) for the cross-fragment
+        # semantic context used by the routing editor.  Keep the historical
+        # selected-file behaviour for callers that omit ``all=1``.
+        if all_fragments:
+            for tag in _collect_config_outbound_tags(all_fragments=True):
+                if tag not in tags:
+                    tags.append(tag)
         for tag in _collect_reverse_semantic_tags(side="outbound", all_fragments=all_fragments):
             if tag not in tags:
                 tags.append(tag)

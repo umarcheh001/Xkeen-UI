@@ -283,6 +283,7 @@ import { iconHtml } from '../ui/operator_icons.js';
   let _engineSwitchChain = Promise.resolve();
   let _monacoEnsurePromise = null;
   let _lastPageReturnShowAt = 0;
+  let _externalRoutingRefreshWired = false;
 
   let _commentsBadgeBase = { found: false, using: false, bn: '' };
   let _commentsBadgeOverride = null;
@@ -5997,6 +5998,29 @@ function closeHelp() {
     } catch (e) {}
   }
 
+  // Some routing helpers (for example DNS-over-VLESS) modify the active
+  // fragment outside of the editor's normal save flow.  Keep the editor as a
+  // live view of the file on disk instead of requiring a hard page reload.
+  // The event is deliberately handled here, rather than by the helper, so it
+  // also refreshes the active schema/semantic context and both editor engines.
+  function wireExternalRoutingRefreshOnce() {
+    try {
+      if (_externalRoutingRefreshWired) return;
+      _externalRoutingRefreshWired = true;
+      document.addEventListener('xkeen-routing-fragment-saved', (event) => {
+        try {
+          const detail = event && event.detail ? event.detail : {};
+          const reason = String(detail.reason || '').trim().toLowerCase();
+          if (reason !== 'dns-over-vless') return;
+          // Let the helper finish its own status refresh and then fetch the
+          // canonical routing text.  load() updates CodeMirror/Monaco,
+          // validation markers, saved baseline and dirty state atomically.
+          Promise.resolve().then(() => load()).catch(() => {});
+        } catch (e) {}
+      });
+    } catch (e) {}
+  }
+
   function showCmToolbar(show) {
     try {
       if (_cm && _cm._xkeenToolbarEl) {
@@ -6230,6 +6254,7 @@ function closeHelp() {
 
         // Fix Monaco after tab switches / navigation away+back (BFCache)
         try { wirePageReturnOnce(); } catch (e) {}
+        try { wireExternalRoutingRefreshOnce(); } catch (e) {}
 
         wireUI();
 
