@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import socket
 import socketserver
 import threading
 import time
@@ -114,11 +115,19 @@ class FakeMihomoState:
             return len(active_ids)
 
 
-class _ThreadingUnixHTTPServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
-    """HTTPServer-compatible Unix listener used by the same request handler."""
+if hasattr(socket, "AF_UNIX") and hasattr(socketserver, "UnixStreamServer"):
 
-    daemon_threads = True
-    allow_reuse_address = True
+    class _ThreadingUnixHTTPServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+        """HTTPServer-compatible Unix listener used by the same request handler."""
+
+        daemon_threads = True
+        allow_reuse_address = True
+
+else:
+    # ``socketserver.UnixStreamServer`` is not available on Windows.  Keep the
+    # fixture importable there so TCP tests can still run; Unix transport tests
+    # are guarded by ``hasattr(socket, 'AF_UNIX')``.
+    _ThreadingUnixHTTPServer = None
 
 
 class FakeMihomo(AbstractContextManager["FakeMihomo"]):
@@ -366,6 +375,8 @@ class FakeMihomo(AbstractContextManager["FakeMihomo"]):
         if self.socket_path is None:
             self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         else:
+            if _ThreadingUnixHTTPServer is None:
+                raise OSError("Unix sockets are unavailable on this platform")
             self.socket_path.parent.mkdir(parents=True, exist_ok=True)
             self.socket_path.unlink(missing_ok=True)
             self.server = _ThreadingUnixHTTPServer(str(self.socket_path), Handler)

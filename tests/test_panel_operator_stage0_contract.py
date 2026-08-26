@@ -108,7 +108,7 @@ def test_stage0_inventory_covers_views_accordions_engines_and_all_modals(tmp_pat
     assert len(engines["selectors"]) == 8
 
     modal_inventory = payload["modal_inventory"]
-    assert modal_inventory["count"] == 52
+    assert modal_inventory["count"] == 53
     assert modal_inventory["missing_family_ids"] == []
     assert modal_inventory["stale_family_ids"] == []
     assert set(modal_inventory["family_counts"]) == {

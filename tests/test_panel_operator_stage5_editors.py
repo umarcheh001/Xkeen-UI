@@ -85,7 +85,7 @@ def test_stage5_all_static_modals_are_bound_to_one_of_the_four_family_frames():
     css = CSS.read_text(encoding="utf-8")
 
     expected_counts = {
-        "confirm-compact-form": 23,
+        "confirm-compact-form": 24,
         "editor-workbench": 7,
         "master-detail": 19,
         "drawer-help": 3,
@@ -95,7 +95,7 @@ def test_stage5_all_static_modals_are_bound_to_one_of_the_four_family_frames():
         template,
     )
 
-    assert len(modal_pairs) == 52
+    assert len(modal_pairs) == 53
     assert {family for _, family in modal_pairs} == set(expected_counts)
     assert {family: sum(mapped == family for _, mapped in modal_pairs) for family in expected_counts} == expected_counts
 
