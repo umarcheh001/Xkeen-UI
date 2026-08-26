@@ -74,37 +74,53 @@ import { getMihomoPanelApi } from './mihomo_panel.js';
     const list = $(IDS.details);
     const apply = $(IDS.apply);
     const dot = $(IDS.dot);
+    const routerNote = document.querySelector('#mihomo-dns-modal .routing-dns-over-vless-links');
     if (list) list.textContent = '';
 
     const enabled = !!data?.enabled;
     const canDisable = !!data?.can_disable;
-    const blocked = !enabled && !canDisable && !data?.can_enable;
+    const canRecover = !!data?.can_recover;
+    const blocked = !enabled && !canDisable && !canRecover && !data?.can_enable;
     const altered = !!data?.tampered;
-    const state = enabled ? 'enabled' : ((canDisable || blocked || altered) ? 'blocked' : 'ready');
+    const state = enabled ? 'enabled' : ((canDisable || canRecover || blocked || altered) ? 'blocked' : 'ready');
     if (badge) {
       badge.dataset.state = state;
-      badge.textContent = enabled ? 'Включено' : (altered ? 'Изменено вручную' : (canDisable ? 'Готово к восстановлению' : (blocked ? 'Требует внимания' : 'Готово')));
+      badge.textContent = enabled ? 'Включено' : (canRecover ? 'DNS-блок удалён' : (altered ? 'Изменено вручную' : (canDisable ? 'Готово к восстановлению' : (blocked ? 'Требует внимания' : 'Готово'))));
     }
-    if (dot) dot.dataset.state = enabled ? 'enabled' : ((blocked || altered) ? 'blocked' : 'off');
+    if (dot) dot.dataset.state = enabled ? 'enabled' : ((blocked || altered || canRecover) ? 'blocked' : 'off');
     if (status) {
       if (enabled) status.textContent = 'Защищённый DNS активен: Mihomo отвечает на порту 53, а DNS override Keenetic включён.';
+      else if (canRecover) status.textContent = 'DNS-блок уже удалён вручную, а Keenetic DNS override выключен. Можно сохранить текущий config.yaml и завершить отключение без возврата старого снимка.';
       else if (altered) status.textContent = 'После включения config.yaml был изменён. Панель не станет автоматически перезаписывать эти правки.';
       else if (canDisable) status.textContent = 'DNS-конфигурация подготовлена. Можно безопасно вернуть полный исходный снимок.';
       else if (blocked) status.textContent = 'Автоматическая настройка остановлена, чтобы не затронуть существующий DNS или маршрутизацию.';
       else status.textContent = 'После подтверждения панель проверит YAML, сохранит снимок, запустит Mihomo и протестирует DNS.';
     }
+    if (routerNote) {
+      routerNote.textContent = enabled
+        ? 'Устройства по‑прежнему используют DNS роутера — Keenetic автоматически направляет запросы в Mihomo.'
+        : (canRecover
+          ? 'DNS override Keenetic уже выключен — устройства используют системный DNS роутера.'
+          : 'Пока защищённый DNS не активен, устройства используют системный DNS Keenetic.');
+    }
 
     if (data) {
       addDetail(`Активное ядро: ${data.active_core || 'не определено'}`, data.active_core === 'mihomo' ? 'ok' : 'warn');
       if (data.proxy_group) addDetail(`Защищённый маршрут: ${data.proxy_group}`, 'ok');
-      addDetail(`DNS-слушатель: ${data.listen || '0.0.0.0:53'} · ${data.mode || 'redir-host'}`, 'ok');
+      const listenerActive = !!(data.enabled || data.prepared || data.can_disable);
+      addDetail(
+        listenerActive
+          ? `DNS-слушатель: ${data.listen || '0.0.0.0:53'} · ${data.mode || 'redir-host'}`
+          : 'DNS-слушатель Mihomo: не активен (раздел dns отсутствует)',
+        listenerActive ? 'ok' : 'warn',
+      );
       addDetail(`Keenetic DNS override: ${data.dns_override === true ? 'включён' : (data.dns_override === false ? 'выключен' : 'не определён')}`, data.dns_override == null ? 'warn' : 'ok');
       (data.blockers || []).forEach((message) => addDetail(message, 'warn'));
     }
 
     if (apply) {
-      apply.disabled = busy || altered || (!enabled && !canDisable && blocked);
-      apply.textContent = busy ? 'Выполняется…' : ((enabled || canDisable) ? 'Отключить и восстановить' : 'Включить защищённый DNS');
+      apply.disabled = busy || (altered && !canRecover) || (!enabled && !canDisable && !canRecover && blocked);
+      apply.textContent = busy ? 'Выполняется…' : (canRecover ? 'Сохранить текущий конфиг' : ((enabled || canDisable) ? 'Отключить и восстановить' : 'Включить защищённый DNS'));
       apply.classList.toggle('btn-danger', enabled || canDisable);
       apply.classList.toggle('btn-primary', !enabled && !canDisable);
     }
@@ -147,14 +163,17 @@ import { getMihomoPanelApi } from './mihomo_panel.js';
 
   async function apply() {
     if (busy || !current) return;
-    const action = (current.enabled || current.can_disable) ? 'disable' : 'enable';
-    const message = action === 'enable'
+    const recovery = !!current.can_recover;
+    const action = (current.enabled || current.can_disable || recovery) ? 'disable' : 'enable';
+    const message = recovery
+      ? 'DNS-блок уже отсутствует в config.yaml, а DNS override Keenetic выключен. Панель проверит текущий YAML и очистит только устаревшее состояние мастера; ваши ручные правки не будут заменены старым снимком.'
+      : action === 'enable'
       ? 'Панель добавит отдельный DNS-блок, направит DoH через выбранную proxy-группу, включит DNS override Keenetic, перезапустит Mihomo и проверит реальный DNS-ответ. При ошибке всё будет восстановлено.'
       : 'Панель вернёт точный снимок config.yaml и исходное состояние DNS Keenetic. Изменяются только объекты однокнопочной настройки.';
     const confirmed = await confirmMihomoAction({
       title: action === 'enable' ? 'Включить защищённый DNS?' : 'Отключить защищённый DNS?',
       message,
-      okText: action === 'enable' ? 'Включить' : 'Восстановить',
+      okText: action === 'enable' ? 'Включить' : (recovery ? 'Сохранить текущий конфиг' : 'Восстановить'),
       cancelText: 'Отмена',
       danger: action === 'disable',
     }, message);
@@ -166,7 +185,9 @@ import { getMihomoPanelApi } from './mihomo_panel.js';
       const result = await postAction(action);
       toastXkeen(action === 'enable'
         ? `Защищённый DNS включён${result?.probe?.latency_ms != null ? ` · ${result.probe.latency_ms} мс` : ''}`
-        : 'DNS Mihomo отключён, исходная конфигурация восстановлена.', 'success');
+        : (result?.recovered
+          ? 'Старое состояние DNS очищено, текущий config.yaml сохранён.'
+          : 'DNS Mihomo отключён, исходная конфигурация восстановлена.'), 'success');
       const panel = getMihomoPanelApi();
       if (panel && typeof panel.reloadFromDiskIfClean === 'function') {
         await panel.reloadFromDiskIfClean();

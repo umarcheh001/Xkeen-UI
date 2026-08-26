@@ -495,6 +495,17 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
     tampered = bool(state and not exact)
     partial = bool((has_begin or has_end) and not exact)
     group = str(state.get("proxy_group") or "") if exact else str(_select_proxy_group(text) or "")
+    # A user may remove the complete managed block manually.  If Keenetic's
+    # DNS override is already off, never restore the old snapshot over those
+    # unrelated edits; offer a metadata-only recovery instead.
+    can_recover = bool(
+        state
+        and tampered
+        and not has_dns
+        and not has_begin
+        and not has_end
+        and override is False
+    )
     blockers: list[str] = []
     if not enabled and not state:
         if core != "mihomo":
@@ -505,8 +516,10 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
             blockers.append("Не найдена proxy-группа для защищённых DNS-запросов.")
         if override is None:
             blockers.append("Не удалось прочитать DNS override Keenetic: " + override_detail)
-    if tampered:
+    if tampered and not can_recover:
         blockers.append("Конфигурация изменена после включения DNS; автоматическое восстановление остановлено.")
+    elif can_recover:
+        blockers.append("DNS-блок уже удалён вручную, а DNS override Keenetic выключен; текущий config.yaml можно сохранить без возврата старого снимка.")
     if partial and not state:
         blockers.append("Обнаружен неполный служебный DNS-блок.")
     can_disable = bool(exact and state)
@@ -517,6 +530,7 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         "prepared": exact,
         "partial": partial,
         "tampered": tampered,
+        "can_recover": can_recover,
         "can_enable": can_enable,
         "can_disable": can_disable,
         "active_core": core,
@@ -645,6 +659,53 @@ def apply_action(
                     code="apply_failed",
                     details={"cause": str(exc), "rollback": rollback_errors},
                 ) from exc
+
+        if status.get("can_recover"):
+            # The managed DNS block is already gone.  Do not restore the
+            # pre-enable snapshot because that would discard the user's
+            # unrelated edits.  A preflight still protects against clearing
+            # the transaction marker while the current YAML is broken.
+            validation = validate_config(new_content=current) or ""
+            if not _validation_ok(validation):
+                raise MihomoDnsError(
+                    "Mihomo не подтвердил текущую конфигурацию; состояние DNS не очищено.",
+                    code="recover_preflight_failed",
+                    details=validation[-4000:],
+                )
+            current_override, override_detail = _dns_override_status()
+            if current_override is not False:
+                raise MihomoDnsError(
+                    "Состояние DNS override Keenetic изменилось; сначала верните системный DNS роутера.",
+                    code="recover_override_changed",
+                    details=override_detail,
+                )
+            previous_core = detect_running_core() or ""
+            backup = save_config(current)
+            if not bool(restart_xkeen(source="mihomo-dns-recover")):
+                raise MihomoDnsError(
+                    "Mihomo не запустился с текущей конфигурацией; состояние DNS не очищено.",
+                    code="recover_restart_failed",
+                )
+            expected_core = previous_core if previous_core in {"xray", "mihomo"} else ""
+            if expected_core and not _wait_for_core(expected_core):
+                raise MihomoDnsError(
+                    "Сервис не запустился с текущей конфигурацией; состояние DNS не очищено.",
+                    code="recover_restart_failed",
+                )
+            if not _wait_for_port_53(should_be_free=False):
+                raise MihomoDnsError(
+                    "Системный DNS Keenetic не вернул порт 53 после перезапуска Mihomo.",
+                    code="recover_firmware_dns_failed",
+                )
+            _clear_state(ui_state_dir, config_file)
+            return {
+                "ok": True,
+                "enabled": False,
+                "recovered": True,
+                "preserved_current": True,
+                "dns_override": False,
+                "backup": str(getattr(backup, "filename", "") or "") or None,
+            }
 
         if not status.get("can_disable") or not state:
             raise MihomoDnsError(

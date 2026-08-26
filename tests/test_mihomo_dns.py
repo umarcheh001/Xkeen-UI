@@ -223,6 +223,45 @@ def test_tampering_stops_automatic_disable(tmp_path: Path, monkeypatch):
     assert status["can_disable"] is False
 
 
+def test_removed_dns_block_can_clear_stale_state_without_restoring_snapshot(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    prepared, group = dns.build_enabled_config(BASE)
+    config.write_text(BASE, encoding="utf-8")
+    snapshot = tmp_path / "before.yaml"
+    snapshot.write_text(BASE + "# before enable\n", encoding="utf-8")
+    dns._save_state(str(state), str(config), {
+        "original_config": str(snapshot),
+        "original_sha256": dns._sha256(snapshot.read_text(encoding="utf-8")),
+        "applied_sha256": dns._sha256(prepared),
+        "original_dns_override": False,
+        "proxy_group": group,
+    })
+    calls: list[object] = []
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_wait_for_core", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda **_kwargs: True)
+
+    status = dns.get_status(config_file=str(config), ui_state_dir=str(state))
+    assert status["tampered"] is True
+    assert status["can_disable"] is False
+    assert status["can_recover"] is True
+
+    result = dns.apply_action(
+        "disable",
+        config_file=str(config),
+        ui_state_dir=str(state),
+        validate_config=lambda **kwargs: calls.append(("validate", kwargs["new_content"])) or "[exit code: 0]",
+        save_config=lambda content: calls.append(("save", content)) or type("Backup", (), {"filename": "current.yaml"})(),
+        restart_xkeen=lambda **kwargs: calls.append(("restart", kwargs["source"])) or True,
+    )
+
+    assert result["recovered"] is True
+    assert result["preserved_current"] is True
+    assert config.read_text(encoding="utf-8") == BASE
+    assert calls == [("validate", BASE), ("save", BASE), ("restart", "mihomo-dns-recover")]
+    assert not (state / "mihomo-dns" / dns.STATE_FILENAME).exists()
+
+
 def test_http_contract_and_frontend(tmp_path: Path, monkeypatch):
     import routes.mihomo as mihomo_routes
     from routes.mihomo import create_mihomo_blueprint
