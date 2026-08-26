@@ -859,39 +859,6 @@ import { iconHtml } from '../ui/operator_icons.js';
     return _routingQuickFixProvider;
   }
 
-  function getActiveRoutingEditorRaw() {
-    if (_engine === 'monaco' && _monaco) return _monaco;
-    if (_cm) return _cm;
-    return null;
-  }
-
-  function applyBestRoutingQuickFix() {
-    if (isRoutingExpertModeEnabled()) {
-      try { toastXkeen('Экспертный режим отключает quick fix для этого редактора.', 'info'); } catch (e) {}
-      return false;
-    }
-    const editor = getActiveRoutingEditorRaw();
-    if (!editor || typeof editor.getQuickFixes !== 'function' || typeof editor.applyQuickFix !== 'function') {
-      try { toastXkeen('Quick fixes пока недоступны для текущего редактора.', 'warning'); } catch (e) {}
-      return false;
-    }
-    let fixes = [];
-    try { fixes = editor.getQuickFixes({ limit: 1 }); } catch (e) { fixes = []; }
-    const fix = Array.isArray(fixes) && fixes.length ? fixes[0] : null;
-    if (!fix) {
-      try { toastXkeen('Под курсором не нашёл подходящего quick fix.', 'info'); } catch (e) {}
-      return false;
-    }
-    const applied = !!editor.applyQuickFix(fix);
-    if (applied) {
-      try { toastXkeen(`Исправлено: ${String(fix.title || 'quick fix')}`, 'success'); } catch (e) {}
-      try { scheduleValidate(0); } catch (e2) {}
-    } else {
-      try { toastXkeen('Не удалось применить quick fix.', 'error'); } catch (e3) {}
-    }
-    return applied;
-  }
-
   function updateRoutingSchemaBadge(result) {
     const el = $(IDS.editorSchemaBadge);
     if (!el) return;
@@ -4773,7 +4740,6 @@ function closeHelp() {
           const icons = getXkeenEditorToolbarIcons();
           const items = [];
           let inserted = false;
-          let fixInserted = false;
           base.forEach((it) => {
             // Replace fullscreen action: in routing card it must work for the active engine
             // (CodeMirror or Monaco), not just CodeMirror.
@@ -4782,16 +4748,6 @@ function closeHelp() {
                 onClick: () => toggleEditorFullscreen(cm),
               }));
               return;
-            }
-            if (!fixInserted && it && it.id === 'help') {
-              items.push({
-                id: 'quick_fix',
-                svg: icons.quickFix || '',
-                label: 'Quick fix',
-                fallbackHint: 'Лучшее исправление',
-                onClick: () => applyBestRoutingQuickFix(),
-              });
-              fixInserted = true;
             }
             // Drop the default CodeMirror help button (red '?').
             if (it && it.id === 'help') {
@@ -4813,15 +4769,6 @@ function closeHelp() {
 
           // If defaults did not contain a help button at all, still add JSONC help at the end.
           if (!inserted) {
-            if (!fixInserted) {
-              items.push({
-                id: 'quick_fix',
-                svg: icons.quickFix || '',
-                label: 'Quick fix',
-                fallbackHint: 'Лучшее исправление',
-                onClick: () => applyBestRoutingQuickFix(),
-              });
-            }
             items.push({
               id: 'help_comments',
               svg: icons.help || '',
@@ -4931,14 +4878,6 @@ function closeHelp() {
         bar.className = 'xkeen-cm-toolbar xk-routing-monaco-toolbar';
         bar.setAttribute('role', 'toolbar');
         bar.appendChild(buildRoutingToolbarButton({
-          actionId: 'quick_fix',
-          label: 'Quick fix',
-          tip: 'Применить лучшее исправление',
-          svg: icons.quickFix || '',
-          fallbackText: 'FX',
-          onClick: () => applyBestRoutingQuickFix(),
-        }));
-        bar.appendChild(buildRoutingToolbarButton({
           actionId: 'compare',
           label: 'Сравнить',
           tip: 'Сравнить редактор с сохранённой версией',
@@ -4988,7 +4927,7 @@ function closeHelp() {
       if (_cm && _cm._xkeenToolbarEl) {
         moveToolbarToHost(_cm);
         // In Monaco mode the dedicated Monaco toolbar takes over; hide the CM
-        // toolbar entirely so quick-fix/fullscreen don't duplicate. In CM mode
+        // toolbar entirely so the actions don't duplicate. In CM mode
         // restore full visibility via syncToolbarForEngine.
         if (isMonaco) {
           _cm._xkeenToolbarEl.style.display = 'none';
@@ -5002,12 +4941,6 @@ function closeHelp() {
       if (isMonaco) ensureRoutingMonacoToolbar();
       if (_routingMonacoToolbarEl) {
         _routingMonacoToolbarEl.style.display = isMonaco ? '' : 'none';
-        const expert = isRoutingExpertModeEnabled();
-        const btns = _routingMonacoToolbarEl.querySelectorAll('button.xkeen-cm-tool');
-        (btns || []).forEach((btn) => {
-          const isQuickFix = !!(btn.dataset && btn.dataset.actionId === 'quick_fix');
-          btn.style.display = isQuickFix && expert ? 'none' : '';
-        });
       }
     } catch (e) {}
   }
@@ -5017,7 +4950,6 @@ function closeHelp() {
       if (!_cm || !_cm._xkeenToolbarEl || !_cm._xkeenToolbarEl.querySelectorAll) return;
       const bar = _cm._xkeenToolbarEl;
       const isMonaco = (String(engine || '').toLowerCase() === 'monaco');
-      const expert = isRoutingExpertModeEnabled();
 
       // Always keep the toolbar container visible in the host so layout doesn't jump.
       bar.style.display = '';
@@ -5030,14 +4962,9 @@ function closeHelp() {
         );
 
         const isFs = !!(btn.dataset && btn.dataset.actionId === 'fs');
-        const isQuickFix = !!(btn.dataset && btn.dataset.actionId === 'quick_fix');
 
-        // In Monaco mode show quick fix + yellow JSONC help + fullscreen.
-        if (isQuickFix && expert) {
-          btn.style.display = 'none';
-          return;
-        }
-        btn.style.display = (isMonaco && !(isCommentsHelp || isFs || isQuickFix)) ? 'none' : '';
+        // In Monaco mode show only the yellow JSONC help + fullscreen.
+        btn.style.display = (isMonaco && !(isCommentsHelp || isFs)) ? 'none' : '';
       });
     } catch (e) {}
   }

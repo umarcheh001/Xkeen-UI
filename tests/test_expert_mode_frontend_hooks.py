@@ -46,16 +46,16 @@ def test_codemirror_and_monaco_runtime_gate_schema_assist_in_expert_mode():
     assert "if (_isEditorExpertModeEnabled()) return null;" in monaco_src
 
 
-def test_routing_and_mihomo_hide_quick_fix_in_expert_mode():
+def test_routing_and_mihomo_respect_expert_mode():
     routing_src = _read(JS_DIR / "features" / "routing.js")
     mihomo_src = _read(JS_DIR / "features" / "mihomo_panel.js")
 
+    # Кнопок quick fix в тулбарах больше нет: экспертный режим гасит сам провайдер.
     assert "function isRoutingExpertModeEnabled()" in routing_src
-    assert "if (isQuickFix && expert) {" in routing_src
-    assert "Экспертный режим отключает quick fix" in routing_src
+    assert "data-action-id=\"quick_fix\"" not in routing_src
+    assert "quick_fix" not in routing_src
     assert "wireRoutingUiSettingsSyncOnce" in routing_src
 
     assert "function isMihomoExpertModeEnabled()" in mihomo_src
-    assert "if (isQuickFix && expert) {" in mihomo_src
-    assert "Экспертный режим отключает quick fix" in mihomo_src
+    assert "quick_fix" not in mihomo_src
     assert "wireMihomoUiSettingsSyncOnce" in mihomo_src

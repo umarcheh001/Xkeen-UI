@@ -184,7 +184,6 @@
     down: iconHtml('move-down'),
     up: iconHtml('move-up'),
     replace: iconHtml('replace'),
-    quickFix: iconHtml('quick-fix'),
     comment: iconHtml('comment'),
     fullscreen: iconHtml('fullscreen'),
     help: iconHtml('help'),

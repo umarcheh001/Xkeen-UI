@@ -38,7 +38,7 @@ ACCESSIBLE_LABELS = {
     "move-up": "Вверх", "normalize": "Нормализовать", "open": "Открыть",
     "owner": "Владелец", "pause": "Пауза", "permissions": "Права доступа",
     "ping": "Проверить задержку", "play": "Запустить", "pool": "Пул", "preview": "Предпросмотр",
-    "quick-fix": "Быстрое исправление", "quick-start": "Быстрый старт", "refresh": "Обновить",
+    "quick-start": "Быстрый старт", "refresh": "Обновить",
     "reload": "Перезагрузить", "replace": "Заменить", "restart": "Перезапустить",
     "restore": "Восстановить", "save": "Сохранить", "search": "Поиск", "settings": "Настройки",
     "stop": "Остановить", "storage": "Хранилище", "subscriptions": "Подписки",

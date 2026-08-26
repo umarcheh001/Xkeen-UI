@@ -56,7 +56,6 @@ const OPERATOR_ICON_NAMES = Object.freeze([
   "pool",
   "preview",
   "processes",
-  "quick-fix",
   "quick-start",
   "refresh",
   "reload",

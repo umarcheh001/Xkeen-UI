@@ -302,33 +302,6 @@ let mihomoPanelModuleApi = null;
     return _mihomoQuickFixProvider;
   }
 
-  function applyBestMihomoQuickFix() {
-    if (isMihomoExpertModeEnabled()) {
-      try { if (typeof window.toast === 'function') window.toast('Экспертный режим отключает quick fix для этого редактора.', 'info'); } catch (e) {}
-      return false;
-    }
-    const editor = _engine === 'monaco' ? _monaco : getSharedEditor();
-    if (!editor || typeof editor.getQuickFixes !== 'function' || typeof editor.applyQuickFix !== 'function') {
-      try { if (typeof window.toast === 'function') window.toast('Quick fixes пока недоступны для текущего редактора.', 'warning'); } catch (e) {}
-      return false;
-    }
-    let fixes = [];
-    try { fixes = editor.getQuickFixes({ limit: 1 }); } catch (e) { fixes = []; }
-    const fix = Array.isArray(fixes) && fixes.length ? fixes[0] : null;
-    if (!fix) {
-      try { if (typeof window.toast === 'function') window.toast('Под курсором не нашёл подходящего quick fix.', 'info'); } catch (e) {}
-      return false;
-    }
-    const applied = !!editor.applyQuickFix(fix);
-    if (applied) {
-      try { if (typeof window.toast === 'function') window.toast(`Исправлено: ${String(fix.title || 'quick fix')}`, 'success'); } catch (e) {}
-      try { scheduleMihomoSchemaValidation(); } catch (e2) {}
-    } else {
-      try { if (typeof window.toast === 'function') window.toast('Не удалось применить quick fix.', 'error'); } catch (e3) {}
-    }
-    return applied;
-  }
-
   async function ensureMihomoSchemaDocument() {
     if (_mihomoSchemaState && _mihomoSchemaState.schema) {
       return { ok: true, spec: _mihomoSchemaState.spec, schema: _mihomoSchemaState.schema };
@@ -674,7 +647,6 @@ let mihomoPanelModuleApi = null;
       if (!cm || !cm._xkeenToolbarEl || !cm._xkeenToolbarEl.querySelectorAll) return;
       const bar = cm._xkeenToolbarEl;
       const isMonaco = (String(engine || '').toLowerCase() === 'monaco');
-      const expert = isMihomoExpertModeEnabled();
 
       // Keep the toolbar container visible so layout doesn't jump.
       bar.style.display = '';
@@ -703,29 +675,18 @@ let mihomoPanelModuleApi = null;
         const id = (btn.dataset && btn.dataset.actionId) ? String(btn.dataset.actionId) : '';
         const isFs = (id === 'fs');
         const isFsAny = (id === 'fs_any');
-        const isQuickFix = (id === 'quick_fix');
         const isCompare = (id === 'compare');
 
         if (isMonaco) {
-          // In Monaco mode show quick fix + compare + one fullscreen button:
+          // In Monaco mode show compare + one fullscreen button:
           // fs (preferred) or fs_any.
-          if (isQuickFix) {
-            if (expert) {
-              btn.style.display = 'none';
-              return;
-            }
-            btn.style.display = '';
-          } else if (isCompare) {
+          if (isCompare) {
             btn.style.display = '';
           } else {
             btn.style.display = hasFs ? (isFs ? '' : 'none') : (isFsAny ? '' : 'none');
           }
         } else {
           // In CodeMirror mode hide the fallback button to avoid duplicates.
-          if (isQuickFix && expert) {
-            btn.style.display = 'none';
-            return;
-          }
           btn.style.display = isFsAny ? 'none' : '';
         }
       });
@@ -1084,34 +1045,13 @@ let mihomoPanelModuleApi = null;
 
         // Replace fullscreen action: in this card it must work for the active engine.
         const items = [];
-        let quickFixInserted = false;
         sourceItems.forEach((it) => {
-          if (!quickFixInserted && it && it.id === 'help') {
-            items.push({
-              id: 'quick_fix',
-              svg: icons.quickFix || '',
-              label: 'Quick fix',
-              fallbackHint: 'Лучшее исправление',
-              onClick: () => applyBestMihomoQuickFix(),
-            });
-            quickFixInserted = true;
-          }
           if (it && it.id === 'fs') {
             items.push(Object.assign({}, it, { onClick: (cm) => toggleEditorFullscreen(cm) }));
             return;
           }
           items.push(it);
         });
-        if (!quickFixInserted) {
-          items.push({
-            id: 'quick_fix',
-            svg: icons.quickFix || '',
-            label: 'Quick fix',
-            fallbackHint: 'Лучшее исправление',
-            onClick: () => applyBestMihomoQuickFix(),
-          });
-        }
-
         // Fallback fullscreen button for Monaco only when the shared toolbar has no real fs action.
         try {
           if (icons.fullscreen && !items.some((it) => it && (it.id === 'fs' || it.id === 'fs_any'))) {

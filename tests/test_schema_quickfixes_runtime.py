@@ -566,11 +566,14 @@ def test_phase4_quickfix_runtime_is_wired_into_editors():
     assert "editor.setQuickFixProvider = (provider) => {" in monaco_src
     assert "getQuickFixes(request)" in cm_src
     assert "applyQuickFix(fix)" in cm_src
-    assert "quickFix:" in toolbar_src
+    # Иконки quick fix в общем тулбаре редакторов больше нет — кнопку убрали.
+    assert "quickFix:" not in toolbar_src
     assert "quickFixProvider: getRoutingQuickFixProvider()," in routing_src
     assert "quickFixProvider: getMihomoQuickFixProvider()," in mihomo_src
-    assert "icons.quickFix" in routing_src
-    assert "icons.quickFix" in mihomo_src
+    # Кнопок quick fix в тулбарах роутинга и Mihomo нет: quick fix остаётся
+    # доступен через code actions Monaco и провайдеры редакторов.
+    assert "icons.quickFix" not in routing_src
+    assert "icons.quickFix" not in mihomo_src
 
 
 def test_xray_semantic_flags_private_ip_rule_after_negated_geoip():
