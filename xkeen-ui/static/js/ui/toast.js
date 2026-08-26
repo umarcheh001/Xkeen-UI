@@ -20,12 +20,20 @@
 
   function ensureContainer() {
     let container = document.getElementById('toast-container');
-    if (container) return container;
-
     try {
-      container = document.createElement('div');
-      container.id = 'toast-container';
-      document.body.appendChild(container);
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+      }
+      // The panel template historically placed the toast portal inside
+      // .container-wide, which owns a z-index stacking context. Most static
+      // modals share that context, but runtime workbenches (notably Xray
+      // subscriptions) are appended directly to body and therefore cover the
+      // whole container, regardless of the toast's near-maximum z-index.
+      // Keep the portal at the document root so its global layer is real.
+      if (container.parentElement !== document.body) {
+        document.body.appendChild(container);
+      }
     } catch (error) {
       return null;
     }

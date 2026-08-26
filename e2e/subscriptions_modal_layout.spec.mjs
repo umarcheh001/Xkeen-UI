@@ -99,6 +99,37 @@ async function openOutboundsPanel(page) {
   await expect(body).toBeVisible();
 }
 
+test('global toasts stay above the runtime Xray subscriptions modal', async ({ page }) => {
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    await route.fulfill({ json: { ok: true, subscriptions: [] } });
+  });
+  await openSubscriptionsModal(page);
+
+  await page.evaluate(() => window.toast('Тестовая ошибка подписки Xray.', 'error'));
+  const toast = page.locator('#toast-container .toast').last();
+  await expect(toast).toBeVisible();
+
+  const layers = await page.evaluate(() => {
+    const modal = document.querySelector('#outbounds-subscriptions-modal');
+    const container = document.querySelector('#toast-container');
+    const toastNode = container?.querySelector('.toast:last-child');
+    const toastRect = toastNode?.getBoundingClientRect();
+    const point = toastRect
+      ? document.elementFromPoint(toastRect.left + toastRect.width / 2, toastRect.top + toastRect.height / 2)
+      : null;
+    return {
+      portalAtBodyRoot: container?.parentElement === document.body,
+      modalZ: Number(getComputedStyle(modal).zIndex || 0),
+      toastZ: Number(getComputedStyle(container).zIndex || 0),
+      toastOwnsTopPoint: !!(point && point.closest('#toast-container')),
+    };
+  });
+
+  expect(layers.portalAtBodyRoot).toBe(true);
+  expect(layers.toastZ).toBeGreaterThan(layers.modalZ);
+  expect(layers.toastOwnsTopPoint).toBe(true);
+});
+
 test('main outbounds card keeps proxy nodes inside scrollable panel', async ({ page }) => {
   const nodes = buildDemoNodes();
   const nodeLatency = buildNodeLatency(nodes);

@@ -621,6 +621,7 @@ def test_confirm_modal_stacks_above_dynamic_editor_modal_z_indexes():
 def test_global_toasts_stay_visible_above_open_modals():
     styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
     modal = Path('xkeen-ui/static/js/ui/modal.js').read_text(encoding='utf-8')
+    toast = Path('xkeen-ui/static/js/ui/toast.js').read_text(encoding='utf-8')
 
     toast_block = styles.split('#toast-container {', 1)[1].split('}', 1)[0]
     toast_item_block = styles.split('.toast {', 1)[1].split('}', 1)[0]
@@ -630,6 +631,9 @@ def test_global_toasts_stay_visible_above_open_modals():
     assert 'pointer-events: auto;' in toast_item_block
     assert 'const Z_TOP_LIMIT = 2147483000;' in modal
     assert 'above Z_TOP_LIMIT' in modal
+    assert "if (container.parentElement !== document.body) {" in toast
+    assert 'document.body.appendChild(container);' in toast
+    assert 'Keep the portal at the document root' in toast
 
 
 def test_mihomo_import_explains_stale_subscription_delete_failure():
