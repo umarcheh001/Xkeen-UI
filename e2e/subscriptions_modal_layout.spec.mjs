@@ -1620,3 +1620,99 @@ test('subscriptions modal ping-all button shows compact spinner while probing', 
   await expect(pingAllBtn).not.toHaveClass(/is-busy/);
   await expect(pingAllBtn).not.toHaveAttribute('aria-busy', /./);
 });
+
+test('subscriptions fragment list grows into the free column height', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const nodes = buildDemoNodes().slice(0, 3);
+  const subscriptions = Array.from({ length: 8 }, (_, index) =>
+    buildDemoSubscription(nodes, {
+      id: `demo-sub-${index}`,
+      name: `VPS_SUB_${index}`,
+      tag: `VPS_SUB_${index}`,
+      output_file: `04_outbounds.vps_sub_${index}.json`,
+    })
+  );
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscriptions }),
+    });
+  });
+
+  await openSubscriptionsModal(page);
+  await expect(page.locator('tr[data-sub-id="demo-sub-0"]')).toBeVisible();
+  const advanced = page.locator('#outbounds-subscriptions-modal .xk-sub-advanced');
+  if (!(await advanced.getAttribute('open'))) await advanced.locator('summary').click();
+
+  const layout = await page.evaluate(() => {
+    const panel = document.querySelector('#outbounds-subscriptions-modal .xk-sub-list-panel');
+    const wrap = document.querySelector('#outbounds-subscriptions-modal .xk-sub-tablewrap');
+    const table = wrap?.querySelector('table');
+    const diagnostics = document.querySelector('#outbounds-subscriptions-diagnostics');
+    const panelRect = panel?.getBoundingClientRect();
+    const wrapRect = wrap?.getBoundingClientRect();
+    const tableRect = table?.getBoundingClientRect();
+    const diagRect = diagnostics?.getBoundingClientRect();
+    return {
+      wrapHeight: wrapRect ? Math.round(wrapRect.height) : 0,
+      tableHeight: tableRect ? Math.round(tableRect.height) : 0,
+      panelHeight: panelRect ? Math.round(panelRect.height) : 0,
+      diagInsidePanel: !!(panelRect && diagRect && diagRect.bottom <= panelRect.bottom + 1),
+      wrapAboveDiagnostics: !!(wrapRect && diagRect && wrapRect.bottom <= diagRect.top + 1),
+    };
+  });
+
+  // The old build pinned the wrapper at 190px regardless of the free space.
+  expect(layout.wrapHeight).toBeGreaterThan(240);
+  expect(layout.wrapHeight).toBeLessThan(layout.panelHeight);
+  expect(layout.diagInsidePanel).toBe(true);
+  expect(layout.wrapAboveDiagnostics).toBe(true);
+});
+
+test('subscriptions advanced settings remember their expanded state', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const subscription = buildDemoSubscription();
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscriptions: [subscription] }),
+    });
+  });
+
+  await openSubscriptionsModal(page);
+  const advanced = page.locator('#outbounds-subscriptions-modal .xk-sub-advanced');
+
+  // A first visit keeps the block collapsed so the modal opens compact.
+  await expect(advanced).not.toHaveAttribute('open', '');
+
+  await advanced.locator('summary').click();
+  await expect(advanced).toHaveAttribute('open', '');
+
+  // Reopening the modal keeps the operator's choice.
+  await page.locator('#outbounds-subscriptions-close-btn').click();
+  await expect(page.locator('#outbounds-subscriptions-modal')).toBeHidden();
+  await page.locator('#outbounds-subscriptions-btn').click();
+  await expect(page.locator('#outbounds-subscriptions-modal')).toBeVisible();
+  await expect(advanced).toHaveAttribute('open', '');
+
+  // And it survives a full page reload.
+  await page.reload();
+  await openSubscriptionsModal(page);
+  await expect(page.locator('#outbounds-subscriptions-modal .xk-sub-advanced')).toHaveAttribute('open', '');
+
+  // Collapsing is remembered too.
+  await page.locator('#outbounds-subscriptions-modal .xk-sub-advanced > summary').click();
+  await page.locator('#outbounds-subscriptions-close-btn').click();
+  await page.locator('#outbounds-subscriptions-btn').click();
+  await expect(page.locator('#outbounds-subscriptions-modal .xk-sub-advanced')).not.toHaveAttribute('open', '');
+});

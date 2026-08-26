@@ -60,6 +60,8 @@ DEFAULT_MAX_BODY_BYTES = 1024 * 1024
 DEFAULT_ERROR_RETRY_SECONDS = 15 * 60
 MIN_ERROR_RETRY_SECONDS = 60
 MAX_ERROR_RETRY_SECONDS = 6 * 3600
+DEFAULT_REFRESH_LOOKAHEAD_SECONDS = 5 * 60
+MAX_REFRESH_LOOKAHEAD_SECONDS = 3600
 
 SUPPORTED_SCHEMES = (
     "vless://",
@@ -5729,6 +5731,37 @@ def refresh_subscription(
     return result
 
 
+def _refresh_lookahead_seconds() -> int:
+    """Window used to pull almost-due subscriptions into the current batch.
+
+    Subscriptions added at slightly different moments drift apart and become
+    due in different scheduler ticks, which used to cost one Xray restart
+    each. Refreshing the ones that would fire within the window together
+    realigns their ``next_update_ts`` from a single instant, so afterwards
+    they keep landing in the same batch on their own.
+    """
+
+    try:
+        raw = int(
+            os.environ.get("XKEEN_SUBSCRIPTIONS_LOOKAHEAD_SEC", str(DEFAULT_REFRESH_LOOKAHEAD_SECONDS))
+            or DEFAULT_REFRESH_LOOKAHEAD_SECONDS
+        )
+    except Exception:
+        raw = DEFAULT_REFRESH_LOOKAHEAD_SECONDS
+    return max(0, min(MAX_REFRESH_LOOKAHEAD_SECONDS, raw))
+
+
+def _refresh_result_needs_restart(result: Any) -> bool:
+    if not isinstance(result, dict) or not result.get("ok"):
+        return False
+    return bool(
+        result.get("changed")
+        or result.get("observatory_changed")
+        or result.get("routing_changed")
+        or result.get("outbounds_changed")
+    )
+
+
 def refresh_due_subscriptions(
     ui_state_dir: str,
     *,
@@ -5739,7 +5772,10 @@ def refresh_due_subscriptions(
 ) -> List[Dict[str, Any]]:
     state = load_subscription_state(ui_state_dir)
     now_ts = _now()
-    results: List[Dict[str, Any]] = []
+    lookahead = _refresh_lookahead_seconds()
+
+    due_subs: List[Dict[str, Any]] = []
+    has_due = False
     for sub in list(state.get("subscriptions") or []):
         if not isinstance(sub, dict) or not bool(sub.get("enabled", True)):
             continue
@@ -5748,8 +5784,23 @@ def refresh_due_subscriptions(
             due_ts = float(due)
         except Exception:
             due_ts = 0.0
-        if due_ts > now_ts:
+        if due_ts <= now_ts:
+            has_due = True
+        elif due_ts > now_ts + lookahead:
             continue
+        due_subs.append(sub)
+
+    # Never refresh early on its own: the look-ahead only widens a batch that
+    # already has at least one genuinely due subscription. Without this guard
+    # every tick would keep pulling schedules forward.
+    if not has_due:
+        return []
+
+    batch_restart = bool(restart and restart_xkeen and env_flag("XKEEN_SUBSCRIPTIONS_RESTART_BATCH", True))
+    item_restart = bool(restart and not batch_restart)
+
+    results: List[Dict[str, Any]] = []
+    for sub in due_subs:
         try:
             results.append(
                 refresh_subscription(
@@ -5758,11 +5809,23 @@ def refresh_due_subscriptions(
                     xray_configs_dir=xray_configs_dir,
                     snapshot=snapshot,
                     restart_xkeen=restart_xkeen,
-                    restart=restart,
+                    restart=item_restart,
                 )
             )
         except Exception as exc:
             results.append({"id": sub.get("id"), "ok": False, "error": str(exc)})
+
+    if batch_restart and any(_refresh_result_needs_restart(item) for item in results):
+        try:
+            restarted = bool(restart_xkeen(source="xray-subscriptions-batch"))
+        except TypeError:
+            restarted = bool(restart_xkeen())
+        except Exception:
+            restarted = False
+        for item in results:
+            if _refresh_result_needs_restart(item):
+                item["restarted"] = restarted
+
     return results
 
 
@@ -6649,7 +6712,13 @@ def start_subscription_scheduler(
                 )
                 if results:
                     ok_count = sum(1 for r in results if r.get("ok"))
-                    _log("info", "xray subscriptions auto-refresh", total=len(results), ok=ok_count)
+                    _log(
+                        "info",
+                        "xray subscriptions auto-refresh",
+                        total=len(results),
+                        ok=ok_count,
+                        restarted=any(r.get("restarted") for r in results),
+                    )
             except Exception as exc:
                 _log("warning", "xray subscriptions scheduler failed", error=str(exc))
             time.sleep(tick)

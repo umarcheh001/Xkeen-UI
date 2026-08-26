@@ -33,6 +33,8 @@ STATE_FILENAME = "mihomo_subscriptions.json"
 DEFAULT_INTERVAL_HOURS = 24
 MIN_INTERVAL_HOURS = 1
 MAX_INTERVAL_HOURS = 168
+DEFAULT_REFRESH_LOOKAHEAD_SECONDS = 5 * 60
+MAX_REFRESH_LOOKAHEAD_SECONDS = 3600
 REFRESH_PARSER_XRAY_JSON = "xray-json"
 REFRESH_PARSER_MIHOMO_PROVIDER = "mihomo-provider"
 
@@ -1186,6 +1188,33 @@ def refresh_subscription(
             )
 
 
+def _refresh_lookahead_seconds() -> int:
+    """Window used to pull almost-due subscriptions into the current batch.
+
+    Subscriptions added at slightly different moments drift apart and become
+    due in different scheduler ticks, which used to cost one core restart
+    each. Refreshing the ones that would fire within the window together
+    realigns their ``next_update_ts`` from a single instant, so afterwards
+    they keep landing in the same batch on their own.
+    """
+
+    try:
+        raw = int(
+            os.environ.get(
+                "XKEEN_MIHOMO_SUBSCRIPTIONS_LOOKAHEAD_SEC",
+                str(DEFAULT_REFRESH_LOOKAHEAD_SECONDS),
+            )
+            or DEFAULT_REFRESH_LOOKAHEAD_SECONDS
+        )
+    except Exception:
+        raw = DEFAULT_REFRESH_LOOKAHEAD_SECONDS
+    return max(0, min(MAX_REFRESH_LOOKAHEAD_SECONDS, raw))
+
+
+def _refresh_result_needs_restart(result: Any) -> bool:
+    return bool(isinstance(result, dict) and result.get("ok") and result.get("changed"))
+
+
 def refresh_due_subscriptions(
     ui_state_dir: str,
     *,
@@ -1196,7 +1225,10 @@ def refresh_due_subscriptions(
 ) -> List[Dict[str, Any]]:
     state = load_subscription_state(ui_state_dir)
     now_ts = _now()
-    results: List[Dict[str, Any]] = []
+    lookahead = _refresh_lookahead_seconds()
+
+    due_subs: List[Dict[str, Any]] = []
+    has_due = False
     for sub in list(state.get("subscriptions") or []):
         if not isinstance(sub, dict) or not bool(sub.get("enabled", True)):
             continue
@@ -1204,8 +1236,25 @@ def refresh_due_subscriptions(
             due_ts = float(sub.get("next_update_ts") or 0)
         except Exception:
             due_ts = 0.0
-        if due_ts > now_ts:
+        if due_ts <= now_ts:
+            has_due = True
+        elif due_ts > now_ts + lookahead:
             continue
+        due_subs.append(sub)
+
+    # Never refresh early on its own: the look-ahead only widens a batch that
+    # already has at least one genuinely due subscription. Without this guard
+    # every tick would keep pulling schedules forward.
+    if not has_due:
+        return []
+
+    batch_restart = bool(
+        restart and restart_xkeen is not None and env_flag("XKEEN_MIHOMO_SUBSCRIPTIONS_RESTART_BATCH", True)
+    )
+    item_restart = bool(restart and not batch_restart)
+
+    results: List[Dict[str, Any]] = []
+    for sub in due_subs:
         try:
             results.append(
                 refresh_subscription(
@@ -1213,12 +1262,27 @@ def refresh_due_subscriptions(
                     str(sub.get("id") or ""),
                     mihomo_config_file=mihomo_config_file,
                     restart_xkeen=restart_xkeen,
-                    restart=restart,
+                    restart=item_restart,
                     save_callback=save_callback,
                 )
             )
         except Exception as exc:
             results.append({"ok": False, "id": sub.get("id"), "error": str(exc)})
+
+    if batch_restart and any(_refresh_result_needs_restart(item) for item in results):
+        restarted = False
+        try:
+            try:
+                restart_xkeen(source="mihomo-subscriptions-batch")
+            except TypeError:
+                restart_xkeen("mihomo-subscriptions-batch")
+            restarted = True
+        except Exception:
+            restarted = False
+        for item in results:
+            if _refresh_result_needs_restart(item):
+                item["restarted"] = restarted
+
     return results
 
 
@@ -1266,6 +1330,7 @@ def start_subscription_scheduler(
                             "mihomo subscriptions auto-refresh",
                             total=len(results),
                             ok=sum(1 for r in results if r.get("ok")),
+                            restarted=any(r.get("restarted") for r in results),
                         )
                     except Exception:
                         pass

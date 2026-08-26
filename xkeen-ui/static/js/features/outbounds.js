@@ -5904,6 +5904,31 @@ let outboundsModuleApi = null;
       } catch (e6) {}
     }
 
+    // Remember whether the operator keeps the advanced block expanded. It stays
+    // collapsed on a first visit so an empty modal opens compact, and the
+    // choice sticks from then on.
+    const SUBS_ADVANCED_KEY = 'xkeen_subs_advanced_open';
+
+    function subsAdvancedNode() {
+      const form = $(SUB_IDS.form);
+      return form && form.querySelector ? form.querySelector('.xk-sub-advanced') : null;
+    }
+
+    function subsRestoreAdvancedState() {
+      const advanced = subsAdvancedNode();
+      if (!advanced) return;
+      try {
+        if (!window.localStorage) return;
+        advanced.open = localStorage.getItem(SUBS_ADVANCED_KEY) === '1';
+      } catch (e) {}
+    }
+
+    function subsStoreAdvancedState(open) {
+      try {
+        if (window.localStorage) localStorage.setItem(SUBS_ADVANCED_KEY, open ? '1' : '0');
+      } catch (e) {}
+    }
+
     function subsShow(show) {
       const modal = subsEnsureModal();
       if (!modal) return;
@@ -5913,6 +5938,7 @@ let outboundsModuleApi = null;
         else modal.classList.add('hidden');
       } catch (e) {}
       if (show) {
+        try { subsRestoreAdvancedState(); } catch (e4) {}
         const apply = () => {
           try { subsSyncModalLayout(); } catch (e2) {}
         };
@@ -8347,6 +8373,14 @@ let outboundsModuleApi = null;
         });
         if (intervalApplyBtn.dataset) intervalApplyBtn.dataset.xkSubApplyBound = '1';
       }
+      const advancedEl = modal.querySelector ? modal.querySelector('.xk-sub-advanced') : null;
+      if (advancedEl && !(advancedEl.dataset && advancedEl.dataset.xkSubAdvancedBound === '1')) {
+        advancedEl.addEventListener('toggle', () => {
+          try { subsStoreAdvancedState(!!advancedEl.open); } catch (e) {}
+        });
+        if (advancedEl.dataset) advancedEl.dataset.xkSubAdvancedBound = '1';
+      }
+
       if (!(modal.dataset && modal.dataset.xkSubResizeBound === '1')) {
         window.addEventListener('resize', () => {
           const m = $(SUB_IDS.modal);

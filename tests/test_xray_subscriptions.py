@@ -6547,3 +6547,192 @@ def test_probe_xray_outbounds_nodes_latency_uses_pool_outbounds(monkeypatch, tmp
     assert captured["tags"] == ["pool-one", "pool-two"]
     assert result["node_latency"][nodes[0]["key"]]["delay_ms"] == 111
     assert result["node_latency"][nodes[1]["key"]]["delay_ms"] == 222
+
+
+def _prepare_batch_subscriptions(tmp_path: Path, monkeypatch, subs, ids):
+    """Create N enabled subscriptions sharing one stubbed provider."""
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda url: (_vless(f"Node {url.rsplit('/', 1)[-1]}"), {}),
+    )
+
+    for sub_id in ids:
+        subs.upsert_subscription(
+            str(ui_state_dir),
+            {
+                "id": sub_id,
+                "name": sub_id,
+                "tag": sub_id,
+                "url": f"https://example.com/sub/{sub_id}",
+                "enabled": True,
+                "ping_enabled": False,
+                "interval_hours": 6,
+            },
+        )
+
+    return ui_state_dir, xray_dir
+
+
+def _set_due_offsets(subs, ui_state_dir: Path, offsets):
+    import time
+
+    now_ts = time.time()
+    state = subs.load_subscription_state(str(ui_state_dir))
+    for item in state["subscriptions"]:
+        item["next_update_ts"] = now_ts + offsets[item["id"]]
+    subs._write_state(str(ui_state_dir), state)
+    return now_ts
+
+
+def test_refresh_due_subscriptions_restarts_once_for_whole_batch(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ids = ["sub_a", "sub_b", "sub_c"]
+    ui_state_dir, xray_dir = _prepare_batch_subscriptions(tmp_path, monkeypatch, subs, ids)
+    _set_due_offsets(subs, ui_state_dir, {sub_id: -10 for sub_id in ids})
+
+    restarts = []
+    results = subs.refresh_due_subscriptions(
+        str(ui_state_dir),
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **kwargs: restarts.append(kwargs) or True,
+        restart=True,
+    )
+
+    assert [item["id"] for item in results] == ids
+    assert all(item["ok"] for item in results)
+    assert all(item["changed"] for item in results)
+    assert all(item["restarted"] for item in results)
+    assert [entry["source"] for entry in restarts] == ["xray-subscriptions-batch"]
+
+    for sub_id in ids:
+        assert (xray_dir / f"04_outbounds.{sub_id}.json").exists()
+
+
+def test_refresh_due_subscriptions_pulls_almost_due_into_same_batch(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir, xray_dir = _prepare_batch_subscriptions(tmp_path, monkeypatch, subs, ["sub_a", "sub_b"])
+    _set_due_offsets(subs, ui_state_dir, {"sub_a": -10, "sub_b": 180})
+
+    restarts = []
+    results = subs.refresh_due_subscriptions(
+        str(ui_state_dir),
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **kwargs: restarts.append(kwargs) or True,
+        restart=True,
+    )
+
+    assert sorted(item["id"] for item in results) == ["sub_a", "sub_b"]
+    assert len(restarts) == 1
+
+    # Both schedules are now anchored to the same refresh, so the next tick
+    # keeps them in one batch without any look-ahead.
+    state = subs.load_subscription_state(str(ui_state_dir))
+    next_ts = [item["next_update_ts"] for item in state["subscriptions"]]
+    assert max(next_ts) - min(next_ts) < 5
+
+
+def test_refresh_due_subscriptions_skips_when_only_future_subscriptions_exist(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir, xray_dir = _prepare_batch_subscriptions(tmp_path, monkeypatch, subs, ["sub_a", "sub_b"])
+    _set_due_offsets(subs, ui_state_dir, {"sub_a": 120, "sub_b": 180})
+
+    restarts = []
+    results = subs.refresh_due_subscriptions(
+        str(ui_state_dir),
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **kwargs: restarts.append(kwargs) or True,
+        restart=True,
+    )
+
+    assert results == []
+    assert restarts == []
+    assert not (xray_dir / "04_outbounds.sub_a.json").exists()
+
+
+def test_refresh_due_subscriptions_does_not_restart_when_nothing_changed(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ids = ["sub_a", "sub_b"]
+    ui_state_dir, xray_dir = _prepare_batch_subscriptions(tmp_path, monkeypatch, subs, ids)
+    _set_due_offsets(subs, ui_state_dir, {sub_id: -10 for sub_id in ids})
+
+    restarts = []
+    restart_stub = lambda **kwargs: restarts.append(kwargs) or True
+    subs.refresh_due_subscriptions(
+        str(ui_state_dir),
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=restart_stub,
+        restart=True,
+    )
+    assert len(restarts) == 1
+
+    restarts.clear()
+    _set_due_offsets(subs, ui_state_dir, {sub_id: -10 for sub_id in ids})
+    results = subs.refresh_due_subscriptions(
+        str(ui_state_dir),
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=restart_stub,
+        restart=True,
+    )
+
+    assert all(item["ok"] for item in results)
+    assert not any(item["changed"] for item in results)
+    assert restarts == []
+
+
+def test_refresh_due_subscriptions_batch_can_be_disabled(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ids = ["sub_a", "sub_b"]
+    ui_state_dir, xray_dir = _prepare_batch_subscriptions(tmp_path, monkeypatch, subs, ids)
+    _set_due_offsets(subs, ui_state_dir, {sub_id: -10 for sub_id in ids})
+    monkeypatch.setenv("XKEEN_SUBSCRIPTIONS_RESTART_BATCH", "0")
+
+    restarts = []
+    results = subs.refresh_due_subscriptions(
+        str(ui_state_dir),
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **kwargs: restarts.append(kwargs) or True,
+        restart=True,
+    )
+
+    assert all(item["restarted"] for item in results)
+    assert [entry["source"] for entry in restarts] == ["xray-subscription-refresh"] * 2
+
+
+def test_refresh_due_subscriptions_lookahead_can_be_disabled(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir, xray_dir = _prepare_batch_subscriptions(tmp_path, monkeypatch, subs, ["sub_a", "sub_b"])
+    _set_due_offsets(subs, ui_state_dir, {"sub_a": -10, "sub_b": 180})
+    monkeypatch.setenv("XKEEN_SUBSCRIPTIONS_LOOKAHEAD_SEC", "0")
+
+    results = subs.refresh_due_subscriptions(
+        str(ui_state_dir),
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=True,
+    )
+
+    assert [item["id"] for item in results] == ["sub_a"]

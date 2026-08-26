@@ -485,3 +485,231 @@ def test_refresh_config_subscription_replaces_imported_proxy_blocks(tmp_path, mo
     assert sub["source"] == "config"
     assert sub["proxy_names"] == ["New Node"]
     assert "New Node" in sub["managed_yaml"]
+
+
+def _state_with_two_managed_subscriptions(first_yaml: str, second_yaml: str):
+    return {
+        "profile": "router_custom",
+        "subscriptions": [],
+        "defaultGroups": ["Заблок. сервисы"],
+        "enabledRuleGroups": ["Blocked"],
+        "proxies": [
+            {
+                "kind": "yaml",
+                "yaml": first_yaml,
+                "tags": ["xray-sub:one.test"],
+                "xray_json_subscription": {
+                    "id": "sub-one",
+                    "url": "https://one.test/xray.json",
+                    "tag": "xray-sub:one.test",
+                    "enabled": True,
+                    "interval_hours": 24,
+                },
+            },
+            {
+                "kind": "yaml",
+                "yaml": second_yaml,
+                "tags": ["xray-sub:two.test"],
+                "xray_json_subscription": {
+                    "id": "sub-two",
+                    "url": "https://two.test/xray.json",
+                    "tag": "xray-sub:two.test",
+                    "enabled": True,
+                    "interval_hours": 24,
+                },
+            },
+        ],
+    }
+
+
+def _prepare_two_subscriptions(tmp_path, monkeypatch):
+    """Two managed subscriptions with a provider that always returns fresh nodes."""
+
+    def _yaml_for(remarks: str, address: str, uuid: str) -> str:
+        proxies, _ = svc.convert_subscription_text(_subscription_body(remarks, address, uuid))
+        return "\n\n".join(p.yaml.strip() for p in proxies)
+
+    state = _state_with_two_managed_subscriptions(
+        _yaml_for("Old One", "1.1.1.1", "11111111-1111-1111-1111-111111111111"),
+        _yaml_for("Old Two", "3.3.3.3", "33333333-3333-3333-3333-333333333333"),
+    )
+    current_config = build_full_config(state)
+
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(current_config, encoding="utf-8")
+    svc.sync_from_generator_state(str(tmp_path), state, config_text=current_config)
+
+    bodies = {
+        "https://one.test/xray.json": _subscription_body(
+            "New One", "2.2.2.2", "22222222-2222-2222-2222-222222222222"
+        ),
+        "https://two.test/xray.json": _subscription_body(
+            "New Two", "4.4.4.4", "44444444-4444-4444-4444-444444444444"
+        ),
+    }
+    monkeypatch.setattr(
+        svc,
+        "fetch_subscription_body",
+        lambda url: (bodies[url], {}, {"fetch_mode": "happ_ua"}),
+    )
+
+    def _save(text: str):
+        config_path.write_text(text, encoding="utf-8")
+
+    return config_path, _save
+
+
+def _set_due_offsets(tmp_path, offsets):
+    import time
+
+    now_ts = time.time()
+    state = svc.load_subscription_state(str(tmp_path))
+    for item in state["subscriptions"]:
+        item["next_update_ts"] = now_ts + offsets[item["id"]]
+    svc._write_state(str(tmp_path), state)
+
+
+def test_refresh_due_subscriptions_restarts_once_for_whole_batch(tmp_path, monkeypatch):
+    config_path, save = _prepare_two_subscriptions(tmp_path, monkeypatch)
+    _set_due_offsets(tmp_path, {"sub-one": -10, "sub-two": -10})
+
+    restarts: list[str] = []
+
+    def _restart(*, source="api"):
+        restarts.append(source)
+
+    results = svc.refresh_due_subscriptions(
+        str(tmp_path),
+        mihomo_config_file=str(config_path),
+        restart_xkeen=_restart,
+        restart=True,
+        save_callback=save,
+    )
+
+    assert sorted(item["id"] for item in results) == ["sub-one", "sub-two"]
+    assert all(item["ok"] for item in results)
+    assert all(item["changed"] for item in results)
+    assert all(item["restarted"] for item in results)
+    assert restarts == ["mihomo-subscriptions-batch"]
+
+    written = config_path.read_text(encoding="utf-8")
+    assert "New One" in written
+    assert "New Two" in written
+
+
+def test_refresh_due_subscriptions_pulls_almost_due_into_same_batch(tmp_path, monkeypatch):
+    config_path, save = _prepare_two_subscriptions(tmp_path, monkeypatch)
+    _set_due_offsets(tmp_path, {"sub-one": -10, "sub-two": 180})
+
+    restarts: list[str] = []
+
+    def _restart(*, source="api"):
+        restarts.append(source)
+
+    results = svc.refresh_due_subscriptions(
+        str(tmp_path),
+        mihomo_config_file=str(config_path),
+        restart_xkeen=_restart,
+        restart=True,
+        save_callback=save,
+    )
+
+    assert sorted(item["id"] for item in results) == ["sub-one", "sub-two"]
+    assert len(restarts) == 1
+
+    # Both schedules are now anchored to the same refresh, so the next tick
+    # keeps them in one batch without any look-ahead.
+    saved = svc.load_subscription_state(str(tmp_path))
+    next_ts = [item["next_update_ts"] for item in saved["subscriptions"]]
+    assert max(next_ts) - min(next_ts) < 5
+
+
+def test_refresh_due_subscriptions_skips_when_only_future_subscriptions_exist(tmp_path, monkeypatch):
+    config_path, save = _prepare_two_subscriptions(tmp_path, monkeypatch)
+    _set_due_offsets(tmp_path, {"sub-one": 120, "sub-two": 180})
+    before = config_path.read_text(encoding="utf-8")
+
+    restarts: list[str] = []
+
+    results = svc.refresh_due_subscriptions(
+        str(tmp_path),
+        mihomo_config_file=str(config_path),
+        restart_xkeen=lambda **kwargs: restarts.append(kwargs),
+        restart=True,
+        save_callback=save,
+    )
+
+    assert results == []
+    assert restarts == []
+    assert config_path.read_text(encoding="utf-8") == before
+
+
+def test_refresh_due_subscriptions_does_not_restart_when_nothing_changed(tmp_path, monkeypatch):
+    config_path, save = _prepare_two_subscriptions(tmp_path, monkeypatch)
+    _set_due_offsets(tmp_path, {"sub-one": -10, "sub-two": -10})
+
+    restarts: list[str] = []
+
+    def _restart(*, source="api"):
+        restarts.append(source)
+
+    svc.refresh_due_subscriptions(
+        str(tmp_path),
+        mihomo_config_file=str(config_path),
+        restart_xkeen=_restart,
+        restart=True,
+        save_callback=save,
+    )
+    assert len(restarts) == 1
+
+    restarts.clear()
+    _set_due_offsets(tmp_path, {"sub-one": -10, "sub-two": -10})
+    results = svc.refresh_due_subscriptions(
+        str(tmp_path),
+        mihomo_config_file=str(config_path),
+        restart_xkeen=_restart,
+        restart=True,
+        save_callback=save,
+    )
+
+    assert all(item["ok"] for item in results)
+    assert not any(item["changed"] for item in results)
+    assert restarts == []
+
+
+def test_refresh_due_subscriptions_batch_can_be_disabled(tmp_path, monkeypatch):
+    config_path, save = _prepare_two_subscriptions(tmp_path, monkeypatch)
+    _set_due_offsets(tmp_path, {"sub-one": -10, "sub-two": -10})
+    monkeypatch.setenv("XKEEN_MIHOMO_SUBSCRIPTIONS_RESTART_BATCH", "0")
+
+    restarts: list[str] = []
+
+    def _restart(*, source="api"):
+        restarts.append(source)
+
+    results = svc.refresh_due_subscriptions(
+        str(tmp_path),
+        mihomo_config_file=str(config_path),
+        restart_xkeen=_restart,
+        restart=True,
+        save_callback=save,
+    )
+
+    assert all(item["restarted"] for item in results)
+    assert restarts == ["mihomo-subscription-refresh"] * 2
+
+
+def test_refresh_due_subscriptions_lookahead_can_be_disabled(tmp_path, monkeypatch):
+    config_path, save = _prepare_two_subscriptions(tmp_path, monkeypatch)
+    _set_due_offsets(tmp_path, {"sub-one": -10, "sub-two": 180})
+    monkeypatch.setenv("XKEEN_MIHOMO_SUBSCRIPTIONS_LOOKAHEAD_SEC", "0")
+
+    results = svc.refresh_due_subscriptions(
+        str(tmp_path),
+        mihomo_config_file=str(config_path),
+        restart_xkeen=lambda **_kwargs: None,
+        restart=True,
+        save_callback=save,
+    )
+
+    assert [item["id"] for item in results] == ["sub-one"]

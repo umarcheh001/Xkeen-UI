@@ -11601,13 +11601,24 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-list-head-actions > .btn-
   margin: 0;
 }
 
+/* The fragment list grows with its rows instead of sitting at a fixed 190px,
+ * but it still needs a ceiling: this column is sized by its own content, so an
+ * uncapped list pushes the diagnostics and the node panel below the modal's
+ * bottom edge rather than yielding to them.  Tying the cap to the viewport
+ * keeps the list as tall as the window can afford while the areas underneath
+ * stay reachable, and `flex-basis: auto` still collapses the wrapper around a
+ * short list. */
 body.panel-page #outbounds-subscriptions-modal .xk-sub-tablewrap {
   flex: 0 1 auto;
   min-height: 0;
-  max-height: 190px;
+  max-height: clamp(190px, 40dvh, 560px);
   overflow: auto;
   border-radius: 0 !important;
   background: transparent !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-list-panel > :is(.xk-sub-panelhead, .xk-sub-diagnostics, .xk-sub-status) {
+  flex-shrink: 0;
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-table {
@@ -15942,6 +15953,12 @@ body.panel-page .monaco-editor :is(.suggest-details, .parameter-hints-widget) :i
   body.panel-page #outbounds-subscriptions-modal .xk-sub-form-panel {
     border-right: 0 !important;
     border-bottom: 1px solid var(--op-border) !important;
+  }
+
+  /* Stacked layout: the column is sized by its own content, so an uncapped
+   * list would push the diagnostics far below the fold. */
+  body.panel-page #outbounds-subscriptions-modal .xk-sub-tablewrap {
+    max-height: 190px;
   }
 }
 
