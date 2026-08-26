@@ -64,10 +64,11 @@ try:
     import app as _appmod  # noqa
 
     try:
-        if hasattr(_appmod, "set_ws_runtime"):
-            _appmod.set_ws_runtime(True)
-        else:
-            _appmod.WS_RUNTIME = True
+        if GEVENT_AVAILABLE:
+            if hasattr(_appmod, "set_ws_runtime"):
+                _appmod.set_ws_runtime(True)
+            else:
+                _appmod.WS_RUNTIME = True
     except Exception:
         pass
 except Exception:
