@@ -8029,8 +8029,7 @@ body.panel-page .modal :is(
   .xk-pool-replace-card,
   .xk-pt-card,
   .xk-hw-diag-card,
-  .xk-sub-balancers,
-  .xk-sub-diagnostics
+  .xk-sub-balancers
 ) {
   margin: 0 !important;
   padding: 10px 0 !important;
@@ -11617,7 +11616,7 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-tablewrap {
   background: transparent !important;
 }
 
-body.panel-page #outbounds-subscriptions-modal .xk-sub-list-panel > :is(.xk-sub-panelhead, .xk-sub-diagnostics, .xk-sub-status) {
+body.panel-page #outbounds-subscriptions-modal .xk-sub-list-panel > :is(.xk-sub-panelhead, .xk-sub-status) {
   flex-shrink: 0;
 }
 
@@ -11654,7 +11653,6 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-table tbody tr.is-selecte
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-badge,
-body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-pill,
 body.panel-page #outbounds-subscriptions-modal .xk-sub-file-badge,
 body.panel-page #outbounds-subscriptions-modal .xk-sub-node-latency {
   border-radius: 4px !important;
@@ -11695,114 +11693,9 @@ body.panel-page #outbounds-subscriptions-modal :is(.xk-sub-list-head-actions, .x
   box-shadow: none !important;
 }
 
-body.panel-page #outbounds-subscriptions-modal .xk-sub-diagnostics {
-  display: block;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: 0 !important;
-  border-top: 1px solid var(--op-border) !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-}
-
-body.panel-page #outbounds-subscriptions-modal .xk-sub-diagnostics > summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 46px;
-  padding: 8px 0;
-  cursor: pointer;
-  list-style: none;
-}
-
-body.panel-page #outbounds-subscriptions-modal .xk-sub-diagnostics > summary::-webkit-details-marker {
-  display: none;
-}
-
-body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-heading,
-body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-copy {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-}
-
-body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-heading {
-  gap: 7px;
-}
-
-body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-copy {
-  align-items: flex-start;
-  flex-direction: column;
-}
-
-body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-caret {
-  display: inline-flex;
-  flex: 0 0 auto;
-  color: var(--op-faint);
-  transform: rotate(-90deg);
-  transition: transform 0.12s ease;
-}
-
-body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-caret .xk-action-icon {
-  width: 14px;
-  height: 14px;
-}
-
-body.panel-page #outbounds-subscriptions-modal .xk-sub-diagnostics[open] > summary .xk-sub-diag-caret {
-  transform: rotate(0deg);
-}
-
-body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-pills {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 5px;
-  min-width: 0;
-}
-
-body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-pill {
-  min-height: var(--op-control-compact-h);
-  padding: 0 7px;
-  border: 1px solid var(--op-accent-border) !important;
-  border-radius: var(--op-control-radius) !important;
-  background: var(--op-accent-soft) !important;
-  color: var(--op-accent-hover) !important;
-  font-size: calc(9.5px * var(--xk-font-scale, 1));
-  font-weight: 620;
-  box-shadow: none !important;
-}
-
-body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-pill:is(.is-error, .is-warning, .is-error-list, .is-filtered) {
-  border-color: var(--op-accent-border) !important;
-  background: var(--op-accent-soft) !important;
-  color: var(--op-accent-hover) !important;
-}
-
-body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-body {
-  max-height: 164px;
-  margin: 0 0 8px;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-}
-
 /* The feature stylesheet makes the diagnostics body a flex container.  That
  * explicit display value otherwise wins over the browser's closed-details
  * rule, leaving the contents visible after the summary is collapsed. */
-body.panel-page #outbounds-subscriptions-modal .xk-sub-diagnostics:not([open]) > .xk-sub-diag-body {
-  display: none;
-  margin: 0;
-}
-
-body.panel-page #outbounds-subscriptions-modal .xk-sub-diag-group {
-  margin: 0;
-  padding: 8px 10px;
-  border: 0 !important;
-  border-left: 2px solid var(--op-border-strong) !important;
-  border-radius: 0 !important;
-  background: var(--op-surface-2) !important;
-}
-
 body.panel-page #outbounds-subscriptions-modal .xk-sub-node-panel {
   /* Once a user enlarges the resizable modal, let the server work area claim
    * the remaining body height instead of leaving an empty canvas below it. */

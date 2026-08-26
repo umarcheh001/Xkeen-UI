@@ -4584,10 +4584,6 @@ let outboundsModuleApi = null;
       refreshDue: 'outbounds-subscriptions-refresh-due-btn',
       tbody: 'outbounds-subscriptions-tbody',
       empty: 'outbounds-subscriptions-empty',
-      diagnostics: 'outbounds-subscriptions-diagnostics',
-      diagnosticsTitle: 'outbounds-subscriptions-diagnostics-title',
-      diagnosticsPills: 'outbounds-subscriptions-diagnostics-pills',
-      diagnosticsBody: 'outbounds-subscriptions-diagnostics-body',
       status: 'outbounds-subscriptions-status',
       summary: 'outbounds-subscriptions-summary',
       nodesPanel: 'outbounds-subscriptions-nodes-panel',
@@ -4601,7 +4597,6 @@ let outboundsModuleApi = null;
 
     let _subscriptions = [];
     let _subscriptionRoutingBalancers = [];
-    let _subscriptionRoutingMeta = Object.create(null);
     let _subscriptionEditId = '';
     let _subscriptionNodePingState = Object.create(null);
     let _subscriptionPingAllBusy = false;
@@ -4699,17 +4694,6 @@ let outboundsModuleApi = null;
         .filter((tag) => !!tag && known.has(tag) && !seen.has(tag) && seen.add(tag));
     }
 
-    function subsRoutingMetaText(key) {
-      const meta = _subscriptionRoutingMeta && typeof _subscriptionRoutingMeta === 'object' ? _subscriptionRoutingMeta : {};
-      return String(meta && meta[key] ? meta[key] : '').trim();
-    }
-
-    function subsRoutingMetaNumber(key) {
-      const meta = _subscriptionRoutingMeta && typeof _subscriptionRoutingMeta === 'object' ? _subscriptionRoutingMeta : {};
-      const value = Number(meta && meta[key]);
-      return Number.isFinite(value) ? value : 0;
-    }
-
     function subsHasManualStrategyBalancers() {
       return (_subscriptionRoutingBalancers || []).some((item) => {
         if (!item || item.auto_managed) return false;
@@ -4729,142 +4713,6 @@ let outboundsModuleApi = null;
         return 'Режим «Применение» влияет только на служебный pool. Включи «Служебный пул», чтобы менять это поведение.';
       }
       return 'Безопасно: leastPing-balancer и fallback синхронизируются, а явные правила на vless-reality остаются. Жёстко: auto-правила на vless-reality переезжают в balancerTag пула. Только подписка: служебный pool работает только через generated nodes; одиночный vless-reality/proxy в 04_outbounds.json не требуется.';
-    }
-
-    function subsRoutingModeValue(value) {
-      const mode = String(value || 'safe-fallback').trim() || 'safe-fallback';
-      return mode === SUB_ROUTING_MODE_SUBSCRIPTION_ONLY ? SUB_ROUTING_MODE_SUBSCRIPTION_ONLY : mode;
-    }
-
-    function subsQuotedTag(tag) {
-      const value = String(tag || '').trim();
-      return value ? `"${value}"` : '';
-    }
-
-    function subsDraftAutoBalancerTag() {
-      return (
-        subsRoutingMetaText('existing_auto_balancer_tag')
-        || subsRoutingMetaText('auto_balancer_candidate_tag')
-        || 'proxy'
-      );
-    }
-
-    function subsSelectorPrefixHint(tagPrefix) {
-      const prefix = String(tagPrefix || '').trim();
-      if (!prefix) return '';
-      const previewNodes = _subscriptionPreview && Array.isArray(_subscriptionPreview.nodes)
-        ? _subscriptionPreview.nodes
-        : [];
-      const sampleTags = [];
-      const seen = new Set();
-      for (let idx = 0; idx < previewNodes.length; idx += 1) {
-        const item = previewNodes[idx];
-        const tag = String(item && item.tag ? item.tag : '').trim();
-        if (!tag || seen.has(tag)) continue;
-        seen.add(tag);
-        sampleTags.push(tag);
-        if (sampleTags.length >= 2) break;
-      }
-      if (sampleTags.length) {
-        const suffix = previewNodes.length > sampleTags.length ? ' и другие generated tags.' : '.';
-        return `${subsQuotedTag(prefix)} матчится на ${sampleTags.map((tag) => subsQuotedTag(tag)).join(', ')}${suffix}`;
-      }
-      return `${subsQuotedTag(prefix)} матчится на generated tags вида ${subsQuotedTag(prefix + '--node')}.`;
-    }
-
-    function subsBuildDraftIntegrationPlan(formState) {
-      const state = (formState && typeof formState === 'object') ? formState : subsReadFormState();
-      const resolved = subsResolveDraftDefaults(state);
-      const manualTags = subsNormalizeBalancerTags(state.routing_balancer_tags);
-      const tagPrefix = String(resolved.tag || '').trim();
-      const items = [];
-      const warnings = [];
-      const hasContext = !!(
-        String(state.url || '').trim()
-        || String(state.name || '').trim()
-        || String(state.tag || '').trim()
-        || manualTags.length
-        || !state.ping_enabled
-        || state.routing_auto_rule !== subsSuggestedAutoRuleDefault()
-      );
-
-      if (!hasContext) {
-        return { items, warnings, hasPlan: false };
-      }
-
-      if (state.ping_enabled && tagPrefix) {
-        items.push(`Observatory: в subjectSelector добавится prefix ${subsQuotedTag(tagPrefix)} для leastPing-проверок. Prefix-match Xray: ${subsSelectorPrefixHint(tagPrefix)}`);
-      }
-
-      if (state.routing_auto_rule) {
-        const autoTag = subsDraftAutoBalancerTag();
-        const hasExistingAutoPool = !!subsRoutingMetaText('existing_auto_balancer_tag');
-        const routingMode = subsRoutingModeValue(state.routing_mode);
-        const selectedManualSubscriptionOnly = routingMode === SUB_ROUTING_MODE_SUBSCRIPTION_ONLY && manualTags.length;
-        if (selectedManualSubscriptionOnly) {
-          items.push(`Routing: \u0440\u0435\u0436\u0438\u043c «\u0422\u043e\u043b\u044c\u043a\u043e \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0430» \u0431\u0443\u0434\u0435\u0442 \u043e\u043f\u0438\u0440\u0430\u0442\u044c\u0441\u044f \u043d\u0430 \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0435 user balancers; \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool ${subsQuotedTag(autoTag)} \u043d\u0435 \u0431\u0443\u0434\u0435\u0442 \u0441\u043e\u0437\u0434\u0430\u043d.`);
-        } else if (tagPrefix) {
-          items.push(
-            hasExistingAutoPool
-              ? `Routing: \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0430 \u0434\u043e\u0431\u0430\u0432\u0438\u0442 prefix ${subsQuotedTag(tagPrefix)} \u0432 \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool ${subsQuotedTag(autoTag)}.`
-              : `Routing: \u0431\u0443\u0434\u0435\u0442 \u0441\u043e\u0437\u0434\u0430\u043d \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool ${subsQuotedTag(autoTag)} \u0441 leastPing \u0434\u043b\u044f prefix ${subsQuotedTag(tagPrefix)}.`
-          );
-        } else {
-          items.push(`Routing: \u0431\u0443\u0434\u0435\u0442 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool ${subsQuotedTag(autoTag)}.`);
-        }
-        if (!selectedManualSubscriptionOnly) {
-          items.push('Routing: \u0431\u0443\u0434\u0435\u0442 \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u043e \u0438\u043b\u0438 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u043e \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u043e\u0435 \u043f\u0440\u0430\u0432\u0438\u043b\u043e xk_auto_leastPing \u0434\u043b\u044f inbound redirect/tproxy.');
-        }
-        if (routingMode === 'migrate-vless-rules') {
-          items.push('Применение: совместимые auto-правила на vless-reality будут переведены на balancerTag служебного pool.');
-        } else if (routingMode === SUB_ROUTING_MODE_SUBSCRIPTION_ONLY && !selectedManualSubscriptionOnly) {
-          items.push('Применение: только подписка. Служебный pool будет вести трафик только через generated nodes; одиночный vless-reality/proxy в 04_outbounds.json не нужен.');
-        }
-      }
-
-      if (manualTags.length) {
-        const routingMode = subsRoutingModeValue(state.routing_mode);
-        if (routingMode === SUB_ROUTING_MODE_SUBSCRIPTION_ONLY) {
-          items.push(`User balancers: selector у ${manualTags.map((tag) => subsQuotedTag(tag)).join(', ')} будет заменён на подписочный prefix. Prefix-match Xray: ${subsSelectorPrefixHint(tagPrefix)}`);
-        } else {
-          items.push(`User balancers: будут расширены selector у ${manualTags.map((tag) => subsQuotedTag(tag)).join(', ')}. Prefix-match Xray: ${subsSelectorPrefixHint(tagPrefix)} Существующие значения не удаляются.`);
-        }
-      }
-
-      if (!state.routing_auto_rule && !manualTags.length) {
-        items.push('Routing: \u043d\u0435 \u0438\u0437\u043c\u0435\u043d\u0438\u0442\u0441\u044f, \u043f\u043e\u043a\u0430 \u043d\u0435 \u0432\u043a\u043b\u044e\u0447\u0451\u043d \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool \u0438 \u043d\u0435 \u043e\u0442\u043c\u0435\u0447\u0435\u043d\u044b user balancer-\u044b.');
-      }
-
-      const directRuleCount = subsRoutingMetaNumber('direct_rule_count');
-      const ruDirectRuleCount = subsRoutingMetaNumber('ru_direct_rule_count');
-      if (directRuleCount > 0) {
-        items.push(
-          ruDirectRuleCount > 0
-            ? `Routing: \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c\u0441\u043a\u0438\u0435 direct-\u043f\u0440\u0430\u0432\u0438\u043b\u0430 \u0431\u0443\u0434\u0443\u0442 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u044b (${directRuleCount}, RU: ${ruDirectRuleCount}).`
-            : `Routing: \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c\u0441\u043a\u0438\u0435 direct-\u043f\u0440\u0430\u0432\u0438\u043b\u0430 \u0431\u0443\u0434\u0443\u0442 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u044b (${directRuleCount}).`
-        );
-      }
-
-      if (state.routing_auto_rule) {
-        const shadowRuleTag = subsRoutingMetaText('auto_rule_shadowing_rule_tag');
-        const shadowTargetLabel = subsRoutingMetaText('auto_rule_shadowing_target_label');
-        const routingMode = subsRoutingModeValue(state.routing_mode);
-        if (routingMode === SUB_ROUTING_MODE_SUBSCRIPTION_ONLY && (shadowRuleTag || shadowTargetLabel)) {
-          items.push(
-            shadowRuleTag && shadowTargetLabel
-              ? `Routing: раннее правило ${subsQuotedTag(shadowRuleTag)} для ${shadowTargetLabel} будет оставлено ниже служебного правила, чтобы режим «Только подписка» не уходил в ручной outbound.`
-              : 'Routing: раннее ручное proxy-правило будет оставлено ниже служебного правила, чтобы режим «Только подписка» использовал generated nodes.'
-          );
-        } else if (shadowRuleTag && shadowTargetLabel) {
-          warnings.push(`\u0412 05_routing.json \u043f\u0440\u0430\u0432\u0438\u043b\u043e ${subsQuotedTag(shadowRuleTag)} \u0434\u043b\u044f ${shadowTargetLabel} \u0441\u0442\u043e\u0438\u0442 \u0440\u0430\u043d\u044c\u0448\u0435 \u0438, \u0432\u0435\u0440\u043e\u044f\u0442\u043d\u043e, \u043f\u0435\u0440\u0435\u0445\u0432\u0430\u0442\u0438\u0442 \u0442\u0440\u0430\u0444\u0438\u043a \u0434\u043e xk_auto_leastPing.`);
-        } else if (shadowRuleTag) {
-          warnings.push(`\u0412 05_routing.json \u043f\u0440\u0430\u0432\u0438\u043b\u043e ${subsQuotedTag(shadowRuleTag)} \u0441\u0442\u043e\u0438\u0442 \u0440\u0430\u043d\u044c\u0448\u0435 \u0438, \u0432\u0435\u0440\u043e\u044f\u0442\u043d\u043e, \u043f\u0435\u0440\u0435\u0445\u0432\u0430\u0442\u0438\u0442 \u0442\u0440\u0430\u0444\u0438\u043a \u0434\u043e xk_auto_leastPing.`);
-        } else if (shadowTargetLabel) {
-          warnings.push(`\u0412 05_routing.json \u0431\u043e\u043b\u0435\u0435 \u0440\u0430\u043d\u043d\u0435\u0435 \u043f\u0440\u0430\u0432\u0438\u043b\u043e \u0434\u043b\u044f ${shadowTargetLabel} \u0432\u0435\u0440\u043e\u044f\u0442\u043d\u043e \u043f\u0435\u0440\u0435\u0445\u0432\u0430\u0442\u0438\u0442 \u0442\u0440\u0430\u0444\u0438\u043a \u0434\u043e xk_auto_leastPing.`);
-        }
-      }
-
-      return { items, warnings, hasPlan: items.length > 0 || warnings.length > 0 };
     }
 
     function subsSelectedBalancerTags() {
@@ -5409,7 +5257,6 @@ let outboundsModuleApi = null;
         previewBtn.classList.toggle('is-armed', armed);
       }
       try { subsUpdateDraftBadge(formState, dirty); } catch (e) {}
-      try { subsRenderDiagnostics(); } catch (e2) {}
 
       return { formState, resolved, validation, dirty };
     }
@@ -5479,7 +5326,6 @@ let outboundsModuleApi = null;
         previewBtn.classList.toggle('is-armed', armed);
       }
       try { subsUpdateDraftBadge(formState, dirty); } catch (e) {}
-      try { subsRenderDiagnostics(); } catch (e2) {}
 
       return { formState, resolved, validation, dirty };
     }
@@ -5548,7 +5394,6 @@ let outboundsModuleApi = null;
       try { if (opts.focus !== false) $(SUB_IDS.url).focus(); } catch (e) {}
       try { subsSyncSelection(); } catch (e) {}
       try { subsRenderNodeList(); } catch (e) {}
-      try { subsRenderDiagnostics(); } catch (e2) {}
       try { subsSyncSubscriptionFormState(); } catch (e3) {}
       return true;
     }
@@ -5789,21 +5634,6 @@ let outboundsModuleApi = null;
                     </table>
                     <div id="outbounds-subscriptions-empty" class="xk-pool-empty">Подписок пока нет.</div>
                   </div>
-                  <details id="outbounds-subscriptions-diagnostics" class="xk-sub-diagnostics" open>
-                    <summary class="xk-sub-diag-head">
-                      <span class="xk-sub-diag-heading">
-                        <span class="xk-sub-diag-caret" aria-hidden="true">${iconHtml('chevron-down')}</span>
-                        <span class="xk-sub-diag-copy">
-                          <span class="xk-pool-kicker">Диагностика</span>
-                          <span id="outbounds-subscriptions-diagnostics-title" class="terminal-menu-title">Выбери подписку</span>
-                        </span>
-                      </span>
-                      <span id="outbounds-subscriptions-diagnostics-pills" class="xk-sub-diag-pills"></span>
-                    </summary>
-                    <div id="outbounds-subscriptions-diagnostics-body" class="xk-sub-diag-body">
-                      <div class="xk-sub-diag-empty">Выбери подписку справа, чтобы увидеть полный текст ошибки refresh, warnings транспорта и ошибки узлов.</div>
-                    </div>
-                  </details>
                   <div id="outbounds-subscriptions-status" class="modal-hint xk-sub-status"></div>
                 </section>
               </div>
@@ -6387,7 +6217,7 @@ let outboundsModuleApi = null;
       return raw.length > 42 ? raw.slice(0, 39) + '…' : raw;
     }
 
-    function subsTrimDiagnosticUrlToken(token) {
+    function subsTrimUrlToken(token) {
       let url = String(token || '');
       let trailing = '';
       while (url && /[),.;!?]$/.test(url)) {
@@ -6401,7 +6231,7 @@ let outboundsModuleApi = null;
       const full = String(url || '');
       if (!full) return '';
       const short = subsShortUrl(full) || full;
-      const className = String(opts && opts.className || 'xk-sub-diag-url').trim() || 'xk-sub-diag-url';
+      const className = String(opts && opts.className || 'xk-sub-link').trim() || 'xk-sub-link';
       const shortEscaped = escapeHtml(short);
       return `<span class="${escapeHtml(className)}"><code>${shortEscaped}</code></span>`;
     }
@@ -6409,7 +6239,7 @@ let outboundsModuleApi = null;
     function subsRenderUrlLine(line, opts) {
       const renderUrl = opts && typeof opts.renderUrl === 'function'
         ? opts.renderUrl
-        : subsRenderDiagnosticUrl;
+        : subsRenderUrlToken;
       const raw = String(line || '');
       if (!raw) return '';
       const urlRe = /\b(?:[a-z][a-z0-9+.-]*):\/\/[^\s<>"']+/gi;
@@ -6421,7 +6251,7 @@ let outboundsModuleApi = null;
         if (!Number.isFinite(index)) return match;
         matched = true;
         html += escapeHtml(raw.slice(lastIndex, index));
-        const token = subsTrimDiagnosticUrlToken(match);
+        const token = subsTrimUrlToken(match);
         html += token.url ? renderUrl(token.url) : escapeHtml(match);
         html += escapeHtml(token.trailing);
         lastIndex = index + match.length;
@@ -6432,16 +6262,8 @@ let outboundsModuleApi = null;
       return html;
     }
 
-    function subsRenderDiagnosticUrl(url) {
-      return subsRenderUrlToken(url);
-    }
-
     function subsRenderStatusUrl(url) {
       return subsRenderUrlToken(url);
-    }
-
-    function subsRenderDiagnosticLine(line) {
-      return subsRenderUrlLine(line, { renderUrl: subsRenderDiagnosticUrl });
     }
 
     function subsRenderStatusLine(line) {
@@ -6790,251 +6612,6 @@ let outboundsModuleApi = null;
       return badges;
     }
 
-    function subsStringList(value) {
-      if (Array.isArray(value)) {
-        return value.map((item) => String(item || '').trim()).filter(Boolean);
-      }
-      const text = String(value || '').trim();
-      return text ? [text] : [];
-    }
-
-    function subsFormatResultErrors(items) {
-      return (Array.isArray(items) ? items : [])
-        .map((item) => {
-          if (typeof item === 'string') return String(item || '').trim();
-          if (!item || typeof item !== 'object') return '';
-          const idx = Number(item.idx);
-          const tag = String(item.tag || '').trim();
-          const message = String(item.error || item.message || '').trim();
-          const parts = [];
-          if (Number.isFinite(idx) && idx >= 0) parts.push(`#${idx + 1}`);
-          if (tag) parts.push(tag);
-          const prefix = parts.join(' · ');
-          if (prefix && message) return `${prefix}: ${message}`;
-          return prefix || message;
-        })
-        .filter(Boolean);
-    }
-
-    function subsActiveDiagnosticsTarget() {
-      if (_subscriptionPreview) {
-        const formState = subsReadFormState();
-        const resolved = subsResolveDraftDefaults(formState);
-        return {
-          __xkDiagnosticsKind: 'preview',
-          id: String(formState.id || _subscriptionEditId || '').trim(),
-          name: resolved.name || 'Черновик',
-          tag: resolved.tag || '',
-          url: String(formState.url || '').trim(),
-          name_filter: String(formState.name_filter || '').trim(),
-          type_filter: String(formState.type_filter || '').trim(),
-          transport_filter: String(formState.transport_filter || '').trim(),
-          excluded_node_keys: Array.isArray(formState.excluded_node_keys) ? formState.excluded_node_keys.slice() : [],
-          interval_hours: subsCurrentIntervalHours(formState) || SUB_DEFAULT_INTERVAL_HOURS,
-          profile_update_interval_hours: Number(_subscriptionPreview.profileUpdateIntervalHours || 0),
-          last_count: Array.isArray(_subscriptionPreview.nodes) ? _subscriptionPreview.nodes.length : 0,
-          last_source_count: Number(_subscriptionPreview.sourceCount || 0),
-          last_filtered_out_count: Number(_subscriptionPreview.filteredOutCount || 0),
-          last_warnings: Array.isArray(_subscriptionPreview.warnings) ? _subscriptionPreview.warnings.slice() : [],
-          last_errors: Array.isArray(_subscriptionPreview.errors) ? _subscriptionPreview.errors.slice() : [],
-          last_source_format: String(_subscriptionPreview.sourceFormat || ''),
-          last_fetch_mode: String(_subscriptionPreview.fetchMode || ''),
-          last_hwid_response_headers: subsPlainObject(_subscriptionPreview.hwidResponseHeaders),
-          last_hwid_limit_info: subsPlainObject(_subscriptionPreview.hwidLimitInfo),
-          preview_ts: Number(_subscriptionPreview.ts || 0),
-        };
-      }
-      return subsFindById(_subscriptionEditId);
-    }
-
-    function subsDiagnosticsSnapshot(sub) {
-      const s = sub && typeof sub === 'object' ? sub : {};
-      const kind = String(s.__xkDiagnosticsKind || 'saved').trim() || 'saved';
-      const rawWarnings = subsStringList(s.last_warnings);
-      const errors = subsFormatResultErrors(s.last_errors);
-      const refreshError = String(s.last_error || '').trim();
-      const title = String(s.name || s.tag || s.id || (kind === 'preview' ? 'Черновик' : 'Подписка')).trim() || 'Подписка';
-      const pills = [];
-      const hwid = subsHwidDiagnostics(s);
-      const warnings = hwid.active ? rawWarnings.filter((line) => !subsIsHwidWarning(line)) : rawWarnings;
-      if (refreshError || s.last_ok === false) pills.push({ label: 'refresh error', tone: 'error', title: refreshError || 'Последнее обновление завершилось ошибкой.' });
-      if (hwid.active) pills.push({ label: hwid.reached ? 'HWID лимит' : 'HWID', tone: hwid.reached ? 'warning' : 'info', title: (hwid.lines && hwid.lines[0]) || 'HWID-данные из ответа провайдера.' });
-      if (warnings.length) pills.push({ label: `${warnings.length} предупрежд.`, tone: 'warning', title: warnings[0] });
-      if (errors.length) pills.push({ label: `${errors.length} parse`, tone: 'error-list', title: errors[0] });
-
-      return {
-        kind,
-        title,
-        pills,
-        hwid,
-        warnings,
-        errors,
-        refreshError,
-      };
-    }
-
-    function subsRenderDiagnosticsLegacy__unused() {
-      const root = $(SUB_IDS.diagnostics);
-      const titleEl = $(SUB_IDS.diagnosticsTitle);
-      const pillsEl = $(SUB_IDS.diagnosticsPills);
-      const bodyEl = $(SUB_IDS.diagnosticsBody);
-      if (!root || !titleEl || !pillsEl || !bodyEl) return;
-
-      const target = subsActiveDiagnosticsTarget();
-      if (!target) {
-        titleEl.textContent = 'Выбери подписку';
-        pillsEl.innerHTML = '';
-        bodyEl.innerHTML = '<div class="xk-sub-diag-empty">Выбери подписку справа, чтобы увидеть полный текст ошибки refresh, warnings транспорта и ошибки узлов.</div>';
-        return;
-      }
-
-      const snapshot = subsDiagnosticsSnapshot(target);
-      const title = snapshot.kind === 'preview'
-        ? `${snapshot.title} · черновик`
-        : snapshot.title;
-      titleEl.textContent = title;
-      try {
-        titleEl.setAttribute('data-tooltip', title);
-        titleEl.setAttribute('title', title);
-      } catch (e) {}
-
-      pillsEl.innerHTML = snapshot.pills.map((pill) => {
-        const label = escapeHtml(String(pill && pill.label ? pill.label : ''));
-        const tone = escapeHtml(String(pill && pill.tone ? pill.tone : 'neutral'));
-        const tooltip = escapeHtml(String(pill && pill.title ? pill.title : label));
-        return `<span class="xk-sub-diag-pill is-${tone}" title="${tooltip}" data-tooltip="${tooltip}">${label}</span>`;
-      }).join('');
-
-      const groups = [];
-
-      if (snapshot.refreshError) {
-        groups.push(
-          `<div class="xk-sub-diag-group is-error"><div class="xk-sub-diag-label">Ошибка refresh</div><pre class="xk-sub-diag-pre">${escapeHtml(snapshot.refreshError)}</pre></div>`
-        );
-      }
-      if (snapshot.warnings.length) {
-        groups.push(
-          `<div class="xk-sub-diag-group is-warning"><div class="xk-sub-diag-label">Предупреждения</div><ul class="xk-sub-diag-list">${snapshot.warnings.map((line) => `<li>${subsRenderDiagnosticLine(line)}</li>`).join('')}</ul></div>`
-        );
-      }
-      if (snapshot.errors.length) {
-        groups.push(
-          `<div class="xk-sub-diag-group is-error-list"><div class="xk-sub-diag-label">Ошибки узлов</div><ul class="xk-sub-diag-list">${snapshot.errors.map((line) => `<li>${subsRenderDiagnosticLine(line)}</li>`).join('')}</ul></div>`
-        );
-      }
-      if (!snapshot.refreshError && !snapshot.warnings.length && !snapshot.errors.length) {
-        groups.push(
-          '<div class="xk-sub-diag-empty">Последнее обновление прошло без ошибок и дополнительных предупреждений.</div>'
-        );
-      }
-
-      bodyEl.innerHTML = groups.join('');
-    }
-
-    function subsRenderDiagnostics() {
-      const root = $(SUB_IDS.diagnostics);
-      const titleEl = $(SUB_IDS.diagnosticsTitle);
-      const pillsEl = $(SUB_IDS.diagnosticsPills);
-      const bodyEl = $(SUB_IDS.diagnosticsBody);
-      if (!root || !titleEl || !pillsEl || !bodyEl) return;
-
-      const formState = subsReadFormState();
-      const resolved = subsResolveDraftDefaults(formState);
-      const plan = subsBuildDraftIntegrationPlan(formState);
-      const target = subsActiveDiagnosticsTarget();
-
-      if (!target && !plan.hasPlan) {
-        titleEl.textContent = '\u0412\u044b\u0431\u0435\u0440\u0438 \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0443';
-        pillsEl.innerHTML = '';
-        bodyEl.innerHTML = '<div class="xk-sub-diag-empty">\u0412\u044b\u0431\u0435\u0440\u0438 \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0443 \u0441\u043f\u0440\u0430\u0432\u0430, \u0447\u0442\u043e\u0431\u044b \u0443\u0432\u0438\u0434\u0435\u0442\u044c \u043f\u043e\u043b\u043d\u044b\u0439 \u0442\u0435\u043a\u0441\u0442 \u043e\u0448\u0438\u0431\u043a\u0438 refresh, warnings \u0442\u0440\u0430\u043d\u0441\u043f\u043e\u0440\u0442\u0430 \u0438 \u043e\u0448\u0438\u0431\u043a\u0438 \u0443\u0437\u043b\u043e\u0432.</div>';
-        return;
-      }
-
-      const snapshot = target
-        ? subsDiagnosticsSnapshot(target)
-        : {
-            kind: 'draft',
-            title: resolved.name || '\u0427\u0435\u0440\u043d\u043e\u0432\u0438\u043a',
-            pills: [],
-            warnings: [],
-            errors: [],
-            refreshError: '',
-          };
-      const title = snapshot.kind === 'preview'
-        ? `${snapshot.title} · \u0447\u0435\u0440\u043d\u043e\u0432\u0438\u043a`
-        : snapshot.kind === 'draft'
-          ? `${snapshot.title} · \u0438\u043d\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u044f`
-          : snapshot.title;
-      titleEl.textContent = title;
-      try {
-        titleEl.setAttribute('data-tooltip', title);
-        titleEl.setAttribute('title', title);
-      } catch (e) {}
-
-      const pills = Array.isArray(snapshot.pills) ? snapshot.pills.slice() : [];
-      if (plan.items.length) {
-        pills.unshift({
-          label: `${plan.items.length} измен.`,
-          tone: 'filtered',
-          title: '\u0427\u0442\u043e \u0438\u0437\u043c\u0435\u043d\u0438\u0442\u0441\u044f \u0432 observatory, routing \u0438 user balancer-\u0430\u0445 \u043f\u043e\u0441\u043b\u0435 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u044f.',
-        });
-      }
-      if (plan.warnings.length) {
-        pills.unshift({
-          label: `${plan.warnings.length} предупрежд.`,
-          tone: 'warning',
-          title: plan.warnings[0],
-        });
-      }
-
-      pillsEl.innerHTML = pills.map((pill) => {
-        const label = escapeHtml(String(pill && pill.label ? pill.label : ''));
-        const tone = escapeHtml(String(pill && pill.tone ? pill.tone : 'neutral'));
-        const tooltip = escapeHtml(String(pill && pill.title ? pill.title : label));
-        return `<span class="xk-sub-diag-pill is-${tone}" title="${tooltip}" data-tooltip="${tooltip}">${label}</span>`;
-      }).join('');
-
-      const groups = [];
-
-      if (plan.items.length) {
-        groups.push(
-          `<div class="xk-sub-diag-group is-plan"><div class="xk-sub-diag-label">\u0427\u0442\u043e \u0438\u0437\u043c\u0435\u043d\u0438\u0442\u0441\u044f</div><ul class="xk-sub-diag-list">${plan.items.map((line) => `<li>${subsRenderDiagnosticLine(line)}</li>`).join('')}</ul></div>`
-        );
-      }
-      if (plan.warnings.length) {
-        groups.push(
-          `<div class="xk-sub-diag-group is-warning"><div class="xk-sub-diag-label">\u0412\u043e\u0437\u043c\u043e\u0436\u043d\u044b\u0439 \u043a\u043e\u043d\u0444\u043b\u0438\u043a\u0442 routing</div><ul class="xk-sub-diag-list">${plan.warnings.map((line) => `<li>${subsRenderDiagnosticLine(line)}</li>`).join('')}</ul></div>`
-        );
-      }
-      if (snapshot.hwid && snapshot.hwid.active && Array.isArray(snapshot.hwid.lines) && snapshot.hwid.lines.length) {
-        groups.push(
-          `<div class="xk-sub-diag-group is-warning"><div class="xk-sub-diag-label">HWID / лимит устройств</div><ul class="xk-sub-diag-list">${snapshot.hwid.lines.map((line) => `<li>${subsRenderDiagnosticLine(line)}</li>`).join('')}</ul></div>`
-        );
-      }
-      if (snapshot.refreshError) {
-        groups.push(
-          `<div class="xk-sub-diag-group is-error"><div class="xk-sub-diag-label">\u041e\u0448\u0438\u0431\u043a\u0430 refresh</div><pre class="xk-sub-diag-pre">${escapeHtml(snapshot.refreshError)}</pre></div>`
-        );
-      }
-      if (snapshot.warnings.length) {
-        groups.push(
-          `<div class="xk-sub-diag-group is-warning"><div class="xk-sub-diag-label">Предупреждения</div><ul class="xk-sub-diag-list">${snapshot.warnings.map((line) => `<li>${subsRenderDiagnosticLine(line)}</li>`).join('')}</ul></div>`
-        );
-      }
-      if (snapshot.errors.length) {
-        groups.push(
-          `<div class="xk-sub-diag-group is-error-list"><div class="xk-sub-diag-label">\u041e\u0448\u0438\u0431\u043a\u0438 \u0443\u0437\u043b\u043e\u0432</div><ul class="xk-sub-diag-list">${snapshot.errors.map((line) => `<li>${subsRenderDiagnosticLine(line)}</li>`).join('')}</ul></div>`
-        );
-      }
-      if (!groups.length) {
-        groups.push(
-          '<div class="xk-sub-diag-empty">\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u0435\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435 \u043f\u0440\u043e\u0448\u043b\u043e \u0431\u0435\u0437 \u043e\u0448\u0438\u0431\u043e\u043a \u0438 \u0434\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0445 \u043f\u0440\u0435\u0434\u0443\u043f\u0440\u0435\u0436\u0434\u0435\u043d\u0438\u0439.</div>'
-        );
-      }
-
-      bodyEl.innerHTML = groups.join('');
-    }
-
     function subsResetForm() {
       _subscriptionEditId = '';
       _subscriptionPreview = null;
@@ -7058,7 +6635,6 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.refreshNow).checked = true; } catch (e) {}
       try { subsSyncSelection(); } catch (e2) {}
       try { subsRenderNodeList(); } catch (e2) {}
-      try { subsRenderDiagnostics(); } catch (e3) {}
       try { subsCaptureBaseline(); } catch (e4) {}
       try { subsSyncSubscriptionFormState(); } catch (e5) {}
     }
@@ -7094,7 +6670,6 @@ let outboundsModuleApi = null;
       try { if (opts.focus !== false) $(SUB_IDS.url).focus(); } catch (e) {}
       try { subsSyncSelection(); } catch (e2) {}
       try { subsRenderNodeList(); } catch (e2) {}
-      try { subsRenderDiagnostics(); } catch (e3) {}
       try { subsCaptureBaseline(); } catch (e4) {}
       try { subsSyncSubscriptionFormState(); } catch (e5) {}
     }
@@ -7259,7 +6834,6 @@ let outboundsModuleApi = null;
       });
 
       try { subsRenderNodeList(); } catch (e) {}
-      try { subsRenderDiagnostics(); } catch (e2) {}
     }
 
     async function subsDuplicate(id) {
@@ -7797,9 +7371,6 @@ let outboundsModuleApi = null;
         }
         _subscriptions = Array.isArray(data.subscriptions) ? data.subscriptions : [];
         _subscriptionRoutingBalancers = Array.isArray(data.routing_balancers) ? data.routing_balancers : [];
-        _subscriptionRoutingMeta = data && typeof data.routing_meta === 'object' && data.routing_meta
-          ? data.routing_meta
-          : Object.create(null);
         try {
           _subscriptionOutputFiles = new Set(_subscriptions.map((sub) => baseName(sub && sub.output_file)).filter(Boolean));
           _subscriptionOutputFilesTs = Date.now();
@@ -7838,7 +7409,6 @@ let outboundsModuleApi = null;
       }
       _subscriptionPreview = null;
       try { subsRenderNodeList(); } catch (e) {}
-      try { subsRenderDiagnostics(); } catch (e2) {}
       try { subsSyncSubscriptionFormState(); } catch (e3) {}
       if (!silent) {
         try { subsSetStatus('', false); } catch (e) {}
@@ -7902,7 +7472,6 @@ let outboundsModuleApi = null;
           ts: Date.now(),
         };
         subsRenderNodeList();
-        subsRenderDiagnostics();
         subsSyncSubscriptionFormState();
         const nodeCount = Number(_subscriptionPreview.sourceCount || _subscriptionPreview.nodes.length || 0);
         const okCount = Number(data.count || 0);

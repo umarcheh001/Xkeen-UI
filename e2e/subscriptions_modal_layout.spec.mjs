@@ -929,7 +929,7 @@ test('Xray latency stays visible but becomes muted after five minutes on cards a
 
 test('subscriptions servers expand into a resized modal and keep compact actions', async ({ page }) => {
   await page.setViewportSize({ width: 1400, height: 1200 });
-  const nodes = Array.from({ length: 30 }, (_, index) => ({
+  const nodes = Array.from({ length: 60 }, (_, index) => ({
     ...buildDemoNodes()[index % buildDemoNodes().length],
     key: `resized-node-${index + 1}`,
     name: `Resized server ${index + 1}`,
@@ -1202,63 +1202,6 @@ test('subscriptions routing controls stay compact and balancers wrap as tiles', 
   expect(selectedCards[0].cardBackground).not.toBe(unselectedCards[0].cardBackground);
 });
 
-test('subscriptions diagnostics collapses and uses Operator controls', async ({ page }) => {
-  const subscription = buildDemoSubscription();
-  await page.route('**/api/xray/subscriptions', async (route) => {
-    if (route.request().method() !== 'GET') {
-      await route.fallback();
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ ok: true, subscriptions: [subscription] }),
-    });
-  });
-
-  await openSubscriptionsModal(page);
-  await page.locator('tr[data-sub-id="demo-sub"]').click();
-
-  const contract = await page.evaluate(() => {
-    const diagnostics = document.querySelector('#outbounds-subscriptions-diagnostics');
-    const summary = diagnostics?.querySelector('summary');
-    const body = diagnostics?.querySelector('.xk-sub-diag-body');
-    const caret = diagnostics?.querySelector('.xk-sub-diag-caret');
-    const pill = diagnostics?.querySelector('.xk-sub-diag-pill');
-    const pingAll = document.querySelector('#outbounds-subscriptions-nodes-pingall');
-    const bodyStyle = window.getComputedStyle(document.body);
-    const swatch = document.createElement('span');
-    swatch.style.background = bodyStyle.getPropertyValue('--op-accent-soft').trim();
-    document.body.appendChild(swatch);
-    const accentSoft = window.getComputedStyle(swatch).backgroundColor;
-    swatch.remove();
-    summary?.click();
-    const collapsed = {
-      open: !!diagnostics?.open,
-      bodyHeight: body ? Math.round(body.getBoundingClientRect().height) : -1,
-    };
-    summary?.click();
-    const pingRect = pingAll?.getBoundingClientRect();
-    return {
-      hasCaret: !!caret,
-      reopened: !!diagnostics?.open,
-      collapsed,
-      pillBackground: pill ? window.getComputedStyle(pill).backgroundColor : '',
-      accentSoft,
-      pingWidth: pingRect ? Math.round(pingRect.width) : 0,
-      pingHeight: pingRect ? Math.round(pingRect.height) : 0,
-    };
-  });
-
-  expect(contract.hasCaret).toBe(true);
-  expect(contract.collapsed.open).toBe(false);
-  expect(contract.collapsed.bodyHeight).toBe(0);
-  expect(contract.reopened).toBe(true);
-  expect(contract.pillBackground).toBe(contract.accentSoft);
-  expect(contract.pingWidth).toBe(contract.pingHeight);
-  expect(contract.pingWidth).toBeGreaterThanOrEqual(28);
-});
-
 test('subscriptions workbench collapses empty rows and keeps refresh due in the list header', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 900 });
   const nodes = buildDemoNodes().slice(0, 7);
@@ -1476,66 +1419,6 @@ test('subscriptions modal does not reserve an empty desktop canvas without nodes
   expect(layout.height).toBeGreaterThanOrEqual(layout.bodyScrollHeight);
 });
 
-test('subscriptions diagnostics keep long source links compact and neutral without a tooltip', async ({ page }) => {
-  const nodes = buildDemoNodes();
-  const longSourceUrl = 'happ://crypt5/fzvdf6IVsHlFRwbbqoJGcN3Q96xpQiLGj3a2IAJF1PcBOQafyFLmnBB7JgOgXgyQCyUoemrxWpf9nw8ImicCMniTzOjk7tk6MZJxTFQFtlvIf8u36BlS8Kl4RPbkUUsy';
-  const subscription = buildDemoSubscription(nodes, {
-    last_warnings: [
-      `Подписка была получена через Happ helper-дешифратор. Источник: ${longSourceUrl}`,
-    ],
-  });
-
-  await page.route('**/api/xray/subscriptions', async (route) => {
-    if (route.request().method() !== 'GET') {
-      await route.fallback();
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ ok: true, subscriptions: [subscription] }),
-    });
-  });
-
-  await openSubscriptionsModal(page);
-  await page.locator('tr[data-sub-id="demo-sub"]').click();
-  await expect(page.locator('#outbounds-subscriptions-diagnostics-body')).toContainText('Источник:');
-  await expect(page.locator('#outbounds-subscriptions-diagnostics-body .xk-sub-diag-url code')).toBeVisible();
-  await page.waitForTimeout(200);
-
-  const diagnostics = await page.evaluate(() => {
-    const body = document.querySelector('#outbounds-subscriptions-diagnostics-body');
-    const groups = Array.from(document.querySelectorAll('#outbounds-subscriptions-diagnostics-body .xk-sub-diag-group'));
-    const urlChip = document.querySelector('#outbounds-subscriptions-diagnostics-body .xk-sub-diag-url');
-    const urlCode = urlChip ? urlChip.querySelector('code') : null;
-    const urlStyle = urlCode ? getComputedStyle(urlCode) : null;
-    const maxGroupOverflow = groups.reduce((max, node) => (
-      Math.max(max, Math.max(0, Math.round(node.scrollWidth - node.clientWidth)))
-    ), 0);
-    return {
-      bodyOverflow: body ? Math.max(0, Math.round(body.scrollWidth - body.clientWidth)) : 0,
-      maxGroupOverflow,
-      shortUrl: urlCode ? String(urlCode.textContent || '').trim() : '',
-      hasTooltip: !!(urlChip && (
-        urlChip.hasAttribute('title')
-        || urlChip.hasAttribute('data-tooltip')
-        || urlChip.querySelector('[title], [data-tooltip]')
-      )),
-      urlBackground: urlStyle ? urlStyle.backgroundColor : '',
-      urlBorderWidth: urlStyle ? urlStyle.borderTopWidth : '',
-    };
-  });
-
-  expect(diagnostics.bodyOverflow).toBeLessThanOrEqual(4);
-  expect(diagnostics.maxGroupOverflow).toBeLessThanOrEqual(4);
-  expect(diagnostics.shortUrl.length).toBeGreaterThan(0);
-  expect(diagnostics.shortUrl.length).toBeLessThan(longSourceUrl.length);
-  expect(diagnostics.shortUrl).toContain('crypt5');
-  expect(diagnostics.hasTooltip).toBe(false);
-  expect(diagnostics.urlBackground).toBe('rgba(0, 0, 0, 0)');
-  expect(diagnostics.urlBorderWidth).toBe('0px');
-});
-
 test('subscriptions modal ping-all button shows compact spinner while probing', async ({ page }) => {
   const nodes = buildDemoNodes();
   const subscription = buildDemoSubscription(nodes);
@@ -1653,25 +1536,22 @@ test('subscriptions fragment list grows into the free column height', async ({ p
     const panel = document.querySelector('#outbounds-subscriptions-modal .xk-sub-list-panel');
     const wrap = document.querySelector('#outbounds-subscriptions-modal .xk-sub-tablewrap');
     const table = wrap?.querySelector('table');
-    const diagnostics = document.querySelector('#outbounds-subscriptions-diagnostics');
     const panelRect = panel?.getBoundingClientRect();
     const wrapRect = wrap?.getBoundingClientRect();
     const tableRect = table?.getBoundingClientRect();
-    const diagRect = diagnostics?.getBoundingClientRect();
     return {
       wrapHeight: wrapRect ? Math.round(wrapRect.height) : 0,
       tableHeight: tableRect ? Math.round(tableRect.height) : 0,
       panelHeight: panelRect ? Math.round(panelRect.height) : 0,
-      diagInsidePanel: !!(panelRect && diagRect && diagRect.bottom <= panelRect.bottom + 1),
-      wrapAboveDiagnostics: !!(wrapRect && diagRect && wrapRect.bottom <= diagRect.top + 1),
+      wrapInsidePanel: !!(panelRect && wrapRect && wrapRect.bottom <= panelRect.bottom + 1),
     };
   });
 
   // The old build pinned the wrapper at 190px regardless of the free space.
   expect(layout.wrapHeight).toBeGreaterThan(240);
   expect(layout.wrapHeight).toBeLessThan(layout.panelHeight);
-  expect(layout.diagInsidePanel).toBe(true);
-  expect(layout.wrapAboveDiagnostics).toBe(true);
+  expect(layout.wrapInsidePanel).toBe(true);
+  expect(layout.tableHeight).toBeGreaterThan(0);
 });
 
 test('subscriptions advanced settings remember their expanded state', async ({ page }) => {

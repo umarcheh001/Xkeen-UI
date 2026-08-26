@@ -43,10 +43,6 @@ def test_xray_subscription_form_exposes_regex_filters_and_payload_fields():
     assert "sockopt_mark_255: isEntwareMarkEnabled(SUB_IDS.sockoptMark)," in outbounds_src
     assert "sockopt_mark_255: !!state.sockopt_mark_255," in outbounds_src
     assert "routing_balancer_tags: subsSelectedBalancerTags()," in outbounds_src
-    assert "let _subscriptionRoutingMeta = Object.create(null);" in outbounds_src
-    assert "function subsRoutingMetaText(key) {" in outbounds_src
-    assert "function subsRoutingMetaNumber(key) {" in outbounds_src
-    assert "function subsBuildDraftIntegrationPlan(formState) {" in outbounds_src
     assert "function subsApplySubscriptionCopy(formState) {" in outbounds_src
     assert "function subsFilterSummary(sub) {" in outbounds_src
     assert "data.filtered_out_count" in outbounds_src
@@ -317,13 +313,7 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "function subsSyncModalLayout() {" in outbounds_src
     assert "function subsDecorateActionButtons(modal) {" in outbounds_src
     assert "function subsRenderRoutingBalancers(selectedTags) {" in outbounds_src
-    assert "_subscriptionRoutingMeta = data && typeof data.routing_meta === 'object' && data.routing_meta" in outbounds_src
     assert "subsSuggestedAutoRuleDefault()" in outbounds_src
-    assert "ru_direct_rule_count" in outbounds_src
-    assert "direct-\\u043f\\u0440\\u0430\\u0432\\u0438\\u043b\\u0430" in outbounds_src
-    assert "else if (shadowTargetLabel)" in outbounds_src
-    assert "\\u0431\\u043e\\u043b\\u0435\\u0435 \\u0440\\u0430\\u043d\\u043d\\u0435\\u0435 \\u043f\\u0440\\u0430\\u0432\\u0438\\u043b\\u043e \\u0434\\u043b\\u044f" in outbounds_src
-    assert "xk-sub-diag-group is-plan" in outbounds_src
     assert "function subsTransportFilterText(transport, protocol) {" in outbounds_src
     assert "function subsProtocolFilterText(protocol) {" in outbounds_src
     assert "xk-sub-update-note" in outbounds_src
@@ -377,9 +367,6 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "btn.disabled = !hasPingable;" in outbounds_src
     assert "Нет активных узлов в generated fragment." in outbounds_src
     assert "Tag prefix" in outbounds_src
-    assert "function subsSelectorPrefixHint(tagPrefix) {" in outbounds_src
-    assert "Prefix-match Xray:" in outbounds_src
-    assert "prefix + '--node'" in outbounds_src
     assert "selector и subjectSelector по prefix-match" in outbounds_src
     assert "через subjectSelector для LeastPing." in outbounds_src
     assert "имя будет сгенерировано автоматически при сохранении" in outbounds_src
@@ -460,10 +447,8 @@ def test_subscription_control_tooltips_can_prefer_bottom_placement():
     assert ".xk-sub-interval-note {" in styles_src
     assert ".xk-sub-update-note {" in styles_src
     assert ".xk-sub-update-title {" in styles_src
-    assert ".xk-sub-diag-group.is-plan {" in styles_src
     assert ".xk-sub-node-pill-transport" in styles_src
     assert ".xk-sub-table tbody tr.is-selected" in styles_src
-    assert "html[data-theme=\"light\"] .xk-sub-diag-group.is-plan {" in styles_src
 
 
 def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
@@ -577,45 +562,29 @@ def test_xray_subscription_list_surfaces_operational_status_badges():
     assert "html[data-theme=\"light\"] .xk-sub-badge.is-due {" in styles_src
 
 
-def test_xray_subscription_modal_surfaces_refresh_diagnostics_details():
+def test_xray_subscription_modal_has_no_diagnostics_block():
+    """Блок «Диагностика» убран из модалки подписок вместе со всеми хвостами."""
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
     styles_src = _read("xkeen-ui/static/styles.css")
+    operator_src = _read("xkeen-ui/static/panel-operator.css")
 
-    assert "diagnostics: 'outbounds-subscriptions-diagnostics'" in outbounds_src
-    assert "diagnosticsTitle: 'outbounds-subscriptions-diagnostics-title'" in outbounds_src
-    assert "diagnosticsPills: 'outbounds-subscriptions-diagnostics-pills'" in outbounds_src
-    assert "diagnosticsBody: 'outbounds-subscriptions-diagnostics-body'" in outbounds_src
-    assert 'id="outbounds-subscriptions-diagnostics"' in outbounds_src
-    assert 'id="outbounds-subscriptions-diagnostics-title"' in outbounds_src
-    assert 'id="outbounds-subscriptions-diagnostics-pills"' in outbounds_src
-    assert 'id="outbounds-subscriptions-diagnostics-body"' in outbounds_src
-    assert "function subsStringList(value) {" in outbounds_src
-    assert "function subsFormatResultErrors(items) {" in outbounds_src
-    assert "function subsActiveDiagnosticsTarget() {" in outbounds_src
-    assert "function subsDiagnosticsSnapshot(sub) {" in outbounds_src
-    assert "function subsRenderDiagnostics() {" in outbounds_src
-    assert "__xkDiagnosticsKind: 'preview'" in outbounds_src
-    assert "errors: Array.isArray(data.errors) ? data.errors : []," in outbounds_src
-    assert "Выбери подписку справа, чтобы увидеть полный текст ошибки refresh, warnings транспорта и ошибки узлов." in outbounds_src
-    assert "Ошибка refresh" in outbounds_src
-    assert "Последнее обновление прошло без ошибок и дополнительных предупреждений." in outbounds_src
-    assert "Сводка" not in outbounds_src
-    assert ".xk-sub-diagnostics {" in styles_src
-    assert ".xk-sub-diag-head {" in styles_src
-    assert ".xk-sub-diag-pills {" in styles_src
-    assert ".xk-sub-diag-pill {" in styles_src
-    assert ".xk-sub-diag-pill.is-warning {" in styles_src
-    assert ".xk-sub-diag-group {" in styles_src
-    assert ".xk-sub-diag-pre {" in styles_src
-    assert ".xk-sub-diag-empty {" in styles_src
-    assert "html[data-theme=\"light\"] .xk-sub-diagnostics {" in styles_src
-    assert "html[data-theme=\"light\"] .xk-sub-diag-pill.is-error {" in styles_src
-    assert "html[data-theme=\"light\"] .xk-sub-diag-group.is-warning {" in styles_src
+    marker = "xk-sub-" + "diag"
+    assert "outbounds-subscriptions-diagnostics" not in outbounds_src
+    assert "subsRenderDiagnostics" not in outbounds_src
+    assert "subsDiagnosticsSnapshot" not in outbounds_src
+    assert "subsActiveDiagnosticsTarget" not in outbounds_src
+    assert "subsBuildDraftIntegrationPlan" not in outbounds_src
+    assert marker not in outbounds_src
+    assert marker not in styles_src
+    assert marker not in operator_src
+
+    # HWID-диагностика остаётся: её показывают бейджи списка и тосты предпросмотра.
+    assert "function subsHwidDiagnostics(sub) {" in outbounds_src
+    assert "function subsIsHwidWarning(line) {" in outbounds_src
+    assert "hwid.reached ? 'HWID лимит' : 'HWID'" in outbounds_src
+
+    # Чип ссылки переехал под свою настоящую роль — статус-строку модалки.
+    assert "'xk-sub-link'" in outbounds_src
+    assert ".xk-sub-link {" in styles_src
 
 
-def test_xray_subscription_only_mode_does_not_warn_about_shadowed_manual_pool():
-    outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
-
-    assert "routingMode === SUB_ROUTING_MODE_SUBSCRIPTION_ONLY && (shadowRuleTag || shadowTargetLabel)" in outbounds_src
-    assert "будет оставлено ниже служебного правила" in outbounds_src
-    assert "не уходил в ручной outbound" in outbounds_src
