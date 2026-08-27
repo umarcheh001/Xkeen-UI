@@ -1508,22 +1508,28 @@ import {
     if (action === 'paste') {
       if (_isCustomContextMenuReadOnly(editor)) return false;
 
-      // Let Monaco handle paste first. Its built-in clipboard controller consumes
-      // the real paste event (including clipboard contents copied outside this
-      // page) and preserves browser/platform-specific behavior and permissions.
-      // The custom menu used to read navigator.clipboard.readText() directly;
-      // that call is commonly denied after a context-menu click, which made the
-      // Paste item a no-op while Ctrl+V continued to work.
+      // Context-menu activation does not provide Monaco's clipboard controller
+      // with a trusted `paste` event, so clipboardPasteAction can resolve
+      // successfully without inserting anything. Read the system clipboard
+      // while this user gesture is still active and apply the text directly;
+      // this supports content copied from other editors or browser pages.
+      const value = await _readCustomContextMenuClipboardText();
+      if (typeof value === 'string' && value.length) {
+        const targetSelections = selections.length ? selections : _getCustomContextMenuSelections(editor);
+        if (!targetSelections.length) return false;
+        return _execCustomContextMenuEdits(editor, targetSelections.map((range) => ({ range, text: value, forceMoveMarkers: true })), 'xk-monaco-menu-paste');
+      }
+
+      // If the Clipboard API is unavailable/denied, retain Monaco's native
+      // action as a final fallback (for example, runtimes that synthesize a
+      // paste event from the menu command).
       if (_isCustomContextMenuActionSupported(editor, 'editor.action.clipboardPasteAction')) {
         if (await _runCustomContextMenuEditorAction(editor, 'editor.action.clipboardPasteAction')) return true;
       }
-
-      // Fallback for runtimes without Monaco's clipboard action (older/minimal
-      // builds). Keep the shadow clipboard for text copied through this menu.
-      const value = await _readCustomContextMenuClipboardText();
+      // Keep the shadow clipboard for text copied through this menu.
       if (typeof value !== 'string') return false;
       const targetSelections = selections.length ? selections : _getCustomContextMenuSelections(editor);
-      if (!targetSelections.length) return false;
+      if (!targetSelections.length || !value.length) return false;
       return _execCustomContextMenuEdits(editor, targetSelections.map((range) => ({ range, text: value, forceMoveMarkers: true })), 'xk-monaco-menu-paste');
     }
 

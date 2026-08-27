@@ -5,6 +5,26 @@ import re
 
 import pytest
 
+
+def test_monaco_context_menu_paste_reads_system_clipboard_when_no_paste_event():
+    """Context-menu Paste must support text copied outside Monaco.
+
+    Monaco invokes clipboardPasteAction from a menu mouse event, where
+    ``event.clipboardData`` is absent.  The runtime patch should fall back to
+    the asynchronous Clipboard API before consulting the in-memory cache.
+    """
+    text = Path('xkeen-ui/static/js/patches/monaco_runtime_fix.js').read_text(encoding='utf-8')
+
+    read_fn = text.split('async function clipboardReadText(event)', 1)[1].split(
+        'async function runClipboardAction', 1
+    )[0]
+    assert "clipboard && typeof clipboard.readText === 'function'" in read_fn
+    assert 'const text = await clipboard.readText();' in read_fn
+    assert 'storeLastClipboardText(text);' in read_fn
+    # Preserve the event-data/cache fallbacks for browsers without readText.
+    assert "event && event.clipboardData" in read_fn
+    assert 'return getCachedClipboardText();' in read_fn
+
 def test_terminal_debug_module_exists_and_exports_expected_helpers():
     path = Path('xkeen-ui/static/js/features/terminal_debug.js')
     text = path.read_text(encoding='utf-8')

@@ -153,6 +153,14 @@
   }
 
   async function clipboardReadText(event) {
+    // A context-menu action is dispatched from a mouse event rather than the
+    // editor's native `paste` event, so `event.clipboardData` is normally
+    // unavailable.  Monaco's built-in clipboardPasteAction relies on the
+    // browser paste event and consequently becomes a no-op when the text was
+    // copied outside of Monaco.  Read the system clipboard explicitly while
+    // the menu click still carries a user activation.  This is the same API
+    // used by Ctrl+V in modern browsers and works for content copied from
+    // other editors/pages as well.
     try {
       const clipboardData = event && event.clipboardData;
       if (clipboardData && typeof clipboardData.getData === 'function') {
@@ -163,6 +171,19 @@
         }
       }
     } catch (e) {}
+
+    try {
+      const nav = window.navigator || null;
+      const clipboard = nav && nav.clipboard;
+      if (clipboard && typeof clipboard.readText === 'function') {
+        const text = await clipboard.readText();
+        if (typeof text === 'string') {
+          storeLastClipboardText(text);
+          return text;
+        }
+      }
+    } catch (e) {}
+
     return getCachedClipboardText();
   }
 
