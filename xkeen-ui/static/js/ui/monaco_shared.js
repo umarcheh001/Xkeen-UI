@@ -1492,6 +1492,35 @@ import {
     return '';
   }
 
+  function _tryNativeEditorPaste(editor) {
+    // Keep the menu click's user activation and let Monaco's hidden textarea
+    // receive a trusted paste event.  This is the only path that can read the
+    // clipboard on HTTP origins where navigator.clipboard.readText() is
+    // unavailable/denied.  Some Chromium/webview runtimes allow
+    // execCommand('paste') when invoked directly from a user gesture.
+    if (!editor || typeof document === 'undefined' || !document.execCommand) return false;
+    let model = null;
+    let beforeVersion = null;
+    let beforeValue = null;
+    try {
+      model = typeof editor.getModel === 'function' ? editor.getModel() : null;
+      if (model && typeof model.getVersionId === 'function') beforeVersion = model.getVersionId();
+      if (model && beforeVersion == null && typeof model.getValue === 'function') beforeValue = model.getValue();
+    } catch (e) {}
+    let commandResult = false;
+    try { commandResult = !!document.execCommand('paste'); } catch (e) {}
+    if (!commandResult || !model) return false;
+    try {
+      if (beforeVersion != null && typeof model.getVersionId === 'function') {
+        return model.getVersionId() !== beforeVersion;
+      }
+      if (beforeValue != null && typeof model.getValue === 'function') {
+        return model.getValue() !== beforeValue;
+      }
+    } catch (e) {}
+    return commandResult;
+  }
+
   async function _readCustomContextMenuClipboardText() {
     try {
       if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
@@ -1536,6 +1565,10 @@ import {
 
     if (action === 'paste') {
       if (_isCustomContextMenuReadOnly(editor)) return false;
+
+      // First try a trusted native paste while this pointer event still has
+      // user activation. This enables external clipboard text on HTTP panels.
+      if (_tryNativeEditorPaste(editor)) return true;
 
       // Context-menu activation does not provide Monaco's clipboard controller
       // with a trusted `paste` event, so clipboardPasteAction can resolve
