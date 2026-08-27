@@ -6829,11 +6829,54 @@ let outboundsModuleApi = null;
             restore: false,
           });
           if (!ok) return;
-          if (sub) subsFillForm(sub, { focus: false, keepRefreshNow: true });
+          if (!sub) return;
+          subsFillForm(sub, { focus: false, keepRefreshNow: true });
+          // Ждём раскладку после рендера узлов, иначе замеры берутся от старого списка.
+          try {
+            requestAnimationFrame(() => {
+              try { subsScrollNodesIntoView(); } catch (e2) {}
+            });
+          } catch (e3) {
+            try { subsScrollNodesIntoView(); } catch (e4) {}
+          }
         });
       });
 
       try { subsRenderNodeList(); } catch (e) {}
+    }
+
+    function subsScrollNodesIntoView() {
+      const panel = $(SUB_IDS.nodesPanel);
+      const modal = $(SUB_IDS.modal);
+      const body = modal && modal.querySelector ? modal.querySelector('.modal-body') : null;
+      if (!panel || !body) return false;
+
+      const listEl = $(SUB_IDS.nodesList);
+      const hasNodes = !!(listEl && listEl.querySelector && listEl.querySelector('.xk-sub-node-item'));
+      if (!hasNodes) return false;
+
+      let bodyRect = null;
+      let panelRect = null;
+      try {
+        bodyRect = body.getBoundingClientRect();
+        panelRect = panel.getBoundingClientRect();
+      } catch (e) {}
+      if (!bodyRect || !panelRect) return false;
+
+      // Панель уже видна целиком — прокрутка только дёргала бы окно.
+      if (panelRect.top >= bodyRect.top - 1 && panelRect.bottom <= bodyRect.bottom + 1) return false;
+
+      const delta = panelRect.top - bodyRect.top;
+      if (Math.abs(delta) < 2) return false;
+
+      let smooth = true;
+      try { smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e2) {}
+      try {
+        body.scrollTo({ top: body.scrollTop + delta, behavior: smooth ? 'smooth' : 'auto' });
+      } catch (e3) {
+        try { body.scrollTop = body.scrollTop + delta; } catch (e4) {}
+      }
+      return true;
     }
 
     async function subsDuplicate(id) {

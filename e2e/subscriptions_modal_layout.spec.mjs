@@ -992,9 +992,11 @@ test('subscriptions servers expand into a resized modal and keep compact actions
   });
 
   expect(layout.modal.height).toBeGreaterThanOrEqual(990);
-  expect(layout.body.scrollHeight).toBeLessThanOrEqual(layout.body.clientHeight + 1);
   expect(layout.list.height).toBeGreaterThan(350);
-  expect(layout.list.scrollHeight).toBeGreaterThan(layout.list.clientHeight);
+  // The server list grows with its cards instead of scrolling inside itself;
+  // the window is what scrolls once the cards outgrow the modal.
+  expect(layout.list.scrollHeight).toBeLessThanOrEqual(layout.list.clientHeight + 1);
+  expect(layout.body.scrollHeight).toBeGreaterThan(layout.body.clientHeight);
   expect(layout.ping.width).toBeGreaterThanOrEqual(28);
   expect(layout.ping.height).toBe(22);
   expect(layout.ping.radius).toBe('4px');
@@ -1246,14 +1248,21 @@ test('subscriptions workbench collapses empty rows and keeps refresh due in the 
     return {
       modalHeight: modalRect ? Math.round(modalRect.height) : 0,
       dueInsideHead: !!(headRect && dueRect && dueRect.top >= headRect.top - 1 && dueRect.bottom <= headRect.bottom + 1),
-      tableSlack: tableRect && wrapRect ? Math.round(wrapRect.height - tableRect.height) : 999,
+      // Dead space left under the table inside its own column, status line aside.
+      columnSlack: (() => {
+        const panelRect = listPanel?.getBoundingClientRect();
+        const status = document.querySelector('#outbounds-subscriptions-status');
+        const statusHeight = status ? status.getBoundingClientRect().height : 0;
+        return panelRect && wrapRect ? Math.round(panelRect.bottom - wrapRect.bottom - statusHeight) : 999;
+      })(),
       nodeSlack: listRect && cardBottom ? Math.round(listRect.bottom - cardBottom) : 999,
       hiddenNotesVisible: hiddenNotes.filter((note) => window.getComputedStyle(note).display !== 'none').length,
     };
   });
 
   expect(layout.dueInsideHead).toBe(true);
-  expect(layout.tableSlack).toBeLessThanOrEqual(3);
+  // The table wrapper fills its column instead of collapsing around the rows.
+  expect(layout.columnSlack).toBeLessThanOrEqual(24);
   expect(layout.nodeSlack).toBeLessThanOrEqual(3);
   expect(layout.hiddenNotesVisible).toBe(0);
   expect(layout.modalHeight).toBeLessThan(1000);
@@ -1552,6 +1561,161 @@ test('subscriptions fragment list grows into the free column height', async ({ p
   expect(layout.wrapHeight).toBeLessThan(layout.panelHeight);
   expect(layout.wrapInsidePanel).toBe(true);
   expect(layout.tableHeight).toBeGreaterThan(0);
+});
+
+test('subscriptions window scrolls as a whole so every server is reachable', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const base = buildDemoNodes();
+  const nodes = Array.from({ length: 120 }, (_, index) => ({
+    ...base[index % base.length],
+    key: `bulk-node-${index + 1}`,
+    name: `Bulk server ${index + 1}`,
+    tag: `demo-sub--bulk-node-${index + 1}`,
+  }));
+  const subscription = buildDemoSubscription(nodes);
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscriptions: [subscription] }),
+    });
+  });
+
+  await openSubscriptionsModal(page);
+  await page.locator('tr[data-sub-id="demo-sub"]').click();
+  await expect(page.locator('#outbounds-subscriptions-nodes-list .xk-sub-node-item')).toHaveCount(nodes.length);
+
+  // The click scrolls the window down to the servers on its own.
+  const readScrollTop = () => page.evaluate(() => {
+    const body = document.querySelector('#outbounds-subscriptions-modal .modal-body');
+    return body ? Math.round(body.scrollTop) : 0;
+  });
+  await expect.poll(readScrollTop).toBeGreaterThan(0);
+  // Smooth scrolling is still animating right after the click: wait for it to settle.
+  await expect
+    .poll(async () => {
+      const first = await readScrollTop();
+      await page.waitForTimeout(80);
+      const second = await readScrollTop();
+      return first === second ? 'settled' : 'moving';
+    })
+    .toBe('settled');
+
+  const layout = await page.evaluate(() => {
+    const body = document.querySelector('#outbounds-subscriptions-modal .modal-body');
+    const list = document.querySelector('#outbounds-subscriptions-nodes-list');
+    const panel = document.querySelector('#outbounds-subscriptions-nodes-panel');
+    const head = panel?.querySelector('.xk-sub-panelhead');
+    const bodyRect = body?.getBoundingClientRect();
+    return {
+      bodyScrolls: !!(body && body.scrollHeight > body.clientHeight + 1),
+      listOwnScroll: !!(list && list.scrollHeight > list.clientHeight + 1),
+      listOverflow: list ? window.getComputedStyle(list).overflowY : '',
+      headPosition: head ? window.getComputedStyle(head).position : '',
+      lastCardBelowFold: (() => {
+        const cards = document.querySelectorAll('#outbounds-subscriptions-nodes-list .xk-sub-node-item');
+        const last = cards[cards.length - 1];
+        const rect = last?.getBoundingClientRect();
+        return !!(rect && bodyRect && rect.bottom > bodyRect.bottom);
+      })(),
+    };
+  });
+
+  // The list itself no longer scrolls: the window does, so the servers are
+  // reached by scrolling past the form and the fragment table.
+  expect(layout.listOwnScroll).toBe(false);
+  expect(layout.listOverflow).toBe('visible');
+  expect(layout.bodyScrolls).toBe(true);
+  expect(layout.headPosition).toBe('sticky');
+  expect(layout.lastCardBelowFold).toBe(true);
+
+  // Scrolling to the bottom brings the last server fully into view.
+  await page.evaluate(() => {
+    const body = document.querySelector('#outbounds-subscriptions-modal .modal-body');
+    if (body) body.scrollTop = body.scrollHeight;
+  });
+  await page.waitForTimeout(120);
+  const bottom = await page.evaluate(() => {
+    const body = document.querySelector('#outbounds-subscriptions-modal .modal-body');
+    const cards = document.querySelectorAll('#outbounds-subscriptions-nodes-list .xk-sub-node-item');
+    const last = cards[cards.length - 1];
+    const head = document.querySelector('#outbounds-subscriptions-nodes-panel .xk-sub-panelhead');
+    const bodyRect = body?.getBoundingClientRect();
+    const rect = last?.getBoundingClientRect();
+    const headRect = head?.getBoundingClientRect();
+    return {
+      lastVisible: !!(rect && bodyRect && rect.bottom <= bodyRect.bottom + 1 && rect.top >= bodyRect.top - 1),
+      // The heading keeps naming the subscription while the list scrolls past it.
+      headPinned: !!(bodyRect && headRect && Math.abs(headRect.top - bodyRect.top) <= 2),
+    };
+  });
+  expect(bottom.lastVisible).toBe(true);
+  expect(bottom.headPinned).toBe(true);
+});
+
+test('subscriptions fragment table fills the free height of its column', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const nodes = buildDemoNodes().slice(0, 2);
+  const subscriptions = Array.from({ length: 8 }, (_, index) =>
+    buildDemoSubscription(nodes, {
+      id: `fill-sub-${index}`,
+      name: `VPS_FILL_${index}`,
+      tag: `VPS_FILL_${index}`,
+      output_file: `04_outbounds.vps_fill_${index}.json`,
+    })
+  );
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscriptions }),
+    });
+  });
+
+  await openSubscriptionsModal(page);
+  await expect(page.locator('tr[data-sub-id="fill-sub-0"]')).toBeVisible();
+  // The form column is the tall one once its advanced block is open: that is the
+  // height the table has to fill instead of leaving a dead zone underneath.
+  const advanced = page.locator('#outbounds-subscriptions-modal .xk-sub-advanced');
+  if (!(await advanced.getAttribute('open'))) await advanced.locator('summary').click();
+  await page.waitForTimeout(150);
+
+  const layout = await page.evaluate(() => {
+    const panel = document.querySelector('#outbounds-subscriptions-modal .xk-sub-list-panel');
+    const wrap = document.querySelector('#outbounds-subscriptions-modal .xk-sub-tablewrap');
+    const status = document.querySelector('#outbounds-subscriptions-status');
+    const panelRect = panel?.getBoundingClientRect();
+    const wrapRect = wrap?.getBoundingClientRect();
+    const statusRect = status?.getBoundingClientRect();
+    const statusHeight = statusRect ? statusRect.height : 0;
+    return {
+      panelHeight: panelRect ? Math.round(panelRect.height) : 0,
+      wrapHeight: wrapRect ? Math.round(wrapRect.height) : 0,
+      // Dead space between the table and the bottom of its column.
+      gap: (panelRect && wrapRect) ? Math.round(panelRect.bottom - wrapRect.bottom - statusHeight) : 999,
+      visibleRows: (() => {
+        const rows = Array.from(document.querySelectorAll('#outbounds-subscriptions-tbody tr[data-sub-id]'));
+        if (!wrapRect) return 0;
+        return rows.filter((row) => {
+          const rect = row.getBoundingClientRect();
+          return rect.top >= wrapRect.top - 1 && rect.bottom <= wrapRect.bottom + 1;
+        }).length;
+      })(),
+    };
+  });
+
+  // The old build capped the table at 40dvh and left the rest of the column empty.
+  expect(layout.wrapHeight).toBeGreaterThan(500);
+  expect(layout.gap).toBeLessThanOrEqual(24);
+  expect(layout.visibleRows).toBeGreaterThan(3);
 });
 
 test('subscriptions advanced settings remember their expanded state', async ({ page }) => {

@@ -11600,17 +11600,19 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-list-head-actions > .btn-
   margin: 0;
 }
 
-/* The fragment list grows with its rows instead of sitting at a fixed 190px,
- * but it still needs a ceiling: this column is sized by its own content, so an
- * uncapped list pushes the diagnostics and the node panel below the modal's
- * bottom edge rather than yielding to them.  Tying the cap to the viewport
- * keeps the list as tall as the window can afford while the areas underneath
- * stay reachable, and `flex-basis: auto` still collapses the wrapper around a
- * short list. */
+/* The fragment list owns the free height of its column.  The form panel on the
+ * left is the taller of the two, so a capped wrapper left a dead zone under the
+ * table instead of showing more rows.  The wrapper keeps its own scrollbar and
+ * sticky header, which is what stops a long list from stretching the two-column
+ * area: the node panel underneath stays exactly one page scroll away. */
 body.panel-page #outbounds-subscriptions-modal .xk-sub-tablewrap {
-  flex: 0 1 auto;
-  min-height: 0;
-  max-height: clamp(190px, 40dvh, 560px);
+  /* `flex-basis: 0` is what keeps the table honest: it takes the height left
+   * over in its column instead of asking for the height of all its rows, so a
+   * long list fills the dead space next to the form without stretching the
+   * two-column area and pushing the servers further down. */
+  flex: 1 1 0;
+  min-height: clamp(190px, 34dvh, 420px);
+  max-height: none;
   overflow: auto;
   border-radius: 0 !important;
   background: transparent !important;
@@ -11697,13 +11699,14 @@ body.panel-page #outbounds-subscriptions-modal :is(.xk-sub-list-head-actions, .x
  * explicit display value otherwise wins over the browser's closed-details
  * rule, leaving the contents visible after the summary is collapsed. */
 body.panel-page #outbounds-subscriptions-modal .xk-sub-node-panel {
-  /* Once a user enlarges the resizable modal, let the server work area claim
-   * the remaining body height instead of leaving an empty canvas below it. */
-  flex: 1 1 auto;
+  /* The server area claims any leftover body height, but never shrinks below
+   * its own content: with many servers it grows past the modal and the body
+   * scrollbar takes over, so the whole window scrolls down to the servers. */
+  flex: 1 0 auto;
   min-height: 0;
   gap: 8px;
   margin: 0;
-  padding: 10px 14px 14px;
+  padding: 0 14px 14px;
   border: 0 !important;
   border-radius: 0 !important;
 }
@@ -11716,15 +11719,26 @@ html[data-theme="light"] body.panel-page #outbounds-subscriptions-modal .xk-sub-
   gap: 8px;
   align-items: stretch;
   align-content: start;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
   max-height: none;
   padding: 0;
-  overflow: auto;
+  overflow: visible;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
-  scrollbar-gutter: stable;
+}
+
+/* Long server lists scroll the whole window, so the panel heading sticks to the
+ * top of the body: it keeps naming the subscription the cards belong to. */
+body.panel-page #outbounds-subscriptions-modal .xk-sub-node-panel > .xk-sub-panelhead {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: 0 -14px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--op-border) !important;
+  background: var(--op-surface) !important;
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-node-item,
@@ -15848,9 +15862,10 @@ body.panel-page .monaco-editor :is(.suggest-details, .parameter-hints-widget) :i
     border-bottom: 1px solid var(--op-border) !important;
   }
 
-  /* Stacked layout: the column is sized by its own content, so an uncapped
-   * list would push the diagnostics far below the fold. */
+  /* Stacked layout: both panels share one column, so an uncapped table would
+   * push the server list far below the fold. */
   body.panel-page #outbounds-subscriptions-modal .xk-sub-tablewrap {
+    min-height: 0;
     max-height: 190px;
   }
 }
