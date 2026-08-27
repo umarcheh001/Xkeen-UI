@@ -1185,17 +1185,17 @@
       {{ op_icon('alert') }}
       <div>
         <strong id="mihomo-clash-assistant-title">Нужна настройка Mihomo API</strong>
-        <span id="mihomo-clash-assistant-message">Панель безопасно перенесёт API на локальный TCP с новым secret после вашего подтверждения.</span>
-        <code id="mihomo-clash-assistant-value">external-controller: 127.0.0.1:9090</code>
+        <span id="mihomo-clash-assistant-message">Настройте controller вручную или подтвердите первоначальное включение API.</span>
+        <code id="mihomo-clash-assistant-value">Доступ из LAN и secret не изменяются автоматически</code>
       </div>
-      <button id="mihomo-clash-assistant-button" type="button" class="btn-primary" data-mihomo-clash-action="migration-preview">Настроить автоматически</button>
+      <button id="mihomo-clash-assistant-button" type="button" class="btn-primary" data-mihomo-clash-action="migration-preview">Включить API</button>
     </div>
 
     <section id="mihomo-clash-migration" class="xk-mihomo-migration" aria-labelledby="mihomo-clash-migration-title" hidden>
       <div class="xk-mihomo-migration-head">
         <div>
           <h3 id="mihomo-clash-migration-title">Настройка Mihomo API</h3>
-          <p id="mihomo-clash-migration-description">Панель выполнит всё автоматически.</p>
+      <p id="mihomo-clash-migration-description">Панель выполнит первоначальную настройку только после вашего подтверждения.</p>
         </div>
         <button type="button" class="btn-secondary btn-icon" data-mihomo-clash-action="migration-close" aria-label="Закрыть помощник">{{ op_icon('close') }}</button>
       </div>
@@ -1209,7 +1209,7 @@
         <summary>Другой способ подключения</summary>
         <label for="mihomo-clash-migration-transport">Подключение</label>
         <select id="mihomo-clash-migration-transport">
-          <option value="tcp-loopback">Локальный TCP + новый secret (рекомендуется)</option>
+          <option value="tcp-loopback">Локальный TCP (secret задаётся вами)</option>
           <option value="unix">Unix socket</option>
         </select>
       </details>

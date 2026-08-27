@@ -233,20 +233,21 @@ function renderStatus(state, payload = null) {
     openConfig.hidden = !['controller_missing', 'not_configured', 'blocked', 'unauthorized'].includes(state);
   }
   const warning = byId('mihomo-clash-security-warning');
-  const migrationRequired = !!(payload?.security?.migration_required);
+  // A security migration used to trigger a one-click "protect" assistant.
+  // Keep the status payload for diagnostics, but do not offer or run that
+  // migration automatically: controller access is intentionally left under
+  // the user's control so Xkeen and Zashboard can coexist.
   const setupRequired = !!(payload?.security?.setup_required);
-  const nextAssistantKind = setupRequired ? 'setup' : (migrationRequired ? 'security' : '');
+  const nextAssistantKind = setupRequired ? 'setup' : '';
   if (warning) warning.dataset.kind = nextAssistantKind;
   if (nextAssistantKind === 'setup') {
     setText('mihomo-clash-assistant-title', 'Нужно один раз включить Mihomo API');
     setText('mihomo-clash-assistant-message', 'Панель сама создаст backup, добавит локальный API, проверит конфиг, перезапустит Mihomo и проверит подключение.');
     setText('mihomo-clash-assistant-button', 'Включить API');
-  } else if (nextAssistantKind === 'security') {
-    setText('mihomo-clash-assistant-title', 'Mihomo API нужно защитить');
-    setText('mihomo-clash-assistant-message', 'Панель автоматически перенесёт API с открытого LAN-порта на локальный TCP с новым secret, backup и проверкой.');
-    setText('mihomo-clash-assistant-button', 'Защитить автоматически');
   }
-  setText('mihomo-clash-assistant-value', 'Ваши группы, узлы и подписки не изменятся');
+  setText('mihomo-clash-assistant-value', setupRequired
+    ? 'Настройка API выполняется только после вашего подтверждения.'
+    : 'Настройки controller и доступ из LAN не изменяются. Совместимо с Zashboard.');
   assistantKind = nextAssistantKind;
   setHidden(warning, !nextAssistantKind);
   void refreshPanelMode();
@@ -262,7 +263,7 @@ function renderPanelSwitch() {
   const panelName = String(panelMode.panel_name || 'прежнюю панель');
   setText('mihomo-clash-panel-switch-label', external ? 'Вернуться в Xkeen Clash API' : `Вернуть ${panelName}`);
   button.setAttribute('data-tooltip', external
-    ? 'Создать backup, включить защищённый Xkeen Clash API и перезапустить Mihomo'
+    ? 'Создать backup, включить Xkeen Clash API и перезапустить Mihomo'
     : `Создать backup и вернуть ${panelName} одной кнопкой`);
 }
 
@@ -284,7 +285,7 @@ async function togglePanelMode() {
   const panelName = String(panelMode.panel_name || 'прежнюю панель');
   const question = target === 'external'
     ? `Вернуть ${panelName}? Панель создаст backup, восстановит прежний controller и перезапустит Mihomo.`
-    : 'Вернуться в Xkeen Clash API? Панель создаст backup, включит локальный API и перезапустит Mihomo.';
+    : 'Вернуться в Xkeen Clash API? Панель создаст backup, включит API и перезапустит Mihomo. Настройки доступа не изменяются.';
   if (!window.confirm(question)) return false;
   panelSwitchBusy = true;
   renderPanelSwitch();
@@ -367,14 +368,17 @@ function setMigrationBusy(busy) {
 
 function renderMigrationAssistantCopy() {
   const setup = assistantKind === 'setup';
-  setText('mihomo-clash-migration-title', setup ? 'Включить Mihomo API' : 'Защитить Mihomo API');
+  setText('mihomo-clash-migration-title', 'Включить Mihomo API');
   setText('mihomo-clash-migration-description', setup
     ? 'Одна кнопка — backup, проверка, сохранение, перезапуск и контроль подключения.'
-    : 'Панель сохранит ваши настройки и автоматически закроет доступ к controller из LAN.');
-  setText('mihomo-clash-migration-apply', setup ? 'Настроить и включить API' : 'Защитить и перезапустить');
+    : 'Автоматическая защита отключена. Настройте controller вручную в конфигурации.');
+  setText('mihomo-clash-migration-apply', 'Настроить и включить API');
 }
 
 async function openMigrationPreview() {
+  // The migration endpoint can still be used for initial API setup, but the
+  // former security-migration path is intentionally unavailable in the UI.
+  if (assistantKind !== 'setup') return false;
   renderMigrationAssistantCopy();
   setHidden(byId('mihomo-clash-migration'), false);
   const ready = await refreshMigrationPreview();
@@ -385,9 +389,10 @@ async function openMigrationPreview() {
 async function applyMigration() {
   if (migrationBusy || !migrationPreviewId) return false;
   const setup = assistantKind === 'setup';
+  if (!setup) return false;
   const confirmed = window.confirm(setup
     ? 'Панель создаст backup, настроит локальный Mihomo API и перезапустит Mihomo. Продолжить?'
-    : 'Панель создаст backup, закроет доступ к controller из LAN и перезапустит Mihomo. Продолжить?');
+    : 'Настроить Mihomo API?');
   if (!confirmed) return false;
   migrationBusy = true;
   setMigrationBusy(true);
