@@ -184,7 +184,13 @@ def _security_posture(discovery: MihomoClashDiscovery) -> dict[str, Any]:
         "recommended_transport": "tcp-loopback",
         "recommended_value": "external-controller: 127.0.0.1:9090 + secret",
         "panel_password_reuse": False,
-        "migration_required": lan_without_secret,
+        # Do not force an automatic "protect" migration for LAN controllers.
+        # Users may intentionally expose the Clash API (for example to use
+        # Zashboard from another device) and can manage the secret/bind address
+        # themselves.  Keeping this flag false prevents the frontend from
+        # showing a one-click protection warning while retaining the diagnostic
+        # mode above for informational purposes.
+        "migration_required": False,
         "setup_required": setup_required,
     }
 
