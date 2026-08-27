@@ -178,7 +178,7 @@ def insert_proxies_from_state(content: str, state: Dict[str, Any]) -> str:
         default_groups = []
     default_groups = [str(group).strip() for group in default_groups if str(group).strip()]
     if not default_groups:
-        default_groups = ["Заблок. сервисы"]
+        default_groups = ["Заблок. сервисы", "Fallback", "Fastest"]
 
     cfg = content
 
@@ -231,7 +231,7 @@ def insert_proxies_from_state(content: str, state: Dict[str, Any]) -> str:
             groups = list(default_groups)
 
         if not groups:
-            groups = ["Заблок. сервисы"]
+            groups = ["Заблок. сервисы", "Fallback", "Fastest"]
 
         try:
             if kind in {"auto", "vless", "trojan", "vmess", "ss", "hysteria2"}:

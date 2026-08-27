@@ -28,6 +28,9 @@ DEFAULT_TEMPLATES: Dict[str, str] = {
     "app": "custom.yaml",
 }
 
+# Built-in proxy groups used as defaults for newly imported nodes.
+DEFAULT_PROXY_GROUPS: Sequence[str] = ("Заблок. сервисы", "Fallback", "Fastest")
+
 
 ROUTER_PROVIDER_NAMES: List[str] = [
     "proxy-sub",
@@ -156,4 +159,5 @@ __all__ = [
     "select_template_filename",
     "load_template_text",
     "get_profile_rule_presets",
+    "DEFAULT_PROXY_GROUPS",
 ]

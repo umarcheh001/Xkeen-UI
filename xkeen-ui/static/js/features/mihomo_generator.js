@@ -155,6 +155,25 @@ let mihomoGeneratorModuleApi = null;
           type: select
           icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Reject.png
           include-all: true
+          proxies: [Fallback, Fastest]
+
+        - name: Fallback
+          type: fallback
+          url: https://www.gstatic.com/generate_204
+          icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Available.png
+          interval: 300
+          max-failed-times: 3
+          hidden: true
+          include-all: true
+
+        - name: Fastest
+          type: url-test
+          url: https://www.gstatic.com/generate_204
+          icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Auto.png
+          interval: 300
+          max-failed-times: 3
+          hidden: true
+          include-all: true
       
         - name: QUIC
           type: select
@@ -3860,7 +3879,7 @@ function initEngineToggle() {
               const groups = Array.isArray(state.defaultGroups)
                 ? state.defaultGroups.map((item) => String(item || "").trim()).filter(Boolean)
                 : [];
-              defaultGroupsInput.value = groups.join(", ");
+              defaultGroupsInput.value = (groups.length ? groups : ["Заблок. сервисы", "Fallback", "Fastest"]).join(", ");
             }
 
             restoreSubscriptionRows(Array.isArray(state.subscriptions) ? state.subscriptions : []);

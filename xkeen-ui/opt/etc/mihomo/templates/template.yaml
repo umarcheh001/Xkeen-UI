@@ -57,7 +57,7 @@ proxy-groups:
   type: select
   icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Hijacking.png
   include-all: true
-  proxies: ["⚡️ Fastest", DIRECT]
+  proxies: [Fallback, "⚡️ Fastest", DIRECT]
 
 - name: ⚡️ Fastest
   type: url-test
@@ -74,60 +74,61 @@ proxy-groups:
 - name: Fallback
   type: fallback
   hidden: true
-  icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png
+  icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Available.png
   use:
   - proxy-sub
   url: https://www.gstatic.com/generate_204
   interval: 300
+  max-failed-times: 3
   lazy: true
 
 - name: AI
   type: select
   icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/ChatGPT.png
   include-all: true
-  proxies: ["VPN", "⚡️ Fastest", DIRECT]
+  proxies: ["VPN", Fallback, "⚡️ Fastest", DIRECT]
 
 - name: GitHub
   type: select
   icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/GitHub.png
   include-all: true
-  proxies: [DIRECT, "VPN", "⚡️ Fastest"]
+  proxies: [DIRECT, "VPN", Fallback, "⚡️ Fastest"]
 
 - name: YouTube
   type: select
   icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/YouTube.png
   include-all: true
-  proxies: ["VPN", "⚡️ Fastest", DIRECT]
+  proxies: ["VPN", Fallback, "⚡️ Fastest", DIRECT]
 
 - name: Amazon
   type: select
   icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Amazon.png
   include-all: true
-  proxies: [DIRECT, "VPN", "⚡️ Fastest"]
+  proxies: [DIRECT, "VPN", Fallback, "⚡️ Fastest"]
 
 - name: CDN
   type: select
   icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Cloudflare.png
   include-all: true
-  proxies: [DIRECT, "VPN", "⚡️ Fastest"]
+  proxies: [DIRECT, "VPN", Fallback, "⚡️ Fastest"]
 
 - name: Meta
   type: select
   icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Facebook.png
   include-all: true
-  proxies: ["VPN", "⚡️ Fastest", DIRECT]
+  proxies: ["VPN", Fallback, "⚡️ Fastest", DIRECT]
 
 - name: Spotify
   type: select
   icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Spotify.png
   include-all: true
-  proxies: [DIRECT, "VPN", "⚡️ Fastest"]
+  proxies: [DIRECT, "VPN", Fallback, "⚡️ Fastest"]
 
 - name: PlayStation
   type: select
   icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/PlayStation.png
   include-all: true
-  proxies: [DIRECT, "VPN", "⚡️ Fastest"]
+  proxies: [DIRECT, "VPN", Fallback, "⚡️ Fastest"]
 
 - name: Xbox
   type: select
@@ -139,37 +140,37 @@ proxy-groups:
   type: select
   icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Telegram.png
   include-all: true
-  proxies: ["VPN", "⚡️ Fastest", DIRECT]
+  proxies: ["VPN", Fallback, "⚡️ Fastest", DIRECT]
 
 - name: Steam
   type: select
   icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Steam.png
   include-all: true
-  proxies: [DIRECT, "VPN", "⚡️ Fastest"]
+  proxies: [DIRECT, "VPN", Fallback, "⚡️ Fastest"]
 
 - name: Discord
   type: select
   icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Discord.png
   include-all: true
-  proxies: ["VPN", "⚡️ Fastest", DIRECT]
+  proxies: ["VPN", Fallback, "⚡️ Fastest", DIRECT]
 
 - name: Заблокировано в РФ
   type: select
   icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Filter.png
   include-all: true
-  proxies: ["VPN", "⚡️ Fastest", DIRECT]
+  proxies: ["VPN", Fallback, "⚡️ Fastest", DIRECT]
 
 - name: Недоступно из РФ
   type: select
   icon: https://upload.wikimedia.org/wikipedia/commons/e/ed/RKN_site_logo_%282013-2021%29.png
   include-all: true
-  proxies: ["VPN", "⚡️ Fastest", DIRECT]
+  proxies: ["VPN", Fallback, "⚡️ Fastest", DIRECT]
 
 - name: Остальное
   type: select
   icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Global.png
   include-all: true
-  proxies: [DIRECT, "⚡️ Fastest", "VPN"]
+  proxies: [DIRECT, Fallback, "⚡️ Fastest", "VPN"]
 
 rule-providers:
   apple:

@@ -55,92 +55,111 @@ proxy-groups:
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Reject.png
     include-all: true
+    proxies: [Fallback, Fastest]
+
+  - name: Fallback
+    type: fallback
+    url: https://www.gstatic.com/generate_204
+    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Available.png
+    interval: 300
+    max-failed-times: 3
+    hidden: true
+    include-all: true
+
+  - name: Fastest
+    type: url-test
+    url: https://www.gstatic.com/generate_204
+    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Auto.png
+    interval: 300
+    max-failed-times: 3
+    hidden: true
+    include-all: true
 
   - name: YouTube
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/YouTube.png
     include-all: true
-    proxies: [Заблок. сервисы, DIRECT]
+    proxies: [Заблок. сервисы, Fallback, Fastest, DIRECT]
 
   - name: Discord
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Discord.png
     include-all: true
-    proxies: [Заблок. сервисы, DIRECT]
+    proxies: [Заблок. сервисы, Fallback, Fastest, DIRECT]
 
   - name: Twitch
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Twitch.png
     include-all: true
-    proxies: [DIRECT, Заблок. сервисы]
+    proxies: [DIRECT, Заблок. сервисы, Fallback, Fastest]
 
   - name: Reddit
     type: select
     icon: https://www.redditstatic.com/shreddit/assets/favicon/192x192.png
     include-all: true
-    proxies: [DIRECT, Заблок. сервисы]
+    proxies: [DIRECT, Заблок. сервисы, Fallback, Fastest]
 
   - name: Meta
     type: select
     icon: https://github.com/zxc-rv/assets/raw/main/group-icons/meta.png
     include-all: true
-    proxies: [Заблок. сервисы, DIRECT]
+    proxies: [Заблок. сервисы, Fallback, Fastest, DIRECT]
 
   - name: Spotify
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Spotify.png
     include-all: true
     exclude-filter: 🇷🇺
-    proxies: [Заблок. сервисы, DIRECT]
+    proxies: [Заблок. сервисы, Fallback, Fastest, DIRECT]
 
   - name: Speedtest
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Speedtest.png
     include-all: true
-    proxies: [Заблок. сервисы, DIRECT]
+    proxies: [Заблок. сервисы, Fallback, Fastest, DIRECT]
 
   - name: Telegram
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Telegram.png
     include-all: true
-    proxies: [Заблок. сервисы, DIRECT]
+    proxies: [Заблок. сервисы, Fallback, Fastest, DIRECT]
 
   - name: Steam
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Steam.png
     include-all: true
-    proxies: [DIRECT, Заблок. сервисы]
+    proxies: [DIRECT, Fallback, Fastest, Заблок. сервисы]
 
   - name: CDN
     type: select
     icon: https://www.svgrepo.com/show/396567/globe-with-meridians.svg
     include-all: true
-    proxies: [Заблок. сервисы, PASS]
+    proxies: [Заблок. сервисы, Fallback, Fastest, PASS]
   
   - name: Google
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Google_Search.png
     include-all: true
-    proxies: [PASS, Заблок. сервисы]
+    proxies: [PASS, Fallback, Fastest, Заблок. сервисы]
 
   - name: GitHub
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/GitHub.png
     include-all: true
-    proxies: [PASS, Заблок. сервисы]
+    proxies: [PASS, Fallback, Fastest, Заблок. сервисы]
 
   - name: AI
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Bot.png
     include-all: true
     exclude-filter: 🇷🇺
-    proxies: [Заблок. сервисы]
+    proxies: [Заблок. сервисы, Fallback, Fastest]
 
   - name: Twitter
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Twitter.png
     include-all: true
-    proxies: [Заблок. сервисы, DIRECT]
+    proxies: [Заблок. сервисы, Fallback, Fastest, DIRECT]
 
 rule-providers:
   adlist@domain: { <<: *domain, url: https://github.com/zxc-rv/ad-filter/releases/latest/download/adlist.mrs }
