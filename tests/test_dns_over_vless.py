@@ -993,8 +993,14 @@ def test_local_resolver_takes_the_home_zones_out_of_the_tunnel(tmp_path: Path):
     assert first["address"] == "192.168.1.1"
     assert first["port"] == 5353
     assert "domain:lan" in first["domains"]
-    # Reverse lookups for private ranges must not reach a public resolver.
-    assert "domain:in-addr.arpa" in first["domains"]
+    # Reverse lookups for private ranges must not reach a public resolver...
+    assert "domain:10.in-addr.arpa" in first["domains"]
+    assert "domain:168.192.in-addr.arpa" in first["domains"]
+    # ...but a blanket in-addr.arpa would also grab PTR for public addresses.
+    assert "domain:in-addr.arpa" not in first["domains"]
+    # The router's own zones stay on this side of the tunnel too.
+    assert "domain:keenetic.net" in first["domains"]
+    assert "domain:netcraze.net" in first["domains"]
     assert first["skipFallback"] is True
     # A public upstream still follows for everything else.
     assert fragment["dns"]["servers"][1] == "1.1.1.1"
@@ -1160,3 +1166,33 @@ def test_zone_list_is_free_form_within_a_sane_cap():
         raise AssertionError("expected the zone list to be refused")
     except dns.DnsOverVlessError as exc:
         assert exc.code == "local_domains_invalid"
+
+
+def test_default_zones_are_local_by_definition_plus_vendor_zones():
+    defaults = dns.DEFAULT_LOCAL_DOMAINS
+
+    # Nothing in the default list is a delegated public zone except the vendor
+    # domains, which the router resolves for itself.
+    assert set(dns.LOCAL_ZONES) <= set(defaults)
+    assert set(dns.PRIVATE_PTR_ZONES) <= set(defaults)
+    assert set(dns.KEENETIC_ZONES) <= set(defaults)
+    assert set(dns.NETCRAZE_ZONES) <= set(defaults)
+
+    # 172.16/12 is rare at home and costs sixteen entries, so it is a preset.
+    assert dns.PTR_172_ZONES[0] == "domain:16.172.in-addr.arpa"
+    assert dns.PTR_172_ZONES[-1] == "domain:31.172.in-addr.arpa"
+    assert not set(dns.PTR_172_ZONES) & set(defaults)
+    assert dns.ZONE_PRESETS["ptr172"] == dns.PTR_172_ZONES
+
+
+def test_status_offers_the_zone_presets(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert set(result["zone_presets"]) == {"local", "ptr", "ptr172", "keenetic", "netcraze"}
+    assert result["zone_presets"]["keenetic"] == dns.KEENETIC_ZONES

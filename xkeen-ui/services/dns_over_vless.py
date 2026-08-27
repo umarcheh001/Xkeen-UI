@@ -51,19 +51,60 @@ LOCAL_RULE_TAG = "xk_dns_over_vless_local"
 # Zones that must never be answered from the other side of the tunnel: the
 # router's own names, home network names, and reverse lookups for private
 # ranges (a PTR for 192.168.x.x tells a public resolver about your LAN).
-DEFAULT_LOCAL_DOMAINS = [
+# Zones that are local by definition: none of them is delegated on the public
+# internet, so a query for them has no business leaving the house.
+LOCAL_ZONES = [
     "domain:lan",
     "domain:local",
     "domain:home",
     "domain:home.arpa",
     "domain:internal",
     "domain:localdomain",
+]
+
+# Reverse zones for private ranges only.  A blanket ``in-addr.arpa`` would also
+# capture PTR lookups for public addresses, which are not local at all.
+PRIVATE_PTR_ZONES = [
+    "domain:10.in-addr.arpa",
+    "domain:168.192.in-addr.arpa",
+    "domain:254.169.in-addr.arpa",
+    "domain:d.f.ip6.arpa",
+    "domain:8.e.f.ip6.arpa",
+]
+
+# 172.16.0.0/12 spans sixteen reverse zones and is rare in home networks, so it
+# is offered as a preset instead of sitting in the default list.
+PTR_172_ZONES = [f"domain:{octet}.172.in-addr.arpa" for octet in range(16, 32)]
+
+# Router vendor zones.  These are real public domains, listed because the
+# router resolves them for itself: the local web interface, the DDNS name the
+# box registers, and the redirect target used when opening it from the LAN.
+KEENETIC_ZONES = [
     "domain:keenetic.net",
     "domain:keenetic.io",
-    "domain:keenetic.com",
-    "domain:in-addr.arpa",
-    "domain:ip6.arpa",
+    "domain:keenetic.pro",
+    "domain:keenetic.name",
+    "domain:keenetic.link",
 ]
+NETCRAZE_ZONES = [
+    "domain:netcraze.net",
+    "domain:netcraze.pro",
+]
+
+DEFAULT_LOCAL_DOMAINS = [
+    *LOCAL_ZONES,
+    *PRIVATE_PTR_ZONES,
+    *KEENETIC_ZONES,
+    *NETCRAZE_ZONES,
+]
+
+ZONE_PRESETS = {
+    "local": LOCAL_ZONES,
+    "ptr": PRIVATE_PTR_ZONES,
+    "ptr172": PTR_172_ZONES,
+    "keenetic": KEENETIC_ZONES,
+    "netcraze": NETCRAZE_ZONES,
+}
 # These caps are not Xray limits — it handles far longer lists.  They only
 # stop an accidental paste from bloating the config into something nobody can
 # read back, so they sit well above any realistic home setup.
@@ -1711,6 +1752,8 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
             else list(DEFAULT_LOCAL_DOMAINS)
         ),
         "default_local_domains": list(DEFAULT_LOCAL_DOMAINS),
+        "zone_presets": {name: list(zones) for name, zones in ZONE_PRESETS.items()},
+        "max_local_domains": MAX_LOCAL_DOMAINS,
         "direct_outbound": _direct_outbound_tag(runtime),
         "route_drift": drift,
         "watchdog": state.get("watchdog") if isinstance(state.get("watchdog"), dict) else None,
