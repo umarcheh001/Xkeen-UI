@@ -91,6 +91,19 @@ def test_status_exposes_safe_one_click_plan(tmp_path: Path, monkeypatch):
     }
 
 
+def test_existing_user_dns_is_not_claimed_as_assistant_enabled(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    config.write_text(BASE + "\ndns:\n  enable: true\n  listen: 0.0.0.0:53\n", encoding="utf-8")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    result = dns.get_status(config_file=str(config), ui_state_dir=str(state))
+
+    assert result["enabled"] is False
+    assert result["dns_listener_configured"] is True
+    assert result["can_enable"] is False
+    assert any("уже есть раздел dns" in message for message in result["blockers"])
+
+
 def test_enable_validates_saves_switches_restarts_and_probes(tmp_path: Path, monkeypatch):
     config, state = _status_ready(tmp_path, monkeypatch)
     calls: list[object] = []
@@ -220,6 +233,37 @@ def test_tampering_stops_automatic_disable(tmp_path: Path, monkeypatch):
     status = dns.get_status(config_file=str(config), ui_state_dir=str(state))
 
     assert status["tampered"] is True
+    assert status["can_disable"] is False
+
+
+def test_manually_edited_config_keeps_runtime_dns_status_without_managed_comments(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    prepared, group = dns.build_enabled_config(BASE)
+    # A formatter/manual save can remove comments and change unrelated YAML
+    # while retaining the complete DNS mapping created by the assistant.
+    edited = prepared.replace(dns.MANAGED_BEGIN + "\n", "").replace(dns.MANAGED_END + "\n", "")
+    edited += "# user's later routing edit\n"
+    config.write_text(edited, encoding="utf-8")
+    snapshot = tmp_path / "before.yaml"
+    snapshot.write_text(BASE, encoding="utf-8")
+    dns._save_state(str(state), str(config), {
+        "original_config": str(snapshot),
+        "original_sha256": dns._sha256(BASE),
+        "applied_sha256": dns._sha256(prepared),
+        "original_dns_override": False,
+        "proxy_group": group,
+    })
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    status = dns.get_status(config_file=str(config), ui_state_dir=str(state))
+
+    assert status["enabled"] is True
+    assert status["dns_present"] is True
+    assert status["dns_enabled"] is True
+    assert status["dns_listener_configured"] is True
+    assert status["listen"] == "0.0.0.0:53"
+    assert status["tampered"] is True
+    assert status["prepared"] is False
     assert status["can_disable"] is False
 
 

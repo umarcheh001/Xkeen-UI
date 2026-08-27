@@ -85,11 +85,14 @@ import { getMihomoPanelApi } from './mihomo_panel.js';
     const state = enabled ? 'enabled' : ((canDisable || canRecover || blocked || altered) ? 'blocked' : 'ready');
     if (badge) {
       badge.dataset.state = state;
-      badge.textContent = enabled ? 'Включено' : (canRecover ? 'DNS-блок удалён' : (altered ? 'Изменено вручную' : (canDisable ? 'Готово к восстановлению' : (blocked ? 'Требует внимания' : 'Готово'))));
+      badge.textContent = enabled
+        ? (altered ? 'Включено · изменено вручную' : 'Включено')
+        : (canRecover ? 'DNS-блок удалён' : (altered ? 'Изменено вручную' : (canDisable ? 'Готово к восстановлению' : (blocked ? 'Требует внимания' : 'Готово'))));
     }
     if (dot) dot.dataset.state = enabled ? 'enabled' : ((blocked || altered || canRecover) ? 'blocked' : 'off');
     if (status) {
-      if (enabled) status.textContent = 'Защищённый DNS активен: Mihomo отвечает на порту 53, а DNS override Keenetic включён.';
+      if (enabled && altered) status.textContent = 'Защищённый DNS активен, но config.yaml был изменён вручную. Панель видит сохранённый DNS-блок и не станет автоматически откатывать ваши правки.';
+      else if (enabled) status.textContent = 'Защищённый DNS активен: Mihomo отвечает на порту 53, а DNS override Keenetic включён.';
       else if (canRecover) status.textContent = 'DNS-блок уже удалён вручную, а Keenetic DNS override выключен. Можно сохранить текущий config.yaml и завершить отключение без возврата старого снимка.';
       else if (altered) status.textContent = 'После включения config.yaml был изменён. Панель не станет автоматически перезаписывать эти правки.';
       else if (canDisable) status.textContent = 'DNS-конфигурация подготовлена. Можно безопасно вернуть полный исходный снимок.';
@@ -107,12 +110,15 @@ import { getMihomoPanelApi } from './mihomo_panel.js';
     if (data) {
       addDetail(`Активное ядро: ${data.active_core || 'не определено'}`, data.active_core === 'mihomo' ? 'ok' : 'warn');
       if (data.proxy_group) addDetail(`Защищённый маршрут: ${data.proxy_group}`, 'ok');
-      const listenerActive = !!(data.enabled || data.prepared || data.can_disable);
+      const listenerConfigured = !!(data.dns_listener_configured || data.enabled || data.prepared || data.can_disable);
+      const dnsPresent = !!(data.dns_present || listenerConfigured);
       addDetail(
-        listenerActive
-          ? `DNS-слушатель: ${data.listen || '0.0.0.0:53'} · ${data.mode || 'redir-host'}`
-          : 'DNS-слушатель Mihomo: не активен (раздел dns отсутствует)',
-        listenerActive ? 'ok' : 'warn',
+        listenerConfigured
+          ? `DNS-слушатель: ${data.listen || '0.0.0.0:53'} · ${data.mode || 'redir-host'}${altered ? ' · блок сохранён после ручной правки' : ''}`
+          : (dnsPresent
+            ? 'Раздел dns присутствует, но слушатель на порту 53 в нём не включён'
+            : 'DNS-слушатель Mihomo: не активен (раздел dns отсутствует)'),
+        listenerConfigured ? 'ok' : 'warn',
       );
       addDetail(`Keenetic DNS override: ${data.dns_override === true ? 'включён' : (data.dns_override === false ? 'выключен' : 'не определён')}`, data.dns_override == null ? 'warn' : 'ok');
       (data.blockers || []).forEach((message) => addDetail(message, 'warn'));

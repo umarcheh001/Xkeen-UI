@@ -115,6 +115,41 @@ def _strip_yaml_scalar(value: str) -> str:
     return raw.replace("''", "'").strip()
 
 
+def _dns_runtime_config(text: str) -> dict[str, Any]:
+    """Inspect the user-visible DNS section without claiming ownership of it.
+
+    The managed comments are intentionally not required here.  YAML formatters
+    and manual edits may remove comments while leaving the complete, working
+    ``dns`` mapping in place.  Ownership/rollback still uses the transaction
+    hash below, but runtime status must be based on the actual configuration.
+    """
+
+    section = _top_level_section(text, "dns")
+    if section is None:
+        return {"present": False, "enabled": False, "listen": "", "listener_configured": False}
+
+    body = section[2]
+
+    def nested_scalar(key: str) -> str:
+        match = re.search(rf"^[ \t]+{re.escape(key)}[ \t]*:[ \t]*([^#\r\n]+)", body, re.MULTILINE)
+        return _strip_yaml_scalar(match.group(1)) if match else ""
+
+    enabled_value = nested_scalar("enable").lower()
+    dns_enabled = enabled_value in {"true", "yes", "on", "1"}
+    listen = nested_scalar("listen")
+    normalized_listen = listen.rsplit("/", 1)[0].strip().lower()
+    listener_configured = bool(
+        dns_enabled
+        and re.search(r"(?:^|:)(?:53)$", normalized_listen)
+    )
+    return {
+        "present": True,
+        "enabled": dns_enabled,
+        "listen": listen,
+        "listener_configured": listener_configured,
+    }
+
+
 def _proxy_groups(text: str) -> list[str]:
     section = _top_level_section(text, "proxy-groups")
     if not section:
@@ -487,11 +522,21 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
     core = detect_running_core() or ""
     has_begin = MANAGED_BEGIN in text
     has_end = MANAGED_END in text
-    has_dns = _top_level_section(text, "dns") is not None
+    dns_runtime = _dns_runtime_config(text)
+    has_dns = bool(dns_runtime["present"])
     managed = bool(has_begin and has_end and has_dns)
     applied_hash = str(state.get("applied_sha256") or "")
     exact = bool(managed and applied_hash and _sha256(text) == applied_hash)
-    enabled = bool(exact and override is True)
+    # ``exact`` answers whether an automatic rollback is safe.  It must not be
+    # used to decide whether DNS is actually configured: a manual save or YAML
+    # formatter can remove the managed comments while preserving a working DNS
+    # block.  Keep those two concepts separate.
+    enabled = bool(
+        state
+        and core == "mihomo"
+        and dns_runtime["listener_configured"]
+        and override is True
+    )
     tampered = bool(state and not exact)
     partial = bool((has_begin or has_end) and not exact)
     group = str(state.get("proxy_group") or "") if exact else str(_select_proxy_group(text) or "")
@@ -536,7 +581,10 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         "active_core": core,
         "proxy_group": group or None,
         "dns_override": override,
-        "listen": DNS_LISTEN,
+        "dns_present": has_dns,
+        "dns_enabled": bool(dns_runtime["enabled"]),
+        "dns_listener_configured": bool(dns_runtime["listener_configured"]),
+        "listen": str(dns_runtime["listen"] or DNS_LISTEN),
         "mode": "redir-host",
         "blockers": blockers,
         "safety": {
