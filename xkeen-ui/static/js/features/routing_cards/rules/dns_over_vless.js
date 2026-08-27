@@ -162,6 +162,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       if (enabled) text.textContent = 'DNS-over-VLESS активен: Xray-конфигурация и DNS override Keenetic согласованы.';
       else if (data && data.partial) text.textContent = 'Обнаружена неполная настройка DNS-over-VLESS. Панель может удалить только свои объекты и восстановить DNS override.';
       else if (data && data.prepared) text.textContent = 'Xray-конфигурация подготовлена, но DNS override Keenetic ещё не активен.';
+      else if (data && data.watchdog && data.watchdog.reason) text.textContent = 'DNS-over-VLESS был отключён автоматически: ядро не отвечало, и DNS вернулся к прошивке Keenetic.';
       else if (blocked) text.textContent = 'Однокнопочная настройка остановлена, чтобы не затронуть существующую маршрутизацию.';
       else text.textContent = 'Конфигурация совместима. После подтверждения панель проверит, сохранит и протестирует DNS автоматически.';
     }
@@ -170,6 +171,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       addDetail(`Активное ядро: ${data.active_core || 'не определено'}`, data.active_core === 'xray' ? 'ok' : 'warn');
       if (data.target && data.target.label) addDetail(`Маршрут DNS: ${data.target.label}`, 'ok');
       addDetail(`Keenetic DNS override: ${data.dns_override === true ? 'включён' : (data.dns_override === false ? 'выключен' : 'не определён')}`, data.dns_override == null ? 'warn' : 'ok');
+      if (data.watchdog && data.watchdog.reason) {
+        addDetail(`Сторож отключил защиту: ${data.watchdog.reason} Порт 53 снова обслуживает Keenetic.`, 'warn');
+      }
       if (data.route_drift) {
         const drift = data.route_drift;
         const was = (drift.managed || []).join(', ') || '—';

@@ -713,4 +713,27 @@ def create_app(*, ws_runtime: bool = False):
         except Exception:
             pass
 
+    try:
+        from services.dns_over_vless import start_watchdog as start_dns_over_vless_watchdog
+
+        start_dns_over_vless_watchdog(
+            configs_dir=XRAY_CONFIGS_DIR,
+            routing_file=ROUTING_FILE,
+            ui_state_dir=UI_STATE_DIR,
+            restart_xkeen=restart_xkeen,
+            audit=append_restart_log,
+        )
+    except Exception as e:  # noqa: BLE001
+        try:
+            from core.logging import core_log_once
+
+            core_log_once(
+                "warning",
+                "dns_over_vless_watchdog_failed",
+                "dns-over-vless watchdog init failed (non-fatal)",
+                error=str(e),
+            )
+        except Exception:
+            pass
+
     return app

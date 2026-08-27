@@ -50,6 +50,16 @@ DNS_PROBE_ATTEMPTS = 3
 
 _LOCK = threading.RLock()
 
+# Watchdog: while the feature is on, the firmware resolver is disabled and Xray
+# owns port 53.  If the core dies, nothing else answers DNS for the whole LAN,
+# so a background check restarts the core and, if that keeps failing, hands
+# port 53 back to KeeneticOS instead of leaving the network without DNS.
+WATCHDOG_INTERVAL = 30.0
+WATCHDOG_FAIL_THRESHOLD = 3
+WATCHDOG_RESTART_ATTEMPTS = 2
+_WATCHDOG_LOCK = threading.Lock()
+_WATCHDOG_STARTED = False
+
 
 class DnsOverVlessError(RuntimeError):
     def __init__(self, message: str, *, code: str = "dns_over_vless_failed", details: Any = None):
@@ -991,6 +1001,182 @@ def _dns_probe(domain: str = PROBE_DOMAIN, timeout: float = 7.0) -> Dict[str, An
     }
 
 
+def _emergency_release(
+    *, configs_dir: str, routing_file: str, ui_state_dir: str, restart_xkeen: Callable[..., Any], reason: str
+) -> Dict[str, Any]:
+    """Give port 53 back to KeeneticOS after the core stayed down.
+
+    Unlike :func:`apply_action` this path never rolls back.  Its whole purpose
+    is to restore name resolution for the LAN, so a partial failure must not
+    put the DNS override back on.  Order matters: drop the managed config
+    first, because a core that recovers while ndnproxy already holds port 53
+    would fail to bind and stay down.
+    """
+    steps: list[str] = []
+    routing, _raw = _read_routing_with_raw(routing_file)
+    managed_path = os.path.join(configs_dir, MANAGED_FRAGMENT)
+
+    try:
+        _write_routing_preserving_comments(routing_file, _build_disabled_routing(routing))
+        steps.append("routing_cleared")
+    except Exception as exc:  # noqa: BLE001
+        steps.append(f"routing_failed:{exc}")
+    try:
+        os.remove(managed_path)
+        steps.append("fragment_removed")
+    except FileNotFoundError:
+        steps.append("fragment_absent")
+    except Exception as exc:  # noqa: BLE001
+        steps.append(f"fragment_failed:{exc}")
+
+    state = _load_state(ui_state_dir)
+    desired = bool(state.get("original_dns_override", False))
+    try:
+        _set_dns_override(desired)
+        steps.append("dns_override_restored")
+    except Exception as exc:  # noqa: BLE001
+        steps.append(f"dns_override_failed:{exc}")
+
+    try:
+        restart_xkeen(source="dns-over-vless-watchdog-release")
+        steps.append("core_restart_requested")
+    except Exception as exc:  # noqa: BLE001
+        steps.append(f"core_restart_failed:{exc}")
+
+    released = {
+        "released_at": int(time.time()),
+        "reason": reason,
+        "steps": steps,
+    }
+    state["enabled"] = False
+    state["watchdog"] = released
+    try:
+        _save_state(ui_state_dir, state)
+    except Exception:
+        pass
+    return released
+
+
+def _watchdog_healthy() -> bool:
+    if detect_running_core() != "xray":
+        return False
+    return bool(_dns_probe().get("ok"))
+
+
+def watchdog_tick(
+    *,
+    configs_dir: str,
+    routing_file: str,
+    ui_state_dir: str,
+    restart_xkeen: Callable[..., Any],
+    counters: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Run one health check and return the updated counters plus the action.
+
+    Actions: ``idle`` (feature off), ``ok``, ``watching`` (a failure seen, still
+    below the threshold), ``restarted`` (core restart attempted) and
+    ``released`` (gave DNS back to the firmware).
+    """
+    result = dict(counters or {})
+    result.setdefault("fails", 0)
+    result.setdefault("restarts", 0)
+    result.setdefault("released", False)
+
+    with _LOCK:
+        state = _load_state(ui_state_dir)
+        if not state.get("enabled"):
+            # Either never enabled, or already released/disabled by someone.
+            result.update({"fails": 0, "restarts": 0, "action": "idle"})
+            return result
+        if result.get("released"):
+            result["action"] = "released"
+            return result
+
+        if _watchdog_healthy():
+            result.update({"fails": 0, "restarts": 0, "action": "ok"})
+            return result
+
+        result["fails"] = int(result["fails"]) + 1
+        if result["fails"] < WATCHDOG_FAIL_THRESHOLD:
+            result["action"] = "watching"
+            return result
+
+        if int(result["restarts"]) < WATCHDOG_RESTART_ATTEMPTS:
+            result["restarts"] = int(result["restarts"]) + 1
+            result["fails"] = 0
+            try:
+                restart_xkeen(source="dns-over-vless-watchdog")
+            except Exception:
+                pass
+            result["action"] = "restarted"
+            return result
+
+        reason = "Xray не поднялся после %d попыток; DNS возвращён прошивке." % int(result["restarts"])
+        result["release"] = _emergency_release(
+            configs_dir=configs_dir,
+            routing_file=routing_file,
+            ui_state_dir=ui_state_dir,
+            restart_xkeen=restart_xkeen,
+            reason=reason,
+        )
+        result.update({"released": True, "action": "released"})
+        return result
+
+
+def start_watchdog(
+    *,
+    configs_dir: str,
+    routing_file: str,
+    ui_state_dir: str,
+    restart_xkeen: Callable[..., Any],
+    interval: float = WATCHDOG_INTERVAL,
+    audit: Optional[Callable[..., None]] = None,
+) -> bool:
+    """Start the background health check once per process."""
+    global _WATCHDOG_STARTED
+    with _WATCHDOG_LOCK:
+        if _WATCHDOG_STARTED:
+            return False
+        _WATCHDOG_STARTED = True
+
+    def _loop() -> None:
+        counters: Dict[str, Any] = {}
+        while True:
+            time.sleep(max(5.0, float(interval or WATCHDOG_INTERVAL)))
+            try:
+                counters = watchdog_tick(
+                    configs_dir=configs_dir,
+                    routing_file=routing_file,
+                    ui_state_dir=ui_state_dir,
+                    restart_xkeen=restart_xkeen,
+                    counters=counters,
+                )
+                action = counters.get("action")
+                if action in {"restarted", "released"} and audit is not None:
+                    # The watchdog acts unattended; leave a trace in the log.
+                    try:
+                        audit(
+                            action == "restarted",
+                            source="dns-over-vless-watchdog",
+                            summary=(
+                                "DNS-over-VLESS: перезапуск Xray сторожем"
+                                if action == "restarted"
+                                else "DNS-over-VLESS отключён сторожем, DNS возвращён прошивке"
+                            ),
+                        )
+                    except Exception:
+                        pass
+                if action == "released":
+                    # Nothing left to guard; a new enable restarts the cycle.
+                    counters = {}
+            except Exception:
+                counters = {}
+
+    thread = threading.Thread(target=_loop, name="xkeen-dns-over-vless-watchdog", daemon=True)
+    thread.start()
+    return True
+
+
 def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dict[str, Any]:
     routing, _raw = _read_routing_with_raw(routing_file)
     runtime = _collect_runtime(configs_dir, routing)
@@ -1048,6 +1234,7 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
         "target": ({k: v for k, v in target.items() if k != "managed_balancer"} if target else None),
         "candidates": candidates,
         "route_drift": drift,
+        "watchdog": state.get("watchdog") if isinstance(state.get("watchdog"), dict) else None,
         "selected_target": selected_tag,
         "default_target": default_tag,
         "choice_required": bool(len(_usable_candidates(candidates)) > 1 and not selected_tag),
