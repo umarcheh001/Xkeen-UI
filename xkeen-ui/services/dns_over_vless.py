@@ -33,6 +33,7 @@ from typing import Any, Callable, Dict, Iterable, Optional
 from services.cores import detect_running_core
 from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.xray_config_files import jsonc_path_for
+from utils.firmware import ndmc_path as _resolve_ndmc, run_ndmc
 from utils.jsonc import strip_json_comments_text
 
 
@@ -419,28 +420,21 @@ def _managed_config_tampered(presence: Dict[str, bool]) -> bool:
 
 
 def _ndmc_path() -> str:
-    return str(shutil.which("ndmc") or "")
+    return _resolve_ndmc()
 
 
 def _dns_override_status() -> tuple[Optional[bool], str]:
-    ndmc = _ndmc_path()
-    if not ndmc:
+    if not _ndmc_path():
         return None, "ndmc не найден"
     try:
-        proc = subprocess.run(
-            [ndmc, "-c", "show running-config"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
+        run = run_ndmc("show running-config", timeout=10)
     except Exception as exc:
         return None, str(exc)
-    if proc.returncode != 0:
-        return None, str(proc.stderr or proc.stdout or "ndmc error").strip()
+    if run.rc != 0:
+        return None, (run.output or "ndmc error").strip()
     # ndmc emits terminal erase-prefixes (``\x1b[K``) even when stdout is not
     # a TTY.  Normalize those control sequences before inspecting the config.
-    clean = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", str(proc.stdout or ""))
+    clean = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", str(run.stdout or ""))
     lines = [line.strip().lower() for line in clean.splitlines()]
     if any(line == "no opkg dns-override" or line.startswith("no opkg dns-override ") for line in lines):
         return False, "running-config"
@@ -451,8 +445,7 @@ def _dns_override_status() -> tuple[Optional[bool], str]:
 
 
 def _set_dns_override(enabled: bool) -> None:
-    ndmc = _ndmc_path()
-    if not ndmc:
+    if not _ndmc_path():
         raise DnsOverVlessError("Не найден ndmc; настройка Keenetic недоступна.", code="ndmc_missing")
     command = "opkg dns-override" if enabled else "no opkg dns-override"
 
@@ -461,36 +454,24 @@ def _set_dns_override(enabled: bool) -> None:
     # malformed argument on KeeneticOS 5.x and returns error 7405602.  Apply
     # the setting and persist it as two independent invocations instead.
     try:
-        proc = subprocess.run(
-            [ndmc, "-c", command],
-            capture_output=True,
-            text=True,
-            timeout=15,
-            check=False,
-        )
+        run = run_ndmc(command, timeout=15)
     except Exception as exc:
         raise DnsOverVlessError("Не удалось изменить DNS override Keenetic.", code="ndmc_failed", details=str(exc)) from exc
-    output = f"{proc.stdout or ''}\n{proc.stderr or ''}".strip()
-    if proc.returncode != 0 or "% error" in output.lower() or "error:" in output.lower() or "command::base error" in output.lower():
+    output = run.output
+    if run.rc != 0 or "% error" in output.lower() or "error:" in output.lower() or "command::base error" in output.lower():
         raise DnsOverVlessError("Keenetic отклонил команду DNS override.", code="ndmc_failed", details=output)
 
     try:
-        save_proc = subprocess.run(
-            [ndmc, "-c", "system configuration save"],
-            capture_output=True,
-            text=True,
-            timeout=15,
-            check=False,
-        )
+        save_run = run_ndmc("system configuration save", timeout=15)
     except Exception as exc:
         raise DnsOverVlessError(
             "Не удалось сохранить настройку DNS override Keenetic.",
             code="ndmc_failed",
             details=str(exc),
         ) from exc
-    save_output = f"{save_proc.stdout or ''}\n{save_proc.stderr or ''}".strip()
+    save_output = save_run.output
     if (
-        save_proc.returncode != 0
+        save_run.rc != 0
         or "% error" in save_output.lower()
         or "error:" in save_output.lower()
         or "command::base error" in save_output.lower()

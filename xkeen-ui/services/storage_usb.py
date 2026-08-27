@@ -22,6 +22,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
+from utils.firmware import ndmc_path, run_ndmc
+
 
 _SAFE_FS_NAME_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 
@@ -35,7 +37,7 @@ class NdmcResult:
 
 def ndmc_exists() -> bool:
     try:
-        return bool(shutil.which("ndmc"))
+        return bool(ndmc_path())
     except Exception:
         return False
 
@@ -51,14 +53,8 @@ def _run_ndmc(commands: List[str], *, timeout_s: float = 6.0) -> NdmcResult:
         return NdmcResult(rc=2, out="", err="empty command")
 
     try:
-        cp = subprocess.run(
-            ["ndmc", "-c", payload],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=float(timeout_s),
-        )
-        return NdmcResult(rc=int(cp.returncode or 0), out=str(cp.stdout or ""), err=str(cp.stderr or ""))
+        run = run_ndmc(payload, timeout=float(timeout_s))
+        return NdmcResult(rc=run.rc, out=run.stdout, err=run.stderr)
     except FileNotFoundError:
         return NdmcResult(rc=127, out="", err="ndmc not found")
     except subprocess.TimeoutExpired:

@@ -320,7 +320,14 @@ def _run_cmd(args: list[str], *, timeout: float = 2.0) -> str | None:
 
 
 def _ndmc_show_version() -> str | None:
-    return _run_cmd(["ndmc", "-c", "show version"], timeout=2.5)
+    try:
+        from utils.firmware import run_ndmc
+
+        run = run_ndmc("show version", timeout=2.5)
+    except Exception:
+        return None
+    out = (run.stdout or "").strip()
+    return out or None
 
 
 def _parse_ndmc_os_ver(ndm_out: str | None) -> str | None:

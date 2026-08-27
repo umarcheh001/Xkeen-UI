@@ -29,6 +29,7 @@ from typing import Any, Callable, Optional
 
 from services.cores import detect_running_core
 from services.io.atomic import _atomic_write_json, _atomic_write_text
+from utils.firmware import ndmc_path as _resolve_ndmc, run_ndmc
 
 
 STATE_FILENAME = "mihomo_dns.json"
@@ -330,26 +331,19 @@ def build_enabled_config(text: str, group: Optional[str] = None) -> tuple[str, s
 
 
 def _ndmc_path() -> str:
-    return str(shutil.which("ndmc") or "")
+    return _resolve_ndmc()
 
 
 def _ndmc(command: str, *, timeout: int = 15) -> str:
-    binary = _ndmc_path()
-    if not binary:
+    if not _ndmc_path():
         raise MihomoDnsError("Не найден ndmc; настройка Keenetic недоступна.", code="ndmc_missing")
     try:
-        proc = subprocess.run(
-            [binary, "-c", command],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-        )
+        run = run_ndmc(command, timeout=timeout)
     except Exception as exc:
         raise MihomoDnsError("Не удалось выполнить команду Keenetic.", code="ndmc_failed", details=str(exc)) from exc
-    output = f"{proc.stdout or ''}\n{proc.stderr or ''}".strip()
+    output = run.output
     lowered = output.lower()
-    if proc.returncode != 0 or "% error" in lowered or "command::base error" in lowered:
+    if run.rc != 0 or "% error" in lowered or "command::base error" in lowered:
         raise MihomoDnsError("Keenetic отклонил настройку DNS.", code="ndmc_failed", details=output)
     return re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", output)
 

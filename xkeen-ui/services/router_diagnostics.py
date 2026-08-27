@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from services.keenetic_rci import build_rci_request
+from utils.firmware import firmware_env
 
 
 RCI_ROOT = "http://127.0.0.1:79/rci"
@@ -775,6 +776,7 @@ def sample_dns_diagnostics(
                 text=True,
                 timeout=2,
                 check=False,
+                **({"env": firmware_env()} if command[0] == "ndmc" else {}),
             )
         except (OSError, UnicodeError, subprocess.SubprocessError):
             continue
