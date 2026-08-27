@@ -1507,6 +1507,19 @@ import {
 
     if (action === 'paste') {
       if (_isCustomContextMenuReadOnly(editor)) return false;
+
+      // Let Monaco handle paste first. Its built-in clipboard controller consumes
+      // the real paste event (including clipboard contents copied outside this
+      // page) and preserves browser/platform-specific behavior and permissions.
+      // The custom menu used to read navigator.clipboard.readText() directly;
+      // that call is commonly denied after a context-menu click, which made the
+      // Paste item a no-op while Ctrl+V continued to work.
+      if (_isCustomContextMenuActionSupported(editor, 'editor.action.clipboardPasteAction')) {
+        if (await _runCustomContextMenuEditorAction(editor, 'editor.action.clipboardPasteAction')) return true;
+      }
+
+      // Fallback for runtimes without Monaco's clipboard action (older/minimal
+      // builds). Keep the shadow clipboard for text copied through this menu.
       const value = await _readCustomContextMenuClipboardText();
       if (typeof value !== 'string') return false;
       const targetSelections = selections.length ? selections : _getCustomContextMenuSelections(editor);
