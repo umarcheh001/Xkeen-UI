@@ -15,6 +15,7 @@ It never rewrites proxy outbounds or unrelated routing rules.
 from __future__ import annotations
 
 import copy
+import ipaddress
 import json
 import os
 import random
@@ -45,6 +46,23 @@ DNS_OUT_TAG = "dns-out"
 PROXY_RULE_TAG = "xk_dns_over_vless_proxy"
 CAPTURE_RULE_TAG = "xk_dns_over_vless_capture"
 BALANCER_TAG = "xk-dns-over-vless"
+DEFAULT_UPSTREAMS = ["8.8.8.8"]
+LOCAL_RULE_TAG = "xk_dns_over_vless_local"
+# Zones that must never be answered from the other side of the tunnel: the
+# router's own names, home network names, and reverse lookups for private
+# ranges (a PTR for 192.168.x.x tells a public resolver about your LAN).
+DEFAULT_LOCAL_DOMAINS = [
+    "domain:lan",
+    "domain:local",
+    "domain:home.arpa",
+    "domain:keenetic.net",
+    "domain:keenetic.io",
+    "domain:keenetic.com",
+    "domain:in-addr.arpa",
+    "domain:ip6.arpa",
+]
+MAX_UPSTREAMS = 4
+UPSTREAM_SCHEMES = ("https://", "tls://", "tcp://", "quic://")
 PROBE_DOMAIN = "example.com"
 DNS_PROBE_ATTEMPTS = 3
 
@@ -635,14 +653,172 @@ def _select_target(
     return _build_combined_target(chosen, runtime)
 
 
-def _managed_fragment() -> Dict[str, Any]:
+def _upstream_host(value: str) -> str:
+    """Host part of an upstream: bare address, or the host inside a URL."""
+    text = str(value or "").strip()
+    for scheme in UPSTREAM_SCHEMES:
+        if text.lower().startswith(scheme):
+            rest = text[len(scheme):]
+            rest = rest.split("/", 1)[0]
+            if rest.startswith("["):
+                return rest[1:].split("]", 1)[0]
+            # Strip a port, but never mistake an IPv6 literal's colons for one.
+            if rest.count(":") == 1:
+                rest = rest.split(":", 1)[0]
+            return rest
+    return text
+
+
+def _upstream_problem(value: str) -> str:
+    """Reason this upstream is unusable, or an empty string when it is fine.
+
+    Only literal addresses are accepted.  A hostname would itself need to be
+    resolved before the resolver works, and a private or loopback address
+    would send the query back into this very listener -- a DNS loop, or a
+    query leaking to the local network instead of the tunnel.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return "пустой адрес"
+    if len(text) > 200:
+        return "слишком длинный адрес"
+    host = _upstream_host(text)
+    if not host:
+        return f"«{text}»: не удалось разобрать адрес"
+    try:
+        parsed = ipaddress.ip_address(host)
+    except ValueError:
+        return f"«{text}»: нужен IP-адрес, имя хоста пришлось бы резолвить до запуска DNS"
+    if parsed.is_loopback:
+        return f"«{text}»: адрес петли — запрос вернулся бы в этот же слушатель"
+    if parsed.is_private or parsed.is_link_local:
+        return f"«{text}»: локальный адрес — запрос ушёл бы мимо туннеля"
+    if parsed.is_multicast or parsed.is_unspecified or parsed.is_reserved:
+        return f"«{text}»: адрес нельзя использовать как DNS-сервер"
+    return ""
+
+
+def normalize_upstreams(value: Any) -> list[str]:
+    """Accept a list or a comma/space separated string, keeping order."""
+    if isinstance(value, (list, tuple, set)):
+        parts = [str(item) for item in value]
+    else:
+        parts = re.split(r"[,;\s]+", str(value or ""))
+    result: list[str] = []
+    for part in parts:
+        text = part.strip()
+        if text and text not in result:
+            result.append(text)
+    return result
+
+
+def validate_upstreams(value: Any) -> list[str]:
+    """Normalize and check upstreams, falling back to the default when empty."""
+    upstreams = normalize_upstreams(value)
+    if not upstreams:
+        return list(DEFAULT_UPSTREAMS)
+    if len(upstreams) > MAX_UPSTREAMS:
+        raise DnsOverVlessError(
+            f"Слишком много DNS-серверов: не больше {MAX_UPSTREAMS}.",
+            code="upstreams_invalid",
+        )
+    problems = [problem for problem in (_upstream_problem(item) for item in upstreams) if problem]
+    if problems:
+        raise DnsOverVlessError(
+            "Проверьте список DNS-серверов: " + "; ".join(problems) + ".",
+            code="upstreams_invalid",
+            details={"problems": problems},
+        )
+    return upstreams
+
+
+def _safe_upstreams(value: Any) -> Optional[list[str]]:
+    """Same check without raising: ``None`` when the list is not usable."""
+    try:
+        upstreams = normalize_upstreams(value)
+        if not upstreams or len(upstreams) > MAX_UPSTREAMS:
+            return None
+        if any(_upstream_problem(item) for item in upstreams):
+            return None
+        return upstreams
+    except Exception:
+        return None
+
+
+def _parse_local_resolver(value: Any) -> Optional[Dict[str, Any]]:
+    """Parse ``address`` or ``address:port`` for the LAN-side resolver.
+
+    Unlike an upstream this one is *meant* to be a private address: it points
+    at whatever still answers local names on the router or in the network.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return None
+    host, port = text, 53
+    if text.startswith("["):
+        host, _, tail = text[1:].partition("]")
+        if tail.startswith(":"):
+            port = int(tail[1:] or 53)
+    elif text.count(":") == 1:
+        host, _, raw_port = text.partition(":")
+        try:
+            port = int(raw_port)
+        except ValueError:
+            raise DnsOverVlessError(
+                f"«{text}»: порт локального DNS должен быть числом.",
+                code="local_resolver_invalid",
+            )
+    try:
+        parsed = ipaddress.ip_address(host)
+    except ValueError:
+        raise DnsOverVlessError(
+            f"«{text}»: укажите IP-адрес локального DNS, имя хоста здесь не подойдёт.",
+            code="local_resolver_invalid",
+        )
+    if not (1 <= port <= 65535):
+        raise DnsOverVlessError(f"«{text}»: недопустимый порт.", code="local_resolver_invalid")
+    if parsed.is_multicast or parsed.is_unspecified or parsed.is_reserved:
+        raise DnsOverVlessError(
+            f"«{text}»: адрес нельзя использовать как DNS-сервер.",
+            code="local_resolver_invalid",
+        )
+    return {"address": str(parsed), "port": port}
+
+
+def _local_domains(value: Any) -> list[str]:
+    items = normalize_upstreams(value) if value else []
+    return items or list(DEFAULT_LOCAL_DOMAINS)
+
+
+def _managed_fragment(
+    upstreams: Optional[list[str]] = None,
+    local_resolver: Optional[Dict[str, Any]] = None,
+    local_domains: Optional[list[str]] = None,
+) -> Dict[str, Any]:
+    servers: list[Any] = []
+    if local_resolver:
+        # Listed first so these zones are matched before the public upstreams.
+        # skipFallback keeps a missing local answer from being retried abroad.
+        servers.append(
+            {
+                "address": local_resolver["address"],
+                "port": int(local_resolver.get("port") or 53),
+                "domains": list(local_domains or DEFAULT_LOCAL_DOMAINS),
+                "skipFallback": True,
+            }
+        )
+    servers.extend(list(upstreams or DEFAULT_UPSTREAMS))
+    public_count = len(servers) - (1 if local_resolver else 0)
     return {
         "dns": {
-            # Use an explicit public upstream; the DNS outbound carries these
-            # UDP requests through the selected VLESS route.
-            "servers": ["8.8.8.8"],
+            # Explicit public upstreams; the DNS outbound carries these UDP
+            # requests through the selected VLESS route.
+            "servers": servers,
             "queryStrategy": "UseIP",
-            "disableFallback": True,
+            # A single upstream has nothing to fall back to, and forbidding the
+            # fallback keeps Xray from trying anything else.  With several,
+            # falling back to the next one is the reason they were listed.
+            "disableFallback": public_count < 2,
             "tag": DNS_IN_TAG,
         },
         "inbounds": [
@@ -661,10 +837,38 @@ def _owned_rule(rule: Any) -> bool:
     return isinstance(rule, dict) and _clean_tag(rule.get("ruleTag")) in {
         PROXY_RULE_TAG,
         CAPTURE_RULE_TAG,
+        LOCAL_RULE_TAG,
     }
 
 
-def _build_enabled_routing(routing: Dict[str, Any], target: Dict[str, Any]) -> Dict[str, Any]:
+def _direct_outbound_tag(runtime: Dict[str, Any]) -> str:
+    """Tag of a freedom outbound, i.e. the one that leaves the tunnel."""
+    for item in runtime.get("outbounds", []):
+        if _clean_tag(item.get("protocol")).lower() == "freedom":
+            return _clean_tag(item.get("tag"))
+    return ""
+
+
+def _local_rule(resolver: Optional[Dict[str, Any]], direct_tag: str) -> Optional[Dict[str, Any]]:
+    """Send queries aimed at the LAN resolver straight out, never via VLESS."""
+    if not resolver or not direct_tag:
+        return None
+    address = resolver["address"]
+    suffix = "/128" if ":" in address else "/32"
+    return {
+        "type": "field",
+        "inboundTag": [DNS_IN_TAG],
+        "ip": [address + suffix],
+        "outboundTag": direct_tag,
+        "ruleTag": LOCAL_RULE_TAG,
+    }
+
+
+def _build_enabled_routing(
+    routing: Dict[str, Any],
+    target: Dict[str, Any],
+    local_rule: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     result = copy.deepcopy(routing if isinstance(routing, dict) else {})
     model = result.get("routing")
     if not isinstance(model, dict):
@@ -684,7 +888,11 @@ def _build_enabled_routing(routing: Dict[str, Any], target: Dict[str, Any]) -> D
         "outboundTag": DNS_OUT_TAG,
         "ruleTag": CAPTURE_RULE_TAG,
     }
-    model["rules"] = [proxy_rule, capture_rule, *rules]
+    # The local rule must be matched before the proxy rule, otherwise the
+    # query for a home name would already be on its way through the tunnel.
+    ordered = [local_rule] if local_rule else []
+    ordered.extend([proxy_rule, capture_rule])
+    model["rules"] = [*ordered, *rules]
 
     balancers = [
         item
@@ -695,6 +903,23 @@ def _build_enabled_routing(routing: Dict[str, Any], target: Dict[str, Any]) -> D
         balancers.append(copy.deepcopy(target["managed_balancer"]))
     if balancers or "balancers" in model:
         model["balancers"] = balancers
+    return result
+
+
+def _rebuild_local_rule(
+    routing: Dict[str, Any], local_rule: Optional[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """Replace our local rule in place, leaving the other managed rules alone."""
+    result = copy.deepcopy(routing if isinstance(routing, dict) else {})
+    model = result.get("routing")
+    if not isinstance(model, dict):
+        return result
+    rules = [
+        item
+        for item in (model.get("rules") if isinstance(model.get("rules"), list) else [])
+        if not (isinstance(item, dict) and _clean_tag(item.get("ruleTag")) == LOCAL_RULE_TAG)
+    ]
+    model["rules"] = ([local_rule] + rules) if local_rule else rules
     return result
 
 
@@ -742,10 +967,29 @@ def _conflicts(runtime: Dict[str, Any], routing: Dict[str, Any]) -> list[str]:
 def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bool]:
     managed_path = os.path.join(configs_dir, MANAGED_FRAGMENT)
     fragment = _read_json(managed_path, None)
-    exact_fragment = fragment == _managed_fragment()
+    # The upstream list is user-configurable, so compare against a fragment
+    # rebuilt from the servers this file declares: anything else that differs
+    # (extra inbound, changed queryStrategy, wrong disableFallback) is caught.
+    raw_servers = ((fragment or {}).get("dns") or {}).get("servers")
+    raw_servers = raw_servers if isinstance(raw_servers, list) else []
+    # The optional local resolver is an object and always comes first; the
+    # public upstreams are plain strings after it.
+    local_obj = raw_servers[0] if raw_servers and isinstance(raw_servers[0], dict) else None
+    declared = _safe_upstreams([item for item in raw_servers if not isinstance(item, dict)])
+    declared_resolver = (
+        {"address": str(local_obj.get("address") or ""), "port": local_obj.get("port") or 53}
+        if isinstance(local_obj, dict) and local_obj.get("address")
+        else None
+    )
+    exact_fragment = bool(declared) and fragment == _managed_fragment(
+        declared,
+        declared_resolver,
+        local_obj.get("domains") if isinstance(local_obj, dict) else None,
+    )
     model = routing.get("routing") if isinstance(routing.get("routing"), dict) else {}
     rules = model.get("rules") if isinstance(model.get("rules"), list) else []
     proxy_rule_obj = next((item for item in rules if _clean_tag(item.get("ruleTag")) == PROXY_RULE_TAG), None)
+    local_rule_obj = next((item for item in rules if _clean_tag(item.get("ruleTag")) == LOCAL_RULE_TAG), None)
     capture_rule_obj = next((item for item in rules if _clean_tag(item.get("ruleTag")) == CAPTURE_RULE_TAG), None)
     balancer_obj = next(
         (
@@ -778,6 +1022,14 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
             or (_clean_tag(proxy_rule_obj.get("outboundTag")) in proxy_tags and not proxy_rule_obj.get("balancerTag"))
         )
     )
+    # The local rule is optional; when present it must be exactly the one we
+    # would build for the resolver this fragment declares.
+    expected_local = (
+        _local_rule(declared_resolver, _direct_outbound_tag(runtime)) if declared_resolver else None
+    )
+    safe_local_rule = (local_rule_obj is None) or (
+        expected_local is not None and local_rule_obj == expected_local
+    )
     safe_capture_rule = capture_rule_obj == {
         "type": "field",
         "network": "tcp,udp",
@@ -792,6 +1044,8 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
         "proxy_rule_owned": proxy_rule_obj is not None,
         "capture_rule": safe_capture_rule,
         "capture_rule_owned": capture_rule_obj is not None,
+        "local_rule": safe_local_rule,
+        "local_rule_owned": local_rule_obj is not None,
         "balancer": safe_balancer,
         "balancer_owned": balancer_obj is not None,
     }
@@ -808,7 +1062,13 @@ def _managed_config_complete(presence: Dict[str, bool]) -> bool:
 def _managed_config_present(presence: Dict[str, bool]) -> bool:
     return any(
         presence.get(key)
-        for key in ("fragment_owned", "proxy_rule_owned", "capture_rule_owned", "balancer_owned")
+        for key in (
+            "fragment_owned",
+            "proxy_rule_owned",
+            "capture_rule_owned",
+            "local_rule_owned",
+            "balancer_owned",
+        )
     )
 
 
@@ -823,6 +1083,7 @@ def _managed_config_tampered(presence: Dict[str, bool]) -> bool:
             ("fragment_owned", "fragment"),
             ("proxy_rule_owned", "proxy_rule"),
             ("capture_rule_owned", "capture_rule"),
+            ("local_rule_owned", "local_rule"),
             ("balancer_owned", "balancer"),
         )
     )
@@ -1315,6 +1576,7 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
     default_tag = default_candidate_tag(candidates)
     # A choice made earlier survives in the state file, so an install that
     # predates the picker keeps its route instead of being re-guessed.
+    upstreams = _safe_upstreams(state.get("upstreams")) or list(DEFAULT_UPSTREAMS)
     state_tags = _stored_selection(state)
     # The picker may only preselect routes that are still usable; drift
     # detection deliberately works off the raw stored tags, because a source
@@ -1364,6 +1626,17 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
         "blockers": blockers,
         "target": ({k: v for k, v in target.items() if k != "managed_balancer"} if target else None),
         "candidates": candidates,
+        "upstreams": upstreams,
+        "default_upstreams": list(DEFAULT_UPSTREAMS),
+        "max_upstreams": MAX_UPSTREAMS,
+        "local_resolver": (state.get("local_resolver") or {}).get("address_port") or "",
+        "local_domains": (
+            state.get("local_domains")
+            if isinstance(state.get("local_domains"), list)
+            else list(DEFAULT_LOCAL_DOMAINS)
+        ),
+        "default_local_domains": list(DEFAULT_LOCAL_DOMAINS),
+        "direct_outbound": _direct_outbound_tag(runtime),
         "route_drift": drift,
         "watchdog": state.get("watchdog") if isinstance(state.get("watchdog"), dict) else None,
         "selected_target": selected_tag,
@@ -1390,6 +1663,9 @@ def apply_action(
     ui_state_dir: str,
     restart_xkeen: Callable[..., Any],
     target_tag: Any = "",
+    upstreams: Any = None,
+    local_resolver: Any = None,
+    local_domains: Any = None,
 ) -> Dict[str, Any]:
     normalized = str(action or "").strip().lower()
     if normalized not in {"enable", "disable"}:
@@ -1412,6 +1688,29 @@ def apply_action(
         routing, _raw = _read_routing_with_raw(routing_file)
         runtime = _collect_runtime(configs_dir, routing)
         managed_path = os.path.join(configs_dir, MANAGED_FRAGMENT)
+        stored_state = _load_state(ui_state_dir)
+        # An explicit request wins; otherwise keep what this install chose.
+        wanted_upstreams = (
+            validate_upstreams(upstreams)
+            if upstreams is not None
+            else (_safe_upstreams(stored_state.get("upstreams")) or list(DEFAULT_UPSTREAMS))
+        )
+        wanted_local = (
+            _parse_local_resolver(local_resolver)
+            if local_resolver is not None
+            else _parse_local_resolver((stored_state.get("local_resolver") or {}).get("address_port"))
+        )
+        wanted_local_domains = (
+            _local_domains(local_domains)
+            if local_domains is not None
+            else _local_domains(stored_state.get("local_domains"))
+        )
+        direct_tag = _direct_outbound_tag(runtime)
+        if wanted_local and not direct_tag:
+            raise DnsOverVlessError(
+                "Не найден outbound прямого подключения (freedom) — локальные зоны некуда направить.",
+                code="direct_outbound_missing",
+            )
         routing_raw_path = jsonc_path_for(routing_file)
         state_path = _state_path(ui_state_dir)
         snapshot_dir, manifest = _snapshot(
@@ -1430,12 +1729,27 @@ def apply_action(
         try:
             if normalized == "enable":
                 presence = _managed_presence(configs_dir, routing)
-                if _managed_config_complete(presence):
+                current_fragment = _read_json(managed_path, None)
+                current_upstreams = _safe_upstreams(
+                    ((current_fragment or {}).get("dns") or {}).get("servers")
+                )
+                expected_fragment = _managed_fragment(
+                    wanted_upstreams, wanted_local, wanted_local_domains
+                )
+                if _managed_config_complete(presence) and current_fragment == expected_fragment:
                     # Idempotent recovery path: configuration is already
                     # prepared, so only revalidate it and claim DNS override.
                     target = None
                     next_routing = routing
-                    next_fragment = _read_json(managed_path, _managed_fragment())
+                    next_fragment = current_fragment
+                elif _managed_config_complete(presence):
+                    # Same route, new DNS settings: rewrite the fragment and
+                    # re-lay our own rules so the local rule matches it.
+                    target = None
+                    next_routing = _rebuild_local_rule(
+                        routing, _local_rule(wanted_local, direct_tag)
+                    )
+                    next_fragment = expected_fragment
                 else:
                     if _managed_config_present(presence):
                         raise DnsOverVlessError(
@@ -1452,8 +1766,10 @@ def apply_action(
                         previous_state
                     )
                     target = _select_target(runtime, requested, routing)
-                    next_routing = _build_enabled_routing(routing, target)
-                    next_fragment = _managed_fragment()
+                    next_routing = _build_enabled_routing(
+                        routing, target, _local_rule(wanted_local, direct_tag)
+                    )
+                    next_fragment = expected_fragment
                 desired_override = True
             else:
                 presence = _managed_presence(configs_dir, routing)
@@ -1539,6 +1855,16 @@ def apply_action(
                         "enabled": True,
                         "enabled_at": int(time.time()),
                         "original_dns_override": original_override_for_state,
+                        "upstreams": wanted_upstreams,
+                        "local_resolver": (
+                            {
+                                "address_port": "%s:%s" % (wanted_local["address"], wanted_local["port"]),
+                                **wanted_local,
+                            }
+                            if wanted_local
+                            else None
+                        ),
+                        "local_domains": wanted_local_domains if wanted_local else None,
                         "target": ({k: v for k, v in target.items() if k != "managed_balancer"} if target else previous_state.get("target")),
                         "last_transaction": snapshot_dir,
                     },

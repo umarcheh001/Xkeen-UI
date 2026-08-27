@@ -25,6 +25,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     fallback: 'routing-dns-over-vless-route-fallback',
     multi: 'routing-dns-over-vless-multi',
     multiRow: 'routing-dns-over-vless-multi-row',
+    upstreams: 'routing-dns-over-vless-upstreams',
+    local: 'routing-dns-over-vless-local',
   };
 
   let status = null;
@@ -55,9 +57,20 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     return data;
   }
 
+  function dnsSettings() {
+    const upstreams = $(DOM.upstreams);
+    const local = $(DOM.local);
+    const settings = {};
+    if (upstreams) settings.upstreams = String(upstreams.value || '').trim();
+    // An empty string is meaningful here: it switches the local exception off.
+    if (local) settings.local_resolver = String(local.value || '').trim();
+    return settings;
+  }
+
   async function postAction(action, targets) {
     const list = Array.isArray(targets) ? targets.filter(Boolean) : [];
     const payload = list.length ? { action, targets: list } : { action };
+    if (action === 'enable') Object.assign(payload, dnsSettings());
     const client = http();
     if (client && typeof client.postJSON === 'function') {
       return client.postJSON('/api/routing/dns-over-vless', payload, { timeoutMs: 90000, retry: 0 });
@@ -150,8 +163,22 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       select.appendChild(option);
     });
     select.disabled = busy || (!multi && poolUsable.length < 2);
+    renderDnsFields(data);
     chosenTargets = wanted;
     renderFallback(multi ? null : pool.find((item) => item.tag === wanted[0]), multi, wanted);
+  }
+
+  function renderDnsFields(data) {
+    const upstreams = $(DOM.upstreams);
+    const local = $(DOM.local);
+    if (upstreams && !upstreams.dataset.touched) {
+      upstreams.value = ((data && data.upstreams) || []).join(', ');
+    }
+    if (local && !local.dataset.touched) {
+      local.value = (data && data.local_resolver) || '';
+    }
+    if (upstreams) upstreams.disabled = busy;
+    if (local) local.disabled = busy;
   }
 
   function renderFallback(candidate, multi, wanted) {
@@ -281,6 +308,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     showModal(true);
     chosenTargets = [];
     multiTouched = false;
+    [DOM.upstreams, DOM.local].forEach((id) => {
+      const field = $(id);
+      if (field) delete field.dataset.touched;
+    });
     const text = $(DOM.status);
     const badge = $(DOM.badge);
     const apply = $(DOM.apply);
@@ -356,6 +387,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         if (status) renderRoute(status);
       });
     }
+    [DOM.upstreams, DOM.local].forEach((id) => {
+      const field = $(id);
+      if (field) field.addEventListener('input', () => { field.dataset.touched = '1'; });
+    });
     const multiBox = $(DOM.multi);
     if (multiBox) {
       multiBox.addEventListener('change', () => {

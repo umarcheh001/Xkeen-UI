@@ -289,6 +289,9 @@ def test_frontend_has_dns_button_modal_and_guard_copy():
     assert "Сторож отключил защиту" in script
     assert 'id="routing-dns-over-vless-multi"' in template
     assert "Балансировать между несколькими прокси" in template
+    assert 'id="routing-dns-over-vless-upstreams"' in template
+    assert 'id="routing-dns-over-vless-local"' in template
+    assert "local_resolver" in script
 
 
 def _scenario_config(tmp_path: Path):
@@ -949,3 +952,115 @@ def test_install_enabled_before_the_picker_keeps_working(tmp_path: Path, monkeyp
     # The source balancer falls back to direct, so the old clone without a
     # fallback already matches what this version would build: no drift.
     assert result["route_drift"] is None
+
+
+def test_upstreams_are_validated_against_loops_and_leaks():
+    assert dns.validate_upstreams("") == ["8.8.8.8"]
+    assert dns.validate_upstreams("1.1.1.1, 9.9.9.9") == ["1.1.1.1", "9.9.9.9"]
+    assert dns.validate_upstreams(["https://8.8.8.8/dns-query"]) == ["https://8.8.8.8/dns-query"]
+
+    for bad in ("127.0.0.53", "192.168.1.1", "169.254.1.1", "dns.google", "8.8.8.8 1.1.1.1 9.9.9.9 8.8.4.4 1.0.0.1"):
+        try:
+            dns.validate_upstreams(bad)
+            raise AssertionError(f"expected {bad!r} to be refused")
+        except dns.DnsOverVlessError as exc:
+            assert exc.code == "upstreams_invalid"
+
+
+def test_several_upstreams_enable_fallback_between_them():
+    single = dns._managed_fragment(["8.8.8.8"])
+    several = dns._managed_fragment(["8.8.8.8", "1.1.1.1"])
+
+    # One server has nothing to fall back to; several are listed precisely so
+    # the next one is tried.
+    assert single["dns"]["disableFallback"] is True
+    assert several["dns"]["disableFallback"] is False
+    assert several["dns"]["servers"] == ["8.8.8.8", "1.1.1.1"]
+
+
+def test_local_resolver_takes_the_home_zones_out_of_the_tunnel(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+    resolver = dns._parse_local_resolver("192.168.1.1:5353")
+
+    fragment = dns._managed_fragment(["1.1.1.1"], resolver)
+    first = fragment["dns"]["servers"][0]
+
+    assert first["address"] == "192.168.1.1"
+    assert first["port"] == 5353
+    assert "domain:lan" in first["domains"]
+    # Reverse lookups for private ranges must not reach a public resolver.
+    assert "domain:in-addr.arpa" in first["domains"]
+    assert first["skipFallback"] is True
+    # A public upstream still follows for everything else.
+    assert fragment["dns"]["servers"][1] == "1.1.1.1"
+
+    rule = dns._local_rule(resolver, dns._direct_outbound_tag(runtime))
+    assert rule["outboundTag"] == "direct"
+    assert rule["ip"] == ["192.168.1.1/32"]
+    assert rule["inboundTag"] == [dns.DNS_IN_TAG]
+
+
+def test_local_rule_is_matched_before_the_proxy_rule(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+    target = dns._select_target(runtime, "balancer_main", routing)
+    rule = dns._local_rule(dns._parse_local_resolver("192.168.1.1"), "direct")
+
+    planned = dns._build_enabled_routing(routing, target, rule)
+    tags = [item.get("ruleTag") for item in planned["routing"]["rules"][:3]]
+
+    # Otherwise a home name would already be travelling through the tunnel.
+    assert tags == [dns.LOCAL_RULE_TAG, dns.PROXY_RULE_TAG, dns.CAPTURE_RULE_TAG]
+    assert dns._build_disabled_routing(planned) == routing
+
+
+def test_local_resolver_input_is_checked(tmp_path: Path):
+    assert dns._parse_local_resolver("") is None
+    assert dns._parse_local_resolver("10.0.0.1") == {"address": "10.0.0.1", "port": 53}
+
+    for bad in ("router.lan", "192.168.1.1:port", "0.0.0.0"):
+        try:
+            dns._parse_local_resolver(bad)
+            raise AssertionError(f"expected {bad!r} to be refused")
+        except dns.DnsOverVlessError as exc:
+            assert exc.code == "local_resolver_invalid"
+
+
+def test_enable_stores_dns_settings_and_status_reports_them(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj: _write(Path(path), obj))
+
+    dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+        upstreams=["1.1.1.1", "9.9.9.9"],
+        local_resolver="192.168.1.1:5353",
+    )
+
+    fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+    assert fragment["dns"]["servers"][0]["address"] == "192.168.1.1"
+    assert fragment["dns"]["servers"][1:] == ["1.1.1.1", "9.9.9.9"]
+
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["enabled"] is True
+    assert result["tampered"] is False
+    assert result["upstreams"] == ["1.1.1.1", "9.9.9.9"]
+    assert result["local_resolver"] == "192.168.1.1:5353"

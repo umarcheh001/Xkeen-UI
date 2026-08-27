@@ -2590,6 +2590,14 @@
             <select id="routing-dns-over-vless-target" class="xray-log-select" aria-describedby="routing-dns-over-vless-route-hint"></select>
             <p class="modal-hint" id="routing-dns-over-vless-route-hint">DNS пойдёт через выбранный балансировщик или прокси. Выбор сохраняется и используется при последующих включениях.</p>
             <p id="routing-dns-over-vless-route-fallback" class="routing-dns-over-vless-route-fallback hidden"></p>
+
+            <label for="routing-dns-over-vless-upstreams">DNS-серверы в туннеле</label>
+            <input type="text" id="routing-dns-over-vless-upstreams" class="routing-rule-input" placeholder="8.8.8.8, 1.1.1.1" autocomplete="off" spellcheck="false">
+            <p class="modal-hint">Через запятую, только IP-адреса. Второй и следующие используются, когда первый не отвечает.</p>
+
+            <label for="routing-dns-over-vless-local">Локальный DNS для домашних имён</label>
+            <input type="text" id="routing-dns-over-vless-local" class="routing-rule-input" placeholder="не используется" autocomplete="off" spellcheck="false">
+            <p class="modal-hint">Необязательно. Адрес резолвера, который отвечает за <code>.lan</code>, имена устройств и зоны Keenetic — запросы к нему пойдут напрямую, мимо туннеля. Укажите порт, если резолвер слушает не на 53.</p>
           </div>
 
           <div class="routing-dns-over-vless-safety" aria-label="Защита операции">

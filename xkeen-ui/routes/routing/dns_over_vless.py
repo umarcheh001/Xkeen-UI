@@ -50,6 +50,11 @@ def register_dns_over_vless_routes(
         if raw_target is None:
             raw_target = payload.get("target")
         target_tag = raw_target if isinstance(raw_target, list) else str(raw_target or "").strip()
+        # Omitted keys mean "keep what this install already uses"; an empty
+        # local resolver means "switch the local exception off".
+        upstreams = payload.get("upstreams", None)
+        local_resolver = payload.get("local_resolver", None)
+        local_domains = payload.get("local_domains", None)
         try:
             result = apply_action(
                 action,
@@ -58,6 +63,9 @@ def register_dns_over_vless_routes(
                 ui_state_dir=ui_state_dir,
                 restart_xkeen=restart_xkeen,
                 target_tag=target_tag,
+                upstreams=upstreams,
+                local_resolver=local_resolver,
+                local_domains=local_domains,
             )
             audit(True, action=action, summary=("DNS-over-VLESS включён" if action == "enable" else "DNS-over-VLESS отключён"))
             return jsonify(result)
