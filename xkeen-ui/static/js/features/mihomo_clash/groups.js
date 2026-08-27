@@ -780,6 +780,22 @@ function nodeFlagHtml(countryCode) {
   return `<span class="xk-sub-node-country xk-mihomo-node-country" data-country="${countryCode}" role="img" aria-label="${escapeHtml(label)}" data-tooltip="${escapeHtml(label)}">${svg}</span>`;
 }
 
+function thematicGroupIcon(name) {
+  const value = String(name || '').trim().toLowerCase();
+  if (value === 'fallback') return 'https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Available.png';
+  if (value === 'fastest' || value.includes('fastest') || value.includes('быстр')) {
+    return 'https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Speedtest.png';
+  }
+  return '';
+}
+
+function nodeVisualIconHtml(node) {
+  const nestedGroup = allGroups().find((group) => group.name === node?.name);
+  const icon = String(node?.icon || nestedGroup?.icon || thematicGroupIcon(node?.name) || '').trim();
+  if (!icon) return '';
+  return `<span class="xk-mihomo-node-icon" aria-hidden="true"><img src="${escapeHtml(icon)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
+}
+
 
 function renderNodeProbe(group, node) {
   if (!canProbeNode(node)) return '';
@@ -838,7 +854,7 @@ function renderNode(group, node) {
         aria-pressed="${selected ? 'true' : 'false'}" ${selectionDisabled ? 'aria-disabled="true" data-tooltip="Этот узел нельзя зафиксировать в автоматической группе."' : ''}
         ${!selectable || selected || selectPending || selection || selectionDisabled ? 'disabled' : ''}>
         <span class="xk-mihomo-node-main">
-          <strong>${fixed ? iconHtml('lock') : ''}${nodeFlagHtml(countryCode)}<span>${escapeHtml(displayName)}</span></strong>
+          <strong>${fixed ? iconHtml('lock') : ''}${nodeVisualIconHtml(node)}${nodeFlagHtml(countryCode)}<span>${escapeHtml(displayName)}</span></strong>
           <small>${escapeHtml(meta)}</small>
           ${endpoint ? `<small class="xk-mihomo-node-endpoint">${escapeHtml(endpoint)}</small>` : ''}
         </span>
@@ -863,11 +879,7 @@ function groupIconHtml(group) {
   // Older configs often omit icons for the built-in automatic groups. Keep
   // those cards visually identifiable even before the template is regenerated.
   const name = String(group.name || '').trim().toLowerCase();
-  const thematicIcon = name === 'fallback'
-    ? 'https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png'
-    : (name.includes('fastest') || name.includes('быстр')
-      ? 'https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Speedtest.png'
-      : '');
+  const thematicIcon = thematicGroupIcon(name);
   const resolvedIcon = icon || thematicIcon;
   if (!resolvedIcon) {
     return `<span class="xk-mihomo-group-icon xk-mihomo-group-icon--default" aria-hidden="true">${iconHtml('dns', 'xk-mihomo-group-default-icon')}</span>`;
@@ -885,7 +897,7 @@ function groupFixedStatusHtml(group) {
 
 function pickerNodeIconHtml(node) {
   const nestedGroup = allGroups().find((group) => group.name === node?.name);
-  const groupIcon = String(nestedGroup?.icon || '').trim();
+  const groupIcon = String(nestedGroup?.icon || thematicGroupIcon(node?.name) || '').trim();
   if (groupIcon) {
     return `<span class="xk-mihomo-picker-node-icon xk-mihomo-picker-node-icon--group"><img src="${escapeHtml(groupIcon)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
   }

@@ -18729,6 +18729,24 @@ body.panel-page .xk-mihomo-group-default-icon {
   color: var(--op-muted);
 }
 
+body.panel-page .xk-mihomo-node-icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  vertical-align: -3px;
+  align-items: center;
+  justify-content: center;
+}
+
+body.panel-page .xk-mihomo-node-icon img {
+  display: block;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
 body.panel-page .xk-mihomo-group-body[hidden] {
   display: none !important;
 }
