@@ -721,11 +721,32 @@ export function wirePanelLazyFeatureClicks() {
       if (consumeReplayFlag(outboundsTrigger)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
+      // Feature loading is asynchronous. Keep one pending activation per
+      // header so repeated clicks while the module is loading cannot queue
+      // multiple replay clicks (which would toggle the card twice and leave
+      // it collapsed after the first user click).
+      try {
+        if (outboundsTrigger.dataset && outboundsTrigger.dataset.xkOutboundsActivationPending === '1') return;
+        if (outboundsTrigger.dataset) outboundsTrigger.dataset.xkOutboundsActivationPending = '1';
+      } catch (e) {}
       const configShell = getConfigShellApi();
-      if (!configShell) return;
+      if (!configShell) {
+        try { if (outboundsTrigger.dataset) delete outboundsTrigger.dataset.xkOutboundsActivationPending; } catch (e) {}
+        return;
+      }
       Promise.resolve(activateOutboundsConfigView({ reason: 'interaction' })).then((ready) => {
         if (!ready) return;
+        try { if (outboundsTrigger.dataset) delete outboundsTrigger.dataset.xkOutboundsActivationPending; } catch (e) {}
+        // Initialization already wires the real header handler. Invoke the
+        // feature action directly instead of replaying a DOM click, avoiding a
+        // race with the lazy-click guard during module startup.
+        const outboundsApi = getPanelLazyFeatureApi('outbounds');
+        if (outboundsApi && typeof outboundsApi.toggleCard === 'function') {
+          try { outboundsApi.toggleCard(); return; } catch (e) {}
+        }
         replayDeferredClick(outboundsTrigger);
+      }).catch(() => {
+        try { if (outboundsTrigger.dataset) delete outboundsTrigger.dataset.xkOutboundsActivationPending; } catch (e) {}
       });
       return;
     }
@@ -753,10 +774,25 @@ export function wirePanelLazyFeatureClicks() {
     if (outboundsHeader && !isPanelLazyFeatureReady('outbounds')) {
       event.preventDefault();
       event.stopImmediatePropagation();
+      try {
+        if (outboundsHeader.dataset && outboundsHeader.dataset.xkOutboundsActivationPending === '1') return;
+        if (outboundsHeader.dataset) outboundsHeader.dataset.xkOutboundsActivationPending = '1';
+      } catch (e) {}
       const configShell = getConfigShellApi();
-      if (!configShell) return;
+      if (!configShell) {
+        try { if (outboundsHeader.dataset) delete outboundsHeader.dataset.xkOutboundsActivationPending; } catch (e) {}
+        return;
+      }
       Promise.resolve(activateOutboundsConfigView({ reason: 'keyboard-interaction' })).then((ready) => {
-        if (ready) replayDeferredClick(outboundsHeader);
+        if (!ready) return;
+        try { if (outboundsHeader.dataset) delete outboundsHeader.dataset.xkOutboundsActivationPending; } catch (e) {}
+        const outboundsApi = getPanelLazyFeatureApi('outbounds');
+        if (outboundsApi && typeof outboundsApi.toggleCard === 'function') {
+          try { outboundsApi.toggleCard(); return; } catch (e) {}
+        }
+        replayDeferredClick(outboundsHeader);
+      }).catch(() => {
+        try { if (outboundsHeader.dataset) delete outboundsHeader.dataset.xkOutboundsActivationPending; } catch (e) {}
       });
     }
   }, true);
