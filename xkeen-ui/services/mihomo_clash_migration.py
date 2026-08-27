@@ -23,6 +23,15 @@ _UNIX_RE = re.compile(
 _SECRET_RE = re.compile(r"^(?P<indent>\s*)secret\s*:\s*.*$", re.MULTILINE)
 
 
+def _top_level_insert(text: str, block: str) -> str:
+    source = str(text or "").rstrip() + "\n"
+    lines = source.splitlines(keepends=True)
+    index = next((i for i, line in enumerate(lines)
+                  if line.strip() and not line.lstrip().startswith("#")
+                  and line[:1] not in {" ", "\t"}), len(lines))
+    return "".join(lines[:index]) + str(block).rstrip("\n") + "\n" + "".join(lines[index:])
+
+
 @dataclass(frozen=True)
 class MigrationPreview:
     content: str
@@ -58,7 +67,7 @@ def _replace_or_insert(
         return text[: match.start()] + f"{match.group('indent')}{line}" + text[
             match.end() :
         ], True
-    return text.rstrip() + "\n" + line + "\n", False
+    return _top_level_insert(text, line), False
 
 
 def _replace_or_insert_near(

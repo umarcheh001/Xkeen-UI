@@ -178,6 +178,32 @@ def _without_controller_directives(text: str) -> str:
     return cleaned + "\n"
 
 
+def _insert_controller_directives_at_top(text: str, directives: Iterable[str]) -> str:
+    """Insert restored controller settings with the other top-level settings.
+
+    Keep the template's introductory comments at the top, then place
+    ``external-controller``/``secret`` before the first YAML setting instead
+    of appending them after rules and providers at the end of the file.
+    """
+    source = str(text or "").rstrip() + "\n"
+    lines = source.splitlines(keepends=True)
+    insert_at = len(lines)
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        # A top-level key starts in column zero. Nested list/map content must
+        # not become the insertion anchor.
+        if line[:1] not in {" ", "\t"}:
+            insert_at = index
+            break
+    rendered = "\n".join(str(item).rstrip("\r\n") for item in directives if str(item).strip())
+    if not rendered:
+        return source
+    block = rendered + "\n"
+    return "".join(lines[:insert_at]) + block + "".join(lines[insert_at:])
+
+
 def build_switch_preview(text: str, state: Mapping[str, Any], target: str) -> PanelSwitchPreview:
     normalized = str(target or "").strip().lower()
     panel_name = str(state.get("panel_name") or panel_name_from_config(text))
@@ -193,7 +219,7 @@ def build_switch_preview(text: str, state: Mapping[str, Any], target: str) -> Pa
     directives = state.get("external_directives")
     if not isinstance(directives, list) or not directives:
         raise ValueError("external_panel_backup_missing")
-    content = _without_controller_directives(text).rstrip() + "\n" + "\n".join(directives) + "\n"
+    content = _insert_controller_directives_at_top(_without_controller_directives(text), directives)
     return PanelSwitchPreview("external", content, panel_name)
 
 
