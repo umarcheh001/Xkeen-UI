@@ -287,6 +287,8 @@ def test_frontend_has_dns_button_modal_and_guard_copy():
     assert 'id="routing-dns-over-vless-route-fallback"' in template
     assert "Резервирование сохранено" in script
     assert "Сторож отключил защиту" in script
+    assert 'id="routing-dns-over-vless-multi"' in template
+    assert "Балансировать между несколькими прокси" in template
 
 
 def _scenario_config(tmp_path: Path):
@@ -729,3 +731,151 @@ def test_watchdog_thread_starts_only_once(tmp_path: Path, monkeypatch):
 
     assert first is True
     assert second is False
+
+
+def test_several_proxies_are_combined_into_an_own_balancer(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    target = dns._select_target(runtime, ["my_proxy_1", "reserve_proxy_1"], routing)
+
+    assert target["kind"] == "balancer"
+    assert target["sources"] == ["my_proxy_1", "reserve_proxy_1"]
+    assert target["managed_balancer"]["selector"] == ["my_proxy_1", "reserve_proxy_1"]
+    # No observatory in this fixture, so leastPing would never pick a node.
+    assert target["managed_balancer"]["strategy"] == {"type": "random"}
+    assert "fallbackTag" not in target["managed_balancer"]
+
+
+def test_least_ping_is_used_only_when_observatory_probes_the_chosen_proxies(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    _write(configs / "07_observatory.json", {"observatory": {"subjectSelector": ["my_proxy"]}})
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    covered = dns._select_target(runtime, ["my_proxy_1", "my_proxy_2"], routing)
+    partly = dns._select_target(runtime, ["my_proxy_1", "reserve_proxy_1"], routing)
+
+    assert covered["managed_balancer"]["strategy"] == {"type": "leastPing"}
+    # reserve_proxy_1 is not probed, so the whole set falls back to random.
+    assert partly["managed_balancer"]["strategy"] == {"type": "random"}
+
+
+def test_a_balancer_cannot_be_combined_with_other_routes(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    try:
+        dns._select_target(runtime, ["balancer_main", "my_proxy_1"], routing)
+        raise AssertionError("expected mixing to be refused")
+    except dns.DnsOverVlessError as exc:
+        assert exc.code == "mixed_target_selection"
+        assert exc.details["balancers"] == ["balancer_main"]
+
+
+def test_a_single_element_list_behaves_like_a_plain_choice(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    listed = dns._select_target(runtime, ["balancer_main"], routing)
+    plain = dns._select_target(runtime, "balancer_main", routing)
+
+    assert listed == plain
+
+
+def test_combined_choice_is_saved_and_reused(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj: _write(Path(path), obj))
+
+    result = dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag=["my_proxy_1", "my_proxy_2"],
+    )
+
+    assert result["target"]["sources"] == ["my_proxy_1", "my_proxy_2"]
+    saved = json.loads((state / dns.STATE_FILENAME).read_text(encoding="utf-8"))
+    assert saved["target"]["sources"] == ["my_proxy_1", "my_proxy_2"]
+    written = json.loads(routing_path.read_text(encoding="utf-8"))
+    managed = next(
+        item for item in written["routing"]["balancers"] if item["tag"] == dns.BALANCER_TAG
+    )
+    assert managed["selector"] == ["my_proxy_1", "my_proxy_2"]
+
+
+def test_status_reports_drift_when_a_combined_proxy_disappears(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    target = dns._select_target(
+        dns._collect_runtime(str(configs), routing), ["my_proxy_1", "my_proxy_2"], routing
+    )
+    _write(configs / dns.MANAGED_FRAGMENT, dns._managed_fragment())
+    _write(routing_path, dns._build_enabled_routing(routing, target))
+    _write(
+        state / dns.STATE_FILENAME,
+        {"enabled": True, "target": {"sources": ["my_proxy_1", "my_proxy_2"]}},
+    )
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    steady = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+    assert steady["route_drift"] is None
+
+    outbounds = json.loads((configs / "04_outbounds.json").read_text(encoding="utf-8"))
+    outbounds["outbounds"] = [
+        item for item in outbounds["outbounds"] if item["tag"] != "my_proxy_2"
+    ]
+    _write(configs / "04_outbounds.json", outbounds)
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["route_drift"]["managed"] == ["my_proxy_1", "my_proxy_2"]
+    assert result["route_drift"]["current"] == ["my_proxy_1"]
+
+
+def test_http_contract_accepts_a_list_of_targets(tmp_path: Path, monkeypatch):
+    from routes.routing import dns_over_vless as dns_routes
+
+    configs, routing_path, state = _scenario_config(tmp_path)
+    seen: dict[str, Any] = {}
+
+    def fake_apply(action, **kwargs):
+        seen["action"] = action
+        seen["target_tag"] = kwargs.get("target_tag")
+        return {"ok": True, "action": action}
+
+    monkeypatch.setattr(dns_routes, "apply_action", fake_apply)
+    app = Flask(__name__)
+    app.config["WTF_CSRF_ENABLED"] = False
+    dns_routes.register_dns_over_vless_routes(
+        app,
+        xray_configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_kwargs: True,
+    )
+
+    response = app.test_client().post(
+        "/api/routing/dns-over-vless",
+        json={"action": "enable", "targets": ["my_proxy_1", "my_proxy_2"]},
+    )
+
+    assert response.status_code == 200
+    assert seen["target_tag"] == ["my_proxy_1", "my_proxy_2"]

@@ -45,7 +45,11 @@ def register_dns_over_vless_routes(
     def api_dns_over_vless_apply() -> Any:
         payload = request.get_json(silent=True) or {}
         action = str(payload.get("action") or "").strip().lower()
-        target_tag = str(payload.get("target") or "").strip()
+        # Accept one tag or several: several plain proxies are balanced together.
+        raw_target = payload.get("targets")
+        if raw_target is None:
+            raw_target = payload.get("target")
+        target_tag = raw_target if isinstance(raw_target, list) else str(raw_target or "").strip()
         try:
             result = apply_action(
                 action,

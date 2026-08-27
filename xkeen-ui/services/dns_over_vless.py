@@ -140,11 +140,23 @@ def _collect_runtime(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, Any
     # tag -> inboundTag a loopback outbound re-injects traffic with, so a
     # fallback chain can be followed across the loopback hop.
     loopback_targets: Dict[str, str] = {}
+    # subjectSelector entries of observatory/burstObservatory: leastPing only
+    # works for outbounds an observatory actually probes.
+    observatory_selectors: list[str] = []
 
     for name, obj in _iter_json_fragments(configs_dir):
         dns = obj.get("dns")
         if isinstance(dns, dict) and dns:
             dns_fragments.append(name)
+        for key in ("observatory", "burstObservatory"):
+            section = obj.get(key)
+            if not isinstance(section, dict):
+                continue
+            raw = section.get("subjectSelector")
+            for value in raw if isinstance(raw, list) else []:
+                prefix = str(value).strip()
+                if prefix:
+                    observatory_selectors.append(prefix)
         for item in obj.get("outbounds") if isinstance(obj.get("outbounds"), list) else []:
             if not isinstance(item, dict):
                 continue
@@ -177,6 +189,7 @@ def _collect_runtime(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, Any
         "dns_fragments": dns_fragments,
         "balancers": balancers,
         "loopback_targets": loopback_targets,
+        "observatory_selectors": observatory_selectors,
     }
 
 
@@ -428,6 +441,7 @@ def _build_target(
             "kind": "outbound",
             "tag": tag,
             "source": tag,
+            "sources": [tag],
             "label": candidate["label"],
             "fallback": {"tag": "", "kept": False, "verdict": "none", "reason": "одиночный прокси, резерва нет"},
             "managed_balancer": None,
@@ -448,10 +462,50 @@ def _build_target(
         "kind": "balancer",
         "tag": BALANCER_TAG,
         "source": tag,
+        "sources": [tag],
         "label": candidate["label"],
         "fallback": plan,
         "managed_balancer": managed,
     }
+
+
+def _stored_selection(state: Dict[str, Any]) -> list[str]:
+    stored = state.get("target") if isinstance(state.get("target"), dict) else {}
+    return normalize_target_request(stored.get("sources") or stored.get("source") or "")
+
+
+def _combined_drift(
+    runtime: Dict[str, Any], routing: Dict[str, Any], tags: list[str]
+) -> Optional[Dict[str, Any]]:
+    """A balancer built here drifts when one of its chosen proxies disappears."""
+    managed = _find_managed_clone(routing)
+    if not managed:
+        return None
+    live = {item["tag"] for item in _proxy_outbounds(runtime)}
+    current = [tag for tag in tags if tag in live]
+    snapshot = [str(value).strip() for value in managed.get("selector", []) if str(value).strip()]
+    if current == snapshot:
+        return None
+    return {
+        "source": ", ".join(tags),
+        "managed": snapshot,
+        "current": current,
+        "managed_fallback": _clean_tag(managed.get("fallbackTag")),
+        "current_fallback": "",
+    }
+
+
+def _find_managed_clone(routing: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    model = routing.get("routing") if isinstance(routing.get("routing"), dict) else {}
+    balancers = model.get("balancers") if isinstance(model.get("balancers"), list) else []
+    return next(
+        (
+            item
+            for item in balancers
+            if isinstance(item, dict) and _clean_tag(item.get("tag")) == BALANCER_TAG
+        ),
+        None,
+    )
 
 
 def _route_drift(runtime: Dict[str, Any], routing: Dict[str, Any], source_tag: str) -> Optional[Dict[str, Any]]:
@@ -464,16 +518,7 @@ def _route_drift(runtime: Dict[str, Any], routing: Dict[str, Any], source_tag: s
     source = _find_balancer(runtime, source_tag)
     if not source:
         return None
-    model = routing.get("routing") if isinstance(routing.get("routing"), dict) else {}
-    balancers = model.get("balancers") if isinstance(model.get("balancers"), list) else []
-    managed = next(
-        (
-            item
-            for item in balancers
-            if isinstance(item, dict) and _clean_tag(item.get("tag")) == BALANCER_TAG
-        ),
-        None,
-    )
+    managed = _find_managed_clone(routing)
     if not managed:
         return None
     current = _usable_selector(source, [item["tag"] for item in _proxy_outbounds(runtime)])
@@ -492,8 +537,59 @@ def _route_drift(runtime: Dict[str, Any], routing: Dict[str, Any], source_tag: s
     }
 
 
+def normalize_target_request(requested: Any) -> list[str]:
+    """Accept a single tag or a list of them, keeping order and dropping dupes."""
+    values = requested if isinstance(requested, (list, tuple, set)) else [requested]
+    result: list[str] = []
+    for value in values:
+        tag = _clean_tag(value)
+        if tag and tag not in result:
+            result.append(tag)
+    return result
+
+
+def _observatory_covers(runtime: Dict[str, Any], tags: Iterable[str]) -> bool:
+    prefixes = [
+        _clean_tag(value) for value in runtime.get("observatory_selectors", []) if _clean_tag(value)
+    ]
+    if not prefixes:
+        return False
+    return all(any(str(tag).startswith(prefix) for prefix in prefixes) for tag in tags)
+
+
+def _build_combined_target(
+    chosen: list[Dict[str, Any]], runtime: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Balance DNS across several plain outbounds the user picked.
+
+    Xray routes a rule to exactly one outbound or one balancer, so several
+    proxies can only be combined by creating a balancer -- one the user does
+    not otherwise have.  ``leastPing`` needs an observatory that actually
+    probes these outbounds; without that coverage it would never pick a node,
+    so fall back to ``random``.
+    """
+    tags = [item["tag"] for item in chosen]
+    strategy = {"type": "leastPing"} if _observatory_covers(runtime, tags) else {"type": "random"}
+    return {
+        "kind": "balancer",
+        "tag": BALANCER_TAG,
+        "source": "",
+        "sources": tags,
+        "label": "прокси: " + ", ".join(tags),
+        # Nothing to inherit: this balancer is created here, not cloned.
+        "fallback": {"tag": "", "kept": False, "verdict": "none", "reason": "собственный балансировщик, резерва нет"},
+        "managed_balancer": {
+            "tag": BALANCER_TAG,
+            "selector": list(tags),
+            "strategy": strategy,
+        },
+    }
+
+
 def _select_target(
-    runtime: Dict[str, Any], requested_tag: str = "", routing: Optional[Dict[str, Any]] = None
+    runtime: Dict[str, Any],
+    requested_tag: Any = "",
+    routing: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     candidates = list_candidates(runtime, routing)
     usable = _usable_candidates(candidates)
@@ -502,25 +598,41 @@ def _select_target(
             "Не найден рабочий proxy-outbound или балансировщик Xray.",
             code="proxy_target_missing",
         )
-    wanted = _clean_tag(requested_tag)
-    if wanted:
-        chosen = next((item for item in usable if item["tag"] == wanted), None)
-        if chosen is None:
-            raise DnsOverVlessError(
-                f"Маршрут «{wanted}» недоступен для DNS-over-VLESS.",
-                code="target_unavailable",
-                details={"candidates": candidates},
-            )
-    elif len(usable) == 1:
-        chosen = usable[0]
-    else:
+    wanted = normalize_target_request(requested_tag)
+
+    if not wanted:
+        if len(usable) == 1:
+            return _build_target(usable[0], runtime, routing)
         # Ambiguous: refuse rather than resurrect the old file-order guess.
         raise DnsOverVlessError(
             "Выберите маршрут для DNS: доступно несколько балансировщиков или прокси.",
             code="target_choice_required",
             details={"candidates": candidates, "default": default_candidate_tag(candidates)},
         )
-    return _build_target(chosen, runtime, routing)
+
+    chosen: list[Dict[str, Any]] = []
+    for tag in wanted:
+        match = next((item for item in usable if item["tag"] == tag), None)
+        if match is None:
+            raise DnsOverVlessError(
+                f"Маршрут «{tag}» недоступен для DNS-over-VLESS.",
+                code="target_unavailable",
+                details={"candidates": candidates},
+            )
+        chosen.append(match)
+
+    if len(chosen) == 1:
+        return _build_target(chosen[0], runtime, routing)
+
+    balancers = [item["tag"] for item in chosen if item["kind"] == "balancer"]
+    if balancers:
+        raise DnsOverVlessError(
+            "Балансировщик нельзя объединять с другими маршрутами — выберите либо один "
+            "балансировщик, либо несколько прокси.",
+            code="mixed_target_selection",
+            details={"balancers": balancers, "candidates": candidates},
+        )
+    return _build_combined_target(chosen, runtime)
 
 
 def _managed_fragment() -> Dict[str, Any]:
@@ -1194,26 +1306,36 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
     default_tag = default_candidate_tag(candidates)
     # A choice made earlier survives in the state file, so an install that
     # predates the picker keeps its route instead of being re-guessed.
-    state_tag = _clean_tag((state.get("target") or {}).get("source"))
-    # The picker may only preselect a route that is still usable; drift
-    # detection deliberately works off the raw stored tag, because a source
-    # balancer that went unusable is exactly what needs reporting.
-    selected_tag = state_tag
-    if selected_tag and not any(
-        item["tag"] == selected_tag and item.get("usable") for item in candidates
-    ):
-        selected_tag = ""
+    state_tags = _stored_selection(state)
+    # The picker may only preselect routes that are still usable; drift
+    # detection deliberately works off the raw stored tags, because a source
+    # that went unusable is exactly what needs reporting.
+    selected_tags = [
+        tag
+        for tag in state_tags
+        if any(item["tag"] == tag and item.get("usable") for item in candidates)
+    ]
+    selected_tag = selected_tags[0] if len(selected_tags) == 1 else ""
     if not enabled:
         blockers.extend(_conflicts(runtime, routing))
         try:
-            target = _select_target(runtime, selected_tag or default_tag, routing)
+            target = _select_target(runtime, selected_tags or default_tag, routing)
         except DnsOverVlessError as exc:
             blockers.append(str(exc))
         if core != "xray":
             blockers.append("Для активации переключите активное ядро на Xray.")
         if override is None:
             blockers.append("Не удалось прочитать настройку DNS override Keenetic: " + override_detail)
-    drift = _route_drift(runtime, routing, state_tag) if (enabled and state_tag) else None
+    drift = None
+    # Do not gate this on ``enabled``: a proxy that vanished from the selector
+    # is exactly what makes the managed config look incomplete, and the drift
+    # message explains that far better than "неполная настройка".
+    if state_tags and _find_managed_clone(routing):
+        drift = (
+            _route_drift(runtime, routing, state_tags[0])
+            if len(state_tags) == 1
+            else _combined_drift(runtime, routing, state_tags)
+        )
     if partial:
         blockers.append("Обнаружена неполная предыдущая настройка DNS-over-VLESS; сначала выполните восстановление/отключение.")
     if tampered:
@@ -1236,8 +1358,9 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
         "route_drift": drift,
         "watchdog": state.get("watchdog") if isinstance(state.get("watchdog"), dict) else None,
         "selected_target": selected_tag,
+        "selected_targets": selected_tags,
         "default_target": default_tag,
-        "choice_required": bool(len(_usable_candidates(candidates)) > 1 and not selected_tag),
+        "choice_required": bool(len(_usable_candidates(candidates)) > 1 and not selected_tags),
         "managed_fragment": MANAGED_FRAGMENT,
         "articles": ["https://jameszero.net/4773.htm", "https://jameszero.net/3398.htm"],
         "safety": {
@@ -1257,7 +1380,7 @@ def apply_action(
     routing_file: str,
     ui_state_dir: str,
     restart_xkeen: Callable[..., Any],
-    target_tag: str = "",
+    target_tag: Any = "",
 ) -> Dict[str, Any]:
     normalized = str(action or "").strip().lower()
     if normalized not in {"enable", "disable"}:
@@ -1316,8 +1439,8 @@ def apply_action(
                     # An explicit request wins; otherwise reuse the route this
                     # install already chose.  With neither, _select_target
                     # refuses instead of guessing by file order.
-                    requested = _clean_tag(target_tag) or _clean_tag(
-                        (previous_state.get("target") or {}).get("source")
+                    requested = normalize_target_request(target_tag) or _stored_selection(
+                        previous_state
                     )
                     target = _select_target(runtime, requested, routing)
                     next_routing = _build_enabled_routing(routing, target)

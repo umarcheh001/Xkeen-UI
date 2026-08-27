@@ -23,11 +23,13 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     route: 'routing-dns-over-vless-route',
     target: 'routing-dns-over-vless-target',
     fallback: 'routing-dns-over-vless-route-fallback',
+    multi: 'routing-dns-over-vless-multi',
+    multiRow: 'routing-dns-over-vless-multi-row',
   };
 
   let status = null;
   let busy = false;
-  let chosenTarget = '';
+  let chosenTargets = [];
 
   function showModal(open) {
     const modal = $(DOM.modal);
@@ -52,8 +54,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     return data;
   }
 
-  async function postAction(action, target) {
-    const payload = target ? { action, target } : { action };
+  async function postAction(action, targets) {
+    const list = Array.isArray(targets) ? targets.filter(Boolean) : [];
+    const payload = list.length ? { action, targets: list } : { action };
     const client = http();
     if (client && typeof client.postJSON === 'function') {
       return client.postJSON('/api/routing/dns-over-vless', payload, { timeoutMs: 90000, retry: 0 });
@@ -92,6 +95,11 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     return text;
   }
 
+  function multiEnabled() {
+    const box = $(DOM.multi);
+    return !!(box && box.checked);
+  }
+
   function renderRoute(data) {
     const wrap = $(DOM.route);
     const select = $(DOM.target);
@@ -106,26 +114,54 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       return;
     }
 
-    const wanted = chosenTarget || (data && (data.selected_target || data.default_target)) || '';
-    const fallback = usable.length ? usable[0].tag : '';
-    const active = usable.some((item) => item.tag === wanted) ? wanted : fallback;
+    // Xray routes a rule to one outbound or one balancer, so combining is only
+    // possible across plain proxies — a balancer can never join them.
+    const proxies = usable.filter((item) => item.kind === 'outbound');
+    const multiRow = $(DOM.multiRow);
+    const multiBox = $(DOM.multi);
+    const canCombine = proxies.length > 1;
+    if (multiRow) multiRow.classList.toggle('hidden', !canCombine);
+    if (multiBox && !canCombine) multiBox.checked = false;
+    const multi = multiEnabled() && canCombine;
+
+    const pool = multi ? candidates.filter((item) => item.kind === 'outbound') : candidates;
+    const poolUsable = pool.filter((item) => item.usable);
+
+    let wanted = chosenTargets.length
+      ? chosenTargets
+      : (data && (data.selected_targets || []).length ? data.selected_targets : [data && data.default_target].filter(Boolean));
+    wanted = wanted.filter((tag) => poolUsable.some((item) => item.tag === tag));
+    if (!wanted.length && poolUsable.length) wanted = [poolUsable[0].tag];
+    if (!multi) wanted = wanted.slice(0, 1);
+
+    select.multiple = multi;
+    select.size = multi ? Math.min(6, Math.max(3, pool.length)) : 0;
     select.textContent = '';
-    candidates.forEach((item) => {
+    pool.forEach((item) => {
       const option = document.createElement('option');
       option.value = item.tag;
       option.textContent = candidateText(item);
       option.disabled = !item.usable;
-      if (item.tag === active) option.selected = true;
+      option.selected = wanted.indexOf(item.tag) !== -1;
       select.appendChild(option);
     });
-    select.disabled = busy || usable.length < 2;
-    chosenTarget = active;
-    renderFallback(candidates.find((item) => item.tag === active));
+    select.disabled = busy || (!multi && poolUsable.length < 2);
+    chosenTargets = wanted;
+    renderFallback(multi ? null : pool.find((item) => item.tag === wanted[0]), multi, wanted);
   }
 
-  function renderFallback(candidate) {
+  function renderFallback(candidate, multi, wanted) {
     const line = $(DOM.fallback);
     if (!line) return;
+    if (multi) {
+      line.classList.remove('hidden');
+      line.dataset.state = 'kept';
+      const list = (wanted || []);
+      line.textContent = list.length
+        ? `Выбрано ${list.length}: ${list.join(', ')}. Панель создаст из них свой балансировщик; резервного маршрута у него нет.`
+        : 'Отметьте хотя бы два прокси, между которыми балансировать DNS.';
+      return;
+    }
     const plan = candidate && candidate.fallback;
     const show = !!(plan && plan.tag);
     line.classList.toggle('hidden', !show);
@@ -227,7 +263,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
   async function open() {
     showModal(true);
-    chosenTarget = '';
+    chosenTargets = [];
     const text = $(DOM.status);
     const badge = $(DOM.badge);
     const apply = $(DOM.apply);
@@ -240,8 +276,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   async function apply() {
     if (busy || !status) return;
     const action = (status.enabled || status.can_disable) ? 'disable' : 'enable';
-    const picked = (status.candidates || []).find((item) => item && item.tag === chosenTarget);
-    const routeNote = (action === 'enable' && picked) ? `DNS пойдёт через ${picked.label}. ` : '';
+    const labels = (status.candidates || [])
+      .filter((item) => item && chosenTargets.indexOf(item.tag) !== -1)
+      .map((item) => item.label);
+    const routeNote = (action === 'enable' && labels.length)
+      ? (labels.length > 1
+        ? `DNS будет балансироваться между: ${labels.join(', ')}. `
+        : `DNS пойдёт через ${labels[0]}. `)
+      : '';
     const question = action === 'enable'
       ? routeNote + 'Панель создаст отдельный DNS-фрагмент, добавит два служебных правила в начало routing, выполнит xray -test, включит DNS override Keenetic, перезапустит Xray и проверит DNS. При любой ошибке всё будет восстановлено.'
       : 'Панель удалит только созданный ей DNS-фрагмент и служебные правила, восстановит исходное состояние DNS override Keenetic и перезапустит Xray.';
@@ -260,7 +302,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     busy = true;
     render(status);
     try {
-      const result = await postAction(action, action === 'enable' ? chosenTarget : '');
+      const result = await postAction(action, action === 'enable' ? chosenTargets : []);
       toast(action === 'enable'
         ? `DNS-over-VLESS включён${result.probe && result.probe.latency_ms != null ? ` · DNS ${result.probe.latency_ms} мс` : ''}`
         : 'DNS-over-VLESS отключён, исходная настройка восстановлена.');
@@ -291,7 +333,17 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const targetSelect = $(DOM.target);
     if (targetSelect) {
       targetSelect.addEventListener('change', () => {
-        chosenTarget = targetSelect.value || '';
+        chosenTargets = Array.from(targetSelect.selectedOptions || [])
+          .map((option) => option.value)
+          .filter(Boolean);
+        if (status) renderRoute(status);
+      });
+    }
+    const multiBox = $(DOM.multi);
+    if (multiBox) {
+      multiBox.addEventListener('change', () => {
+        // Switching modes drops a selection the other mode cannot express.
+        chosenTargets = [];
         if (status) renderRoute(status);
       });
     }

@@ -19300,6 +19300,14 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
 .routing-dns-over-vless-route { display: grid; gap: 6px; }
 .routing-dns-over-vless-route label { color: var(--modal-text); font-weight: 600; }
 .routing-dns-over-vless-route select { width: 100%; }
+.routing-dns-over-vless-route select[multiple] { height: auto; min-height: 104px; padding: 6px; }
+.routing-dns-over-vless-route select[multiple] option { padding: 3px 4px; }
+.routing-dns-over-vless-route select[multiple] option:checked {
+  background: rgba(96, 165, 250, .35);
+  font-weight: 600;
+}
+.routing-dns-over-vless-multi { display: flex; align-items: center; gap: 8px; font-weight: 400; }
+.routing-dns-over-vless-multi input { margin: 0; }
 .routing-dns-over-vless-route .modal-hint { margin: 0; }
 .routing-dns-over-vless-route-fallback { margin: 0; font-size: 12px; line-height: 1.4; }
 .routing-dns-over-vless-route-fallback[data-state="kept"] { color: #a7f3d0; }
