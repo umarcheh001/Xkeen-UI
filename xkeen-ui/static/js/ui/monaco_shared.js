@@ -1468,6 +1468,30 @@ import {
     return false;
   }
 
+  function _readClipboardViaExecCommand() {
+    // Clipboard API is unavailable on HTTP panel origins.  As a best-effort
+    // fallback, ask the browser to paste into a temporary textarea while the
+    // menu click still carries user activation (supported by some Chromium
+    // deployments and embedded webviews).
+    try {
+      const ta = document.createElement('textarea');
+      ta.setAttribute('aria-hidden', 'true');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      ta.style.pointerEvents = 'none';
+      ta.style.left = '-9999px';
+      ta.style.top = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = !!(document.execCommand && document.execCommand('paste'));
+      const value = ok ? String(ta.value || '') : '';
+      try { document.body.removeChild(ta); } catch (e) {}
+      return value;
+    } catch (e) {}
+    return '';
+  }
+
   async function _readCustomContextMenuClipboardText() {
     try {
       if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
@@ -1478,6 +1502,11 @@ import {
         }
       }
     } catch (e) {}
+    const pasted = _readClipboardViaExecCommand();
+    if (pasted) {
+      _state.customContextMenuClipboardShadow = pasted;
+      return pasted;
+    }
     return String(_state.customContextMenuClipboardShadow || '');
   }
 
