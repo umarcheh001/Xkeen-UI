@@ -22,6 +22,19 @@ _UNIX_RE = re.compile(
 )
 _SECRET_RE = re.compile(r"^(?P<indent>\s*)secret\s*:\s*.*$", re.MULTILINE)
 
+# Top-level settings that conventionally precede the Clash API directives.
+# Keeping these in one place gives generated configs a stable, human-friendly
+# layout while leaving unrelated sections untouched.
+_API_ORDER_ANCHORS = (
+    "log-level",
+    "allow-lan",
+    "redir-port",
+    "tproxy-port",
+    "routing-mark",
+    "find-process-mode",
+    "unified-delay",
+)
+
 
 def _top_level_insert(text: str, block: str) -> str:
     source = str(text or "").rstrip() + "\n"
@@ -105,6 +118,50 @@ def _replace_if_present(
     ], True
 
 
+def _reposition_tcp_directives(text: str, *, secret_line: str) -> str:
+    """Place ``external-controller`` and ``secret`` together in the header.
+
+    Older migrations inserted the controller before the first YAML key and
+    appended a newly-created secret to EOF.  Besides looking untidy this made
+    subsequent round-trips move the two settings farther apart.  Strip only
+    top-level API directives, then insert a canonical pair after the standard
+    global settings (or before the first setting when no anchor exists).
+    """
+
+    source = str(text or "").rstrip() + "\n"
+    # Restrict removal to column-zero directives; nested ``secret`` values in
+    # proxy/provider definitions must remain intact.
+    lines = source.splitlines(keepends=True)
+    kept: list[str] = []
+    for line in lines:
+        if line[:1] in {" ", "\t"}:
+            kept.append(line)
+            continue
+        if re.match(r"^(?:external-controller|external-controller-unix|secret)\s*:", line):
+            continue
+        kept.append(line)
+
+    # Find the last known global setting.  Inserting after it yields the
+    # conventional order shown in the UI (controller, secret, external-ui).
+    insert_at = None
+    for index, line in enumerate(kept):
+        if line[:1] in {" ", "\t"} or not line.strip() or line.lstrip().startswith("#"):
+            continue
+        key = line.split(":", 1)[0].strip()
+        if key in _API_ORDER_ANCHORS:
+            insert_at = index + 1
+    if insert_at is None:
+        insert_at = next(
+            (i for i, line in enumerate(kept)
+             if line.strip() and not line.lstrip().startswith("#")
+             and line[:1] not in {" ", "\t"}),
+            len(kept),
+        )
+
+    block = ["external-controller: 127.0.0.1:9090\n", f"secret: {secret_line}\n"]
+    return "".join(kept[:insert_at] + block + kept[insert_at:])
+
+
 def build_safe_mihomo_config(
     text: str, *, prefer_unix: bool = True
 ) -> MigrationPreview:
@@ -151,19 +208,14 @@ def build_safe_mihomo_config(
         flags=re.MULTILINE,
     )
     updated = re.sub(r"\n{3,}", "\n\n", updated)
-    updated, existed = _replace_or_insert(
-        updated, _CONTROLLER_RE, "external-controller: 127.0.0.1:9090"
+    had_controller = bool(_CONTROLLER_RE.search(updated))
+    # Rebuild the pair in a canonical header position.  This deliberately
+    # removes/reinserts only top-level directives, preserving nested values.
+    updated = _reposition_tcp_directives(
+        updated, secret_line="__XKEEN_GENERATED_SECRET__"
     )
-    if not existed:
+    if not had_controller:
         changes.append("Добавить локальный TCP controller")
-    if _SECRET_RE.search(updated):
-        updated = _SECRET_RE.sub(
-            lambda m: f"{m.group('indent')}secret: __XKEEN_GENERATED_SECRET__",
-            updated,
-            count=1,
-        )
-    else:
-        updated = updated.rstrip() + "\nsecret: __XKEEN_GENERATED_SECRET__\n"
     changes.append("Сгенерировать непустой secret при применении")
     return MigrationPreview(updated, "tcp-loopback", tuple(changes))
 

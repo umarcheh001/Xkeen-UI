@@ -187,17 +187,36 @@ def _insert_controller_directives_at_top(text: str, directives: Iterable[str]) -
     """
     source = str(text or "").rstrip() + "\n"
     lines = source.splitlines(keepends=True)
-    insert_at = len(lines)
+    # Place API directives after the standard global settings, matching the
+    # canonical layout used by migration.  Fall back to the first top-level
+    # key for minimal/empty configs.
+    anchors = {
+        "log-level", "allow-lan", "redir-port", "tproxy-port",
+        "routing-mark", "find-process-mode", "unified-delay",
+    }
+    insert_at = None
     for index, line in enumerate(lines):
         stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
+        if not stripped or stripped.startswith("#") or line[:1] in {" ", "\t"}:
             continue
-        # A top-level key starts in column zero. Nested list/map content must
-        # not become the insertion anchor.
-        if line[:1] not in {" ", "\t"}:
-            insert_at = index
-            break
-    rendered = "\n".join(str(item).rstrip("\r\n") for item in directives if str(item).strip())
+        key = line.split(":", 1)[0].strip()
+        if key in anchors:
+            insert_at = index + 1
+    if insert_at is None:
+        insert_at = len(lines)
+        for index, line in enumerate(lines):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if line[:1] not in {" ", "\t"}:
+                insert_at = index
+                break
+    # Keep transport directives in a deterministic order regardless of how
+    # the previous migration left them in the file.
+    ordered = [str(item).rstrip("\r\n") for item in directives if str(item).strip()]
+    rank = {"external-controller": 0, "external-controller-unix": 1, "secret": 2}
+    ordered.sort(key=lambda item: rank.get(item.split(":", 1)[0].strip(), 99))
+    rendered = "\n".join(ordered)
     if not rendered:
         return source
     block = rendered + "\n"
