@@ -2581,6 +2581,13 @@
 
           <div id="routing-dns-over-vless-status" class="routing-dns-over-vless-status" role="status" aria-live="polite">Проверяем текущую конфигурацию…</div>
 
+          <div id="routing-dns-over-vless-route" class="routing-dns-over-vless-route hidden">
+            <label for="routing-dns-over-vless-target">Маршрут для DNS-запросов</label>
+            <select id="routing-dns-over-vless-target" class="xray-log-select" aria-describedby="routing-dns-over-vless-route-hint"></select>
+            <p class="modal-hint" id="routing-dns-over-vless-route-hint">DNS пойдёт через выбранный балансировщик или прокси. Выбор сохраняется и используется при последующих включениях.</p>
+            <p id="routing-dns-over-vless-route-fallback" class="routing-dns-over-vless-route-fallback hidden"></p>
+          </div>
+
           <div class="routing-dns-over-vless-safety" aria-label="Защита операции">
             <div>{{ op_icon('validate') }}<span><b>Xray preflight</b><small>Проверка во временном каталоге до записи</small></span></div>
             <div>{{ op_icon('archive') }}<span><b>Полный снимок</b><small>DNS, routing, JSONC и состояние мастера</small></span></div>
@@ -2588,7 +2595,7 @@
           </div>
 
           <ul id="routing-dns-over-vless-details" class="routing-dns-over-vless-details"></ul>
-          <p class="modal-hint routing-dns-over-vless-warning">Настройка применяется только при активном ядре Xray. Прокси-outbound и существующие правила не переписываются. Прямой fallback для DNS намеренно не используется, чтобы не допустить утечку или петлю.</p>
+          <p class="modal-hint routing-dns-over-vless-warning">Настройка применяется только при активном ядре Xray. Прокси-outbound и существующие правила не переписываются. Резервный маршрут балансировщика переносится только тогда, когда вся его цепочка остаётся внутри прокси; fallback, ведущий в прямое соединение, отбрасывается, чтобы не допустить утечку или петлю.</p>
           <p class="routing-dns-over-vless-links">Описание схемы: <a href="https://jameszero.net/4773.htm" target="_blank" rel="noopener noreferrer">упрощённый вариант</a> · <a href="https://jameszero.net/3398.htm" target="_blank" rel="noopener noreferrer">первая часть</a></p>
         </div>
         <div class="modal-actions routing-dns-over-vless-actions">

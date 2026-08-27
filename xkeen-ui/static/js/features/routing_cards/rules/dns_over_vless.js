@@ -20,10 +20,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     status: 'routing-dns-over-vless-status',
     details: 'routing-dns-over-vless-details',
     dot: 'routing-dns-over-vless-dot',
+    route: 'routing-dns-over-vless-route',
+    target: 'routing-dns-over-vless-target',
+    fallback: 'routing-dns-over-vless-route-fallback',
   };
 
   let status = null;
   let busy = false;
+  let chosenTarget = '';
 
   function showModal(open) {
     const modal = $(DOM.modal);
@@ -48,16 +52,17 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     return data;
   }
 
-  async function postAction(action) {
+  async function postAction(action, target) {
+    const payload = target ? { action, target } : { action };
     const client = http();
     if (client && typeof client.postJSON === 'function') {
-      return client.postJSON('/api/routing/dns-over-vless', { action }, { timeoutMs: 90000, retry: 0 });
+      return client.postJSON('/api/routing/dns-over-vless', payload, { timeoutMs: 90000, retry: 0 });
     }
     const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const response = await fetch('/api/routing/dns-over-vless', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify(payload),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -75,6 +80,63 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     li.className = kind ? `is-${kind}` : '';
     li.textContent = String(text || '');
     list.appendChild(li);
+  }
+
+  function candidateText(item) {
+    const bits = [];
+    if (item.strategy_type) bits.push(item.strategy_type);
+    if (item.kind === 'balancer') bits.push(`узлов: ${item.selector_count}`);
+    let text = item.label || item.tag;
+    if (bits.length) text += ` · ${bits.join(' · ')}`;
+    if (!item.usable && item.reason) text += ` — ${item.reason}`;
+    return text;
+  }
+
+  function renderRoute(data) {
+    const wrap = $(DOM.route);
+    const select = $(DOM.target);
+    if (!wrap || !select) return;
+    const candidates = (data && Array.isArray(data.candidates)) ? data.candidates : [];
+    const usable = candidates.filter((item) => item && item.usable);
+    // The route is only chosen while enabling; disabling touches nothing.
+    const show = !!(data && !data.enabled && !data.can_disable && candidates.length);
+    wrap.classList.toggle('hidden', !show);
+    if (!show) {
+      select.textContent = '';
+      return;
+    }
+
+    const wanted = chosenTarget || (data && (data.selected_target || data.default_target)) || '';
+    const fallback = usable.length ? usable[0].tag : '';
+    const active = usable.some((item) => item.tag === wanted) ? wanted : fallback;
+    select.textContent = '';
+    candidates.forEach((item) => {
+      const option = document.createElement('option');
+      option.value = item.tag;
+      option.textContent = candidateText(item);
+      option.disabled = !item.usable;
+      if (item.tag === active) option.selected = true;
+      select.appendChild(option);
+    });
+    select.disabled = busy || usable.length < 2;
+    chosenTarget = active;
+    renderFallback(candidates.find((item) => item.tag === active));
+  }
+
+  function renderFallback(candidate) {
+    const line = $(DOM.fallback);
+    if (!line) return;
+    const plan = candidate && candidate.fallback;
+    const show = !!(plan && plan.tag);
+    line.classList.toggle('hidden', !show);
+    if (!show) {
+      line.textContent = '';
+      return;
+    }
+    line.dataset.state = plan.kept ? 'kept' : 'dropped';
+    line.textContent = plan.kept
+      ? `Резервирование сохранено: ${plan.reason}.`
+      : `Резервирование не переносится: ${plan.reason}.`;
   }
 
   function render(data) {
@@ -108,8 +170,21 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       addDetail(`Активное ядро: ${data.active_core || 'не определено'}`, data.active_core === 'xray' ? 'ok' : 'warn');
       if (data.target && data.target.label) addDetail(`Маршрут DNS: ${data.target.label}`, 'ok');
       addDetail(`Keenetic DNS override: ${data.dns_override === true ? 'включён' : (data.dns_override === false ? 'выключен' : 'не определён')}`, data.dns_override == null ? 'warn' : 'ok');
+      if (data.route_drift) {
+        const drift = data.route_drift;
+        const was = (drift.managed || []).join(', ') || '—';
+        const now = (drift.current || []).join(', ') || '—';
+        const parts = [];
+        if (was !== now) parts.push(`узлы: было «${was}», стало «${now}»`);
+        if ((drift.managed_fallback || '') !== (drift.current_fallback || '')) {
+          parts.push(`резерв: было «${drift.managed_fallback || '—'}», стало «${drift.current_fallback || '—'}»`);
+        }
+        addDetail(`Балансировщик ${drift.source} изменился после включения (${parts.join('; ')}). Переключите DNS-over-VLESS, чтобы обновить маршрут.`, 'warn');
+      }
       (data.blockers || []).forEach((item) => addDetail(item, 'warn'));
     }
+
+    renderRoute(data);
 
     if (apply) {
       apply.disabled = busy || (!enabled && !canDisable && blocked);
@@ -148,6 +223,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
   async function open() {
     showModal(true);
+    chosenTarget = '';
     const text = $(DOM.status);
     const badge = $(DOM.badge);
     const apply = $(DOM.apply);
@@ -160,8 +236,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   async function apply() {
     if (busy || !status) return;
     const action = (status.enabled || status.can_disable) ? 'disable' : 'enable';
+    const picked = (status.candidates || []).find((item) => item && item.tag === chosenTarget);
+    const routeNote = (action === 'enable' && picked) ? `DNS пойдёт через ${picked.label}. ` : '';
     const question = action === 'enable'
-      ? 'Панель создаст отдельный DNS-фрагмент, добавит два служебных правила в начало routing, выполнит xray -test, включит DNS override Keenetic, перезапустит Xray и проверит DNS. При любой ошибке всё будет восстановлено.'
+      ? routeNote + 'Панель создаст отдельный DNS-фрагмент, добавит два служебных правила в начало routing, выполнит xray -test, включит DNS override Keenetic, перезапустит Xray и проверит DNS. При любой ошибке всё будет восстановлено.'
       : 'Панель удалит только созданный ей DNS-фрагмент и служебные правила, восстановит исходное состояние DNS override Keenetic и перезапустит Xray.';
     let confirmed = true;
     if (C && typeof C.confirmModal === 'function') {
@@ -178,7 +256,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     busy = true;
     render(status);
     try {
-      const result = await postAction(action);
+      const result = await postAction(action, action === 'enable' ? chosenTarget : '');
       toast(action === 'enable'
         ? `DNS-over-VLESS включён${result.probe && result.probe.latency_ms != null ? ` · DNS ${result.probe.latency_ms} мс` : ''}`
         : 'DNS-over-VLESS отключён, исходная настройка восстановлена.');
@@ -206,6 +284,13 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     });
     const applyButton = $(DOM.apply);
     if (applyButton) applyButton.addEventListener('click', (event) => { event.preventDefault(); apply(); });
+    const targetSelect = $(DOM.target);
+    if (targetSelect) {
+      targetSelect.addEventListener('change', () => {
+        chosenTarget = targetSelect.value || '';
+        if (status) renderRoute(status);
+      });
+    }
     const modal = $(DOM.modal);
     if (modal) modal.addEventListener('click', (event) => { if (event.target === modal && !busy) showModal(false); });
     refresh();

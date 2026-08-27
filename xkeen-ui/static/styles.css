@@ -19297,6 +19297,15 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
 .routing-dns-over-vless-badge[data-state="enabled"] { color: #a7f3d0; background: rgba(5, 150, 105, .2); }
 .routing-dns-over-vless-badge[data-state="blocked"] { color: #fde68a; background: rgba(217, 119, 6, .2); }
 .routing-dns-over-vless-status { color: var(--modal-text); line-height: 1.5; }
+.routing-dns-over-vless-route { display: grid; gap: 6px; }
+.routing-dns-over-vless-route label { color: var(--modal-text); font-weight: 600; }
+.routing-dns-over-vless-route select { width: 100%; }
+.routing-dns-over-vless-route .modal-hint { margin: 0; }
+.routing-dns-over-vless-route-fallback { margin: 0; font-size: 12px; line-height: 1.4; }
+.routing-dns-over-vless-route-fallback[data-state="kept"] { color: #a7f3d0; }
+.routing-dns-over-vless-route-fallback[data-state="dropped"] { color: #fde68a; }
+html[data-theme="light"] .routing-dns-over-vless-route-fallback[data-state="kept"] { color: #047857; }
+html[data-theme="light"] .routing-dns-over-vless-route-fallback[data-state="dropped"] { color: #b45309; }
 .routing-dns-over-vless-safety { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .routing-dns-over-vless-safety > div {
   display: grid;

@@ -127,6 +127,9 @@ def _collect_runtime(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, Any
     inbound_tags: set[str] = set()
     inbound_ports: list[Dict[str, Any]] = []
     dns_fragments: list[str] = []
+    # tag -> inboundTag a loopback outbound re-injects traffic with, so a
+    # fallback chain can be followed across the loopback hop.
+    loopback_targets: Dict[str, str] = {}
 
     for name, obj in _iter_json_fragments(configs_dir):
         dns = obj.get("dns")
@@ -139,6 +142,9 @@ def _collect_runtime(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, Any
             protocol = _clean_tag(item.get("protocol")).lower()
             if tag:
                 outbounds.append({"tag": tag, "protocol": protocol, "file": name})
+            if tag and protocol == "loopback":
+                settings = item.get("settings") if isinstance(item.get("settings"), dict) else {}
+                loopback_targets[tag] = _clean_tag(settings.get("inboundTag"))
         for item in obj.get("inbounds") if isinstance(obj.get("inbounds"), list) else []:
             if not isinstance(item, dict):
                 continue
@@ -160,6 +166,7 @@ def _collect_runtime(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, Any
         "inbound_ports": inbound_ports,
         "dns_fragments": dns_fragments,
         "balancers": balancers,
+        "loopback_targets": loopback_targets,
     }
 
 
@@ -178,56 +185,332 @@ def _proxy_outbounds(runtime: Dict[str, Any]) -> list[Dict[str, str]]:
     return result
 
 
-def _select_target(runtime: Dict[str, Any]) -> Dict[str, Any]:
+def _find_balancer(runtime: Dict[str, Any], tag: str) -> Optional[Dict[str, Any]]:
+    wanted = _clean_tag(tag)
+    for item in runtime.get("balancers", []):
+        if isinstance(item, dict) and _clean_tag(item.get("tag")) == wanted:
+            return item
+    return None
+
+
+def _usable_selector(balancer: Dict[str, Any], proxy_tags: Iterable[str]) -> list[str]:
+    """Selector prefixes of ``balancer`` that still resolve to a live proxy."""
+    reserved_exact = {"direct", "block", DNS_OUT_TAG, "dns", "api", "xray-api", "metrics"}
+    tags = list(proxy_tags)
+    raw = balancer.get("selector") if isinstance(balancer.get("selector"), list) else []
+    selector: list[str] = []
+    for value in raw:
+        prefix = str(value).strip()
+        if not prefix or prefix.lower() in reserved_exact:
+            continue
+        if any(tag.startswith(prefix) for tag in tags):
+            selector.append(prefix)
+    return selector
+
+
+def list_candidates(
+    runtime: Dict[str, Any], routing: Optional[Dict[str, Any]] = None
+) -> list[Dict[str, Any]]:
+    """Every route DNS can be sent through, balancers first.
+
+    The previous implementation guessed this list away: it looked for a
+    balancer literally tagged ``proxy``, otherwise took whichever balancer came
+    first in the file and, when that one's selector matched nothing, silently
+    pinned DNS to the first proxy outbound.  With several balancers -- the
+    panel's own mobile-whitelist scenario ships three -- the DNS route depended
+    on JSON ordering.  Enumerate the options instead and let the caller pick.
+    """
     proxies = _proxy_outbounds(runtime)
     proxy_tags = [item["tag"] for item in proxies]
-    reserved_exact = {"direct", "block", DNS_OUT_TAG, "dns", "api", "xray-api", "metrics"}
-    balancers = runtime.get("balancers") if isinstance(runtime.get("balancers"), list) else []
-    preferred = None
-    for item in balancers:
-        if _clean_tag(item.get("tag")) == "proxy":
-            preferred = item
-            break
-    if preferred is None:
-        preferred = next((item for item in balancers if _clean_tag(item.get("tag")) != BALANCER_TAG), None)
+    candidates: list[Dict[str, Any]] = []
 
-    if isinstance(preferred, dict):
-        selector = []
-        for value in preferred.get("selector", []) if isinstance(preferred.get("selector"), list) else []:
-            prefix = str(value).strip()
-            if not prefix:
-                continue
-            if any(tag.startswith(prefix) for tag in proxy_tags) and prefix.lower() not in reserved_exact:
-                selector.append(prefix)
-        if selector:
-            managed = {
-                "tag": BALANCER_TAG,
-                "selector": selector,
-                "strategy": copy.deepcopy(preferred.get("strategy") or {"type": "random"}),
-            }
-            # Intentionally omit fallbackTag: a direct fallback would send
-            # 127.0.0.53 back to the router and can create a DNS loop/leak.
-            return {
+    for item in runtime.get("balancers", []):
+        tag = _clean_tag(item.get("tag"))
+        if not tag or tag == BALANCER_TAG:
+            continue
+        selector = _usable_selector(item, proxy_tags)
+        strategy = item.get("strategy") if isinstance(item.get("strategy"), dict) else {}
+        candidates.append(
+            {
                 "kind": "balancer",
-                "tag": BALANCER_TAG,
-                "source": _clean_tag(preferred.get("tag")),
-                "label": f"балансировщик {_clean_tag(preferred.get('tag'))}",
-                "managed_balancer": managed,
+                "tag": tag,
+                "label": f"балансировщик {tag}",
+                "selector": selector,
+                "selector_count": len(selector),
+                "strategy_type": _clean_tag(strategy.get("type")),
+                "fallback_tag": _clean_tag(item.get("fallbackTag")),
+                "fallback": _fallback_plan(runtime, routing if isinstance(routing, dict) else {}, item),
+                "usable": bool(selector),
+                "reason": "" if selector else "ни один outbound не соответствует selector",
             }
+        )
 
-    if proxies:
-        item = proxies[0]
+    for item in proxies:
+        tag = item["tag"]
+        candidates.append(
+            {
+                "kind": "outbound",
+                "tag": tag,
+                "label": f"прокси {tag}",
+                "selector": [],
+                "selector_count": 0,
+                "strategy_type": "",
+                "fallback_tag": "",
+                "fallback": {"tag": "", "kept": False, "verdict": "none", "reason": "одиночный прокси, резерва нет"},
+                "usable": True,
+                "reason": "",
+            }
+        )
+    return candidates
+
+
+def _usable_candidates(candidates: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    return [item for item in candidates if item.get("usable")]
+
+
+def default_candidate_tag(candidates: list[Dict[str, Any]]) -> str:
+    """Tag the UI preselects.  Only ever a suggestion, never applied silently."""
+    usable = _usable_candidates(candidates)
+    if not usable:
+        return ""
+    named = next(
+        (item for item in usable if item["kind"] == "balancer" and item["tag"] == "proxy"),
+        None,
+    )
+    if named:
+        return named["tag"]
+    balancer = next((item for item in usable if item["kind"] == "balancer"), None)
+    return (balancer or usable[0])["tag"]
+
+
+LEAK_PROTOCOLS = {"freedom"}
+DEAD_END_PROTOCOLS = {"blackhole"}
+
+
+def _resolve_outbound_refs(runtime: Dict[str, Any], ref: str) -> list[Dict[str, str]]:
+    """Outbounds a fallback reference points at: exact tag, else tag prefix."""
+    wanted = _clean_tag(ref)
+    if not wanted:
+        return []
+    items = [item for item in runtime.get("outbounds", []) if isinstance(item, dict)]
+    exact = [item for item in items if _clean_tag(item.get("tag")) == wanted]
+    if exact:
+        return exact
+    return [item for item in items if _clean_tag(item.get("tag")).startswith(wanted)]
+
+
+def _combine_verdicts(verdicts: set[str]) -> str:
+    if not verdicts:
+        return "unknown"
+    if "leak" in verdicts:
+        return "leak"
+    if "unknown" in verdicts:
+        return "unknown"
+    return "safe"
+
+
+def _fallback_verdict(
+    runtime: Dict[str, Any],
+    routing: Dict[str, Any],
+    ref: str,
+    seen: Optional[set[str]] = None,
+) -> str:
+    """Follow a fallback reference until it terminates.
+
+    ``safe``    stays inside proxies, or dead-ends in blackhole/nothing;
+    ``leak``    reaches a freedom outbound, i.e. DNS would go to the provider;
+    ``unknown`` cannot be resolved from the config alone.
+
+    The original code assumed every fallbackTag meant ``direct`` and dropped it
+    outright.  That holds for the subscription auto-balancer, but the panel's
+    own scenario chains balancers through loopback outbounds, where discarding
+    the fallback silently removes the user's DNS redundancy for no safety gain.
+    """
+    seen = set() if seen is None else seen
+    key = _clean_tag(ref)
+    if not key:
+        return "safe"
+    if key in seen:
+        # A cycle cannot introduce a new exit; whoever opened it decides.
+        return "safe"
+    seen.add(key)
+
+    matches = _resolve_outbound_refs(runtime, key)
+    if not matches:
+        return "unknown"
+    verdicts: set[str] = set()
+    for item in matches:
+        protocol = _clean_tag(item.get("protocol")).lower()
+        if protocol in LEAK_PROTOCOLS:
+            verdicts.add("leak")
+        elif protocol in DEAD_END_PROTOCOLS:
+            verdicts.add("safe")
+        elif protocol == "loopback":
+            verdicts.add(_loopback_verdict(runtime, routing, _clean_tag(item.get("tag")), seen))
+        else:
+            verdicts.add("safe")
+    return _combine_verdicts(verdicts)
+
+
+def _loopback_verdict(
+    runtime: Dict[str, Any], routing: Dict[str, Any], loopback_tag: str, seen: set[str]
+) -> str:
+    """Where routing sends traffic that a loopback outbound re-injects."""
+    inbound = _clean_tag(runtime.get("loopback_targets", {}).get(loopback_tag))
+    if not inbound:
+        return "unknown"
+    model = routing.get("routing") if isinstance(routing.get("routing"), dict) else {}
+    rules = model.get("rules") if isinstance(model.get("rules"), list) else []
+    verdicts: set[str] = set()
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        raw = rule.get("inboundTag")
+        tags = raw if isinstance(raw, list) else ([raw] if raw else [])
+        if inbound not in [_clean_tag(value) for value in tags]:
+            continue
+        outbound_tag = _clean_tag(rule.get("outboundTag"))
+        balancer_tag = _clean_tag(rule.get("balancerTag"))
+        if outbound_tag:
+            verdicts.add(_fallback_verdict(runtime, routing, outbound_tag, seen))
+        elif balancer_tag:
+            verdicts.add(_balancer_verdict(runtime, routing, balancer_tag, seen))
+    return _combine_verdicts(verdicts)
+
+
+def _balancer_verdict(
+    runtime: Dict[str, Any], routing: Dict[str, Any], balancer_tag: str, seen: set[str]
+) -> str:
+    balancer = _find_balancer(runtime, balancer_tag)
+    if not balancer:
+        return "unknown"
+    raw = balancer.get("selector") if isinstance(balancer.get("selector"), list) else []
+    verdicts = {_fallback_verdict(runtime, routing, value, seen) for value in raw}
+    fallback = _clean_tag(balancer.get("fallbackTag"))
+    if fallback:
+        verdicts.add(_fallback_verdict(runtime, routing, fallback, seen))
+    return _combine_verdicts(verdicts)
+
+
+def _fallback_plan(
+    runtime: Dict[str, Any], routing: Dict[str, Any], balancer: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Decide whether the source balancer's fallback may be carried over."""
+    tag = _clean_tag(balancer.get("fallbackTag"))
+    if not tag:
+        return {"tag": "", "kept": False, "verdict": "none", "reason": "у балансировщика нет резервного маршрута"}
+    verdict = _fallback_verdict(runtime, routing, tag)
+    if verdict == "safe":
+        return {"tag": tag, "kept": True, "verdict": verdict, "reason": f"резервный маршрут «{tag}» остаётся внутри прокси"}
+    if verdict == "leak":
+        reason = f"резервный маршрут «{tag}» ведёт напрямую — DNS утёк бы провайдеру"
+    else:
+        reason = f"резервный маршрут «{tag}» не удалось проследить по конфигурации"
+    return {"tag": tag, "kept": False, "verdict": verdict, "reason": reason}
+
+
+def _build_target(
+    candidate: Dict[str, Any], runtime: Dict[str, Any], routing: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    tag = candidate["tag"]
+    if candidate["kind"] == "outbound":
         return {
             "kind": "outbound",
-            "tag": item["tag"],
-            "source": item["tag"],
-            "label": f"прокси {item['tag']}",
+            "tag": tag,
+            "source": tag,
+            "label": candidate["label"],
+            "fallback": {"tag": "", "kept": False, "verdict": "none", "reason": "одиночный прокси, резерва нет"},
             "managed_balancer": None,
         }
-    raise DnsOverVlessError(
-        "Не найден рабочий proxy-outbound или балансировщик Xray.",
-        code="proxy_target_missing",
+    source = _find_balancer(runtime, tag) or {}
+    managed = {
+        "tag": BALANCER_TAG,
+        "selector": list(candidate["selector"]),
+        "strategy": copy.deepcopy(source.get("strategy") or {"type": "random"}),
+    }
+    # Carry the fallback over only when the whole chain stays inside proxies.
+    # A fallback that ends at a freedom outbound would send 127.0.0.53 back to
+    # the router and can create a DNS loop/leak, so that one is still dropped.
+    plan = _fallback_plan(runtime, routing if isinstance(routing, dict) else {}, source)
+    if plan["kept"]:
+        managed["fallbackTag"] = plan["tag"]
+    return {
+        "kind": "balancer",
+        "tag": BALANCER_TAG,
+        "source": tag,
+        "label": candidate["label"],
+        "fallback": plan,
+        "managed_balancer": managed,
+    }
+
+
+def _route_drift(runtime: Dict[str, Any], routing: Dict[str, Any], source_tag: str) -> Optional[Dict[str, Any]]:
+    """Report a managed clone that no longer matches the balancer it came from.
+
+    The clone is a snapshot taken at enable time.  Editing the original
+    balancer afterwards leaves DNS on the stale selector, and an enable/disable
+    round-trip is currently the only way to resync -- so at least say so.
+    """
+    source = _find_balancer(runtime, source_tag)
+    if not source:
+        return None
+    model = routing.get("routing") if isinstance(routing.get("routing"), dict) else {}
+    balancers = model.get("balancers") if isinstance(model.get("balancers"), list) else []
+    managed = next(
+        (
+            item
+            for item in balancers
+            if isinstance(item, dict) and _clean_tag(item.get("tag")) == BALANCER_TAG
+        ),
+        None,
     )
+    if not managed:
+        return None
+    current = _usable_selector(source, [item["tag"] for item in _proxy_outbounds(runtime)])
+    snapshot = [str(value).strip() for value in managed.get("selector", []) if str(value).strip()]
+    managed_fallback = _clean_tag(managed.get("fallbackTag"))
+    plan = _fallback_plan(runtime, routing, source)
+    current_fallback = plan["tag"] if plan["kept"] else ""
+    if current == snapshot and current_fallback == managed_fallback:
+        return None
+    return {
+        "source": source_tag,
+        "managed": snapshot,
+        "current": current,
+        "managed_fallback": managed_fallback,
+        "current_fallback": current_fallback,
+    }
+
+
+def _select_target(
+    runtime: Dict[str, Any], requested_tag: str = "", routing: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    candidates = list_candidates(runtime, routing)
+    usable = _usable_candidates(candidates)
+    if not usable:
+        raise DnsOverVlessError(
+            "Не найден рабочий proxy-outbound или балансировщик Xray.",
+            code="proxy_target_missing",
+        )
+    wanted = _clean_tag(requested_tag)
+    if wanted:
+        chosen = next((item for item in usable if item["tag"] == wanted), None)
+        if chosen is None:
+            raise DnsOverVlessError(
+                f"Маршрут «{wanted}» недоступен для DNS-over-VLESS.",
+                code="target_unavailable",
+                details={"candidates": candidates},
+            )
+    elif len(usable) == 1:
+        chosen = usable[0]
+    else:
+        # Ambiguous: refuse rather than resurrect the old file-order guess.
+        raise DnsOverVlessError(
+            "Выберите маршрут для DNS: доступно несколько балансировщиков или прокси.",
+            code="target_choice_required",
+            details={"candidates": candidates, "default": default_candidate_tag(candidates)},
+        )
+    return _build_target(chosen, runtime, routing)
 
 
 def _managed_fragment() -> Dict[str, Any]:
@@ -350,13 +633,17 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
         ),
         None,
     )
-    proxies = _proxy_outbounds(_collect_runtime(configs_dir, routing))
+    runtime = _collect_runtime(configs_dir, routing)
+    proxies = _proxy_outbounds(runtime)
     proxy_tags = {item["tag"] for item in proxies}
     selector = [str(value).strip() for value in (balancer_obj or {}).get("selector", []) if str(value).strip()]
+    # The clone may keep a fallback, but only one that cannot reach ``direct``.
+    managed_fallback = _clean_tag((balancer_obj or {}).get("fallbackTag"))
+    safe_fallback = (not managed_fallback) or _fallback_verdict(runtime, routing, managed_fallback) == "safe"
     safe_balancer = bool(
         balancer_obj
         and selector
-        and not _clean_tag(balancer_obj.get("fallbackTag"))
+        and safe_fallback
         and all(any(tag.startswith(prefix) for tag in proxy_tags) for prefix in selector)
         and not any(prefix.lower() in {"direct", "block", DNS_OUT_TAG, "dns"} for prefix in selector)
     )
@@ -717,16 +1004,30 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
     partial = bool(_managed_config_present(presence) and not complete_config)
     blockers: list[str] = []
     target: Optional[Dict[str, Any]] = None
+    candidates = list_candidates(runtime, routing)
+    default_tag = default_candidate_tag(candidates)
+    # A choice made earlier survives in the state file, so an install that
+    # predates the picker keeps its route instead of being re-guessed.
+    state_tag = _clean_tag((state.get("target") or {}).get("source"))
+    # The picker may only preselect a route that is still usable; drift
+    # detection deliberately works off the raw stored tag, because a source
+    # balancer that went unusable is exactly what needs reporting.
+    selected_tag = state_tag
+    if selected_tag and not any(
+        item["tag"] == selected_tag and item.get("usable") for item in candidates
+    ):
+        selected_tag = ""
     if not enabled:
         blockers.extend(_conflicts(runtime, routing))
         try:
-            target = _select_target(runtime)
+            target = _select_target(runtime, selected_tag or default_tag, routing)
         except DnsOverVlessError as exc:
             blockers.append(str(exc))
         if core != "xray":
             blockers.append("Для активации переключите активное ядро на Xray.")
         if override is None:
             blockers.append("Не удалось прочитать настройку DNS override Keenetic: " + override_detail)
+    drift = _route_drift(runtime, routing, state_tag) if (enabled and state_tag) else None
     if partial:
         blockers.append("Обнаружена неполная предыдущая настройка DNS-over-VLESS; сначала выполните восстановление/отключение.")
     if tampered:
@@ -745,6 +1046,11 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
         "can_disable": not tampered and (_managed_config_present(presence) or bool(state.get("enabled"))),
         "blockers": blockers,
         "target": ({k: v for k, v in target.items() if k != "managed_balancer"} if target else None),
+        "candidates": candidates,
+        "route_drift": drift,
+        "selected_target": selected_tag,
+        "default_target": default_tag,
+        "choice_required": bool(len(_usable_candidates(candidates)) > 1 and not selected_tag),
         "managed_fragment": MANAGED_FRAGMENT,
         "articles": ["https://jameszero.net/4773.htm", "https://jameszero.net/3398.htm"],
         "safety": {
@@ -764,6 +1070,7 @@ def apply_action(
     routing_file: str,
     ui_state_dir: str,
     restart_xkeen: Callable[..., Any],
+    target_tag: str = "",
 ) -> Dict[str, Any]:
     normalized = str(action or "").strip().lower()
     if normalized not in {"enable", "disable"}:
@@ -819,7 +1126,13 @@ def apply_action(
                     conflicts = _conflicts(runtime, routing)
                     if conflicts:
                         raise DnsOverVlessError("Безопасная активация остановлена: " + " ".join(conflicts), code="config_conflict")
-                    target = _select_target(runtime)
+                    # An explicit request wins; otherwise reuse the route this
+                    # install already chose.  With neither, _select_target
+                    # refuses instead of guessing by file order.
+                    requested = _clean_tag(target_tag) or _clean_tag(
+                        (previous_state.get("target") or {}).get("source")
+                    )
+                    target = _select_target(runtime, requested, routing)
                     next_routing = _build_enabled_routing(routing, target)
                     next_fragment = _managed_fragment()
                 desired_override = True

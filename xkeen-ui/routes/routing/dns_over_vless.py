@@ -45,6 +45,7 @@ def register_dns_over_vless_routes(
     def api_dns_over_vless_apply() -> Any:
         payload = request.get_json(silent=True) or {}
         action = str(payload.get("action") or "").strip().lower()
+        target_tag = str(payload.get("target") or "").strip()
         try:
             result = apply_action(
                 action,
@@ -52,6 +53,7 @@ def register_dns_over_vless_routes(
                 routing_file=routing_file,
                 ui_state_dir=ui_state_dir,
                 restart_xkeen=restart_xkeen,
+                target_tag=target_tag,
             )
             audit(True, action=action, summary=("DNS-over-VLESS включён" if action == "enable" else "DNS-over-VLESS отключён"))
             return jsonify(result)
