@@ -16,6 +16,10 @@
 
 - `panel-operator-redesign-completion-plan.md` — план завершения переезда панели на Operator Console; Этап 4 закрыт; в Этапе 5 закрыты editor/workbench, comments/schema status labels, responsive editor help, mobile fullscreen сложных модалов и применение четырёх modal families ко всем 50 static modals; Этапы 5–7 в целом открыты; сквозной icon-поток I0–I6 закрыт.
 
+## Функции панели
+
+- `dns-over-vless.md` — DNS-over-VLESS для ядра Xray: схема перехвата, кого он затрагивает, выбор маршрута и резервирования, свои DNS-серверы и локальные зоны, сторож и ручное восстановление.
+
 ## Недавние закрытые инициативы
 
 - `devtools-operator-theme.md` — закрытый перевод DevTools со старой blue-glass темы на общие с основной панелью Operator tokens, flat shell/data rows/log canvas/modals и responsive dark/light contract.
