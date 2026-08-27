@@ -54,17 +54,39 @@
     return 'success';
   }
 
-  function iconForKind(kind) {
-    switch (normalizeKind(kind)) {
-      case 'error':
-        return '\u26A0';
-      case 'info':
-        return '\u2139';
-      case 'warning':
-        return '\u26A0';
-      default:
-        return '\u2713';
-    }
+  // Sprite icon names mirror the operator console vocabulary: a toast icon and
+  // a button icon must be the same Tabler glyph at the same weight.
+  const SPRITE_URL = '/static/icons/operator.svg?v=20260822a';
+
+  const ICON_NAME_BY_KIND = {
+    success: 'check',
+    info: 'info',
+    warning: 'alert',
+    error: 'alert',
+  };
+
+  function iconNameForKind(kind) {
+    return ICON_NAME_BY_KIND[normalizeKind(kind)] || 'info';
+  }
+
+  function iconHrefForKind(kind) {
+    const name = iconNameForKind(kind);
+    try {
+      const icons = XK.ui && XK.ui.operatorIcons;
+      if (icons && typeof icons.href === 'function') return icons.href(name);
+    } catch (error) {}
+    return SPRITE_URL + '#xk-' + name;
+  }
+
+  function setEntryIcon(entry, kind) {
+    if (!entry || !entry.iconUse) return;
+    const href = iconHrefForKind(kind);
+    if (entry.iconHref === href) return;
+    entry.iconHref = href;
+    try {
+      entry.iconUse.setAttribute('href', href);
+      entry.iconUse.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', href);
+    } catch (error) {}
   }
 
   function normalizeOptions(message, kindOrOptions) {
@@ -87,11 +109,18 @@
         ? Math.max(0, Number(opts.duration))
         : DEFAULT_DURATION[kind]);
 
+    // Errors stay until the reader dismisses them: they usually carry the only
+    // explanation for a failed action, and a 4-second window is not enough to
+    // read a router CLI dump. Callers can still pass an explicit duration.
+    const explicitDuration = Number.isFinite(Number(opts.durationMs)) || Number.isFinite(Number(opts.duration));
+    const sticky = !!(opts.sticky || opts.persist || opts.persistent) || (kind === 'error' && !explicitDuration);
+
     return {
       message: String(msg ?? ''),
+      detail: String(opts.detail ?? opts.details ?? ''),
       kind,
       duration,
-      sticky: !!(opts.sticky || opts.persist || opts.persistent),
+      sticky,
       id: opts.id ? String(opts.id) : '',
       dedupeKey: opts.dedupeKey ? String(opts.dedupeKey) : '',
       dedupeWindowMs: Number.isFinite(Number(opts.dedupeWindowMs)) ? Math.max(0, Number(opts.dedupeWindowMs)) : 600,
@@ -140,6 +169,158 @@
     }, 200);
   }
 
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const COPY_LABEL = 'Копировать';
+  const COPIED_LABEL = 'Скопировано';
+
+  function makeSpriteIcon(className, href) {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', className);
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+
+    const use = document.createElementNS(SVG_NS, 'use');
+    if (href) {
+      use.setAttribute('href', href);
+      try { use.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', href); } catch (error) {}
+    }
+    svg.appendChild(use);
+    return { svg, use };
+  }
+
+  function playEntrance(el) {
+    if (!el) return;
+    try {
+      el.dataset.entering = '1';
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          try { delete el.dataset.entering; } catch (error) {}
+        });
+      });
+    } catch (error) {
+      try { delete el.dataset.entering; } catch (inner) {}
+    }
+  }
+
+  // The life bar is the only moving part of a toast: it shows the reader that
+  // the message leaves on its own, so an auto-dismiss never looks like a
+  // glitch. Sticky toasts (every error) render no bar.
+  function startLife(entry, duration) {
+    if (!entry || !entry.life) return;
+    const ms = Math.max(0, Number(duration || 0));
+
+    if (!ms) {
+      entry.life.hidden = true;
+      entry.life.style.transition = 'none';
+      entry.life.style.width = '100%';
+      return;
+    }
+
+    entry.life.hidden = false;
+    entry.life.style.transition = 'none';
+    entry.life.style.width = '100%';
+
+    try {
+      void entry.life.offsetWidth;
+      entry.life.style.transition = 'width ' + ms + 'ms linear';
+      entry.life.style.width = '0%';
+    } catch (error) {}
+  }
+
+  function resetCopyLabel(entry) {
+    if (!entry || !entry.copyBtn) return;
+    try {
+      if (entry.copyResetTimer) clearTimeout(entry.copyResetTimer);
+    } catch (error) {}
+    entry.copyResetTimer = null;
+    entry.copyBtn.textContent = COPY_LABEL;
+  }
+
+  function copyEntryText(entry) {
+    if (!entry || !entry.copyBtn) return;
+    const payload = String(entry.copyText || '');
+    if (!payload) return;
+
+    const markCopied = () => {
+      try {
+        entry.copyBtn.textContent = COPIED_LABEL;
+        if (entry.copyResetTimer) clearTimeout(entry.copyResetTimer);
+        entry.copyResetTimer = setTimeout(() => resetCopyLabel(entry), 1600);
+      } catch (error) {}
+    };
+
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(payload).then(markCopied, () => legacyCopy(payload, markCopied));
+        return;
+      }
+    } catch (error) {}
+
+    legacyCopy(payload, markCopied);
+  }
+
+  function legacyCopy(payload, onDone) {
+    try {
+      const area = document.createElement('textarea');
+      area.value = payload;
+      area.setAttribute('readonly', 'readonly');
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand('copy');
+      area.remove();
+      if (typeof onDone === 'function') onDone();
+    } catch (error) {}
+  }
+
+  // One dismiss path for both render modes: store-backed toasts go through the
+  // store so its queue stays authoritative, local ones close directly.
+  function dismissEntry(entry) {
+    if (!entry) return;
+
+    if (entry.uid) {
+      const api = getUiToastApi();
+      if (api) {
+        try {
+          api.dismiss(entry.uid, { source: 'toast_close' });
+          return;
+        } catch (error) {}
+      }
+    }
+
+    closeLocalToast(entry);
+  }
+
+  function applyEntryContent(entry, data) {
+    if (!entry || !data) return;
+
+    const kind = normalizeKind(data.kind);
+    const message = String(data.message || '');
+    const detail = String(data.detail || '').trim();
+    const sticky = !!data.sticky || Math.max(0, Number(data.duration || 0)) <= 0;
+
+    entry.el.className = 'toast toast-' + kind;
+    entry.el.dataset.kind = kind;
+    setEntryIcon(entry, kind);
+
+    entry.text.textContent = message;
+    entry.detail.textContent = detail;
+    entry.detail.hidden = !detail;
+    entry.actions.hidden = !detail;
+    entry.copyText = detail ? message + '\n' + detail : message;
+    resetCopyLabel(entry);
+
+    // A toast that never expires must be closable, and an error is always
+    // worth a close affordance even while its timer runs.
+    entry.close.hidden = !(sticky || kind === 'error');
+
+    entry.el.style.opacity = '';
+    entry.el.style.transform = '';
+    entry.el.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+    entry.el.setAttribute('aria-live', kind === 'error' ? 'assertive' : 'polite');
+  }
+
   function createRenderedEntry(container) {
     const toast = document.createElement('div');
     toast.className = 'toast toast-success';
@@ -147,26 +328,74 @@
     toast.setAttribute('role', 'status');
     toast.setAttribute('aria-live', 'polite');
 
-    const icon = document.createElement('div');
-    icon.className = 'toast-icon';
+    const iconParts = makeSpriteIcon('toast-icon', iconHrefForKind('success'));
+
+    const body = document.createElement('div');
+    body.className = 'toast-body';
 
     const text = document.createElement('div');
     text.className = 'toast-message';
 
-    toast.appendChild(icon);
-    toast.appendChild(text);
+    const detail = document.createElement('div');
+    detail.className = 'toast-detail';
+    detail.hidden = true;
+
+    const actions = document.createElement('div');
+    actions.className = 'toast-actions';
+    actions.hidden = true;
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'toast-copy';
+    copyBtn.textContent = COPY_LABEL;
+    actions.appendChild(copyBtn);
+
+    body.appendChild(text);
+    body.appendChild(detail);
+    body.appendChild(actions);
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'toast-close';
+    close.hidden = true;
+    close.setAttribute('aria-label', 'Закрыть');
+    close.appendChild(makeSpriteIcon('', SPRITE_URL + '#xk-close').svg);
+
+    const life = document.createElement('span');
+    life.className = 'toast-life';
+    life.hidden = true;
+
+    toast.appendChild(iconParts.svg);
+    toast.appendChild(body);
+    toast.appendChild(close);
+    toast.appendChild(life);
     container.appendChild(toast);
 
-    return {
+    const entry = {
       uid: '',
       el: toast,
-      icon,
+      icon: iconParts.svg,
+      iconUse: iconParts.use,
+      iconHref: iconHrefForKind('success'),
       text,
+      detail,
+      actions,
+      copyBtn,
+      copyText: '',
+      copyResetTimer: null,
+      close,
+      life,
       timer: null,
       removeTimer: null,
       renderToken: '',
       removing: false,
     };
+
+    copyBtn.addEventListener('click', () => copyEntryText(entry));
+    close.addEventListener('click', () => dismissEntry(entry));
+    playEntrance(toast);
+
+    return entry;
   }
 
   function syncRenderedEntry(entry, toastState, api) {
@@ -179,19 +408,13 @@
 
     entry.uid = String(toastState.uid || '');
     entry.removing = false;
-    entry.icon.textContent = iconForKind(toastState.kind);
-    entry.text.textContent = String(toastState.message || '');
-    entry.el.className = 'toast toast-' + normalizeKind(toastState.kind);
-    entry.el.dataset.kind = normalizeKind(toastState.kind);
-    entry.el.style.opacity = '';
-    entry.el.style.transform = '';
-    entry.el.setAttribute('role', normalizeKind(toastState.kind) === 'error' ? 'alert' : 'status');
-    entry.el.setAttribute('aria-live', normalizeKind(toastState.kind) === 'error' ? 'assertive' : 'polite');
+    applyEntryContent(entry, toastState);
 
     const renderToken = [
       toastState.updatedAt,
       toastState.kind,
       toastState.message,
+      toastState.detail,
       toastState.duration,
       toastState.sticky,
     ].join('|');
@@ -200,7 +423,12 @@
     entry.renderToken = renderToken;
     clearRenderedTimer(entry);
 
-    if (toastState.sticky || Number(toastState.duration || 0) <= 0) return;
+    if (toastState.sticky || Number(toastState.duration || 0) <= 0) {
+      startLife(entry, 0);
+      return;
+    }
+
+    startLife(entry, toastState.duration);
 
     entry.timer = setTimeout(() => {
       try {
@@ -274,6 +502,10 @@
     } catch (error) {}
 
     try {
+      if (entry.copyResetTimer) clearTimeout(entry.copyResetTimer);
+    } catch (error) {}
+
+    try {
       entry.el.style.opacity = '0';
       entry.el.style.transform = 'translateY(4px)';
     } catch (error) {}
@@ -292,9 +524,11 @@
 
     if (sticky || duration <= 0) {
       entry.timer = null;
+      startLife(entry, 0);
       return;
     }
 
+    startLife(entry, duration);
     entry.timer = setTimeout(() => closeLocalToast(entry), duration);
   }
 
@@ -337,14 +571,7 @@
     entry.dedupeKey = nextKey;
     entry.closed = false;
     entry.removing = false;
-    entry.icon.textContent = iconForKind(opts.kind);
-    entry.text.textContent = opts.message;
-    entry.el.className = 'toast toast-' + opts.kind;
-    entry.el.dataset.kind = opts.kind;
-    entry.el.style.opacity = '';
-    entry.el.style.transform = '';
-    entry.el.setAttribute('role', opts.kind === 'error' ? 'alert' : 'status');
-    entry.el.setAttribute('aria-live', opts.kind === 'error' ? 'assertive' : 'polite');
+    applyEntryContent(entry, opts);
 
     if (entry.id) LOCAL_ACTIVE.set(entry.id, entry);
     if (entry.dedupeKey) LOCAL_ACTIVE_BY_KEY.set(entry.dedupeKey, entry);

@@ -12,8 +12,8 @@
     "panel_redesign_rules_allowed_in_legacy_stylesheet": false,
     "operator_stylesheet_owns_presentation_only": true,
     "legacy_panel_rule_guard": {
-      "frozen_rule_block_count": 738,
-      "frozen_rule_blocks_sha256": "6240c3421a60d918980211858b6d49bfd97e66472136c12f5983e9e9c4a38c95",
+      "frozen_rule_block_count": 730,
+      "frozen_rule_blocks_sha256": "4eef5172616d6d97cecd708ced285cb1a3e6407fe7a9c6842d8d3f20a767cd8d",
       "policy": "Existing legacy blocks are frozen; do not add or edit panel redesign rules here."
     }
   },

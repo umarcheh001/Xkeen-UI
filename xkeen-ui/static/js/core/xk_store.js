@@ -247,6 +247,7 @@
       id: typeof source.id === "string" ? source.id : "",
       dedupeKey: typeof source.dedupeKey === "string" ? source.dedupeKey : "",
       message: typeof source.message === "string" ? source.message : "",
+      detail: typeof source.detail === "string" ? source.detail : "",
       kind: normalizeToastKind(source.kind),
       duration: Number.isFinite(duration) ? Math.max(0, Math.floor(duration)) : 0,
       sticky: !!source.sticky,
@@ -280,6 +281,7 @@
 
     return {
       message: String(source.message ?? ""),
+      detail: String(source.detail ?? source.details ?? ""),
       kind: normalizeToastKind(source.kind),
       duration: Number.isFinite(duration) ? Math.max(0, Math.floor(duration)) : 0,
       sticky: !!(source.sticky || source.persist || source.persistent),
@@ -324,6 +326,7 @@
       id: payload.id ? String(payload.id) : "",
       dedupeKey: resolveUiToastKey(payload),
       message: String(payload.message || ""),
+      detail: String(payload.detail || ""),
       kind: normalizeToastKind(payload.kind),
       duration: Number.isFinite(Number(payload.duration)) ? Math.max(0, Math.floor(Number(payload.duration))) : 0,
       sticky: !!payload.sticky,
