@@ -860,10 +860,19 @@ function groupSummary(group) {
 
 function groupIconHtml(group) {
   const icon = String(group.icon || '').trim();
-  if (!icon) {
+  // Older configs often omit icons for the built-in automatic groups. Keep
+  // those cards visually identifiable even before the template is regenerated.
+  const name = String(group.name || '').trim().toLowerCase();
+  const thematicIcon = name === 'fallback'
+    ? 'https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png'
+    : (name.includes('fastest') || name.includes('быстр')
+      ? 'https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Speedtest.png'
+      : '');
+  const resolvedIcon = icon || thematicIcon;
+  if (!resolvedIcon) {
     return `<span class="xk-mihomo-group-icon xk-mihomo-group-icon--default" aria-hidden="true">${iconHtml('dns', 'xk-mihomo-group-default-icon')}</span>`;
   }
-  return `<span class="xk-mihomo-group-icon"><img src="${escapeHtml(icon)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
+  return `<span class="xk-mihomo-group-icon"><img src="${escapeHtml(resolvedIcon)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
 }
 
 function groupFixedStatusHtml(group) {

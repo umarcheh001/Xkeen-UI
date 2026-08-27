@@ -5,7 +5,6 @@ import { getPanelLazyFeatureApi } from './panel.lazy_bindings.runtime.js';
 import {
   initMihomoPanel,
   onShowMihomoPanel,
-  reloadMihomoPanelFromDiskIfClean,
 } from '../features/mihomo_panel.js';
 import {
   getXkeenStateValue,
@@ -64,15 +63,6 @@ function bindMihomoConfigSubviewRuntime() {
   mihomoConfigSubviewRuntimeBound = true;
   document.addEventListener('xkeen:mihomo-config-subview-shown', () => {
     safe(() => onShowMihomoPanel({ reason: 'subview' }));
-  });
-  document.addEventListener('xkeen:mihomo-config-changed', () => {
-    Promise.resolve(reloadMihomoPanelFromDiskIfClean())
-      .then((result) => {
-        if (result?.skipped === 'dirty') {
-          try { window.toast('config.yaml изменён автоматически. В редакторе есть несохранённые правки — он не был перезаписан.', 'warning'); } catch (e) {}
-        }
-      })
-      .catch(() => null);
   });
 }
 

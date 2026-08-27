@@ -101,8 +101,9 @@ def build_safe_mihomo_config(
 ) -> MigrationPreview:
     """Return a preview without exposing/generated secrets.
 
-    Unix is the default.  The TCP path is useful on installations where the
-    core cannot create a socket; its secret is generated only during apply.
+    Unix sockets remain available for explicit/legacy callers. The protected
+    loopback TCP path is selected by the panel by default; its secret is
+    generated only during apply.
     """
 
     original = str(text or "")
@@ -130,8 +131,19 @@ def build_safe_mihomo_config(
             changes.append("Убрать больше не нужный secret")
         return MigrationPreview(updated, "unix", tuple(changes))
 
+    # Do not leave a legacy Unix controller behind: Mihomo prefers the Unix
+    # target when both directives are present, which would make the newly
+    # protected TCP API appear inactive after migration.
+    updated = _UNIX_RE.sub("", original)
+    updated = re.sub(
+        r"^[ \t]*#[ \t]*(?:external-controller отключён: используется Unix socket|secret не требуется для Unix socket)[ \t]*$\n?",
+        "",
+        updated,
+        flags=re.MULTILINE,
+    )
+    updated = re.sub(r"\n{3,}", "\n\n", updated)
     updated, existed = _replace_or_insert(
-        original, _CONTROLLER_RE, "external-controller: 127.0.0.1:9090"
+        updated, _CONTROLLER_RE, "external-controller: 127.0.0.1:9090"
     )
     if not existed:
         changes.append("Добавить локальный TCP controller")

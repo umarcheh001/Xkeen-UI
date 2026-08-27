@@ -147,6 +147,7 @@ let mihomoPanelModuleApi = null;
   let _viewStateStore = null;
   let _restartLogModulePromise = null;
   let _mihomoUiSettingsSyncWired = false;
+  let _mihomoConfigChangeSyncWired = false;
 
   function $(id) {
     return document.getElementById(id);
@@ -1518,6 +1519,23 @@ let mihomoPanelModuleApi = null;
     const cm = getSharedEditor();
     try {
       if (cm && cm.refresh) cm.refresh();
+    } catch (e) {}
+  }
+
+  // Security assistants and panel switches update config.yaml on the server
+  // while the editor remains mounted.  Keep the editor in sync immediately
+  // (without requiring a hard reload), but never overwrite unsaved edits.
+  function wireMihomoConfigChangeSyncOnce() {
+    if (_mihomoConfigChangeSyncWired) return;
+    _mihomoConfigChangeSyncWired = true;
+    try {
+      document.addEventListener('xkeen:mihomo-config-changed', () => {
+        Promise.resolve(reloadFromDiskIfClean()).then((result) => {
+          if (result?.skipped === 'dirty') {
+            try { toast('config.yaml изменён автоматически. Несохранённые правки оставлены в редакторе.', 'warning'); } catch (e) {}
+          }
+        }).catch(() => {});
+      });
     } catch (e) {}
   }
 
@@ -3331,6 +3349,7 @@ let mihomoPanelModuleApi = null;
     _inited = true;
     if (root.dataset) root.dataset.xkeenMihomoPanelInited = '1';
     try { wireMihomoUiSettingsSyncOnce(); } catch (e) {}
+    try { wireMihomoConfigChangeSyncOnce(); } catch (e) {}
 
     const finishInit = () => {
       ensureEditor();

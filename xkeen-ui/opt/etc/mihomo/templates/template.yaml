@@ -19,7 +19,8 @@ tproxy-port: 5001
 routing-mark: 255
 find-process-mode: off
 unified-delay: true
-external-controller-unix: ./mihomo-api.sock
+external-controller: 127.0.0.1:9090
+secret: ""
 external-ui: zashboard
 external-ui-url: https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip
 profile: { store-selected: true }
@@ -62,12 +63,22 @@ proxy-groups:
   type: url-test
   hidden: true
   # exclude-filter: "Без VPN|🇷🇺|test|old" # Исключает ноды только из авто-выбора ⚡️ Fastest. В остальных группах они останутся доступны. Добавляй слова/флаги через |. Это regex-фильтр.
-  icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Auto.png
+  icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Speedtest.png
   use:
   - proxy-sub
   url: https://www.gstatic.com/generate_204
   interval: 300
   tolerance: 150
+  lazy: true
+
+- name: Fallback
+  type: fallback
+  hidden: true
+  icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png
+  use:
+  - proxy-sub
+  url: https://www.gstatic.com/generate_204
+  interval: 300
   lazy: true
 
 - name: AI

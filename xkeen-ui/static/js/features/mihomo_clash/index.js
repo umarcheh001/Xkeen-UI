@@ -293,6 +293,13 @@ async function togglePanelMode() {
     const result = await switchMihomoPanel(target, preview?.preview_id);
     panelMode = { ...panelMode, ...result };
     renderPanelSwitch();
+    // The panel switch writes config.yaml server-side; notify the mounted
+    // editor so it reloads immediately instead of requiring Ctrl+F5.
+    try {
+      document.dispatchEvent(new CustomEvent('xkeen:mihomo-config-changed', {
+        detail: { reason: 'panel-switch', target },
+      }));
+    } catch (error) {}
     if (target === 'external' && result?.external_url) {
       window.location.assign(String(result.external_url));
       return true;

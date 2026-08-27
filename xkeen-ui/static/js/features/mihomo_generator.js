@@ -136,7 +136,8 @@ let mihomoGeneratorModuleApi = null;
       routing-mark: 255
       find-process-mode: off
       unified-delay: true
-      external-controller-unix: ./mihomo-api.sock
+      external-controller: 127.0.0.1:9090
+      secret: ""
       external-ui: zashboard
       external-ui-url: https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip
       profile: { store-selected: true }
