@@ -292,6 +292,8 @@ def test_frontend_has_dns_button_modal_and_guard_copy():
     assert 'id="routing-dns-over-vless-upstreams"' in template
     assert 'id="routing-dns-over-vless-local"' in template
     assert "local_resolver" in script
+    assert 'id="routing-dns-over-vless-zones"' in template
+    assert "Зоны, которые остаются в локальной сети" in template
 
 
 def _scenario_config(tmp_path: Path):
@@ -982,9 +984,9 @@ def test_local_resolver_takes_the_home_zones_out_of_the_tunnel(tmp_path: Path):
     configs, routing_path, _state = _scenario_config(tmp_path)
     routing = json.loads(routing_path.read_text(encoding="utf-8"))
     runtime = dns._collect_runtime(str(configs), routing)
-    resolver = dns._parse_local_resolver("192.168.1.1:5353")
+    resolvers = dns._parse_local_resolvers("192.168.1.1:5353")
 
-    fragment = dns._managed_fragment(["1.1.1.1"], resolver)
+    fragment = dns._managed_fragment(["1.1.1.1"], resolvers)
     first = fragment["dns"]["servers"][0]
 
     assert first["address"] == "192.168.1.1"
@@ -996,7 +998,7 @@ def test_local_resolver_takes_the_home_zones_out_of_the_tunnel(tmp_path: Path):
     # A public upstream still follows for everything else.
     assert fragment["dns"]["servers"][1] == "1.1.1.1"
 
-    rule = dns._local_rule(resolver, dns._direct_outbound_tag(runtime))
+    rule = dns._local_rule(resolvers, dns._direct_outbound_tag(runtime))
     assert rule["outboundTag"] == "direct"
     assert rule["ip"] == ["192.168.1.1/32"]
     assert rule["inboundTag"] == [dns.DNS_IN_TAG]
@@ -1007,7 +1009,7 @@ def test_local_rule_is_matched_before_the_proxy_rule(tmp_path: Path):
     routing = json.loads(routing_path.read_text(encoding="utf-8"))
     runtime = dns._collect_runtime(str(configs), routing)
     target = dns._select_target(runtime, "balancer_main", routing)
-    rule = dns._local_rule(dns._parse_local_resolver("192.168.1.1"), "direct")
+    rule = dns._local_rule(dns._parse_local_resolvers("192.168.1.1"), "direct")
 
     planned = dns._build_enabled_routing(routing, target, rule)
     tags = [item.get("ruleTag") for item in planned["routing"]["rules"][:3]]
@@ -1063,4 +1065,80 @@ def test_enable_stores_dns_settings_and_status_reports_them(tmp_path: Path, monk
     assert result["enabled"] is True
     assert result["tampered"] is False
     assert result["upstreams"] == ["1.1.1.1", "9.9.9.9"]
-    assert result["local_resolver"] == "192.168.1.1:5353"
+    assert result["local_resolvers"] == ["192.168.1.1:5353"]
+
+
+def test_bare_zone_entries_are_qualified_before_use():
+    # A bare string is a substring match in Xray: "lan" would also catch
+    # atlantic.com and send it to the LAN resolver.
+    assert dns._local_domains("lan, home.arpa") == ["domain:lan", "domain:home.arpa"]
+    assert dns._local_domains(["full:my.keenetic.net", "GEOSITE:private"]) == [
+        "full:my.keenetic.net",
+        "geosite:private",
+    ]
+    assert dns._local_domains("") == dns.DEFAULT_LOCAL_DOMAINS
+    assert dns._local_domains(", ,") == dns.DEFAULT_LOCAL_DOMAINS
+
+
+def test_custom_zones_reach_the_fragment(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj: _write(Path(path), obj))
+
+    dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+        local_resolver="10.0.0.1",
+        local_domains="lan, office.internal",
+    )
+
+    fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+    assert fragment["dns"]["servers"][0]["domains"] == ["domain:lan", "domain:office.internal"]
+
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["local_domains"] == ["domain:lan", "domain:office.internal"]
+    assert result["default_local_domains"] == dns.DEFAULT_LOCAL_DOMAINS
+    assert result["tampered"] is False
+
+
+def test_several_network_segments_each_get_their_own_resolver(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+    resolvers = dns._parse_local_resolvers("192.168.1.1, 192.168.2.1:5353, 10.8.0.1")
+
+    fragment = dns._managed_fragment(["1.1.1.1"], resolvers)
+    servers = fragment["dns"]["servers"]
+
+    assert [item["address"] for item in servers[:3]] == ["192.168.1.1", "192.168.2.1", "10.8.0.1"]
+    assert [item["port"] for item in servers[:3]] == [53, 5353, 53]
+    # Every segment answers the same zone list, and the public upstream follows.
+    assert all(item["domains"] == dns.DEFAULT_LOCAL_DOMAINS for item in servers[:3])
+    assert servers[3:] == ["1.1.1.1"]
+    # One public upstream still means no fallback abroad.
+    assert fragment["dns"]["disableFallback"] is True
+
+    rule = dns._local_rule(resolvers, dns._direct_outbound_tag(runtime))
+    assert rule["ip"] == ["192.168.1.1/32", "192.168.2.1/32", "10.8.0.1/32"]
+
+
+def test_too_many_local_resolvers_are_refused():
+    try:
+        dns._parse_local_resolvers("10.0.0.1, 10.0.1.1, 10.0.2.1, 10.0.3.1, 10.0.4.1")
+        raise AssertionError("expected the list to be refused")
+    except dns.DnsOverVlessError as exc:
+        assert exc.code == "local_resolver_invalid"

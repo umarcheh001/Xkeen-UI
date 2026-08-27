@@ -27,6 +27,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     multiRow: 'routing-dns-over-vless-multi-row',
     upstreams: 'routing-dns-over-vless-upstreams',
     local: 'routing-dns-over-vless-local',
+    zones: 'routing-dns-over-vless-zones',
+    zonesRow: 'routing-dns-over-vless-zones-row',
   };
 
   let status = null;
@@ -64,6 +66,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     if (upstreams) settings.upstreams = String(upstreams.value || '').trim();
     // An empty string is meaningful here: it switches the local exception off.
     if (local) settings.local_resolver = String(local.value || '').trim();
+    const zones = $(DOM.zones);
+    if (zones && settings.local_resolver) settings.local_domains = String(zones.value || '').trim();
     return settings;
   }
 
@@ -175,10 +179,23 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       upstreams.value = ((data && data.upstreams) || []).join(', ');
     }
     if (local && !local.dataset.touched) {
-      local.value = (data && data.local_resolver) || '';
+      local.value = ((data && data.local_resolvers) || []).join(', ');
     }
     if (upstreams) upstreams.disabled = busy;
     if (local) local.disabled = busy;
+
+    const zones = $(DOM.zones);
+    const zonesRow = $(DOM.zonesRow);
+    // The zone list only means something once a local resolver answers them.
+    const hasLocal = !!(local && String(local.value || '').trim());
+    if (zonesRow) zonesRow.classList.toggle('hidden', !hasLocal);
+    if (zones) {
+      if (!zones.dataset.touched) {
+        const list = (data && data.local_domains) || (data && data.default_local_domains) || [];
+        zones.value = list.join(', ');
+      }
+      zones.disabled = busy;
+    }
   }
 
   function renderFallback(candidate, multi, wanted) {
@@ -308,7 +325,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     showModal(true);
     chosenTargets = [];
     multiTouched = false;
-    [DOM.upstreams, DOM.local].forEach((id) => {
+    [DOM.upstreams, DOM.local, DOM.zones].forEach((id) => {
       const field = $(id);
       if (field) delete field.dataset.touched;
     });
@@ -387,9 +404,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         if (status) renderRoute(status);
       });
     }
-    [DOM.upstreams, DOM.local].forEach((id) => {
+    [DOM.upstreams, DOM.local, DOM.zones].forEach((id) => {
       const field = $(id);
-      if (field) field.addEventListener('input', () => { field.dataset.touched = '1'; });
+      if (!field) return;
+      field.addEventListener('input', () => {
+        field.dataset.touched = '1';
+        // Typing a local resolver reveals the zone list straight away.
+        if (id === DOM.local && status) renderDnsFields(status);
+      });
     });
     const multiBox = $(DOM.multi);
     if (multiBox) {

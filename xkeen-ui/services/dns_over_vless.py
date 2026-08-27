@@ -62,6 +62,7 @@ DEFAULT_LOCAL_DOMAINS = [
     "domain:ip6.arpa",
 ]
 MAX_UPSTREAMS = 4
+MAX_LOCAL_RESOLVERS = 4
 UPSTREAM_SCHEMES = ("https://", "tls://", "tcp://", "quic://")
 PROBE_DOMAIN = "example.com"
 DNS_PROBE_ATTEMPTS = 3
@@ -785,30 +786,80 @@ def _parse_local_resolver(value: Any) -> Optional[Dict[str, Any]]:
     return {"address": str(parsed), "port": port}
 
 
+LOCAL_DOMAIN_PREFIXES = ("domain:", "full:", "keyword:", "regexp:", "geosite:", "ext:")
+
+
+def _normalize_local_domain(value: str) -> str:
+    """Make a zone entry explicit.
+
+    A bare string is a *substring* match for Xray: ``lan`` would also catch
+    ``atlantic.com`` and quietly send it to the LAN resolver.  Prefix anything
+    unqualified with ``domain:`` so it matches the zone and its subdomains.
+    """
+    text = str(value or "").strip().lower().strip(".")
+    if not text:
+        return ""
+    if text.startswith(LOCAL_DOMAIN_PREFIXES):
+        head, _, tail = text.partition(":")
+        return f"{head}:{tail.strip()}" if tail.strip() else ""
+    return "domain:" + text
+
+
+def _parse_local_resolvers(value: Any) -> list[Dict[str, Any]]:
+    """Parse one or several LAN resolvers — a home network can have segments,
+    each with its own server answering local names."""
+    if value is None or value == "":
+        return []
+    result: list[Dict[str, Any]] = []
+    for item in normalize_upstreams(value):
+        parsed = _parse_local_resolver(item)
+        if parsed and parsed not in result:
+            result.append(parsed)
+    if len(result) > MAX_LOCAL_RESOLVERS:
+        raise DnsOverVlessError(
+            f"Слишком много локальных DNS: не больше {MAX_LOCAL_RESOLVERS}.",
+            code="local_resolver_invalid",
+        )
+    return result
+
+
+def _resolver_label(resolver: Dict[str, Any]) -> str:
+    return "%s:%s" % (resolver["address"], resolver.get("port") or 53)
+
+
 def _local_domains(value: Any) -> list[str]:
-    items = normalize_upstreams(value) if value else []
-    return items or list(DEFAULT_LOCAL_DOMAINS)
+    if value is None or value == "":
+        return list(DEFAULT_LOCAL_DOMAINS)
+    result: list[str] = []
+    for item in normalize_upstreams(value):
+        normalized = _normalize_local_domain(item)
+        if normalized and normalized not in result:
+            result.append(normalized)
+    return result or list(DEFAULT_LOCAL_DOMAINS)
 
 
 def _managed_fragment(
     upstreams: Optional[list[str]] = None,
-    local_resolver: Optional[Dict[str, Any]] = None,
+    local_resolvers: Optional[list[Dict[str, Any]]] = None,
     local_domains: Optional[list[str]] = None,
 ) -> Dict[str, Any]:
     servers: list[Any] = []
-    if local_resolver:
+    resolvers = list(local_resolvers or [])
+    zones = list(local_domains or DEFAULT_LOCAL_DOMAINS)
+    for resolver in resolvers:
         # Listed first so these zones are matched before the public upstreams.
-        # skipFallback keeps a missing local answer from being retried abroad.
+        # skipFallback keeps a missing local answer from being retried abroad;
+        # with several segments Xray still tries the next local server.
         servers.append(
             {
-                "address": local_resolver["address"],
-                "port": int(local_resolver.get("port") or 53),
-                "domains": list(local_domains or DEFAULT_LOCAL_DOMAINS),
+                "address": resolver["address"],
+                "port": int(resolver.get("port") or 53),
+                "domains": zones,
                 "skipFallback": True,
             }
         )
     servers.extend(list(upstreams or DEFAULT_UPSTREAMS))
-    public_count = len(servers) - (1 if local_resolver else 0)
+    public_count = len(servers) - len(resolvers)
     return {
         "dns": {
             # Explicit public upstreams; the DNS outbound carries these UDP
@@ -849,16 +900,21 @@ def _direct_outbound_tag(runtime: Dict[str, Any]) -> str:
     return ""
 
 
-def _local_rule(resolver: Optional[Dict[str, Any]], direct_tag: str) -> Optional[Dict[str, Any]]:
-    """Send queries aimed at the LAN resolver straight out, never via VLESS."""
-    if not resolver or not direct_tag:
+def _local_rule(
+    resolvers: Optional[list[Dict[str, Any]]], direct_tag: str
+) -> Optional[Dict[str, Any]]:
+    """Send queries aimed at the LAN resolvers straight out, never via VLESS."""
+    items = list(resolvers or [])
+    if not items or not direct_tag:
         return None
-    address = resolver["address"]
-    suffix = "/128" if ":" in address else "/32"
+    addresses = []
+    for resolver in items:
+        address = str(resolver["address"])
+        addresses.append(address + ("/128" if ":" in address else "/32"))
     return {
         "type": "field",
         "inboundTag": [DNS_IN_TAG],
-        "ip": [address + suffix],
+        "ip": addresses,
         "outboundTag": direct_tag,
         "ruleTag": LOCAL_RULE_TAG,
     }
@@ -974,17 +1030,16 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
     raw_servers = raw_servers if isinstance(raw_servers, list) else []
     # The optional local resolver is an object and always comes first; the
     # public upstreams are plain strings after it.
-    local_obj = raw_servers[0] if raw_servers and isinstance(raw_servers[0], dict) else None
+    local_objs = [item for item in raw_servers if isinstance(item, dict) and item.get("address")]
     declared = _safe_upstreams([item for item in raw_servers if not isinstance(item, dict)])
-    declared_resolver = (
-        {"address": str(local_obj.get("address") or ""), "port": local_obj.get("port") or 53}
-        if isinstance(local_obj, dict) and local_obj.get("address")
-        else None
-    )
+    declared_resolvers = [
+        {"address": str(item.get("address") or ""), "port": item.get("port") or 53}
+        for item in local_objs
+    ]
     exact_fragment = bool(declared) and fragment == _managed_fragment(
         declared,
-        declared_resolver,
-        local_obj.get("domains") if isinstance(local_obj, dict) else None,
+        declared_resolvers,
+        local_objs[0].get("domains") if local_objs else None,
     )
     model = routing.get("routing") if isinstance(routing.get("routing"), dict) else {}
     rules = model.get("rules") if isinstance(model.get("rules"), list) else []
@@ -1025,7 +1080,7 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
     # The local rule is optional; when present it must be exactly the one we
     # would build for the resolver this fragment declares.
     expected_local = (
-        _local_rule(declared_resolver, _direct_outbound_tag(runtime)) if declared_resolver else None
+        _local_rule(declared_resolvers, _direct_outbound_tag(runtime)) if declared_resolvers else None
     )
     safe_local_rule = (local_rule_obj is None) or (
         expected_local is not None and local_rule_obj == expected_local
@@ -1629,7 +1684,10 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
         "upstreams": upstreams,
         "default_upstreams": list(DEFAULT_UPSTREAMS),
         "max_upstreams": MAX_UPSTREAMS,
-        "local_resolver": (state.get("local_resolver") or {}).get("address_port") or "",
+        "local_resolvers": (
+            state.get("local_resolvers") if isinstance(state.get("local_resolvers"), list) else []
+        ),
+        "max_local_resolvers": MAX_LOCAL_RESOLVERS,
         "local_domains": (
             state.get("local_domains")
             if isinstance(state.get("local_domains"), list)
@@ -1696,9 +1754,9 @@ def apply_action(
             else (_safe_upstreams(stored_state.get("upstreams")) or list(DEFAULT_UPSTREAMS))
         )
         wanted_local = (
-            _parse_local_resolver(local_resolver)
+            _parse_local_resolvers(local_resolver)
             if local_resolver is not None
-            else _parse_local_resolver((stored_state.get("local_resolver") or {}).get("address_port"))
+            else _parse_local_resolvers(stored_state.get("local_resolvers"))
         )
         wanted_local_domains = (
             _local_domains(local_domains)
@@ -1856,14 +1914,7 @@ def apply_action(
                         "enabled_at": int(time.time()),
                         "original_dns_override": original_override_for_state,
                         "upstreams": wanted_upstreams,
-                        "local_resolver": (
-                            {
-                                "address_port": "%s:%s" % (wanted_local["address"], wanted_local["port"]),
-                                **wanted_local,
-                            }
-                            if wanted_local
-                            else None
-                        ),
+                        "local_resolvers": [_resolver_label(item) for item in wanted_local],
                         "local_domains": wanted_local_domains if wanted_local else None,
                         "target": ({k: v for k, v in target.items() if k != "managed_balancer"} if target else previous_state.get("target")),
                         "last_transaction": snapshot_dir,

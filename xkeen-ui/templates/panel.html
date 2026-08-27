@@ -2595,9 +2595,15 @@
             <input type="text" id="routing-dns-over-vless-upstreams" class="routing-rule-input" placeholder="8.8.8.8, 1.1.1.1" autocomplete="off" spellcheck="false">
             <p class="modal-hint">Через запятую, только IP-адреса. Второй и следующие используются, когда первый не отвечает.</p>
 
-            <label for="routing-dns-over-vless-local">Локальный DNS для домашних имён</label>
+            <label for="routing-dns-over-vless-local">Локальные DNS для домашних имён</label>
             <input type="text" id="routing-dns-over-vless-local" class="routing-rule-input" placeholder="не используется" autocomplete="off" spellcheck="false">
-            <p class="modal-hint">Необязательно. Адрес резолвера, который отвечает за <code>.lan</code>, имена устройств и зоны Keenetic — запросы к нему пойдут напрямую, мимо туннеля. Укажите порт, если резолвер слушает не на 53.</p>
+            <p class="modal-hint">Необязательно. Адреса резолверов, отвечающих за домашние имена — запросы к ним пойдут напрямую, мимо туннеля. Через запятую, если сегментов сети несколько; порт указывайте, если резолвер слушает не на 53.</p>
+
+            <div id="routing-dns-over-vless-zones-row" class="routing-dns-over-vless-zones hidden">
+              <label for="routing-dns-over-vless-zones">Зоны, которые остаются в локальной сети</label>
+              <textarea id="routing-dns-over-vless-zones" class="routing-rule-input" rows="3" autocomplete="off" spellcheck="false"></textarea>
+              <p class="modal-hint">Через запятую. Запись без префикса дополняется до <code>domain:</code> — иначе Xray искал бы её как подстроку и захватил бы чужие домены. Обратные зоны <code>in-addr.arpa</code> и <code>ip6.arpa</code> держат PTR-запросы о приватных адресах внутри сети.</p>
+            </div>
           </div>
 
           <div class="routing-dns-over-vless-safety" aria-label="Защита операции">
