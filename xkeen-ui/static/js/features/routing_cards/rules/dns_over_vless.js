@@ -29,6 +29,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     local: 'routing-dns-over-vless-local',
     zones: 'routing-dns-over-vless-zones',
     zonesRow: 'routing-dns-over-vless-zones-row',
+    zonePresets: 'routing-dns-over-vless-zone-presets',
   };
 
   let status = null;
@@ -172,6 +173,85 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     renderFallback(multi ? null : pool.find((item) => item.tag === wanted[0]), multi, wanted);
   }
 
+  const PRESET_LABELS = {
+    local: 'Локальные',
+    ptr: 'Обратные приватные',
+    ptr172: '172.16/12',
+    keenetic: 'Keenetic',
+    netcraze: 'Netcraze',
+  };
+
+  function parseZones(text) {
+    return String(text || '')
+      .split(/[,;\s]+/)
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  function writeZones(list) {
+    const zones = $(DOM.zones);
+    if (!zones) return;
+    zones.value = list.join(', ');
+    zones.dataset.touched = '1';
+  }
+
+  function togglePreset(key) {
+    const presets = (status && status.zone_presets) || {};
+    const group = (presets[key] || []).map((item) => String(item).toLowerCase());
+    if (!group.length) return;
+    const current = parseZones(($(DOM.zones) || {}).value);
+    const hasAll = group.every((zone) => current.indexOf(zone) !== -1);
+    const next = hasAll
+      ? current.filter((zone) => group.indexOf(zone) === -1)
+      : current.concat(group.filter((zone) => current.indexOf(zone) === -1));
+    writeZones(next);
+    renderZonePresets();
+  }
+
+  function renderZonePresets() {
+    const holder = $(DOM.zonePresets);
+    if (!holder) return;
+    const presets = (status && status.zone_presets) || {};
+    const keys = Object.keys(PRESET_LABELS).filter((key) => (presets[key] || []).length);
+    const current = parseZones(($(DOM.zones) || {}).value);
+
+    if (holder.dataset.keys !== keys.join(',')) {
+      holder.dataset.keys = keys.join(',');
+      holder.textContent = '';
+      keys.forEach((key) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.preset = key;
+        button.dataset.label = PRESET_LABELS[key];
+        button.addEventListener('click', (event) => { event.preventDefault(); togglePreset(key); });
+        holder.appendChild(button);
+      });
+      const reset = document.createElement('button');
+      reset.type = 'button';
+      reset.dataset.role = 'reset';
+      reset.textContent = 'По умолчанию';
+      reset.addEventListener('click', (event) => {
+        event.preventDefault();
+        writeZones(((status && status.default_local_domains) || []).map((item) => String(item).toLowerCase()));
+        renderZonePresets();
+      });
+      holder.appendChild(reset);
+    }
+
+    Array.prototype.forEach.call(holder.querySelectorAll('button[data-preset]'), (button) => {
+      const group = (presets[button.dataset.preset] || []).map((item) => String(item).toLowerCase());
+      const active = group.length && group.every((zone) => current.indexOf(zone) !== -1);
+      button.dataset.active = active ? '1' : '0';
+      // Colour alone reads as focus rather than state, so mark it in the text.
+      button.textContent = (active ? '✓ ' : '+ ') + button.dataset.label;
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      button.title = active ? 'Убрать этот набор из списка' : 'Добавить этот набор в список';
+      button.disabled = busy;
+    });
+    const reset = holder.querySelector('button[data-role="reset"]');
+    if (reset) reset.disabled = busy;
+  }
+
   function renderDnsFields(data) {
     const upstreams = $(DOM.upstreams);
     const local = $(DOM.local);
@@ -196,6 +276,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       }
       zones.disabled = busy;
     }
+    if (hasLocal) renderZonePresets();
   }
 
   function renderFallback(candidate, multi, wanted) {
@@ -411,6 +492,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         field.dataset.touched = '1';
         // Typing a local resolver reveals the zone list straight away.
         if (id === DOM.local && status) renderDnsFields(status);
+        // Editing the list by hand must keep the group buttons honest.
+        if (id === DOM.zones) renderZonePresets();
       });
     });
     const multiBox = $(DOM.multi);

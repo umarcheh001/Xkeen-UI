@@ -294,6 +294,8 @@ def test_frontend_has_dns_button_modal_and_guard_copy():
     assert "local_resolver" in script
     assert 'id="routing-dns-over-vless-zones"' in template
     assert "Зоны, которые остаются в локальной сети" in template
+    assert 'id="routing-dns-over-vless-zone-presets"' in template
+    assert "togglePreset" in script
 
 
 def _scenario_config(tmp_path: Path):

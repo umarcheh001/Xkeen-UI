@@ -19310,6 +19310,27 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
 .routing-dns-over-vless-multi input { margin: 0; }
 .routing-dns-over-vless-route > input[type="text"] { width: 100%; }
 .routing-dns-over-vless-zones { display: grid; gap: 6px; }
+.routing-dns-over-vless-zone-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.routing-dns-over-vless-zone-presets button {
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--modal-body-border);
+  background: transparent;
+  color: var(--modal-muted);
+  cursor: pointer;
+}
+.routing-dns-over-vless-zone-presets button:hover { color: var(--modal-text); }
+.routing-dns-over-vless-zone-presets button[data-active="1"] {
+  border-color: #60a5fa;
+  background: rgba(96, 165, 250, .28);
+  color: var(--modal-text);
+  font-weight: 600;
+}
+.routing-dns-over-vless-zone-presets button[data-role="reset"] { margin-left: auto; }
+.routing-dns-over-vless-zone-presets button:disabled { opacity: .5; cursor: default; }
 .routing-dns-over-vless-zones textarea {
   width: 100%;
   resize: vertical;

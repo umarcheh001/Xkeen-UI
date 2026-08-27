@@ -2602,6 +2602,7 @@
             <div id="routing-dns-over-vless-zones-row" class="routing-dns-over-vless-zones hidden">
               <label for="routing-dns-over-vless-zones">Зоны, которые остаются в локальной сети</label>
               <textarea id="routing-dns-over-vless-zones" class="routing-rule-input" rows="3" autocomplete="off" spellcheck="false"></textarea>
+              <div id="routing-dns-over-vless-zone-presets" class="routing-dns-over-vless-zone-presets" role="group" aria-label="Наборы зон"></div>
               <p class="modal-hint">Заполнено частыми случаями — дополните своими, если в сети используется собственная зона. Через запятую; запись без префикса дополняется до <code>domain:</code>, иначе Xray искал бы её как подстроку и захватил бы чужие домены. Обратные зоны <code>in-addr.arpa</code> и <code>ip6.arpa</code> держат PTR-запросы о приватных адресах внутри сети.</p>
             </div>
           </div>
