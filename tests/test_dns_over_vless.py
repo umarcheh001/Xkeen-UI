@@ -961,7 +961,8 @@ def test_upstreams_are_validated_against_loops_and_leaks():
     assert dns.validate_upstreams("1.1.1.1, 9.9.9.9") == ["1.1.1.1", "9.9.9.9"]
     assert dns.validate_upstreams(["https://8.8.8.8/dns-query"]) == ["https://8.8.8.8/dns-query"]
 
-    for bad in ("127.0.0.53", "192.168.1.1", "169.254.1.1", "dns.google", "8.8.8.8 1.1.1.1 9.9.9.9 8.8.4.4 1.0.0.1"):
+    too_many = " ".join(f"9.9.9.{n}" for n in range(dns.MAX_UPSTREAMS + 1))
+    for bad in ("127.0.0.53", "192.168.1.1", "169.254.1.1", "dns.google", too_many):
         try:
             dns.validate_upstreams(bad)
             raise AssertionError(f"expected {bad!r} to be refused")
@@ -1137,8 +1138,25 @@ def test_several_network_segments_each_get_their_own_resolver(tmp_path: Path):
 
 
 def test_too_many_local_resolvers_are_refused():
+    # The cap only guards against an accidental paste; a real home network
+    # with a handful of segments stays well below it.
+    fine = ", ".join(f"10.0.{n}.1" for n in range(dns.MAX_LOCAL_RESOLVERS))
+    assert len(dns._parse_local_resolvers(fine)) == dns.MAX_LOCAL_RESOLVERS
+
     try:
-        dns._parse_local_resolvers("10.0.0.1, 10.0.1.1, 10.0.2.1, 10.0.3.1, 10.0.4.1")
+        dns._parse_local_resolvers(", ".join(f"10.1.{n}.1" for n in range(dns.MAX_LOCAL_RESOLVERS + 1)))
         raise AssertionError("expected the list to be refused")
     except dns.DnsOverVlessError as exc:
         assert exc.code == "local_resolver_invalid"
+
+
+def test_zone_list_is_free_form_within_a_sane_cap():
+    # Any private zone is allowed — only the count is capped.
+    custom = dns._local_domains("corp.local, mynet, office.internal")
+    assert custom == ["domain:corp.local", "domain:mynet", "domain:office.internal"]
+
+    try:
+        dns._local_domains(", ".join(f"zone{n}.lan" for n in range(dns.MAX_LOCAL_DOMAINS + 1)))
+        raise AssertionError("expected the zone list to be refused")
+    except dns.DnsOverVlessError as exc:
+        assert exc.code == "local_domains_invalid"

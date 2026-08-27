@@ -54,15 +54,22 @@ LOCAL_RULE_TAG = "xk_dns_over_vless_local"
 DEFAULT_LOCAL_DOMAINS = [
     "domain:lan",
     "domain:local",
+    "domain:home",
     "domain:home.arpa",
+    "domain:internal",
+    "domain:localdomain",
     "domain:keenetic.net",
     "domain:keenetic.io",
     "domain:keenetic.com",
     "domain:in-addr.arpa",
     "domain:ip6.arpa",
 ]
-MAX_UPSTREAMS = 4
-MAX_LOCAL_RESOLVERS = 4
+# These caps are not Xray limits — it handles far longer lists.  They only
+# stop an accidental paste from bloating the config into something nobody can
+# read back, so they sit well above any realistic home setup.
+MAX_UPSTREAMS = 8
+MAX_LOCAL_RESOLVERS = 16
+MAX_LOCAL_DOMAINS = 64
 UPSTREAM_SCHEMES = ("https://", "tls://", "tcp://", "quic://")
 PROBE_DOMAIN = "example.com"
 DNS_PROBE_ATTEMPTS = 3
@@ -828,6 +835,11 @@ def _resolver_label(resolver: Dict[str, Any]) -> str:
 
 
 def _local_domains(value: Any) -> list[str]:
+    """Zone list for the LAN resolvers: defaults when empty, otherwise yours.
+
+    The list itself is free-form — a home network may use any private zone —
+    so nothing here restricts *which* zones you add, only how many.
+    """
     if value is None or value == "":
         return list(DEFAULT_LOCAL_DOMAINS)
     result: list[str] = []
@@ -835,6 +847,11 @@ def _local_domains(value: Any) -> list[str]:
         normalized = _normalize_local_domain(item)
         if normalized and normalized not in result:
             result.append(normalized)
+    if len(result) > MAX_LOCAL_DOMAINS:
+        raise DnsOverVlessError(
+            f"Слишком много локальных зон: не больше {MAX_LOCAL_DOMAINS}.",
+            code="local_domains_invalid",
+        )
     return result or list(DEFAULT_LOCAL_DOMAINS)
 
 
