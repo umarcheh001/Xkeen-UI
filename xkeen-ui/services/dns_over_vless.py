@@ -1194,36 +1194,45 @@ def watchdog_tick(
     result.setdefault("restarts", 0)
     result.setdefault("released", False)
 
+    # A health check waits seconds on the DNS probe and a core restart takes
+    # longer still.  Holding _LOCK across them would stall the user's own
+    # enable/disable, so the lock only covers state reads and the mutating step.
     with _LOCK:
         state = _load_state(ui_state_dir)
-        if not state.get("enabled"):
-            # Either never enabled, or already released/disabled by someone.
+    if not state.get("enabled"):
+        # Either never enabled, or already released/disabled by someone.
+        result.update({"fails": 0, "restarts": 0, "action": "idle"})
+        return result
+    if result.get("released"):
+        result["action"] = "released"
+        return result
+
+    if _watchdog_healthy():
+        result.update({"fails": 0, "restarts": 0, "action": "ok"})
+        return result
+
+    result["fails"] = int(result["fails"]) + 1
+    if result["fails"] < WATCHDOG_FAIL_THRESHOLD:
+        result["action"] = "watching"
+        return result
+
+    if int(result["restarts"]) < WATCHDOG_RESTART_ATTEMPTS:
+        result["restarts"] = int(result["restarts"]) + 1
+        result["fails"] = 0
+        try:
+            restart_xkeen(source="dns-over-vless-watchdog")
+        except Exception:
+            pass
+        result["action"] = "restarted"
+        return result
+
+    reason = "Xray не поднялся после %d попыток; DNS возвращён прошивке." % int(result["restarts"])
+    with _LOCK:
+        # The user may have switched the feature off while we were probing;
+        # releasing on top of that would fight their decision.
+        if not _load_state(ui_state_dir).get("enabled"):
             result.update({"fails": 0, "restarts": 0, "action": "idle"})
             return result
-        if result.get("released"):
-            result["action"] = "released"
-            return result
-
-        if _watchdog_healthy():
-            result.update({"fails": 0, "restarts": 0, "action": "ok"})
-            return result
-
-        result["fails"] = int(result["fails"]) + 1
-        if result["fails"] < WATCHDOG_FAIL_THRESHOLD:
-            result["action"] = "watching"
-            return result
-
-        if int(result["restarts"]) < WATCHDOG_RESTART_ATTEMPTS:
-            result["restarts"] = int(result["restarts"]) + 1
-            result["fails"] = 0
-            try:
-                restart_xkeen(source="dns-over-vless-watchdog")
-            except Exception:
-                pass
-            result["action"] = "restarted"
-            return result
-
-        reason = "Xray не поднялся после %d попыток; DNS возвращён прошивке." % int(result["restarts"])
         result["release"] = _emergency_release(
             configs_dir=configs_dir,
             routing_file=routing_file,
@@ -1231,8 +1240,8 @@ def watchdog_tick(
             restart_xkeen=restart_xkeen,
             reason=reason,
         )
-        result.update({"released": True, "action": "released"})
-        return result
+    result.update({"released": True, "action": "released"})
+    return result
 
 
 def start_watchdog(

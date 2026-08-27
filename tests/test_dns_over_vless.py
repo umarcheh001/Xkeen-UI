@@ -835,6 +835,9 @@ def test_status_reports_drift_when_a_combined_proxy_disappears(tmp_path: Path, m
         configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
     )
     assert steady["route_drift"] is None
+    # A balancer built here must pass the same integrity checks as a clone.
+    assert steady["enabled"] is True
+    assert steady["tampered"] is False
 
     outbounds = json.loads((configs / "04_outbounds.json").read_text(encoding="utf-8"))
     outbounds["outbounds"] = [
@@ -879,3 +882,70 @@ def test_http_contract_accepts_a_list_of_targets(tmp_path: Path, monkeypatch):
 
     assert response.status_code == 200
     assert seen["target_tag"] == ["my_proxy_1", "my_proxy_2"]
+
+
+def test_watchdog_abandons_release_if_the_user_disabled_meanwhile(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _enabled_install(tmp_path)
+    overrides: list[bool] = []
+    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: False)
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: overrides.append(enabled))
+
+    real_load = dns._load_state
+    seen = {"calls": 0}
+
+    def flaky_load(path):
+        # The last read happens inside the lock, right before releasing: by
+        # then the user has switched the feature off from the panel.
+        seen["calls"] += 1
+        value = real_load(path)
+        if seen["calls"] > 1 and value.get("enabled"):
+            value = dict(value)
+            value["enabled"] = False
+        return value
+
+    counters: Dict[str, Any] = {"fails": dns.WATCHDOG_FAIL_THRESHOLD - 1, "restarts": dns.WATCHDOG_RESTART_ATTEMPTS}
+    monkeypatch.setattr(dns, "_load_state", flaky_load)
+    result = _tick(configs, routing_path, state, lambda **_k: True, counters)
+
+    assert result["action"] == "idle"
+    assert overrides == []
+    assert (configs / dns.MANAGED_FRAGMENT).exists()
+
+
+def test_install_enabled_before_the_picker_keeps_working(tmp_path: Path, monkeypatch):
+    """An upgrade must not disturb a configuration enabled by the old code."""
+    configs, routing_path, state = _base_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    # The old builder always dropped fallbackTag and never stored `sources`.
+    legacy_target = {
+        "kind": "balancer",
+        "tag": dns.BALANCER_TAG,
+        "source": "proxy",
+        "label": "балансировщик proxy",
+        "managed_balancer": {
+            "tag": dns.BALANCER_TAG,
+            "selector": ["proxy-a", "proxy-b"],
+            "strategy": {"type": "leastPing"},
+        },
+    }
+    _write(configs / dns.MANAGED_FRAGMENT, dns._managed_fragment())
+    _write(routing_path, dns._build_enabled_routing(routing, legacy_target))
+    _write(
+        state / dns.STATE_FILENAME,
+        {"version": 1, "enabled": True, "original_dns_override": False, "target": {
+            "kind": "balancer", "tag": dns.BALANCER_TAG, "source": "proxy", "label": "балансировщик proxy",
+        }},
+    )
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["enabled"] is True
+    assert result["tampered"] is False
+    assert result["selected_targets"] == ["proxy"]
+    # The source balancer falls back to direct, so the old clone without a
+    # fallback already matches what this version would build: no drift.
+    assert result["route_drift"] is None

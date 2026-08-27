@@ -30,6 +30,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   let status = null;
   let busy = false;
   let chosenTargets = [];
+  let multiTouched = false;
 
   function showModal(open) {
     const modal = $(DOM.modal);
@@ -122,6 +123,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const canCombine = proxies.length > 1;
     if (multiRow) multiRow.classList.toggle('hidden', !canCombine);
     if (multiBox && !canCombine) multiBox.checked = false;
+    // Reopen in combined mode when that is what was saved last time.
+    const savedCombined = !!(data && (data.selected_targets || []).length > 1);
+    if (multiBox && canCombine && savedCombined && !multiTouched) multiBox.checked = true;
     const multi = multiEnabled() && canCombine;
 
     const pool = multi ? candidates.filter((item) => item.kind === 'outbound') : candidates;
@@ -155,11 +159,18 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     if (!line) return;
     if (multi) {
       line.classList.remove('hidden');
-      line.dataset.state = 'kept';
       const list = (wanted || []);
-      line.textContent = list.length
-        ? `Выбрано ${list.length}: ${list.join(', ')}. Панель создаст из них свой балансировщик; резервного маршрута у него нет.`
-        : 'Отметьте хотя бы два прокси, между которыми балансировать DNS.';
+      if (list.length > 1) {
+        line.dataset.state = 'kept';
+        line.textContent = `Выбрано ${list.length}: ${list.join(', ')}. Панель создаст из них свой балансировщик; резервного маршрута у него нет.`;
+      } else if (list.length === 1) {
+        // One proxy is not a balancer: be honest instead of promising one.
+        line.dataset.state = 'dropped';
+        line.textContent = `Выбран один прокси (${list[0]}) — балансировки не будет. Отметьте ещё хотя бы один.`;
+      } else {
+        line.dataset.state = 'dropped';
+        line.textContent = 'Отметьте хотя бы два прокси, между которыми балансировать DNS.';
+      }
       return;
     }
     const plan = candidate && candidate.fallback;
@@ -187,12 +198,17 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const enabled = !!(data && data.enabled);
     const canDisable = !!(data && data.can_disable);
     const blocked = !enabled && !canDisable && !(data && data.can_enable);
+    // An automatic release is not a neutral "ready" state: the protection was
+    // switched off by itself and the user has to know.
+    const released = !enabled && !!(data && data.watchdog && data.watchdog.reason);
     if (badge) {
-      badge.textContent = enabled ? 'Включено' : (canDisable ? 'Нужно восстановить' : (blocked ? 'Требует внимания' : 'Готово'));
-      badge.dataset.state = enabled ? 'enabled' : ((canDisable || blocked) ? 'blocked' : 'ready');
+      badge.textContent = enabled
+        ? 'Включено'
+        : (released ? 'Отключено сторожем' : (canDisable ? 'Нужно восстановить' : (blocked ? 'Требует внимания' : 'Готово')));
+      badge.dataset.state = enabled ? 'enabled' : ((released || canDisable || blocked) ? 'blocked' : 'ready');
     }
     if (dot) {
-      dot.dataset.state = enabled ? 'enabled' : ((canDisable || blocked) ? 'blocked' : 'off');
+      dot.dataset.state = enabled ? 'enabled' : ((released || canDisable || blocked) ? 'blocked' : 'off');
     }
     if (text) {
       if (enabled) text.textContent = 'DNS-over-VLESS активен: Xray-конфигурация и DNS override Keenetic согласованы.';
@@ -264,6 +280,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   async function open() {
     showModal(true);
     chosenTargets = [];
+    multiTouched = false;
     const text = $(DOM.status);
     const badge = $(DOM.badge);
     const apply = $(DOM.apply);
@@ -343,6 +360,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     if (multiBox) {
       multiBox.addEventListener('change', () => {
         // Switching modes drops a selection the other mode cannot express.
+        multiTouched = true;
         chosenTargets = [];
         if (status) renderRoute(status);
       });
