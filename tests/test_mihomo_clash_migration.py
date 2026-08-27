@@ -18,13 +18,15 @@ from services.mihomo_clash_migration import (
 )
 
 
-def test_bundled_templates_and_generator_are_unix_first():
+def test_bundled_templates_and_generator_use_loopback_controller():
     for path in sorted((APP_DIR / "opt" / "etc" / "mihomo" / "templates").glob("*.yaml")):
         text = path.read_text(encoding="utf-8")
-        assert "external-controller-unix: ./mihomo-api.sock" in text
+        assert "external-controller: 127.0.0.1:9090" in text
+        assert "external-controller-unix:" not in text
         assert "external-controller: 0.0.0.0:9090" not in text
     generator = (APP_DIR / "static" / "js" / "features" / "mihomo_generator.js").read_text(encoding="utf-8")
-    assert "external-controller-unix: ./mihomo-api.sock" in generator
+    assert "external-controller: 127.0.0.1:9090" in generator
+    assert "external-controller-unix:" not in generator
     assert "external-controller: 0.0.0.0:9090" not in generator
 
 

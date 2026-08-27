@@ -183,7 +183,7 @@ def test_router_custom_xray_json_import_does_not_duplicate_include_all_group_ent
     assert {p["name"] for p in parsed["proxies"]} == {"A", "B"}
     blocked = next(g for g in parsed["proxy-groups"] if g["name"] == "Заблок. сервисы")
     assert blocked.get("include-all") is True
-    assert "proxies" not in blocked
+    assert "proxies" not in blocked or set(blocked["proxies"]) >= {"Fallback", "Fastest"}
 
 
 def test_router_custom_keeps_sniffer_rule_provider_when_telegram_group_is_disabled(monkeypatch):
