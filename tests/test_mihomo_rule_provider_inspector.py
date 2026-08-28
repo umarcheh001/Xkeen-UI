@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,24 @@ from services.mihomo_rule_provider_inspector import (
     clear_rule_provider_inspector_cache,
     inspect_rule_provider,
 )
+
+
+def _symlinks_available() -> bool:
+    """Симлинки есть не везде: под Windows они требуют особых прав."""
+    with tempfile.TemporaryDirectory() as tmp:
+        target = Path(tmp) / "target.txt"
+        target.write_text("x", encoding="utf-8")
+        try:
+            (Path(tmp) / "link.txt").symlink_to(target)
+        except (OSError, NotImplementedError):
+            return False
+    return True
+
+
+SYMLINKS = _symlinks_available()
+# Конвертер mrs общается с ядром через именованный канал, которого на не-POSIX
+# системах нет; сам инспектор на роутере работает именно так.
+FIFO = hasattr(os, "mkfifo")
 
 
 def write_config(root: Path, providers: str) -> Path:
@@ -104,6 +123,7 @@ def test_router_fallback_parser_resolves_rule_anchors_without_pyyaml(tmp_path: P
     assert inline["rules"] == ["AND,((DST-PORT,443),(NETWORK,UDP))"]
 
 
+@pytest.mark.skipif(not SYMLINKS, reason="Symlinks are unavailable on this platform")
 def test_symlink_traversal_directory_and_oversized_query_are_rejected(tmp_path: Path):
     outside = tmp_path.parent / "outside-provider.txt"
     outside.write_text("secret.test\n", encoding="utf-8")
@@ -147,6 +167,7 @@ def test_cache_uses_mtime_and_invalidates_after_file_change(tmp_path: Path):
     assert third["rules"] == ["two.test"]
 
 
+@pytest.mark.skipif(not FIFO, reason="FIFO pipes are unavailable")
 def test_mrs_uses_argument_vector_private_temp_and_cache(tmp_path: Path, monkeypatch):
     provider = tmp_path / "semi;colon.mrs"
     provider.write_bytes(b"fixture-mrs")
@@ -180,6 +201,7 @@ def test_mrs_uses_argument_vector_private_temp_and_cache(tmp_path: Path, monkeyp
     assert not list(tmp_path.glob("xkeen-mrs-*"))
 
 
+@pytest.mark.skipif(not FIFO, reason="FIFO pipes are unavailable")
 def test_mrs_converter_output_is_bounded_before_it_reaches_disk(tmp_path: Path, monkeypatch):
     provider = tmp_path / "provider.mrs"
     provider.write_bytes(b"fixture-mrs")

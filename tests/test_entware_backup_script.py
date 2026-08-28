@@ -285,7 +285,12 @@ def test_entware_backup_stages_archive_when_destination_is_entware_root(tmp_path
     tar_cmd = shutil.which("tar")
     assert tar_cmd is not None
     listing = subprocess.run(
-        [tar_cmd, "-tzf", str(archives[0])],
+        # Архив передаётся именем, а работа идёт из его каталога: GNU tar
+        # принимает абсолютный путь вида ``C:\...`` за адрес удалённого хоста
+        # и пытается открыть соединение. Относительное имя одинаково понятно
+        # и GNU tar, и bsdtar, и на роутере ничего не меняет.
+        [tar_cmd, "-tzf", archives[0].name],
+        cwd=str(archives[0].parent),
         text=True,
         encoding="utf-8",
         errors="replace",
