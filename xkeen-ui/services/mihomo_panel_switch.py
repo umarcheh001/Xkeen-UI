@@ -247,13 +247,12 @@ def public_status(text: str, state: Mapping[str, Any]) -> dict[str, Any]:
     directives = controller_directives(text)
     if any(re.match(r"^[ \t]*external-controller-unix[ \t]*:", line) for line in directives):
         mode = "xkeen"
-    elif (
-        str(state.get("mode") or "") == "xkeen"
-        and has_tcp_controller(text)
-        and not has_browser_dashboard_controller(text)
-    ):
-        # Protected Xkeen mode uses loopback TCP. Honour the persisted switch
-        # marker so it is not mistaken for a pre-existing loopback dashboard.
+    elif str(state.get("mode") or "") == "xkeen" and has_tcp_controller(text):
+        # Xkeen and the user's dashboard now share one user-managed controller,
+        # so the bind address no longer tells the two views apart.  Only the
+        # persisted switch marker does: without it a completed switch would
+        # report "external" again on the next status read and the button would
+        # bounce back to its previous label.
         mode = "xkeen"
     elif has_browser_dashboard_controller(text):
         mode = "external"

@@ -357,7 +357,15 @@ def test_status_route_reports_missing_controller_as_operational_state():
     }
 
 
-def test_status_route_marks_lan_controller_without_secret_for_migration():
+def test_status_route_reports_lan_controller_without_forcing_migration():
+    """Открытый в LAN controller без secret описывается, но не чинится сам.
+
+    Пользователь мог открыть Clash API намеренно — например, чтобы ходить в
+    Zashboard с другого устройства. Поэтому статус остаётся диагностическим:
+    ``mode`` называет вещи своими именами, а ``migration_required`` не
+    поднимается, чтобы панель не предлагала «защитить» одним кликом и не
+    оборвала пользователю доступ.
+    """
     discovery = MihomoClashDiscovery(
         configured=True,
         target=MihomoClashTarget(
@@ -379,7 +387,7 @@ def test_status_route_marks_lan_controller_without_secret_for_migration():
         "recommended_transport": "tcp-loopback",
         "recommended_value": "external-controller: 127.0.0.1:9090 + secret",
         "panel_password_reuse": False,
-        "migration_required": True,
+        "migration_required": False,
         "setup_required": False,
     }
 
