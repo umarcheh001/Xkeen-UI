@@ -714,12 +714,21 @@ def create_app(*, ws_runtime: bool = False):
             pass
 
     try:
-        from services.dns_over_vless import start_watchdog as start_dns_over_vless_watchdog
+        from services.dns_guard import start_guard as start_dns_guard
 
-        start_dns_over_vless_watchdog(
+        # One guard for both assistants: whichever of them currently owns port
+        # 53, it is the same LAN that loses DNS when the core stops answering.
+        try:
+            from mihomo_server_core import save_config as _dns_guard_save_mihomo
+        except Exception:
+            _dns_guard_save_mihomo = None
+
+        start_dns_guard(
             configs_dir=XRAY_CONFIGS_DIR,
             routing_file=ROUTING_FILE,
             ui_state_dir=UI_STATE_DIR,
+            mihomo_config_file=MIHOMO_CONFIG_FILE,
+            save_mihomo_config=_dns_guard_save_mihomo,
             restart_xkeen=restart_xkeen,
             audit=append_restart_log,
         )
@@ -729,8 +738,8 @@ def create_app(*, ws_runtime: bool = False):
 
             core_log_once(
                 "warning",
-                "dns_over_vless_watchdog_failed",
-                "dns-over-vless watchdog init failed (non-fatal)",
+                "dns_guard_failed",
+                "dns guard init failed (non-fatal)",
                 error=str(e),
             )
         except Exception:

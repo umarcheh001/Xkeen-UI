@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from flask import Blueprint, jsonify, request
 
+from services.dns_guard import conflicting_protection
 from services.dns_over_vless import DnsOverVlessError, apply_action, get_status
 
 
@@ -16,6 +17,7 @@ def register_dns_over_vless_routes(
     routing_file: str,
     ui_state_dir: str,
     restart_xkeen: Callable[..., Any],
+    mihomo_config_file: str = "",
     append_restart_log: Callable[..., None] | None = None,
 ) -> None:
     def audit(ok: bool, **meta: Any) -> None:
@@ -55,6 +57,22 @@ def register_dns_over_vless_routes(
         upstreams = payload.get("upstreams", None)
         local_resolver = payload.get("local_resolver", None)
         local_domains = payload.get("local_domains", None)
+        # Both assistants flip the same firmware switch and both want port 53.
+        # Turning the second one on would overwrite the first one's record of the
+        # original setting, leaving nothing able to put it back.
+        if action == "enable":
+            conflict = conflicting_protection(
+                want="dns-over-vless",
+                ui_state_dir=ui_state_dir,
+                mihomo_config_file=mihomo_config_file,
+            )
+            if conflict:
+                message = "Сначала выключите %s: обе защиты DNS одновременно работать не могут." % conflict
+                audit(False, action=action, phase="dns_protection_conflict", summary=message)
+                return jsonify(
+                    {"ok": False, "error": message, "code": "dns_protection_conflict"}
+                ), 409
+
         try:
             result = apply_action(
                 action,

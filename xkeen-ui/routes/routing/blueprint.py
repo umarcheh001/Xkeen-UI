@@ -46,6 +46,7 @@ def create_routing_blueprint(
     strip_json_comments_text: Callable[[str], str],
     restart_xkeen: Callable[..., bool],
     UI_STATE_DIR: str = "",
+    MIHOMO_CONFIG_FILE: str = "",
     append_restart_log: Callable[..., None] | None = None,
     save_operation_diagnostic: Callable[..., None] | None = None,
 ) -> Blueprint:
@@ -80,6 +81,7 @@ def create_routing_blueprint(
         routing_file=ROUTING_FILE,
         ui_state_dir=UI_STATE_DIR,
         restart_xkeen=restart_xkeen,
+        mihomo_config_file=MIHOMO_CONFIG_FILE,
         append_restart_log=append_restart_log,
     )
     register_templates_routes(

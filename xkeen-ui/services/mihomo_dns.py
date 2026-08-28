@@ -814,6 +814,79 @@ def apply_action(
             ) from exc
 
 
+def is_enabled(*, config_file: str, ui_state_dir: str) -> bool:
+    """Cheap check for the shared DNS guard: did this assistant take port 53?"""
+
+    try:
+        state = _load_state(ui_state_dir, config_file)
+    except Exception:
+        return False
+    return bool(state.get("enabled"))
+
+
+def emergency_release(
+    *,
+    config_file: str,
+    ui_state_dir: str,
+    save_config: Callable[[str], Any],
+    restart_xkeen: Callable[..., Any],
+    reason: str,
+) -> dict[str, Any]:
+    """Give port 53 back to KeeneticOS after the guarded core stopped serving.
+
+    The counterpart of :func:`apply_action` for the unattended path.  Unlike a
+    user-driven disable this never rolls back and never fails closed: its only
+    job is to make the LAN resolve names again.  A corrupted snapshot therefore
+    skips the config restore but still hands the port back, because leaving
+    ``dns-override`` on would keep every client without DNS.
+    """
+
+    steps: list[str] = []
+    state = _load_state(ui_state_dir, config_file)
+
+    snapshot_path = str(state.get("original_config") or "")
+    original = _read_text(snapshot_path, None) if snapshot_path else None
+    expected_sha = str(state.get("original_sha256") or "")
+    if original is None:
+        steps.append("snapshot_missing")
+    elif expected_sha and _sha256(original) != expected_sha:
+        # A damaged snapshot must not overwrite a working config.
+        steps.append("snapshot_corrupt")
+        original = None
+
+    if original is not None:
+        try:
+            save_config(original)
+            steps.append("config_restored")
+        except Exception as exc:  # noqa: BLE001
+            steps.append(f"config_failed:{exc}")
+
+    # The port has to be released before the firmware can bind it, so the
+    # override is flipped after the config that owned :53 is gone.
+    desired = bool(state.get("original_dns_override", False))
+    try:
+        _set_dns_override(desired)
+        steps.append("dns_override_restored")
+    except Exception as exc:  # noqa: BLE001
+        steps.append(f"dns_override_failed:{exc}")
+
+    try:
+        restart_xkeen(source="mihomo-dns-guard-release")
+        steps.append("core_restart_requested")
+    except Exception as exc:  # noqa: BLE001
+        steps.append(f"core_restart_failed:{exc}")
+
+    if not _wait_for_port_53(should_be_free=False):
+        steps.append("port_53_still_free")
+
+    released = {"released_at": int(time.time()), "reason": reason, "steps": steps}
+    try:
+        _clear_state(ui_state_dir, config_file)
+    except Exception:
+        pass
+    return released
+
+
 __all__ = [
     "DNS_LISTEN",
     "MANAGED_BEGIN",
@@ -821,5 +894,7 @@ __all__ = [
     "MihomoDnsError",
     "apply_action",
     "build_enabled_config",
+    "emergency_release",
     "get_status",
+    "is_enabled",
 ]

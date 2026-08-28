@@ -597,121 +597,6 @@ def test_clone_pointed_at_direct_by_hand_is_treated_as_tampered(tmp_path: Path, 
 
     assert result["tampered"] is True
     assert result["enabled"] is False
-
-
-def _enabled_install(tmp_path: Path):
-    """A scenario install with the feature switched on."""
-    configs, routing_path, state = _scenario_config(tmp_path)
-    routing = json.loads(routing_path.read_text(encoding="utf-8"))
-    target = dns._select_target(dns._collect_runtime(str(configs), routing), "balancer_main", routing)
-    _write(configs / dns.MANAGED_FRAGMENT, dns._managed_fragment())
-    _write(routing_path, dns._build_enabled_routing(routing, target))
-    _write(
-        state / dns.STATE_FILENAME,
-        {"enabled": True, "original_dns_override": False, "target": {"source": "balancer_main"}},
-    )
-    return configs, routing_path, state
-
-
-def _tick(configs, routing_path, state, restart, counters):
-    return dns.watchdog_tick(
-        configs_dir=str(configs),
-        routing_file=str(routing_path),
-        ui_state_dir=str(state),
-        restart_xkeen=restart,
-        counters=counters,
-    )
-
-
-def test_watchdog_does_nothing_while_the_feature_is_off(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _scenario_config(tmp_path)
-    calls: list[object] = []
-    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: False)
-    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: calls.append(enabled))
-
-    result = _tick(configs, routing_path, state, lambda **k: calls.append(k) or True, {})
-
-    assert result["action"] == "idle"
-    assert calls == []
-
-
-def test_watchdog_stays_quiet_while_dns_answers(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _enabled_install(tmp_path)
-    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: True)
-
-    result = _tick(configs, routing_path, state, lambda **k: True, {"fails": 2, "restarts": 1})
-
-    assert result["action"] == "ok"
-    assert result["fails"] == 0 and result["restarts"] == 0
-
-
-def test_watchdog_restarts_the_core_before_giving_up(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _enabled_install(tmp_path)
-    restarts: list[str] = []
-    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: False)
-
-    counters: Dict[str, Any] = {}
-    actions = []
-    for _ in range(dns.WATCHDOG_FAIL_THRESHOLD):
-        counters = _tick(configs, routing_path, state, lambda **k: restarts.append(k.get("source")) or True, counters)
-        actions.append(counters["action"])
-
-    # Failures are tolerated up to the threshold, then a restart is attempted.
-    assert actions[:-1] == ["watching"] * (dns.WATCHDOG_FAIL_THRESHOLD - 1)
-    assert actions[-1] == "restarted"
-    assert restarts == ["dns-over-vless-watchdog"]
-    # The managed configuration is still in place: nothing was released yet.
-    assert (configs / dns.MANAGED_FRAGMENT).exists()
-
-
-def test_watchdog_recovers_without_releasing_when_the_core_comes_back(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _enabled_install(tmp_path)
-    health = {"ok": False}
-    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: health["ok"])
-
-    counters: Dict[str, Any] = {}
-    for _ in range(dns.WATCHDOG_FAIL_THRESHOLD):
-        counters = _tick(configs, routing_path, state, lambda **k: True, counters)
-    assert counters["action"] == "restarted"
-
-    health["ok"] = True
-    counters = _tick(configs, routing_path, state, lambda **k: True, counters)
-
-    assert counters["action"] == "ok"
-    assert counters["restarts"] == 0
-    assert json.loads((state / dns.STATE_FILENAME).read_text(encoding="utf-8"))["enabled"] is True
-
-
-def test_watchdog_hands_dns_back_to_the_firmware_after_restarts_fail(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _enabled_install(tmp_path)
-    overrides: list[bool] = []
-    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: False)
-    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: overrides.append(enabled))
-    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj: _write(Path(path), obj))
-
-    counters: Dict[str, Any] = {}
-    action = ""
-    for _ in range(dns.WATCHDOG_FAIL_THRESHOLD * (dns.WATCHDOG_RESTART_ATTEMPTS + 1) + 2):
-        counters = _tick(configs, routing_path, state, lambda **k: True, counters)
-        action = counters["action"]
-        if action == "released":
-            break
-
-    assert action == "released"
-    # Port 53 goes back to the firmware resolver...
-    assert overrides == [False]
-    # ...and the managed config is gone, so a recovering core can bind again.
-    assert not (configs / dns.MANAGED_FRAGMENT).exists()
-    written = json.loads(routing_path.read_text(encoding="utf-8"))
-    assert all(
-        item.get("ruleTag") not in {dns.PROXY_RULE_TAG, dns.CAPTURE_RULE_TAG}
-        for item in written["routing"]["rules"]
-    )
-    saved = json.loads((state / dns.STATE_FILENAME).read_text(encoding="utf-8"))
-    assert saved["enabled"] is False
-    assert saved["watchdog"]["reason"]
-
-
 def test_status_reports_an_automatic_release(tmp_path: Path, monkeypatch):
     configs, routing_path, state = _scenario_config(tmp_path)
     _write(
@@ -727,26 +612,6 @@ def test_status_reports_an_automatic_release(tmp_path: Path, monkeypatch):
 
     assert result["watchdog"]["reason"] == "Xray не поднялся"
     assert result["enabled"] is False
-
-
-def test_watchdog_thread_starts_only_once(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _scenario_config(tmp_path)
-    monkeypatch.setattr(dns, "_WATCHDOG_STARTED", False, raising=False)
-
-    kwargs = dict(
-        configs_dir=str(configs),
-        routing_file=str(routing_path),
-        ui_state_dir=str(state),
-        restart_xkeen=lambda **_k: True,
-        interval=3600.0,
-    )
-    first = dns.start_watchdog(**kwargs)
-    second = dns.start_watchdog(**kwargs)
-
-    assert first is True
-    assert second is False
-
-
 def test_status_exposes_the_effective_watchdog_settings(tmp_path: Path, monkeypatch):
     configs, routing, state = _base_config(tmp_path)
     monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
@@ -786,57 +651,6 @@ def test_watchdog_settings_clamp_and_ignore_junk(monkeypatch):
     assert settings["interval"] == dns.WATCHDOG_INTERVAL_BOUNDS[0]
     assert settings["fail_threshold"] == dns.WATCHDOG_FAIL_THRESHOLD
     assert settings["restart_attempts"] == dns.WATCHDOG_RESTART_ATTEMPTS_BOUNDS[1]
-
-
-def test_watchdog_threshold_from_the_environment_delays_the_restart(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _enabled_install(tmp_path)
-    restarts: list[str] = []
-    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: False)
-    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG_FAILS", str(dns.WATCHDOG_FAIL_THRESHOLD + 2))
-
-    counters: Dict[str, Any] = {}
-    actions = []
-    for _ in range(dns.WATCHDOG_FAIL_THRESHOLD + 2):
-        counters = _tick(configs, routing_path, state, lambda **k: restarts.append(k.get("source")) or True, counters)
-        actions.append(counters["action"])
-
-    assert actions[-1] == "restarted"
-    assert actions[:-1] == ["watching"] * (dns.WATCHDOG_FAIL_THRESHOLD + 1)
-
-
-def test_watchdog_without_restart_attempts_releases_dns_at_once(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _enabled_install(tmp_path)
-    restarts: list[str] = []
-    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: False)
-    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: True)
-    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS", "0")
-
-    counters: Dict[str, Any] = {}
-    for _ in range(dns.WATCHDOG_FAIL_THRESHOLD):
-        counters = _tick(configs, routing_path, state, lambda **k: restarts.append(k.get("source")) or True, counters)
-
-    assert counters["action"] == "released"
-    # Перезапусков не было, причина об этом и говорит.
-    assert restarts == ["dns-over-vless-watchdog-release"]
-    assert "перезапуски отключены" in counters["release"]["reason"]
-
-
-def test_watchdog_thread_is_not_started_when_disabled(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _scenario_config(tmp_path)
-    monkeypatch.setattr(dns, "_WATCHDOG_STARTED", False, raising=False)
-    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG", "0")
-
-    started = dns.start_watchdog(
-        configs_dir=str(configs),
-        routing_file=str(routing_path),
-        ui_state_dir=str(state),
-        restart_xkeen=lambda **_k: True,
-    )
-
-    assert started is False
-    assert dns._WATCHDOG_STARTED is False
-
-
 def test_several_proxies_are_combined_into_an_own_balancer(tmp_path: Path):
     configs, routing_path, _state = _scenario_config(tmp_path)
     routing = json.loads(routing_path.read_text(encoding="utf-8"))
@@ -986,36 +800,6 @@ def test_http_contract_accepts_a_list_of_targets(tmp_path: Path, monkeypatch):
 
     assert response.status_code == 200
     assert seen["target_tag"] == ["my_proxy_1", "my_proxy_2"]
-
-
-def test_watchdog_abandons_release_if_the_user_disabled_meanwhile(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _enabled_install(tmp_path)
-    overrides: list[bool] = []
-    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: False)
-    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: overrides.append(enabled))
-
-    real_load = dns._load_state
-    seen = {"calls": 0}
-
-    def flaky_load(path):
-        # The last read happens inside the lock, right before releasing: by
-        # then the user has switched the feature off from the panel.
-        seen["calls"] += 1
-        value = real_load(path)
-        if seen["calls"] > 1 and value.get("enabled"):
-            value = dict(value)
-            value["enabled"] = False
-        return value
-
-    counters: Dict[str, Any] = {"fails": dns.WATCHDOG_FAIL_THRESHOLD - 1, "restarts": dns.WATCHDOG_RESTART_ATTEMPTS}
-    monkeypatch.setattr(dns, "_load_state", flaky_load)
-    result = _tick(configs, routing_path, state, lambda **_k: True, counters)
-
-    assert result["action"] == "idle"
-    assert overrides == []
-    assert (configs / dns.MANAGED_FRAGMENT).exists()
-
-
 def test_install_enabled_before_the_picker_keeps_working(tmp_path: Path, monkeypatch):
     """An upgrade must not disturb a configuration enabled by the old code."""
     configs, routing_path, state = _base_config(tmp_path)
