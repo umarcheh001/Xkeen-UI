@@ -1,7 +1,7 @@
 #######################################################################################################
 # Описание:
-# Встроенная панель XKeen управляет Mihomo через локальный Unix socket; controller не открыт в LAN.
-# Zashboard остаётся optional: для него настройте отдельный защищённый browser-reachable controller осознанно.
+# XKeen UI и Zashboard используют общий Clash API. Адрес controller и secret
+# остаются под вашим управлением; при необходимости ограничьте доступ firewall/VPN.
 # Группа "Заблок. сервисы" содержит список доменов большинства заблокированных ресурсов.
 # Остальные группы YouTube/Discord и тд имеют приоритет над группой "Заблок. сервисы". 
 #######################################################################################################
@@ -19,8 +19,7 @@ tproxy-port: 5001
 routing-mark: 255
 find-process-mode: off
 unified-delay: true
-external-controller: 127.0.0.1:9090
-secret: ""
+external-controller: 0.0.0.0:9090
 external-ui: zashboard
 external-ui-url: https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip
 profile: { store-selected: true }

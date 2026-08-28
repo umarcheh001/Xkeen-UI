@@ -118,7 +118,8 @@ let mihomoGeneratorModuleApi = null;
       
         const SKELETON = `#######################################################################################################
       # Описание:
-      # Встроенная панель XKeen управляет Mihomo через локальный Unix socket. Zashboard остаётся отдельным optional-инструментом и требует осознанной настройки защищённого browser-reachable controller.
+      # XKeen UI и Zashboard используют общий Clash API. Адрес controller и secret
+      # остаются под вашим управлением; при необходимости ограничьте доступ firewall/VPN.
       # Группа "Заблок. сервисы" содержит список доменов большинства заблокированных ресурсов (как снаружи, так и внутри)
       # Остальные группы YouTube/Discord и тд имеют приоритет над группой "Заблок. сервисы". Eсли переопределение не нужно, можно выбрать "Заблок. сервисы" в качестве подключения и управлять всеми группами разом в группе "Заблок. сервисы"
       #######################################################################################################
@@ -136,8 +137,7 @@ let mihomoGeneratorModuleApi = null;
       routing-mark: 255
       find-process-mode: off
       unified-delay: true
-      external-controller: 127.0.0.1:9090
-      secret: ""
+      external-controller: 0.0.0.0:9090
       external-ui: zashboard
       external-ui-url: https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip
       profile: { store-selected: true }
