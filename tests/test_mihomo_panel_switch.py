@@ -81,15 +81,13 @@ def test_loopback_dashboard_is_also_remembered(tmp_path: Path):
     assert public_status(loopback, state)["mode"] == "external"
 
 
-def test_frontend_has_one_button_round_trip_contract():
+def test_frontend_does_not_expose_panel_switch_controls():
     markup = (APP_DIR / "templates" / "panel.html").read_text(encoding="utf-8")
     client = (APP_DIR / "static" / "js" / "features" / "mihomo_clash" / "client.js").read_text(encoding="utf-8")
     index = (APP_DIR / "static" / "js" / "features" / "mihomo_clash" / "index.js").read_text(encoding="utf-8")
-    assert 'id="mihomo-clash-panel-switch"' in markup
-    assert "/api/mihomo/security/panel-switch-preview" in client
-    assert "/api/mihomo/security/panel-switch" in client
-    assert "Вернуться в Xkeen Clash API" in index
-    assert "Вернуть ${panelName}" in index
+    assert 'id="mihomo-clash-panel-switch"' not in markup
+    assert "/api/mihomo/security/panel-switch" not in client
+    assert "panel-switch" not in index
 
 
 def _switch_app(tmp_path: Path, config: Path, restart):

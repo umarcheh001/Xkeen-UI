@@ -61,11 +61,9 @@ test('compact runtime mode switch confirms overrides and stays in the status str
     return {
       mode: height('mihomo-clash-status-mode'),
       egress: height('mihomo-clash-egress-toggle'),
-      panel: height('mihomo-clash-panel-switch'),
     };
   });
   expect(toolbarButtonHeights.mode).toBe(toolbarButtonHeights.egress);
-  expect(toolbarButtonHeights.mode).toBe(toolbarButtonHeights.panel);
 
   await trigger.click();
   await expect(page.locator('#mihomo-clash-mode-menu')).toBeVisible();

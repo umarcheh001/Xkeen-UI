@@ -10,9 +10,6 @@ const RULES_ENDPOINT = '/api/mihomo/clash/rules';
 const PROVIDERS_ENDPOINT = '/api/mihomo/clash/providers';
 const MIGRATION_PREVIEW_ENDPOINT = '/api/mihomo/security/migration-preview';
 const MIGRATION_APPLY_ENDPOINT = '/api/mihomo/security/migration-apply';
-const PANEL_MODE_ENDPOINT = '/api/mihomo/security/panel-mode';
-const PANEL_SWITCH_PREVIEW_ENDPOINT = '/api/mihomo/security/panel-switch-preview';
-const PANEL_SWITCH_ENDPOINT = '/api/mihomo/security/panel-switch';
 const EGRESS_LISTENER_PREVIEW_ENDPOINT = '/api/mihomo/security/egress-listener-preview';
 const EGRESS_LISTENER_APPLY_ENDPOINT = '/api/mihomo/security/egress-listener-apply';
 const WS_TOKEN_ENDPOINT = '/api/ws-token';
@@ -63,28 +60,6 @@ export function setMihomoClashRuntimeMode(mode, options = {}) {
     timeoutMs: 8000,
     retry: 0,
     signal: options.signal,
-  });
-}
-
-export function fetchMihomoPanelMode() {
-  return requestJSON(PANEL_MODE_ENDPOINT, {
-    method: 'GET', cache: 'no-store', credentials: 'same-origin', timeoutMs: 5000, retry: 0,
-  });
-}
-
-export function previewMihomoPanelSwitch(target) {
-  return requestJSON(PANEL_SWITCH_PREVIEW_ENDPOINT, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target: String(target || '') }),
-    credentials: 'same-origin', timeoutMs: 10000, retry: 0,
-  });
-}
-
-export function switchMihomoPanel(target, previewId) {
-  return requestJSON(PANEL_SWITCH_ENDPOINT, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target: String(target || ''), preview_id: String(previewId || ''), confirmed: true }),
-    credentials: 'same-origin', timeoutMs: 60000, retry: 0,
   });
 }
 

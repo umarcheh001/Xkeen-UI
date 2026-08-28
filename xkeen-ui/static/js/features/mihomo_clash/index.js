@@ -1,10 +1,7 @@
 import {
   applyMihomoClashMigration,
-  fetchMihomoPanelMode,
   fetchMihomoClashStatus,
   previewMihomoClashMigration,
-  previewMihomoPanelSwitch,
-  switchMihomoPanel,
   setMihomoClashRuntimeMode,
 } from './client.js';
 import { confirmMihomoAction } from '../mihomo_runtime.js';
@@ -51,8 +48,6 @@ let requestSequence = 0;
 let migrationBusy = false;
 let migrationPreviewId = '';
 let assistantKind = '';
-let panelMode = null;
-let panelSwitchBusy = false;
 let runtimeMode = '';
 let runtimeModeBusy = false;
 const RUNTIME_MODES = new Set(['rule', 'global', 'direct']);
@@ -252,73 +247,6 @@ function renderStatus(state, payload = null) {
     : 'Настройки controller и доступ из LAN не изменяются. Совместимо с Zashboard.');
   assistantKind = nextAssistantKind;
   setHidden(warning, !nextAssistantKind);
-  void refreshPanelMode();
-}
-
-function renderPanelSwitch() {
-  const button = byId('mihomo-clash-panel-switch');
-  if (!button || !panelMode) return;
-  const external = panelMode.mode === 'external';
-  const available = external ? panelMode.can_enable_xkeen : panelMode.can_restore_external;
-  setHidden(button, !available);
-  button.disabled = panelSwitchBusy;
-  const panelName = String(panelMode.panel_name || 'прежнюю панель');
-  setText('mihomo-clash-panel-switch-label', external ? 'Вернуться в Xkeen Clash API' : `Вернуть ${panelName}`);
-  button.setAttribute('data-tooltip', external
-    ? 'Создать backup, включить Xkeen Clash API и перезапустить Mihomo'
-    : `Создать backup и вернуть ${panelName} одной кнопкой`);
-}
-
-async function refreshPanelMode() {
-  try {
-    panelMode = await fetchMihomoPanelMode();
-    renderPanelSwitch();
-  } catch (error) {
-    panelMode = null;
-    setHidden(byId('mihomo-clash-panel-switch'), true);
-  }
-}
-
-async function togglePanelMode() {
-  if (panelSwitchBusy) return false;
-  if (!panelMode) await refreshPanelMode();
-  if (!panelMode) return false;
-  const target = panelMode.mode === 'external' ? 'xkeen' : 'external';
-  const panelName = String(panelMode.panel_name || 'прежнюю панель');
-  const question = target === 'external'
-    ? `Вернуть ${panelName}? Панель создаст backup, восстановит прежний controller и перезапустит Mihomo.`
-    : 'Вернуться в Xkeen Clash API? Панель создаст backup, включит API и перезапустит Mihomo. Настройки доступа не изменяются.';
-  if (!window.confirm(question)) return false;
-  panelSwitchBusy = true;
-  renderPanelSwitch();
-  try {
-    const preview = await previewMihomoPanelSwitch(target);
-    const result = await switchMihomoPanel(target, preview?.preview_id);
-    panelMode = { ...panelMode, ...result };
-    renderPanelSwitch();
-    // The panel switch writes config.yaml server-side; notify the mounted
-    // editor so it reloads immediately instead of requiring Ctrl+F5.
-    try {
-      document.dispatchEvent(new CustomEvent('xkeen:mihomo-config-changed', {
-        detail: { reason: 'panel-switch', target },
-      }));
-    } catch (error) {}
-    if (target === 'external' && result?.external_url) {
-      window.location.assign(String(result.external_url));
-      return true;
-    }
-    window.setTimeout(() => void refreshMihomoClashStatus({ reason: 'panel-switch' }), 500);
-    return true;
-  } catch (error) {
-    const message = error?.data?.rolled_back
-      ? 'Переключение не удалось, прежняя конфигурация автоматически восстановлена.'
-      : (error?.message || 'Не удалось переключить панель.');
-    try { window.toast(message, 'error'); } catch (toastError) { window.alert(message); }
-    return false;
-  } finally {
-    panelSwitchBusy = false;
-    renderPanelSwitch();
-  }
 }
 
 function migrationTransport() {
@@ -528,7 +456,6 @@ function bindWorkspace() {
     if (action === 'migration-refresh') void refreshMigrationPreview();
     if (action === 'migration-apply') void applyMigration();
     if (action === 'migration-close') setHidden(byId('mihomo-clash-migration'), true);
-    if (action === 'panel-switch') void togglePanelMode();
     if (action === 'mode-menu') toggleRuntimeModeMenu();
     const mode = target.dataset.mihomoRuntimeMode;
     if (mode) void changeRuntimeMode(mode);
