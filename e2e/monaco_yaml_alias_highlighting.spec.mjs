@@ -3,6 +3,8 @@ import { test, expect } from './fixtures.mjs';
 test('Monaco marks the YAML alias sigil separately from its name', async ({ page }) => {
   await page.goto('/');
   await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await expect(page.locator('#view-mihomo')).toBeVisible();
+  await page.locator('#mihomo-clash-tab-config').click();
   await page.locator('#mihomo-editor-engine-select').selectOption('monaco');
   await expect(page.locator('#mihomo-editor-monaco .monaco-editor').last()).toBeVisible();
 

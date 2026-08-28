@@ -18,16 +18,21 @@ from services.mihomo_clash_migration import (
 )
 
 
-def test_bundled_templates_and_generator_use_loopback_controller():
+def test_bundled_templates_and_generator_share_a_user_managed_controller():
+    """Шаблоны отдают Clash API пользователю, а не прячут его за unix-сокетом.
+
+    Панель и внешняя панель вроде Zashboard ходят в один и тот же controller,
+    поэтому шаблон обязан оставлять его обычным TCP-адресом: unix-сокет
+    браузерная панель открыть не сможет. Сам адрес и secret настраивает
+    пользователь — шаблон только задаёт рабочий старт.
+    """
     for path in sorted((APP_DIR / "opt" / "etc" / "mihomo" / "templates").glob("*.yaml")):
         text = path.read_text(encoding="utf-8")
-        assert "external-controller: 127.0.0.1:9090" in text
+        assert "external-controller: 0.0.0.0:9090" in text
         assert "external-controller-unix:" not in text
-        assert "external-controller: 0.0.0.0:9090" not in text
     generator = (APP_DIR / "static" / "js" / "features" / "mihomo_generator.js").read_text(encoding="utf-8")
-    assert "external-controller: 127.0.0.1:9090" in generator
+    assert "external-controller: 0.0.0.0:9090" in generator
     assert "external-controller-unix:" not in generator
-    assert "external-controller: 0.0.0.0:9090" not in generator
 
 
 def test_unix_preview_is_non_mutating_and_removes_lan_controller():

@@ -2,11 +2,20 @@ import { test, expect } from './fixtures.mjs';
 
 
 const editorContracts = [
-  { editor: 'port-proxying-editor', save: 'port-proxying-save-btn', status: 'port-proxying-status', min: 156, max: 220 },
-  { editor: 'port-exclude-editor', save: 'port-exclude-save-btn', status: 'port-exclude-status', min: 156, max: 220 },
-  { editor: 'ip-exclude-editor', save: 'ip-exclude-save-btn', status: 'ip-exclude-status', min: 168, max: 240 },
-  { editor: 'xkeen-config-editor', save: 'xkeen-config-save-btn', status: 'xkeen-config-status', min: 220, max: 320 },
+  { editor: 'port-proxying-editor', save: 'port-proxying-save-btn', status: 'port-proxying-status' },
+  { editor: 'port-exclude-editor', save: 'port-exclude-save-btn', status: 'port-exclude-status' },
+  { editor: 'ip-exclude-editor', save: 'ip-exclude-save-btn', status: 'ip-exclude-status' },
+  { editor: 'xkeen-config-editor', save: 'xkeen-config-save-btn', status: 'xkeen-config-status' },
 ];
+
+// Индивидуальные размеры редакторов заменены общей высотой: панель задаёт
+// --xk-mini-editor-height: clamp(210px, 27dvh, 290px), а на узком экране —
+// clamp(190px, 32dvh, 260px). Отступ до футера ушёл в его собственный padding-top.
+const editorBounds = {
+  desktop: { min: 210, max: 290 },
+  mobile: { min: 190, max: 260 },
+};
+const footerGutter = 7;
 
 
 async function mockPorts(page) {
@@ -74,11 +83,11 @@ async function measurePorts(page) {
       return {
         cardHeight: cardRect.height,
         editorHeight: editorRect.height,
-        editorMin: Number.parseFloat(getComputedStyle(card).getPropertyValue('--xk-mini-editor-min')),
-        editorMax: Number.parseFloat(getComputedStyle(card).getPropertyValue('--xk-mini-editor-max')),
         footerDisplay: getComputedStyle(footer).display,
+        footerPaddingTop: Number.parseFloat(getComputedStyle(footer).paddingTop),
         footerTop: footerRect.top,
         editorBottom: editorRect.bottom,
+        saveTop: saveRect.top,
         statusCenter: statusRect.top + statusRect.height / 2,
         saveCenter: saveRect.top + saveRect.height / 2,
         saveHeight: saveRect.height,
@@ -101,22 +110,24 @@ test.describe('Operator Console Stage 4 ports', () => {
       const layout = await measurePorts(page);
 
       expect(layout.overflow).toBeLessThanOrEqual(1);
-      for (let index = 0; index < editorContracts.length; index += 1) {
-        const contract = editorContracts[index];
-        const item = layout.items[index];
-        expect(item.editorMin).toBe(contract.min);
-        expect(item.editorMax).toBe(contract.max);
-        expect(item.editorHeight).toBeGreaterThanOrEqual(contract.min - 1);
-        expect(item.editorHeight).toBeLessThanOrEqual(contract.max + 1);
+      for (const item of layout.items) {
+        expect(item.editorHeight).toBeGreaterThanOrEqual(editorBounds.desktop.min - 1);
+        expect(item.editorHeight).toBeLessThanOrEqual(editorBounds.desktop.max + 1);
         expect(item.footerDisplay).toBe('flex');
-        expect(item.footerTop).toBeGreaterThanOrEqual(item.editorBottom + 7);
+        expect(item.footerTop).toBeGreaterThanOrEqual(item.editorBottom - 1);
+        expect(item.footerPaddingTop).toBeGreaterThanOrEqual(footerGutter);
+        expect(item.saveTop).toBeGreaterThanOrEqual(item.editorBottom + footerGutter);
         expect(Math.abs(item.statusCenter - item.saveCenter)).toBeLessThanOrEqual(1);
         expect(item.saveHeight).toBeLessThanOrEqual(32.5);
         expect(item.saveWidth).toBeLessThan(item.footerWidth * 0.4);
       }
 
-      expect(layout.items[0].cardHeight).toBeLessThan(360);
-      expect(layout.items[0].cardHeight).not.toBe(layout.items[1].cardHeight);
+      // Двухколоночная сетка растягивает карточки: все четыре одной высоты.
+      expect(layout.items[0].cardHeight).toBeLessThanOrEqual(430);
+      for (const item of layout.items) {
+        expect(Math.abs(item.cardHeight - layout.items[0].cardHeight)).toBeLessThanOrEqual(1);
+        expect(Math.abs(item.editorHeight - layout.items[0].editorHeight)).toBeLessThanOrEqual(1);
+      }
 
       await page.locator('#port-proxying-save-btn').click();
       await expect(page.locator('#port-proxying-status')).toHaveText('port_proxying.lst сохранён.');
@@ -130,9 +141,10 @@ test.describe('Operator Console Stage 4 ports', () => {
 
     expect(layout.overflow).toBeLessThanOrEqual(1);
     for (const item of layout.items) {
-      expect(item.editorHeight).toBeGreaterThanOrEqual(item.editorMin - 1);
-      expect(item.editorHeight).toBeLessThanOrEqual(item.editorMax + 1);
-      expect(item.footerTop).toBeGreaterThanOrEqual(item.editorBottom + 7);
+      expect(item.editorHeight).toBeGreaterThanOrEqual(editorBounds.mobile.min - 1);
+      expect(item.editorHeight).toBeLessThanOrEqual(editorBounds.mobile.max + 1);
+      expect(item.footerTop).toBeGreaterThanOrEqual(item.editorBottom - 1);
+      expect(item.saveTop).toBeGreaterThanOrEqual(item.editorBottom + footerGutter);
       expect(item.saveHeight).toBeGreaterThanOrEqual(39.5);
       expect(item.saveWidth).toBeLessThan(item.footerWidth * 0.5);
     }

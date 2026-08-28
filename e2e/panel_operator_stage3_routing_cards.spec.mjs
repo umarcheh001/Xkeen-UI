@@ -183,8 +183,9 @@ async function collectNodeRowGeometry(page) {
       '.xk-sub-node-name',
       '.xk-sub-node-protocol',
       '.xk-sub-node-endpoint-cell',
+      '.xk-sub-node-side',
       '.xk-sub-node-health-cell',
-      '.xk-sub-node-actions',
+      '.xk-sub-node-ping',
     ];
     const cells = selectors.map((selector) => {
       const node = row?.querySelector(selector);

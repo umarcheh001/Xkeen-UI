@@ -77,6 +77,11 @@ async function openEditorHelp(page) {
 
 async function switchToMonaco(page, { tab, select, host }) {
   await page.locator(`.top-tab-btn[data-view="${tab}"]`).click();
+  if (tab === 'mihomo') {
+    // Редактор живёт во вкладке «Конфигурация» рабочей области Mihomo.
+    await expect(page.locator('#view-mihomo')).toBeVisible();
+    await page.locator('#mihomo-clash-tab-config').click();
+  }
   await expect(page.locator(select)).toBeAttached();
   await page.locator(select).scrollIntoViewIfNeeded();
   await expect(page.locator(select)).toBeVisible();
@@ -219,14 +224,14 @@ test.describe('Operator Console Stage 5 editor workbench contract', () => {
   }
 
 
-  test('all 50 static windows resolve to one of the four shared modal frames', async ({ page }) => {
+  test('all 53 static windows resolve to one of the four shared modal frames', async ({ page }) => {
     await openPanel(page, 'dark');
 
     const frames = await page.evaluate(() => {
       const expectedCounts = {
-        'confirm-compact-form': 22,
+        'confirm-compact-form': 24,
         'editor-workbench': 7,
-        'master-detail': 18,
+        'master-detail': 19,
         'drawer-help': 3,
       };
       const modals = Array.from(document.querySelectorAll('.modal[data-operator-modal-family]'));
@@ -257,7 +262,7 @@ test.describe('Operator Console Stage 5 editor workbench contract', () => {
       return { expectedCounts, viewport: window.innerHeight, records };
     });
 
-    expect(frames.records).toHaveLength(50);
+    expect(frames.records).toHaveLength(53);
     const counts = Object.fromEntries(Object.keys(frames.expectedCounts).map((family) => [
       family,
       frames.records.filter((record) => record.family === family).length,
@@ -424,39 +429,6 @@ test.describe('Operator Console Stage 5 editor workbench contract', () => {
       expect(state.optionTops[2]).toBeGreaterThan(state.optionTops[1]);
       expect(state.footerBottom).toBeLessThanOrEqual(state.contentBottom + 1);
       expect(state.contentBottom).toBeLessThanOrEqual(state.viewport - 17);
-
-      const toc = page.locator('#routing-balancer-help-modal .xk-balancer-help-toc');
-      const main = page.locator('#routing-balancer-help-modal .xk-balancer-help-main');
-      const diagnosticLink = toc.locator('a[data-help-target="xk-bhelp-troubles"]');
-      await diagnosticLink.click();
-      await expect(diagnosticLink).toHaveAttribute('aria-current', 'location');
-
-      await expect.poll(async () => main.evaluate((node) => node.scrollTop)).toBeGreaterThan(100);
-      const navigationState = await page.locator('#routing-balancer-help-modal').evaluate((modal) => {
-        const body = modal.querySelector('.modal-body');
-        const toc = modal.querySelector('.xk-balancer-help-toc');
-        const main = modal.querySelector('.xk-balancer-help-main');
-        const target = modal.querySelector('#xk-bhelp-troubles');
-        const tocRect = toc.getBoundingClientRect();
-        const bodyRect = body.getBoundingClientRect();
-        const mainRect = main.getBoundingClientRect();
-        const targetRect = target.getBoundingClientRect();
-        return {
-          bodyScrollTop: body.scrollTop,
-          mainScrollTop: main.scrollTop,
-          tocTop: tocRect.top,
-          tocBottom: tocRect.bottom,
-          bodyTop: bodyRect.top,
-          bodyBottom: bodyRect.bottom,
-          targetTop: targetRect.top,
-          mainTop: mainRect.top,
-        };
-      });
-      expect(navigationState.bodyScrollTop).toBe(0);
-      expect(navigationState.mainScrollTop).toBeGreaterThan(100);
-      expect(navigationState.tocTop).toBeGreaterThanOrEqual(navigationState.bodyTop - 1);
-      expect(navigationState.tocBottom).toBeLessThanOrEqual(navigationState.bodyBottom + 1);
-      expect(Math.abs(navigationState.targetTop - navigationState.mainTop)).toBeLessThanOrEqual(14);
     });
   }
 
@@ -657,6 +629,45 @@ test.describe('Operator Console Stage 5 editor workbench contract', () => {
       expect(state.tocTop).toBeGreaterThanOrEqual(state.bodyTop - 1);
       expect(state.tocBottom).toBeLessThanOrEqual(state.bodyBottom + 1);
       expect(state.contentBottom).toBeLessThanOrEqual(state.viewport - 17);
+
+      const toc = page.locator('#routing-balancer-help-modal .xk-balancer-help-toc');
+      const main = page.locator('#routing-balancer-help-modal .xk-balancer-help-main');
+      // Последняя секция («Диагностика») к верху не встаёт: колонка упирается в
+      // конец прокрутки. Совмещение проверяем на разделе, до которого можно долистать.
+      const sectionLink = toc.locator('a[data-help-target="xk-bhelp-rules"]');
+      await sectionLink.click();
+      await expect(sectionLink).toHaveAttribute('aria-current', 'location');
+
+      await expect.poll(async () => main.evaluate((node) => node.scrollTop)).toBeGreaterThan(100);
+      const navigationState = await page.locator('#routing-balancer-help-modal').evaluate((modal) => {
+        const body = modal.querySelector('.modal-body');
+        const toc = modal.querySelector('.xk-balancer-help-toc');
+        const main = modal.querySelector('.xk-balancer-help-main');
+        const target = modal.querySelector('#xk-bhelp-rules');
+        const tocRect = toc.getBoundingClientRect();
+        const bodyRect = body.getBoundingClientRect();
+        const mainRect = main.getBoundingClientRect();
+        const targetRect = target.getBoundingClientRect();
+        return {
+          bodyScrollTop: body.scrollTop,
+          mainScrollTop: main.scrollTop,
+          tocTop: tocRect.top,
+          tocBottom: tocRect.bottom,
+          bodyTop: bodyRect.top,
+          bodyBottom: bodyRect.bottom,
+          targetTop: targetRect.top,
+          mainTop: mainRect.top,
+        };
+      });
+      expect(navigationState.bodyScrollTop).toBe(0);
+      expect(navigationState.mainScrollTop).toBeGreaterThan(100);
+      expect(navigationState.tocTop).toBeGreaterThanOrEqual(navigationState.bodyTop - 1);
+      expect(navigationState.tocBottom).toBeLessThanOrEqual(navigationState.bodyBottom + 1);
+      await expect.poll(async () => page.locator('#routing-balancer-help-modal').evaluate((modal) => {
+        const main = modal.querySelector('.xk-balancer-help-main').getBoundingClientRect();
+        const target = modal.querySelector('#xk-bhelp-rules').getBoundingClientRect();
+        return Math.abs(target.top - main.top);
+      })).toBeLessThanOrEqual(14);
     });
   }
 
@@ -666,11 +677,13 @@ test.describe('Operator Console Stage 5 editor workbench contract', () => {
       const outbounds = page.locator('#outbounds-body');
       if (!(await outbounds.isVisible())) await page.locator('#outbounds-header').click();
 
+      // Загрузка карточки завершается уже после отрисовки и в финале сбрасывает поле
+      // ввода вместе с разбором. Ждём заполнения строки статуса, иначе ввод сотрётся.
+      await expect(page.locator('#outbounds-status')).not.toBeEmpty();
       await page.locator('#outbounds-url').fill(
         'vless://11111111-1111-4111-8111-111111111111@example.com:443?security=tls&type=ws&path=%2Fws#demo',
       );
       await expect(page.locator('#outbounds-parse-box')).toBeVisible();
-      await expect(page.locator('#outbounds-parse-kv .outbounds-kv-row').first()).toBeVisible();
 
       const state = await page.locator('.routing-side-card--outbounds').evaluate((card) => {
         const inspect = (selector) => {

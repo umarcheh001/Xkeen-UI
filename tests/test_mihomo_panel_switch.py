@@ -29,15 +29,21 @@ rules: []
 
 
 def test_switch_preserves_dashboard_and_unrelated_config(tmp_path: Path):
+    """Переключение вида не трогает ни адрес controller, ни secret.
+
+    Панель и внешняя панель делят один Clash API, настроенный пользователем.
+    Подмена адреса или секрета оборвала бы доступ к дашборду и проверки
+    задержек, поэтому переключение меняет только то, куда смотрит панель.
+    """
     state_file = tmp_path / "switch.json"
     state = remember_external_config(state_file, EXTERNAL)
 
     xkeen = build_switch_preview(EXTERNAL, state, "xkeen")
-    assert "external-controller: 127.0.0.1:9090" in xkeen.content
-    assert "__XKEEN_GENERATED_SECRET__" in xkeen.content
+    assert "external-controller: 0.0.0.0:9090" in xkeen.content
+    assert "secret: keep-me" in xkeen.content
+    assert "__XKEEN_GENERATED_SECRET__" not in xkeen.content
     assert "external-ui: zashboard" in xkeen.content
     assert "rules: []" in xkeen.content
-    assert "keep-me" not in xkeen.content
 
     edited = xkeen.content.replace("rules: []", "rules:\n  - MATCH,DIRECT")
     restored = build_switch_preview(edited, load_state(state_file), "external")
@@ -120,7 +126,10 @@ def test_switch_endpoint_saves_and_can_return_to_external(tmp_path: Path, monkey
     })
     assert response.status_code == 200
     assert response.get_json()["mode"] == "xkeen"
-    assert "external-controller: 127.0.0.1:9090" in saved[-1]
+    # Сохраняется конфигурация пользователя: адрес controller и secret её, а
+    # не подставленные панелью.
+    assert "external-controller: 0.0.0.0:9090" in saved[-1]
+    assert "secret: keep-me" in saved[-1]
     assert "__XKEEN_GENERATED_SECRET__" not in saved[-1]
 
 

@@ -430,9 +430,12 @@ test.describe('Operator Console Stage 4 routing data screens', () => {
     await expect(disabled).toHaveAttribute('data-disabled', '1');
     await expect(disabled).toHaveAttribute('data-open', '1');
     await expect(disabled.locator('.routing-rule-badge.is-disabled')).toHaveText('отключено');
-    await expect(disabled.locator('.routing-rule-disabled-status')).toContainText('RAW JSONC');
-    await expect(disabled.locator('.routing-rule-disabled-note')).toContainText('не участвует в маршрутизации');
-    await expect(disabled.locator('.routing-rule-toggle')).toHaveText('Вернуть правило');
+    // Отдельная строка статуса и примечание убраны: карточка стала компактной,
+    // а упоминание RAW JSONC переехало в подсказку кнопки возврата.
+    const toggle = disabled.locator('.routing-rule-toggle');
+    await expect(toggle).toHaveText('Раскомментировать');
+    await expect(toggle).toHaveAttribute('aria-label', /RAW JSONC/);
+    await expect(toggle).toHaveAttribute('data-tooltip', /RAW JSONC/);
     await expect(page.locator('#routing-rules-add-btn')).toBeDisabled();
     await expect(page.locator('#routing-rules-list .routing-rule-handle')).toHaveCount(0);
   });

@@ -15,6 +15,7 @@ async function openRoutingMihomoValidation(page) {
   await page.goto('/');
   await page.locator('.top-tab-btn[data-view="mihomo"]').click();
   await expect(page.locator('#view-mihomo')).toBeVisible();
+  await page.locator('#mihomo-clash-tab-config').click();
   await expect.poll(() => page.evaluate(() => (
     typeof window.XKeen?.features?.mihomoPanel?.setEditorText === 'function'
   ))).toBe(true);

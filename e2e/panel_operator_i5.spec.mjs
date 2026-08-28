@@ -2,6 +2,15 @@ import { test, expect } from './fixtures.mjs';
 
 const TOP_LEVEL_VIEWS = ['routing', 'xkeen', 'commands', 'files'];
 
+// Части экрана, которые зависят от машины и момента запуска, а не от вёрстки:
+// отметка времени последней проверки ядер и всё, что файловый менеджер читает
+// с реальной файловой системы (листинги, пути, свободное место, статус lftp).
+// Без масок эталон закреплял бы состояние конкретного компьютера.
+const SNAPSHOT_MASKS = {
+  commands: ['#cores-checked-at'],
+  files: ['.fm-list', '.fm-path-input', '#fm-footer-status', '#fm-disabled-note'],
+};
+
 async function openPanel(page, theme, viewport = { width: 1440, height: 900 }) {
   await page.setViewportSize(viewport);
   await page.addInitScript((nextTheme) => {
@@ -112,6 +121,7 @@ test.describe('Operator Console I5 accessibility and responsive contract', () =>
         animations: 'disabled',
         caret: 'hide',
         maxDiffPixels: 300,
+        mask: (SNAPSHOT_MASKS[view] || []).map((selector) => page.locator(`#view-${view} ${selector}`)),
       });
     }
 
