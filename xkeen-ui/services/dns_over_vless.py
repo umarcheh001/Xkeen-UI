@@ -124,8 +124,60 @@ _LOCK = threading.RLock()
 WATCHDOG_INTERVAL = 30.0
 WATCHDOG_FAIL_THRESHOLD = 3
 WATCHDOG_RESTART_ATTEMPTS = 2
+# Setups differ: a slow router needs a longer restart window, an always-on link
+# tolerates a tighter check.  The defaults above stay, the environment tunes them
+# within bounds that keep the guard a guard: it must still check, still retry a
+# little, and still be able to give DNS back.
+WATCHDOG_INTERVAL_BOUNDS = (5.0, 3600.0)
+WATCHDOG_FAIL_THRESHOLD_BOUNDS = (1, 100)
+WATCHDOG_RESTART_ATTEMPTS_BOUNDS = (0, 20)
 _WATCHDOG_LOCK = threading.Lock()
 _WATCHDOG_STARTED = False
+
+
+def _env_number(name: str, default, bounds, cast):
+    raw = str(os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = cast(raw)
+    except Exception:
+        return default
+    low, high = bounds
+    return max(low, min(high, value))
+
+
+def watchdog_enabled() -> bool:
+    """``XKEEN_DNS_OVER_VLESS_WATCHDOG=0`` turns the background check off."""
+    raw = str(os.environ.get("XKEEN_DNS_OVER_VLESS_WATCHDOG") or "").strip().lower()
+    if not raw:
+        return True
+    return raw in {"1", "true", "yes", "on"}
+
+
+def watchdog_settings() -> Dict[str, Any]:
+    """Effective watchdog knobs: defaults unless the environment overrides them."""
+    return {
+        "enabled": watchdog_enabled(),
+        "interval": _env_number(
+            "XKEEN_DNS_OVER_VLESS_WATCHDOG_INTERVAL",
+            WATCHDOG_INTERVAL,
+            WATCHDOG_INTERVAL_BOUNDS,
+            float,
+        ),
+        "fail_threshold": _env_number(
+            "XKEEN_DNS_OVER_VLESS_WATCHDOG_FAILS",
+            WATCHDOG_FAIL_THRESHOLD,
+            WATCHDOG_FAIL_THRESHOLD_BOUNDS,
+            int,
+        ),
+        "restart_attempts": _env_number(
+            "XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS",
+            WATCHDOG_RESTART_ATTEMPTS,
+            WATCHDOG_RESTART_ATTEMPTS_BOUNDS,
+            int,
+        ),
+    }
 
 
 class DnsOverVlessError(RuntimeError):
@@ -1556,13 +1608,24 @@ def watchdog_tick(
     ui_state_dir: str,
     restart_xkeen: Callable[..., Any],
     counters: Optional[Dict[str, Any]] = None,
+    fail_threshold: Optional[int] = None,
+    restart_attempts: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Run one health check and return the updated counters plus the action.
 
     Actions: ``idle`` (feature off), ``ok``, ``watching`` (a failure seen, still
     below the threshold), ``restarted`` (core restart attempted) and
     ``released`` (gave DNS back to the firmware).
+
+    ``fail_threshold`` and ``restart_attempts`` default to the environment
+    settings, so a caller that does not care stays on the documented behaviour.
     """
+    if fail_threshold is None or restart_attempts is None:
+        settings = watchdog_settings()
+        if fail_threshold is None:
+            fail_threshold = int(settings["fail_threshold"])
+        if restart_attempts is None:
+            restart_attempts = int(settings["restart_attempts"])
     result = dict(counters or {})
     result.setdefault("fails", 0)
     result.setdefault("restarts", 0)
@@ -1586,11 +1649,11 @@ def watchdog_tick(
         return result
 
     result["fails"] = int(result["fails"]) + 1
-    if result["fails"] < WATCHDOG_FAIL_THRESHOLD:
+    if result["fails"] < fail_threshold:
         result["action"] = "watching"
         return result
 
-    if int(result["restarts"]) < WATCHDOG_RESTART_ATTEMPTS:
+    if int(result["restarts"]) < restart_attempts:
         result["restarts"] = int(result["restarts"]) + 1
         result["fails"] = 0
         try:
@@ -1600,7 +1663,13 @@ def watchdog_tick(
         result["action"] = "restarted"
         return result
 
-    reason = "Xray не поднялся после %d попыток; DNS возвращён прошивке." % int(result["restarts"])
+    attempts = int(result["restarts"])
+    reason = (
+        "Xray не поднялся после %d попыток перезапуска; DNS возвращён прошивке." % attempts
+        if attempts
+        # Перезапуски отключены настройкой — сторож сразу отдаёт DNS прошивке.
+        else "Xray не отвечает, перезапуски отключены; DNS возвращён прошивке."
+    )
     with _LOCK:
         # The user may have switched the feature off while we were probing;
         # releasing on top of that would fight their decision.
@@ -1624,10 +1693,23 @@ def start_watchdog(
     routing_file: str,
     ui_state_dir: str,
     restart_xkeen: Callable[..., Any],
-    interval: float = WATCHDOG_INTERVAL,
+    interval: Optional[float] = None,
     audit: Optional[Callable[..., None]] = None,
 ) -> bool:
-    """Start the background health check once per process."""
+    """Start the background health check once per process.
+
+    Everything the loop needs is read from the environment once, at startup:
+    the check runs unattended for days and must not change its mind mid-flight.
+    """
+    settings = watchdog_settings()
+    if not settings["enabled"]:
+        return False
+    tick = float(interval if interval else settings["interval"])
+    low, high = WATCHDOG_INTERVAL_BOUNDS
+    tick = max(low, min(high, tick))
+    fail_threshold = int(settings["fail_threshold"])
+    restart_attempts = int(settings["restart_attempts"])
+
     global _WATCHDOG_STARTED
     with _WATCHDOG_LOCK:
         if _WATCHDOG_STARTED:
@@ -1637,7 +1719,7 @@ def start_watchdog(
     def _loop() -> None:
         counters: Dict[str, Any] = {}
         while True:
-            time.sleep(max(5.0, float(interval or WATCHDOG_INTERVAL)))
+            time.sleep(tick)
             try:
                 counters = watchdog_tick(
                     configs_dir=configs_dir,
@@ -1645,6 +1727,8 @@ def start_watchdog(
                     ui_state_dir=ui_state_dir,
                     restart_xkeen=restart_xkeen,
                     counters=counters,
+                    fail_threshold=fail_threshold,
+                    restart_attempts=restart_attempts,
                 )
                 action = counters.get("action")
                 if action in {"restarted", "released"} and audit is not None:

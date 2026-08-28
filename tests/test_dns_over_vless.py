@@ -740,6 +740,81 @@ def test_watchdog_thread_starts_only_once(tmp_path: Path, monkeypatch):
     assert second is False
 
 
+def test_watchdog_settings_follow_the_environment(monkeypatch):
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG_INTERVAL", "120")
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG_FAILS", "5")
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS", "0")
+
+    settings = dns.watchdog_settings()
+
+    assert settings["enabled"] is True
+    assert settings["interval"] == 120.0
+    assert settings["fail_threshold"] == 5
+    assert settings["restart_attempts"] == 0
+
+
+def test_watchdog_settings_clamp_and_ignore_junk(monkeypatch):
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG_INTERVAL", "1")
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG_FAILS", "не число")
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS", "999")
+
+    settings = dns.watchdog_settings()
+
+    # Слишком частая проверка прижата к нижней границе, мусор игнорируется.
+    assert settings["interval"] == dns.WATCHDOG_INTERVAL_BOUNDS[0]
+    assert settings["fail_threshold"] == dns.WATCHDOG_FAIL_THRESHOLD
+    assert settings["restart_attempts"] == dns.WATCHDOG_RESTART_ATTEMPTS_BOUNDS[1]
+
+
+def test_watchdog_threshold_from_the_environment_delays_the_restart(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _enabled_install(tmp_path)
+    restarts: list[str] = []
+    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: False)
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG_FAILS", str(dns.WATCHDOG_FAIL_THRESHOLD + 2))
+
+    counters: Dict[str, Any] = {}
+    actions = []
+    for _ in range(dns.WATCHDOG_FAIL_THRESHOLD + 2):
+        counters = _tick(configs, routing_path, state, lambda **k: restarts.append(k.get("source")) or True, counters)
+        actions.append(counters["action"])
+
+    assert actions[-1] == "restarted"
+    assert actions[:-1] == ["watching"] * (dns.WATCHDOG_FAIL_THRESHOLD + 1)
+
+
+def test_watchdog_without_restart_attempts_releases_dns_at_once(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _enabled_install(tmp_path)
+    restarts: list[str] = []
+    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: False)
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: True)
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS", "0")
+
+    counters: Dict[str, Any] = {}
+    for _ in range(dns.WATCHDOG_FAIL_THRESHOLD):
+        counters = _tick(configs, routing_path, state, lambda **k: restarts.append(k.get("source")) or True, counters)
+
+    assert counters["action"] == "released"
+    # Перезапусков не было, причина об этом и говорит.
+    assert restarts == ["dns-over-vless-watchdog-release"]
+    assert "перезапуски отключены" in counters["release"]["reason"]
+
+
+def test_watchdog_thread_is_not_started_when_disabled(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "_WATCHDOG_STARTED", False, raising=False)
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG", "0")
+
+    started = dns.start_watchdog(
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+    )
+
+    assert started is False
+    assert dns._WATCHDOG_STARTED is False
+
+
 def test_several_proxies_are_combined_into_an_own_balancer(tmp_path: Path):
     configs, routing_path, _state = _scenario_config(tmp_path)
     routing = json.loads(routing_path.read_text(encoding="utf-8"))

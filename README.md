@@ -162,6 +162,19 @@ http://<IP_роутера>:<порт>/
 
 Для подписок Mihomo работает та же логика с собственными переменными: `XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER`, `XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER_TICK`, `XKEEN_MIHOMO_SUBSCRIPTIONS_LOOKAHEAD_SEC`, `XKEEN_MIHOMO_SUBSCRIPTIONS_RESTART_BATCH`.
 
+## Сторож DNS-over-VLESS
+
+Пока DNS-over-VLESS включён, порт 53 принадлежит Xray, поэтому фоновый сторож следит за ядром и, если оно не поднимается, возвращает DNS прошивке. Подробности — в [docs/dns-over-vless.md](docs/dns-over-vless.md).
+
+Переменные окружения:
+
+- `XKEEN_DNS_OVER_VLESS_WATCHDOG=0` — не запускать сторожа. При отказе ядра сеть останется без DNS до ручного вмешательства.
+- `XKEEN_DNS_OVER_VLESS_WATCHDOG_INTERVAL` — период проверки в секундах (по умолчанию `30`, диапазон 5–3600).
+- `XKEEN_DNS_OVER_VLESS_WATCHDOG_FAILS` — сколько сбоев подряд считать отказом (по умолчанию `3`, диапазон 1–100).
+- `XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS` — сколько раз пробовать перезапустить ядро перед возвратом DNS прошивке (по умолчанию `2`, диапазон 0–20; `0` — отдать сразу).
+
+Значения читаются при старте панели, поэтому после правки её нужно перезапустить.
+
 ## Управление сервисом
 
 ```sh
