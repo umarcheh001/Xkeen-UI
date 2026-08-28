@@ -237,6 +237,8 @@ function renderStatus(state, payload = null) {
   // Keep the status payload for diagnostics, but do not offer or run that
   // migration automatically: controller access is intentionally left under
   // the user's control so Xkeen and Zashboard can coexist.
+  // The legacy payload?.security?.migration_required field is ignored on
+  // purpose; it remains available only for backwards-compatible diagnostics.
   const setupRequired = !!(payload?.security?.setup_required);
   const nextAssistantKind = setupRequired ? 'setup' : '';
   if (warning) warning.dataset.kind = nextAssistantKind;

@@ -1,10 +1,10 @@
 """Durable, controller-only switching between Xkeen Clash API and a user UI.
 
 The user's dashboard (Zashboard, MetaCubeXD, etc.) is selected by ``external-ui``
-and is intentionally never changed here.  Xkeen only needs to replace the
-controller transport.  Keeping the original controller directives separately
-lets us restore the dashboard without rolling back unrelated edits in
-``config.yaml``.
+and is intentionally never changed here.  Xkeen shares the controller already
+configured by the user; switching views must not rewrite bind addresses or
+secrets. Keeping the original controller directives separately lets us restore
+the dashboard without rolling back unrelated edits in ``config.yaml``.
 """
 
 from __future__ import annotations
@@ -227,11 +227,12 @@ def build_switch_preview(text: str, state: Mapping[str, Any], target: str) -> Pa
     normalized = str(target or "").strip().lower()
     panel_name = str(state.get("panel_name") or panel_name_from_config(text))
     if normalized == "xkeen":
-        # Keep the protected Xkeen facade on loopback TCP. This preserves the
-        # delay-probe behaviour of browser dashboards on embedded Mihomo builds
-        # while still closing LAN access and generating a private credential at
-        # apply time.
-        content = build_safe_mihomo_config(text, prefer_unix=False).content
+        # Xkeen and an external dashboard (for example Zashboard) intentionally
+        # share the same user-managed Clash controller.  Do not rewrite the
+        # bind address or generate/replace a secret when switching views: API
+        # security is the user's responsibility and changing it can break
+        # dashboard reachability and proxy health checks.
+        content = str(text or "")
         return PanelSwitchPreview("xkeen", content, panel_name)
     if normalized != "external":
         raise ValueError("panel_switch_target_invalid")
