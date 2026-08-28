@@ -395,6 +395,7 @@ test('routing Mihomo proxy tools use a compact operator empty state', async ({ p
   await page.goto('/');
   await page.locator('.top-tab-btn[data-view="mihomo"]').click();
   await expect(page.locator('#view-mihomo')).toBeVisible();
+  await page.locator('#mihomo-clash-tab-config').click();
 
   const menu = page.locator('.xk-mihomo-menu');
   await menu.locator('summary').click();
@@ -431,6 +432,7 @@ test('routing Mihomo proxy tools keep a scrollable resize-safe workbench and ali
   await page.goto('/');
   await page.locator('.top-tab-btn[data-view="mihomo"]').click();
   await expect(page.locator('#view-mihomo')).toBeVisible();
+  await page.locator('#mihomo-clash-tab-config').click();
 
   const menu = page.locator('.xk-mihomo-menu');
   await menu.locator('summary').click();

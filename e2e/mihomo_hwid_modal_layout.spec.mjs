@@ -6,6 +6,7 @@ test('HWID subscription uses the resizable Operator workbench and stretches its 
   await page.goto('/');
   await page.locator('.top-tab-btn[data-view="mihomo"]').click();
   await expect(page.locator('#view-mihomo')).toBeVisible();
+  await page.locator('#mihomo-clash-tab-config').click();
   const menu = page.locator('.xk-mihomo-menu');
   await menu.locator('summary').click();
   await expect(page.locator('#mihomo-hwid-sub-btn')).toBeVisible();
@@ -60,6 +61,8 @@ test('HWID device profile is compact, editable, and resets to Mihomo panel defau
   await page.addInitScript(() => localStorage.removeItem('xkeen.mihomo.hwid.device-profile.v1'));
   await page.goto('/');
   await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await expect(page.locator('#view-mihomo')).toBeVisible();
+  await page.locator('#mihomo-clash-tab-config').click();
   const menu = page.locator('.xk-mihomo-menu');
   await menu.locator('summary').click();
   await page.locator('#mihomo-hwid-sub-btn').click();
