@@ -16035,7 +16035,9 @@ body.panel-page .routing-side-card--outbounds #outbounds-body.xk-outbounds-summa
 
 body.panel-page .routing-side-card--outbounds #outbounds-body .outbounds-hint-field {
   display: grid;
-  grid-template-rows: auto var(--op-control-h);
+  /* The track has to grow with the control: on mobile the shared touch-target
+   * rule lifts the select to 40px, and a fixed row would let it overflow. */
+  grid-template-rows: auto minmax(var(--op-control-h), auto);
   gap: 4px;
   min-width: 0;
 }
@@ -16048,10 +16050,15 @@ body.panel-page .routing-side-card--outbounds #outbounds-body .outbounds-hint-fi
   line-height: 1.2;
 }
 
+/* Height stays deliberately free of !important: the selector is specific
+ * enough to hold the compact desktop control height on its own, while the
+ * 40px mobile touch-target rule keeps the priority it needs. Marking it
+ * important here made these three selects the only controls in the panel
+ * that stayed at 32px on a phone. */
 body.panel-page .routing-side-card--outbounds #outbounds-body .outbounds-hint-field .xray-log-select {
   width: 100%;
-  min-height: var(--op-control-h) !important;
-  height: var(--op-control-h) !important;
+  min-height: var(--op-control-h);
+  height: var(--op-control-h);
   padding: 0 26px 0 8px !important;
   border-color: var(--op-border) !important;
   border-radius: var(--op-control-radius) !important;

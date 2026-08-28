@@ -1,6 +1,9 @@
 import { test, expect } from './fixtures.mjs';
 
 
+// Расстояние между блоками шапки: gap: 7px у .header-center и соседей.
+const headerGap = 7;
+
 const restartLines = [
   '[2026-07-29 09:10:00] source=routing result=OK file=03_routing.json duration_ms=41\n',
   '[2026-07-29 09:12:00] source=xray-preflight result=FAIL file=04_outbounds.json phase=validation returncode=23 summary=invalid_rule\n',
@@ -101,7 +104,10 @@ async function readLogsGeometry(page) {
 
 
 test.describe('Operator Console Stage 4 logs', () => {
-  test('header keeps the Xray status separate from the centered core selector', async ({ page }) => {
+  // Шапка сознательно ушла от абсолютного центрирования: ядро и бейдж логов
+  // теперь участвуют в потоке, чтобы широкая сводка справа сдвигала их, а не
+  // закрашивала. См. комментарий у .panel-shell-center в panel-operator.css.
+  test('header keeps the Xray status separate from the core selector', async ({ page }) => {
     await openLogs(page, 'dark', { width: 1440, height: 900 });
 
     const geometry = await page.evaluate(() => {
@@ -123,15 +129,19 @@ test.describe('Operator Console Stage 4 logs', () => {
         badgePosition: getComputedStyle(badge.parentElement).position,
         badgeTransform: getComputedStyle(badge.parentElement).transform,
         headerCenter: box(document.querySelector('.header-center')),
-        viewportCenter: innerWidth / 2,
+        headerLeft: box(document.querySelector('.header-title-group')),
+        headerRight: box(document.querySelector('.header-right')),
+        pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       };
     });
 
-    expect(geometry.core.center).toBeCloseTo(geometry.viewportCenter, 0);
-    expect(geometry.headerCenter.center).toBeCloseTo(geometry.viewportCenter, 0);
-    expect(geometry.badge.left).toBeGreaterThanOrEqual(geometry.core.right + 8);
-    expect(geometry.badgePosition).toBe('absolute');
-    expect(geometry.badgeTransform).not.toBe('none');
+    // Группа стоит в потоке между заголовком и правой сводкой, ничего не перекрывая.
+    expect(geometry.badgePosition).toBe('static');
+    expect(geometry.badgeTransform).toBe('none');
+    expect(geometry.badge.left).toBeGreaterThanOrEqual(geometry.core.right + headerGap);
+    expect(geometry.headerCenter.left).toBeGreaterThanOrEqual(geometry.headerLeft.right + headerGap);
+    expect(geometry.headerCenter.right).toBeLessThanOrEqual(geometry.headerRight.left);
+    expect(geometry.pageOverflow).toBeLessThanOrEqual(1);
     await expect(page.locator('#xray-logs-badge use')).toHaveAttribute('href', /#xk-terminal$/);
   });
 
