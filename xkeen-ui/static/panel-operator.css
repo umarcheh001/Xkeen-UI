@@ -13411,6 +13411,14 @@ body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-d
   line-height: 1.4;
 }
 
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-status-summary {
+  color: var(--op-text);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-status-text {
+  color: var(--op-text-muted);
+}
+
 body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-dns-over-vless-safety {
   gap: 6px;
 }

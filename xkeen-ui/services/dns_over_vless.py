@@ -1841,6 +1841,9 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
         "direct_outbound": _direct_outbound_tag(runtime),
         "route_drift": drift,
         "watchdog": state.get("watchdog") if isinstance(state.get("watchdog"), dict) else None,
+        # The card explains what guards the feature, so it needs the values that
+        # are actually in force — defaults or environment overrides alike.
+        "watchdog_settings": watchdog_settings(),
         "selected_target": selected_tag,
         "selected_targets": selected_tags,
         "default_target": default_tag,

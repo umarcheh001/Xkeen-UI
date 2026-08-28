@@ -286,7 +286,14 @@ def test_frontend_has_dns_button_modal_and_guard_copy():
     assert "renderRoute" in script
     assert 'id="routing-dns-over-vless-route-fallback"' in template
     assert "Резервирование сохранено" in script
-    assert "Сторож отключил защиту" in script
+    assert "Сторож снял защиту" in script
+    # Карточка объясняет состояние словами, а не только цветной меткой.
+    assert "describeState" in script
+    assert "конфигурация совместима, можно включать" in script
+    assert "служебная конфигурация и настройка роутера согласованы" in script
+    assert "осталась неполная настройка от прерванной операции" in script
+    assert "ядро не поднялось, DNS возвращён прошивке" in script
+    assert "Сторож проверяет ядро каждые" in script
     assert 'id="routing-dns-over-vless-multi"' in template
     assert "Балансировать между несколькими прокси" in template
     assert 'id="routing-dns-over-vless-upstreams"' in template
@@ -738,6 +745,21 @@ def test_watchdog_thread_starts_only_once(tmp_path: Path, monkeypatch):
 
     assert first is True
     assert second is False
+
+
+def test_status_exposes_the_effective_watchdog_settings(tmp_path: Path, monkeypatch):
+    configs, routing, state = _base_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG_INTERVAL", "45")
+
+    result = dns.get_status(configs_dir=str(configs), routing_file=str(routing), ui_state_dir=str(state))
+
+    # Карточка объясняет пользователю условия сторожа, поэтому берёт их из статуса.
+    assert result["watchdog_settings"]["enabled"] is True
+    assert result["watchdog_settings"]["interval"] == 45.0
+    assert result["watchdog_settings"]["fail_threshold"] == dns.WATCHDOG_FAIL_THRESHOLD
+    assert result["watchdog_settings"]["restart_attempts"] == dns.WATCHDOG_RESTART_ATTEMPTS
 
 
 def test_watchdog_settings_follow_the_environment(monkeypatch):

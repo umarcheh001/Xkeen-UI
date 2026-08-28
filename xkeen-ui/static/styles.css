@@ -19296,7 +19296,9 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
 }
 .routing-dns-over-vless-badge[data-state="enabled"] { color: #a7f3d0; background: rgba(5, 150, 105, .2); }
 .routing-dns-over-vless-badge[data-state="blocked"] { color: #fde68a; background: rgba(217, 119, 6, .2); }
-.routing-dns-over-vless-status { color: var(--modal-text); line-height: 1.5; }
+.routing-dns-over-vless-status { display: grid; gap: 3px; color: var(--modal-text); line-height: 1.5; }
+.routing-dns-over-vless-status-summary { font-weight: 600; }
+.routing-dns-over-vless-status-text { color: var(--modal-muted); }
 .routing-dns-over-vless-route { display: grid; gap: 6px; }
 .routing-dns-over-vless-route label { color: var(--modal-text); font-weight: 600; }
 .routing-dns-over-vless-route select { width: 100%; }

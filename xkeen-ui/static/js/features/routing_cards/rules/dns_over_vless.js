@@ -311,6 +311,84 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       : `Резервирование не переносится: ${plan.reason}.`;
   }
 
+  function plural(count, one, many) {
+    const n = Math.abs(Number(count) || 0);
+    return (n % 10 === 1 && n % 100 !== 11) ? one : many;
+  }
+
+  // Формулировка сторожа собирается из действующих настроек, а не из констант:
+  // пользователь мог изменить их переменными окружения.
+  function watchdogText(data) {
+    const cfg = (data && data.watchdog_settings) || null;
+    if (cfg && cfg.enabled === false) {
+      return {
+        text: 'Сторож отключён настройкой: если ядро упадёт, сеть останется без разрешения имён, пока вы не вмешаетесь вручную.',
+        kind: 'warn',
+      };
+    }
+    const interval = Math.round(Number(cfg && cfg.interval) || 30);
+    const fails = Math.round(Number(cfg && cfg.fail_threshold) || 3);
+    const restarts = Math.round(Number(cfg && cfg.restart_attempts) || 0);
+    const tail = restarts > 0
+      ? `перезапустит ядро (до ${restarts} ${plural(restarts, 'попытки', 'попыток')}), а если не поможет — вернёт DNS роутеру`
+      : 'сразу вернёт DNS роутеру — перезапуски отключены настройкой';
+    return {
+      text: `Сторож проверяет ядро каждые ${interval} с; после ${fails} ${plural(fails, 'сбоя', 'сбоев')} подряд ${tail}.`,
+      kind: 'ok',
+    };
+  }
+
+  // Каждому состоянию — короткая расшифровка рядом с бейджем и объяснение
+  // обычными словами: что сейчас происходит с DNS и что делать дальше.
+  function describeState(data, flags) {
+    if (flags.enabled) {
+      return {
+        badge: 'Включено',
+        state: 'enabled',
+        summary: 'служебная конфигурация и настройка роутера согласованы',
+        text: 'DNS-запросы всей сети уходят внутрь туннеля Xray: провайдер видит только зашифрованное соединение, а не список сайтов. Порт 53 обслуживает Xray, штатный резолвер роутера выключен.',
+      };
+    }
+    if (flags.released) {
+      return {
+        badge: 'Отключено сторожем',
+        state: 'blocked',
+        summary: 'ядро не поднялось, DNS возвращён прошивке',
+        text: 'Ядро Xray перестало отвечать, и сторож вернул разрешение имён прошивке роутера, чтобы сеть не осталась без интернета. Сейчас DNS-запросы идут в открытом виде. Разберитесь, почему упало ядро, и включите защиту заново — сама она не вернётся.',
+      };
+    }
+    if (data && data.partial) {
+      return {
+        badge: 'Нужно восстановить',
+        state: 'blocked',
+        summary: 'осталась неполная настройка от прерванной операции',
+        text: 'Часть служебных объектов на месте, часть — нет, и в таком виде DNS через туннель не работает. Кнопка ниже удалит только то, что создавала панель, и вернёт разрешение имён роутеру.',
+      };
+    }
+    if (data && data.prepared) {
+      return {
+        badge: 'Нужно восстановить',
+        state: 'blocked',
+        summary: 'конфигурация Xray готова, но перехват DNS на роутере не включён',
+        text: 'Запросы пока идут мимо туннеля. Включите ещё раз, чтобы панель довела настройку до конца, или отключите — тогда служебная конфигурация будет удалена.',
+      };
+    }
+    if (flags.blocked) {
+      return {
+        badge: 'Требует внимания',
+        state: 'blocked',
+        summary: 'найден конфликт: занятый порт, чужой DNS-блок или своё правило на 53',
+        text: 'Включение остановлено, чтобы не сломать уже настроенную маршрутизацию. Что именно мешает — в списке ниже; после того как уберёте конфликт, проверка пройдёт сама.',
+      };
+    }
+    return {
+      badge: 'Готово',
+      state: 'ready',
+      summary: 'конфигурация совместима, можно включать',
+      text: 'Сейчас имена разрешает штатный резолвер роутера, и провайдер видит, к каким доменам обращается сеть. При включении панель проверит конфигурацию во временном каталоге, сохранит снимок и протестирует DNS: если что-то пойдёт не так, всё вернётся как было.',
+    };
+  }
+
   function render(data) {
     status = data || null;
     const badge = $(DOM.badge);
@@ -326,30 +404,51 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     // An automatic release is not a neutral "ready" state: the protection was
     // switched off by itself and the user has to know.
     const released = !enabled && !!(data && data.watchdog && data.watchdog.reason);
+    const info = describeState(data, { enabled, canDisable, blocked, released });
     if (badge) {
-      badge.textContent = enabled
-        ? 'Включено'
-        : (released ? 'Отключено сторожем' : (canDisable ? 'Нужно восстановить' : (blocked ? 'Требует внимания' : 'Готово')));
-      badge.dataset.state = enabled ? 'enabled' : ((released || canDisable || blocked) ? 'blocked' : 'ready');
+      badge.textContent = info.badge;
+      badge.dataset.state = info.state;
+      // Расшифровка целиком не помещается в бейдж, но нужна для подсказки и
+      // для тех, кто читает карточку экранным диктором.
+      badge.title = `${info.badge} — ${info.summary}`;
     }
     if (dot) {
-      dot.dataset.state = enabled ? 'enabled' : ((released || canDisable || blocked) ? 'blocked' : 'off');
+      dot.dataset.state = enabled ? 'enabled' : (info.state === 'ready' ? 'off' : 'blocked');
     }
     if (text) {
-      if (enabled) text.textContent = 'DNS-over-VLESS активен: Xray-конфигурация и DNS override Keenetic согласованы.';
-      else if (data && data.partial) text.textContent = 'Обнаружена неполная настройка DNS-over-VLESS. Панель может удалить только свои объекты и восстановить DNS override.';
-      else if (data && data.prepared) text.textContent = 'Xray-конфигурация подготовлена, но DNS override Keenetic ещё не активен.';
-      else if (data && data.watchdog && data.watchdog.reason) text.textContent = 'DNS-over-VLESS был отключён автоматически: ядро не отвечало, и DNS вернулся к прошивке Keenetic.';
-      else if (blocked) text.textContent = 'Однокнопочная настройка остановлена, чтобы не затронуть существующую маршрутизацию.';
-      else text.textContent = 'Конфигурация совместима. После подтверждения панель проверит, сохранит и протестирует DNS автоматически.';
+      text.textContent = '';
+      const summary = document.createElement('b');
+      summary.className = 'routing-dns-over-vless-status-summary';
+      summary.textContent = `${info.badge} — ${info.summary}`;
+      const body = document.createElement('span');
+      body.className = 'routing-dns-over-vless-status-text';
+      body.textContent = info.text;
+      text.appendChild(summary);
+      text.appendChild(body);
     }
 
     if (data) {
-      addDetail(`Активное ядро: ${data.active_core || 'не определено'}`, data.active_core === 'xray' ? 'ok' : 'warn');
-      if (data.target && data.target.label) addDetail(`Маршрут DNS: ${data.target.label}`, 'ok');
-      addDetail(`Keenetic DNS override: ${data.dns_override === true ? 'включён' : (data.dns_override === false ? 'выключен' : 'не определён')}`, data.dns_override == null ? 'warn' : 'ok');
+      const core = data.active_core || '';
+      addDetail(
+        core === 'xray'
+          ? 'Активное ядро: Xray — то, что нужно для DNS-over-VLESS.'
+          : `Активное ядро: ${core || 'не определено'}. DNS-over-VLESS работает только с Xray.`,
+        core === 'xray' ? 'ok' : 'warn',
+      );
+      if (data.target && data.target.label) addDetail(`DNS-запросы идут через: ${data.target.label}`, 'ok');
+      addDetail(
+        data.dns_override === true
+          ? 'Перехват DNS на роутере: включён — порт 53 отдан Xray.'
+          : (data.dns_override === false
+            ? 'Перехват DNS на роутере: выключен — имена разрешает штатный резолвер.'
+            : 'Перехват DNS на роутере: определить не удалось.'),
+        data.dns_override == null ? 'warn' : 'ok',
+      );
       if (data.watchdog && data.watchdog.reason) {
-        addDetail(`Сторож отключил защиту: ${data.watchdog.reason} Порт 53 снова обслуживает Keenetic.`, 'warn');
+        addDetail(`Сторож снял защиту: ${data.watchdog.reason} Порт 53 снова обслуживает прошивка роутера.`, 'warn');
+      } else {
+        const guard = watchdogText(data);
+        addDetail(guard.text, guard.kind);
       }
       if (data.route_drift) {
         const drift = data.route_drift;
