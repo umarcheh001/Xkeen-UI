@@ -90,11 +90,21 @@ const MIHOMO_RELEASED = {
   },
 };
 
+// Оба окна снимаются в обеих темах: тексты сторожа читают и там, и там.
+const THEME = (process.env.XKEEN_GUARD_SHOTS_THEME === 'dark') ? 'dark' : 'light';
+
 async function shoot(page, selector, name) {
-  await page.locator(selector).screenshot({ path: `${SHOTS}/${name}.png` });
+  await page.locator(selector).screenshot({ path: `${SHOTS}/${name}-${THEME}.png` });
+}
+
+async function applyTheme(page) {
+  await page.addInitScript((theme) => {
+    try { localStorage.setItem('xkeen-theme', theme); } catch (error) {}
+  }, THEME);
 }
 
 async function openVless(page, status) {
+  await applyTheme(page);
   await page.route('**/api/routing/dns-over-vless', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(status) });
   });
@@ -106,6 +116,7 @@ async function openVless(page, status) {
 }
 
 async function openMihomo(page, status) {
+  await applyTheme(page);
   await page.route('**/api/mihomo/dns', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(status) });
   });
