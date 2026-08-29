@@ -19262,7 +19262,7 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
 .routing-dns-over-vless-dot[data-state="enabled"] { background: #34d399; box-shadow: 0 0 0 2px rgba(52, 211, 153, .15); }
 .routing-dns-over-vless-dot[data-state="blocked"] { background: #f59e0b; }
 
-.routing-dns-over-vless-modal-content { max-width: 760px; }
+.routing-dns-over-vless-modal-content { max-width: 920px; }
 .routing-dns-over-vless-body { display: grid; gap: 14px; }
 .routing-dns-over-vless-lead {
   display: grid;

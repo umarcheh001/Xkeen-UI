@@ -13344,16 +13344,27 @@ body.panel-page .modal[data-operator-modal-family="confirm-compact-form"] .modal
  * large empty header/footer around a handful of status rows and also exposed
  * a floating “Resize” tooltip. Keep its frame content-sized and opt out of
  * the generic resizer without changing any runtime hooks. */
+/* Both dialogs are tall forms, so they open pinned to the top of the viewport
+ * and take all the height the screen allows instead of being centred inside a
+ * fixed frame — centring wasted the bottom half of a tall screen and pushed the
+ * body into a needless scroll. */
+body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) {
+  align-items: flex-start !important;
+  padding: 16px;
+}
+
 body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-dns-over-vless-modal-content {
   display: grid !important;
   /* The body row must be allowed to shrink below its content, otherwise the
    * grid overflows the max-height and the footer with the action buttons is
    * cut off until the dialog is dragged (which drops the max-height). */
   grid-template-rows: auto minmax(0, 1fr) auto;
-  width: min(760px, calc(100vw - 36px));
+  /* Width comes from the xk-modal-width-* class on the content element, so the
+   * two dialogs sharing this rule can size themselves independently. */
+  width: min(var(--xk-modal-width, 760px), calc(100vw - 36px));
   height: auto !important;
   min-height: 0 !important;
-  max-height: min(880px, calc(100dvh - 36px));
+  max-height: calc(100dvh - 32px);
   resize: none !important;
 }
 

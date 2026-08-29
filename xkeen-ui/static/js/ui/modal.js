@@ -177,6 +177,8 @@
   // Modal positioning + drag
   // ---------------------------------------------------------------------------
   const PAD = 8;
+  // How far the pointer must travel before a header press counts as a drag.
+  const DRAG_SLOP = 3;
   // Keep dragged/opened modals in a bounded stack. The global toast portal is
   // deliberately rendered just above Z_TOP_LIMIT so action results stay
   // readable while a modal remains open; confirmations still lead this stack.
@@ -660,28 +662,15 @@
     const w = Math.max(200, r.width || 520);
     const h = Math.max(150, r.height || 320);
 
-    // Freeze current position into fixed coordinates.
-    try {
-      contentEl.style.position = 'fixed';
-      contentEl.style.left = Math.round(r.left) + 'px';
-      contentEl.style.top = Math.round(r.top) + 'px';
-      contentEl.style.width = Math.round(w) + 'px';
-      contentEl.style.height = Math.round(h) + 'px';
-      contentEl.style.maxWidth = 'none';
-      contentEl.style.maxHeight = 'none';
-      // Keep the physical geometry stable and move it with a compositor
-      // transform below. Updating `left`/`top` on every pointer event makes
-      // large master/detail modals (notably the DAT index) repaint their
-      // entire scrollable content and feels jerky on lower-powered devices.
-      contentEl.style.transform = 'translate3d(0, 0, 0)';
-      contentEl.dataset.xkDragged = '1';
-    } catch (err2) {}
-
     bringModalToFront(modalEl);
 
     const clientX = (e && typeof e.clientX === 'number') ? e.clientX : 0;
     const clientY = (e && typeof e.clientY === 'number') ? e.clientY : 0;
 
+    // Geometry is frozen on the first real movement, not here: a plain click on
+    // the header used to pin the dialog to fixed coordinates and drop its
+    // max-height, so a dialog that sizes itself to the viewport suddenly grew
+    // to its full content height and had to be dragged back into place.
     drag = {
       modal: modalEl,
       content: contentEl,
@@ -689,6 +678,9 @@
       pointerId: (e && typeof e.pointerId === 'number') ? e.pointerId : null,
       offX: clientX - r.left,
       offY: clientY - r.top,
+      startX: clientX,
+      startY: clientY,
+      moved: false,
       w,
       h,
       baseX: Math.round(r.left),
@@ -697,16 +689,6 @@
       targetY: Math.round(r.top),
       raf: 0,
     };
-
-    try {
-      modalEl.classList.add('is-dragging');
-      contentEl.style.willChange = 'transform';
-    } catch (err2a) {}
-
-    try {
-      document.documentElement.style.userSelect = 'none';
-      document.documentElement.style.cursor = 'move';
-    } catch (err3) {}
 
     // Capture pointer on the actual handle element to keep drag smooth even over iframes.
     try {
@@ -719,10 +701,50 @@
     try { e.preventDefault(); } catch (err5) {}
   }
 
+  function beginDragGeometry(state) {
+    if (!state || state.moved || !state.content) return;
+    state.moved = true;
+    const contentEl = state.content;
+
+    // Freeze current position into fixed coordinates.
+    try {
+      contentEl.style.position = 'fixed';
+      contentEl.style.left = state.baseX + 'px';
+      contentEl.style.top = state.baseY + 'px';
+      contentEl.style.width = Math.round(state.w) + 'px';
+      contentEl.style.height = Math.round(state.h) + 'px';
+      contentEl.style.maxWidth = 'none';
+      contentEl.style.maxHeight = 'none';
+      // Keep the physical geometry stable and move it with a compositor
+      // transform below. Updating `left`/`top` on every pointer event makes
+      // large master/detail modals (notably the DAT index) repaint their
+      // entire scrollable content and feels jerky on lower-powered devices.
+      contentEl.style.transform = 'translate3d(0, 0, 0)';
+      contentEl.dataset.xkDragged = '1';
+    } catch (err2) {}
+
+    try {
+      state.modal.classList.add('is-dragging');
+      contentEl.style.willChange = 'transform';
+    } catch (err2a) {}
+
+    try {
+      document.documentElement.style.userSelect = 'none';
+      document.documentElement.style.cursor = 'move';
+    } catch (err3) {}
+  }
+
   function moveDrag(e) {
     if (!drag || !drag.content) return;
     const clientX = (e && typeof e.clientX === 'number') ? e.clientX : 0;
     const clientY = (e && typeof e.clientY === 'number') ? e.clientY : 0;
+    if (!drag.moved) {
+      // A few pixels of slip while clicking must not count as a drag.
+      const slipped = Math.abs(clientX - drag.startX) > DRAG_SLOP
+        || Math.abs(clientY - drag.startY) > DRAG_SLOP;
+      if (!slipped) return;
+      beginDragGeometry(drag);
+    }
     const p = clampPos(clientX - drag.offX, clientY - drag.offY, drag.w, drag.h, PAD);
     drag.targetX = Math.round(p.x);
     drag.targetY = Math.round(p.y);
@@ -746,6 +768,17 @@
     if (!drag) return;
 
     const activeDrag = drag;
+    if (!activeDrag.moved) {
+      // Nothing was dragged, so nothing about the dialog's geometry changed.
+      try {
+        const cap = activeDrag.handle || activeDrag.content;
+        if (cap && cap.releasePointerCapture && activeDrag.pointerId != null) {
+          cap.releasePointerCapture(activeDrag.pointerId);
+        }
+      } catch (e4) {}
+      drag = null;
+      return;
+    }
     try {
       if (activeDrag.raf) cancelAnimationFrame(activeDrag.raf);
       activeDrag.raf = 0;

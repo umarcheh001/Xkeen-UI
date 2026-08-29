@@ -687,7 +687,12 @@ def test_modal_drag_uses_frame_coalesced_compositor_transforms():
     assert '.is-dragging .xk-dat-modal-body' in operator_css
     assert 'visibility: hidden !important;' in operator_css
     assert 'content-visibility: auto;' in operator_css
-    assert "import '../ui/modal.js?v=20260822drag2';" in panel_compat
+    assert "import '../ui/modal.js?v=20260829drag3';" in panel_compat
+    # A press on the header only arms a drag: geometry is frozen once the
+    # pointer actually travels, so a plain click cannot resize the dialog.
+    assert 'const DRAG_SLOP = 3;' in modal
+    assert 'function beginDragGeometry(state) {' in modal
+    assert 'if (!activeDrag.moved) {' in modal
 
 
 def test_codemirror6_source_bridge_is_opt_in_and_does_not_inject_importmap_dynamically():

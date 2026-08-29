@@ -6807,8 +6807,8 @@
     ]
   },
   "dom_contract": {
-    "id_count": 1222,
-    "unique_id_count": 1222,
+    "id_count": 1224,
+    "unique_id_count": 1224,
     "duplicate_ids": [],
     "ids": [
       "backups-clear-snapshots-btn",
@@ -7635,6 +7635,8 @@
       "routing-dns-over-vless-close",
       "routing-dns-over-vless-details",
       "routing-dns-over-vless-dot",
+      "routing-dns-over-vless-lead-text",
+      "routing-dns-over-vless-lead-title",
       "routing-dns-over-vless-local",
       "routing-dns-over-vless-modal",
       "routing-dns-over-vless-multi",
@@ -11070,7 +11072,7 @@
       "#outbounds-file-code",
       ".xk-mihomo-topbar .xk-routing-active-inline"
     ],
-    "js_referenced_template_id_count": 1146,
+    "js_referenced_template_id_count": 1148,
     "js_referenced_template_ids": {
       "backups-clear-snapshots-btn": [
         "xkeen-ui/static/js/features/backups.js"
@@ -13509,6 +13511,12 @@
         "xkeen-ui/static/js/features/routing_cards/rules/dns_over_vless.js"
       ],
       "routing-dns-over-vless-dot": [
+        "xkeen-ui/static/js/features/routing_cards/rules/dns_over_vless.js"
+      ],
+      "routing-dns-over-vless-lead-text": [
+        "xkeen-ui/static/js/features/routing_cards/rules/dns_over_vless.js"
+      ],
+      "routing-dns-over-vless-lead-title": [
         "xkeen-ui/static/js/features/routing_cards/rules/dns_over_vless.js"
       ],
       "routing-dns-over-vless-local": [

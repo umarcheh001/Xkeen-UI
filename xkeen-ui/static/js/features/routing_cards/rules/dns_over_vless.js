@@ -17,6 +17,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     cancel: 'routing-dns-over-vless-cancel',
     apply: 'routing-dns-over-vless-apply',
     badge: 'routing-dns-over-vless-badge',
+    leadTitle: 'routing-dns-over-vless-lead-title',
+    leadText: 'routing-dns-over-vless-lead-text',
     status: 'routing-dns-over-vless-status',
     details: 'routing-dns-over-vless-details',
     dot: 'routing-dns-over-vless-dot',
@@ -248,7 +250,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const candidates = (data && Array.isArray(data.candidates)) ? data.candidates : [];
     const usable = candidates.filter((item) => item && item.usable);
     // The route is only chosen while enabling; disabling touches nothing.
-    const show = !!(data && !data.enabled && !data.can_disable && candidates.length);
+    // A route cannot be applied under another core either, so asking for one
+    // next to a blocked action button would only be noise.
+    const show = !!(data && !data.enabled && !data.can_disable && candidates.length
+      && coreOf(data) === 'xray');
     routeVisible = show;
     wrap.classList.toggle('hidden', !show);
     if (!show) {
@@ -439,6 +444,18 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   // пользователь мог изменить их переменными окружения.
   function watchdogText(data) {
     const cfg = (data && data.watchdog_settings) || null;
+    const core = coreOf(data);
+    // Сторож один на обе защиты и следит за той, что включена. Пока
+    // DNS-over-VLESS выключен, сторожить здесь нечего — обещать проверки
+    // «каждые N секунд» было бы неправдой.
+    if (core !== 'xray' && !(data && data.enabled)) {
+      return {
+        text: coreName(core)
+          ? `Сторож общий для обоих ядер и следит за включённой защитой: сейчас это забота ядра ${coreName(core)}. Для DNS-over-VLESS он заступит, когда защиту включат под Xray.`
+          : 'Сторож общий для обоих ядер и следит за включённой защитой. Для DNS-over-VLESS он заступит, когда защиту включат под Xray.',
+        kind: 'ok',
+      };
+    }
     if (cfg && cfg.enabled === false) {
       return {
         text: 'Сторож отключён настройкой: если ядро упадёт, сеть останется без разрешения имён, пока вы не вмешаетесь вручную.',
@@ -457,9 +474,61 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     };
   }
 
+  // Ядро определяет всё содержание карточки: DNS-over-VLESS собирает фрагмент
+  // именно для Xray, а у Mihomo свой защищённый DNS в отдельном окне. Пока
+  // тексты были написаны только про Xray, при активном Mihomo карточка
+  // объясняла происходящее неверно.
+  const CORE_NAMES = { xray: 'Xray', mihomo: 'Mihomo' };
+
+  function coreOf(data) {
+    return String((data && data.active_core) || '').toLowerCase();
+  }
+
+  function coreName(core) {
+    return CORE_NAMES[core] || '';
+  }
+
+  const MIHOMO_HINT = 'У Mihomo свой защищённый DNS — кнопка «DNS» на вкладке Mihomo.';
+
+  function renderLead(data) {
+    const title = $(DOM.leadTitle);
+    const text = $(DOM.leadText);
+    if (!title || !text) return;
+    const core = coreOf(data);
+    if (core === 'xray') {
+      title.textContent = 'DNS через защищённый туннель Xray';
+      text.textContent = 'Панель подготовит отдельный DNS-фрагмент, добавит только два служебных правила и включит перехват DNS в Keenetic.';
+      return;
+    }
+    if (core === 'mihomo') {
+      // Единственное осмысленное действие при Mihomo — открыть его собственное
+      // окно DNS, поэтому заголовок ведёт туда, а не упирается в запрет.
+      title.textContent = 'Сейчас работает Mihomo — у него свой защищённый DNS';
+      text.textContent = 'Настраивается он кнопкой «DNS» на вкладке Mihomo. Здесь собирается DNS-фрагмент для ядра Xray, поэтому включение доступно, только когда активно оно.';
+      return;
+    }
+    if (!core || core === 'unknown') {
+      title.textContent = 'Активное ядро не определено';
+      text.textContent = 'Панель не смогла понять, какое ядро сейчас работает. DNS-over-VLESS настраивает только Xray — проверьте состояние служб и откройте окно снова.';
+      return;
+    }
+    title.textContent = `Активно ядро ${core} — здесь настраивается только Xray`;
+    text.textContent = 'DNS-over-VLESS собирает DNS-фрагмент для ядра Xray. Переключите активное ядро на Xray, чтобы включить защиту.';
+  }
+
   // Каждому состоянию — короткая расшифровка рядом с бейджем и объяснение
   // обычными словами: что сейчас происходит с DNS и что делать дальше.
   function describeState(data, flags) {
+    const core = coreOf(data);
+    const otherCore = core && core !== 'xray' ? coreName(core) || core : '';
+    if (flags.enabled && otherCore) {
+      return {
+        badge: 'Не действует',
+        state: 'blocked',
+        summary: `служебная конфигурация на месте, но активно ядро ${otherCore}`,
+        text: `DNS-фрагмент и правила Xray сохранены, однако запросы через них сейчас не идут: сеть обслуживает ядро ${otherCore}. Верните активным ядром Xray, чтобы защита снова работала, либо отключите её здесь и уберите служебную конфигурацию. ${MIHOMO_HINT}`,
+      };
+    }
     if (flags.enabled) {
       return {
         badge: 'Включено',
@@ -468,12 +537,39 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         text: 'DNS-запросы всей сети уходят внутрь туннеля Xray: провайдер видит только зашифрованное соединение, а не список сайтов. Порт 53 обслуживает Xray, штатный резолвер роутера выключен.',
       };
     }
+    if (flags.released && otherCore) {
+      // Сторож один на обе защиты: увидев, что имена перестали разрешаться под
+      // чужим ядром, он не перезапускает Xray (это была не авария), а сразу
+      // отдаёт DNS прошивке и снимает служебную конфигурацию.
+      return {
+        badge: 'Защита снята',
+        state: 'blocked',
+        summary: `ядро сменили на ${otherCore}, DNS возвращён прошивке`,
+        text: `После перехода на ${otherCore} разрешение имён через туннель Xray перестало отвечать, и сторож вернул DNS прошивке роутера — перезапускать Xray он не стал, потому что ядро сменили намеренно. Служебный DNS-фрагмент и правила при этом удалены, а запросы снова идут в открытом виде. Включить DNS-over-VLESS заново можно, вернув активным ядром Xray. ${MIHOMO_HINT}`,
+      };
+    }
     if (flags.released) {
       return {
         badge: 'Отключено сторожем',
         state: 'blocked',
         summary: 'ядро не поднялось, DNS возвращён прошивке',
         text: 'Ядро Xray перестало отвечать, и сторож вернул разрешение имён прошивке роутера, чтобы сеть не осталась без интернета. Сейчас DNS-запросы идут в открытом виде. Разберитесь, почему упало ядро, и включите защиту заново — сама она не вернётся.',
+      };
+    }
+    if (otherCore) {
+      return {
+        badge: 'Нужно ядро Xray',
+        state: 'blocked',
+        summary: `сейчас активно ядро ${otherCore}`,
+        text: `DNS-over-VLESS готовит DNS-фрагмент и правила маршрутизации для Xray, поэтому с активным ядром ${otherCore} включать нечего. Имена сейчас разрешает штатный резолвер роутера. Переключите активное ядро на Xray, чтобы защита стала доступна. ${MIHOMO_HINT}`,
+      };
+    }
+    if (!core || core === 'unknown') {
+      return {
+        badge: 'Ядро не определено',
+        state: 'blocked',
+        summary: 'непонятно, какое ядро сейчас работает',
+        text: 'Панель не смогла определить активное ядро, поэтому не берётся менять настройку DNS. Проверьте состояние служб на вкладке XKeen и откройте окно заново.',
       };
     }
     if (data && data.partial) {
@@ -524,6 +620,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     // switched off by itself and the user has to know.
     const released = !enabled && !!(data && data.watchdog && data.watchdog.reason);
     const info = describeState(data, { enabled, canDisable, blocked, released });
+    renderLead(data);
     if (badge) {
       badge.textContent = info.badge;
       badge.dataset.state = info.state;
@@ -547,11 +644,13 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     }
 
     if (data) {
-      const core = data.active_core || '';
+      const core = coreOf(data);
       addDetail(
         core === 'xray'
           ? 'Активное ядро: Xray — то, что нужно для DNS-over-VLESS.'
-          : `Активное ядро: ${core || 'не определено'}. DNS-over-VLESS работает только с Xray.`,
+          : (core === 'mihomo'
+            ? `Активное ядро: Mihomo. DNS-over-VLESS работает только с Xray. ${MIHOMO_HINT}`
+            : `Активное ядро: ${coreName(core) || core || 'не определено'}. DNS-over-VLESS работает только с Xray.`),
         core === 'xray' ? 'ok' : 'warn',
       );
       if (data.target && data.target.label) addDetail(`DNS-запросы идут через: ${data.target.label}`, 'ok');
@@ -590,7 +689,11 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       // the line under the list say what is missing.
       const needsTarget = routeVisible && !chosenTargets.length;
       apply.disabled = busy || (!enabled && !canDisable && (blocked || needsTarget));
-      apply.textContent = busy ? 'Выполняется…' : ((enabled || canDisable) ? 'Отключить и восстановить' : 'Включить безопасно');
+      // «Включить безопасно» на неподходящем ядре обещало бы невозможное.
+      const wrongCore = coreOf(data) !== 'xray' && !enabled && !canDisable;
+      apply.textContent = busy
+        ? 'Выполняется…'
+        : ((enabled || canDisable) ? 'Отключить и восстановить' : (wrongCore ? 'Нужно ядро Xray' : 'Включить безопасно'));
       apply.classList.toggle('btn-danger', enabled || canDisable);
       apply.classList.toggle('btn-primary', !enabled && !canDisable);
     }
