@@ -139,6 +139,11 @@ export function testMihomoClashDelay(scope, name, options = {}) {
       name: String(name || ''),
       preset: String(options.preset || 'auto'),
       ...(options.provider ? { provider: String(options.provider) } : {}),
+      // How long the core itself waits for the probe. Omitted, it keeps the
+      // preset default; a batch run asks for a shorter one.
+      ...(Number.isFinite(Number(options.timeoutMs))
+        ? { timeout_ms: Math.round(Number(options.timeoutMs)) }
+        : {}),
     }),
     credentials: 'same-origin',
     // The backend may retry a transient Google probe failure once through the

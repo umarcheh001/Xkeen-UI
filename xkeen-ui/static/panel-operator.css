@@ -18958,10 +18958,13 @@ body.panel-page .xk-mihomo-picker-delay[data-delay-tone="warning"] { color: var(
 body.panel-page .xk-mihomo-picker-delay[data-delay-tone="stale"] { color: var(--op-muted); opacity: .7; }
 body.panel-page .xk-mihomo-picker-delay:is(
   [data-delay-tone="bad"],
-  [data-delay-tone="failed"],
-  [data-delay-tone="unavailable"],
-  [data-delay-tone="timeout"]
+  [data-delay-tone="failed"]
 ) { color: var(--op-danger); }
+/* Same rule as the node badge: no answer is muted, not red. */
+body.panel-page .xk-mihomo-picker-delay[data-delay-tone="unavailable"] {
+  color: var(--op-muted);
+  opacity: .72;
+}
 
 body.panel-page .xk-mihomo-picker-popover {
   position: absolute;
@@ -19407,10 +19410,16 @@ body.panel-page .xk-mihomo-node-delay[data-delay-tone="stale"] {
 }
 
 body.panel-page .xk-mihomo-node-delay[data-delay-tone="bad"],
-body.panel-page .xk-mihomo-node-delay[data-delay-tone="failed"],
-body.panel-page .xk-mihomo-node-delay[data-delay-tone="unavailable"],
-body.panel-page .xk-mihomo-node-delay[data-delay-tone="timeout"] {
+body.panel-page .xk-mihomo-node-delay[data-delay-tone="failed"] {
   color: var(--op-danger) !important;
+}
+/* "The node did not answer" is a measurement, not a malfunction: the core's own
+ * health-check reports it constantly for perfectly ordinary nodes. Red belongs
+ * to a slow node (bad) and to a failed request (failed); a missing answer reads
+ * as muted, the way the dashboards users compare us against show it. */
+body.panel-page .xk-mihomo-node-delay[data-delay-tone="unavailable"] {
+  color: var(--op-muted) !important;
+  opacity: .72;
 }
 
 body.panel-page .xk-mihomo-delay-history-popover {

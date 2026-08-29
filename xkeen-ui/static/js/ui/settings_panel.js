@@ -845,7 +845,7 @@ import { getFeatureApi } from '../features/feature_access.js';
           'mihomo-latency-test-mode',
           'mihomo.latencyTestMode',
           'Тест группы',
-          'Безопасный режим проверяет конечные узлы по одному. Core batch делегирует раскрытую группу одному запросу Mihomo.',
+          'Безопасный режим проверяет конечные узлы по одному. Core batch делегирует группу одному запросу Mihomo — но только там, где ядро тестирует её само (url-test, fallback); группы с ручным выбором в любом режиме проверяются по узлам.',
           [
             { value: 'safe', label: 'Безопасный для роутера' },
             { value: 'core', label: 'Core batch' },
@@ -859,7 +859,7 @@ import { getFeatureApi } from '../features/feature_access.js';
           'Верхняя граница зелёного значения.',
           50,
           5000,
-          250,
+          400,
           'Зелёный порог задержки сохранён.'
         ),
         createServerNumber(
@@ -869,7 +869,7 @@ import { getFeatureApi } from '../features/feature_access.js';
           'Верхняя граница жёлтого значения; должна быть выше зелёного порога.',
           100,
           10000,
-          650,
+          800,
           'Жёлтый порог задержки сохранён.'
         ),
       ],

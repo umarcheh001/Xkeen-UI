@@ -52,8 +52,8 @@
       latencyPreset: 'auto',
       latencyFreshness: 'auto',
       latencyTestMode: 'safe',
-      latencyLowMs: 250,
-      latencyMediumMs: 650,
+      latencyLowMs: 400,
+      latencyMediumMs: 800,
     },
   };
 

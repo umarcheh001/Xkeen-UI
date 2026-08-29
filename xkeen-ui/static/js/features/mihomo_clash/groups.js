@@ -15,7 +15,15 @@ const SELECTABLE_TYPES = new Set(['selector', 'select', 'urltest', 'fallback', '
 const MAX_DELAY_CONCURRENCY = 5;
 const MAX_BUSY_RETRIES = 2;
 const MAX_RATE_LIMIT_RETRIES = 10;
-const DELAY_BATCH_CADENCE_MS = 120;
+// A batch probe is a short, bounded burst of five in-flight requests, which is
+// what Zashboard does and what the backend guard is sized for. The extra pause
+// between items only stretched a large group over minutes, long enough for the
+// freshness window to start expiring results while the run was still going.
+const DELAY_BATCH_CADENCE_MS = 0;
+// Mihomo is asked to give up early during a batch, the way Zashboard does: a
+// node that needs more than two seconds is not one the user would pick anyway,
+// and waiting the full five multiplies the wall time of a large group.
+const BATCH_PROBE_TIMEOUT_MS = 2000;
 const MAX_DELAY_HISTORY = 10;
 const DELAY_HISTORY_HOVER_MS = 350;
 // A latency number is a point-in-time observation, not a live status. Five
@@ -54,8 +62,8 @@ let sortMode = 'config';
 let latencyPreset = 'auto';
 let latencyFreshness = 'auto';
 let latencyTestMode = 'safe';
-let latencyLowMs = 250;
-let latencyMediumMs = 650;
+let latencyLowMs = 400;
+let latencyMediumMs = 800;
 let showTimeoutHidden = false;
 let hideUnavailable = false;
 let consecutiveTimeouts = 3;
@@ -239,8 +247,8 @@ function applyMihomoUiSettings(settings) {
   latencyTestMode = ['safe', 'core'].includes(String(mihomo.latencyTestMode || ''))
     ? String(mihomo.latencyTestMode)
     : 'safe';
-  latencyLowMs = clampLatencyThreshold(mihomo.latencyLowMs, 50, 5000, 250);
-  latencyMediumMs = clampLatencyThreshold(mihomo.latencyMediumMs, 100, 10000, 650);
+  latencyLowMs = clampLatencyThreshold(mihomo.latencyLowMs, 50, 5000, 400);
+  latencyMediumMs = clampLatencyThreshold(mihomo.latencyMediumMs, 100, 10000, 800);
   if (latencyMediumMs <= latencyLowMs) latencyMediumMs = Math.min(10000, latencyLowMs + 50);
   if (mihomo.collapsedGroups && typeof mihomo.collapsedGroups === 'object') {
     for (const [name, collapsed] of Object.entries(mihomo.collapsedGroups)) {
@@ -592,8 +600,18 @@ function nodeProbeStatus(group, node) {
   if (result?.state === 'pending') {
     return { state: 'pending', label: 'проверка', tooltip: 'Выполняется проверка задержки узла.' };
   }
+  // A probe that came back empty is an observation about the node, not a fault
+  // of the panel or the core: Mihomo answers ``delay: 0`` for it and its own
+  // health-check records the same zero. Showing that as a red "таймаут" made a
+  // perfectly ordinary result look broken, while Zashboard — measuring the very
+  // same thing — leaves it neutral. Keep it neutral here too, and keep the
+  // wording about the node.
   if (result?.state === 'timeout') {
-    return { state: 'timeout', label: 'таймаут', tooltip: 'Превышено время ожидания. Нажмите, чтобы повторить.' };
+    return {
+      state: 'unknown',
+      label: 'нет ответа',
+      tooltip: 'Узел не ответил на проверку. Нажмите, чтобы повторить.',
+    };
   }
   if (result?.state === 'failed') {
     return {
@@ -617,10 +635,12 @@ function nodeProbeStatus(group, node) {
     };
   }
   if (result?.state === 'invalid') {
+    // The core answered the batch but said nothing about this node — the same
+    // "no measurement" as an empty probe, so it reads the same way.
     return {
-      state: 'failed',
+      state: 'unknown',
       label: 'нет результата',
-      tooltip: 'Mihomo не вернул задержку. Нажмите, чтобы повторить.',
+      tooltip: 'Mihomo не вернул задержку этого узла. Нажмите, чтобы повторить.',
     };
   }
   if (result?.state === 'cancelled') {
@@ -638,10 +658,13 @@ function nodeProbeStatus(group, node) {
     (effectiveNode.availability === 'unavailable' || effectiveNode.alive === false)
     && isPayloadFresh()
   ) {
+    // This is the core's own health-check verdict, and it is the state a user
+    // sees again once a manual measurement ages out. It says "the last check
+    // got nothing", which is worth showing plainly but is not an error either.
     return {
       state: 'unavailable',
-      label: 'недоступен',
-      tooltip: `Фоновая проверка: узел недоступен.${chainCopy} Нажмите, чтобы проверить снова.`,
+      label: 'не ответил на фоновой проверке',
+      tooltip: `Фоновая проверка ядра не получила ответ от узла.${chainCopy} Нажмите, чтобы проверить сейчас.`,
     };
   }
   if (measurement && isFreshMeasurement(
@@ -1337,6 +1360,18 @@ function nodeQueueFromGroups(groupItems) {
   return [...byIdentity.values()].map((item) => ({ ...item, targets: uniqueTargets(item.targets) }));
 }
 
+// ``/group/{name}/delay`` is meant for the groups the core tests on its own.
+// On a selector-style group Mihomo re-picks ``now`` while answering it, so the
+// batch both disturbs the user's choice and reports the group's verdict rather
+// than each node's. Zashboard probes those group types node by node; so do we,
+// whatever the configured mode says.
+const CORE_BATCH_TYPES = new Set(['urltest', 'fallback']);
+
+function coreBatchApplies(name) {
+  const group = groups().find((item) => item.name === name);
+  return CORE_BATCH_TYPES.has(String(group?.type || '').trim().toLowerCase());
+}
+
 function coreGroupQueue(name) {
   const group = groups().find((item) => item.name === name);
   if (!group) return [];
@@ -1356,9 +1391,10 @@ function delayFailureState(error) {
   const code = errorCode(error) || String(error?.code || '');
   if (
     code === 'upstream_timeout'
-    // Current Mihomo returns HTTP 503 when an individual outbound completes
-    // a delay probe without a usable result. Treat that retryable response as
-    // a probe timeout, not as a panel/API failure.
+    // A retryable upstream answer (503 while an outbound is still settling,
+    // 5xx under load) tells us nothing was measured. That is the same outcome
+    // as an empty probe, and the card says so in the node's terms rather than
+    // showing the user an API error they cannot act on.
     || (code === 'upstream_http_error' && error?.data?.retryable === true)
     || error?.name === 'TimeoutError'
     || error?.isTimeout === true
@@ -1435,6 +1471,9 @@ async function requestDelay(item) {
       return await testMihomoClashDelay(item.scope, item.name, {
         provider: item.provider,
         preset: latencyPreset,
+        // A single node the user clicked gets the full preset timeout; a batch
+        // trades a little accuracy on slow nodes for finishing in seconds.
+        timeoutMs: delayRun?.batch ? BATCH_PROBE_TIMEOUT_MS : undefined,
         signal: delayRun.controller?.signal,
       });
     } catch (error) {
@@ -1494,8 +1533,10 @@ function buildDelaySummary(finished) {
   const elapsedSeconds = Math.max(0, (performance.now() - finished.startedAt) / 1000).toFixed(1);
   const fallbackCopy = finished.fallbacks ? ` · Cloudflare fallback: ${finished.fallbacks}` : '';
   return {
-    text: `Успешно: ${counts.done} · Ошибка: ${counts.failed} · Таймаут: ${counts.timeout} · Пропущено: ${counts.skipped} · ${elapsedSeconds} с${fallbackCopy}`,
-    tone: counts.failed || counts.timeout ? (counts.done ? 'warning' : 'danger') : 'success',
+    text: `Успешно: ${counts.done} · Без ответа: ${counts.timeout} · Ошибка: ${counts.failed} · Пропущено: ${counts.skipped} · ${elapsedSeconds} с${fallbackCopy}`,
+    // Nodes that did not answer are an ordinary outcome of a probe run, so they
+    // no longer colour the summary by themselves; only real request failures do.
+    tone: counts.failed ? (counts.done ? 'warning' : 'danger') : 'success',
   };
 }
 
@@ -1527,6 +1568,9 @@ async function runDelayQueue(items, source = {}) {
     results,
     identities,
     source,
+    // A run over more than one node is a batch: it probes with the shorter
+    // timeout so a large group finishes while the user is still looking at it.
+    batch: identities.size > 1,
     total: identities.size,
     completed: 0,
     fallbacks: 0,
@@ -1704,13 +1748,14 @@ function bind() {
     }
     if (target.hasAttribute('data-mihomo-group-delay')) {
       const groupName = String(target.dataset.group || '');
-      const items = latencyTestMode === 'core'
+      const useCoreBatch = latencyTestMode === 'core' && coreBatchApplies(groupName);
+      const items = useCoreBatch
         ? coreGroupQueue(groupName)
         : groupNodeQueue(groupName);
       void runDelayQueue(items, {
         type: 'group',
         group: groupName,
-        mode: latencyTestMode,
+        mode: useCoreBatch ? 'core' : 'safe',
       });
     }
     if (target.hasAttribute('data-mihomo-delay-visible')) void runDelayQueue(visibleNodeQueue(), { type: 'visible' });
