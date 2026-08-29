@@ -124,10 +124,13 @@ test('with Mihomo running the dialog talks about Mihomo, not Xray', async ({ pag
   // cannot have protected DNS".
   await expect(page.locator('#routing-dns-over-vless-modal')).not.toContainText('только с Xray');
   await expect(page.locator('#routing-dns-over-vless-modal')).not.toContainText('только для Xray');
-  await expect(page.locator('#routing-dns-over-vless-status')).toContainText('ядро сменили на Mihomo');
-  await expect(page.locator('#routing-dns-over-vless-status')).toContainText('перезапускать Xray он не стал');
+  // The guard is one mechanism for both cores, so both windows announce it with
+  // the same sentence and the same badge.
+  await expect(page.locator('#routing-dns-over-vless-badge')).toHaveText('Снято сторожем');
+  await expect(page.locator('#routing-dns-over-vless-status')).toContainText('Сторож вернул DNS роутеру');
+  await expect(page.locator('#routing-dns-over-vless-status')).toContainText('вернув активным ядром Xray вместо Mihomo');
   // The guard's own reason is accurate, so it is shown as written.
-  await expect(page.locator('#routing-dns-over-vless-details')).toContainText('перезапуски делу не помогут');
+  await expect(page.locator('#routing-dns-over-vless-status')).toContainText('перезапуски делу не помогут');
   // No point picking a route that cannot be applied under this core.
   await expect(page.locator('#routing-dns-over-vless-route')).toBeHidden();
   const apply = page.locator('#routing-dns-over-vless-apply');

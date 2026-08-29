@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict
 
@@ -286,14 +287,26 @@ def test_frontend_has_dns_button_modal_and_guard_copy():
     assert "renderRoute" in script
     assert 'id="routing-dns-over-vless-route-fallback"' in template
     assert "Резервирование сохранено" in script
-    assert "Сторож снял защиту" in script
+    # Про сторожа оба окна говорят одними словами, поэтому тексты — общий модуль.
+    guard_copy = (root / "xkeen-ui/static/js/features/dns_guard_text.js").read_text(encoding="utf-8")
+    mihomo = (root / "xkeen-ui/static/js/features/mihomo_dns.js").read_text(encoding="utf-8")
+    assert "dns_guard_text.js" in script
+    assert "dns_guard_text.js" in mihomo
+    assert "guardNotice(data, enabled)" in script
+    assert "guardNotice(data, enabled)" in mihomo
+    assert "Сторож вернул DNS роутеру" in guard_copy
+    assert "Сторож следит: проверяет разрешение имён каждые" in guard_copy
+    # Ни одна фраза сторожа не называет ядро: механизм у обеих защит один.
+    # Комментарии объясняют, откуда взялся модуль, поэтому проверяется код без них.
+    guard_code = re.sub(r"/\*.*?\*/", "", guard_copy, flags=re.S)
+    guard_code = re.sub(r"//.*", "", guard_code)
+    assert "Xray" not in guard_code and "Mihomo" not in guard_code
     # Карточка объясняет состояние словами, а не только цветной меткой.
     assert "describeState" in script
     assert "конфигурация совместима, можно включать" in script
     assert "служебная конфигурация и настройка роутера согласованы" in script
     assert "осталась неполная настройка от прерванной операции" in script
-    assert "ядро не поднялось, DNS возвращён прошивке" in script
-    assert "Сторож проверяет ядро каждые" in script
+    assert "GUARD_RELEASED_BADGE" in script
     assert 'id="routing-dns-over-vless-multi"' in template
     assert "Балансировать между несколькими прокси" in template
     assert 'id="routing-dns-over-vless-upstreams"' in template

@@ -70,7 +70,10 @@ from services.mihomo_egress_setup import (
     MihomoEgressSetupError,
     build_mihomo_egress_setup,
 )
-from services.dns_guard import conflicting_protection as _dns_conflicting_protection
+from services.dns_guard import (
+    conflicting_protection as _dns_conflicting_protection,
+    watchdog_settings as _dns_watchdog_settings,
+)
 from services.mihomo_dns import (
     MihomoDnsError,
     apply_action as apply_mihomo_dns_action,
@@ -1426,10 +1429,14 @@ def create_mihomo_blueprint(
     def api_mihomo_dns_status():
         """Return the guarded one-click DNS assistant state."""
         try:
-            return jsonify(get_mihomo_dns_status(
+            status = get_mihomo_dns_status(
                 config_file=MIHOMO_CONFIG_FILE,
                 ui_state_dir=ui_state_dir,
-            )), 200
+            )
+            # The port-53 guard is one loop for both protections; the window
+            # describes it with the same numbers the DNS-over-VLESS one shows.
+            status["watchdog_settings"] = _dns_watchdog_settings()
+            return jsonify(status), 200
         except MihomoDnsError as exc:
             return _api_error(
                 str(exc),

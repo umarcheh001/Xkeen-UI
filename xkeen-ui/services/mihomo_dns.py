@@ -33,6 +33,10 @@ from utils.firmware import ndmc_path as _resolve_ndmc, run_ndmc
 
 
 STATE_FILENAME = "mihomo_dns.json"
+# The guard's own trace.  It lives beside the assistant state instead of inside
+# it because a release *clears* that state, and every "is this assistant
+# configured?" check keys off the state file being there.
+RELEASE_FILENAME = "mihomo_dns_watchdog.json"
 MANAGED_BEGIN = "# BEGIN XKeen UI Mihomo DNS (managed)"
 MANAGED_END = "# END XKeen UI Mihomo DNS (managed)"
 DNS_LISTEN = "0.0.0.0:53"
@@ -88,6 +92,44 @@ def _clear_state(ui_state_dir: str, config_file: str) -> None:
     try:
         os.remove(_state_path(ui_state_dir, config_file))
     except FileNotFoundError:
+        pass
+
+
+def _release_path(ui_state_dir: str, config_file: str) -> str:
+    return os.path.join(_state_dir(ui_state_dir, config_file), RELEASE_FILENAME)
+
+
+def read_release(*, config_file: str, ui_state_dir: str) -> Optional[dict[str, Any]]:
+    """The last time the shared guard handed DNS back, if it has not been read away.
+
+    The panel shows this instead of a plain "off": protection that switched
+    itself off is not the same thing as protection nobody turned on.
+    """
+
+    try:
+        value = json.loads(Path(_release_path(ui_state_dir, config_file)).read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _record_release(ui_state_dir: str, config_file: str, released: dict[str, Any]) -> None:
+    path = _release_path(ui_state_dir, config_file)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        _atomic_write_json(path, released)
+    except Exception:
+        pass
+
+
+def _clear_release(ui_state_dir: str, config_file: str) -> None:
+    """Forget the guard's trace once the operator acts on the protection again."""
+
+    try:
+        os.remove(_release_path(ui_state_dir, config_file))
+    except FileNotFoundError:
+        pass
+    except Exception:
         pass
 
 
@@ -581,6 +623,9 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         "listen": str(dns_runtime["listen"] or DNS_LISTEN),
         "mode": "redir-host",
         "blockers": blockers,
+        # The port-53 guard is shared with DNS-over-VLESS, so this window says
+        # the same things about it that the Xray one does.
+        "watchdog": read_release(config_file=config_file, ui_state_dir=ui_state_dir),
         "safety": {
             "preflight": True,
             "backup": True,
@@ -666,6 +711,7 @@ def apply_action(
                     "listen": DNS_LISTEN,
                 }
                 _save_state(ui_state_dir, config_file, next_state)
+                _clear_release(ui_state_dir, config_file)
                 return {
                     "ok": True,
                     "enabled": True,
@@ -740,6 +786,7 @@ def apply_action(
                     code="recover_firmware_dns_failed",
                 )
             _clear_state(ui_state_dir, config_file)
+            _clear_release(ui_state_dir, config_file)
             return {
                 "ok": True,
                 "enabled": False,
@@ -788,6 +835,7 @@ def apply_action(
             if not restore_override and not _wait_for_port_53(should_be_free=False):
                 raise MihomoDnsError("Системный DNS Keenetic не вернул порт 53.", code="firmware_dns_failed")
             _clear_state(ui_state_dir, config_file)
+            _clear_release(ui_state_dir, config_file)
             return {
                 "ok": True,
                 "enabled": False,
@@ -884,6 +932,11 @@ def emergency_release(
         _clear_state(ui_state_dir, config_file)
     except Exception:
         pass
+    # Clearing the state is what makes the assistant look untouched again, so
+    # the trace has to be written afterwards and separately: without it the
+    # panel would show a plain "ready" and never tell the operator that the
+    # protection stood down on its own.
+    _record_release(ui_state_dir, config_file, released)
     return released
 
 
@@ -897,4 +950,5 @@ __all__ = [
     "emergency_release",
     "get_status",
     "is_enabled",
+    "read_release",
 ]

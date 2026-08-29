@@ -1,6 +1,7 @@
 import { confirmMihomoAction } from './mihomo_runtime.js';
 import { getXkeenCoreHttpApi, toastXkeen } from './xkeen_runtime.js';
 import { getMihomoPanelApi } from './mihomo_panel.js';
+import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } from './dns_guard_text.js';
 
 /* Guarded, one-click protected DNS assistant for Mihomo. */
 (() => {
@@ -82,17 +83,22 @@ import { getMihomoPanelApi } from './mihomo_panel.js';
     const canRecover = !!data?.can_recover;
     const blocked = !enabled && !canDisable && !canRecover && !data?.can_enable;
     const altered = !!data?.tampered;
-    const state = enabled ? 'enabled' : ((canDisable || canRecover || blocked || altered) ? 'blocked' : 'ready');
+    // Защита, которую снял сторож, — это не то же самое, что защита, которую
+    // никто не включал: без этой пометки окно показывало ровное «Готово».
+    const released = !enabled && !!guardRelease(data);
+    const state = enabled ? 'enabled' : ((canDisable || canRecover || blocked || altered || released) ? 'blocked' : 'ready');
     if (badge) {
       badge.dataset.state = state;
       badge.textContent = enabled
         ? (altered ? 'Включено · изменено вручную' : 'Включено')
-        : (canRecover ? 'DNS-блок удалён' : (altered ? 'Изменено вручную' : (canDisable ? 'Готово к восстановлению' : (blocked ? 'Требует внимания' : 'Готово'))));
+        : (released ? GUARD_RELEASED_BADGE : (canRecover ? 'DNS-блок удалён' : (altered ? 'Изменено вручную' : (canDisable ? 'Готово к восстановлению' : (blocked ? 'Требует внимания' : 'Готово')))));
     }
-    if (dot) dot.dataset.state = enabled ? 'enabled' : ((blocked || altered || canRecover) ? 'blocked' : 'off');
+    if (dot) dot.dataset.state = enabled ? 'enabled' : ((blocked || altered || canRecover || released) ? 'blocked' : 'off');
     if (status) {
       if (enabled && altered) status.textContent = 'Защищённый DNS активен, но config.yaml был изменён вручную. Панель видит сохранённый DNS-блок и не станет автоматически откатывать ваши правки.';
       else if (enabled) status.textContent = 'Защищённый DNS активен: Mihomo отвечает на порту 53, а DNS override Keenetic включён.';
+      // Формулировка та же, что в окне DNS-over-VLESS: сторож у защит один.
+      else if (released) status.textContent = `${guardReleaseText(data)} Служебный DNS-блок из config.yaml удалён, исходная конфигурация возвращена.`;
       else if (canRecover) status.textContent = 'DNS-блок уже удалён вручную, а Keenetic DNS override выключен. Можно сохранить текущий config.yaml и завершить отключение без возврата старого снимка.';
       else if (altered) status.textContent = 'После включения config.yaml был изменён. Панель не станет автоматически перезаписывать эти правки.';
       else if (canDisable) status.textContent = 'DNS-конфигурация подготовлена. Можно безопасно вернуть полный исходный снимок.';
@@ -102,7 +108,10 @@ import { getMihomoPanelApi } from './mihomo_panel.js';
     if (routerNote) {
       routerNote.textContent = enabled
         ? 'Устройства по‑прежнему используют DNS роутера — Keenetic автоматически направляет запросы в Mihomo.'
-        : (canRecover
+        : (released
+          // О самом стороже уже сказано выше — здесь только то, что с DNS сейчас.
+          ? 'Порт 53 снова у прошивки: имена разрешает системный DNS Keenetic.'
+          : canRecover
           ? 'DNS override Keenetic уже выключен — устройства используют системный DNS роутера.'
           : 'Пока защищённый DNS не активен, устройства используют системный DNS Keenetic.');
     }
@@ -121,6 +130,10 @@ import { getMihomoPanelApi } from './mihomo_panel.js';
         listenerConfigured ? 'ok' : 'warn',
       );
       addDetail(`Keenetic DNS override: ${data.dns_override === true ? 'включён' : (data.dns_override === false ? 'выключен' : 'не определён')}`, data.dns_override == null ? 'warn' : 'ok');
+      // Строка про сторожа — общая с окном DNS-over-VLESS: одна защита порта 53
+      // на два ядра, значит и рассказ о ней должен быть один.
+      const guard = guardNotice(data, enabled);
+      addDetail(guard.text, guard.kind);
       (data.blockers || []).forEach((message) => addDetail(message, 'warn'));
     }
 

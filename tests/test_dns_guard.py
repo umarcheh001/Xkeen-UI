@@ -15,7 +15,7 @@ from typing import Any, Dict, List
 
 import pytest
 
-from services import dns_guard, mihomo_dns
+from services import dns_guard, dns_over_vless, mihomo_dns
 
 
 class _Stub:
@@ -355,6 +355,63 @@ def test_mihomo_release_survives_a_failing_writer(tmp_path: Path, monkeypatch):
     # Restoring DNS matters more than restoring the config, so the run continues.
     assert any(step.startswith("config_failed:") for step in released["steps"])
     assert overrides == [False]
+
+
+def test_the_mihomo_window_still_sees_that_the_guard_stood_the_protection_down(
+    tmp_path: Path, monkeypatch
+):
+    """Releasing clears the assistant state, so the trace lives on its own.
+
+    Without it the window went back to a neutral "ready" and the operator had no
+    way to tell "nobody turned it on" from "the guard turned it off".
+    """
+
+    config_file, _snapshot = _mihomo_install(tmp_path)
+    monkeypatch.setattr(mihomo_dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(mihomo_dns, "_wait_for_port_53", lambda **kwargs: True)
+
+    mihomo_dns.emergency_release(
+        config_file=str(config_file),
+        ui_state_dir=str(tmp_path),
+        save_config=lambda text: None,
+        restart_xkeen=lambda **kwargs: True,
+        reason="ядро не отвечает после 2 попыток перезапуска; DNS возвращён прошивке.",
+    )
+
+    trace = mihomo_dns.read_release(config_file=str(config_file), ui_state_dir=str(tmp_path))
+    assert trace and "DNS возвращён прошивке" in trace["reason"]
+
+    monkeypatch.setattr(mihomo_dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(mihomo_dns, "detect_running_core", lambda: "mihomo")
+    status = mihomo_dns.get_status(config_file=str(config_file), ui_state_dir=str(tmp_path))
+    assert status["enabled"] is False
+    assert status["watchdog"]["reason"] == trace["reason"]
+
+
+def test_the_guard_trace_disappears_once_the_operator_acts_again(tmp_path: Path, monkeypatch):
+    config_file, _snapshot = _mihomo_install(tmp_path)
+    monkeypatch.setattr(mihomo_dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(mihomo_dns, "_wait_for_port_53", lambda **kwargs: True)
+    mihomo_dns.emergency_release(
+        config_file=str(config_file),
+        ui_state_dir=str(tmp_path),
+        save_config=lambda text: None,
+        restart_xkeen=lambda **kwargs: True,
+        reason="ядро не отвечает",
+    )
+
+    mihomo_dns._clear_release(str(tmp_path), str(config_file))
+
+    assert mihomo_dns.read_release(config_file=str(config_file), ui_state_dir=str(tmp_path)) is None
+
+
+def test_both_windows_read_the_same_guard_settings(monkeypatch):
+    """One guard, one set of numbers: the panels must not disagree about them."""
+
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG_INTERVAL", "45")
+
+    assert dns_guard.watchdog_settings() == dns_over_vless.watchdog_settings()
+    assert dns_guard.watchdog_settings()["interval"] == 45.0
 
 
 def test_build_protections_skips_mihomo_without_a_writer(tmp_path: Path):

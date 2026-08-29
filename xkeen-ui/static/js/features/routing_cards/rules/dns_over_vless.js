@@ -1,4 +1,5 @@
 import { getXkeenCoreHttpApi } from '../../xkeen_runtime.js';
+import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseSummary, guardReleaseText } from '../../dns_guard_text.js';
 import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
 /* Guarded, one-click DNS-over-VLESS assistant. */
@@ -435,45 +436,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       : `Резервирование не переносится: ${plan.reason}.`;
   }
 
-  function plural(count, one, many) {
-    const n = Math.abs(Number(count) || 0);
-    return (n % 10 === 1 && n % 100 !== 11) ? one : many;
-  }
-
-  // Формулировка сторожа собирается из действующих настроек, а не из констант:
-  // пользователь мог изменить их переменными окружения.
-  function watchdogText(data) {
-    const cfg = (data && data.watchdog_settings) || null;
-    const core = coreOf(data);
-    // Сторож один на обе защиты и следит за той, что включена. Пока
-    // DNS-over-VLESS выключен, сторожить здесь нечего — обещать проверки
-    // «каждые N секунд» было бы неправдой.
-    if (core !== 'xray' && !(data && data.enabled)) {
-      // Про защиту другого ядра это окно ничего не знает: её состояние живёт в
-      // своём окне. Утверждать, что она включена, значило бы обещать защиту,
-      // которой может не быть.
-      return {
-        text: 'Сторож общий для обеих защит и следит за той, что включена. Для DNS-over-VLESS он заступит, когда его включат под ядром Xray.',
-        kind: 'ok',
-      };
-    }
-    if (cfg && cfg.enabled === false) {
-      return {
-        text: 'Сторож отключён настройкой: если ядро упадёт, сеть останется без разрешения имён, пока вы не вмешаетесь вручную.',
-        kind: 'warn',
-      };
-    }
-    const interval = Math.round(Number(cfg && cfg.interval) || 30);
-    const fails = Math.round(Number(cfg && cfg.fail_threshold) || 3);
-    const restarts = Math.round(Number(cfg && cfg.restart_attempts) || 0);
-    const tail = restarts > 0
-      ? `перезапустит ядро (до ${restarts} ${plural(restarts, 'попытки', 'попыток')}), а если не поможет — вернёт DNS роутеру`
-      : 'сразу вернёт DNS роутеру — перезапуски отключены настройкой';
-    return {
-      text: `Сторож проверяет ядро каждые ${interval} с; после ${fails} ${plural(fails, 'сбоя', 'сбоев')} подряд ${tail}.`,
-      kind: 'ok',
-    };
-  }
+  // Про сторожа оба окна — это и окно DNS Mihomo — говорят одними и теми же
+  // словами: сторож у защит общий, и разные формулировки для разных ядер
+  // читались как разные механизмы. Тексты живут в features/dns_guard_text.js.
 
   // Ядро определяет всё содержание карточки: DNS-over-VLESS собирает фрагмент
   // именно для Xray, а у Mihomo свой защищённый DNS в отдельном окне. Пока
@@ -538,23 +503,20 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         text: 'DNS-запросы всей сети уходят внутрь туннеля Xray: провайдер видит только зашифрованное соединение, а не список сайтов. Порт 53 обслуживает Xray, штатный резолвер роутера выключен.',
       };
     }
-    if (flags.released && otherCore) {
-      // Сторож один на обе защиты: увидев, что имена перестали разрешаться под
-      // чужим ядром, он не перезапускает Xray (это была не авария), а сразу
-      // отдаёт DNS прошивке и снимает служебную конфигурацию.
-      return {
-        badge: 'Защита снята',
-        state: 'blocked',
-        summary: `ядро сменили на ${otherCore}, DNS возвращён прошивке`,
-        text: `После перехода на ${otherCore} разрешение имён через туннель Xray перестало отвечать, и сторож вернул DNS прошивке роутера — перезапускать Xray он не стал, потому что ядро сменили намеренно. Служебный DNS-фрагмент и правила при этом удалены, а запросы снова идут в открытом виде. Включить DNS-over-VLESS заново можно, вернув активным ядром Xray.`,
-      };
-    }
     if (flags.released) {
+      // Сторож у обеих защит один, поэтому и бейдж, и первая фраза здесь те же,
+      // что в окне DNS Mihomo: сначала общее «сторож вернул DNS роутеру» с его
+      // собственной причиной, а уже потом — что делать именно с этой защитой.
+      const back = otherCore
+        // Сторож не перезапускает ядро, которое сменили намеренно: он сразу
+        // отдаёт DNS прошивке и снимает служебную конфигурацию.
+        ? ` Служебный DNS-фрагмент и правила Xray удалены; включить DNS-over-VLESS заново можно, вернув активным ядром Xray вместо ${otherCore}.`
+        : ' Служебный DNS-фрагмент и правила Xray удалены; включите защиту заново, когда разберётесь, почему ядро перестало отвечать.';
       return {
-        badge: 'Отключено сторожем',
+        badge: GUARD_RELEASED_BADGE,
         state: 'blocked',
-        summary: 'ядро не поднялось, DNS возвращён прошивке',
-        text: 'Ядро Xray перестало отвечать, и сторож вернул разрешение имён прошивке роутера, чтобы сеть не осталась без интернета. Сейчас DNS-запросы идут в открытом виде. Разберитесь, почему упало ядро, и включите защиту заново — сама она не вернётся.',
+        summary: guardReleaseSummary(),
+        text: `${guardReleaseText(data)}${back}`,
       };
     }
     if (otherCore) {
@@ -619,7 +581,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const blocked = !enabled && !canDisable && !(data && data.can_enable);
     // An automatic release is not a neutral "ready" state: the protection was
     // switched off by itself and the user has to know.
-    const released = !enabled && !!(data && data.watchdog && data.watchdog.reason);
+    const released = !enabled && !!guardRelease(data);
     const info = describeState(data, { enabled, canDisable, blocked, released });
     renderLead(data);
     if (badge) {
@@ -663,12 +625,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
             : 'Перехват DNS на роутере: определить не удалось.'),
         data.dns_override == null ? 'warn' : 'ok',
       );
-      if (data.watchdog && data.watchdog.reason) {
-        addDetail(`Сторож снял защиту: ${data.watchdog.reason} Порт 53 снова обслуживает прошивка роутера.`, 'warn');
-      } else {
-        const guard = watchdogText(data);
-        addDetail(guard.text, guard.kind);
-      }
+      const guard = guardNotice(data, enabled);
+      addDetail(guard.text, guard.kind);
       if (data.route_drift) {
         const drift = data.route_drift;
         const was = (drift.managed || []).join(', ') || '—';

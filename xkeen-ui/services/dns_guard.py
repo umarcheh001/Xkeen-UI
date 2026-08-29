@@ -148,6 +148,16 @@ def conflicting_protection(*, want: str, ui_state_dir: str, mihomo_config_file: 
     return PROTECTION_LABELS.get(owner, owner)
 
 
+def watchdog_settings() -> Dict[str, Any]:
+    """The knobs the guard is actually running with.
+
+    They were never Xray-specific — one guard watches whichever protection is
+    on — so both panels read them from here instead of from the Xray module.
+    """
+
+    return dns_over_vless.watchdog_settings()
+
+
 def _probe_ok() -> bool:
     """Ask the network, not the process table: does anything resolve names?"""
 
@@ -355,4 +365,5 @@ __all__ = [
     "guard_tick",
     "protection_owner",
     "start_guard",
+    "watchdog_settings",
 ]
