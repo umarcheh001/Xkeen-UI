@@ -2579,12 +2579,17 @@
           <div id="routing-dns-over-vless-status" class="routing-dns-over-vless-status" role="status" aria-live="polite">Проверяем текущую конфигурацию…</div>
 
           <div id="routing-dns-over-vless-route" class="routing-dns-over-vless-route hidden">
-            <label for="routing-dns-over-vless-target">Маршрут для DNS-запросов</label>
+            <span class="routing-dns-over-vless-field-label" id="routing-dns-over-vless-target-label">Маршрут для DNS-запросов</span>
             <label id="routing-dns-over-vless-multi-row" class="routing-dns-over-vless-multi hidden">
               <input type="checkbox" id="routing-dns-over-vless-multi">
               <span>Балансировать между несколькими прокси</span>
             </label>
-            <select id="routing-dns-over-vless-target" class="xray-log-select" aria-describedby="routing-dns-over-vless-route-hint"></select>
+            <div id="routing-dns-over-vless-target-tools" class="routing-dns-over-vless-picker-tools hidden">
+              <span id="routing-dns-over-vless-target-count" class="routing-dns-over-vless-picker-count"></span>
+              <button type="button" id="routing-dns-over-vless-target-all" class="routing-dns-over-vless-picker-bulk">Отметить все</button>
+              <button type="button" id="routing-dns-over-vless-target-none" class="routing-dns-over-vless-picker-bulk">Снять все</button>
+            </div>
+            <div id="routing-dns-over-vless-target" class="routing-dns-over-vless-picker" role="listbox" aria-labelledby="routing-dns-over-vless-target-label" aria-describedby="routing-dns-over-vless-route-hint"></div>
             <p class="modal-hint" id="routing-dns-over-vless-route-hint">DNS пойдёт через выбранный балансировщик или прокси. Выбор сохраняется и используется при последующих включениях.</p>
             <p id="routing-dns-over-vless-route-fallback" class="routing-dns-over-vless-route-fallback hidden"></p>
 

@@ -22,6 +22,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     dot: 'routing-dns-over-vless-dot',
     route: 'routing-dns-over-vless-route',
     target: 'routing-dns-over-vless-target',
+    targetTools: 'routing-dns-over-vless-target-tools',
+    targetCount: 'routing-dns-over-vless-target-count',
+    targetAll: 'routing-dns-over-vless-target-all',
+    targetNone: 'routing-dns-over-vless-target-none',
     fallback: 'routing-dns-over-vless-route-fallback',
     multi: 'routing-dns-over-vless-multi',
     multiRow: 'routing-dns-over-vless-multi-row',
@@ -36,6 +40,11 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   let busy = false;
   let chosenTargets = [];
   let multiTouched = false;
+  // A picked-clean list is a real answer ("nothing selected yet"), so the first
+  // render may fill it in but a later manual clear must survive a re-render.
+  let targetsTouched = false;
+  let routePool = [];
+  let routeVisible = false;
 
   function showModal(open) {
     const modal = $(DOM.modal);
@@ -104,14 +113,127 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     list.appendChild(li);
   }
 
-  function candidateText(item) {
+  function candidateMeta(item) {
     const bits = [];
     if (item.strategy_type) bits.push(item.strategy_type);
     if (item.kind === 'balancer') bits.push(`узлов: ${item.selector_count}`);
-    let text = item.label || item.tag;
-    if (bits.length) text += ` · ${bits.join(' · ')}`;
-    if (!item.usable && item.reason) text += ` — ${item.reason}`;
-    return text;
+    if (!item.usable && item.reason) bits.push(item.reason);
+    return bits.join(' · ');
+  }
+
+  function optionRow(item, selected, multi) {
+    const row = document.createElement('div');
+    row.className = 'routing-dns-over-vless-option';
+    row.dataset.tag = item.tag;
+    row.dataset.selected = selected ? '1' : '0';
+    row.setAttribute('role', 'option');
+    row.setAttribute('aria-selected', selected ? 'true' : 'false');
+    row.tabIndex = -1;
+    if (!item.usable || busy) row.setAttribute('aria-disabled', 'true');
+
+    const mark = document.createElement('span');
+    mark.className = 'routing-dns-over-vless-option-mark';
+    mark.dataset.shape = multi ? 'check' : 'dot';
+    mark.setAttribute('aria-hidden', 'true');
+    if (multi) mark.textContent = '✓';
+    row.appendChild(mark);
+
+    const body = document.createElement('span');
+    body.className = 'routing-dns-over-vless-option-body';
+    const title = document.createElement('span');
+    title.className = 'routing-dns-over-vless-option-title';
+    title.textContent = item.label || item.tag;
+    body.appendChild(title);
+    const meta = candidateMeta(item);
+    if (meta) {
+      const small = document.createElement('small');
+      small.className = 'routing-dns-over-vless-option-meta';
+      small.textContent = meta;
+      body.appendChild(small);
+    }
+    row.appendChild(body);
+    return row;
+  }
+
+  function pickerRows(picker) {
+    return Array.prototype.slice.call(picker.querySelectorAll('.routing-dns-over-vless-option'));
+  }
+
+  function renderPicker(picker, pool, wanted, multi) {
+    // Redrawing throws the focused row away, so remember where the keyboard was.
+    const active = document.activeElement;
+    const hadFocus = !!(active && picker.contains(active));
+    const focusedTag = hadFocus ? (active.dataset || {}).tag : '';
+
+    picker.dataset.mode = multi ? 'multi' : 'single';
+    picker.setAttribute('aria-multiselectable', multi ? 'true' : 'false');
+    picker.textContent = '';
+    pool.forEach((item) => {
+      picker.appendChild(optionRow(item, wanted.indexOf(item.tag) !== -1, multi));
+    });
+
+    // Roving tabindex: one stop for the whole list, on the row that matters.
+    const rows = pickerRows(picker).filter((row) => row.getAttribute('aria-disabled') !== 'true');
+    const stop = rows.find((row) => row.dataset.tag === focusedTag)
+      || rows.find((row) => row.dataset.selected === '1')
+      || rows[0];
+    if (stop) stop.tabIndex = 0;
+    if (hadFocus && stop) { try { stop.focus(); } catch (e) {} }
+  }
+
+  function renderPickerTools(pool, wanted, multi) {
+    const tools = $(DOM.targetTools);
+    if (!tools) return;
+    tools.classList.toggle('hidden', !multi);
+    if (!multi) return;
+    const usable = pool.filter((item) => item && item.usable);
+    const count = $(DOM.targetCount);
+    if (count) count.textContent = `Отмечено ${wanted.length} из ${usable.length}`;
+    const all = $(DOM.targetAll);
+    const none = $(DOM.targetNone);
+    if (all) all.disabled = busy || wanted.length >= usable.length;
+    if (none) none.disabled = busy || !wanted.length;
+  }
+
+  function toggleTarget(tag, multi) {
+    if (!tag || busy) return;
+    targetsTouched = true;
+    if (!multi) {
+      chosenTargets = [tag];
+    } else if (chosenTargets.indexOf(tag) === -1) {
+      chosenTargets = chosenTargets.concat([tag]);
+    } else {
+      chosenTargets = chosenTargets.filter((item) => item !== tag);
+    }
+    // A full redraw keeps the action button and the hint line in step with the
+    // selection, not just the list itself.
+    if (status) render(status);
+  }
+
+  function onPickerKeydown(event) {
+    const picker = $(DOM.target);
+    if (!picker) return;
+    const rows = pickerRows(picker).filter((row) => row.getAttribute('aria-disabled') !== 'true');
+    if (!rows.length) return;
+    const current = rows.indexOf(document.activeElement);
+    let next = -1;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') next = Math.min(rows.length - 1, current + 1);
+    else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') next = Math.max(0, (current === -1 ? 0 : current - 1));
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = rows.length - 1;
+    else if (event.key === ' ' || event.key === 'Enter') {
+      if (current === -1) return;
+      event.preventDefault();
+      toggleTarget(rows[current].dataset.tag, picker.dataset.mode === 'multi');
+      return;
+    } else {
+      return;
+    }
+    event.preventDefault();
+    rows.forEach((row) => { row.tabIndex = -1; });
+    const target = rows[next < 0 ? 0 : next];
+    target.tabIndex = 0;
+    try { target.focus(); } catch (e) {}
   }
 
   function multiEnabled() {
@@ -121,15 +243,19 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
   function renderRoute(data) {
     const wrap = $(DOM.route);
-    const select = $(DOM.target);
-    if (!wrap || !select) return;
+    const picker = $(DOM.target);
+    if (!wrap || !picker) return;
     const candidates = (data && Array.isArray(data.candidates)) ? data.candidates : [];
     const usable = candidates.filter((item) => item && item.usable);
     // The route is only chosen while enabling; disabling touches nothing.
     const show = !!(data && !data.enabled && !data.can_disable && candidates.length);
+    routeVisible = show;
     wrap.classList.toggle('hidden', !show);
     if (!show) {
-      select.textContent = '';
+      picker.textContent = '';
+      routePool = [];
+      const tools = $(DOM.targetTools);
+      if (tools) tools.classList.add('hidden');
       return;
     }
 
@@ -149,25 +275,18 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const pool = multi ? candidates.filter((item) => item.kind === 'outbound') : candidates;
     const poolUsable = pool.filter((item) => item.usable);
 
-    let wanted = chosenTargets.length
+    let wanted = (targetsTouched || chosenTargets.length)
       ? chosenTargets
       : (data && (data.selected_targets || []).length ? data.selected_targets : [data && data.default_target].filter(Boolean));
     wanted = wanted.filter((tag) => poolUsable.some((item) => item.tag === tag));
-    if (!wanted.length && poolUsable.length) wanted = [poolUsable[0].tag];
+    // Until the list is touched, keep a working default; after that an empty
+    // selection is what the user asked for and must not be refilled.
+    if (!wanted.length && poolUsable.length && !targetsTouched) wanted = [poolUsable[0].tag];
     if (!multi) wanted = wanted.slice(0, 1);
 
-    select.multiple = multi;
-    select.size = multi ? Math.min(6, Math.max(3, pool.length)) : 0;
-    select.textContent = '';
-    pool.forEach((item) => {
-      const option = document.createElement('option');
-      option.value = item.tag;
-      option.textContent = candidateText(item);
-      option.disabled = !item.usable;
-      option.selected = wanted.indexOf(item.tag) !== -1;
-      select.appendChild(option);
-    });
-    select.disabled = busy || (!multi && poolUsable.length < 2);
+    routePool = pool;
+    renderPicker(picker, pool, wanted, multi);
+    renderPickerTools(pool, wanted, multi);
     renderDnsFields(data);
     chosenTargets = wanted;
     renderFallback(multi ? null : pool.find((item) => item.tag === wanted[0]), multi, wanted);
@@ -467,7 +586,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     renderRoute(data);
 
     if (apply) {
-      apply.disabled = busy || (!enabled && !canDisable && blocked);
+      // With nothing ticked there is no route to build: block the action and let
+      // the line under the list say what is missing.
+      const needsTarget = routeVisible && !chosenTargets.length;
+      apply.disabled = busy || (!enabled && !canDisable && (blocked || needsTarget));
       apply.textContent = busy ? 'Выполняется…' : ((enabled || canDisable) ? 'Отключить и восстановить' : 'Включить безопасно');
       apply.classList.toggle('btn-danger', enabled || canDisable);
       apply.classList.toggle('btn-primary', !enabled && !canDisable);
@@ -505,6 +627,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     showModal(true);
     chosenTargets = [];
     multiTouched = false;
+    targetsTouched = false;
+    routePool = [];
+    routeVisible = false;
     [DOM.upstreams, DOM.local, DOM.zones].forEach((id) => {
       const field = $(id);
       if (field) delete field.dataset.touched;
@@ -575,13 +700,36 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     });
     const applyButton = $(DOM.apply);
     if (applyButton) applyButton.addEventListener('click', (event) => { event.preventDefault(); apply(); });
-    const targetSelect = $(DOM.target);
-    if (targetSelect) {
-      targetSelect.addEventListener('change', () => {
-        chosenTargets = Array.from(targetSelect.selectedOptions || [])
-          .map((option) => option.value)
-          .filter(Boolean);
-        if (status) renderRoute(status);
+    const picker = $(DOM.target);
+    if (picker) {
+      picker.addEventListener('click', (event) => {
+        const row = event.target && event.target.closest
+          ? event.target.closest('.routing-dns-over-vless-option')
+          : null;
+        if (!row || !picker.contains(row)) return;
+        if (row.getAttribute('aria-disabled') === 'true') return;
+        toggleTarget(row.dataset.tag, picker.dataset.mode === 'multi');
+      });
+      picker.addEventListener('keydown', onPickerKeydown);
+    }
+    const selectAll = $(DOM.targetAll);
+    if (selectAll) {
+      selectAll.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (busy) return;
+        targetsTouched = true;
+        chosenTargets = routePool.filter((item) => item && item.usable).map((item) => item.tag);
+        if (status) render(status);
+      });
+    }
+    const selectNone = $(DOM.targetNone);
+    if (selectNone) {
+      selectNone.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (busy) return;
+        targetsTouched = true;
+        chosenTargets = [];
+        if (status) render(status);
       });
     }
     [DOM.upstreams, DOM.local, DOM.zones].forEach((id) => {
@@ -600,8 +748,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       multiBox.addEventListener('change', () => {
         // Switching modes drops a selection the other mode cannot express.
         multiTouched = true;
+        targetsTouched = false;
         chosenTargets = [];
-        if (status) renderRoute(status);
+        if (status) render(status);
       });
     }
     const modal = $(DOM.modal);

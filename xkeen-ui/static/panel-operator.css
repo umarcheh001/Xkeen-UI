@@ -13346,11 +13346,14 @@ body.panel-page .modal[data-operator-modal-family="confirm-compact-form"] .modal
  * the generic resizer without changing any runtime hooks. */
 body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-dns-over-vless-modal-content {
   display: grid !important;
-  grid-template-rows: auto minmax(0, auto) auto;
+  /* The body row must be allowed to shrink below its content, otherwise the
+   * grid overflows the max-height and the footer with the action buttons is
+   * cut off until the dialog is dragged (which drops the max-height). */
+  grid-template-rows: auto minmax(0, 1fr) auto;
   width: min(760px, calc(100vw - 36px));
   height: auto !important;
   min-height: 0 !important;
-  max-height: min(680px, calc(100dvh - 36px));
+  max-height: min(880px, calc(100dvh - 36px));
   resize: none !important;
 }
 
@@ -13363,6 +13366,7 @@ body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .modal-hea
 body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-dns-over-vless-body {
   display: grid;
   gap: 10px;
+  min-height: 0;
   max-height: none;
   overflow: auto;
 }
@@ -13416,7 +13420,68 @@ body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-status-sum
 }
 
 body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-status-text {
-  color: var(--op-text-muted);
+  color: var(--op-muted);
+}
+
+/* Route picker follows the operator palette; the click-to-toggle behaviour and
+ * geometry stay in the base stylesheet. */
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-picker {
+  max-height: 208px;
+  border-color: var(--op-border);
+  border-radius: var(--op-radius);
+  background: var(--op-surface-2);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-option {
+  border-radius: var(--op-control-radius);
+  color: var(--op-text);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-option:hover {
+  background: var(--op-surface-3);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-option[data-selected="1"] {
+  border-color: color-mix(in srgb, var(--op-accent) 55%, var(--op-border));
+  background: var(--op-accent-soft);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-option-mark {
+  border-color: var(--op-border);
+  border-radius: var(--op-control-radius);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-option-mark[data-shape="dot"] {
+  border-radius: 50%;
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-option[data-selected="1"] .routing-dns-over-vless-option-mark {
+  border-color: var(--op-accent);
+  background: var(--op-accent);
+  color: var(--op-surface);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-option[data-selected="1"] .routing-dns-over-vless-option-mark[data-shape="dot"] {
+  box-shadow: inset 0 0 0 3px var(--op-surface-2);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-option-meta {
+  color: var(--op-muted);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-picker-count {
+  color: var(--op-muted);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-picker-bulk {
+  border-color: var(--op-border);
+  border-radius: var(--op-control-radius);
+  color: var(--op-muted);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-picker-bulk:hover:not(:disabled) {
+  color: var(--op-text);
+  background: var(--op-surface-3);
 }
 
 body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-dns-over-vless-safety {
