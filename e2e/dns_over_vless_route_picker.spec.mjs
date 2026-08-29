@@ -120,6 +120,10 @@ test('with Mihomo running the dialog talks about Mihomo, not Xray', async ({ pag
 
   await expect(page.locator('#routing-dns-over-vless-lead-title')).toContainText('Mihomo');
   await expect(page.locator('#routing-dns-over-vless-lead-text')).toContainText('вкладке Mihomo');
+  // Mihomo has the same protection of its own, so nothing may read as "you
+  // cannot have protected DNS".
+  await expect(page.locator('#routing-dns-over-vless-modal')).not.toContainText('только с Xray');
+  await expect(page.locator('#routing-dns-over-vless-modal')).not.toContainText('только для Xray');
   await expect(page.locator('#routing-dns-over-vless-status')).toContainText('ядро сменили на Mihomo');
   await expect(page.locator('#routing-dns-over-vless-status')).toContainText('перезапускать Xray он не стал');
   // The guard's own reason is accurate, so it is shown as written.

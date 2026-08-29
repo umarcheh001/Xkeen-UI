@@ -488,7 +488,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     return CORE_NAMES[core] || '';
   }
 
-  const MIHOMO_HINT = 'У Mihomo свой защищённый DNS — кнопка «DNS» на вкладке Mihomo.';
+  const MIHOMO_HINT = 'У Mihomo та же защита настраивается своим окном — кнопка «DNS» на вкладке Mihomo.';
 
   function renderLead(data) {
     const title = $(DOM.leadTitle);
@@ -504,16 +504,16 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       // Единственное осмысленное действие при Mihomo — открыть его собственное
       // окно DNS, поэтому заголовок ведёт туда, а не упирается в запрет.
       title.textContent = 'Сейчас работает Mihomo — у него свой защищённый DNS';
-      text.textContent = 'Настраивается он кнопкой «DNS» на вкладке Mihomo. Здесь собирается DNS-фрагмент для ядра Xray, поэтому включение доступно, только когда активно оно.';
+      text.textContent = 'Настраивается он кнопкой «DNS» на вкладке Mihomo и защищает запросы так же. Это окно собирает DNS-фрагмент для ядра Xray, поэтому включение здесь доступно, только когда активно оно.';
       return;
     }
     if (!core || core === 'unknown') {
       title.textContent = 'Активное ядро не определено';
-      text.textContent = 'Панель не смогла понять, какое ядро сейчас работает. DNS-over-VLESS настраивает только Xray — проверьте состояние служб и откройте окно снова.';
+      text.textContent = 'Панель не смогла понять, какое ядро сейчас работает. Это окно настраивает защиту для ядра Xray — проверьте состояние служб и откройте окно снова.';
       return;
     }
-    title.textContent = `Активно ядро ${core} — здесь настраивается только Xray`;
-    text.textContent = 'DNS-over-VLESS собирает DNS-фрагмент для ядра Xray. Переключите активное ядро на Xray, чтобы включить защиту.';
+    title.textContent = `Сейчас работает ядро ${core}`;
+    text.textContent = 'Это окно собирает DNS-фрагмент для ядра Xray. Переключите активное ядро на Xray, чтобы включить защиту здесь.';
   }
 
   // Каждому состоянию — короткая расшифровка рядом с бейджем и объяснение
@@ -561,7 +561,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         badge: 'Нужно ядро Xray',
         state: 'blocked',
         summary: `сейчас активно ядро ${otherCore}`,
-        text: `DNS-over-VLESS готовит DNS-фрагмент и правила маршрутизации для Xray, поэтому с активным ядром ${otherCore} включать нечего. Имена сейчас разрешает штатный резолвер роутера. Переключите активное ядро на Xray, чтобы защита стала доступна.`,
+        text: `Это окно готовит DNS-фрагмент и правила маршрутизации для Xray, поэтому с активным ядром ${otherCore} включать здесь нечего — своя защита DNS у него настраивается отдельно. Имена сейчас разрешает штатный резолвер роутера. Переключите активное ядро на Xray, чтобы включить защиту здесь.`,
       };
     }
     if (!core || core === 'unknown') {
@@ -649,8 +649,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         core === 'xray'
           ? 'Активное ядро: Xray — то, что нужно для DNS-over-VLESS.'
           : (core === 'mihomo'
-            ? `Активное ядро: Mihomo. DNS-over-VLESS работает только с Xray. ${MIHOMO_HINT}`
-            : `Активное ядро: ${coreName(core) || core || 'не определено'}. DNS-over-VLESS работает только с Xray.`),
+            ? `Активное ядро: Mihomo. Это окно настраивает защиту для Xray. ${MIHOMO_HINT}`
+            : `Активное ядро: ${coreName(core) || core || 'не определено'}. Это окно настраивает защиту для Xray.`),
         core === 'xray' ? 'ok' : 'warn',
       );
       if (data.target && data.target.label) addDetail(`DNS-запросы идут через: ${data.target.label}`, 'ok');
