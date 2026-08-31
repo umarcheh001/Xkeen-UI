@@ -894,22 +894,32 @@ def test_local_resolver_takes_the_home_zones_out_of_the_tunnel(tmp_path: Path):
     resolvers = dns._parse_local_resolvers("192.168.1.1:5353")
 
     fragment = dns._managed_fragment(["1.1.1.1"], resolvers)
-    first = fragment["dns"]["servers"][0]
+    strict, delegated = fragment["dns"]["servers"][0], fragment["dns"]["servers"][1]
 
-    assert first["address"] == "192.168.1.1"
-    assert first["port"] == 5353
-    assert "domain:lan" in first["domains"]
+    assert strict["address"] == "192.168.1.1"
+    assert strict["port"] == 5353
+    assert "domain:lan" in strict["domains"]
     # Reverse lookups for private ranges must not reach a public resolver...
-    assert "domain:10.in-addr.arpa" in first["domains"]
-    assert "domain:168.192.in-addr.arpa" in first["domains"]
+    assert "domain:10.in-addr.arpa" in strict["domains"]
+    assert "domain:168.192.in-addr.arpa" in strict["domains"]
     # ...but a blanket in-addr.arpa would also grab PTR for public addresses.
-    assert "domain:in-addr.arpa" not in first["domains"]
-    # The router's own zones stay on this side of the tunnel too.
-    assert "domain:keenetic.net" in first["domains"]
-    assert "domain:netcraze.net" in first["domains"]
-    assert first["skipFallback"] is True
+    assert "domain:in-addr.arpa" not in strict["domains"]
+    # None of these exists on the public internet, so a silent resolver is the
+    # end of the story: retrying abroad would only hand over the LAN names.
+    assert strict["skipFallback"] is True
+
+    # The router's own zones are real delegated domains, listed only because the
+    # box resolves them for itself.  They ride the same resolver, but a silent
+    # one must not leave the local web interface or the DDNS name unresolvable.
+    assert delegated["address"] == "192.168.1.1"
+    assert delegated["port"] == 5353
+    assert "domain:keenetic.net" in delegated["domains"]
+    assert "domain:netcraze.net" in delegated["domains"]
+    assert "domain:lan" not in delegated["domains"]
+    assert delegated["skipFallback"] is False
+
     # A public upstream still follows for everything else.
-    assert fragment["dns"]["servers"][1] == "1.1.1.1"
+    assert fragment["dns"]["servers"][2] == "1.1.1.1"
 
     rule = dns._local_rule(resolvers, dns._direct_outbound_tag(runtime))
     assert rule["outboundTag"] == "direct"
@@ -968,7 +978,8 @@ def test_enable_stores_dns_settings_and_status_reports_them(tmp_path: Path, monk
 
     fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
     assert fragment["dns"]["servers"][0]["address"] == "192.168.1.1"
-    assert fragment["dns"]["servers"][1:] == ["1.1.1.1", "9.9.9.9"]
+    assert fragment["dns"]["servers"][1]["address"] == "192.168.1.1"
+    assert fragment["dns"]["servers"][2:] == ["1.1.1.1", "9.9.9.9"]
 
     monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
     result = dns.get_status(
@@ -1016,7 +1027,12 @@ def test_custom_zones_reach_the_fragment(tmp_path: Path, monkeypatch):
     )
 
     fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
-    assert fragment["dns"]["servers"][0]["domains"] == ["domain:lan", "domain:office.internal"]
+    # ``lan`` is nowhere on the public internet; ``office.internal`` is a name
+    # the user added, so it is treated as delegated and may fall back.
+    assert fragment["dns"]["servers"][0]["domains"] == ["domain:lan"]
+    assert fragment["dns"]["servers"][0]["skipFallback"] is True
+    assert fragment["dns"]["servers"][1]["domains"] == ["domain:office.internal"]
+    assert fragment["dns"]["servers"][1]["skipFallback"] is False
 
     monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
     result = dns.get_status(
@@ -1028,6 +1044,45 @@ def test_custom_zones_reach_the_fragment(tmp_path: Path, monkeypatch):
     assert result["tampered"] is False
 
 
+def test_only_strict_zones_keep_the_single_server_and_no_fallback(tmp_path: Path):
+    """Nothing changes for a zone list that is local through and through."""
+
+    resolvers = dns._parse_local_resolvers("192.168.1.1")
+    fragment = dns._managed_fragment(["1.1.1.1"], resolvers, ["domain:lan", "domain:home"])
+    servers = fragment["dns"]["servers"]
+
+    assert len(servers) == 2
+    assert servers[0]["domains"] == ["domain:lan", "domain:home"]
+    assert servers[0]["skipFallback"] is True
+    assert servers[1] == "1.1.1.1"
+    # No delegated zone means nothing needs the global fallback.
+    assert fragment["dns"]["disableFallback"] is True
+
+
+def test_declared_fragment_with_split_zones_is_not_read_back_as_drift(tmp_path: Path):
+    """Two entries per resolver must fold back into the resolver they came from.
+
+    Otherwise the panel rebuilds a four-server fragment from its own three-server
+    file and reports a config nobody touched as tampered.
+    """
+
+    resolvers = dns._parse_local_resolvers("192.168.1.1:5353")
+    fragment = dns._managed_fragment(["1.1.1.1"], resolvers)
+    raw_servers = fragment["dns"]["servers"]
+
+    folded: list[dict] = []
+    zones: dict[tuple, list[str]] = {}
+    for item in [entry for entry in raw_servers if isinstance(entry, dict)]:
+        key = (item["address"], item["port"])
+        if key not in zones:
+            zones[key] = []
+            folded.append({"address": key[0], "port": key[1]})
+        zones[key].extend(item["domains"])
+
+    assert folded == [{"address": "192.168.1.1", "port": 5353}]
+    assert dns._managed_fragment(["1.1.1.1"], folded, zones[("192.168.1.1", 5353)]) == fragment
+
+
 def test_several_network_segments_each_get_their_own_resolver(tmp_path: Path):
     configs, routing_path, _state = _scenario_config(tmp_path)
     routing = json.loads(routing_path.read_text(encoding="utf-8"))
@@ -1037,13 +1092,22 @@ def test_several_network_segments_each_get_their_own_resolver(tmp_path: Path):
     fragment = dns._managed_fragment(["1.1.1.1"], resolvers)
     servers = fragment["dns"]["servers"]
 
+    strict_zones, delegated_zones = dns._split_local_zones(dns.DEFAULT_LOCAL_DOMAINS)
+
+    # Every segment is asked about the strict zones first, in the order given...
     assert [item["address"] for item in servers[:3]] == ["192.168.1.1", "192.168.2.1", "10.8.0.1"]
     assert [item["port"] for item in servers[:3]] == [53, 5353, 53]
-    # Every segment answers the same zone list, and the public upstream follows.
-    assert all(item["domains"] == dns.DEFAULT_LOCAL_DOMAINS for item in servers[:3])
-    assert servers[3:] == ["1.1.1.1"]
-    # One public upstream still means no fallback abroad.
-    assert fragment["dns"]["disableFallback"] is True
+    assert all(item["domains"] == strict_zones for item in servers[:3])
+    assert all(item["skipFallback"] is True for item in servers[:3])
+    # ...then about the delegated ones, and only after every segment stayed
+    # silent does the query reach the public upstream.
+    assert [item["address"] for item in servers[3:6]] == ["192.168.1.1", "192.168.2.1", "10.8.0.1"]
+    assert all(item["domains"] == delegated_zones for item in servers[3:6])
+    assert all(item["skipFallback"] is False for item in servers[3:6])
+    assert servers[6:] == ["1.1.1.1"]
+    # The global flag would otherwise cancel that last hop: one upstream, but a
+    # delegated zone still needs somewhere to go.
+    assert fragment["dns"]["disableFallback"] is False
 
     rule = dns._local_rule(resolvers, dns._direct_outbound_tag(runtime))
     assert rule["ip"] == ["192.168.1.1/32", "192.168.2.1/32", "10.8.0.1/32"]

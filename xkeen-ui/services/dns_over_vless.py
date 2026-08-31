@@ -98,6 +98,13 @@ DEFAULT_LOCAL_DOMAINS = [
     *NETCRAZE_ZONES,
 ]
 
+# Zones that do not exist on the public internet: asking a public resolver
+# about them returns NXDOMAIN anyway and hands it the names of the machines in
+# your house.  Everything else on the local list — the vendor zones below, and
+# whatever the user adds — is a real delegated domain, so a silent LAN resolver
+# must not be the end of the story for it.
+STRICT_LOCAL_ZONES = frozenset([*LOCAL_ZONES, *PRIVATE_PTR_ZONES, *PTR_172_ZONES])
+
 ZONE_PRESETS = {
     "local": LOCAL_ZONES,
     "ptr": PRIVATE_PTR_ZONES,
@@ -968,6 +975,22 @@ def _local_domains(value: Any) -> list[str]:
     return result or list(DEFAULT_LOCAL_DOMAINS)
 
 
+def _split_local_zones(zones: list[str]) -> tuple[list[str], list[str]]:
+    """Zones that must stay home, and zones a public resolver may answer."""
+    strict = [zone for zone in zones if zone in STRICT_LOCAL_ZONES]
+    delegated = [zone for zone in zones if zone not in STRICT_LOCAL_ZONES]
+    return strict, delegated
+
+
+def _local_server(resolver: Dict[str, Any], domains: list[str], *, skip_fallback: bool) -> Dict[str, Any]:
+    return {
+        "address": resolver["address"],
+        "port": int(resolver.get("port") or 53),
+        "domains": domains,
+        "skipFallback": skip_fallback,
+    }
+
+
 def _managed_fragment(
     upstreams: Optional[list[str]] = None,
     local_resolvers: Optional[list[Dict[str, Any]]] = None,
@@ -976,20 +999,22 @@ def _managed_fragment(
     servers: list[Any] = []
     resolvers = list(local_resolvers or [])
     zones = list(local_domains or DEFAULT_LOCAL_DOMAINS)
+    public_upstreams = list(upstreams or DEFAULT_UPSTREAMS)
+    strict_zones, delegated_zones = _split_local_zones(zones)
+    # Listed before the public upstreams so local zones are matched first.
+    # skipFallback keeps a missing home name from being retried abroad; with
+    # several segments Xray still tries the next local server.
     for resolver in resolvers:
-        # Listed first so these zones are matched before the public upstreams.
-        # skipFallback keeps a missing local answer from being retried abroad;
-        # with several segments Xray still tries the next local server.
-        servers.append(
-            {
-                "address": resolver["address"],
-                "port": int(resolver.get("port") or 53),
-                "domains": zones,
-                "skipFallback": True,
-            }
-        )
-    servers.extend(list(upstreams or DEFAULT_UPSTREAMS))
-    public_count = len(servers) - len(resolvers)
+        if strict_zones:
+            servers.append(_local_server(resolver, strict_zones, skip_fallback=True))
+    # Delegated zones (vendor domains, anything the user added) are real public
+    # names: if every local resolver stays silent, the query has to reach a
+    # public upstream instead of failing.
+    for resolver in resolvers:
+        if delegated_zones:
+            servers.append(_local_server(resolver, delegated_zones, skip_fallback=False))
+    servers.extend(public_upstreams)
+    public_count = len(public_upstreams)
     return {
         "dns": {
             # Explicit public upstreams; the DNS outbound carries these UDP
@@ -999,7 +1024,10 @@ def _managed_fragment(
             # A single upstream has nothing to fall back to, and forbidding the
             # fallback keeps Xray from trying anything else.  With several,
             # falling back to the next one is the reason they were listed.
-            "disableFallback": public_count < 2,
+            # The flag is global, so it also decides whether a delegated zone
+            # may leave a silent local resolver for a public one: when such a
+            # server exists, the fallback has to stay on even with one upstream.
+            "disableFallback": public_count < 2 and not (resolvers and delegated_zones),
             "tag": DNS_IN_TAG,
         },
         "inbounds": [
@@ -1158,18 +1186,27 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
     # (extra inbound, changed queryStrategy, wrong disableFallback) is caught.
     raw_servers = ((fragment or {}).get("dns") or {}).get("servers")
     raw_servers = raw_servers if isinstance(raw_servers, list) else []
-    # The optional local resolver is an object and always comes first; the
-    # public upstreams are plain strings after it.
+    # The optional local resolvers are objects and always come first; the
+    # public upstreams are plain strings after them.  One resolver may take two
+    # entries — strict zones and delegated ones are declared separately — so
+    # fold them back by address before rebuilding.
     local_objs = [item for item in raw_servers if isinstance(item, dict) and item.get("address")]
     declared = _safe_upstreams([item for item in raw_servers if not isinstance(item, dict)])
-    declared_resolvers = [
-        {"address": str(item.get("address") or ""), "port": item.get("port") or 53}
-        for item in local_objs
-    ]
+    declared_resolvers: list[Dict[str, Any]] = []
+    declared_zones: Dict[tuple[str, int], list[str]] = {}
+    for item in local_objs:
+        key = (str(item.get("address") or ""), int(item.get("port") or 53))
+        if key not in declared_zones:
+            declared_zones[key] = []
+            declared_resolvers.append({"address": key[0], "port": key[1]})
+        for zone in item.get("domains") or []:
+            if zone not in declared_zones[key]:
+                declared_zones[key].append(zone)
+    first_zones = declared_zones[next(iter(declared_zones))] if declared_zones else None
     exact_fragment = bool(declared) and fragment == _managed_fragment(
         declared,
         declared_resolvers,
-        local_objs[0].get("domains") if local_objs else None,
+        first_zones,
     )
     model = routing.get("routing") if isinstance(routing.get("routing"), dict) else {}
     rules = model.get("rules") if isinstance(model.get("rules"), list) else []
