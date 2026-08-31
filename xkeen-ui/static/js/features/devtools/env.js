@@ -192,6 +192,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     'XKEEN_PORT_PROXYING_FILE': 'Файл со списком портов для проксирования. По умолчанию: /opt/etc/xkeen/port_proxying.lst.',
     'XKEEN_PORT_EXCLUDE_FILE': 'Файл со списком портов-исключений. По умолчанию: /opt/etc/xkeen/port_exclude.lst.',
     'XKEEN_IP_EXCLUDE_FILE': 'Файл со списком IP/подсетей-исключений. По умолчанию: /opt/etc/xkeen/ip_exclude.lst. В старых версиях мог быть /opt/etc/xkeen_exclude.lst — UI подхватит его автоматически, если новый путь отсутствует.',
+    'XKEEN_CONFIG_FILE': 'Путь к конфигу XKeen (xkeen.json), откуда UI читает и куда пишет настройки самого XKeen. По умолчанию: /opt/etc/xkeen/xkeen.json.',
   };
 
   ENV_HELP.XKEEN_INIT_SCRIPT = 'Rezervnyi put k init.d-skriptu XKeen dlya fallback-scenariev sovmestimosti. Osnovnoi put upravleniya - CLI `xkeen`; pri ego nedostupnosti UI ishet S05xkeen, potom S99xkeen.';
@@ -214,6 +215,21 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   ENV_HELP.XKEEN_HAPP_DECRYPTOR_TIMEOUT = 'Таймаут запуска raw Happ decryptor в секундах. По умолчанию 45, потому что `crypt5` на роутере может считаться заметно дольше обычного helper. Применяется к следующей попытке импорта или обновления без Restart UI.';
   ENV_HELP.XKEEN_HAPP_HELPER_HWID = 'Необязательный ручной HWID для bundled Happ helper. Обычно оставьте пустым: helper возьмёт HWID роутера автоматически.';
   ENV_HELP.XKEEN_SUBSCRIPTION_HAPP_USER_AGENT = 'User-Agent для bundled Happ helper и Happ fallback-запросов. По умолчанию: Happ/3.18.3/Android/17771400994551771562.';
+  ENV_HELP.XKEEN_SUBSCRIPTION_ALLOW_HTTP = 'Разрешить подписки по plain HTTP. По умолчанию 1: провайдеры до сих пор часто публикуют публичные фиды по HTTP. Значение 0 требует HTTPS. Private- и локальные адреса блокируются отдельно, независимо от этой настройки. Применяется к следующей загрузке подписки без Restart UI.';
+  ENV_HELP.XKEEN_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS = 'Разрешить подписки с локальных/private адресов, в том числе через редиректы. По умолчанию 0. Включайте только если фид действительно раздаётся внутри вашей сети. Применяется к следующей загрузке подписки без Restart UI.';
+  ENV_HELP.XKEEN_SUBSCRIPTIONS_SCHEDULER = 'Фоновое автообновление Xray-подписок. По умолчанию 1 (включено). Значение 0 полностью отключает планировщик: подписки обновляются только вручную. Требует Restart UI.';
+  ENV_HELP.XKEEN_SUBSCRIPTIONS_SCHEDULER_TICK = 'Период опроса планировщика Xray-подписок в секундах: как часто панель проверяет, не подошёл ли срок обновления. По умолчанию 60, диапазон 15–3600. Требует Restart UI.';
+  ENV_HELP.XKEEN_SUBSCRIPTIONS_LOOKAHEAD_SEC = 'Окно подтягивания «почти созревших» Xray-подписок в секундах. По умолчанию 300 (5 минут), максимум 3600. Подписки, срок которых наступит в пределах окна, обновляются вместе с уже созревшими — так их расписания выравниваются и дальше они идут одной пачкой. Значение 0 отключает подтягивание. Окно работает только когда хотя бы одна подписка реально созрела, поэтому расписание не уезжает вперёд само по себе. Применяется к следующему прогону без Restart UI.';
+  ENV_HELP.XKEEN_SUBSCRIPTIONS_RESTART_BATCH = 'Перезапускать ядро один раз на всю пачку обновлённых Xray-подписок. По умолчанию 1. Значение 0 возвращает старое поведение: отдельный перезапуск на каждую подписку (десять подписок — десять обрывов связи). Применяется к следующему прогону без Restart UI.';
+  ENV_HELP.XKEEN_SUBSCRIPTIONS_SNAPSHOT = 'Создавать rollback-копию сгенерированного фрагмента подписки перед перезаписью. По умолчанию 0 (не создавать): фрагмент полностью восстанавливается повторным обновлением подписки, а копия на каждую подписку только копится в configs/backups и изнашивает flash роутера при каждом изменении фида. Значение 1 возвращает прежнее поведение. Конфиги, которые правит человек (роутинг, inbounds, observatory), копируются всегда, независимо от этой настройки. Применяется к следующему обновлению без Restart UI.';
+  ENV_HELP.XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER = 'То же, что XKEEN_SUBSCRIPTIONS_SCHEDULER, но для подписок Mihomo. По умолчанию 1. Требует Restart UI.';
+  ENV_HELP.XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER_TICK = 'Период опроса планировщика подписок Mihomo в секундах. По умолчанию 60, диапазон 15–3600. Требует Restart UI.';
+  ENV_HELP.XKEEN_MIHOMO_SUBSCRIPTIONS_LOOKAHEAD_SEC = 'Окно подтягивания «почти созревших» подписок Mihomo в секундах. По умолчанию 300, максимум 3600, 0 отключает. Применяется к следующему прогону без Restart UI.';
+  ENV_HELP.XKEEN_MIHOMO_SUBSCRIPTIONS_RESTART_BATCH = 'Один перезапуск ядра на всю пачку обновлённых подписок Mihomo. По умолчанию 1, значение 0 возвращает перезапуск на каждую подписку. Применяется к следующему прогону без Restart UI.';
+  ENV_HELP.XKEEN_DNS_OVER_VLESS_WATCHDOG = 'Фоновый сторож DNS-over-VLESS. По умолчанию 1. Пока защита включена, порт 53 принадлежит ядру, и сторож возвращает DNS прошивке, если ядро не поднимается. Значение 0 отключает сторожа: при отказе ядра сеть останется без DNS до ручного вмешательства. Требует Restart UI.';
+  ENV_HELP.XKEEN_DNS_OVER_VLESS_WATCHDOG_INTERVAL = 'Период проверки сторожа DNS-over-VLESS в секундах. По умолчанию 30, диапазон 5–3600. Требует Restart UI.';
+  ENV_HELP.XKEEN_DNS_OVER_VLESS_WATCHDOG_FAILS = 'Сколько неудачных проверок подряд сторож считает отказом ядра. По умолчанию 3, диапазон 1–100. Требует Restart UI.';
+  ENV_HELP.XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS = 'Сколько раз сторож пробует перезапустить ядро перед тем, как вернуть DNS прошивке. По умолчанию 2, диапазон 0–20. Значение 0 — отдавать DNS сразу. Требует Restart UI.';
   ENV_HELP.XKEEN_XRAY_TEST_TIMEOUT = 'Таймаут preflight-проверки Xray (`xray -test`) в секундах. По умолчанию 30 секунд для всех роутеров, минимум 5. Пользователь может подобрать значение под своё устройство; применяется при следующем сохранении без Restart UI.';
   ENV_HELP.XKEEN_DAT_ALLOW_HOSTS = 'Доверенные хосты для обновления DAT по URL. Формат: через запятую. По умолчанию: GitHub/release/raw хосты.';
   ENV_HELP.XKEEN_DAT_ALLOW_HTTP = 'Разрешить plain HTTP для DAT update. По умолчанию 0 (только HTTPS).';
@@ -375,6 +391,13 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   ENV_NO_RESTART_KEYS.add('XKEEN_HAPP_HELPER_HWID');
   ENV_NO_RESTART_KEYS.add('XKEEN_SUBSCRIPTION_HAPP_USER_AGENT');
   ENV_NO_RESTART_KEYS.add('XKEEN_XRAY_TEST_TIMEOUT');
+  ENV_NO_RESTART_KEYS.add('XKEEN_SUBSCRIPTION_ALLOW_HTTP');
+  ENV_NO_RESTART_KEYS.add('XKEEN_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS');
+  ENV_NO_RESTART_KEYS.add('XKEEN_SUBSCRIPTIONS_LOOKAHEAD_SEC');
+  ENV_NO_RESTART_KEYS.add('XKEEN_SUBSCRIPTIONS_RESTART_BATCH');
+  ENV_NO_RESTART_KEYS.add('XKEEN_SUBSCRIPTIONS_SNAPSHOT');
+  ENV_NO_RESTART_KEYS.add('XKEEN_MIHOMO_SUBSCRIPTIONS_LOOKAHEAD_SEC');
+  ENV_NO_RESTART_KEYS.add('XKEEN_MIHOMO_SUBSCRIPTIONS_RESTART_BATCH');
   ENV_RESTART_KEYS.delete('XKEEN_ALLOW_SHELL');
   ENV_RESTART_KEYS.delete('XKEEN_AUTH_LOGIN_WINDOW_SECONDS');
   ENV_RESTART_KEYS.delete('XKEEN_AUTH_LOGIN_MAX_ATTEMPTS');
@@ -403,7 +426,22 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   ENV_RESTART_KEYS.delete('XKEEN_HAPP_HELPER_HWID');
   ENV_RESTART_KEYS.delete('XKEEN_SUBSCRIPTION_HAPP_USER_AGENT');
   ENV_RESTART_KEYS.delete('XKEEN_XRAY_TEST_TIMEOUT');
+  ENV_RESTART_KEYS.delete('XKEEN_SUBSCRIPTION_ALLOW_HTTP');
+  ENV_RESTART_KEYS.delete('XKEEN_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS');
+  ENV_RESTART_KEYS.delete('XKEEN_SUBSCRIPTIONS_LOOKAHEAD_SEC');
+  ENV_RESTART_KEYS.delete('XKEEN_SUBSCRIPTIONS_RESTART_BATCH');
+  ENV_RESTART_KEYS.delete('XKEEN_SUBSCRIPTIONS_SNAPSHOT');
+  ENV_RESTART_KEYS.delete('XKEEN_MIHOMO_SUBSCRIPTIONS_LOOKAHEAD_SEC');
+  ENV_RESTART_KEYS.delete('XKEEN_MIHOMO_SUBSCRIPTIONS_RESTART_BATCH');
   ENV_RESTART_KEYS.add('XKEEN_INIT_SCRIPT');
+  ENV_RESTART_KEYS.add('XKEEN_SUBSCRIPTIONS_SCHEDULER');
+  ENV_RESTART_KEYS.add('XKEEN_SUBSCRIPTIONS_SCHEDULER_TICK');
+  ENV_RESTART_KEYS.add('XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER');
+  ENV_RESTART_KEYS.add('XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER_TICK');
+  ENV_RESTART_KEYS.add('XKEEN_DNS_OVER_VLESS_WATCHDOG');
+  ENV_RESTART_KEYS.add('XKEEN_DNS_OVER_VLESS_WATCHDOG_INTERVAL');
+  ENV_RESTART_KEYS.add('XKEEN_DNS_OVER_VLESS_WATCHDOG_FAILS');
+  ENV_RESTART_KEYS.add('XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS');
 
   let _envSnapshot = { items: [], envFile: '' };
   let _envFilter = '';
@@ -479,6 +517,20 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
       prefixes: [],
     },
     {
+      id: 'subscriptions',
+      title: 'Подписки и автообновление',
+      desc: 'Политика URL подписок и фоновый планировщик обновления Xray/Mihomo.',
+      keys: [],
+      prefixes: ['XKEEN_SUBSCRIPTION_', 'XKEEN_SUBSCRIPTIONS_', 'XKEEN_MIHOMO_SUBSCRIPTIONS_'],
+    },
+    {
+      id: 'dns',
+      title: 'DNS-over-VLESS',
+      desc: 'Сторож, который возвращает DNS прошивке, если ядро не поднимается.',
+      keys: [],
+      prefixes: ['XKEEN_DNS_OVER_VLESS_'],
+    },
+    {
       id: 'dat',
       title: 'DAT / GeoIP',
       desc: 'Ограничения и allow-list для загрузки geoip/geosite/DAT.',
@@ -538,7 +590,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
       id: 'xray',
       title: 'Xray и списки XKeen',
       desc: 'Пути фрагментов Xray, preflight-таймаут и файлы списков портов/IP.',
-      keys: ['XKEEN_XRAY_TEST_TIMEOUT', 'XKEEN_CONFIG_FILE'],
+      keys: ['XKEEN_XRAY_TEST_TIMEOUT', 'XKEEN_CONFIG_FILE', 'XKEEN_INIT_SCRIPT'],
       prefixes: ['XKEEN_XRAY_', 'XKEEN_PORT_', 'XKEEN_IP_'],
     },
     {
