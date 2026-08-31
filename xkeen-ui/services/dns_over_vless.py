@@ -43,6 +43,10 @@ STATE_FILENAME = "dns_over_vless.json"
 LISTENER_TAG = "xk-dns-listener"
 DNS_IN_TAG = "dns-in"
 DNS_OUT_TAG = "dns-out"
+# The port the managed listener takes over.  A resolver pointed back at it
+# would ask this very service for the name it is trying to resolve, so the
+# parser refuses such an address instead of building a loop.
+LISTENER_PORT = 53
 PROXY_RULE_TAG = "xk_dns_over_vless_proxy"
 CAPTURE_RULE_TAG = "xk_dns_over_vless_capture"
 BALANCER_TAG = "xk-dns-over-vless"
@@ -881,6 +885,28 @@ def _safe_upstreams(value: Any) -> Optional[list[str]]:
         return None
 
 
+def _address_is_ours(parsed: Any) -> bool:
+    """Does this address belong to the machine the panel runs on?
+
+    The listener binds every interface, so a resolver at the router's own LAN
+    address loops just as surely as one at 127.0.0.1.  Binding a throwaway
+    socket is the cheapest honest answer: it succeeds only for an address that
+    is actually assigned here.  When the probe cannot run we stay permissive —
+    refusing a legitimate resolver would be worse than missing a loop.
+    """
+    if parsed.is_loopback:
+        return True
+    family = socket.AF_INET6 if parsed.version == 6 else socket.AF_INET
+    try:
+        with socket.socket(family, socket.SOCK_DGRAM) as probe:
+            probe.bind((str(parsed), 0))
+        return True
+    except OSError:
+        return False
+    except Exception:
+        return False
+
+
 def _parse_local_resolver(value: Any) -> Optional[Dict[str, Any]]:
     """Parse ``address`` or ``address:port`` for the LAN-side resolver.
 
@@ -917,6 +943,13 @@ def _parse_local_resolver(value: Any) -> Optional[Dict[str, Any]]:
         raise DnsOverVlessError(
             f"«{text}»: адрес нельзя использовать как DNS-сервер.",
             code="local_resolver_invalid",
+        )
+    if port == LISTENER_PORT and _address_is_ours(parsed):
+        raise DnsOverVlessError(
+            f"«{text}»: по этому адресу отвечает сам DNS-over-VLESS — запрос вернулся бы к нему же "
+            "и зациклился. Домашние имена знает резолвер прошивки, он слушает на другом порту: "
+            "127.0.0.1:41100, и дальше по одному порту на политику доступа.",
+            code="local_resolver_loop",
         )
     return {"address": str(parsed), "port": port}
 
@@ -1080,7 +1113,7 @@ def _managed_fragment(
             {
                 "tag": LISTENER_TAG,
                 "protocol": "dokodemo-door",
-                "port": 53,
+                "port": LISTENER_PORT,
                 "settings": {"network": "tcp,udp"},
             }
         ],
@@ -1964,6 +1997,21 @@ def apply_action(
             raise DnsOverVlessError(
                 "Для доменов мимо туннеля укажите и адреса DNS, и список доменов.",
                 code="direct_incomplete",
+            )
+        # Both groups live in one ``servers`` list and are told apart on read-back
+        # by the addresses named in the bypass rule — by address alone, port and
+        # zones do not enter into it.  An address in both groups therefore reads
+        # back as one group only, and the panel would report drift against a
+        # config that is in fact exactly what it wrote.
+        shared_resolvers = sorted(
+            {item["address"] for item in wanted_local} & {item["address"] for item in wanted_direct}
+        )
+        if shared_resolvers:
+            raise DnsOverVlessError(
+                "Адрес " + ", ".join(shared_resolvers) + " указан и для домашних имён, и для доменов "
+                "мимо туннеля. Панель различает эти группы по адресам, поэтому один и тот же адрес "
+                "в обеих сделал бы настройку нечитаемой — оставьте его в одной.",
+                code="resolver_group_overlap",
             )
         direct_tag = _direct_outbound_tag(runtime)
         if (wanted_local or wanted_direct) and not direct_tag:

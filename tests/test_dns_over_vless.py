@@ -1360,6 +1360,71 @@ def test_status_offers_the_zone_presets(tmp_path: Path, monkeypatch):
     assert result["zone_presets"]["keenetic"] == dns.KEENETIC_ZONES
 
 
+def test_resolver_pointed_at_our_own_listener_is_refused():
+    # 127.0.0.1:53 is this very service: the query would come straight back.
+    for bad in ("127.0.0.1", "127.0.0.1:53"):
+        with pytest.raises(dns.DnsOverVlessError) as excinfo:
+            dns._parse_local_resolver(bad)
+        assert excinfo.value.code == "local_resolver_loop"
+        assert "зациклил" in str(excinfo.value)
+
+    # ::1 never reaches the new rule: Python counts ::/8 as reserved, so the
+    # older check refuses it first. Same outcome for the user, other sentence.
+    with pytest.raises(dns.DnsOverVlessError):
+        dns._parse_local_resolver("[::1]:53")
+
+    # The firmware resolver sits on the same host but a different port, which is
+    # exactly the address the hint tells people to use.
+    assert dns._parse_local_resolver("127.0.0.1:41100") == {"address": "127.0.0.1", "port": 41100}
+    # A resolver elsewhere in the network keeps working on port 53.
+    assert dns._parse_local_resolver("192.168.1.1") == {"address": "192.168.1.1", "port": 53}
+
+
+def test_own_address_probe_stays_permissive_when_it_cannot_run(monkeypatch):
+    # Refusing a legitimate resolver would be worse than missing a loop.
+    import socket as socket_module
+
+    def _explode(*_args, **_kwargs):
+        raise OSError("no sockets here")
+
+    monkeypatch.setattr(socket_module, "socket", _explode)
+    assert dns._parse_local_resolver("192.168.1.1") == {"address": "192.168.1.1", "port": 53}
+
+
+def test_one_address_in_both_resolver_groups_is_refused(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+
+    with pytest.raises(dns.DnsOverVlessError) as excinfo:
+        dns.apply_action(
+            "enable",
+            configs_dir=str(configs),
+            routing_file=str(routing_path),
+            ui_state_dir=str(state),
+            restart_xkeen=lambda *a, **k: None,
+            local_resolver="192.168.1.1",
+            local_domains="domain:lan",
+            direct_resolver="192.168.1.1:5353",
+            direct_domains="domain:example.com",
+        )
+
+    assert excinfo.value.code == "resolver_group_overlap"
+    # The port differs, but read-back splits the groups by address alone.
+    assert "192.168.1.1" in str(excinfo.value)
+
+
+def test_field_hint_names_the_firmware_resolver_ports():
+    # The addresses are not guessable, so the hint has to carry them; without
+    # this the field reads as if there were nothing to put in it.
+    markup = Path("xkeen-ui/templates/panel.html").read_text(encoding="utf-8")
+    hint_start = markup.index('for="routing-dns-over-vless-local"')
+    hint = markup[hint_start : hint_start + 1600]
+    assert "127.0.0.1:41100" in hint
+    assert "41101" in hint and "41102" in hint
+    assert "зациклил" in hint
+
+
 def test_managed_jsonc_header_is_not_duplicated_on_rewrite(tmp_path: Path, monkeypatch):
     # On the router the header line had piled up: it is written on every enable, and the
     # previous one survived as an ordinary user comment.
