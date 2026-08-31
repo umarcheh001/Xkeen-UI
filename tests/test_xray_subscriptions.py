@@ -6736,3 +6736,51 @@ def test_refresh_due_subscriptions_lookahead_can_be_disabled(tmp_path: Path, mon
     )
 
     assert [item["id"] for item in results] == ["sub_a"]
+
+
+def _refresh_recording_snapshots(subs, ui_state_dir: Path, xray_dir: Path, sub_id: str):
+    """Refresh one subscription and return the paths a snapshot was asked for."""
+
+    seen: list[str] = []
+    subs.refresh_subscription(
+        str(ui_state_dir),
+        sub_id,
+        xray_configs_dir=str(xray_dir),
+        snapshot=seen.append,
+        restart=False,
+    )
+    return seen
+
+
+def test_subscription_fragment_is_not_snapshotted_by_default(tmp_path: Path, monkeypatch):
+    """A generated fragment is reproducible, so no rollback copy piles up."""
+
+    from services import xray_subscriptions as subs
+
+    sub_id = "sub_snap"
+    ui_state_dir, xray_dir = _prepare_batch_subscriptions(tmp_path, monkeypatch, subs, [sub_id])
+
+    # First refresh creates the fragment; there is nothing to snapshot yet.
+    _refresh_recording_snapshots(subs, ui_state_dir, xray_dir, sub_id)
+
+    # Second refresh overwrites it with different content.
+    monkeypatch.setattr(subs, "fetch_subscription_body", lambda url: (_vless("Renamed node"), {}))
+    seen = _refresh_recording_snapshots(subs, ui_state_dir, xray_dir, sub_id)
+
+    assert (xray_dir / f"04_outbounds.{sub_id}.json").exists()
+    assert not any(Path(path).name.startswith(f"04_outbounds.{sub_id}") for path in seen)
+
+
+def test_subscription_fragment_snapshot_can_be_restored_by_env(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    sub_id = "sub_snap_on"
+    ui_state_dir, xray_dir = _prepare_batch_subscriptions(tmp_path, monkeypatch, subs, [sub_id])
+    monkeypatch.setenv("XKEEN_SUBSCRIPTIONS_SNAPSHOT", "1")
+
+    _refresh_recording_snapshots(subs, ui_state_dir, xray_dir, sub_id)
+    monkeypatch.setattr(subs, "fetch_subscription_body", lambda url: (_vless("Renamed node"), {}))
+    seen = _refresh_recording_snapshots(subs, ui_state_dir, xray_dir, sub_id)
+
+    output_path = str(xray_dir / f"04_outbounds.{sub_id}.json")
+    assert output_path in seen

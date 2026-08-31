@@ -2879,6 +2879,24 @@ def _jsonc_semantically_matches_subscription_output(text: str, obj: Any) -> bool
     return _subscription_output_hash(parsed) == _subscription_output_hash(obj)
 
 
+def _subscription_output_snapshot(snapshot: SnapshotCallback | None) -> SnapshotCallback | None:
+    """Rollback snapshots for generated subscription fragments are off by default.
+
+    The fragment is fully reproducible by refreshing the subscription, so a
+    rollback copy per subscription only piles up in ``configs/backups`` and
+    rewrites router flash on every feed change. Set
+    ``XKEEN_SUBSCRIPTIONS_SNAPSHOT=1`` to bring the old behaviour back.
+
+    Human-edited configs (routing, inbounds, observatory) keep their snapshots
+    regardless of this flag.
+    """
+    if snapshot is None:
+        return None
+    if not env_flag("XKEEN_SUBSCRIPTIONS_SNAPSHOT", False):
+        return None
+    return snapshot
+
+
 def _write_subscription_output_if_changed(path: str, obj: Any, *, snapshot: SnapshotCallback | None = None) -> bool:
     new_text = json.dumps(obj, ensure_ascii=False, indent=2) + "\n"
     try:
@@ -5509,7 +5527,8 @@ def refresh_subscription(
             set_sockopt_mark(outbounds, 255)
         tags = [str(ob.get("tag") or "").strip() for ob in outbounds if isinstance(ob, dict) and ob.get("tag")]
         output_obj = {"outbounds": outbounds}
-        changed = _write_subscription_output_if_changed(output_path, output_obj, snapshot=snapshot)
+        output_snapshot = _subscription_output_snapshot(snapshot)
+        changed = _write_subscription_output_if_changed(output_path, output_obj, snapshot=output_snapshot)
         current_file_hash = str(manual_overrides.get("current_hash") or "").strip() if isinstance(manual_overrides, dict) else ""
         previous_output_hash = str(sub.get("last_hash") or "").strip()
         accepted_manual_file_change = bool(
@@ -5535,14 +5554,14 @@ def refresh_subscription(
                 except Exception:
                     raw_old = ""
                 if raw_old != raw_text:
-                    if snapshot and os.path.exists(raw_path):
-                        snapshot(raw_path)
+                    if output_snapshot and os.path.exists(raw_path):
+                        output_snapshot(raw_path)
                     _atomic_write_text(raw_path, raw_text)
             else:
                 raw_old = load_text(raw_path, default="")
                 if isinstance(raw_old, str) and raw_old != raw_text and not _jsonc_semantically_matches_subscription_output(raw_old, output_obj):
-                    if snapshot and os.path.exists(raw_path):
-                        snapshot(raw_path)
+                    if output_snapshot and os.path.exists(raw_path):
+                        output_snapshot(raw_path)
                     _atomic_write_text(raw_path, raw_text)
         except Exception:
             pass
