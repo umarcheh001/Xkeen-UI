@@ -1358,3 +1358,53 @@ def test_status_offers_the_zone_presets(tmp_path: Path, monkeypatch):
 
     assert set(result["zone_presets"]) == {"local", "ptr", "ptr172", "keenetic", "netcraze"}
     assert result["zone_presets"]["keenetic"] == dns.KEENETIC_ZONES
+
+
+def test_managed_jsonc_header_is_not_duplicated_on_rewrite(tmp_path: Path, monkeypatch):
+    # On the router the header line had piled up: it is written on every enable, and the
+    # previous one survived as an ordinary user comment.
+    from services import xray_subscriptions as subs
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(path) + "c")
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+
+    _configs, routing_path, _state = _scenario_config(tmp_path)
+    sidecar = Path(str(routing_path) + "c")
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+
+    dns._write_routing_preserving_comments(str(routing_path), routing)
+    header = "// DNS-over-VLESS managed by XKeen UI"
+    assert sidecar.read_text(encoding="utf-8").count(header) == 1
+
+    # A comment the user typed sits in the same slot as the header and must survive.
+    sidecar.write_text(
+        sidecar.read_text(encoding="utf-8").replace("{", "// не трогать этот блок\n{", 1),
+        encoding="utf-8",
+    )
+    for _ in range(3):
+        dns._write_routing_preserving_comments(str(routing_path), routing)
+
+    text = sidecar.read_text(encoding="utf-8")
+    assert text.count(header) == 1
+    assert "// не трогать этот блок" in text
+
+
+def test_managed_jsonc_header_already_duplicated_is_healed(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(path) + "c")
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+
+    _configs, routing_path, _state = _scenario_config(tmp_path)
+    sidecar = Path(str(routing_path) + "c")
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    header = "// DNS-over-VLESS managed by XKeen UI"
+
+    # The state a router that ran the old code is already in.
+    sidecar.write_text(
+        header + "\n" + header + "\n" + json.dumps(routing, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    dns._write_routing_preserving_comments(str(routing_path), routing)
+
+    assert sidecar.read_text(encoding="utf-8").count(header) == 1
