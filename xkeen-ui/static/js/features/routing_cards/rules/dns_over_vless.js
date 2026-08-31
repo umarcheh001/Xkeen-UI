@@ -37,6 +37,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     zones: 'routing-dns-over-vless-zones',
     zonesRow: 'routing-dns-over-vless-zones-row',
     zonePresets: 'routing-dns-over-vless-zone-presets',
+    direct: 'routing-dns-over-vless-direct',
+    directZones: 'routing-dns-over-vless-direct-zones',
+    directZonesRow: 'routing-dns-over-vless-direct-zones-row',
+    directFromRules: 'routing-dns-over-vless-direct-from-rules',
   };
 
   let status = null;
@@ -81,6 +85,13 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     if (local) settings.local_resolver = String(local.value || '').trim();
     const zones = $(DOM.zones);
     if (zones && settings.local_resolver) settings.local_domains = String(zones.value || '').trim();
+    const direct = $(DOM.direct);
+    // Same rule as above: an empty string switches the bypass group off.
+    if (direct) settings.direct_resolver = String(direct.value || '').trim();
+    const directZones = $(DOM.directZones);
+    if (directZones && settings.direct_resolver) {
+      settings.direct_domains = String(directZones.value || '').trim();
+    }
     return settings;
   }
 
@@ -402,6 +413,34 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       zones.disabled = busy;
     }
     if (hasLocal) renderZonePresets();
+
+    const direct = $(DOM.direct);
+    if (direct && !direct.dataset.touched) {
+      direct.value = ((data && data.direct_resolvers) || []).join(', ');
+    }
+    if (direct) direct.disabled = busy;
+
+    const directZones = $(DOM.directZones);
+    const directZonesRow = $(DOM.directZonesRow);
+    // Like the zone list above: the domains matter only once a resolver is
+    // named, so the field appears together with one.
+    const hasDirect = !!(direct && String(direct.value || '').trim());
+    if (directZonesRow) directZonesRow.classList.toggle('hidden', !hasDirect);
+    if (directZones) {
+      if (!directZones.dataset.touched) {
+        directZones.value = ((data && data.direct_domains) || []).join(', ');
+      }
+      directZones.disabled = busy;
+    }
+    const fromRules = $(DOM.directFromRules);
+    if (fromRules) {
+      // Nothing to offer when no rule of the user's own goes out directly.
+      const offered = (data && data.direct_rule_domains) || [];
+      fromRules.disabled = busy || !offered.length;
+      fromRules.title = offered.length
+        ? `Подставит домены из ваших правил: ${offered.join(', ')}`
+        : 'В правилах роутинга нет доменов, ведущих напрямую';
+    }
   }
 
   function renderFallback(candidate, multi, wanted) {
@@ -797,17 +836,29 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         if (status) render(status);
       });
     }
-    [DOM.upstreams, DOM.local, DOM.zones].forEach((id) => {
+    [DOM.upstreams, DOM.local, DOM.zones, DOM.direct, DOM.directZones].forEach((id) => {
       const field = $(id);
       if (!field) return;
       field.addEventListener('input', () => {
         field.dataset.touched = '1';
-        // Typing a local resolver reveals the zone list straight away.
-        if (id === DOM.local && status) renderDnsFields(status);
+        // Typing a resolver reveals the matching domain list straight away.
+        if ((id === DOM.local || id === DOM.direct) && status) renderDnsFields(status);
         // Editing the list by hand must keep the group buttons honest.
         if (id === DOM.zones) renderZonePresets();
       });
     });
+    const fromRules = $(DOM.directFromRules);
+    if (fromRules) {
+      fromRules.addEventListener('click', () => {
+        const offered = (status && status.direct_rule_domains) || [];
+        const field = $(DOM.directZones);
+        if (!field || !offered.length) return;
+        // The routing rules are the source of truth: resolving these names
+        // directly is only useful because they already travel directly.
+        field.value = offered.join(', ');
+        field.dataset.touched = '1';
+      });
+    }
     const multiBox = $(DOM.multi);
     if (multiBox) {
       multiBox.addEventListener('change', () => {

@@ -286,6 +286,12 @@ def test_frontend_has_dns_button_modal_and_guard_copy():
     assert "Маршрут для DNS-запросов" in template
     assert "renderRoute" in script
     assert 'id="routing-dns-over-vless-route-fallback"' in template
+    # The bypass group needs both halves in the markup, plus the button that
+    # copies the domains from the routing rules instead of retyping them.
+    assert 'id="routing-dns-over-vless-direct"' in template
+    assert 'id="routing-dns-over-vless-direct-zones"' in template
+    assert 'id="routing-dns-over-vless-direct-from-rules"' in template
+    assert "direct_rule_domains" in script
     # The card prints the server's sentence as is: no wrapper written in
     # config language ("Резервирование не переносится: ...") around it.
     assert "plan.reason" in script
@@ -1081,6 +1087,192 @@ def test_declared_fragment_with_split_zones_is_not_read_back_as_drift(tmp_path: 
 
     assert folded == [{"address": "192.168.1.1", "port": 5353}]
     assert dns._managed_fragment(["1.1.1.1"], folded, zones[("192.168.1.1", 5353)]) == fragment
+
+
+def test_direct_domains_are_resolved_past_the_tunnel(tmp_path: Path):
+    """A domain routed directly should be resolved directly, or its address is
+    the one near the exit point while the traffic goes straight out."""
+
+    local = dns._parse_local_resolvers("192.168.1.1")
+    bypass = dns._parse_direct_resolvers("77.88.8.8, 77.88.8.1")
+    fragment = dns._managed_fragment(
+        ["8.8.8.8"], local, ["domain:lan"], bypass, ["geosite:category-ru"]
+    )
+    servers = fragment["dns"]["servers"]
+
+    # Home zones first, then the bypass group, then the public upstream.
+    assert servers[0]["address"] == "192.168.1.1"
+    assert [item["address"] for item in servers[1:3]] == ["77.88.8.8", "77.88.8.1"]
+    assert all(item["domains"] == ["geosite:category-ru"] for item in servers[1:3])
+    # A silent resolver must not leave the name unresolved: the query falls
+    # through to the public upstream instead.
+    assert all(item["skipFallback"] is False for item in servers[1:3])
+    assert servers[3:] == ["8.8.8.8"]
+    assert fragment["dns"]["disableFallback"] is False
+
+
+def test_direct_rule_keeps_those_queries_out_of_the_tunnel(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+    target = dns._select_target(runtime, "balancer_main", routing)
+    bypass = dns._parse_direct_resolvers("77.88.8.8")
+
+    rule = dns._direct_rule(bypass, "direct")
+    assert rule["ip"] == ["77.88.8.8/32"]
+    assert rule["outboundTag"] == "direct"
+
+    planned = dns._build_enabled_routing(
+        routing, target, dns._local_rule(dns._parse_local_resolvers("192.168.1.1"), "direct"), rule
+    )
+    tags = [item.get("ruleTag") for item in planned["routing"]["rules"][:4]]
+
+    # Both bypass rules must win over the proxy rule, or the query is already
+    # inside the tunnel by the time they are checked.
+    assert tags == [dns.LOCAL_RULE_TAG, dns.DIRECT_RULE_TAG, dns.PROXY_RULE_TAG, dns.CAPTURE_RULE_TAG]
+
+
+def test_half_a_bypass_setting_is_refused(tmp_path: Path, monkeypatch):
+    """Resolvers without domains are never asked; domains without resolvers
+    have nowhere to go.  Either half alone is a silent no-op."""
+
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+
+    with pytest.raises(dns.DnsOverVlessError) as excinfo:
+        dns.apply_action(
+            "enable",
+            configs_dir=str(configs),
+            routing_file=str(routing_path),
+            ui_state_dir=str(state),
+            restart_xkeen=lambda **_k: True,
+            target_tag="balancer_main",
+            direct_resolver="77.88.8.8",
+        )
+
+    assert excinfo.value.code == "direct_incomplete"
+
+
+def test_bypass_group_survives_read_back_without_looking_tampered(tmp_path: Path, monkeypatch):
+    """Both groups are objects in the same list; telling them apart is what the
+    drift check gets wrong if it guesses instead of reading the bypass rule."""
+
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj: _write(Path(path), obj))
+
+    dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+        local_resolver="192.168.1.1:5353",
+        direct_resolver="77.88.8.8",
+        direct_domains="geosite:category-ru, domain:ok.ru",
+    )
+
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["enabled"] is True
+    assert result["tampered"] is False
+    assert result["local_resolvers"] == ["192.168.1.1:5353"]
+    assert result["direct_resolvers"] == ["77.88.8.8:53"]
+    assert result["direct_domains"] == ["geosite:category-ru", "domain:ok.ru"]
+
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    tags = [item.get("ruleTag") for item in routing["routing"]["rules"][:2]]
+    assert tags == [dns.LOCAL_RULE_TAG, dns.DIRECT_RULE_TAG]
+
+
+def test_disable_removes_the_bypass_rule_too(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+    target = dns._select_target(runtime, "balancer_main", routing)
+    planned = dns._build_enabled_routing(
+        routing, target, None, dns._direct_rule(dns._parse_direct_resolvers("77.88.8.8"), "direct")
+    )
+
+    cleaned = dns._build_disabled_routing(planned)
+    tags = {item.get("ruleTag") for item in cleaned["routing"]["rules"]}
+
+    assert dns.DIRECT_RULE_TAG not in tags
+    assert dns.PROXY_RULE_TAG not in tags
+
+
+def test_emergency_release_drops_the_bypass_rules_too(tmp_path: Path, monkeypatch):
+    """The watchdog gives port 53 back by clearing our rules; a rule it does not
+    know about would stay behind and keep sending DNS to a dead listener."""
+
+    configs, routing_path, state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+    target = dns._select_target(runtime, "balancer_main", routing)
+    planned = dns._build_enabled_routing(
+        routing,
+        target,
+        dns._local_rule(dns._parse_local_resolvers("192.168.1.1"), "direct"),
+        dns._direct_rule(dns._parse_direct_resolvers("77.88.8.8"), "direct"),
+    )
+    _write(routing_path, planned)
+    _write(
+        configs / dns.MANAGED_FRAGMENT,
+        dns._managed_fragment(
+            ["8.8.8.8"],
+            dns._parse_local_resolvers("192.168.1.1"),
+            None,
+            dns._parse_direct_resolvers("77.88.8.8"),
+            ["geosite:category-ru"],
+        ),
+    )
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj: _write(Path(path), obj))
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+
+    released = dns._emergency_release(
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        reason="test",
+    )
+
+    assert "routing_cleared" in released["steps"]
+    assert "fragment_removed" in released["steps"]
+    after = json.loads(routing_path.read_text(encoding="utf-8"))
+    tags = {item.get("ruleTag") for item in after["routing"]["rules"]}
+    assert dns.LOCAL_RULE_TAG not in tags
+    assert dns.DIRECT_RULE_TAG not in tags
+    assert dns.PROXY_RULE_TAG not in tags
+    assert dns.CAPTURE_RULE_TAG not in tags
+
+
+def test_domains_already_routed_direct_are_offered_as_a_starting_list(tmp_path: Path):
+    """Keeping the two lists in sync by hand is what makes them drift apart."""
+
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    routing["routing"]["rules"].insert(
+        0,
+        {"type": "field", "outboundTag": "direct", "domain": ["geosite:category-ru", "ok.ru"]},
+    )
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    offered = dns._domains_routed_direct(runtime, routing)
+
+    # Bare names are qualified the same way the zone list qualifies them.
+    assert offered == ["geosite:category-ru", "domain:ok.ru"]
 
 
 def test_several_network_segments_each_get_their_own_resolver(tmp_path: Path):

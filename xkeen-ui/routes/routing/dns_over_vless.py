@@ -57,6 +57,8 @@ def register_dns_over_vless_routes(
         upstreams = payload.get("upstreams", None)
         local_resolver = payload.get("local_resolver", None)
         local_domains = payload.get("local_domains", None)
+        direct_resolver = payload.get("direct_resolver", None)
+        direct_domains = payload.get("direct_domains", None)
         # Both assistants flip the same firmware switch and both want port 53.
         # Turning the second one on would overwrite the first one's record of the
         # original setting, leaving nothing able to put it back.
@@ -84,6 +86,8 @@ def register_dns_over_vless_routes(
                 upstreams=upstreams,
                 local_resolver=local_resolver,
                 local_domains=local_domains,
+                direct_resolver=direct_resolver,
+                direct_domains=direct_domains,
             )
             audit(True, action=action, summary=("DNS-over-VLESS включён" if action == "enable" else "DNS-over-VLESS отключён"))
             return jsonify(result)

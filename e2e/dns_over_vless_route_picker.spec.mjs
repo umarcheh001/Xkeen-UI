@@ -58,6 +58,15 @@ const STATUS = {
 };
 
 
+const BYPASS_STATUS = {
+  ...STATUS,
+  direct_resolvers: [],
+  direct_domains: [],
+  // What the user's own routing rules already send past the tunnel.
+  direct_rule_domains: ['geosite:category-ru', 'domain:ok.ru'],
+};
+
+
 const MIHOMO_STATUS = {
   ...STATUS,
   active_core: 'mihomo',
@@ -252,4 +261,34 @@ test('clicking the header leaves the dialog where it is, dragging still moves it
   await page.mouse.up();
   const afterDrag = await geometry();
   expect(afterDrag.left).toBeGreaterThan(before.left + 40);
+});
+
+
+test('the bypass domain list appears with its resolver and fills from the rules', async ({ page }) => {
+  await openDialog(page, BYPASS_STATUS);
+
+  const resolvers = page.locator('#routing-dns-over-vless-direct');
+  const domains = page.locator('#routing-dns-over-vless-direct-zones');
+  const fromRules = page.locator('#routing-dns-over-vless-direct-from-rules');
+
+  // Domains mean nothing until a resolver is named, so the list stays hidden.
+  await expect(resolvers).toBeVisible();
+  await expect(domains).toBeHidden();
+
+  await resolvers.fill('77.88.8.8, 77.88.8.1');
+  await expect(domains).toBeVisible();
+
+  // Retyping the list by hand is what lets it drift from the routing rules.
+  await expect(fromRules).toBeEnabled();
+  await fromRules.click();
+  await expect(domains).toHaveValue('geosite:category-ru, domain:ok.ru');
+});
+
+
+test('with no direct rules the offer button stays closed', async ({ page }) => {
+  await openDialog(page, { ...BYPASS_STATUS, direct_rule_domains: [] });
+
+  await page.locator('#routing-dns-over-vless-direct').fill('77.88.8.8');
+  await expect(page.locator('#routing-dns-over-vless-direct-zones')).toBeVisible();
+  await expect(page.locator('#routing-dns-over-vless-direct-from-rules')).toBeDisabled();
 });

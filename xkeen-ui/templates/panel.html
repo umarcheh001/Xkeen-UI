@@ -2607,6 +2607,19 @@
               <div id="routing-dns-over-vless-zone-presets" class="routing-dns-over-vless-zone-presets" role="group" aria-label="Наборы зон"></div>
               <p class="modal-hint">Заполнено частыми случаями — дополните своими, если в сети используется собственная зона. Через запятую; запись без префикса дополняется до <code>domain:</code>, иначе Xray искал бы её как подстроку и захватил бы чужие домены. Обратные зоны <code>in-addr.arpa</code> и <code>ip6.arpa</code> держат PTR-запросы о приватных адресах внутри сети.</p>
             </div>
+
+            <label for="routing-dns-over-vless-direct">DNS для доменов мимо туннеля</label>
+            <input type="text" id="routing-dns-over-vless-direct" class="routing-rule-input" placeholder="не используется" autocomplete="off" spellcheck="false">
+            <p class="modal-hint">Необязательно. Домены, которые вы и так пускаете напрямую, сейчас получают адрес от зарубежного резолвера — сайт с CDN отдаёт узел рядом с точкой выхода, а не рядом с вами. Укажите резолверы, которые ответят на них правильно: через запятую, спрашиваются по очереди, порт — если не 53.</p>
+
+            <div id="routing-dns-over-vless-direct-zones-row" class="routing-dns-over-vless-zones hidden">
+              <label for="routing-dns-over-vless-direct-zones">Домены, которые резолвятся мимо туннеля</label>
+              <textarea id="routing-dns-over-vless-direct-zones" class="routing-rule-input" rows="3" autocomplete="off" spellcheck="false"></textarea>
+              <div class="routing-dns-over-vless-zone-presets">
+                <button type="button" id="routing-dns-over-vless-direct-from-rules" class="routing-dns-over-vless-zone-preset">Взять из правил, ведущих напрямую</button>
+              </div>
+              <p class="modal-hint">Эти запросы увидит провайдер. Для сайтов, которые вы и так открываете напрямую, это обычно не важно — их трафик он видит в любом случае, — зато адрес вы получите ближайший. Если все указанные резолверы молчат, имя всё же спросят у DNS-сервера в туннеле.</p>
+            </div>
           </div>
 
           <div class="routing-dns-over-vless-safety" aria-label="Защита операции">

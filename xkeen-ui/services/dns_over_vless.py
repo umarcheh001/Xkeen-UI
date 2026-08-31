@@ -48,6 +48,10 @@ CAPTURE_RULE_TAG = "xk_dns_over_vless_capture"
 BALANCER_TAG = "xk-dns-over-vless"
 DEFAULT_UPSTREAMS = ["8.8.8.8"]
 LOCAL_RULE_TAG = "xk_dns_over_vless_local"
+# Domains the user already routes past the tunnel: their names are resolved by
+# a resolver of the user's choosing, not through VLESS, so the address they get
+# is the near one instead of one next to the exit point.
+DIRECT_RULE_TAG = "xk_dns_over_vless_direct"
 # Zones that must never be answered from the other side of the tunnel: the
 # router's own names, home network names, and reverse lookups for private
 # ranges (a PTR for 192.168.x.x tells a public resolver about your LAN).
@@ -118,6 +122,10 @@ ZONE_PRESETS = {
 MAX_UPSTREAMS = 8
 MAX_LOCAL_RESOLVERS = 16
 MAX_LOCAL_DOMAINS = 64
+# Same caps for the bypass group: different numbers here would only be a
+# question the user has to answer twice.
+MAX_DIRECT_RESOLVERS = 16
+MAX_DIRECT_DOMAINS = 64
 UPSTREAM_SCHEMES = ("https://", "tls://", "tcp://", "quic://")
 PROBE_DOMAIN = "example.com"
 DNS_PROBE_ATTEMPTS = 3
@@ -932,9 +940,9 @@ def _normalize_local_domain(value: str) -> str:
     return "domain:" + text
 
 
-def _parse_local_resolvers(value: Any) -> list[Dict[str, Any]]:
-    """Parse one or several LAN resolvers — a home network can have segments,
-    each with its own server answering local names."""
+def _parse_resolver_list(value: Any, *, limit: int, noun: str, code: str) -> list[Dict[str, Any]]:
+    """Parse one or several resolvers — a network can have segments, each with
+    its own server, and they are asked in the order given."""
     if value is None or value == "":
         return []
     result: list[Dict[str, Any]] = []
@@ -942,10 +950,37 @@ def _parse_local_resolvers(value: Any) -> list[Dict[str, Any]]:
         parsed = _parse_local_resolver(item)
         if parsed and parsed not in result:
             result.append(parsed)
-    if len(result) > MAX_LOCAL_RESOLVERS:
+    if len(result) > limit:
+        raise DnsOverVlessError(f"Слишком много {noun}: не больше {limit}.", code=code)
+    return result
+
+
+def _parse_local_resolvers(value: Any) -> list[Dict[str, Any]]:
+    return _parse_resolver_list(
+        value, limit=MAX_LOCAL_RESOLVERS, noun="локальных DNS", code="local_resolver_invalid"
+    )
+
+
+def _parse_direct_resolvers(value: Any) -> list[Dict[str, Any]]:
+    return _parse_resolver_list(
+        value, limit=MAX_DIRECT_RESOLVERS, noun="прямых DNS", code="direct_resolver_invalid"
+    )
+
+
+def _direct_domains(value: Any) -> list[str]:
+    """Domains resolved past the tunnel.  Empty means the feature is off: there
+    is no sensible default list, it mirrors the user's own routing rules."""
+    if value is None or value == "":
+        return []
+    result: list[str] = []
+    for item in normalize_upstreams(value):
+        normalized = _normalize_local_domain(item)
+        if normalized and normalized not in result:
+            result.append(normalized)
+    if len(result) > MAX_DIRECT_DOMAINS:
         raise DnsOverVlessError(
-            f"Слишком много локальных DNS: не больше {MAX_LOCAL_RESOLVERS}.",
-            code="local_resolver_invalid",
+            f"Слишком много доменов мимо туннеля: не больше {MAX_DIRECT_DOMAINS}.",
+            code="direct_domains_invalid",
         )
     return result
 
@@ -995,6 +1030,8 @@ def _managed_fragment(
     upstreams: Optional[list[str]] = None,
     local_resolvers: Optional[list[Dict[str, Any]]] = None,
     local_domains: Optional[list[str]] = None,
+    direct_resolvers: Optional[list[Dict[str, Any]]] = None,
+    direct_domains: Optional[list[str]] = None,
 ) -> Dict[str, Any]:
     servers: list[Any] = []
     resolvers = list(local_resolvers or [])
@@ -1013,8 +1050,17 @@ def _managed_fragment(
     for resolver in resolvers:
         if delegated_zones:
             servers.append(_local_server(resolver, delegated_zones, skip_fallback=False))
+    # Domains routed past the tunnel: asked of the resolvers the user picked,
+    # in order, and a miss still reaches a public upstream through VLESS rather
+    # than leaving the name unresolved.
+    bypass = list(direct_resolvers or [])
+    bypass_zones = list(direct_domains or [])
+    for resolver in bypass:
+        if bypass_zones:
+            servers.append(_local_server(resolver, bypass_zones, skip_fallback=False))
     servers.extend(public_upstreams)
     public_count = len(public_upstreams)
+    needs_fallback = bool(resolvers and delegated_zones) or bool(bypass and bypass_zones)
     return {
         "dns": {
             # Explicit public upstreams; the DNS outbound carries these UDP
@@ -1027,7 +1073,7 @@ def _managed_fragment(
             # The flag is global, so it also decides whether a delegated zone
             # may leave a silent local resolver for a public one: when such a
             # server exists, the fallback has to stay on even with one upstream.
-            "disableFallback": public_count < 2 and not (resolvers and delegated_zones),
+            "disableFallback": public_count < 2 and not needs_fallback,
             "tag": DNS_IN_TAG,
         },
         "inbounds": [
@@ -1047,6 +1093,7 @@ def _owned_rule(rule: Any) -> bool:
         PROXY_RULE_TAG,
         CAPTURE_RULE_TAG,
         LOCAL_RULE_TAG,
+        DIRECT_RULE_TAG,
     }
 
 
@@ -1058,10 +1105,10 @@ def _direct_outbound_tag(runtime: Dict[str, Any]) -> str:
     return ""
 
 
-def _local_rule(
-    resolvers: Optional[list[Dict[str, Any]]], direct_tag: str
+def _bypass_rule(
+    resolvers: Optional[list[Dict[str, Any]]], direct_tag: str, rule_tag: str
 ) -> Optional[Dict[str, Any]]:
-    """Send queries aimed at the LAN resolvers straight out, never via VLESS."""
+    """Send queries aimed at these resolvers straight out, never via VLESS."""
     items = list(resolvers or [])
     if not items or not direct_tag:
         return None
@@ -1074,14 +1121,52 @@ def _local_rule(
         "inboundTag": [DNS_IN_TAG],
         "ip": addresses,
         "outboundTag": direct_tag,
-        "ruleTag": LOCAL_RULE_TAG,
+        "ruleTag": rule_tag,
     }
+
+
+def _domains_routed_direct(runtime: Dict[str, Any], routing: Dict[str, Any]) -> list[str]:
+    """Domains the user's own rules already send past the tunnel.
+
+    Offered to the card as a starting list: the whole point of resolving them
+    directly is that they are routed directly, so keeping a second copy of the
+    list by hand would only let the two drift apart.
+    """
+    direct_tag = _direct_outbound_tag(runtime)
+    if not direct_tag:
+        return []
+    model = routing.get("routing") if isinstance(routing.get("routing"), dict) else {}
+    rules = model.get("rules") if isinstance(model.get("rules"), list) else []
+    result: list[str] = []
+    for rule in rules:
+        if not isinstance(rule, dict) or _owned_rule(rule):
+            continue
+        if _clean_tag(rule.get("outboundTag")) != direct_tag:
+            continue
+        for item in rule.get("domain") or []:
+            value = _normalize_local_domain(item)
+            if value and value not in result and len(result) < MAX_DIRECT_DOMAINS:
+                result.append(value)
+    return result
+
+
+def _local_rule(
+    resolvers: Optional[list[Dict[str, Any]]], direct_tag: str
+) -> Optional[Dict[str, Any]]:
+    return _bypass_rule(resolvers, direct_tag, LOCAL_RULE_TAG)
+
+
+def _direct_rule(
+    resolvers: Optional[list[Dict[str, Any]]], direct_tag: str
+) -> Optional[Dict[str, Any]]:
+    return _bypass_rule(resolvers, direct_tag, DIRECT_RULE_TAG)
 
 
 def _build_enabled_routing(
     routing: Dict[str, Any],
     target: Dict[str, Any],
     local_rule: Optional[Dict[str, Any]] = None,
+    direct_rule: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     result = copy.deepcopy(routing if isinstance(routing, dict) else {})
     model = result.get("routing")
@@ -1102,9 +1187,9 @@ def _build_enabled_routing(
         "outboundTag": DNS_OUT_TAG,
         "ruleTag": CAPTURE_RULE_TAG,
     }
-    # The local rule must be matched before the proxy rule, otherwise the
+    # The bypass rules must be matched before the proxy rule, otherwise the
     # query for a home name would already be on its way through the tunnel.
-    ordered = [local_rule] if local_rule else []
+    ordered = [item for item in (local_rule, direct_rule) if item]
     ordered.extend([proxy_rule, capture_rule])
     model["rules"] = [*ordered, *rules]
 
@@ -1121,9 +1206,11 @@ def _build_enabled_routing(
 
 
 def _rebuild_local_rule(
-    routing: Dict[str, Any], local_rule: Optional[Dict[str, Any]]
+    routing: Dict[str, Any],
+    local_rule: Optional[Dict[str, Any]],
+    direct_rule: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Replace our local rule in place, leaving the other managed rules alone."""
+    """Replace our bypass rules in place, leaving the other managed rules alone."""
     result = copy.deepcopy(routing if isinstance(routing, dict) else {})
     model = result.get("routing")
     if not isinstance(model, dict):
@@ -1131,9 +1218,12 @@ def _rebuild_local_rule(
     rules = [
         item
         for item in (model.get("rules") if isinstance(model.get("rules"), list) else [])
-        if not (isinstance(item, dict) and _clean_tag(item.get("ruleTag")) == LOCAL_RULE_TAG)
+        if not (
+            isinstance(item, dict)
+            and _clean_tag(item.get("ruleTag")) in {LOCAL_RULE_TAG, DIRECT_RULE_TAG}
+        )
     ]
-    model["rules"] = ([local_rule] + rules) if local_rule else rules
+    model["rules"] = [item for item in (local_rule, direct_rule) if item] + rules
     return result
 
 
@@ -1202,16 +1292,37 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
         for zone in item.get("domains") or []:
             if zone not in declared_zones[key]:
                 declared_zones[key].append(zone)
-    first_zones = declared_zones[next(iter(declared_zones))] if declared_zones else None
-    exact_fragment = bool(declared) and fragment == _managed_fragment(
-        declared,
-        declared_resolvers,
-        first_zones,
-    )
     model = routing.get("routing") if isinstance(routing.get("routing"), dict) else {}
     rules = model.get("rules") if isinstance(model.get("rules"), list) else []
     proxy_rule_obj = next((item for item in rules if _clean_tag(item.get("ruleTag")) == PROXY_RULE_TAG), None)
     local_rule_obj = next((item for item in rules if _clean_tag(item.get("ruleTag")) == LOCAL_RULE_TAG), None)
+    direct_rule_obj = next((item for item in rules if _clean_tag(item.get("ruleTag")) == DIRECT_RULE_TAG), None)
+    # Both groups are objects in the same ``servers`` list, and their zones may
+    # legitimately look alike.  What tells them apart is the rule that sends
+    # their traffic out: the bypass rule names exactly the addresses of its own
+    # group, so the split comes from there rather than from guesswork.
+    bypass_addresses = {
+        str(value).split("/")[0].strip()
+        for value in ((direct_rule_obj or {}).get("ip") or [])
+        if str(value).strip()
+    }
+    local_declared = [item for item in declared_resolvers if item["address"] not in bypass_addresses]
+    direct_declared = [item for item in declared_resolvers if item["address"] in bypass_addresses]
+
+    def _zones_of(items: list[Dict[str, Any]]) -> Optional[list[str]]:
+        for item in items:
+            zones = declared_zones.get((item["address"], int(item["port"] or 53)))
+            if zones:
+                return zones
+        return None
+
+    exact_fragment = bool(declared) and fragment == _managed_fragment(
+        declared,
+        local_declared,
+        _zones_of(local_declared),
+        direct_declared,
+        _zones_of(direct_declared),
+    )
     capture_rule_obj = next((item for item in rules if _clean_tag(item.get("ruleTag")) == CAPTURE_RULE_TAG), None)
     balancer_obj = next(
         (
@@ -1247,10 +1358,16 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
     # The local rule is optional; when present it must be exactly the one we
     # would build for the resolver this fragment declares.
     expected_local = (
-        _local_rule(declared_resolvers, _direct_outbound_tag(runtime)) if declared_resolvers else None
+        _local_rule(local_declared, _direct_outbound_tag(runtime)) if local_declared else None
     )
     safe_local_rule = (local_rule_obj is None) or (
         expected_local is not None and local_rule_obj == expected_local
+    )
+    expected_direct = (
+        _direct_rule(direct_declared, _direct_outbound_tag(runtime)) if direct_declared else None
+    )
+    safe_direct_rule = (direct_rule_obj is None) or (
+        expected_direct is not None and direct_rule_obj == expected_direct
     )
     safe_capture_rule = capture_rule_obj == {
         "type": "field",
@@ -1268,6 +1385,8 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
         "capture_rule_owned": capture_rule_obj is not None,
         "local_rule": safe_local_rule,
         "local_rule_owned": local_rule_obj is not None,
+        "direct_rule": safe_direct_rule,
+        "direct_rule_owned": direct_rule_obj is not None,
         "balancer": safe_balancer,
         "balancer_owned": balancer_obj is not None,
     }
@@ -1289,6 +1408,7 @@ def _managed_config_present(presence: Dict[str, bool]) -> bool:
             "proxy_rule_owned",
             "capture_rule_owned",
             "local_rule_owned",
+            "direct_rule_owned",
             "balancer_owned",
         )
     )
@@ -1306,6 +1426,7 @@ def _managed_config_tampered(presence: Dict[str, bool]) -> bool:
             ("proxy_rule_owned", "proxy_rule"),
             ("capture_rule_owned", "capture_rule"),
             ("local_rule_owned", "local_rule"),
+            ("direct_rule_owned", "direct_rule"),
             ("balancer_owned", "balancer"),
         )
     )
@@ -1742,6 +1863,17 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
         "default_local_domains": list(DEFAULT_LOCAL_DOMAINS),
         "zone_presets": {name: list(zones) for name, zones in ZONE_PRESETS.items()},
         "max_local_domains": MAX_LOCAL_DOMAINS,
+        "direct_resolvers": (
+            state.get("direct_resolvers") if isinstance(state.get("direct_resolvers"), list) else []
+        ),
+        "max_direct_resolvers": MAX_DIRECT_RESOLVERS,
+        "direct_domains": (
+            state.get("direct_domains") if isinstance(state.get("direct_domains"), list) else []
+        ),
+        "max_direct_domains": MAX_DIRECT_DOMAINS,
+        # Domains the user already sends past the tunnel: the card offers them
+        # as a starting list so nobody keeps two copies of it in sync by hand.
+        "direct_rule_domains": _domains_routed_direct(runtime, routing),
         "direct_outbound": _direct_outbound_tag(runtime),
         "route_drift": drift,
         "watchdog": state.get("watchdog") if isinstance(state.get("watchdog"), dict) else None,
@@ -1775,6 +1907,8 @@ def apply_action(
     upstreams: Any = None,
     local_resolver: Any = None,
     local_domains: Any = None,
+    direct_resolver: Any = None,
+    direct_domains: Any = None,
 ) -> Dict[str, Any]:
     normalized = str(action or "").strip().lower()
     if normalized not in {"enable", "disable"}:
@@ -1814,8 +1948,25 @@ def apply_action(
             if local_domains is not None
             else _local_domains(stored_state.get("local_domains"))
         )
+        wanted_direct = (
+            _parse_direct_resolvers(direct_resolver)
+            if direct_resolver is not None
+            else _parse_direct_resolvers(stored_state.get("direct_resolvers"))
+        )
+        wanted_direct_domains = (
+            _direct_domains(direct_domains)
+            if direct_domains is not None
+            else _direct_domains(stored_state.get("direct_domains"))
+        )
+        # Half a setting resolves nothing: without domains the resolvers are
+        # never consulted, without resolvers the domains have nowhere to go.
+        if bool(wanted_direct) != bool(wanted_direct_domains):
+            raise DnsOverVlessError(
+                "Для доменов мимо туннеля укажите и адреса DNS, и список доменов.",
+                code="direct_incomplete",
+            )
         direct_tag = _direct_outbound_tag(runtime)
-        if wanted_local and not direct_tag:
+        if (wanted_local or wanted_direct) and not direct_tag:
             raise DnsOverVlessError(
                 "Не найден outbound прямого подключения (freedom) — локальные зоны некуда направить.",
                 code="direct_outbound_missing",
@@ -1843,7 +1994,11 @@ def apply_action(
                     ((current_fragment or {}).get("dns") or {}).get("servers")
                 )
                 expected_fragment = _managed_fragment(
-                    wanted_upstreams, wanted_local, wanted_local_domains
+                    wanted_upstreams,
+                    wanted_local,
+                    wanted_local_domains,
+                    wanted_direct,
+                    wanted_direct_domains,
                 )
                 if _managed_config_complete(presence) and current_fragment == expected_fragment:
                     # Idempotent recovery path: configuration is already
@@ -1856,7 +2011,9 @@ def apply_action(
                     # re-lay our own rules so the local rule matches it.
                     target = None
                     next_routing = _rebuild_local_rule(
-                        routing, _local_rule(wanted_local, direct_tag)
+                        routing,
+                        _local_rule(wanted_local, direct_tag),
+                        _direct_rule(wanted_direct, direct_tag),
                     )
                     next_fragment = expected_fragment
                 else:
@@ -1876,7 +2033,10 @@ def apply_action(
                     )
                     target = _select_target(runtime, requested, routing)
                     next_routing = _build_enabled_routing(
-                        routing, target, _local_rule(wanted_local, direct_tag)
+                        routing,
+                        target,
+                        _local_rule(wanted_local, direct_tag),
+                        _direct_rule(wanted_direct, direct_tag),
                     )
                     next_fragment = expected_fragment
                 desired_override = True
@@ -1967,6 +2127,8 @@ def apply_action(
                         "upstreams": wanted_upstreams,
                         "local_resolvers": [_resolver_label(item) for item in wanted_local],
                         "local_domains": wanted_local_domains if wanted_local else None,
+                        "direct_resolvers": [_resolver_label(item) for item in wanted_direct],
+                        "direct_domains": wanted_direct_domains if wanted_direct else None,
                         "target": ({k: v for k, v in target.items() if k != "managed_balancer"} if target else previous_state.get("target")),
                         "last_transaction": snapshot_dir,
                     },
