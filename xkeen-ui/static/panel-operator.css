@@ -15927,6 +15927,16 @@ body.panel-page .monaco-editor :is(.suggest-details, .parameter-hints-widget) :i
     color: HighlightText !important;
   }
 
+  /* The rules above swap colors but leave the focus ring to the browser, and a
+   * default that changes between versions is not a contract to lean on: in
+   * high-contrast mode the ring is the only thing telling a keyboard user where
+   * they are.  ``:focus`` is included next to ``:focus-visible`` on purpose —
+   * here an always-visible ring costs nothing and never goes missing. */
+  body.panel-page :is(button, [role="button"], a[href], summary, input, select, textarea):is(:focus, :focus-visible) {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px !important;
+  }
+
   body.panel-page .xk-action-icon {
     fill: none !important;
     stroke: currentColor !important;

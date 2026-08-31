@@ -96,7 +96,12 @@ test.describe('Operator Console I5 accessibility and responsive contract', () =>
     // focus assertion below verify the user-perceived accessible fallback.
     const focusable = page.locator('button, [role="button"], a[href], summary').first();
     await focusable.focus();
+    // The ring comes from our own forced-colors block, not from whatever the
+    // browser happens to draw by default: that default changed once already
+    // and took the assertion with it.
     await expect(focusable).toHaveCSS('outline-style', 'solid');
+    const width = await focusable.evaluate((node) => Number.parseFloat(getComputedStyle(node).outlineWidth));
+    expect(width).toBeGreaterThanOrEqual(2);
   });
 
   test('mobile controls use 40px targets without glyph scaling or page overflow', async ({ page }) => {
