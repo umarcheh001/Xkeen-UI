@@ -286,7 +286,10 @@ def test_frontend_has_dns_button_modal_and_guard_copy():
     assert "Маршрут для DNS-запросов" in template
     assert "renderRoute" in script
     assert 'id="routing-dns-over-vless-route-fallback"' in template
-    assert "Резервирование сохранено" in script
+    # The card prints the server's sentence as is: no wrapper written in
+    # config language ("Резервирование не переносится: ...") around it.
+    assert "plan.reason" in script
+    assert "Резервирование сохранено" not in script
     # Про сторожа оба окна говорят одними словами, поэтому тексты — общий модуль.
     guard_copy = (root / "xkeen-ui/static/js/features/dns_guard_text.js").read_text(encoding="utf-8")
     mihomo = (root / "xkeen-ui/static/js/features/mihomo_dns.js").read_text(encoding="utf-8")
@@ -539,6 +542,13 @@ def test_fallback_into_direct_is_still_dropped(tmp_path: Path):
     assert "fallbackTag" not in target["managed_balancer"]
     assert target["fallback"]["kept"] is False
     assert target["fallback"]["verdict"] == "leak"
+
+    # The user never asked for this decision, so the card has to explain it in
+    # plain words: what happens, and why the spare path was not taken.
+    reason = target["fallback"]["reason"]
+    assert reason.startswith("Если все выбранные прокси разом откажут")
+    assert "провайдер" in reason
+    assert "fallback" not in reason.lower()
 
 
 def test_unresolvable_fallback_is_dropped_rather_than_assumed_safe(tmp_path: Path):

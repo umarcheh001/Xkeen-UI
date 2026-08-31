@@ -542,12 +542,32 @@ def _fallback_plan(
     if not tag:
         return {"tag": "", "kept": False, "verdict": "none", "reason": "у балансировщика нет резервного маршрута"}
     verdict = _fallback_verdict(runtime, routing, tag)
+    # The reason is shown to the user as a whole sentence: nobody outside the
+    # config knows what a fallbackTag is, or that we clone their balancer, so
+    # the text says what happens when every proxy is down instead.
     if verdict == "safe":
-        return {"tag": tag, "kept": True, "verdict": verdict, "reason": f"резервный маршрут «{tag}» остаётся внутри прокси"}
+        return {
+            "tag": tag,
+            "kept": True,
+            "verdict": verdict,
+            "reason": (
+                f"Если все выбранные прокси разом откажут, DNS уйдёт на запасной прокси «{tag}» — "
+                "мимо провайдера, так что защита сохранится."
+            ),
+        }
     if verdict == "leak":
-        reason = f"резервный маршрут «{tag}» ведёт напрямую — DNS утёк бы провайдеру"
+        reason = (
+            "Если все выбранные прокси разом откажут, DNS просто перестанет отвечать. "
+            "В вашем балансировщике на такой случай стоит запасной путь в обход VPN, но для DNS "
+            "панель его не использует: запросы пошли бы к провайдеру, и он снова видел бы, "
+            "какие сайты вы открываете."
+        )
     else:
-        reason = f"резервный маршрут «{tag}» не удалось проследить по конфигурации"
+        reason = (
+            "Если все выбранные прокси разом откажут, DNS просто перестанет отвечать. "
+            "Куда ведёт запасной путь вашего балансировщика, панель проследить не смогла, "
+            "а вслепую пускать по нему DNS нельзя: он может выйти мимо VPN, к провайдеру."
+        )
     return {"tag": tag, "kept": False, "verdict": verdict, "reason": reason}
 
 

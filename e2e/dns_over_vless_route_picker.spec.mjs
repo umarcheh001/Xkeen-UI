@@ -41,7 +41,7 @@ const STATUS = {
       selector_count: 2,
       strategy_type: 'leastPing',
       fallback_tag: 'direct',
-      fallback: { tag: 'direct', kept: false, verdict: 'dropped', reason: 'резервный маршрут «direct» ведёт напрямую' },
+      fallback: { tag: 'direct', kept: false, verdict: 'dropped', reason: 'Если все выбранные прокси разом откажут, DNS просто перестанет отвечать. В вашем балансировщике на такой случай стоит запасной путь в обход VPN, но для DNS панель его не использует: запросы пошли бы к провайдеру, и он снова видел бы, какие сайты вы открываете.' },
       usable: true,
       reason: '',
     },

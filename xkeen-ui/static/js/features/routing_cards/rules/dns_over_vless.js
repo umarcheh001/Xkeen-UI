@@ -412,7 +412,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       const list = (wanted || []);
       if (list.length > 1) {
         line.dataset.state = 'kept';
-        line.textContent = `Выбрано ${list.length}: ${list.join(', ')}. Панель создаст из них свой балансировщик; резервного маршрута у него нет.`;
+        // Тот же язык, что и у причины с сервера: что произойдёт, а не что
+        // панель собрала в конфигурации.
+        line.textContent = `Выбрано ${list.length}: ${list.join(', ')}. Панель распределит DNS-запросы между ними. Если откажут все разом, DNS перестанет отвечать: запасного пути в обход VPN здесь нет — по нему запросы ушли бы к провайдеру.`;
       } else if (list.length === 1) {
         // One proxy is not a balancer: be honest instead of promising one.
         line.dataset.state = 'dropped';
@@ -431,9 +433,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       return;
     }
     line.dataset.state = plan.kept ? 'kept' : 'dropped';
-    line.textContent = plan.kept
-      ? `Резервирование сохранено: ${plan.reason}.`
-      : `Резервирование не переносится: ${plan.reason}.`;
+    // Причина приходит с сервера целой фразой и печатается как есть. Прежняя
+    // обёртка вокруг неё говорила языком конфигурации: читателю надо было знать,
+    // что такое fallbackTag и что панель клонирует его балансировщик.
+    line.textContent = plan.reason || '';
   }
 
   // Про сторожа оба окна — это и окно DNS Mihomo — говорят одними и теми же
