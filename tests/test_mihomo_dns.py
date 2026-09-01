@@ -45,6 +45,17 @@ def test_build_enabled_config_is_additive_routed_and_router_safe():
     assert content.index("profile:") < content.index(dns.MANAGED_BEGIN) < content.index("proxy-groups:")
 
 
+def test_build_enabled_config_adds_geosite_ru_filters_for_fake_ip_geodata():
+    content, _ = dns.build_enabled_config(BASE, mode="fake-ip", geodata=True)
+
+    lines = content.splitlines()
+    start = lines.index("  fake-ip-filter:")
+    assert lines[start + 1] == "    - 'geosite:private'"
+    assert lines[start + 2] == "    - 'geosite:category-ru'"
+    assert "*.lan" not in content
+    assert "*.local" not in content
+
+
 def test_build_refuses_existing_user_dns_without_rewriting_it():
     source = BASE + "\ndns:\n  enable: true\n  nameserver: [system]\n"
 
@@ -389,4 +400,5 @@ def test_http_contract_and_frontend(tmp_path: Path, monkeypatch):
     assert "192.168.1.1:1054" not in template
     assert "'/api/mihomo/dns'" in script
     assert "Включить защищённый DNS" in script
+    assert "geosite:category-ru" in script
     assert "mihomo_dns.js" in bundle

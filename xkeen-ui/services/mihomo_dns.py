@@ -399,11 +399,13 @@ def _domain_rule_provider_names(config_text: str) -> list[str]:
 def _fake_ip_default_filters(config_text: str = "") -> list[str]:
     """Build safe defaults, adding private-domain source only when available."""
 
-    filters = list(DEFAULT_FAKE_IP_FILTERS)
     geodata = _geodata_runtime_config(config_text)
     if geodata["private_filter"]:
-        filters.append(str(geodata["private_filter"]))
-    return filters
+        filters = [str(geodata["private_filter"])]
+        if geodata["private_source"] == "geodata":
+            filters.append("geosite:category-ru")
+        return filters
+    return list(DEFAULT_FAKE_IP_FILTERS)
 
 
 def _normalize_fake_ip_options(fake_ip: Any = None, *, config_text: str = "") -> dict[str, Any]:

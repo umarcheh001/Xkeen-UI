@@ -31,6 +31,45 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
   const $ = (id) => document.getElementById(id);
   let current = null;
   let busy = false;
+  const DEFAULT_FAKE_IP_FILTERS = ['*.lan', '*.local'];
+  const GEO_FAKE_IP_FILTERS = ['geosite:private', 'geosite:category-ru'];
+
+  function buildFakeIpFilters(filters, useGeodata) {
+    const clean = [];
+    const seen = new Set();
+    const remove = new Set(
+      (useGeodata ? DEFAULT_FAKE_IP_FILTERS : GEO_FAKE_IP_FILTERS).map((item) => item.toLowerCase()),
+    );
+    const preferred = useGeodata ? GEO_FAKE_IP_FILTERS : DEFAULT_FAKE_IP_FILTERS;
+    for (const item of filters) {
+      const text = String(item || '').trim();
+      if (!text) continue;
+      const lower = text.toLowerCase();
+      if (remove.has(lower)) continue;
+      if (seen.has(lower)) continue;
+      seen.add(lower);
+      clean.push(text);
+    }
+    for (const item of preferred) {
+      const lower = item.toLowerCase();
+      if (seen.has(lower)) continue;
+      seen.add(lower);
+      clean.push(item);
+    }
+    return clean;
+  }
+
+  function syncFakeIpFilters(useGeodata) {
+    const textarea = $(IDS.fakeFilters);
+    if (!textarea) return;
+    const current = String(textarea.value || '')
+      .split(/\r?\n/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const next = buildFakeIpFilters(current, useGeodata);
+    const nextText = next.join('\n');
+    if (textarea.value !== nextText) textarea.value = nextText;
+  }
 
   function showModal(open) {
     const modal = $(IDS.modal);
@@ -57,11 +96,10 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     if (mode === 'fake-ip') {
       const useGeodata = !!$(IDS.geodataEnable)?.checked;
       const filters = String($(IDS.fakeFilters)?.value || '').split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
-      if (useGeodata && !filters.some((item) => /^geosite:private$/i.test(item))) filters.push('geosite:private');
       payload.fake_ip = {
         range: $(IDS.fakeRange)?.value || '198.18.0.1/16',
         filter_mode: $(IDS.fakeFilterMode)?.value || 'blacklist',
-        filters,
+        filters: buildFakeIpFilters(filters, useGeodata),
       };
       payload.geodata = useGeodata;
     }
@@ -127,6 +165,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     }
     if (fakeOptions) fakeOptions.classList.toggle('hidden', (mode?.value || data?.mode) !== 'fake-ip');
     if (geodataEnable && !busy && geodata) geodataEnable.checked = !!(geodata.enabled || geodata.geosite_configured);
+    if ((mode?.value || data?.mode) === 'fake-ip') syncFakeIpFilters(!!geodataEnable?.checked);
     if (modeHint) modeHint.textContent = (mode?.value || data?.mode) === 'fake-ip'
       ? `Расширенный режим: виртуальные IP. ${data?.fake_ip_available === false ? 'TUN/TProxy-маршрут не обнаружен.' : 'Прозрачный TUN/TProxy-маршрут обнаружен.'}`
       : 'Совместимо с TProxy и большинством устройств LAN.';
@@ -285,10 +324,14 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       const fakeOptions = $(IDS.fakeOptions);
       const fake = $(IDS.mode)?.value === 'fake-ip';
       fakeOptions?.classList.toggle('hidden', !fake);
+      if (fake) syncFakeIpFilters(!!$(IDS.geodataEnable)?.checked);
       const hint = $(IDS.modeHint);
       if (hint) hint.textContent = fake
         ? `Расширенный режим: виртуальные IP. ${current?.fake_ip_available === false ? 'TUN/TProxy-маршрут не обнаружен.' : 'Проверьте наличие прозрачного TUN/TProxy-маршрута.'}`
         : 'Совместимо с TProxy и большинством устройств LAN.';
+    });
+    $(IDS.geodataEnable)?.addEventListener('change', () => {
+      if ($(IDS.mode)?.value === 'fake-ip') syncFakeIpFilters(!!$(IDS.geodataEnable)?.checked);
     });
     $(IDS.modal)?.addEventListener('click', (event) => {
       if (event.target === $(IDS.modal) && !busy) showModal(false);
