@@ -13368,6 +13368,28 @@ body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-d
   resize: none !important;
 }
 
+/* GeoSite opt-in follows the compact panel switch language instead of the
+ * rounded blue pill used by legacy form controls. */
+body.panel-page #mihomo-dns-modal .mihomo-dns-geodata-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--op-muted);
+}
+body.panel-page #mihomo-dns-modal .mihomo-dns-geodata-toggle:hover {
+  background: transparent;
+}
+body.panel-page #mihomo-dns-modal .mihomo-dns-geodata-toggle .dt-switch-label {
+  color: var(--op-muted);
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 560;
+}
+
 body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .modal-header {
   min-height: 50px;
   height: auto;

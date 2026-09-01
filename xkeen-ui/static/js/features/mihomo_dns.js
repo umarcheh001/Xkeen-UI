@@ -21,6 +21,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     modeHint: 'mihomo-dns-mode-hint',
     fakeOptions: 'mihomo-dns-fake-options',
     geodataHint: 'mihomo-dns-geodata-hint',
+    geodataEnable: 'mihomo-dns-geodata-enable',
     fakeRange: 'mihomo-dns-fake-range',
     fakeFilterMode: 'mihomo-dns-fake-filter-mode',
     fakeFilters: 'mihomo-dns-fake-filters',
@@ -54,11 +55,15 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     const mode = $(IDS.mode)?.value || 'redir-host';
     const payload = { mode, proxy_group: $(IDS.proxyGroup)?.value || undefined };
     if (mode === 'fake-ip') {
+      const useGeodata = !!$(IDS.geodataEnable)?.checked;
+      const filters = String($(IDS.fakeFilters)?.value || '').split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+      if (useGeodata && !filters.some((item) => /^geosite:private$/i.test(item))) filters.push('geosite:private');
       payload.fake_ip = {
         range: $(IDS.fakeRange)?.value || '198.18.0.1/16',
         filter_mode: $(IDS.fakeFilterMode)?.value || 'blacklist',
-        filters: String($(IDS.fakeFilters)?.value || '').split(/\r?\n/).map((item) => item.trim()).filter(Boolean),
+        filters,
       };
+      payload.geodata = useGeodata;
     }
     return payload;
   }
@@ -102,6 +107,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     const modeHint = $(IDS.modeHint);
     const proxyGroup = $(IDS.proxyGroup);
     const geodata = data?.geodata || null;
+    const geodataEnable = $(IDS.geodataEnable);
     if (list) list.textContent = '';
 
     const enabled = !!data?.enabled;
@@ -120,6 +126,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       if (selected && data.proxy_groups.includes(selected)) proxyGroup.value = selected;
     }
     if (fakeOptions) fakeOptions.classList.toggle('hidden', (mode?.value || data?.mode) !== 'fake-ip');
+    if (geodataEnable && !busy && geodata) geodataEnable.checked = !!(geodata.enabled || geodata.geosite_configured);
     if (modeHint) modeHint.textContent = (mode?.value || data?.mode) === 'fake-ip'
       ? `Расширенный режим: виртуальные IP. ${data?.fake_ip_available === false ? 'TUN/TProxy-маршрут не обнаружен.' : 'Прозрачный TUN/TProxy-маршрут обнаружен.'}`
       : 'Совместимо с TProxy и большинством устройств LAN.';
@@ -130,6 +137,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       geodataHint.classList.toggle('is-ok', geodata?.private_available === true);
     }
     if (mode) mode.disabled = enabled || canDisable || altered;
+    if (geodataEnable) geodataEnable.disabled = enabled || canDisable || altered;
     if (proxyGroup) proxyGroup.disabled = enabled || canDisable || altered;
     const state = enabled ? 'enabled' : ((canDisable || canRecover || blocked || altered || released) ? 'blocked' : 'ready');
     if (badge) {

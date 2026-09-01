@@ -45,6 +45,7 @@ PROBE_DOMAIN = "example.com"
 DEFAULT_FAKE_IP_RANGE = "198.18.0.1/16"
 DEFAULT_FAKE_IP_FILTER_MODE = "blacklist"
 DEFAULT_FAKE_IP_FILTERS = ("*.lan", "*.local")
+DEFAULT_GEOSITE_URL = "https://github.com/v2fly/domain-list-community/releases/latest/download/dlc.dat"
 DNS_MODES = ("redir-host", "fake-ip")
 FAKE_IP_FILTER_MODES = ("blacklist", "whitelist", "rule")
 _LOCK = threading.RLock()
@@ -471,6 +472,28 @@ def _fake_ip_route_available(text: str) -> bool:
     return bool(re.search(r"(?im)^tproxy-port\s*:\s*[1-9]\d*\s*$", str(text or "")))
 
 
+def _with_geodata_defaults(text: str) -> str:
+    """Add optional V2Fly GeoSite settings without touching existing values."""
+    source = str(text or "")
+    additions: list[str] = []
+    if _top_level_section(source, "geodata-mode") is None and not re.search(r"(?im)^geodata-mode\s*:", source):
+        additions.append("geodata-mode: true")
+    geox = _top_level_section(source, "geox-url")
+    if geox is None:
+        additions.extend(["geox-url:", f"  geosite: {_yaml_single_quote(DEFAULT_GEOSITE_URL)}"])
+    elif not _section_scalar(geox, "geosite"):
+        # Preserve existing geox-url keys while adding the missing geosite
+        # sibling at the end of that top-level mapping.
+        start, end, body = geox
+        insertion = body.rstrip("\r\n") + f"\n  geosite: {_yaml_single_quote(DEFAULT_GEOSITE_URL)}\n"
+        source = source[:start] + insertion + source[end:]
+        geox = _top_level_section(source, "geox-url")
+    if not additions:
+        return source
+    prefix = "\n".join(additions) + "\n\n"
+    return prefix + source.lstrip("\r\n")
+
+
 def _managed_dns_block(group: str, *, mode: str = "redir-host", fake_ip: Any = None) -> str:
     target = str(group or "").strip()
     if not target:
@@ -596,7 +619,7 @@ def _insert_managed_dns_block(text: str, block: str) -> str:
     return f"{before}\n\n{managed}\n"
 
 
-def build_enabled_config(text: str, group: Optional[str] = None, *, mode: str = "redir-host", fake_ip: Any = None) -> tuple[str, str]:
+def build_enabled_config(text: str, group: Optional[str] = None, *, mode: str = "redir-host", fake_ip: Any = None, geodata: bool = False) -> tuple[str, str]:
     original = str(text or "")
     if not original.strip():
         raise MihomoDnsError("Активный config.yaml пуст.", code="config_empty")
@@ -610,7 +633,8 @@ def build_enabled_config(text: str, group: Optional[str] = None, *, mode: str = 
     normalized_mode = _normalize_mode(mode)
     if normalized_mode == "fake-ip" and not _fake_ip_route_available(original):
         raise MihomoDnsError("Fake-IP требует включённый TUN или TProxy-маршрут.", code="fake_ip_route_missing")
-    fake_options = _normalize_fake_ip_options(fake_ip, config_text=original) if normalized_mode == "fake-ip" else None
+    source = _with_geodata_defaults(original) if (geodata and normalized_mode == "fake-ip") else original
+    fake_options = _normalize_fake_ip_options(fake_ip, config_text=source) if normalized_mode == "fake-ip" else None
     selected = str(group or _select_proxy_group(original) or "").strip()
     if not selected:
         raise MihomoDnsError(
@@ -622,7 +646,7 @@ def build_enabled_config(text: str, group: Optional[str] = None, *, mode: str = 
     # Keep the managed block near the top-level runtime settings (normally
     # immediately after ``profile``), rather than at EOF after all providers,
     # groups and rules.
-    patched = _insert_managed_dns_block(_remove_store_fake_ip(original), _managed_dns_block(selected, mode=normalized_mode, fake_ip=fake_options))
+    patched = _insert_managed_dns_block(_remove_store_fake_ip(source), _managed_dns_block(selected, mode=normalized_mode, fake_ip=fake_options))
     return patched, selected
 
 
@@ -906,6 +930,7 @@ def apply_action(
     restart_xkeen: Callable[..., Any],
     mode: str = "redir-host",
     fake_ip: Any = None,
+    geodata: bool = False,
     proxy_group: Optional[str] = None,
 ) -> dict[str, Any]:
     normalized = str(action or "").strip().lower()
@@ -930,6 +955,7 @@ def apply_action(
                 str(proxy_group or status.get("proxy_group") or ""),
                 mode=mode,
                 fake_ip=fake_ip,
+                geodata=geodata,
             )
             validation = validate_config(new_content=prepared) or ""
             if not _validation_ok(validation):

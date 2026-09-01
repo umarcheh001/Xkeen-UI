@@ -2640,7 +2640,7 @@
     </div>
 
     <div id="mihomo-dns-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" data-modal-noresize="1" data-modal-nopos="1" data-modal-remember="0" role="dialog" aria-modal="true" aria-labelledby="mihomo-dns-title">
-      <div class="modal-content xk-modal-width xk-modal-width-760 routing-dns-over-vless-modal-content mihomo-dns-modal-content">
+      <div class="modal-content xk-modal-width xk-modal-width-980 routing-dns-over-vless-modal-content mihomo-dns-modal-content">
         <div class="modal-header">
           <span class="modal-title" id="mihomo-dns-title">Защищённый DNS Mihomo</span>
           <button type="button" class="modal-close" id="mihomo-dns-close" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
@@ -2679,6 +2679,12 @@
             <label for="mihomo-dns-fake-filters">Фильтры (по одному на строку)</label>
             <textarea id="mihomo-dns-fake-filters" rows="3" spellcheck="false">*.lan
 *.local</textarea>
+            <label class="dt-switch xk-mini-switch mihomo-dns-geodata-toggle" title="Добавить GeoSite-базу V2Fly в config.yaml для фильтра geosite:private.">
+              <input type="checkbox" id="mihomo-dns-geodata-enable">
+              <span class="dt-switch-slider" aria-hidden="true"></span>
+              <span class="dt-switch-label">Подключить GeoSite (geodata-mode + V2Fly)</span>
+            </label>
+            <p class="modal-hint">По выбору добавит geodata-mode: true и geox-url.geosite (V2Fly dlc.dat). Существующие настройки GeoSite не перезаписываются.</p>
             <p id="mihomo-dns-geodata-hint" class="modal-hint" role="status" aria-live="polite">Проверяем наличие GeoSite private…</p>
             <p class="modal-hint">Fake-IP требует включённый TUN или TProxy и не должен пересекаться с вашей LAN/VPN-сетью.</p>
           </div>
