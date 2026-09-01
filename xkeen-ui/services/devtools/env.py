@@ -39,6 +39,23 @@ ENV_WHITELIST: Tuple[str, ...] = (
     "XKEEN_HAPP_DECRYPTOR_TIMEOUT",
     "XKEEN_HAPP_HELPER_HWID",
     "XKEEN_SUBSCRIPTION_HAPP_USER_AGENT",
+    # Subscriptions: URL policy + background auto-refresh (Xray and Mihomo)
+    "XKEEN_SUBSCRIPTION_ALLOW_HTTP",
+    "XKEEN_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS",
+    "XKEEN_SUBSCRIPTIONS_SCHEDULER",
+    "XKEEN_SUBSCRIPTIONS_SCHEDULER_TICK",
+    "XKEEN_SUBSCRIPTIONS_LOOKAHEAD_SEC",
+    "XKEEN_SUBSCRIPTIONS_RESTART_BATCH",
+    "XKEEN_SUBSCRIPTIONS_SNAPSHOT",
+    "XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER",
+    "XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER_TICK",
+    "XKEEN_MIHOMO_SUBSCRIPTIONS_LOOKAHEAD_SEC",
+    "XKEEN_MIHOMO_SUBSCRIPTIONS_RESTART_BATCH",
+    # DNS-over-VLESS watchdog
+    "XKEEN_DNS_OVER_VLESS_WATCHDOG",
+    "XKEEN_DNS_OVER_VLESS_WATCHDOG_INTERVAL",
+    "XKEEN_DNS_OVER_VLESS_WATCHDOG_FAILS",
+    "XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS",
     "XKEEN_XRAY_TEST_TIMEOUT",
     "XKEEN_DAT_ALLOW_HOSTS",
     "XKEEN_DAT_ALLOW_HTTP",
@@ -316,6 +333,37 @@ def _default_effective_value(
         return ""
     if k == "XKEEN_SUBSCRIPTION_HAPP_USER_AGENT":
         return "Happ/3.18.3/Android/17771400994551771562"
+
+    # Subscription URL policy (services/xray_subscriptions.py::_subscription_policy).
+    if k == "XKEEN_SUBSCRIPTION_ALLOW_HTTP":
+        return "1"
+    if k == "XKEEN_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS":
+        return "0"
+
+    # Subscription auto-refresh scheduler. Xray and Mihomo share the same
+    # defaults; see services/xray_subscriptions.py and services/mihomo_subscriptions.py.
+    if k in ("XKEEN_SUBSCRIPTIONS_SCHEDULER", "XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER"):
+        return "1"
+    if k in ("XKEEN_SUBSCRIPTIONS_SCHEDULER_TICK", "XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER_TICK"):
+        return "60"
+    if k in ("XKEEN_SUBSCRIPTIONS_LOOKAHEAD_SEC", "XKEEN_MIHOMO_SUBSCRIPTIONS_LOOKAHEAD_SEC"):
+        # DEFAULT_REFRESH_LOOKAHEAD_SECONDS = 5 * 60
+        return "300"
+    if k in ("XKEEN_SUBSCRIPTIONS_RESTART_BATCH", "XKEEN_MIHOMO_SUBSCRIPTIONS_RESTART_BATCH"):
+        return "1"
+    if k == "XKEEN_SUBSCRIPTIONS_SNAPSHOT":
+        # Off by default: the fragment is reproducible by refreshing.
+        return "0"
+
+    # DNS-over-VLESS watchdog (services/dns_over_vless.py WATCHDOG_* constants).
+    if k == "XKEEN_DNS_OVER_VLESS_WATCHDOG":
+        return "1"
+    if k == "XKEEN_DNS_OVER_VLESS_WATCHDOG_INTERVAL":
+        return "30"
+    if k == "XKEEN_DNS_OVER_VLESS_WATCHDOG_FAILS":
+        return "3"
+    if k == "XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS":
+        return "2"
     if k == "XKEEN_DAT_ALLOW_HOSTS":
         return "github.com,raw.githubusercontent.com,objects.githubusercontent.com,release-assets.githubusercontent.com,codeload.github.com"
     if k == "XKEEN_DAT_ALLOW_HTTP":

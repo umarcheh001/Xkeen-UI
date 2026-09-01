@@ -615,7 +615,7 @@ test('Mihomo latency stays visible but is marked stale after five minutes and gr
   const latency = page.locator('[data-group-name="AUTO"] [data-node-name="node-a"] .xk-mihomo-node-delay');
   const unavailable = page.locator('[data-group-name="AUTO"] [data-node-name="node-b"] .xk-mihomo-node-delay');
   await expect(latency).toHaveText('82 мс');
-  await expect(unavailable).toHaveText('недоступен');
+  await expect(unavailable).toHaveText('не ответил на фоновой проверке');
 
   await latency.click();
   await expect(latency).toHaveText('44 мс');
@@ -637,6 +637,9 @@ test('Mihomo latency stays visible but is marked stale after five minutes and gr
 test('auto freshness follows provider healthcheck interval and core group mode uses one group request', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-08-16T10:15:30Z') });
   const data = groupsPayload();
+  // Core batch is for the group types the core tests on its own; a selector is
+  // probed node by node, so this fixture has to be a url-test group.
+  data.groups[0].type = 'URLTest';
   data.groups[0].healthcheck_interval_seconds = 900;
   data.groups[0].nodes[0].healthcheck_interval_seconds = 900;
   const delayRequests = [];
@@ -672,6 +675,44 @@ test('auto freshness follows provider healthcheck interval and core group mode u
   expect(delayRequests).toHaveLength(1);
   expect(delayRequests[0]).toMatchObject({ scope: 'group', name: 'AUTO' });
 });
+
+test('core batch mode still probes a selector group node by node', async ({ page }) => {
+  // Mihomo re-picks ``now`` while answering /group/{name}/delay, so on a
+  // selector the batch would both disturb the user's choice and report the
+  // group's verdict instead of each node's. Zashboard excludes those group
+  // types from the core batch; the mode selector must not override that.
+  const data = groupsPayload();
+  const requests = [];
+  await page.route('**/api/ui-settings', async (route) => {
+    if (route.request().method() === 'GET') {
+      return route.fulfill({ json: { schemaVersion: 2, mihomo: { latencyTestMode: 'core' } } });
+    }
+    return route.fulfill({ json: { ok: true } });
+  });
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: data }));
+  await page.route('**/api/mihomo/clash/delay', async (route) => {
+    const body = route.request().postDataJSON();
+    requests.push(body);
+    return route.fulfill({ json: { ok: true, results: [{ name: body.name, delay_ms: 61 }] } });
+  });
+
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const settings = window.XKeen?.ui?.settings;
+    settings?.setLocal?.({ mihomo: { latencyTestMode: 'core' } });
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-core-mode-selector' });
+  });
+  await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
+  await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test').click();
+
+  await expect(page.locator('[data-node-name="node-a"] .xk-mihomo-node-delay')).toHaveText('61 мс');
+  expect(requests.some((item) => item.scope === 'group')).toBe(false);
+  expect(requests.map((item) => item.scope).sort()).toEqual(['provider-proxy', 'proxy']);
+});
+
 
 test('server cards replace provider emoji with one rectangular country flag', async ({ page }) => {
   const data = groupsPayload('🇩🇪 DE Germany.01');
@@ -781,7 +822,7 @@ test('visible delay test waits for the backend rolling limit instead of failing 
   expect(nodeBAttempts).toBe(2);
 });
 
-test('retryable Mihomo 503 is shown as a node timeout instead of a panel error', async ({ page }) => {
+test('retryable Mihomo 503 reads as a node that did not answer, not a panel error', async ({ page }) => {
   const data = groupsPayload('node-a');
   data.groups[0].nodes = [{
     name: 'node-a', type: 'VLESS', alive: false, udp: true,
@@ -808,7 +849,10 @@ test('retryable Mihomo 503 is shown as a node timeout instead of a panel error',
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
   const latency = page.locator('[data-node-name="node-a"] .xk-mihomo-node-delay');
   await latency.click();
-  await expect(latency).toHaveText('таймаут');
+  // Nothing was measured — that is a fact about the node, so the badge stays
+  // neutral (the icon variant) instead of shouting a red API error.
+  await expect(latency).toHaveAttribute('data-delay-tone', 'unknown');
+  await expect(latency.locator('.xk-visually-hidden')).toHaveText('нет ответа');
 });
 
 
@@ -849,19 +893,24 @@ test('group delay probes unique nodes without group endpoint and reconciles the 
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-test').click();
 
   await expect(page.locator('[data-node-name="node-a"] .xk-mihomo-node-delay')).toHaveText('51 мс');
-  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('таймаут');
+  const silent = page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay');
+  await expect(silent).toHaveAttribute('data-delay-tone', 'unknown');
+  await expect(silent.locator('.xk-visually-hidden')).toHaveText('нет ответа');
   await expect(page.locator('[data-node-name="DIRECT"] .xk-mihomo-node-delay')).toHaveCount(0);
   const resultToast = page.locator('#toast-container .toast');
   await expect(resultToast).toContainText('Успешно: 1');
-  await expect(resultToast).toContainText('Таймаут: 1');
-  await expect(resultToast).toHaveClass(/toast-warning/);
+  await expect(resultToast).toContainText('Без ответа: 1');
+  // A node that stayed silent is an ordinary outcome, so the run itself
+  // succeeded; only a failed request would colour this warning.
+  await expect(resultToast).toHaveClass(/toast-success/);
   const toastBox = await resultToast.boundingBox();
   expect(toastBox?.y).toBeLessThan(80);
   await expect(page.locator('#mihomo-clash-delay-summary')).toHaveCount(0);
   await expect.poll(() => groupReads).toBeGreaterThan(readsBeforeTest);
+  // A batch asks the core to give up early, the way Zashboard does.
   expect(requests).toEqual([
-    { scope: 'proxy', name: 'node-a', preset: 'auto' },
-    { scope: 'provider-proxy', name: 'node-b', provider: 'provider-one', preset: 'auto' },
+    { scope: 'proxy', name: 'node-a', preset: 'auto', timeout_ms: 2000 },
+    { scope: 'provider-proxy', name: 'node-b', provider: 'provider-one', preset: 'auto', timeout_ms: 2000 },
   ]);
   await expect(resultToast).toHaveCount(0, { timeout: 7_000 });
 });
@@ -971,7 +1020,7 @@ test('visible delay de-duplicates the same provider node across expanded groups'
   await expect(page.locator('#toast-container .toast')).toContainText('Успешно: 2');
   expect(requests).toHaveLength(2);
   expect(requests.filter((item) => item.name === 'node-b')).toEqual([
-    { scope: 'provider-proxy', name: 'node-b', provider: 'provider-one', preset: 'auto' },
+    { scope: 'provider-proxy', name: 'node-b', provider: 'provider-one', preset: 'auto', timeout_ms: 2000 },
   ]);
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText(['45 мс', '45 мс']);
 });
@@ -1244,16 +1293,16 @@ test('Mihomo group disclosures keep the workspace compact and keyboard accessibl
   }));
   expect(nodeCard).toEqual({ radius: '6px', minHeight: '82px', hasSelectionDot: false });
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-probe')).toHaveCount(1);
-  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('недоступен');
+  await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveText('не ответил на фоновой проверке');
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveAttribute('data-delay-tone', 'unavailable');
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay use')).toHaveAttribute('href', /#xk-server-off$/);
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveAttribute(
     'aria-label',
-    /недоступен/,
+    /не ответил на фоновой проверке/,
   );
   await expect(page.locator('[data-node-name="node-b"] .xk-mihomo-node-delay')).toHaveAttribute(
     'data-tooltip',
-    'Фоновая проверка: узел недоступен. Нажмите, чтобы проверить снова.',
+    'Фоновая проверка ядра не получила ответ от узла. Нажмите, чтобы проверить сейчас.',
   );
   const unavailablePlacement = await page.locator('[data-node-name="node-b"]').evaluate((card) => {
     const cardBox = card.getBoundingClientRect();

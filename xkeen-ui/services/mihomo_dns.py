@@ -34,6 +34,10 @@ from utils.firmware import ndmc_path as _resolve_ndmc, run_ndmc
 
 
 STATE_FILENAME = "mihomo_dns.json"
+# The guard's own trace.  It lives beside the assistant state instead of inside
+# it because a release *clears* that state, and every "is this assistant
+# configured?" check keys off the state file being there.
+RELEASE_FILENAME = "mihomo_dns_watchdog.json"
 MANAGED_BEGIN = "# BEGIN XKeen UI Mihomo DNS (managed)"
 MANAGED_END = "# END XKeen UI Mihomo DNS (managed)"
 DNS_LISTEN = "0.0.0.0:53"
@@ -94,6 +98,44 @@ def _clear_state(ui_state_dir: str, config_file: str) -> None:
     try:
         os.remove(_state_path(ui_state_dir, config_file))
     except FileNotFoundError:
+        pass
+
+
+def _release_path(ui_state_dir: str, config_file: str) -> str:
+    return os.path.join(_state_dir(ui_state_dir, config_file), RELEASE_FILENAME)
+
+
+def read_release(*, config_file: str, ui_state_dir: str) -> Optional[dict[str, Any]]:
+    """The last time the shared guard handed DNS back, if it has not been read away.
+
+    The panel shows this instead of a plain "off": protection that switched
+    itself off is not the same thing as protection nobody turned on.
+    """
+
+    try:
+        value = json.loads(Path(_release_path(ui_state_dir, config_file)).read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _record_release(ui_state_dir: str, config_file: str, released: dict[str, Any]) -> None:
+    path = _release_path(ui_state_dir, config_file)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        _atomic_write_json(path, released)
+    except Exception:
+        pass
+
+
+def _clear_release(ui_state_dir: str, config_file: str) -> None:
+    """Forget the guard's trace once the operator acts on the protection again."""
+
+    try:
+        os.remove(_release_path(ui_state_dir, config_file))
+    except FileNotFoundError:
+        pass
+    except Exception:
         pass
 
 
@@ -721,6 +763,9 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         "fake_ip": state.get("fake_ip") if isinstance(state.get("fake_ip"), dict) else None,
         "fake_ip_available": _fake_ip_route_available(text),
         "blockers": blockers,
+        # The port-53 guard is shared with DNS-over-VLESS, so this window says
+        # the same things about it that the Xray one does.
+        "watchdog": read_release(config_file=config_file, ui_state_dir=ui_state_dir),
         "safety": {
             "preflight": True,
             "backup": True,
@@ -816,6 +861,7 @@ def apply_action(
                     "fake_ip": ({k: v for k, v in _normalize_fake_ip_options(fake_ip, config_text=current).items() if k != "network"} if _normalize_mode(mode) == "fake-ip" else None),
                 }
                 _save_state(ui_state_dir, config_file, next_state)
+                _clear_release(ui_state_dir, config_file)
                 return {
                     "ok": True,
                     "enabled": True,
@@ -892,6 +938,7 @@ def apply_action(
                     code="recover_firmware_dns_failed",
                 )
             _clear_state(ui_state_dir, config_file)
+            _clear_release(ui_state_dir, config_file)
             return {
                 "ok": True,
                 "enabled": False,
@@ -940,6 +987,7 @@ def apply_action(
             if not restore_override and not _wait_for_port_53(should_be_free=False):
                 raise MihomoDnsError("Системный DNS Keenetic не вернул порт 53.", code="firmware_dns_failed")
             _clear_state(ui_state_dir, config_file)
+            _clear_release(ui_state_dir, config_file)
             return {
                 "ok": True,
                 "enabled": False,
@@ -966,6 +1014,84 @@ def apply_action(
             ) from exc
 
 
+def is_enabled(*, config_file: str, ui_state_dir: str) -> bool:
+    """Cheap check for the shared DNS guard: did this assistant take port 53?"""
+
+    try:
+        state = _load_state(ui_state_dir, config_file)
+    except Exception:
+        return False
+    return bool(state.get("enabled"))
+
+
+def emergency_release(
+    *,
+    config_file: str,
+    ui_state_dir: str,
+    save_config: Callable[[str], Any],
+    restart_xkeen: Callable[..., Any],
+    reason: str,
+) -> dict[str, Any]:
+    """Give port 53 back to KeeneticOS after the guarded core stopped serving.
+
+    The counterpart of :func:`apply_action` for the unattended path.  Unlike a
+    user-driven disable this never rolls back and never fails closed: its only
+    job is to make the LAN resolve names again.  A corrupted snapshot therefore
+    skips the config restore but still hands the port back, because leaving
+    ``dns-override`` on would keep every client without DNS.
+    """
+
+    steps: list[str] = []
+    state = _load_state(ui_state_dir, config_file)
+
+    snapshot_path = str(state.get("original_config") or "")
+    original = _read_text(snapshot_path, None) if snapshot_path else None
+    expected_sha = str(state.get("original_sha256") or "")
+    if original is None:
+        steps.append("snapshot_missing")
+    elif expected_sha and _sha256(original) != expected_sha:
+        # A damaged snapshot must not overwrite a working config.
+        steps.append("snapshot_corrupt")
+        original = None
+
+    if original is not None:
+        try:
+            save_config(original)
+            steps.append("config_restored")
+        except Exception as exc:  # noqa: BLE001
+            steps.append(f"config_failed:{exc}")
+
+    # The port has to be released before the firmware can bind it, so the
+    # override is flipped after the config that owned :53 is gone.
+    desired = bool(state.get("original_dns_override", False))
+    try:
+        _set_dns_override(desired)
+        steps.append("dns_override_restored")
+    except Exception as exc:  # noqa: BLE001
+        steps.append(f"dns_override_failed:{exc}")
+
+    try:
+        restart_xkeen(source="mihomo-dns-guard-release")
+        steps.append("core_restart_requested")
+    except Exception as exc:  # noqa: BLE001
+        steps.append(f"core_restart_failed:{exc}")
+
+    if not _wait_for_port_53(should_be_free=False):
+        steps.append("port_53_still_free")
+
+    released = {"released_at": int(time.time()), "reason": reason, "steps": steps}
+    try:
+        _clear_state(ui_state_dir, config_file)
+    except Exception:
+        pass
+    # Clearing the state is what makes the assistant look untouched again, so
+    # the trace has to be written afterwards and separately: without it the
+    # panel would show a plain "ready" and never tell the operator that the
+    # protection stood down on its own.
+    _record_release(ui_state_dir, config_file, released)
+    return released
+
+
 __all__ = [
     "DNS_LISTEN",
     "MANAGED_BEGIN",
@@ -973,5 +1099,8 @@ __all__ = [
     "MihomoDnsError",
     "apply_action",
     "build_enabled_config",
+    "emergency_release",
     "get_status",
+    "is_enabled",
+    "read_release",
 ]

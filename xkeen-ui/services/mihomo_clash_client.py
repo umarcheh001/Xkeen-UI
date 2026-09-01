@@ -30,6 +30,10 @@ DEFAULT_RESPONSE_LIMIT = 2 * 1024 * 1024
 DEFAULT_STREAM_FRAME_LIMIT = 2 * 1024 * 1024
 READ_CHUNK_BYTES = 64 * 1024
 MAX_OPERATION_NAME_BYTES = 1024
+# A caller-supplied probe timeout stays inside bounds Mihomo can serve without
+# holding a worker for an unreasonable time; the upper bound also keeps the
+# probe below the ``proxy_delay`` endpoint socket timeout.
+MIHOMO_CLASH_DELAY_TIMEOUT_BOUNDS = (1000, 10000)
 
 
 @dataclass(frozen=True)
@@ -285,13 +289,16 @@ class MihomoClashClient:
         name: str,
         *,
         preset: str = "auto",
+        timeout_ms: int | None = None,
     ) -> MihomoClashJSONResponse:
         """Run one allow-listed proxy/group delay probe.
 
-        The caller supplies only a preset id. URL and timeout remain backend
-        constants and can never be turned into an SSRF primitive by a browser
-        request. Like Zashboard, an explicit ``expected`` status is omitted so
-        Mihomo applies its normal delay-probe response handling.
+        The caller supplies only a preset id, so the probe URL can never be
+        turned into an SSRF primitive by a browser request. Only the probe
+        timeout is adjustable, and only inside
+        :data:`MIHOMO_CLASH_DELAY_TIMEOUT_BOUNDS`. Like Zashboard, an explicit
+        ``expected`` status is omitted so Mihomo applies its normal delay-probe
+        response handling.
         """
 
         normalized_scope = str(scope or "").strip().lower()
@@ -315,15 +322,17 @@ class MihomoClashClient:
         query = urlencode(
             {
                 "url": delay_preset.url,
-                "timeout": delay_preset.timeout_ms,
+                "timeout": self.resolve_delay_timeout_ms(delay_preset, timeout_ms),
             }
         )
-        response = self._request(
+        # Mihomo answers a node that did not respond with ``delay: 0``. That is
+        # a measurement result, not an API failure, so it is passed through to
+        # the caller instead of being turned into an upstream error.
+        return self._request(
             spec,
             path=f"{self._named_path(spec, name)}?{query}",
             expect_json=True,
         )
-        return self._reject_zero_delay(response) if normalized_scope == "proxy" else response
 
     def request_provider_proxy_delay(
         self,
@@ -331,6 +340,7 @@ class MihomoClashClient:
         name: str,
         *,
         preset: str = "auto",
+        timeout_ms: int | None = None,
     ) -> MihomoClashJSONResponse:
         """Probe one provider-scoped proxy to avoid same-name collisions."""
 
@@ -348,33 +358,30 @@ class MihomoClashClient:
         query = urlencode(
             {
                 "url": delay_preset.url,
-                "timeout": delay_preset.timeout_ms,
+                "timeout": self.resolve_delay_timeout_ms(delay_preset, timeout_ms),
             }
         )
-        return self._reject_zero_delay(
-            self._request(spec, path=f"{path}?{query}", expect_json=True)
-        )
+        return self._request(spec, path=f"{path}?{query}", expect_json=True)
 
     @staticmethod
-    def _reject_zero_delay(response: MihomoClashJSONResponse) -> MihomoClashJSONResponse:
-        """Treat Mihomo's zero sentinel as a retryable probe timeout."""
+    def resolve_delay_timeout_ms(
+        preset: MihomoClashDelayPreset,
+        timeout_ms: int | None,
+    ) -> int:
+        """Pick the probe timeout the core will actually be asked for.
 
-        payload = response.payload if isinstance(response.payload, Mapping) else {}
-        raw_delay = payload.get("delay")
-        if isinstance(raw_delay, bool):
-            return response
+        An unusable value is treated as "not supplied" rather than as an error:
+        the probe is a diagnostic and should still run with the preset default.
+        """
+
+        if timeout_ms is None or isinstance(timeout_ms, bool):
+            return int(preset.timeout_ms)
         try:
-            delay = float(raw_delay)
+            requested = int(timeout_ms)
         except (TypeError, ValueError, OverflowError):
-            return response
-        if delay == 0:
-            raise MihomoClashClientError(
-                "upstream_timeout",
-                "The Mihomo delay probe timed out.",
-                status=504,
-                retryable=True,
-            )
-        return response
+            return int(preset.timeout_ms)
+        low, high = MIHOMO_CLASH_DELAY_TIMEOUT_BOUNDS
+        return max(low, min(high, requested))
 
     def disconnect_connection(self, connection_id: str) -> MihomoClashJSONResponse:
         """Close exactly one validated connection id."""
@@ -729,6 +736,7 @@ __all__ = [
     "DEFAULT_STREAM_FRAME_LIMIT",
     "MAX_OPERATION_NAME_BYTES",
     "MIHOMO_CLASH_DELAY_PRESETS",
+    "MIHOMO_CLASH_DELAY_TIMEOUT_BOUNDS",
     "MIHOMO_CLASH_ENDPOINTS",
     "MihomoClashClient",
     "MihomoClashClientError",

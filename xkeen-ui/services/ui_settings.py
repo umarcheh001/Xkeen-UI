@@ -115,10 +115,10 @@ DEFAULTS: Dict[str, Any] = {
         # Router-safe per-node probing remains the default. Operators can opt
         # into Mihomo's one-request group endpoint for large groups.
         "latencyTestMode": "safe",
-        # Preserve the long-standing Xkeen colours while making both cutoffs
-        # adjustable from the UI settings panel.
-        "latencyLowMs": 250,
-        "latencyMediumMs": 650,
+        # Match Zashboard's cutoffs: VLESS hops routinely land in the 300-700ms
+        # band, which the previous 250/650 pair painted as slow or unusable.
+        "latencyLowMs": 400,
+        "latencyMediumMs": 800,
     },
 }
 

@@ -11,7 +11,14 @@ def test_default_delay_policy_protects_low_power_router_batches():
     policy = MIHOMO_CLASH_ACTION_POLICIES["delay"]
     assert policy.max_global_concurrent == 5
     assert policy.max_subject_concurrent == 5
-    assert policy.max_calls_per_window == 120
+
+
+def test_delay_policy_window_covers_a_full_large_group_run():
+    # Five parallel workers without pauses finish a 200+ node group well above
+    # the old 120-call window, which left the tail of the run unmeasured.
+    policy = MIHOMO_CLASH_ACTION_POLICIES["delay"]
+    assert policy.max_calls_per_window == 600
+    assert policy.window_seconds == 60.0
 
 
 def test_action_guard_limits_same_subject_concurrency_and_releases_lease():

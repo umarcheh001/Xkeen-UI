@@ -12,8 +12,8 @@ def test_ui_settings_defaults_mihomo_timeout_hiding_to_disabled(tmp_path):
         "latencyPreset": "auto",
         "latencyFreshness": "auto",
         "latencyTestMode": "safe",
-        "latencyLowMs": 250,
-        "latencyMediumMs": 650,
+        "latencyLowMs": 400,
+        "latencyMediumMs": 800,
     }
 
 
@@ -31,8 +31,8 @@ def test_ui_settings_persists_mihomo_timeout_hiding_preferences(tmp_path):
         "latencyPreset": "auto",
         "latencyFreshness": "auto",
         "latencyTestMode": "safe",
-        "latencyLowMs": 250,
-        "latencyMediumMs": 650,
+        "latencyLowMs": 400,
+        "latencyMediumMs": 800,
     }
     assert ui_settings.load_settings(ui_state_dir=str(tmp_path))["mihomo"] == saved["mihomo"]
 
@@ -50,8 +50,8 @@ def test_ui_settings_persists_mihomo_timeout_hiding_preferences(tmp_path):
         "latencyPreset": "auto",
         "latencyFreshness": "auto",
         "latencyTestMode": "safe",
-        "latencyLowMs": 250,
-        "latencyMediumMs": 650,
+        "latencyLowMs": 400,
+        "latencyMediumMs": 800,
     }
 
 
@@ -90,8 +90,8 @@ def test_ui_settings_rejects_invalid_mihomo_timeout_hiding_preferences(tmp_path)
         "latencyPreset": "auto",
         "latencyFreshness": "auto",
         "latencyTestMode": "safe",
-        "latencyLowMs": 250,
-        "latencyMediumMs": 650,
+        "latencyLowMs": 400,
+        "latencyMediumMs": 800,
     }
 
 
@@ -116,8 +116,8 @@ def test_ui_settings_does_not_persist_mihomo_timeout_history(tmp_path):
         "latencyPreset": "auto",
         "latencyFreshness": "auto",
         "latencyTestMode": "safe",
-        "latencyLowMs": 250,
-        "latencyMediumMs": 650,
+        "latencyLowMs": 400,
+        "latencyMediumMs": 800,
     }
 
 
@@ -130,8 +130,8 @@ def test_ui_settings_persists_bounded_mihomo_workspace_preferences(tmp_path):
                 "latencyPreset": "cloudflare",
                 "latencyFreshness": "15",
                 "latencyTestMode": "core",
-                "latencyLowMs": 400,
-                "latencyMediumMs": 800,
+                "latencyLowMs": 300,
+                "latencyMediumMs": 900,
             }
         },
         ui_state_dir=str(tmp_path),
@@ -143,8 +143,12 @@ def test_ui_settings_persists_bounded_mihomo_workspace_preferences(tmp_path):
     assert patched["mihomo"]["latencyPreset"] == "cloudflare"
     assert patched["mihomo"]["latencyFreshness"] == "15"
     assert patched["mihomo"]["latencyTestMode"] == "core"
-    assert patched["mihomo"]["latencyLowMs"] == 400
-    assert patched["mihomo"]["latencyMediumMs"] == 800
+    # Operator-chosen thresholds must survive a change of the shipped defaults.
+    assert patched["mihomo"]["latencyLowMs"] == 300
+    assert patched["mihomo"]["latencyMediumMs"] == 900
+    reloaded = ui_settings.load_settings(ui_state_dir=str(tmp_path))
+    assert reloaded["mihomo"]["latencyLowMs"] == 300
+    assert reloaded["mihomo"]["latencyMediumMs"] == 900
 
 
 def test_ui_settings_rejects_arbitrary_latency_url_and_invalid_workspace_state(tmp_path):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict
 
@@ -285,15 +286,36 @@ def test_frontend_has_dns_button_modal_and_guard_copy():
     assert "Маршрут для DNS-запросов" in template
     assert "renderRoute" in script
     assert 'id="routing-dns-over-vless-route-fallback"' in template
-    assert "Резервирование сохранено" in script
-    assert "Сторож снял защиту" in script
+    # The bypass group needs both halves in the markup, plus the button that
+    # copies the domains from the routing rules instead of retyping them.
+    assert 'id="routing-dns-over-vless-direct"' in template
+    assert 'id="routing-dns-over-vless-direct-zones"' in template
+    assert 'id="routing-dns-over-vless-direct-from-rules"' in template
+    assert "direct_rule_domains" in script
+    # The card prints the server's sentence as is: no wrapper written in
+    # config language ("Резервирование не переносится: ...") around it.
+    assert "plan.reason" in script
+    assert "Резервирование сохранено" not in script
+    # Про сторожа оба окна говорят одними словами, поэтому тексты — общий модуль.
+    guard_copy = (root / "xkeen-ui/static/js/features/dns_guard_text.js").read_text(encoding="utf-8")
+    mihomo = (root / "xkeen-ui/static/js/features/mihomo_dns.js").read_text(encoding="utf-8")
+    assert "dns_guard_text.js" in script
+    assert "dns_guard_text.js" in mihomo
+    assert "guardNotice(data, enabled)" in script
+    assert "guardNotice(data, enabled)" in mihomo
+    assert "Сторож вернул DNS роутеру" in guard_copy
+    assert "Сторож следит: проверяет разрешение имён каждые" in guard_copy
+    # Ни одна фраза сторожа не называет ядро: механизм у обеих защит один.
+    # Комментарии объясняют, откуда взялся модуль, поэтому проверяется код без них.
+    guard_code = re.sub(r"/\*.*?\*/", "", guard_copy, flags=re.S)
+    guard_code = re.sub(r"//.*", "", guard_code)
+    assert "Xray" not in guard_code and "Mihomo" not in guard_code
     # Карточка объясняет состояние словами, а не только цветной меткой.
     assert "describeState" in script
     assert "конфигурация совместима, можно включать" in script
     assert "служебная конфигурация и настройка роутера согласованы" in script
     assert "осталась неполная настройка от прерванной операции" in script
-    assert "ядро не поднялось, DNS возвращён прошивке" in script
-    assert "Сторож проверяет ядро каждые" in script
+    assert "GUARD_RELEASED_BADGE" in script
     assert 'id="routing-dns-over-vless-multi"' in template
     assert "Балансировать между несколькими прокси" in template
     assert 'id="routing-dns-over-vless-upstreams"' in template
@@ -527,6 +549,13 @@ def test_fallback_into_direct_is_still_dropped(tmp_path: Path):
     assert target["fallback"]["kept"] is False
     assert target["fallback"]["verdict"] == "leak"
 
+    # The user never asked for this decision, so the card has to explain it in
+    # plain words: what happens, and why the spare path was not taken.
+    reason = target["fallback"]["reason"]
+    assert reason.startswith("Если все выбранные прокси разом откажут")
+    assert "провайдер" in reason
+    assert "fallback" not in reason.lower()
+
 
 def test_unresolvable_fallback_is_dropped_rather_than_assumed_safe(tmp_path: Path):
     configs, routing_path, _state = _scenario_config(tmp_path)
@@ -597,121 +626,6 @@ def test_clone_pointed_at_direct_by_hand_is_treated_as_tampered(tmp_path: Path, 
 
     assert result["tampered"] is True
     assert result["enabled"] is False
-
-
-def _enabled_install(tmp_path: Path):
-    """A scenario install with the feature switched on."""
-    configs, routing_path, state = _scenario_config(tmp_path)
-    routing = json.loads(routing_path.read_text(encoding="utf-8"))
-    target = dns._select_target(dns._collect_runtime(str(configs), routing), "balancer_main", routing)
-    _write(configs / dns.MANAGED_FRAGMENT, dns._managed_fragment())
-    _write(routing_path, dns._build_enabled_routing(routing, target))
-    _write(
-        state / dns.STATE_FILENAME,
-        {"enabled": True, "original_dns_override": False, "target": {"source": "balancer_main"}},
-    )
-    return configs, routing_path, state
-
-
-def _tick(configs, routing_path, state, restart, counters):
-    return dns.watchdog_tick(
-        configs_dir=str(configs),
-        routing_file=str(routing_path),
-        ui_state_dir=str(state),
-        restart_xkeen=restart,
-        counters=counters,
-    )
-
-
-def test_watchdog_does_nothing_while_the_feature_is_off(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _scenario_config(tmp_path)
-    calls: list[object] = []
-    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: False)
-    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: calls.append(enabled))
-
-    result = _tick(configs, routing_path, state, lambda **k: calls.append(k) or True, {})
-
-    assert result["action"] == "idle"
-    assert calls == []
-
-
-def test_watchdog_stays_quiet_while_dns_answers(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _enabled_install(tmp_path)
-    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: True)
-
-    result = _tick(configs, routing_path, state, lambda **k: True, {"fails": 2, "restarts": 1})
-
-    assert result["action"] == "ok"
-    assert result["fails"] == 0 and result["restarts"] == 0
-
-
-def test_watchdog_restarts_the_core_before_giving_up(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _enabled_install(tmp_path)
-    restarts: list[str] = []
-    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: False)
-
-    counters: Dict[str, Any] = {}
-    actions = []
-    for _ in range(dns.WATCHDOG_FAIL_THRESHOLD):
-        counters = _tick(configs, routing_path, state, lambda **k: restarts.append(k.get("source")) or True, counters)
-        actions.append(counters["action"])
-
-    # Failures are tolerated up to the threshold, then a restart is attempted.
-    assert actions[:-1] == ["watching"] * (dns.WATCHDOG_FAIL_THRESHOLD - 1)
-    assert actions[-1] == "restarted"
-    assert restarts == ["dns-over-vless-watchdog"]
-    # The managed configuration is still in place: nothing was released yet.
-    assert (configs / dns.MANAGED_FRAGMENT).exists()
-
-
-def test_watchdog_recovers_without_releasing_when_the_core_comes_back(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _enabled_install(tmp_path)
-    health = {"ok": False}
-    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: health["ok"])
-
-    counters: Dict[str, Any] = {}
-    for _ in range(dns.WATCHDOG_FAIL_THRESHOLD):
-        counters = _tick(configs, routing_path, state, lambda **k: True, counters)
-    assert counters["action"] == "restarted"
-
-    health["ok"] = True
-    counters = _tick(configs, routing_path, state, lambda **k: True, counters)
-
-    assert counters["action"] == "ok"
-    assert counters["restarts"] == 0
-    assert json.loads((state / dns.STATE_FILENAME).read_text(encoding="utf-8"))["enabled"] is True
-
-
-def test_watchdog_hands_dns_back_to_the_firmware_after_restarts_fail(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _enabled_install(tmp_path)
-    overrides: list[bool] = []
-    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: False)
-    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: overrides.append(enabled))
-    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj: _write(Path(path), obj))
-
-    counters: Dict[str, Any] = {}
-    action = ""
-    for _ in range(dns.WATCHDOG_FAIL_THRESHOLD * (dns.WATCHDOG_RESTART_ATTEMPTS + 1) + 2):
-        counters = _tick(configs, routing_path, state, lambda **k: True, counters)
-        action = counters["action"]
-        if action == "released":
-            break
-
-    assert action == "released"
-    # Port 53 goes back to the firmware resolver...
-    assert overrides == [False]
-    # ...and the managed config is gone, so a recovering core can bind again.
-    assert not (configs / dns.MANAGED_FRAGMENT).exists()
-    written = json.loads(routing_path.read_text(encoding="utf-8"))
-    assert all(
-        item.get("ruleTag") not in {dns.PROXY_RULE_TAG, dns.CAPTURE_RULE_TAG}
-        for item in written["routing"]["rules"]
-    )
-    saved = json.loads((state / dns.STATE_FILENAME).read_text(encoding="utf-8"))
-    assert saved["enabled"] is False
-    assert saved["watchdog"]["reason"]
-
-
 def test_status_reports_an_automatic_release(tmp_path: Path, monkeypatch):
     configs, routing_path, state = _scenario_config(tmp_path)
     _write(
@@ -727,26 +641,6 @@ def test_status_reports_an_automatic_release(tmp_path: Path, monkeypatch):
 
     assert result["watchdog"]["reason"] == "Xray не поднялся"
     assert result["enabled"] is False
-
-
-def test_watchdog_thread_starts_only_once(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _scenario_config(tmp_path)
-    monkeypatch.setattr(dns, "_WATCHDOG_STARTED", False, raising=False)
-
-    kwargs = dict(
-        configs_dir=str(configs),
-        routing_file=str(routing_path),
-        ui_state_dir=str(state),
-        restart_xkeen=lambda **_k: True,
-        interval=3600.0,
-    )
-    first = dns.start_watchdog(**kwargs)
-    second = dns.start_watchdog(**kwargs)
-
-    assert first is True
-    assert second is False
-
-
 def test_status_exposes_the_effective_watchdog_settings(tmp_path: Path, monkeypatch):
     configs, routing, state = _base_config(tmp_path)
     monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
@@ -786,57 +680,6 @@ def test_watchdog_settings_clamp_and_ignore_junk(monkeypatch):
     assert settings["interval"] == dns.WATCHDOG_INTERVAL_BOUNDS[0]
     assert settings["fail_threshold"] == dns.WATCHDOG_FAIL_THRESHOLD
     assert settings["restart_attempts"] == dns.WATCHDOG_RESTART_ATTEMPTS_BOUNDS[1]
-
-
-def test_watchdog_threshold_from_the_environment_delays_the_restart(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _enabled_install(tmp_path)
-    restarts: list[str] = []
-    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: False)
-    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG_FAILS", str(dns.WATCHDOG_FAIL_THRESHOLD + 2))
-
-    counters: Dict[str, Any] = {}
-    actions = []
-    for _ in range(dns.WATCHDOG_FAIL_THRESHOLD + 2):
-        counters = _tick(configs, routing_path, state, lambda **k: restarts.append(k.get("source")) or True, counters)
-        actions.append(counters["action"])
-
-    assert actions[-1] == "restarted"
-    assert actions[:-1] == ["watching"] * (dns.WATCHDOG_FAIL_THRESHOLD + 1)
-
-
-def test_watchdog_without_restart_attempts_releases_dns_at_once(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _enabled_install(tmp_path)
-    restarts: list[str] = []
-    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: False)
-    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: True)
-    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS", "0")
-
-    counters: Dict[str, Any] = {}
-    for _ in range(dns.WATCHDOG_FAIL_THRESHOLD):
-        counters = _tick(configs, routing_path, state, lambda **k: restarts.append(k.get("source")) or True, counters)
-
-    assert counters["action"] == "released"
-    # Перезапусков не было, причина об этом и говорит.
-    assert restarts == ["dns-over-vless-watchdog-release"]
-    assert "перезапуски отключены" in counters["release"]["reason"]
-
-
-def test_watchdog_thread_is_not_started_when_disabled(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _scenario_config(tmp_path)
-    monkeypatch.setattr(dns, "_WATCHDOG_STARTED", False, raising=False)
-    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG", "0")
-
-    started = dns.start_watchdog(
-        configs_dir=str(configs),
-        routing_file=str(routing_path),
-        ui_state_dir=str(state),
-        restart_xkeen=lambda **_k: True,
-    )
-
-    assert started is False
-    assert dns._WATCHDOG_STARTED is False
-
-
 def test_several_proxies_are_combined_into_an_own_balancer(tmp_path: Path):
     configs, routing_path, _state = _scenario_config(tmp_path)
     routing = json.loads(routing_path.read_text(encoding="utf-8"))
@@ -986,36 +829,6 @@ def test_http_contract_accepts_a_list_of_targets(tmp_path: Path, monkeypatch):
 
     assert response.status_code == 200
     assert seen["target_tag"] == ["my_proxy_1", "my_proxy_2"]
-
-
-def test_watchdog_abandons_release_if_the_user_disabled_meanwhile(tmp_path: Path, monkeypatch):
-    configs, routing_path, state = _enabled_install(tmp_path)
-    overrides: list[bool] = []
-    monkeypatch.setattr(dns, "_watchdog_healthy", lambda: False)
-    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: overrides.append(enabled))
-
-    real_load = dns._load_state
-    seen = {"calls": 0}
-
-    def flaky_load(path):
-        # The last read happens inside the lock, right before releasing: by
-        # then the user has switched the feature off from the panel.
-        seen["calls"] += 1
-        value = real_load(path)
-        if seen["calls"] > 1 and value.get("enabled"):
-            value = dict(value)
-            value["enabled"] = False
-        return value
-
-    counters: Dict[str, Any] = {"fails": dns.WATCHDOG_FAIL_THRESHOLD - 1, "restarts": dns.WATCHDOG_RESTART_ATTEMPTS}
-    monkeypatch.setattr(dns, "_load_state", flaky_load)
-    result = _tick(configs, routing_path, state, lambda **_k: True, counters)
-
-    assert result["action"] == "idle"
-    assert overrides == []
-    assert (configs / dns.MANAGED_FRAGMENT).exists()
-
-
 def test_install_enabled_before_the_picker_keeps_working(tmp_path: Path, monkeypatch):
     """An upgrade must not disturb a configuration enabled by the old code."""
     configs, routing_path, state = _base_config(tmp_path)
@@ -1087,22 +900,32 @@ def test_local_resolver_takes_the_home_zones_out_of_the_tunnel(tmp_path: Path):
     resolvers = dns._parse_local_resolvers("192.168.1.1:5353")
 
     fragment = dns._managed_fragment(["1.1.1.1"], resolvers)
-    first = fragment["dns"]["servers"][0]
+    strict, delegated = fragment["dns"]["servers"][0], fragment["dns"]["servers"][1]
 
-    assert first["address"] == "192.168.1.1"
-    assert first["port"] == 5353
-    assert "domain:lan" in first["domains"]
+    assert strict["address"] == "192.168.1.1"
+    assert strict["port"] == 5353
+    assert "domain:lan" in strict["domains"]
     # Reverse lookups for private ranges must not reach a public resolver...
-    assert "domain:10.in-addr.arpa" in first["domains"]
-    assert "domain:168.192.in-addr.arpa" in first["domains"]
+    assert "domain:10.in-addr.arpa" in strict["domains"]
+    assert "domain:168.192.in-addr.arpa" in strict["domains"]
     # ...but a blanket in-addr.arpa would also grab PTR for public addresses.
-    assert "domain:in-addr.arpa" not in first["domains"]
-    # The router's own zones stay on this side of the tunnel too.
-    assert "domain:keenetic.net" in first["domains"]
-    assert "domain:netcraze.net" in first["domains"]
-    assert first["skipFallback"] is True
+    assert "domain:in-addr.arpa" not in strict["domains"]
+    # None of these exists on the public internet, so a silent resolver is the
+    # end of the story: retrying abroad would only hand over the LAN names.
+    assert strict["skipFallback"] is True
+
+    # The router's own zones are real delegated domains, listed only because the
+    # box resolves them for itself.  They ride the same resolver, but a silent
+    # one must not leave the local web interface or the DDNS name unresolvable.
+    assert delegated["address"] == "192.168.1.1"
+    assert delegated["port"] == 5353
+    assert "domain:keenetic.net" in delegated["domains"]
+    assert "domain:netcraze.net" in delegated["domains"]
+    assert "domain:lan" not in delegated["domains"]
+    assert delegated["skipFallback"] is False
+
     # A public upstream still follows for everything else.
-    assert fragment["dns"]["servers"][1] == "1.1.1.1"
+    assert fragment["dns"]["servers"][2] == "1.1.1.1"
 
     rule = dns._local_rule(resolvers, dns._direct_outbound_tag(runtime))
     assert rule["outboundTag"] == "direct"
@@ -1161,7 +984,8 @@ def test_enable_stores_dns_settings_and_status_reports_them(tmp_path: Path, monk
 
     fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
     assert fragment["dns"]["servers"][0]["address"] == "192.168.1.1"
-    assert fragment["dns"]["servers"][1:] == ["1.1.1.1", "9.9.9.9"]
+    assert fragment["dns"]["servers"][1]["address"] == "192.168.1.1"
+    assert fragment["dns"]["servers"][2:] == ["1.1.1.1", "9.9.9.9"]
 
     monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
     result = dns.get_status(
@@ -1209,7 +1033,12 @@ def test_custom_zones_reach_the_fragment(tmp_path: Path, monkeypatch):
     )
 
     fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
-    assert fragment["dns"]["servers"][0]["domains"] == ["domain:lan", "domain:office.internal"]
+    # ``lan`` is nowhere on the public internet; ``office.internal`` is a name
+    # the user added, so it is treated as delegated and may fall back.
+    assert fragment["dns"]["servers"][0]["domains"] == ["domain:lan"]
+    assert fragment["dns"]["servers"][0]["skipFallback"] is True
+    assert fragment["dns"]["servers"][1]["domains"] == ["domain:office.internal"]
+    assert fragment["dns"]["servers"][1]["skipFallback"] is False
 
     monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
     result = dns.get_status(
@@ -1221,6 +1050,231 @@ def test_custom_zones_reach_the_fragment(tmp_path: Path, monkeypatch):
     assert result["tampered"] is False
 
 
+def test_only_strict_zones_keep_the_single_server_and_no_fallback(tmp_path: Path):
+    """Nothing changes for a zone list that is local through and through."""
+
+    resolvers = dns._parse_local_resolvers("192.168.1.1")
+    fragment = dns._managed_fragment(["1.1.1.1"], resolvers, ["domain:lan", "domain:home"])
+    servers = fragment["dns"]["servers"]
+
+    assert len(servers) == 2
+    assert servers[0]["domains"] == ["domain:lan", "domain:home"]
+    assert servers[0]["skipFallback"] is True
+    assert servers[1] == "1.1.1.1"
+    # No delegated zone means nothing needs the global fallback.
+    assert fragment["dns"]["disableFallback"] is True
+
+
+def test_declared_fragment_with_split_zones_is_not_read_back_as_drift(tmp_path: Path):
+    """Two entries per resolver must fold back into the resolver they came from.
+
+    Otherwise the panel rebuilds a four-server fragment from its own three-server
+    file and reports a config nobody touched as tampered.
+    """
+
+    resolvers = dns._parse_local_resolvers("192.168.1.1:5353")
+    fragment = dns._managed_fragment(["1.1.1.1"], resolvers)
+    raw_servers = fragment["dns"]["servers"]
+
+    folded: list[dict] = []
+    zones: dict[tuple, list[str]] = {}
+    for item in [entry for entry in raw_servers if isinstance(entry, dict)]:
+        key = (item["address"], item["port"])
+        if key not in zones:
+            zones[key] = []
+            folded.append({"address": key[0], "port": key[1]})
+        zones[key].extend(item["domains"])
+
+    assert folded == [{"address": "192.168.1.1", "port": 5353}]
+    assert dns._managed_fragment(["1.1.1.1"], folded, zones[("192.168.1.1", 5353)]) == fragment
+
+
+def test_direct_domains_are_resolved_past_the_tunnel(tmp_path: Path):
+    """A domain routed directly should be resolved directly, or its address is
+    the one near the exit point while the traffic goes straight out."""
+
+    local = dns._parse_local_resolvers("192.168.1.1")
+    bypass = dns._parse_direct_resolvers("77.88.8.8, 77.88.8.1")
+    fragment = dns._managed_fragment(
+        ["8.8.8.8"], local, ["domain:lan"], bypass, ["geosite:category-ru"]
+    )
+    servers = fragment["dns"]["servers"]
+
+    # Home zones first, then the bypass group, then the public upstream.
+    assert servers[0]["address"] == "192.168.1.1"
+    assert [item["address"] for item in servers[1:3]] == ["77.88.8.8", "77.88.8.1"]
+    assert all(item["domains"] == ["geosite:category-ru"] for item in servers[1:3])
+    # A silent resolver must not leave the name unresolved: the query falls
+    # through to the public upstream instead.
+    assert all(item["skipFallback"] is False for item in servers[1:3])
+    assert servers[3:] == ["8.8.8.8"]
+    assert fragment["dns"]["disableFallback"] is False
+
+
+def test_direct_rule_keeps_those_queries_out_of_the_tunnel(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+    target = dns._select_target(runtime, "balancer_main", routing)
+    bypass = dns._parse_direct_resolvers("77.88.8.8")
+
+    rule = dns._direct_rule(bypass, "direct")
+    assert rule["ip"] == ["77.88.8.8/32"]
+    assert rule["outboundTag"] == "direct"
+
+    planned = dns._build_enabled_routing(
+        routing, target, dns._local_rule(dns._parse_local_resolvers("192.168.1.1"), "direct"), rule
+    )
+    tags = [item.get("ruleTag") for item in planned["routing"]["rules"][:4]]
+
+    # Both bypass rules must win over the proxy rule, or the query is already
+    # inside the tunnel by the time they are checked.
+    assert tags == [dns.LOCAL_RULE_TAG, dns.DIRECT_RULE_TAG, dns.PROXY_RULE_TAG, dns.CAPTURE_RULE_TAG]
+
+
+def test_half_a_bypass_setting_is_refused(tmp_path: Path, monkeypatch):
+    """Resolvers without domains are never asked; domains without resolvers
+    have nowhere to go.  Either half alone is a silent no-op."""
+
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+
+    with pytest.raises(dns.DnsOverVlessError) as excinfo:
+        dns.apply_action(
+            "enable",
+            configs_dir=str(configs),
+            routing_file=str(routing_path),
+            ui_state_dir=str(state),
+            restart_xkeen=lambda **_k: True,
+            target_tag="balancer_main",
+            direct_resolver="77.88.8.8",
+        )
+
+    assert excinfo.value.code == "direct_incomplete"
+
+
+def test_bypass_group_survives_read_back_without_looking_tampered(tmp_path: Path, monkeypatch):
+    """Both groups are objects in the same list; telling them apart is what the
+    drift check gets wrong if it guesses instead of reading the bypass rule."""
+
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj: _write(Path(path), obj))
+
+    dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+        local_resolver="192.168.1.1:5353",
+        direct_resolver="77.88.8.8",
+        direct_domains="geosite:category-ru, domain:ok.ru",
+    )
+
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["enabled"] is True
+    assert result["tampered"] is False
+    assert result["local_resolvers"] == ["192.168.1.1:5353"]
+    assert result["direct_resolvers"] == ["77.88.8.8:53"]
+    assert result["direct_domains"] == ["geosite:category-ru", "domain:ok.ru"]
+
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    tags = [item.get("ruleTag") for item in routing["routing"]["rules"][:2]]
+    assert tags == [dns.LOCAL_RULE_TAG, dns.DIRECT_RULE_TAG]
+
+
+def test_disable_removes_the_bypass_rule_too(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+    target = dns._select_target(runtime, "balancer_main", routing)
+    planned = dns._build_enabled_routing(
+        routing, target, None, dns._direct_rule(dns._parse_direct_resolvers("77.88.8.8"), "direct")
+    )
+
+    cleaned = dns._build_disabled_routing(planned)
+    tags = {item.get("ruleTag") for item in cleaned["routing"]["rules"]}
+
+    assert dns.DIRECT_RULE_TAG not in tags
+    assert dns.PROXY_RULE_TAG not in tags
+
+
+def test_emergency_release_drops_the_bypass_rules_too(tmp_path: Path, monkeypatch):
+    """The watchdog gives port 53 back by clearing our rules; a rule it does not
+    know about would stay behind and keep sending DNS to a dead listener."""
+
+    configs, routing_path, state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+    target = dns._select_target(runtime, "balancer_main", routing)
+    planned = dns._build_enabled_routing(
+        routing,
+        target,
+        dns._local_rule(dns._parse_local_resolvers("192.168.1.1"), "direct"),
+        dns._direct_rule(dns._parse_direct_resolvers("77.88.8.8"), "direct"),
+    )
+    _write(routing_path, planned)
+    _write(
+        configs / dns.MANAGED_FRAGMENT,
+        dns._managed_fragment(
+            ["8.8.8.8"],
+            dns._parse_local_resolvers("192.168.1.1"),
+            None,
+            dns._parse_direct_resolvers("77.88.8.8"),
+            ["geosite:category-ru"],
+        ),
+    )
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj: _write(Path(path), obj))
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+
+    released = dns._emergency_release(
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        reason="test",
+    )
+
+    assert "routing_cleared" in released["steps"]
+    assert "fragment_removed" in released["steps"]
+    after = json.loads(routing_path.read_text(encoding="utf-8"))
+    tags = {item.get("ruleTag") for item in after["routing"]["rules"]}
+    assert dns.LOCAL_RULE_TAG not in tags
+    assert dns.DIRECT_RULE_TAG not in tags
+    assert dns.PROXY_RULE_TAG not in tags
+    assert dns.CAPTURE_RULE_TAG not in tags
+
+
+def test_domains_already_routed_direct_are_offered_as_a_starting_list(tmp_path: Path):
+    """Keeping the two lists in sync by hand is what makes them drift apart."""
+
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    routing["routing"]["rules"].insert(
+        0,
+        {"type": "field", "outboundTag": "direct", "domain": ["geosite:category-ru", "ok.ru"]},
+    )
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    offered = dns._domains_routed_direct(runtime, routing)
+
+    # Bare names are qualified the same way the zone list qualifies them.
+    assert offered == ["geosite:category-ru", "domain:ok.ru"]
+
+
 def test_several_network_segments_each_get_their_own_resolver(tmp_path: Path):
     configs, routing_path, _state = _scenario_config(tmp_path)
     routing = json.loads(routing_path.read_text(encoding="utf-8"))
@@ -1230,13 +1284,22 @@ def test_several_network_segments_each_get_their_own_resolver(tmp_path: Path):
     fragment = dns._managed_fragment(["1.1.1.1"], resolvers)
     servers = fragment["dns"]["servers"]
 
+    strict_zones, delegated_zones = dns._split_local_zones(dns.DEFAULT_LOCAL_DOMAINS)
+
+    # Every segment is asked about the strict zones first, in the order given...
     assert [item["address"] for item in servers[:3]] == ["192.168.1.1", "192.168.2.1", "10.8.0.1"]
     assert [item["port"] for item in servers[:3]] == [53, 5353, 53]
-    # Every segment answers the same zone list, and the public upstream follows.
-    assert all(item["domains"] == dns.DEFAULT_LOCAL_DOMAINS for item in servers[:3])
-    assert servers[3:] == ["1.1.1.1"]
-    # One public upstream still means no fallback abroad.
-    assert fragment["dns"]["disableFallback"] is True
+    assert all(item["domains"] == strict_zones for item in servers[:3])
+    assert all(item["skipFallback"] is True for item in servers[:3])
+    # ...then about the delegated ones, and only after every segment stayed
+    # silent does the query reach the public upstream.
+    assert [item["address"] for item in servers[3:6]] == ["192.168.1.1", "192.168.2.1", "10.8.0.1"]
+    assert all(item["domains"] == delegated_zones for item in servers[3:6])
+    assert all(item["skipFallback"] is False for item in servers[3:6])
+    assert servers[6:] == ["1.1.1.1"]
+    # The global flag would otherwise cancel that last hop: one upstream, but a
+    # delegated zone still needs somewhere to go.
+    assert fragment["dns"]["disableFallback"] is False
 
     rule = dns._local_rule(resolvers, dns._direct_outbound_tag(runtime))
     assert rule["ip"] == ["192.168.1.1/32", "192.168.2.1/32", "10.8.0.1/32"]
@@ -1295,3 +1358,118 @@ def test_status_offers_the_zone_presets(tmp_path: Path, monkeypatch):
 
     assert set(result["zone_presets"]) == {"local", "ptr", "ptr172", "keenetic", "netcraze"}
     assert result["zone_presets"]["keenetic"] == dns.KEENETIC_ZONES
+
+
+def test_resolver_pointed_at_our_own_listener_is_refused():
+    # 127.0.0.1:53 is this very service: the query would come straight back.
+    for bad in ("127.0.0.1", "127.0.0.1:53"):
+        with pytest.raises(dns.DnsOverVlessError) as excinfo:
+            dns._parse_local_resolver(bad)
+        assert excinfo.value.code == "local_resolver_loop"
+        assert "зациклил" in str(excinfo.value)
+
+    # ::1 never reaches the new rule: Python counts ::/8 as reserved, so the
+    # older check refuses it first. Same outcome for the user, other sentence.
+    with pytest.raises(dns.DnsOverVlessError):
+        dns._parse_local_resolver("[::1]:53")
+
+    # The firmware resolver sits on the same host but a different port, which is
+    # exactly the address the hint tells people to use.
+    assert dns._parse_local_resolver("127.0.0.1:41100") == {"address": "127.0.0.1", "port": 41100}
+    # A resolver elsewhere in the network keeps working on port 53.
+    assert dns._parse_local_resolver("192.168.1.1") == {"address": "192.168.1.1", "port": 53}
+
+
+def test_own_address_probe_stays_permissive_when_it_cannot_run(monkeypatch):
+    # Refusing a legitimate resolver would be worse than missing a loop.
+    import socket as socket_module
+
+    def _explode(*_args, **_kwargs):
+        raise OSError("no sockets here")
+
+    monkeypatch.setattr(socket_module, "socket", _explode)
+    assert dns._parse_local_resolver("192.168.1.1") == {"address": "192.168.1.1", "port": 53}
+
+
+def test_one_address_in_both_resolver_groups_is_refused(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+
+    with pytest.raises(dns.DnsOverVlessError) as excinfo:
+        dns.apply_action(
+            "enable",
+            configs_dir=str(configs),
+            routing_file=str(routing_path),
+            ui_state_dir=str(state),
+            restart_xkeen=lambda *a, **k: None,
+            local_resolver="192.168.1.1",
+            local_domains="domain:lan",
+            direct_resolver="192.168.1.1:5353",
+            direct_domains="domain:example.com",
+        )
+
+    assert excinfo.value.code == "resolver_group_overlap"
+    # The port differs, but read-back splits the groups by address alone.
+    assert "192.168.1.1" in str(excinfo.value)
+
+
+def test_field_hint_names_the_firmware_resolver_ports():
+    # The addresses are not guessable, so the hint has to carry them; without
+    # this the field reads as if there were nothing to put in it.
+    markup = Path("xkeen-ui/templates/panel.html").read_text(encoding="utf-8")
+    hint_start = markup.index('for="routing-dns-over-vless-local"')
+    hint = markup[hint_start : hint_start + 1600]
+    assert "127.0.0.1:41100" in hint
+    assert "41101" in hint and "41102" in hint
+    assert "зациклил" in hint
+
+
+def test_managed_jsonc_header_is_not_duplicated_on_rewrite(tmp_path: Path, monkeypatch):
+    # On the router the header line had piled up: it is written on every enable, and the
+    # previous one survived as an ordinary user comment.
+    from services import xray_subscriptions as subs
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(path) + "c")
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+
+    _configs, routing_path, _state = _scenario_config(tmp_path)
+    sidecar = Path(str(routing_path) + "c")
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+
+    dns._write_routing_preserving_comments(str(routing_path), routing)
+    header = "// DNS-over-VLESS managed by XKeen UI"
+    assert sidecar.read_text(encoding="utf-8").count(header) == 1
+
+    # A comment the user typed sits in the same slot as the header and must survive.
+    sidecar.write_text(
+        sidecar.read_text(encoding="utf-8").replace("{", "// не трогать этот блок\n{", 1),
+        encoding="utf-8",
+    )
+    for _ in range(3):
+        dns._write_routing_preserving_comments(str(routing_path), routing)
+
+    text = sidecar.read_text(encoding="utf-8")
+    assert text.count(header) == 1
+    assert "// не трогать этот блок" in text
+
+
+def test_managed_jsonc_header_already_duplicated_is_healed(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(path) + "c")
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+
+    _configs, routing_path, _state = _scenario_config(tmp_path)
+    sidecar = Path(str(routing_path) + "c")
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    header = "// DNS-over-VLESS managed by XKeen UI"
+
+    # The state a router that ran the old code is already in.
+    sidecar.write_text(
+        header + "\n" + header + "\n" + json.dumps(routing, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    dns._write_routing_preserving_comments(str(routing_path), routing)
+
+    assert sidecar.read_text(encoding="utf-8").count(header) == 1

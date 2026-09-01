@@ -13344,13 +13344,27 @@ body.panel-page .modal[data-operator-modal-family="confirm-compact-form"] .modal
  * large empty header/footer around a handful of status rows and also exposed
  * a floating “Resize” tooltip. Keep its frame content-sized and opt out of
  * the generic resizer without changing any runtime hooks. */
+/* Both dialogs are tall forms, so they open pinned to the top of the viewport
+ * and take all the height the screen allows instead of being centred inside a
+ * fixed frame — centring wasted the bottom half of a tall screen and pushed the
+ * body into a needless scroll. */
+body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) {
+  align-items: flex-start !important;
+  padding: 16px;
+}
+
 body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-dns-over-vless-modal-content {
   display: grid !important;
-  grid-template-rows: auto minmax(0, auto) auto;
-  width: min(760px, calc(100vw - 36px));
+  /* The body row must be allowed to shrink below its content, otherwise the
+   * grid overflows the max-height and the footer with the action buttons is
+   * cut off until the dialog is dragged (which drops the max-height). */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* Width comes from the xk-modal-width-* class on the content element, so the
+   * two dialogs sharing this rule can size themselves independently. */
+  width: min(var(--xk-modal-width, 760px), calc(100vw - 36px));
   height: auto !important;
   min-height: 0 !important;
-  max-height: min(680px, calc(100dvh - 36px));
+  max-height: calc(100dvh - 32px);
   resize: none !important;
 }
 
@@ -13363,6 +13377,7 @@ body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .modal-hea
 body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-dns-over-vless-body {
   display: grid;
   gap: 10px;
+  min-height: 0;
   max-height: none;
   overflow: auto;
 }
@@ -13416,7 +13431,68 @@ body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-status-sum
 }
 
 body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-status-text {
-  color: var(--op-text-muted);
+  color: var(--op-muted);
+}
+
+/* Route picker follows the operator palette; the click-to-toggle behaviour and
+ * geometry stay in the base stylesheet. */
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-picker {
+  max-height: 208px;
+  border-color: var(--op-border);
+  border-radius: var(--op-radius);
+  background: var(--op-surface-2);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-option {
+  border-radius: var(--op-control-radius);
+  color: var(--op-text);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-option:hover {
+  background: var(--op-surface-3);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-option[data-selected="1"] {
+  border-color: color-mix(in srgb, var(--op-accent) 55%, var(--op-border));
+  background: var(--op-accent-soft);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-option-mark {
+  border-color: var(--op-border);
+  border-radius: var(--op-control-radius);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-option-mark[data-shape="dot"] {
+  border-radius: 50%;
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-option[data-selected="1"] .routing-dns-over-vless-option-mark {
+  border-color: var(--op-accent);
+  background: var(--op-accent);
+  color: var(--op-surface);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-option[data-selected="1"] .routing-dns-over-vless-option-mark[data-shape="dot"] {
+  box-shadow: inset 0 0 0 3px var(--op-surface-2);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-option-meta {
+  color: var(--op-muted);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-picker-count {
+  color: var(--op-muted);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-picker-bulk {
+  border-color: var(--op-border);
+  border-radius: var(--op-control-radius);
+  color: var(--op-muted);
+}
+
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-picker-bulk:hover:not(:disabled) {
+  color: var(--op-text);
+  background: var(--op-surface-3);
 }
 
 body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-dns-over-vless-safety {
@@ -15849,6 +15925,16 @@ body.panel-page .monaco-editor :is(.suggest-details, .parameter-hints-widget) :i
   body.panel-page :is(button, [role="button"], a[href], summary):is(:hover, :focus-visible, [aria-pressed="true"], [aria-expanded="true"]) {
     background: Highlight !important;
     color: HighlightText !important;
+  }
+
+  /* The rules above swap colors but leave the focus ring to the browser, and a
+   * default that changes between versions is not a contract to lean on: in
+   * high-contrast mode the ring is the only thing telling a keyboard user where
+   * they are.  ``:focus`` is included next to ``:focus-visible`` on purpose —
+   * here an always-visible ring costs nothing and never goes missing. */
+  body.panel-page :is(button, [role="button"], a[href], summary, input, select, textarea):is(:focus, :focus-visible) {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px !important;
   }
 
   body.panel-page .xk-action-icon {
@@ -18882,10 +18968,13 @@ body.panel-page .xk-mihomo-picker-delay[data-delay-tone="warning"] { color: var(
 body.panel-page .xk-mihomo-picker-delay[data-delay-tone="stale"] { color: var(--op-muted); opacity: .7; }
 body.panel-page .xk-mihomo-picker-delay:is(
   [data-delay-tone="bad"],
-  [data-delay-tone="failed"],
-  [data-delay-tone="unavailable"],
-  [data-delay-tone="timeout"]
+  [data-delay-tone="failed"]
 ) { color: var(--op-danger); }
+/* Same rule as the node badge: no answer is muted, not red. */
+body.panel-page .xk-mihomo-picker-delay[data-delay-tone="unavailable"] {
+  color: var(--op-muted);
+  opacity: .72;
+}
 
 body.panel-page .xk-mihomo-picker-popover {
   position: absolute;
@@ -19331,10 +19420,16 @@ body.panel-page .xk-mihomo-node-delay[data-delay-tone="stale"] {
 }
 
 body.panel-page .xk-mihomo-node-delay[data-delay-tone="bad"],
-body.panel-page .xk-mihomo-node-delay[data-delay-tone="failed"],
-body.panel-page .xk-mihomo-node-delay[data-delay-tone="unavailable"],
-body.panel-page .xk-mihomo-node-delay[data-delay-tone="timeout"] {
+body.panel-page .xk-mihomo-node-delay[data-delay-tone="failed"] {
   color: var(--op-danger) !important;
+}
+/* "The node did not answer" is a measurement, not a malfunction: the core's own
+ * health-check reports it constantly for perfectly ordinary nodes. Red belongs
+ * to a slow node (bad) and to a failed request (failed); a missing answer reads
+ * as muted, the way the dashboards users compare us against show it. */
+body.panel-page .xk-mihomo-node-delay[data-delay-tone="unavailable"] {
+  color: var(--op-muted) !important;
+  opacity: .72;
 }
 
 body.panel-page .xk-mihomo-delay-history-popover {

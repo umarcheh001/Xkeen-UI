@@ -1,4 +1,5 @@
 import { getXkeenCoreHttpApi } from '../../xkeen_runtime.js';
+import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseSummary, guardReleaseText } from '../../dns_guard_text.js';
 import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
 /* Guarded, one-click DNS-over-VLESS assistant. */
@@ -17,11 +18,17 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     cancel: 'routing-dns-over-vless-cancel',
     apply: 'routing-dns-over-vless-apply',
     badge: 'routing-dns-over-vless-badge',
+    leadTitle: 'routing-dns-over-vless-lead-title',
+    leadText: 'routing-dns-over-vless-lead-text',
     status: 'routing-dns-over-vless-status',
     details: 'routing-dns-over-vless-details',
     dot: 'routing-dns-over-vless-dot',
     route: 'routing-dns-over-vless-route',
     target: 'routing-dns-over-vless-target',
+    targetTools: 'routing-dns-over-vless-target-tools',
+    targetCount: 'routing-dns-over-vless-target-count',
+    targetAll: 'routing-dns-over-vless-target-all',
+    targetNone: 'routing-dns-over-vless-target-none',
     fallback: 'routing-dns-over-vless-route-fallback',
     multi: 'routing-dns-over-vless-multi',
     multiRow: 'routing-dns-over-vless-multi-row',
@@ -30,12 +37,21 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     zones: 'routing-dns-over-vless-zones',
     zonesRow: 'routing-dns-over-vless-zones-row',
     zonePresets: 'routing-dns-over-vless-zone-presets',
+    direct: 'routing-dns-over-vless-direct',
+    directZones: 'routing-dns-over-vless-direct-zones',
+    directZonesRow: 'routing-dns-over-vless-direct-zones-row',
+    directFromRules: 'routing-dns-over-vless-direct-from-rules',
   };
 
   let status = null;
   let busy = false;
   let chosenTargets = [];
   let multiTouched = false;
+  // A picked-clean list is a real answer ("nothing selected yet"), so the first
+  // render may fill it in but a later manual clear must survive a re-render.
+  let targetsTouched = false;
+  let routePool = [];
+  let routeVisible = false;
 
   function showModal(open) {
     const modal = $(DOM.modal);
@@ -69,6 +85,13 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     if (local) settings.local_resolver = String(local.value || '').trim();
     const zones = $(DOM.zones);
     if (zones && settings.local_resolver) settings.local_domains = String(zones.value || '').trim();
+    const direct = $(DOM.direct);
+    // Same rule as above: an empty string switches the bypass group off.
+    if (direct) settings.direct_resolver = String(direct.value || '').trim();
+    const directZones = $(DOM.directZones);
+    if (directZones && settings.direct_resolver) {
+      settings.direct_domains = String(directZones.value || '').trim();
+    }
     return settings;
   }
 
@@ -104,14 +127,127 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     list.appendChild(li);
   }
 
-  function candidateText(item) {
+  function candidateMeta(item) {
     const bits = [];
     if (item.strategy_type) bits.push(item.strategy_type);
     if (item.kind === 'balancer') bits.push(`узлов: ${item.selector_count}`);
-    let text = item.label || item.tag;
-    if (bits.length) text += ` · ${bits.join(' · ')}`;
-    if (!item.usable && item.reason) text += ` — ${item.reason}`;
-    return text;
+    if (!item.usable && item.reason) bits.push(item.reason);
+    return bits.join(' · ');
+  }
+
+  function optionRow(item, selected, multi) {
+    const row = document.createElement('div');
+    row.className = 'routing-dns-over-vless-option';
+    row.dataset.tag = item.tag;
+    row.dataset.selected = selected ? '1' : '0';
+    row.setAttribute('role', 'option');
+    row.setAttribute('aria-selected', selected ? 'true' : 'false');
+    row.tabIndex = -1;
+    if (!item.usable || busy) row.setAttribute('aria-disabled', 'true');
+
+    const mark = document.createElement('span');
+    mark.className = 'routing-dns-over-vless-option-mark';
+    mark.dataset.shape = multi ? 'check' : 'dot';
+    mark.setAttribute('aria-hidden', 'true');
+    if (multi) mark.textContent = '✓';
+    row.appendChild(mark);
+
+    const body = document.createElement('span');
+    body.className = 'routing-dns-over-vless-option-body';
+    const title = document.createElement('span');
+    title.className = 'routing-dns-over-vless-option-title';
+    title.textContent = item.label || item.tag;
+    body.appendChild(title);
+    const meta = candidateMeta(item);
+    if (meta) {
+      const small = document.createElement('small');
+      small.className = 'routing-dns-over-vless-option-meta';
+      small.textContent = meta;
+      body.appendChild(small);
+    }
+    row.appendChild(body);
+    return row;
+  }
+
+  function pickerRows(picker) {
+    return Array.prototype.slice.call(picker.querySelectorAll('.routing-dns-over-vless-option'));
+  }
+
+  function renderPicker(picker, pool, wanted, multi) {
+    // Redrawing throws the focused row away, so remember where the keyboard was.
+    const active = document.activeElement;
+    const hadFocus = !!(active && picker.contains(active));
+    const focusedTag = hadFocus ? (active.dataset || {}).tag : '';
+
+    picker.dataset.mode = multi ? 'multi' : 'single';
+    picker.setAttribute('aria-multiselectable', multi ? 'true' : 'false');
+    picker.textContent = '';
+    pool.forEach((item) => {
+      picker.appendChild(optionRow(item, wanted.indexOf(item.tag) !== -1, multi));
+    });
+
+    // Roving tabindex: one stop for the whole list, on the row that matters.
+    const rows = pickerRows(picker).filter((row) => row.getAttribute('aria-disabled') !== 'true');
+    const stop = rows.find((row) => row.dataset.tag === focusedTag)
+      || rows.find((row) => row.dataset.selected === '1')
+      || rows[0];
+    if (stop) stop.tabIndex = 0;
+    if (hadFocus && stop) { try { stop.focus(); } catch (e) {} }
+  }
+
+  function renderPickerTools(pool, wanted, multi) {
+    const tools = $(DOM.targetTools);
+    if (!tools) return;
+    tools.classList.toggle('hidden', !multi);
+    if (!multi) return;
+    const usable = pool.filter((item) => item && item.usable);
+    const count = $(DOM.targetCount);
+    if (count) count.textContent = `Отмечено ${wanted.length} из ${usable.length}`;
+    const all = $(DOM.targetAll);
+    const none = $(DOM.targetNone);
+    if (all) all.disabled = busy || wanted.length >= usable.length;
+    if (none) none.disabled = busy || !wanted.length;
+  }
+
+  function toggleTarget(tag, multi) {
+    if (!tag || busy) return;
+    targetsTouched = true;
+    if (!multi) {
+      chosenTargets = [tag];
+    } else if (chosenTargets.indexOf(tag) === -1) {
+      chosenTargets = chosenTargets.concat([tag]);
+    } else {
+      chosenTargets = chosenTargets.filter((item) => item !== tag);
+    }
+    // A full redraw keeps the action button and the hint line in step with the
+    // selection, not just the list itself.
+    if (status) render(status);
+  }
+
+  function onPickerKeydown(event) {
+    const picker = $(DOM.target);
+    if (!picker) return;
+    const rows = pickerRows(picker).filter((row) => row.getAttribute('aria-disabled') !== 'true');
+    if (!rows.length) return;
+    const current = rows.indexOf(document.activeElement);
+    let next = -1;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') next = Math.min(rows.length - 1, current + 1);
+    else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') next = Math.max(0, (current === -1 ? 0 : current - 1));
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = rows.length - 1;
+    else if (event.key === ' ' || event.key === 'Enter') {
+      if (current === -1) return;
+      event.preventDefault();
+      toggleTarget(rows[current].dataset.tag, picker.dataset.mode === 'multi');
+      return;
+    } else {
+      return;
+    }
+    event.preventDefault();
+    rows.forEach((row) => { row.tabIndex = -1; });
+    const target = rows[next < 0 ? 0 : next];
+    target.tabIndex = 0;
+    try { target.focus(); } catch (e) {}
   }
 
   function multiEnabled() {
@@ -121,15 +257,22 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
   function renderRoute(data) {
     const wrap = $(DOM.route);
-    const select = $(DOM.target);
-    if (!wrap || !select) return;
+    const picker = $(DOM.target);
+    if (!wrap || !picker) return;
     const candidates = (data && Array.isArray(data.candidates)) ? data.candidates : [];
     const usable = candidates.filter((item) => item && item.usable);
     // The route is only chosen while enabling; disabling touches nothing.
-    const show = !!(data && !data.enabled && !data.can_disable && candidates.length);
+    // A route cannot be applied under another core either, so asking for one
+    // next to a blocked action button would only be noise.
+    const show = !!(data && !data.enabled && !data.can_disable && candidates.length
+      && coreOf(data) === 'xray');
+    routeVisible = show;
     wrap.classList.toggle('hidden', !show);
     if (!show) {
-      select.textContent = '';
+      picker.textContent = '';
+      routePool = [];
+      const tools = $(DOM.targetTools);
+      if (tools) tools.classList.add('hidden');
       return;
     }
 
@@ -149,25 +292,18 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const pool = multi ? candidates.filter((item) => item.kind === 'outbound') : candidates;
     const poolUsable = pool.filter((item) => item.usable);
 
-    let wanted = chosenTargets.length
+    let wanted = (targetsTouched || chosenTargets.length)
       ? chosenTargets
       : (data && (data.selected_targets || []).length ? data.selected_targets : [data && data.default_target].filter(Boolean));
     wanted = wanted.filter((tag) => poolUsable.some((item) => item.tag === tag));
-    if (!wanted.length && poolUsable.length) wanted = [poolUsable[0].tag];
+    // Until the list is touched, keep a working default; after that an empty
+    // selection is what the user asked for and must not be refilled.
+    if (!wanted.length && poolUsable.length && !targetsTouched) wanted = [poolUsable[0].tag];
     if (!multi) wanted = wanted.slice(0, 1);
 
-    select.multiple = multi;
-    select.size = multi ? Math.min(6, Math.max(3, pool.length)) : 0;
-    select.textContent = '';
-    pool.forEach((item) => {
-      const option = document.createElement('option');
-      option.value = item.tag;
-      option.textContent = candidateText(item);
-      option.disabled = !item.usable;
-      option.selected = wanted.indexOf(item.tag) !== -1;
-      select.appendChild(option);
-    });
-    select.disabled = busy || (!multi && poolUsable.length < 2);
+    routePool = pool;
+    renderPicker(picker, pool, wanted, multi);
+    renderPickerTools(pool, wanted, multi);
     renderDnsFields(data);
     chosenTargets = wanted;
     renderFallback(multi ? null : pool.find((item) => item.tag === wanted[0]), multi, wanted);
@@ -277,6 +413,34 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       zones.disabled = busy;
     }
     if (hasLocal) renderZonePresets();
+
+    const direct = $(DOM.direct);
+    if (direct && !direct.dataset.touched) {
+      direct.value = ((data && data.direct_resolvers) || []).join(', ');
+    }
+    if (direct) direct.disabled = busy;
+
+    const directZones = $(DOM.directZones);
+    const directZonesRow = $(DOM.directZonesRow);
+    // Like the zone list above: the domains matter only once a resolver is
+    // named, so the field appears together with one.
+    const hasDirect = !!(direct && String(direct.value || '').trim());
+    if (directZonesRow) directZonesRow.classList.toggle('hidden', !hasDirect);
+    if (directZones) {
+      if (!directZones.dataset.touched) {
+        directZones.value = ((data && data.direct_domains) || []).join(', ');
+      }
+      directZones.disabled = busy;
+    }
+    const fromRules = $(DOM.directFromRules);
+    if (fromRules) {
+      // Nothing to offer when no rule of the user's own goes out directly.
+      const offered = (data && data.direct_rule_domains) || [];
+      fromRules.disabled = busy || !offered.length;
+      fromRules.title = offered.length
+        ? `Подставит домены из ваших правил: ${offered.join(', ')}`
+        : 'В правилах роутинга нет доменов, ведущих напрямую';
+    }
   }
 
   function renderFallback(candidate, multi, wanted) {
@@ -287,7 +451,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       const list = (wanted || []);
       if (list.length > 1) {
         line.dataset.state = 'kept';
-        line.textContent = `Выбрано ${list.length}: ${list.join(', ')}. Панель создаст из них свой балансировщик; резервного маршрута у него нет.`;
+        // Тот же язык, что и у причины с сервера: что произойдёт, а не что
+        // панель собрала в конфигурации.
+        line.textContent = `Выбрано ${list.length}: ${list.join(', ')}. Панель распределит DNS-запросы между ними. Если откажут все разом, DNS перестанет отвечать: запасного пути в обход VPN здесь нет — по нему запросы ушли бы к провайдеру.`;
       } else if (list.length === 1) {
         // One proxy is not a balancer: be honest instead of promising one.
         line.dataset.state = 'dropped';
@@ -306,41 +472,71 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       return;
     }
     line.dataset.state = plan.kept ? 'kept' : 'dropped';
-    line.textContent = plan.kept
-      ? `Резервирование сохранено: ${plan.reason}.`
-      : `Резервирование не переносится: ${plan.reason}.`;
+    // Причина приходит с сервера целой фразой и печатается как есть. Прежняя
+    // обёртка вокруг неё говорила языком конфигурации: читателю надо было знать,
+    // что такое fallbackTag и что панель клонирует его балансировщик.
+    line.textContent = plan.reason || '';
   }
 
-  function plural(count, one, many) {
-    const n = Math.abs(Number(count) || 0);
-    return (n % 10 === 1 && n % 100 !== 11) ? one : many;
+  // Про сторожа оба окна — это и окно DNS Mihomo — говорят одними и теми же
+  // словами: сторож у защит общий, и разные формулировки для разных ядер
+  // читались как разные механизмы. Тексты живут в features/dns_guard_text.js.
+
+  // Ядро определяет всё содержание карточки: DNS-over-VLESS собирает фрагмент
+  // именно для Xray, а у Mihomo свой защищённый DNS в отдельном окне. Пока
+  // тексты были написаны только про Xray, при активном Mihomo карточка
+  // объясняла происходящее неверно.
+  const CORE_NAMES = { xray: 'Xray', mihomo: 'Mihomo' };
+
+  function coreOf(data) {
+    return String((data && data.active_core) || '').toLowerCase();
   }
 
-  // Формулировка сторожа собирается из действующих настроек, а не из констант:
-  // пользователь мог изменить их переменными окружения.
-  function watchdogText(data) {
-    const cfg = (data && data.watchdog_settings) || null;
-    if (cfg && cfg.enabled === false) {
-      return {
-        text: 'Сторож отключён настройкой: если ядро упадёт, сеть останется без разрешения имён, пока вы не вмешаетесь вручную.',
-        kind: 'warn',
-      };
+  function coreName(core) {
+    return CORE_NAMES[core] || '';
+  }
+
+  const MIHOMO_HINT = 'У Mihomo свой защищённый DNS — кнопка «DNS» на вкладке Mihomo.';
+
+  function renderLead(data) {
+    const title = $(DOM.leadTitle);
+    const text = $(DOM.leadText);
+    if (!title || !text) return;
+    const core = coreOf(data);
+    if (core === 'xray') {
+      title.textContent = 'DNS через защищённый туннель Xray';
+      text.textContent = 'Панель подготовит отдельный DNS-фрагмент, добавит только два служебных правила и включит перехват DNS в Keenetic.';
+      return;
     }
-    const interval = Math.round(Number(cfg && cfg.interval) || 30);
-    const fails = Math.round(Number(cfg && cfg.fail_threshold) || 3);
-    const restarts = Math.round(Number(cfg && cfg.restart_attempts) || 0);
-    const tail = restarts > 0
-      ? `перезапустит ядро (до ${restarts} ${plural(restarts, 'попытки', 'попыток')}), а если не поможет — вернёт DNS роутеру`
-      : 'сразу вернёт DNS роутеру — перезапуски отключены настройкой';
-    return {
-      text: `Сторож проверяет ядро каждые ${interval} с; после ${fails} ${plural(fails, 'сбоя', 'сбоев')} подряд ${tail}.`,
-      kind: 'ok',
-    };
+    if (core === 'mihomo') {
+      // Единственное осмысленное действие при Mihomo — открыть его собственное
+      // окно DNS, поэтому заголовок ведёт туда, а не упирается в запрет.
+      title.textContent = 'Сейчас работает Mihomo — у него свой защищённый DNS';
+      text.textContent = 'Настраивается он кнопкой «DNS» на вкладке Mihomo и прячет запросы так же. Это окно настраивает DNS-over-VLESS для ядра Xray, поэтому включение здесь доступно, только когда активно оно.';
+      return;
+    }
+    if (!core || core === 'unknown') {
+      title.textContent = 'Активное ядро не определено';
+      text.textContent = 'Панель не смогла понять, какое ядро сейчас работает. Это окно настраивает DNS-over-VLESS для ядра Xray — проверьте состояние служб и откройте окно снова.';
+      return;
+    }
+    title.textContent = `Сейчас работает ядро ${core}`;
+    text.textContent = 'Это окно настраивает DNS-over-VLESS для ядра Xray. Переключите активное ядро на Xray, чтобы включить его здесь.';
   }
 
   // Каждому состоянию — короткая расшифровка рядом с бейджем и объяснение
   // обычными словами: что сейчас происходит с DNS и что делать дальше.
   function describeState(data, flags) {
+    const core = coreOf(data);
+    const otherCore = core && core !== 'xray' ? coreName(core) || core : '';
+    if (flags.enabled && otherCore) {
+      return {
+        badge: 'Не действует',
+        state: 'blocked',
+        summary: `служебная конфигурация на месте, но активно ядро ${otherCore}`,
+        text: `DNS-фрагмент и правила Xray сохранены, но работают они только под Xray, а сейчас активно ядро ${otherCore} — через туннель запросы не идут. Порт 53 при этом остаётся отданным Xray, поэтому имена могут вообще не разрешаться: сторож заметит это и вернёт DNS прошивке. Верните активным ядром Xray либо отключите настройку здесь.`,
+      };
+    }
     if (flags.enabled) {
       return {
         badge: 'Включено',
@@ -350,11 +546,35 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       };
     }
     if (flags.released) {
+      // Сторож у обеих защит один, поэтому и бейдж, и первая фраза здесь те же,
+      // что в окне DNS Mihomo: сначала общее «сторож вернул DNS роутеру» с его
+      // собственной причиной, а уже потом — что делать именно с этой защитой.
+      const back = otherCore
+        // Сторож не перезапускает ядро, которое сменили намеренно: он сразу
+        // отдаёт DNS прошивке и снимает служебную конфигурацию.
+        ? ` Служебный DNS-фрагмент и правила Xray удалены; включить DNS-over-VLESS заново можно, вернув активным ядром Xray вместо ${otherCore}.`
+        : ' Служебный DNS-фрагмент и правила Xray удалены; включите защиту заново, когда разберётесь, почему ядро перестало отвечать.';
       return {
-        badge: 'Отключено сторожем',
+        badge: GUARD_RELEASED_BADGE,
         state: 'blocked',
-        summary: 'ядро не поднялось, DNS возвращён прошивке',
-        text: 'Ядро Xray перестало отвечать, и сторож вернул разрешение имён прошивке роутера, чтобы сеть не осталась без интернета. Сейчас DNS-запросы идут в открытом виде. Разберитесь, почему упало ядро, и включите защиту заново — сама она не вернётся.',
+        summary: guardReleaseSummary(),
+        text: `${guardReleaseText(data)}${back}`,
+      };
+    }
+    if (otherCore) {
+      return {
+        badge: 'Нужно ядро Xray',
+        state: 'blocked',
+        summary: `сейчас активно ядро ${otherCore}`,
+        text: `Это окно готовит DNS-фрагмент и правила маршрутизации для Xray, поэтому с активным ядром ${otherCore} включать здесь нечего — свой защищённый DNS у него настраивается отдельно. Имена сейчас разрешает штатный резолвер роутера. Переключите активное ядро на Xray, чтобы включить DNS-over-VLESS.`,
+      };
+    }
+    if (!core || core === 'unknown') {
+      return {
+        badge: 'Ядро не определено',
+        state: 'blocked',
+        summary: 'непонятно, какое ядро сейчас работает',
+        text: 'Панель не смогла определить активное ядро, поэтому не берётся менять настройку DNS. Проверьте состояние служб на вкладке XKeen и откройте окно заново.',
       };
     }
     if (data && data.partial) {
@@ -403,8 +623,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const blocked = !enabled && !canDisable && !(data && data.can_enable);
     // An automatic release is not a neutral "ready" state: the protection was
     // switched off by itself and the user has to know.
-    const released = !enabled && !!(data && data.watchdog && data.watchdog.reason);
+    const released = !enabled && !!guardRelease(data);
     const info = describeState(data, { enabled, canDisable, blocked, released });
+    renderLead(data);
     if (badge) {
       badge.textContent = info.badge;
       badge.dataset.state = info.state;
@@ -428,11 +649,13 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     }
 
     if (data) {
-      const core = data.active_core || '';
+      const core = coreOf(data);
       addDetail(
         core === 'xray'
           ? 'Активное ядро: Xray — то, что нужно для DNS-over-VLESS.'
-          : `Активное ядро: ${core || 'не определено'}. DNS-over-VLESS работает только с Xray.`,
+          : (core === 'mihomo'
+            ? `Активное ядро: Mihomo. Это окно настраивает DNS-over-VLESS для Xray. ${MIHOMO_HINT}`
+            : `Активное ядро: ${coreName(core) || core || 'не определено'}. Это окно настраивает DNS-over-VLESS для Xray.`),
         core === 'xray' ? 'ok' : 'warn',
       );
       if (data.target && data.target.label) addDetail(`DNS-запросы идут через: ${data.target.label}`, 'ok');
@@ -444,12 +667,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
             : 'Перехват DNS на роутере: определить не удалось.'),
         data.dns_override == null ? 'warn' : 'ok',
       );
-      if (data.watchdog && data.watchdog.reason) {
-        addDetail(`Сторож снял защиту: ${data.watchdog.reason} Порт 53 снова обслуживает прошивка роутера.`, 'warn');
-      } else {
-        const guard = watchdogText(data);
-        addDetail(guard.text, guard.kind);
-      }
+      const guard = guardNotice(data, enabled);
+      addDetail(guard.text, guard.kind);
       if (data.route_drift) {
         const drift = data.route_drift;
         const was = (drift.managed || []).join(', ') || '—';
@@ -467,8 +686,15 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     renderRoute(data);
 
     if (apply) {
-      apply.disabled = busy || (!enabled && !canDisable && blocked);
-      apply.textContent = busy ? 'Выполняется…' : ((enabled || canDisable) ? 'Отключить и восстановить' : 'Включить безопасно');
+      // With nothing ticked there is no route to build: block the action and let
+      // the line under the list say what is missing.
+      const needsTarget = routeVisible && !chosenTargets.length;
+      apply.disabled = busy || (!enabled && !canDisable && (blocked || needsTarget));
+      // «Включить безопасно» на неподходящем ядре обещало бы невозможное.
+      const wrongCore = coreOf(data) !== 'xray' && !enabled && !canDisable;
+      apply.textContent = busy
+        ? 'Выполняется…'
+        : ((enabled || canDisable) ? 'Отключить и восстановить' : (wrongCore ? 'Нужно ядро Xray' : 'Включить безопасно'));
       apply.classList.toggle('btn-danger', enabled || canDisable);
       apply.classList.toggle('btn-primary', !enabled && !canDisable);
     }
@@ -505,6 +731,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     showModal(true);
     chosenTargets = [];
     multiTouched = false;
+    targetsTouched = false;
+    routePool = [];
+    routeVisible = false;
     [DOM.upstreams, DOM.local, DOM.zones].forEach((id) => {
       const field = $(id);
       if (field) delete field.dataset.touched;
@@ -575,33 +804,69 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     });
     const applyButton = $(DOM.apply);
     if (applyButton) applyButton.addEventListener('click', (event) => { event.preventDefault(); apply(); });
-    const targetSelect = $(DOM.target);
-    if (targetSelect) {
-      targetSelect.addEventListener('change', () => {
-        chosenTargets = Array.from(targetSelect.selectedOptions || [])
-          .map((option) => option.value)
-          .filter(Boolean);
-        if (status) renderRoute(status);
+    const picker = $(DOM.target);
+    if (picker) {
+      picker.addEventListener('click', (event) => {
+        const row = event.target && event.target.closest
+          ? event.target.closest('.routing-dns-over-vless-option')
+          : null;
+        if (!row || !picker.contains(row)) return;
+        if (row.getAttribute('aria-disabled') === 'true') return;
+        toggleTarget(row.dataset.tag, picker.dataset.mode === 'multi');
+      });
+      picker.addEventListener('keydown', onPickerKeydown);
+    }
+    const selectAll = $(DOM.targetAll);
+    if (selectAll) {
+      selectAll.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (busy) return;
+        targetsTouched = true;
+        chosenTargets = routePool.filter((item) => item && item.usable).map((item) => item.tag);
+        if (status) render(status);
       });
     }
-    [DOM.upstreams, DOM.local, DOM.zones].forEach((id) => {
+    const selectNone = $(DOM.targetNone);
+    if (selectNone) {
+      selectNone.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (busy) return;
+        targetsTouched = true;
+        chosenTargets = [];
+        if (status) render(status);
+      });
+    }
+    [DOM.upstreams, DOM.local, DOM.zones, DOM.direct, DOM.directZones].forEach((id) => {
       const field = $(id);
       if (!field) return;
       field.addEventListener('input', () => {
         field.dataset.touched = '1';
-        // Typing a local resolver reveals the zone list straight away.
-        if (id === DOM.local && status) renderDnsFields(status);
+        // Typing a resolver reveals the matching domain list straight away.
+        if ((id === DOM.local || id === DOM.direct) && status) renderDnsFields(status);
         // Editing the list by hand must keep the group buttons honest.
         if (id === DOM.zones) renderZonePresets();
       });
     });
+    const fromRules = $(DOM.directFromRules);
+    if (fromRules) {
+      fromRules.addEventListener('click', () => {
+        const offered = (status && status.direct_rule_domains) || [];
+        const field = $(DOM.directZones);
+        if (!field || !offered.length) return;
+        // The routing rules are the source of truth: resolving these names
+        // directly is only useful because they already travel directly.
+        field.value = offered.join(', ');
+        field.dataset.touched = '1';
+      });
+    }
     const multiBox = $(DOM.multi);
     if (multiBox) {
       multiBox.addEventListener('change', () => {
         // Switching modes drops a selection the other mode cannot express.
         multiTouched = true;
+        targetsTouched = false;
         chosenTargets = [];
-        if (status) renderRoute(status);
+        if (status) render(status);
       });
     }
     const modal = $(DOM.modal);

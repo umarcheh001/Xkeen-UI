@@ -2,3 +2,12 @@
 *.py text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+# Файлы, которые собираются скриптами из scripts/: они пишут вывод с LF,
+# это задано в самих генераторах. В репозиторий же они когда-то попали с
+# CRLF, и из-за расхождения любая пересборка показывала ложную разницу во
+# всём файле, которую приходилось откатывать руками. Держим LF с обеих сторон.
+docs/panel-operator-icon-inventory.json text eol=lf
+docs/panel-operator-stage0-inventory.json text eol=lf
+xkeen-ui/static/icons/operator.svg text eol=lf
+xkeen-ui/static/icons/tabler-icons.LICENSE text eol=lf
+xkeen-ui/static/js/ui/operator_icons_manifest.js text eol=lf

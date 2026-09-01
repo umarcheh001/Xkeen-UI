@@ -53,32 +53,32 @@
           "accessible_label": "Новая сессия"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3512",
+          "location": "xkeen-ui/templates/panel.html:L3530",
           "control_type": "text+icon",
           "accessible_label": "Вставить в конфиг"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3575",
+          "location": "xkeen-ui/templates/panel.html:L3593",
           "control_type": "text+icon",
           "accessible_label": "Добавить пример proxy"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3781",
+          "location": "xkeen-ui/templates/panel.html:L3799",
           "control_type": "text+icon",
           "accessible_label": "Вставить в конфиг"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4087",
+          "location": "xkeen-ui/templates/panel.html:L4105",
           "control_type": "icon-only",
           "accessible_label": "Добавить в маршрутизацию"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4197",
+          "location": "xkeen-ui/templates/panel.html:L4215",
           "control_type": "text+icon",
           "accessible_label": "Добавить"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4871",
+          "location": "xkeen-ui/templates/panel.html:L4889",
           "control_type": "text+icon",
           "accessible_label": "Добавить строку"
         }
@@ -110,7 +110,7 @@
           "accessible_label": "Предупреждение"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L812",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L835",
           "control_type": "runtime-action",
           "accessible_label": "Предупреждение"
         },
@@ -191,7 +191,7 @@
           "accessible_label": "Сохранить и применить на роутере"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3310",
+          "location": "xkeen-ui/templates/panel.html:L3328",
           "control_type": "text+icon",
           "accessible_label": "Вставить в поле"
         }
@@ -253,7 +253,7 @@
           "accessible_label": "Назад"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4075",
+          "location": "xkeen-ui/templates/panel.html:L4093",
           "control_type": "icon-only",
           "accessible_label": "Prev"
         }
@@ -264,7 +264,7 @@
       "tabler_asset": "bolt",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L813",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L836",
           "control_type": "runtime-action",
           "accessible_label": "Быстрое действие"
         },
@@ -274,7 +274,7 @@
           "accessible_label": "Быстрое действие"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3354",
+          "location": "xkeen-ui/templates/panel.html:L3372",
           "control_type": "icon-only",
           "accessible_label": "Entware mark 255"
         },
@@ -300,7 +300,7 @@
           "accessible_label": "Закладка"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4872",
+          "location": "xkeen-ui/templates/panel.html:L4890",
           "control_type": "text+icon",
           "accessible_label": "Добавить текущую папку активной панели"
         }
@@ -358,7 +358,7 @@
           "accessible_label": "Подтвердить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L960",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L983",
           "control_type": "runtime-action",
           "accessible_label": "Подтвердить"
         },
@@ -399,7 +399,7 @@
       "tabler_asset": "chevron-down",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L991",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L1014",
           "control_type": "runtime-action",
           "accessible_label": "Раскрыть"
         },
@@ -510,12 +510,12 @@
           "accessible_label": "Очистить историю команд"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3353",
+          "location": "xkeen-ui/templates/panel.html:L3371",
           "control_type": "text+icon",
           "accessible_label": "Очистить"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4964",
+          "location": "xkeen-ui/templates/panel.html:L4982",
           "control_type": "icon-only",
           "accessible_label": "Очистить историю"
         }
@@ -711,42 +711,42 @@
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L2628",
+          "location": "xkeen-ui/templates/panel.html:L2646",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L2664",
+          "location": "xkeen-ui/templates/panel.html:L2682",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L2716",
+          "location": "xkeen-ui/templates/panel.html:L2734",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L2881",
+          "location": "xkeen-ui/templates/panel.html:L2899",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L2911",
+          "location": "xkeen-ui/templates/panel.html:L2929",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L2964",
+          "location": "xkeen-ui/templates/panel.html:L2982",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3008",
+          "location": "xkeen-ui/templates/panel.html:L3026",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3053",
+          "location": "xkeen-ui/templates/panel.html:L3071",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
@@ -756,192 +756,192 @@
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3321",
+          "location": "xkeen-ui/templates/panel.html:L3339",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3422",
+          "location": "xkeen-ui/templates/panel.html:L3440",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3531",
+          "location": "xkeen-ui/templates/panel.html:L3549",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3675",
+          "location": "xkeen-ui/templates/panel.html:L3693",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3794",
+          "location": "xkeen-ui/templates/panel.html:L3812",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3826",
+          "location": "xkeen-ui/templates/panel.html:L3844",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3851",
+          "location": "xkeen-ui/templates/panel.html:L3869",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3870",
+          "location": "xkeen-ui/templates/panel.html:L3888",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3897",
+          "location": "xkeen-ui/templates/panel.html:L3915",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3956",
+          "location": "xkeen-ui/templates/panel.html:L3974",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3992",
+          "location": "xkeen-ui/templates/panel.html:L4010",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4039",
+          "location": "xkeen-ui/templates/panel.html:L4057",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4139",
+          "location": "xkeen-ui/templates/panel.html:L4157",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4192",
+          "location": "xkeen-ui/templates/panel.html:L4210",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4224",
+          "location": "xkeen-ui/templates/panel.html:L4242",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4265",
+          "location": "xkeen-ui/templates/panel.html:L4283",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4281",
+          "location": "xkeen-ui/templates/panel.html:L4299",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4303",
+          "location": "xkeen-ui/templates/panel.html:L4321",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4401",
+          "location": "xkeen-ui/templates/panel.html:L4419",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4432",
+          "location": "xkeen-ui/templates/panel.html:L4450",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4469",
+          "location": "xkeen-ui/templates/panel.html:L4487",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4494",
+          "location": "xkeen-ui/templates/panel.html:L4512",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4533",
+          "location": "xkeen-ui/templates/panel.html:L4551",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4590",
+          "location": "xkeen-ui/templates/panel.html:L4608",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4614",
+          "location": "xkeen-ui/templates/panel.html:L4632",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4650",
+          "location": "xkeen-ui/templates/panel.html:L4668",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4677",
+          "location": "xkeen-ui/templates/panel.html:L4695",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4696",
+          "location": "xkeen-ui/templates/panel.html:L4714",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4725",
+          "location": "xkeen-ui/templates/panel.html:L4743",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4778",
+          "location": "xkeen-ui/templates/panel.html:L4796",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4812",
+          "location": "xkeen-ui/templates/panel.html:L4830",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4832",
+          "location": "xkeen-ui/templates/panel.html:L4850",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4859",
+          "location": "xkeen-ui/templates/panel.html:L4877",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4887",
+          "location": "xkeen-ui/templates/panel.html:L4905",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4927",
+          "location": "xkeen-ui/templates/panel.html:L4945",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4948",
+          "location": "xkeen-ui/templates/panel.html:L4966",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4979",
+          "location": "xkeen-ui/templates/panel.html:L4997",
           "control_type": "icon-only",
           "accessible_label": "Close"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L5001",
+          "location": "xkeen-ui/templates/panel.html:L5019",
           "control_type": "icon-only",
           "accessible_label": "Close"
         }
@@ -1042,27 +1042,27 @@
           "accessible_label": "Показать доменные имена"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L29",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L1011",
           "control_type": "runtime-action",
           "accessible_label": "Показать доменные имена"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L885",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L37",
           "control_type": "runtime-action",
           "accessible_label": "Показать доменные имена"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L905",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L908",
           "control_type": "runtime-action",
           "accessible_label": "Показать доменные имена"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L913",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L928",
           "control_type": "runtime-action",
           "accessible_label": "Показать доменные имена"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L988",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L936",
           "control_type": "runtime-action",
           "accessible_label": "Показать доменные имена"
         },
@@ -1158,17 +1158,17 @@
           "accessible_label": "Обновить Mihomo до pre-release"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3511",
+          "location": "xkeen-ui/templates/panel.html:L3529",
           "control_type": "text+icon",
           "accessible_label": "В proxies"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3837",
+          "location": "xkeen-ui/templates/panel.html:L3855",
           "control_type": "text+icon",
           "accessible_label": "Скачать"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4048",
+          "location": "xkeen-ui/templates/panel.html:L4066",
           "control_type": "text+icon",
           "accessible_label": "xk-geodat"
         },
@@ -1300,37 +1300,37 @@
           "accessible_label": "Копировать весь буфер"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L2899",
+          "location": "xkeen-ui/templates/panel.html:L2917",
           "control_type": "text+icon",
           "accessible_label": "Копировать"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3908",
+          "location": "xkeen-ui/templates/panel.html:L3926",
           "control_type": "text+icon",
           "accessible_label": "Скопировать адрес USDT (TON)"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3916",
+          "location": "xkeen-ui/templates/panel.html:L3934",
           "control_type": "text+icon",
           "accessible_label": "Скопировать адрес TONCOIN"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3924",
+          "location": "xkeen-ui/templates/panel.html:L3942",
           "control_type": "text+icon",
           "accessible_label": "Скопировать адрес BITCOIN"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3932",
+          "location": "xkeen-ui/templates/panel.html:L3950",
           "control_type": "text+icon",
           "accessible_label": "Скопировать адрес Ethereum"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4073",
+          "location": "xkeen-ui/templates/panel.html:L4091",
           "control_type": "icon-only",
           "accessible_label": "Copy"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4211",
+          "location": "xkeen-ui/templates/panel.html:L4229",
           "control_type": "text+icon",
           "accessible_label": "Copy"
         }
@@ -1361,12 +1361,12 @@
           "accessible_label": "Редактировать"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L2948",
+          "location": "xkeen-ui/templates/panel.html:L2966",
           "control_type": "text+icon",
           "accessible_label": "Редактировать"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3599",
+          "location": "xkeen-ui/templates/panel.html:L3617",
           "control_type": "text+icon",
           "accessible_label": "Переименовать"
         },
@@ -1392,7 +1392,7 @@
           "accessible_label": "Экспорт"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4199",
+          "location": "xkeen-ui/templates/panel.html:L4217",
           "control_type": "text+icon",
           "accessible_label": "Export"
         }
@@ -1460,22 +1460,22 @@
           "accessible_label": "Подсветка логов"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3309",
+          "location": "xkeen-ui/templates/panel.html:L3327",
           "control_type": "text+icon",
           "accessible_label": "Собрать"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3510",
+          "location": "xkeen-ui/templates/panel.html:L3528",
           "control_type": "text+icon",
           "accessible_label": "Преобразовать"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3628",
+          "location": "xkeen-ui/templates/panel.html:L3646",
           "control_type": "text+icon",
           "accessible_label": "Подготовить"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4024",
+          "location": "xkeen-ui/templates/panel.html:L4042",
           "control_type": "text+icon",
           "accessible_label": "Форматировать"
         }
@@ -1496,7 +1496,7 @@
           "accessible_label": "Дальше"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4077",
+          "location": "xkeen-ui/templates/panel.html:L4095",
           "control_type": "icon-only",
           "accessible_label": "Next"
         }
@@ -1728,7 +1728,7 @@
           "accessible_label": "Вставить"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4200",
+          "location": "xkeen-ui/templates/panel.html:L4218",
           "control_type": "text+icon",
           "accessible_label": "Import"
         }
@@ -1764,7 +1764,7 @@
           "accessible_label": "Информация"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L169",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L177",
           "control_type": "runtime-action",
           "accessible_label": "Информация"
         },
@@ -1906,7 +1906,7 @@
           "accessible_label": "Загрузка"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L825",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L848",
           "control_type": "runtime-action",
           "accessible_label": "Загрузка"
         },
@@ -1962,17 +1962,17 @@
       "tabler_asset": "lock",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L1028",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L1051",
           "control_type": "runtime-action",
           "accessible_label": "Ограничить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L857",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L880",
           "control_type": "runtime-action",
           "accessible_label": "Ограничить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L893",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L916",
           "control_type": "runtime-action",
           "accessible_label": "Ограничить"
         },
@@ -2127,7 +2127,7 @@
           "accessible_label": "Предыдущее совпадение"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4594",
+          "location": "xkeen-ui/templates/panel.html:L4612",
           "control_type": "text+icon",
           "accessible_label": "Вверх"
         }
@@ -2253,7 +2253,7 @@
       "tabler_asset": "stopwatch",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L1030",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L1053",
           "control_type": "runtime-action",
           "accessible_label": "Проверить задержку"
         },
@@ -2309,7 +2309,7 @@
           "accessible_label": "Запустить tail"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4212",
+          "location": "xkeen-ui/templates/panel.html:L4230",
           "control_type": "text+icon",
           "accessible_label": "Run"
         }
@@ -2544,7 +2544,7 @@
           "accessible_label": "Обновить список устройств"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L2946",
+          "location": "xkeen-ui/templates/panel.html:L2964",
           "control_type": "text+icon",
           "accessible_label": "Обновить"
         },
@@ -2554,12 +2554,12 @@
           "accessible_label": "Обновить телеметрию"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3881",
+          "location": "xkeen-ui/templates/panel.html:L3899",
           "control_type": "text+icon",
           "accessible_label": "Повторить загрузку каталога"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4049",
+          "location": "xkeen-ui/templates/panel.html:L4067",
           "control_type": "icon-only",
           "accessible_label": "Обновить содержимое"
         },
@@ -2574,12 +2574,12 @@
           "accessible_label": "Обновить статусы"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4965",
+          "location": "xkeen-ui/templates/panel.html:L4983",
           "control_type": "icon-only",
           "accessible_label": "Обновить операции"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4984",
+          "location": "xkeen-ui/templates/panel.html:L5002",
           "control_type": "icon-only",
           "accessible_label": "Обновить список дисков"
         },
@@ -2687,12 +2687,12 @@
           "accessible_label": "Сохранить и перезапустить mihomo"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3711",
+          "location": "xkeen-ui/templates/panel.html:L3729",
           "control_type": "text+icon",
           "accessible_label": "Вернуть автоматически определённые значения панели"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3782",
+          "location": "xkeen-ui/templates/panel.html:L3800",
           "control_type": "text+icon",
           "accessible_label": "Применить + рестарт"
         }
@@ -2743,12 +2743,12 @@
           "accessible_label": "Авто-бэкап"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3305",
+          "location": "xkeen-ui/templates/panel.html:L3323",
           "control_type": "text+icon",
           "accessible_label": "Заполнить из поля"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4870",
+          "location": "xkeen-ui/templates/panel.html:L4888",
           "control_type": "text+icon",
           "accessible_label": "Вернуть стандартный набор"
         },
@@ -2850,32 +2850,32 @@
           "accessible_label": "Сохранить"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L2947",
+          "location": "xkeen-ui/templates/panel.html:L2965",
           "control_type": "text+icon",
           "accessible_label": "Сохранить как шаблон"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3409",
+          "location": "xkeen-ui/templates/panel.html:L3427",
           "control_type": "text+icon",
           "accessible_label": "Сохранить"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3841",
+          "location": "xkeen-ui/templates/panel.html:L3859",
           "control_type": "text+icon",
           "accessible_label": "Сохранить"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4025",
+          "location": "xkeen-ui/templates/panel.html:L4043",
           "control_type": "text+icon",
           "accessible_label": "Сохранить"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4254",
+          "location": "xkeen-ui/templates/panel.html:L4272",
           "control_type": "text+icon",
           "accessible_label": "Сохранить"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4876",
+          "location": "xkeen-ui/templates/panel.html:L4894",
           "control_type": "text+icon",
           "accessible_label": "Сохранить"
         },
@@ -2911,7 +2911,7 @@
           "accessible_label": "Поиск"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L995",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L1018",
           "control_type": "runtime-action",
           "accessible_label": "Поиск"
         },
@@ -2937,7 +2937,7 @@
       "tabler_asset": "server-off",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L811",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/groups.js:L834",
           "control_type": "runtime-action",
           "accessible_label": "server-off"
         },
@@ -3161,7 +3161,7 @@
           "accessible_label": "Соединения"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3629",
+          "location": "xkeen-ui/templates/panel.html:L3647",
           "control_type": "text+icon",
           "accessible_label": "Заменить"
         }
@@ -3242,27 +3242,27 @@
           "accessible_label": "Очистить логфайлы"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L2949",
+          "location": "xkeen-ui/templates/panel.html:L2967",
           "control_type": "text+icon",
           "accessible_label": "Удалить"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4198",
+          "location": "xkeen-ui/templates/panel.html:L4216",
           "control_type": "text+icon",
           "accessible_label": "Удалить"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4253",
+          "location": "xkeen-ui/templates/panel.html:L4271",
           "control_type": "text+icon",
           "accessible_label": "Удалить"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4313",
+          "location": "xkeen-ui/templates/panel.html:L4331",
           "control_type": "icon-only",
           "accessible_label": "Удалить профиль"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L4363",
+          "location": "xkeen-ui/templates/panel.html:L4381",
           "control_type": "icon-only",
           "accessible_label": "Удалить hostkey"
         },
@@ -3339,7 +3339,7 @@
           "accessible_label": "Проверка"
         },
         {
-          "location": "xkeen-ui/templates/panel.html:L3780",
+          "location": "xkeen-ui/templates/panel.html:L3798",
           "control_type": "text+icon",
           "accessible_label": "Проверить"
         }

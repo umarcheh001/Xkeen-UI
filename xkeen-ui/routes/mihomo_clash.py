@@ -11,7 +11,12 @@ from typing import Any, Callable, Mapping
 from flask import Blueprint, jsonify, request, session
 
 from routes.common.errors import error_response
-from services.mihomo_clash_client import MihomoClashClient, MihomoClashClientError
+from services.mihomo_clash_client import (
+    MIHOMO_CLASH_DELAY_PRESETS,
+    MIHOMO_CLASH_DELAY_TIMEOUT_BOUNDS,
+    MihomoClashClient,
+    MihomoClashClientError,
+)
 from services.mihomo_clash_dto import (
     build_mihomo_clash_connections_dto,
     build_mihomo_clash_delay_dto,
@@ -515,6 +520,24 @@ def _action_name(body: Mapping[str, Any], field: str) -> str | None:
     return name
 
 
+def _delay_timeout_ms(body: Mapping[str, Any], preset: str) -> int:
+    """Resolve the probe timeout the panel will be told about.
+
+    A missing or non-numeric field means "use the preset default" rather than a
+    request error: the probe is a diagnostic, and refusing to measure because a
+    hint was malformed would be worse than measuring with the default. Values
+    outside the supported range are clamped for the same reason.
+    """
+
+    fallback = MIHOMO_CLASH_DELAY_PRESETS.get(str(preset))
+    default_ms = int(fallback.timeout_ms) if fallback is not None else 5000
+    raw = body.get("timeout_ms")
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        return default_ms
+    low, high = MIHOMO_CLASH_DELAY_TIMEOUT_BOUNDS
+    return max(low, min(high, raw))
+
+
 def _guard_rejected(rejected: MihomoClashActionRejected):
     response = error_response(
         "Операция Mihomo временно ограничена.",
@@ -564,7 +587,16 @@ def create_mihomo_clash_blueprint(
         safe_metadata = {
             key: value
             for key, value in metadata.items()
-            if key in {"group", "scope", "preset", "provider_kind", "error_code", "mode", "previous_mode"}
+            if key in {
+                "group",
+                "scope",
+                "preset",
+                "provider_kind",
+                "error_code",
+                "mode",
+                "previous_mode",
+                "timeout_ms",
+            }
             and isinstance(value, (str, int, bool))
         }
         try:
@@ -1327,6 +1359,10 @@ def create_mihomo_clash_blueprint(
                 code="invalid_delay_request",
             )
 
+        # A caller-supplied timeout only narrows or widens the probe window;
+        # the target URL still comes from the backend preset allow-list.
+        timeout_ms = _delay_timeout_ms(body, preset)
+
         lease, rejected_response = _acquire_action("delay")
         if rejected_response:
             return rejected_response
@@ -1340,8 +1376,18 @@ def create_mihomo_clash_blueprint(
 
         def _request_delay(delay_preset: str):
             if scope == "provider-proxy":
-                return client.request_provider_proxy_delay(provider, name, preset=delay_preset)
-            return client.request_delay(scope, name, preset=delay_preset)
+                return client.request_provider_proxy_delay(
+                    provider,
+                    name,
+                    preset=delay_preset,
+                    timeout_ms=timeout_ms,
+                )
+            return client.request_delay(
+                scope,
+                name,
+                preset=delay_preset,
+                timeout_ms=timeout_ms,
+            )
 
         try:
             try:
@@ -1371,6 +1417,7 @@ def create_mihomo_clash_blueprint(
                 False,
                 scope=scope,
                 preset=preset,
+                timeout_ms=timeout_ms,
                 error_code=exc.code,
             )
             return _safe_client_error(exc)
@@ -1380,6 +1427,7 @@ def create_mihomo_clash_blueprint(
                 False,
                 scope=scope,
                 preset=preset,
+                timeout_ms=timeout_ms,
                 error_code="internal_error",
             )
             return error_response(
@@ -1402,6 +1450,7 @@ def create_mihomo_clash_blueprint(
                 False,
                 scope=scope,
                 preset=preset,
+                timeout_ms=timeout_ms,
                 error_code="upstream_delay_invalid",
             )
             return error_response(
@@ -1413,7 +1462,14 @@ def create_mihomo_clash_blueprint(
         payload["ok"] = True
         payload["effective_preset"] = effective_preset
         payload["fallback_used"] = fallback_used
-        _audit_action("delay", True, scope=scope, preset=effective_preset)
+        payload["effective_timeout_ms"] = timeout_ms
+        _audit_action(
+            "delay",
+            True,
+            scope=scope,
+            preset=effective_preset,
+            timeout_ms=timeout_ms,
+        )
         return jsonify(payload), 200
 
     @bp.get("/api/mihomo/clash/connections")

@@ -26,6 +26,7 @@ class StubClient:
         self.unfixed: list[str] = []
         self.delays: list[tuple[str, str, str]] = []
         self.provider_delays: list[tuple[str, str, str]] = []
+        self.delay_timeouts: list[int | None] = []
         self.disconnected: list[str] = []
         self.disconnected_all = 0
         self.provider_updates: list[tuple[str, str]] = []
@@ -58,14 +59,23 @@ class StubClient:
             raise self.error
         return MihomoClashJSONResponse(None, 204, 1, 0)
 
-    def request_delay(self, scope: str, name: str, *, preset: str):
+    def request_delay(self, scope: str, name: str, *, preset: str, timeout_ms: int | None = None):
         self.delays.append((scope, name, preset))
+        self.delay_timeouts.append(timeout_ms)
         if self.error:
             raise self.error
         return self.responses["delay"]
 
-    def request_provider_proxy_delay(self, provider: str, name: str, *, preset: str):
+    def request_provider_proxy_delay(
+        self,
+        provider: str,
+        name: str,
+        *,
+        preset: str,
+        timeout_ms: int | None = None,
+    ):
         self.provider_delays.append((provider, name, preset))
+        self.delay_timeouts.append(timeout_ms)
         if self.error:
             raise self.error
         return self.responses["delay"]
@@ -938,16 +948,27 @@ def test_delay_route_forwards_only_scope_name_and_preset_id():
         "preset": "google",
         "effective_preset": "google",
         "fallback_used": False,
+        "effective_timeout_ms": 5000,
         "results": [{"name": "node-a", "delay_ms": 87}],
         "truncated": False,
     }
     assert client.delays == [("proxy", "node-a", "google")]
+    # An omitted ``timeout_ms`` must keep the preset default measurable.
+    assert client.delay_timeouts == [5000]
 
 
 def test_delay_route_retries_transient_auto_failure_with_allowlisted_cloudflare():
     class FallbackClient(StubClient):
-        def request_delay(self, scope: str, name: str, *, preset: str):
+        def request_delay(
+            self,
+            scope: str,
+            name: str,
+            *,
+            preset: str,
+            timeout_ms: int | None = None,
+        ):
             self.delays.append((scope, name, preset))
+            self.delay_timeouts.append(timeout_ms)
             if preset == "auto":
                 raise MihomoClashClientError(
                     "upstream_timeout",
@@ -973,29 +994,112 @@ def test_delay_route_retries_transient_auto_failure_with_allowlisted_cloudflare(
     ]
 
 
-def test_delay_route_reports_zero_delay_as_timeout_after_fallback():
-    class ZeroDelayClient(StubClient):
-        def request_delay(self, scope: str, name: str, *, preset: str):
-            self.delays.append((scope, name, preset))
-            raise MihomoClashClientError(
-                "upstream_timeout",
-                "zero delay sentinel",
-                status=504,
-                retryable=True,
-            )
-
-    client = ZeroDelayClient()
+def test_delay_route_reports_zero_delay_as_a_measured_result_without_a_fallback():
+    client = StubClient(
+        responses={"delay": MihomoClashJSONResponse({"delay": 0}, 200, 3, 12)}
+    )
     response = make_app(ready_discovery(), client).test_client().post(
         "/api/mihomo/clash/delay",
         json={"scope": "proxy", "name": "node-a", "preset": "auto"},
     )
 
-    assert response.status_code == 504
-    assert response.get_json()["code"] == "upstream_timeout"
-    assert client.delays == [
-        ("proxy", "node-a", "auto"),
-        ("proxy", "node-a", "cloudflare"),
-    ]
+    # Zero means "the node did not answer the probe" and the panel renders it
+    # as a timeout badge. Retrying against Cloudflare would only double the
+    # load on a node that is already known to be silent.
+    assert response.status_code == 200
+    assert response.get_json()["results"] == [{"name": "node-a", "delay_ms": 0}]
+    assert response.get_json()["fallback_used"] is False
+    assert client.delays == [("proxy", "node-a", "auto")]
+
+
+def test_delay_route_forwards_and_clamps_the_requested_probe_timeout():
+    client = StubClient(
+        responses={"delay": MihomoClashJSONResponse({"delay": 64}, 200, 3, 12)}
+    )
+    app = make_app(ready_discovery(), client)
+
+    within = app.test_client().post(
+        "/api/mihomo/clash/delay",
+        json={"scope": "proxy", "name": "node-a", "preset": "google", "timeout_ms": 3000},
+    )
+    too_large = app.test_client().post(
+        "/api/mihomo/clash/delay",
+        json={"scope": "proxy", "name": "node-a", "preset": "google", "timeout_ms": 60000},
+    )
+    too_small = app.test_client().post(
+        "/api/mihomo/clash/delay",
+        json={"scope": "proxy", "name": "node-a", "preset": "google", "timeout_ms": 5},
+    )
+    # A malformed hint must not fail the probe: measuring with the preset
+    # default is more useful to the operator than a validation error.
+    malformed = app.test_client().post(
+        "/api/mihomo/clash/delay",
+        json={"scope": "proxy", "name": "node-a", "preset": "google", "timeout_ms": "fast"},
+    )
+
+    assert [
+        within.status_code,
+        too_large.status_code,
+        too_small.status_code,
+        malformed.status_code,
+    ] == [200, 200, 200, 200]
+    assert within.get_json()["effective_timeout_ms"] == 3000
+    assert too_large.get_json()["effective_timeout_ms"] == 10000
+    assert too_small.get_json()["effective_timeout_ms"] == 1000
+    assert malformed.get_json()["effective_timeout_ms"] == 5000
+    assert client.delay_timeouts == [3000, 10000, 1000, 5000]
+
+
+def test_delay_route_keeps_the_requested_timeout_on_the_cloudflare_fallback():
+    class FallbackClient(StubClient):
+        def request_delay(
+            self,
+            scope: str,
+            name: str,
+            *,
+            preset: str,
+            timeout_ms: int | None = None,
+        ):
+            self.delays.append((scope, name, preset))
+            self.delay_timeouts.append(timeout_ms)
+            if preset == "auto":
+                raise MihomoClashClientError(
+                    "upstream_unreachable",
+                    "probe target unreachable",
+                    status=502,
+                    retryable=True,
+                )
+            return MihomoClashJSONResponse({"delay": 77}, 200, 3, 20)
+
+    client = FallbackClient()
+    response = make_app(ready_discovery(), client).test_client().post(
+        "/api/mihomo/clash/delay",
+        json={"scope": "proxy", "name": "node-a", "preset": "auto", "timeout_ms": 2500},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["effective_timeout_ms"] == 2500
+    assert client.delay_timeouts == [2500, 2500]
+
+
+def test_provider_scoped_delay_route_forwards_the_requested_timeout():
+    client = StubClient(
+        responses={"delay": MihomoClashJSONResponse({"delay": 33}, 200, 2, 18)}
+    )
+    response = make_app(ready_discovery(), client).test_client().post(
+        "/api/mihomo/clash/delay",
+        json={
+            "scope": "provider-proxy",
+            "provider": "provider-a",
+            "name": "node-a",
+            "preset": "google",
+            "timeout_ms": 4000,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["effective_timeout_ms"] == 4000
+    assert client.delay_timeouts == [4000]
 
 
 def test_explicit_google_preset_does_not_switch_targets_on_transient_failure():

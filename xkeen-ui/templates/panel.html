@@ -2561,7 +2561,7 @@
     </div>
 
     <div id="routing-dns-over-vless-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" data-modal-noresize="1" data-modal-nopos="1" data-modal-remember="0" role="dialog" aria-modal="true" aria-labelledby="routing-dns-over-vless-title">
-      <div class="modal-content xk-modal-width xk-modal-width-760 routing-dns-over-vless-modal-content">
+      <div class="modal-content xk-modal-width xk-modal-width-920 routing-dns-over-vless-modal-content">
         <div class="modal-header">
           <span class="modal-title" id="routing-dns-over-vless-title">DNS-over-VLESS</span>
           <button type="button" class="modal-close" id="routing-dns-over-vless-close" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
@@ -2570,8 +2570,8 @@
           <div class="routing-dns-over-vless-lead">
             <span class="routing-dns-over-vless-lead-icon" aria-hidden="true">{{ op_icon('dns') }}</span>
             <div>
-              <strong>DNS через защищённый туннель Xray</strong>
-              <p>Панель подготовит отдельный DNS-фрагмент, добавит только два служебных правила и включит перехват DNS в Keenetic.</p>
+              <strong id="routing-dns-over-vless-lead-title">DNS через защищённый туннель Xray</strong>
+              <p id="routing-dns-over-vless-lead-text">Панель подготовит отдельный DNS-фрагмент, добавит только два служебных правила и включит перехват DNS в Keenetic.</p>
             </div>
             <span id="routing-dns-over-vless-badge" class="routing-dns-over-vless-badge">Проверка…</span>
           </div>
@@ -2579,12 +2579,17 @@
           <div id="routing-dns-over-vless-status" class="routing-dns-over-vless-status" role="status" aria-live="polite">Проверяем текущую конфигурацию…</div>
 
           <div id="routing-dns-over-vless-route" class="routing-dns-over-vless-route hidden">
-            <label for="routing-dns-over-vless-target">Маршрут для DNS-запросов</label>
+            <span class="routing-dns-over-vless-field-label" id="routing-dns-over-vless-target-label">Маршрут для DNS-запросов</span>
             <label id="routing-dns-over-vless-multi-row" class="routing-dns-over-vless-multi hidden">
               <input type="checkbox" id="routing-dns-over-vless-multi">
               <span>Балансировать между несколькими прокси</span>
             </label>
-            <select id="routing-dns-over-vless-target" class="xray-log-select" aria-describedby="routing-dns-over-vless-route-hint"></select>
+            <div id="routing-dns-over-vless-target-tools" class="routing-dns-over-vless-picker-tools hidden">
+              <span id="routing-dns-over-vless-target-count" class="routing-dns-over-vless-picker-count"></span>
+              <button type="button" id="routing-dns-over-vless-target-all" class="routing-dns-over-vless-picker-bulk">Отметить все</button>
+              <button type="button" id="routing-dns-over-vless-target-none" class="routing-dns-over-vless-picker-bulk">Снять все</button>
+            </div>
+            <div id="routing-dns-over-vless-target" class="routing-dns-over-vless-picker" role="listbox" aria-labelledby="routing-dns-over-vless-target-label" aria-describedby="routing-dns-over-vless-route-hint"></div>
             <p class="modal-hint" id="routing-dns-over-vless-route-hint">DNS пойдёт через выбранный балансировщик или прокси. Выбор сохраняется и используется при последующих включениях.</p>
             <p id="routing-dns-over-vless-route-fallback" class="routing-dns-over-vless-route-fallback hidden"></p>
 
@@ -2594,13 +2599,26 @@
 
             <label for="routing-dns-over-vless-local">Локальные DNS для домашних имён</label>
             <input type="text" id="routing-dns-over-vless-local" class="routing-rule-input" placeholder="не используется" autocomplete="off" spellcheck="false">
-            <p class="modal-hint">Необязательно. Адреса резолверов, отвечающих за домашние имена — запросы к ним пойдут напрямую, мимо туннеля. Через запятую, если сегментов сети несколько; порт указывайте, если резолвер слушает не на 53.</p>
+            <p class="modal-hint">Необязательно. Адреса резолверов, отвечающих за домашние имена — запросы к ним пойдут напрямую, мимо туннеля. Через запятую, если сегментов сети несколько; порт указывайте, если резолвер слушает не на 53. На Keenetic домашние имена и хостнеймы из DHCP знает резолвер прошивки: он слушает на <code>127.0.0.1:41100</code> и дальше по одному порту на каждую политику доступа — <code>41101</code>, <code>41102</code>. Порт 53 здесь занят самим DNS-over-VLESS: указать его нельзя, запрос вернулся бы сюда же и зациклился.</p>
 
             <div id="routing-dns-over-vless-zones-row" class="routing-dns-over-vless-zones hidden">
               <label for="routing-dns-over-vless-zones">Зоны, которые остаются в локальной сети</label>
               <textarea id="routing-dns-over-vless-zones" class="routing-rule-input" rows="3" autocomplete="off" spellcheck="false"></textarea>
               <div id="routing-dns-over-vless-zone-presets" class="routing-dns-over-vless-zone-presets" role="group" aria-label="Наборы зон"></div>
               <p class="modal-hint">Заполнено частыми случаями — дополните своими, если в сети используется собственная зона. Через запятую; запись без префикса дополняется до <code>domain:</code>, иначе Xray искал бы её как подстроку и захватил бы чужие домены. Обратные зоны <code>in-addr.arpa</code> и <code>ip6.arpa</code> держат PTR-запросы о приватных адресах внутри сети.</p>
+            </div>
+
+            <label for="routing-dns-over-vless-direct">DNS для доменов мимо туннеля</label>
+            <input type="text" id="routing-dns-over-vless-direct" class="routing-rule-input" placeholder="не используется" autocomplete="off" spellcheck="false">
+            <p class="modal-hint">Необязательно. Домены, которые вы и так пускаете напрямую, сейчас получают адрес от зарубежного резолвера — сайт с CDN отдаёт узел рядом с точкой выхода, а не рядом с вами. Укажите резолверы, которые ответят на них правильно: через запятую, спрашиваются по очереди, порт — если не 53. Адрес, уже занятый в поле выше, сюда не подойдёт: группы различаются по адресам, и один и тот же в обеих панель прочитать не сможет.</p>
+
+            <div id="routing-dns-over-vless-direct-zones-row" class="routing-dns-over-vless-zones hidden">
+              <label for="routing-dns-over-vless-direct-zones">Домены, которые резолвятся мимо туннеля</label>
+              <textarea id="routing-dns-over-vless-direct-zones" class="routing-rule-input" rows="3" autocomplete="off" spellcheck="false"></textarea>
+              <div class="routing-dns-over-vless-zone-presets">
+                <button type="button" id="routing-dns-over-vless-direct-from-rules" class="routing-dns-over-vless-zone-preset">Взять из правил, ведущих напрямую</button>
+              </div>
+              <p class="modal-hint">Эти запросы увидит провайдер. Для сайтов, которые вы и так открываете напрямую, это обычно не важно — их трафик он видит в любом случае, — зато адрес вы получите ближайший. Если все указанные резолверы молчат, имя всё же спросят у DNS-сервера в туннеле.</p>
             </div>
           </div>
 
@@ -2611,7 +2629,7 @@
           </div>
 
           <ul id="routing-dns-over-vless-details" class="routing-dns-over-vless-details"></ul>
-          <p class="modal-hint routing-dns-over-vless-warning">Настройка применяется только при активном ядре Xray. Прокси-outbound и существующие правила не переписываются. Резервный маршрут балансировщика переносится только тогда, когда вся его цепочка остаётся внутри прокси; fallback, ведущий в прямое соединение, отбрасывается, чтобы не допустить утечку или петлю.</p>
+          <p class="modal-hint routing-dns-over-vless-warning">Настройка применяется при активном ядре Xray; у Mihomo защита DNS настраивается своим окном. Прокси-outbound и существующие правила не переписываются. Резервный маршрут балансировщика переносится только тогда, когда вся его цепочка остаётся внутри прокси; fallback, ведущий в прямое соединение, отбрасывается, чтобы не допустить утечку или петлю.</p>
           <p class="routing-dns-over-vless-links">Описание схемы: <a href="https://jameszero.net/4773.htm" target="_blank" rel="noopener noreferrer">упрощённый вариант</a> · <a href="https://jameszero.net/3398.htm" target="_blank" rel="noopener noreferrer">первая часть</a></p>
         </div>
         <div class="modal-actions routing-dns-over-vless-actions">

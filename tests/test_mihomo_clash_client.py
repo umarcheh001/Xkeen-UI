@@ -374,7 +374,7 @@ def test_provider_proxy_delay_encodes_provider_and_node_segments():
 
 
 @pytest.mark.parametrize("scope", ["proxy", "provider-proxy"])
-def test_single_proxy_delay_zero_is_a_retryable_timeout(scope: str):
+def test_single_proxy_delay_zero_reaches_the_caller_as_a_measurement(scope: str):
     endpoints = {
         "proxy_delay": MihomoClashEndpoint("GET", "/proxies/{name}/delay", 2, 1024),
         "provider_proxy_delay": MihomoClashEndpoint(
@@ -396,15 +396,92 @@ def test_single_proxy_delay_zero_is_a_retryable_timeout(scope: str):
         )
     with tcp_server({expected_path: (200, "application/json", b'{"delay":0}')}) as (port, _handler):
         client = client_for_port(port, endpoints)
-        with pytest.raises(MihomoClashClientError) as captured:
-            if scope == "provider-proxy":
-                client.request_provider_proxy_delay("provider", "node")
-            else:
-                client.request_delay("proxy", "node")
+        if scope == "provider-proxy":
+            response = client.request_provider_proxy_delay("provider", "node")
+        else:
+            response = client.request_delay("proxy", "node")
 
-    assert captured.value.code == "upstream_timeout"
-    assert captured.value.status == 504
-    assert captured.value.retryable is True
+    # Mihomo answers an unreachable node with a zero delay. Zashboard shows it
+    # as a failed probe, so the client must not hide it behind an API error.
+    assert response.status == 200
+    assert response.payload == {"delay": 0}
+
+
+@pytest.mark.parametrize(
+    ("requested_ms", "sent_ms"),
+    [(2000, 2000), (10, 1000), (99000, 10000), ("fast", 5000), (None, 5000)],
+)
+def test_delay_probe_timeout_is_clamped_into_the_supported_window(requested_ms, sent_ms):
+    endpoints = {"proxy_delay": MihomoClashEndpoint("GET", "/proxies/{name}/delay", 2, 1024)}
+    expected_path = (
+        "/proxies/node/delay"
+        f"?url=https%3A%2F%2Fwww.gstatic.com%2Fgenerate_204&timeout={sent_ms}"
+    )
+    with tcp_server({expected_path: (200, "application/json", b'{"delay":73}')}) as (
+        port,
+        handler,
+    ):
+        response = client_for_port(port, endpoints).request_delay(
+            "proxy",
+            "node",
+            timeout_ms=requested_ms,
+        )
+
+    assert response.payload == {"delay": 73}
+    assert handler.seen[0]["path"] == expected_path
+
+
+def test_provider_proxy_delay_accepts_the_same_bounded_timeout():
+    endpoints = {
+        "provider_proxy_delay": MihomoClashEndpoint(
+            "GET",
+            "/providers/proxies/{provider}/{name}/healthcheck",
+            2,
+            1024,
+        )
+    }
+    expected_path = (
+        "/providers/proxies/provider/node/healthcheck"
+        "?url=https%3A%2F%2Fwww.gstatic.com%2Fgenerate_204&timeout=10000"
+    )
+    with tcp_server({expected_path: (200, "application/json", b'{"delay":120}')}) as (
+        port,
+        handler,
+    ):
+        response = client_for_port(port, endpoints).request_provider_proxy_delay(
+            "provider",
+            "node",
+            timeout_ms=45000,
+        )
+
+    assert response.payload == {"delay": 120}
+    assert handler.seen[0]["path"] == expected_path
+
+
+def test_delay_timeout_never_lets_a_caller_replace_the_allow_listed_url():
+    endpoints = {"proxy_delay": MihomoClashEndpoint("GET", "/proxies/{name}/delay", 2, 1024)}
+    # The timeout is the only tunable knob; the preset id still selects the URL,
+    # which keeps the SSRF boundary at the client instead of at the route.
+    expected_path = (
+        "/proxies/node/delay?url=https%3A%2F%2Fcp.cloudflare.com%2F&timeout=1500"
+    )
+    with tcp_server({expected_path: (200, "application/json", b'{"delay":55}')}) as (
+        port,
+        handler,
+    ):
+        client = client_for_port(port, endpoints)
+        response = client.request_delay("proxy", "node", preset="cloudflare", timeout_ms=1500)
+        with pytest.raises(MihomoClashClientError) as captured:
+            client.request_delay(
+                "proxy",
+                "node",
+                preset="http://router/private",
+                timeout_ms=1500,
+            )
+
+    assert response.payload == {"delay": 55}
+    assert handler.seen[0]["path"] == expected_path
+    assert captured.value.code == "delay_preset_not_allowed"
 
 
 def test_delay_uses_backend_preset_and_never_accepts_arbitrary_url():

@@ -185,7 +185,14 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
         "providerCandidates[0]",
         "MAX_BUSY_RETRIES = 2",
         "MAX_RATE_LIMIT_RETRIES = 10",
-        "DELAY_BATCH_CADENCE_MS = 120",
+        # A batch is a short bounded burst, not a paced drip: the extra pause
+        # stretched a large group past its own freshness window.
+        "DELAY_BATCH_CADENCE_MS = 0",
+        "BATCH_PROBE_TIMEOUT_MS = 2000",
+        # ``/group/{name}/delay`` is only for the group types the core tests
+        # itself; a selector is probed node by node whatever the mode says.
+        "CORE_BATCH_TYPES",
+        "coreBatchApplies",
         "DEFAULT_DELAY_FRESHNESS_TTL_MS = 5 * 60 * 1000",
         "measurementFreshnessTtlMs",
         "latencyTestMode = 'safe'",

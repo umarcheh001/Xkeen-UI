@@ -25,7 +25,9 @@ MIHOMO_CLASH_ACTION_POLICIES: Mapping[str, MihomoClashActionPolicy] = MappingPro
         "proxy-unfix": MihomoClashActionPolicy(2, 1, 20, 60.0),
         # Match Zashboard's bounded five-worker latency queue. The guard still
         # prevents additional tabs from growing this into an unbounded burst.
-        "delay": MihomoClashActionPolicy(5, 5, 120, 60.0),
+        # Five workers without pauses reach several hundred probes a minute, so
+        # a 120-call window silently truncated large-group runs.
+        "delay": MihomoClashActionPolicy(5, 5, 600, 60.0),
         # HTTP fallback uses this endpoint at a documented two-second cadence.
         # The rolling limit bounds accidental hot loops while leaving room for
         # manual refreshes and a reconnect bootstrap.
