@@ -1450,6 +1450,9 @@ def create_mihomo_blueprint(
         """Validate, snapshot, apply/revert, restart and health-check DNS."""
         data = request.get_json(silent=True) or {}
         action = str(data.get("action") or "").strip().lower()
+        mode = str(data.get("mode") or "redir-host").strip().lower()
+        fake_ip = data.get("fake_ip") if isinstance(data.get("fake_ip"), dict) else None
+        proxy_group = str(data.get("proxy_group") or "").strip() or None
         if data.get("confirmed") is not True:
             return _api_error(
                 "Требуется подтверждение настройки DNS Mihomo.",
@@ -1465,6 +1468,9 @@ def create_mihomo_blueprint(
                 validate_config=validate_config,
                 save_config=save_config,
                 restart_xkeen=restart_xkeen,
+                mode=mode,
+                fake_ip=fake_ip,
+                proxy_group=proxy_group,
             )
             return jsonify(result), 200
         except MihomoDnsError as exc:

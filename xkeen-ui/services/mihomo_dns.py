@@ -13,6 +13,7 @@ active profile and is restored on disable or on any failed enable.
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import os
 import random
@@ -37,6 +38,11 @@ MANAGED_BEGIN = "# BEGIN XKeen UI Mihomo DNS (managed)"
 MANAGED_END = "# END XKeen UI Mihomo DNS (managed)"
 DNS_LISTEN = "0.0.0.0:53"
 PROBE_DOMAIN = "example.com"
+DEFAULT_FAKE_IP_RANGE = "198.18.0.1/16"
+DEFAULT_FAKE_IP_FILTER_MODE = "blacklist"
+DEFAULT_FAKE_IP_FILTERS = ("*.lan", "*.local")
+DNS_MODES = ("redir-host", "fake-ip")
+FAKE_IP_FILTER_MODES = ("blacklist", "whitelist", "rule")
 _LOCK = threading.RLock()
 
 
@@ -127,7 +133,7 @@ def _dns_runtime_config(text: str) -> dict[str, Any]:
 
     section = _top_level_section(text, "dns")
     if section is None:
-        return {"present": False, "enabled": False, "listen": "", "listener_configured": False}
+        return {"present": False, "enabled": False, "listen": "", "listener_configured": False, "mode": ""}
 
     body = section[2]
 
@@ -138,6 +144,7 @@ def _dns_runtime_config(text: str) -> dict[str, Any]:
     enabled_value = nested_scalar("enable").lower()
     dns_enabled = enabled_value in {"true", "yes", "on", "1"}
     listen = nested_scalar("listen")
+    mode = nested_scalar("enhanced-mode").lower()
     normalized_listen = listen.rsplit("/", 1)[0].strip().lower()
     listener_configured = bool(
         dns_enabled
@@ -148,6 +155,7 @@ def _dns_runtime_config(text: str) -> dict[str, Any]:
         "enabled": dns_enabled,
         "listen": listen,
         "listener_configured": listener_configured,
+        "mode": mode,
     }
 
 
@@ -192,21 +200,143 @@ def _yaml_single_quote(value: str) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
-def _managed_dns_block(group: str) -> str:
+def _domain_rule_provider_names(config_text: str) -> list[str]:
+    """Return configured domain/classical rule-provider names.
+
+    A ``rule-set:...`` fake-IP filter can only refer to a provider that is
+    actually declared in this config.  In particular, ``private@ip`` is not
+    a domain provider and must not be used for DNS name filtering.
+    """
+
+    section = _top_level_section(config_text, "rule-providers")
+    if not section:
+        return []
+    body = section[2]
+    entries: list[tuple[str, list[str]]] = []
+    current_name = ""
+    current: list[str] = []
+    for line in body.splitlines()[1:]:
+        match = re.match(r"^  ([^\s:#][^:]*):(?:\s*(.*))?$", line)
+        if match:
+            if current_name:
+                entries.append((current_name.strip(), current))
+            current_name = match.group(1).strip()
+            current = [str(match.group(2) or "")]
+        elif current_name:
+            current.append(line)
+    if current_name:
+        entries.append((current_name, current))
+    names: list[str] = []
+    for name, lines in entries:
+        joined = "\n".join(lines).lower()
+        if re.search(r"(?:^|[\s,{])behavior\s*:\s*(?:domain|classical)\b", joined):
+            names.append(name)
+    return names
+
+
+def _fake_ip_default_filters(config_text: str = "") -> list[str]:
+    """Build safe defaults without assuming a GeoSite database/tag exists."""
+
+    filters = list(DEFAULT_FAKE_IP_FILTERS)
+    providers = _domain_rule_provider_names(config_text)
+    private = next((name for name in providers if "private" in name.lower()), "")
+    if private:
+        filters.append(f"rule-set:{private}")
+    return filters
+
+
+def _normalize_fake_ip_options(fake_ip: Any = None, *, config_text: str = "") -> dict[str, Any]:
+    """Validate the user-controlled Fake-IP options before rendering YAML."""
+
+    raw = fake_ip if isinstance(fake_ip, dict) else {}
+    value = str(raw.get("range") or DEFAULT_FAKE_IP_RANGE).strip()
+    try:
+        network = ipaddress.ip_network(value, strict=False)
+    except ValueError as exc:
+        raise MihomoDnsError("Некорректный диапазон Fake-IP.", code="fake_ip_range_invalid") from exc
+    if network.version != 4 or network.prefixlen > 24 or network.prefixlen < 8:
+        raise MihomoDnsError("Диапазон Fake-IP должен быть IPv4-сетью от /8 до /24.", code="fake_ip_range_invalid")
+    # Never allow the synthetic range to overlap common LAN/VPN/reserved
+    # networks.  Deployments can add their own networks through an env var.
+    reserved = ["10.0.0.0/8", "127.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16"]
+    reserved.extend(str(item).strip() for item in str(os.environ.get("XKEEN_FAKE_IP_RESERVED_NETWORKS") or "").split(",") if str(item).strip())
+    for item in reserved:
+        try:
+            if network.overlaps(ipaddress.ip_network(item, strict=False)):
+                raise MihomoDnsError("Диапазон Fake-IP пересекается с локальной сетью.", code="fake_ip_range_overlap", details=item)
+        except ValueError:
+            continue
+    filter_mode = str(raw.get("filter_mode") or DEFAULT_FAKE_IP_FILTER_MODE).strip().lower()
+    if filter_mode not in FAKE_IP_FILTER_MODES:
+        raise MihomoDnsError("Неизвестный режим фильтра Fake-IP.", code="fake_ip_filter_mode_invalid")
+    filters = raw.get("filters") if "filters" in raw else _fake_ip_default_filters(config_text)
+    if isinstance(filters, str):
+        filters = [line.strip() for line in filters.splitlines() if line.strip()]
+    if not isinstance(filters, (list, tuple)):
+        raise MihomoDnsError("Список фильтров Fake-IP имеет неверный формат.", code="fake_ip_filters_invalid")
+    clean_filters = []
+    for item in filters:
+        text = str(item or "").strip()
+        if text and len(text) <= 255 and "\n" not in text and "\r" not in text:
+            clean_filters.append(text)
+    if not clean_filters:
+        raise MihomoDnsError("Для Fake-IP укажите хотя бы один фильтр.", code="fake_ip_filters_invalid")
+    if filter_mode == "rule":
+        invalid = [item for item in clean_filters if not re.search(r",(?:fake-ip|real-ip)\s*$", item, re.IGNORECASE)]
+        if invalid:
+            raise MihomoDnsError(
+                "В режиме rule фильтры должны быть правилами с действием fake-ip или real-ip.",
+                code="fake_ip_rules_invalid",
+                details=invalid[:8],
+            )
+    return {"range": value, "filter_mode": filter_mode, "filters": clean_filters, "network": network}
+
+
+def _normalize_mode(mode: Any = None) -> str:
+    value = str(mode or "redir-host").strip().lower()
+    if value not in DNS_MODES:
+        raise MihomoDnsError("Неизвестный режим DNS Mihomo.", code="dns_mode_invalid")
+    return value
+
+
+def _fake_ip_route_available(text: str) -> bool:
+    """Fake-IP needs a transparent route capable of handling synthetic IPs."""
+
+    tun = _top_level_section(text, "tun")
+    if tun and re.search(r"(?im)^\s+enable\s*:\s*(?:true|yes|on|1)\b", tun[2]):
+        return True
+    # Existing XKeen TProxy installations expose a tproxy-port.  It is a
+    # sufficient signal for the guarded assistant; users without either route
+    # are stopped before any config is written.
+    return bool(re.search(r"(?im)^tproxy-port\s*:\s*[1-9]\d*\s*$", str(text or "")))
+
+
+def _managed_dns_block(group: str, *, mode: str = "redir-host", fake_ip: Any = None) -> str:
     target = str(group or "").strip()
     if not target:
         raise MihomoDnsError("Не найдена proxy-группа для защищённого DNS.", code="proxy_group_missing")
+    normalized_mode = _normalize_mode(mode)
+    fake = _normalize_fake_ip_options(fake_ip) if normalized_mode == "fake-ip" else None
     google = f"https://8.8.8.8/dns-query#{target}&name-cert-verify=dns.google"
     cloudflare = f"https://1.1.1.1/dns-query#{target}&name-cert-verify=cloudflare-dns.com"
+    fake_block = ""
+    if fake:
+        fake_block = (
+            f"  fake-ip-range: {fake['range']}\n"
+            f"  fake-ip-filter-mode: {fake['filter_mode']}\n"
+            "  fake-ip-filter:\n"
+            + "".join(f"    - {_yaml_single_quote(item)}\n" for item in fake["filters"])
+        )
     return (
         f"{MANAGED_BEGIN}\n"
         "dns:\n"
         "  enable: true\n"
         f"  listen: {DNS_LISTEN}\n"
         "  ipv6: false\n"
-        "  enhanced-mode: redir-host\n"
+        f"  enhanced-mode: {normalized_mode}\n"
         "  cache-algorithm: arc\n"
         "  prefer-h3: false\n"
+        f"{fake_block}"
         "  use-hosts: true\n"
         "  use-system-hosts: true\n"
         "  default-nameserver:\n"
@@ -306,7 +436,7 @@ def _insert_managed_dns_block(text: str, block: str) -> str:
     return f"{before}\n\n{managed}\n"
 
 
-def build_enabled_config(text: str, group: Optional[str] = None) -> tuple[str, str]:
+def build_enabled_config(text: str, group: Optional[str] = None, *, mode: str = "redir-host", fake_ip: Any = None) -> tuple[str, str]:
     original = str(text or "")
     if not original.strip():
         raise MihomoDnsError("Активный config.yaml пуст.", code="config_empty")
@@ -317,16 +447,22 @@ def build_enabled_config(text: str, group: Optional[str] = None) -> tuple[str, s
             "В config.yaml уже есть раздел dns. Панель не будет его перезаписывать.",
             code="dns_conflict",
         )
+    normalized_mode = _normalize_mode(mode)
+    if normalized_mode == "fake-ip" and not _fake_ip_route_available(original):
+        raise MihomoDnsError("Fake-IP требует включённый TUN или TProxy-маршрут.", code="fake_ip_route_missing")
+    fake_options = _normalize_fake_ip_options(fake_ip, config_text=original) if normalized_mode == "fake-ip" else None
     selected = str(group or _select_proxy_group(original) or "").strip()
     if not selected:
         raise MihomoDnsError(
             "Не найдена proxy-группа Mihomo. Сначала добавьте узел и группу.",
             code="proxy_group_missing",
         )
+    if group and selected not in _proxy_groups(original):
+        raise MihomoDnsError("Выбранная proxy-группа отсутствует в config.yaml.", code="proxy_group_invalid")
     # Keep the managed block near the top-level runtime settings (normally
     # immediately after ``profile``), rather than at EOF after all providers,
     # groups and rules.
-    patched = _insert_managed_dns_block(_remove_store_fake_ip(original), _managed_dns_block(selected))
+    patched = _insert_managed_dns_block(_remove_store_fake_ip(original), _managed_dns_block(selected, mode=normalized_mode, fake_ip=fake_options))
     return patched, selected
 
 
@@ -534,6 +670,7 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
     tampered = bool(state and not exact)
     partial = bool((has_begin or has_end) and not exact)
     group = str(state.get("proxy_group") or "") if exact else str(_select_proxy_group(text) or "")
+    mode = str(state.get("mode") or dns_runtime.get("mode") or "redir-host").strip().lower()
     # A user may remove the complete managed block manually.  If Keenetic's
     # DNS override is already off, never restore the old snapshot over those
     # unrelated edits; offer a metadata-only recovery instead.
@@ -574,12 +711,15 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         "can_disable": can_disable,
         "active_core": core,
         "proxy_group": group or None,
+        "proxy_groups": _proxy_groups(text),
         "dns_override": override,
         "dns_present": has_dns,
         "dns_enabled": bool(dns_runtime["enabled"]),
         "dns_listener_configured": bool(dns_runtime["listener_configured"]),
         "listen": str(dns_runtime["listen"] or DNS_LISTEN),
-        "mode": "redir-host",
+        "mode": mode if mode in DNS_MODES else "redir-host",
+        "fake_ip": state.get("fake_ip") if isinstance(state.get("fake_ip"), dict) else None,
+        "fake_ip_available": _fake_ip_route_available(text),
         "blockers": blockers,
         "safety": {
             "preflight": True,
@@ -599,6 +739,9 @@ def apply_action(
     validate_config: Callable[..., str],
     save_config: Callable[[str], Any],
     restart_xkeen: Callable[..., Any],
+    mode: str = "redir-host",
+    fake_ip: Any = None,
+    proxy_group: Optional[str] = None,
 ) -> dict[str, Any]:
     normalized = str(action or "").strip().lower()
     if normalized not in {"enable", "disable"}:
@@ -617,7 +760,12 @@ def apply_action(
                     code="enable_blocked",
                     details=status.get("blockers"),
                 )
-            prepared, group = build_enabled_config(current, str(status.get("proxy_group") or ""))
+            prepared, group = build_enabled_config(
+                current,
+                str(proxy_group or status.get("proxy_group") or ""),
+                mode=mode,
+                fake_ip=fake_ip,
+            )
             validation = validate_config(new_content=prepared) or ""
             if not _validation_ok(validation):
                 raise MihomoDnsError(
@@ -664,6 +812,8 @@ def apply_action(
                     "original_dns_override": original_override,
                     "proxy_group": group,
                     "listen": DNS_LISTEN,
+                    "mode": _normalize_mode(mode),
+                    "fake_ip": ({k: v for k, v in _normalize_fake_ip_options(fake_ip, config_text=current).items() if k != "network"} if _normalize_mode(mode) == "fake-ip" else None),
                 }
                 _save_state(ui_state_dir, config_file, next_state)
                 return {
@@ -671,6 +821,8 @@ def apply_action(
                     "enabled": True,
                     "proxy_group": group,
                     "listen": DNS_LISTEN,
+                    "mode": _normalize_mode(mode),
+                    "fake_ip": ({k: v for k, v in _normalize_fake_ip_options(fake_ip).items() if k != "network"} if _normalize_mode(mode) == "fake-ip" else None),
                     "backup": str(getattr(backup, "filename", "") or "") or None,
                     "probe": probe,
                 }

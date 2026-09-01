@@ -16,6 +16,13 @@ import { getMihomoPanelApi } from './mihomo_panel.js';
     badge: 'mihomo-dns-badge',
     status: 'mihomo-dns-status',
     details: 'mihomo-dns-details',
+    mode: 'mihomo-dns-mode',
+    modeHint: 'mihomo-dns-mode-hint',
+    fakeOptions: 'mihomo-dns-fake-options',
+    fakeRange: 'mihomo-dns-fake-range',
+    fakeFilterMode: 'mihomo-dns-fake-filter-mode',
+    fakeFilters: 'mihomo-dns-fake-filters',
+    proxyGroup: 'mihomo-dns-proxy-group',
   });
 
   const $ = (id) => document.getElementById(id);
@@ -41,8 +48,21 @@ import { getMihomoPanelApi } from './mihomo_panel.js';
     return data;
   }
 
+  function selectedOptions() {
+    const mode = $(IDS.mode)?.value || 'redir-host';
+    const payload = { mode, proxy_group: $(IDS.proxyGroup)?.value || undefined };
+    if (mode === 'fake-ip') {
+      payload.fake_ip = {
+        range: $(IDS.fakeRange)?.value || '198.18.0.1/16',
+        filter_mode: $(IDS.fakeFilterMode)?.value || 'blacklist',
+        filters: String($(IDS.fakeFilters)?.value || '').split(/\r?\n/).map((item) => item.trim()).filter(Boolean),
+      };
+    }
+    return payload;
+  }
+
   async function postAction(action) {
-    const payload = { action, confirmed: true };
+    const payload = { action, confirmed: true, ...selectedOptions() };
     const client = getXkeenCoreHttpApi();
     if (client && typeof client.postJSON === 'function') {
       return client.postJSON('/api/mihomo/dns', payload, { timeoutMs: 120000, retry: 0 });
@@ -75,6 +95,10 @@ import { getMihomoPanelApi } from './mihomo_panel.js';
     const apply = $(IDS.apply);
     const dot = $(IDS.dot);
     const routerNote = document.querySelector('#mihomo-dns-modal .routing-dns-over-vless-links');
+    const mode = $(IDS.mode);
+    const fakeOptions = $(IDS.fakeOptions);
+    const modeHint = $(IDS.modeHint);
+    const proxyGroup = $(IDS.proxyGroup);
     if (list) list.textContent = '';
 
     const enabled = !!data?.enabled;
@@ -82,6 +106,21 @@ import { getMihomoPanelApi } from './mihomo_panel.js';
     const canRecover = !!data?.can_recover;
     const blocked = !enabled && !canDisable && !canRecover && !data?.can_enable;
     const altered = !!data?.tampered;
+    if (mode && data?.mode && !busy) mode.value = data.mode;
+    if (proxyGroup && data?.proxy_groups && !busy) {
+      const selected = data.proxy_group || '';
+      proxyGroup.textContent = '';
+      data.proxy_groups.forEach((name) => {
+        const option = document.createElement('option'); option.value = name; option.textContent = name; proxyGroup.appendChild(option);
+      });
+      if (selected && data.proxy_groups.includes(selected)) proxyGroup.value = selected;
+    }
+    if (fakeOptions) fakeOptions.classList.toggle('hidden', (mode?.value || data?.mode) !== 'fake-ip');
+    if (modeHint) modeHint.textContent = (mode?.value || data?.mode) === 'fake-ip'
+      ? `Расширенный режим: виртуальные IP. ${data?.fake_ip_available === false ? 'TUN/TProxy-маршрут не обнаружен.' : 'Прозрачный TUN/TProxy-маршрут обнаружен.'}`
+      : 'Совместимо с TProxy и большинством устройств LAN.';
+    if (mode) mode.disabled = enabled || canDisable || altered;
+    if (proxyGroup) proxyGroup.disabled = enabled || canDisable || altered;
     const state = enabled ? 'enabled' : ((canDisable || canRecover || blocked || altered) ? 'blocked' : 'ready');
     if (badge) {
       badge.dataset.state = state;
@@ -97,7 +136,7 @@ import { getMihomoPanelApi } from './mihomo_panel.js';
       else if (altered) status.textContent = 'После включения config.yaml был изменён. Панель не станет автоматически перезаписывать эти правки.';
       else if (canDisable) status.textContent = 'DNS-конфигурация подготовлена. Можно безопасно вернуть полный исходный снимок.';
       else if (blocked) status.textContent = 'Автоматическая настройка остановлена, чтобы не затронуть существующий DNS или маршрутизацию.';
-      else status.textContent = 'После подтверждения панель проверит YAML, сохранит снимок, запустит Mihomo и протестирует DNS.';
+      else status.textContent = `После подтверждения панель применит режим ${(mode?.value || 'redir-host')}, проверит YAML, сохранит снимок, запустит Mihomo и протестирует DNS.`;
     }
     if (routerNote) {
       routerNote.textContent = enabled
@@ -220,6 +259,15 @@ import { getMihomoPanelApi } from './mihomo_panel.js';
       if (!busy) showModal(false);
     }));
     $(IDS.apply)?.addEventListener('click', (event) => { event.preventDefault(); void apply(); });
+    $(IDS.mode)?.addEventListener('change', () => {
+      const fakeOptions = $(IDS.fakeOptions);
+      const fake = $(IDS.mode)?.value === 'fake-ip';
+      fakeOptions?.classList.toggle('hidden', !fake);
+      const hint = $(IDS.modeHint);
+      if (hint) hint.textContent = fake
+        ? `Расширенный режим: виртуальные IP. ${current?.fake_ip_available === false ? 'TUN/TProxy-маршрут не обнаружен.' : 'Проверьте наличие прозрачного TUN/TProxy-маршрута.'}`
+        : 'Совместимо с TProxy и большинством устройств LAN.';
+    });
     $(IDS.modal)?.addEventListener('click', (event) => {
       if (event.target === $(IDS.modal) && !busy) showModal(false);
     });

@@ -2639,6 +2639,31 @@
 
           <div id="mihomo-dns-status" class="routing-dns-over-vless-status" role="status" aria-live="polite">Проверяем текущую конфигурацию…</div>
 
+          <div class="routing-dns-over-vless-route mihomo-dns-mode-picker">
+            <label for="mihomo-dns-proxy-group">Proxy-группа для DoH</label>
+            <select id="mihomo-dns-proxy-group"><option value="">Автоматический выбор</option></select>
+            <label for="mihomo-dns-mode">Режим обработки имён</label>
+            <select id="mihomo-dns-mode">
+              <option value="redir-host" selected>redir-host — реальные IP (рекомендуется)</option>
+              <option value="fake-ip">fake-ip — виртуальные IP (расширенный режим)</option>
+            </select>
+            <p id="mihomo-dns-mode-hint" class="modal-hint">Совместимо с TProxy и большинством устройств LAN.</p>
+          </div>
+          <div id="mihomo-dns-fake-options" class="routing-dns-over-vless-route hidden">
+            <label for="mihomo-dns-fake-range">Диапазон Fake-IP</label>
+            <input id="mihomo-dns-fake-range" type="text" value="198.18.0.1/16" spellcheck="false" autocomplete="off">
+            <label for="mihomo-dns-fake-filter-mode">Режим фильтра</label>
+            <select id="mihomo-dns-fake-filter-mode">
+              <option value="blacklist" selected>blacklist — исключить локальные зоны</option>
+              <option value="whitelist">whitelist — только указанные зоны</option>
+              <option value="rule">rule — правила Mihomo</option>
+            </select>
+            <label for="mihomo-dns-fake-filters">Фильтры (по одному на строку)</label>
+            <textarea id="mihomo-dns-fake-filters" rows="3" spellcheck="false">*.lan
+*.local</textarea>
+            <p class="modal-hint">Fake-IP требует включённый TUN или TProxy и не должен пересекаться с вашей LAN/VPN-сетью.</p>
+          </div>
+
           <div class="routing-dns-over-vless-safety" aria-label="Защита операции">
             <div>{{ op_icon('validate') }}<span><b>Mihomo preflight</b><small>Проверка временного YAML до записи</small></span></div>
             <div>{{ op_icon('backup') }}<span><b>Полный снимок</b><small>Исходный config.yaml и DNS override</small></span></div>
@@ -2646,7 +2671,7 @@
           </div>
 
           <ul id="mihomo-dns-details" class="routing-dns-over-vless-details"></ul>
-          <p class="modal-hint routing-dns-over-vless-warning">Пользовательский раздел <code>dns:</code> не перезаписывается. Для совместимости с TProxy используется <code>redir-host</code>; <code>store-fake-ip</code> удаляется только из подготовленной конфигурации.</p>
+          <p class="modal-hint routing-dns-over-vless-warning">Пользовательский раздел <code>dns:</code> не перезаписывается. Настройки применяются транзакционно и автоматически откатываются при ошибке.</p>
           <p class="routing-dns-over-vless-links">Устройства по‑прежнему используют DNS роутера — Keenetic автоматически направляет запросы в Mihomo.</p>
         </div>
         <div class="modal-actions routing-dns-over-vless-actions">
