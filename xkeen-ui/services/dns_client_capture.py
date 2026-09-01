@@ -26,6 +26,8 @@ from typing import Any, Dict, List
 CHAIN = "XKEEN_UI_DNS"
 PARENT_CHAIN = "PREROUTING"
 IPTABLES_BINARIES = ("/opt/sbin/iptables", "iptables")
+IP_BINARIES = ("/opt/sbin/ip", "ip")
+ADDRESS_RE = re.compile(r"^\d+:\s*(\S+)\s+inet\s+([0-9.]+)/")
 MAX_CAPTURE_CLIENTS = 64
 DNS_PORT = 53
 
@@ -84,32 +86,99 @@ def _must(args: List[str]) -> None:
         raise CaptureError(err or f"iptables вернул код {rc} на {' '.join(args)}")
 
 
-def _rules_for(mac: str) -> List[List[str]]:
-    """The pair of rules that sends one device's DNS to our own port 53."""
+def lan_addresses() -> List[str]:
+    """Every address of the router itself, whatever its segments are called.
+
+    Read from the router at the moment the rules are written rather than
+    guessed: segment names and subnets differ from box to box, and a list
+    written into the code would be wrong on the next router.  Loopback is left
+    out (that is the listener itself) and so is link-local; everything else the
+    box answers on counts, including the WAN address -- a device that asks it
+    for names is still asking the router.
+
+    The rules name them instead of catching port 53 wherever it is aimed.  A
+    blanket rule also catches a device that carries a resolver address of its
+    own, and such a connection then dies on this firmware: the packet is
+    redirected and reaches Xray, but no answer ever comes back.  Measured on a
+    router -- a captured device could not reach 77.88.8.8 or 195.208.4.1 while
+    1.1.1.1 and 8.8.8.8 answered, and the same probe worked the moment the
+    chain was taken away.  Aiming only at the router keeps the ordinary case
+    working and leaves a hand-set resolver alone.
+    """
+    found: List[str] = []
+    for binary in IP_BINARIES:
+        try:
+            proc = subprocess.run(
+                [binary, "-4", "-o", "addr", "show"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except FileNotFoundError:
+            continue
+        except Exception:  # noqa: BLE001 - try the next name
+            continue
+        if proc.returncode != 0:
+            continue
+        for line in (proc.stdout or "").splitlines():
+            match = ADDRESS_RE.match(line.strip())
+            if not match:
+                continue
+            address = match.group(2)
+            if address.startswith(("127.", "169.254.")) or address in found:
+                continue
+            found.append(address)
+        if found:
+            return found
+    return found
+
+
+def _rules_for(mac: str, addresses: List[str]) -> List[List[str]]:
+    """The rules that send one device's DNS to our own port 53.
+
+    Two per segment: a client that gets no answer over UDP retries over TCP.
+    """
     return [
         [
             "-A", CHAIN,
+            "-d", address,
             "-p", protocol,
             "-m", "mac", "--mac-source", mac,
             "-m", protocol, "--dport", str(DNS_PORT),
             "-j", "REDIRECT", "--to-ports", str(DNS_PORT),
         ]
+        for address in addresses
         for protocol in ("udp", "tcp")
     ]
+
+
+def parse_rules(text: str) -> List[tuple[str, str, str]]:
+    """The chain as it stands: (mac, address, protocol) per rule."""
+    found: List[tuple[str, str, str]] = []
+    for line in str(text or "").splitlines():
+        if "REDIRECT" not in line or f"--dport {DNS_PORT} " not in line + " ":
+            continue
+        mac = re.search(r"--mac-source\s+(\S+)", line)
+        address = re.search(r"-d\s+([0-9.]+)", line)
+        protocol = re.search(r"-p\s+(\S+)", line)
+        if not mac:
+            continue
+        found.append(
+            (
+                mac.group(1).strip().lower(),
+                address.group(1) if address else "",
+                protocol.group(1) if protocol else "",
+            )
+        )
+    return found
 
 
 def parse_macs(text: str) -> List[str]:
     """Devices named by the chain as it stands now."""
     found: List[str] = []
-    for line in str(text or "").splitlines():
-        if "REDIRECT" not in line or f"--dport {DNS_PORT} " not in line + " ":
-            continue
-        mac = re.search(r"--mac-source\s+(\S+)", line)
-        if not mac:
-            continue
-        value = mac.group(1).strip().lower()
-        if value not in found:
-            found.append(value)
+    for mac, _address, _protocol in parse_rules(text):
+        if mac not in found:
+            found.append(mac)
     return found
 
 
@@ -186,6 +255,13 @@ def ensure(macs: Any) -> Dict[str, Any]:
     if not wanted:
         return {"ok": True, "changed": remove(), "macs": []}
 
+    addresses = lan_addresses()
+    if not addresses:
+        raise CaptureError(
+            "Не удалось определить адреса роутера в домашних сетях; "
+            "правило не поставлено."
+        )
+
     changed = False
     rc, chain_text, chain_err = _run(["-S", CHAIN])
     if rc != 0:
@@ -195,12 +271,19 @@ def ensure(macs: Any) -> Dict[str, Any]:
         chain_text = ""
         changed = True
 
-    if parse_macs(chain_text) != wanted:
+    # Compared rule by rule, not device by device: a segment added or an
+    # address changed has to reach the chain as surely as a new device does.
+    desired = [rule for mac in wanted for rule in _rules_for(mac, addresses)]
+    if parse_rules(chain_text) != [
+        (mac, address, protocol)
+        for mac in wanted
+        for address in addresses
+        for protocol in ("udp", "tcp")
+    ]:
         if chain_text.strip():
             _must(["-F", CHAIN])
-        for mac in wanted:
-            for rule in _rules_for(mac):
-                _must(rule)
+        for rule in desired:
+            _must(rule)
         changed = True
 
     rc, parent_text, parent_err = _run(["-S", PARENT_CHAIN])

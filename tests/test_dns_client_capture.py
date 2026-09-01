@@ -45,10 +45,14 @@ class Firewall:
         return 1, "", f"unexpected {args}"
 
 
+LAN = ["192.168.45.1", "192.168.46.1"]
+
+
 @pytest.fixture()
 def firewall(monkeypatch):
     fake = Firewall()
     monkeypatch.setattr(cap, "_run", fake.run)
+    monkeypatch.setattr(cap, "lan_addresses", lambda: list(LAN))
     return fake
 
 
@@ -72,11 +76,22 @@ def test_the_chain_is_created_filled_and_put_first(firewall):
     result = cap.ensure(["10:f6:0a:a5:e7:9a"])
 
     assert result["changed"] is True
-    # Both protocols: a client that gets no answer over UDP retries over TCP.
-    assert len(firewall.chain) == 2
+    # Two protocols per segment: a client that gets no answer over UDP retries
+    # over TCP, and the router answers on every home segment it has.
+    assert len(firewall.chain) == 4
     assert "-p udp" in firewall.chain[0] and "--mac-source 10:f6:0a:a5:e7:9a" in firewall.chain[0]
     assert "-p tcp" in firewall.chain[1]
     assert "--to-ports 53" in firewall.chain[0]
+    # Only queries aimed at the router itself.  A blanket rule also swallows a
+    # resolver the user set by hand on the device, and such a connection dies:
+    # measured on a router, a captured device could not reach 77.88.8.8 while
+    # 1.1.1.1 answered.
+    assert [rule[1] for rule in cap.parse_rules("\n".join(firewall.chain))] == [
+        "192.168.45.1",
+        "192.168.45.1",
+        "192.168.46.1",
+        "192.168.46.1",
+    ]
     # Below the firmware's own redirect the chain would be decoration: that
     # rule ends the nat table before ours is reached.
     assert firewall.parent[0].endswith(f"-j {cap.CHAIN}")
@@ -157,3 +172,55 @@ def test_a_chain_that_is_not_first_is_reported_as_such(monkeypatch):
     monkeypatch.setattr(cap, "_run", fake.run)
 
     assert cap.status()["first"] is False
+
+
+def test_a_new_segment_reaches_the_chain_without_touching_the_device_list(firewall, monkeypatch):
+    cap.ensure(["10:f6:0a:a5:e7:9a"])
+    # A guest segment appears, or the router's address changes: the devices are
+    # the same, the rules are not.
+    monkeypatch.setattr(cap, "lan_addresses", lambda: ["192.168.45.1", "10.1.1.1"])
+
+    result = cap.ensure(["10:f6:0a:a5:e7:9a"])
+
+    assert result["changed"] is True
+    assert sorted({rule[1] for rule in cap.parse_rules("\n".join(firewall.chain))}) == [
+        "10.1.1.1",
+        "192.168.45.1",
+    ]
+
+
+def test_without_a_readable_address_nothing_is_written(monkeypatch):
+    fake = Firewall()
+    monkeypatch.setattr(cap, "_run", fake.run)
+    monkeypatch.setattr(cap, "lan_addresses", lambda: [])
+
+    # A blanket rule would be worse than none: it also swallows the resolver a
+    # device carries of its own, and that connection dies.
+    with pytest.raises(cap.CaptureError):
+        cap.ensure(["10:f6:0a:a5:e7:9a"])
+    assert fake.chain is None
+
+
+def test_the_addresses_are_read_from_the_router_not_assumed(monkeypatch):
+    # Real output: the firmware repeats the interface name and puts a
+    # backslash before the lifetimes.
+    dump = "\n".join(
+        [
+            r"1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever",
+            r"8: eth3    inet 192.168.1.254/24 brd 192.168.1.255 scope global eth3\   valid_lft forever",
+            r"31: br0    inet 192.168.45.1/24 brd 192.168.45.255 scope global br0\    valid_lft forever",
+            r"32: br1    inet 192.168.46.1/24 brd 192.168.46.255 scope global br1\    valid_lft forever",
+        ]
+    )
+
+    class Proc:
+        returncode = 0
+        stdout = dump
+        stderr = ""
+
+    monkeypatch.setattr(cap.subprocess, "run", lambda *a, **k: Proc())
+
+    # Whatever the segments are called and whatever subnets they use: a list
+    # written into the code would be wrong on the next router.  Loopback is the
+    # listener itself, so it is the one address left out.
+    assert cap.lan_addresses() == ["192.168.1.254", "192.168.45.1", "192.168.46.1"]
