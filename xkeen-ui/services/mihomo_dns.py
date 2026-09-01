@@ -297,12 +297,11 @@ def _geodata_runtime_config(config_text: str) -> dict[str, Any]:
     # An explicit false always wins.  If geodata-mode is omitted, a geosite
     # source is still useful in Mihomo's normal geodata loader; the preflight
     # remains the final authority for the concrete binary/version.
-    # ``geodata-mode: true`` by itself does not tell us whether a usable
-    # geosite.dat exists in Mihomo's working directory.  Treat an explicit
-    # geox-url as the only positively configured source; otherwise keep the
-    # UI warning actionable instead of claiming that ``geosite:private`` is
-    # available when the file may be missing.
-    geodata_enabled = mode is not False and bool(geosite_url)
+    # ``geodata-mode: true`` and an explicit geox-url are both required before
+    # the UI calls ``geosite:private`` available.  A URL without the mode may
+    # be ignored by Mihomo, while the mode without a URL may refer to a missing
+    # local geosite.dat.  Keep the warning actionable in both cases.
+    geodata_enabled = mode is True and bool(geosite_url)
     geosite_configured = bool(geosite_url)
     if private_provider:
         private_filter = f"rule-set:{private_provider}"
@@ -330,6 +329,12 @@ def _geodata_runtime_config(config_text: str) -> dict[str, Any]:
             "geodata-mode включён, но источник GeoSite не указан. "
             "Добавьте geox-url.geosite, например URL V2Fly из подсказки ниже, "
             "и перезапустите Mihomo."
+        )
+    elif geosite_url and mode is not True:
+        notice = (
+            "Источник GeoSite указан, но geodata-mode не включён явно. Добавьте "
+            "geodata-mode: true и перезапустите Mihomo, иначе geosite:private "
+            "может быть недоступен."
         )
     elif geosite_configured and mode is False:
         notice = (

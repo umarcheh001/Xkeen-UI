@@ -101,6 +101,18 @@ geox-url:
     assert result["private_filter"] == "geosite:private"
 
 
+def test_geodata_status_requires_explicit_mode_with_geox_url():
+    source = BASE + """
+geox-url:
+  geosite: https://example.invalid/geosite.dat
+"""
+
+    result = dns._geodata_runtime_config(source)
+
+    assert result["private_available"] is False
+    assert "geodata-mode: true" in result["notice"]
+
+
 def _status_ready(tmp_path: Path, monkeypatch):
     config = tmp_path / "config.yaml"
     config.write_text(BASE, encoding="utf-8")
