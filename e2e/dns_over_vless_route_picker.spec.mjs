@@ -292,3 +292,73 @@ test('with no direct rules the offer button stays closed', async ({ page }) => {
   await expect(page.locator('#routing-dns-over-vless-direct-zones')).toBeVisible();
   await expect(page.locator('#routing-dns-over-vless-direct-from-rules')).toBeDisabled();
 });
+
+
+test('the other record types are let through on one node the dialog names', async ({ page }) => {
+  const status = {
+    ...STATUS,
+    pass_non_ip: false,
+    pass_non_ip_node: '',
+    pass_non_ip_options: ['node-alpha', 'node-beta'],
+  };
+  await openDialog(page, status);
+
+  const row = page.locator('#routing-dns-over-vless-pass-row');
+  const toggle = page.locator('#routing-dns-over-vless-pass');
+  const node = page.locator('#routing-dns-over-vless-pass-node');
+
+  // The node only matters once the pass-through is on, so it stays out of the
+  // way until then.
+  await expect(toggle).not.toBeChecked();
+  await expect(row).toBeHidden();
+
+  // The switch is styled: its slider covers the box, so drive the input itself.
+  await toggle.check({ force: true });
+  await expect(row).toBeVisible();
+  await expect(node.locator('option')).toHaveCount(2);
+  await expect(node).toHaveValue('node-alpha');
+
+  await node.selectOption('node-beta');
+
+  let sent = null;
+  await page.route('**/api/routing/dns-over-vless', async (route) => {
+    if (route.request().method() === 'POST') {
+      sent = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, action: 'enable', enabled: true, restarted: true, probe: { ok: true } }),
+      });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(status) });
+  });
+
+  const apply = page.locator('#routing-dns-over-vless-apply');
+  await expect(apply).toBeEnabled();
+  await apply.click();
+
+  // Enabling asks for confirmation first; the request only fires once it is
+  // accepted.
+  await expect(page.locator('#confirm-modal')).not.toHaveClass(/hidden/);
+  await page.locator('#confirm-modal-ok-btn').click();
+
+  await expect.poll(() => sent && sent.pass_non_ip).toBe(true);
+  // The node the user picked, not the first one the panel offered.
+  expect(sent.pass_non_ip_node).toBe('node-beta');
+});
+
+
+test('a remembered node keeps its place and a vanished one does not look chosen', async ({ page }) => {
+  await openDialog(page, {
+    ...STATUS,
+    pass_non_ip: true,
+    pass_non_ip_node: 'node-beta',
+    pass_non_ip_options: ['node-alpha', 'node-beta'],
+  });
+
+  // Reordering the user's own balancer must not move the traffic silently.
+  await expect(page.locator('#routing-dns-over-vless-pass')).toBeChecked();
+  await expect(page.locator('#routing-dns-over-vless-pass-row')).toBeVisible();
+  await expect(page.locator('#routing-dns-over-vless-pass-node')).toHaveValue('node-beta');
+});

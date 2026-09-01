@@ -41,6 +41,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     directZones: 'routing-dns-over-vless-direct-zones',
     directZonesRow: 'routing-dns-over-vless-direct-zones-row',
     directFromRules: 'routing-dns-over-vless-direct-from-rules',
+    pass: 'routing-dns-over-vless-pass',
+    passRow: 'routing-dns-over-vless-pass-row',
+    passNode: 'routing-dns-over-vless-pass-node',
   };
 
   let status = null;
@@ -91,6 +94,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const directZones = $(DOM.directZones);
     if (directZones && settings.direct_resolver) {
       settings.direct_domains = String(directZones.value || '').trim();
+    }
+    const pass = $(DOM.pass);
+    if (pass) {
+      settings.pass_non_ip = !!pass.checked;
+      const node = $(DOM.passNode);
+      // The node only means anything while the pass-through is on; sending it
+      // otherwise would pin a choice the user cannot see.
+      if (pass.checked && node && node.value) settings.pass_non_ip_node = node.value;
     }
     return settings;
   }
@@ -431,6 +442,37 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         directZones.value = ((data && data.direct_domains) || []).join(', ');
       }
       directZones.disabled = busy;
+    }
+    const pass = $(DOM.pass);
+    const passRow = $(DOM.passRow);
+    const passNode = $(DOM.passNode);
+    if (pass) {
+      if (!pass.dataset.touched) pass.checked = !!(data && data.pass_non_ip);
+      pass.disabled = busy;
+    }
+    // The node matters only while the switch is on, so it appears with it.
+    const passOn = !!(pass && pass.checked);
+    if (passRow) passRow.classList.toggle('hidden', !passOn);
+    if (passNode) {
+      const options = (data && data.pass_non_ip_options) || [];
+      const wanted = passNode.dataset.touched
+        ? passNode.value
+        : ((data && data.pass_non_ip_node) || '');
+      const same = JSON.stringify(options) === (passNode.dataset.options || '');
+      if (!same) {
+        passNode.dataset.options = JSON.stringify(options);
+        passNode.innerHTML = '';
+        options.forEach((tag) => {
+          const option = document.createElement('option');
+          option.value = tag;
+          option.textContent = tag;
+          passNode.appendChild(option);
+        });
+      }
+      // A remembered node that no longer exists must not look chosen.
+      if (wanted && options.indexOf(wanted) >= 0) passNode.value = wanted;
+      else if (options.length) passNode.value = options[0];
+      passNode.disabled = busy || !options.length;
     }
     const fromRules = $(DOM.directFromRules);
     if (fromRules) {
@@ -858,6 +900,17 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         field.value = offered.join(', ');
         field.dataset.touched = '1';
       });
+    }
+    const passBox = $(DOM.pass);
+    if (passBox) {
+      passBox.addEventListener('change', () => {
+        passBox.dataset.touched = '1';
+        if (status) renderDnsFields(status);
+      });
+    }
+    const passNodeBox = $(DOM.passNode);
+    if (passNodeBox) {
+      passNodeBox.addEventListener('change', () => { passNodeBox.dataset.touched = '1'; });
     }
     const multiBox = $(DOM.multi);
     if (multiBox) {

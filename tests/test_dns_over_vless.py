@@ -1473,3 +1473,178 @@ def test_managed_jsonc_header_already_duplicated_is_healed(tmp_path: Path, monke
     dns._write_routing_preserving_comments(str(routing_path), routing)
 
     assert sidecar.read_text(encoding="utf-8").count(header) == 1
+
+
+def test_dns_outbound_stays_bare_until_the_other_record_types_are_let_through():
+    assert dns._dns_outbound() == {"tag": dns.DNS_OUT_TAG, "protocol": "dns"}
+    assert dns._dns_outbound("my_proxy_1") == {
+        "tag": dns.DNS_OUT_TAG,
+        "protocol": "dns",
+        "settings": {"nonIPQuery": "skip"},
+        # Without a route of their own the skipped queries would leave the
+        # router in the clear, so the pass-through always names one.
+        "proxySettings": {"tag": "my_proxy_1"},
+    }
+
+
+def test_pass_node_options_spell_out_the_selector_prefixes(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    # ``balancer_main`` selects by the prefix ``my_proxy``; a node has to be a
+    # real outbound, so the prefix is expanded rather than offered as is.
+    assert dns._pass_node_options(runtime, routing, ["balancer_main"]) == [
+        "my_proxy_1",
+        "my_proxy_2",
+    ]
+    assert dns._pass_node_options(runtime, routing, ["white_list_1"]) == ["white_list_1"]
+    # No usable route to go on: every live proxy is offered instead of nothing.
+    assert dns._pass_node_options(runtime, routing, []) == [
+        "my_proxy_1",
+        "my_proxy_2",
+        "reserve_proxy_1",
+        "white_list_1",
+    ]
+
+
+def test_pass_node_is_remembered_rather_than_recomputed(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    # First run has nothing stored: the first node of the route is taken.
+    assert dns._pick_pass_node(None, None, runtime, routing, ["balancer_main"]) == "my_proxy_1"
+    # A stored node keeps its place even though it is not the first one -- the
+    # user reordering their own selector must not silently move the traffic.
+    assert (
+        dns._pick_pass_node(None, "my_proxy_2", runtime, routing, ["balancer_main"])
+        == "my_proxy_2"
+    )
+    # A stored node that no longer exists falls back to the route.
+    assert (
+        dns._pick_pass_node(None, "gone_proxy", runtime, routing, ["balancer_main"])
+        == "my_proxy_1"
+    )
+    # An explicit request wins, but only for a node the route can reach.
+    assert (
+        dns._pick_pass_node("my_proxy_2", "my_proxy_1", runtime, routing, ["balancer_main"])
+        == "my_proxy_2"
+    )
+    try:
+        dns._pick_pass_node("balancer_main", None, runtime, routing, ["balancer_main"])
+        raise AssertionError("expected a balancer to be refused as a node")
+    except dns.DnsOverVlessError as exc:
+        assert exc.code == "pass_node_unavailable"
+
+
+def test_enable_can_let_the_other_record_types_through(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj, **_kwargs: _write(Path(path), obj))
+
+    dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+        pass_non_ip=True,
+        pass_non_ip_node="my_proxy_2",
+    )
+
+    fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+    assert fragment["outbounds"] == [
+        {
+            "tag": dns.DNS_OUT_TAG,
+            "protocol": "dns",
+            "settings": {"nonIPQuery": "skip"},
+            "proxySettings": {"tag": "my_proxy_2"},
+        }
+    ]
+    # The skipped queries are handed on to the address the client aimed at, so
+    # the listener has to name one: a client asking the router itself aims at a
+    # private address that means nothing on the other side of the tunnel.
+    assert fragment["inbounds"][0]["settings"] == {
+        "network": "tcp,udp",
+        "address": "8.8.8.8",
+        "port": 53,
+    }
+
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["pass_non_ip"] is True
+    assert result["pass_non_ip_node"] == "my_proxy_2"
+    assert result["pass_non_ip_options"] == ["my_proxy_1", "my_proxy_2"]
+    # The pass-through is part of the config the panel wrote, so it must not
+    # read back as somebody having edited the fragment by hand.
+    assert result["tampered"] is False
+    assert result["presence"]["fragment"] is True
+
+
+def test_a_half_written_pass_through_reads_back_as_drift(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    target = dns._select_target(dns._collect_runtime(str(configs), routing), "balancer_main")
+    _write(routing_path, dns._build_enabled_routing(routing, target))
+    fragment = dns._managed_fragment(pass_node="my_proxy_1")
+    # ``nonIPQuery`` without a route of its own is not something this panel
+    # writes: the skipped queries would leave in the clear.
+    del fragment["outbounds"][0]["proxySettings"]
+    _write(configs / dns.MANAGED_FRAGMENT, fragment)
+    _write(state / dns.STATE_FILENAME, {"enabled": True, "pass_non_ip": True})
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["presence"]["fragment"] is False
+
+
+def test_the_listener_names_a_destination_only_with_the_pass_through():
+    # An installation that never turned the pass-through on keeps exactly the
+    # fragment it already has, so its config must not read back as edited.
+    bare = dns._managed_fragment()
+    assert bare["inbounds"][0]["settings"] == {"network": "tcp,udp"}
+    # The destination follows the DNS servers the user chose, not a constant.
+    named = dns._managed_fragment(["1.1.1.1", "9.9.9.9"], pass_node="my_proxy_1")
+    assert named["inbounds"][0]["settings"] == {
+        "network": "tcp,udp",
+        "address": "1.1.1.1",
+        "port": 53,
+    }
+    # A server written as a URL still yields a plain address to aim at.
+    via_url = dns._managed_fragment(["https://1.1.1.1/dns-query"], pass_node="my_proxy_1")
+    assert via_url["inbounds"][0]["settings"]["address"] == "1.1.1.1"
+
+
+def test_the_pass_through_listener_reads_back_without_drift(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    target = dns._select_target(dns._collect_runtime(str(configs), routing), "balancer_main")
+    _write(routing_path, dns._build_enabled_routing(routing, target))
+    _write(
+        configs / dns.MANAGED_FRAGMENT,
+        dns._managed_fragment(["9.9.9.9"], pass_node="my_proxy_1"),
+    )
+    _write(state / dns.STATE_FILENAME, {"enabled": True, "pass_non_ip": True})
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["presence"]["fragment"] is True

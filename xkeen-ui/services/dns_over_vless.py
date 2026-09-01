@@ -793,6 +793,75 @@ def _select_target(
     return _build_combined_target(chosen, runtime)
 
 
+def _pass_node_options(
+    runtime: Dict[str, Any], routing: Optional[Dict[str, Any]], selection: list[str]
+) -> list[str]:
+    """Plain outbounds that may carry the other record types, in route order.
+
+    ``proxySettings`` names one outbound handler, so a balancer is spelled out
+    into the outbounds it selects.  With no usable route to go on, every live
+    proxy is offered rather than nothing: the caller still has to pick one.
+    """
+    candidates = list_candidates(runtime, routing if isinstance(routing, dict) else {})
+    by_tag = {item["tag"]: item for item in candidates}
+    live = [item["tag"] for item in candidates if item["kind"] == "outbound"]
+    picked: list[str] = []
+
+    def _add(tag: str) -> None:
+        if tag in live and tag not in picked:
+            picked.append(tag)
+
+    for tag in selection:
+        item = by_tag.get(_clean_tag(tag))
+        if item is None:
+            continue
+        if item["kind"] == "outbound":
+            _add(item["tag"])
+            continue
+        # A selector holds prefixes, not finished tags; spell them out into the
+        # proxies they actually match, keeping the order the outbounds have.
+        for prefix in item["selector"]:
+            for node in live:
+                if node.startswith(prefix):
+                    _add(node)
+    return picked or live
+
+
+def _pick_pass_node(
+    requested: Any,
+    stored: Any,
+    runtime: Dict[str, Any],
+    routing: Optional[Dict[str, Any]],
+    selection: list[str],
+) -> str:
+    """Which node carries the record types the built-in DNS cannot answer.
+
+    The choice is remembered rather than recomputed on every write: the first
+    node of a balancer changes whenever the user reorders their own selector,
+    and a fragment that quietly followed along would read back as drift against
+    a config this panel had itself written.
+    """
+    options = _pass_node_options(runtime, routing, selection)
+    wanted = _clean_tag(requested)
+    if wanted:
+        if wanted not in options:
+            raise DnsOverVlessError(
+                f"Узел «{wanted}» не подходит для прочих типов записей: нужен прокси из выбранного маршрута.",
+                code="pass_node_unavailable",
+                details={"options": options},
+            )
+        return wanted
+    kept = _clean_tag(stored)
+    if kept and kept in options:
+        return kept
+    if not options:
+        raise DnsOverVlessError(
+            "Для прочих типов записей нужен хотя бы один прокси-outbound; балансировщик здесь указать нельзя.",
+            code="pass_node_missing",
+        )
+    return options[0]
+
+
 def _upstream_host(value: str) -> str:
     """Host part of an upstream: bare address, or the host inside a URL."""
     text = str(value or "").strip()
@@ -1059,12 +1128,57 @@ def _local_server(resolver: Dict[str, Any], domains: list[str], *, skip_fallback
     }
 
 
+def _dns_listener(upstreams: list[str], pass_node: str = "") -> Dict[str, Any]:
+    """The listener that takes over port 53.
+
+    With the pass-through on, the destination has to be spelled out here.
+    ``nonIPQuery: "skip"`` hands a query on to the address the client aimed at,
+    and a client that asks the router itself aims at a private address, which
+    means nothing on the far side of the tunnel -- those queries would simply
+    hang, which is worse than the empty answer they got before.  Naming the
+    first DNS server of the list makes every client behave the same, whether it
+    asks the router or an address outside.  Without the pass-through the field
+    would change nothing, so it stays out: an installation configured earlier
+    keeps exactly the fragment it already has.
+    """
+    inbound: Dict[str, Any] = {
+        "tag": LISTENER_TAG,
+        "protocol": "dokodemo-door",
+        "port": LISTENER_PORT,
+        "settings": {"network": "tcp,udp"},
+    }
+    if pass_node:
+        chosen = list(upstreams or DEFAULT_UPSTREAMS)[0]
+        inbound["settings"]["address"] = _upstream_host(chosen) or DEFAULT_UPSTREAMS[0]
+        inbound["settings"]["port"] = LISTENER_PORT
+    return inbound
+
+
+def _dns_outbound(pass_node: str = "") -> Dict[str, Any]:
+    """The DNS outbound, optionally letting the other record types through.
+
+    Xray's built-in DNS answers A and AAAA and nothing else: MX, TXT, SRV,
+    HTTPS, NS and SOA come back as ``NOERROR`` with no records, which a client
+    reads as "no such record" and does not retry.  ``nonIPQuery: "skip"`` hands
+    those queries on untouched instead, and ``proxySettings`` decides where
+    they go -- without it they would leave in the clear.  A balancer cannot be
+    named there (Xray looks for an outbound handler and fails to start), so
+    these types ride exactly one node.
+    """
+    outbound: Dict[str, Any] = {"tag": DNS_OUT_TAG, "protocol": "dns"}
+    if pass_node:
+        outbound["settings"] = {"nonIPQuery": "skip"}
+        outbound["proxySettings"] = {"tag": pass_node}
+    return outbound
+
+
 def _managed_fragment(
     upstreams: Optional[list[str]] = None,
     local_resolvers: Optional[list[Dict[str, Any]]] = None,
     local_domains: Optional[list[str]] = None,
     direct_resolvers: Optional[list[Dict[str, Any]]] = None,
     direct_domains: Optional[list[str]] = None,
+    pass_node: str = "",
 ) -> Dict[str, Any]:
     servers: list[Any] = []
     resolvers = list(local_resolvers or [])
@@ -1109,15 +1223,8 @@ def _managed_fragment(
             "disableFallback": public_count < 2 and not needs_fallback,
             "tag": DNS_IN_TAG,
         },
-        "inbounds": [
-            {
-                "tag": LISTENER_TAG,
-                "protocol": "dokodemo-door",
-                "port": LISTENER_PORT,
-                "settings": {"network": "tcp,udp"},
-            }
-        ],
-        "outbounds": [{"tag": DNS_OUT_TAG, "protocol": "dns"}],
+        "inbounds": [_dns_listener(public_upstreams, pass_node)],
+        "outbounds": [_dns_outbound(pass_node)],
     }
 
 
@@ -1349,12 +1456,30 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
                 return zones
         return None
 
+    # Whether the other record types are let through is written in the DNS
+    # outbound itself, so read it back from there rather than from the panel's
+    # own notes: a config the user edited by hand then reads as drift, which is
+    # what it is.  Half of the pair (one key without the other) is not a
+    # fragment this panel would write, so it reads back as no pass-through and
+    # the comparison below reports the difference.
+    declared_pass = ""
+    first_outbound = next(iter((fragment or {}).get("outbounds") or []), None)
+    if isinstance(first_outbound, dict):
+        settings = first_outbound.get("settings")
+        proxy_settings = first_outbound.get("proxySettings")
+        if (
+            isinstance(settings, dict)
+            and settings.get("nonIPQuery") == "skip"
+            and isinstance(proxy_settings, dict)
+        ):
+            declared_pass = _clean_tag(proxy_settings.get("tag"))
     exact_fragment = bool(declared) and fragment == _managed_fragment(
         declared,
         local_declared,
         _zones_of(local_declared),
         direct_declared,
         _zones_of(direct_declared),
+        declared_pass,
     )
     capture_rule_obj = next((item for item in rules if _clean_tag(item.get("ruleTag")) == CAPTURE_RULE_TAG), None)
     balancer_obj = next(
@@ -1908,6 +2033,13 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
         # as a starting list so nobody keeps two copies of it in sync by hand.
         "direct_rule_domains": _domains_routed_direct(runtime, routing),
         "direct_outbound": _direct_outbound_tag(runtime),
+        # The other record types: whether they are let through, on which node,
+        # and which nodes the chosen route could hand them to.
+        "pass_non_ip": bool(state.get("pass_non_ip")),
+        "pass_non_ip_node": _clean_tag(state.get("pass_non_ip_node")),
+        "pass_non_ip_options": _pass_node_options(
+            runtime, routing, _stored_selection(state)
+        ),
         "route_drift": drift,
         "watchdog": state.get("watchdog") if isinstance(state.get("watchdog"), dict) else None,
         # The card explains what guards the feature, so it needs the values that
@@ -1942,6 +2074,8 @@ def apply_action(
     local_domains: Any = None,
     direct_resolver: Any = None,
     direct_domains: Any = None,
+    pass_non_ip: Any = None,
+    pass_non_ip_node: Any = None,
 ) -> Dict[str, Any]:
     normalized = str(action or "").strip().lower()
     if normalized not in {"enable", "disable"}:
@@ -1991,6 +2125,21 @@ def apply_action(
             if direct_domains is not None
             else _direct_domains(stored_state.get("direct_domains"))
         )
+        # An omitted switch keeps what this install already chose.
+        wanted_pass = (
+            bool(pass_non_ip)
+            if pass_non_ip is not None
+            else bool(stored_state.get("pass_non_ip"))
+        )
+        wanted_pass_node = ""
+        if wanted_pass:
+            wanted_pass_node = _pick_pass_node(
+                pass_non_ip_node,
+                stored_state.get("pass_non_ip_node"),
+                runtime,
+                routing,
+                normalize_target_request(target_tag) or _stored_selection(stored_state),
+            )
         # Half a setting resolves nothing: without domains the resolvers are
         # never consulted, without resolvers the domains have nowhere to go.
         if bool(wanted_direct) != bool(wanted_direct_domains):
@@ -2047,6 +2196,7 @@ def apply_action(
                     wanted_local_domains,
                     wanted_direct,
                     wanted_direct_domains,
+                    wanted_pass_node,
                 )
                 if _managed_config_complete(presence) and current_fragment == expected_fragment:
                     # Idempotent recovery path: configuration is already
@@ -2177,6 +2327,8 @@ def apply_action(
                         "local_domains": wanted_local_domains if wanted_local else None,
                         "direct_resolvers": [_resolver_label(item) for item in wanted_direct],
                         "direct_domains": wanted_direct_domains if wanted_direct else None,
+                        "pass_non_ip": wanted_pass,
+                        "pass_non_ip_node": wanted_pass_node,
                         "target": ({k: v for k, v in target.items() if k != "managed_balancer"} if target else previous_state.get("target")),
                         "last_transaction": snapshot_dir,
                     },
