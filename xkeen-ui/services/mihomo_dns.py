@@ -242,6 +242,120 @@ def _yaml_single_quote(value: str) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
+def _top_level_scalar(text: str, key: str) -> str:
+    """Read a simple top-level scalar without parsing/rewriting the YAML."""
+
+    match = re.search(rf"(?im)^{re.escape(key)}[ \t]*:[ \t]*([^#\r\n]+)", str(text or ""))
+    return _strip_yaml_scalar(match.group(1)) if match else ""
+
+
+def _section_scalar(section: Optional[tuple[int, int, str]], key: str) -> str:
+    """Read a nested scalar from a top-level mapping section."""
+
+    if not section:
+        return ""
+    body = section[2]
+    match = re.search(rf"^[ \t]+{re.escape(key)}[ \t]*:[ \t]*([^#\r\n]+)", body, re.MULTILINE)
+    if match:
+        return _strip_yaml_scalar(match.group(1))
+    # Also accept the compact form: ``geox-url: { geosite: ... }``.
+    first_line = body.splitlines()[0] if body else ""
+    compact = re.search(rf"[{{,][ \t]*{re.escape(key)}[ \t]*:[ \t]*([^,}}#\r\n]+)", first_line)
+    return _strip_yaml_scalar(compact.group(1)) if compact else ""
+
+
+def _yaml_bool(value: str) -> Optional[bool]:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"true", "yes", "on", "1"}:
+        return True
+    if normalized in {"false", "no", "off", "0"}:
+        return False
+    return None
+
+
+def _geodata_runtime_config(config_text: str) -> dict[str, Any]:
+    """Describe GeoSite availability without assuming a DAT is installed.
+
+    Mihomo supports two different kinds of private-domain sources:
+
+    * a ``rule-providers`` entry (usually ``geosite-private``) with
+      ``behavior: domain``/``classical``; and
+    * a GeoSite DAT selected through ``geodata-mode`` + ``geox-url.geosite``,
+      referenced from Fake-IP filters as ``geosite:private``.
+
+    These are deliberately kept separate.  An ``ipcidr`` provider such as
+    ``private@ip`` is useful for routing but cannot filter DNS names.
+    """
+
+    mode_raw = _top_level_scalar(config_text, "geodata-mode")
+    mode = _yaml_bool(mode_raw)
+    geosite_url = _section_scalar(_top_level_section(config_text, "geox-url"), "geosite")
+    private_provider = next(
+        (name for name in _domain_rule_provider_names(config_text) if "private" in name.lower()),
+        "",
+    )
+    # An explicit false always wins.  If geodata-mode is omitted, a geosite
+    # source is still useful in Mihomo's normal geodata loader; the preflight
+    # remains the final authority for the concrete binary/version.
+    # ``geodata-mode: true`` by itself does not tell us whether a usable
+    # geosite.dat exists in Mihomo's working directory.  Treat an explicit
+    # geox-url as the only positively configured source; otherwise keep the
+    # UI warning actionable instead of claiming that ``geosite:private`` is
+    # available when the file may be missing.
+    geodata_enabled = mode is not False and bool(geosite_url)
+    geosite_configured = bool(geosite_url)
+    if private_provider:
+        private_filter = f"rule-set:{private_provider}"
+        private_source = "rule-provider"
+    elif geodata_enabled:
+        private_filter = "geosite:private"
+        private_source = "geodata"
+    else:
+        private_filter = ""
+        private_source = ""
+
+    if private_provider:
+        notice = (
+            f"Найден доменный rule-provider «{private_provider}». Для Fake-IP можно "
+            f"использовать фильтр {private_filter}; provider с behavior: ipcidr для этого не подходит."
+        )
+    elif geodata_enabled:
+        source = geosite_url
+        notice = (
+            f"GeoSite настроен ({source}). Для Fake-IP можно использовать geosite:private, "
+            "если выбранная база содержит тег private; это не проверяется до запуска Mihomo."
+        )
+    elif mode is True and not geosite_url:
+        notice = (
+            "geodata-mode включён, но источник GeoSite не указан. "
+            "Добавьте geox-url.geosite, например URL V2Fly из подсказки ниже, "
+            "и перезапустите Mihomo."
+        )
+    elif geosite_configured and mode is False:
+        notice = (
+            "В config.yaml указана GeoSite-база, но geodata-mode отключён. "
+            "Включите geodata-mode: true или используйте доменный rule-provider."
+        )
+    else:
+        notice = (
+            "GeoSite или доменный provider private не настроен — фильтр geosite:private "
+            "работать не будет. Для V2Fly добавьте в config.yaml geodata-mode: true и "
+            "geox-url.geosite: https://github.com/v2fly/domain-list-community/releases/latest/download/dlc.dat."
+        )
+
+    return {
+        "mode": mode,
+        "enabled": geodata_enabled,
+        "geosite_url": geosite_url or None,
+        "geosite_configured": geosite_configured,
+        "private_provider": private_provider or None,
+        "private_filter": private_filter or None,
+        "private_source": private_source or None,
+        "private_available": bool(private_filter),
+        "notice": notice,
+    }
+
+
 def _domain_rule_provider_names(config_text: str) -> list[str]:
     """Return configured domain/classical rule-provider names.
 
@@ -277,13 +391,12 @@ def _domain_rule_provider_names(config_text: str) -> list[str]:
 
 
 def _fake_ip_default_filters(config_text: str = "") -> list[str]:
-    """Build safe defaults without assuming a GeoSite database/tag exists."""
+    """Build safe defaults, adding private-domain source only when available."""
 
     filters = list(DEFAULT_FAKE_IP_FILTERS)
-    providers = _domain_rule_provider_names(config_text)
-    private = next((name for name in providers if "private" in name.lower()), "")
-    if private:
-        filters.append(f"rule-set:{private}")
+    geodata = _geodata_runtime_config(config_text)
+    if geodata["private_filter"]:
+        filters.append(str(geodata["private_filter"]))
     return filters
 
 
@@ -695,6 +808,7 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
     has_begin = MANAGED_BEGIN in text
     has_end = MANAGED_END in text
     dns_runtime = _dns_runtime_config(text)
+    geodata = _geodata_runtime_config(text)
     has_dns = bool(dns_runtime["present"])
     managed = bool(has_begin and has_end and has_dns)
     applied_hash = str(state.get("applied_sha256") or "")
@@ -762,6 +876,7 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         "mode": mode if mode in DNS_MODES else "redir-host",
         "fake_ip": state.get("fake_ip") if isinstance(state.get("fake_ip"), dict) else None,
         "fake_ip_available": _fake_ip_route_available(text),
+        "geodata": geodata,
         "blockers": blockers,
         # The port-53 guard is shared with DNS-over-VLESS, so this window says
         # the same things about it that the Xray one does.

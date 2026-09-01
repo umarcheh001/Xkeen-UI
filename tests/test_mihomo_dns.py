@@ -62,6 +62,45 @@ def test_proxy_group_selection_uses_first_real_group_as_fallback():
     assert "#Мой маршрут&name-cert-verify=dns.google" in content
 
 
+def test_geodata_status_warns_when_private_source_is_missing():
+    result = dns._geodata_runtime_config(BASE)
+
+    assert result["private_available"] is False
+    assert "geosite:private" in result["notice"]
+    assert "v2fly/domain-list-community" in result["notice"]
+
+
+def test_geodata_status_detects_domain_private_provider():
+    source = BASE + """
+rule-providers:
+  geosite-private:
+    type: http
+    behavior: domain
+    format: mrs
+    url: https://example.invalid/private.mrs
+"""
+
+    result = dns._geodata_runtime_config(source)
+
+    assert result["private_provider"] == "geosite-private"
+    assert result["private_filter"] == "rule-set:geosite-private"
+    assert result["private_available"] is True
+
+
+def test_geodata_status_detects_v2fly_geox_url():
+    source = BASE + """
+geodata-mode: true
+geox-url:
+  geosite: https://github.com/v2fly/domain-list-community/releases/latest/download/dlc.dat
+"""
+
+    result = dns._geodata_runtime_config(source)
+
+    assert result["enabled"] is True
+    assert result["geosite_url"].endswith("/dlc.dat")
+    assert result["private_filter"] == "geosite:private"
+
+
 def _status_ready(tmp_path: Path, monkeypatch):
     config = tmp_path / "config.yaml"
     config.write_text(BASE, encoding="utf-8")

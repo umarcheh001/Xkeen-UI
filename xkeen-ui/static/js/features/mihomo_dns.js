@@ -20,6 +20,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     mode: 'mihomo-dns-mode',
     modeHint: 'mihomo-dns-mode-hint',
     fakeOptions: 'mihomo-dns-fake-options',
+    geodataHint: 'mihomo-dns-geodata-hint',
     fakeRange: 'mihomo-dns-fake-range',
     fakeFilterMode: 'mihomo-dns-fake-filter-mode',
     fakeFilters: 'mihomo-dns-fake-filters',
@@ -100,6 +101,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     const fakeOptions = $(IDS.fakeOptions);
     const modeHint = $(IDS.modeHint);
     const proxyGroup = $(IDS.proxyGroup);
+    const geodata = data?.geodata || null;
     if (list) list.textContent = '';
 
     const enabled = !!data?.enabled;
@@ -121,6 +123,12 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     if (modeHint) modeHint.textContent = (mode?.value || data?.mode) === 'fake-ip'
       ? `Расширенный режим: виртуальные IP. ${data?.fake_ip_available === false ? 'TUN/TProxy-маршрут не обнаружен.' : 'Прозрачный TUN/TProxy-маршрут обнаружен.'}`
       : 'Совместимо с TProxy и большинством устройств LAN.';
+    const geodataHint = $(IDS.geodataHint);
+    if (geodataHint) {
+      geodataHint.textContent = geodata?.notice || 'Проверяем наличие GeoSite private…';
+      geodataHint.classList.toggle('is-warning', geodata?.private_available === false);
+      geodataHint.classList.toggle('is-ok', geodata?.private_available === true);
+    }
     if (mode) mode.disabled = enabled || canDisable || altered;
     if (proxyGroup) proxyGroup.disabled = enabled || canDisable || altered;
     const state = enabled ? 'enabled' : ((canDisable || canRecover || blocked || altered || released) ? 'blocked' : 'ready');
@@ -165,6 +173,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       addDetail(`Keenetic DNS override: ${data.dns_override === true ? 'включён' : (data.dns_override === false ? 'выключен' : 'не определён')}`, data.dns_override == null ? 'warn' : 'ok');
       const guard = guardNotice(data, enabled);
       addDetail(guard.text, guard.kind);
+      if (geodata?.notice) addDetail(`GeoSite: ${geodata.notice}`, geodata.private_available ? 'ok' : 'warn');
       (data.blockers || []).forEach((message) => addDetail(message, 'warn'));
     }
 
