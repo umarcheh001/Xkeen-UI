@@ -3539,6 +3539,7 @@ def _write_jsonc_sidecar_if_changed(
     header: str,
     snapshot: SnapshotCallback | None = None,
     preserve_existing_comments: bool = False,
+    drop_header: str = "",
 ) -> bool:
     ensure_xray_jsonc_dir()
     jsonc = jsonc_path_for(main_path)
@@ -3557,8 +3558,14 @@ def _write_jsonc_sidecar_if_changed(
                 comment_source = ""
         if preserve_existing_comments and comment_source:
             old_obj = _load_jsonc_text(comment_source)
+            # What gets written and what counts as ours are not the same thing.
+            # A caller switching its feature off writes no header any more, but
+            # the header it wrote earlier still has to be dropped -- otherwise it
+            # survives as an ordinary user comment and outlives the feature.
             comments = _collect_jsonc_comments_by_semantic_key(
-                comment_source, old_obj if old_obj is not None else obj, header=header
+                comment_source,
+                old_obj if old_obj is not None else obj,
+                header=header or drop_header,
             )
             text = _render_jsonc_with_comments(obj, comments, header=header)
         else:

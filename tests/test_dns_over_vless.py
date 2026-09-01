@@ -150,7 +150,7 @@ def test_apply_rolls_back_files_and_router_setting_after_probe_failure(tmp_path:
     monkeypatch.setattr(dns, "_wait_for_xray", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(dns, "_dns_probe", lambda *_args, **_kwargs: {"ok": False, "error": "timeout"})
-    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj: _write(Path(path), obj))
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj, **_kwargs: _write(Path(path), obj))
 
     def set_override(enabled: bool) -> None:
         calls.append(enabled)
@@ -194,7 +194,7 @@ def test_disable_restores_firmware_dns_only_after_xray_restart(tmp_path: Path, m
     monkeypatch.setattr(dns, "_wait_for_xray", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(dns, "_wait_for_port_53", lambda **kwargs: calls.append(("port", kwargs["should_be_free"])) or True)
     monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: calls.append(("override", enabled)))
-    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj: _write(Path(path), obj))
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj, **_kwargs: _write(Path(path), obj))
 
     result = dns.apply_action(
         "disable",
@@ -479,7 +479,7 @@ def test_choice_saved_in_state_is_reused_when_request_omits_it(tmp_path: Path, m
     monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
     monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
     monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
-    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj: _write(Path(path), obj))
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj, **_kwargs: _write(Path(path), obj))
 
     result = dns.apply_action(
         "enable",
@@ -742,7 +742,7 @@ def test_combined_choice_is_saved_and_reused(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
     monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
     monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
-    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj: _write(Path(path), obj))
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj, **_kwargs: _write(Path(path), obj))
 
     result = dns.apply_action(
         "enable",
@@ -969,7 +969,7 @@ def test_enable_stores_dns_settings_and_status_reports_them(tmp_path: Path, monk
     monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
     monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
     monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
-    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj: _write(Path(path), obj))
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj, **_kwargs: _write(Path(path), obj))
 
     dns.apply_action(
         "enable",
@@ -1019,7 +1019,7 @@ def test_custom_zones_reach_the_fragment(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
     monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
     monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
-    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj: _write(Path(path), obj))
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj, **_kwargs: _write(Path(path), obj))
 
     dns.apply_action(
         "enable",
@@ -1166,7 +1166,7 @@ def test_bypass_group_survives_read_back_without_looking_tampered(tmp_path: Path
     monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
     monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
     monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
-    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj: _write(Path(path), obj))
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj, **_kwargs: _write(Path(path), obj))
 
     dns.apply_action(
         "enable",
@@ -1237,7 +1237,7 @@ def test_emergency_release_drops_the_bypass_rules_too(tmp_path: Path, monkeypatc
             ["geosite:category-ru"],
         ),
     )
-    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj: _write(Path(path), obj))
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj, **_kwargs: _write(Path(path), obj))
     monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
 
     released = dns._emergency_release(
@@ -1648,3 +1648,92 @@ def test_the_pass_through_listener_reads_back_without_drift(tmp_path: Path, monk
     )
 
     assert result["presence"]["fragment"] is True
+
+
+def test_the_service_line_goes_on_with_the_feature_and_comes_off_with_it(
+    tmp_path: Path, monkeypatch
+):
+    from services import xray_subscriptions as subs
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(path) + "c")
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+
+    _configs, routing_path, _state = _scenario_config(tmp_path)
+    sidecar = Path(str(routing_path) + "c")
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+
+    dns._write_routing_preserving_comments(str(routing_path), routing)
+    assert sidecar.read_text(encoding="utf-8").count(dns.MANAGED_JSONC_HEADER) == 1
+
+    sidecar.write_text(
+        sidecar.read_text(encoding="utf-8").replace("{", "// правило для дома" + chr(10) + "{", 1),
+        encoding="utf-8",
+    )
+    # Switching the feature off must take the line with it: left behind, the file
+    # goes on claiming something that is no longer true.
+    dns._write_routing_preserving_comments(str(routing_path), routing, managed=False)
+
+    text = sidecar.read_text(encoding="utf-8")
+    assert dns.MANAGED_JSONC_HEADER not in text
+    # The user's own comment is not ours to remove.
+    assert "// правило для дома" in text
+
+
+def test_disable_writes_the_routing_without_the_service_line(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _base_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    target = dns._select_target(dns._collect_runtime(str(configs), routing), "proxy")
+    _write(configs / dns.MANAGED_FRAGMENT, dns._managed_fragment())
+    _write(routing_path, dns._build_enabled_routing(routing, target))
+    _write(state / dns.STATE_FILENAME, {"enabled": True, "original_dns_override": False})
+
+    seen: list[bool] = []
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda **_k: True)
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(
+        dns,
+        "_write_routing_preserving_comments",
+        lambda path, obj, managed=True: seen.append(managed) or _write(Path(path), obj),
+    )
+
+    dns.apply_action(
+        "disable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+    )
+
+    assert seen == [False]
+
+
+def test_the_guard_release_also_writes_without_the_service_line(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _base_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    target = dns._select_target(dns._collect_runtime(str(configs), routing), "proxy")
+    _write(configs / dns.MANAGED_FRAGMENT, dns._managed_fragment())
+    _write(routing_path, dns._build_enabled_routing(routing, target))
+    _write(state / dns.STATE_FILENAME, {"enabled": True, "original_dns_override": False})
+
+    seen: list[bool] = []
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(
+        dns,
+        "_write_routing_preserving_comments",
+        lambda path, obj, managed=True: seen.append(managed) or _write(Path(path), obj),
+    )
+
+    dns._emergency_release(
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        reason="тест",
+    )
+
+    # The guard letting go is a switch-off like any other.
+    assert seen == [False]

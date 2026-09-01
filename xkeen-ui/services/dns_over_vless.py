@@ -39,6 +39,9 @@ from utils.jsonc import strip_json_comments_text
 
 
 MANAGED_FRAGMENT = "02_dns_over_vless.json"
+# Written above the routing while the feature is on, and taken back off it
+# when the feature is switched off.
+MANAGED_JSONC_HEADER = "// DNS-over-VLESS managed by XKeen UI"
 STATE_FILENAME = "dns_over_vless.json"
 LISTENER_TAG = "xk-dns-listener"
 DNS_IN_TAG = "dns-in"
@@ -1737,7 +1740,17 @@ def _stage_and_test(configs_dir: str, replacements: Dict[str, Optional[Dict[str,
         raise DnsOverVlessError("Не удалось проверить подготовленную конфигурацию Xray.", code="xray_preflight_failed", details=str(exc)) from exc
 
 
-def _write_routing_preserving_comments(path: str, obj: Dict[str, Any]) -> None:
+def _write_routing_preserving_comments(
+    path: str, obj: Dict[str, Any], *, managed: bool = True
+) -> None:
+    """Write routing, keeping the user's own JSONC comments attached to rules.
+
+    ``managed`` says whether this write leaves the feature switched on.  On the
+    way out the header must not be written again -- it used to be, and the line
+    then stayed in the file as if the user had put it there, outliving the
+    feature it described.  It is still named as ours so the old one is dropped
+    rather than kept as somebody's comment.
+    """
     # Reuse the same semantic JSONC comment preservation path as subscription
     # routing sync. This keeps user comments attached to their rules.
     from services.xray_subscriptions import _write_jsonc_sidecar_if_changed
@@ -1745,7 +1758,8 @@ def _write_routing_preserving_comments(path: str, obj: Dict[str, Any]) -> None:
     _write_jsonc_sidecar_if_changed(
         path,
         obj,
-        header="// DNS-over-VLESS managed by XKeen UI",
+        header=MANAGED_JSONC_HEADER if managed else "",
+        drop_header=MANAGED_JSONC_HEADER,
         preserve_existing_comments=True,
     )
     _atomic_write_json(path, obj)
@@ -1891,7 +1905,9 @@ def _emergency_release(
     managed_path = os.path.join(configs_dir, MANAGED_FRAGMENT)
 
     try:
-        _write_routing_preserving_comments(routing_file, _build_disabled_routing(routing))
+        _write_routing_preserving_comments(
+            routing_file, _build_disabled_routing(routing), managed=False
+        )
         steps.append("routing_cleared")
     except Exception as exc:  # noqa: BLE001
         steps.append(f"routing_failed:{exc}")
@@ -2287,7 +2303,7 @@ def apply_action(
                     os.remove(managed_path)
                 except FileNotFoundError:
                     pass
-                _write_routing_preserving_comments(routing_file, next_routing)
+                _write_routing_preserving_comments(routing_file, next_routing, managed=False)
 
             restarted = bool(restart_xkeen(source="dns-over-vless"))
             if not restarted or not _wait_for_xray():
