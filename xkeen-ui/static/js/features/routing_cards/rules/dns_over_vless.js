@@ -338,7 +338,6 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     routePool = pool;
     renderPicker(picker, pool, wanted, multi);
     renderPickerTools(pool, wanted, multi);
-    renderDnsFields(data);
     chosenTargets = wanted;
     renderFallback(multi ? null : pool.find((item) => item.tag === wanted[0]), multi, wanted);
   }
@@ -762,6 +761,11 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     }
 
     renderRoute(data);
+    // Не внутри renderRoute: тот выходит раньше, когда выбор маршрута скрыт,
+    // а скрыт он ровно при включённой функции — и тогда окно переставало
+    // перечитывать с сервера и отмеченные устройства, и все прочие поля,
+    // показывая вместо них то, что осталось в DOM.
+    renderDnsFields(data);
 
     if (apply) {
       // With nothing ticked there is no route to build: block the action and let
@@ -812,10 +816,17 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     targetsTouched = false;
     routePool = [];
     routeVisible = false;
-    [DOM.upstreams, DOM.local, DOM.zones].forEach((id) => {
+    // Все поля, а не три: тронутый один раз переключатель иначе навсегда
+    // переставал обновляться с сервера, даже после переоткрытия окна.
+    [
+      DOM.upstreams, DOM.local, DOM.zones, DOM.direct, DOM.directZones,
+      DOM.remote, DOM.pass, DOM.passNode, DOM.capture, DOM.multi,
+    ].forEach((id) => {
       const field = $(id);
       if (field) delete field.dataset.touched;
     });
+    capturedMacs = [];
+    lastClients = null;
     const text = $(DOM.status);
     const badge = $(DOM.badge);
     const apply = $(DOM.apply);
@@ -969,6 +980,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         ? `DNS-over-VLESS включён${result.probe && result.probe.latency_ms != null ? ` · DNS ${result.probe.latency_ms} мс` : ''}`
         : 'DNS-over-VLESS отключён, исходная настройка восстановлена.');
       await refresh();
+      // Строки списка сложились до применения: теперь у устройств другой
+      // вердикт, и показывать прежний — значит показывать неправду.
+      loadClients();
       try { document.dispatchEvent(new CustomEvent('xkeen-routing-fragment-saved', { detail: { reason: 'dns-over-vless' } })); } catch (e) {}
     } catch (error) {
       const data = error && error.data ? error.data : null;

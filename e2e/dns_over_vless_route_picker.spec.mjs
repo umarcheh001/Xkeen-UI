@@ -494,3 +494,33 @@ test('a remembered choice comes back ticked', async ({ page }) => {
   const phone = page.locator('#routing-dns-over-vless-clients-list li', { hasText: 'Телефон' });
   await expect(phone.locator('.routing-dns-over-vless-clients-pick')).not.toBeChecked();
 });
+
+
+test('with the feature on, the window still shows what the router holds', async ({ page }) => {
+  await routeClients(page, {
+    ...CLIENTS,
+    clients: CLIENTS.clients.map((item) =>
+      item.mac === 'aa:bb:cc:dd:ee:02'
+        ? { ...item, captured: true, verdict: 'reaches', reason: 'DNS заведён в туннель правилом панели' }
+        : item),
+  });
+  // Включённая функция прячет выбор маршрута — и раньше вместе с ним
+  // переставали заполняться все остальные поля окна.
+  await openDialog(page, {
+    ...STATUS,
+    enabled: true,
+    can_enable: false,
+    can_disable: true,
+    upstreams: ['127.0.0.53'],
+    upstreams_remote: true,
+    capture_clients: true,
+    capture_macs: ['aa:bb:cc:dd:ee:02'],
+  });
+
+  await expect(page.locator('#routing-dns-over-vless-capture')).toBeChecked();
+  await expect(page.locator('#routing-dns-over-vless-remote')).toBeChecked();
+  await expect(page.locator('#routing-dns-over-vless-upstreams')).toHaveValue('127.0.0.53');
+
+  const phone = page.locator('#routing-dns-over-vless-clients-list li', { hasText: 'Телефон' });
+  await expect(phone.locator('.routing-dns-over-vless-clients-pick')).toBeChecked();
+});
