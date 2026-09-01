@@ -54,6 +54,9 @@ PROXY_RULE_TAG = "xk_dns_over_vless_proxy"
 CAPTURE_RULE_TAG = "xk_dns_over_vless_capture"
 BALANCER_TAG = "xk-dns-over-vless"
 DEFAULT_UPSTREAMS = ["8.8.8.8"]
+# The stub resolver systemd ships with: on a Debian or Ubuntu VPS it is
+# already listening, which makes it the address to suggest first.
+DEFAULT_REMOTE_UPSTREAM = "127.0.0.53"
 LOCAL_RULE_TAG = "xk_dns_over_vless_local"
 # Domains the user already routes past the tunnel: their names are resolved by
 # a resolver of the user's choosing, not through VLESS, so the address they get
@@ -865,55 +868,108 @@ def _pick_pass_node(
     return options[0]
 
 
-def _upstream_host(value: str) -> str:
-    """Host part of an upstream: bare address, or the host inside a URL."""
+def _split_upstream(value: str) -> tuple[str, int]:
+    """Address and port of an upstream; port is 0 when it is not spelled out.
+
+    An IPv6 literal is full of colons, so a port only counts when it is either
+    bracketed (``[::1]:5353``) or the single colon of an IPv4 address.
+    """
     text = str(value or "").strip()
     for scheme in UPSTREAM_SCHEMES:
         if text.lower().startswith(scheme):
-            rest = text[len(scheme):]
-            rest = rest.split("/", 1)[0]
+            # Inside a URL the port belongs to the scheme's own transport; the
+            # panel keeps such upstreams as written and does not take it apart.
+            rest = text[len(scheme):].split("/", 1)[0]
             if rest.startswith("["):
-                return rest[1:].split("]", 1)[0]
-            # Strip a port, but never mistake an IPv6 literal's colons for one.
+                return rest[1:].split("]", 1)[0], 0
             if rest.count(":") == 1:
                 rest = rest.split(":", 1)[0]
-            return rest
-    return text
+            return rest, 0
+    if text.startswith("["):
+        host, _, tail = text[1:].partition("]")
+        port = tail[1:] if tail.startswith(":") else ""
+        return host, int(port) if port.isdigit() else 0
+    if text.count(":") == 1:
+        host, _, port = text.partition(":")
+        return host, int(port) if port.isdigit() else 0
+    return text, 0
 
 
-def _upstream_problem(value: str) -> str:
+def _upstream_host(value: str) -> str:
+    """Host part of an upstream: bare address, or the host inside a URL."""
+    return _split_upstream(value)[0]
+
+
+def _upstream_port(value: str) -> int:
+    """Port an upstream names, or 0 when it uses the default one."""
+    return _split_upstream(value)[1]
+
+
+def _upstream_text(item: Any) -> str:
+    """A server entry as the user writes it, whatever form it has in the file."""
+    if isinstance(item, dict):
+        port = item.get("port")
+        address = str(item.get("address") or "")
+        return f"{address}:{int(port)}" if port and int(port) != LISTENER_PORT else address
+    return str(item or "")
+
+
+def _upstream_problem(value: str, allow_remote: bool = False) -> str:
     """Reason this upstream is unusable, or an empty string when it is fine.
 
-    Only literal addresses are accepted.  A hostname would itself need to be
-    resolved before the resolver works, and a private or loopback address
-    would send the query back into this very listener -- a DNS loop, or a
-    query leaking to the local network instead of the tunnel.
+    Only literal addresses are accepted: a hostname would itself need to be
+    resolved before the resolver works.
+
+    A loopback or private address is refused by default, because the address
+    people type there by mistake is their own home resolver -- which belongs in
+    the local-resolvers field instead.  ``allow_remote`` is the user saying
+    they meant the other end: every server in this list is asked *through* the
+    tunnel, so ``127.0.0.53`` is the exit node's own resolver, not ours.
     """
     text = str(value or "").strip()
     if not text:
         return "пустой адрес"
     if len(text) > 200:
         return "слишком длинный адрес"
-    host = _upstream_host(text)
+    host, port = _split_upstream(text)
     if not host:
         return f"«{text}»: не удалось разобрать адрес"
+    if ":" in text and not text.lower().startswith(UPSTREAM_SCHEMES) and not text.startswith("["):
+        # One colon and no digits after it is a typo, not an IPv6 literal.
+        if text.count(":") == 1 and not port:
+            return f"«{text}»: после двоеточия нужен номер порта"
+    if port and not (1 <= port <= 65535):
+        return f"«{text}»: недопустимый порт"
     try:
         parsed = ipaddress.ip_address(host)
     except ValueError:
         return f"«{text}»: нужен IP-адрес, имя хоста пришлось бы резолвить до запуска DNS"
-    if parsed.is_loopback:
-        return f"«{text}»: адрес петли — запрос вернулся бы в этот же слушатель"
-    if parsed.is_private or parsed.is_link_local:
-        return f"«{text}»: локальный адрес — запрос ушёл бы мимо туннеля"
-    if parsed.is_multicast or parsed.is_unspecified or parsed.is_reserved:
+    if parsed.is_loopback and not allow_remote:
+        return (
+            f"«{text}»: адрес петли. Если это резолвер на выходном узле, "
+            "отметьте «DNS-сервер на стороне выходного узла»"
+        )
+    if (parsed.is_private or parsed.is_link_local) and not allow_remote:
+        return (
+            f"«{text}»: локальный адрес. Домашний резолвер укажите в поле "
+            "локальных DNS; резолвер на выходном узле — отметьте галочкой"
+        )
+    # ``::1`` counts as reserved as well as loopback; the loopback answer
+    # above is the one that fits it, so it must not be condemned here.
+    if parsed.is_multicast or parsed.is_unspecified or (parsed.is_reserved and not parsed.is_loopback):
         return f"«{text}»: адрес нельзя использовать как DNS-сервер"
     return ""
 
 
 def normalize_upstreams(value: Any) -> list[str]:
-    """Accept a list or a comma/space separated string, keeping order."""
+    """Accept a list or a comma/space separated string, keeping order.
+
+    A list read back from a fragment may hold server objects rather than
+    strings -- that is how a port is written -- so those are folded back into
+    the text form the user typed.
+    """
     if isinstance(value, (list, tuple, set)):
-        parts = [str(item) for item in value]
+        parts = [_upstream_text(item) for item in value]
     else:
         parts = re.split(r"[,;\s]+", str(value or ""))
     result: list[str] = []
@@ -924,7 +980,7 @@ def normalize_upstreams(value: Any) -> list[str]:
     return result
 
 
-def validate_upstreams(value: Any) -> list[str]:
+def validate_upstreams(value: Any, allow_remote: bool = False) -> list[str]:
     """Normalize and check upstreams, falling back to the default when empty."""
     upstreams = normalize_upstreams(value)
     if not upstreams:
@@ -934,7 +990,11 @@ def validate_upstreams(value: Any) -> list[str]:
             f"Слишком много DNS-серверов: не больше {MAX_UPSTREAMS}.",
             code="upstreams_invalid",
         )
-    problems = [problem for problem in (_upstream_problem(item) for item in upstreams) if problem]
+    problems = [
+        problem
+        for problem in (_upstream_problem(item, allow_remote) for item in upstreams)
+        if problem
+    ]
     if problems:
         raise DnsOverVlessError(
             "Проверьте список DNS-серверов: " + "; ".join(problems) + ".",
@@ -944,13 +1004,19 @@ def validate_upstreams(value: Any) -> list[str]:
     return upstreams
 
 
-def _safe_upstreams(value: Any) -> Optional[list[str]]:
-    """Same check without raising: ``None`` when the list is not usable."""
+def _safe_upstreams(value: Any, allow_remote: bool = True) -> Optional[list[str]]:
+    """Same check without raising: ``None`` when the list is not usable.
+
+    Reading is permissive on purpose.  This is used to read back what is
+    already written -- in the fragment or in this install's own notes -- and
+    that was checked when it was written; refusing it now would report a
+    config the panel wrote itself as edited by somebody else.
+    """
     try:
         upstreams = normalize_upstreams(value)
         if not upstreams or len(upstreams) > MAX_UPSTREAMS:
             return None
-        if any(_upstream_problem(item) for item in upstreams):
+        if any(_upstream_problem(item, allow_remote) for item in upstreams):
             return None
         return upstreams
     except Exception:
@@ -1137,9 +1203,10 @@ def _dns_listener() -> Dict[str, Any]:
     Nothing is rewritten here.  The pass-through does need the destination
     replaced -- a client that asks the router itself aims at a private address,
     which means nothing on the far side of the tunnel -- but doing it in the
-    listener would move the destination *port* along with the address, and the
-    capture rule below matches by port.  The DNS outbound rewrites the
-    destination itself, after routing, where nothing can collide with it.
+    listener would move the destination *port* too, and the capture rule below
+    matches by port.  A resolver on 443 or 853 would then drag every connection
+    to that port into the DNS outbound.  The DNS outbound rewrites the
+    destination itself, after routing, where no such collision is possible.
     """
     return {
         "tag": LISTENER_TAG,
@@ -1162,14 +1229,16 @@ def _dns_outbound(pass_node: str = "", upstreams: Optional[list[str]] = None) ->
     """
     outbound: Dict[str, Any] = {"tag": DNS_OUT_TAG, "protocol": "dns"}
     if pass_node:
+        settings: Dict[str, Any] = {"nonIPQuery": "skip"}
         # Where a skipped query goes: the address the client aimed at is
         # useless once it leaves the tunnel, so the first DNS server of the
-        # list takes its place.  Without the pass-through the field would
-        # change nothing, so it stays out: an installation configured earlier
-        # keeps exactly the fragment it already has.
+        # list takes its place, port included.
         chosen = list(upstreams or DEFAULT_UPSTREAMS)[0]
-        address = _upstream_host(chosen) or DEFAULT_UPSTREAMS[0]
-        outbound["settings"] = {"nonIPQuery": "skip", "address": address}
+        host, port = _split_upstream(chosen)
+        settings["address"] = host or DEFAULT_UPSTREAMS[0]
+        if port and port != LISTENER_PORT:
+            settings["port"] = port
+        outbound["settings"] = settings
         outbound["proxySettings"] = {"tag": pass_node}
     return outbound
 
@@ -1207,7 +1276,17 @@ def _managed_fragment(
     for resolver in bypass:
         if bypass_zones:
             servers.append(_local_server(resolver, bypass_zones, skip_fallback=False))
-    servers.extend(public_upstreams)
+    # A server without a port stays a plain string, exactly as it has always
+    # been written: an installation configured earlier must keep byte-identical
+    # config.  A port can only be said in the object form.
+    for item in public_upstreams:
+        host, port = _split_upstream(item)
+        if port and port != LISTENER_PORT:
+            servers.append({"address": host, "port": port})
+        else:
+            # A spelled-out ``:53`` is the default said out loud; dropping it
+            # keeps one written form per server, so the read-back matches.
+            servers.append(host if port else item)
     public_count = len(public_upstreams)
     needs_fallback = bool(resolvers and delegated_zones) or bool(bypass and bypass_zones)
     return {
@@ -1304,6 +1383,23 @@ def _direct_rule(
     return _bypass_rule(resolvers, direct_tag, DIRECT_RULE_TAG)
 
 
+def _capture_rule() -> Dict[str, Any]:
+    """The rule that hands the intercepted queries to the built-in DNS.
+
+    It catches port 53 wherever it is aimed, which is what pulls in the devices
+    carrying a hard-wired public resolver of their own.  Nothing else may be
+    added to that port list: every connection to the added port would be
+    swallowed by the DNS outbound along with the queries.
+    """
+    return {
+        "type": "field",
+        "network": "tcp,udp",
+        "port": "53",
+        "outboundTag": DNS_OUT_TAG,
+        "ruleTag": CAPTURE_RULE_TAG,
+    }
+
+
 def _build_enabled_routing(
     routing: Dict[str, Any],
     target: Dict[str, Any],
@@ -1322,13 +1418,7 @@ def _build_enabled_routing(
         "ruleTag": PROXY_RULE_TAG,
     }
     proxy_rule["balancerTag" if target["kind"] == "balancer" else "outboundTag"] = target["tag"]
-    capture_rule = {
-        "type": "field",
-        "network": "tcp,udp",
-        "port": "53",
-        "outboundTag": DNS_OUT_TAG,
-        "ruleTag": CAPTURE_RULE_TAG,
-    }
+    capture_rule = _capture_rule()
     # The bypass rules must be matched before the proxy rule, otherwise the
     # query for a home name would already be on its way through the tunnel.
     ordered = [item for item in (local_rule, direct_rule) if item]
@@ -1422,8 +1512,21 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
     # public upstreams are plain strings after them.  One resolver may take two
     # entries — strict zones and delegated ones are declared separately — so
     # fold them back by address before rebuilding.
-    local_objs = [item for item in raw_servers if isinstance(item, dict) and item.get("address")]
-    declared = _safe_upstreams([item for item in raw_servers if not isinstance(item, dict)])
+    # Objects in this list mean two different things: a local or bypass
+    # resolver always names the zones it answers for, a public server with a
+    # port names none.  That is the only difference, and it is enough.
+    local_objs = [
+        item
+        for item in raw_servers
+        if isinstance(item, dict) and item.get("address") and item.get("domains")
+    ]
+    declared = _safe_upstreams(
+        [
+            _upstream_text(item)
+            for item in raw_servers
+            if not (isinstance(item, dict) and item.get("domains"))
+        ]
+    )
     declared_resolvers: list[Dict[str, Any]] = []
     declared_zones: Dict[tuple[str, int], list[str]] = {}
     for item in local_objs:
@@ -1529,13 +1632,7 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
     safe_direct_rule = (direct_rule_obj is None) or (
         expected_direct is not None and direct_rule_obj == expected_direct
     )
-    safe_capture_rule = capture_rule_obj == {
-        "type": "field",
-        "network": "tcp,udp",
-        "port": "53",
-        "outboundTag": DNS_OUT_TAG,
-        "ruleTag": CAPTURE_RULE_TAG,
-    }
+    safe_capture_rule = capture_rule_obj == _capture_rule()
     return {
         "fragment": exact_fragment,
         "fragment_owned": os.path.isfile(managed_path),
@@ -2023,6 +2120,9 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
         "candidates": candidates,
         "upstreams": upstreams,
         "default_upstreams": list(DEFAULT_UPSTREAMS),
+        # Whether the DNS servers above live on the far side of the tunnel.
+        "upstreams_remote": bool(state.get("upstreams_remote")),
+        "default_remote_upstream": DEFAULT_REMOTE_UPSTREAM,
         "max_upstreams": MAX_UPSTREAMS,
         "local_resolvers": (
             state.get("local_resolvers") if isinstance(state.get("local_resolvers"), list) else []
@@ -2091,6 +2191,7 @@ def apply_action(
     direct_domains: Any = None,
     pass_non_ip: Any = None,
     pass_non_ip_node: Any = None,
+    upstreams_remote: Any = None,
 ) -> Dict[str, Any]:
     normalized = str(action or "").strip().lower()
     if normalized not in {"enable", "disable"}:
@@ -2115,8 +2216,15 @@ def apply_action(
         managed_path = os.path.join(configs_dir, MANAGED_FRAGMENT)
         stored_state = _load_state(ui_state_dir)
         # An explicit request wins; otherwise keep what this install chose.
+        # An address on the far side of the tunnel is only allowed when the
+        # user says that is what they meant.
+        wanted_remote = (
+            bool(upstreams_remote)
+            if upstreams_remote is not None
+            else bool(stored_state.get("upstreams_remote"))
+        )
         wanted_upstreams = (
-            validate_upstreams(upstreams)
+            validate_upstreams(upstreams, wanted_remote)
             if upstreams is not None
             else (_safe_upstreams(stored_state.get("upstreams")) or list(DEFAULT_UPSTREAMS))
         )
@@ -2342,6 +2450,7 @@ def apply_action(
                         "local_domains": wanted_local_domains if wanted_local else None,
                         "direct_resolvers": [_resolver_label(item) for item in wanted_direct],
                         "direct_domains": wanted_direct_domains if wanted_direct else None,
+                        "upstreams_remote": wanted_remote,
                         "pass_non_ip": wanted_pass,
                         "pass_non_ip_node": wanted_pass_node,
                         "target": ({k: v for k, v in target.items() if k != "managed_balancer"} if target else previous_state.get("target")),

@@ -79,6 +79,8 @@ def register_dns_over_vless_routes(
         direct_domains = payload.get("direct_domains", None)
         # Whether the record types the built-in DNS cannot answer are let
         # through, and which node carries them.
+        # Whether the DNS servers above are resolved at the exit node.
+        upstreams_remote = payload.get("upstreams_remote", None)
         pass_non_ip = payload.get("pass_non_ip", None)
         pass_non_ip_node = payload.get("pass_non_ip_node", None)
         # Both assistants flip the same firmware switch and both want port 53.
@@ -110,6 +112,7 @@ def register_dns_over_vless_routes(
                 local_domains=local_domains,
                 direct_resolver=direct_resolver,
                 direct_domains=direct_domains,
+                upstreams_remote=upstreams_remote,
                 pass_non_ip=pass_non_ip,
                 pass_non_ip_node=pass_non_ip_node,
             )

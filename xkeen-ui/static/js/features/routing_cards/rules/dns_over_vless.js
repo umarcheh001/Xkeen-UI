@@ -33,6 +33,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     multi: 'routing-dns-over-vless-multi',
     multiRow: 'routing-dns-over-vless-multi-row',
     upstreams: 'routing-dns-over-vless-upstreams',
+    remote: 'routing-dns-over-vless-remote',
     local: 'routing-dns-over-vless-local',
     zones: 'routing-dns-over-vless-zones',
     zonesRow: 'routing-dns-over-vless-zones-row',
@@ -87,6 +88,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const local = $(DOM.local);
     const settings = {};
     if (upstreams) settings.upstreams = String(upstreams.value || '').trim();
+    const remote = $(DOM.remote);
+    // Sent with the list itself: the same address is a mistake without it and
+    // a deliberate choice with it.
+    if (remote) settings.upstreams_remote = !!remote.checked;
     // An empty string is meaningful here: it switches the local exception off.
     if (local) settings.local_resolver = String(local.value || '').trim();
     const zones = $(DOM.zones);
@@ -445,6 +450,11 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         directZones.value = ((data && data.direct_domains) || []).join(', ');
       }
       directZones.disabled = busy;
+    }
+    const remote = $(DOM.remote);
+    if (remote) {
+      if (!remote.dataset.touched) remote.checked = !!(data && data.upstreams_remote);
+      remote.disabled = busy;
     }
     const pass = $(DOM.pass);
     const passRow = $(DOM.passRow);
@@ -969,6 +979,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         field.value = offered.join(', ');
         field.dataset.touched = '1';
       });
+    }
+    const remoteBox = $(DOM.remote);
+    if (remoteBox) {
+      remoteBox.addEventListener('change', () => { remoteBox.dataset.touched = '1'; });
     }
     const passBox = $(DOM.pass);
     if (passBox) {

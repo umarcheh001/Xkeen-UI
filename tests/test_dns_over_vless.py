@@ -1489,6 +1489,12 @@ def test_dns_outbound_stays_bare_until_the_other_record_types_are_let_through():
         # router in the clear, so the pass-through always names one.
         "proxySettings": {"tag": "my_proxy_1"},
     }
+    # A server on a port of its own carries that port into the rewrite.
+    assert dns._dns_outbound("my_proxy_1", ["127.0.0.53:5353"])["settings"] == {
+        "nonIPQuery": "skip",
+        "address": "127.0.0.53",
+        "port": 5353,
+    }
 
 
 def test_pass_node_options_spell_out_the_selector_prefixes(tmp_path: Path):
@@ -1574,7 +1580,7 @@ def test_enable_can_let_the_other_record_types_through(tmp_path: Path, monkeypat
         }
     ]
     # The listener stays plain: rewriting there would move the destination port
-    # as well, and the capture rule matches by port.
+    # as well, and the capture rule below matches by port.
     assert fragment["inbounds"][0]["settings"] == {"network": "tcp,udp"}
 
     monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
@@ -1618,8 +1624,7 @@ def test_the_outbound_names_a_destination_only_with_the_pass_through():
     bare = dns._managed_fragment()
     assert "settings" not in bare["outbounds"][0]
     # The listener never rewrites: the destination port would move with it and
-    # the capture rule matches by port -- a resolver on 443 would drag every
-    # connection to that port into the DNS outbound.
+    # the capture rule matches by port.
     assert bare["inbounds"][0]["settings"] == {"network": "tcp,udp"}
     # The destination follows the DNS servers the user chose, not a constant.
     named = dns._managed_fragment(["1.1.1.1", "9.9.9.9"], pass_node="my_proxy_1")
@@ -1737,3 +1742,229 @@ def test_the_guard_release_also_writes_without_the_service_line(tmp_path: Path, 
 
     # The guard letting go is a switch-off like any other.
     assert seen == [False]
+
+
+def test_an_exit_node_resolver_is_refused_until_it_is_declared_as_one():
+    # The address people type here by mistake is their own home resolver, and
+    # that belongs in the local-resolvers field instead.
+    for address in ("127.0.0.53", "192.168.1.53"):
+        try:
+            dns.validate_upstreams([address])
+            raise AssertionError(f"expected {address!r} to be refused")
+        except dns.DnsOverVlessError as exc:
+            assert exc.code == "upstreams_invalid"
+        # Declared as living on the far side of the tunnel, the same address is
+        # exactly what the user meant.
+        assert dns.validate_upstreams([address], True) == [address]
+
+
+def test_reading_back_an_exit_node_resolver_is_not_drift(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    target = dns._select_target(dns._collect_runtime(str(configs), routing), "balancer_main")
+    _write(routing_path, dns._build_enabled_routing(routing, target))
+    _write(configs / dns.MANAGED_FRAGMENT, dns._managed_fragment([dns.DEFAULT_REMOTE_UPSTREAM]))
+    _write(
+        state / dns.STATE_FILENAME,
+        {"enabled": True, "upstreams": [dns.DEFAULT_REMOTE_UPSTREAM], "upstreams_remote": True},
+    )
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    # The panel wrote this address itself; refusing to read it back would
+    # report its own config as edited by somebody else.
+    assert result["presence"]["fragment"] is True
+    assert result["upstreams"] == [dns.DEFAULT_REMOTE_UPSTREAM]
+    assert result["upstreams_remote"] is True
+
+
+def test_enable_keeps_the_exit_node_resolver_and_aims_the_pass_through_at_it(
+    tmp_path: Path, monkeypatch
+):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj, **_k: _write(Path(path), obj))
+
+    dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+        upstreams=["127.0.0.53"],
+        upstreams_remote=True,
+        pass_non_ip=True,
+    )
+
+    fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+    assert fragment["dns"]["servers"] == ["127.0.0.53"]
+    # The skipped record types follow the same resolver rather than a public one.
+    assert fragment["outbounds"][0]["settings"]["address"] == "127.0.0.53"
+
+
+def test_the_switch_alone_does_not_smuggle_a_home_resolver_in(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+
+    try:
+        dns.apply_action(
+            "enable",
+            configs_dir=str(configs),
+            routing_file=str(routing_path),
+            ui_state_dir=str(state),
+            restart_xkeen=lambda **_k: True,
+            target_tag="balancer_main",
+            upstreams=["192.168.1.53"],
+            upstreams_remote=False,
+        )
+        raise AssertionError("expected a private address to be refused")
+    except dns.DnsOverVlessError as exc:
+        assert exc.code == "upstreams_invalid"
+
+
+def test_a_dns_server_may_name_its_own_port():
+    # A server on the default port stays a plain string, exactly as it has
+    # always been written: an install configured earlier keeps its config
+    # byte-identical instead of reading back as edited.
+    assert dns._managed_fragment(["8.8.8.8"])["dns"]["servers"] == ["8.8.8.8"]
+    # The default port said out loud is still the default: one written form
+    # per server, so the read-back matches what was written.
+    assert dns._managed_fragment(["8.8.8.8:53"])["dns"]["servers"] == ["8.8.8.8"]
+    # A URL keeps its own transport's port and is not taken apart.
+    assert dns._managed_fragment(["https://1.1.1.1/dns-query"])["dns"]["servers"] == [
+        "https://1.1.1.1/dns-query"
+    ]
+    # A port can only be said in the object form.
+    ported = dns._managed_fragment(["127.0.0.53:5353"], pass_node="my_proxy_1")
+    assert ported["dns"]["servers"] == [{"address": "127.0.0.53", "port": 5353}]
+    # And the pass-through aims at the same place, port included.
+    assert ported["outbounds"][0]["settings"] == {
+        "nonIPQuery": "skip",
+        "address": "127.0.0.53",
+        "port": 5353,
+    }
+
+
+def test_a_port_is_told_apart_from_the_colons_of_an_ipv6_address():
+    assert dns._split_upstream("1.1.1.1") == ("1.1.1.1", 0)
+    assert dns._split_upstream("127.0.0.53:5353") == ("127.0.0.53", 5353)
+    assert dns._split_upstream("[::1]:5353") == ("::1", 5353)
+    # An address full of colons and no brackets names no port.
+    assert dns._split_upstream("2001:4860:4860::8888") == ("2001:4860:4860::8888", 0)
+    assert dns.validate_upstreams(["[::1]:5353"], True) == ["[::1]:5353"]
+
+
+def test_a_colon_without_a_number_after_it_is_reported_as_a_typo():
+    for value, expected in (("1.1.1.1:", "после двоеточия"), ("1.1.1.1:99999", "недопустимый порт")):
+        try:
+            dns.validate_upstreams([value], True)
+            raise AssertionError(f"expected {value!r} to be refused")
+        except dns.DnsOverVlessError as exc:
+            assert exc.code == "upstreams_invalid"
+            assert expected in str(exc)
+
+
+def test_the_capture_rule_never_widens_beyond_port_53(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    target = dns._select_target(dns._collect_runtime(str(configs), routing), "balancer_main")
+
+    def _capture_of(planned):
+        rules = planned["routing"]["rules"]
+        return next(item for item in rules if item.get("ruleTag") == dns.CAPTURE_RULE_TAG)
+
+    # The rule matches by destination port and nothing else, so any port added
+    # to it would drag every connection to that port into the DNS outbound --
+    # a resolver on 443 would take the whole web with it.  The destination is
+    # rewritten in the DNS outbound instead, after routing.
+    assert _capture_of(dns._build_enabled_routing(routing, target))["port"] == "53"
+    fragment = dns._managed_fragment(["127.0.0.53:5353"], pass_node="my_proxy_1")
+    assert fragment["outbounds"][0]["settings"]["port"] == 5353
+    assert _capture_of(dns._build_enabled_routing(routing, target))["port"] == "53"
+
+
+def test_a_dns_server_with_a_port_reads_back_without_drift(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    target = dns._select_target(dns._collect_runtime(str(configs), routing), "balancer_main")
+    fragment = dns._managed_fragment(["127.0.0.53:5353"], pass_node="my_proxy_1")
+    _write(routing_path, dns._build_enabled_routing(routing, target))
+    _write(configs / dns.MANAGED_FRAGMENT, fragment)
+    _write(
+        state / dns.STATE_FILENAME,
+        {
+            "enabled": True,
+            "upstreams": ["127.0.0.53:5353"],
+            "upstreams_remote": True,
+            "pass_non_ip": True,
+        },
+    )
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["presence"]["fragment"] is True
+    assert result["presence"]["capture_rule"] is True
+    assert result["upstreams"] == ["127.0.0.53:5353"]
+
+
+def test_changing_the_port_moves_the_rewrite_with_it(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(
+        dns, "_write_routing_preserving_comments", lambda path, obj, **_k: _write(Path(path), obj)
+    )
+
+    def _enable(upstream):
+        dns.apply_action(
+            "enable",
+            configs_dir=str(configs),
+            routing_file=str(routing_path),
+            ui_state_dir=str(state),
+            restart_xkeen=lambda **_k: True,
+            target_tag="balancer_main",
+            upstreams=[upstream],
+            upstreams_remote=True,
+            pass_non_ip=True,
+        )
+
+    def _settings():
+        fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+        return fragment["outbounds"][0]["settings"]
+
+    _enable("127.0.0.53")
+    assert _settings() == {"nonIPQuery": "skip", "address": "127.0.0.53"}
+
+    # The same route, a new port: the rewrite has to follow, or the skipped
+    # queries would keep going to the port the resolver has left.
+    _enable("127.0.0.53:5353")
+    assert _settings() == {"nonIPQuery": "skip", "address": "127.0.0.53", "port": 5353}
+
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+    assert result["presence"]["fragment"] is True
+    assert result["presence"]["capture_rule"] is True
+    assert result["upstreams"] == ["127.0.0.53:5353"]

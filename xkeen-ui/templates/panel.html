@@ -2595,7 +2595,14 @@
 
             <label for="routing-dns-over-vless-upstreams">DNS-серверы в туннеле</label>
             <input type="text" id="routing-dns-over-vless-upstreams" class="routing-rule-input" placeholder="8.8.8.8, 1.1.1.1" autocomplete="off" spellcheck="false">
-            <p class="modal-hint">Через запятую, только IP-адреса. Второй и следующие используются, когда первый не отвечает.</p>
+            <p class="modal-hint">Через запятую, только IP-адреса. Второй и следующие используются, когда первый не отвечает. Порт указывайте, если резолвер слушает не на 53 — например <code>127.0.0.53:5353</code>.</p>
+
+            <label class="dt-switch routing-dns-over-vless-remote-toggle" title="Адрес разыменовывается на выходном узле, а не в вашей сети.">
+              <input type="checkbox" id="routing-dns-over-vless-remote">
+              <span class="dt-switch-slider" aria-hidden="true"></span>
+              <span class="dt-switch-label">DNS-сервер на стороне выходного узла</span>
+            </label>
+            <p class="modal-hint">Запросы к серверам из списка выше и так идут через туннель, поэтому адрес можно указать такой, какой видит выходной узел, а не вы. Например <code>127.0.0.53</code> — штатный резолвер Ubuntu и Debian: тогда имена разрешает сам VPS, наружу не выходит ни одного открытого запроса, а адреса сайтов приходят ровно те, что видны из точки выхода. Так же указывается AdGuard Home, поднятый на VPS. Без этой отметки панель отвергает адреса петли и домашних сетей — их обычно вписывают по ошибке вместо поля локальных DNS. Проверьте, что на VPS ничего не блокирует обращения к приватным адресам: правило вида <code>geoip:private → block</code> оставит DNS без ответа.</p>
 
             <label for="routing-dns-over-vless-local">Локальные DNS для домашних имён</label>
             <input type="text" id="routing-dns-over-vless-local" class="routing-rule-input" placeholder="не используется" autocomplete="off" spellcheck="false">
