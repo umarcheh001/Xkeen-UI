@@ -900,32 +900,28 @@ def test_local_resolver_takes_the_home_zones_out_of_the_tunnel(tmp_path: Path):
     resolvers = dns._parse_local_resolvers("192.168.1.1:5353")
 
     fragment = dns._managed_fragment(["1.1.1.1"], resolvers)
-    strict, delegated = fragment["dns"]["servers"][0], fragment["dns"]["servers"][1]
+    home = fragment["dns"]["servers"][0]
 
-    assert strict["address"] == "192.168.1.1"
-    assert strict["port"] == 5353
-    assert "domain:lan" in strict["domains"]
+    assert home["address"] == "192.168.1.1"
+    assert home["port"] == 5353
+    assert "domain:lan" in home["domains"]
     # Reverse lookups for private ranges must not reach a public resolver...
-    assert "domain:10.in-addr.arpa" in strict["domains"]
-    assert "domain:168.192.in-addr.arpa" in strict["domains"]
+    assert "domain:10.in-addr.arpa" in home["domains"]
+    assert "domain:168.192.in-addr.arpa" in home["domains"]
     # ...but a blanket in-addr.arpa would also grab PTR for public addresses.
-    assert "domain:in-addr.arpa" not in strict["domains"]
-    # None of these exists on the public internet, so a silent resolver is the
-    # end of the story: retrying abroad would only hand over the LAN names.
-    assert strict["skipFallback"] is True
-
-    # The router's own zones are real delegated domains, listed only because the
-    # box resolves them for itself.  They ride the same resolver, but a silent
-    # one must not leave the local web interface or the DDNS name unresolvable.
-    assert delegated["address"] == "192.168.1.1"
-    assert delegated["port"] == 5353
-    assert "domain:keenetic.net" in delegated["domains"]
-    assert "domain:netcraze.net" in delegated["domains"]
-    assert "domain:lan" not in delegated["domains"]
-    assert delegated["skipFallback"] is False
+    assert "domain:in-addr.arpa" not in home["domains"]
+    # The router's own zones ride the same server: they are listed because the
+    # box resolves them for itself.
+    assert "domain:keenetic.net" in home["domains"]
+    assert "domain:netcraze.net" in home["domains"]
+    # And this resolver answers its own zones only.  ``skipFallback: false``
+    # would let Xray use it for every other name too -- it sits ahead of the
+    # public upstreams and answers direct, so it would win every query and
+    # quietly take the whole of DNS out of the tunnel.
+    assert home["skipFallback"] is True
 
     # A public upstream still follows for everything else.
-    assert fragment["dns"]["servers"][2] == "1.1.1.1"
+    assert fragment["dns"]["servers"][1] == "1.1.1.1"
 
     rule = dns._local_rule(resolvers, dns._direct_outbound_tag(runtime))
     assert rule["outboundTag"] == "direct"
@@ -983,9 +979,9 @@ def test_enable_stores_dns_settings_and_status_reports_them(tmp_path: Path, monk
     )
 
     fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+    # One server for the resolver, then the public upstreams.
     assert fragment["dns"]["servers"][0]["address"] == "192.168.1.1"
-    assert fragment["dns"]["servers"][1]["address"] == "192.168.1.1"
-    assert fragment["dns"]["servers"][2:] == ["1.1.1.1", "9.9.9.9"]
+    assert fragment["dns"]["servers"][1:] == ["1.1.1.1", "9.9.9.9"]
 
     monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
     result = dns.get_status(
@@ -1033,12 +1029,15 @@ def test_custom_zones_reach_the_fragment(tmp_path: Path, monkeypatch):
     )
 
     fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
-    # ``lan`` is nowhere on the public internet; ``office.internal`` is a name
-    # the user added, so it is treated as delegated and may fall back.
-    assert fragment["dns"]["servers"][0]["domains"] == ["domain:lan"]
+    # Both zones ride one server, and it answers nothing else.
+    assert fragment["dns"]["servers"][0]["domains"] == [
+        "domain:lan",
+        "domain:office.internal",
+    ]
     assert fragment["dns"]["servers"][0]["skipFallback"] is True
-    assert fragment["dns"]["servers"][1]["domains"] == ["domain:office.internal"]
-    assert fragment["dns"]["servers"][1]["skipFallback"] is False
+    # ``office.internal`` is a name the user added, so it is a real delegated
+    # domain: a silent resolver must not be the end of the story for it.
+    assert fragment["dns"]["disableFallback"] is False
 
     monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
     result = dns.get_status(
@@ -1104,9 +1103,12 @@ def test_direct_domains_are_resolved_past_the_tunnel(tmp_path: Path):
     assert servers[0]["address"] == "192.168.1.1"
     assert [item["address"] for item in servers[1:3]] == ["77.88.8.8", "77.88.8.1"]
     assert all(item["domains"] == ["geosite:category-ru"] for item in servers[1:3])
-    # A silent resolver must not leave the name unresolved: the query falls
-    # through to the public upstream instead.
-    assert all(item["skipFallback"] is False for item in servers[1:3])
+    # These resolvers answer their own list and nothing else.  Written with
+    # ``skipFallback: false`` they would also answer every other name, and
+    # being direct they beat the tunnelled upstream every time -- measured on
+    # a router, a domain outside the list came back from them.  What lets a
+    # silent one fall through is the global flag below.
+    assert all(item["skipFallback"] is True for item in servers[1:3])
     assert servers[3:] == ["8.8.8.8"]
     assert fragment["dns"]["disableFallback"] is False
 
@@ -1284,21 +1286,16 @@ def test_several_network_segments_each_get_their_own_resolver(tmp_path: Path):
     fragment = dns._managed_fragment(["1.1.1.1"], resolvers)
     servers = fragment["dns"]["servers"]
 
-    strict_zones, delegated_zones = dns._split_local_zones(dns.DEFAULT_LOCAL_DOMAINS)
-
-    # Every segment is asked about the strict zones first, in the order given...
+    # Every segment gets one server, in the order given, each answering the
+    # whole zone list and nothing else.
     assert [item["address"] for item in servers[:3]] == ["192.168.1.1", "192.168.2.1", "10.8.0.1"]
     assert [item["port"] for item in servers[:3]] == [53, 5353, 53]
-    assert all(item["domains"] == strict_zones for item in servers[:3])
+    assert all(item["domains"] == dns.DEFAULT_LOCAL_DOMAINS for item in servers[:3])
     assert all(item["skipFallback"] is True for item in servers[:3])
-    # ...then about the delegated ones, and only after every segment stayed
-    # silent does the query reach the public upstream.
-    assert [item["address"] for item in servers[3:6]] == ["192.168.1.1", "192.168.2.1", "10.8.0.1"]
-    assert all(item["domains"] == delegated_zones for item in servers[3:6])
-    assert all(item["skipFallback"] is False for item in servers[3:6])
-    assert servers[6:] == ["1.1.1.1"]
-    # The global flag would otherwise cancel that last hop: one upstream, but a
-    # delegated zone still needs somewhere to go.
+    assert servers[3:] == ["1.1.1.1"]
+    # The default list carries the vendor zones, which are real delegated
+    # domains: after every segment stays silent the query still has to reach
+    # the public upstream, and only the global flag can let it.
     assert fragment["dns"]["disableFallback"] is False
 
     rule = dns._local_rule(resolvers, dns._direct_outbound_tag(runtime))
@@ -1968,3 +1965,34 @@ def test_changing_the_port_moves_the_rewrite_with_it(tmp_path: Path, monkeypatch
     assert result["presence"]["fragment"] is True
     assert result["presence"]["capture_rule"] is True
     assert result["upstreams"] == ["127.0.0.53:5353"]
+
+
+def test_no_resolver_with_a_domain_list_may_answer_anything_else():
+    """The leak this pins was found on a live router.
+
+    ``skipFallback`` reads backwards: ``false`` does not mean "let the query
+    fall through when I stay silent", it means "Xray may also use me for names
+    I do not match".  Such a server sits ahead of the public upstreams and
+    answers direct, so it wins every query -- ``whoami.akamai.net``, a domain
+    on nobody's list, came back from the bypass resolver's upstream, and every
+    DNS leak test showed it instead of the tunnel.
+    """
+    local = dns._parse_local_resolvers("192.168.1.1")
+    bypass = dns._parse_direct_resolvers("77.88.8.8, 77.88.8.1")
+    fragment = dns._managed_fragment(
+        ["8.8.8.8"],
+        local,
+        ["domain:lan", "domain:office.internal"],
+        bypass,
+        ["geosite:category-ru"],
+    )
+    scoped = [item for item in fragment["dns"]["servers"] if isinstance(item, dict)]
+
+    assert scoped, "the fragment must still carry the resolvers themselves"
+    assert all(item["skipFallback"] is True for item in scoped)
+    # The public upstream has no domain list, so it stays the one server that
+    # answers everything else -- and it is the only way out of the tunnel.
+    assert fragment["dns"]["servers"][-1] == "8.8.8.8"
+    # A silent resolver still has somewhere to fall through to; that is the
+    # global flag, not the per-server one.
+    assert fragment["dns"]["disableFallback"] is False

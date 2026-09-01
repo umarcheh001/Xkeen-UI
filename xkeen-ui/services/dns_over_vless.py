@@ -1183,18 +1183,38 @@ def _local_domains(value: Any) -> list[str]:
 
 
 def _split_local_zones(zones: list[str]) -> tuple[list[str], list[str]]:
-    """Zones that must stay home, and zones a public resolver may answer."""
+    """Zones that must stay home, and zones a public resolver may answer.
+
+    Only the global fallback is decided by this split now: the zones ride one
+    server per resolver, and which of them may be retried elsewhere is not
+    something Xray can be told per zone.
+    """
     strict = [zone for zone in zones if zone in STRICT_LOCAL_ZONES]
     delegated = [zone for zone in zones if zone not in STRICT_LOCAL_ZONES]
     return strict, delegated
 
 
-def _local_server(resolver: Dict[str, Any], domains: list[str], *, skip_fallback: bool) -> Dict[str, Any]:
+def _local_server(resolver: Dict[str, Any], domains: list[str]) -> Dict[str, Any]:
+    """A resolver that answers its own zones and nothing else.
+
+    ``skipFallback`` reads backwards: ``false`` does not mean "let the query
+    fall through when I stay silent", it means "Xray may also use me for names
+    I do not match".  A resolver like that sits ahead of the public upstreams
+    and answers direct, so it wins every query -- and the whole of DNS quietly
+    stops going through the tunnel.  Measured on a router: with ``false`` a
+    domain outside the list came back from the local resolver's upstream, with
+    ``true`` it did not.
+
+    What keeps a silent resolver from killing its own zones is the global
+    ``disableFallback``, not this flag: with the fallback on, a zone whose
+    resolver does not answer still reaches a public upstream.  That was
+    measured too, against a resolver address that answers nothing.
+    """
     return {
         "address": resolver["address"],
         "port": int(resolver.get("port") or 53),
         "domains": domains,
-        "skipFallback": skip_fallback,
+        "skipFallback": True,
     }
 
 
@@ -1256,19 +1276,12 @@ def _managed_fragment(
     resolvers = list(local_resolvers or [])
     zones = list(local_domains or DEFAULT_LOCAL_DOMAINS)
     public_upstreams = list(upstreams or DEFAULT_UPSTREAMS)
-    strict_zones, delegated_zones = _split_local_zones(zones)
-    # Listed before the public upstreams so local zones are matched first.
-    # skipFallback keeps a missing home name from being retried abroad; with
-    # several segments Xray still tries the next local server.
+    _strict_zones, delegated_zones = _split_local_zones(zones)
+    # Listed before the public upstreams so the named zones are matched first;
+    # with several segments Xray still tries the next local server.
     for resolver in resolvers:
-        if strict_zones:
-            servers.append(_local_server(resolver, strict_zones, skip_fallback=True))
-    # Delegated zones (vendor domains, anything the user added) are real public
-    # names: if every local resolver stays silent, the query has to reach a
-    # public upstream instead of failing.
-    for resolver in resolvers:
-        if delegated_zones:
-            servers.append(_local_server(resolver, delegated_zones, skip_fallback=False))
+        if zones:
+            servers.append(_local_server(resolver, zones))
     # Domains routed past the tunnel: asked of the resolvers the user picked,
     # in order, and a miss still reaches a public upstream through VLESS rather
     # than leaving the name unresolved.
@@ -1276,7 +1289,7 @@ def _managed_fragment(
     bypass_zones = list(direct_domains or [])
     for resolver in bypass:
         if bypass_zones:
-            servers.append(_local_server(resolver, bypass_zones, skip_fallback=False))
+            servers.append(_local_server(resolver, bypass_zones))
     # A server without a port stays a plain string, exactly as it has always
     # been written: an installation configured earlier must keep byte-identical
     # config.  A port can only be said in the object form.
@@ -1289,6 +1302,10 @@ def _managed_fragment(
             # keeps one written form per server, so the read-back matches.
             servers.append(host if port else item)
     public_count = len(public_upstreams)
+    # Every resolver above answers only its own zones, so a silent one can only
+    # fall through by the global flag.  Zones that exist nowhere on the public
+    # internet are the exception: retrying them abroad returns NXDOMAIN anyway
+    # and hands over the names of the machines at home.
     needs_fallback = bool(resolvers and delegated_zones) or bool(bypass and bypass_zones)
     return {
         "dns": {
