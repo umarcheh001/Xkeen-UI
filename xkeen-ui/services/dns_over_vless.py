@@ -1131,33 +1131,25 @@ def _local_server(resolver: Dict[str, Any], domains: list[str], *, skip_fallback
     }
 
 
-def _dns_listener(upstreams: list[str], pass_node: str = "") -> Dict[str, Any]:
+def _dns_listener() -> Dict[str, Any]:
     """The listener that takes over port 53.
 
-    With the pass-through on, the destination has to be spelled out here.
-    ``nonIPQuery: "skip"`` hands a query on to the address the client aimed at,
-    and a client that asks the router itself aims at a private address, which
-    means nothing on the far side of the tunnel -- those queries would simply
-    hang, which is worse than the empty answer they got before.  Naming the
-    first DNS server of the list makes every client behave the same, whether it
-    asks the router or an address outside.  Without the pass-through the field
-    would change nothing, so it stays out: an installation configured earlier
-    keeps exactly the fragment it already has.
+    Nothing is rewritten here.  The pass-through does need the destination
+    replaced -- a client that asks the router itself aims at a private address,
+    which means nothing on the far side of the tunnel -- but doing it in the
+    listener would move the destination *port* along with the address, and the
+    capture rule below matches by port.  The DNS outbound rewrites the
+    destination itself, after routing, where nothing can collide with it.
     """
-    inbound: Dict[str, Any] = {
+    return {
         "tag": LISTENER_TAG,
         "protocol": "dokodemo-door",
         "port": LISTENER_PORT,
         "settings": {"network": "tcp,udp"},
     }
-    if pass_node:
-        chosen = list(upstreams or DEFAULT_UPSTREAMS)[0]
-        inbound["settings"]["address"] = _upstream_host(chosen) or DEFAULT_UPSTREAMS[0]
-        inbound["settings"]["port"] = LISTENER_PORT
-    return inbound
 
 
-def _dns_outbound(pass_node: str = "") -> Dict[str, Any]:
+def _dns_outbound(pass_node: str = "", upstreams: Optional[list[str]] = None) -> Dict[str, Any]:
     """The DNS outbound, optionally letting the other record types through.
 
     Xray's built-in DNS answers A and AAAA and nothing else: MX, TXT, SRV,
@@ -1170,7 +1162,14 @@ def _dns_outbound(pass_node: str = "") -> Dict[str, Any]:
     """
     outbound: Dict[str, Any] = {"tag": DNS_OUT_TAG, "protocol": "dns"}
     if pass_node:
-        outbound["settings"] = {"nonIPQuery": "skip"}
+        # Where a skipped query goes: the address the client aimed at is
+        # useless once it leaves the tunnel, so the first DNS server of the
+        # list takes its place.  Without the pass-through the field would
+        # change nothing, so it stays out: an installation configured earlier
+        # keeps exactly the fragment it already has.
+        chosen = list(upstreams or DEFAULT_UPSTREAMS)[0]
+        address = _upstream_host(chosen) or DEFAULT_UPSTREAMS[0]
+        outbound["settings"] = {"nonIPQuery": "skip", "address": address}
         outbound["proxySettings"] = {"tag": pass_node}
     return outbound
 
@@ -1226,8 +1225,8 @@ def _managed_fragment(
             "disableFallback": public_count < 2 and not needs_fallback,
             "tag": DNS_IN_TAG,
         },
-        "inbounds": [_dns_listener(public_upstreams, pass_node)],
-        "outbounds": [_dns_outbound(pass_node)],
+        "inbounds": [_dns_listener()],
+        "outbounds": [_dns_outbound(pass_node, public_upstreams)],
     }
 
 

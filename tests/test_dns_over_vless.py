@@ -1480,7 +1480,11 @@ def test_dns_outbound_stays_bare_until_the_other_record_types_are_let_through():
     assert dns._dns_outbound("my_proxy_1") == {
         "tag": dns.DNS_OUT_TAG,
         "protocol": "dns",
-        "settings": {"nonIPQuery": "skip"},
+        # The skipped queries are handed on to the destination of the
+        # connection, and a client asking the router itself aims at a private
+        # address that means nothing on the other side of the tunnel: the
+        # outbound replaces it with the first DNS server of the list.
+        "settings": {"nonIPQuery": "skip", "address": "8.8.8.8"},
         # Without a route of their own the skipped queries would leave the
         # router in the clear, so the pass-through always names one.
         "proxySettings": {"tag": "my_proxy_1"},
@@ -1565,18 +1569,13 @@ def test_enable_can_let_the_other_record_types_through(tmp_path: Path, monkeypat
         {
             "tag": dns.DNS_OUT_TAG,
             "protocol": "dns",
-            "settings": {"nonIPQuery": "skip"},
+            "settings": {"nonIPQuery": "skip", "address": "8.8.8.8"},
             "proxySettings": {"tag": "my_proxy_2"},
         }
     ]
-    # The skipped queries are handed on to the address the client aimed at, so
-    # the listener has to name one: a client asking the router itself aims at a
-    # private address that means nothing on the other side of the tunnel.
-    assert fragment["inbounds"][0]["settings"] == {
-        "network": "tcp,udp",
-        "address": "8.8.8.8",
-        "port": 53,
-    }
+    # The listener stays plain: rewriting there would move the destination port
+    # as well, and the capture rule matches by port.
+    assert fragment["inbounds"][0]["settings"] == {"network": "tcp,udp"}
 
     monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
     result = dns.get_status(
@@ -1613,21 +1612,22 @@ def test_a_half_written_pass_through_reads_back_as_drift(tmp_path: Path, monkeyp
     assert result["presence"]["fragment"] is False
 
 
-def test_the_listener_names_a_destination_only_with_the_pass_through():
+def test_the_outbound_names_a_destination_only_with_the_pass_through():
     # An installation that never turned the pass-through on keeps exactly the
     # fragment it already has, so its config must not read back as edited.
     bare = dns._managed_fragment()
+    assert "settings" not in bare["outbounds"][0]
+    # The listener never rewrites: the destination port would move with it and
+    # the capture rule matches by port -- a resolver on 443 would drag every
+    # connection to that port into the DNS outbound.
     assert bare["inbounds"][0]["settings"] == {"network": "tcp,udp"}
     # The destination follows the DNS servers the user chose, not a constant.
     named = dns._managed_fragment(["1.1.1.1", "9.9.9.9"], pass_node="my_proxy_1")
-    assert named["inbounds"][0]["settings"] == {
-        "network": "tcp,udp",
-        "address": "1.1.1.1",
-        "port": 53,
-    }
+    assert named["outbounds"][0]["settings"] == {"nonIPQuery": "skip", "address": "1.1.1.1"}
+    assert named["inbounds"][0]["settings"] == {"network": "tcp,udp"}
     # A server written as a URL still yields a plain address to aim at.
     via_url = dns._managed_fragment(["https://1.1.1.1/dns-query"], pass_node="my_proxy_1")
-    assert via_url["inbounds"][0]["settings"]["address"] == "1.1.1.1"
+    assert via_url["outbounds"][0]["settings"]["address"] == "1.1.1.1"
 
 
 def test_the_pass_through_listener_reads_back_without_drift(tmp_path: Path, monkeypatch):
