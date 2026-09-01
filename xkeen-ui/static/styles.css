@@ -19478,6 +19478,9 @@ html[data-theme="light"] .routing-dns-over-vless-route-fallback[data-state="drop
 .routing-dns-over-vless-clients-pick:disabled { cursor: not-allowed; }
 .routing-dns-over-vless-capture-toggle { margin-top: 4px; }
 .routing-dns-over-vless-capture-cost { border-left: 3px solid #f59e0b; padding-left: 10px; }
+.routing-dns-over-vless-reset { margin-right: auto; background: none; border: 0; padding: 6px 2px; color: var(--modal-muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font: inherit; }
+.routing-dns-over-vless-reset:hover:not(:disabled) { color: var(--text, inherit); }
+.routing-dns-over-vless-reset:disabled { opacity: 0.5; cursor: not-allowed; }
 .routing-dns-over-vless-warning { margin: 0; }
 .routing-dns-over-vless-links { margin: 0; color: var(--modal-muted); }
 .routing-dns-over-vless-links a { color: #7dd3fc; }

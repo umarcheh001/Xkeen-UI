@@ -49,6 +49,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     clientsSummary: 'routing-dns-over-vless-clients-summary',
     clientsList: 'routing-dns-over-vless-clients-list',
     capture: 'routing-dns-over-vless-capture',
+    reset: 'routing-dns-over-vless-reset',
   };
 
   let status = null;
@@ -780,6 +781,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       apply.classList.toggle('btn-danger', enabled || canDisable);
       apply.classList.toggle('btn-primary', !enabled && !canDisable);
     }
+    const resetButton = $(DOM.reset);
+    if (resetButton) resetButton.disabled = busy;
   }
 
   function renderError(error) {
@@ -796,6 +799,42 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       apply.disabled = true;
       apply.textContent = 'Недоступно';
     }
+  }
+
+  // Настройки теперь переживают выключение функции, поэтому нужен способ
+  // начать с чистого листа. Роутер при этом не трогаем: поля окна применятся
+  // только при включении, как и любые другие правки в нём.
+  function resetFields() {
+    const data = status || {};
+    const values = [
+      [DOM.upstreams, ((data.default_upstreams) || []).join(', ')],
+      [DOM.local, ''],
+      [DOM.zones, ''],
+      [DOM.direct, ''],
+      [DOM.directZones, ''],
+    ];
+    values.forEach(([id, value]) => {
+      const field = $(id);
+      if (!field) return;
+      field.value = value;
+      field.dataset.touched = '1';
+    });
+    [DOM.remote, DOM.pass, DOM.capture, DOM.multi].forEach((id) => {
+      const box = $(id);
+      if (!box) return;
+      box.checked = false;
+      box.dataset.touched = '1';
+    });
+    const node = $(DOM.passNode);
+    if (node) delete node.dataset.touched;
+    capturedMacs = [];
+    // Маршрут тоже возвращается к тому, что панель предложила бы сама.
+    chosenTargets = [];
+    targetsTouched = false;
+    multiTouched = false;
+    render(status || {});
+    if (lastClients) renderClients(lastClients);
+    toast('Настройки окна сброшены. Чтобы применить их, включите функцию.');
   }
 
   async function refresh() {
@@ -1006,6 +1045,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     });
     const applyButton = $(DOM.apply);
     if (applyButton) applyButton.addEventListener('click', (event) => { event.preventDefault(); apply(); });
+    const resetButton = $(DOM.reset);
+    if (resetButton) {
+      resetButton.addEventListener('click', (event) => { event.preventDefault(); if (!busy) resetFields(); });
+    }
     const picker = $(DOM.target);
     if (picker) {
       picker.addEventListener('click', (event) => {

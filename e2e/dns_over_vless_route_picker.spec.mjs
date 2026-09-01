@@ -28,6 +28,7 @@ const STATUS = {
   dns_override: false,
   blockers: [],
   upstreams: ['8.8.8.8'],
+  default_upstreams: ['8.8.8.8'],
   local_resolvers: [],
   local_domains: [],
   default_local_domains: ['domain:lan'],
@@ -523,4 +524,45 @@ test('with the feature on, the window still shows what the router holds', async 
 
   const phone = page.locator('#routing-dns-over-vless-clients-list li', { hasText: 'Телефон' });
   await expect(phone.locator('.routing-dns-over-vless-clients-pick')).toBeChecked();
+});
+
+
+test('the reset button clears the window without touching the router', async ({ page }) => {
+  await routeClients(page, CLIENTS);
+  const status = {
+    ...STATUS,
+    upstreams: ['127.0.0.53'],
+    upstreams_remote: true,
+    capture_clients: true,
+    capture_macs: ['aa:bb:cc:dd:ee:02'],
+  };
+  await openDialog(page, status);
+
+  let posted = 0;
+  await page.route('**/api/routing/dns-over-vless', async (route) => {
+    if (route.request().method() === 'POST') posted += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(status),
+    });
+  });
+
+  const upstreams = page.locator('#routing-dns-over-vless-upstreams');
+  const remote = page.locator('#routing-dns-over-vless-remote');
+  await expect(upstreams).toHaveValue('127.0.0.53');
+  await expect(remote).toBeChecked();
+  const phone = page.locator('#routing-dns-over-vless-clients-list li', { hasText: 'Телефон' });
+  await expect(phone.locator('.routing-dns-over-vless-clients-pick')).toBeChecked();
+
+  await page.locator('#routing-dns-over-vless-reset').click();
+
+  // Настройки теперь переживают выключение функции, поэтому нужен способ
+  // начать с чистого листа.
+  await expect(upstreams).toHaveValue('8.8.8.8');
+  await expect(remote).not.toBeChecked();
+  await expect(page.locator('#routing-dns-over-vless-capture')).not.toBeChecked();
+  await expect(phone.locator('.routing-dns-over-vless-clients-pick')).not.toBeChecked();
+  // Роутер при этом не трогаем: сброс — это только поля окна.
+  expect(posted).toBe(0);
 });

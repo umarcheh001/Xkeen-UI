@@ -1996,3 +1996,62 @@ def test_no_resolver_with_a_domain_list_may_answer_anything_else():
     # A silent resolver still has somewhere to fall through to; that is the
     # global flag, not the per-server one.
     assert fragment["dns"]["disableFallback"] is False
+
+
+def test_turning_the_feature_off_keeps_what_it_was_set_to(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(
+        dns, "_write_routing_preserving_comments", lambda path, obj, **_k: _write(Path(path), obj)
+    )
+
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+        upstreams=["9.9.9.9"],
+        local_resolver="192.168.1.1",
+        capture_clients=True,
+        capture_macs=["10:f6:0a:a5:e7:9a"],
+    )
+
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    dns.apply_action(
+        "disable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+    )
+
+    saved = json.loads((state / dns.STATE_FILENAME).read_text(encoding="utf-8"))
+    # Off means off -- and the guard reads exactly this flag.
+    assert saved["enabled"] is False
+    # ...but the next enable should offer what was set up, not a blank window.
+    assert saved["upstreams"] == ["9.9.9.9"]
+    assert saved["local_resolvers"] == ["192.168.1.1:53"]
+    assert saved["capture_clients"] is True
+    assert saved["capture_macs"] == ["10:f6:0a:a5:e7:9a"]
+    assert saved["target"]["tag"]
+
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    # Nothing of it is applied: the config is gone and the card says so.
+    assert result["enabled"] is False
+    assert result["can_disable"] is False
+    assert result["capture_rule_state"] is None
+    # The window still shows the remembered draft.
+    assert result["upstreams"] == ["9.9.9.9"]
+    assert result["capture_macs"] == ["10:f6:0a:a5:e7:9a"]

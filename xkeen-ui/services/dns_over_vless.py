@@ -2568,10 +2568,26 @@ def apply_action(
                     },
                 )
             else:
-                try:
-                    os.remove(state_path)
-                except FileNotFoundError:
-                    pass
+                # Turning the feature off is not the same as forgetting how it
+                # was set up.  Nothing here is applied while it is off -- there
+                # is no fragment, no routing rules and no firewall chain -- but
+                # the next enable then offers the same servers, zones, devices
+                # and route instead of a blank window, which is what the card
+                # already promises about the route.
+                kept = {
+                    key: value
+                    for key, value in previous_state.items()
+                    if key not in {"enabled_at", "original_dns_override", "watchdog"}
+                }
+                kept.update(
+                    {
+                        "version": 1,
+                        "enabled": False,
+                        "disabled_at": int(time.time()),
+                        "last_transaction": snapshot_dir,
+                    }
+                )
+                _save_state(ui_state_dir, kept)
 
             return {
                 "ok": True,
