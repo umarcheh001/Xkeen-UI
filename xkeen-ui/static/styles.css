@@ -19467,7 +19467,11 @@ html[data-theme="light"] .routing-dns-over-vless-route-fallback[data-state="drop
 .routing-dns-over-vless-clients-legend span::before { content: ""; width: 10px; height: 3px; border-radius: 2px; background: #94a3b8; }
 .routing-dns-over-vless-clients-legend span[data-verdict="reaches"]::before { background: #34d399; }
 .routing-dns-over-vless-clients-legend span[data-verdict="intercepted"]::before { background: #60a5fa; }
-.routing-dns-over-vless-clients-addr { color: var(--modal-muted); font-variant-numeric: tabular-nums; }
+.routing-dns-over-vless-clients-legend span[data-verdict="offline"] { opacity: 0.65; }
+.routing-dns-over-vless-clients-legend span[data-verdict="offline"]::before { background: transparent; }
+.routing-dns-over-vless-clients-list li[data-offline="1"] { opacity: 0.65; }
+.routing-dns-over-vless-clients-offline { font-style: normal; font-size: 11px; line-height: 1.6; padding: 0 6px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.45); }
+.routing-dns-over-vless-clients-addr { display: inline-flex; align-items: center; gap: 8px; color: var(--modal-muted); font-variant-numeric: tabular-nums; }
 .routing-dns-over-vless-clients-why { grid-column: 1 / -1; color: var(--modal-muted); }
 .routing-dns-over-vless-warning { margin: 0; }
 .routing-dns-over-vless-links { margin: 0; color: var(--modal-muted); }

@@ -838,14 +838,30 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       title.textContent = item.title || item.mac || '—';
       const where = document.createElement('span');
       where.className = 'routing-dns-over-vless-clients-addr';
-      where.textContent = item.ip || item.mac || '';
+      // Устройство, которое давно не появлялось, теряет аренду адреса, и
+      // прошивка отдаёт его как 0.0.0.0 — такой адрес сюда не доходит, и
+      // остаётся MAC. Про саму отлучку говорим прямо, а не подсказкой.
+      if (!item.active) {
+        const offline = document.createElement('i');
+        offline.className = 'routing-dns-over-vless-clients-offline';
+        offline.textContent = 'не в сети';
+        // Адрес остаётся виден, пока за устройством держится аренда DHCP;
+        // после её конца прошивка отдаёт 0.0.0.0, и остаётся MAC. Разница
+        // настоящая, поэтому объясняем её, а не прячем адрес у всех подряд.
+        offline.title = item.ip
+          ? 'Устройства нет в сети; адрес за ним держит аренда DHCP'
+          : 'Устройства нет в сети; аренда адреса истекла, показан MAC';
+        where.appendChild(offline);
+      }
+      const address = item.ip || item.mac || '';
+      if (address) where.appendChild(document.createTextNode(address));
       const why = document.createElement('span');
       why.className = 'routing-dns-over-vless-clients-why';
       why.textContent = item.reason || '';
       row.appendChild(title);
       row.appendChild(where);
       row.appendChild(why);
-      if (!item.active) row.title = 'Устройство сейчас не в сети';
+      if (!item.active) row.dataset.offline = '1';
       list.appendChild(row);
     });
   }

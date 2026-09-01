@@ -91,6 +91,17 @@ def parse_redirects(text: str) -> List[Dict[str, str]]:
     return found
 
 
+def _usable_address(value: str) -> str:
+    """An address the user can act on, or nothing.
+
+    A device that has been away long enough loses its lease and the firmware
+    prints ``0.0.0.0`` for it.  Showing that in the list is worse than showing
+    nothing: it reads as a real address and there is no such host.
+    """
+    text = str(value or "").strip()
+    return "" if text in {"0.0.0.0", "::", "0:0:0:0:0:0:0:0"} else text
+
+
 def _bridge_of(interface_id: str) -> str:
     """``Bridge1`` in the device list is ``br1`` in the firewall rules."""
     match = re.match(r"^Bridge(\d+)$", str(interface_id or "").strip())
@@ -153,7 +164,7 @@ def parse_hosts(text: str) -> List[Dict[str, Any]]:
         if key == "mac":
             current["mac"] = value.lower()
         elif key == "ip":
-            current["ip"] = value
+            current["ip"] = _usable_address(value)
         elif key == "hostname":
             current["hostname"] = value
         elif key == "name":

@@ -46,6 +46,18 @@ HOSTS = """
                active: no
 
              host:
+                  mac: 5C:CF:7F:11:22:33
+                   ip: 0.0.0.0
+             hostname: sensor
+                 name: Датчик
+            interface:
+                       id: Bridge0
+                     name: Home
+           registered: yes
+               policy:
+               active: no
+
+             host:
                   mac: 00:30:18:A6:C4:72
                    ip: 192.168.10.202
              hostname: nas
@@ -101,7 +113,7 @@ def test_marks_written_two_ways_are_the_same_mark():
 def test_hosts_are_read_without_mixing_in_the_nested_interface_block():
     hosts = dc.parse_hosts(HOSTS)
 
-    assert len(hosts) == 3
+    assert len(hosts) == 4
     first = hosts[0]
     # ``name`` belongs both to the device and to the interface inside it; the
     # device's own name must win.
@@ -113,7 +125,7 @@ def test_hosts_are_read_without_mixing_in_the_nested_interface_block():
     assert first["registered"] is True
     assert first["active"] is False
     # An empty policy field is a real answer: the device is in no policy.
-    assert hosts[1]["policy"] == ""
+    assert hosts[2]["policy"] == ""
 
 
 def test_a_device_in_a_policy_is_taken_away_and_one_without_arrives():
@@ -121,7 +133,7 @@ def test_a_device_in_a_policy_is_taken_away_and_one_without_arrives():
     redirects = dc.parse_redirects(REDIRECTS)
     verdicts = dc.judge(dc.parse_hosts(HOSTS), policies, redirects)
 
-    phone, nas, laptop = verdicts
+    phone, sensor, nas, laptop = verdicts
     # Policy0 has a redirect on the guest segment too, so the phone loses its DNS.
     assert phone["verdict"] == dc.INTERCEPTED
     assert "XKeen" in phone["reason"]
@@ -142,7 +154,7 @@ def test_a_rule_on_another_segment_does_not_condemn_this_one():
     verdicts = dc.judge(dc.parse_hosts(HOSTS), policies, redirects)
 
     # The laptop sits on Bridge0, so a rule bound to br1 says nothing about it.
-    assert verdicts[2]["verdict"] == dc.REACHES
+    assert verdicts[3]["verdict"] == dc.REACHES
 
 
 def test_an_unreadable_policy_mark_is_admitted_rather_than_guessed():
@@ -152,7 +164,7 @@ def test_an_unreadable_policy_mark_is_admitted_rather_than_guessed():
         dc.parse_redirects(REDIRECTS),
     )
 
-    assert verdicts[2]["verdict"] == dc.UNKNOWN
+    assert verdicts[3]["verdict"] == dc.UNKNOWN
 
 
 def test_report_counts_and_survives_an_unreadable_firewall(monkeypatch):
@@ -169,8 +181,8 @@ def test_report_counts_and_survives_an_unreadable_firewall(monkeypatch):
     # to say why instead of reporting that all is well.
     assert report["ok"] is True
     assert report["error"] == "iptables не найден"
-    assert report["counts"]["total"] == 3
-    assert report["counts"][dc.REACHES] == 3
+    assert report["counts"]["total"] == 4
+    assert report["counts"][dc.REACHES] == 4
 
 
 def test_report_gives_up_when_the_device_list_cannot_be_read(monkeypatch):
@@ -201,3 +213,15 @@ def test_report_marks_which_policies_intercept(monkeypatch):
 
     assert intercepting == {"XKeen", "Незарегистрированные клиенты"}
     assert report["counts"][dc.INTERCEPTED] == 1
+
+
+def test_a_device_that_lost_its_lease_gets_no_address_to_show():
+    hosts = dc.parse_hosts(HOSTS)
+
+    # The firmware keeps such a device in the list and prints ``0.0.0.0`` for
+    # it.  Showing that reads as a real address, and there is no such host --
+    # the window falls back to the MAC instead.
+    sensor = hosts[1]
+    assert sensor["name"] == "Датчик"
+    assert sensor["active"] is False
+    assert sensor["ip"] == ""

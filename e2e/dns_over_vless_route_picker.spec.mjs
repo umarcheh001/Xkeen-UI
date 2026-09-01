@@ -372,7 +372,7 @@ const CLIENTS = {
   clients: [
     { mac: 'aa:bb:cc:dd:ee:01', ip: '192.168.10.20', title: 'Ноутбук', policy: 'XKeen', active: true, registered: true, verdict: 'reaches', reason: 'устройство не состоит в политике доступа' },
     { mac: 'aa:bb:cc:dd:ee:02', ip: '192.168.10.21', title: 'Телефон', policy: 'XKeen', active: true, registered: true, verdict: 'intercepted', reason: 'DNS перехватывает политика «XKeen»' },
-    { mac: 'aa:bb:cc:dd:ee:03', ip: '192.168.10.22', title: 'Камера', policy: 'Гости', active: false, registered: true, verdict: 'unknown', reason: 'не удалось определить метку политики «Гости»' },
+    { mac: 'aa:bb:cc:dd:ee:03', ip: '', title: 'Камера', policy: 'Гости', active: false, registered: true, verdict: 'unknown', reason: 'не удалось определить метку политики «Гости»' },
   ],
   policies: [],
 };
@@ -415,4 +415,22 @@ test('an unreadable device list is admitted instead of passing for success', asy
 
   await expect(page.locator('#routing-dns-over-vless-clients-summary')).toContainText('это не Keenetic');
   await expect(page.locator('#routing-dns-over-vless-clients-list li')).toHaveCount(0);
+});
+
+
+test('a device that is away says so instead of showing an address it no longer has', async ({ page }) => {
+  await routeClients(page, CLIENTS);
+  await openDialog(page);
+
+  const rows = page.locator('#routing-dns-over-vless-clients-list li');
+  const away = rows.filter({ hasText: 'Камера' });
+  await expect(away).toHaveAttribute('data-offline', '1');
+  await expect(away).toContainText('не в сети');
+  // Без аренды адреса прошивка отдаёт 0.0.0.0; вместо него остаётся MAC.
+  await expect(away).toContainText('aa:bb:cc:dd:ee:03');
+
+  // Устройство в сети такой отметки не получает.
+  const here = rows.filter({ hasText: 'Ноутбук' });
+  await expect(here).not.toHaveAttribute('data-offline', '1');
+  await expect(here).toContainText('192.168.10.20');
 });
