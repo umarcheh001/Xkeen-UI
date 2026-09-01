@@ -370,9 +370,9 @@ const CLIENTS = {
   error: '',
   counts: { total: 3, reaches: 1, intercepted: 1, unknown: 1 },
   clients: [
-    { mac: 'aa:bb:cc:dd:ee:01', ip: '192.168.10.20', title: 'Ноутбук', policy: 'XKeen', active: true, registered: true, verdict: 'reaches', reason: 'устройство не состоит в политике доступа' },
-    { mac: 'aa:bb:cc:dd:ee:02', ip: '192.168.10.21', title: 'Телефон', policy: 'XKeen', active: true, registered: true, verdict: 'intercepted', reason: 'DNS перехватывает политика «XKeen»' },
-    { mac: 'aa:bb:cc:dd:ee:03', ip: '', title: 'Камера', policy: 'Гости', active: false, registered: true, verdict: 'unknown', reason: 'не удалось определить метку политики «Гости»' },
+    { mac: 'aa:bb:cc:dd:ee:01', ip: '192.168.10.20', title: 'Ноутбук', policy: 'XKeen', active: true, registered: true, verdict: 'reaches', reason: 'устройство не состоит в политике доступа', can_capture: false, captured: false, firmware_resolver: '' },
+    { mac: 'aa:bb:cc:dd:ee:02', ip: '192.168.10.21', title: 'Телефон', policy: 'XKeen', active: true, registered: true, verdict: 'intercepted', reason: 'DNS перехватывает политика «XKeen»', can_capture: true, captured: false, firmware_resolver: '127.0.0.1:41100' },
+    { mac: 'aa:bb:cc:dd:ee:03', ip: '', title: 'Камера', policy: 'Гости', active: false, registered: true, verdict: 'unknown', reason: 'не удалось определить метку политики «Гости»', can_capture: true, captured: false, firmware_resolver: '' },
   ],
   policies: [],
 };
@@ -403,21 +403,6 @@ test('the dialog says who uses the feature and puts the taken-away devices first
 });
 
 
-test('an unreadable device list is admitted instead of passing for success', async ({ page }) => {
-  await routeClients(page, {
-    ok: false,
-    available: false,
-    error: 'ndmc не найден — это не Keenetic',
-    clients: [],
-    counts: { total: 0, reaches: 0, intercepted: 0, unknown: 0 },
-  });
-  await openDialog(page);
-
-  await expect(page.locator('#routing-dns-over-vless-clients-summary')).toContainText('это не Keenetic');
-  await expect(page.locator('#routing-dns-over-vless-clients-list li')).toHaveCount(0);
-});
-
-
 test('a device that is away says so instead of showing an address it no longer has', async ({ page }) => {
   await routeClients(page, CLIENTS);
   await openDialog(page);
@@ -433,4 +418,79 @@ test('a device that is away says so instead of showing an address it no longer h
   const here = rows.filter({ hasText: 'Ноутбук' });
   await expect(here).not.toHaveAttribute('data-offline', '1');
   await expect(here).toContainText('192.168.10.20');
+});
+
+
+test('an unreadable device list is admitted instead of passing for success', async ({ page }) => {
+  await routeClients(page, {
+    ok: false,
+    available: false,
+    error: 'ndmc не найден — это не Keenetic',
+    clients: [],
+    counts: { total: 0, reaches: 0, intercepted: 0, unknown: 0 },
+  });
+  await openDialog(page);
+
+  await expect(page.locator('#routing-dns-over-vless-clients-summary')).toContainText('это не Keenetic');
+  await expect(page.locator('#routing-dns-over-vless-clients-list li')).toHaveCount(0);
+});
+
+
+test('devices are ticked one by one and only with the switch on', async ({ page }) => {
+  const status = { ...STATUS, capture_clients: false, capture_macs: [] };
+  await routeClients(page, CLIENTS);
+  await openDialog(page, status);
+
+  const picks = page.locator('.routing-dns-over-vless-clients-pick');
+  // Отмечать можно только тех, у кого DNS забирает политика: ноутбук доходит
+  // и без правила, галочки у него нет.
+  await expect(picks).toHaveCount(2);
+  // Пока переключатель выключен, цепочки нет вовсе — и галочки не трогаются.
+  await expect(picks.first()).toBeDisabled();
+
+  const toggle = page.locator('#routing-dns-over-vless-capture');
+  await toggle.check({ force: true });
+  await expect(picks.first()).toBeEnabled();
+
+  const phone = page.locator('#routing-dns-over-vless-clients-list li', { hasText: 'Телефон' });
+  // Адрес резолвера прошивки назван прямо в строке: он же отвечает за
+  // домашние имена, которые устройство потеряет.
+  await expect(phone).toContainText('127.0.0.1:41100');
+  await phone.locator('.routing-dns-over-vless-clients-pick').check({ force: true });
+
+  let sent = null;
+  await page.route('**/api/routing/dns-over-vless', async (route) => {
+    if (route.request().method() === 'POST') {
+      sent = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, action: 'enable', enabled: true, restarted: true, probe: { ok: true } }),
+      });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(status) });
+  });
+
+  await page.locator('#routing-dns-over-vless-apply').click();
+  await expect(page.locator('#confirm-modal')).not.toHaveClass(/hidden/);
+  await page.locator('#confirm-modal-ok-btn').click();
+
+  await expect.poll(() => sent && sent.capture_clients).toBe(true);
+  expect(sent.capture_macs).toEqual(['aa:bb:cc:dd:ee:02']);
+});
+
+
+test('a remembered choice comes back ticked', async ({ page }) => {
+  await routeClients(page, CLIENTS);
+  await openDialog(page, {
+    ...STATUS,
+    capture_clients: true,
+    capture_macs: ['aa:bb:cc:dd:ee:03'],
+  });
+
+  const camera = page.locator('#routing-dns-over-vless-clients-list li', { hasText: 'Камера' });
+  await expect(camera.locator('.routing-dns-over-vless-clients-pick')).toBeChecked();
+  const phone = page.locator('#routing-dns-over-vless-clients-list li', { hasText: 'Телефон' });
+  await expect(phone.locator('.routing-dns-over-vless-clients-pick')).not.toBeChecked();
 });

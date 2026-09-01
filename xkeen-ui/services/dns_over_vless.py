@@ -34,6 +34,7 @@ from typing import Any, Callable, Dict, Iterable, Optional
 from services.cores import detect_running_core
 from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.xray_config_files import jsonc_path_for
+from services import dns_client_capture
 from utils.firmware import ndmc_path as _resolve_ndmc, run_ndmc
 from utils.jsonc import strip_json_comments_text
 
@@ -2000,6 +2001,14 @@ def _emergency_release(
     routing, _raw = _read_routing_with_raw(routing_file)
     managed_path = os.path.join(configs_dir, MANAGED_FRAGMENT)
 
+    # The captured devices come back to the firmware first.  A rule that sends
+    # them to a port Xray no longer holds leaves them without DNS at all --
+    # worse than the interception this feature undoes.
+    try:
+        steps.append("capture_removed" if dns_client_capture.remove() else "capture_absent")
+    except Exception as exc:  # noqa: BLE001
+        steps.append(f"capture_failed:{exc}")
+
     try:
         _write_routing_preserving_comments(
             routing_file, _build_disabled_routing(routing), managed=False
@@ -2049,6 +2058,29 @@ def _emergency_release(
 # assuming Xray is the only core that can answer.  ``_emergency_release``
 # above stays here because only this module knows how to undo its own
 # fragment and routing.
+
+
+def reapply_client_capture(*, ui_state_dir: str) -> Dict[str, Any]:
+    """Put the capture chain back the way this install asked for it.
+
+    The firmware rebuilds its own firewall chains whenever policies or
+    interfaces change, and our jump can end up below the redirect it is meant
+    to precede -- where it is decoration.  The guard calls this on every
+    healthy tick, so it has to be cheap when there is nothing to do.
+    """
+    state = _load_state(ui_state_dir)
+    if not state.get("enabled"):
+        return {"ok": True, "changed": False, "macs": []}
+    wanted = _safe_capture_macs(state.get("capture_macs")) if state.get("capture_clients") else []
+    return dns_client_capture.ensure(wanted)
+
+
+def _safe_capture_macs(value: Any) -> list[str]:
+    """Read back the chosen devices without raising on a hand-edited file."""
+    try:
+        return dns_client_capture.normalize_macs(value)
+    except dns_client_capture.CaptureError:
+        return []
 
 
 def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dict[str, Any]:
@@ -2122,6 +2154,13 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
         "default_upstreams": list(DEFAULT_UPSTREAMS),
         # Whether the DNS servers above live on the far side of the tunnel.
         "upstreams_remote": bool(state.get("upstreams_remote")),
+        # Devices brought back with a rule of our own, and what the firewall
+        # actually holds -- the two can differ after the firmware rebuilds its
+        # chains, and the window has to say so rather than repeat the setting.
+        "capture_clients": bool(state.get("capture_clients")),
+        "capture_macs": _safe_capture_macs(state.get("capture_macs")),
+        "capture_rule_state": dns_client_capture.status() if enabled else None,
+        "max_capture_clients": dns_client_capture.MAX_CAPTURE_CLIENTS,
         "default_remote_upstream": DEFAULT_REMOTE_UPSTREAM,
         "max_upstreams": MAX_UPSTREAMS,
         "local_resolvers": (
@@ -2192,6 +2231,8 @@ def apply_action(
     pass_non_ip: Any = None,
     pass_non_ip_node: Any = None,
     upstreams_remote: Any = None,
+    capture_clients: Any = None,
+    capture_macs: Any = None,
 ) -> Dict[str, Any]:
     normalized = str(action or "").strip().lower()
     if normalized not in {"enable", "disable"}:
@@ -2248,6 +2289,28 @@ def apply_action(
             if direct_domains is not None
             else _direct_domains(stored_state.get("direct_domains"))
         )
+        # Devices whose DNS the firmware takes away can be brought back with a
+        # rule of our own.  The switch and the list are separate on purpose:
+        # with the switch off no chain is created at all, so a checkbox left
+        # ticked by accident changes nothing in the firewall.
+        wanted_capture = (
+            bool(capture_clients)
+            if capture_clients is not None
+            else bool(stored_state.get("capture_clients"))
+        )
+        try:
+            wanted_capture_macs = dns_client_capture.normalize_macs(
+                capture_macs if capture_macs is not None else stored_state.get("capture_macs")
+            )
+        except dns_client_capture.CaptureError as exc:
+            raise DnsOverVlessError(str(exc), code="capture_clients_invalid")
+        if wanted_capture and not wanted_capture_macs:
+            raise DnsOverVlessError(
+                "Отметьте устройства, DNS которых нужно завести в туннель, "
+                "или выключите переключатель.",
+                code="capture_clients_empty",
+            )
+
         # An omitted switch keeps what this install already chose.
         wanted_pass = (
             bool(pass_non_ip)
@@ -2305,6 +2368,12 @@ def apply_action(
         )
         desired_override = before_override
         router_changed = False
+        capture_result: Dict[str, Any] = {
+            "enabled": wanted_capture,
+            "clients": len(wanted_capture_macs) if wanted_capture else 0,
+            "changed": False,
+            "error": "",
+        }
 
         try:
             if normalized == "enable":
@@ -2406,6 +2475,13 @@ def apply_action(
                         code="dns_port_busy",
                     )
             else:
+                # The captured devices go back to the firmware before the port
+                # changes hands: a rule pointing at a port Xray has left would
+                # leave them without DNS at all.
+                try:
+                    capture_result["changed"] = dns_client_capture.remove()
+                except Exception as exc:  # noqa: BLE001 - reported, never fatal
+                    capture_result["error"] = str(exc)
                 try:
                     os.remove(managed_path)
                 except FileNotFoundError:
@@ -2436,6 +2512,21 @@ def apply_action(
                         code="dns_probe_failed",
                         details=probe,
                     )
+                # Only now, with Xray answering, may devices be pointed at it.
+                # A failure here is reported rather than rolled back: the
+                # feature itself is already working for everyone else, and the
+                # window shows the state of the rule separately.
+                try:
+                    result = dns_client_capture.ensure(
+                        wanted_capture_macs if wanted_capture else []
+                    )
+                    capture_result["changed"] = bool(result.get("changed"))
+                except Exception as exc:  # noqa: BLE001 - reported to the window
+                    capture_result["error"] = str(exc)
+                    try:
+                        dns_client_capture.remove()
+                    except Exception:  # noqa: BLE001 - nothing more to try
+                        pass
 
             if normalized == "enable":
                 _save_state(
@@ -2453,6 +2544,8 @@ def apply_action(
                         "upstreams_remote": wanted_remote,
                         "pass_non_ip": wanted_pass,
                         "pass_non_ip_node": wanted_pass_node,
+                        "capture_clients": wanted_capture,
+                        "capture_macs": wanted_capture_macs,
                         "target": ({k: v for k, v in target.items() if k != "managed_balancer"} if target else previous_state.get("target")),
                         "last_transaction": snapshot_dir,
                     },
@@ -2467,6 +2560,7 @@ def apply_action(
                 "ok": True,
                 "action": normalized,
                 "enabled": normalized == "enable",
+                "capture": capture_result,
                 "restarted": True,
                 "probe": probe,
                 "backup": os.path.basename(snapshot_dir),

@@ -21,6 +21,7 @@ import re
 import subprocess
 from typing import Any, Dict, List, Optional
 
+from services import dns_client_capture
 from utils.firmware import run_ndmc
 
 REDIR_CHAIN = "_NDM_HOTSPOT_DNSREDIR"
@@ -195,6 +196,10 @@ def judge(
         label = (policy or {}).get("description") or policy_name
         mark = (policy or {}).get("mark") or ""
 
+        # The resolver this device is being sent to instead of ours.  It is
+        # also the address that answers its home names, so the window can name
+        # it rather than make the user hunt for the right port.
+        resolver = ""
         if not policy_name:
             # No policy means no mark, and every redirect rule matches a mark.
             verdict, reason = REACHES, "устройство не состоит в политике доступа"
@@ -209,6 +214,8 @@ def judge(
             if matched:
                 verdict = INTERCEPTED
                 reason = f"DNS перехватывает политика «{label}» и уводит на резолвер прошивки"
+                port = next((rule["to_port"] for rule in matched if rule["to_port"]), "")
+                resolver = f"127.0.0.1:{port}" if port else ""
             else:
                 verdict = REACHES
                 reason = f"политика «{label}» DNS не перехватывает"
@@ -223,6 +230,10 @@ def judge(
                 "registered": bool(host.get("registered")),
                 "verdict": verdict,
                 "reason": reason,
+                # Only a device the firmware takes away has anything to gain
+                # from a rule of ours; one that already arrives does not.
+                "can_capture": verdict in (INTERCEPTED, UNKNOWN),
+                "firmware_resolver": resolver,
             }
         )
     return verdicts
@@ -286,6 +297,24 @@ def client_report() -> Dict[str, Any]:
     policies = parse_policies(policy_text)
     redirects = parse_redirects(redirect_text)
     clients = judge(parse_hosts(host_text), policies, redirects)
+    # What the firewall holds right now, not what the panel asked for: the two
+    # part company whenever the firmware rebuilds its chains.
+    captured = dns_client_capture.status()
+    # Below the firmware's own redirect our chain is decoration: that rule ends
+    # the nat table before ours is reached.  Saying "заведено" then would be a
+    # lie the user has no way to check.
+    working = bool(captured.get("present") and captured.get("first"))
+    for item in clients:
+        item["captured"] = item["mac"] in captured.get("macs", [])
+        if not item["captured"]:
+            continue
+        if working:
+            item["verdict"] = REACHES
+            item["reason"] = "DNS заведён в туннель правилом панели"
+        else:
+            item["reason"] = (
+                "правило панели есть, но стоит ниже правила прошивки и не действует"
+            )
     counts = {
         "total": len(clients),
         REACHES: sum(1 for item in clients if item["verdict"] == REACHES),
@@ -300,6 +329,7 @@ def client_report() -> Dict[str, Any]:
         "error": redirect_error,
         "clients": clients,
         "counts": counts,
+        "capture": captured,
         "policies": [
             {
                 "name": item["name"],

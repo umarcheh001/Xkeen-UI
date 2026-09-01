@@ -19473,6 +19473,11 @@ html[data-theme="light"] .routing-dns-over-vless-route-fallback[data-state="drop
 .routing-dns-over-vless-clients-offline { font-style: normal; font-size: 11px; line-height: 1.6; padding: 0 6px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.45); }
 .routing-dns-over-vless-clients-addr { display: inline-flex; align-items: center; gap: 8px; color: var(--modal-muted); font-variant-numeric: tabular-nums; }
 .routing-dns-over-vless-clients-why { grid-column: 1 / -1; color: var(--modal-muted); }
+.routing-dns-over-vless-clients-list li > b { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.routing-dns-over-vless-clients-pick { flex: none; margin: 0; cursor: pointer; }
+.routing-dns-over-vless-clients-pick:disabled { cursor: not-allowed; }
+.routing-dns-over-vless-capture-toggle { margin-top: 4px; }
+.routing-dns-over-vless-capture-cost { border-left: 3px solid #f59e0b; padding-left: 10px; }
 .routing-dns-over-vless-warning { margin: 0; }
 .routing-dns-over-vless-links { margin: 0; color: var(--modal-muted); }
 .routing-dns-over-vless-links a { color: #7dd3fc; }

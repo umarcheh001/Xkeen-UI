@@ -45,11 +45,13 @@ class Protection:
         expected_core: str,
         is_enabled: Callable[[], bool],
         release: Callable[[str], Dict[str, Any]],
+        reconcile: Optional[Callable[[], Any]] = None,
     ) -> None:
         self.name = name
         self.expected_core = expected_core
         self._is_enabled = is_enabled
         self._release = release
+        self._reconcile = reconcile
 
     def enabled(self) -> bool:
         try:
@@ -61,6 +63,23 @@ class Protection:
 
     def release(self, reason: str) -> Dict[str, Any]:
         return self._release(reason)
+
+    def reconcile(self) -> str:
+        """Put back whatever the firmware may have undone since the last tick.
+
+        Only for changes made outside our own files: KeeneticOS rebuilds its
+        firewall chains on any policy or interface change, and a rule of ours
+        can end up below the one it is meant to precede.  A failure here is
+        reported, never fatal -- the DNS itself is answering, which is what the
+        tick was checking.
+        """
+        if not self._reconcile:
+            return ""
+        try:
+            self._reconcile()
+        except Exception as exc:  # noqa: BLE001 - reported to the audit line
+            return str(exc)
+        return ""
 
 
 def build_protections(
@@ -85,6 +104,9 @@ def build_protections(
                 ui_state_dir=ui_state_dir,
                 restart_xkeen=restart_xkeen,
                 reason=reason,
+            ),
+            reconcile=lambda: dns_over_vless.reapply_client_capture(
+                ui_state_dir=ui_state_dir
             ),
         ),
     ]
@@ -214,6 +236,9 @@ def guard_tick(
 
     if _probe_ok():
         result.update({"fails": 0, "restarts": 0, "action": "ok"})
+        problems = [note for note in (item.reconcile() for item in active) if note]
+        if problems:
+            result["reconcile_error"] = "; ".join(problems)
         return result
 
     running = str(detect_running_core() or "")

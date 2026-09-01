@@ -21,11 +21,13 @@ from services import dns_guard, dns_over_vless, mihomo_dns
 class _Stub:
     """A protection the test can steer, standing in for a real assistant."""
 
-    def __init__(self, name: str, core: str, *, on: bool = True):
+    def __init__(self, name: str, core: str, *, on: bool = True, note: str = ""):
         self.name = name
         self.expected_core = core
         self.on = on
         self.released: List[str] = []
+        self.reconciled = 0
+        self.note = note
 
     def enabled(self) -> bool:
         return self.on
@@ -34,6 +36,10 @@ class _Stub:
         self.released.append(reason)
         self.on = False
         return {"reason": reason}
+
+    def reconcile(self) -> str:
+        self.reconciled += 1
+        return self.note
 
 
 @pytest.fixture(autouse=True)
@@ -439,3 +445,28 @@ def test_build_protections_wires_both_assistants(tmp_path: Path):
 
     assert [item.name for item in protections] == ["dns-over-vless", "mihomo-dns"]
     assert [item.expected_core for item in protections] == ["xray", "mihomo"]
+
+def test_a_healthy_tick_puts_back_what_the_firmware_undid(monkeypatch):
+    monkeypatch.setattr(dns_guard, "_probe_ok", lambda: True)
+    stub = _Stub("dns-over-vless", "xray")
+
+    result = _tick([stub])
+
+    # The firmware rebuilds its firewall chains on any policy change, so the
+    # rule that brings captured devices back has to be checked every tick.
+    assert result["action"] == "ok"
+    assert stub.reconciled == 1
+    assert "reconcile_error" not in result
+
+
+def test_a_rule_that_cannot_be_put_back_is_reported_not_swallowed(monkeypatch):
+    monkeypatch.setattr(dns_guard, "_probe_ok", lambda: True)
+    stub = _Stub("dns-over-vless", "xray", note="iptables не найден")
+
+    result = _tick([stub])
+
+    # DNS is answering, so this is not a reason to stand down -- but silence
+    # would let the capture quietly stop working.
+    assert result["action"] == "ok"
+    assert result["reconcile_error"] == "iptables не найден"
+    assert stub.released == []

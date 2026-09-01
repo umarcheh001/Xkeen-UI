@@ -214,7 +214,6 @@ def test_report_marks_which_policies_intercept(monkeypatch):
     assert intercepting == {"XKeen", "Незарегистрированные клиенты"}
     assert report["counts"][dc.INTERCEPTED] == 1
 
-
 def test_a_device_that_lost_its_lease_gets_no_address_to_show():
     hosts = dc.parse_hosts(HOSTS)
 
@@ -225,3 +224,68 @@ def test_a_device_that_lost_its_lease_gets_no_address_to_show():
     assert sensor["name"] == "Датчик"
     assert sensor["active"] is False
     assert sensor["ip"] == ""
+
+
+def test_only_a_device_the_firmware_takes_away_is_offered_the_rule():
+    verdicts = dc.judge(dc.parse_hosts(HOSTS), dc.parse_policies(POLICIES), dc.parse_redirects(REDIRECTS))
+
+    phone, sensor, nas, laptop = verdicts
+    # The phone loses its DNS to a policy: it is exactly who the rule is for.
+    assert phone["can_capture"] is True
+    # These two already arrive; there is nothing for a rule to fix.
+    assert nas["can_capture"] is False
+    assert laptop["can_capture"] is False
+
+
+def test_a_captured_device_is_counted_as_arriving(monkeypatch):
+    monkeypatch.setattr(dc, "_iptables_chain", lambda chain: (REDIRECTS, ""))
+    monkeypatch.setattr(
+        dc,
+        "_ndmc",
+        lambda command: ((POLICIES, "") if "policy" in command else (HOSTS, "")),
+    )
+    monkeypatch.setattr(
+        dc.dns_client_capture,
+        "status",
+        lambda: {"available": True, "present": True, "first": True, "macs": ["88:51:f2:72:21:5a"], "error": ""},
+    )
+
+    report = dc.client_report()
+    phone = report["clients"][0]
+
+    assert phone["captured"] is True
+    assert phone["verdict"] == dc.REACHES
+    assert report["counts"][dc.INTERCEPTED] == 0
+
+
+def test_a_rule_below_the_firmware_is_not_called_a_success(monkeypatch):
+    monkeypatch.setattr(dc, "_iptables_chain", lambda chain: (REDIRECTS, ""))
+    monkeypatch.setattr(
+        dc,
+        "_ndmc",
+        lambda command: ((POLICIES, "") if "policy" in command else (HOSTS, "")),
+    )
+    monkeypatch.setattr(
+        dc.dns_client_capture,
+        "status",
+        lambda: {"available": True, "present": True, "first": False, "macs": ["88:51:f2:72:21:5a"], "error": ""},
+    )
+
+    report = dc.client_report()
+    phone = report["clients"][0]
+
+    # The firmware's redirect ends the nat table first, so nothing changed for
+    # this device -- and the window has to say why.
+    assert phone["captured"] is True
+    assert phone["verdict"] == dc.INTERCEPTED
+    assert "ниже правила прошивки" in phone["reason"]
+
+
+def test_the_window_learns_which_resolver_answers_the_home_names():
+    verdicts = dc.judge(dc.parse_hosts(HOSTS), dc.parse_policies(POLICIES), dc.parse_redirects(REDIRECTS))
+
+    # Taking a device away from the firmware costs it the DHCP hostnames; the
+    # address that still knows them is the port its own policy is sent to.
+    assert verdicts[0]["firmware_resolver"] == "127.0.0.1:41100"
+    # A device nobody redirects has no such address to name.
+    assert verdicts[2]["firmware_resolver"] == ""

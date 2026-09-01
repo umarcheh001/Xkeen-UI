@@ -48,11 +48,19 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     clients: 'routing-dns-over-vless-clients',
     clientsSummary: 'routing-dns-over-vless-clients-summary',
     clientsList: 'routing-dns-over-vless-clients-list',
+    capture: 'routing-dns-over-vless-capture',
   };
 
   let status = null;
   let busy = false;
   let chosenTargets = [];
+  // Устройства, чей DNS заводим в туннель. Живёт отдельно от списка на
+  // экране: список перечитывается сам по себе, а выбор должен пережить
+  // и перечитывание, и уход устройства из сети.
+  let capturedMacs = [];
+  // Последний ответ про устройства: список перерисовывается и без нового
+  // запроса — например, когда переключатель открывает галочки.
+  let lastClients = null;
   let multiTouched = false;
   // A picked-clean list is a real answer ("nothing selected yet"), so the first
   // render may fill it in but a later manual clear must survive a re-render.
@@ -110,6 +118,13 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       // The node only means anything while the pass-through is on; sending it
       // otherwise would pin a choice the user cannot see.
       if (pass.checked && node && node.value) settings.pass_non_ip_node = node.value;
+    }
+    const capture = $(DOM.capture);
+    if (capture) {
+      settings.capture_clients = !!capture.checked;
+      // Список шлём всегда: снятая галочка при выключенном переключателе
+      // должна запомниться, а не потеряться до следующего включения.
+      settings.capture_macs = capturedMacs.slice();
     }
     return settings;
   }
@@ -455,6 +470,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     if (remote) {
       if (!remote.dataset.touched) remote.checked = !!(data && data.upstreams_remote);
       remote.disabled = busy;
+    }
+    const capture = $(DOM.capture);
+    if (capture) {
+      if (!capture.dataset.touched) {
+        capture.checked = !!(data && data.capture_clients);
+        capturedMacs = ((data && data.capture_macs) || []).slice();
+      }
+      capture.disabled = busy;
     }
     const pass = $(DOM.pass);
     const passRow = $(DOM.passRow);
@@ -806,6 +829,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   }
 
   function renderClients(data) {
+    lastClients = data;
     const summary = $(DOM.clientsSummary);
     const list = $(DOM.clientsList);
     if (!summary || !list) return;
@@ -831,11 +855,33 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       if (a.active !== b.active) return a.active ? -1 : 1;
       return String(a.title || '').localeCompare(String(b.title || ''), 'ru');
     });
+    const capture = $(DOM.capture);
+    const capturing = !!(capture && capture.checked);
     clients.forEach((item) => {
       const row = document.createElement('li');
       row.dataset.verdict = item.verdict || 'unknown';
       const title = document.createElement('b');
-      title.textContent = item.title || item.mac || '—';
+      // Отмечать имеет смысл только тех, у кого DNS забирает политика:
+      // остальные и так доходят, и галочка им ничего не даст.
+      if (item.can_capture && item.mac) {
+        const pick = document.createElement('input');
+        pick.type = 'checkbox';
+        pick.className = 'routing-dns-over-vless-clients-pick';
+        pick.checked = capturedMacs.indexOf(item.mac) !== -1;
+        pick.disabled = busy || !capturing;
+        pick.title = capturing
+          ? 'Завести DNS этого устройства в туннель'
+          : 'Сначала включите переключатель ниже';
+        pick.setAttribute('aria-label', `Завести DNS: ${item.title || item.mac}`);
+        pick.addEventListener('change', () => {
+          const at = capturedMacs.indexOf(item.mac);
+          if (pick.checked && at === -1) capturedMacs.push(item.mac);
+          if (!pick.checked && at !== -1) capturedMacs.splice(at, 1);
+          if (capture) capture.dataset.touched = '1';
+        });
+        title.appendChild(pick);
+      }
+      title.appendChild(document.createTextNode(item.title || item.mac || '—'));
       const where = document.createElement('span');
       where.className = 'routing-dns-over-vless-clients-addr';
       // Устройство, которое давно не появлялось, теряет аренду адреса, и
@@ -858,6 +904,11 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       const why = document.createElement('span');
       why.className = 'routing-dns-over-vless-clients-why';
       why.textContent = item.reason || '';
+      // Домашние имена такого устройства знает резолвер его политики — назовём
+      // адрес прямо здесь, иначе искать его придётся по SSH.
+      if (item.can_capture && item.firmware_resolver) {
+        why.textContent += ` · домашние имена знает ${item.firmware_resolver}`;
+      }
       row.appendChild(title);
       row.appendChild(where);
       row.appendChild(why);
@@ -1010,6 +1061,15 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const passNodeBox = $(DOM.passNode);
     if (passNodeBox) {
       passNodeBox.addEventListener('change', () => { passNodeBox.dataset.touched = '1'; });
+    }
+    const captureBox = $(DOM.capture);
+    if (captureBox) {
+      captureBox.addEventListener('change', () => {
+        captureBox.dataset.touched = '1';
+        // Галочки у устройств живут только при включённом переключателе:
+        // перерисуем список, чтобы это было видно, а не только на словах.
+        if (lastClients) renderClients(lastClients);
+      });
     }
     const multiBox = $(DOM.multi);
     if (multiBox) {

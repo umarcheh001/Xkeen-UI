@@ -83,6 +83,10 @@ def register_dns_over_vless_routes(
         upstreams_remote = payload.get("upstreams_remote", None)
         pass_non_ip = payload.get("pass_non_ip", None)
         pass_non_ip_node = payload.get("pass_non_ip_node", None)
+        # Whether devices whose DNS the firmware takes away are brought back
+        # with a rule of our own, and which of them.
+        capture_clients = payload.get("capture_clients", None)
+        capture_macs = payload.get("capture_macs", None)
         # Both assistants flip the same firmware switch and both want port 53.
         # Turning the second one on would overwrite the first one's record of the
         # original setting, leaving nothing able to put it back.
@@ -115,6 +119,8 @@ def register_dns_over_vless_routes(
                 upstreams_remote=upstreams_remote,
                 pass_non_ip=pass_non_ip,
                 pass_non_ip_node=pass_non_ip_node,
+                capture_clients=capture_clients,
+                capture_macs=capture_macs,
             )
             audit(True, action=action, summary=("DNS-over-VLESS включён" if action == "enable" else "DNS-over-VLESS отключён"))
             return jsonify(result)
