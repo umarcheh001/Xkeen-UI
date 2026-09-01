@@ -2642,6 +2642,20 @@
           </div>
 
           <ul id="routing-dns-over-vless-details" class="routing-dns-over-vless-details"></ul>
+
+          <div id="routing-dns-over-vless-clients" class="routing-dns-over-vless-clients">
+            <div class="routing-dns-over-vless-clients-head">
+              <b>Кто из устройств пользуется функцией</b>
+              <span id="routing-dns-over-vless-clients-summary" class="modal-hint">Проверяем…</span>
+            </div>
+            <p class="routing-dns-over-vless-clients-legend" aria-label="Как читать цвета">
+              <span data-verdict="reaches">DNS идёт через туннель</span>
+              <span data-verdict="intercepted">забирает политика доступа</span>
+              <span data-verdict="unknown">определить не удалось</span>
+            </p>
+            <ul id="routing-dns-over-vless-clients-list" class="routing-dns-over-vless-clients-list"></ul>
+            <p class="modal-hint">Занятый порт 53 ещё не значит, что функцией пользуются: DNS-запросы устройств, состоящих в политике доступа, прошивка заворачивает на собственный резолвер раньше, чем они дойдут до Xray. Устройства вне политик доходят. У отмеченных синим DNS не сломан — его обслуживает резолвер прошивки. Разница в другом: адреса приходят с геолокацией его апстрима, а не выходного узла туннеля, и настройки этого окна на такие устройства не действуют — ни списки зон, ни домены мимо туннеля, ни пропуск остальных типов записей. Чтобы завернуть в туннель и остальных, устройству нужно указать внешний DNS-сервер вручную — тогда его запрос попадёт в туннель по общему правилу.</p>
+          </div>
           <p class="modal-hint routing-dns-over-vless-warning">Настройка применяется при активном ядре Xray; у Mihomo защита DNS настраивается своим окном. Прокси-outbound и существующие правила не переписываются. Резервный маршрут балансировщика переносится только тогда, когда вся его цепочка остаётся внутри прокси; fallback, ведущий в прямое соединение, отбрасывается, чтобы не допустить утечку или петлю.</p>
           <p class="routing-dns-over-vless-links">Описание схемы: <a href="https://jameszero.net/4773.htm" target="_blank" rel="noopener noreferrer">упрощённый вариант</a> · <a href="https://jameszero.net/3398.htm" target="_blank" rel="noopener noreferrer">первая часть</a></p>
         </div>

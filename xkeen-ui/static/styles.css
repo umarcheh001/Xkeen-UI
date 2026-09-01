@@ -19455,6 +19455,20 @@ html[data-theme="light"] .routing-dns-over-vless-route-fallback[data-state="drop
 .routing-dns-over-vless-details { display: grid; gap: 7px; margin: 0; padding-left: 20px; color: var(--modal-muted); }
 .routing-dns-over-vless-details li::marker { color: #60a5fa; }
 .routing-dns-over-vless-details li.is-warn::marker { color: #f59e0b; }
+.routing-dns-over-vless-clients { display: grid; gap: 8px; }
+.routing-dns-over-vless-clients-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.routing-dns-over-vless-clients-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; max-height: 220px; overflow-y: auto; }
+.routing-dns-over-vless-clients-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 6px 8px; border-radius: 6px; border-left: 3px solid transparent; background: rgba(148, 163, 184, 0.08); }
+.routing-dns-over-vless-clients-list li[data-verdict="intercepted"] { border-left-color: #60a5fa; }
+.routing-dns-over-vless-clients-list li[data-verdict="reaches"] { border-left-color: #34d399; }
+.routing-dns-over-vless-clients-list li[data-verdict="unknown"] { border-left-color: #94a3b8; }
+.routing-dns-over-vless-clients-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; color: var(--modal-muted); }
+.routing-dns-over-vless-clients-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.routing-dns-over-vless-clients-legend span::before { content: ""; width: 10px; height: 3px; border-radius: 2px; background: #94a3b8; }
+.routing-dns-over-vless-clients-legend span[data-verdict="reaches"]::before { background: #34d399; }
+.routing-dns-over-vless-clients-legend span[data-verdict="intercepted"]::before { background: #60a5fa; }
+.routing-dns-over-vless-clients-addr { color: var(--modal-muted); font-variant-numeric: tabular-nums; }
+.routing-dns-over-vless-clients-why { grid-column: 1 / -1; color: var(--modal-muted); }
 .routing-dns-over-vless-warning { margin: 0; }
 .routing-dns-over-vless-links { margin: 0; color: var(--modal-muted); }
 .routing-dns-over-vless-links a { color: #7dd3fc; }

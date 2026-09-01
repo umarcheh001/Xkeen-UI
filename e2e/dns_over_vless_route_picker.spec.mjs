@@ -362,3 +362,57 @@ test('a remembered node keeps its place and a vanished one does not look chosen'
   await expect(page.locator('#routing-dns-over-vless-pass-row')).toBeVisible();
   await expect(page.locator('#routing-dns-over-vless-pass-node')).toHaveValue('node-beta');
 });
+
+
+const CLIENTS = {
+  ok: true,
+  available: true,
+  error: '',
+  counts: { total: 3, reaches: 1, intercepted: 1, unknown: 1 },
+  clients: [
+    { mac: 'aa:bb:cc:dd:ee:01', ip: '192.168.10.20', title: 'Ноутбук', policy: 'XKeen', active: true, registered: true, verdict: 'reaches', reason: 'устройство не состоит в политике доступа' },
+    { mac: 'aa:bb:cc:dd:ee:02', ip: '192.168.10.21', title: 'Телефон', policy: 'XKeen', active: true, registered: true, verdict: 'intercepted', reason: 'DNS перехватывает политика «XKeen»' },
+    { mac: 'aa:bb:cc:dd:ee:03', ip: '192.168.10.22', title: 'Камера', policy: 'Гости', active: false, registered: true, verdict: 'unknown', reason: 'не удалось определить метку политики «Гости»' },
+  ],
+  policies: [],
+};
+
+
+async function routeClients(page, payload) {
+  await page.route('**/api/routing/dns-over-vless/clients', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload) });
+  });
+}
+
+
+test('the dialog says who uses the feature and puts the taken-away devices first', async ({ page }) => {
+  await routeClients(page, CLIENTS);
+  await openDialog(page);
+
+  const summary = page.locator('#routing-dns-over-vless-clients-summary');
+  await expect(summary).toContainText('Пользуются 1 из 3');
+  await expect(summary).toContainText('у 1 DNS забирает политика доступа');
+
+  const rows = page.locator('#routing-dns-over-vless-clients-list li');
+  await expect(rows).toHaveCount(3);
+  // Devices the feature never reaches are the reason to open this list at all.
+  await expect(rows.nth(0)).toHaveAttribute('data-verdict', 'intercepted');
+  await expect(rows.nth(0)).toContainText('Телефон');
+  await expect(rows.nth(1)).toHaveAttribute('data-verdict', 'unknown');
+  await expect(rows.nth(2)).toHaveAttribute('data-verdict', 'reaches');
+});
+
+
+test('an unreadable device list is admitted instead of passing for success', async ({ page }) => {
+  await routeClients(page, {
+    ok: false,
+    available: false,
+    error: 'ndmc не найден — это не Keenetic',
+    clients: [],
+    counts: { total: 0, reaches: 0, intercepted: 0, unknown: 0 },
+  });
+  await openDialog(page);
+
+  await expect(page.locator('#routing-dns-over-vless-clients-summary')).toContainText('это не Keenetic');
+  await expect(page.locator('#routing-dns-over-vless-clients-list li')).toHaveCount(0);
+});

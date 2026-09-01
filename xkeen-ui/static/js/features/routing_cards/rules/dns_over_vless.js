@@ -44,6 +44,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     pass: 'routing-dns-over-vless-pass',
     passRow: 'routing-dns-over-vless-pass-row',
     passNode: 'routing-dns-over-vless-pass-node',
+    clients: 'routing-dns-over-vless-clients',
+    clientsSummary: 'routing-dns-over-vless-clients-summary',
+    clientsList: 'routing-dns-over-vless-clients-list',
   };
 
   let status = null;
@@ -787,6 +790,72 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     if (badge) badge.textContent = 'Проверка…';
     if (apply) apply.disabled = true;
     await refresh();
+    // Slower than everything else here -- it asks the firmware for the
+    // device list -- so it fills in after the card is already usable.
+    loadClients();
+  }
+
+  function renderClients(data) {
+    const summary = $(DOM.clientsSummary);
+    const list = $(DOM.clientsList);
+    if (!summary || !list) return;
+    list.textContent = '';
+    if (!data || data.available === false) {
+      summary.textContent = (data && data.error) || 'Проверить не удалось.';
+      return;
+    }
+    const counts = data.counts || {};
+    const total = counts.total || 0;
+    const taken = counts.intercepted || 0;
+    summary.textContent = taken
+      ? `Пользуются ${counts.reaches || 0} из ${total}; у ${taken} DNS забирает политика доступа.`
+      : `Пользуются все ${total}.`;
+    if (data.error) summary.textContent += ` Правила прочитать не удалось: ${data.error}`;
+
+    // Устройства, до которых функция не доходит, идут первыми: ради них
+    // и открывают этот список.
+    const order = { intercepted: 0, unknown: 1, reaches: 2 };
+    const clients = (data.clients || []).slice().sort((a, b) => {
+      const byVerdict = (order[a.verdict] ?? 3) - (order[b.verdict] ?? 3);
+      if (byVerdict) return byVerdict;
+      if (a.active !== b.active) return a.active ? -1 : 1;
+      return String(a.title || '').localeCompare(String(b.title || ''), 'ru');
+    });
+    clients.forEach((item) => {
+      const row = document.createElement('li');
+      row.dataset.verdict = item.verdict || 'unknown';
+      const title = document.createElement('b');
+      title.textContent = item.title || item.mac || '—';
+      const where = document.createElement('span');
+      where.className = 'routing-dns-over-vless-clients-addr';
+      where.textContent = item.ip || item.mac || '';
+      const why = document.createElement('span');
+      why.className = 'routing-dns-over-vless-clients-why';
+      why.textContent = item.reason || '';
+      row.appendChild(title);
+      row.appendChild(where);
+      row.appendChild(why);
+      if (!item.active) row.title = 'Устройство сейчас не в сети';
+      list.appendChild(row);
+    });
+  }
+
+  async function loadClients() {
+    const summary = $(DOM.clientsSummary);
+    const list = $(DOM.clientsList);
+    if (summary) summary.textContent = 'Проверяем…';
+    if (list) list.textContent = '';
+    try {
+      const client = http();
+      const data = (client && typeof client.fetchJSON === 'function')
+        ? await client.fetchJSON('/api/routing/dns-over-vless/clients', { cache: 'no-store', timeoutMs: 25000 })
+        : await (await fetch('/api/routing/dns-over-vless/clients', { cache: 'no-store' })).json();
+      renderClients(data);
+    } catch (error) {
+      if (summary) {
+        summary.textContent = `Проверить не удалось: ${error && error.message ? error.message : error}`;
+      }
+    }
   }
 
   async function apply() {

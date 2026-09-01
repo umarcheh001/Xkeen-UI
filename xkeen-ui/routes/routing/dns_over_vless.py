@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from flask import Blueprint, jsonify, request
 
+from services.dns_clients import client_report
 from services.dns_guard import conflicting_protection
 from services.dns_over_vless import DnsOverVlessError, apply_action, get_status
 
@@ -42,6 +43,23 @@ def register_dns_over_vless_routes(
             return jsonify({"ok": False, "error": str(exc), "code": exc.code, "details": exc.details}), 409
         except Exception:
             return jsonify({"ok": False, "error": "Не удалось проверить DNS-over-VLESS.", "code": "status_failed"}), 500
+
+    @bp.get("/api/routing/dns-over-vless/clients")
+    def api_dns_over_vless_clients() -> Any:
+        # Kept out of the status call: reading the device list talks to the
+        # firmware and is far slower than everything else the card needs.
+        try:
+            return jsonify(client_report())
+        except Exception:
+            return jsonify(
+                {
+                    "ok": False,
+                    "available": False,
+                    "error": "Не удалось выяснить, кто из устройств пользуется DNS-over-VLESS.",
+                    "clients": [],
+                    "counts": {"total": 0, "reaches": 0, "intercepted": 0, "unknown": 0},
+                }
+            ), 200
 
     @bp.post("/api/routing/dns-over-vless")
     def api_dns_over_vless_apply() -> Any:
