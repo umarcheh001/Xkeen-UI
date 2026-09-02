@@ -990,6 +990,34 @@ body.panel-page .dt-switch-label {
   opacity: 1 !important;
 }
 
+/* Переключатель формы, а не панели инструментов.
+ *
+ * Базовый .dt-switch (styles.css:13964) приходит завёрнутым в «чип»: padding,
+ * border-radius: 9999px, рамка и фон. В тулбаре с короткой подписью это
+ * таблетка, а в модальной форме, где контейнер — грид (styles.css:19302) или
+ * где .xk-mini-switch сам ставит width: 100%, чип растягивается на всю
+ * колонку и превращается в широкую плашку.
+ *
+ * Модификатор адресный: у общего примитива чип остаётся.
+ */
+body.panel-page .dt-switch.xk-switch-bare {
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 0;
+  width: auto;
+}
+
+body.panel-page .dt-switch.xk-switch-bare:hover {
+  background: none;
+}
+
+body.panel-page .dt-switch.xk-switch-bare .dt-switch-label {
+  color: var(--op-text);
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 600;
+}
+
 /* ==========================================================================
  * 4. PRIMITIVES
  *
