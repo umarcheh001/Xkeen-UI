@@ -137,7 +137,15 @@ MAX_LOCAL_DOMAINS = 64
 # question the user has to answer twice.
 MAX_DIRECT_RESOLVERS = 16
 MAX_DIRECT_DOMAINS = 64
-UPSTREAM_SCHEMES = ("https://", "tls://", "tcp://", "quic://")
+# Schemes the core actually implements for a DNS server.  Checked on Xray
+# 26.7.28: ``https://`` builds a DoH client and ``tcp://`` a TCP one, while
+# ``tls://`` and ``quic://`` are not recognised at all -- the core silently
+# falls back to a plain UDP client aimed at the literal string and every
+# lookup then dies on "too many colons in address".  ``xray -test`` says
+# "Configuration OK" for those, so the config starts and the whole LAN is
+# left without DNS; they have to be refused here.
+UPSTREAM_SCHEMES = ("https://", "tcp://")
+UNSUPPORTED_SCHEMES = ("tls://", "quic://")
 PROBE_DOMAIN = "example.com"
 DNS_PROBE_ATTEMPTS = 3
 
@@ -932,6 +940,13 @@ def _upstream_problem(value: str, allow_remote: bool = False) -> str:
         return "пустой адрес"
     if len(text) > 200:
         return "слишком длинный адрес"
+    for scheme in UNSUPPORTED_SCHEMES:
+        if text.lower().startswith(scheme):
+            return (
+                f"«{text}»: схему {scheme} ядро Xray не понимает — конфигурация запустится, "
+                "а DNS перестанет отвечать. Шифрованный резолвер указывайте как "
+                "https://<адрес>/dns-query"
+            )
     host, port = _split_upstream(text)
     if not host:
         return f"«{text}»: не удалось разобрать адрес"

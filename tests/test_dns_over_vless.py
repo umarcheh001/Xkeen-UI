@@ -882,6 +882,30 @@ def test_upstreams_are_validated_against_loops_and_leaks():
             assert exc.code == "upstreams_invalid"
 
 
+def test_schemes_the_core_cannot_use_are_refused():
+    """``tls://`` and ``quic://`` start fine and then answer nothing.
+
+    Checked on the router with Xray 26.7.28: for both schemes the core builds a
+    plain UDP client aimed at the literal string, ``xray -test`` still prints
+    "Configuration OK", and every lookup fails with "too many colons in
+    address".  Accepting them would take DNS away from the whole LAN, so they
+    are refused here rather than on the router.
+    """
+    for scheme in ("tls://1.1.1.1", "tls://1.1.1.1:853", "quic://9.9.9.9"):
+        try:
+            dns.validate_upstreams(scheme)
+            raise AssertionError(f"expected {scheme!r} to be refused")
+        except dns.DnsOverVlessError as exc:
+            assert exc.code == "upstreams_invalid"
+            assert "ядро Xray не понимает" in str(exc)
+
+    # The two the core does implement stay untouched, port and path included.
+    assert dns.validate_upstreams("https://1.1.1.1:443/dns-query") == [
+        "https://1.1.1.1:443/dns-query"
+    ]
+    assert dns.validate_upstreams("tcp://9.9.9.9") == ["tcp://9.9.9.9"]
+
+
 def test_several_upstreams_enable_fallback_between_them():
     single = dns._managed_fragment(["8.8.8.8"])
     several = dns._managed_fragment(["8.8.8.8", "1.1.1.1"])
