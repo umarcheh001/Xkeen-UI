@@ -13735,6 +13735,61 @@ body.panel-page .xk-hint-more > p {
   color: var(--op-muted);
 }
 
+/* Шесть именованных зон окна DNS-over-VLESS: обязательные раскрыты сразу,
+ * необязательные свёрнуты и показывают только сводку своего значения. */
+body.panel-page .xk-dns-zone {
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius);
+  background: var(--op-surface-2);
+  overflow: hidden;
+}
+
+body.panel-page .xk-dns-zone-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+body.panel-page .xk-dns-zone-head::-webkit-details-marker { display: none; }
+
+body.panel-page .xk-dns-zone-head > b {
+  color: var(--op-text-strong);
+  font-size: calc(12.5px * var(--xk-font-scale, 1));
+  font-weight: 600;
+}
+
+body.panel-page .xk-dns-zone-opt {
+  font-size: calc(9.5px * var(--xk-font-scale, 1));
+  color: var(--op-faint);
+  border: 1px solid var(--op-border);
+  border-radius: 12px;
+  padding: 1px 7px;
+}
+
+/* Сводка прижата вправо и исчезает, когда зона раскрыта: там уже видно
+ * настоящие значения, а повтор только шумит. */
+body.panel-page .xk-dns-zone-sum {
+  margin-left: auto;
+  color: var(--op-data-muted);
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-variant-numeric: tabular-nums;
+}
+
+body.panel-page .xk-dns-zone[open] .xk-dns-zone-sum { display: none; }
+
+body.panel-page .xk-dns-zone-head .dt-switch { margin-left: auto; }
+body.panel-page .xk-dns-zone-sum ~ .dt-switch { margin-left: 0; }
+
+body.panel-page .xk-dns-zone-body {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--op-border);
+}
+
 body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-dns-over-vless-safety {
   gap: 6px;
 }
