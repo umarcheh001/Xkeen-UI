@@ -119,6 +119,33 @@ def test_build_stamp_notices_untracked_files(builder, tmp_path):
     assert builder.git_build_stamp(repo).dirty is True
 
 
+def test_build_stamp_ignores_changes_outside_the_packed_subtree(builder, tmp_path):
+    repo = tmp_path / "scoped"
+    _init_repo(repo)
+    (repo / "xkeen-ui").mkdir()
+    (repo / "xkeen-ui" / "app.py").write_text("print('hi')\n", encoding="utf-8")
+    _git(repo, "add", "xkeen-ui/app.py")
+    _git(repo, "commit", "-qm", "add project")
+
+    # The kind of files this repository really carries: a built artifact and a
+    # personal note that never ship inside the archive.
+    (repo / "xkeen-ui-routing.tar.gz").write_text("rebuilt\n", encoding="utf-8")
+    (repo / "README_DEVELOPER_HANDOFF.md").write_text("local notes\n", encoding="utf-8")
+
+    assert builder.git_build_stamp(repo, pathspec="xkeen-ui").dirty is False
+    # Unscoped, the same tree does look dirty — that is why main() narrows it.
+    assert builder.git_build_stamp(repo).dirty is True
+
+    (repo / "xkeen-ui" / "app.py").write_text("print('edited')\n", encoding="utf-8")
+    assert builder.git_build_stamp(repo, pathspec="xkeen-ui").dirty is True
+
+
+def test_builder_narrows_the_dirty_check_to_the_packaged_project():
+    script = SCRIPT_PATH.read_text(encoding="utf-8")
+
+    assert "git_build_stamp(REPO_ROOT, pathspec=PROJECT_DIRNAME)" in script
+
+
 def test_build_stamp_survives_a_non_repository(builder, tmp_path):
     plain = tmp_path / "plain"
     plain.mkdir()

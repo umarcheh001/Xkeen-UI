@@ -127,7 +127,15 @@ def _git_output(repo_root: Path, args: list[str]) -> Optional[str]:
     return str(output or "").strip()
 
 
-def git_build_stamp(repo_root: Path) -> BuildStamp:
+def git_build_stamp(repo_root: Path, pathspec: Optional[str] = None) -> BuildStamp:
+    """Describe the code being packed.
+
+    ``pathspec`` narrows the dirty check to what actually goes into the archive.
+    The repository also holds files that never ship — the built archive itself,
+    personal notes kept out of git — and letting those mark the build dirty
+    would be its own kind of lie.
+    """
+
     short = _git_output(repo_root, ["rev-parse", "--short", "HEAD"])
     full = _git_output(repo_root, ["rev-parse", "HEAD"])
     if not short or not full:
@@ -136,7 +144,10 @@ def git_build_stamp(repo_root: Path) -> BuildStamp:
 
     # --porcelain lists staged, unstaged and untracked entries alike; any line
     # at all means the packed tree is not the commit.
-    status = _git_output(repo_root, ["status", "--porcelain", "--untracked-files=normal"])
+    args = ["status", "--porcelain", "--untracked-files=normal"]
+    if pathspec:
+        args += ["--", pathspec]
+    status = _git_output(repo_root, args)
     if status is None:
         dirty = True
     else:
@@ -288,7 +299,7 @@ def main() -> int:
     if not args.skip_frontend_build:
         run_checked(["npm", "run", "frontend:build"], cwd=REPO_ROOT)
 
-    stamp = git_build_stamp(REPO_ROOT)
+    stamp = git_build_stamp(REPO_ROOT, pathspec=PROJECT_DIRNAME)
     override = str(args.version or "").strip()
     if override:
         stamp = BuildStamp(
