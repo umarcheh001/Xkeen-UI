@@ -2449,3 +2449,90 @@ def test_the_wait_for_the_port_reads_the_tables_rather_than_binding(tmp_path: Pa
     assert dns._wait_for_port_53(should_be_free=True, timeout=0.3, proc_dir=str(firmware)) is False
     # ...and the opposite wait is satisfied by exactly the same reading.
     assert dns._wait_for_port_53(should_be_free=False, timeout=0.3, proc_dir=str(firmware)) is True
+
+
+def _runtime_with_marks(tmp_path: Path, marks: list[Any]) -> Dict[str, Any]:
+    """A config whose proxies carry the given ``sockopt.mark`` values."""
+    configs = tmp_path / "marks"
+    configs.mkdir(parents=True)
+    outbounds: list[Dict[str, Any]] = [{"tag": "block", "protocol": "blackhole"}]
+    for index, mark in enumerate(marks, start=1):
+        item: Dict[str, Any] = {"tag": f"proxy-{index}", "protocol": "vless"}
+        if mark is not None:
+            item["streamSettings"] = {"sockopt": {"mark": mark}}
+        outbounds.append(item)
+    _write(configs / "04_outbounds.json", {"outbounds": outbounds})
+    return dns._collect_runtime(str(configs), {})
+
+
+def test_the_dns_outbound_takes_the_mark_the_rest_of_the_config_uses(tmp_path: Path):
+    """XKeen refuses to proxy Entware when any outbound lacks the mark.
+
+    It checks every outbound of every config file, sparing only ``blackhole``
+    and ``loopback`` -- so the DNS outbound has to carry the same mark as the
+    rest, or Entware proxying is switched off for safety.
+    """
+    assert dns._service_mark(_runtime_with_marks(tmp_path, [255, 255, 255])) == 255
+
+
+def test_a_config_without_marks_leaves_the_dns_outbound_as_it_was(tmp_path: Path):
+    """Where nobody marks anything, adding a mark would route DNS somewhere new."""
+    assert dns._service_mark(_runtime_with_marks(tmp_path / "none", [None, None])) is None
+
+
+def test_marks_that_disagree_are_not_guessed_between(tmp_path: Path):
+    """A wrong mark sends the service traffic into somebody else's policy --
+    quieter and worse than the warning it would silence."""
+    assert dns._service_mark(_runtime_with_marks(tmp_path / "mixed", [255, 1234])) is None
+    # A proxy that simply lacks the mark does not veto the value the others agree on.
+    assert dns._service_mark(_runtime_with_marks(tmp_path / "partial", [255, None, 255])) == 255
+
+
+def test_the_written_fragment_carries_the_mark_of_the_install(tmp_path: Path, monkeypatch):
+    """End to end: enabling on a marked config must not leave the odd one out."""
+    configs, routing_path, state = _scenario_config(tmp_path)
+    outbounds = json.loads((configs / "04_outbounds.json").read_text(encoding="utf-8"))
+    for item in outbounds["outbounds"]:
+        if item.get("protocol") in {"vless", "freedom"}:
+            item["streamSettings"] = {"sockopt": {"mark": 255}}
+    _write(configs / "04_outbounds.json", outbounds)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(
+        dns,
+        "_write_routing_preserving_comments",
+        lambda path, obj, **_kwargs: _write(Path(path), obj),
+    )
+
+    dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+    )
+
+    fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+    assert fragment["outbounds"][0]["streamSettings"] == {"sockopt": {"mark": 255}}
+
+    # ...and the panel still recognises its own work rather than crying drift.
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+    assert result["tampered"] is False
+    assert result["presence"]["fragment"] is True
+
+
+def test_an_unmarked_install_still_gets_a_plain_dns_outbound(tmp_path: Path):
+    """Nothing to copy means nothing to write: the fragment stays as before."""
+    assert "streamSettings" not in dns._managed_fragment()["outbounds"][0]
+    assert dns._managed_fragment(mark=255)["outbounds"][0]["streamSettings"] == {
+        "sockopt": {"mark": 255}
+    }

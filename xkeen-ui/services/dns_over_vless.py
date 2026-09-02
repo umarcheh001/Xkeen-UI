@@ -333,7 +333,12 @@ def _collect_runtime(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, Any
             tag = _clean_tag(item.get("tag"))
             protocol = _clean_tag(item.get("protocol")).lower()
             if tag:
-                outbounds.append({"tag": tag, "protocol": protocol, "file": name})
+                stream = item.get("streamSettings")
+                sockopt = stream.get("sockopt") if isinstance(stream, dict) else None
+                mark = sockopt.get("mark") if isinstance(sockopt, dict) else None
+                outbounds.append(
+                    {"tag": tag, "protocol": protocol, "file": name, "mark": mark}
+                )
             if tag and protocol == "loopback":
                 settings = item.get("settings") if isinstance(item.get("settings"), dict) else {}
                 loopback_targets[tag] = _clean_tag(settings.get("inboundTag"))
@@ -361,6 +366,38 @@ def _collect_runtime(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, Any
         "loopback_targets": loopback_targets,
         "observatory_selectors": observatory_selectors,
     }
+
+
+def _service_mark(runtime: Dict[str, Any]) -> Optional[int]:
+    """The firewall mark this installation puts on Xray's own connections.
+
+    XKeen proxies Entware traffic by marking what Xray sends, so that its own
+    connections are not caught by the rules that redirect everything else.  Its
+    check (``validate_client_routing_mark`` in ``S05xkeen``) walks every
+    outbound of every config file, sparing only ``blackhole`` and ``loopback``:
+    one unmarked outbound and Entware proxying is switched off for safety.  The
+    DNS outbound is one of those, so it has to carry the same mark.
+
+    The value is copied, never invented.  Where the config marks nothing, or
+    marks disagree, ``None`` says so: a wrong mark would push service traffic
+    into somebody else's policy, which is quieter and worse than the warning it
+    would silence.
+    """
+    found: set[int] = set()
+    for item in runtime.get("outbounds", []):
+        if _clean_tag(item.get("protocol")).lower() in {"blackhole", "loopback"}:
+            continue
+        if _clean_tag(item.get("tag")) == DNS_OUT_TAG:
+            continue
+        mark = item.get("mark")
+        if mark is None or isinstance(mark, bool):
+            continue
+        try:
+            found.add(int(mark))
+        except (TypeError, ValueError):
+            # A mark this panel cannot read is a mark it must not copy.
+            return None
+    return found.pop() if len(found) == 1 else None
 
 
 def _proxy_outbounds(runtime: Dict[str, Any]) -> list[Dict[str, str]]:
@@ -1269,7 +1306,11 @@ def _dns_listener() -> Dict[str, Any]:
     }
 
 
-def _dns_outbound(pass_node: str = "", upstreams: Optional[list[str]] = None) -> Dict[str, Any]:
+def _dns_outbound(
+    pass_node: str = "",
+    upstreams: Optional[list[str]] = None,
+    mark: Optional[int] = None,
+) -> Dict[str, Any]:
     """The DNS outbound, optionally letting the other record types through.
 
     Xray's built-in DNS answers A and AAAA and nothing else: MX, TXT, SRV,
@@ -1293,6 +1334,11 @@ def _dns_outbound(pass_node: str = "", upstreams: Optional[list[str]] = None) ->
             settings["port"] = port
         outbound["settings"] = settings
         outbound["proxySettings"] = {"tag": pass_node}
+    if mark is not None:
+        # XKeen marks what Xray sends so its own traffic escapes the rules that
+        # redirect everything else; an unmarked outbound here turns Entware
+        # proxying off for the whole install.  See ``_service_mark``.
+        outbound["streamSettings"] = {"sockopt": {"mark": int(mark)}}
     return outbound
 
 
@@ -1303,6 +1349,7 @@ def _managed_fragment(
     direct_resolvers: Optional[list[Dict[str, Any]]] = None,
     direct_domains: Optional[list[str]] = None,
     pass_node: str = "",
+    mark: Optional[int] = None,
 ) -> Dict[str, Any]:
     servers: list[Any] = []
     resolvers = list(local_resolvers or [])
@@ -1355,7 +1402,7 @@ def _managed_fragment(
             "tag": DNS_IN_TAG,
         },
         "inbounds": [_dns_listener()],
-        "outbounds": [_dns_outbound(pass_node, public_upstreams)],
+        "outbounds": [_dns_outbound(pass_node, public_upstreams, mark)],
     }
 
 
@@ -1628,6 +1675,19 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
             and isinstance(proxy_settings, dict)
         ):
             declared_pass = _clean_tag(proxy_settings.get("tag"))
+    # The mark is read back from the fragment rather than from the config as it
+    # stands now: a proxy added since then may carry a different one, and that
+    # is not the panel's writing having drifted.
+    declared_mark = None
+    if isinstance(first_outbound, dict):
+        stream = first_outbound.get("streamSettings")
+        sockopt = stream.get("sockopt") if isinstance(stream, dict) else None
+        raw_mark = sockopt.get("mark") if isinstance(sockopt, dict) else None
+        if raw_mark is not None and not isinstance(raw_mark, bool):
+            try:
+                declared_mark = int(raw_mark)
+            except (TypeError, ValueError):
+                declared_mark = None
     exact_fragment = bool(declared) and fragment == _managed_fragment(
         declared,
         local_declared,
@@ -1635,6 +1695,7 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
         direct_declared,
         _zones_of(direct_declared),
         declared_pass,
+        declared_mark,
     )
     capture_rule_obj = next((item for item in rules if _clean_tag(item.get("ruleTag")) == CAPTURE_RULE_TAG), None)
     balancer_obj = next(
@@ -2657,6 +2718,7 @@ def apply_action(
                     wanted_direct,
                     wanted_direct_domains,
                     wanted_pass_node,
+                    _service_mark(runtime),
                 )
                 if _managed_config_complete(presence) and current_fragment == expected_fragment:
                     # Idempotent recovery path: configuration is already
