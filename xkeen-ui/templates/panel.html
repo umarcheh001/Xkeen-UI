@@ -2731,6 +2731,15 @@
             </label>
             <p class="modal-hint">По выбору добавит geodata-mode: true и geox-url.geosite (V2Fly dlc.dat). Существующие настройки GeoSite не перезаписываются.</p>
             <p id="mihomo-dns-geodata-hint" class="modal-hint" role="status" aria-live="polite">Проверяем наличие GeoSite private…</p>
+            <div id="mihomo-dns-rule-providers" class="mihomo-dns-rule-providers">
+              <b class="mihomo-dns-rule-providers-title">Режим без GeoSite: доменные MRS-провайдеры</b>
+              <p class="modal-hint">Кнопки добавят выбранные rule-provider в <code>config.yaml</code> и подставят их в fake-ip-filter. Это не требует geodata-mode и использует отдельные списки MetaCubeX.</p>
+              <div class="mihomo-dns-rule-provider-buttons" role="group" aria-label="Доменные MRS-провайдеры">
+                <button type="button" id="mihomo-dns-provider-category-ru" class="btn-secondary mihomo-dns-provider-btn" data-provider="category_ru@domain" aria-pressed="false">Добавить category_ru@domain</button>
+                <button type="button" id="mihomo-dns-provider-private" class="btn-secondary mihomo-dns-provider-btn" data-provider="geosite_private@domain" aria-pressed="false">Добавить geosite_private@domain</button>
+              </div>
+              <p id="mihomo-dns-rule-providers-hint" class="modal-hint" role="status" aria-live="polite">Провайдеры не выбраны — будут использованы только локальные зоны.</p>
+            </div>
             <p class="modal-hint">Fake-IP требует включённый TUN или TProxy и не должен пересекаться с вашей LAN/VPN-сетью.</p>
           </div>
 

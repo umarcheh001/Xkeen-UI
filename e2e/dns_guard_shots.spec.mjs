@@ -90,6 +90,43 @@ const MIHOMO_RELEASED = {
   },
 };
 
+const MIHOMO_RULE_PROVIDER_STATUS = {
+  ...MIHOMO_BASE,
+  mode: 'fake-ip',
+  can_enable: true,
+  fake_ip_available: true,
+  geodata: {
+    enabled: false,
+    geosite_configured: false,
+    private_available: false,
+    notice: 'GeoSite или доменный provider private не настроен — фильтр geosite:private работать не будет.',
+    domain_providers: {
+      'category_ru@domain': {
+        configured: false,
+        filter: 'rule-set:category_ru@domain',
+        url: 'https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/category-ru.mrs',
+      },
+      'geosite_private@domain': {
+        configured: false,
+        filter: 'rule-set:geosite_private@domain',
+        url: 'https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/private.mrs',
+      },
+    },
+    rule_providers: {
+      'category_ru@domain': {
+        configured: false,
+        filter: 'rule-set:category_ru@domain',
+        url: 'https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/category-ru.mrs',
+      },
+      'geosite_private@domain': {
+        configured: false,
+        filter: 'rule-set:geosite_private@domain',
+        url: 'https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/private.mrs',
+      },
+    },
+  },
+};
+
 // Оба окна снимаются в обеих темах: тексты сторожа читают и там, и там.
 const THEME = (process.env.XKEEN_GUARD_SHOTS_THEME === 'dark') ? 'dark' : 'light';
 
@@ -151,4 +188,53 @@ test('Mihomo DNS: the guard handed DNS back', async ({ page }) => {
   await openMihomo(page, MIHOMO_RELEASED);
   await expect(page.locator('#mihomo-dns-badge')).toHaveText('Снято сторожем');
   await shoot(page, '#mihomo-dns-modal .modal-content', '4-mihomo-guard-released');
+});
+
+test('Mihomo DNS: rule-provider buttons fill the fake-ip payload', async ({ page }) => {
+  const status = structuredClone(MIHOMO_RULE_PROVIDER_STATUS);
+  const postBodies = [];
+
+  await openMihomo(page, status);
+  await page.route('**/api/mihomo/dns', async (route) => {
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON();
+      postBodies.push(body);
+      status.enabled = true;
+      status.can_enable = false;
+      status.can_disable = true;
+      status.dns_override = true;
+      status.prepared = true;
+      status.dns_present = true;
+      status.dns_enabled = true;
+      status.dns_listener_configured = true;
+      await route.fulfill({
+        json: {
+          ok: true,
+          enabled: true,
+          proxy_group: 'PROXY',
+          listen: '0.0.0.0:53',
+          mode: 'fake-ip',
+          fake_ip: body.fake_ip,
+          rule_providers: body.rule_providers,
+          probe: { ok: true, latency_ms: 17 },
+        },
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await expect(page.locator('#mihomo-dns-rule-providers')).toBeVisible();
+  await page.locator('#mihomo-dns-provider-category-ru').click();
+  await page.locator('#mihomo-dns-provider-private').click();
+  await expect(page.locator('#mihomo-dns-provider-category-ru')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#mihomo-dns-provider-private')).toHaveAttribute('aria-pressed', 'true');
+
+  await page.locator('#mihomo-dns-apply').click();
+  await expect(page.locator('#confirm-modal')).toBeVisible();
+  await page.locator('#confirm-modal-ok-btn').click();
+  await expect.poll(() => postBodies.length).toBe(1);
+  expect(postBodies[0].rule_providers).toEqual(['category_ru@domain', 'geosite_private@domain']);
+  expect(postBodies[0].fake_ip.filters).toContain('rule-set:category_ru@domain');
+  expect(postBodies[0].fake_ip.filters).toContain('rule-set:geosite_private@domain');
 });

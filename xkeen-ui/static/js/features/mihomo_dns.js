@@ -22,6 +22,10 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     fakeOptions: 'mihomo-dns-fake-options',
     geodataHint: 'mihomo-dns-geodata-hint',
     geodataEnable: 'mihomo-dns-geodata-enable',
+    ruleProviders: 'mihomo-dns-rule-providers',
+    ruleProvidersHint: 'mihomo-dns-rule-providers-hint',
+    providerCategoryRu: 'mihomo-dns-provider-category-ru',
+    providerPrivate: 'mihomo-dns-provider-private',
     fakeRange: 'mihomo-dns-fake-range',
     fakeFilterMode: 'mihomo-dns-fake-filter-mode',
     fakeFilters: 'mihomo-dns-fake-filters',
@@ -31,16 +35,32 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
   const $ = (id) => document.getElementById(id);
   let current = null;
   let busy = false;
+  let providerSelectionTouched = false;
   const DEFAULT_FAKE_IP_FILTERS = ['*.lan', '*.local'];
   const GEO_FAKE_IP_FILTERS = ['geosite:private', 'geosite:category-ru'];
+  const DOMAIN_RULE_PROVIDER_FILTERS = [
+    ['category_ru@domain', 'rule-set:category_ru@domain', IDS.providerCategoryRu],
+    ['geosite_private@domain', 'rule-set:geosite_private@domain', IDS.providerPrivate],
+  ];
 
-  function buildFakeIpFilters(filters, useGeodata) {
+  function selectedRuleProviders() {
+    return DOMAIN_RULE_PROVIDER_FILTERS
+      .filter(([, , id]) => $(id)?.getAttribute('aria-pressed') === 'true')
+      .map(([name]) => name);
+  }
+
+  function buildFakeIpFilters(filters, useGeodata, ruleProviders = selectedRuleProviders()) {
     const clean = [];
     const seen = new Set();
+    const providerFilters = DOMAIN_RULE_PROVIDER_FILTERS.map(([, filter]) => filter.toLowerCase());
     const remove = new Set(
-      (useGeodata ? DEFAULT_FAKE_IP_FILTERS : GEO_FAKE_IP_FILTERS).map((item) => item.toLowerCase()),
+      [...DEFAULT_FAKE_IP_FILTERS, ...GEO_FAKE_IP_FILTERS, ...providerFilters].map((item) => item.toLowerCase()),
     );
-    const preferred = useGeodata ? GEO_FAKE_IP_FILTERS : DEFAULT_FAKE_IP_FILTERS;
+    const selected = new Set((ruleProviders || []).map((item) => String(item || '').toLowerCase()));
+    const preferred = useGeodata
+      ? GEO_FAKE_IP_FILTERS
+      : DOMAIN_RULE_PROVIDER_FILTERS.filter(([name]) => selected.has(name.toLowerCase())).map(([, filter]) => filter);
+    const defaults = preferred.length ? preferred : DEFAULT_FAKE_IP_FILTERS;
     for (const item of filters) {
       const text = String(item || '').trim();
       if (!text) continue;
@@ -50,7 +70,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       seen.add(lower);
       clean.push(text);
     }
-    for (const item of preferred) {
+    for (const item of defaults) {
       const lower = item.toLowerCase();
       if (seen.has(lower)) continue;
       seen.add(lower);
@@ -66,7 +86,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       .split(/\r?\n/)
       .map((item) => item.trim())
       .filter(Boolean);
-    const next = buildFakeIpFilters(current, useGeodata);
+    const next = buildFakeIpFilters(current, useGeodata, selectedRuleProviders());
     const nextText = next.join('\n');
     if (textarea.value !== nextText) textarea.value = nextText;
   }
@@ -99,9 +119,10 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       payload.fake_ip = {
         range: $(IDS.fakeRange)?.value || '198.18.0.1/16',
         filter_mode: $(IDS.fakeFilterMode)?.value || 'blacklist',
-        filters: buildFakeIpFilters(filters, useGeodata),
+        filters: buildFakeIpFilters(filters, useGeodata, selectedRuleProviders()),
       };
       payload.geodata = useGeodata;
+      payload.rule_providers = useGeodata ? [] : selectedRuleProviders();
     }
     return payload;
   }
@@ -130,6 +151,47 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     item.textContent = String(text);
     if (kind) item.className = `is-${kind}`;
     list.appendChild(item);
+  }
+
+  function setRuleProviderButton(id, selected, disabled) {
+    const button = $(id);
+    if (!button) return;
+    button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    button.disabled = !!disabled;
+  }
+
+  function syncRuleProviderUi(data) {
+    const container = $(IDS.ruleProviders);
+    const geodataEnabled = !!$(IDS.geodataEnable)?.checked;
+    const enabled = !!data?.enabled || !!data?.can_disable || !!data?.tampered;
+    if (container) container.classList.toggle('hidden', geodataEnabled);
+
+    if (!providerSelectionTouched && !busy && data) {
+      const configured = data?.geodata?.domain_providers || data?.geodata?.rule_providers || {};
+      const selected = new Set(
+        DOMAIN_RULE_PROVIDER_FILTERS
+          .filter(([name]) => configured?.[name]?.configured)
+          .map(([name]) => name),
+      );
+      DOMAIN_RULE_PROVIDER_FILTERS.forEach(([name, , id]) => setRuleProviderButton(id, selected.has(name), false));
+    }
+    DOMAIN_RULE_PROVIDER_FILTERS.forEach(([, , id]) => setRuleProviderButton(
+      id,
+      $(id)?.getAttribute('aria-pressed') === 'true',
+      enabled || geodataEnabled,
+    ));
+
+    const selected = selectedRuleProviders();
+    const hint = $(IDS.ruleProvidersHint);
+    if (hint) {
+      if (geodataEnabled) {
+        hint.textContent = 'Используется GeoSite — доменные rule-provider отключены.';
+      } else if (selected.length) {
+        hint.textContent = `Будут добавлены: ${selected.join(', ')} и использованы как rule-set в fake-ip-filter.`;
+      } else {
+        hint.textContent = 'Провайдеры не выбраны — будут использованы только локальные зоны.';
+      }
+    }
   }
 
   function render(data) {
@@ -165,6 +227,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     }
     if (fakeOptions) fakeOptions.classList.toggle('hidden', (mode?.value || data?.mode) !== 'fake-ip');
     if (geodataEnable && !busy && geodata) geodataEnable.checked = !!(geodata.enabled || geodata.geosite_configured);
+    syncRuleProviderUi(data);
     if ((mode?.value || data?.mode) === 'fake-ip') syncFakeIpFilters(!!geodataEnable?.checked);
     if (modeHint) modeHint.textContent = (mode?.value || data?.mode) === 'fake-ip'
       ? `Расширенный режим: виртуальные IP. ${data?.fake_ip_available === false ? 'TUN/TProxy-маршрут не обнаружен.' : 'Прозрачный TUN/TProxy-маршрут обнаружен.'}`
@@ -260,6 +323,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
   }
 
   async function open() {
+    providerSelectionTouched = false;
     showModal(true);
     if ($(IDS.status)) $(IDS.status).textContent = 'Проверяем текущую конфигурацию…';
     if ($(IDS.badge)) $(IDS.badge).textContent = 'Проверка…';
@@ -332,7 +396,18 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     });
     $(IDS.geodataEnable)?.addEventListener('change', () => {
       if ($(IDS.mode)?.value === 'fake-ip') syncFakeIpFilters(!!$(IDS.geodataEnable)?.checked);
+      syncRuleProviderUi(current || {});
     });
+    DOMAIN_RULE_PROVIDER_FILTERS.forEach(([, , id]) => $(id)?.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (busy || $(id)?.disabled || $(IDS.geodataEnable)?.checked) return;
+      const button = $(id);
+      const next = button?.getAttribute('aria-pressed') !== 'true';
+      button?.setAttribute('aria-pressed', next ? 'true' : 'false');
+      providerSelectionTouched = true;
+      if ($(IDS.mode)?.value === 'fake-ip') syncFakeIpFilters(false);
+      syncRuleProviderUi(current || {});
+    }));
     $(IDS.modal)?.addEventListener('click', (event) => {
       if (event.target === $(IDS.modal) && !busy) showModal(false);
     });

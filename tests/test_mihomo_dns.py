@@ -56,6 +56,24 @@ def test_build_enabled_config_adds_geosite_ru_filters_for_fake_ip_geodata():
     assert "*.local" not in content
 
 
+def test_build_enabled_config_adds_domain_rule_providers_without_geodata():
+    content, _ = dns.build_enabled_config(
+        BASE,
+        mode="fake-ip",
+        fake_ip={"range": "198.18.0.1/16", "filter_mode": "blacklist"},
+        geodata=False,
+        rule_providers=["category-ru", "private"],
+    )
+
+    assert "geodata-mode: true" not in content
+    assert "rule-providers:" in content
+    assert "category_ru@domain" in content
+    assert "geosite_private@domain" in content
+    assert "rule-set:category_ru@domain" in content
+    assert "rule-set:geosite_private@domain" in content
+    assert "geosite:private" not in content
+
+
 def test_build_refuses_existing_user_dns_without_rewriting_it():
     source = BASE + "\ndns:\n  enable: true\n  nameserver: [system]\n"
 
@@ -402,3 +420,41 @@ def test_http_contract_and_frontend(tmp_path: Path, monkeypatch):
     assert "Включить защищённый DNS" in script
     assert "geosite:category-ru" in script
     assert "mihomo_dns.js" in bundle
+
+
+def test_http_contract_forwards_rule_providers(tmp_path: Path, monkeypatch):
+    import routes.mihomo as mihomo_routes
+    from routes.mihomo import create_mihomo_blueprint
+
+    config, state = _status_ready(tmp_path, monkeypatch)
+    monkeypatch.setattr(mihomo_routes, "get_mihomo_dns_status", dns.get_status)
+    captured: dict[str, object] = {}
+
+    def fake_apply(action, **kwargs):
+        captured["action"] = action
+        captured.update(kwargs)
+        return {"ok": True, "enabled": True, "probe": {"ok": True, "latency_ms": 1}}
+
+    monkeypatch.setattr(mihomo_routes, "apply_mihomo_dns_action", fake_apply)
+    app = Flask("mihomo-dns")
+    app.register_blueprint(create_mihomo_blueprint(
+        MIHOMO_CONFIG_FILE=str(config),
+        MIHOMO_TEMPLATES_DIR=str(tmp_path / "templates"),
+        MIHOMO_DEFAULT_TEMPLATE=str(tmp_path / "templates" / "default.yaml"),
+        restart_xkeen=lambda **_kwargs: True,
+        ui_state_dir=str(state),
+    ))
+
+    response = app.test_client().post("/api/mihomo/dns", json={
+        "confirmed": True,
+        "action": "enable",
+        "mode": "fake-ip",
+        "geodata": False,
+        "fake_ip": {"range": "198.18.0.1/16", "filter_mode": "blacklist", "filters": ["*.lan"]},
+        "rule_providers": ["category_ru@domain", "private"],
+    })
+
+    assert response.status_code == 200
+    assert captured["action"] == "enable"
+    assert captured["rule_providers"] == ["category_ru@domain", "private"]
+    assert captured["geodata"] is False

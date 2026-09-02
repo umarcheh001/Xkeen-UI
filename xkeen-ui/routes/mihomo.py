@@ -1461,6 +1461,7 @@ def create_mihomo_blueprint(
         mode = str(data.get("mode") or "redir-host").strip().lower()
         fake_ip = data.get("fake_ip") if isinstance(data.get("fake_ip"), dict) else None
         geodata = bool(data.get("geodata"))
+        rule_providers = data.get("rule_providers")
         proxy_group = str(data.get("proxy_group") or "").strip() or None
         if data.get("confirmed") is not True:
             return _api_error(
@@ -1497,6 +1498,7 @@ def create_mihomo_blueprint(
                 mode=mode,
                 fake_ip=fake_ip,
                 geodata=geodata,
+                rule_providers=rule_providers,
                 proxy_group=proxy_group,
             )
             return jsonify(result), 200

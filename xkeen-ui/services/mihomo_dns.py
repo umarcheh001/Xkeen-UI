@@ -46,6 +46,13 @@ DEFAULT_FAKE_IP_RANGE = "198.18.0.1/16"
 DEFAULT_FAKE_IP_FILTER_MODE = "blacklist"
 DEFAULT_FAKE_IP_FILTERS = ("*.lan", "*.local")
 DEFAULT_GEOSITE_URL = "https://github.com/v2fly/domain-list-community/releases/latest/download/dlc.dat"
+# Domain rule-sets are a GeoSite-free alternative for Fake-IP filters.  Keep
+# the names stable: they are referenced by ``rule-set:...`` values in the
+# generated DNS block and can also be reused by the user's routing rules.
+DEFAULT_DOMAIN_RULE_PROVIDERS = {
+    "category_ru@domain": "https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/category-ru.mrs",
+    "geosite_private@domain": "https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/private.mrs",
+}
 DNS_MODES = ("redir-host", "fake-ip")
 FAKE_IP_FILTER_MODES = ("blacklist", "whitelist", "rule")
 _LOCK = threading.RLock()
@@ -291,8 +298,14 @@ def _geodata_runtime_config(config_text: str) -> dict[str, Any]:
     mode_raw = _top_level_scalar(config_text, "geodata-mode")
     mode = _yaml_bool(mode_raw)
     geosite_url = _section_scalar(_top_level_section(config_text, "geox-url"), "geosite")
+    domain_provider_names = _domain_rule_provider_names(config_text)
+    domain_providers = _domain_rule_provider_status(config_text)
     private_provider = next(
-        (name for name in _domain_rule_provider_names(config_text) if "private" in name.lower()),
+        (name for name in domain_provider_names if "private" in name.lower()),
+        "",
+    )
+    category_ru_provider = next(
+        (name for name in domain_provider_names if name.lower() in {"category_ru@domain", "category-ru@domain"}),
         "",
     )
     # An explicit false always wins.  If geodata-mode is omitted, a geosite
@@ -318,6 +331,13 @@ def _geodata_runtime_config(config_text: str) -> dict[str, Any]:
         notice = (
             f"Найден доменный rule-provider «{private_provider}». Для Fake-IP можно "
             f"использовать фильтр {private_filter}; provider с behavior: ipcidr для этого не подходит."
+        )
+        if category_ru_provider:
+            notice += f" Также доступен {category_ru_provider} для российских доменов."
+    elif category_ru_provider:
+        notice = (
+            f"Найден доменный rule-provider «{category_ru_provider}», но provider private не найден. "
+            "Для локальных зон добавьте geosite_private@domain или используйте только category-ru."
         )
     elif geodata_enabled:
         source = geosite_url
@@ -355,9 +375,14 @@ def _geodata_runtime_config(config_text: str) -> dict[str, Any]:
         "geosite_url": geosite_url or None,
         "geosite_configured": geosite_configured,
         "private_provider": private_provider or None,
+        "category_ru_provider": category_ru_provider or None,
         "private_filter": private_filter or None,
         "private_source": private_source or None,
         "private_available": bool(private_filter),
+        "domain_providers": domain_providers,
+        # Alias kept in the status payload for callers that group all
+        # GeoSite-free sources under ``rule_providers``.
+        "rule_providers": domain_providers,
         "notice": notice,
     }
 
@@ -391,15 +416,153 @@ def _domain_rule_provider_names(config_text: str) -> list[str]:
     names: list[str] = []
     for name, lines in entries:
         joined = "\n".join(lines).lower()
-        if re.search(r"(?:^|[\s,{])behavior\s*:\s*(?:domain|classical)\b", joined):
+        # The stock templates use ``name@domain: { <<: *domain, ... }``.  In
+        # that compact form the behavior lives in the YAML anchor, outside
+        # this entry, so the key suffix is the reliable signal.  For ordinary
+        # expanded entries retain the behavior check as well.
+        if re.search(r"(?:^|[\s,{])behavior\s*:\s*ipcidr\b", joined):
+            continue
+        if name.lower().endswith("@domain") or re.search(r"(?:^|[\s,{])behavior\s*:\s*(?:domain|classical)\b", joined):
             names.append(name)
     return names
+
+
+def _rule_provider_entry_names(config_text: str) -> list[str]:
+    """Return every top-level provider key, including compact YAML entries."""
+
+    section = _top_level_section(config_text, "rule-providers")
+    if not section:
+        return []
+    names: list[str] = []
+    # Provider keys are indented exactly one level below rule-providers.  This
+    # deliberately does not parse nested fields, so arbitrary user YAML is
+    # preserved byte-for-byte by the assistant.
+    for line in section[2].splitlines()[1:]:
+        match = re.match(r"^  ([^\s:#][^:]*):", line)
+        if match:
+            name = match.group(1).strip()
+            if name and name not in names:
+                names.append(name)
+    return names
+
+
+def _normalize_domain_rule_providers(value: Any) -> list[str]:
+    """Normalize the UI's provider selection to known, safe provider IDs."""
+
+    if value is True:
+        raw: list[Any] = list(DEFAULT_DOMAIN_RULE_PROVIDERS)
+    elif value in (None, False):
+        raw = []
+    elif isinstance(value, str):
+        raw = [item.strip() for item in value.split(",")]
+    elif isinstance(value, (list, tuple, set)):
+        raw = list(value)
+    elif isinstance(value, dict):
+        raw = [key for key, enabled in value.items() if enabled]
+    else:
+        raw = []
+
+    aliases = {
+        "category-ru": "category_ru@domain",
+        "category_ru": "category_ru@domain",
+        "private": "geosite_private@domain",
+        "geosite-private": "geosite_private@domain",
+        "geosite_private": "geosite_private@domain",
+    }
+    known = {name.lower(): name for name in DEFAULT_DOMAIN_RULE_PROVIDERS}
+    selected: list[str] = []
+    for item in raw:
+        key = str(item or "").strip()
+        canonical = known.get(key.lower()) or aliases.get(key.lower())
+        if canonical and canonical not in selected:
+            selected.append(canonical)
+    # Keep output stable for snapshots and generated YAML.  The category list
+    # precedes private, matching the recommended fake-ip-filter order.
+    return [name for name in DEFAULT_DOMAIN_RULE_PROVIDERS if name in selected]
+
+
+def _domain_rule_provider_status(config_text: str) -> dict[str, dict[str, Any]]:
+    domain_names = {name.lower(): name for name in _domain_rule_provider_names(config_text)}
+    aliases = {
+        "category_ru@domain": ("category-ru@domain",),
+        "geosite_private@domain": ("geosite-private@domain",),
+    }
+    return {
+        name: {
+            "configured": name.lower() in domain_names or any(alias.lower() in domain_names for alias in aliases.get(name, ())),
+            "filter": f"rule-set:{domain_names.get(name.lower()) or next((alias for alias in aliases.get(name, ()) if alias.lower() in domain_names), name)}",
+            "url": url,
+        }
+        for name, url in DEFAULT_DOMAIN_RULE_PROVIDERS.items()
+    }
+
+
+def _render_domain_rule_provider(name: str, url: str, *, use_anchor: bool) -> str:
+    if use_anchor:
+        return f"  {name}: {{ <<: *domain, url: {url} }}"
+    return (
+        f"  {name}:\n"
+        "    type: http\n"
+        "    behavior: domain\n"
+        "    format: mrs\n"
+        "    interval: 86400\n"
+        f"    url: {url}"
+    )
+
+
+def _with_domain_rule_provider_defaults(text: str, providers: Any = None) -> str:
+    """Add selected GeoSite-free MRS providers without replacing user entries."""
+
+    selected = _normalize_domain_rule_providers(providers)
+    if not selected:
+        return str(text or "")
+    source = str(text or "")
+    existing = {name.lower() for name in _rule_provider_entry_names(source)}
+    aliases = {
+        "category_ru@domain": ("category-ru@domain",),
+        "geosite_private@domain": ("geosite-private@domain",),
+    }
+    missing = [
+        name for name in selected
+        if name.lower() not in existing and not any(alias.lower() in existing for alias in aliases.get(name, ()))
+    ]
+    if not missing:
+        return source
+    use_anchor = bool(re.search(r"(?m)&domain\b", source))
+    rendered = "\n".join(_render_domain_rule_provider(name, DEFAULT_DOMAIN_RULE_PROVIDERS[name], use_anchor=use_anchor) for name in missing)
+    section = _top_level_section(source, "rule-providers")
+    if section:
+        start, _end, body = section
+        body_without_trailing = body.rstrip("\r\n")
+        insertion = "\n" + rendered + "\n"
+        return source[:start] + body_without_trailing + insertion + source[start + len(body):]
+
+    # Put a newly created provider map alongside the other top-level runtime
+    # sections.  This keeps the generated config readable and leaves scalar
+    # settings at the top untouched.
+    insertion_at = len(source)
+    for match in _TOP_LEVEL_KEY_RE.finditer(source):
+        if match.group("key") in _DNS_INSERT_BEFORE_SECTIONS:
+            insertion_at = match.start()
+            break
+    before = source[:insertion_at].rstrip("\r\n")
+    after = source[insertion_at:].lstrip("\r\n")
+    block = "rule-providers:\n" + rendered
+    return f"{before}\n\n{block}\n\n{after}" if after else f"{before}\n\n{block}\n"
 
 
 def _fake_ip_default_filters(config_text: str = "") -> list[str]:
     """Build safe defaults, adding private-domain source only when available."""
 
     geodata = _geodata_runtime_config(config_text)
+    providers = _domain_rule_provider_status(config_text)
+    provider_filters = [
+        details["filter"]
+        for details in providers.values()
+        if details["configured"]
+    ]
+    if provider_filters:
+        return provider_filters
     if geodata["private_filter"]:
         filters = [str(geodata["private_filter"])]
         if geodata["private_source"] == "geodata":
@@ -621,7 +784,15 @@ def _insert_managed_dns_block(text: str, block: str) -> str:
     return f"{before}\n\n{managed}\n"
 
 
-def build_enabled_config(text: str, group: Optional[str] = None, *, mode: str = "redir-host", fake_ip: Any = None, geodata: bool = False) -> tuple[str, str]:
+def build_enabled_config(
+    text: str,
+    group: Optional[str] = None,
+    *,
+    mode: str = "redir-host",
+    fake_ip: Any = None,
+    geodata: bool = False,
+    rule_providers: Any = None,
+) -> tuple[str, str]:
     original = str(text or "")
     if not original.strip():
         raise MihomoDnsError("Активный config.yaml пуст.", code="config_empty")
@@ -636,6 +807,11 @@ def build_enabled_config(text: str, group: Optional[str] = None, *, mode: str = 
     if normalized_mode == "fake-ip" and not _fake_ip_route_available(original):
         raise MihomoDnsError("Fake-IP требует включённый TUN или TProxy-маршрут.", code="fake_ip_route_missing")
     source = _with_geodata_defaults(original) if (geodata and normalized_mode == "fake-ip") else original
+    # GeoSite DAT and domain MRS providers are alternative sources.  Never add
+    # both for one activation: the selected source determines the generated
+    # fake-ip filters and avoids duplicate downloads at runtime.
+    if normalized_mode == "fake-ip" and not geodata:
+        source = _with_domain_rule_provider_defaults(source, rule_providers)
     fake_options = _normalize_fake_ip_options(fake_ip, config_text=source) if normalized_mode == "fake-ip" else None
     selected = str(group or _select_proxy_group(original) or "").strip()
     if not selected:
@@ -906,6 +1082,7 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         "listen": str(dns_runtime["listen"] or DNS_LISTEN),
         "mode": mode if mode in DNS_MODES else "redir-host",
         "fake_ip": state.get("fake_ip") if isinstance(state.get("fake_ip"), dict) else None,
+        "rule_providers": state.get("rule_providers") if isinstance(state.get("rule_providers"), list) else [],
         "fake_ip_available": _fake_ip_route_available(text),
         "geodata": geodata,
         "blockers": blockers,
@@ -933,6 +1110,7 @@ def apply_action(
     mode: str = "redir-host",
     fake_ip: Any = None,
     geodata: bool = False,
+    rule_providers: Any = None,
     proxy_group: Optional[str] = None,
 ) -> dict[str, Any]:
     normalized = str(action or "").strip().lower()
@@ -958,6 +1136,7 @@ def apply_action(
                 mode=mode,
                 fake_ip=fake_ip,
                 geodata=geodata,
+                rule_providers=rule_providers,
             )
             validation = validate_config(new_content=prepared) or ""
             if not _validation_ok(validation):
@@ -1006,7 +1185,8 @@ def apply_action(
                     "proxy_group": group,
                     "listen": DNS_LISTEN,
                     "mode": _normalize_mode(mode),
-                    "fake_ip": ({k: v for k, v in _normalize_fake_ip_options(fake_ip, config_text=current).items() if k != "network"} if _normalize_mode(mode) == "fake-ip" else None),
+                    "fake_ip": ({k: v for k, v in _normalize_fake_ip_options(fake_ip, config_text=prepared).items() if k != "network"} if _normalize_mode(mode) == "fake-ip" else None),
+                    "rule_providers": _normalize_domain_rule_providers(rule_providers) if _normalize_mode(mode) == "fake-ip" and not geodata else [],
                 }
                 _save_state(ui_state_dir, config_file, next_state)
                 _clear_release(ui_state_dir, config_file)
@@ -1017,6 +1197,7 @@ def apply_action(
                     "listen": DNS_LISTEN,
                     "mode": _normalize_mode(mode),
                     "fake_ip": ({k: v for k, v in _normalize_fake_ip_options(fake_ip).items() if k != "network"} if _normalize_mode(mode) == "fake-ip" else None),
+                    "rule_providers": _normalize_domain_rule_providers(rule_providers) if _normalize_mode(mode) == "fake-ip" and not geodata else [],
                     "backup": str(getattr(backup, "filename", "") or "") or None,
                     "probe": probe,
                 }

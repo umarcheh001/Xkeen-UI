@@ -13390,6 +13390,44 @@ body.panel-page #mihomo-dns-modal .mihomo-dns-geodata-toggle .dt-switch-label {
   font-weight: 560;
 }
 
+body.panel-page #mihomo-dns-modal .mihomo-dns-rule-providers {
+  display: grid;
+  gap: 5px;
+  margin-top: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-control-radius);
+  background: color-mix(in srgb, var(--op-surface-3) 42%, var(--op-surface-2));
+}
+body.panel-page #mihomo-dns-modal .mihomo-dns-rule-providers.hidden {
+  display: none;
+}
+body.panel-page #mihomo-dns-modal .mihomo-dns-rule-providers-title {
+  color: var(--op-text);
+  font-size: calc(11px * var(--xk-font-scale, 1));
+}
+body.panel-page #mihomo-dns-modal .mihomo-dns-rule-provider-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+body.panel-page #mihomo-dns-modal .mihomo-dns-provider-btn {
+  min-height: 30px;
+  padding: 4px 8px;
+  border-color: var(--op-border);
+  border-radius: var(--op-control-radius);
+  color: var(--op-muted);
+  font-size: calc(10px * var(--xk-font-scale, 1));
+}
+body.panel-page #mihomo-dns-modal .mihomo-dns-provider-btn[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--op-accent) 55%, var(--op-border));
+  color: var(--op-text);
+  background: var(--op-accent-soft);
+}
+body.panel-page #mihomo-dns-modal .mihomo-dns-provider-btn:disabled {
+  opacity: .55;
+}
+
 body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .modal-header {
   min-height: 50px;
   height: auto;
