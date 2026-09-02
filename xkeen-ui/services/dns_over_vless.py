@@ -1803,27 +1803,79 @@ def _set_dns_override(enabled: bool) -> None:
         )
 
 
-def _wait_for_port_53(*, should_be_free: bool, timeout: float = 8.0) -> bool:
+def _port_53_is_held(proc_dir: str = "/proc") -> Optional[bool]:
+    """Is port 53 held by a resolver, as opposed to merely used?
+
+    ``bind()`` cannot answer this.  With UDP tproxy in force, Xray keeps
+    sockets bound to ``<the address the client aimed at>:53`` so it can answer
+    from the right source, and such a socket blocks ``bind(0.0.0.0, 53)`` while
+    blocking nothing else: Xray itself listens on ``::`` and the two live side
+    by side.  Measured on a live router, the panel refused to enable a feature
+    that was perfectly able to run.
+
+    A resolver owning the port is one bound to a wildcard address, so that is
+    what is looked for here.  ``None`` means the tables could not be read --
+    the caller falls back to the old probe rather than guessing.
+    """
+    wildcards = {"00000000", "0" * 32}
+    seen_any = False
+    for name in ("udp", "udp6", "tcp", "tcp6"):
+        try:
+            with open(os.path.join(proc_dir, "net", name), "r", encoding="utf-8") as handle:
+                rows = handle.read().splitlines()[1:]
+        except OSError:
+            continue
+        seen_any = True
+        for row in rows:
+            fields = row.split()
+            if len(fields) < 4:
+                continue
+            local, state = fields[1], fields[3]
+            address, _, port = local.partition(":")
+            if port.lower() != "0035":
+                continue
+            # A TCP socket that is not listening is a conversation, not an owner.
+            if name.startswith("tcp") and state.upper() != "0A":
+                continue
+            if address.lower().lstrip("0") == "" and address.lower() in wildcards:
+                return True
+    return False if seen_any else None
+
+
+def _wait_for_port_53(
+    *, should_be_free: bool, timeout: float = 8.0, proc_dir: str = "/proc"
+) -> bool:
     """Wait until the firmware resolver releases (or reclaims) port 53.
 
     ``opkg dns-override`` is applied asynchronously by KeeneticOS.  Starting
     Xray before ndnproxy has released the socket would make the restart fail,
     while restoring the firmware resolver before Xray stops would race in the
     opposite direction.
+
+    Who holds the port is read from the kernel's tables, not attempted with a
+    ``bind``: see ``_port_53_is_held``.  Only where those tables cannot be read
+    does the old bind probe stand in.
     """
     deadline = time.monotonic() + max(0.2, float(timeout or 0))
-    while time.monotonic() < deadline:
-        in_use = False
-        for sock_type in (socket.SOCK_STREAM, socket.SOCK_DGRAM):
-            with socket.socket(socket.AF_INET, sock_type) as sock:
-                try:
-                    sock.bind(("0.0.0.0", 53))
-                except OSError:
-                    in_use = True
-                    break
-        if in_use == (not should_be_free):
+    while True:
+        held = _port_53_is_held(proc_dir=proc_dir)
+        if held is None:
+            held = _port_53_bind_probe()
+        if held == (not should_be_free):
             return True
+        if time.monotonic() >= deadline:
+            return False
         time.sleep(0.2)
+
+
+def _port_53_bind_probe() -> bool:
+    """Fallback for systems without ``/proc``: is the port refusing a bind?"""
+    for sock_type in (socket.SOCK_STREAM, socket.SOCK_DGRAM):
+        with socket.socket(socket.AF_INET, sock_type) as sock:
+            try:
+                sock.bind(("0.0.0.0", 53))
+            except OSError:
+                return True
     return False
 
 

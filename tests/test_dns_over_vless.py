@@ -2400,3 +2400,52 @@ def test_the_pass_through_probe_asks_a_domain_whose_txt_fits_in_one_packet(monke
     assert seen["qtype"] == dns.QTYPE_TXT
     assert seen["accept_truncated"] is True
     assert seen["domain"] == "example.com"
+
+
+def _proc_net(tmp_path: Path, **files: str) -> Path:
+    """A stand-in ``/proc/net`` with the tables this check reads."""
+    net = tmp_path / "proc" / "net"
+    net.mkdir(parents=True)
+    header_udp = (
+        "   sl  local_address rem_address   st tx_queue rx_queue tr tm->when "
+        "retrnsmt   uid  timeout inode ref pointer drops\n"
+    )
+    for name in ("udp", "udp6", "tcp", "tcp6"):
+        (net / name).write_text(header_udp + files.get(name, ""), encoding="utf-8")
+    return net.parent
+
+
+def test_a_transparent_socket_does_not_count_as_the_port_being_held(tmp_path: Path):
+    """Measured on a live router: Xray listens on ``::`` and keeps tproxy
+    sockets bound to ``<external DNS>:53`` at the same time.  Those sockets
+    belong to traffic passing through, not to anyone holding port 53, and the
+    old ``bind(0.0.0.0, 53)`` check refused to start the feature because of them.
+    """
+    # 8.8.8.8:53, little-endian hex, as /proc/net/udp writes it
+    proc = _proc_net(tmp_path, udp="  1: 08080808:0035 00000000:0000 07 0 0 0\n")
+
+    assert dns._port_53_is_held(proc_dir=str(proc)) is False
+
+
+def test_the_firmware_resolver_on_a_wildcard_address_counts_as_held(tmp_path: Path):
+    """ndnproxy sits on 0.0.0.0:53 and :::53 -- that is the port being held."""
+    proc = _proc_net(tmp_path, udp="  1: 00000000:0035 00000000:0000 07 0 0 0\n")
+    assert dns._port_53_is_held(proc_dir=str(proc)) is True
+
+    proc6 = _proc_net(
+        tmp_path / "six",
+        udp6="  1: 00000000000000000000000000000000:0035 00000000000000000000000000000000:0000 07 0 0 0\n",
+    )
+    assert dns._port_53_is_held(proc_dir=str(proc6)) is True
+
+
+def test_the_wait_for_the_port_reads_the_tables_rather_than_binding(tmp_path: Path):
+    """The wait must agree with reality: a pass-through socket is not a squatter."""
+    passing = _proc_net(tmp_path, udp="  1: 08080808:0035 00000000:0000 07 0 0 0\n")
+    assert dns._wait_for_port_53(should_be_free=True, timeout=0.3, proc_dir=str(passing)) is True
+
+    firmware = _proc_net(tmp_path / "held", udp="  1: 00000000:0035 00000000:0000 07 0 0 0\n")
+    # The firmware resolver really is on the port: the wait has to fail here.
+    assert dns._wait_for_port_53(should_be_free=True, timeout=0.3, proc_dir=str(firmware)) is False
+    # ...and the opposite wait is satisfied by exactly the same reading.
+    assert dns._wait_for_port_53(should_be_free=False, timeout=0.3, proc_dir=str(firmware)) is True
