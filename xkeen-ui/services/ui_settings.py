@@ -95,6 +95,10 @@ DEFAULTS: Dict[str, Any] = {
         # Show the routing scenario helper card.
         # Default ON to preserve the existing panel layout.
         "showScenarioCard": True,
+        # Раскладка окна DNS-over-VLESS: "auto" — две колонки, если помещаются,
+        # "single" — всегда одна, "split" — всегда две. Ниже 1100 px любая
+        # раскладка схлопывается в одну колонку: на планшете двух колонок нет.
+        "dnsOverVlessLayout": "auto",
     },
     "mihomo": {
         # Hide nodes only after Mihomo itself reports a stable run of timeout
@@ -189,6 +193,7 @@ def _canonical_empty() -> Dict[str, Any]:
             "autoApply": bool(DEFAULTS["routing"]["autoApply"]),
             "showActiveOutbound": bool(DEFAULTS["routing"]["showActiveOutbound"]),
             "showScenarioCard": bool(DEFAULTS["routing"]["showScenarioCard"]),
+            "dnsOverVlessLayout": str(DEFAULTS["routing"]["dnsOverVlessLayout"]),
         },
         "mihomo": {
             "hideUnavailable": bool(DEFAULTS["mihomo"]["hideUnavailable"]),
@@ -529,8 +534,21 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 rep.warnings.append({"path": "routing.showScenarioCard", "warning": "invalid type; ignored"})
                 rep.changed = True
 
+        dns_layout = routing_raw.get("dnsOverVlessLayout")
+        if dns_layout is not None:
+            value = _as_lower_str(dns_layout)
+            if value in ("auto", "single", "split"):
+                out["routing"]["dnsOverVlessLayout"] = value
+            else:
+                # Неизвестная раскладка — это чаще всего настройка из будущей
+                # версии. Откатываемся к auto, а не роняем весь блок routing.
+                rep.warnings.append(
+                    {"path": "routing.dnsOverVlessLayout", "warning": "unknown value; reset to auto"}
+                )
+                rep.changed = True
+
         for k in routing_raw.keys():
-            if k not in ("guiEnabled", "autoApply", "showActiveOutbound", "showScenarioCard"):
+            if k not in ("guiEnabled", "autoApply", "showActiveOutbound", "showScenarioCard", "dnsOverVlessLayout"):
                 rep.warnings.append({"path": f"routing.{k}", "warning": "unknown key dropped"})
                 rep.changed = True
 
