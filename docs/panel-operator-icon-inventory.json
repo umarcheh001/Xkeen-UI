@@ -2544,6 +2544,11 @@
           "accessible_label": "Обновить список устройств"
         },
         {
+          "location": "xkeen-ui/templates/panel.html:L2679",
+          "control_type": "text+icon",
+          "accessible_label": "Вернуть поля окна к значениям по умолчанию. Роутер при этом не меняется — настройки применятся, только когда вы включите функцию."
+        },
+        {
           "location": "xkeen-ui/templates/panel.html:L3040",
           "control_type": "text+icon",
           "accessible_label": "Обновить"

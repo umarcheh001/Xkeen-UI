@@ -832,7 +832,7 @@
         ],
         "icon_inventory": {
           "action_control_count": 7,
-          "operator_icon_control_count": 1,
+          "operator_icon_control_count": 2,
           "close_control_count": 1,
           "close_icons": [
             "close"
@@ -868,7 +868,9 @@
             },
             {
               "control": "routing-dns-over-vless-reset",
-              "icons": [],
+              "icons": [
+                "refresh"
+              ],
               "icon_only": false,
               "accessible_name": true
             },

@@ -19478,8 +19478,10 @@ html[data-theme="light"] .routing-dns-over-vless-route-fallback[data-state="drop
 .routing-dns-over-vless-clients-pick:disabled { cursor: not-allowed; }
 .routing-dns-over-vless-capture-toggle { margin-top: 4px; }
 .routing-dns-over-vless-capture-cost { border-left: 3px solid #f59e0b; padding-left: 10px; }
-.routing-dns-over-vless-reset { margin-right: auto; background: none; border: 0; padding: 6px 2px; color: var(--modal-muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font: inherit; }
-.routing-dns-over-vless-reset:hover:not(:disabled) { color: var(--text, inherit); }
+/* Kept to the left of the closing buttons: it is a separate action, not a
+   variant of "Применить".  It reads as a real button rather than a muted link
+   because it was too easy to miss among the two below. */
+.routing-dns-over-vless-reset { margin-right: auto; display: inline-flex; align-items: center; gap: 6px; }
 .routing-dns-over-vless-reset:disabled { opacity: 0.5; cursor: not-allowed; }
 .routing-dns-over-vless-warning { margin: 0; }
 .routing-dns-over-vless-links { margin: 0; color: var(--modal-muted); }
