@@ -153,9 +153,12 @@ DNS_PROBE_ATTEMPTS = 3
 # that carries the rest.
 QTYPE_A = 1
 QTYPE_TXT = 16
-# The pass-through probe: a domain that always carries TXT records, asked no
-# more often than this, and acted upon only after this many failures in a row.
-PASS_PROBE_DOMAIN = "google.com"
+# The pass-through probe: a domain whose TXT answer fits in a single UDP packet,
+# asked no more often than this, and acted upon only after this many failures in
+# a row.  Measured on a live router: TXT of google.com and cloudflare.com comes
+# back truncated with no records at all, which a probe counting records would
+# read as a dead node.
+PASS_PROBE_DOMAIN = PROBE_DOMAIN
 PASS_PROBE_INTERVAL = 600.0
 PASS_PROBE_FAILS = 2
 # A switch rewrites the fragment and restarts the core, which drops every
@@ -1957,8 +1960,26 @@ def _dns_query_packet(domain: str, qtype: int, txid: int) -> bytes:
     return header + qname + struct.pack("!HH", int(qtype), 1)
 
 
+def _probe_verdict(response: Dict[str, Any], *, accept_truncated: bool) -> bool:
+    """Does this answer prove what the probe set out to prove?
+
+    Records in the answer always do.  A truncated answer (``TC=1``) carries
+    none, yet proves the query reached a server and came back -- which is the
+    whole question for the pass-through probe, where an empty answer is the
+    failure being looked for.  The plain health probe wants records.
+    """
+    if int(response.get("rcode") or 0) != 0:
+        return False
+    if int(response.get("answers") or 0) > 0:
+        return True
+    return bool(accept_truncated and response.get("truncated"))
+
+
 def _dns_probe(
-    domain: str = PROBE_DOMAIN, timeout: float = 7.0, qtype: int = QTYPE_A
+    domain: str = PROBE_DOMAIN,
+    timeout: float = 7.0,
+    qtype: int = QTYPE_A,
+    accept_truncated: bool = False,
 ) -> Dict[str, Any]:
     """Probe the new listener with short retries while Xray warms up.
 
@@ -2020,12 +2041,14 @@ def _dns_probe(
             continue
         rid, flags, _qd, answers, _ns, _ar = struct.unpack("!HHHHHH", data[:12])
         rcode = flags & 0x000F
-        last_response = {"answers": answers, "rcode": rcode}
-        if rid == txid and rcode == 0 and answers > 0:
+        truncated = bool(flags & 0x0200)
+        last_response = {"answers": answers, "rcode": rcode, "truncated": truncated}
+        if rid == txid and _probe_verdict(last_response, accept_truncated=accept_truncated):
             return {
                 "ok": True,
                 "answers": answers,
                 "rcode": rcode,
+                "truncated": truncated,
                 "attempts": attempts,
                 "latency_ms": round((time.monotonic() - started) * 1000),
             }
@@ -2152,9 +2175,11 @@ def _pass_probe() -> Dict[str, Any]:
 
     A TXT query cannot be answered by the built-in DNS at all, so an answer to
     it proves the whole chain: ``nonIPQuery: "skip"`` is in force and the node
-    named in ``proxySettings`` is carrying the query.
+    named in ``proxySettings`` is carrying the query.  A truncated answer proves
+    it just as well -- it came back from the far side -- while an empty one is
+    exactly the failure being looked for.
     """
-    return _dns_probe(PASS_PROBE_DOMAIN, qtype=QTYPE_TXT)
+    return _dns_probe(PASS_PROBE_DOMAIN, qtype=QTYPE_TXT, accept_truncated=True)
 
 
 def check_pass_non_ip(

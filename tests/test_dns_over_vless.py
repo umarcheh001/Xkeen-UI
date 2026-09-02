@@ -2141,7 +2141,12 @@ def _pass_through_install(tmp_path: Path, monkeypatch) -> tuple[Path, Path, Path
 def _quiet_other_types(monkeypatch) -> None:
     """A and AAAA still answer; everything else comes back empty."""
 
-    def probe(domain: str = dns.PROBE_DOMAIN, timeout: float = 7.0, qtype: int = dns.QTYPE_A):
+    def probe(
+        domain: str = dns.PROBE_DOMAIN,
+        timeout: float = 7.0,
+        qtype: int = dns.QTYPE_A,
+        accept_truncated: bool = False,
+    ):
         if qtype == dns.QTYPE_A:
             return {"ok": True, "answers": 1}
         return {"ok": False, "error": "некорректный DNS-ответ (rcode=0, answers=0)", "answers": 0}
@@ -2306,7 +2311,12 @@ def test_enabling_the_pass_through_checks_it_at_once(tmp_path: Path, monkeypatch
     )
     asked: list[int] = []
 
-    def probe(domain: str = dns.PROBE_DOMAIN, timeout: float = 7.0, qtype: int = dns.QTYPE_A):
+    def probe(
+        domain: str = dns.PROBE_DOMAIN,
+        timeout: float = 7.0,
+        qtype: int = dns.QTYPE_A,
+        accept_truncated: bool = False,
+    ):
         asked.append(qtype)
         return {"ok": True, "answers": 1}
 
@@ -2347,3 +2357,46 @@ def test_a_clock_that_jumps_backwards_does_not_silence_the_check(tmp_path: Path,
     )
 
     assert result["action"] == "watching"
+
+
+def test_a_truncated_answer_still_proves_the_pass_through_carries_the_query():
+    """`TC=1` means the answer did not fit in one UDP packet, not that it failed.
+
+    Measured on a live router: `TXT google.com` comes back truncated with no
+    records, while the query itself plainly reached the far side.  Counting
+    that as a failure would make the guard walk the whole route, restarting
+    the core at every step, while nothing is broken.
+    """
+    truncated = {"rcode": 0, "answers": 0, "truncated": True}
+    empty = {"rcode": 0, "answers": 0, "truncated": False}
+    answered = {"rcode": 0, "answers": 2, "truncated": False}
+    refused = {"rcode": 5, "answers": 0, "truncated": False}
+
+    assert dns._probe_verdict(answered, accept_truncated=False) is True
+    assert dns._probe_verdict(truncated, accept_truncated=True) is True
+    # An empty answer is exactly the failure the pass-through probe looks for.
+    assert dns._probe_verdict(empty, accept_truncated=True) is False
+    assert dns._probe_verdict(refused, accept_truncated=True) is False
+    # The plain A probe has no reason to accept a truncated answer.
+    assert dns._probe_verdict(truncated, accept_truncated=False) is False
+
+
+def test_the_pass_through_probe_asks_a_domain_whose_txt_fits_in_one_packet(monkeypatch):
+    """Measured on the router: TXT of google.com and cloudflare.com is truncated.
+
+    The probe forgives truncation anyway, but asking a domain whose answer fits
+    keeps the check honest instead of resting on that leniency.
+    """
+    seen: Dict[str, Any] = {}
+
+    def probe(domain=dns.PROBE_DOMAIN, timeout=7.0, qtype=dns.QTYPE_A, accept_truncated=False):
+        seen.update(domain=domain, qtype=qtype, accept_truncated=accept_truncated)
+        return {"ok": True, "answers": 2}
+
+    monkeypatch.setattr(dns, "_dns_probe", probe)
+
+    dns._pass_probe()
+
+    assert seen["qtype"] == dns.QTYPE_TXT
+    assert seen["accept_truncated"] is True
+    assert seen["domain"] == "example.com"
