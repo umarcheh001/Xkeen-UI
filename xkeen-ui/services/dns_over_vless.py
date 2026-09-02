@@ -152,6 +152,7 @@ DNS_PROBE_ATTEMPTS = 3
 # built-in DNS, so only a query of another type says anything about the node
 # that carries the rest.
 QTYPE_A = 1
+QTYPE_AAAA = 28
 QTYPE_TXT = 16
 # The pass-through probe: a domain whose TXT answer fits in a single UDP packet,
 # asked no more often than this, and acted upon only after this many failures in
@@ -1310,28 +1311,49 @@ def _dns_outbound(
     pass_node: str = "",
     upstreams: Optional[list[str]] = None,
     mark: Optional[int] = None,
+    modern: bool = True,
 ) -> Dict[str, Any]:
     """The DNS outbound, optionally letting the other record types through.
 
     Xray's built-in DNS answers A and AAAA and nothing else: MX, TXT, SRV,
     HTTPS, NS and SOA come back as ``NOERROR`` with no records, which a client
-    reads as "no such record" and does not retry.  ``nonIPQuery: "skip"`` hands
-    those queries on untouched instead, and ``proxySettings`` decides where
-    they go -- without it they would leave in the clear.  A balancer cannot be
-    named there (Xray looks for an outbound handler and fails to start), so
-    these types ride exactly one node.
+    reads as "no such record" and does not retry.  The pass-through hands those
+    queries on instead, and ``proxySettings`` decides where they go -- without
+    it they would leave in the clear.  A balancer cannot be named there (Xray
+    looks for an outbound handler and fails to start), so these types ride
+    exactly one node.
+
+    Two forms say this.  ``rules`` is the current one: ``hijack`` sends A and
+    AAAA into the built-in DNS, ``direct`` hands the rest to the destination.
+    ``nonIPQuery`` is what older cores understand; the core itself warns that
+    it "will be removed soon", so it is written only where ``rules`` is not
+    understood -- see ``_core_supports_dns_rules``.
     """
     outbound: Dict[str, Any] = {"tag": DNS_OUT_TAG, "protocol": "dns"}
     if pass_node:
-        settings: Dict[str, Any] = {"nonIPQuery": "skip"}
-        # Where a skipped query goes: the address the client aimed at is
+        # Where a handed-on query goes: the address the client aimed at is
         # useless once it leaves the tunnel, so the first DNS server of the
         # list takes its place, port included.
         chosen = list(upstreams or DEFAULT_UPSTREAMS)[0]
         host, port = _split_upstream(chosen)
-        settings["address"] = host or DEFAULT_UPSTREAMS[0]
-        if port and port != LISTENER_PORT:
-            settings["port"] = port
+        address = host or DEFAULT_UPSTREAMS[0]
+        settings: Dict[str, Any] = {}
+        if modern:
+            settings["rewriteAddress"] = address
+            if port and port != LISTENER_PORT:
+                settings["rewritePort"] = port
+            # Query types are numbers here: the parser reads a string as a port
+            # range and refuses names like "A".
+            settings["rules"] = [
+                {"action": "hijack", "qType": QTYPE_A},
+                {"action": "hijack", "qType": QTYPE_AAAA},
+                {"action": "direct"},
+            ]
+        else:
+            settings["nonIPQuery"] = "skip"
+            settings["address"] = address
+            if port and port != LISTENER_PORT:
+                settings["port"] = port
         outbound["settings"] = settings
         outbound["proxySettings"] = {"tag": pass_node}
     if mark is not None:
@@ -1350,6 +1372,7 @@ def _managed_fragment(
     direct_domains: Optional[list[str]] = None,
     pass_node: str = "",
     mark: Optional[int] = None,
+    modern: bool = True,
 ) -> Dict[str, Any]:
     servers: list[Any] = []
     resolvers = list(local_resolvers or [])
@@ -1402,7 +1425,7 @@ def _managed_fragment(
             "tag": DNS_IN_TAG,
         },
         "inbounds": [_dns_listener()],
-        "outbounds": [_dns_outbound(pass_node, public_upstreams, mark)],
+        "outbounds": [_dns_outbound(pass_node, public_upstreams, mark, modern)],
     }
 
 
@@ -1665,16 +1688,20 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
     # fragment this panel would write, so it reads back as no pass-through and
     # the comparison below reports the difference.
     declared_pass = ""
+    # Which form the pass-through is written in: an install set up before the
+    # move to ``rules`` keeps the deprecated one, and reading it as somebody's
+    # hand edit would leave the panel unable to disable its own configuration.
+    declared_modern = True
     first_outbound = next(iter((fragment or {}).get("outbounds") or []), None)
     if isinstance(first_outbound, dict):
         settings = first_outbound.get("settings")
         proxy_settings = first_outbound.get("proxySettings")
-        if (
-            isinstance(settings, dict)
-            and settings.get("nonIPQuery") == "skip"
-            and isinstance(proxy_settings, dict)
-        ):
-            declared_pass = _clean_tag(proxy_settings.get("tag"))
+        if isinstance(settings, dict) and isinstance(proxy_settings, dict):
+            if settings.get("nonIPQuery") == "skip":
+                declared_pass = _clean_tag(proxy_settings.get("tag"))
+                declared_modern = False
+            elif isinstance(settings.get("rules"), list) and settings.get("rules"):
+                declared_pass = _clean_tag(proxy_settings.get("tag"))
     # The mark is read back from the fragment rather than from the config as it
     # stands now: a proxy added since then may carry a different one, and that
     # is not the panel's writing having drifted.
@@ -1696,6 +1723,7 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
         _zones_of(direct_declared),
         declared_pass,
         declared_mark,
+        declared_modern,
     )
     capture_rule_obj = next((item for item in rules if _clean_tag(item.get("ruleTag")) == CAPTURE_RULE_TAG), None)
     balancer_obj = next(
@@ -1944,6 +1972,44 @@ def _xray_binary() -> str:
     if os.path.exists("/opt/sbin/xray"):
         return "/opt/sbin/xray"
     return str(shutil.which("xray") or "")
+
+
+def _core_supports_dns_rules() -> bool:
+    """Does this core understand the DNS outbound ``rules`` list?
+
+    ``nonIPQuery`` is what older cores understand, and the current one warns it
+    "will be removed soon"; both forms therefore have to be available.  The core
+    itself is the only honest answer to which one it takes, so a throwaway config
+    with a single rule is put to ``xray -test``.  A core that cannot be found or
+    cannot be asked keeps the older form: writing a config the core refuses is
+    worse than writing a deprecated one it accepts.
+    """
+    xray = _xray_binary()
+    if not xray:
+        return False
+    probe = {
+        "outbounds": [
+            {
+                "tag": DNS_OUT_TAG,
+                "protocol": "dns",
+                "settings": {"rules": [{"action": "hijack", "qType": QTYPE_A}]},
+            }
+        ]
+    }
+    try:
+        with tempfile.TemporaryDirectory(prefix="xkeen-dns-rules-") as tmpdir:
+            path = os.path.join(tmpdir, "probe.json")
+            _atomic_write_json(path, probe)
+            proc = subprocess.run(
+                [xray, "-test", "-c", path],
+                capture_output=True,
+                text=True,
+                timeout=max(5, int(os.environ.get("XKEEN_XRAY_TEST_TIMEOUT", "30"))),
+                check=False,
+            )
+            return proc.returncode == 0
+    except Exception:  # noqa: BLE001 - an unaskable core keeps the older form
+        return False
 
 
 def _stage_and_test(configs_dir: str, replacements: Dict[str, Optional[Dict[str, Any]]]) -> Dict[str, Any]:
@@ -2719,6 +2785,7 @@ def apply_action(
                     wanted_direct_domains,
                     wanted_pass_node,
                     _service_mark(runtime),
+                    _core_supports_dns_rules() if wanted_pass_node else True,
                 )
                 if _managed_config_complete(presence) and current_fragment == expected_fragment:
                     # Idempotent recovery path: configuration is already

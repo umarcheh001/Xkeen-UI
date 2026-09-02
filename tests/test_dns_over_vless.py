@@ -1502,21 +1502,24 @@ def test_dns_outbound_stays_bare_until_the_other_record_types_are_let_through():
     assert dns._dns_outbound("my_proxy_1") == {
         "tag": dns.DNS_OUT_TAG,
         "protocol": "dns",
-        # The skipped queries are handed on to the destination of the
-        # connection, and a client asking the router itself aims at a private
-        # address that means nothing on the other side of the tunnel: the
-        # outbound replaces it with the first DNS server of the list.
-        "settings": {"nonIPQuery": "skip", "address": "8.8.8.8"},
-        # Without a route of their own the skipped queries would leave the
-        # router in the clear, so the pass-through always names one.
+        # A and AAAA go to the built-in DNS, everything else is handed on to
+        # the destination of the connection -- and a client asking the router
+        # itself aims at a private address that means nothing on the other side
+        # of the tunnel, so the outbound rewrites it to the first DNS server.
+        "settings": {
+            "rewriteAddress": "8.8.8.8",
+            "rules": [
+                {"action": "hijack", "qType": dns.QTYPE_A},
+                {"action": "hijack", "qType": dns.QTYPE_AAAA},
+                {"action": "direct"},
+            ],
+        },
+        # Without a route of their own those queries would leave the router in
+        # the clear, so the pass-through always names one.
         "proxySettings": {"tag": "my_proxy_1"},
     }
     # A server on a port of its own carries that port into the rewrite.
-    assert dns._dns_outbound("my_proxy_1", ["127.0.0.53:5353"])["settings"] == {
-        "nonIPQuery": "skip",
-        "address": "127.0.0.53",
-        "port": 5353,
-    }
+    assert dns._dns_outbound("my_proxy_1", ["127.0.0.53:5353"])["settings"]["rewritePort"] == 5353
 
 
 def test_pass_node_options_spell_out_the_selector_prefixes(tmp_path: Path):
@@ -1650,11 +1653,11 @@ def test_the_outbound_names_a_destination_only_with_the_pass_through():
     assert bare["inbounds"][0]["settings"] == {"network": "tcp,udp"}
     # The destination follows the DNS servers the user chose, not a constant.
     named = dns._managed_fragment(["1.1.1.1", "9.9.9.9"], pass_node="my_proxy_1")
-    assert named["outbounds"][0]["settings"] == {"nonIPQuery": "skip", "address": "1.1.1.1"}
+    assert named["outbounds"][0]["settings"]["rewriteAddress"] == "1.1.1.1"
     assert named["inbounds"][0]["settings"] == {"network": "tcp,udp"}
     # A server written as a URL still yields a plain address to aim at.
     via_url = dns._managed_fragment(["https://1.1.1.1/dns-query"], pass_node="my_proxy_1")
-    assert via_url["outbounds"][0]["settings"]["address"] == "1.1.1.1"
+    assert via_url["outbounds"][0]["settings"]["rewriteAddress"] == "1.1.1.1"
 
 
 def test_the_pass_through_listener_reads_back_without_drift(tmp_path: Path, monkeypatch):
@@ -1872,11 +1875,9 @@ def test_a_dns_server_may_name_its_own_port():
     ported = dns._managed_fragment(["127.0.0.53:5353"], pass_node="my_proxy_1")
     assert ported["dns"]["servers"] == [{"address": "127.0.0.53", "port": 5353}]
     # And the pass-through aims at the same place, port included.
-    assert ported["outbounds"][0]["settings"] == {
-        "nonIPQuery": "skip",
-        "address": "127.0.0.53",
-        "port": 5353,
-    }
+    settings = ported["outbounds"][0]["settings"]
+    assert settings["rewriteAddress"] == "127.0.0.53"
+    assert settings["rewritePort"] == 5353
 
 
 def test_a_port_is_told_apart_from_the_colons_of_an_ipv6_address():
@@ -1913,7 +1914,7 @@ def test_the_capture_rule_never_widens_beyond_port_53(tmp_path: Path):
     # rewritten in the DNS outbound instead, after routing.
     assert _capture_of(dns._build_enabled_routing(routing, target))["port"] == "53"
     fragment = dns._managed_fragment(["127.0.0.53:5353"], pass_node="my_proxy_1")
-    assert fragment["outbounds"][0]["settings"]["port"] == 5353
+    assert fragment["outbounds"][0]["settings"]["rewritePort"] == 5353
     assert _capture_of(dns._build_enabled_routing(routing, target))["port"] == "53"
 
 
@@ -2536,3 +2537,101 @@ def test_an_unmarked_install_still_gets_a_plain_dns_outbound(tmp_path: Path):
     assert dns._managed_fragment(mark=255)["outbounds"][0]["streamSettings"] == {
         "sockopt": {"mark": 255}
     }
+
+
+def test_the_pass_through_is_written_in_the_form_the_core_understands():
+    """`nonIPQuery` is deprecated: the core warns it "will be removed soon".
+
+    The replacement is a rules list -- `hijack` sends A and AAAA to the built-in
+    DNS, `direct` hands everything else on -- and it was measured to behave
+    identically on Xray 26.7.28, `proxySettings` included.
+    """
+    modern = dns._dns_outbound("my_proxy_1", ["8.8.8.8"], modern=True)["settings"]
+
+    assert modern["rules"] == [
+        {"action": "hijack", "qType": dns.QTYPE_A},
+        {"action": "hijack", "qType": dns.QTYPE_AAAA},
+        {"action": "direct"},
+    ]
+    assert modern["rewriteAddress"] == "8.8.8.8"
+    # Nothing deprecated left in this form -- that is the whole point.
+    assert "nonIPQuery" not in modern and "address" not in modern
+
+    # A core that does not know the rules keeps the form it does know.
+    legacy = dns._dns_outbound("my_proxy_1", ["8.8.8.8"], modern=False)["settings"]
+    assert legacy == {"nonIPQuery": "skip", "address": "8.8.8.8"}
+
+
+def test_a_resolver_on_another_port_keeps_its_port_in_both_forms():
+    modern = dns._dns_outbound("my_proxy_1", ["127.0.0.53:5353"], modern=True)["settings"]
+    assert modern["rewriteAddress"] == "127.0.0.53"
+    assert modern["rewritePort"] == 5353
+
+    legacy = dns._dns_outbound("my_proxy_1", ["127.0.0.53:5353"], modern=False)["settings"]
+    assert legacy["address"] == "127.0.0.53"
+    assert legacy["port"] == 5353
+
+
+@pytest.mark.parametrize("modern", [True, False])
+def test_both_forms_of_the_pass_through_read_back_as_ours(tmp_path: Path, monkeypatch, modern: bool):
+    """An install written by an older panel keeps working after an update.
+
+    The deprecated form stays readable: re-reading it as somebody's hand edit
+    would make the panel refuse to disable its own configuration.
+    """
+    configs, routing_path, state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    target = dns._select_target(dns._collect_runtime(str(configs), routing), "balancer_main")
+    _write(routing_path, dns._build_enabled_routing(routing, target))
+    _write(
+        configs / dns.MANAGED_FRAGMENT,
+        dns._managed_fragment(pass_node="my_proxy_1", modern=modern),
+    )
+    _write(state / dns.STATE_FILENAME, {"enabled": True, "pass_non_ip": True})
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["presence"]["fragment"] is True
+    assert result["tampered"] is False
+    # The point of recognising it: the panel can still switch its own work off.
+    assert result["can_disable"] is True
+
+
+def test_a_core_that_does_not_know_the_rules_gets_the_form_it_understands(
+    tmp_path: Path, monkeypatch
+):
+    """Older XKeen builds ship older cores; the panel must not lock them out."""
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(
+        dns,
+        "_write_routing_preserving_comments",
+        lambda path, obj, **_kwargs: _write(Path(path), obj),
+    )
+    monkeypatch.setattr(dns, "_core_supports_dns_rules", lambda: False)
+
+    dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+        pass_non_ip=True,
+        pass_non_ip_node="my_proxy_1",
+    )
+
+    settings = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+    settings = settings["outbounds"][0]["settings"]
+    assert settings["nonIPQuery"] == "skip"
+    assert "rules" not in settings
