@@ -50,6 +50,11 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     ['geosite_private@domain', 'rule-set:geosite_private@domain', IDS.providerPrivate],
     ['category-ai@domain', 'rule-set:category-ai@domain', IDS.providerCategoryAi],
   ];
+  const RULE_PROVIDER_LABELS = Object.freeze({
+    'category_ru@domain': 'RU',
+    'geosite_private@domain': 'Private',
+    'category-ai@domain': 'AI',
+  });
 
   function selectedRuleProviders() {
     return DOMAIN_RULE_PROVIDER_FILTERS
@@ -171,6 +176,18 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     button.disabled = !!disabled;
   }
 
+  function syncRuleProviderHighlights() {
+    const textarea = $(IDS.fakeFilters);
+    if (!textarea) return;
+    const filters = new Set(String(textarea.value || '')
+      .split(/\r?\n/)
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean));
+    DOMAIN_RULE_PROVIDER_FILTERS.forEach(([, filter, id]) => {
+      setRuleProviderButton(id, filters.has(filter.toLowerCase()), $(id)?.disabled);
+    });
+  }
+
   function syncRuleProviderUi(data) {
     const container = $(IDS.ruleProviders);
     const geodataEnabled = !!$(IDS.geodataEnable)?.checked;
@@ -179,14 +196,17 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
 
     if (!providerSelectionTouched && !busy && data) {
       const configured = data?.geodata?.domain_providers || data?.geodata?.rule_providers || {};
-      const selected = new Set(
+      const selected = new Set();
+      if (enabled) {
         DOMAIN_RULE_PROVIDER_FILTERS
           .filter(([name]) => configured?.[name]?.configured)
-          .map(([name]) => name),
-      );
-      if (!selected.size) DOMAIN_RULE_PROVIDER_FILTERS.forEach(([name]) => selected.add(name));
+          .forEach(([name]) => selected.add(name));
+      } else {
+        DOMAIN_RULE_PROVIDER_FILTERS.forEach(([name]) => selected.add(name));
+      }
       DOMAIN_RULE_PROVIDER_FILTERS.forEach(([name, , id]) => setRuleProviderButton(id, selected.has(name), false));
     }
+    if (!geodataEnabled) syncRuleProviderHighlights();
     DOMAIN_RULE_PROVIDER_FILTERS.forEach(([, , id]) => setRuleProviderButton(
       id,
       $(id)?.getAttribute('aria-pressed') === 'true',
@@ -197,11 +217,11 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     const hint = $(IDS.ruleProvidersHint);
     if (hint) {
       if (geodataEnabled) {
-        hint.textContent = 'Используется GeoSite — доменные rule-provider отключены.';
+        hint.textContent = 'MRS отключены.';
       } else if (selected.length) {
-        hint.textContent = `Будут добавлены: ${selected.join(', ')} и использованы как rule-set в fake-ip-filter.`;
+        hint.textContent = `Выбрано: ${selected.map((name) => RULE_PROVIDER_LABELS[name] || name).join(', ')}.`;
       } else {
-        hint.textContent = 'Провайдеры не выбраны — будут использованы только локальные зоны.';
+        hint.textContent = 'Списки не выбраны.';
       }
     }
   }
@@ -242,13 +262,14 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     syncRuleProviderUi(data);
     if ((mode?.value || data?.mode) === 'fake-ip') syncFakeIpFilters(!!geodataEnable?.checked);
     if (modeHint) modeHint.textContent = (mode?.value || data?.mode) === 'fake-ip'
-      ? `Расширенный режим: виртуальные IP. ${data?.fake_ip_available === false ? 'TUN/TProxy-маршрут не обнаружен.' : 'Прозрачный TUN/TProxy-маршрут обнаружен.'}`
+      ? `${data?.fake_ip_available === false ? 'Нужен TUN/TProxy: прозрачный маршрут не обнаружен.' : 'TUN/TProxy обнаружен.'} Проверьте, что диапазон не пересекается с LAN/VPN.`
       : 'Совместимо с TProxy и большинством устройств LAN.';
     const geodataHint = $(IDS.geodataHint);
     if (geodataHint) {
-      geodataHint.textContent = geodata?.notice || 'Проверяем наличие GeoSite private…';
-      geodataHint.classList.toggle('is-warning', geodata?.private_available === false);
-      geodataHint.classList.toggle('is-ok', geodata?.private_available === true);
+      const useGeodata = !!geodataEnable?.checked;
+      geodataHint.textContent = useGeodata ? 'Фильтры: geosite:private и geosite:category-ru.' : '';
+      geodataHint.classList.toggle('hidden', !useGeodata);
+      geodataHint.classList.remove('is-warning', 'is-ok');
     }
     if (mode) mode.disabled = enabled || canDisable || altered;
     if (geodataEnable) geodataEnable.disabled = enabled || canDisable || altered;
@@ -295,7 +316,9 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       addDetail(`Keenetic DNS override: ${data.dns_override === true ? 'включён' : (data.dns_override === false ? 'выключен' : 'не определён')}`, data.dns_override == null ? 'warn' : 'ok');
       const guard = guardNotice(data, enabled);
       addDetail(guard.text, guard.kind);
-      if (geodata?.notice) addDetail(`GeoSite: ${geodata.notice}`, geodata.private_available ? 'ok' : 'warn');
+      if ((mode?.value || data?.mode) === 'fake-ip' && geodataEnable?.checked && geodata?.notice) {
+        addDetail(`GeoSite: ${geodata.notice}`, geodata.private_available ? 'ok' : 'warn');
+      }
       (data.blockers || []).forEach((message) => addDetail(message, 'warn'));
     }
 
@@ -403,12 +426,18 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       if (fake) syncFakeIpFilters(!!$(IDS.geodataEnable)?.checked);
       const hint = $(IDS.modeHint);
       if (hint) hint.textContent = fake
-        ? `Расширенный режим: виртуальные IP. ${current?.fake_ip_available === false ? 'TUN/TProxy-маршрут не обнаружен.' : 'Проверьте наличие прозрачного TUN/TProxy-маршрута.'}`
+        ? `${current?.fake_ip_available === false ? 'Нужен TUN/TProxy: прозрачный маршрут не обнаружен.' : 'Проверьте наличие TUN/TProxy.'} Диапазон не должен пересекаться с LAN/VPN.`
         : 'Совместимо с TProxy и большинством устройств LAN.';
     });
     $(IDS.geodataEnable)?.addEventListener('change', () => {
       if ($(IDS.mode)?.value === 'fake-ip') syncFakeIpFilters(!!$(IDS.geodataEnable)?.checked);
       syncRuleProviderUi(current || {});
+      const hint = $(IDS.geodataHint);
+      const enabled = !!$(IDS.geodataEnable)?.checked;
+      if (hint) {
+        hint.textContent = enabled ? 'Фильтры: geosite:private и geosite:category-ru.' : '';
+        hint.classList.toggle('hidden', !enabled);
+      }
     });
     DOMAIN_RULE_PROVIDER_FILTERS.forEach(([, , id]) => $(id)?.addEventListener('click', (event) => {
       event.preventDefault();
@@ -420,6 +449,11 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       if ($(IDS.mode)?.value === 'fake-ip') syncFakeIpFilters(false);
       syncRuleProviderUi(current || {});
     }));
+    $(IDS.fakeFilters)?.addEventListener('input', () => {
+      providerSelectionTouched = true;
+      syncRuleProviderHighlights();
+      syncRuleProviderUi(current || {});
+    });
     $(IDS.modal)?.addEventListener('click', (event) => {
       if (event.target === $(IDS.modal) && !busy) showModal(false);
     });
