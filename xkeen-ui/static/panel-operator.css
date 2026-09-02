@@ -13706,6 +13706,35 @@ body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-picker-bul
   background: var(--op-surface-3);
 }
 
+/* Длинные объяснения не удалены, а свёрнуты: нативный <details> даёт
+ * клавиатурную доступность и не требует ни строчки JS. */
+body.panel-page .xk-hint-more {
+  display: inline;
+}
+
+body.panel-page .xk-hint-more > summary {
+  display: inline;
+  cursor: pointer;
+  color: var(--op-accent-hover);
+  text-decoration: underline dotted;
+  list-style: none;
+}
+
+body.panel-page .xk-hint-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+body.panel-page .xk-hint-more[open] > summary {
+  color: var(--op-muted);
+}
+
+body.panel-page .xk-hint-more > p {
+  margin: 6px 0 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--op-border);
+  color: var(--op-muted);
+}
+
 body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-dns-over-vless-safety {
   gap: 6px;
 }
