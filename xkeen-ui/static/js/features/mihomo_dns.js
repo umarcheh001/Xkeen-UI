@@ -26,6 +26,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     ruleProvidersHint: 'mihomo-dns-rule-providers-hint',
     providerCategoryRu: 'mihomo-dns-provider-category-ru',
     providerPrivate: 'mihomo-dns-provider-private',
+    providerCategoryAi: 'mihomo-dns-provider-category-ai',
     fakeRange: 'mihomo-dns-fake-range',
     fakeFilterMode: 'mihomo-dns-fake-filter-mode',
     fakeFilters: 'mihomo-dns-fake-filters',
@@ -36,11 +37,18 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
   let current = null;
   let busy = false;
   let providerSelectionTouched = false;
-  const DEFAULT_FAKE_IP_FILTERS = ['*.lan', '*.local'];
+  const LOCAL_FAKE_IP_FILTERS = ['*.lan', '*.local'];
+  const DEFAULT_FAKE_IP_FILTERS = [
+    'rule-set:category_ru@domain',
+    'rule-set:geosite_private@domain',
+    'rule-set:category-ai@domain',
+    '+.tsarea.tv',
+  ];
   const GEO_FAKE_IP_FILTERS = ['geosite:private', 'geosite:category-ru'];
   const DOMAIN_RULE_PROVIDER_FILTERS = [
     ['category_ru@domain', 'rule-set:category_ru@domain', IDS.providerCategoryRu],
     ['geosite_private@domain', 'rule-set:geosite_private@domain', IDS.providerPrivate],
+    ['category-ai@domain', 'rule-set:category-ai@domain', IDS.providerCategoryAi],
   ];
 
   function selectedRuleProviders() {
@@ -54,13 +62,16 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     const seen = new Set();
     const providerFilters = DOMAIN_RULE_PROVIDER_FILTERS.map(([, filter]) => filter.toLowerCase());
     const remove = new Set(
-      [...DEFAULT_FAKE_IP_FILTERS, ...GEO_FAKE_IP_FILTERS, ...providerFilters].map((item) => item.toLowerCase()),
+      [...LOCAL_FAKE_IP_FILTERS, ...DEFAULT_FAKE_IP_FILTERS, ...GEO_FAKE_IP_FILTERS, ...providerFilters].map((item) => item.toLowerCase()),
     );
     const selected = new Set((ruleProviders || []).map((item) => String(item || '').toLowerCase()));
     const preferred = useGeodata
       ? GEO_FAKE_IP_FILTERS
       : DOMAIN_RULE_PROVIDER_FILTERS.filter(([name]) => selected.has(name.toLowerCase())).map(([, filter]) => filter);
-    const defaults = preferred.length ? preferred : DEFAULT_FAKE_IP_FILTERS;
+    const privateProviderSelected = selected.has('geosite_private@domain');
+    const defaults = preferred.length
+      ? [...preferred, ...(!useGeodata && !privateProviderSelected ? LOCAL_FAKE_IP_FILTERS : []), '+.tsarea.tv']
+      : LOCAL_FAKE_IP_FILTERS;
     for (const item of filters) {
       const text = String(item || '').trim();
       if (!text) continue;
@@ -173,6 +184,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
           .filter(([name]) => configured?.[name]?.configured)
           .map(([name]) => name),
       );
+      if (!selected.size) DOMAIN_RULE_PROVIDER_FILTERS.forEach(([name]) => selected.add(name));
       DOMAIN_RULE_PROVIDER_FILTERS.forEach(([name, , id]) => setRuleProviderButton(id, selected.has(name), false));
     }
     DOMAIN_RULE_PROVIDER_FILTERS.forEach(([, , id]) => setRuleProviderButton(

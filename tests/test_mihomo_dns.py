@@ -52,6 +52,7 @@ def test_build_enabled_config_adds_geosite_ru_filters_for_fake_ip_geodata():
     start = lines.index("  fake-ip-filter:")
     assert lines[start + 1] == "    - 'geosite:private'"
     assert lines[start + 2] == "    - 'geosite:category-ru'"
+    assert lines[start + 3] == "    - '+.tsarea.tv'  # TorrServer"
     assert "*.lan" not in content
     assert "*.local" not in content
 
@@ -72,6 +73,49 @@ def test_build_enabled_config_adds_domain_rule_providers_without_geodata():
     assert "rule-set:category_ru@domain" in content
     assert "rule-set:geosite_private@domain" in content
     assert "geosite:private" not in content
+
+
+def test_build_enabled_config_adds_recommended_fake_ip_profile_by_default():
+    content, _ = dns.build_enabled_config(BASE, mode="fake-ip")
+
+    expected_filters = (
+        "    - 'rule-set:category_ru@domain'  # Российские сайты\n"
+        "    - 'rule-set:geosite_private@domain'  # Локальные устройства и приватные доменные зоны\n"
+        "    - 'rule-set:category-ai@domain'  # Список доменов AI-сервисов\n"
+        "    - '+.tsarea.tv'  # TorrServer\n"
+    )
+    assert expected_filters in content
+    assert "category-ai-chat-!cn.mrs" in content
+    assert "    - 77.88.8.8\n    - 77.88.8.1" in content
+    for nameserver in (
+        "https://geohide.ru/dns-query",
+        "quic://dns.comss.one",
+        "https://dns.alidns.com/dns-query",
+        "https://xbox-dns.ru/dns-query",
+        "https://cloudflare-dns.com/dns-query#Заблок. сервисы&name-cert-verify=cloudflare-dns.com",
+        "https://dns.google/dns-query#Заблок. сервисы&name-cert-verify=dns.google",
+        "tls://8.8.8.8#Заблок. сервисы&name-cert-verify=dns.google",
+        "tls://1.1.1.1#Заблок. сервисы&name-cert-verify=cloudflare-dns.com",
+    ):
+        assert nameserver in content
+    assert "  nameserver-policy:\n" in content
+    assert (
+        "    'rule-set:category_ru@domain':\n"
+        "      - 77.88.8.8\n"
+        "      - 77.88.8.1\n"
+        "    'rule-set:category-ai@domain':\n"
+        "      - 'https://xbox-dns.ru/dns-query'\n"
+    ) in content
+
+
+def test_redir_host_keeps_the_existing_resolver_profile():
+    content, _ = dns.build_enabled_config(BASE, mode="redir-host")
+
+    assert "    - 77.88.8.8\n    - 1.1.1.1" in content
+    assert "https://8.8.8.8/dns-query#Заблок. сервисы&name-cert-verify=dns.google" in content
+    assert "https://1.1.1.1/dns-query#Заблок. сервисы&name-cert-verify=cloudflare-dns.com" in content
+    assert "geohide.ru" not in content
+    assert "nameserver-policy" not in content
 
 
 def test_build_refuses_existing_user_dns_without_rewriting_it():

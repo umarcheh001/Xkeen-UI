@@ -45,6 +45,7 @@ PROBE_DOMAIN = "example.com"
 DEFAULT_FAKE_IP_RANGE = "198.18.0.1/16"
 DEFAULT_FAKE_IP_FILTER_MODE = "blacklist"
 DEFAULT_FAKE_IP_FILTERS = ("*.lan", "*.local")
+DEFAULT_FAKE_IP_EXTRA_FILTERS = ("+.tsarea.tv",)
 DEFAULT_GEOSITE_URL = "https://github.com/v2fly/domain-list-community/releases/latest/download/dlc.dat"
 # Domain rule-sets are a GeoSite-free alternative for Fake-IP filters.  Keep
 # the names stable: they are referenced by ``rule-set:...`` values in the
@@ -52,6 +53,32 @@ DEFAULT_GEOSITE_URL = "https://github.com/v2fly/domain-list-community/releases/l
 DEFAULT_DOMAIN_RULE_PROVIDERS = {
     "category_ru@domain": "https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/category-ru.mrs",
     "geosite_private@domain": "https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/private.mrs",
+    # MetaCubeX does not publish a category-ai.mrs file.  Keep the provider
+    # name requested by the UI profile, but point it at the maintained
+    # non-China AI/chat category which covers ChatGPT, Claude, Gemini, etc.
+    "category-ai@domain": "https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/category-ai-chat-!cn.mrs",
+}
+DEFAULT_REDIR_BOOTSTRAP = ("77.88.8.8", "1.1.1.1")
+DEFAULT_REDIR_ROUTED_NAMESERVERS = (
+    ("https://8.8.8.8/dns-query", "dns.google"),
+    ("https://1.1.1.1/dns-query", "cloudflare-dns.com"),
+)
+DEFAULT_FAKE_IP_BOOTSTRAP = ("77.88.8.8", "77.88.8.1")
+DEFAULT_FAKE_IP_NAMESERVERS = (
+    "https://geohide.ru/dns-query",
+    "quic://dns.comss.one",
+    "https://dns.alidns.com/dns-query",
+    "https://xbox-dns.ru/dns-query",
+)
+DEFAULT_FAKE_IP_ROUTED_NAMESERVERS = (
+    ("https://cloudflare-dns.com/dns-query", "cloudflare-dns.com"),
+    ("https://dns.google/dns-query", "dns.google"),
+    ("tls://8.8.8.8", "dns.google"),
+    ("tls://1.1.1.1", "cloudflare-dns.com"),
+)
+DEFAULT_FAKE_IP_DNS_POLICY = {
+    "rule-set:category_ru@domain": DEFAULT_FAKE_IP_BOOTSTRAP,
+    "rule-set:category-ai@domain": ("https://xbox-dns.ru/dns-query",),
 }
 DNS_MODES = ("redir-host", "fake-ip")
 FAKE_IP_FILTER_MODES = ("blacklist", "whitelist", "rule")
@@ -449,9 +476,9 @@ def _rule_provider_entry_names(config_text: str) -> list[str]:
 def _normalize_domain_rule_providers(value: Any) -> list[str]:
     """Normalize the UI's provider selection to known, safe provider IDs."""
 
-    if value is True:
+    if value is True or value is None:
         raw: list[Any] = list(DEFAULT_DOMAIN_RULE_PROVIDERS)
-    elif value in (None, False):
+    elif value is False:
         raw = []
     elif isinstance(value, str):
         raw = [item.strip() for item in value.split(",")]
@@ -468,6 +495,8 @@ def _normalize_domain_rule_providers(value: Any) -> list[str]:
         "private": "geosite_private@domain",
         "geosite-private": "geosite_private@domain",
         "geosite_private": "geosite_private@domain",
+        "category_ai": "category-ai@domain",
+        "category-ai": "category-ai@domain",
     }
     known = {name.lower(): name for name in DEFAULT_DOMAIN_RULE_PROVIDERS}
     selected: list[str] = []
@@ -486,6 +515,7 @@ def _domain_rule_provider_status(config_text: str) -> dict[str, dict[str, Any]]:
     aliases = {
         "category_ru@domain": ("category-ru@domain",),
         "geosite_private@domain": ("geosite-private@domain",),
+        "category-ai@domain": ("category_ai@domain",),
     }
     return {
         name: {
@@ -521,6 +551,7 @@ def _with_domain_rule_provider_defaults(text: str, providers: Any = None) -> str
     aliases = {
         "category_ru@domain": ("category-ru@domain",),
         "geosite_private@domain": ("geosite-private@domain",),
+        "category-ai@domain": ("category_ai@domain",),
     }
     missing = [
         name for name in selected
@@ -562,12 +593,16 @@ def _fake_ip_default_filters(config_text: str = "") -> list[str]:
         if details["configured"]
     ]
     if provider_filters:
-        return provider_filters
+        # The MRS profile keeps local/private names real and also preserves
+        # the user's TorrServer hostname outside the downloaded lists.
+        if not providers["geosite_private@domain"]["configured"]:
+            provider_filters.extend(DEFAULT_FAKE_IP_FILTERS)
+        return provider_filters + list(DEFAULT_FAKE_IP_EXTRA_FILTERS)
     if geodata["private_filter"]:
         filters = [str(geodata["private_filter"])]
         if geodata["private_source"] == "geodata":
             filters.append("geosite:category-ru")
-        return filters
+        return filters + list(DEFAULT_FAKE_IP_EXTRA_FILTERS)
     return list(DEFAULT_FAKE_IP_FILTERS)
 
 
@@ -665,16 +700,41 @@ def _managed_dns_block(group: str, *, mode: str = "redir-host", fake_ip: Any = N
         raise MihomoDnsError("Не найдена proxy-группа для защищённого DNS.", code="proxy_group_missing")
     normalized_mode = _normalize_mode(mode)
     fake = _normalize_fake_ip_options(fake_ip) if normalized_mode == "fake-ip" else None
-    google = f"https://8.8.8.8/dns-query#{target}&name-cert-verify=dns.google"
-    cloudflare = f"https://1.1.1.1/dns-query#{target}&name-cert-verify=cloudflare-dns.com"
     fake_block = ""
+    policy_block = ""
     if fake:
+        filter_comments = {
+            "rule-set:category_ru@domain": "Российские сайты",
+            "rule-set:geosite_private@domain": "Локальные устройства и приватные доменные зоны",
+            "rule-set:category-ai@domain": "Список доменов AI-сервисов",
+            "+.tsarea.tv": "TorrServer",
+        }
         fake_block = (
             f"  fake-ip-range: {fake['range']}\n"
             f"  fake-ip-filter-mode: {fake['filter_mode']}\n"
             "  fake-ip-filter:\n"
-            + "".join(f"    - {_yaml_single_quote(item)}\n" for item in fake["filters"])
+            + "".join(
+                f"    - {_yaml_single_quote(item)}"
+                f"  # {filter_comments[item]}\n" if item in filter_comments
+                else f"    - {_yaml_single_quote(item)}\n"
+                for item in fake["filters"]
+            )
         )
+        policy_lines = []
+        fake_filters = {str(item).strip() for item in fake["filters"]}
+        for policy_name, servers in DEFAULT_FAKE_IP_DNS_POLICY.items():
+            if policy_name not in fake_filters:
+                continue
+            policy_lines.append(f"    {_yaml_single_quote(policy_name)}:\n")
+            policy_lines.extend(
+                f"      - {_yaml_single_quote(server) if str(server).startswith(('http://', 'https://', 'quic://', 'tls://')) else server}\n"
+                for server in servers
+            )
+        if policy_lines:
+            policy_block = "  nameserver-policy:\n" + "".join(policy_lines)
+    bootstrap = DEFAULT_FAKE_IP_BOOTSTRAP if fake else DEFAULT_REDIR_BOOTSTRAP
+    plain_nameservers = DEFAULT_FAKE_IP_NAMESERVERS if fake else ()
+    routed_nameservers = DEFAULT_FAKE_IP_ROUTED_NAMESERVERS if fake else DEFAULT_REDIR_ROUTED_NAMESERVERS
     return (
         f"{MANAGED_BEGIN}\n"
         "dns:\n"
@@ -688,15 +748,17 @@ def _managed_dns_block(group: str, *, mode: str = "redir-host", fake_ip: Any = N
         "  use-hosts: true\n"
         "  use-system-hosts: true\n"
         "  default-nameserver:\n"
-        "    - 77.88.8.8\n"
-        "    - 1.1.1.1\n"
-        "  proxy-server-nameserver:\n"
-        "    - 77.88.8.8\n"
-        "    - 1.1.1.1\n"
-        "  nameserver:\n"
-        f"    - {_yaml_single_quote(google)}\n"
-        f"    - {_yaml_single_quote(cloudflare)}\n"
-        f"{MANAGED_END}\n"
+        + "".join(f"    - {server}\n" for server in bootstrap)
+        + "  proxy-server-nameserver:\n"
+        + "".join(f"    - {server}\n" for server in bootstrap)
+        + "  nameserver:\n"
+        + "".join(f"    - {_yaml_single_quote(server)}\n" for server in plain_nameservers)
+        + "".join(
+            f"    - {_yaml_single_quote(url + '#' + target + '&name-cert-verify=' + verify)}\n"
+            for url, verify in routed_nameservers
+        )
+        + policy_block
+        + f"{MANAGED_END}\n"
     )
 
 

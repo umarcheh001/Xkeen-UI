@@ -225,16 +225,17 @@ test('Mihomo DNS: rule-provider buttons fill the fake-ip payload', async ({ page
   });
 
   await expect(page.locator('#mihomo-dns-rule-providers')).toBeVisible();
-  await page.locator('#mihomo-dns-provider-category-ru').click();
-  await page.locator('#mihomo-dns-provider-private').click();
   await expect(page.locator('#mihomo-dns-provider-category-ru')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#mihomo-dns-provider-private')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#mihomo-dns-provider-category-ai')).toHaveAttribute('aria-pressed', 'true');
 
   await page.locator('#mihomo-dns-apply').click();
   await expect(page.locator('#confirm-modal')).toBeVisible();
   await page.locator('#confirm-modal-ok-btn').click();
   await expect.poll(() => postBodies.length).toBe(1);
-  expect(postBodies[0].rule_providers).toEqual(['category_ru@domain', 'geosite_private@domain']);
+  expect(postBodies[0].rule_providers).toEqual(['category_ru@domain', 'geosite_private@domain', 'category-ai@domain']);
   expect(postBodies[0].fake_ip.filters).toContain('rule-set:category_ru@domain');
   expect(postBodies[0].fake_ip.filters).toContain('rule-set:geosite_private@domain');
+  expect(postBodies[0].fake_ip.filters).toContain('rule-set:category-ai@domain');
+  expect(postBodies[0].fake_ip.filters).toContain('+.tsarea.tv');
 });

@@ -194,6 +194,33 @@ sed -n '/^tun:/,/^[^[:space:]]/p' "$CONFIG"
 Fake-IP требует, чтобы виртуальные адреса перехватывались TUN/TProxy. Без этого
 DNS может отвечать, но соединения по возвращённым виртуальным IP не заработают.
 
+Без GeoSite кнопка добавляет три доменных MRS-провайдера MetaCubeX на верхнем
+уровне конфигурации. Имя `category-ai@domain` сохраняется как понятный
+идентификатор профиля; его источником служит актуальный список
+`category-ai-chat-!cn.mrs`, поскольку файла `category-ai.mrs` у MetaCubeX нет.
+
+```yaml
+rule-providers:
+  category_ru@domain:
+    type: http
+    behavior: domain
+    format: mrs
+    interval: 86400
+    url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/category-ru.mrs
+  geosite_private@domain:
+    type: http
+    behavior: domain
+    format: mrs
+    interval: 86400
+    url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/private.mrs
+  category-ai@domain:
+    type: http
+    behavior: domain
+    format: mrs
+    interval: 86400
+    url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/category-ai-chat-!cn.mrs
+```
+
 В существующий единственный раздел `dns:` добавьте/измените поля:
 
 ```yaml
@@ -205,21 +232,35 @@ dns:
   fake-ip-range: 198.18.0.1/16
   fake-ip-filter-mode: blacklist
   fake-ip-filter:
-    - '*.lan'
-    - '*.local'
+    - 'rule-set:category_ru@domain'
+    - 'rule-set:geosite_private@domain'
+    - 'rule-set:category-ai@domain'
+    - '+.tsarea.tv'
   cache-algorithm: arc
   prefer-h3: false
   use-hosts: true
   use-system-hosts: true
   default-nameserver:
     - 77.88.8.8
-    - 1.1.1.1
+    - 77.88.8.1
   proxy-server-nameserver:
     - 77.88.8.8
-    - 1.1.1.1
+    - 77.88.8.1
   nameserver:
-    - 'https://8.8.8.8/dns-query#<ИМЯ_ГРУППЫ>&name-cert-verify=dns.google'
-    - 'https://1.1.1.1/dns-query#<ИМЯ_ГРУППЫ>&name-cert-verify=cloudflare-dns.com'
+    - 'https://geohide.ru/dns-query'
+    - 'quic://dns.comss.one'
+    - 'https://dns.alidns.com/dns-query'
+    - 'https://xbox-dns.ru/dns-query'
+    - 'https://cloudflare-dns.com/dns-query#<ИМЯ_ГРУППЫ>&name-cert-verify=cloudflare-dns.com'
+    - 'https://dns.google/dns-query#<ИМЯ_ГРУППЫ>&name-cert-verify=dns.google'
+    - 'tls://8.8.8.8#<ИМЯ_ГРУППЫ>&name-cert-verify=dns.google'
+    - 'tls://1.1.1.1#<ИМЯ_ГРУППЫ>&name-cert-verify=cloudflare-dns.com'
+  nameserver-policy:
+    'rule-set:category_ru@domain':
+      - 77.88.8.8
+      - 77.88.8.1
+    'rule-set:category-ai@domain':
+      - 'https://xbox-dns.ru/dns-query'
 ```
 
 ### 6.1. Диапазон Fake-IP
@@ -232,8 +273,9 @@ VPN и другими реальными сетями. Не используйт
 
 ### 6.2. Режимы фильтра
 
-- **`blacklist`** — Fake-IP выдаётся всем доменам, кроме перечисленных. Для
-  домашней сети обычно оставляют `*.lan` и `*.local`.
+- **`blacklist`** — Fake-IP выдаётся всем доменам, кроме перечисленных. В
+  профиле кнопки private MRS-список заменяет ручные `*.lan`/`*.local`, а RU,
+  AI и `tsarea.tv` также получают реальные адреса.
 - **`whitelist`** — Fake-IP выдаётся только доменам из списка; остальные
   получают реальные адреса.
 - **`rule`** — каждая строка является правилом Mihomo и должна заканчиваться
@@ -251,8 +293,9 @@ VPN и другими реальными сетями. Не используйт
 ### 6.3. Необязательный GeoSite
 
 Фильтры `geosite:private` и `geosite:category-ru` работают только при наличии
-подходящей GeoSite-базы. Если её нет, оставьте `*.lan`/`*.local` или добавьте в
-верхний уровень конфигурации (не внутрь `dns:`):
+подходящей GeoSite-базы. По умолчанию кнопка использует MRS-провайдеры выше.
+Если включить альтернативный GeoSite-переключатель, она заменит ими MRS-фильтры
+и добавит в верхний уровень конфигурации (не внутрь `dns:`):
 
 ```yaml
 geodata-mode: true

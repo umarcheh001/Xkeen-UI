@@ -2722,23 +2722,27 @@
               <option value="rule">rule — правила Mihomo</option>
             </select>
             <label for="mihomo-dns-fake-filters">Фильтры (по одному на строку)</label>
-            <textarea id="mihomo-dns-fake-filters" rows="3" spellcheck="false">*.lan
-*.local</textarea>
+            <textarea id="mihomo-dns-fake-filters" rows="4" spellcheck="false">rule-set:category_ru@domain
+rule-set:geosite_private@domain
+rule-set:category-ai@domain
++.tsarea.tv</textarea>
             <label class="dt-switch xk-mini-switch mihomo-dns-geodata-toggle" title="Добавить GeoSite-базу V2Fly в config.yaml для фильтра geosite:private.">
               <input type="checkbox" id="mihomo-dns-geodata-enable">
               <span class="dt-switch-slider" aria-hidden="true"></span>
               <span class="dt-switch-label">Подключить GeoSite (geodata-mode + V2Fly)</span>
             </label>
-            <p class="modal-hint">По выбору добавит geodata-mode: true и geox-url.geosite (V2Fly dlc.dat). Существующие настройки GeoSite не перезаписываются.</p>
+            <p class="modal-hint">По умолчанию используются доменные MRS-провайдеры: они не требуют GeoSite и сохраняют локальные имена реальными.</p>
+            <p class="modal-hint">GeoSite — альтернативный источник V2Fly. При включении он заменит MRS-фильтры на geosite:private и geosite:category-ru.</p>
             <p id="mihomo-dns-geodata-hint" class="modal-hint" role="status" aria-live="polite">Проверяем наличие GeoSite private…</p>
             <div id="mihomo-dns-rule-providers" class="mihomo-dns-rule-providers">
-              <b class="mihomo-dns-rule-providers-title">Режим без GeoSite: доменные MRS-провайдеры</b>
-              <p class="modal-hint">Кнопки добавят выбранные rule-provider в <code>config.yaml</code> и подставят их в fake-ip-filter. Это не требует geodata-mode и использует отдельные списки MetaCubeX.</p>
+              <b class="mihomo-dns-rule-providers-title">Профиль Fake-IP без GeoSite</b>
+              <p class="modal-hint">Выбранные списки будут добавлены в <code>config.yaml</code> и использованы в <code>fake-ip-filter</code>.</p>
               <div class="mihomo-dns-rule-provider-buttons" role="group" aria-label="Доменные MRS-провайдеры">
-                <button type="button" id="mihomo-dns-provider-category-ru" class="btn-secondary mihomo-dns-provider-btn" data-provider="category_ru@domain" aria-pressed="false">Добавить category_ru@domain</button>
-                <button type="button" id="mihomo-dns-provider-private" class="btn-secondary mihomo-dns-provider-btn" data-provider="geosite_private@domain" aria-pressed="false">Добавить geosite_private@domain</button>
+                <button type="button" id="mihomo-dns-provider-category-ru" class="btn-secondary mihomo-dns-provider-btn" data-provider="category_ru@domain" aria-pressed="false">category_ru@domain</button>
+                <button type="button" id="mihomo-dns-provider-private" class="btn-secondary mihomo-dns-provider-btn" data-provider="geosite_private@domain" aria-pressed="false">geosite_private@domain</button>
+                <button type="button" id="mihomo-dns-provider-category-ai" class="btn-secondary mihomo-dns-provider-btn" data-provider="category-ai@domain" aria-pressed="false">category-ai@domain</button>
               </div>
-              <p id="mihomo-dns-rule-providers-hint" class="modal-hint" role="status" aria-live="polite">Провайдеры не выбраны — будут использованы только локальные зоны.</p>
+              <p id="mihomo-dns-rule-providers-hint" class="modal-hint" role="status" aria-live="polite">Рабочий профиль: RU, private, AI и TorrServer.</p>
             </div>
             <p class="modal-hint">Fake-IP требует включённый TUN или TProxy и не должен пересекаться с вашей LAN/VPN-сетью.</p>
           </div>
