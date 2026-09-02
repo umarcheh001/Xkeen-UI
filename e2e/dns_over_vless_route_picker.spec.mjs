@@ -566,3 +566,54 @@ test('the reset button clears the window without touching the router', async ({ 
   // Роутер при этом не трогаем: сброс — это только поля окна.
   expect(posted).toBe(0);
 });
+
+
+test('the dialog says when the other record types moved to a reserve node', async ({ page }) => {
+  await openDialog(page, {
+    ...STATUS,
+    pass_non_ip: true,
+    pass_non_ip_node: 'node-beta',
+    pass_non_ip_options: ['node-alpha', 'node-beta'],
+    pass_non_ip_health: {
+      ok: false,
+      checked_at: 1756800000,
+      node: 'node-beta',
+      switched_from: 'node-alpha',
+      switched_at: 1756800000,
+      exhausted: false,
+      error: '',
+    },
+  });
+
+  // The guard probe asks for A, so without this line a half-broken feature
+  // looks perfectly healthy in the window.
+  const health = page.locator('#routing-dns-over-vless-pass-health');
+  await expect(health).toBeVisible();
+  await expect(health).toContainText('node-beta');
+  await expect(health).toContainText('node-alpha');
+});
+
+
+test('the dialog admits it when no node carries the other record types', async ({ page }) => {
+  await openDialog(page, {
+    ...STATUS,
+    pass_non_ip: true,
+    pass_non_ip_node: 'node-beta',
+    pass_non_ip_options: ['node-alpha', 'node-beta'],
+    pass_non_ip_health: {
+      ok: false,
+      checked_at: 1756800000,
+      node: 'node-beta',
+      switched_from: 'node-alpha',
+      switched_at: 1756800000,
+      exhausted: true,
+      error: '',
+    },
+  });
+
+  const health = page.locator('#routing-dns-over-vless-pass-health');
+  await expect(health).toBeVisible();
+  await expect(health).toContainText('ни один');
+  // A and AAAA keep working: the reader has to know the outage is partial.
+  await expect(health).toContainText('AAAA');
+});

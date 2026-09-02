@@ -19439,6 +19439,8 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
 .routing-dns-over-vless-route-fallback[data-state="dropped"] { color: #fde68a; }
 html[data-theme="light"] .routing-dns-over-vless-route-fallback[data-state="kept"] { color: #047857; }
 html[data-theme="light"] .routing-dns-over-vless-route-fallback[data-state="dropped"] { color: #b45309; }
+.routing-dns-over-vless-route-fallback[data-state="failed"] { color: #fca5a5; }
+html[data-theme="light"] .routing-dns-over-vless-route-fallback[data-state="failed"] { color: #b91c1c; }
 .routing-dns-over-vless-safety { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .routing-dns-over-vless-safety > div {
   display: grid;

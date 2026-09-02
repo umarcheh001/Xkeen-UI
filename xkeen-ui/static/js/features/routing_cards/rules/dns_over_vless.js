@@ -45,6 +45,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     pass: 'routing-dns-over-vless-pass',
     passRow: 'routing-dns-over-vless-pass-row',
     passNode: 'routing-dns-over-vless-pass-node',
+    passHealth: 'routing-dns-over-vless-pass-health',
     clients: 'routing-dns-over-vless-clients',
     clientsSummary: 'routing-dns-over-vless-clients-summary',
     clientsList: 'routing-dns-over-vless-clients-list',
@@ -510,6 +511,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       else if (options.length) passNode.value = options[0];
       passNode.disabled = busy || !options.length;
     }
+    renderPassHealth(passOn ? (data && data.pass_non_ip_health) : null);
     const fromRules = $(DOM.directFromRules);
     if (fromRules) {
       // Nothing to offer when no rule of the user's own goes out directly.
@@ -519,6 +521,60 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         ? `Подставит домены из ваших правил: ${offered.join(', ')}`
         : 'В правилах роутинга нет доменов, ведущих напрямую';
     }
+  }
+
+  function passHealthMoment(seconds) {
+    const value = Number(seconds);
+    if (!Number.isFinite(value) || value <= 0) return '';
+    try {
+      return new Date(value * 1000).toLocaleString('ru-RU', {
+        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+      });
+    } catch (error) {
+      return '';
+    }
+  }
+
+  /* Как живётся тем типам записей, что едут одним узлом.
+   *
+   * Проба сторожа спрашивает A, на который встроенный DNS отвечает сам, — то
+   * есть отказ этого узла в остальном окне выглядит как полное здоровье.
+   * Строка ниже — единственное место, где такой частичный отказ виден.
+   */
+  function renderPassHealth(health) {
+    const line = $(DOM.passHealth);
+    if (!line) return;
+    if (!health) {
+      line.classList.add('hidden');
+      line.textContent = '';
+      return;
+    }
+    line.classList.remove('hidden');
+    const node = String(health.node || '').trim();
+    const from = String(health.switched_from || '').trim();
+    if (health.exhausted) {
+      line.dataset.state = 'failed';
+      line.textContent = 'Прочие типы записей не проходят: ни один узел маршрута на них не отвечает. '
+        + 'A и AAAA идут обычным путём — отказ частичный. Панель больше не переключает узлы сама.';
+      return;
+    }
+    if (health.ok) {
+      const when = passHealthMoment(health.checked_at);
+      line.dataset.state = 'kept';
+      line.textContent = when
+        ? `Прочие типы записей проходят через ${node}. Проверено ${when}.`
+        : `Прочие типы записей проходят через ${node}.`;
+      return;
+    }
+    line.dataset.state = 'dropped';
+    if (from) {
+      const when = passHealthMoment(health.switched_at);
+      line.textContent = when
+        ? `Прочие типы записей переведены на ${node}: узел ${from} на них не отвечал. Переключено ${when}.`
+        : `Прочие типы записей переведены на ${node}: узел ${from} на них не отвечал.`;
+      return;
+    }
+    line.textContent = `Прочие типы записей не получили ответ через ${node}; сторож проверит ещё раз.`;
   }
 
   function renderFallback(candidate, multi, wanted) {
