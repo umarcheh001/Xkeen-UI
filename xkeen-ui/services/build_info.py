@@ -72,6 +72,12 @@ def read_build_info(ui_state_dir: Optional[str] = None) -> Dict[str, Any]:
         "channel": env_channel,
         "version": None,
         "commit": None,
+        # Коммит, с которого началась упаковка. Архив собирается до коммита,
+        # поэтому при dirty=True внутри лежит уже более новый код, и опознать
+        # сборку можно только по tree_sha256.
+        "base_commit": None,
+        "dirty": None,
+        "tree_sha256": None,
         "built_utc": None,
         "source": None,
         "artifact": None,
@@ -85,7 +91,18 @@ def read_build_info(ui_state_dir: Optional[str] = None) -> Dict[str, Any]:
         info["exists"] = True
         info["path"] = path
         # Allow missing keys; keep stable output schema.
-        for k in ("repo", "channel", "version", "commit", "built_utc", "source", "artifact"):
+        for k in (
+            "repo",
+            "channel",
+            "version",
+            "commit",
+            "base_commit",
+            "dirty",
+            "tree_sha256",
+            "built_utc",
+            "source",
+            "artifact",
+        ):
             if k in data:
                 info[k] = data.get(k)
         break

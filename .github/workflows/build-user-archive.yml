@@ -77,23 +77,35 @@ jobs:
             UPDATE_URL=""
           fi
 
-          RELEASE_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          export VERSION UPDATE_URL
 
-          export VERSION RELEASE_DATE UPDATE_URL
-
+          # Штамп пишется тем же кодом, что и локальная сборка, иначе две ветки
+          # разъезжаются по набору полей. Здесь дерево — это ровно GITHUB_SHA
+          # (чистый checkout), поэтому dirty=false и commit заполнен.
           python - <<'PY'
-          import json
+          import importlib.util
           import os
+          import sys
           from pathlib import Path
 
-          path = Path("package-root/xkeen-ui/BUILD.json")
-          payload = {
-              "version": os.environ["VERSION"],
-              "release_date": os.environ["RELEASE_DATE"],
-              "update_url": os.environ["UPDATE_URL"],
-          }
-          path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-          print(path.read_text(encoding="utf-8"))
+          spec = importlib.util.spec_from_file_location("builder", "scripts/build_user_archive.py")
+          builder = importlib.util.module_from_spec(spec)
+          sys.modules["builder"] = builder
+          spec.loader.exec_module(builder)
+
+          root = Path("package-root/xkeen-ui")
+          sha = os.environ["GITHUB_SHA"]
+          builder.write_build_json(
+              root,
+              stamp=builder.BuildStamp(
+                  version=os.environ["VERSION"],
+                  base_commit=sha[:7],
+                  commit=sha,
+                  dirty=False,
+              ),
+              update_url=os.environ["UPDATE_URL"],
+          )
+          print((root / "BUILD.json").read_text(encoding="utf-8"))
           PY
 
       - name: Create user archive

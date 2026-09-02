@@ -11,8 +11,10 @@ import sys
 import tarfile
 import tempfile
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional, Set
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -72,7 +74,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--version",
         default="",
-        help="Optional BUILD.json version override (defaults to git short SHA).",
+        help=(
+            "Optional BUILD.json version override. By default the short SHA of HEAD, "
+            "suffixed with -dirty when the packed tree is ahead of that commit."
+        ),
     )
     parser.add_argument(
         "--update-url",
@@ -92,18 +97,74 @@ def run_checked(cmd: list[str], *, cwd: Path) -> None:
     subprocess.run(argv, cwd=str(cwd), check=True)
 
 
-def git_short_head(repo_root: Path) -> str:
+@dataclass(frozen=True)
+class BuildStamp:
+    """Identity of the code that goes into the archive.
+
+    ``base_commit`` is only where the packaging started from.  The release
+    workflow packs before committing, so the working tree is normally ahead of
+    it — then ``dirty`` is true, ``commit`` is withheld and ``version`` carries
+    the ``-dirty`` suffix.  Claiming the bare hash used to make BUILD.json name
+    a commit that did not contain the shipped code.
+    """
+
+    version: str
+    base_commit: str
+    commit: Optional[str]
+    dirty: bool
+
+
+def _git_output(repo_root: Path, args: list[str]) -> Optional[str]:
     try:
         output = subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"],
+            ["git", *args],
             cwd=str(repo_root),
             text=True,
             stderr=subprocess.DEVNULL,
         )
-        value = str(output or "").strip()
-        return value or "local"
     except Exception:
-        return "local"
+        return None
+    return str(output or "").strip()
+
+
+def git_build_stamp(repo_root: Path) -> BuildStamp:
+    short = _git_output(repo_root, ["rev-parse", "--short", "HEAD"])
+    full = _git_output(repo_root, ["rev-parse", "HEAD"])
+    if not short or not full:
+        # No git, no commit to name: the tree hash stays the only identity.
+        return BuildStamp(version="local", base_commit="local", commit=None, dirty=True)
+
+    # --porcelain lists staged, unstaged and untracked entries alike; any line
+    # at all means the packed tree is not the commit.
+    status = _git_output(repo_root, ["status", "--porcelain", "--untracked-files=normal"])
+    if status is None:
+        dirty = True
+    else:
+        dirty = bool(status.strip())
+
+    if dirty:
+        return BuildStamp(version=f"{short}-dirty", base_commit=short, commit=None, dirty=True)
+    return BuildStamp(version=short, base_commit=short, commit=full, dirty=False)
+
+
+def compute_tree_sha256(root: Path, exclude: Optional[Set[str]] = None) -> str:
+    """Hash every packed file by path and content.
+
+    Deterministic across machines and independent of timestamps, so two builds
+    of the same code produce the same value — which is what lets a router be
+    matched to its source when no commit describes it.
+    """
+
+    skip = set(exclude or ())
+    digest = hashlib.sha256()
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        rel = path.relative_to(root).as_posix()
+        if rel in skip:
+            continue
+        digest.update(rel.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(hashlib.sha256(path.read_bytes()).digest())
+    return digest.hexdigest()
 
 
 def ignore_project_entries(_src_dir: str, names: list[str]) -> set[str]:
@@ -148,9 +209,14 @@ def copy_project_tree(src_root: Path, dst_root: Path) -> None:
     )
 
 
-def write_build_json(dst_root: Path, *, version: str, update_url: str) -> None:
+def write_build_json(dst_root: Path, *, stamp: BuildStamp, update_url: str) -> None:
     payload = {
-        "version": str(version or "").strip(),
+        "version": str(stamp.version or "").strip(),
+        "base_commit": str(stamp.base_commit or "").strip(),
+        "commit": stamp.commit,
+        "dirty": bool(stamp.dirty),
+        # BUILD.json is written into the tree it describes, so it cannot hash itself.
+        "tree_sha256": compute_tree_sha256(dst_root, exclude={"BUILD.json"}),
         "release_date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "update_url": str(update_url or "").strip(),
     }
@@ -222,14 +288,22 @@ def main() -> int:
     if not args.skip_frontend_build:
         run_checked(["npm", "run", "frontend:build"], cwd=REPO_ROOT)
 
-    version = str(args.version or "").strip() or git_short_head(REPO_ROOT)
+    stamp = git_build_stamp(REPO_ROOT)
+    override = str(args.version or "").strip()
+    if override:
+        stamp = BuildStamp(
+            version=override,
+            base_commit=stamp.base_commit,
+            commit=stamp.commit,
+            dirty=stamp.dirty,
+        )
     update_url = str(args.update_url or "").strip()
 
     with tempfile.TemporaryDirectory(prefix="xkeen-package-", dir=str(REPO_ROOT)) as tmp_dir:
         temp_root = Path(tmp_dir)
         package_root = temp_root / PROJECT_DIRNAME
         copy_project_tree(PROJECT_ROOT, package_root)
-        write_build_json(package_root, version=version, update_url=update_url)
+        write_build_json(package_root, stamp=stamp, update_url=update_url)
 
         fd, temp_archive_raw = tempfile.mkstemp(
             prefix="xkeen-ui-routing-",
@@ -260,6 +334,10 @@ def main() -> int:
     print(f"[*] archive: {archive_path}")
     print(f"[*] sha256: {digest}")
     print(f"[*] sha file: {sha_path}")
+    print(f"[*] version: {stamp.version} (base {stamp.base_commit}, dirty={str(stamp.dirty).lower()})")
+    if stamp.dirty:
+        print("[*] рабочее дерево впереди коммита — BUILD.json не называет коммит,")
+        print("    сборку опознаёт tree_sha256 внутри архива.")
     return 0
 
 

@@ -1227,22 +1227,53 @@ extract_json_field() {
     || true
 }
 
+extract_json_bare() {
+  # extract "field": <literal> (true/false/null/number) — values without quotes
+  _field="$1"
+  _file="$2"
+  [ -f "$_file" ] || return 0
+  grep -o "\"$_field\"[[:space:]]*:[[:space:]]*[A-Za-z0-9._-]*" "$_file" 2>/dev/null \
+    | head -n 1 \
+    | sed -E 's/.*:[[:space:]]*//' \
+    || true
+}
+
+# Файл, который читается здесь, распакован из архива: build_user_archive.py кладёт
+# в него штамп сборки. Штамп нужно перенести целиком — install.sh переписывает
+# BUILD.json с нуля, и всё, что не перечислено ниже, потерялось бы.
+#
+# base_commit — коммит, с которого началась упаковка, а не тот, что внутри архива:
+# релиз собирается ДО коммита, поэтому рабочее дерево обычно уже впереди. В таком
+# случае dirty=true, commit не заполняется, а version несёт суффикс -dirty.
+# Опознать сборку точно можно только по tree_sha256.
 OLD_BUILD="$UI_DIR/BUILD.json"
 OLD_VERSION=""
 OLD_COMMIT=""
 OLD_REPO=""
 OLD_CHANNEL=""
+OLD_BASE_COMMIT=""
+OLD_DIRTY=""
+OLD_TREE_SHA=""
 if [ -f "$OLD_BUILD" ]; then
   OLD_VERSION="$(extract_json_field version "$OLD_BUILD")"
   OLD_COMMIT="$(extract_json_field commit "$OLD_BUILD")"
   OLD_REPO="$(extract_json_field repo "$OLD_BUILD")"
   OLD_CHANNEL="$(extract_json_field channel "$OLD_BUILD")"
+  OLD_BASE_COMMIT="$(extract_json_field base_commit "$OLD_BUILD")"
+  OLD_TREE_SHA="$(extract_json_field tree_sha256 "$OLD_BUILD")"
+  OLD_DIRTY="$(extract_json_bare dirty "$OLD_BUILD")"
 fi
 
 BUILD_REPO="${XKEEN_UI_UPDATE_REPO:-${OLD_REPO:-umarcheh001/Xkeen-UI}}"
 BUILD_CHANNEL="${XKEEN_UI_UPDATE_CHANNEL:-${OLD_CHANNEL:-stable}}"
 BUILD_VERSION="${XKEEN_UI_VERSION:-$OLD_VERSION}"
 BUILD_COMMIT="${XKEEN_UI_COMMIT:-$OLD_COMMIT}"
+BUILD_BASE_COMMIT="$OLD_BASE_COMMIT"
+BUILD_TREE_SHA="$OLD_TREE_SHA"
+case "$OLD_DIRTY" in
+  true|false) BUILD_DIRTY="$OLD_DIRTY" ;;
+  *)          BUILD_DIRTY="" ;;
+esac
 BUILD_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date +"%Y-%m-%dT%H:%M:%SZ")"
 
 TMP_BUILD="$UI_DIR/.BUILD.json.tmp"
@@ -1259,6 +1290,21 @@ TMP_BUILD="$UI_DIR/.BUILD.json.tmp"
     echo "  \"commit\": \"$(json_escape "$BUILD_COMMIT")\","
   else
     echo "  \"commit\": null,"
+  fi
+  if [ -n "$BUILD_BASE_COMMIT" ]; then
+    echo "  \"base_commit\": \"$(json_escape "$BUILD_BASE_COMMIT")\","
+  else
+    echo "  \"base_commit\": null,"
+  fi
+  if [ -n "$BUILD_DIRTY" ]; then
+    echo "  \"dirty\": $BUILD_DIRTY,"
+  else
+    echo "  \"dirty\": null,"
+  fi
+  if [ -n "$BUILD_TREE_SHA" ]; then
+    echo "  \"tree_sha256\": \"$(json_escape "$BUILD_TREE_SHA")\","
+  else
+    echo "  \"tree_sha256\": null,"
   fi
   echo "  \"built_utc\": \"$(json_escape "$BUILD_UTC")\","
   echo "  \"source\": \"install.sh\","
