@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from pathlib import Path
 from typing import Any, Dict
 
@@ -2079,3 +2080,270 @@ def test_turning_the_feature_off_keeps_what_it_was_set_to(tmp_path: Path, monkey
     # The window still shows the remembered draft.
     assert result["upstreams"] == ["9.9.9.9"]
     assert result["capture_macs"] == ["10:f6:0a:a5:e7:9a"]
+
+
+def test_the_probe_asks_for_the_record_type_it_was_given():
+    """A probe that only ever asks for A cannot see the other types fail.
+
+    The built-in DNS answers A and AAAA itself, so an A query says nothing
+    about the node that carries MX, TXT and the rest.
+    """
+    packet = dns._dns_query_packet("example.com", dns.QTYPE_TXT, 0x1234)
+
+    assert packet[:2] == b"\x12\x34"
+    assert b"\x07example\x03com\x00" in packet
+    # qtype TXT (16), class IN
+    assert packet.endswith(b"\x00\x10\x00\x01")
+
+    assert dns._dns_query_packet("example.com", dns.QTYPE_A, 0x1234).endswith(
+        b"\x00\x01\x00\x01"
+    )
+
+
+def _moment(round_no: int = 1) -> float:
+    """Now, plus that many guard rounds.
+
+    Enabling the feature already stamps a check of its own, so a probe only
+    happens again once the interval since it has passed.
+    """
+    return time.time() + round_no * (dns.PASS_PROBE_INTERVAL + 1)
+
+
+def _pass_through_install(tmp_path: Path, monkeypatch) -> tuple[Path, Path, Path]:
+    """A live install whose other record types ride ``my_proxy_1``."""
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(
+        dns,
+        "_write_routing_preserving_comments",
+        lambda path, obj, **_kwargs: _write(Path(path), obj),
+    )
+    dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+        pass_non_ip=True,
+        pass_non_ip_node="my_proxy_1",
+    )
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    return configs, routing_path, state
+
+
+def _quiet_other_types(monkeypatch) -> None:
+    """A and AAAA still answer; everything else comes back empty."""
+
+    def probe(domain: str = dns.PROBE_DOMAIN, timeout: float = 7.0, qtype: int = dns.QTYPE_A):
+        if qtype == dns.QTYPE_A:
+            return {"ok": True, "answers": 1}
+        return {"ok": False, "error": "некорректный DNS-ответ (rcode=0, answers=0)", "answers": 0}
+
+    monkeypatch.setattr(dns, "_dns_probe", probe)
+
+
+def test_one_quiet_answer_is_watched_rather_than_acted_on(tmp_path: Path, monkeypatch):
+    """A single empty answer must not restart the core.
+
+    Switching nodes costs a restart of Xray, which drops every connection on
+    the router; one missed probe is not worth that.
+    """
+    configs, routing_path, state = _pass_through_install(tmp_path, monkeypatch)
+    _quiet_other_types(monkeypatch)
+    restarts: list[str] = []
+
+    result = dns.check_pass_non_ip(
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **kwargs: restarts.append(str(kwargs.get("source"))) or True,
+        now=_moment(),
+    )
+
+    assert result["action"] == "watching"
+    assert restarts == []
+    fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+    assert fragment["outbounds"][0]["proxySettings"] == {"tag": "my_proxy_1"}
+    health = json.loads((state / dns.STATE_FILENAME).read_text(encoding="utf-8"))["pass_non_ip_health"]
+    assert health["ok"] is False
+    assert health["fails"] == 1
+    assert health["node"] == "my_proxy_1"
+
+
+def test_the_other_record_types_move_to_the_next_node_when_theirs_stays_quiet(
+    tmp_path: Path, monkeypatch
+):
+    """The whole point of the reserve: a dead node must not take MX and TXT with it."""
+    configs, routing_path, state = _pass_through_install(tmp_path, monkeypatch)
+    _quiet_other_types(monkeypatch)
+    restarts: list[str] = []
+    guard = {
+        "configs_dir": str(configs),
+        "routing_file": str(routing_path),
+        "ui_state_dir": str(state),
+        "restart_xkeen": lambda **kwargs: restarts.append(str(kwargs.get("source"))) or True,
+    }
+
+    dns.check_pass_non_ip(now=_moment(), **guard)
+    result = dns.check_pass_non_ip(now=_moment(2), **guard)
+
+    assert result["action"] == "switched"
+    assert result["node"] == "my_proxy_2"
+    assert restarts, "switching nodes has to reach the core"
+    fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+    assert fragment["outbounds"][0]["proxySettings"] == {"tag": "my_proxy_2"}
+    saved = json.loads((state / dns.STATE_FILENAME).read_text(encoding="utf-8"))
+    assert saved["pass_non_ip_node"] == "my_proxy_2"
+    health = saved["pass_non_ip_health"]
+    assert health["node"] == "my_proxy_2"
+    assert health["switched_from"] == "my_proxy_1"
+    assert health["tried"] == ["my_proxy_1"]
+
+
+def test_the_core_is_left_alone_once_every_node_has_had_its_turn(tmp_path: Path, monkeypatch):
+    """When no node answers, the fault is not the node -- stop restarting."""
+    configs, routing_path, state = _pass_through_install(tmp_path, monkeypatch)
+    _quiet_other_types(monkeypatch)
+    restarts: list[str] = []
+    guard = {
+        "configs_dir": str(configs),
+        "routing_file": str(routing_path),
+        "ui_state_dir": str(state),
+        "restart_xkeen": lambda **kwargs: restarts.append(str(kwargs.get("source"))) or True,
+    }
+
+    actions = []
+    for step in range(8):
+        actions.append(
+            dns.check_pass_non_ip(now=_moment(step + 1), **guard)["action"]
+        )
+
+    # my_proxy_1 and my_proxy_2 are the only nodes of the route, so exactly one
+    # switch is possible; after that the guard only watches.
+    assert actions.count("switched") == 1
+    assert len(restarts) == 1
+    assert actions[-1] == "exhausted"
+    health = json.loads((state / dns.STATE_FILENAME).read_text(encoding="utf-8"))["pass_non_ip_health"]
+    assert health["exhausted"] is True
+    assert health["tried"] == ["my_proxy_1", "my_proxy_2"]
+
+
+def test_a_flapping_node_cannot_restart_the_core_over_and_over(tmp_path: Path, monkeypatch):
+    """One switch per hour at most: each one drops every connection on the router."""
+    configs, routing_path, state = _pass_through_install(tmp_path, monkeypatch)
+    outbounds = json.loads((configs / "04_outbounds.json").read_text(encoding="utf-8"))
+    outbounds["outbounds"].append({"tag": "my_proxy_3", "protocol": "vless"})
+    _write(configs / "04_outbounds.json", outbounds)
+    _quiet_other_types(monkeypatch)
+    restarts: list[str] = []
+    guard = {
+        "configs_dir": str(configs),
+        "routing_file": str(routing_path),
+        "ui_state_dir": str(state),
+        "restart_xkeen": lambda **kwargs: restarts.append(str(kwargs.get("source"))) or True,
+    }
+
+    dns.check_pass_non_ip(now=_moment(), **guard)
+    dns.check_pass_non_ip(now=_moment(2), **guard)
+    dns.check_pass_non_ip(now=_moment(3), **guard)
+    result = dns.check_pass_non_ip(now=_moment(4), **guard)
+
+    # my_proxy_3 is free and untried, but the hour since the last switch is not up.
+    assert result["action"] == "waiting"
+    assert len(restarts) == 1
+    saved = json.loads((state / dns.STATE_FILENAME).read_text(encoding="utf-8"))
+    assert saved["pass_non_ip_node"] == "my_proxy_2"
+
+
+def test_the_window_is_told_how_the_pass_through_is_doing(tmp_path: Path, monkeypatch):
+    """A partial failure the user cannot see is a partial failure nobody fixes."""
+    configs, routing_path, state = _pass_through_install(tmp_path, monkeypatch)
+    _quiet_other_types(monkeypatch)
+    guard = {
+        "configs_dir": str(configs),
+        "routing_file": str(routing_path),
+        "ui_state_dir": str(state),
+        "restart_xkeen": lambda **_k: True,
+    }
+    dns.check_pass_non_ip(now=_moment(), **guard)
+    dns.check_pass_non_ip(now=_moment(2), **guard)
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    health = result["pass_non_ip_health"]
+    assert health["ok"] is False
+    assert health["node"] == "my_proxy_2"
+    assert health["switched_from"] == "my_proxy_1"
+    assert health["exhausted"] is False
+
+
+def test_enabling_the_pass_through_checks_it_at_once(tmp_path: Path, monkeypatch):
+    """Waiting ten minutes for the first verdict would leave the window mute.
+
+    The user has just switched the pass-through on; whether it carries the
+    other record types is exactly what they are looking at the window for.
+    """
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(
+        dns,
+        "_write_routing_preserving_comments",
+        lambda path, obj, **_kwargs: _write(Path(path), obj),
+    )
+    asked: list[int] = []
+
+    def probe(domain: str = dns.PROBE_DOMAIN, timeout: float = 7.0, qtype: int = dns.QTYPE_A):
+        asked.append(qtype)
+        return {"ok": True, "answers": 1}
+
+    monkeypatch.setattr(dns, "_dns_probe", probe)
+
+    dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+        pass_non_ip=True,
+        pass_non_ip_node="my_proxy_1",
+    )
+
+    assert dns.QTYPE_TXT in asked
+    health = json.loads((state / dns.STATE_FILENAME).read_text(encoding="utf-8"))["pass_non_ip_health"]
+    assert health["ok"] is True
+    assert health["node"] == "my_proxy_1"
+
+
+def test_a_clock_that_jumps_backwards_does_not_silence_the_check(tmp_path: Path, monkeypatch):
+    """Keenetic boots without a real-time clock and NTP can be late.
+
+    A stamp from the future would otherwise hold the check off for as long as
+    the router's clock stayed behind it.
+    """
+    configs, routing_path, state = _pass_through_install(tmp_path, monkeypatch)
+    _quiet_other_types(monkeypatch)
+
+    result = dns.check_pass_non_ip(
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        now=time.time() - 7 * 24 * 3600,
+    )
+
+    assert result["action"] == "watching"

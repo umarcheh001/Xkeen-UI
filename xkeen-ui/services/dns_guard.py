@@ -93,6 +93,22 @@ def build_protections(
 ) -> List[Protection]:
     """Wire both assistants to the guard, skipping any that is not available."""
 
+    def _watch_xray_dns() -> None:
+        """Everything about the Xray protection a healthy tick has to re-check.
+
+        The capture rule can be pushed out of place by the firmware, and the
+        node that carries the other record types can go quiet without the
+        shared probe noticing -- it asks for ``A``, which the built-in DNS
+        answers whatever happened to the pass-through.
+        """
+        dns_over_vless.reapply_client_capture(ui_state_dir=ui_state_dir)
+        dns_over_vless.check_pass_non_ip(
+            configs_dir=configs_dir,
+            routing_file=routing_file,
+            ui_state_dir=ui_state_dir,
+            restart_xkeen=restart_xkeen,
+        )
+
     protections: List[Protection] = [
         Protection(
             "dns-over-vless",
@@ -105,9 +121,7 @@ def build_protections(
                 restart_xkeen=restart_xkeen,
                 reason=reason,
             ),
-            reconcile=lambda: dns_over_vless.reapply_client_capture(
-                ui_state_dir=ui_state_dir
-            ),
+            reconcile=_watch_xray_dns,
         ),
     ]
 

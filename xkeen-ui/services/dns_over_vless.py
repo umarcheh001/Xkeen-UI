@@ -148,6 +148,20 @@ UPSTREAM_SCHEMES = ("https://", "tcp://")
 UNSUPPORTED_SCHEMES = ("tls://", "quic://")
 PROBE_DOMAIN = "example.com"
 DNS_PROBE_ATTEMPTS = 3
+# Record types as they travel on the wire.  Xray answers A and AAAA out of its
+# built-in DNS, so only a query of another type says anything about the node
+# that carries the rest.
+QTYPE_A = 1
+QTYPE_TXT = 16
+# The pass-through probe: a domain that always carries TXT records, asked no
+# more often than this, and acted upon only after this many failures in a row.
+PASS_PROBE_DOMAIN = "google.com"
+PASS_PROBE_INTERVAL = 600.0
+PASS_PROBE_FAILS = 2
+# A switch rewrites the fragment and restarts the core, which drops every
+# connection on the router; a flapping node must not be able to do that in a
+# loop, so one switch an hour is the ceiling.
+PASS_SWITCH_INTERVAL = 3600.0
 
 _LOCK = threading.RLock()
 
@@ -1935,7 +1949,17 @@ def _wait_for_xray(timeout: float = 12.0) -> bool:
     return detect_running_core() == "xray"
 
 
-def _dns_probe(domain: str = PROBE_DOMAIN, timeout: float = 7.0) -> Dict[str, Any]:
+def _dns_query_packet(domain: str, qtype: int, txid: int) -> bytes:
+    """One standard recursive query, ready to send."""
+    labels = [label.encode("ascii") for label in domain.strip(".").split(".") if label]
+    qname = b"".join(bytes([len(label)]) + label for label in labels) + b"\x00"
+    header = struct.pack("!HHHHHH", txid, 0x0100, 1, 0, 0, 0)
+    return header + qname + struct.pack("!HH", int(qtype), 1)
+
+
+def _dns_probe(
+    domain: str = PROBE_DOMAIN, timeout: float = 7.0, qtype: int = QTYPE_A
+) -> Dict[str, Any]:
     """Probe the new listener with short retries while Xray warms up.
 
     Large configs with observatory/balancers can take several seconds after
@@ -1948,8 +1972,6 @@ def _dns_probe(domain: str = PROBE_DOMAIN, timeout: float = 7.0) -> Dict[str, An
 
     started = time.monotonic()
     deadline = started + max(1.0, float(timeout or 0))
-    labels = [label.encode("ascii") for label in domain.strip(".").split(".") if label]
-    qname = b"".join(bytes([len(label)]) + label for label in labels) + b"\x00"
     attempts = 0
     last_error = "timeout"
     last_response: Dict[str, Any] = {}
@@ -1975,7 +1997,7 @@ def _dns_probe(domain: str = PROBE_DOMAIN, timeout: float = 7.0) -> Dict[str, An
     while attempts < DNS_PROBE_ATTEMPTS and time.monotonic() < deadline:
         attempts += 1
         txid = random.randint(0, 65535)
-        packet = struct.pack("!HHHHHH", txid, 0x0100, 1, 0, 0, 0) + qname + struct.pack("!HH", 1, 1)
+        packet = _dns_query_packet(domain, qtype, txid)
         remaining = max(0.2, deadline - time.monotonic())
         attempt_timeout = min(2.25, remaining)
         data = b""
@@ -2107,6 +2129,139 @@ def reapply_client_capture(*, ui_state_dir: str) -> Dict[str, Any]:
     return dns_client_capture.ensure(wanted)
 
 
+def _pass_health_for_window(state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The pass-through record the window can rely on, or nothing to say yet."""
+    if not state.get("pass_non_ip"):
+        return None
+    health = state.get("pass_non_ip_health")
+    if not isinstance(health, dict) or not health.get("checked_at"):
+        return None
+    return {
+        "ok": bool(health.get("ok")),
+        "checked_at": int(float(health.get("checked_at") or 0)),
+        "node": _clean_tag(health.get("node")),
+        "switched_from": _clean_tag(health.get("switched_from")),
+        "switched_at": int(float(health.get("switched_at") or 0)),
+        "exhausted": bool(health.get("exhausted")),
+        "error": str(health.get("error") or ""),
+    }
+
+
+def _pass_probe() -> Dict[str, Any]:
+    """Does the pass-through actually carry the other record types?
+
+    A TXT query cannot be answered by the built-in DNS at all, so an answer to
+    it proves the whole chain: ``nonIPQuery: "skip"`` is in force and the node
+    named in ``proxySettings`` is carrying the query.
+    """
+    return _dns_probe(PASS_PROBE_DOMAIN, qtype=QTYPE_TXT)
+
+
+def check_pass_non_ip(
+    *,
+    configs_dir: str,
+    routing_file: str,
+    ui_state_dir: str,
+    restart_xkeen: Callable[..., Any],
+    now: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Watch the one node that carries MX, TXT, SRV and the rest.
+
+    ``proxySettings`` names a single outbound -- Xray refuses a balancer there
+    -- so that node is a single point of failure the main guard cannot see: its
+    probe asks for ``A``, which the built-in DNS answers by itself no matter
+    what happened to the pass-through.
+    """
+    state = _load_state(ui_state_dir)
+    if not state.get("enabled") or not state.get("pass_non_ip"):
+        return {"action": "idle"}
+    moment = float(now if now is not None else time.time())
+    health = state.get("pass_non_ip_health")
+    health = dict(health) if isinstance(health, dict) else {}
+    last = float(health.get("checked_at") or 0)
+    # The guard ticks every half minute; asking the far side of the tunnel that
+    # often would be traffic spent on nothing.  A stamp from the future means
+    # the router's clock moved, not that the check just ran: Keenetic boots
+    # without a real-time clock, and waiting it out would mute the check for
+    # as long as the clock stayed behind.
+    if last and 0 <= moment - last < PASS_PROBE_INTERVAL:
+        return {"action": "skipped"}
+
+    node = _clean_tag(state.get("pass_non_ip_node"))
+    probe = _pass_probe()
+    if probe.get("ok"):
+        _store_pass_health(
+            ui_state_dir,
+            {"ok": True, "checked_at": moment, "node": node, "fails": 0, "tried": []},
+        )
+        return {"action": "ok", "node": node}
+
+    fails = int(health.get("fails") or 0) + 1
+    health.update({"ok": False, "checked_at": moment, "node": node, "fails": fails})
+    health["error"] = str(probe.get("error") or "")
+    if fails < PASS_PROBE_FAILS:
+        _store_pass_health(ui_state_dir, health)
+        return {"action": "watching", "node": node, "fails": fails}
+
+    routing, _raw = _read_routing_with_raw(routing_file)
+    runtime = _collect_runtime(configs_dir, routing)
+    options = _pass_node_options(runtime, routing, _stored_selection(state))
+    tried = [tag for tag in (health.get("tried") or []) if isinstance(tag, str)]
+    if node and node not in tried:
+        tried.append(node)
+    health["tried"] = tried
+    following = next((tag for tag in options if tag not in tried), "")
+    if not following:
+        # Every node of the route has had its turn and none of them answered:
+        # the fault is not with the node.  Stop restarting the core over it and
+        # let the window say so instead.
+        health["exhausted"] = True
+        _store_pass_health(ui_state_dir, health)
+        return {"action": "exhausted", "node": node, "tried": tried}
+
+    switched_at = float(health.get("switched_at") or 0)
+    if switched_at and moment - switched_at < PASS_SWITCH_INTERVAL:
+        _store_pass_health(ui_state_dir, health)
+        return {"action": "waiting", "node": node, "next": following}
+
+    try:
+        apply_action(
+            "enable",
+            configs_dir=configs_dir,
+            routing_file=routing_file,
+            ui_state_dir=ui_state_dir,
+            restart_xkeen=restart_xkeen,
+            pass_non_ip=True,
+            pass_non_ip_node=following,
+        )
+    except Exception as exc:  # noqa: BLE001 - reported to the window, never fatal
+        health["error"] = str(exc)
+        _store_pass_health(ui_state_dir, health)
+        return {"action": "switch-failed", "node": node, "error": str(exc)}
+
+    _store_pass_health(
+        ui_state_dir,
+        {
+            "ok": False,
+            "checked_at": moment,
+            "node": following,
+            "fails": 0,
+            "tried": tried,
+            "switched_from": node,
+            "switched_at": moment,
+        },
+    )
+    return {"action": "switched", "node": following, "from": node}
+
+
+def _store_pass_health(ui_state_dir: str, health: Dict[str, Any]) -> None:
+    """Keep the record next to the settings it describes."""
+    with _LOCK:
+        state = _load_state(ui_state_dir)
+        state["pass_non_ip_health"] = health
+        _save_state(ui_state_dir, state)
+
+
 def _safe_capture_macs(value: Any) -> list[str]:
     """Read back the chosen devices without raising on a hand-edited file."""
     try:
@@ -2226,6 +2381,10 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
         "pass_non_ip_options": _pass_node_options(
             runtime, routing, _stored_selection(state)
         ),
+        # How that single node is actually doing: the shared guard probe asks
+        # for A, which the built-in DNS answers on its own, so nothing else in
+        # this status would show the other record types failing.
+        "pass_non_ip_health": _pass_health_for_window(state) if enabled else None,
         "route_drift": drift,
         "watchdog": state.get("watchdog") if isinstance(state.get("watchdog"), dict) else None,
         # The card explains what guards the feature, so it needs the values that
@@ -2582,6 +2741,24 @@ def apply_action(
                         "last_transaction": snapshot_dir,
                     },
                 )
+                if wanted_pass:
+                    # The window asks about the pass-through the moment it is
+                    # switched on; waiting for the guard's first round would
+                    # leave it with nothing to say for ten minutes.  A failure
+                    # here is a fact to report, never a reason to roll back:
+                    # A and AAAA are already answering.
+                    pass_probe = _pass_probe()
+                    _store_pass_health(
+                        ui_state_dir,
+                        {
+                            "ok": bool(pass_probe.get("ok")),
+                            "checked_at": time.time(),
+                            "node": wanted_pass_node,
+                            "fails": 0 if pass_probe.get("ok") else 1,
+                            "tried": [],
+                            "error": str(pass_probe.get("error") or ""),
+                        },
+                    )
             else:
                 # Turning the feature off is not the same as forgetting how it
                 # was set up.  Nothing here is applied while it is off -- there

@@ -470,3 +470,34 @@ def test_a_rule_that_cannot_be_put_back_is_reported_not_swallowed(monkeypatch):
     assert result["action"] == "ok"
     assert result["reconcile_error"] == "iptables не найден"
     assert stub.released == []
+
+
+def test_the_xray_protection_also_watches_its_pass_through(tmp_path: Path, monkeypatch):
+    """The shared probe asks for A, which says nothing about MX and TXT.
+
+    Those ride one node named in ``proxySettings``, so their failure is
+    invisible to the tick itself and has to be looked for separately.
+    """
+    calls: list[str] = []
+    monkeypatch.setattr(dns_over_vless, "reapply_client_capture", lambda **_k: {"ok": True})
+    monkeypatch.setattr(
+        dns_over_vless,
+        "check_pass_non_ip",
+        lambda **kwargs: calls.append(str(kwargs["ui_state_dir"])) or {"action": "ok"},
+    )
+
+    protections = dns_guard.build_protections(
+        configs_dir=str(tmp_path),
+        routing_file=str(tmp_path / "routing.json"),
+        ui_state_dir=str(tmp_path),
+        mihomo_config_file=str(tmp_path / "config.yaml"),
+        save_mihomo_config=lambda text: None,
+        restart_xkeen=lambda **kwargs: True,
+    )
+    by_name = {item.name: item for item in protections}
+    assert by_name["dns-over-vless"].reconcile() == ""
+    # Mihomo resolves names itself: it has no pass-through to watch, and the
+    # guard must not invent one for it.
+    assert by_name["mihomo-dns"].reconcile() == ""
+
+    assert calls == [str(tmp_path)]
