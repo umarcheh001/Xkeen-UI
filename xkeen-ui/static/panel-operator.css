@@ -35,8 +35,14 @@ body.panel-page {
   --op-accent-border: rgba(133, 136, 242, 0.42);
   --op-success: #4db68b;
   --op-success-soft: rgba(77, 182, 139, 0.12);
+  /* Пары для меток на мелком кегле: цвет, которому хватает контраста поверх
+   * мягкой заливки, и рамка того же тона. */
+  --op-success-strong: #6fd3a8;
+  --op-success-border: rgba(111, 211, 168, 0.42);
   --op-warning: #d7a650;
   --op-warning-soft: rgba(215, 166, 80, 0.12);
+  --op-warning-strong: #e2b463;
+  --op-warning-border: rgba(226, 180, 99, 0.42);
   --op-danger: #df727b;
   --op-danger-soft: rgba(223, 114, 123, 0.12);
   --op-radius-sm: 6px;
@@ -13185,8 +13191,12 @@ html[data-theme="light"] body.panel-page {
   --op-accent-border: rgba(91, 95, 199, 0.34);
   --op-success: #2c8966;
   --op-success-soft: rgba(44, 137, 102, 0.1);
+  --op-success-strong: #1f6f52;
+  --op-success-border: rgba(31, 111, 82, 0.34);
   --op-warning: #9d6a12;
   --op-warning-soft: rgba(157, 106, 18, 0.1);
+  --op-warning-strong: #7d540e;
+  --op-warning-border: rgba(125, 84, 14, 0.34);
   --op-danger: #bd4f5a;
   --op-danger-soft: rgba(189, 79, 90, 0.09);
   --op-shadow: 0 1px 2px rgba(25, 28, 35, 0.06);
@@ -13913,6 +13923,30 @@ body.panel-page .xk-dns-zone-req {
 
 body.panel-page .xk-dns-zone[data-required="1"] {
   box-shadow: inset 3px 0 0 0 var(--op-accent);
+}
+
+/* Метка обязательной зоны — светофор, а не ярлык. Синяя: до зоны ещё не
+ * дошли. Зелёная: сделано. Оранжевая: сделано, но не работает. Цвет несёт
+ * то же, что и слово, — на цвет одному полагаться нельзя. Полоса зоны идёт
+ * за меткой, чтобы состояние читалось по левому краю всей колонки. */
+body.panel-page .xk-dns-zone-req[data-state="done"] {
+  color: var(--op-success-strong);
+  border-color: var(--op-success-border);
+  background: var(--op-success-soft);
+}
+
+body.panel-page .xk-dns-zone[data-req-state="done"] {
+  box-shadow: inset 3px 0 0 0 var(--op-success-strong);
+}
+
+body.panel-page .xk-dns-zone-req[data-state="warn"] {
+  color: var(--op-warning-strong);
+  border-color: var(--op-warning-border);
+  background: var(--op-warning-soft);
+}
+
+body.panel-page .xk-dns-zone[data-req-state="warn"] {
+  box-shadow: inset 3px 0 0 0 var(--op-warning-strong);
 }
 
 /* Сводка прижата вправо и исчезает, когда зона раскрыта: там уже видно

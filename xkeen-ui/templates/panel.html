@@ -2598,7 +2598,7 @@
             <details class="xk-dns-zone" data-zone="route" data-required="1">
               <summary class="xk-dns-zone-head">
                 <b id="routing-dns-over-vless-target-label">Маршрут для DNS-запросов</b>
-                <span class="xk-dns-zone-req">обязательно</span>
+                <span class="xk-dns-zone-req" data-zone-req="route">обязательно</span>
                 <span class="xk-dns-zone-sum" data-zone-sum="route"></span>
               </summary>
               <div class="xk-dns-zone-body" id="routing-dns-over-vless-route">
@@ -2620,7 +2620,7 @@
             <details class="xk-dns-zone" data-zone="servers" data-required="1">
               <summary class="xk-dns-zone-head">
                 <b>DNS-серверы в туннеле</b>
-                <span class="xk-dns-zone-req">обязательно</span>
+                <span class="xk-dns-zone-req" data-zone-req="servers">обязательно</span>
                 <span class="xk-dns-zone-sum" data-zone-sum="servers"></span>
               </summary>
               <div class="xk-dns-zone-body">
@@ -2741,9 +2741,10 @@
           </div>
 
           <div class="xk-dns-rail xk-dns-rail-side">
-            <details class="xk-dns-zone" data-zone="devices">
+            <details class="xk-dns-zone" data-zone="devices" data-required="1">
               <summary class="xk-dns-zone-head">
                 <b>Кто из устройств пользуется функцией</b>
+                <span class="xk-dns-zone-req" data-zone-req="devices">обязательно</span>
                 <span class="xk-dns-zone-sum" data-zone-sum="devices"></span>
                 <label class="dt-switch xk-switch-bare" title="Правило в firewall роутера, которое возвращает выбранные устройства к DNS-over-VLESS.">
                   <input type="checkbox" id="routing-dns-over-vless-capture" aria-label="Заводить DNS выбранных устройств в туннель">

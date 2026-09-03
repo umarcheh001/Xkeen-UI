@@ -847,7 +847,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   function syncRequiredZones(open) {
     const content = document.querySelector('#routing-dns-over-vless-modal .modal-content');
     if (!content || content.dataset.dnsLayout !== 'split') return;
-    const list = document.querySelectorAll(`${ZONES}[data-required="1"]`);
+    // Сама зона устройств тоже обязательная, но она здесь ведущая: тянуть
+    // её за собой означало бы открывать то, что человек только что закрыл.
+    const list = document.querySelectorAll(`${ZONES}[data-required="1"]:not([data-zone="devices"])`);
     for (let i = 0; i < list.length; i += 1) {
       const zone = list[i];
       // Зона маршрута прячется при включённой функции — разворачивать нечего.
@@ -878,6 +880,63 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     }
   }
 
+  // Метка обязательной зоны — светофор состояния, а не ярлык.
+  //   синяя  — делать нечего: ещё не применено, либо всё и так в порядке;
+  //   зелёная — применено и работает целиком;
+  //   оранжевая — применено, но не полностью: сюда надо посмотреть.
+  // Слово меняется вместе с цветом: на один цвет полагаться нельзя, да и
+  // зелёное «обязательно» читалось бы странно.
+  function zoneMark(zone, data) {
+    const applied = !!(data && data.enabled);
+    // Служебный фрагмент записан не целиком -- например, включение оборвалось.
+    const half = !!(data && data.partial);
+    if (zone === 'route') {
+      if (!applied) return { text: 'обязательно', state: 'todo' };
+      // Состав исходного балансировщика разошёлся с применённым: маршрут
+      // стоит, но ведёт не туда, куда думает человек.
+      if (data.route_drift) return { text: 'состав разошёлся', state: 'warn' };
+      if (half) return { text: 'применено не целиком', state: 'warn' };
+      return { text: 'маршрут применён', state: 'done' };
+    }
+    if (zone === 'servers') {
+      if (!applied) return { text: 'обязательно', state: 'todo' };
+      if (half) return { text: 'применено не целиком', state: 'warn' };
+      return { text: 'серверы применены', state: 'done' };
+    }
+    if (zone === 'devices') {
+      // Эта зона не ждёт применения: устройства, сидящие в политике доступа,
+      // видно сразу, и решить по ним нужно до включения, а не после.
+      if (!lastClients || lastClients.available === false) return { text: 'обязательно', state: 'todo' };
+      const clients = lastClients.clients || [];
+      // Отмечено, но не доходит: прошивка перестроила цепочки и поставила
+      // своё правило выше нашего. Добавлять нечего, чинить есть что.
+      if (clients.some((item) => item.captured && item.verdict !== 'reaches')) {
+        return { text: 'правило не действует', state: 'warn' };
+      }
+      if (clients.some((item) => item.verdict === 'intercepted' && !item.captured)) {
+        return { text: 'есть кого добавить', state: 'warn' };
+      }
+      // «Определить не удалось» -- это не «всё хорошо»: зелёным не обещаем.
+      if (clients.some((item) => item.verdict === 'unknown')) return { text: 'обязательно', state: 'todo' };
+      if (!applied) return { text: 'обязательно', state: 'todo' };
+      return { text: 'все доходят', state: 'done' };
+    }
+    return null;
+  }
+
+  function renderZoneMarks(data) {
+    const marks = document.querySelectorAll('[data-zone-req]');
+    for (let i = 0; i < marks.length; i += 1) {
+      const mark = marks[i];
+      const info = zoneMark(mark.dataset.zoneReq, data);
+      if (!info) continue;
+      mark.textContent = info.text;
+      mark.dataset.state = info.state;
+      const zone = mark.closest ? mark.closest('.xk-dns-zone') : null;
+      if (zone) zone.dataset.reqState = info.state;
+    }
+  }
+
   function renderZoneSummaries(data) {
     const slots = document.querySelectorAll('[data-zone-sum]');
     for (let i = 0; i < slots.length; i += 1) {
@@ -887,6 +946,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       if (info.tone) slot.dataset.tone = info.tone;
       else delete slot.dataset.tone;
     }
+    renderZoneMarks(data);
   }
 
   function render(data) {
@@ -1211,6 +1271,11 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       ? `Пользуются ${counts.reaches || 0} из ${total}; у ${taken} DNS забирает политика доступа.`
       : `Пользуются все ${total}.`;
     if (data.error) summary.textContent += ` Правила прочитать не удалось: ${data.error}`;
+    // Сторож не смог поставить правило захвата на место. Без этой строки
+    // метка «правило не действует» оставалась загадкой: видно, что не
+    // работает, и непонятно почему.
+    const captureError = status && status.capture_error;
+    if (captureError) summary.textContent += ` Правило захвата не встало на место: ${captureError}`;
 
     // Устройства, до которых функция не доходит, идут первыми: ради них
     // и открывают этот список.

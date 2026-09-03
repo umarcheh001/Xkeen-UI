@@ -42,13 +42,20 @@ def test_no_zone_is_open_in_the_markup():
 
 def test_required_zones_are_the_marked_ones():
     # Прежняя метка «необязательно» стояла на четырёх зонах из шести и была
-    # бледнее прочего текста. Помечаем наоборот -- две обязательные.
+    # бледнее прочего текста. Помечаем наоборот -- обязательные. Разбор по
+    # устройствам такой же обязательный: без ответа на вопрос «а до кого
+    # функция вообще доходит» включение остаётся наполовину слепым.
     assert "xk-dns-zone-opt" not in MODAL
-    for zone in ("route", "servers"):
+    for zone in ("route", "servers", "devices"):
         start = MODAL.index(f'data-zone="{zone}"')
         head = MODAL[start:MODAL.index("</summary>", start)]
-        assert 'data-required="1"' in MODAL[start - 60:start + 40], zone
-        assert '<span class="xk-dns-zone-req">обязательно</span>' in head, zone
+        assert 'data-required="1"' in MODAL[start - 60:start + 60], zone
+        assert f'data-zone-req="{zone}"' in head, zone
+        assert ">обязательно</span>" in head, zone
+    for zone in ("home", "direct", "records"):
+        start = MODAL.index(f'data-zone="{zone}"')
+        head = MODAL[start:MODAL.index("</summary>", start)]
+        assert "xk-dns-zone-req" not in head, zone
 
 
 def test_every_zone_carries_a_summary_slot():

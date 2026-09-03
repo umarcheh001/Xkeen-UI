@@ -2335,6 +2335,17 @@ def _emergency_release(
 # fragment and routing.
 
 
+# Почему восстановление правила захвата не удалось в последний раз. Сторож
+# ловит исключение и пишет его себе в счётчики, где оно и остаётся: окно
+# показывало «правило не действует», не умея сказать почему. Запоминаем здесь,
+# в том же процессе, где сторож и живёт.
+_LAST_CAPTURE_NOTE: Dict[str, Any] = {}
+
+
+def last_capture_error() -> str:
+    return str(_LAST_CAPTURE_NOTE.get("error") or "")
+
+
 def reapply_client_capture(*, ui_state_dir: str) -> Dict[str, Any]:
     """Put the capture chain back the way this install asked for it.
 
@@ -2345,9 +2356,16 @@ def reapply_client_capture(*, ui_state_dir: str) -> Dict[str, Any]:
     """
     state = _load_state(ui_state_dir)
     if not state.get("enabled"):
+        _LAST_CAPTURE_NOTE.pop("error", None)
         return {"ok": True, "changed": False, "macs": []}
     wanted = _safe_capture_macs(state.get("capture_macs")) if state.get("capture_clients") else []
-    return dns_client_capture.ensure(wanted)
+    try:
+        result = dns_client_capture.ensure(wanted)
+    except Exception as exc:  # noqa: BLE001 -- причину показывает окно
+        _LAST_CAPTURE_NOTE["error"] = str(exc)
+        raise
+    _LAST_CAPTURE_NOTE.pop("error", None)
+    return result
 
 
 def _pass_health_for_window(state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -2609,6 +2627,9 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
         # this status would show the other record types failing.
         "pass_non_ip_health": _pass_health_for_window(state) if enabled else None,
         "route_drift": drift,
+        # Почему правило захвата не встало на место: сторож ловит эту ошибку
+        # молча, а окну есть что о ней сказать.
+        "capture_error": last_capture_error(),
         "watchdog": state.get("watchdog") if isinstance(state.get("watchdog"), dict) else None,
         # The card explains what guards the feature, so it needs the values that
         # are actually in force — defaults or environment overrides alike.

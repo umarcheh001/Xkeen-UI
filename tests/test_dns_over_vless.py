@@ -565,6 +565,31 @@ def test_fallback_into_direct_is_still_dropped(tmp_path: Path):
     assert "включить функцию обратно нужно вручную" in reason
 
 
+def test_capture_failure_is_remembered_for_the_window(tmp_path: Path, monkeypatch):
+    # Сторож ловит эту ошибку и кладёт себе в счётчики, где она и остаётся.
+    # Окно показывало «правило не действует», не умея сказать почему.
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    (state_dir / "dns_over_vless.json").write_text(
+        json.dumps({"enabled": True, "capture_clients": True, "capture_macs": ["aa:bb:cc:dd:ee:01"]}),
+        encoding="utf-8",
+    )
+
+    def _boom(_macs):
+        raise RuntimeError("не удалось определить адреса роутера")
+
+    monkeypatch.setattr(dns.dns_client_capture, "ensure", _boom)
+    with pytest.raises(RuntimeError):
+        dns.reapply_client_capture(ui_state_dir=str(state_dir))
+    assert "не удалось определить адреса роутера" in dns.last_capture_error()
+
+    # Удачная попытка снимает жалобу: держать протухшую причину хуже, чем
+    # не показывать никакой.
+    monkeypatch.setattr(dns.dns_client_capture, "ensure", lambda macs: {"ok": True, "changed": False})
+    dns.reapply_client_capture(ui_state_dir=str(state_dir))
+    assert dns.last_capture_error() == ""
+
+
 def test_fallback_reason_says_nothing_about_the_guard_when_it_is_off(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG", "0")
     configs, routing_path, _state = _base_config(tmp_path)

@@ -25,12 +25,126 @@ test('окно открывается со свёрнутыми зонами', a
 test('помечены обязательные зоны, а не необязательные', async ({ page }) => {
   await openDialog(page);
 
-  await expect(page.locator('.xk-dns-zone[data-zone="route"] .xk-dns-zone-req')).toHaveText('обязательно');
-  await expect(page.locator('.xk-dns-zone[data-zone="servers"] .xk-dns-zone-req')).toHaveText('обязательно');
+  // Разбор по устройствам такой же обязательный, как маршрут и серверы.
+  await expect(page.locator('#routing-dns-over-vless-modal .xk-dns-zone-req')).toHaveCount(3);
+  for (const zone of ['route', 'servers', 'devices']) {
+    await expect(page.locator(`.xk-dns-zone[data-zone="${zone}"] .xk-dns-zone-req`)).toHaveCount(1);
+  }
   // Прежняя метка стояла на четырёх зонах из шести и была бледнее прочего
   // текста: заметной должна быть обязательность, а не её отсутствие.
   await expect(page.locator('#routing-dns-over-vless-modal .xk-dns-zone-opt')).toHaveCount(0);
   await expect(page.locator('.xk-dns-zone[data-zone="home"] .xk-dns-zone-req')).toHaveCount(0);
+});
+
+
+test('пока не применено, обязательные зоны синие, а после применения зелёные', async ({ page }) => {
+  // Заполненность полей тут ни при чём: маршрут подставлен по умолчанию и
+  // серверы прописаны, но на роутере ещё ничего нет.
+  await openDialog(page);
+  for (const zone of ['route', 'servers']) {
+    await expect(page.locator(`[data-zone-req="${zone}"]`)).toHaveText('обязательно');
+    await expect(page.locator(`[data-zone-req="${zone}"]`)).toHaveAttribute('data-state', 'todo');
+  }
+});
+
+
+test('применённая зона зеленеет вместе со своей полосой', async ({ page }) => {
+  await openDialog(page, { ...STATUS, enabled: true, can_enable: false, can_disable: true });
+
+  const servers = page.locator('[data-zone-req="servers"]');
+  await expect(servers).toHaveText('серверы применены');
+  await expect(servers).toHaveAttribute('data-state', 'done');
+  // Полоса зоны идёт за меткой: состояние читается по левому краю колонки.
+  await expect(page.locator('.xk-dns-zone[data-zone="servers"]')).toHaveAttribute('data-req-state', 'done');
+});
+
+
+test('наполовину применённая функция красит зоны оранжевым', async ({ page }) => {
+  // Служебный фрагмент записан не целиком — например, включение оборвалось.
+  await openDialog(page, { ...STATUS, enabled: true, can_disable: true, partial: true });
+  await expect(page.locator('[data-zone-req="servers"]')).toHaveText('применено не целиком');
+  await expect(page.locator('[data-zone-req="servers"]')).toHaveAttribute('data-state', 'warn');
+});
+
+
+test('разошедшийся состав балансировщика виден по метке маршрута', async ({ page }) => {
+  await openDialog(page, {
+    ...STATUS,
+    enabled: true,
+    can_enable: false,
+    can_disable: true,
+    route_drift: { tag: 'proxy', added: ['c'], removed: [] },
+  });
+  await expect(page.locator('[data-zone-req="route"]')).toHaveText('состав разошёлся');
+  await expect(page.locator('[data-zone-req="route"]')).toHaveAttribute('data-state', 'warn');
+});
+
+
+test('метка устройств различает «добавить» и «не работает»', async ({ page }) => {
+  const client = (mac, verdict, captured) => ({
+    title: `Устройство ${mac}`, mac, ip: '192.168.10.5', verdict, captured,
+    active: true, can_capture: verdict !== 'reaches', reason: '',
+  });
+  const mark = page.locator('[data-zone-req="devices"]');
+
+  await mockClients(page, {
+    available: true,
+    counts: { total: 2, reaches: 1, intercepted: 1 },
+    clients: [client('aa:00', 'intercepted', false), client('aa:01', 'reaches', false)],
+  });
+  await openDialog(page);
+  // Политика доступа забирает DNS, устройство можно отметить.
+  await expect(mark).toHaveText('есть кого добавить');
+  await expect(mark).toHaveAttribute('data-state', 'warn');
+});
+
+
+test('отмеченное, но не работающее устройство просит починить, а не добавить', async ({ page }) => {
+  const mark = page.locator('[data-zone-req="devices"]');
+  await mockClients(page, {
+    available: true,
+    counts: { total: 1, reaches: 0, intercepted: 1 },
+    // Правило панели есть, но прошивка перестроила цепочки и поставила своё
+    // выше: добавлять нечего, а функция всё равно не доходит.
+    clients: [{ title: 'Ноутбук', mac: 'aa:02', ip: '192.168.10.7', verdict: 'intercepted', captured: true, active: true, can_capture: true, reason: '' }],
+  });
+  await openDialog(page);
+  await expect(mark).toHaveText('правило не действует');
+  await expect(mark).toHaveAttribute('data-state', 'warn');
+});
+
+
+test('когда доходят все — зелёная метка, а «не удалось определить» зелёным не считается', async ({ page }) => {
+  const client = (mac, verdict) => ({
+    title: mac, mac, ip: '192.168.10.9', verdict, captured: false,
+    active: true, can_capture: verdict !== 'reaches', reason: '',
+  });
+  const mark = page.locator('[data-zone-req="devices"]');
+
+  await mockClients(page, {
+    available: true,
+    counts: { total: 2, reaches: 2, intercepted: 0 },
+    clients: [client('aa:03', 'reaches'), client('aa:04', 'reaches')],
+  });
+  await openDialog(page, { ...STATUS, enabled: true, can_enable: false, can_disable: true });
+  await expect(mark).toHaveText('все доходят');
+  await expect(mark).toHaveAttribute('data-state', 'done');
+});
+
+
+test('неопределённое устройство держит метку синей, а не зелёной', async ({ page }) => {
+  await mockClients(page, {
+    available: true,
+    counts: { total: 2, reaches: 1, intercepted: 0 },
+    clients: [
+      { title: 'a', mac: 'aa:05', ip: '', verdict: 'unknown', captured: false, active: false, can_capture: true, reason: '' },
+      { title: 'b', mac: 'aa:06', ip: '192.168.10.8', verdict: 'reaches', captured: false, active: true, can_capture: false, reason: '' },
+    ],
+  });
+  await openDialog(page);
+  // Зелёный тут был бы обещанием, которого панель дать не может.
+  await expect(page.locator('[data-zone-req="devices"]')).toHaveText('обязательно');
+  await expect(page.locator('[data-zone-req="devices"]')).toHaveAttribute('data-state', 'todo');
 });
 
 
