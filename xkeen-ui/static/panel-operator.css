@@ -13765,7 +13765,7 @@ body.panel-page .xk-dns-zone-opt {
   font-size: calc(9.5px * var(--xk-font-scale, 1));
   color: var(--op-faint);
   border: 1px solid var(--op-border);
-  border-radius: 12px;
+  border-radius: var(--op-control-radius);
   padding: 1px 7px;
 }
 
