@@ -13593,6 +13593,64 @@ body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-d
   overflow: auto;
 }
 
+/* Окно DNS-over-VLESS раскладывается в одну из двух сеток через
+ * data-dns-layout на .modal-content. Разметка одна и та же в обеих —
+ * отличаются только области грида, ни один узел никуда не переносится. */
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-body {
+  display: grid;
+  gap: 10px;
+  align-items: start;
+}
+
+body.panel-page .routing-dns-over-vless-lead { grid-area: lead; }
+body.panel-page .routing-dns-over-vless-state { grid-area: state; }
+body.panel-page .xk-dns-zone[data-zone="route"] { grid-area: route; }
+body.panel-page .xk-dns-zone[data-zone="servers"] { grid-area: servers; }
+body.panel-page .xk-dns-zone[data-zone="home"] { grid-area: home; }
+body.panel-page .xk-dns-zone[data-zone="direct"] { grid-area: direct; }
+body.panel-page .xk-dns-zone[data-zone="records"] { grid-area: records; }
+body.panel-page .xk-dns-zone[data-zone="devices"] { grid-area: devices; }
+body.panel-page .routing-dns-over-vless-foot { grid-area: foot; }
+
+/* Одна колонка: порядок чтения сверху вниз, состояние и устройства в потоке. */
+body.panel-page [data-dns-layout="single"] .routing-dns-over-vless-body {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "lead"
+    "state"
+    "route"
+    "servers"
+    "home"
+    "direct"
+    "records"
+    "devices"
+    "foot";
+}
+
+/* Две колонки: слева настройка, справа «как это работает сейчас».
+ * Разбор по устройствам — главная диагностика окна, и в рельсе он виден
+ * сразу, а не после прокрутки длинной формы. */
+body.panel-page [data-dns-layout="split"] .routing-dns-over-vless-body {
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  grid-template-areas:
+    "lead    lead"
+    "route   state"
+    "servers devices"
+    "home    devices"
+    "direct  foot"
+    "records foot";
+}
+
+/* Ниже этого порога двух колонок физически нет — схлопываемся независимо
+ * от выбранной настройки. */
+@media (max-width: 1100px) {
+  body.panel-page [data-dns-layout="split"] .routing-dns-over-vless-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "lead" "state" "route" "servers" "home" "direct" "records" "devices" "foot";
+  }
+}
+
 body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-dns-over-vless-lead {
   gap: 10px;
   padding: 10px;

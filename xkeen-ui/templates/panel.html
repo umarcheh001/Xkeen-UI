@@ -2561,7 +2561,7 @@
     </div>
 
     <div id="routing-dns-over-vless-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" data-modal-noresize="1" data-modal-nopos="1" data-modal-remember="0" role="dialog" aria-modal="true" aria-labelledby="routing-dns-over-vless-title">
-      <div class="modal-content xk-modal-width xk-modal-width-920 routing-dns-over-vless-modal-content">
+      <div class="modal-content xk-modal-width xk-modal-width-1160 routing-dns-over-vless-modal-content" data-dns-layout="single">
         <div class="modal-header">
           <span class="modal-title" id="routing-dns-over-vless-title">DNS-over-VLESS</span>
           <button type="button" class="modal-close" id="routing-dns-over-vless-close" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
@@ -2576,7 +2576,17 @@
             <span id="routing-dns-over-vless-badge" class="routing-dns-over-vless-badge">Проверка…</span>
           </div>
 
-          <div id="routing-dns-over-vless-status" class="routing-dns-over-vless-status" role="status" aria-live="polite">Проверяем текущую конфигурацию…</div>
+          <div class="routing-dns-over-vless-state">
+            <div id="routing-dns-over-vless-status" class="routing-dns-over-vless-status" role="status" aria-live="polite">Проверяем текущую конфигурацию…</div>
+
+            <div class="routing-dns-over-vless-safety" aria-label="Защита операции">
+              <div>{{ op_icon('validate') }}<span><b>Xray preflight</b><small>Проверка во временном каталоге до записи</small></span></div>
+              <div>{{ op_icon('archive') }}<span><b>Полный снимок</b><small>DNS, routing, JSONC и состояние мастера</small></span></div>
+              <div>{{ op_icon('restore') }}<span><b>Автооткат</b><small>При ошибке старта или DNS-теста</small></span></div>
+            </div>
+
+            <ul id="routing-dns-over-vless-details" class="routing-dns-over-vless-details"></ul>
+          </div>
 
           <details class="xk-dns-zone" data-zone="route" open>
             <summary class="xk-dns-zone-head">
@@ -2720,14 +2730,6 @@
             </div>
           </details>
 
-          <div class="routing-dns-over-vless-safety" aria-label="Защита операции">
-            <div>{{ op_icon('validate') }}<span><b>Xray preflight</b><small>Проверка во временном каталоге до записи</small></span></div>
-            <div>{{ op_icon('archive') }}<span><b>Полный снимок</b><small>DNS, routing, JSONC и состояние мастера</small></span></div>
-            <div>{{ op_icon('restore') }}<span><b>Автооткат</b><small>При ошибке старта или DNS-теста</small></span></div>
-          </div>
-
-          <ul id="routing-dns-over-vless-details" class="routing-dns-over-vless-details"></ul>
-
           <details class="xk-dns-zone" data-zone="devices">
             <summary class="xk-dns-zone-head">
               <b>Кто из устройств пользуется функцией</b>
@@ -2768,13 +2770,15 @@
               </div>
             </div>
           </details>
-          <div class="modal-hint routing-dns-over-vless-warning">Настройка применяется при активном ядре Xray; у Mihomo защита DNS настраивается своим окном.
-            <details class="xk-hint-more">
-              <summary>Подробнее</summary>
-              <p>Прокси-outbound и существующие правила не переписываются. Резервный маршрут балансировщика переносится только тогда, когда вся его цепочка остаётся внутри прокси; fallback, ведущий в прямое соединение, отбрасывается, чтобы не допустить утечку или петлю.</p>
-            </details>
+          <div class="routing-dns-over-vless-foot">
+            <div class="modal-hint routing-dns-over-vless-warning">Настройка применяется при активном ядре Xray; у Mihomo защита DNS настраивается своим окном.
+              <details class="xk-hint-more">
+                <summary>Подробнее</summary>
+                <p>Прокси-outbound и существующие правила не переписываются. Резервный маршрут балансировщика переносится только тогда, когда вся его цепочка остаётся внутри прокси; fallback, ведущий в прямое соединение, отбрасывается, чтобы не допустить утечку или петлю.</p>
+              </details>
+            </div>
+            <p class="routing-dns-over-vless-links">Описание схемы: <a href="https://jameszero.net/4773.htm" target="_blank" rel="noopener noreferrer">упрощённый вариант</a> · <a href="https://jameszero.net/3398.htm" target="_blank" rel="noopener noreferrer">первая часть</a></p>
           </div>
-          <p class="routing-dns-over-vless-links">Описание схемы: <a href="https://jameszero.net/4773.htm" target="_blank" rel="noopener noreferrer">упрощённый вариант</a> · <a href="https://jameszero.net/3398.htm" target="_blank" rel="noopener noreferrer">первая часть</a></p>
         </div>
         <div class="modal-actions routing-dns-over-vless-actions">
           <button type="button" id="routing-dns-over-vless-reset" class="btn-secondary routing-dns-over-vless-reset" title="Вернуть поля окна к значениям по умолчанию. Роутер при этом не меняется — настройки применятся, только когда вы включите функцию.">{{ op_icon('refresh') }}<span class="xk-action-label">Сбросить настройки</span></button>
