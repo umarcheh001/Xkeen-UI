@@ -113,7 +113,11 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
       el.dataset.loading = 'true';
       el.setAttribute('aria-busy', 'true');
       if (el.id === 'xkeen-core-text') {
-        el.disabled = true;
+        // Не `disabled`: выключенный элемент браузер лишает фокуса, и
+        // пользователь, добравшийся до кнопки клавиатурой, оказывался ни на
+        // чём. `aria-disabled` объявляет то же самое, но фокус оставляет —
+        // действие отбивает сам обработчик клика.
+        el.setAttribute('aria-disabled', 'true');
         if (!String(el.textContent || '').trim()) el.textContent = 'Ядро';
       }
       return;
@@ -121,6 +125,7 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
 
     try { delete el.dataset.loading; } catch (e) { el.removeAttribute('data-loading'); }
     el.removeAttribute('aria-busy');
+    if (el.id === 'xkeen-core-text') el.removeAttribute('aria-disabled');
   }
 
   function renderHeaderAsyncShell(snapshot) {
@@ -351,7 +356,6 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
       coreEl.textContent = 'Ядро: ' + label;
       coreEl.dataset.core = label;
       coreEl.classList.add('has-core');
-      coreEl.disabled = false;
       lamp.title = text + ' (ядро: ' + label + ')';
       return;
     }
@@ -359,7 +363,6 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
     coreEl.textContent = 'Ядро';
     coreEl.dataset.core = '';
     coreEl.classList.remove('has-core');
-    coreEl.disabled = false;
     lamp.title = text;
     syncTooltipText(lamp, lamp.getAttribute('title') || '');
   }

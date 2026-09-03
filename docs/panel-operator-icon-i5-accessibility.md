@@ -21,23 +21,23 @@ npm exec playwright test e2e/panel_operator_i5.spec.mjs --project=chromium
 
 Проверено: **7 Chromium тестов проходят**; статический icon/accessibility contract — **9 тестов проходят**. Runtime/API/DOM hooks не менялись.
 
-## Открытый пункт: выключение кнопки уносит фокус (заведено 3 сентября 2026)
+## Загрузка кнопки ядра не уносит фокус (закрыто 3 сентября 2026)
 
-Пока грузится статус ядра, `setHeaderAsyncChipLoading` (`xkeen-ui/static/js/pages/panel_shell.shared.js`)
-ставит `#xkeen-core-text` `disabled = true`, а `renderXkeenServiceStatus`
-(`xkeen-ui/static/js/features/service_status.js`) снимает выключение, когда статус придёт.
-Браузер снимает фокус с выключаемого элемента, поэтому пользователь, нажавший Tab в первую
-секунду после загрузки, теряет позицию и оказывается на `body`.
+Пока грузится статус ядра, `#xkeen-core-text` показывает скелетон. Раньше на это время
+кнопка получала `disabled`, а выключенный элемент браузер лишает фокуса: пользователь,
+добравшийся до неё клавиатурой, оказывался на `body`.
 
-**Что сделать:** перевести индикацию загрузки с `disabled` на `aria-disabled="true"` —
-такой элемент остаётся фокусируемым, — а отбой действия сделать в обработчике клика
-(`bindCoreModalUI`). Стили выключенного вида, сейчас висящие на `:disabled`, продублировать
-на `[aria-disabled="true"]`. Тот же приём проверить для `#xk-update-link`.
+Теперь состояние объявляется через `aria-disabled="true"` — и в разметке `panel.html`, и в
+`setHeaderAsyncChipLoading` (`xkeen-ui/static/js/pages/panel_shell.shared.js`). Мышиный клик
+по-прежнему гасит `pointer-events` из стиля `[data-loading="true"]`, а клавиатурный отбивает
+обработчик в `bindCoreModalUI` (`xkeen-ui/static/js/features/service_status.js`). Снятия
+`coreEl.disabled = false`, оставшиеся от прежнего механизма, убраны — их больше нечего снимать.
 
-**Что можно будет убрать после этого:** ожидание `toBeEnabled()` у кнопки ядра в
-`openPanel` (`e2e/panel_operator_i5.spec.mjs`) — оно появилось как обход именно этого
-поведения.
+Стережёт `e2e/header_core_button_loading.spec.mjs`: фокус, поставленный в первый же кадр,
+переживает инициализацию, а `Enter` во время загрузки не открывает окно выбора ядра.
+Проверка контракта разметки и обработчика — `tests/test_header_core_button_state.py`.
 
-**Чего касаться не нужно:** потеря фокуса при переносе разметки экрана уже закрыта —
-`captureCurrentDocumentScreenSnapshot` возвращает фокус после переноса, стережёт
-`e2e/top_level_screen_focus.spec.mjs`.
+Вместе с закрытым ранее возвратом фокуса после переноса разметки
+(`captureCurrentDocumentScreenSnapshot`, стережёт `e2e/top_level_screen_focus.spec.mjs`) это
+убрало флак `panel_operator_i5.spec.mjs`: обход в виде ожидания `toBeEnabled()` снят,
+`--repeat-each=5` даёт 35 passed.

@@ -967,14 +967,12 @@ let serviceStatusModuleApi = null;
       coreEl.textContent = `Ядро: ${label}`;
       coreEl.dataset.core = label;
       coreEl.classList.add('has-core');
-      coreEl.disabled = false;
       lamp.title = `${text} (ядро: ${label})`;
     } else {
       // Keep the core button visible/clickable even when core is unknown
       coreEl.textContent = 'Ядро';
       coreEl.dataset.core = '';
       coreEl.classList.remove('has-core');
-      coreEl.disabled = false;
       lamp.title = text;
     }
   }
@@ -1320,6 +1318,9 @@ let serviceStatusModuleApi = null;
     if (coreTextEl) {
       coreTextEl.addEventListener('click', (e) => {
         e.preventDefault();
+        // Пока грузится статус, кнопка помечена `aria-disabled`: мышь гасит
+        // `pointer-events`, а клавиатура доходит сюда — отбой нужен здесь.
+        if (coreTextEl.getAttribute('aria-disabled') === 'true') return;
         openXkeenCoreModal();
       });
     }
