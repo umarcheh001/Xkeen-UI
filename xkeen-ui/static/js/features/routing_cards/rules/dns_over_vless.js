@@ -743,6 +743,41 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     };
   }
 
+  // Сводка нужна ровно для того, чтобы свёрнутое не значило «спрятанное»:
+  // по шапкам должно читаться состояние всего окна, без раскрытия зон.
+  function zoneSummaryText(zone, data) {
+    if (zone === 'home') {
+      const list = (data && data.local_resolvers) || [];
+      if (!list.length) return 'не настроена';
+      const zones = parseZones(($(DOM.zones) || {}).value || '');
+      return `${list.length} резолвер(ов) · ${zones.length} зон`;
+    }
+    if (zone === 'direct') {
+      const list = (data && data.direct_resolvers) || [];
+      if (!list.length) return 'не настроены';
+      const domains = (data && data.direct_domains) || [];
+      return `${list.length} резолвер(ов) · ${domains.length} доменов`;
+    }
+    if (zone === 'records') {
+      if (!(data && data.pass_non_ip)) return 'выключено';
+      const node = (data && data.pass_non_ip_node) || '';
+      return node ? `включено · узел ${node}` : 'включено';
+    }
+    if (zone === 'devices') {
+      const summary = $(DOM.clientsSummary);
+      return (summary && summary.textContent.trim()) || 'проверяем…';
+    }
+    return '';
+  }
+
+  function renderZoneSummaries(data) {
+    const slots = document.querySelectorAll('[data-zone-sum]');
+    for (let i = 0; i < slots.length; i += 1) {
+      const slot = slots[i];
+      slot.textContent = zoneSummaryText(slot.dataset.zoneSum, data);
+    }
+  }
+
   function render(data) {
     status = data || null;
     const badge = $(DOM.badge);
@@ -823,6 +858,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     // перечитывать с сервера и отмеченные устройства, и все прочие поля,
     // показывая вместо них то, что осталось в DOM.
     renderDnsFields(data);
+    renderZoneSummaries(data);
 
     if (apply) {
       // With nothing ticked there is no route to build: block the action and let
@@ -1196,6 +1232,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     }
     const modal = $(DOM.modal);
     if (modal) modal.addEventListener('click', (event) => { if (event.target === modal && !busy) showModal(false); });
+    // Клик по переключателю в подшапке меняет настройку, а не сворачивает зону.
+    // <summary> сворачивает <details> от клика в любом своём месте, а
+    // переключатели зон records/devices сидят внутри него.
+    document.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!target || !target.closest) return;
+      if (target.closest('.xk-dns-zone-head .dt-switch')) event.stopPropagation();
+    }, true);
     refresh();
   }
 
