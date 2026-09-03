@@ -33,6 +33,7 @@ const DEFAULT_UI_SETTINGS = {
     autoApply: false,
     showActiveOutbound: false,
     showScenarioCard: true,
+    dnsOverVlessLayout: 'auto',
   },
   mihomo: {
     hideUnavailable: false,

@@ -2564,7 +2564,10 @@
       <div class="modal-content xk-modal-width xk-modal-width-1160 routing-dns-over-vless-modal-content" data-dns-layout="single">
         <div class="modal-header">
           <span class="modal-title" id="routing-dns-over-vless-title">DNS-over-VLESS</span>
-          <button type="button" class="modal-close" id="routing-dns-over-vless-close" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+          <div class="routing-dns-over-vless-header-actions">
+            <button type="button" id="routing-dns-over-vless-layout" class="routing-dns-over-vless-layout-btn" title="Раскладка окна: авто, одна колонка, две колонки" aria-label="Раскладка окна">{{ op_icon('compare') }}</button>
+            <button type="button" class="modal-close" id="routing-dns-over-vless-close" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+          </div>
         </div>
         <div class="modal-body routing-dns-over-vless-body">
           <div class="routing-dns-over-vless-lead">

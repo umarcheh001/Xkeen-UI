@@ -27,3 +27,83 @@ test('свёрнутая зона показывает сводку', async ({ p
   const sum = page.locator('[data-zone-sum="home"]');
   await expect(sum).toHaveText('не настроена');
 });
+
+
+test('раскладка переключается по кругу, и подпись кнопки называет выбранный режим', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 1000 });
+  await openDialog(page);
+
+  const content = page.locator('#routing-dns-over-vless-modal .modal-content');
+  const button = page.locator('#routing-dns-over-vless-layout');
+  // По умолчанию — авто, а на широком экране это разворачивается в две колонки.
+  await expect(content).toHaveAttribute('data-dns-layout', 'split');
+  await expect(button).toHaveAttribute('data-tooltip', /авто/);
+
+  await button.click();
+  await expect(content).toHaveAttribute('data-dns-layout', 'single');
+  await expect(button).toHaveAttribute('data-tooltip', /одна колонка/);
+
+  await button.click();
+  await expect(content).toHaveAttribute('data-dns-layout', 'split');
+  await expect(button).toHaveAttribute('data-tooltip', /две колонки/);
+
+  // Круг замкнулся: третий клик возвращает к авто.
+  await button.click();
+  await expect(content).toHaveAttribute('data-dns-layout', 'split');
+  await expect(button).toHaveAttribute('data-tooltip', /авто/);
+});
+
+
+test('на узком экране раскладка всегда одноколоночная, каким бы ни был выбор', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 1000 });
+  await openDialog(page);
+
+  const content = page.locator('#routing-dns-over-vless-modal .modal-content');
+  const button = page.locator('#routing-dns-over-vless-layout');
+  // Авто ниже порога — тоже одна колонка.
+  await expect(content).toHaveAttribute('data-dns-layout', 'single');
+
+  await button.click(); // auto -> single
+  await expect(content).toHaveAttribute('data-dns-layout', 'single');
+
+  await button.click(); // single -> split, но порог всё равно не пройден
+  await expect(content).toHaveAttribute('data-dns-layout', 'single');
+});
+
+
+test('выбор раскладки переживает перезагрузку страницы', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 1000 });
+  await openDialog(page);
+
+  await page.locator('#routing-dns-over-vless-layout').click(); // auto -> single
+  await expect(page.locator('#routing-dns-over-vless-modal .modal-content'))
+    .toHaveAttribute('data-dns-layout', 'single');
+
+  await page.reload();
+  await expect(page.locator('#view-routing')).toBeVisible();
+  await page.locator('#routing-dns-over-vless-btn').click();
+  await expect(page.locator('#routing-dns-over-vless-modal')).toBeVisible();
+  // Настройка живёт на сервере, а не в браузере: после перезагрузки окно
+  // снова открывается в том режиме, который выбрали в прошлый раз.
+  await expect(page.locator('#routing-dns-over-vless-modal .modal-content'))
+    .toHaveAttribute('data-dns-layout', 'single');
+});
+
+
+test('ошибка сохранения настройки не откатывает уже применённую раскладку', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 1000 });
+  await openDialog(page);
+
+  // PATCH /api/ui-settings падает — но экран уже перерисован до этого запроса.
+  await page.route('**/api/ui-settings', async (route) => {
+    if (route.request().method() === 'PATCH') {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'boom' }) });
+      return;
+    }
+    await route.fallback();
+  });
+
+  const content = page.locator('#routing-dns-over-vless-modal .modal-content');
+  await page.locator('#routing-dns-over-vless-layout').click();
+  await expect(content).toHaveAttribute('data-dns-layout', 'single');
+});

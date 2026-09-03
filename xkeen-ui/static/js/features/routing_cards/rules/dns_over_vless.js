@@ -14,6 +14,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
   const DOM = {
     modal: 'routing-dns-over-vless-modal',
+    layout: 'routing-dns-over-vless-layout',
     close: 'routing-dns-over-vless-close',
     cancel: 'routing-dns-over-vless-cancel',
     apply: 'routing-dns-over-vless-apply',
@@ -929,6 +930,51 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     toast('Настройки окна сброшены. Чтобы применить их, включите функцию.');
   }
 
+  // Три раскладки окна: авто (решает ширина экрана), и два принудительных
+  // выбора. Значение живёт на сервере — это вкус человека, а не браузера.
+  const LAYOUT_MODES = ['auto', 'single', 'split'];
+  const LAYOUT_MIN_SPLIT_PX = 1100;
+
+  function readLayout() {
+    try {
+      const settings = window.XKeen.ui.settings.get();
+      const value = settings && settings.routing && settings.routing.dnsOverVlessLayout;
+      return LAYOUT_MODES.indexOf(value) === -1 ? 'auto' : value;
+    } catch (e) {
+      return 'auto';
+    }
+  }
+
+  // Ниже порога двух колонок физически нет, поэтому split там неотличим от
+  // single — решает ширина, а не настройка.
+  function resolveLayout(mode) {
+    if (mode === 'single') return 'single';
+    const fits = window.innerWidth >= LAYOUT_MIN_SPLIT_PX;
+    if (mode === 'split') return fits ? 'split' : 'single';
+    return fits ? 'split' : 'single';
+  }
+
+  function applyLayout(mode) {
+    const content = document.querySelector('#routing-dns-over-vless-modal .modal-content');
+    if (!content) return;
+    content.dataset.dnsLayout = resolveLayout(mode);
+    const button = $(DOM.layout);
+    if (button) {
+      const names = { auto: 'авто', single: 'одна колонка', split: 'две колонки' };
+      button.title = `Раскладка окна: ${names[mode]}`;
+    }
+  }
+
+  async function cycleLayout() {
+    const next = LAYOUT_MODES[(LAYOUT_MODES.indexOf(readLayout()) + 1) % LAYOUT_MODES.length];
+    applyLayout(next);
+    try {
+      await window.XKeen.ui.settings.patch({ routing: { dnsOverVlessLayout: next } });
+    } catch (e) {
+      // Настройка не сохранилась — раскладка всё равно уже применена на экране.
+    }
+  }
+
   async function refresh() {
     try {
       const data = await getStatus();
@@ -942,6 +988,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
   async function open() {
     showModal(true);
+    applyLayout(readLayout());
     chosenTargets = [];
     multiTouched = false;
     targetsTouched = false;
@@ -1131,6 +1178,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     if (!button || button.dataset.wired === '1') return;
     button.dataset.wired = '1';
     button.addEventListener('click', (event) => { event.preventDefault(); open(); });
+    const layoutBtn = $(DOM.layout);
+    if (layoutBtn) layoutBtn.addEventListener('click', cycleLayout);
+    window.addEventListener('resize', () => applyLayout(readLayout()));
+    document.addEventListener('xkeen:ui-settings-changed', () => applyLayout(readLayout()));
     [DOM.close, DOM.cancel].forEach((id) => {
       const el = $(id);
       if (el) el.addEventListener('click', (event) => { event.preventDefault(); showModal(false); });

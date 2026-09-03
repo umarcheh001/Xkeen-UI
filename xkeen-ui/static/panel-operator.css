@@ -7001,8 +7001,8 @@ body.panel-page .modal-hint {
   line-height: 1.45;
 }
 
-body.panel-page .modal-close,
-html[data-theme="light"] body.panel-page .modal-close {
+body.panel-page :is(.modal-close, .routing-dns-over-vless-layout-btn),
+html[data-theme="light"] body.panel-page :is(.modal-close, .routing-dns-over-vless-layout-btn) {
   display: inline-grid;
   place-items: center;
   width: 32px;
@@ -7017,7 +7017,7 @@ html[data-theme="light"] body.panel-page .modal-close {
   transform: none !important;
 }
 
-body.panel-page .modal-close:hover {
+body.panel-page :is(.modal-close, .routing-dns-over-vless-layout-btn):hover {
   color: var(--op-text) !important;
 }
 
@@ -13651,6 +13651,15 @@ body.panel-page [data-dns-layout="split"] .routing-dns-over-vless-body {
   }
 }
 
+/* Кнопка раскладки живёт рядом с закрытием, а не вместо него — оборачиваем
+ * обе в одну группу, чтобы модальный заголовок (space-between из двух
+ * элементов) не растащил их по разным краям. */
+body.panel-page .routing-dns-over-vless-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-dns-over-vless-lead {
   gap: 10px;
   padding: 10px;
@@ -14406,7 +14415,7 @@ body.panel-page #outbounds-pool-modal:has(.xk-pool-empty:not(.hidden):not([hidde
   overflow: auto;
 }
 
-body.panel-page .modal[data-operator-modal-family] .modal-close > .xk-action-icon {
+body.panel-page .modal[data-operator-modal-family] :is(.modal-close, .routing-dns-over-vless-layout-btn) > .xk-action-icon {
   display: block;
 }
 
