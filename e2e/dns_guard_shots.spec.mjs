@@ -250,3 +250,42 @@ test('Mihomo DNS: rule-provider buttons fill the fake-ip payload', async ({ page
   expect(postBodies[0].fake_ip.filters).not.toContain('*.lan');
   expect(postBodies[0].fake_ip.filters).not.toContain('*.local');
 });
+
+
+// Переключатель раскладок удваивает поверхность визуальных проверок: без
+// снимка второй раскладки она протухнет незаметно — смотрят обычно в свою.
+async function setLayout(page, mode) {
+  const content = page.locator('#routing-dns-over-vless-modal .modal-content');
+  const button = page.locator('#routing-dns-over-vless-layout');
+  // Режим хранится на сервере и переживает прогон, поэтому не «столько-то
+  // кликов от авто», а «щёлкаем по кругу, пока не встанет нужный».
+  for (let i = 0; i < 3; i += 1) {
+    if (await content.getAttribute('data-dns-layout') === mode) return;
+    await button.click();
+  }
+  await expect(content).toHaveAttribute('data-dns-layout', mode);
+}
+
+// Список устройств приходит от прошивки: на снимке это были бы MAC и имена
+// машины, на которой гоняли тесты. Подменяем пустым ответом.
+async function muteClients(page) {
+  await page.route('**/api/routing/dns-over-vless/clients', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: true, clients: [], counts: {} }) });
+  });
+}
+
+test('DNS-over-VLESS: одна колонка', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 1200 });
+  await muteClients(page);
+  await openVless(page, VLESS_BASE);
+  await setLayout(page, 'single');
+  await shoot(page, '#routing-dns-over-vless-modal .modal-content', '5-vless-layout-single');
+});
+
+test('DNS-over-VLESS: две колонки', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 1200 });
+  await muteClients(page);
+  await openVless(page, VLESS_BASE);
+  await setLayout(page, 'split');
+  await shoot(page, '#routing-dns-over-vless-modal .modal-content', '6-vless-layout-split');
+});
