@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import stat
 from pathlib import Path
 
 import pytest
@@ -36,6 +37,13 @@ XKEEN_NAT_OK = """-P PREROUTING ACCEPT
 -A xkeen -p tcp -m comment --comment xkeen_rule -j REDIRECT --to-ports 5000
 """
 
+XKEEN_INIT_LEGACY = """#!/bin/sh
+name_app="XKeen"
+name_chain="xkeen"
+ipv4_exclude="255.255.255.255/32 10.0.0.0/8 198.18.0.0/15 224.0.0.0/4"
+proxy_dns="off"
+"""
+
 
 def _fake_ip_firewall(monkeypatch, *, mangle=XKEEN_MANGLE_OK, nat=XKEEN_NAT_OK):
     monkeypatch.setattr(
@@ -43,6 +51,46 @@ def _fake_ip_firewall(monkeypatch, *, mangle=XKEEN_MANGLE_OK, nat=XKEEN_NAT_OK):
         "_iptables_table_rules",
         lambda table: ((mangle if table == "mangle" else nat), ""),
     )
+
+
+def _live_fake_ip_firewall(monkeypatch, init_script: Path):
+    def read_rules(table):
+        mangle = XKEEN_MANGLE_OK
+        if dns.LEGACY_FAKE_IP_EXCLUSION in init_script.read_text(encoding="utf-8"):
+            mangle = mangle.replace(
+                "-A xkeen -p udp",
+                "-A xkeen -d 198.18.0.0/15 -m comment --comment xkeen_rule -j RETURN\n-A xkeen -p udp",
+            )
+        return (mangle if table == "mangle" else XKEEN_NAT_OK), ""
+
+    monkeypatch.setattr(dns, "_iptables_table_rules", read_rules)
+    monkeypatch.setattr(dns, "resolve_xkeen_init_script", lambda: str(init_script))
+
+
+def test_iptables_dump_uses_wait_syntax_supported_by_keenetic(monkeypatch):
+    calls = []
+
+    class Proc:
+        returncode = 0
+        stdout = XKEEN_MANGLE_OK
+        stderr = ""
+
+    def run(args, **kwargs):
+        calls.append((args, kwargs))
+        return Proc()
+
+    monkeypatch.setattr(dns.subprocess, "run", run)
+
+    rules, error = dns._iptables_table_rules("mangle")
+
+    assert error == ""
+    assert rules == XKEEN_MANGLE_OK
+    assert calls == [
+        (
+            ["/opt/sbin/iptables", "-w", "-t", "mangle", "-S"],
+            {"capture_output": True, "text": True, "timeout": 4},
+        )
+    ]
 
 
 def test_build_enabled_config_is_additive_routed_and_router_safe():
@@ -234,6 +282,42 @@ def test_fake_ip_route_reports_unreadable_firewall_without_claiming_success(monk
     assert route["firewall_error"] == "iptables не найден"
 
 
+def test_legacy_xkeen_repair_plan_removes_only_exact_exclusion(tmp_path: Path):
+    script = tmp_path / "S05xkeen"
+    script.write_text(XKEEN_INIT_LEGACY, encoding="utf-8", newline="\n")
+    script.chmod(0o751)
+    original_mode = stat.S_IMODE(script.stat().st_mode)
+
+    plan = dns._legacy_xkeen_repair_plan(str(script))
+
+    patched = plan["patched"].decode("utf-8")
+    assert dns.LEGACY_FAKE_IP_EXCLUSION not in patched
+    assert 'ipv4_exclude="255.255.255.255/32 10.0.0.0/8 224.0.0.0/4"' in patched
+    assert patched.replace(" 224.0.0.0/4", " 198.18.0.0/15 224.0.0.0/4") == XKEEN_INIT_LEGACY
+    assert plan["mode"] == original_mode
+    assert script.read_text(encoding="utf-8") == XKEEN_INIT_LEGACY
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        XKEEN_INIT_LEGACY.replace('ipv4_exclude="', 'ipv4_exclude="$custom '),
+        XKEEN_INIT_LEGACY + 'ipv4_exclude="198.18.0.0/15"\n',
+        XKEEN_INIT_LEGACY.replace('name_chain="xkeen"\n', ""),
+    ],
+)
+def test_legacy_xkeen_repair_refuses_unknown_script_format(tmp_path: Path, source: str):
+    script = tmp_path / "S05xkeen"
+    script.write_text(source, encoding="utf-8", newline="\n")
+    before = script.read_bytes()
+
+    with pytest.raises(dns.MihomoDnsError) as captured:
+        dns._legacy_xkeen_repair_plan(str(script))
+
+    assert captured.value.code == "fake_ip_repair_script_unsupported"
+    assert script.read_bytes() == before
+
+
 def test_redir_host_keeps_the_existing_resolver_profile():
     content, _ = dns.build_enabled_config(BASE, mode="redir-host")
 
@@ -370,6 +454,10 @@ def test_status_exposes_safe_one_click_plan(tmp_path: Path, monkeypatch):
 
 def test_status_exposes_the_live_xkeen_fake_ip_exclusion(tmp_path: Path, monkeypatch):
     config, state = _status_ready(tmp_path, monkeypatch)
+    init_script = tmp_path / "S05xkeen"
+    init_script.write_text(XKEEN_INIT_LEGACY, encoding="utf-8", newline="\n")
+    init_script.chmod(0o755)
+    monkeypatch.setattr(dns, "resolve_xkeen_init_script", lambda: str(init_script))
     legacy = XKEEN_MANGLE_OK.replace(
         "-A xkeen -p udp",
         "-A xkeen -d 198.18.0.0/15 -m comment --comment xkeen_rule -j RETURN\n-A xkeen -p udp",
@@ -382,6 +470,9 @@ def test_status_exposes_the_live_xkeen_fake_ip_exclusion(tmp_path: Path, monkeyp
     assert result["fake_ip_route"]["confidence"] == "blocked"
     assert result["fake_ip_route"]["network"] == "198.18.0.0/16"
     assert "правило RETURN для 198.18.0.0/15" in result["fake_ip_route"]["message"]
+    assert result["fake_ip_repair"]["needed"] is True
+    assert result["fake_ip_repair"]["can_repair"] is True
+    assert result["fake_ip_repair"]["requires_confirmation"] is True
 
 
 def test_existing_user_dns_can_be_returned_to_keenetic_without_a_snapshot(tmp_path: Path, monkeypatch):
@@ -532,6 +623,152 @@ def test_fake_ip_enable_stops_before_writing_when_xkeen_excludes_range(tmp_path:
     assert captured.value.details["firewall"]["exclusion"] == "198.18.0.0/15"
     assert calls == []
     assert config.read_text(encoding="utf-8") == BASE
+
+
+def test_fake_ip_enable_requires_explicit_repair_confirmation(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    init_script = tmp_path / "S05xkeen"
+    init_script.write_text(XKEEN_INIT_LEGACY, encoding="utf-8", newline="\n")
+    init_script.chmod(0o755)
+    _live_fake_ip_firewall(monkeypatch, init_script)
+    calls: list[str] = []
+
+    with pytest.raises(dns.MihomoDnsError) as captured:
+        dns.apply_action(
+            "enable",
+            config_file=str(config),
+            ui_state_dir=str(state),
+            validate_config=lambda **_kwargs: calls.append("validate") or "[exit code: 0]",
+            save_config=lambda _content: calls.append("save"),
+            restart_xkeen=lambda **_kwargs: calls.append("restart") or True,
+            mode="fake-ip",
+            fake_ip={"range": "198.18.0.1/16", "filters": ["*.lan"]},
+        )
+
+    assert captured.value.code == "fake_ip_repair_confirmation_required"
+    assert captured.value.details["repair"]["can_repair"] is True
+    assert calls == []
+    assert init_script.read_text(encoding="utf-8") == XKEEN_INIT_LEGACY
+    assert config.read_text(encoding="utf-8") == BASE
+
+
+def test_fake_ip_enable_repairs_legacy_exclusion_then_activates(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    init_script = tmp_path / "S05xkeen"
+    init_script.write_text(XKEEN_INIT_LEGACY, encoding="utf-8", newline="\n")
+    init_script.chmod(0o755)
+    original_mode = stat.S_IMODE(init_script.stat().st_mode)
+    _live_fake_ip_firewall(monkeypatch, init_script)
+    override = {"value": False}
+    calls: list[object] = []
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (override["value"], "test"))
+    monkeypatch.setattr(dns, "_set_dns_override", lambda value: (calls.append(("override", value)), override.update(value=value)))
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda **kwargs: calls.append(("port", kwargs["should_be_free"])) or True)
+    monkeypatch.setattr(dns, "_wait_for_mihomo", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda: {"ok": True, "latency_ms": 7})
+
+    def save_config(content):
+        calls.append(("save", content))
+        config.write_text(content, encoding="utf-8")
+        return type("Backup", (), {"filename": "before.yaml"})()
+
+    result = dns.apply_action(
+        "enable",
+        config_file=str(config),
+        ui_state_dir=str(state),
+        validate_config=lambda **_kwargs: "[exit code: 0]",
+        save_config=save_config,
+        restart_xkeen=lambda **kwargs: calls.append(("restart", kwargs["source"])) or True,
+        mode="fake-ip",
+        fake_ip={"range": "198.18.0.1/16", "filters": ["*.lan"]},
+        repair_legacy_exclusion=True,
+    )
+
+    assert result["ok"] is True
+    assert result["mode"] == "fake-ip"
+    assert result["fake_ip_route"]["available"] is True
+    assert result["xkeen_repair"]["applied"] is True
+    assert Path(result["xkeen_repair"]["backup"]).read_text(encoding="utf-8") == XKEEN_INIT_LEGACY
+    assert dns.LEGACY_FAKE_IP_EXCLUSION not in init_script.read_text(encoding="utf-8")
+    assert stat.S_IMODE(init_script.stat().st_mode) == original_mode
+    assert [item for item in calls if item[0] == "restart"] == [
+        ("restart", "mihomo-dns-fake-ip-repair"),
+        ("restart", "mihomo-dns"),
+    ]
+    saved_state = json.loads((state / "mihomo-dns" / dns.STATE_FILENAME).read_text(encoding="utf-8"))
+    assert saved_state["xkeen_repair"]["backup"] == result["xkeen_repair"]["backup"]
+
+
+def test_fake_ip_enable_restores_xkeen_script_when_later_probe_fails(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    init_script = tmp_path / "S05xkeen"
+    init_script.write_text(XKEEN_INIT_LEGACY, encoding="utf-8", newline="\n")
+    init_script.chmod(0o755)
+    _live_fake_ip_firewall(monkeypatch, init_script)
+    override = {"value": False}
+    calls: list[object] = []
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (override["value"], "test"))
+    monkeypatch.setattr(dns, "_set_dns_override", lambda value: override.update(value=value))
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda **_kwargs: True)
+    monkeypatch.setattr(dns, "_wait_for_mihomo", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda: {"ok": False, "error": "timeout"})
+
+    def save_config(content):
+        config.write_text(content, encoding="utf-8")
+        return type("Backup", (), {"filename": "before.yaml"})()
+
+    with pytest.raises(dns.MihomoDnsError) as captured:
+        dns.apply_action(
+            "enable",
+            config_file=str(config),
+            ui_state_dir=str(state),
+            validate_config=lambda **_kwargs: "[exit code: 0]",
+            save_config=save_config,
+            restart_xkeen=lambda **kwargs: calls.append(("restart", kwargs["source"])) or True,
+            mode="fake-ip",
+            fake_ip={"range": "198.18.0.1/16", "filters": ["*.lan"]},
+            repair_legacy_exclusion=True,
+        )
+
+    assert captured.value.code == "dns_probe_failed"
+    assert config.read_text(encoding="utf-8") == BASE
+    assert init_script.read_text(encoding="utf-8") == XKEEN_INIT_LEGACY
+    assert override["value"] is False
+    assert calls == [
+        ("restart", "mihomo-dns-fake-ip-repair"),
+        ("restart", "mihomo-dns"),
+        ("restart", "mihomo-dns-rollback"),
+    ]
+
+
+def test_fake_ip_repair_restart_failure_restores_script_before_dns_write(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    init_script = tmp_path / "S05xkeen"
+    init_script.write_text(XKEEN_INIT_LEGACY, encoding="utf-8", newline="\n")
+    _live_fake_ip_firewall(monkeypatch, init_script)
+    calls: list[object] = []
+
+    with pytest.raises(dns.MihomoDnsError) as captured:
+        dns.apply_action(
+            "enable",
+            config_file=str(config),
+            ui_state_dir=str(state),
+            validate_config=lambda **_kwargs: "[exit code: 0]",
+            save_config=lambda _content: calls.append("save"),
+            restart_xkeen=lambda **kwargs: calls.append(("restart", kwargs["source"])) or kwargs["source"].endswith("rollback"),
+            mode="fake-ip",
+            fake_ip={"range": "198.18.0.1/16", "filters": ["*.lan"]},
+            repair_legacy_exclusion=True,
+        )
+
+    assert captured.value.code == "fake_ip_repair_restart_failed"
+    assert captured.value.rolled_back is True
+    assert init_script.read_text(encoding="utf-8") == XKEEN_INIT_LEGACY
+    assert config.read_text(encoding="utf-8") == BASE
+    assert calls == [
+        ("restart", "mihomo-dns-fake-ip-repair"),
+        ("restart", "mihomo-dns-rollback"),
+    ]
 
 
 def test_disable_restores_exact_snapshot_then_firmware_dns(tmp_path: Path, monkeypatch):
@@ -795,6 +1032,8 @@ def test_http_contract_and_frontend(tmp_path: Path, monkeypatch):
     assert "TUN/TProxy обнаружен" not in script
     assert "Маршрут Fake-IP через TUN/TProxy не подтверждён" in script
     assert "dns_selector: !!$(IDS.dnsSelectorEnable)?.checked" in script
+    assert "repair_legacy_exclusion = true" in script
+    assert "Исправить и включить Fake-IP" in script
     assert "mihomo_dns.js" in bundle
 
 
@@ -829,6 +1068,7 @@ def test_http_contract_forwards_rule_providers(tmp_path: Path, monkeypatch):
         "fake_ip": {"range": "198.18.0.1/16", "filter_mode": "blacklist", "filters": ["*.lan"]},
         "rule_providers": ["category_ru@domain", "private"],
         "dns_selector": True,
+        "repair_legacy_exclusion": True,
     })
 
     assert response.status_code == 200
@@ -836,3 +1076,4 @@ def test_http_contract_forwards_rule_providers(tmp_path: Path, monkeypatch):
     assert captured["rule_providers"] == ["category_ru@domain", "private"]
     assert captured["geodata"] is False
     assert captured["dns_selector"] is True
+    assert captured["repair_legacy_exclusion"] is True

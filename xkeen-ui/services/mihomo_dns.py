@@ -21,6 +21,7 @@ import re
 import shlex
 import shutil
 import socket
+import stat
 import struct
 import subprocess
 import threading
@@ -31,6 +32,7 @@ from typing import Any, Callable, Optional
 
 from services.cores import detect_running_core
 from services.io.atomic import _atomic_write_json, _atomic_write_text
+from services.xkeen_commands_catalog import resolve_xkeen_init_script
 from utils.firmware import ndmc_path as _resolve_ndmc, run_ndmc
 
 
@@ -87,14 +89,24 @@ DNS_MODES = ("redir-host", "fake-ip")
 FAKE_IP_FILTER_MODES = ("blacklist", "whitelist", "rule")
 IPTABLES_BINARIES = ("/opt/sbin/iptables", "iptables")
 XKEEN_FIREWALL_CHAIN = "xkeen"
+XKEEN_INIT_SCRIPT = "/opt/etc/init.d/S05xkeen"
+LEGACY_FAKE_IP_EXCLUSION = "198.18.0.0/15"
 _LOCK = threading.RLock()
 
 
 class MihomoDnsError(RuntimeError):
-    def __init__(self, message: str, *, code: str = "mihomo_dns_failed", details: Any = None):
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "mihomo_dns_failed",
+        details: Any = None,
+        rolled_back: bool = False,
+    ):
         super().__init__(message)
         self.code = code
         self.details = details
+        self.rolled_back = bool(rolled_back)
 
 
 def _sha256(text: str) -> str:
@@ -785,7 +797,11 @@ def _iptables_table_rules(table: str) -> tuple[str, str]:
     for binary in IPTABLES_BINARIES:
         try:
             proc = subprocess.run(
-                [binary, "-w", "2", "-t", table, "-S"],
+                # Keenetic currently ships iptables 1.4.21.  It supports
+                # ``-w`` but not the optional seconds argument added later,
+                # so ``-w 2`` is parsed as a stray rule argument.  The Python
+                # timeout still bounds an indefinitely held xtables lock.
+                [binary, "-w", "-t", table, "-S"],
                 capture_output=True,
                 text=True,
                 timeout=4,
@@ -1098,6 +1114,238 @@ def _wait_for_fake_ip_route(
         time.sleep(0.2)
         result = _fake_ip_route_info(text, fake_ip_range)
     return result
+
+
+def _xkeen_init_script_path(path: str = "") -> str:
+    return os.path.abspath(str(path or resolve_xkeen_init_script() or XKEEN_INIT_SCRIPT))
+
+
+def _legacy_xkeen_repair_plan(path: str = "") -> dict[str, Any]:
+    """Prepare an exact, side-effect-free repair for an old XKeen script.
+
+    This intentionally understands only the known static ``ipv4_exclude``
+    assignment.  Shell expressions, duplicate assignments and non-CIDR values
+    are refused instead of trying to rewrite an unfamiliar init script.
+    """
+
+    script_path = _xkeen_init_script_path(path)
+    try:
+        metadata = os.lstat(script_path)
+    except OSError as exc:
+        raise MihomoDnsError(
+            f"Стартовый скрипт XKeen не найден: {script_path}.",
+            code="fake_ip_repair_script_missing",
+            details=str(exc),
+        ) from exc
+    if not stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+        raise MihomoDnsError(
+            "Автоисправление доступно только для обычного файла стартового скрипта XKeen.",
+            code="fake_ip_repair_script_unsupported",
+        )
+    try:
+        original = Path(script_path).read_bytes()
+        source = original.decode("utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise MihomoDnsError(
+            "Не удалось безопасно прочитать стартовый скрипт XKeen как UTF-8.",
+            code="fake_ip_repair_script_unreadable",
+            details=str(exc),
+        ) from exc
+    if len(original) > 2 * 1024 * 1024:
+        raise MihomoDnsError(
+            "Стартовый скрипт XKeen имеет неожиданный размер; автоисправление остановлено.",
+            code="fake_ip_repair_script_unsupported",
+        )
+    if not re.search(r"(?m)^name_app=(?:\"XKeen\"|'XKeen')\s*$", source) or not re.search(
+        r"(?m)^name_chain=(?:\"xkeen\"|'xkeen')\s*$", source
+    ):
+        raise MihomoDnsError(
+            "Формат стартового скрипта XKeen не распознан; файл не изменён.",
+            code="fake_ip_repair_script_unsupported",
+        )
+
+    assignment = re.compile(
+        r"(?m)^(?P<prefix>ipv4_exclude[ \t]*=[ \t]*)(?P<quote>[\"'])(?P<value>[^\"'\r\n]*)(?P=quote)(?P<suffix>[ \t]*(?:#[^\r\n]*)?)(?P<eol>\r?)$"
+    )
+    matches = list(assignment.finditer(source))
+    if len(matches) != 1:
+        raise MihomoDnsError(
+            "Переменная ipv4_exclude в стартовом скрипте имеет неизвестный формат; файл не изменён.",
+            code="fake_ip_repair_script_unsupported",
+        )
+    match = matches[0]
+    value = match.group("value")
+    tokens = value.split()
+    if tokens.count(LEGACY_FAKE_IP_EXCLUSION) != 1:
+        raise MihomoDnsError(
+            f"Стартовый скрипт не содержит единственного исключения {LEGACY_FAKE_IP_EXCLUSION}; файл не изменён.",
+            code="fake_ip_repair_exclusion_not_found",
+        )
+    try:
+        parsed = [ipaddress.ip_network(token, strict=False) for token in tokens]
+    except ValueError as exc:
+        raise MihomoDnsError(
+            "ipv4_exclude содержит не только статические CIDR; автоисправление остановлено.",
+            code="fake_ip_repair_script_unsupported",
+            details=str(exc),
+        ) from exc
+    if any(network.version != 4 for network in parsed):
+        raise MihomoDnsError(
+            "ipv4_exclude имеет неожиданный состав; автоисправление остановлено.",
+            code="fake_ip_repair_script_unsupported",
+        )
+
+    next_tokens = [token for token in tokens if token != LEGACY_FAKE_IP_EXCLUSION]
+    patched_value = " ".join(next_tokens)
+    patched_source = (
+        source[: match.start()]
+        + match.group("prefix")
+        + match.group("quote")
+        + patched_value
+        + match.group("quote")
+        + match.group("suffix")
+        + match.group("eol")
+        + source[match.end() :]
+    )
+    patched = patched_source.encode("utf-8")
+    if patched == original or LEGACY_FAKE_IP_EXCLUSION in patched_value.split():
+        raise MihomoDnsError(
+            "Не удалось подготовить однозначное исправление ipv4_exclude; файл не изменён.",
+            code="fake_ip_repair_script_unsupported",
+        )
+    return {
+        "path": script_path,
+        "original": original,
+        "patched": patched,
+        "mode": stat.S_IMODE(metadata.st_mode),
+        "uid": metadata.st_uid,
+        "gid": metadata.st_gid,
+    }
+
+
+def _fake_ip_repair_status(route: dict[str, Any], path: str = "") -> dict[str, Any]:
+    firewall = route.get("firewall") if isinstance(route.get("firewall"), dict) else {}
+    needed = bool(
+        route.get("confidence") == "blocked"
+        and firewall.get("exclusion") == LEGACY_FAKE_IP_EXCLUSION
+    )
+    base = {
+        "needed": needed,
+        "can_repair": False,
+        "requires_confirmation": needed,
+        "script": _xkeen_init_script_path(path),
+        "exclusion": LEGACY_FAKE_IP_EXCLUSION,
+    }
+    if not needed:
+        return base
+    try:
+        _legacy_xkeen_repair_plan(path)
+    except MihomoDnsError as exc:
+        return {
+            **base,
+            "code": exc.code,
+            "message": str(exc),
+        }
+    return {
+        **base,
+        "can_repair": True,
+        "message": (
+            f"Панель может сохранить резервную копию {_xkeen_init_script_path(path)}, удалить только "
+            f"{LEGACY_FAKE_IP_EXCLUSION}, перезапустить XKeen и повторно проверить маршрут."
+        ),
+    }
+
+
+def _atomic_replace_bytes(path: str, content: bytes, *, mode: int, uid: int, gid: int) -> None:
+    """Replace a regular file without ever exposing partially written data."""
+
+    tmp = f"{path}.xkeen-ui-{uuid.uuid4().hex}.tmp"
+    try:
+        with open(tmp, "xb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(tmp, mode)
+        try:
+            os.chown(tmp, uid, gid)
+        except (AttributeError, PermissionError):
+            # Desktop tests and non-root development runs cannot chown.  The
+            # production panel runs as root and preserves the original owner.
+            pass
+        os.replace(tmp, path)
+    finally:
+        try:
+            os.remove(tmp)
+        except FileNotFoundError:
+            pass
+
+
+def _snapshot_xkeen_init_script(ui_state_dir: str, config_file: str, plan: dict[str, Any]) -> str:
+    txid = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
+    directory = os.path.join(_state_dir(ui_state_dir, config_file), "xkeen-init-repairs", txid)
+    os.makedirs(directory, mode=0o700, exist_ok=False)
+    backup = os.path.join(directory, os.path.basename(str(plan["path"])) + ".before")
+    _atomic_replace_bytes(
+        backup,
+        bytes(plan["original"]),
+        mode=0o600,
+        uid=int(plan["uid"]),
+        gid=int(plan["gid"]),
+    )
+    return backup
+
+
+def _apply_legacy_xkeen_repair(
+    plan: dict[str, Any],
+    *,
+    ui_state_dir: str,
+    config_file: str,
+) -> dict[str, Any]:
+    backup = _snapshot_xkeen_init_script(ui_state_dir, config_file, plan)
+    path = str(plan["path"])
+    try:
+        _atomic_replace_bytes(
+            path,
+            bytes(plan["patched"]),
+            mode=int(plan["mode"]),
+            uid=int(plan["uid"]),
+            gid=int(plan["gid"]),
+        )
+        if Path(path).read_bytes() != bytes(plan["patched"]):
+            raise OSError("проверка записанного файла не совпала")
+    except Exception as exc:
+        restore_error = ""
+        try:
+            _atomic_replace_bytes(
+                path,
+                bytes(plan["original"]),
+                mode=int(plan["mode"]),
+                uid=int(plan["uid"]),
+                gid=int(plan["gid"]),
+            )
+        except Exception as rollback_exc:  # noqa: BLE001 - preserve both causes
+            restore_error = str(rollback_exc)
+        raise MihomoDnsError(
+            "Не удалось безопасно исправить стартовый скрипт XKeen.",
+            code="fake_ip_repair_write_failed",
+            details={"cause": str(exc), "backup": backup, "restore": restore_error},
+        ) from exc
+    return {
+        "applied": True,
+        "script": path,
+        "backup": backup,
+        "exclusion": LEGACY_FAKE_IP_EXCLUSION,
+    }
+
+
+def _restore_legacy_xkeen_repair(plan: dict[str, Any]) -> None:
+    _atomic_replace_bytes(
+        str(plan["path"]),
+        bytes(plan["original"]),
+        mode=int(plan["mode"]),
+        uid=int(plan["uid"]),
+        gid=int(plan["gid"]),
+    )
 
 
 def _with_geodata_defaults(text: str) -> str:
@@ -1546,6 +1794,7 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         or DEFAULT_FAKE_IP_RANGE
     )
     fake_ip_route = _fake_ip_route_info(text, fake_ip_range)
+    fake_ip_repair = _fake_ip_repair_status(fake_ip_route)
     # A user may remove the complete managed block manually.  If Keenetic's
     # DNS override is already off, never restore the old snapshot over those
     # unrelated edits; offer a metadata-only recovery instead.
@@ -1623,6 +1872,7 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         # true for TProxy only after the selected CIDR reaches the live target.
         "fake_ip_available": bool(fake_ip_route["available"]),
         "fake_ip_route": fake_ip_route,
+        "fake_ip_repair": fake_ip_repair,
         "dns_selector": {
             "enabled": dns_selector_enabled,
             "name": DNS_SELECTOR_NAME,
@@ -1774,6 +2024,7 @@ def apply_action(
     rule_providers: Any = None,
     proxy_group: Optional[str] = None,
     dns_selector: bool = False,
+    repair_legacy_exclusion: bool = False,
 ) -> dict[str, Any]:
     normalized = str(action or "").strip().lower()
     if normalized not in {"enable", "disable", "release"}:
@@ -1798,19 +2049,40 @@ def apply_action(
                 if normalized_mode == "fake-ip"
                 else None
             )
+            repair_plan = None
+            repair_result = None
             if fake_options is not None:
                 route = _fake_ip_route_info(current, fake_options["range"])
                 if not route.get("available"):
-                    code = (
-                        "fake_ip_firewall_excluded"
-                        if route.get("confidence") == "blocked"
-                        else "fake_ip_route_unverified"
-                    )
-                    raise MihomoDnsError(
-                        str(route.get("message") or "Маршрут Fake-IP не подтверждён."),
-                        code=code,
-                        details=route,
-                    )
+                    repair = _fake_ip_repair_status(route)
+                    if repair.get("needed") and repair_legacy_exclusion is True:
+                        if not repair.get("can_repair"):
+                            raise MihomoDnsError(
+                                str(repair.get("message") or "Стартовый скрипт XKeen нельзя исправить автоматически."),
+                                code=str(repair.get("code") or "fake_ip_repair_unavailable"),
+                                details=repair,
+                            )
+                        repair_plan = _legacy_xkeen_repair_plan(str(repair.get("script") or ""))
+                    else:
+                        code = (
+                            "fake_ip_repair_confirmation_required"
+                            if repair.get("needed") and repair.get("can_repair")
+                            else (
+                                "fake_ip_firewall_excluded"
+                                if route.get("confidence") == "blocked"
+                                else "fake_ip_route_unverified"
+                            )
+                        )
+                        message = (
+                            "Подтвердите исправление устаревшего исключения XKeen и включение Fake-IP."
+                            if code == "fake_ip_repair_confirmation_required"
+                            else str(route.get("message") or "Маршрут Fake-IP не подтверждён.")
+                        )
+                        raise MihomoDnsError(
+                            message,
+                            code=code,
+                            details={"route": route, "repair": repair} if code == "fake_ip_repair_confirmation_required" else route,
+                        )
             prepared, group = build_enabled_config(
                 current,
                 str(proxy_group or status.get("proxy_group") or ""),
@@ -1830,7 +2102,28 @@ def apply_action(
             snapshot = _snapshot_original(ui_state_dir, config_file, current)
             saved = False
             override_changed = False
+            repair_applied = False
             try:
+                if repair_plan is not None:
+                    repair_result = _apply_legacy_xkeen_repair(
+                        repair_plan,
+                        ui_state_dir=ui_state_dir,
+                        config_file=config_file,
+                    )
+                    repair_applied = True
+                    if not bool(restart_xkeen(source="mihomo-dns-fake-ip-repair")):
+                        raise MihomoDnsError(
+                            "XKeen не перезапустился после исправления исключения Fake-IP.",
+                            code="fake_ip_repair_restart_failed",
+                            details=repair_result,
+                        )
+                    repaired_route = _wait_for_fake_ip_route(current, fake_options["range"])
+                    if not repaired_route.get("available"):
+                        raise MihomoDnsError(
+                            str(repaired_route.get("message") or "После исправления маршрут Fake-IP не появился."),
+                            code="fake_ip_repair_route_failed",
+                            details={"repair": repair_result, "route": repaired_route},
+                        )
                 backup = save_config(prepared)
                 saved = True
                 if not _mihomo_selected_for_restart():
@@ -1887,6 +2180,7 @@ def apply_action(
                         "upstream": group,
                     } if dns_selector is True else None,
                     "rule_providers": _normalize_domain_rule_providers(rule_providers) if normalized_mode == "fake-ip" and not geodata else [],
+                    "xkeen_repair": repair_result,
                 }
                 _save_state(ui_state_dir, config_file, next_state)
                 _clear_release(ui_state_dir, config_file)
@@ -1904,6 +2198,7 @@ def apply_action(
                         "upstream": group,
                     } if dns_selector is True else None,
                     "rule_providers": _normalize_domain_rule_providers(rule_providers) if normalized_mode == "fake-ip" and not geodata else [],
+                    "xkeen_repair": repair_result,
                     "backup": str(getattr(backup, "filename", "") or "") or None,
                     "probe": probe,
                 }
@@ -1919,13 +2214,19 @@ def apply_action(
                         _set_dns_override(bool(original_override))
                     except Exception as rollback_exc:
                         rollback_errors.append(str(rollback_exc))
-                if saved:
+                if repair_applied and repair_plan is not None:
+                    try:
+                        _restore_legacy_xkeen_repair(repair_plan)
+                    except Exception as rollback_exc:
+                        rollback_errors.append(str(rollback_exc))
+                if saved or repair_applied:
                     try:
                         restart_xkeen(source="mihomo-dns-rollback")
                     except Exception as rollback_exc:
                         rollback_errors.append(str(rollback_exc))
                 _clear_state(ui_state_dir, config_file)
                 if isinstance(exc, MihomoDnsError):
+                    exc.rolled_back = bool(saved or override_changed or repair_applied)
                     if rollback_errors:
                         exc.details = {"cause": exc.details, "rollback": rollback_errors}
                     raise
@@ -1933,6 +2234,7 @@ def apply_action(
                     "Не удалось включить DNS Mihomo; предыдущая конфигурация восстановлена.",
                     code="apply_failed",
                     details={"cause": str(exc), "rollback": rollback_errors},
+                    rolled_back=bool(saved or override_changed or repair_applied),
                 ) from exc
 
         if normalized == "release":

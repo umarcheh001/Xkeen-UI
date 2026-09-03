@@ -154,6 +154,10 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       };
       payload.geodata = useGeodata;
       payload.rule_providers = useGeodata ? [] : selectedRuleProviders();
+      const repair = current?.fake_ip_repair;
+      if (repair?.needed === true && repair?.can_repair === true) {
+        payload.repair_legacy_exclusion = true;
+      }
     }
     return payload;
   }
@@ -241,12 +245,38 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     }
   }
 
+  function syncApplyControl(data) {
+    const apply = $(IDS.apply);
+    if (!apply) return;
+    const enabled = !!data?.enabled;
+    const canDisable = !!data?.can_disable;
+    const canRecover = !!data?.can_recover;
+    const canRelease = !!data?.can_release;
+    const blocked = !enabled && !canDisable && !canRecover && !canRelease && !data?.can_enable;
+    const repair = ($(IDS.mode)?.value || data?.mode) === 'fake-ip' ? data?.fake_ip_repair : null;
+    const repairNeeded = repair?.needed === true;
+    const repairUnavailable = repairNeeded && repair?.can_repair !== true;
+    apply.disabled = busy || repairUnavailable || (!enabled && !canDisable && !canRecover && !canRelease && blocked);
+    apply.textContent = busy
+      ? 'Выполняется…'
+      : (canRelease
+        ? 'Вернуть DNS Keenetic'
+        : (canRecover
+          ? 'Сохранить текущий конфиг'
+          : ((enabled || canDisable)
+            ? 'Отключить и восстановить'
+            : (repairNeeded
+              ? (repairUnavailable ? 'Автоисправление недоступно' : 'Исправить и включить Fake-IP')
+              : 'Включить защищённый DNS'))));
+    apply.classList.toggle('btn-danger', enabled || canDisable || canRelease);
+    apply.classList.toggle('btn-primary', !enabled && !canDisable && !canRelease);
+  }
+
   function render(data) {
     current = data || null;
     const badge = $(IDS.badge);
     const status = $(IDS.status);
     const list = $(IDS.details);
-    const apply = $(IDS.apply);
     const dot = $(IDS.dot);
     const routerNote = document.querySelector('#mihomo-dns-modal .routing-dns-over-vless-links');
     const mode = $(IDS.mode);
@@ -375,18 +405,19 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
           data.fake_ip_route.available ? 'ok' : 'warn',
         );
       }
+      if ((mode?.value || data?.mode) === 'fake-ip' && data?.fake_ip_repair?.needed) {
+        addDetail(
+          `Автоисправление XKeen: ${data.fake_ip_repair.message || 'неизвестный формат стартового скрипта'}`,
+          'warn',
+        );
+      }
       if ((mode?.value || data?.mode) === 'fake-ip' && geodataEnable?.checked && geodata?.notice) {
         addDetail(`GeoSite: ${geodata.notice}`, geodata.private_available ? 'ok' : 'warn');
       }
       (data.blockers || []).forEach((message) => addDetail(message, 'warn'));
     }
 
-    if (apply) {
-      apply.disabled = busy || (!enabled && !canDisable && !canRecover && !canRelease && blocked);
-      apply.textContent = busy ? 'Выполняется…' : (canRelease ? 'Вернуть DNS Keenetic' : (canRecover ? 'Сохранить текущий конфиг' : ((enabled || canDisable) ? 'Отключить и восстановить' : 'Включить защищённый DNS')));
-      apply.classList.toggle('btn-danger', enabled || canDisable || canRelease);
-      apply.classList.toggle('btn-primary', !enabled && !canDisable && !canRelease);
-    }
+    syncApplyControl(data);
   }
 
   function renderError(error) {
@@ -430,18 +461,22 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     const recovery = !!current.can_recover;
     const softRelease = !!current.can_release;
     const action = softRelease ? 'release' : ((current.enabled || current.can_disable || recovery) ? 'disable' : 'enable');
+    const repair = action === 'enable' && ($(IDS.mode)?.value || current?.mode) === 'fake-ip'
+      ? current?.fake_ip_repair
+      : null;
+    const repairsLegacyExclusion = repair?.needed === true && repair?.can_repair === true;
     const createsDnsSelector = action === 'enable' && !!$(IDS.dnsSelectorEnable)?.checked;
     const message = softRelease
       ? 'Панель сохранит текущий config.yaml и весь раздел dns, изменит только dns.enable на false, перезапустит Mihomo для освобождения порта 53 и вернёт DNS прошивке Keenetic. Старый снимок поверх ваших правок восстановлен не будет.'
       : recovery
       ? 'DNS-блок уже отсутствует в config.yaml, а DNS override Keenetic выключен. Панель проверит текущий YAML и очистит только устаревшее состояние мастера; ваши ручные правки не будут заменены старым снимком.'
       : action === 'enable'
-      ? `Панель добавит отдельный DNS-блок, направит DoH через выбранную proxy-группу${createsDnsSelector ? ', создаст переключатель DNS Proxy с выходами через эту группу и DIRECT' : ''}, включит DNS override Keenetic, перезапустит Mihomo и проверит реальный DNS-ответ. При ошибке всё будет восстановлено.`
+      ? `${repairsLegacyExclusion ? 'Панель сохранит резервную копию стартового скрипта XKeen, удалит из ipv4_exclude только 198.18.0.0/15, перезапустит XKeen и повторно проверит маршрут. Затем ' : 'Панель '}добавит отдельный DNS-блок, направит DoH через выбранную proxy-группу${createsDnsSelector ? ', создаст переключатель DNS Proxy с выходами через эту группу и DIRECT' : ''}, включит DNS override Keenetic, перезапустит Mihomo и проверит реальный DNS-ответ. При ошибке всё будет восстановлено.`
       : 'Панель вернёт точный снимок config.yaml и исходное состояние DNS Keenetic. Изменяются только объекты однокнопочной настройки.';
     const confirmed = await confirmMihomoAction({
       title: action === 'enable' ? 'Включить защищённый DNS?' : (softRelease ? 'Вернуть DNS прошивке Keenetic?' : 'Отключить защищённый DNS?'),
       message,
-      okText: action === 'enable' ? 'Включить' : (softRelease ? 'Вернуть DNS Keenetic' : (recovery ? 'Сохранить текущий конфиг' : 'Восстановить')),
+      okText: action === 'enable' ? (repairsLegacyExclusion ? 'Исправить и включить' : 'Включить') : (softRelease ? 'Вернуть DNS Keenetic' : (recovery ? 'Сохранить текущий конфиг' : 'Восстановить')),
       cancelText: 'Отмена',
       danger: action !== 'enable',
     }, message);
@@ -498,6 +533,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       if (hint) hint.textContent = fake
         ? fakeIpRouteHint(current)
         : 'Совместимо с TProxy и большинством устройств LAN.';
+      syncApplyControl(current || {});
     });
     $(IDS.geodataEnable)?.addEventListener('change', () => {
       if ($(IDS.mode)?.value === 'fake-ip') syncFakeIpFilters(!!$(IDS.geodataEnable)?.checked);

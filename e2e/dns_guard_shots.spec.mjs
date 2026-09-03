@@ -150,6 +150,21 @@ const MIHOMO_FAKE_IP_BLOCKED = {
   },
 };
 
+const MIHOMO_FAKE_IP_REPAIRABLE = {
+  ...MIHOMO_BASE,
+  mode: 'fake-ip',
+  fake_ip_available: false,
+  fake_ip_route: MIHOMO_FAKE_IP_BLOCKED.fake_ip_route,
+  fake_ip_repair: {
+    needed: true,
+    can_repair: true,
+    requires_confirmation: true,
+    script: '/opt/etc/init.d/S05xkeen',
+    exclusion: '198.18.0.0/15',
+    message: 'Панель может сохранить резервную копию /opt/etc/init.d/S05xkeen, удалить только 198.18.0.0/15, перезапустить XKeen и повторно проверить маршрут.',
+  },
+};
+
 // Оба окна снимаются в обеих темах: тексты сторожа читают и там, и там.
 const THEME = (process.env.XKEEN_GUARD_SHOTS_THEME === 'dark') ? 'dark' : 'light';
 
@@ -238,6 +253,29 @@ test('Mihomo DNS: a legacy XKeen RETURN is shown as a broken Fake-IP route', asy
   await expect(page.locator('#mihomo-dns-badge')).toHaveText('Включено · Fake-IP заблокирован');
   await expect(page.locator('#mihomo-dns-status')).toContainText('RETURN для 198.18.0.0/15');
   await expect(page.locator('#mihomo-dns-mode-hint')).toContainText('Firewall XKeen исключает Fake-IP');
+});
+
+test('Mihomo DNS: a repairable legacy exclusion requires explicit confirmation', async ({ page }) => {
+  const postBodies = [];
+  await openMihomo(page, MIHOMO_FAKE_IP_REPAIRABLE);
+  await page.route('**/api/mihomo/dns', async (route) => {
+    if (route.request().method() === 'POST') {
+      postBodies.push(route.request().postDataJSON());
+      await route.fulfill({ json: { ok: true, enabled: true, probe: { ok: true, latency_ms: 4 } } });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await expect(page.locator('#mihomo-dns-apply')).toHaveText('Исправить и включить Fake-IP');
+  await expect(page.locator('#mihomo-dns-details')).toContainText('резервную копию');
+  await page.locator('#mihomo-dns-apply').click();
+  await expect(page.locator('#confirm-modal')).toContainText('удалит из ipv4_exclude только 198.18.0.0/15');
+  await expect(page.locator('#confirm-modal-ok-btn')).toHaveText('Исправить и включить');
+  await page.locator('#confirm-modal-ok-btn').click();
+  await expect.poll(() => postBodies.length).toBe(1);
+  expect(postBodies[0].repair_legacy_exclusion).toBe(true);
+  expect(postBodies[0].mode).toBe('fake-ip');
 });
 
 test('Mihomo DNS: optional DNS Proxy selector reaches the activation payload', async ({ page }) => {

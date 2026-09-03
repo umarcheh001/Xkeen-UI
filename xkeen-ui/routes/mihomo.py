@@ -1463,6 +1463,7 @@ def create_mihomo_blueprint(
         geodata = bool(data.get("geodata"))
         rule_providers = data.get("rule_providers")
         dns_selector = data.get("dns_selector") is True
+        repair_legacy_exclusion = data.get("repair_legacy_exclusion") is True
         proxy_group = str(data.get("proxy_group") or "").strip() or None
         if data.get("confirmed") is not True:
             return _api_error(
@@ -1502,6 +1503,7 @@ def create_mihomo_blueprint(
                 rule_providers=rule_providers,
                 proxy_group=proxy_group,
                 dns_selector=dns_selector,
+                repair_legacy_exclusion=repair_legacy_exclusion,
             )
             return jsonify(result), 200
         except MihomoDnsError as exc:
@@ -1511,7 +1513,7 @@ def create_mihomo_blueprint(
                 ok=False,
                 code=exc.code,
                 details=exc.details,
-                rolled_back=True,
+                rolled_back=exc.rolled_back,
             )
         except Exception:
             return _api_error(
