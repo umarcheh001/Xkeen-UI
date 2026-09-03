@@ -2,6 +2,15 @@ import { test, expect } from './fixtures.mjs';
 import { STATUS, openDialog } from './dns_over_vless_fixtures.mjs';
 
 
+// The optional zones (direct/records/devices) ship collapsed by design — a
+// person opens one with a real click on its subheading before touching what
+// is inside. Clicking the title text keeps this off the switch some zones
+// carry in their subheading, which has its own click handling.
+async function openZone(page, zone) {
+  await page.locator(`.xk-dns-zone[data-zone="${zone}"] .xk-dns-zone-head b`).click();
+}
+
+
 const BYPASS_STATUS = {
   ...STATUS,
   direct_resolvers: [],
@@ -195,6 +204,7 @@ test('clicking the header leaves the dialog where it is, dragging still moves it
 
 test('the bypass domain list appears with its resolver and fills from the rules', async ({ page }) => {
   await openDialog(page, BYPASS_STATUS);
+  await openZone(page, 'direct');
 
   const resolvers = page.locator('#routing-dns-over-vless-direct');
   const domains = page.locator('#routing-dns-over-vless-direct-zones');
@@ -216,6 +226,7 @@ test('the bypass domain list appears with its resolver and fills from the rules'
 
 test('with no direct rules the offer button stays closed', async ({ page }) => {
   await openDialog(page, { ...BYPASS_STATUS, direct_rule_domains: [] });
+  await openZone(page, 'direct');
 
   await page.locator('#routing-dns-over-vless-direct').fill('77.88.8.8');
   await expect(page.locator('#routing-dns-over-vless-direct-zones')).toBeVisible();
@@ -231,6 +242,7 @@ test('the other record types are let through on one node the dialog names', asyn
     pass_non_ip_options: ['node-alpha', 'node-beta'],
   };
   await openDialog(page, status);
+  await openZone(page, 'records');
 
   const row = page.locator('#routing-dns-over-vless-pass-row');
   const toggle = page.locator('#routing-dns-over-vless-pass');
@@ -285,6 +297,7 @@ test('a remembered node keeps its place and a vanished one does not look chosen'
     pass_non_ip_node: 'node-beta',
     pass_non_ip_options: ['node-alpha', 'node-beta'],
   });
+  await openZone(page, 'records');
 
   // Reordering the user's own balancer must not move the traffic silently.
   await expect(page.locator('#routing-dns-over-vless-pass')).toBeChecked();
@@ -369,6 +382,7 @@ test('devices are ticked one by one and only with the switch on', async ({ page 
   const status = { ...STATUS, capture_clients: false, capture_macs: [] };
   await routeClients(page, CLIENTS);
   await openDialog(page, status);
+  await openZone(page, 'devices');
 
   const picks = page.locator('.routing-dns-over-vless-clients-pick');
   // Отмечать можно только тех, у кого DNS забирает политика: ноутбук доходит
@@ -512,6 +526,7 @@ test('the dialog says when the other record types moved to a reserve node', asyn
       error: '',
     },
   });
+  await openZone(page, 'records');
 
   // The guard probe asks for A, so without this line a half-broken feature
   // looks perfectly healthy in the window.
@@ -538,6 +553,7 @@ test('the dialog admits it when no node carries the other record types', async (
       error: '',
     },
   });
+  await openZone(page, 'records');
 
   const health = page.locator('#routing-dns-over-vless-pass-health');
   await expect(health).toBeVisible();

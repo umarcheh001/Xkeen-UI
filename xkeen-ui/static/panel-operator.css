@@ -13799,7 +13799,6 @@ body.panel-page .xk-dns-zone {
   border: 1px solid var(--op-border);
   border-radius: var(--op-radius);
   background: var(--op-surface-2);
-  overflow: hidden;
 }
 
 body.panel-page .xk-dns-zone-head {
@@ -13846,6 +13845,11 @@ body.panel-page .xk-dns-zone-body {
   gap: 6px;
   padding: 10px 12px 12px;
   border-top: 1px solid var(--op-border);
+  /* Раньше углы отсекал overflow: hidden на .xk-dns-zone, но у элемента
+   * грида это заодно обнуляло его авто-минимальную высоту и обрезало
+   * содержимое зон route/servers. Отсекать нечему: тело само скруглено
+   * снизу под родительскую рамку. */
+  border-radius: 0 0 var(--op-radius) var(--op-radius);
 }
 
 body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-dns-over-vless-safety {
