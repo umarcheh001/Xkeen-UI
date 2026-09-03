@@ -2566,7 +2566,7 @@
         <div class="modal-header">
           <span class="modal-title" id="routing-dns-over-vless-title">DNS-over-VLESS</span>
           <div class="routing-dns-over-vless-header-actions">
-            <button type="button" id="routing-dns-over-vless-layout" class="routing-dns-over-vless-layout-btn" title="Раскладка окна: авто, одна колонка, две колонки" aria-label="Раскладка окна">{{ op_icon('compare') }}</button>
+            <button type="button" id="routing-dns-over-vless-layout" class="routing-dns-over-vless-layout-btn" title="Раскладка окна" aria-label="Раскладка окна">{{ op_icon('compare') }}</button>
             <button type="button" class="modal-close" id="routing-dns-over-vless-close" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
           </div>
         </div>
@@ -2592,197 +2592,203 @@
             <ul id="routing-dns-over-vless-details" class="routing-dns-over-vless-details"></ul>
           </div>
 
-          <details class="xk-dns-zone" data-zone="route" open>
-            <summary class="xk-dns-zone-head">
-              <b id="routing-dns-over-vless-target-label">Маршрут для DNS-запросов</b>
-            </summary>
-            <div class="xk-dns-zone-body" id="routing-dns-over-vless-route">
-              <label id="routing-dns-over-vless-multi-row" class="routing-dns-over-vless-multi hidden">
-                <input type="checkbox" id="routing-dns-over-vless-multi">
-                <span>Балансировать между несколькими прокси</span>
-              </label>
-              <div id="routing-dns-over-vless-target-tools" class="routing-dns-over-vless-picker-tools hidden">
-                <span id="routing-dns-over-vless-target-count" class="routing-dns-over-vless-picker-count"></span>
-                <button type="button" id="routing-dns-over-vless-target-all" class="routing-dns-over-vless-picker-bulk">Отметить все</button>
-                <button type="button" id="routing-dns-over-vless-target-none" class="routing-dns-over-vless-picker-bulk">Снять все</button>
+          <!-- Рельсы: в две колонки это левый и правый столбцы, в одну -- просто
+               два блока подряд. Порядок чтения одинаков в обеих раскладках. -->
+          <div class="xk-dns-rail xk-dns-rail-form">
+            <details class="xk-dns-zone" data-zone="route" data-required="1">
+              <summary class="xk-dns-zone-head">
+                <b id="routing-dns-over-vless-target-label">Маршрут для DNS-запросов</b>
+                <span class="xk-dns-zone-req">обязательно</span>
+                <span class="xk-dns-zone-sum" data-zone-sum="route"></span>
+              </summary>
+              <div class="xk-dns-zone-body" id="routing-dns-over-vless-route">
+                <label id="routing-dns-over-vless-multi-row" class="routing-dns-over-vless-multi hidden">
+                  <input type="checkbox" id="routing-dns-over-vless-multi">
+                  <span>Балансировать между несколькими прокси</span>
+                </label>
+                <div id="routing-dns-over-vless-target-tools" class="routing-dns-over-vless-picker-tools hidden">
+                  <span id="routing-dns-over-vless-target-count" class="routing-dns-over-vless-picker-count"></span>
+                  <button type="button" id="routing-dns-over-vless-target-all" class="routing-dns-over-vless-picker-bulk">Отметить все</button>
+                  <button type="button" id="routing-dns-over-vless-target-none" class="routing-dns-over-vless-picker-bulk">Снять все</button>
+                </div>
+                <div id="routing-dns-over-vless-target" class="routing-dns-over-vless-picker" role="listbox" aria-labelledby="routing-dns-over-vless-target-label" aria-describedby="routing-dns-over-vless-route-hint"></div>
+                <p class="modal-hint" id="routing-dns-over-vless-route-hint">DNS пойдёт через выбранный балансировщик или прокси. Выбор сохраняется и используется при последующих включениях.</p>
+                <p id="routing-dns-over-vless-route-fallback" class="routing-dns-over-vless-route-fallback hidden"></p>
               </div>
-              <div id="routing-dns-over-vless-target" class="routing-dns-over-vless-picker" role="listbox" aria-labelledby="routing-dns-over-vless-target-label" aria-describedby="routing-dns-over-vless-route-hint"></div>
-              <p class="modal-hint" id="routing-dns-over-vless-route-hint">DNS пойдёт через выбранный балансировщик или прокси. Выбор сохраняется и используется при последующих включениях.</p>
-              <p id="routing-dns-over-vless-route-fallback" class="routing-dns-over-vless-route-fallback hidden"></p>
-            </div>
-          </details>
+            </details>
 
-          <details class="xk-dns-zone" data-zone="servers" open>
-            <summary class="xk-dns-zone-head">
-              <b>DNS-серверы в туннеле</b>
-            </summary>
-            <div class="xk-dns-zone-body">
-              <p id="routing-dns-over-vless-locked-note" class="modal-hint hidden">Функция включена, поэтому настройки только для чтения. Правки применятся при следующем включении.</p>
-              <label for="routing-dns-over-vless-upstreams">DNS-серверы в туннеле</label>
-              <input type="text" id="routing-dns-over-vless-upstreams" class="routing-rule-input" placeholder="8.8.8.8, 1.1.1.1" autocomplete="off" spellcheck="false">
-              <div class="modal-hint">Через запятую, только по IP-адресу.
-                <details class="xk-hint-more">
-                  <summary>Подробнее</summary>
-                  <p>имя хоста пришлось бы разрешать до того, как заработает сам DNS, — резолвить его нечем. Второй и следующие используются, когда первый не отвечает. Порт указывайте, если резолвер слушает не на 53 — например <code>127.0.0.53:5353</code>. Шифрованный апстрим задаётся схемой <code>https://</code> — с адресом и обязательным путём, например <code>https://1.1.1.1/dns-query</code>; без пути сервер не ответит. Есть ещё <code>tcp://</code> — обычный DNS поверх TCP. Схемы <code>tls://</code> и <code>quic://</code> ядро Xray не понимает, панель их не примет. На остальные типы записей схема не распространяется: при включённом пропуске ниже они уходят к тому же адресу обычным DNS на порт 53.</p>
-                </details>
-              </div>
-
-              <label class="dt-switch routing-dns-over-vless-remote-toggle xk-switch-bare" title="Адрес разыменовывается на выходном узле, а не в вашей сети.">
-                <input type="checkbox" id="routing-dns-over-vless-remote">
-                <span class="dt-switch-slider" aria-hidden="true"></span>
-                <span class="dt-switch-label">DNS-сервер на стороне выходного узла</span>
-              </label>
-              <div class="modal-hint">Запросы к серверам из списка выше и так идут через туннель, поэтому адрес можно указать такой, какой видит выходной узел, а не вы.
-                <details class="xk-hint-more">
-                  <summary>Подробнее</summary>
-                  <p>Например <code>127.0.0.53</code> — штатный резолвер Ubuntu и Debian: тогда имена разрешает сам VPS, наружу не выходит ни одного открытого запроса, а адреса сайтов приходят ровно те, что видны из точки выхода. Так же указывается AdGuard Home, поднятый на VPS. Без этой отметки панель отвергает адреса петли и домашних сетей — их обычно вписывают по ошибке вместо поля локальных DNS. Проверьте, что на VPS ничего не блокирует обращения к приватным адресам: правило вида <code>geoip:private → block</code> оставит DNS без ответа. На ядре 26.5.3 и новее его не обязательно убирать — перенесите такое правило в <code>finalRules</code>: блокировка останется, а резолв на локальный адрес пройдёт.</p>
-                </details>
-              </div>
-            </div>
-          </details>
-
-          <details class="xk-dns-zone" data-zone="home">
-            <summary class="xk-dns-zone-head">
-              <b>Локальные DNS для домашних имён</b>
-              <span class="xk-dns-zone-opt">необязательно</span>
-              <span class="xk-dns-zone-sum" data-zone-sum="home"></span>
-            </summary>
-            <div class="xk-dns-zone-body">
-              <label for="routing-dns-over-vless-local">Локальные DNS для домашних имён</label>
-              <input type="text" id="routing-dns-over-vless-local" class="routing-rule-input" placeholder="не используется" autocomplete="off" spellcheck="false">
-              <div class="modal-hint">Необязательно. Адреса резолверов, отвечающих за домашние имена — запросы к ним пойдут напрямую, мимо туннеля.
-                <details class="xk-hint-more">
-                  <summary>Подробнее</summary>
-                  <p>Через запятую, если сегментов сети несколько; порт указывайте, если резолвер слушает не на 53. Только адрес и порт — схемы вроде <code>https://</code> здесь не принимаются: эти запросы уходят напрямую, мимо туннеля. На Keenetic домашние имена и хостнеймы из DHCP знает резолвер прошивки: он слушает на <code>127.0.0.1:41100</code> и дальше по одному порту на каждую политику доступа — <code>41101</code>, <code>41102</code>. Порт 53 здесь занят самим DNS-over-VLESS: указать его нельзя, запрос вернулся бы сюда же и зациклился.</p>
-                </details>
-              </div>
-
-              <div id="routing-dns-over-vless-zones-row" class="routing-dns-over-vless-zones hidden">
-                <label for="routing-dns-over-vless-zones">Зоны, которые остаются в локальной сети</label>
-                <textarea id="routing-dns-over-vless-zones" class="routing-rule-input" rows="3" autocomplete="off" spellcheck="false"></textarea>
-                <div id="routing-dns-over-vless-zone-presets" class="routing-dns-over-vless-zone-presets" role="group" aria-label="Наборы зон"></div>
-                <div class="modal-hint">Заполнено частыми случаями — дополните своими, если в сети используется собственная зона.
+            <details class="xk-dns-zone" data-zone="servers" data-required="1">
+              <summary class="xk-dns-zone-head">
+                <b>DNS-серверы в туннеле</b>
+                <span class="xk-dns-zone-req">обязательно</span>
+                <span class="xk-dns-zone-sum" data-zone-sum="servers"></span>
+              </summary>
+              <div class="xk-dns-zone-body">
+                <p id="routing-dns-over-vless-locked-note" class="modal-hint hidden">Функция включена, поэтому настройки только для чтения. Правки применятся при следующем включении.</p>
+                <label for="routing-dns-over-vless-upstreams">DNS-серверы в туннеле</label>
+                <input type="text" id="routing-dns-over-vless-upstreams" class="routing-rule-input" placeholder="8.8.8.8, 1.1.1.1" autocomplete="off" spellcheck="false">
+                <div class="modal-hint">Через запятую, только по IP-адресу.
                   <details class="xk-hint-more">
                     <summary>Подробнее</summary>
-                    <p>Через запятую; запись без префикса дополняется до <code>domain:</code>, иначе Xray искал бы её как подстроку и захватил бы чужие домены. Обратные зоны <code>in-addr.arpa</code> и <code>ip6.arpa</code> держат PTR-запросы о приватных адресах внутри сети.</p>
+                    <p>имя хоста пришлось бы разрешать до того, как заработает сам DNS, — резолвить его нечем. Второй и следующие используются, когда первый не отвечает. Порт указывайте, если резолвер слушает не на 53 — например <code>127.0.0.53:5353</code>. Шифрованный апстрим задаётся схемой <code>https://</code> — с адресом и обязательным путём, например <code>https://1.1.1.1/dns-query</code>; без пути сервер не ответит. Есть ещё <code>tcp://</code> — обычный DNS поверх TCP. Схемы <code>tls://</code> и <code>quic://</code> ядро Xray не понимает, панель их не примет. На остальные типы записей схема не распространяется: при включённом пропуске ниже они уходят к тому же адресу обычным DNS на порт 53.</p>
+                  </details>
+                </div>
+
+                <label class="dt-switch routing-dns-over-vless-remote-toggle xk-switch-bare" title="Адрес разыменовывается на выходном узле, а не в вашей сети.">
+                  <input type="checkbox" id="routing-dns-over-vless-remote">
+                  <span class="dt-switch-slider" aria-hidden="true"></span>
+                  <span class="dt-switch-label">DNS-сервер на стороне выходного узла</span>
+                </label>
+                <div class="modal-hint">Запросы к серверам из списка выше и так идут через туннель, поэтому адрес можно указать такой, какой видит выходной узел, а не вы.
+                  <details class="xk-hint-more">
+                    <summary>Подробнее</summary>
+                    <p>Например <code>127.0.0.53</code> — штатный резолвер Ubuntu и Debian: тогда имена разрешает сам VPS, наружу не выходит ни одного открытого запроса, а адреса сайтов приходят ровно те, что видны из точки выхода. Так же указывается AdGuard Home, поднятый на VPS. Без этой отметки панель отвергает адреса петли и домашних сетей — их обычно вписывают по ошибке вместо поля локальных DNS. Проверьте, что на VPS ничего не блокирует обращения к приватным адресам: правило вида <code>geoip:private → block</code> оставит DNS без ответа. На ядре 26.5.3 и новее его не обязательно убирать — перенесите такое правило в <code>finalRules</code>: блокировка останется, а резолв на локальный адрес пройдёт.</p>
                   </details>
                 </div>
               </div>
-            </div>
-          </details>
+            </details>
 
-          <details class="xk-dns-zone" data-zone="direct">
-            <summary class="xk-dns-zone-head">
-              <b>DNS для доменов мимо туннеля</b>
-              <span class="xk-dns-zone-opt">необязательно</span>
-              <span class="xk-dns-zone-sum" data-zone-sum="direct"></span>
-            </summary>
-            <div class="xk-dns-zone-body">
-              <label for="routing-dns-over-vless-direct">DNS для доменов мимо туннеля</label>
-              <input type="text" id="routing-dns-over-vless-direct" class="routing-rule-input" placeholder="не используется" autocomplete="off" spellcheck="false">
-              <div class="modal-hint">Необязательно. Домены, которые вы и так пускаете напрямую, сейчас получают адрес от зарубежного резолвера — сайт с CDN отдаёт узел рядом с точкой выхода, а не рядом с вами.
-                <details class="xk-hint-more">
-                  <summary>Подробнее</summary>
-                  <p>Укажите резолверы, которые ответят на них правильно: через запятую, спрашиваются по очереди, порт — если не 53; схемы вроде <code>https://</code> здесь не принимаются, как и в поле локальных DNS. Адрес, уже занятый в поле выше, сюда не подойдёт: группы различаются по адресам, и один и тот же в обеих панель прочитать не сможет.</p>
-                </details>
-              </div>
-
-              <div id="routing-dns-over-vless-direct-zones-row" class="routing-dns-over-vless-zones hidden">
-                <label for="routing-dns-over-vless-direct-zones">Домены, которые резолвятся мимо туннеля</label>
-                <textarea id="routing-dns-over-vless-direct-zones" class="routing-rule-input" rows="3" autocomplete="off" spellcheck="false"></textarea>
-                <div class="routing-dns-over-vless-zone-presets">
-                  <button type="button" id="routing-dns-over-vless-direct-from-rules" class="routing-dns-over-vless-zone-preset">Взять из правил, ведущих напрямую</button>
-                </div>
-                <div class="modal-hint">Эти запросы увидит провайдер. Для сайтов, которые вы и так открываете напрямую, это обычно не важно — их трафик он видит в любом случае, — зато адрес вы получите ближайший.
+            <details class="xk-dns-zone" data-zone="home">
+              <summary class="xk-dns-zone-head">
+                <b>Локальные DNS для домашних имён</b>
+                <span class="xk-dns-zone-sum" data-zone-sum="home"></span>
+              </summary>
+              <div class="xk-dns-zone-body">
+                <label for="routing-dns-over-vless-local">Локальные DNS для домашних имён</label>
+                <input type="text" id="routing-dns-over-vless-local" class="routing-rule-input" placeholder="не используется" autocomplete="off" spellcheck="false">
+                <div class="modal-hint">Необязательно. Адреса резолверов, отвечающих за домашние имена — запросы к ним пойдут напрямую, мимо туннеля.
                   <details class="xk-hint-more">
                     <summary>Подробнее</summary>
-                    <p>Если все указанные резолверы молчат, имя всё же спросят у DNS-сервера в туннеле.</p>
+                    <p>Через запятую, если сегментов сети несколько; порт указывайте, если резолвер слушает не на 53. Только адрес и порт — схемы вроде <code>https://</code> здесь не принимаются: эти запросы уходят напрямую, мимо туннеля. На Keenetic домашние имена и хостнеймы из DHCP знает резолвер прошивки: он слушает на <code>127.0.0.1:41100</code> и дальше по одному порту на каждую политику доступа — <code>41101</code>, <code>41102</code>. Порт 53 здесь занят самим DNS-over-VLESS: указать его нельзя, запрос вернулся бы сюда же и зациклился.</p>
+                  </details>
+                </div>
+
+                <div id="routing-dns-over-vless-zones-row" class="routing-dns-over-vless-zones hidden">
+                  <label for="routing-dns-over-vless-zones">Зоны, которые остаются в локальной сети</label>
+                  <textarea id="routing-dns-over-vless-zones" class="routing-rule-input" rows="3" autocomplete="off" spellcheck="false"></textarea>
+                  <div id="routing-dns-over-vless-zone-presets" class="routing-dns-over-vless-zone-presets" role="group" aria-label="Наборы зон"></div>
+                  <div class="modal-hint">Заполнено частыми случаями — дополните своими, если в сети используется собственная зона.
+                    <details class="xk-hint-more">
+                      <summary>Подробнее</summary>
+                      <p>Через запятую; запись без префикса дополняется до <code>domain:</code>, иначе Xray искал бы её как подстроку и захватил бы чужие домены. Обратные зоны <code>in-addr.arpa</code> и <code>ip6.arpa</code> держат PTR-запросы о приватных адресах внутри сети.</p>
+                    </details>
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <details class="xk-dns-zone" data-zone="direct">
+              <summary class="xk-dns-zone-head">
+                <b>DNS для доменов мимо туннеля</b>
+                <span class="xk-dns-zone-sum" data-zone-sum="direct"></span>
+              </summary>
+              <div class="xk-dns-zone-body">
+                <label for="routing-dns-over-vless-direct">DNS для доменов мимо туннеля</label>
+                <input type="text" id="routing-dns-over-vless-direct" class="routing-rule-input" placeholder="не используется" autocomplete="off" spellcheck="false">
+                <div class="modal-hint">Необязательно. Домены, которые вы и так пускаете напрямую, сейчас получают адрес от зарубежного резолвера — сайт с CDN отдаёт узел рядом с точкой выхода, а не рядом с вами.
+                  <details class="xk-hint-more">
+                    <summary>Подробнее</summary>
+                    <p>Укажите резолверы, которые ответят на них правильно: через запятую, спрашиваются по очереди, порт — если не 53; схемы вроде <code>https://</code> здесь не принимаются, как и в поле локальных DNS. Адрес, уже занятый в поле выше, сюда не подойдёт: группы различаются по адресам, и один и тот же в обеих панель прочитать не сможет.</p>
+                  </details>
+                </div>
+
+                <div id="routing-dns-over-vless-direct-zones-row" class="routing-dns-over-vless-zones hidden">
+                  <label for="routing-dns-over-vless-direct-zones">Домены, которые резолвятся мимо туннеля</label>
+                  <textarea id="routing-dns-over-vless-direct-zones" class="routing-rule-input" rows="3" autocomplete="off" spellcheck="false"></textarea>
+                  <div class="routing-dns-over-vless-zone-presets">
+                    <button type="button" id="routing-dns-over-vless-direct-from-rules" class="routing-dns-over-vless-zone-preset">Взять из правил, ведущих напрямую</button>
+                  </div>
+                  <div class="modal-hint">Эти запросы увидит провайдер. Для сайтов, которые вы и так открываете напрямую, это обычно не важно — их трафик он видит в любом случае, — зато адрес вы получите ближайший.
+                    <details class="xk-hint-more">
+                      <summary>Подробнее</summary>
+                      <p>Если все указанные резолверы молчат, имя всё же спросят у DNS-сервера в туннеле.</p>
+                    </details>
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <details class="xk-dns-zone" data-zone="records">
+              <summary class="xk-dns-zone-head">
+                <b>Прочие типы записей</b>
+                <span class="xk-dns-zone-sum" data-zone-sum="records"></span>
+                <label class="dt-switch xk-switch-bare" title="Пропускать типы записей, на которые встроенный DNS Xray не отвечает.">
+                  <input type="checkbox" id="routing-dns-over-vless-pass" aria-label="Пропускать остальные типы записей">
+                  <span class="dt-switch-slider" aria-hidden="true"></span>
+                </label>
+              </summary>
+              <div class="xk-dns-zone-body">
+                <div class="modal-hint">Встроенный DNS Xray отвечает только на A и AAAA.
+                  <details class="xk-hint-more">
+                    <summary>Подробнее</summary>
+                    <p>Почтовые MX, TXT, SRV для автообнаружения (SIP, Autodiscover) и HTTPS/SVCB он возвращает пустыми — клиент понимает пустой ответ как «такой записи не существует» и не переспрашивает. С этой настройкой они уходят в туннель как есть — к первому DNS-серверу из списка выше.</p>
+                  </details>
+                </div>
+
+                <div id="routing-dns-over-vless-pass-row" class="routing-dns-over-vless-zones hidden">
+                  <label for="routing-dns-over-vless-pass-node">Узел для этих запросов</label>
+                  <select id="routing-dns-over-vless-pass-node" class="routing-rule-input"></select>
+                  <div class="modal-hint">Xray принимает здесь только один outbound — балансировщик указать нельзя.
+                    <details class="xk-hint-more">
+                      <summary>Подробнее</summary>
+                      <p>Поэтому такие запросы пойдут через один узел: если он недоступен, они останутся без ответа, тогда как A и AAAA продолжат идти обычным маршрутом. Выбранный узел запоминается и не меняется сам, даже если вы переставите узлы в своём балансировщике. Если он перестанет отвечать на эти типы записей, сторож переведёт их на следующий узел маршрута — не чаще раза в час и по одному кругу: когда узлы кончатся, панель скажет об этом здесь и перестанет трогать ядро. Адрес назначения панель проставляет сама: без него запросы клиентов, которые спрашивают сам роутер, ушли бы в туннель на домашний адрес и остались бы без ответа. Берётся первый DNS-сервер из списка выше, и резерва у самого адреса нет: если замолчит он, эти типы перестанут отвечать, тогда как A и AAAA переключатся на следующий сервер списка.</p>
+                    </details>
+                  </div>
+                  <p id="routing-dns-over-vless-pass-health" class="routing-dns-over-vless-route-fallback hidden"></p>
+                </div>
+              </div>
+            </details>
+          </div>
+
+          <div class="xk-dns-rail xk-dns-rail-side">
+            <details class="xk-dns-zone" data-zone="devices">
+              <summary class="xk-dns-zone-head">
+                <b>Кто из устройств пользуется функцией</b>
+                <span class="xk-dns-zone-sum" data-zone-sum="devices"></span>
+                <label class="dt-switch xk-switch-bare" title="Правило в firewall роутера, которое возвращает выбранные устройства к DNS-over-VLESS.">
+                  <input type="checkbox" id="routing-dns-over-vless-capture" aria-label="Заводить DNS выбранных устройств в туннель">
+                  <span class="dt-switch-slider" aria-hidden="true"></span>
+                </label>
+              </summary>
+              <div class="xk-dns-zone-body" id="routing-dns-over-vless-clients">
+                <span id="routing-dns-over-vless-clients-summary" class="modal-hint">Проверяем…</span>
+                <p class="routing-dns-over-vless-clients-legend" aria-label="Как читать цвета">
+                  <span data-verdict="reaches">DNS идёт через туннель</span>
+                  <span data-verdict="intercepted">забирает политика доступа</span>
+                  <span data-verdict="unknown">определить не удалось</span>
+                  <span data-verdict="offline">не в сети — приглушены</span>
+                </p>
+                <ul id="routing-dns-over-vless-clients-list" class="routing-dns-over-vless-clients-list"></ul>
+
+                <div class="modal-hint">Панель добавляет в firewall роутера собственную цепочку и ставит её перед правилом прошивки: DNS отмеченных устройств уходит к Xray, а не к резолверу прошивки.
+                  <details class="xk-hint-more">
+                    <summary>Подробнее</summary>
+                    <p>Отмечать можно только те устройства, у которых DNS забирает политика доступа — остальные и так доходят. Перехватываются запросы, адресованные самому роутеру: если устройству прописан собственный DNS-сервер, отметка на него не подействует. Цепочка создаётся, только пока переключатель включён, и снимается при выключении функции, в том числе аварийном.</p>
+                  </details>
+                </div>
+                <div class="modal-hint routing-dns-over-vless-capture-cost">Чем за это платит отмеченное устройство: перестают действовать DNS-фильтры прошивки (Яндекс.DNS, SkyDNS, родительский контроль).
+                  <details class="xk-hint-more">
+                    <summary>Подробнее</summary>
+                    <p>и подмены адресов, на которых работают сторонние прокси-сервисы, — заблокированные сайты у него пойдут через туннель, а не их обходом. Пропадут и домашние имена с хостнеймами из DHCP, если не заполнить поле локальных DNS выше: там нужен порт резолвера его политики, панель подставляет его в подсказке к устройству. IPv6-запросы правило не затрагивает. И ещё одно: отметка действует даже на устройство, исключённое из XKeen — правило панели срабатывает раньше исключения, поэтому его DNS всё равно уйдёт в туннель, хотя остальной трафик пойдёт мимо.</p>
+                  </details>
+                </div>
+                <div class="modal-hint">Занятый порт 53 ещё не значит, что функцией пользуются: DNS-запросы устройств, состоящих в политике доступа, прошивка заворачивает на собственный резолвер раньше, чем они дойдут до Xray.
+                  <details class="xk-hint-more">
+                    <summary>Подробнее</summary>
+                    <p>Устройства вне политик доходят. У отмеченных синим DNS не сломан — его обслуживает резолвер прошивки. Разница в другом: адреса приходят с геолокацией его апстрима, а не выходного узла туннеля, и настройки этого окна на такие устройства не действуют — ни списки зон, ни домены мимо туннеля, ни пропуск остальных типов записей. Чтобы завернуть в туннель и остальных, устройству нужно указать внешний DNS-сервер вручную — тогда его запрос попадёт в туннель по общему правилу.</p>
                   </details>
                 </div>
               </div>
-            </div>
-          </details>
-
-          <details class="xk-dns-zone" data-zone="records">
-            <summary class="xk-dns-zone-head">
-              <b>Прочие типы записей</b>
-              <span class="xk-dns-zone-opt">необязательно</span>
-              <span class="xk-dns-zone-sum" data-zone-sum="records"></span>
-              <label class="dt-switch xk-switch-bare" title="Пропускать типы записей, на которые встроенный DNS Xray не отвечает.">
-                <input type="checkbox" id="routing-dns-over-vless-pass" aria-label="Пропускать остальные типы записей">
-                <span class="dt-switch-slider" aria-hidden="true"></span>
-              </label>
-            </summary>
-            <div class="xk-dns-zone-body">
-              <div class="modal-hint">Встроенный DNS Xray отвечает только на A и AAAA.
+            </details>
+            <div class="routing-dns-over-vless-foot">
+              <div class="modal-hint routing-dns-over-vless-warning">Настройка применяется при активном ядре Xray; у Mihomo защита DNS настраивается своим окном.
                 <details class="xk-hint-more">
                   <summary>Подробнее</summary>
-                  <p>Почтовые MX, TXT, SRV для автообнаружения (SIP, Autodiscover) и HTTPS/SVCB он возвращает пустыми — клиент понимает пустой ответ как «такой записи не существует» и не переспрашивает. С этой настройкой они уходят в туннель как есть — к первому DNS-серверу из списка выше.</p>
+                  <p>Прокси-outbound и существующие правила не переписываются. Резервный маршрут балансировщика переносится только тогда, когда вся его цепочка остаётся внутри прокси; fallback, ведущий в прямое соединение, отбрасывается, чтобы не допустить утечку или петлю.</p>
                 </details>
               </div>
-
-              <div id="routing-dns-over-vless-pass-row" class="routing-dns-over-vless-zones hidden">
-                <label for="routing-dns-over-vless-pass-node">Узел для этих запросов</label>
-                <select id="routing-dns-over-vless-pass-node" class="routing-rule-input"></select>
-                <div class="modal-hint">Xray принимает здесь только один outbound — балансировщик указать нельзя.
-                  <details class="xk-hint-more">
-                    <summary>Подробнее</summary>
-                    <p>Поэтому такие запросы пойдут через один узел: если он недоступен, они останутся без ответа, тогда как A и AAAA продолжат идти обычным маршрутом. Выбранный узел запоминается и не меняется сам, даже если вы переставите узлы в своём балансировщике. Если он перестанет отвечать на эти типы записей, сторож переведёт их на следующий узел маршрута — не чаще раза в час и по одному кругу: когда узлы кончатся, панель скажет об этом здесь и перестанет трогать ядро. Адрес назначения панель проставляет сама: без него запросы клиентов, которые спрашивают сам роутер, ушли бы в туннель на домашний адрес и остались бы без ответа. Берётся первый DNS-сервер из списка выше, и резерва у самого адреса нет: если замолчит он, эти типы перестанут отвечать, тогда как A и AAAA переключатся на следующий сервер списка.</p>
-                  </details>
-                </div>
-                <p id="routing-dns-over-vless-pass-health" class="routing-dns-over-vless-route-fallback hidden"></p>
-              </div>
+              <p class="routing-dns-over-vless-links">Описание схемы: <a href="https://jameszero.net/4773.htm" target="_blank" rel="noopener noreferrer">упрощённый вариант</a> · <a href="https://jameszero.net/3398.htm" target="_blank" rel="noopener noreferrer">первая часть</a></p>
             </div>
-          </details>
-
-          <details class="xk-dns-zone" data-zone="devices">
-            <summary class="xk-dns-zone-head">
-              <b>Кто из устройств пользуется функцией</b>
-              <span class="xk-dns-zone-opt">необязательно</span>
-              <span class="xk-dns-zone-sum" data-zone-sum="devices"></span>
-              <label class="dt-switch xk-switch-bare" title="Правило в firewall роутера, которое возвращает выбранные устройства к DNS-over-VLESS.">
-                <input type="checkbox" id="routing-dns-over-vless-capture" aria-label="Заводить DNS выбранных устройств в туннель">
-                <span class="dt-switch-slider" aria-hidden="true"></span>
-              </label>
-            </summary>
-            <div class="xk-dns-zone-body" id="routing-dns-over-vless-clients">
-              <span id="routing-dns-over-vless-clients-summary" class="modal-hint">Проверяем…</span>
-              <p class="routing-dns-over-vless-clients-legend" aria-label="Как читать цвета">
-                <span data-verdict="reaches">DNS идёт через туннель</span>
-                <span data-verdict="intercepted">забирает политика доступа</span>
-                <span data-verdict="unknown">определить не удалось</span>
-                <span data-verdict="offline">не в сети — приглушены</span>
-              </p>
-              <ul id="routing-dns-over-vless-clients-list" class="routing-dns-over-vless-clients-list"></ul>
-
-              <div class="modal-hint">Панель добавляет в firewall роутера собственную цепочку и ставит её перед правилом прошивки: DNS отмеченных устройств уходит к Xray, а не к резолверу прошивки.
-                <details class="xk-hint-more">
-                  <summary>Подробнее</summary>
-                  <p>Отмечать можно только те устройства, у которых DNS забирает политика доступа — остальные и так доходят. Перехватываются запросы, адресованные самому роутеру: если устройству прописан собственный DNS-сервер, отметка на него не подействует. Цепочка создаётся, только пока переключатель включён, и снимается при выключении функции, в том числе аварийном.</p>
-                </details>
-              </div>
-              <div class="modal-hint routing-dns-over-vless-capture-cost">Чем за это платит отмеченное устройство: перестают действовать DNS-фильтры прошивки (Яндекс.DNS, SkyDNS, родительский контроль).
-                <details class="xk-hint-more">
-                  <summary>Подробнее</summary>
-                  <p>и подмены адресов, на которых работают сторонние прокси-сервисы, — заблокированные сайты у него пойдут через туннель, а не их обходом. Пропадут и домашние имена с хостнеймами из DHCP, если не заполнить поле локальных DNS выше: там нужен порт резолвера его политики, панель подставляет его в подсказке к устройству. IPv6-запросы правило не затрагивает. И ещё одно: отметка действует даже на устройство, исключённое из XKeen — правило панели срабатывает раньше исключения, поэтому его DNS всё равно уйдёт в туннель, хотя остальной трафик пойдёт мимо.</p>
-                </details>
-              </div>
-              <div class="modal-hint">Занятый порт 53 ещё не значит, что функцией пользуются: DNS-запросы устройств, состоящих в политике доступа, прошивка заворачивает на собственный резолвер раньше, чем они дойдут до Xray.
-                <details class="xk-hint-more">
-                  <summary>Подробнее</summary>
-                  <p>Устройства вне политик доходят. У отмеченных синим DNS не сломан — его обслуживает резолвер прошивки. Разница в другом: адреса приходят с геолокацией его апстрима, а не выходного узла туннеля, и настройки этого окна на такие устройства не действуют — ни списки зон, ни домены мимо туннеля, ни пропуск остальных типов записей. Чтобы завернуть в туннель и остальных, устройству нужно указать внешний DNS-сервер вручную — тогда его запрос попадёт в туннель по общему правилу.</p>
-                </details>
-              </div>
-            </div>
-          </details>
-          <div class="routing-dns-over-vless-foot">
-            <div class="modal-hint routing-dns-over-vless-warning">Настройка применяется при активном ядре Xray; у Mihomo защита DNS настраивается своим окном.
-              <details class="xk-hint-more">
-                <summary>Подробнее</summary>
-                <p>Прокси-outbound и существующие правила не переписываются. Резервный маршрут балансировщика переносится только тогда, когда вся его цепочка остаётся внутри прокси; fallback, ведущий в прямое соединение, отбрасывается, чтобы не допустить утечку или петлю.</p>
-              </details>
-            </div>
-            <p class="routing-dns-over-vless-links">Описание схемы: <a href="https://jameszero.net/4773.htm" target="_blank" rel="noopener noreferrer">упрощённый вариант</a> · <a href="https://jameszero.net/3398.htm" target="_blank" rel="noopener noreferrer">первая часть</a></p>
           </div>
         </div>
         <div class="modal-actions routing-dns-over-vless-actions">

@@ -657,7 +657,26 @@ def _fallback_plan(
             "Куда ведёт запасной путь вашего балансировщика, панель проследить не смогла, "
             "а вслепую пускать по нему DNS нельзя: он может выйти мимо VPN, к провайдеру."
         )
-    return {"tag": tag, "kept": False, "verdict": verdict, "reason": reason}
+    return {"tag": tag, "kept": False, "verdict": verdict, "reason": f"{reason} {guard_rescue_note()}"}
+
+
+def guard_rescue_note() -> str:
+    """What saves the network when DNS goes quiet -- said next to the warning.
+
+    Without it the sentence above ends on "DNS перестанет отвечать" and reads
+    as a dead end.  The rescue is real (the guard hands port 53 back to the
+    firmware), but it is not free: from that moment the provider sees the names
+    again, and the protection stays off until someone turns it back on.  Both
+    halves have to be said, and neither of them at all when the guard is off.
+    """
+
+    if not watchdog_enabled():
+        return "Сторож отключён настройкой — вернуть DNS роутеру автоматически будет некому."
+    return (
+        "Без имён сеть не останется: сторож заметит молчание и вернёт DNS роутеру, выключив "
+        "защиту, — с этого момента имена снова видит провайдер, а включить функцию обратно "
+        "нужно вручную."
+    )
 
 
 def _build_target(

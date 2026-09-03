@@ -32,21 +32,42 @@ def test_six_zones_exist():
         assert f'<details class="xk-dns-zone" data-zone="{zone}"' in MODAL, zone
 
 
-def test_required_zones_are_open_and_optional_are_not():
-    for zone in ("route", "servers"):
-        block = MODAL[MODAL.index(f'data-zone="{zone}"'):]
-        assert block[:80].find(" open") != -1, zone
-    for zone in ("home", "direct", "records", "devices"):
+def test_no_zone_is_open_in_the_markup():
+    # Окно открывается компактным: все зоны свёрнуты, а что в них -- видно по
+    # сводке в шапке. Раскрывает человек только ту зону, которая ему нужна.
+    for zone in ZONES:
         block = MODAL[MODAL.index(f'data-zone="{zone}"'):]
         assert block[:80].find(" open") == -1, zone
 
 
-def test_optional_zones_are_labelled_and_carry_a_summary_slot():
-    for zone in ("home", "direct", "records", "devices"):
+def test_required_zones_are_the_marked_ones():
+    # Прежняя метка «необязательно» стояла на четырёх зонах из шести и была
+    # бледнее прочего текста. Помечаем наоборот -- две обязательные.
+    assert "xk-dns-zone-opt" not in MODAL
+    for zone in ("route", "servers"):
         start = MODAL.index(f'data-zone="{zone}"')
         head = MODAL[start:MODAL.index("</summary>", start)]
-        assert '<span class="xk-dns-zone-opt">необязательно</span>' in head, zone
+        assert 'data-required="1"' in MODAL[start - 60:start + 40], zone
+        assert '<span class="xk-dns-zone-req">обязательно</span>' in head, zone
+
+
+def test_every_zone_carries_a_summary_slot():
+    for zone in ZONES:
+        start = MODAL.index(f'data-zone="{zone}"')
+        head = MODAL[start:MODAL.index("</summary>", start)]
         assert f'data-zone-sum="{zone}"' in head, zone
+
+
+def test_zones_live_in_two_rails():
+    # В две колонки рельсы -- это столбцы, в одну они просто идут друг за
+    # другом. Раскладку решает CSS, поэтому разметка одна на оба случая.
+    form = MODAL.index('class="xk-dns-rail xk-dns-rail-form"')
+    side = MODAL.index('class="xk-dns-rail xk-dns-rail-side"')
+    assert form < side
+    for zone in ("route", "servers", "home", "direct", "records"):
+        assert form < MODAL.index(f'data-zone="{zone}"') < side, zone
+    assert MODAL.index('data-zone="devices"') > side
+    assert MODAL.index('class="routing-dns-over-vless-foot"') > side
 
 
 def test_section_switches_sit_in_the_subheader():

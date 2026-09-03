@@ -111,7 +111,7 @@ export function guardNotice(data, enabled) {
   }
   if (!enabled) {
     return {
-      text: `Сторож общий для обеих защит DNS и следит за той, что включена. Здесь защита выключена — сторожить нечего; после включения он станет проверять разрешение имён каждые ${interval} с.`,
+      text: `Сторож общий для обеих защит DNS и следит за той, что включена. Здесь защита выключена — сторожить нечего; после включения он станет проверять разрешение имён каждые ${interval}\u00A0с.`,
       kind: 'ok',
     };
   }
@@ -119,9 +119,24 @@ export function guardNotice(data, enabled) {
     ? `перезапустит активное ядро (до ${restarts} ${plural(restarts, 'попытки', 'попыток')}), а если не поможет — вернёт DNS роутеру`
     : 'сразу вернёт DNS роутеру — перезапуски отключены настройкой';
   return {
-    text: `Сторож следит: проверяет разрешение имён каждые ${interval} с; после ${fails} ${plural(fails, 'сбоя', 'сбоев')} подряд ${tail}.`,
+    text: `Сторож следит: проверяет разрешение имён каждые ${interval}\u00A0с; после ${fails} ${plural(fails, 'сбоя', 'сбоев')} подряд ${tail}.`,
     kind: 'ok',
   };
+}
+
+/**
+ * What saves the network when DNS goes quiet.
+ *
+ * The card warns that a total proxy outage leaves DNS unanswered, and without
+ * this the sentence reads as a dead end.  The rescue is real -- the guard
+ * hands port 53 back to the firmware -- but not free, so both halves are said
+ * here.  Same wording as ``guard_rescue_note`` in services/dns_over_vless.py,
+ * which appends it to the reason the server composes for a single proxy.
+ */
+export function guardRescueNote(data) {
+  const { off } = knobs(data && data.watchdog_settings);
+  if (off) return 'Сторож отключён настройкой — вернуть DNS роутеру автоматически будет некому.';
+  return 'Без имён сеть не останется: сторож заметит молчание и вернёт DNS роутеру, выключив защиту, — с этого момента имена снова видит провайдер, а включить функцию обратно нужно вручную.';
 }
 
 export default {
@@ -131,4 +146,5 @@ export default {
   guardReleaseLine,
   guardReleaseSummary,
   guardReleaseText,
+  guardRescueNote,
 };

@@ -18,10 +18,27 @@ def test_layout_modes_are_the_three_agreed_ones():
 
 
 def test_preference_travels_through_ui_settings():
-    # Вкус у человека один на все машины, поэтому не localStorage.
+    # Вкус у человека один на все машины, поэтому выбор уходит на сервер.
     assert "XKeen.ui.settings" in JS
     assert "dnsOverVlessLayout" in JS
-    assert "localStorage" not in JS
+
+
+def test_choice_survives_a_server_that_did_not_save_it():
+    # ...но на роутере запись настроек может не дойти до диска. Тогда окно всё
+    # равно открывается таким, каким его оставили: браузер помнит выбор сам, а
+    # о несохранении панель говорит вслух, а не молчит.
+    assert "LAYOUT_STORAGE_KEY" in JS
+    assert "localStorage.setItem(LAYOUT_STORAGE_KEY" in JS
+    assert "не сохранилась на роутере" in JS
+
+
+def test_next_layout_is_computed_from_the_screen_not_from_the_saved_value():
+    # Кнопка переключала раскладку ровно один раз: следующий режим считался от
+    # значения с сервера, и там, где оно не сохранялось, она замирала.
+    assert "cycleLayout" not in JS
+    body = JS[JS.index("function toggleLayout()"):]
+    body = body[:body.index(chr(10) + "  }")]
+    assert "currentLayout()" in body
 
 
 def test_auto_resolves_by_width():

@@ -1,14 +1,5 @@
 import { test, expect } from './fixtures.mjs';
-import { STATUS, openDialog } from './dns_over_vless_fixtures.mjs';
-
-
-// The optional zones (direct/records/devices) ship collapsed by design — a
-// person opens one with a real click on its subheading before touching what
-// is inside. Clicking the title text keeps this off the switch some zones
-// carry in their subheading, which has its own click handling.
-async function openZone(page, zone) {
-  await page.locator(`.xk-dns-zone[data-zone="${zone}"] .xk-dns-zone-head b`).click();
-}
+import { STATUS, openDialog, openZone } from './dns_over_vless_fixtures.mjs';
 
 
 const BYPASS_STATUS = {
@@ -34,6 +25,11 @@ test('the dialog opens with its footer inside the frame and scrolls its body', a
   // A short viewport is the case that used to cut the footer off.
   await page.setViewportSize({ width: 1280, height: 700 });
   await openDialog(page);
+  // Окно открывается свёрнутым и на этой высоте помещается целиком:
+  // проверяем прокрутку, поэтому раскрываем зоны, как человек с длинной
+  // настройкой перед собой.
+  await page.locator('#routing-dns-over-vless-modal .xk-dns-zone')
+    .evaluateAll((zones) => zones.forEach((zone) => { zone.open = true; }));
 
   const geometry = await page.evaluate(() => {
     const content = document.querySelector('#routing-dns-over-vless-modal .modal-content');
@@ -97,6 +93,7 @@ test('with Xray running the dialog keeps its Xray wording', async ({ page }) => 
 
 test('a click ticks a proxy and the next click unticks it', async ({ page }) => {
   await openDialog(page);
+  await openZone(page, 'route');
 
   const picker = page.locator('#routing-dns-over-vless-target');
   const options = picker.locator('.routing-dns-over-vless-option');
@@ -138,6 +135,7 @@ test('a click ticks a proxy and the next click unticks it', async ({ page }) => 
 
 test('bulk buttons fill and clear the selection, and an empty one blocks the action', async ({ page }) => {
   await openDialog(page);
+  await openZone(page, 'route');
   await page.locator('#routing-dns-over-vless-multi').check();
 
   await page.locator('#routing-dns-over-vless-target-all').click();
@@ -154,6 +152,7 @@ test('bulk buttons fill and clear the selection, and an empty one blocks the act
 
 test('the list is operable from the keyboard', async ({ page }) => {
   await openDialog(page);
+  await openZone(page, 'route');
   await page.locator('#routing-dns-over-vless-multi').check();
 
   const picker = page.locator('#routing-dns-over-vless-target');

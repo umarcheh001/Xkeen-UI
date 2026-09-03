@@ -19264,6 +19264,10 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
 
 .routing-dns-over-vless-modal-content { max-width: 920px; }
 .routing-dns-over-vless-body { display: grid; gap: 14px; }
+/* Зоны собраны в две рельсы; без операторского слоя они просто идут одна
+   за другой с тем же шагом, что и остальные блоки окна. */
+.xk-dns-rail { display: grid; gap: 14px; align-content: start; }
+.routing-dns-over-vless-state { display: grid; gap: 12px; }
 .routing-dns-over-vless-lead {
   display: grid;
   grid-template-columns: auto 1fr auto;

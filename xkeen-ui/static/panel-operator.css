@@ -13607,8 +13607,9 @@ body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-d
 }
 
 /* Окно DNS-over-VLESS раскладывается в одну из двух сеток через
- * data-dns-layout на .modal-content. Разметка одна и та же в обеих —
- * отличаются только области грида, ни один узел никуда не переносится. */
+ * data-dns-layout на .modal-content. Разметка одна и та же в обеих: зоны
+ * собраны в две рельсы, и меняется только то, где эти рельсы стоят --
+ * рядом или друг под другом. Ни один узел никуда не переносится. */
 body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-body {
   display: grid;
   gap: 10px;
@@ -13617,62 +13618,59 @@ body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-body {
 
 body.panel-page .routing-dns-over-vless-lead { grid-area: lead; }
 body.panel-page .routing-dns-over-vless-state { grid-area: state; }
-body.panel-page .xk-dns-zone[data-zone="route"] { grid-area: route; }
-body.panel-page .xk-dns-zone[data-zone="servers"] { grid-area: servers; }
-body.panel-page .xk-dns-zone[data-zone="home"] { grid-area: home; }
-body.panel-page .xk-dns-zone[data-zone="direct"] { grid-area: direct; }
-body.panel-page .xk-dns-zone[data-zone="records"] { grid-area: records; }
-body.panel-page .xk-dns-zone[data-zone="devices"] { grid-area: devices; }
-body.panel-page .routing-dns-over-vless-foot { grid-area: foot; }
+body.panel-page .xk-dns-rail-form { grid-area: form; }
+body.panel-page .xk-dns-rail-side { grid-area: side; }
 
-/* Одна колонка: порядок чтения сверху вниз, состояние и устройства в потоке. */
+/* Рельса раскладывает свои зоны с тем же шагом, что и сетка окна: в одну
+ * колонку она неотличима от простого столбца зон. */
+body.panel-page .xk-dns-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Строка статуса, плитки защиты и список пунктов -- три отдельных блока.
+ * Без шага плитки упирались в текст сверху и снизу; шаг равен боковому
+ * отступу тела окна. */
+body.panel-page #routing-dns-over-vless-modal .routing-dns-over-vless-state {
+  display: grid;
+  gap: 12px;
+}
+
+/* Одна колонка: порядок чтения сверху вниз. */
 body.panel-page [data-dns-layout="single"] .routing-dns-over-vless-body {
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
     "lead"
     "state"
-    "route"
-    "servers"
-    "home"
-    "direct"
-    "records"
-    "devices"
-    "foot";
+    "form"
+    "side";
 }
 
-/* Две колонки: слева настройка, справа «как это работает сейчас».
- * Разбор по устройствам — главная диагностика окна, и в рельсе он виден
- * сразу, а не после прокрутки длинной формы. */
+/* Две колонки: слева настройка, справа «как это работает сейчас». Разбор по
+ * устройствам -- главная диагностика окна, и в правой рельсе он виден сразу,
+ * а не после прокрутки длинной формы. Левая рельса занимает обе строки: её
+ * зоны идут подряд, и высота соседней колонки на них не влияет -- пустот
+ * между свёрнутыми зонами не остаётся. Раньше каждая зона была отдельной
+ * строкой общего грида, и высокий блок устройств растягивал строки напротив. */
 body.panel-page [data-dns-layout="split"] .routing-dns-over-vless-body {
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr;
   grid-template-areas:
-    "lead    lead"
-    "route   state"
-    "servers devices"
-    "home    devices"
-    "direct  foot"
-    "records foot";
+    "lead lead"
+    "form state"
+    "form side";
 }
 
-/* Выбор маршрута показывается не всегда: при включённой функции его скрывают.
-   Без своей раскладки на его месте оставалась пустая колонка. */
-body.panel-page [data-dns-layout="split"][data-dns-route="off"] .routing-dns-over-vless-body {
-  grid-template-areas:
-    "lead    lead"
-    "state   state"
-    "servers devices"
-    "home    devices"
-    "direct  foot"
-    "records foot";
-}
-
-/* Ниже этого порога двух колонок физически нет — схлопываемся независимо
+/* Ниже этого порога двух колонок физически нет -- схлопываемся независимо
  * от выбранной настройки. */
 @media (max-width: 1100px) {
   body.panel-page [data-dns-layout="split"] .routing-dns-over-vless-body {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
     grid-template-areas:
-      "lead" "state" "route" "servers" "home" "direct" "records" "devices" "foot";
+      "lead" "state" "form" "side";
   }
 
   body.panel-page #mihomo-dns-modal .mihomo-dns-body {
@@ -13858,11 +13856,42 @@ body.panel-page .xk-dns-zone-head {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
+  border-radius: var(--op-radius);
   cursor: pointer;
   list-style: none;
 }
 
+body.panel-page .xk-dns-zone[open] > .xk-dns-zone-head {
+  border-radius: var(--op-radius) var(--op-radius) 0 0;
+}
+
 body.panel-page .xk-dns-zone-head::-webkit-details-marker { display: none; }
+
+/* Что шапка раскрывается, видно только по шеврону: рисуем его уголком из
+ * двух границ, чтобы не заводить иконку в разметке каждой зоны. Подсветка
+ * при наведении говорит то же самое второй раз -- курсором. */
+body.panel-page .xk-dns-zone-head::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-right: 2px;
+  border-top: 1.6px solid var(--op-muted);
+  border-right: 1.6px solid var(--op-muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+body.panel-page .xk-dns-zone[open] > .xk-dns-zone-head::before {
+  transform: rotate(135deg);
+  border-color: var(--op-text-strong);
+}
+
+body.panel-page .xk-dns-zone-head:hover { background: var(--op-surface-3); }
+
+@media (prefers-reduced-motion: reduce) {
+  body.panel-page .xk-dns-zone-head::before { transition: none; }
+}
 
 body.panel-page .xk-dns-zone-head > b {
   color: var(--op-text-strong);
@@ -13870,22 +13899,38 @@ body.panel-page .xk-dns-zone-head > b {
   font-weight: 600;
 }
 
-body.panel-page .xk-dns-zone-opt {
+/* Отметки «необязательно» на остальных зонах больше нет: она была бледной и
+ * стояла на четырёх зонах из шести. Вместо неё выделены две обязательные --
+ * меткой и полосой слева; всё, что не отмечено, необязательно по умолчанию. */
+body.panel-page .xk-dns-zone-req {
   font-size: calc(9.5px * var(--xk-font-scale, 1));
-  color: var(--op-faint);
-  border: 1px solid var(--op-border);
+  color: var(--op-accent-hover);
+  border: 1px solid var(--op-accent-border);
+  background: var(--op-accent-soft);
   border-radius: var(--op-control-radius);
   padding: 1px 7px;
+}
+
+body.panel-page .xk-dns-zone[data-required="1"] {
+  box-shadow: inset 3px 0 0 0 var(--op-accent);
 }
 
 /* Сводка прижата вправо и исчезает, когда зона раскрыта: там уже видно
  * настоящие значения, а повтор только шумит. */
 body.panel-page .xk-dns-zone-sum {
   margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: var(--op-data-muted);
   font-size: calc(10.5px * var(--xk-font-scale, 1));
   font-variant-numeric: tabular-nums;
 }
+
+/* Незаполненная обязательная зона видна по свёрнутой шапке, а не только
+ * после раскрытия. */
+body.panel-page .xk-dns-zone-sum[data-tone="warn"] { color: var(--op-warning); }
 
 body.panel-page .xk-dns-zone[open] .xk-dns-zone-sum { display: none; }
 

@@ -557,6 +557,27 @@ def test_fallback_into_direct_is_still_dropped(tmp_path: Path):
     assert "провайдер" in reason
     assert "fallback" not in reason.lower()
 
+    # ...и чем это кончится: молчащий DNS не оставит сеть без имён навсегда,
+    # сторож вернёт порт прошивке. Цену возврата тоже называем -- иначе выйдет
+    # обещание, что после отказа всё останется защищённым.
+    assert "сторож заметит молчание и вернёт DNS роутеру" in reason
+    assert "имена снова видит провайдер" in reason
+    assert "включить функцию обратно нужно вручную" in reason
+
+
+def test_fallback_reason_says_nothing_about_the_guard_when_it_is_off(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG", "0")
+    configs, routing_path, _state = _base_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    reason = dns._select_target(runtime, "proxy", routing)["fallback"]["reason"]
+
+    # Обещать возврат DNS роутеру некому: сторож выключен настройкой, и об
+    # этом надо сказать прямо, а не промолчать.
+    assert "сторож заметит молчание" not in reason
+    assert "Сторож отключён настройкой" in reason
+
 
 def test_unresolvable_fallback_is_dropped_rather_than_assumed_safe(tmp_path: Path):
     configs, routing_path, _state = _scenario_config(tmp_path)

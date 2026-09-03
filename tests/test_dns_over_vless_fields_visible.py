@@ -51,14 +51,15 @@ def test_hidden_route_takes_its_zone_header_along():
     assert "closest('.xk-dns-zone')" in body
 
 
-def test_layout_closes_the_gap_left_by_the_hidden_route():
-    # Скрытая зона освобождает свою ячейку сетки, и в две колонки рядом с
-    # высоким блоком состояния зияла пустая левая колонка.
+def test_hidden_route_leaves_no_gap_behind_it():
+    # Раньше каждая зона занимала свою ячейку грида, и спрятанная оставляла в
+    # левой колонке пустое место -- под этот случай держали отдельную
+    # раскладку. Теперь колонка это рельса-флексбокс, и спрятанная зона просто
+    # выпадает из потока: чинить нечего.
     body = _body("function renderRoute(data) {", "function parseZones(")
     assert "dataset.dnsRoute" in body
     css = (ROOT / "xkeen-ui/static/panel-operator.css").read_text(encoding="utf-8")
-    marker = '[data-dns-layout="split"][data-dns-route="off"]'
-    assert marker in css
-    block = css[css.index(marker):]
+    assert '[data-dns-route="off"]' not in css
+    block = css[css.index("body.panel-page .xk-dns-rail {"):]
     block = block[:block.index("}")]
-    assert '"state   state"' in block
+    assert "flex-direction: column" in block

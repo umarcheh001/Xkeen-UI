@@ -1,5 +1,5 @@
 import { getXkeenCoreHttpApi } from '../../xkeen_runtime.js';
-import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseSummary, guardReleaseText } from '../../dns_guard_text.js';
+import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseSummary, guardReleaseText, guardRescueNote } from '../../dns_guard_text.js';
 import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
 /* Guarded, one-click DNS-over-VLESS assistant. */
@@ -617,7 +617,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         line.dataset.state = 'kept';
         // Тот же язык, что и у причины с сервера: что произойдёт, а не что
         // панель собрала в конфигурации.
-        line.textContent = `Выбрано ${list.length}: ${list.join(', ')}. Панель распределит DNS-запросы между ними. Если откажут все разом, DNS перестанет отвечать: запасного пути в обход VPN здесь нет — по нему запросы ушли бы к провайдеру.`;
+        line.textContent = `Выбрано ${list.length}: ${list.join(', ')}. Панель распределит DNS-запросы между ними. Если откажут все разом, DNS перестанет отвечать: запасного пути в обход VPN здесь нет — по нему запросы ушли бы к провайдеру. ${guardRescueNote(status)}`;
       } else if (list.length === 1) {
         // One proxy is not a balancer: be honest instead of promising one.
         line.dataset.state = 'dropped';
@@ -773,38 +773,119 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     };
   }
 
+  function plural(count, one, few, many) {
+    const mod100 = count % 100;
+    if (mod100 >= 11 && mod100 <= 14) return many;
+    const mod10 = count % 10;
+    if (mod10 === 1) return one;
+    if (mod10 >= 2 && mod10 <= 4) return few;
+    return many;
+  }
+
   // Сводка нужна ровно для того, чтобы свёрнутое не значило «спрятанное»:
   // по шапкам должно читаться состояние всего окна, без раскрытия зон.
-  function zoneSummaryText(zone, data) {
+  // Возвращаем и тон: незаполненную обязательную зону видно по цвету, не
+  // раскрывая её.
+  function zoneSummary(zone, data) {
+    if (zone === 'route') {
+      if (!chosenTargets.length) return { text: 'маршрут не выбран', tone: 'warn' };
+      return { text: chosenTargets.length === 1 ? chosenTargets[0] : `${chosenTargets.length} прокси` };
+    }
+    if (zone === 'servers') {
+      const list = parseZones((($(DOM.upstreams) || {}).value) || '');
+      if (!list.length) return { text: 'не указаны', tone: 'warn' };
+      return { text: `${list.length} ${plural(list.length, 'сервер', 'сервера', 'серверов')}` };
+    }
     if (zone === 'home') {
       const list = (data && data.local_resolvers) || [];
-      if (!list.length) return 'не настроена';
+      if (!list.length) return { text: 'не настроена' };
       const zones = parseZones(($(DOM.zones) || {}).value || '');
-      return `${list.length} резолвер(ов) · ${zones.length} зон`;
+      return { text: `${list.length} резолвер(ов) · ${zones.length} зон` };
     }
     if (zone === 'direct') {
       const list = (data && data.direct_resolvers) || [];
-      if (!list.length) return 'не настроены';
+      if (!list.length) return { text: 'не настроены' };
       const domains = (data && data.direct_domains) || [];
-      return `${list.length} резолвер(ов) · ${domains.length} доменов`;
+      return { text: `${list.length} резолвер(ов) · ${domains.length} доменов` };
     }
     if (zone === 'records') {
-      if (!(data && data.pass_non_ip)) return 'выключено';
+      if (!(data && data.pass_non_ip)) return { text: 'выключено' };
       const node = (data && data.pass_non_ip_node) || '';
-      return node ? `включено · узел ${node}` : 'включено';
+      return { text: node ? `включено · узел ${node}` : 'включено' };
     }
     if (zone === 'devices') {
-      const summary = $(DOM.clientsSummary);
-      return (summary && summary.textContent.trim()) || 'проверяем…';
+      // Список устройств приходит отдельным запросом и позже остального:
+      // берём его из последнего ответа, а не из строки под шапкой, — она
+      // длинная и в шапку не помещается.
+      if (!lastClients) return { text: 'проверяем…' };
+      if (lastClients.available === false) return { text: 'проверить не удалось', tone: 'warn' };
+      const counts = lastClients.counts || {};
+      const total = counts.total || 0;
+      if (!total) return { text: 'устройств не видно' };
+      const taken = counts.intercepted || 0;
+      return { text: taken ? `${counts.reaches || 0} из ${total}` : `все ${total}` };
     }
-    return '';
+    return { text: '' };
+  }
+
+  const ZONES = '#routing-dns-over-vless-modal .xk-dns-zone';
+
+  // Окно открывается компактным: все зоны свёрнуты, а что в них — видно по
+  // сводкам в шапках. Окно живёт в разметке страницы и между открытиями не
+  // пересоздаётся, поэтому сворачиваем сами, а не атрибутом open в шаблоне.
+  function collapseZones() {
+    const list = document.querySelectorAll(ZONES);
+    for (let i = 0; i < list.length; i += 1) {
+      list[i].open = false;
+      delete list[i].dataset.autoOpen;
+    }
+  }
+
+  // В две колонки список устройств заметно выше формы напротив: разворачиваем
+  // вместе с ним и обязательные зоны, чтобы колонки не разъезжались. Связь
+  // односторонняя — обязательные зоны список устройств не трогают.
+  function syncRequiredZones(open) {
+    const content = document.querySelector('#routing-dns-over-vless-modal .modal-content');
+    if (!content || content.dataset.dnsLayout !== 'split') return;
+    const list = document.querySelectorAll(`${ZONES}[data-required="1"]`);
+    for (let i = 0; i < list.length; i += 1) {
+      const zone = list[i];
+      // Зона маршрута прячется при включённой функции — разворачивать нечего.
+      if (zone.classList.contains('hidden')) continue;
+      if (open) {
+        if (!zone.open) {
+          zone.open = true;
+          zone.dataset.autoOpen = '1';
+        }
+      } else if (zone.dataset.autoOpen === '1') {
+        zone.open = false;
+        delete zone.dataset.autoOpen;
+      }
+    }
+  }
+
+  function wireZones() {
+    const devices = document.querySelector(`${ZONES}[data-zone="devices"]`);
+    if (devices) devices.addEventListener('toggle', () => syncRequiredZones(devices.open));
+    const required = document.querySelectorAll(`${ZONES}[data-required="1"]`);
+    for (let i = 0; i < required.length; i += 1) {
+      const zone = required[i];
+      const head = zone.querySelector('.xk-dns-zone-head');
+      // Зону, которую человек открыл или закрыл сам, автоматика больше не
+      // трогает: событие toggle приходит отложенно и своё от чужого не
+      // отличает, а клик по шапке — всегда чужой.
+      if (head) head.addEventListener('click', () => { delete zone.dataset.autoOpen; });
+    }
   }
 
   function renderZoneSummaries(data) {
     const slots = document.querySelectorAll('[data-zone-sum]');
     for (let i = 0; i < slots.length; i += 1) {
       const slot = slots[i];
-      slot.textContent = zoneSummaryText(slot.dataset.zoneSum, data);
+      const info = zoneSummary(slot.dataset.zoneSum, data) || {};
+      slot.textContent = info.text || '';
+      if (info.tone) slot.dataset.tone = info.tone;
+      else delete slot.dataset.tone;
     }
   }
 
@@ -959,49 +1040,114 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     toast('Настройки окна сброшены. Чтобы применить их, включите функцию.');
   }
 
-  // Три раскладки окна: авто (решает ширина экрана), и два принудительных
-  // выбора. Значение живёт на сервере — это вкус человека, а не браузера.
+  // Раскладок по-прежнему три: авто (решает ширина экрана) и два
+  // принудительных выбора. Кнопка переключает ровно то, что видно, — одну
+  // колонку и две; «авто» остаётся начальным значением, пока выбора не было.
   const LAYOUT_MODES = ['auto', 'single', 'split'];
   const LAYOUT_MIN_SPLIT_PX = 1100;
+  const LAYOUT_STORAGE_KEY = 'xkeen-dns-over-vless-layout';
+  // Выбор этого сеанса главнее сохранённого. Раньше следующий режим считался
+  // от значения с сервера, и там, где запись настроек не доходила до диска,
+  // кнопка после первого нажатия всё время получала одно и то же значение —
+  // и переставала работать.
+  let layoutMode = '';
+  let layoutSaveWarned = false;
 
-  function readLayout() {
+  function normalizeLayout(value) {
+    return LAYOUT_MODES.indexOf(value) === -1 ? '' : value;
+  }
+
+  function storedLayout() {
+    try {
+      return normalizeLayout(window.localStorage.getItem(LAYOUT_STORAGE_KEY));
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function serverLayout() {
     try {
       const settings = window.XKeen.ui.settings.get();
-      const value = settings && settings.routing && settings.routing.dnsOverVlessLayout;
-      return LAYOUT_MODES.indexOf(value) === -1 ? 'auto' : value;
+      return normalizeLayout(settings && settings.routing && settings.routing.dnsOverVlessLayout);
     } catch (e) {
-      return 'auto';
+      return '';
     }
+  }
+
+  function readLayout() {
+    return layoutMode || storedLayout() || serverLayout() || 'auto';
+  }
+
+  function splitFits() {
+    return window.innerWidth >= LAYOUT_MIN_SPLIT_PX;
   }
 
   // Ниже порога двух колонок физически нет, поэтому split там неотличим от
   // single — решает ширина, а не настройка.
   function resolveLayout(mode) {
     if (mode === 'single') return 'single';
-    const fits = window.innerWidth >= LAYOUT_MIN_SPLIT_PX;
-    if (mode === 'split') return fits ? 'split' : 'single';
-    return fits ? 'split' : 'single';
+    return splitFits() ? 'split' : 'single';
+  }
+
+  function currentLayout() {
+    const content = document.querySelector('#routing-dns-over-vless-modal .modal-content');
+    return (content && content.dataset.dnsLayout) || resolveLayout(readLayout());
   }
 
   function applyLayout(mode) {
     const content = document.querySelector('#routing-dns-over-vless-modal .modal-content');
     if (!content) return;
-    content.dataset.dnsLayout = resolveLayout(mode);
+    const resolved = resolveLayout(mode);
+    content.dataset.dnsLayout = resolved;
     const button = $(DOM.layout);
     if (button) {
-      const names = { auto: 'авто', single: 'одна колонка', split: 'две колонки' };
-      button.title = `Раскладка окна: ${names[mode]}`;
+      // Подпись называет не текущий режим, а то, что случится по нажатию:
+      // кнопка теперь переключает две раскладки, а не перебирает три.
+      const tip = splitFits()
+        ? (resolved === 'split' ? 'Показать в одну колонку' : 'Показать в две колонки')
+        : 'Для двух колонок не хватает ширины окна браузера';
+      // Подсказки страницы переносят title в data-tooltip ровно один раз и
+      // дальше его не трогают, поэтому меняем оба атрибута сами.
+      button.title = tip;
+      button.setAttribute('data-tooltip', tip);
     }
   }
 
-  async function cycleLayout() {
-    const next = LAYOUT_MODES[(LAYOUT_MODES.indexOf(readLayout()) + 1) % LAYOUT_MODES.length];
-    applyLayout(next);
+  // Свой выбор запоминаем сразу в браузере и отправляем на сервер. Настройка
+  // на сервере — это вкус человека, а не браузера, но окно должно открываться
+  // таким же и там, где запись настроек не доходит.
+  function setLayout(mode) {
+    layoutMode = mode;
+    applyLayout(mode);
     try {
-      await window.XKeen.ui.settings.patch({ routing: { dnsOverVlessLayout: next } });
+      window.localStorage.setItem(LAYOUT_STORAGE_KEY, mode);
     } catch (e) {
-      // Настройка не сохранилась — раскладка всё равно уже применена на экране.
+      // Приватный режим или переполненное хранилище: остаётся сервер.
     }
+    return persistLayout(mode);
+  }
+
+  async function persistLayout(mode) {
+    try {
+      await window.XKeen.ui.settings.patch({ routing: { dnsOverVlessLayout: mode } });
+      layoutSaveWarned = false;
+    } catch (e) {
+      // Раскладка уже применена на экране и записана в браузере; молчать
+      // нельзя только о том, что на другом устройстве её не будет.
+      if (!layoutSaveWarned) {
+        layoutSaveWarned = true;
+        toast('Раскладка не сохранилась на роутере — запомнил её в этом браузере.', true);
+      }
+    }
+  }
+
+  function toggleLayout() {
+    if (currentLayout() === 'split') return setLayout('single');
+    if (!splitFits()) {
+      toast('Для двух колонок не хватает ширины окна браузера.');
+      return Promise.resolve();
+    }
+    return setLayout('split');
   }
 
   async function refresh() {
@@ -1018,6 +1164,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   async function open() {
     showModal(true);
     applyLayout(readLayout());
+    collapseZones();
     chosenTargets = [];
     multiTouched = false;
     targetsTouched = false;
@@ -1054,6 +1201,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     list.textContent = '';
     if (!data || data.available === false) {
       summary.textContent = (data && data.error) || 'Проверить не удалось.';
+      renderZoneSummaries(status);
       return;
     }
     const counts = data.counts || {};
@@ -1133,6 +1281,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       if (!item.active) row.dataset.offline = '1';
       list.appendChild(row);
     });
+    // Список пришёл позже остального окна: без этого свёрнутая зона так и
+    // оставалась со сводкой «проверяем…».
+    renderZoneSummaries(status);
   }
 
   async function loadClients() {
@@ -1150,6 +1301,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       if (summary) {
         summary.textContent = `Проверить не удалось: ${error && error.message ? error.message : error}`;
       }
+      lastClients = { available: false };
+      renderZoneSummaries(status);
     }
   }
 
@@ -1208,9 +1361,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     button.dataset.wired = '1';
     button.addEventListener('click', (event) => { event.preventDefault(); open(); });
     const layoutBtn = $(DOM.layout);
-    if (layoutBtn) layoutBtn.addEventListener('click', cycleLayout);
+    if (layoutBtn) layoutBtn.addEventListener('click', toggleLayout);
     window.addEventListener('resize', () => applyLayout(readLayout()));
     document.addEventListener('xkeen:ui-settings-changed', () => applyLayout(readLayout()));
+    wireZones();
     [DOM.close, DOM.cancel].forEach((id) => {
       const el = $(id);
       if (el) el.addEventListener('click', (event) => { event.preventDefault(); showModal(false); });
@@ -1260,6 +1414,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         field.dataset.touched = '1';
         // Typing a resolver reveals the matching domain list straight away.
         if ((id === DOM.local || id === DOM.direct) && status) renderDnsFields(status);
+        // Сводка в шапке считается по полям, а не по ответу сервера.
+        renderZoneSummaries(status);
         // Editing the list by hand must keep the group buttons honest.
         if (id === DOM.zones) renderZonePresets();
       });

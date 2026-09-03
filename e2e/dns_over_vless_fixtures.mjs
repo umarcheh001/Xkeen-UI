@@ -45,7 +45,7 @@ export const STATUS = {
       selector_count: 2,
       strategy_type: 'leastPing',
       fallback_tag: 'direct',
-      fallback: { tag: 'direct', kept: false, verdict: 'dropped', reason: 'Если все выбранные прокси разом откажут, DNS просто перестанет отвечать. В вашем балансировщике на такой случай стоит запасной путь в обход VPN, но для DNS панель его не использует: запросы пошли бы к провайдеру, и он снова видел бы, какие сайты вы открываете.' },
+      fallback: { tag: 'direct', kept: false, verdict: 'dropped', reason: 'Если все выбранные прокси разом откажут, DNS просто перестанет отвечать. В вашем балансировщике на такой случай стоит запасной путь в обход VPN, но для DNS панель его не использует: запросы пошли бы к провайдеру, и он снова видел бы, какие сайты вы открываете. Без имён сеть не останется: сторож заметит молчание и вернёт DNS роутеру, выключив защиту, — с этого момента имена снова видит провайдер, а включить функцию обратно нужно вручную.' },
       usable: true,
       reason: '',
     },
@@ -76,5 +76,24 @@ export async function openDialog(page, status = STATUS) {
   await expect(page.locator('#routing-dns-over-vless-btn')).toBeVisible();
   await page.locator('#routing-dns-over-vless-btn').click();
   await expect(page.locator('#routing-dns-over-vless-modal')).toBeVisible();
-  if (status === STATUS) await expect(page.locator('#routing-dns-over-vless-route')).toBeVisible();
+  // Окно открывается со свёрнутыми зонами, поэтому ждём саму зону маршрута,
+  // а не её тело: тело появится, только когда зону раскроют.
+  if (status === STATUS) await expect(page.locator('.xk-dns-zone[data-zone="route"]')).toBeVisible();
+}
+
+
+// Зоны окна свёрнуты: человек раскрывает нужную кликом по её заголовку.
+// Клик именно по тексту заголовка -- мимо переключателя, который у части зон
+// живёт в той же подшапке и обрабатывает клик по-своему.
+export async function openZone(page, zone) {
+  await page.locator(`.xk-dns-zone[data-zone="${zone}"] .xk-dns-zone-head b`).click();
+}
+
+
+// Список устройств приходит от прошивки отдельным запросом: в тестах его
+// подменяем, иначе в окно попадут машины, на которой гоняют прогон.
+export async function mockClients(page, data) {
+  await page.route('**/api/routing/dns-over-vless/clients', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(data) });
+  });
 }
