@@ -20,6 +20,10 @@ async function openPanel(page, theme, viewport = { width: 1440, height: 900 }) {
   await page.goto('/');
   await expect(page.locator('body')).toHaveClass(/\bpanel-page\b/);
   await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+  // Пока статус ядра грузится, панель держит его кнопку выключенной, а
+  // выключение уносит фокус. Тесты ниже фокусируют первую кнопку шапки, так
+  // что ждём устоявшегося состояния — иначе меряем момент загрузки.
+  await expect(page.locator('#xkeen-core-text')).toBeEnabled();
   await page.evaluate(() => document.fonts?.ready);
 }
 
