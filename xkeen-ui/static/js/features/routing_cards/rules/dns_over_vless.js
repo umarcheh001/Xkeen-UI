@@ -52,10 +52,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     clientsList: 'routing-dns-over-vless-clients-list',
     capture: 'routing-dns-over-vless-capture',
     reset: 'routing-dns-over-vless-reset',
+    lockedNote: 'routing-dns-over-vless-locked-note',
   };
 
   let status = null;
   let busy = false;
+  // Функция включена: поля показываем, но правку запрещаем — применяются
+  // они всё равно только при включении.
+  let fieldsLocked = false;
   let chosenTargets = [];
   // Устройства, чей DNS заводим в туннель. Живёт отдельно от списка на
   // экране: список перечитывается сам по себе, а выбор должен пережить
@@ -305,6 +309,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       && coreOf(data) === 'xray');
     routeVisible = show;
     wrap.classList.toggle('hidden', !show);
+    setFieldsLocked(!!(data && data.enabled));
     if (!show) {
       picker.textContent = '';
       routePool = [];
@@ -418,10 +423,26 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       button.textContent = (active ? '✓ ' : '+ ') + button.dataset.label;
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
       button.title = active ? 'Убрать этот набор из списка' : 'Добавить этот набор в список';
-      button.disabled = busy;
+      button.disabled = busy || fieldsLocked;
     });
     const reset = holder.querySelector('button[data-role="reset"]');
-    if (reset) reset.disabled = busy;
+    if (reset) reset.disabled = busy || fieldsLocked;
+  }
+
+  // Выбор маршрута и поля настроек жили в одном контейнере, поэтому при
+  // включённой функции пряталось и то и другое: посмотреть, что настроено,
+  // можно было только выключив защиту. Менять маршрут на ходу и правда
+  // нельзя — а читать настройки и готовить их к следующему включению можно.
+  function setFieldsLocked(locked) {
+    fieldsLocked = !!locked;
+    const note = $(DOM.lockedNote);
+    if (note) note.classList.toggle('hidden', !fieldsLocked);
+    const ids = [DOM.upstreams, DOM.remote, DOM.local, DOM.zones, DOM.direct,
+      DOM.directZones, DOM.pass, DOM.passNode, DOM.capture];
+    for (let i = 0; i < ids.length; i += 1) {
+      const field = $(ids[i]);
+      if (field) field.disabled = fieldsLocked || busy;
+    }
   }
 
   function renderDnsFields(data) {
@@ -433,8 +454,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     if (local && !local.dataset.touched) {
       local.value = ((data && data.local_resolvers) || []).join(', ');
     }
-    if (upstreams) upstreams.disabled = busy;
-    if (local) local.disabled = busy;
+    if (upstreams) upstreams.disabled = busy || fieldsLocked;
+    if (local) local.disabled = busy || fieldsLocked;
 
     const zones = $(DOM.zones);
     const zonesRow = $(DOM.zonesRow);
@@ -446,7 +467,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         const list = (data && data.local_domains) || (data && data.default_local_domains) || [];
         zones.value = list.join(', ');
       }
-      zones.disabled = busy;
+      zones.disabled = busy || fieldsLocked;
     }
     if (hasLocal) renderZonePresets();
 
@@ -454,7 +475,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     if (direct && !direct.dataset.touched) {
       direct.value = ((data && data.direct_resolvers) || []).join(', ');
     }
-    if (direct) direct.disabled = busy;
+    if (direct) direct.disabled = busy || fieldsLocked;
 
     const directZones = $(DOM.directZones);
     const directZonesRow = $(DOM.directZonesRow);
@@ -466,12 +487,12 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       if (!directZones.dataset.touched) {
         directZones.value = ((data && data.direct_domains) || []).join(', ');
       }
-      directZones.disabled = busy;
+      directZones.disabled = busy || fieldsLocked;
     }
     const remote = $(DOM.remote);
     if (remote) {
       if (!remote.dataset.touched) remote.checked = !!(data && data.upstreams_remote);
-      remote.disabled = busy;
+      remote.disabled = busy || fieldsLocked;
     }
     const capture = $(DOM.capture);
     if (capture) {
@@ -479,14 +500,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         capture.checked = !!(data && data.capture_clients);
         capturedMacs = ((data && data.capture_macs) || []).slice();
       }
-      capture.disabled = busy;
+      capture.disabled = busy || fieldsLocked;
     }
     const pass = $(DOM.pass);
     const passRow = $(DOM.passRow);
     const passNode = $(DOM.passNode);
     if (pass) {
       if (!pass.dataset.touched) pass.checked = !!(data && data.pass_non_ip);
-      pass.disabled = busy;
+      pass.disabled = busy || fieldsLocked;
     }
     // The node matters only while the switch is on, so it appears with it.
     const passOn = !!(pass && pass.checked);
@@ -510,14 +531,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       // A remembered node that no longer exists must not look chosen.
       if (wanted && options.indexOf(wanted) >= 0) passNode.value = wanted;
       else if (options.length) passNode.value = options[0];
-      passNode.disabled = busy || !options.length;
+      passNode.disabled = busy || fieldsLocked || !options.length;
     }
     renderPassHealth(passOn ? (data && data.pass_non_ip_health) : null);
     const fromRules = $(DOM.directFromRules);
     if (fromRules) {
       // Nothing to offer when no rule of the user's own goes out directly.
       const offered = (data && data.direct_rule_domains) || [];
-      fromRules.disabled = busy || !offered.length;
+      fromRules.disabled = busy || fieldsLocked || !offered.length;
       fromRules.title = offered.length
         ? `Подставит домены из ваших правил: ${offered.join(', ')}`
         : 'В правилах роутинга нет доменов, ведущих напрямую';

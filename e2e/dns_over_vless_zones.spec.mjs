@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.mjs';
-import { openDialog } from './dns_over_vless_fixtures.mjs';
+import { openDialog, STATUS } from './dns_over_vless_fixtures.mjs';
 
 
 test('переключатель в подшапке не сворачивает зону', async ({ page }) => {
@@ -106,4 +106,27 @@ test('ошибка сохранения настройки не откатыва
   const content = page.locator('#routing-dns-over-vless-modal .modal-content');
   await page.locator('#routing-dns-over-vless-layout').click();
   await expect(content).toHaveAttribute('data-dns-layout', 'single');
+});
+
+
+test('при включённой функции настройки видны и заблокированы', async ({ page }) => {
+  await openDialog(page, { ...STATUS, enabled: true, can_disable: true, upstreams: ['9.9.9.9'] });
+
+  // Маршрут на ходу не сменить — выбор скрыт. А вот что настроено, видно:
+  // раньше поля прятались вместе с ним, и посмотреть их можно было только
+  // выключив защиту.
+  await expect(page.locator('#routing-dns-over-vless-route')).toBeHidden();
+  const upstreams = page.locator('#routing-dns-over-vless-upstreams');
+  await expect(upstreams).toBeVisible();
+  await expect(upstreams).toHaveValue('9.9.9.9');
+  await expect(upstreams).toBeDisabled();
+  await expect(page.locator('#routing-dns-over-vless-remote')).toBeDisabled();
+  await expect(page.locator('#routing-dns-over-vless-locked-note')).toBeVisible();
+});
+
+
+test('при выключенной функции поля снова редактируются', async ({ page }) => {
+  await openDialog(page);
+  await expect(page.locator('#routing-dns-over-vless-upstreams')).toBeEnabled();
+  await expect(page.locator('#routing-dns-over-vless-locked-note')).toBeHidden();
 });
