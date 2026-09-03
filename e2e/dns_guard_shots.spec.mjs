@@ -324,6 +324,50 @@ test('Mihomo DNS: rule-provider buttons fill the fake-ip payload', async ({ page
   expect(postBodies[0].fake_ip.filters).not.toContain('*.local');
 });
 
+test('Mihomo DNS: redir-host uses the compact two-column layout', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 1000 });
+  await openMihomo(page, MIHOMO_BASE);
+
+  const [modal, settings, state] = await Promise.all([
+    page.locator('#mihomo-dns-modal .modal-content').boundingBox(),
+    page.locator('#mihomo-dns-modal .mihomo-dns-route-zone').boundingBox(),
+    page.locator('#mihomo-dns-modal .mihomo-dns-state').boundingBox(),
+  ]);
+  expect(modal.width).toBeLessThanOrEqual(1162);
+  expect(settings.x + settings.width).toBeLessThanOrEqual(state.x);
+  expect(Math.abs(settings.y - state.y)).toBeLessThanOrEqual(2);
+  await expect(page.locator('#mihomo-dns-fake-options')).toBeHidden();
+  await shoot(page, '#mihomo-dns-modal .modal-content', '7-mihomo-layout-redir-host');
+});
+
+test('Mihomo DNS: Fake-IP fields stay content-sized', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 1000 });
+  await openMihomo(page, MIHOMO_RULE_PROVIDER_STATUS);
+
+  const fakeBody = page.locator('#mihomo-dns-fake-options .mihomo-dns-fake-body');
+  await expect(fakeBody).toBeVisible();
+  await expect(fakeBody).toHaveCSS('align-items', 'start');
+  const [filters, sources] = await Promise.all([
+    page.locator('#mihomo-dns-fake-options .mihomo-dns-filter-field').boundingBox(),
+    page.locator('#mihomo-dns-fake-options .mihomo-dns-sources').boundingBox(),
+  ]);
+  expect(Math.abs(filters.height - sources.height)).toBeGreaterThan(8);
+  await shoot(page, '#mihomo-dns-modal .modal-content', '8-mihomo-layout-fake-ip');
+});
+
+test('Mihomo DNS: narrow viewport collapses the main columns', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 1200 });
+  await openMihomo(page, MIHOMO_BASE);
+
+  const [settings, state] = await Promise.all([
+    page.locator('#mihomo-dns-modal .mihomo-dns-route-zone').boundingBox(),
+    page.locator('#mihomo-dns-modal .mihomo-dns-state').boundingBox(),
+  ]);
+  expect(Math.abs(settings.x - state.x)).toBeLessThanOrEqual(2);
+  expect(state.y + state.height).toBeLessThanOrEqual(settings.y);
+  await shoot(page, '#mihomo-dns-modal .modal-content', '9-mihomo-layout-narrow');
+});
+
 
 // Переключатель раскладок удваивает поверхность визуальных проверок: без
 // снимка второй раскладки она протухнет незаметно — смотрят обычно в свою.

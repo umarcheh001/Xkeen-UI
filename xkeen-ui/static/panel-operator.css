@@ -13396,21 +13396,43 @@ body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-d
   resize: none !important;
 }
 
-/* Mihomo DNS is information-dense: on desktop it follows the viewport and
- * presents the settings side by side instead of stacking a narrow form. */
-body.panel-page #mihomo-dns-modal .mihomo-dns-modal-content {
-  --xk-modal-width: 2200px;
-  width: 70vw;
-  max-width: calc(100vw - 32px);
+/* Mihomo needs fewer controls than DNS-over-VLESS. Keep it inside the shared
+ * 1160px modal width and use the second column for live diagnostics instead
+ * of stretching two selects across an ultra-wide, mostly empty canvas. */
+body.panel-page #mihomo-dns-modal .mihomo-dns-body {
+  grid-template-columns: minmax(0, 1.12fr) minmax(380px, .88fr);
+  grid-template-areas:
+    "lead  lead"
+    "route state"
+    "foot  state"
+    "fake  fake";
+  align-items: start;
+}
+
+body.panel-page #mihomo-dns-modal .mihomo-dns-settings {
+  display: contents;
+}
+
+body.panel-page #mihomo-dns-modal .mihomo-dns-route-zone { grid-area: route; }
+body.panel-page #mihomo-dns-modal .mihomo-dns-fake-options { grid-area: fake; }
+
+body.panel-page #mihomo-dns-modal .mihomo-dns-state {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+body.panel-page #mihomo-dns-modal .mihomo-dns-foot {
+  grid-area: foot;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
 }
 
 body.panel-page #mihomo-dns-modal .mihomo-dns-mode-picker {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 12px;
-}
-
-body.panel-page #mihomo-dns-modal .mihomo-dns-mode-picker > .modal-hint {
-  grid-column: 1 / -1;
+  gap: 10px 12px;
+  align-items: start;
 }
 
 body.panel-page #mihomo-dns-modal .mihomo-dns-field,
@@ -13430,31 +13452,36 @@ body.panel-page #mihomo-dns-modal .mihomo-dns-field :is(input, select, textarea)
   width: 100%;
 }
 
-body.panel-page #mihomo-dns-modal .mihomo-dns-fake-options {
-  grid-template-columns: minmax(220px, .8fr) minmax(280px, 1.15fr) minmax(300px, 1.2fr);
-  gap: 12px;
-  align-items: stretch;
+body.panel-page #mihomo-dns-modal .mihomo-dns-fake-body {
+  grid-template-columns: minmax(220px, .75fr) minmax(300px, 1.05fr) minmax(260px, 1fr);
+  grid-template-areas: "core filters sources";
+  gap: 10px;
+  align-items: start;
 }
 
-body.panel-page #mihomo-dns-modal .mihomo-dns-fake-core,
 body.panel-page #mihomo-dns-modal .mihomo-dns-filter-field,
 body.panel-page #mihomo-dns-modal .mihomo-dns-sources {
-  padding: 10px;
+  padding: 9px;
   border: 1px solid var(--op-border);
   border-radius: var(--op-control-radius);
   background: color-mix(in srgb, var(--op-surface-3) 42%, var(--op-surface-2));
 }
 
 body.panel-page #mihomo-dns-modal .mihomo-dns-fake-core {
+  grid-area: core;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 
+body.panel-page #mihomo-dns-modal .mihomo-dns-filter-field { grid-area: filters; }
+
 body.panel-page #mihomo-dns-modal .mihomo-dns-filter-field textarea {
-  min-height: 114px;
+  min-height: 108px;
   resize: vertical;
 }
 
 body.panel-page #mihomo-dns-modal .mihomo-dns-sources {
+  grid-area: sources;
   gap: 10px;
 }
 
@@ -13512,20 +13539,6 @@ body.panel-page #mihomo-dns-modal .mihomo-dns-provider-btn {
   font-size: calc(10px * var(--xk-font-scale, 1));
 }
 
-@media (max-width: 1250px) {
-  body.panel-page #mihomo-dns-modal .mihomo-dns-modal-content {
-    width: calc(100vw - 32px);
-  }
-
-  body.panel-page #mihomo-dns-modal .mihomo-dns-fake-options {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  body.panel-page #mihomo-dns-modal .mihomo-dns-sources {
-    grid-column: 1 / -1;
-    grid-template-columns: minmax(0, 1fr) minmax(260px, .8fr);
-  }
-}
 body.panel-page #mihomo-dns-modal .mihomo-dns-provider-btn[aria-pressed="true"] {
   border-color: var(--op-accent) !important;
   color: var(--op-accent-hover) !important;
@@ -13660,6 +13673,24 @@ body.panel-page [data-dns-layout="split"][data-dns-route="off"] .routing-dns-ove
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       "lead" "state" "route" "servers" "home" "direct" "records" "devices" "foot";
+  }
+
+  body.panel-page #mihomo-dns-modal .mihomo-dns-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "lead" "state" "route" "fake" "foot";
+  }
+
+  body.panel-page #mihomo-dns-modal .mihomo-dns-state .routing-dns-over-vless-safety {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  body.panel-page #mihomo-dns-modal .mihomo-dns-fake-body {
+    grid-template-columns: minmax(0, 1.05fr) minmax(220px, .95fr);
+    grid-template-areas: "core core" "filters sources";
+  }
+
+  body.panel-page #mihomo-dns-modal .mihomo-dns-fake-core {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -14855,13 +14886,19 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
   }
 
   body.panel-page #mihomo-dns-modal .mihomo-dns-mode-picker,
-  body.panel-page #mihomo-dns-modal .mihomo-dns-fake-options,
+  body.panel-page #mihomo-dns-modal .mihomo-dns-fake-body,
+  body.panel-page #mihomo-dns-modal .mihomo-dns-fake-core,
   body.panel-page #mihomo-dns-modal .mihomo-dns-sources {
     grid-template-columns: 1fr;
   }
 
   body.panel-page #mihomo-dns-modal .mihomo-dns-sources {
     grid-column: auto;
+    grid-template-areas: none;
+  }
+
+  body.panel-page #mihomo-dns-modal .mihomo-dns-fake-body {
+    grid-template-areas: "core" "filters" "sources";
   }
 
   body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-dns-over-vless-lead {

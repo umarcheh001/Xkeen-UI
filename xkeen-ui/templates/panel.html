@@ -2794,7 +2794,7 @@
     </div>
 
     <div id="mihomo-dns-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" data-modal-noresize="1" data-modal-nopos="1" data-modal-remember="0" role="dialog" aria-modal="true" aria-labelledby="mihomo-dns-title">
-      <div class="modal-content xk-modal-width routing-dns-over-vless-modal-content mihomo-dns-modal-content">
+      <div class="modal-content xk-modal-width xk-modal-width-1160 routing-dns-over-vless-modal-content mihomo-dns-modal-content">
         <div class="modal-header">
           <span class="modal-title" id="mihomo-dns-title">Защищённый DNS Mihomo</span>
           <button type="button" class="modal-close" id="mihomo-dns-close" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
@@ -2804,86 +2804,105 @@
             <span class="routing-dns-over-vless-lead-icon" aria-hidden="true">{{ op_icon('dns') }}</span>
             <div>
               <strong>DNS через Mihomo</strong>
-              <p>Публичные запросы пойдут через выбранную proxy-группу.</p>
+              <p>Панель направит публичные DNS-запросы через выбранную proxy-группу и передаст порт 53 Mihomo.</p>
             </div>
             <span id="mihomo-dns-badge" class="routing-dns-over-vless-badge">Проверка…</span>
           </div>
 
-          <div id="mihomo-dns-status" class="routing-dns-over-vless-status" role="status" aria-live="polite">Проверяем текущую конфигурацию…</div>
+          <div class="routing-dns-over-vless-state mihomo-dns-state">
+            <div id="mihomo-dns-status" class="routing-dns-over-vless-status" role="status" aria-live="polite">Проверяем текущую конфигурацию…</div>
 
-          <div class="routing-dns-over-vless-route mihomo-dns-mode-picker">
-            <div class="mihomo-dns-field">
-              <label for="mihomo-dns-proxy-group">Proxy-группа для DoH</label>
-              <select id="mihomo-dns-proxy-group"><option value="">Автоматический выбор</option></select>
-              <label class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-geodata-toggle mihomo-dns-selector-toggle" title="Добавить в Mihomo отдельную группу DNS Proxy с выбранным маршрутом и DIRECT.">
-                <input type="checkbox" id="mihomo-dns-selector-enable" aria-describedby="mihomo-dns-selector-hint">
-                <span class="dt-switch-slider" aria-hidden="true"></span>
-                <span class="dt-switch-label">Создать переключатель DNS Proxy</span>
-              </label>
-              <p id="mihomo-dns-selector-hint" class="modal-hint" role="status" aria-live="polite">После запуска позволит переключать DNS между выбранной группой и DIRECT.</p>
+            <div class="routing-dns-over-vless-safety" aria-label="Защита операции">
+              <div>{{ op_icon('validate') }}<span><b>Mihomo preflight</b><small>Проверка временного YAML до записи</small></span></div>
+              <div>{{ op_icon('backup') }}<span><b>Полный снимок</b><small>Исходный config.yaml и DNS override</small></span></div>
+              <div>{{ op_icon('restore') }}<span><b>Автооткат без потери правок</b><small>Изменённый DNS-блок можно сохранить и отключить</small></span></div>
             </div>
-            <div class="mihomo-dns-field">
-              <label for="mihomo-dns-mode">Режим обработки имён</label>
-              <select id="mihomo-dns-mode">
-                <option value="redir-host" selected>redir-host — реальные IP (рекомендуется)</option>
-                <option value="fake-ip">fake-ip — виртуальные IP</option>
-              </select>
-            </div>
-            <p id="mihomo-dns-mode-hint" class="modal-hint">Совместимо с TProxy и большинством устройств LAN.</p>
+
+            <ul id="mihomo-dns-details" class="routing-dns-over-vless-details"></ul>
           </div>
-          <div id="mihomo-dns-fake-options" class="routing-dns-over-vless-route mihomo-dns-fake-options hidden">
-            <div class="mihomo-dns-fake-core">
-              <div class="mihomo-dns-field">
-                <label for="mihomo-dns-fake-range">Диапазон Fake-IP</label>
-                <input id="mihomo-dns-fake-range" type="text" value="198.18.0.1/16" spellcheck="false" autocomplete="off">
+
+          <div class="mihomo-dns-settings">
+            <details class="xk-dns-zone mihomo-dns-route-zone" data-zone="mihomo-route" open>
+              <summary class="xk-dns-zone-head">
+                <b>Маршрут и режим</b>
+              </summary>
+              <div class="xk-dns-zone-body routing-dns-over-vless-route mihomo-dns-mode-picker">
+                <div class="mihomo-dns-field">
+                  <label for="mihomo-dns-proxy-group">Proxy-группа для DoH</label>
+                  <select id="mihomo-dns-proxy-group"><option value="">Автоматический выбор</option></select>
+                  <label class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-geodata-toggle mihomo-dns-selector-toggle" title="Добавить в Mihomo отдельную группу DNS Proxy с выбранным маршрутом и DIRECT.">
+                    <input type="checkbox" id="mihomo-dns-selector-enable" aria-describedby="mihomo-dns-selector-hint">
+                    <span class="dt-switch-slider" aria-hidden="true"></span>
+                    <span class="dt-switch-label">Создать переключатель DNS Proxy</span>
+                  </label>
+                  <p id="mihomo-dns-selector-hint" class="modal-hint" role="status" aria-live="polite">После запуска позволит переключать DNS между выбранной группой и DIRECT.</p>
+                </div>
+                <div class="mihomo-dns-field">
+                  <label for="mihomo-dns-mode">Режим обработки имён</label>
+                  <select id="mihomo-dns-mode">
+                    <option value="redir-host" selected>redir-host — реальные IP (рекомендуется)</option>
+                    <option value="fake-ip">fake-ip — виртуальные IP</option>
+                  </select>
+                  <p id="mihomo-dns-mode-hint" class="modal-hint">Совместимо с TProxy и большинством устройств LAN.</p>
+                </div>
               </div>
-              <div class="mihomo-dns-field">
-                <label for="mihomo-dns-fake-filter-mode">Режим фильтра</label>
-                <select id="mihomo-dns-fake-filter-mode">
-                  <option value="blacklist" selected>blacklist — исключения получают реальные IP</option>
-                  <option value="whitelist">whitelist — Fake-IP только для списка</option>
-                  <option value="rule">rule — правила Mihomo</option>
-                </select>
-              </div>
-            </div>
-            <div class="mihomo-dns-field mihomo-dns-filter-field">
-              <label for="mihomo-dns-fake-filters">Исключения Fake-IP</label>
-              <textarea id="mihomo-dns-fake-filters" rows="6" spellcheck="false">rule-set:category_ru@domain
+            </details>
+
+            <details id="mihomo-dns-fake-options" class="xk-dns-zone mihomo-dns-fake-options hidden" data-zone="mihomo-fake" open>
+              <summary class="xk-dns-zone-head">
+                <b>Настройки Fake-IP</b>
+                <span class="xk-dns-zone-opt">только для fake-ip</span>
+              </summary>
+              <div class="xk-dns-zone-body mihomo-dns-fake-body">
+                <div class="mihomo-dns-fake-core">
+                  <div class="mihomo-dns-field">
+                    <label for="mihomo-dns-fake-range">Диапазон Fake-IP</label>
+                    <input id="mihomo-dns-fake-range" type="text" value="198.18.0.1/16" spellcheck="false" autocomplete="off">
+                  </div>
+                  <div class="mihomo-dns-field">
+                    <label for="mihomo-dns-fake-filter-mode">Режим фильтра</label>
+                    <select id="mihomo-dns-fake-filter-mode">
+                      <option value="blacklist" selected>blacklist — исключения получают реальные IP</option>
+                      <option value="whitelist">whitelist — Fake-IP только для списка</option>
+                      <option value="rule">rule — правила Mihomo</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="mihomo-dns-field mihomo-dns-filter-field">
+                  <label for="mihomo-dns-fake-filters">Исключения Fake-IP</label>
+                  <textarea id="mihomo-dns-fake-filters" rows="6" spellcheck="false">rule-set:category_ru@domain
 rule-set:geosite_private@domain
 rule-set:category-ai@domain
 +.tsarea.tv</textarea>
-              <p class="modal-hint">По одному правилу на строку.</p>
-            </div>
-            <div class="mihomo-dns-sources">
-              <div id="mihomo-dns-rule-providers" class="mihomo-dns-rule-providers">
-                <b class="mihomo-dns-rule-providers-title">Доменные списки MRS</b>
-                <div class="mihomo-dns-rule-provider-buttons" role="group" aria-label="Доменные MRS-провайдеры">
-                  <button type="button" id="mihomo-dns-provider-category-ru" class="btn-secondary mihomo-dns-provider-btn" data-provider="category_ru@domain" aria-pressed="false" title="category_ru@domain">RU</button>
-                  <button type="button" id="mihomo-dns-provider-private" class="btn-secondary mihomo-dns-provider-btn" data-provider="geosite_private@domain" aria-pressed="false" title="geosite_private@domain">Private</button>
-                  <button type="button" id="mihomo-dns-provider-category-ai" class="btn-secondary mihomo-dns-provider-btn" data-provider="category-ai@domain" aria-pressed="false" title="category-ai@domain">AI</button>
+                  <p class="modal-hint">По одному правилу на строку.</p>
                 </div>
-                <p id="mihomo-dns-rule-providers-hint" class="modal-hint" role="status" aria-live="polite">Выбрано: RU, Private и AI.</p>
+                <div class="mihomo-dns-sources">
+                  <div id="mihomo-dns-rule-providers" class="mihomo-dns-rule-providers">
+                    <b class="mihomo-dns-rule-providers-title">Доменные списки MRS</b>
+                    <div class="mihomo-dns-rule-provider-buttons" role="group" aria-label="Доменные MRS-провайдеры">
+                      <button type="button" id="mihomo-dns-provider-category-ru" class="btn-secondary mihomo-dns-provider-btn" data-provider="category_ru@domain" aria-pressed="false" title="category_ru@domain">RU</button>
+                      <button type="button" id="mihomo-dns-provider-private" class="btn-secondary mihomo-dns-provider-btn" data-provider="geosite_private@domain" aria-pressed="false" title="geosite_private@domain">Private</button>
+                      <button type="button" id="mihomo-dns-provider-category-ai" class="btn-secondary mihomo-dns-provider-btn" data-provider="category-ai@domain" aria-pressed="false" title="category-ai@domain">AI</button>
+                    </div>
+                    <p id="mihomo-dns-rule-providers-hint" class="modal-hint" role="status" aria-live="polite">Выбрано: RU, Private и AI.</p>
+                  </div>
+                  <div class="mihomo-dns-geodata-option">
+                    <label class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-geodata-toggle" title="Использовать GeoSite V2Fly вместо доменных MRS-списков.">
+                      <input type="checkbox" id="mihomo-dns-geodata-enable">
+                      <span class="dt-switch-slider" aria-hidden="true"></span>
+                      <span class="dt-switch-label">Использовать GeoSite вместо MRS</span>
+                    </label>
+                    <p id="mihomo-dns-geodata-hint" class="modal-hint hidden" role="status" aria-live="polite"></p>
+                  </div>
+                </div>
               </div>
-              <div class="mihomo-dns-geodata-option">
-                <label class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-geodata-toggle" title="Использовать GeoSite V2Fly вместо доменных MRS-списков.">
-                  <input type="checkbox" id="mihomo-dns-geodata-enable">
-                  <span class="dt-switch-slider" aria-hidden="true"></span>
-                  <span class="dt-switch-label">Использовать GeoSite вместо MRS</span>
-                </label>
-                <p id="mihomo-dns-geodata-hint" class="modal-hint hidden" role="status" aria-live="polite"></p>
-              </div>
+            </details>
+
+            <div class="routing-dns-over-vless-foot mihomo-dns-foot">
+              <p class="modal-hint routing-dns-over-vless-warning">Пользовательский раздел <code>dns:</code> не заменяется пресетом. При возврате DNS прошивке он остаётся в файле с <code>enable: false</code>; один <code>no opkg dns-override</code> не отключает слушатель Mihomo.</p>
+              <p class="routing-dns-over-vless-links">Устройства по‑прежнему используют DNS роутера — Keenetic автоматически направляет запросы в Mihomo.</p>
             </div>
           </div>
-
-          <div class="routing-dns-over-vless-safety" aria-label="Защита операции">
-            <div>{{ op_icon('validate') }}<span><b>Mihomo preflight</b><small>Проверка временного YAML до записи</small></span></div>
-            <div>{{ op_icon('backup') }}<span><b>Полный снимок</b><small>Исходный config.yaml и DNS override</small></span></div>
-            <div>{{ op_icon('restore') }}<span><b>Автооткат без потери правок</b><small>Изменённый DNS-блок можно сохранить и отключить</small></span></div>
-          </div>
-
-          <ul id="mihomo-dns-details" class="routing-dns-over-vless-details"></ul>
-          <p class="modal-hint routing-dns-over-vless-warning">Пользовательский раздел <code>dns:</code> не заменяется пресетом. При возврате DNS прошивке он остаётся в файле с <code>enable: false</code>; один <code>no opkg dns-override</code> не отключает слушатель Mihomo.</p>
-          <p class="routing-dns-over-vless-links">Устройства по‑прежнему используют DNS роутера — Keenetic автоматически направляет запросы в Mihomo.</p>
         </div>
         <div class="modal-actions routing-dns-over-vless-actions">
           <button type="button" id="mihomo-dns-cancel" class="btn-secondary" data-operator-dismiss-duplicate="true">Закрыть</button>
