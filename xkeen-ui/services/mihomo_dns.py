@@ -81,6 +81,8 @@ DEFAULT_FAKE_IP_DNS_POLICY = {
     "rule-set:category_ru@domain": DEFAULT_FAKE_IP_BOOTSTRAP,
     "rule-set:category-ai@domain": ("https://xbox-dns.ru/dns-query",),
 }
+DNS_SELECTOR_NAME = "DNS Proxy"
+DNS_SELECTOR_ICON = "https://img.icons8.com/fluency/96/dns.png"
 DNS_MODES = ("redir-host", "fake-ip")
 FAKE_IP_FILTER_MODES = ("blacklist", "whitelist", "rule")
 IPTABLES_BINARIES = ("/opt/sbin/iptables", "iptables")
@@ -287,6 +289,37 @@ def _select_proxy_group(text: str) -> Optional[str]:
 
 def _yaml_single_quote(value: str) -> str:
     return "'" + str(value).replace("'", "''") + "'"
+
+
+def _with_dns_selector(text: str, upstream: str) -> str:
+    """Append the optional DNS route switch without replacing user groups."""
+
+    source = str(text or "")
+    target = str(upstream or "").strip()
+    if not target:
+        raise MihomoDnsError("Не выбран основной маршрут DNS.", code="proxy_group_missing")
+    names = _proxy_groups(source)
+    if DNS_SELECTOR_NAME in names:
+        raise MihomoDnsError(
+            f"Proxy-группа «{DNS_SELECTOR_NAME}» уже существует; панель не будет её перезаписывать.",
+            code="dns_selector_conflict",
+        )
+    if target not in names:
+        raise MihomoDnsError("Выбранная proxy-группа отсутствует в config.yaml.", code="proxy_group_invalid")
+    section = _top_level_section(source, "proxy-groups")
+    if not section:
+        raise MihomoDnsError("В config.yaml отсутствует раздел proxy-groups.", code="proxy_group_missing")
+    start, _end, body = section
+    rendered = (
+        f"  - name: {_yaml_single_quote(DNS_SELECTOR_NAME)}\n"
+        "    type: select\n"
+        f"    icon: {_yaml_single_quote(DNS_SELECTOR_ICON)}\n"
+        "    proxies:\n"
+        f"      - {_yaml_single_quote(target)}\n"
+        "      - DIRECT\n"
+    )
+    replacement = body.rstrip("\r\n") + "\n" + rendered
+    return source[:start] + replacement + source[start + len(body):]
 
 
 def _top_level_scalar(text: str, key: str) -> str:
@@ -1194,6 +1227,7 @@ def build_enabled_config(
     fake_ip: Any = None,
     geodata: bool = False,
     rule_providers: Any = None,
+    dns_selector: bool = False,
 ) -> tuple[str, str]:
     original = str(text or "")
     if not original.strip():
@@ -1223,10 +1257,17 @@ def build_enabled_config(
         )
     if group and selected not in _proxy_groups(original):
         raise MihomoDnsError("Выбранная proxy-группа отсутствует в config.yaml.", code="proxy_group_invalid")
+    dns_target = selected
+    if dns_selector:
+        source = _with_dns_selector(source, selected)
+        dns_target = DNS_SELECTOR_NAME
     # Keep the managed block near the top-level runtime settings (normally
     # immediately after ``profile``), rather than at EOF after all providers,
     # groups and rules.
-    patched = _insert_managed_dns_block(_remove_store_fake_ip(source), _managed_dns_block(selected, mode=normalized_mode, fake_ip=fake_options))
+    patched = _insert_managed_dns_block(
+        _remove_store_fake_ip(source),
+        _managed_dns_block(dns_target, mode=normalized_mode, fake_ip=fake_options),
+    )
     return patched, selected
 
 
@@ -1437,6 +1478,11 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
     group = str(state.get("proxy_group") or "") if exact else str(_select_proxy_group(text) or "")
     mode = str(state.get("mode") or dns_runtime.get("mode") or "redir-host").strip().lower()
     state_fake_ip = state.get("fake_ip") if isinstance(state.get("fake_ip"), dict) else {}
+    state_dns_selector = state.get("dns_selector") if isinstance(state.get("dns_selector"), dict) else {}
+    dns_selector_requested = bool(state_dns_selector.get("enabled"))
+    dns_selector_present = DNS_SELECTOR_NAME in _proxy_groups(text)
+    dns_selector_enabled = bool(dns_selector_requested and dns_selector_present)
+    dns_selector_conflict = bool(dns_selector_present and not dns_selector_requested)
     fake_ip_range = str(
         state_fake_ip.get("range")
         or dns_runtime.get("fake_ip_range")
@@ -1496,6 +1542,15 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         # true for TProxy only after the selected CIDR reaches the live target.
         "fake_ip_available": bool(fake_ip_route["available"]),
         "fake_ip_route": fake_ip_route,
+        "dns_selector": {
+            "enabled": dns_selector_enabled,
+            "name": DNS_SELECTOR_NAME,
+            "icon": DNS_SELECTOR_ICON,
+            "upstream": str(state_dns_selector.get("upstream") or group or ""),
+            "can_create": not dns_selector_present,
+            "conflict": dns_selector_conflict,
+            "missing": bool(dns_selector_requested and not dns_selector_present),
+        },
         "geodata": geodata,
         "blockers": blockers,
         # The port-53 guard is shared with DNS-over-VLESS, so this window says
@@ -1524,6 +1579,7 @@ def apply_action(
     geodata: bool = False,
     rule_providers: Any = None,
     proxy_group: Optional[str] = None,
+    dns_selector: bool = False,
 ) -> dict[str, Any]:
     normalized = str(action or "").strip().lower()
     if normalized not in {"enable", "disable"}:
@@ -1568,6 +1624,7 @@ def apply_action(
                 fake_ip=fake_ip,
                 geodata=geodata,
                 rule_providers=rule_providers,
+                dns_selector=dns_selector is True,
             )
             validation = validate_config(new_content=prepared) or ""
             if not _validation_ok(validation):
@@ -1630,6 +1687,11 @@ def apply_action(
                     "listen": DNS_LISTEN,
                     "mode": normalized_mode,
                     "fake_ip": ({k: v for k, v in fake_options.items() if k != "network"} if fake_options else None),
+                    "dns_selector": {
+                        "enabled": True,
+                        "name": DNS_SELECTOR_NAME,
+                        "upstream": group,
+                    } if dns_selector is True else None,
                     "rule_providers": _normalize_domain_rule_providers(rule_providers) if normalized_mode == "fake-ip" and not geodata else [],
                 }
                 _save_state(ui_state_dir, config_file, next_state)
@@ -1642,6 +1704,11 @@ def apply_action(
                     "mode": normalized_mode,
                     "fake_ip": ({k: v for k, v in fake_options.items() if k != "network"} if fake_options else None),
                     "fake_ip_route": applied_route,
+                    "dns_selector": {
+                        "enabled": True,
+                        "name": DNS_SELECTOR_NAME,
+                        "upstream": group,
+                    } if dns_selector is True else None,
                     "rule_providers": _normalize_domain_rule_providers(rule_providers) if normalized_mode == "fake-ip" and not geodata else [],
                     "backup": str(getattr(backup, "filename", "") or "") or None,
                     "probe": probe,

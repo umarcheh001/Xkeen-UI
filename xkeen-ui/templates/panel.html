@@ -2815,6 +2815,12 @@
             <div class="mihomo-dns-field">
               <label for="mihomo-dns-proxy-group">Proxy-группа для DoH</label>
               <select id="mihomo-dns-proxy-group"><option value="">Автоматический выбор</option></select>
+              <label class="dt-switch xk-mini-switch mihomo-dns-geodata-toggle mihomo-dns-selector-toggle" title="Добавить в Mihomo отдельную группу DNS Proxy с выбранным маршрутом и DIRECT.">
+                <input type="checkbox" id="mihomo-dns-selector-enable" aria-describedby="mihomo-dns-selector-hint">
+                <span class="dt-switch-slider" aria-hidden="true"></span>
+                <span class="dt-switch-label">Создать переключатель DNS Proxy</span>
+              </label>
+              <p id="mihomo-dns-selector-hint" class="modal-hint" role="status" aria-live="polite">После запуска позволит переключать DNS между выбранной группой и DIRECT.</p>
             </div>
             <div class="mihomo-dns-field">
               <label for="mihomo-dns-mode">Режим обработки имён</label>

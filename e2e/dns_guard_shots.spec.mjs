@@ -210,6 +210,29 @@ test('Mihomo DNS: a legacy XKeen RETURN is shown as a broken Fake-IP route', asy
   await expect(page.locator('#mihomo-dns-mode-hint')).toContainText('Firewall XKeen исключает Fake-IP');
 });
 
+test('Mihomo DNS: optional DNS Proxy selector reaches the activation payload', async ({ page }) => {
+  const status = structuredClone(MIHOMO_BASE);
+  const postBodies = [];
+  await openMihomo(page, status);
+  await page.route('**/api/mihomo/dns', async (route) => {
+    if (route.request().method() === 'POST') {
+      postBodies.push(route.request().postDataJSON());
+      await route.fulfill({ json: { ok: true, enabled: true, probe: { ok: true, latency_ms: 4 } } });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await expect(page.locator('#mihomo-dns-selector-enable')).not.toBeChecked();
+  await page.locator('#mihomo-dns-selector-enable').check();
+  await expect(page.locator('#mihomo-dns-selector-hint')).toContainText('DNS Proxy');
+  await page.locator('#mihomo-dns-apply').click();
+  await page.locator('#confirm-modal-ok-btn').click();
+  await expect.poll(() => postBodies.length).toBe(1);
+  expect(postBodies[0].dns_selector).toBe(true);
+  expect(postBodies[0].proxy_group).toBe('PROXY');
+});
+
 test('Mihomo DNS: rule-provider buttons fill the fake-ip payload', async ({ page }) => {
   const status = structuredClone(MIHOMO_RULE_PROVIDER_STATUS);
   const postBodies = [];

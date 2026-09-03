@@ -95,6 +95,45 @@ def test_build_enabled_config_adds_domain_rule_providers_without_geodata():
     assert "geosite:private" not in content
 
 
+def test_build_enabled_config_can_add_a_dns_route_selector():
+    content, group = dns.build_enabled_config(BASE, dns_selector=True)
+
+    assert group == "Заблок. сервисы"
+    assert content.count("proxy-groups:") == 1
+    assert "  - name: 'DNS Proxy'\n" in content
+    assert "    type: select\n" in content
+    assert "    icon: 'https://img.icons8.com/fluency/96/dns.png'\n" in content
+    assert "    proxies:\n      - 'Заблок. сервисы'\n      - DIRECT\n" in content
+    assert "https://8.8.8.8/dns-query#DNS Proxy&name-cert-verify=dns.google" in content
+
+
+def test_dns_route_selector_never_overwrites_an_existing_group():
+    source = BASE.replace("proxy-groups:\n", "proxy-groups:\n  - name: DNS Proxy\n    type: select\n    proxies: [DIRECT]\n")
+
+    with pytest.raises(dns.MihomoDnsError) as captured:
+        dns.build_enabled_config(source, group="Заблок. сервисы", dns_selector=True)
+
+    assert captured.value.code == "dns_selector_conflict"
+    assert "не будет её перезаписывать" in str(captured.value)
+
+
+def test_dns_route_selector_is_opt_in():
+    content, _ = dns.build_enabled_config(BASE)
+
+    assert "name: 'DNS Proxy'" not in content
+    assert "#DNS Proxy&" not in content
+
+
+def test_an_existing_dns_proxy_group_can_be_selected_without_recreating_it():
+    source = BASE.replace("proxy-groups:\n", "proxy-groups:\n  - name: DNS Proxy\n    type: select\n    proxies: [DIRECT]\n")
+
+    content, group = dns.build_enabled_config(source, group="DNS Proxy")
+
+    assert group == "DNS Proxy"
+    assert content.count("name: DNS Proxy") == 1
+    assert "#DNS Proxy&name-cert-verify=dns.google" in content
+
+
 def test_build_enabled_config_adds_recommended_fake_ip_profile_by_default():
     content, _ = dns.build_enabled_config(BASE, mode="fake-ip")
 
@@ -291,6 +330,15 @@ def test_status_exposes_safe_one_click_plan(tmp_path: Path, monkeypatch):
 
     assert result["can_enable"] is True
     assert result["proxy_group"] == "Заблок. сервисы"
+    assert result["dns_selector"] == {
+        "enabled": False,
+        "name": "DNS Proxy",
+        "icon": "https://img.icons8.com/fluency/96/dns.png",
+        "upstream": "Заблок. сервисы",
+        "can_create": True,
+        "conflict": False,
+        "missing": False,
+    }
     assert result["listen"] == "0.0.0.0:53"
     assert result["mode"] == "redir-host"
     assert result["safety"] == {
@@ -402,6 +450,42 @@ def test_enable_probe_failure_rolls_back_config_and_dns_override(tmp_path: Path,
     assert config.read_text(encoding="utf-8") == BASE
     assert override["value"] is False
     assert calls[-3:] == [("save", BASE), ("override", False), ("restart", "mihomo-dns-rollback")]
+
+
+def test_enable_persists_the_optional_dns_selector_state(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    override = {"value": False}
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (override["value"], "test"))
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: override.update(value=enabled))
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda **_kwargs: True)
+    monkeypatch.setattr(dns, "_wait_for_mihomo", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda: {"ok": True, "latency_ms": 3})
+
+    def save_config(content):
+        config.write_text(content, encoding="utf-8")
+        return type("Backup", (), {"filename": "before.yaml"})()
+
+    result = dns.apply_action(
+        "enable",
+        config_file=str(config),
+        ui_state_dir=str(state),
+        validate_config=lambda **_kwargs: "[exit code: 0]",
+        save_config=save_config,
+        restart_xkeen=lambda **_kwargs: True,
+        dns_selector=True,
+    )
+
+    saved_state = json.loads((state / "mihomo-dns" / dns.STATE_FILENAME).read_text(encoding="utf-8"))
+    assert saved_state["dns_selector"] == {
+        "enabled": True,
+        "name": "DNS Proxy",
+        "upstream": "Заблок. сервисы",
+    }
+    assert result["dns_selector"] == saved_state["dns_selector"]
+    assert "name: 'DNS Proxy'" in config.read_text(encoding="utf-8")
+    status = dns.get_status(config_file=str(config), ui_state_dir=str(state))
+    assert status["dns_selector"]["enabled"] is True
+    assert status["dns_selector"]["upstream"] == "Заблок. сервисы"
 
 
 def test_fake_ip_enable_stops_before_writing_when_xkeen_excludes_range(tmp_path: Path, monkeypatch):
@@ -585,6 +669,8 @@ def test_http_contract_and_frontend(tmp_path: Path, monkeypatch):
     bundle = (root / "xkeen-ui/static/js/pages/panel.mihomo.bundle.js").read_text(encoding="utf-8")
     assert 'id="mihomo-dns-btn"' in template
     assert 'id="mihomo-dns-modal"' in template
+    assert 'id="mihomo-dns-selector-enable"' in template
+    assert "Создать переключатель DNS Proxy" in template
     assert "Mihomo preflight" in template
     assert "Полный снимок" in template
     assert "Автооткат" in template
@@ -595,6 +681,7 @@ def test_http_contract_and_frontend(tmp_path: Path, monkeypatch):
     assert "geosite:category-ru" in script
     assert "TUN/TProxy обнаружен" not in script
     assert "Маршрут Fake-IP через TUN/TProxy не подтверждён" in script
+    assert "dns_selector: !!$(IDS.dnsSelectorEnable)?.checked" in script
     assert "mihomo_dns.js" in bundle
 
 
@@ -628,9 +715,11 @@ def test_http_contract_forwards_rule_providers(tmp_path: Path, monkeypatch):
         "geodata": False,
         "fake_ip": {"range": "198.18.0.1/16", "filter_mode": "blacklist", "filters": ["*.lan"]},
         "rule_providers": ["category_ru@domain", "private"],
+        "dns_selector": True,
     })
 
     assert response.status_code == 200
     assert captured["action"] == "enable"
     assert captured["rule_providers"] == ["category_ru@domain", "private"]
     assert captured["geodata"] is False
+    assert captured["dns_selector"] is True

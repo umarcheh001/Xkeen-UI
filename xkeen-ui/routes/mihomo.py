@@ -1462,6 +1462,7 @@ def create_mihomo_blueprint(
         fake_ip = data.get("fake_ip") if isinstance(data.get("fake_ip"), dict) else None
         geodata = bool(data.get("geodata"))
         rule_providers = data.get("rule_providers")
+        dns_selector = data.get("dns_selector") is True
         proxy_group = str(data.get("proxy_group") or "").strip() or None
         if data.get("confirmed") is not True:
             return _api_error(
@@ -1500,6 +1501,7 @@ def create_mihomo_blueprint(
                 geodata=geodata,
                 rule_providers=rule_providers,
                 proxy_group=proxy_group,
+                dns_selector=dns_selector,
             )
             return jsonify(result), 200
         except MihomoDnsError as exc:

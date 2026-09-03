@@ -31,6 +31,8 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     fakeFilterMode: 'mihomo-dns-fake-filter-mode',
     fakeFilters: 'mihomo-dns-fake-filters',
     proxyGroup: 'mihomo-dns-proxy-group',
+    dnsSelectorEnable: 'mihomo-dns-selector-enable',
+    dnsSelectorHint: 'mihomo-dns-selector-hint',
   });
 
   const $ = (id) => document.getElementById(id);
@@ -137,7 +139,11 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
 
   function selectedOptions() {
     const mode = $(IDS.mode)?.value || 'redir-host';
-    const payload = { mode, proxy_group: $(IDS.proxyGroup)?.value || undefined };
+    const payload = {
+      mode,
+      proxy_group: $(IDS.proxyGroup)?.value || current?.proxy_group || undefined,
+      dns_selector: !!$(IDS.dnsSelectorEnable)?.checked,
+    };
     if (mode === 'fake-ip') {
       const useGeodata = !!$(IDS.geodataEnable)?.checked;
       const filters = String($(IDS.fakeFilters)?.value || '').split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
@@ -247,6 +253,8 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     const fakeOptions = $(IDS.fakeOptions);
     const modeHint = $(IDS.modeHint);
     const proxyGroup = $(IDS.proxyGroup);
+    const dnsSelectorEnable = $(IDS.dnsSelectorEnable);
+    const dnsSelectorHint = $(IDS.dnsSelectorHint);
     const geodata = data?.geodata || null;
     const geodataEnable = $(IDS.geodataEnable);
     if (list) list.textContent = '';
@@ -269,6 +277,23 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
         const option = document.createElement('option'); option.value = name; option.textContent = name; proxyGroup.appendChild(option);
       });
       if (selected && data.proxy_groups.includes(selected)) proxyGroup.value = selected;
+    }
+    const selectorInfo = data?.dns_selector || {};
+    if (dnsSelectorEnable && !busy) dnsSelectorEnable.checked = !!selectorInfo.enabled;
+    if (dnsSelectorEnable) {
+      dnsSelectorEnable.disabled = enabled || canDisable || altered || selectorInfo.conflict === true;
+    }
+    if (dnsSelectorHint) {
+      const upstream = selectorInfo.upstream || proxyGroup?.value || 'выбранный маршрут';
+      if (selectorInfo.enabled) {
+        dnsSelectorHint.textContent = `Создана группа ${selectorInfo.name || 'DNS Proxy'}: ${upstream} ↔ DIRECT.`;
+      } else if (selectorInfo.missing) {
+        dnsSelectorHint.textContent = `Группа ${selectorInfo.name || 'DNS Proxy'} удалена из config.yaml вручную. Автоматическое восстановление остановлено.`;
+      } else if (selectorInfo.conflict) {
+        dnsSelectorHint.textContent = `Группа ${selectorInfo.name || 'DNS Proxy'} уже существует. Панель не станет её перезаписывать; при необходимости выберите её в списке выше.`;
+      } else {
+        dnsSelectorHint.textContent = `Добавит группу DNS Proxy: ${upstream} ↔ DIRECT. Переключать её можно будет в панели Mihomo.`;
+      }
     }
     if (fakeOptions) fakeOptions.classList.toggle('hidden', (mode?.value || data?.mode) !== 'fake-ip');
     if (geodataEnable && !busy && geodata) geodataEnable.checked = !!(geodata.enabled || geodata.geosite_configured);
@@ -319,6 +344,13 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     if (data) {
       addDetail(`Активное ядро: ${data.active_core || 'не определено'}`, data.active_core === 'mihomo' ? 'ok' : 'warn');
       if (data.proxy_group) addDetail(`Защищённый маршрут: ${data.proxy_group}`, 'ok');
+      if (data?.dns_selector?.enabled) {
+        addDetail(`Переключатель DNS: ${data.dns_selector.name || 'DNS Proxy'} · ${data.dns_selector.upstream || data.proxy_group} ↔ DIRECT`, 'ok');
+      } else if (data?.dns_selector?.missing) {
+        addDetail(`Переключатель DNS удалён вручную: группа ${data.dns_selector.name || 'DNS Proxy'} не найдена.`, 'warn');
+      } else if (data?.dns_selector?.conflict) {
+        addDetail(`Переключатель DNS не создаётся: группа ${data.dns_selector.name || 'DNS Proxy'} уже существует.`, 'warn');
+      }
       const listenerConfigured = !!(data.dns_listener_configured || data.enabled || data.prepared || data.can_disable);
       const dnsPresent = !!(data.dns_present || listenerConfigured);
       addDetail(
@@ -392,10 +424,11 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     if (busy || !current) return;
     const recovery = !!current.can_recover;
     const action = (current.enabled || current.can_disable || recovery) ? 'disable' : 'enable';
+    const createsDnsSelector = action === 'enable' && !!$(IDS.dnsSelectorEnable)?.checked;
     const message = recovery
       ? 'DNS-блок уже отсутствует в config.yaml, а DNS override Keenetic выключен. Панель проверит текущий YAML и очистит только устаревшее состояние мастера; ваши ручные правки не будут заменены старым снимком.'
       : action === 'enable'
-      ? 'Панель добавит отдельный DNS-блок, направит DoH через выбранную proxy-группу, включит DNS override Keenetic, перезапустит Mihomo и проверит реальный DNS-ответ. При ошибке всё будет восстановлено.'
+      ? `Панель добавит отдельный DNS-блок, направит DoH через выбранную proxy-группу${createsDnsSelector ? ', создаст переключатель DNS Proxy с выходами через эту группу и DIRECT' : ''}, включит DNS override Keenetic, перезапустит Mihomo и проверит реальный DNS-ответ. При ошибке всё будет восстановлено.`
       : 'Панель вернёт точный снимок config.yaml и исходное состояние DNS Keenetic. Изменяются только объекты однокнопочной настройки.';
     const confirmed = await confirmMihomoAction({
       title: action === 'enable' ? 'Включить защищённый DNS?' : 'Отключить защищённый DNS?',
@@ -441,6 +474,11 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       if (!busy) showModal(false);
     }));
     $(IDS.apply)?.addEventListener('click', (event) => { event.preventDefault(); void apply(); });
+    $(IDS.proxyGroup)?.addEventListener('change', () => {
+      const hint = $(IDS.dnsSelectorHint);
+      if (!hint || current?.dns_selector?.enabled || current?.dns_selector?.conflict) return;
+      hint.textContent = `Добавит группу DNS Proxy: ${$(IDS.proxyGroup)?.value || 'выбранный маршрут'} ↔ DIRECT. Переключать её можно будет в панели Mihomo.`;
+    });
     $(IDS.mode)?.addEventListener('change', () => {
       const fakeOptions = $(IDS.fakeOptions);
       const fake = $(IDS.mode)?.value === 'fake-ip';
