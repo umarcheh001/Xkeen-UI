@@ -20,3 +20,24 @@ npm exec playwright test e2e/panel_operator_i5.spec.mjs --project=chromium
 ```
 
 Проверено: **7 Chromium тестов проходят**; статический icon/accessibility contract — **9 тестов проходят**. Runtime/API/DOM hooks не менялись.
+
+## Открытый пункт: выключение кнопки уносит фокус (заведено 3 сентября 2026)
+
+Пока грузится статус ядра, `setHeaderAsyncChipLoading` (`xkeen-ui/static/js/pages/panel_shell.shared.js`)
+ставит `#xkeen-core-text` `disabled = true`, а `renderXkeenServiceStatus`
+(`xkeen-ui/static/js/features/service_status.js`) снимает выключение, когда статус придёт.
+Браузер снимает фокус с выключаемого элемента, поэтому пользователь, нажавший Tab в первую
+секунду после загрузки, теряет позицию и оказывается на `body`.
+
+**Что сделать:** перевести индикацию загрузки с `disabled` на `aria-disabled="true"` —
+такой элемент остаётся фокусируемым, — а отбой действия сделать в обработчике клика
+(`bindCoreModalUI`). Стили выключенного вида, сейчас висящие на `:disabled`, продублировать
+на `[aria-disabled="true"]`. Тот же приём проверить для `#xk-update-link`.
+
+**Что можно будет убрать после этого:** ожидание `toBeEnabled()` у кнопки ядра в
+`openPanel` (`e2e/panel_operator_i5.spec.mjs`) — оно появилось как обход именно этого
+поведения.
+
+**Чего касаться не нужно:** потеря фокуса при переносе разметки экрана уже закрыта —
+`captureCurrentDocumentScreenSnapshot` возвращает фокус после переноса, стережёт
+`e2e/top_level_screen_focus.spec.mjs`.
