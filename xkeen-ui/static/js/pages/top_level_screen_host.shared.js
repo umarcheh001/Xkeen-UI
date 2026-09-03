@@ -152,12 +152,23 @@ export function captureCurrentDocumentScreenSnapshot(name) {
     return true;
   });
 
+  // Перенос узла — это удаление и вставка, и фокус на нём браузер снимает
+  // молча. Пользователь, успевший нажать Tab до монтирования экрана,
+  // оказывался ни на чём, поэтому возвращаем фокус туда, где он был.
+  const focused = (doc.activeElement && doc.activeElement !== body
+    && doc.activeElement !== doc.documentElement) ? doc.activeElement : null;
+
   movableNodes.forEach((node) => {
     root.appendChild(node);
   });
 
   mount.appendChild(root);
   root.hidden = false;
+
+  if (focused && focused.isConnected && typeof focused.focus === 'function') {
+    // Без preventScroll возврат фокуса дёргал бы страницу к шапке.
+    try { focused.focus({ preventScroll: true }); } catch (error) { /* фокус не критичен */ }
+  }
 
   return {
     name: String(name || ''),
