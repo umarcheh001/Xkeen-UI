@@ -13641,6 +13641,18 @@ body.panel-page [data-dns-layout="split"] .routing-dns-over-vless-body {
     "records foot";
 }
 
+/* Выбор маршрута показывается не всегда: при включённой функции его скрывают.
+   Без своей раскладки на его месте оставалась пустая колонка. */
+body.panel-page [data-dns-layout="split"][data-dns-route="off"] .routing-dns-over-vless-body {
+  grid-template-areas:
+    "lead    lead"
+    "state   state"
+    "servers devices"
+    "home    devices"
+    "direct  foot"
+    "records foot";
+}
+
 /* Ниже этого порога двух колонок физически нет — схлопываемся независимо
  * от выбранной настройки. */
 @media (max-width: 1100px) {

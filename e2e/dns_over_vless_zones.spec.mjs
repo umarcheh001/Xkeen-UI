@@ -116,6 +116,11 @@ test('при включённой функции настройки видны �
   // раньше поля прятались вместе с ним, и посмотреть их можно было только
   // выключив защиту.
   await expect(page.locator('#routing-dns-over-vless-route')).toBeHidden();
+  // Вместе с телом уходит и шапка зоны, иначе от неё остаётся пустая рамка.
+  await expect(page.locator('.xk-dns-zone[data-zone="route"]')).toBeHidden();
+  // И сетка перестраивается: иначе на месте зоны зияла пустая колонка.
+  await expect(page.locator('#routing-dns-over-vless-modal .modal-content'))
+    .toHaveAttribute('data-dns-route', 'off');
   const upstreams = page.locator('#routing-dns-over-vless-upstreams');
   await expect(upstreams).toBeVisible();
   await expect(upstreams).toHaveValue('9.9.9.9');
@@ -129,4 +134,6 @@ test('при выключенной функции поля снова реда�
   await openDialog(page);
   await expect(page.locator('#routing-dns-over-vless-upstreams')).toBeEnabled();
   await expect(page.locator('#routing-dns-over-vless-locked-note')).toBeHidden();
+  await expect(page.locator('#routing-dns-over-vless-modal .modal-content'))
+    .toHaveAttribute('data-dns-route', 'on');
 });

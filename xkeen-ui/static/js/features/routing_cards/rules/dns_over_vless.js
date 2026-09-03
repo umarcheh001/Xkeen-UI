@@ -309,6 +309,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       && coreOf(data) === 'xray');
     routeVisible = show;
     wrap.classList.toggle('hidden', !show);
+    // Вместе с телом уходит и шапка зоны: одно спрятанное тело оставляло на
+    // весь ряд сетки пустую рамку с заголовком «Маршрут для DNS-запросов».
+    const zone = wrap.closest ? wrap.closest('.xk-dns-zone') : null;
+    if (zone) zone.classList.toggle('hidden', !show);
+    // Освободившаяся ячейка сетки не исчезает вместе с зоной: в две колонки
+    // рядом с высоким блоком состояния оставалась пустая левая колонка.
+    const content = wrap.closest ? wrap.closest('.modal-content') : null;
+    if (content) content.dataset.dnsRoute = show ? 'on' : 'off';
     setFieldsLocked(!!(data && data.enabled));
     if (!show) {
       picker.textContent = '';

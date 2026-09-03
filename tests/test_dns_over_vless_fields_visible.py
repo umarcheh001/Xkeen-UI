@@ -42,3 +42,23 @@ def test_locked_state_survives_the_field_render():
 def test_locked_note_lives_in_the_template():
     template = (ROOT / "xkeen-ui/templates/panel.html").read_text(encoding="utf-8")
     assert 'id="routing-dns-over-vless-locked-note"' in template
+
+
+def test_hidden_route_takes_its_zone_header_along():
+    # Прятать одно тело мало: над ним остаётся шапка «Маршрут для
+    # DNS-запросов» — пустая рамка на весь ряд сетки.
+    body = _body("function renderRoute(data) {", "function parseZones(")
+    assert "closest('.xk-dns-zone')" in body
+
+
+def test_layout_closes_the_gap_left_by_the_hidden_route():
+    # Скрытая зона освобождает свою ячейку сетки, и в две колонки рядом с
+    # высоким блоком состояния зияла пустая левая колонка.
+    body = _body("function renderRoute(data) {", "function parseZones(")
+    assert "dataset.dnsRoute" in body
+    css = (ROOT / "xkeen-ui/static/panel-operator.css").read_text(encoding="utf-8")
+    marker = '[data-dns-layout="split"][data-dns-route="off"]'
+    assert marker in css
+    block = css[css.index(marker):]
+    block = block[:block.index("}")]
+    assert '"state   state"' in block
