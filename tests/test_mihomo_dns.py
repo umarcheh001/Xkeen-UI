@@ -24,6 +24,26 @@ rules:
   - MATCH,DIRECT
 """
 
+XKEEN_MANGLE_OK = """-P PREROUTING ACCEPT
+-N xkeen
+-A PREROUTING -p udp -m connmark --mark 0xffffaaa -j xkeen
+-A xkeen -p udp -m comment --comment xkeen_rule -j TPROXY --on-ip 127.0.0.1 --on-port 5001 --tproxy-mark 0x111
+"""
+
+XKEEN_NAT_OK = """-P PREROUTING ACCEPT
+-N xkeen
+-A PREROUTING -p tcp -m connmark --mark 0xffffaaa -j xkeen
+-A xkeen -p tcp -m comment --comment xkeen_rule -j REDIRECT --to-ports 5000
+"""
+
+
+def _fake_ip_firewall(monkeypatch, *, mangle=XKEEN_MANGLE_OK, nat=XKEEN_NAT_OK):
+    monkeypatch.setattr(
+        dns,
+        "_iptables_table_rules",
+        lambda table: ((mangle if table == "mangle" else nat), ""),
+    )
+
 
 def test_build_enabled_config_is_additive_routed_and_router_safe():
     content, group = dns.build_enabled_config(BASE)
@@ -106,6 +126,73 @@ def test_build_enabled_config_adds_recommended_fake_ip_profile_by_default():
         "    'rule-set:category-ai@domain':\n"
         "      - 'https://xbox-dns.ru/dns-query'\n"
     ) in content
+
+
+def test_fake_ip_route_rejects_legacy_xkeen_rfc2544_return(monkeypatch):
+    legacy = XKEEN_MANGLE_OK.replace(
+        "-A xkeen -p udp",
+        "-A xkeen -d 198.18.0.0/15 -m comment --comment xkeen_rule -j RETURN\n-A xkeen -p udp",
+    )
+    _fake_ip_firewall(monkeypatch, mangle=legacy)
+
+    route = dns._fake_ip_route_info(BASE, "198.18.0.1/16")
+
+    assert route["available"] is False
+    assert route["confidence"] == "blocked"
+    assert route["firewall"] == {
+        "table": "mangle",
+        "chain": "xkeen",
+        "protocol": "udp",
+        "exclusion": "198.18.0.0/15",
+    }
+    assert "чистую установку актуальной версии" in route["message"]
+
+
+def test_fake_ip_route_rejects_a_return_that_overlaps_part_of_the_range(monkeypatch):
+    legacy = XKEEN_MANGLE_OK.replace(
+        "-A xkeen -p udp",
+        "-A xkeen -d 198.18.0.0/15 -m comment --comment xkeen_rule -j RETURN\n-A xkeen -p udp",
+    )
+    _fake_ip_firewall(monkeypatch, mangle=legacy)
+
+    route = dns._fake_ip_route_info(BASE, "198.16.0.1/14")
+
+    assert route["available"] is False
+    assert route["confidence"] == "blocked"
+    assert route["firewall"]["exclusion"] == "198.18.0.0/15"
+
+
+def test_fake_ip_route_confirms_complete_hybrid_firewall_path(monkeypatch):
+    _fake_ip_firewall(monkeypatch)
+
+    route = dns._fake_ip_route_info(BASE, "198.18.0.1/16")
+
+    assert route["available"] is True
+    assert route["confidence"] == "confirmed"
+    assert route["mode"] == "hybrid"
+    assert "TCP → REDIRECT 5000" in route["message"]
+    assert "UDP → TProxy 5001" in route["message"]
+
+
+def test_fake_ip_route_does_not_accept_listener_without_firewall_path(monkeypatch):
+    _fake_ip_firewall(monkeypatch, mangle="", nat="")
+
+    route = dns._fake_ip_route_info(BASE, "198.18.0.1/16")
+
+    assert route["available"] is False
+    assert route["confidence"] == "unverified"
+    assert route["missing_paths"] == ["UDP (mangle)", "TCP (nat)"]
+    assert "TProxy-порт 5001 указан" in route["message"]
+
+
+def test_fake_ip_route_reports_unreadable_firewall_without_claiming_success(monkeypatch):
+    monkeypatch.setattr(dns, "_iptables_table_rules", lambda _table: ("", "iptables не найден"))
+
+    route = dns._fake_ip_route_info(BASE, "198.18.0.1/16")
+
+    assert route["available"] is False
+    assert route["confidence"] == "unknown"
+    assert route["firewall_error"] == "iptables не найден"
 
 
 def test_redir_host_keeps_the_existing_resolver_profile():
@@ -215,6 +302,22 @@ def test_status_exposes_safe_one_click_plan(tmp_path: Path, monkeypatch):
     }
 
 
+def test_status_exposes_the_live_xkeen_fake_ip_exclusion(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    legacy = XKEEN_MANGLE_OK.replace(
+        "-A xkeen -p udp",
+        "-A xkeen -d 198.18.0.0/15 -m comment --comment xkeen_rule -j RETURN\n-A xkeen -p udp",
+    )
+    _fake_ip_firewall(monkeypatch, mangle=legacy)
+
+    result = dns.get_status(config_file=str(config), ui_state_dir=str(state))
+
+    assert result["fake_ip_available"] is False
+    assert result["fake_ip_route"]["confidence"] == "blocked"
+    assert result["fake_ip_route"]["network"] == "198.18.0.0/16"
+    assert "правило RETURN для 198.18.0.0/15" in result["fake_ip_route"]["message"]
+
+
 def test_existing_user_dns_is_not_claimed_as_assistant_enabled(tmp_path: Path, monkeypatch):
     config, state = _status_ready(tmp_path, monkeypatch)
     config.write_text(BASE + "\ndns:\n  enable: true\n  listen: 0.0.0.0:53\n", encoding="utf-8")
@@ -299,6 +402,33 @@ def test_enable_probe_failure_rolls_back_config_and_dns_override(tmp_path: Path,
     assert config.read_text(encoding="utf-8") == BASE
     assert override["value"] is False
     assert calls[-3:] == [("save", BASE), ("override", False), ("restart", "mihomo-dns-rollback")]
+
+
+def test_fake_ip_enable_stops_before_writing_when_xkeen_excludes_range(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    legacy = XKEEN_MANGLE_OK.replace(
+        "-A xkeen -p udp",
+        "-A xkeen -d 198.18.0.0/15 -m comment --comment xkeen_rule -j RETURN\n-A xkeen -p udp",
+    )
+    _fake_ip_firewall(monkeypatch, mangle=legacy)
+    calls: list[str] = []
+
+    with pytest.raises(dns.MihomoDnsError) as captured:
+        dns.apply_action(
+            "enable",
+            config_file=str(config),
+            ui_state_dir=str(state),
+            validate_config=lambda **_kwargs: calls.append("validate") or "[exit code: 0]",
+            save_config=lambda _content: calls.append("save"),
+            restart_xkeen=lambda **_kwargs: calls.append("restart") or True,
+            mode="fake-ip",
+            fake_ip={"range": "198.18.0.1/16", "filters": ["*.lan"]},
+        )
+
+    assert captured.value.code == "fake_ip_firewall_excluded"
+    assert captured.value.details["firewall"]["exclusion"] == "198.18.0.0/15"
+    assert calls == []
+    assert config.read_text(encoding="utf-8") == BASE
 
 
 def test_disable_restores_exact_snapshot_then_firmware_dns(tmp_path: Path, monkeypatch):
@@ -463,6 +593,8 @@ def test_http_contract_and_frontend(tmp_path: Path, monkeypatch):
     assert "'/api/mihomo/dns'" in script
     assert "Включить защищённый DNS" in script
     assert "geosite:category-ru" in script
+    assert "TUN/TProxy обнаружен" not in script
+    assert "Маршрут Fake-IP через TUN/TProxy не подтверждён" in script
     assert "mihomo_dns.js" in bundle
 
 

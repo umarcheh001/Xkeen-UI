@@ -56,6 +56,15 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     'category-ai@domain': 'AI',
   });
 
+  function fakeIpRouteHint(data) {
+    const route = data?.fake_ip_route;
+    const message = String(route?.message || '').trim();
+    if (message) return `${message} Диапазон не должен пересекаться с LAN/VPN.`;
+    return `${data?.fake_ip_available === true
+      ? 'Маршрут Fake-IP подтверждён.'
+      : 'Маршрут Fake-IP через TUN/TProxy не подтверждён.'} Диапазон не должен пересекаться с LAN/VPN.`;
+  }
+
   function selectedRuleProviders() {
     return DOMAIN_RULE_PROVIDER_FILTERS
       .filter(([, , id]) => $(id)?.getAttribute('aria-pressed') === 'true')
@@ -248,6 +257,10 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     const blocked = !enabled && !canDisable && !canRecover && !data?.can_enable;
     const altered = !!data?.tampered;
     const released = !enabled && !!guardRelease(data);
+    const activeMode = mode?.value || data?.mode;
+    const fakeRouteUnready = activeMode === 'fake-ip'
+      && (data?.fake_ip_available === false || data?.fake_ip_route?.available === false);
+    const fakeRouteBlocked = fakeRouteUnready && data?.fake_ip_route?.confidence === 'blocked';
     if (mode && data?.mode && !busy) mode.value = data.mode;
     if (proxyGroup && data?.proxy_groups && !busy) {
       const selected = data.proxy_group || '';
@@ -262,7 +275,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     syncRuleProviderUi(data);
     if ((mode?.value || data?.mode) === 'fake-ip') syncFakeIpFilters(!!geodataEnable?.checked);
     if (modeHint) modeHint.textContent = (mode?.value || data?.mode) === 'fake-ip'
-      ? `${data?.fake_ip_available === false ? 'Нужен TUN/TProxy: прозрачный маршрут не обнаружен.' : 'TUN/TProxy обнаружен.'} Проверьте, что диапазон не пересекается с LAN/VPN.`
+      ? fakeIpRouteHint(data)
       : 'Совместимо с TProxy и большинством устройств LAN.';
     const geodataHint = $(IDS.geodataHint);
     if (geodataHint) {
@@ -274,16 +287,19 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     if (mode) mode.disabled = enabled || canDisable || altered;
     if (geodataEnable) geodataEnable.disabled = enabled || canDisable || altered;
     if (proxyGroup) proxyGroup.disabled = enabled || canDisable || altered;
-    const state = enabled ? 'enabled' : ((canDisable || canRecover || blocked || altered || released) ? 'blocked' : 'ready');
+    const state = enabled && !fakeRouteUnready ? 'enabled' : ((canDisable || canRecover || blocked || altered || released || fakeRouteUnready) ? 'blocked' : 'ready');
     if (badge) {
       badge.dataset.state = state;
       badge.textContent = enabled
-        ? (altered ? 'Включено · изменено вручную' : 'Включено')
-        : (released ? GUARD_RELEASED_BADGE : (canRecover ? 'DNS-блок удалён' : (altered ? 'Изменено вручную' : (canDisable ? 'Готово к восстановлению' : (blocked ? 'Требует внимания' : 'Готово')))));
+        ? (fakeRouteBlocked
+          ? 'Включено · Fake-IP заблокирован'
+          : (fakeRouteUnready ? 'Включено · маршрут не подтверждён' : (altered ? 'Включено · изменено вручную' : 'Включено')))
+        : (released ? GUARD_RELEASED_BADGE : (canRecover ? 'DNS-блок удалён' : (altered ? 'Изменено вручную' : (canDisable ? 'Готово к восстановлению' : ((blocked || fakeRouteUnready) ? 'Требует внимания' : 'Готово')))));
     }
-    if (dot) dot.dataset.state = enabled ? 'enabled' : ((blocked || altered || canRecover || released) ? 'blocked' : 'off');
+    if (dot) dot.dataset.state = enabled && !fakeRouteUnready ? 'enabled' : ((blocked || altered || canRecover || released || fakeRouteUnready) ? 'blocked' : 'off');
     if (status) {
-      if (enabled && altered) status.textContent = 'Защищённый DNS активен, но config.yaml был изменён вручную. Панель видит сохранённый DNS-блок и не станет автоматически откатывать ваши правки.';
+      if (enabled && fakeRouteUnready) status.textContent = data?.fake_ip_route?.message || 'DNS отвечает, но маршрут Fake-IP через firewall не подтверждён: соединения по виртуальным IP могут не работать.';
+      else if (enabled && altered) status.textContent = 'Защищённый DNS активен, но config.yaml был изменён вручную. Панель видит сохранённый DNS-блок и не станет автоматически откатывать ваши правки.';
       else if (enabled) status.textContent = 'Защищённый DNS активен: Mihomo отвечает на порту 53, а DNS override Keenetic включён.';
       else if (released) status.textContent = guardReleaseText(data);
       else if (canRecover) status.textContent = 'DNS-блок уже удалён вручную, а Keenetic DNS override выключен. Можно сохранить текущий config.yaml и завершить отключение без возврата старого снимка.';
@@ -316,6 +332,12 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       addDetail(`Keenetic DNS override: ${data.dns_override === true ? 'включён' : (data.dns_override === false ? 'выключен' : 'не определён')}`, data.dns_override == null ? 'warn' : 'ok');
       const guard = guardNotice(data, enabled);
       addDetail(guard.text, guard.kind);
+      if ((mode?.value || data?.mode) === 'fake-ip' && data?.fake_ip_route?.message) {
+        addDetail(
+          `Маршрут Fake-IP: ${data.fake_ip_route.message}`,
+          data.fake_ip_route.available ? 'ok' : 'warn',
+        );
+      }
       if ((mode?.value || data?.mode) === 'fake-ip' && geodataEnable?.checked && geodata?.notice) {
         addDetail(`GeoSite: ${geodata.notice}`, geodata.private_available ? 'ok' : 'warn');
       }
@@ -426,7 +448,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       if (fake) syncFakeIpFilters(!!$(IDS.geodataEnable)?.checked);
       const hint = $(IDS.modeHint);
       if (hint) hint.textContent = fake
-        ? `${current?.fake_ip_available === false ? 'Нужен TUN/TProxy: прозрачный маршрут не обнаружен.' : 'Проверьте наличие TUN/TProxy.'} Диапазон не должен пересекаться с LAN/VPN.`
+        ? fakeIpRouteHint(current)
         : 'Совместимо с TProxy и большинством устройств LAN.';
     });
     $(IDS.geodataEnable)?.addEventListener('change', () => {

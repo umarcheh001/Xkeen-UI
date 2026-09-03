@@ -18,6 +18,7 @@ import json
 import os
 import random
 import re
+import shlex
 import shutil
 import socket
 import struct
@@ -82,6 +83,8 @@ DEFAULT_FAKE_IP_DNS_POLICY = {
 }
 DNS_MODES = ("redir-host", "fake-ip")
 FAKE_IP_FILTER_MODES = ("blacklist", "whitelist", "rule")
+IPTABLES_BINARIES = ("/opt/sbin/iptables", "iptables")
+XKEEN_FIREWALL_CHAIN = "xkeen"
 _LOCK = threading.RLock()
 
 
@@ -210,7 +213,14 @@ def _dns_runtime_config(text: str) -> dict[str, Any]:
 
     section = _top_level_section(text, "dns")
     if section is None:
-        return {"present": False, "enabled": False, "listen": "", "listener_configured": False, "mode": ""}
+        return {
+            "present": False,
+            "enabled": False,
+            "listen": "",
+            "listener_configured": False,
+            "mode": "",
+            "fake_ip_range": "",
+        }
 
     body = section[2]
 
@@ -222,6 +232,7 @@ def _dns_runtime_config(text: str) -> dict[str, Any]:
     dns_enabled = enabled_value in {"true", "yes", "on", "1"}
     listen = nested_scalar("listen")
     mode = nested_scalar("enhanced-mode").lower()
+    fake_ip_range = nested_scalar("fake-ip-range")
     normalized_listen = listen.rsplit("/", 1)[0].strip().lower()
     listener_configured = bool(
         dns_enabled
@@ -233,6 +244,7 @@ def _dns_runtime_config(text: str) -> dict[str, Any]:
         "listen": listen,
         "listener_configured": listener_configured,
         "mode": mode,
+        "fake_ip_range": fake_ip_range,
     }
 
 
@@ -660,16 +672,344 @@ def _normalize_mode(mode: Any = None) -> str:
     return value
 
 
-def _fake_ip_route_available(text: str) -> bool:
-    """Fake-IP needs a transparent route capable of handling synthetic IPs."""
+def _transparent_ports(text: str) -> tuple[int, int]:
+    """Return the configured TProxy and Redirect listeners, if any."""
+
+    source = str(text or "")
+    tproxy = re.search(r"(?im)^tproxy-port\s*:\s*([1-9]\d*)\s*$", source)
+    redirect = re.search(r"(?im)^redir-port\s*:\s*([1-9]\d*)\s*$", source)
+    return (int(tproxy.group(1)) if tproxy else 0, int(redirect.group(1)) if redirect else 0)
+
+
+def _fake_ip_route_configured(text: str) -> bool:
+    """Whether YAML contains a possible transparent entry point."""
 
     tun = _top_level_section(text, "tun")
     if tun and re.search(r"(?im)^\s+enable\s*:\s*(?:true|yes|on|1)\b", tun[2]):
         return True
-    # Existing XKeen TProxy installations expose a tproxy-port.  It is a
-    # sufficient signal for the guarded assistant; users without either route
-    # are stopped before any config is written.
-    return bool(re.search(r"(?im)^tproxy-port\s*:\s*[1-9]\d*\s*$", str(text or "")))
+    return bool(_transparent_ports(text)[0])
+
+
+def _iptables_table_rules(table: str) -> tuple[str, str]:
+    """Read one live IPv4 firewall table without changing it."""
+
+    last_error = ""
+    for binary in IPTABLES_BINARIES:
+        try:
+            proc = subprocess.run(
+                [binary, "-w", "2", "-t", table, "-S"],
+                capture_output=True,
+                text=True,
+                timeout=4,
+            )
+        except FileNotFoundError:
+            last_error = "iptables не найден"
+            continue
+        except Exception as exc:  # noqa: BLE001 - status reports the failure
+            last_error = str(exc)
+            continue
+        if proc.returncode == 0:
+            return proc.stdout or "", ""
+        detail = (proc.stderr or proc.stdout or "").strip()
+        last_error = detail[-300:] if detail else f"iptables вернул код {proc.returncode}"
+    return "", last_error or "не удалось прочитать iptables"
+
+
+def _iptables_rules(text: str) -> dict[str, list[list[str]]]:
+    """Parse ``iptables -S`` into ordered rules grouped by chain."""
+
+    result: dict[str, list[list[str]]] = {}
+    for raw in str(text or "").splitlines():
+        try:
+            tokens = shlex.split(raw, comments=False, posix=True)
+        except ValueError:
+            continue
+        if len(tokens) < 3 or tokens[0] not in {"-A", "--append"}:
+            continue
+        result.setdefault(tokens[1], []).append(tokens[2:])
+    return result
+
+
+def _rule_value(tokens: list[str], *names: str) -> str:
+    for index, token in enumerate(tokens[:-1]):
+        if token in names:
+            return tokens[index + 1]
+    return ""
+
+
+def _rule_protocol_matches(tokens: list[str], protocol: str) -> bool:
+    value = _rule_value(tokens, "-p", "--protocol").lower()
+    if not value or value == "all":
+        return True
+    index = next((i for i, token in enumerate(tokens) if token in {"-p", "--protocol"}), -1)
+    inverted = index > 0 and tokens[index - 1] == "!"
+    return (value != protocol) if inverted else (value == protocol)
+
+
+def _rule_covers_network(tokens: list[str], network: ipaddress.IPv4Network) -> bool:
+    """Whether a destination selector matches every address in ``network``."""
+
+    index = next((i for i, token in enumerate(tokens[:-1]) if token in {"-d", "--destination"}), -1)
+    if index < 0:
+        return True
+    try:
+        destination = ipaddress.ip_network(tokens[index + 1], strict=False)
+    except ValueError:
+        return False
+    if destination.version != 4:
+        return False
+    inverted = index > 0 and tokens[index - 1] == "!"
+    return not network.overlaps(destination) if inverted else network.subnet_of(destination)
+
+
+def _network_return(tokens: list[str], network: ipaddress.IPv4Network, protocol: str) -> str:
+    """Return the CIDR of an unconditional range exclusion, or nothing."""
+
+    target = _rule_value(tokens, "-j", "--jump").upper()
+    destination = _rule_value(tokens, "-d", "--destination")
+    if target != "RETURN" or not destination:
+        return ""
+    # A policy/port/state-specific RETURN is not proof that the whole Fake-IP
+    # range is excluded. XKeen's inherited RFC 2544 rule has only a
+    # destination, comment and RETURN target, which is the case of interest.
+    conditional = {
+        "--dport", "--dports", "--sport", "--sports", "--mark", "--ctstate",
+        "--dscp", "--match-set", "--mac-source", "-i", "--in-interface",
+    }
+    if any(token in conditional for token in tokens):
+        return ""
+    if not _rule_protocol_matches(tokens, protocol):
+        return ""
+    try:
+        excluded = ipaddress.ip_network(destination, strict=False)
+    except ValueError:
+        return ""
+    index = next((i for i, token in enumerate(tokens[:-1]) if token in {"-d", "--destination"}), -1)
+    inverted = index > 0 and tokens[index - 1] == "!"
+    if inverted or excluded.version != 4 or not network.overlaps(excluded):
+        return ""
+    return str(excluded)
+
+
+def _firewall_path(
+    rules_text: str,
+    *,
+    network: ipaddress.IPv4Network,
+    protocol: str,
+    target: str,
+    port: int,
+) -> dict[str, Any]:
+    """Inspect XKeen's PREROUTING -> xkeen -> transparent-target path."""
+
+    rules = _iptables_rules(rules_text)
+    jump_present = any(
+        _rule_value(rule, "-j", "--jump") == XKEEN_FIREWALL_CHAIN
+        and _rule_protocol_matches(rule, protocol)
+        and _rule_covers_network(rule, network)
+        for rule in rules.get("PREROUTING", [])
+    )
+    expected_port_option = ("--on-port",) if target == "TPROXY" else ("--to-port", "--to-ports")
+    for rule in rules.get(XKEEN_FIREWALL_CHAIN, []):
+        exclusion = _network_return(rule, network, protocol)
+        if exclusion:
+            return {
+                "captured": False,
+                "blocked": True,
+                "exclusion": exclusion,
+                "chain": XKEEN_FIREWALL_CHAIN,
+            }
+        if (
+            _rule_value(rule, "-j", "--jump").upper() == target
+            and _rule_protocol_matches(rule, protocol)
+            and _rule_covers_network(rule, network)
+            and _rule_value(rule, *expected_port_option) == str(port)
+        ):
+            return {
+                "captured": bool(jump_present),
+                "blocked": False,
+                "chain": XKEEN_FIREWALL_CHAIN,
+                "jump_present": bool(jump_present),
+            }
+    return {
+        "captured": False,
+        "blocked": False,
+        "chain": XKEEN_FIREWALL_CHAIN,
+        "jump_present": bool(jump_present),
+    }
+
+
+def _fake_ip_route_available(text: str, fake_ip_range: str = DEFAULT_FAKE_IP_RANGE) -> bool:
+    """Whether a live transparent route handles the selected synthetic CIDR."""
+
+    return bool(_fake_ip_route_info(text, fake_ip_range)["available"])
+
+
+def _fake_ip_route_info(text: str, fake_ip_range: str = DEFAULT_FAKE_IP_RANGE) -> dict[str, Any]:
+    """Describe and verify the transparent route used by Fake-IP.
+
+    A ``tproxy-port`` only proves that Mihomo can listen there. For TProxy we
+    additionally require the active XKeen firewall path and reject the legacy
+    ``RETURN ... 198.18.0.0/15`` rule old installations can retain on upgrade.
+    """
+
+    requested_range = str(fake_ip_range or DEFAULT_FAKE_IP_RANGE).strip()
+    try:
+        network = ipaddress.ip_network(requested_range, strict=False)
+    except ValueError:
+        network = ipaddress.ip_network(DEFAULT_FAKE_IP_RANGE, strict=False)
+        requested_range = DEFAULT_FAKE_IP_RANGE
+    route_base = {"range": requested_range, "network": str(network)}
+
+    tun = _top_level_section(text, "tun")
+    if tun and re.search(r"(?im)^\s+enable\s*:\s*(?:true|yes|on|1)\b", tun[2]):
+        return {
+            **route_base,
+            "kind": "tun",
+            "available": True,
+            "confidence": "confirmed",
+            "message": f"TUN включён для маршрутизации Fake-IP {network}.",
+        }
+
+    tproxy_port, redirect_port = _transparent_ports(text)
+    if not tproxy_port:
+        return {
+            **route_base,
+            "kind": "none",
+            "available": False,
+            "confidence": "missing",
+            "message": "Нужен включённый TUN или подтверждённый TProxy-маршрут для Fake-IP.",
+        }
+
+    mangle_text, mangle_error = _iptables_table_rules("mangle")
+    nat_text, nat_error = _iptables_table_rules("nat") if redirect_port else ("", "")
+    if mangle_error or nat_error:
+        detail = mangle_error or nat_error
+        return {
+            **route_base,
+            "kind": "tproxy",
+            "mode": "hybrid" if redirect_port else "tproxy",
+            "port": tproxy_port,
+            "redirect_port": redirect_port or None,
+            "available": False,
+            "confidence": "unknown",
+            "firewall_error": detail,
+            "message": f"TProxy-порт {tproxy_port} указан, но firewall XKeen не удалось проверить: {detail}.",
+        }
+
+    required = [
+        (
+            "mangle",
+            "udp",
+            _firewall_path(
+                mangle_text,
+                network=network,
+                protocol="udp",
+                target="TPROXY",
+                port=tproxy_port,
+            ),
+        )
+    ]
+    if redirect_port:
+        required.append(
+            (
+                "nat",
+                "tcp",
+                _firewall_path(
+                    nat_text,
+                    network=network,
+                    protocol="tcp",
+                    target="REDIRECT",
+                    port=redirect_port,
+                ),
+            )
+        )
+    else:
+        required.append(
+            (
+                "mangle",
+                "tcp",
+                _firewall_path(
+                    mangle_text,
+                    network=network,
+                    protocol="tcp",
+                    target="TPROXY",
+                    port=tproxy_port,
+                ),
+            )
+        )
+
+    blocked = next(((table, protocol, path) for table, protocol, path in required if path.get("blocked")), None)
+    if blocked:
+        table, protocol, path = blocked
+        exclusion = str(path.get("exclusion") or "")
+        return {
+            **route_base,
+            "kind": "tproxy",
+            "mode": "hybrid" if redirect_port else "tproxy",
+            "port": tproxy_port,
+            "redirect_port": redirect_port or None,
+            "available": False,
+            "confidence": "blocked",
+            "firewall": {
+                "table": table,
+                "chain": path.get("chain") or XKEEN_FIREWALL_CHAIN,
+                "protocol": protocol,
+                "exclusion": exclusion,
+            },
+            "message": (
+                f"Firewall XKeen исключает Fake-IP {network}: правило RETURN для {exclusion} "
+                f"в цепочке {XKEEN_FIREWALL_CHAIN}. Уберите старое исключение из настроек XKeen "
+                "или выполните чистую установку актуальной версии, затем перезапустите XKeen."
+            ),
+        }
+
+    missing = [f"{protocol.upper()} ({table})" for table, protocol, path in required if not path.get("captured")]
+    if missing:
+        return {
+            **route_base,
+            "kind": "tproxy",
+            "mode": "hybrid" if redirect_port else "tproxy",
+            "port": tproxy_port,
+            "redirect_port": redirect_port or None,
+            "available": False,
+            "confidence": "unverified",
+            "missing_paths": missing,
+            "message": (
+                f"TProxy-порт {tproxy_port} указан, но firewall XKeen не подтвердил перехват "
+                f"Fake-IP {network}: не найден путь {', '.join(missing)}."
+            ),
+        }
+
+    route_label = (
+        f"TCP → REDIRECT {redirect_port}, UDP → TProxy {tproxy_port}"
+        if redirect_port
+        else f"TCP/UDP → TProxy {tproxy_port}"
+    )
+    return {
+        **route_base,
+        "kind": "tproxy",
+        "mode": "hybrid" if redirect_port else "tproxy",
+        "port": tproxy_port,
+        "redirect_port": redirect_port or None,
+        "available": True,
+        "confidence": "confirmed",
+        "message": f"Firewall XKeen перехватывает Fake-IP {network}: {route_label}.",
+    }
+
+
+def _wait_for_fake_ip_route(
+    text: str,
+    fake_ip_range: str,
+    timeout: float = 6.0,
+) -> dict[str, Any]:
+    """Allow XKeen's netfilter hook to restore chains after a restart."""
+
+    deadline = time.monotonic() + max(0.2, float(timeout or 0))
+    result = _fake_ip_route_info(text, fake_ip_range)
+    while not result.get("available") and result.get("confidence") != "blocked" and time.monotonic() < deadline:
+        time.sleep(0.2)
+        result = _fake_ip_route_info(text, fake_ip_range)
+    return result
 
 
 def _with_geodata_defaults(text: str) -> str:
@@ -866,7 +1206,7 @@ def build_enabled_config(
             code="dns_conflict",
         )
     normalized_mode = _normalize_mode(mode)
-    if normalized_mode == "fake-ip" and not _fake_ip_route_available(original):
+    if normalized_mode == "fake-ip" and not _fake_ip_route_configured(original):
         raise MihomoDnsError("Fake-IP требует включённый TUN или TProxy-маршрут.", code="fake_ip_route_missing")
     source = _with_geodata_defaults(original) if (geodata and normalized_mode == "fake-ip") else original
     # GeoSite DAT and domain MRS providers are alternative sources.  Never add
@@ -1096,6 +1436,13 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
     partial = bool((has_begin or has_end) and not exact)
     group = str(state.get("proxy_group") or "") if exact else str(_select_proxy_group(text) or "")
     mode = str(state.get("mode") or dns_runtime.get("mode") or "redir-host").strip().lower()
+    state_fake_ip = state.get("fake_ip") if isinstance(state.get("fake_ip"), dict) else {}
+    fake_ip_range = str(
+        state_fake_ip.get("range")
+        or dns_runtime.get("fake_ip_range")
+        or DEFAULT_FAKE_IP_RANGE
+    )
+    fake_ip_route = _fake_ip_route_info(text, fake_ip_range)
     # A user may remove the complete managed block manually.  If Keenetic's
     # DNS override is already off, never restore the old snapshot over those
     # unrelated edits; offer a metadata-only recovery instead.
@@ -1143,9 +1490,12 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         "dns_listener_configured": bool(dns_runtime["listener_configured"]),
         "listen": str(dns_runtime["listen"] or DNS_LISTEN),
         "mode": mode if mode in DNS_MODES else "redir-host",
-        "fake_ip": state.get("fake_ip") if isinstance(state.get("fake_ip"), dict) else None,
+        "fake_ip": state_fake_ip or None,
         "rule_providers": state.get("rule_providers") if isinstance(state.get("rule_providers"), list) else [],
-        "fake_ip_available": _fake_ip_route_available(text),
+        # Keep the boolean for API compatibility. Unlike the old value it is
+        # true for TProxy only after the selected CIDR reaches the live target.
+        "fake_ip_available": bool(fake_ip_route["available"]),
+        "fake_ip_route": fake_ip_route,
         "geodata": geodata,
         "blockers": blockers,
         # The port-53 guard is shared with DNS-over-VLESS, so this window says
@@ -1192,6 +1542,25 @@ def apply_action(
                     code="enable_blocked",
                     details=status.get("blockers"),
                 )
+            normalized_mode = _normalize_mode(mode)
+            fake_options = (
+                _normalize_fake_ip_options(fake_ip, config_text=current)
+                if normalized_mode == "fake-ip"
+                else None
+            )
+            if fake_options is not None:
+                route = _fake_ip_route_info(current, fake_options["range"])
+                if not route.get("available"):
+                    code = (
+                        "fake_ip_firewall_excluded"
+                        if route.get("confidence") == "blocked"
+                        else "fake_ip_route_unverified"
+                    )
+                    raise MihomoDnsError(
+                        str(route.get("message") or "Маршрут Fake-IP не подтверждён."),
+                        code=code,
+                        details=route,
+                    )
             prepared, group = build_enabled_config(
                 current,
                 str(proxy_group or status.get("proxy_group") or ""),
@@ -1229,6 +1598,19 @@ def apply_action(
                     raise MihomoDnsError("Mihomo не запустился с новой конфигурацией.", code="mihomo_restart_failed")
                 if not _wait_for_mihomo() or not _wait_for_port_53(should_be_free=False):
                     raise MihomoDnsError("DNS-слушатель Mihomo не запустился на порту 53.", code="dns_listener_failed")
+                applied_route = None
+                if fake_options is not None:
+                    applied_route = _wait_for_fake_ip_route(prepared, fake_options["range"])
+                    if not applied_route.get("available"):
+                        raise MihomoDnsError(
+                            str(applied_route.get("message") or "После перезапуска маршрут Fake-IP не подтверждён."),
+                            code=(
+                                "fake_ip_firewall_excluded"
+                                if applied_route.get("confidence") == "blocked"
+                                else "fake_ip_route_unverified"
+                            ),
+                            details=applied_route,
+                        )
                 probe = _dns_probe()
                 if not probe.get("ok"):
                     raise MihomoDnsError(
@@ -1246,9 +1628,9 @@ def apply_action(
                     "original_dns_override": original_override,
                     "proxy_group": group,
                     "listen": DNS_LISTEN,
-                    "mode": _normalize_mode(mode),
-                    "fake_ip": ({k: v for k, v in _normalize_fake_ip_options(fake_ip, config_text=prepared).items() if k != "network"} if _normalize_mode(mode) == "fake-ip" else None),
-                    "rule_providers": _normalize_domain_rule_providers(rule_providers) if _normalize_mode(mode) == "fake-ip" and not geodata else [],
+                    "mode": normalized_mode,
+                    "fake_ip": ({k: v for k, v in fake_options.items() if k != "network"} if fake_options else None),
+                    "rule_providers": _normalize_domain_rule_providers(rule_providers) if normalized_mode == "fake-ip" and not geodata else [],
                 }
                 _save_state(ui_state_dir, config_file, next_state)
                 _clear_release(ui_state_dir, config_file)
@@ -1257,9 +1639,10 @@ def apply_action(
                     "enabled": True,
                     "proxy_group": group,
                     "listen": DNS_LISTEN,
-                    "mode": _normalize_mode(mode),
-                    "fake_ip": ({k: v for k, v in _normalize_fake_ip_options(fake_ip).items() if k != "network"} if _normalize_mode(mode) == "fake-ip" else None),
-                    "rule_providers": _normalize_domain_rule_providers(rule_providers) if _normalize_mode(mode) == "fake-ip" and not geodata else [],
+                    "mode": normalized_mode,
+                    "fake_ip": ({k: v for k, v in fake_options.items() if k != "network"} if fake_options else None),
+                    "fake_ip_route": applied_route,
+                    "rule_providers": _normalize_domain_rule_providers(rule_providers) if normalized_mode == "fake-ip" and not geodata else [],
                     "backup": str(getattr(backup, "filename", "") or "") or None,
                     "probe": probe,
                 }
