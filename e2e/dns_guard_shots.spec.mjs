@@ -90,6 +90,16 @@ const MIHOMO_RELEASED = {
   },
 };
 
+const MIHOMO_CUSTOM_DNS = {
+  ...MIHOMO_ENABLED,
+  prepared: false,
+  can_disable: false,
+  can_release: true,
+  blockers: [
+    'Обнаружен пользовательский DNS Mihomo на порту 53. Полного снимка нет; панель может сохранить блок и вернуть DNS прошивке Keenetic.',
+  ],
+};
+
 const MIHOMO_RULE_PROVIDER_STATUS = {
   ...MIHOMO_BASE,
   mode: 'fake-ip',
@@ -201,6 +211,26 @@ test('Mihomo DNS: the guard handed DNS back', async ({ page }) => {
   await openMihomo(page, MIHOMO_RELEASED);
   await expect(page.locator('#mihomo-dns-badge')).toHaveText('Снято сторожем');
   await shoot(page, '#mihomo-dns-modal .modal-content', '4-mihomo-guard-released');
+});
+
+test('Mihomo DNS: user-owned DNS can be returned to Keenetic without restoring a snapshot', async ({ page }) => {
+  const postBodies = [];
+  await openMihomo(page, MIHOMO_CUSTOM_DNS);
+  await page.route('**/api/mihomo/dns', async (route) => {
+    if (route.request().method() === 'POST') {
+      postBodies.push(route.request().postDataJSON());
+      await route.fulfill({ json: { ok: true, enabled: false, released: true, dns_block_preserved: true } });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await expect(page.locator('#mihomo-dns-apply')).toHaveText('Вернуть DNS Keenetic');
+  await page.locator('#mihomo-dns-apply').click();
+  await expect(page.locator('#confirm-modal')).toContainText('dns.enable на false');
+  await page.locator('#confirm-modal-ok-btn').click();
+  await expect.poll(() => postBodies.length).toBe(1);
+  expect(postBodies[0].action).toBe('release');
 });
 
 test('Mihomo DNS: a legacy XKeen RETURN is shown as a broken Fake-IP route', async ({ page }) => {

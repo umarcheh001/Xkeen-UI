@@ -2815,7 +2815,7 @@
             <div class="mihomo-dns-field">
               <label for="mihomo-dns-proxy-group">Proxy-группа для DoH</label>
               <select id="mihomo-dns-proxy-group"><option value="">Автоматический выбор</option></select>
-              <label class="dt-switch xk-mini-switch mihomo-dns-geodata-toggle mihomo-dns-selector-toggle" title="Добавить в Mihomo отдельную группу DNS Proxy с выбранным маршрутом и DIRECT.">
+              <label class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-geodata-toggle mihomo-dns-selector-toggle" title="Добавить в Mihomo отдельную группу DNS Proxy с выбранным маршрутом и DIRECT.">
                 <input type="checkbox" id="mihomo-dns-selector-enable" aria-describedby="mihomo-dns-selector-hint">
                 <span class="dt-switch-slider" aria-hidden="true"></span>
                 <span class="dt-switch-label">Создать переключатель DNS Proxy</span>
@@ -2878,11 +2878,11 @@ rule-set:category-ai@domain
           <div class="routing-dns-over-vless-safety" aria-label="Защита операции">
             <div>{{ op_icon('validate') }}<span><b>Mihomo preflight</b><small>Проверка временного YAML до записи</small></span></div>
             <div>{{ op_icon('backup') }}<span><b>Полный снимок</b><small>Исходный config.yaml и DNS override</small></span></div>
-            <div>{{ op_icon('restore') }}<span><b>Автооткат</b><small>При ошибке старта или DNS-теста</small></span></div>
+            <div>{{ op_icon('restore') }}<span><b>Автооткат без потери правок</b><small>Изменённый DNS-блок можно сохранить и отключить</small></span></div>
           </div>
 
           <ul id="mihomo-dns-details" class="routing-dns-over-vless-details"></ul>
-          <p class="modal-hint routing-dns-over-vless-warning">Пользовательский раздел <code>dns:</code> не перезаписывается. Настройки применяются транзакционно и автоматически откатываются при ошибке.</p>
+          <p class="modal-hint routing-dns-over-vless-warning">Пользовательский раздел <code>dns:</code> не заменяется пресетом. При возврате DNS прошивке он остаётся в файле с <code>enable: false</code>; один <code>no opkg dns-override</code> не отключает слушатель Mihomo.</p>
           <p class="routing-dns-over-vless-links">Устройства по‑прежнему используют DNS роутера — Keenetic автоматически направляет запросы в Mihomo.</p>
         </div>
         <div class="modal-actions routing-dns-over-vless-actions">

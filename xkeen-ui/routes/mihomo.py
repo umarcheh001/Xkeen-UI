@@ -1455,7 +1455,7 @@ def create_mihomo_blueprint(
 
     @bp.post("/api/mihomo/dns")
     def api_mihomo_dns_apply():
-        """Validate, snapshot, apply/revert, restart and health-check DNS."""
+        """Apply, restore, or softly release Mihomo DNS after confirmation."""
         data = request.get_json(silent=True) or {}
         action = str(data.get("action") or "").strip().lower()
         mode = str(data.get("mode") or "redir-host").strip().lower()

@@ -262,9 +262,12 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     const enabled = !!data?.enabled;
     const canDisable = !!data?.can_disable;
     const canRecover = !!data?.can_recover;
-    const blocked = !enabled && !canDisable && !canRecover && !data?.can_enable;
+    const canRelease = !!data?.can_release;
+    const blocked = !enabled && !canDisable && !canRecover && !canRelease && !data?.can_enable;
     const altered = !!data?.tampered;
-    const released = !enabled && !!guardRelease(data);
+    const releaseRecord = guardRelease(data);
+    const released = !enabled && !!releaseRecord;
+    const releasedByUser = released && releaseRecord?.source === 'user';
     const activeMode = mode?.value || data?.mode;
     const fakeRouteUnready = activeMode === 'fake-ip'
       && (data?.fake_ip_available === false || data?.fake_ip_route?.available === false);
@@ -312,22 +315,24 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     if (mode) mode.disabled = enabled || canDisable || altered;
     if (geodataEnable) geodataEnable.disabled = enabled || canDisable || altered;
     if (proxyGroup) proxyGroup.disabled = enabled || canDisable || altered;
-    const state = enabled && !fakeRouteUnready ? 'enabled' : ((canDisable || canRecover || blocked || altered || released || fakeRouteUnready) ? 'blocked' : 'ready');
+    const state = enabled && !fakeRouteUnready ? 'enabled' : ((canDisable || canRecover || canRelease || blocked || altered || released || fakeRouteUnready) ? 'blocked' : 'ready');
     if (badge) {
       badge.dataset.state = state;
       badge.textContent = enabled
         ? (fakeRouteBlocked
           ? 'Включено · Fake-IP заблокирован'
           : (fakeRouteUnready ? 'Включено · маршрут не подтверждён' : (altered ? 'Включено · изменено вручную' : 'Включено')))
-        : (released ? GUARD_RELEASED_BADGE : (canRecover ? 'DNS-блок удалён' : (altered ? 'Изменено вручную' : (canDisable ? 'Готово к восстановлению' : ((blocked || fakeRouteUnready) ? 'Требует внимания' : 'Готово')))));
+        : (released ? (releasedByUser ? 'DNS у Keenetic' : GUARD_RELEASED_BADGE) : (canRecover ? 'DNS-блок удалён' : (canRelease ? 'Можно вернуть Keenetic DNS' : (altered ? 'Изменено вручную' : (canDisable ? 'Готово к восстановлению' : ((blocked || fakeRouteUnready) ? 'Требует внимания' : 'Готово'))))));
     }
-    if (dot) dot.dataset.state = enabled && !fakeRouteUnready ? 'enabled' : ((blocked || altered || canRecover || released || fakeRouteUnready) ? 'blocked' : 'off');
+    if (dot) dot.dataset.state = enabled && !fakeRouteUnready ? 'enabled' : ((blocked || altered || canRecover || canRelease || released || fakeRouteUnready) ? 'blocked' : 'off');
     if (status) {
       if (enabled && fakeRouteUnready) status.textContent = data?.fake_ip_route?.message || 'DNS отвечает, но маршрут Fake-IP через firewall не подтверждён: соединения по виртуальным IP могут не работать.';
+      else if (enabled && canRelease) status.textContent = 'Работает пользовательский или изменённый DNS Mihomo. Можно сохранить весь блок, выключить в нём только enable и вернуть DNS прошивке Keenetic.';
       else if (enabled && altered) status.textContent = 'Защищённый DNS активен, но config.yaml был изменён вручную. Панель видит сохранённый DNS-блок и не станет автоматически откатывать ваши правки.';
       else if (enabled) status.textContent = 'Защищённый DNS активен: Mihomo отвечает на порту 53, а DNS override Keenetic включён.';
       else if (released) status.textContent = guardReleaseText(data);
       else if (canRecover) status.textContent = 'DNS-блок уже удалён вручную, а Keenetic DNS override выключен. Можно сохранить текущий config.yaml и завершить отключение без возврата старого снимка.';
+      else if (canRelease) status.textContent = 'DNS override Keenetic включён для пользовательской или изменённой конфигурации. Панель может сохранить DNS-блок, выключить в нём только enable и вернуть DNS роутеру.';
       else if (altered) status.textContent = 'После включения config.yaml был изменён. Панель не станет автоматически перезаписывать эти правки.';
       else if (canDisable) status.textContent = 'DNS-конфигурация подготовлена. Можно безопасно вернуть полный исходный снимок.';
       else if (blocked) status.textContent = 'Автоматическая настройка остановлена, чтобы не затронуть существующий DNS или маршрутизацию.';
@@ -377,10 +382,10 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     }
 
     if (apply) {
-      apply.disabled = busy || (altered && !canRecover) || (!enabled && !canDisable && !canRecover && blocked);
-      apply.textContent = busy ? 'Выполняется…' : (canRecover ? 'Сохранить текущий конфиг' : ((enabled || canDisable) ? 'Отключить и восстановить' : 'Включить защищённый DNS'));
-      apply.classList.toggle('btn-danger', enabled || canDisable);
-      apply.classList.toggle('btn-primary', !enabled && !canDisable);
+      apply.disabled = busy || (!enabled && !canDisable && !canRecover && !canRelease && blocked);
+      apply.textContent = busy ? 'Выполняется…' : (canRelease ? 'Вернуть DNS Keenetic' : (canRecover ? 'Сохранить текущий конфиг' : ((enabled || canDisable) ? 'Отключить и восстановить' : 'Включить защищённый DNS')));
+      apply.classList.toggle('btn-danger', enabled || canDisable || canRelease);
+      apply.classList.toggle('btn-primary', !enabled && !canDisable && !canRelease);
     }
   }
 
@@ -423,19 +428,22 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
   async function apply() {
     if (busy || !current) return;
     const recovery = !!current.can_recover;
-    const action = (current.enabled || current.can_disable || recovery) ? 'disable' : 'enable';
+    const softRelease = !!current.can_release;
+    const action = softRelease ? 'release' : ((current.enabled || current.can_disable || recovery) ? 'disable' : 'enable');
     const createsDnsSelector = action === 'enable' && !!$(IDS.dnsSelectorEnable)?.checked;
-    const message = recovery
+    const message = softRelease
+      ? 'Панель сохранит текущий config.yaml и весь раздел dns, изменит только dns.enable на false, перезапустит Mihomo для освобождения порта 53 и вернёт DNS прошивке Keenetic. Старый снимок поверх ваших правок восстановлен не будет.'
+      : recovery
       ? 'DNS-блок уже отсутствует в config.yaml, а DNS override Keenetic выключен. Панель проверит текущий YAML и очистит только устаревшее состояние мастера; ваши ручные правки не будут заменены старым снимком.'
       : action === 'enable'
       ? `Панель добавит отдельный DNS-блок, направит DoH через выбранную proxy-группу${createsDnsSelector ? ', создаст переключатель DNS Proxy с выходами через эту группу и DIRECT' : ''}, включит DNS override Keenetic, перезапустит Mihomo и проверит реальный DNS-ответ. При ошибке всё будет восстановлено.`
       : 'Панель вернёт точный снимок config.yaml и исходное состояние DNS Keenetic. Изменяются только объекты однокнопочной настройки.';
     const confirmed = await confirmMihomoAction({
-      title: action === 'enable' ? 'Включить защищённый DNS?' : 'Отключить защищённый DNS?',
+      title: action === 'enable' ? 'Включить защищённый DNS?' : (softRelease ? 'Вернуть DNS прошивке Keenetic?' : 'Отключить защищённый DNS?'),
       message,
-      okText: action === 'enable' ? 'Включить' : (recovery ? 'Сохранить текущий конфиг' : 'Восстановить'),
+      okText: action === 'enable' ? 'Включить' : (softRelease ? 'Вернуть DNS Keenetic' : (recovery ? 'Сохранить текущий конфиг' : 'Восстановить')),
       cancelText: 'Отмена',
-      danger: action === 'disable',
+      danger: action !== 'enable',
     }, message);
     if (!confirmed) return;
 
@@ -445,7 +453,9 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       const result = await postAction(action);
       toastXkeen(action === 'enable'
         ? `Защищённый DNS включён${result?.probe?.latency_ms != null ? ` · ${result.probe.latency_ms} мс` : ''}`
-        : (result?.recovered
+        : (result?.released
+          ? 'DNS возвращён прошивке Keenetic; пользовательский блок Mihomo сохранён и отключён.'
+          : result?.recovered
           ? 'Старое состояние DNS очищено, текущий config.yaml сохранён.'
           : 'DNS Mihomo отключён, исходная конфигурация восстановлена.'), 'success');
       const panel = getMihomoPanelApi();

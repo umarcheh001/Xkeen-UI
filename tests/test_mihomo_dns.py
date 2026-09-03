@@ -253,6 +253,24 @@ def test_build_refuses_existing_user_dns_without_rewriting_it():
     assert captured.value.code == "dns_conflict"
 
 
+def test_soft_release_disables_only_the_dns_switch():
+    source = BASE + """
+dns:
+  enable: true # chosen by user
+  listen: 0.0.0.0:53
+  nameserver:
+    - https://resolver.example/dns-query
+"""
+
+    parked, changed = dns._with_dns_disabled(source)
+
+    assert changed is True
+    assert "  enable: false # chosen by user" in parked
+    assert "  listen: 0.0.0.0:53" in parked
+    assert "https://resolver.example/dns-query" in parked
+    assert parked.replace("enable: false", "enable: true") == source
+
+
 def test_proxy_group_selection_uses_first_real_group_as_fallback():
     source = BASE.replace("Заблок. сервисы", "Мой маршрут")
     content, group = dns.build_enabled_config(source)
@@ -366,17 +384,18 @@ def test_status_exposes_the_live_xkeen_fake_ip_exclusion(tmp_path: Path, monkeyp
     assert "правило RETURN для 198.18.0.0/15" in result["fake_ip_route"]["message"]
 
 
-def test_existing_user_dns_is_not_claimed_as_assistant_enabled(tmp_path: Path, monkeypatch):
+def test_existing_user_dns_can_be_returned_to_keenetic_without_a_snapshot(tmp_path: Path, monkeypatch):
     config, state = _status_ready(tmp_path, monkeypatch)
     config.write_text(BASE + "\ndns:\n  enable: true\n  listen: 0.0.0.0:53\n", encoding="utf-8")
     monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
 
     result = dns.get_status(config_file=str(config), ui_state_dir=str(state))
 
-    assert result["enabled"] is False
+    assert result["enabled"] is True
     assert result["dns_listener_configured"] is True
     assert result["can_enable"] is False
-    assert any("уже есть раздел dns" in message for message in result["blockers"])
+    assert result["can_release"] is True
+    assert any("пользовательский DNS Mihomo" in message for message in result["blockers"])
 
 
 def test_enable_validates_saves_switches_restarts_and_probes(tmp_path: Path, monkeypatch):
@@ -572,6 +591,97 @@ def test_tampering_stops_automatic_disable(tmp_path: Path, monkeypatch):
 
     assert status["tampered"] is True
     assert status["can_disable"] is False
+    assert status["can_release"] is True
+
+
+def test_soft_release_preserves_an_edited_dns_block_and_returns_firmware_dns(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    prepared, group = dns.build_enabled_config(BASE)
+    edited = prepared.replace("prefer-h3: false", "prefer-h3: true") + "# user's routing edit\n"
+    config.write_text(edited, encoding="utf-8")
+    snapshot = tmp_path / "before.yaml"
+    snapshot.write_text(BASE, encoding="utf-8")
+    dns._save_state(str(state), str(config), {
+        "enabled": True,
+        "original_config": str(snapshot),
+        "original_sha256": dns._sha256(BASE),
+        "applied_sha256": dns._sha256(prepared),
+        "original_dns_override": False,
+        "proxy_group": group,
+    })
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda **_kwargs: True)
+    calls: list[object] = []
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: calls.append(("override", enabled)))
+
+    def save_config(content):
+        calls.append(("save", content))
+        config.write_text(content, encoding="utf-8")
+        return type("Backup", (), {"filename": "edited.yaml"})()
+
+    result = dns.apply_action(
+        "release",
+        config_file=str(config),
+        ui_state_dir=str(state),
+        validate_config=lambda **kwargs: calls.append(("validate", kwargs["new_content"])) or "[exit code: 0]",
+        save_config=save_config,
+        restart_xkeen=lambda **kwargs: calls.append(("restart", kwargs["source"])) or True,
+    )
+
+    parked = config.read_text(encoding="utf-8")
+    assert result["released"] is True
+    assert result["dns_block_preserved"] is True
+    assert "  enable: false" in parked
+    assert "prefer-h3: true" in parked
+    assert "# user's routing edit" in parked
+    assert BASE != parked
+    assert calls[-3][0] == "save"
+    assert calls[-2] == ("restart", "mihomo-dns-soft-release")
+    assert calls[-1] == ("override", False)
+    assert not (state / "mihomo-dns" / dns.STATE_FILENAME).exists()
+    trace = dns.read_release(config_file=str(config), ui_state_dir=str(state))
+    assert trace and trace["source"] == "user"
+
+
+def test_soft_release_rolls_the_file_back_when_mihomo_cannot_restart(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    prepared, group = dns.build_enabled_config(BASE)
+    edited = prepared + "# keep this user edit\n"
+    config.write_text(edited, encoding="utf-8")
+    snapshot = tmp_path / "before.yaml"
+    snapshot.write_text(BASE, encoding="utf-8")
+    dns._save_state(str(state), str(config), {
+        "enabled": True,
+        "original_config": str(snapshot),
+        "original_sha256": dns._sha256(BASE),
+        "applied_sha256": dns._sha256(prepared),
+        "original_dns_override": False,
+        "proxy_group": group,
+    })
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    overrides: list[bool] = []
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: overrides.append(enabled))
+    restarts: list[str] = []
+
+    def save_config(content):
+        config.write_text(content, encoding="utf-8")
+        return type("Backup", (), {"filename": "edited.yaml"})()
+
+    with pytest.raises(dns.MihomoDnsError) as captured:
+        dns.apply_action(
+            "release",
+            config_file=str(config),
+            ui_state_dir=str(state),
+            validate_config=lambda **_kwargs: "[exit code: 0]",
+            save_config=save_config,
+            restart_xkeen=lambda **kwargs: restarts.append(kwargs["source"]) or kwargs["source"].endswith("rollback"),
+        )
+
+    assert captured.value.code == "dns_soft_release_restart_failed"
+    assert config.read_text(encoding="utf-8") == edited
+    assert overrides == []
+    assert restarts == ["mihomo-dns-soft-release", "mihomo-dns-soft-release-rollback"]
+    assert (state / "mihomo-dns" / dns.STATE_FILENAME).exists()
 
 
 def test_manually_edited_config_keeps_runtime_dns_status_without_managed_comments(tmp_path: Path, monkeypatch):
@@ -674,10 +784,13 @@ def test_http_contract_and_frontend(tmp_path: Path, monkeypatch):
     assert "Mihomo preflight" in template
     assert "Полный снимок" in template
     assert "Автооткат" in template
+    assert "один <code>no opkg dns-override</code> не отключает слушатель Mihomo" in template
     assert "Keenetic автоматически направляет запросы в Mihomo" in template
     assert "192.168.1.1:1054" not in template
     assert "'/api/mihomo/dns'" in script
     assert "Включить защищённый DNS" in script
+    assert "Вернуть DNS Keenetic" in script
+    assert "const action = softRelease ? 'release'" in script
     assert "geosite:category-ru" in script
     assert "TUN/TProxy обнаружен" not in script
     assert "Маршрут Fake-IP через TUN/TProxy не подтверждён" in script

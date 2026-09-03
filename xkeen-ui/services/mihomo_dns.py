@@ -250,6 +250,61 @@ def _dns_runtime_config(text: str) -> dict[str, Any]:
     }
 
 
+def _with_dns_disabled(text: str) -> tuple[str, bool]:
+    """Disable Mihomo DNS without deleting the user's ``dns`` mapping.
+
+    ``no opkg dns-override`` only asks KeeneticOS to start its own resolver; it
+    does not make Mihomo ignore a listener that is still configured on port 53.
+    A restart with that listener intact leaves the two processes racing for the
+    same socket.  For a config edited after the assistant ran (or a completely
+    user-owned config), preserve the mapping and change only its direct
+    ``enable`` key instead of restoring an old whole-file snapshot.
+
+    The assistant already inspects this small part of YAML textually so that it
+    never reformats the rest of a profile.  Use the least-indented ``enable``
+    key in the section: nested mappings may legally contain keys with the same
+    name, but the direct DNS switch is the shallow one.
+    """
+
+    source = str(text or "")
+    section = _top_level_section(source, "dns")
+    if section is None:
+        return source, False
+    start, _end, body = section
+    first_line, separator, tail = body.partition("\n")
+    # Flow-style mappings cannot be patched byte-for-byte with this narrow
+    # helper.  Refuse to guess; the emergency path will still restore the
+    # firmware switch and record that the listener could not be parked.
+    if first_line.partition(":")[2].strip():
+        return source, False
+
+    matches = list(re.finditer(
+        r"(?m)^(?P<indent>[ \t]+)enable(?P<colon>[ \t]*:[ \t]*)"
+        r"(?P<value>[^#\r\n]*?)(?P<comment>[ \t]*(?:#.*)?)$",
+        body,
+    ))
+    if matches:
+        match = min(matches, key=lambda item: len(item.group("indent").expandtabs(8)))
+        value = _strip_yaml_scalar(match.group("value")).lower()
+        if value in {"false", "no", "off", "0"}:
+            return source, False
+        replacement = (
+            f'{match.group("indent")}enable{match.group("colon")}false'
+            f'{match.group("comment")}'
+        )
+        patched_body = body[:match.start()] + replacement + body[match.end():]
+    else:
+        # A missing enable key means Mihomo's DNS is not active, but inserting
+        # an explicit false makes the parked state unambiguous on later edits.
+        indent_match = re.search(r"(?m)^([ \t]+)[A-Za-z0-9_.-]+[ \t]*:", tail)
+        indent = indent_match.group(1) if indent_match else "  "
+        patched_body = first_line + "\n" + indent + "enable: false"
+        if separator:
+            patched_body += "\n" + tail
+
+    return source[:start] + patched_body + source[start + len(body):], True
+
+
 def _proxy_groups(text: str) -> list[str]:
     section = _top_level_section(text, "proxy-groups")
     if not section:
@@ -1467,9 +1522,11 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
     # used to decide whether DNS is actually configured: a manual save or YAML
     # formatter can remove the managed comments while preserving a working DNS
     # block.  Keep those two concepts separate.
+    # Runtime ownership is a property of the live DNS listener and Keenetic's
+    # switch, not of our transaction marker.  This also lets the panel and the
+    # shared guard help with a fully user-authored Mihomo DNS section.
     enabled = bool(
-        state
-        and core == "mihomo"
+        core == "mihomo"
         and dns_runtime["listener_configured"]
         and override is True
     )
@@ -1500,6 +1557,19 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         and not has_end
         and override is False
     )
+    # Once the current file differs from our applied hash, restoring the old
+    # full snapshot could erase legitimate user work.  Offer a soft release
+    # instead: retain the DNS mapping, park it with ``enable: false`` and hand
+    # port 53 back to KeeneticOS.  The same escape hatch is useful for a DNS
+    # mapping that was authored without the assistant and has no state file.
+    can_release = bool(
+        override is True
+        and not exact
+        and (
+            bool(state)
+            or (core in {"", "mihomo"} and bool(dns_runtime["listener_configured"]))
+        )
+    )
     blockers: list[str] = []
     if not enabled and not state:
         if core != "mihomo":
@@ -1510,10 +1580,20 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
             blockers.append("Не найдена proxy-группа для защищённых DNS-запросов.")
         if override is None:
             blockers.append("Не удалось прочитать DNS override Keenetic: " + override_detail)
-    if tampered and not can_recover:
+    if tampered and can_release:
+        blockers.append(
+            "Конфигурация изменена после включения DNS; полный снимок не будет восстановлен. "
+            "Можно сохранить текущий блок и вернуть DNS прошивке Keenetic."
+        )
+    elif tampered and not can_recover:
         blockers.append("Конфигурация изменена после включения DNS; автоматическое восстановление остановлено.")
     elif can_recover:
         blockers.append("DNS-блок уже удалён вручную, а DNS override Keenetic выключен; текущий config.yaml можно сохранить без возврата старого снимка.")
+    if enabled and not state:
+        blockers.append(
+            "Обнаружен пользовательский DNS Mihomo на порту 53. Полного снимка нет; "
+            "панель может сохранить блок и вернуть DNS прошивке Keenetic."
+        )
     if partial and not state:
         blockers.append("Обнаружен неполный служебный DNS-блок.")
     can_disable = bool(exact and state)
@@ -1525,6 +1605,7 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         "partial": partial,
         "tampered": tampered,
         "can_recover": can_recover,
+        "can_release": can_release,
         "can_enable": can_enable,
         "can_disable": can_disable,
         "active_core": core,
@@ -1566,6 +1647,119 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
     }
 
 
+def _release_current_dns(
+    *,
+    config_file: str,
+    ui_state_dir: str,
+    validate_config: Callable[..., str],
+    save_config: Callable[[str], Any],
+    restart_xkeen: Callable[..., Any],
+) -> dict[str, Any]:
+    """Park the current DNS mapping and return port 53 to KeeneticOS.
+
+    This is deliberately different from restoring the assistant's snapshot.
+    It is used only when the file is user-owned or was edited after activation,
+    so every setting except the top-level ``dns.enable`` value is retained.
+    """
+
+    current = _read_text(config_file, "") or ""
+    runtime = _dns_runtime_config(current)
+    parked, changed = _with_dns_disabled(current)
+    if runtime.get("listener_configured") and not changed:
+        raise MihomoDnsError(
+            "Пользовательский DNS-блок нельзя безопасно отключить автоматически; "
+            "задайте dns.enable: false и повторите возврат DNS Keenetic.",
+            code="dns_soft_release_unsupported",
+        )
+    if changed:
+        validation = validate_config(new_content=parked) or ""
+        if not _validation_ok(validation):
+            raise MihomoDnsError(
+                "Mihomo не подтвердил конфигурацию с отключённым DNS; текущий файл не изменён.",
+                code="dns_soft_release_preflight_failed",
+                details=validation[-4000:],
+            )
+
+    backup = None
+    saved = False
+    override_changed = False
+    restart_ok = True
+    try:
+        if changed:
+            backup = save_config(parked)
+            saved = True
+            # Mihomo must reread ``enable: false`` and let go of the socket;
+            # toggling dns-override alone cannot disable its listener.
+            try:
+                restart_ok = bool(restart_xkeen(source="mihomo-dns-soft-release"))
+            except Exception:
+                restart_ok = False
+            if not restart_ok:
+                raise MihomoDnsError(
+                    "Mihomo не перезапустился с отключённым DNS; возврат прошивке отменён.",
+                    code="dns_soft_release_restart_failed",
+                )
+        _set_dns_override(False)
+        override_changed = True
+        if not _wait_for_port_53(should_be_free=False):
+            raise MihomoDnsError(
+                "Системный DNS Keenetic не занял порт 53.",
+                code="firmware_dns_failed",
+            )
+    except Exception as exc:
+        # An explicit button remains transactional.  If the firmware cannot
+        # take over, put the active user config and override back as they were.
+        rollback_errors: list[str] = []
+        if saved:
+            try:
+                save_config(current)
+            except Exception as rollback_exc:  # noqa: BLE001
+                rollback_errors.append(str(rollback_exc))
+        if override_changed:
+            try:
+                _set_dns_override(True)
+            except Exception as rollback_exc:  # noqa: BLE001
+                rollback_errors.append(str(rollback_exc))
+        if saved:
+            try:
+                restart_xkeen(source="mihomo-dns-soft-release-rollback")
+            except Exception as rollback_exc:  # noqa: BLE001
+                rollback_errors.append(str(rollback_exc))
+        if isinstance(exc, MihomoDnsError):
+            if rollback_errors:
+                exc.details = {"cause": exc.details, "rollback": rollback_errors}
+            raise
+        raise MihomoDnsError(
+            "Не удалось вернуть DNS прошивке; текущая конфигурация восстановлена.",
+            code="dns_soft_release_failed",
+            details={"cause": str(exc), "rollback": rollback_errors},
+        ) from exc
+
+    _clear_state(ui_state_dir, config_file)
+    released = {
+        "released_at": int(time.time()),
+        "source": "user",
+        "reason": "DNS возвращён прошивке Keenetic без восстановления старого снимка.",
+        "steps": [
+            "dns_disabled_in_place" if changed else "dns_listener_absent",
+            "core_restarted" if restart_ok else "core_restart_failed",
+            "dns_override_disabled",
+        ],
+    }
+    _record_release(ui_state_dir, config_file, released)
+    return {
+        "ok": True,
+        "enabled": False,
+        "released": True,
+        "preserved_current": True,
+        "dns_block_preserved": bool(runtime.get("present")),
+        "dns_disabled": changed,
+        "dns_override": False,
+        "core_restarted": restart_ok,
+        "backup": str(getattr(backup, "filename", "") or "") or None,
+    }
+
+
 def apply_action(
     action: str,
     *,
@@ -1582,7 +1776,7 @@ def apply_action(
     dns_selector: bool = False,
 ) -> dict[str, Any]:
     normalized = str(action or "").strip().lower()
-    if normalized not in {"enable", "disable"}:
+    if normalized not in {"enable", "disable", "release"}:
         raise MihomoDnsError("Неизвестное действие DNS Mihomo.", code="invalid_action")
 
     with _LOCK:
@@ -1741,6 +1935,21 @@ def apply_action(
                     details={"cause": str(exc), "rollback": rollback_errors},
                 ) from exc
 
+        if normalized == "release":
+            if not status.get("can_release"):
+                raise MihomoDnsError(
+                    "Возврат DNS прошивке недоступен в текущей конфигурации.",
+                    code="dns_soft_release_blocked",
+                    details=status.get("blockers"),
+                )
+            return _release_current_dns(
+                config_file=config_file,
+                ui_state_dir=ui_state_dir,
+                validate_config=validate_config,
+                save_config=save_config,
+                restart_xkeen=restart_xkeen,
+            )
+
         if status.get("can_recover"):
             # The managed DNS block is already gone.  Do not restore the
             # pre-enable snapshot because that would discard the user's
@@ -1856,13 +2065,30 @@ def apply_action(
 
 
 def is_enabled(*, config_file: str, ui_state_dir: str) -> bool:
-    """Cheap check for the shared DNS guard: did this assistant take port 53?"""
+    """Does Mihomo currently own router DNS, including user-authored setups?"""
 
     try:
         state = _load_state(ui_state_dir, config_file)
     except Exception:
+        state = {}
+    override, _detail = _dns_override_status()
+    # A confirmed disabled switch means Keenetic already owns DNS; stale panel
+    # state must not keep the guard active forever.  If ndmc is temporarily
+    # unreadable, retain the transaction marker as the conservative fallback.
+    if override is False:
         return False
-    return bool(state.get("enabled"))
+    if state.get("enabled"):
+        return True
+    if override is not True:
+        return False
+    # Without our transaction marker, a running Xray proves that this inactive
+    # profile does not own port 53.  An empty result can instead mean Mihomo has
+    # just crashed -- exactly when the guard must keep watching and give DNS
+    # back -- so it remains eligible together with a running Mihomo.
+    if detect_running_core() not in {"", "mihomo"}:
+        return False
+    text = _read_text(config_file, "") or ""
+    return bool(_dns_runtime_config(text).get("listener_configured"))
 
 
 def emergency_release(
@@ -1885,6 +2111,9 @@ def emergency_release(
     steps: list[str] = []
     state = _load_state(ui_state_dir, config_file)
 
+    current = _read_text(config_file, "") or ""
+    applied_sha = str(state.get("applied_sha256") or "")
+    current_is_exact = bool(applied_sha and _sha256(current) == applied_sha)
     snapshot_path = str(state.get("original_config") or "")
     original = _read_text(snapshot_path, None) if snapshot_path else None
     expected_sha = str(state.get("original_sha256") or "")
@@ -1895,32 +2124,66 @@ def emergency_release(
         steps.append("snapshot_corrupt")
         original = None
 
-    if original is not None:
+    # A whole-file snapshot is safe only while the current file is still the
+    # exact output we applied.  Once a user edits or replaces its DNS mapping,
+    # keep those changes and park only the listener instead of overwriting the
+    # profile with an older snapshot.
+    restore_snapshot = bool(current_is_exact and original is not None)
+    config_releases_port = False
+    if restore_snapshot:
         try:
             save_config(original)
             steps.append("config_restored")
+            config_releases_port = True
         except Exception as exc:  # noqa: BLE001
             steps.append(f"config_failed:{exc}")
+    else:
+        if original is not None and not current_is_exact:
+            steps.append("snapshot_skipped_current_modified")
+        parked, changed = _with_dns_disabled(current)
+        if changed:
+            try:
+                save_config(parked)
+                steps.extend(("current_config_preserved", "dns_disabled_in_place"))
+                config_releases_port = True
+            except Exception as exc:  # noqa: BLE001
+                steps.append(f"config_failed:{exc}")
+        elif not _dns_runtime_config(current).get("listener_configured"):
+            steps.extend(("current_config_preserved", "dns_listener_absent"))
+            config_releases_port = True
+        else:
+            steps.append("dns_disable_unsupported")
 
-    # The port has to be released before the firmware can bind it, so the
-    # override is flipped after the config that owned :53 is gone.
-    desired = bool(state.get("original_dns_override", False))
-    try:
-        _set_dns_override(desired)
-        steps.append("dns_override_restored")
-    except Exception as exc:  # noqa: BLE001
-        steps.append(f"dns_override_failed:{exc}")
-
+    # Make Mihomo reread the restored/parked config before asking the firmware
+    # resolver to bind port 53.  Otherwise a recovered Mihomo can race ndnproxy
+    # while both still believe they own the same socket.
     try:
         restart_xkeen(source="mihomo-dns-guard-release")
         steps.append("core_restart_requested")
     except Exception as exc:  # noqa: BLE001
         steps.append(f"core_restart_failed:{exc}")
 
+    # A modified/user-owned config has no trustworthy previous ownership state:
+    # the purpose of this fallback is explicitly to restore Keenetic DNS.  For
+    # an exact transaction retain the original switch value as before.
+    desired = bool(state.get("original_dns_override", False)) if restore_snapshot else False
+    try:
+        _set_dns_override(desired)
+        steps.append("dns_override_restored" if desired else "dns_override_disabled")
+    except Exception as exc:  # noqa: BLE001
+        steps.append(f"dns_override_failed:{exc}")
+
     if not _wait_for_port_53(should_be_free=False):
         steps.append("port_53_still_free")
 
-    released = {"released_at": int(time.time()), "reason": reason, "steps": steps}
+    released = {
+        "released_at": int(time.time()),
+        "source": "guard",
+        "reason": reason,
+        "steps": steps,
+        "preserved_current": not restore_snapshot,
+        "dns_config_parked": bool(config_releases_port and not restore_snapshot),
+    }
     try:
         _clear_state(ui_state_dir, config_file)
     except Exception:

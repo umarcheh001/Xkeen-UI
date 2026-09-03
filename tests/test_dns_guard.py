@@ -281,7 +281,8 @@ def test_a_protection_does_not_conflict_with_itself(tmp_path: Path):
 
 def _mihomo_install(tmp_path: Path, *, original: str = "dns:\n  enable: false\n"):
     config_file = tmp_path / "config.yaml"
-    config_file.write_text("dns:\n  enable: true\n", encoding="utf-8")
+    applied = "dns:\n  enable: true\n"
+    config_file.write_text(applied, encoding="utf-8")
     snapshot = tmp_path / "before.yaml"
     snapshot.write_text(original, encoding="utf-8")
     _enable_mihomo_state(
@@ -290,6 +291,7 @@ def _mihomo_install(tmp_path: Path, *, original: str = "dns:\n  enable: false\n"
             "enabled": True,
             "original_config": str(snapshot),
             "original_sha256": hashlib.sha256(original.encode("utf-8")).hexdigest(),
+            "applied_sha256": hashlib.sha256(applied.encode("utf-8")).hexdigest(),
             "original_dns_override": False,
         },
     )
@@ -335,10 +337,64 @@ def test_mihomo_release_still_frees_port_53_when_the_snapshot_is_damaged(tmp_pat
         reason="ядро не отвечает",
     )
 
-    # The damaged config is not written back, but the override is still restored.
-    assert saved == []
+    # The damaged snapshot is not written back.  The current mapping survives,
+    # with only its listener switch parked so Keenetic can own port 53.
+    assert saved == ["dns:\n  enable: false\n"]
     assert "snapshot_corrupt" in released["steps"]
+    assert "dns_disabled_in_place" in released["steps"]
     assert overrides == [False]
+
+
+def test_mihomo_release_never_overwrites_user_edits_with_the_old_snapshot(tmp_path: Path, monkeypatch):
+    config_file, _snapshot = _mihomo_install(tmp_path, original="mode: rule\n")
+    edited = "dns:\n  enable: true\n  listen: 0.0.0.0:53\n  nameserver: [https://user.example/dns-query]\n"
+    config_file.write_text(edited, encoding="utf-8")
+    saved: List[str] = []
+    monkeypatch.setattr(mihomo_dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(mihomo_dns, "_wait_for_port_53", lambda **kwargs: True)
+
+    released = mihomo_dns.emergency_release(
+        config_file=str(config_file),
+        ui_state_dir=str(tmp_path),
+        save_config=lambda text: saved.append(text),
+        restart_xkeen=lambda **kwargs: True,
+        reason="ядро не отвечает",
+    )
+
+    assert len(saved) == 1
+    assert "enable: false" in saved[0]
+    assert "https://user.example/dns-query" in saved[0]
+    assert saved[0] != "mode: rule\n"
+    assert "snapshot_skipped_current_modified" in released["steps"]
+    assert released["preserved_current"] is True
+
+
+def test_user_authored_mihomo_dns_is_watched_without_assistant_state(tmp_path: Path, monkeypatch):
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        "dns:\n  enable: true\n  listen: 0.0.0.0:53\n  nameserver: [https://user.example/dns-query]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(mihomo_dns, "_dns_override_status", lambda: (True, "test"))
+    monkeypatch.setattr(mihomo_dns, "detect_running_core", lambda: "mihomo")
+
+    assert mihomo_dns.is_enabled(
+        config_file=str(config_file), ui_state_dir=str(tmp_path)
+    ) is True
+
+
+def test_inactive_user_mihomo_profile_is_not_mistaken_for_xray_dns(tmp_path: Path, monkeypatch):
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        "dns:\n  enable: true\n  listen: 0.0.0.0:53\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(mihomo_dns, "_dns_override_status", lambda: (True, "test"))
+    monkeypatch.setattr(mihomo_dns, "detect_running_core", lambda: "xray")
+
+    assert mihomo_dns.is_enabled(
+        config_file=str(config_file), ui_state_dir=str(tmp_path)
+    ) is False
 
 
 def test_mihomo_release_survives_a_failing_writer(tmp_path: Path, monkeypatch):

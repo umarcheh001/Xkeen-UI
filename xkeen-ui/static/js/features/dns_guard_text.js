@@ -43,7 +43,13 @@ export function guardReleaseText(data) {
   if (!record) return '';
   const reason = String(record.reason || '').trim();
   const tail = reason.endsWith('.') ? reason : `${reason}.`;
-  return `Сторож вернул DNS роутеру: ${tail} Порт 53 снова обслуживает прошивка, запросы идут в открытом виде — защита сама не включится.`;
+  if (record.source === 'user') {
+    return `DNS возвращён роутеру по вашей команде: ${tail} Пользовательский DNS-блок сохранён, его переключатель enable выключен.`;
+  }
+  const preserved = record.preserved_current
+    ? ' Текущий DNS-блок сохранён и отключён без возврата старого снимка.'
+    : '';
+  return `Сторож вернул DNS роутеру: ${tail} Порт 53 снова обслуживает прошивка, запросы идут в открытом виде — защита сама не включится.${preserved}`;
 }
 
 function releasedAtLabel(record) {
@@ -69,9 +75,15 @@ export function guardReleaseLine(data) {
   const record = guardRelease(data);
   if (!record) return '';
   const when = releasedAtLabel(record);
+  if (record.source === 'user') {
+    return when
+      ? `Возврат DNS: выполнен ${when} по команде пользователя; текущий DNS-блок сохранён и отключён.`
+      : 'Возврат DNS: выполнен по команде пользователя; текущий DNS-блок сохранён и отключён.';
+  }
+  const preserved = record.preserved_current ? ' Текущий DNS-блок сохранён.' : '';
   return when
-    ? `Сторож: сработал ${when} — DNS возвращён роутеру, защита выключена.`
-    : 'Сторож: сработал — DNS возвращён роутеру, защита выключена.';
+    ? `Сторож: сработал ${when} — DNS возвращён роутеру, защита выключена.${preserved}`
+    : `Сторож: сработал — DNS возвращён роутеру, защита выключена.${preserved}`;
 }
 
 /** Short decoding for the badge tooltip and the summary line. */
@@ -87,7 +99,7 @@ export function guardReleaseSummary() {
  * nothing is guarded — only that there is nothing to guard *here*.
  */
 export function guardNotice(data, enabled) {
-  const released = guardReleaseLine(data);
+  const released = enabled ? '' : guardReleaseLine(data);
   if (released) return { text: released, kind: 'warn' };
 
   const { interval, fails, restarts, off } = knobs(data && data.watchdog_settings);
