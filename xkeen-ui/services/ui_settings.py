@@ -856,8 +856,20 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 else:
                     rep.errors.append({"path": "routing.showScenarioCard", "error": "must be boolean"})
 
+            if "dnsOverVlessLayout" in routing_patch:
+                # В отличие от полной проверки, здесь значение прислали явно:
+                # молча подменять его на auto нельзя -- это ответ «сохранил»
+                # на несохранённую раскладку.
+                value = _as_lower_str(routing_patch.get("dnsOverVlessLayout"))
+                if value in ("auto", "single", "split"):
+                    p["dnsOverVlessLayout"] = value
+                else:
+                    rep.errors.append(
+                        {"path": "routing.dnsOverVlessLayout", "error": "must be auto|single|split"}
+                    )
+
             for k in routing_patch.keys():
-                if k not in ("guiEnabled", "autoApply", "showActiveOutbound", "showScenarioCard"):
+                if k not in ("guiEnabled", "autoApply", "showActiveOutbound", "showScenarioCard", "dnsOverVlessLayout"):
                     rep.warnings.append({"path": f"routing.{k}", "warning": "unknown key dropped"})
 
             if p:

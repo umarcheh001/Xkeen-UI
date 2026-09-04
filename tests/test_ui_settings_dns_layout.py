@@ -6,7 +6,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "xkeen-ui"))
 
-from services.ui_settings import DEFAULTS, _sanitize_full  # noqa: E402
+from services.ui_settings import (  # noqa: E402
+    DEFAULTS,
+    _sanitize_full,
+    _sanitize_patch,
+    load_settings,
+    patch_settings,
+)
 
 
 def test_layout_defaults_to_auto():
@@ -34,3 +40,26 @@ def test_wrong_type_falls_back_to_auto():
     out, rep = _sanitize_full({"routing": {"dnsOverVlessLayout": 5}})
     assert out["routing"]["dnsOverVlessLayout"] == "auto"
     assert rep.changed is True
+
+
+def test_patch_keeps_layout():
+    """PATCH-путь отдельный от полной валидации: раскладка должна доезжать."""
+    out, rep = _sanitize_patch({"routing": {"dnsOverVlessLayout": "single"}})
+    assert out["routing"]["dnsOverVlessLayout"] == "single"
+    assert not any(w.get("path") == "routing.dnsOverVlessLayout" for w in rep.warnings)
+
+
+def test_patch_layout_is_case_insensitive():
+    out, _rep = _sanitize_patch({"routing": {"dnsOverVlessLayout": "SPLIT"}})
+    assert out["routing"]["dnsOverVlessLayout"] == "split"
+
+
+def test_patch_rejects_unknown_layout():
+    _out, rep = _sanitize_patch({"routing": {"dnsOverVlessLayout": "three-columns"}})
+    assert any(e.get("path") == "routing.dnsOverVlessLayout" for e in rep.errors)
+
+
+def test_patch_settings_persists_layout(tmp_path):
+    cfg, _rep = patch_settings({"routing": {"dnsOverVlessLayout": "split"}}, str(tmp_path))
+    assert cfg["routing"]["dnsOverVlessLayout"] == "split"
+    assert load_settings(str(tmp_path))["routing"]["dnsOverVlessLayout"] == "split"
