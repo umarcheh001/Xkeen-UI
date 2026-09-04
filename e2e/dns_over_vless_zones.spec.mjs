@@ -127,7 +127,7 @@ test('когда доходят все — зелёная метка, а «не 
     clients: [client('aa:03', 'reaches'), client('aa:04', 'reaches')],
   });
   await openDialog(page, { ...STATUS, enabled: true, can_enable: false, can_disable: true });
-  await expect(mark).toHaveText('все доходят');
+  await expect(mark).toHaveText('все пользуются');
   await expect(mark).toHaveAttribute('data-state', 'done');
 });
 
@@ -396,4 +396,20 @@ test('при выключенной функции поля снова реда�
   await expect(page.locator('#routing-dns-over-vless-locked-note')).toBeHidden();
   await expect(page.locator('#routing-dns-over-vless-modal .modal-content'))
     .toHaveAttribute('data-dns-route', 'on');
+});
+
+
+test('промах мимо окна не закрывает его', async ({ page }) => {
+  await openDialog(page);
+  const modal = page.locator('#routing-dns-over-vless-modal');
+
+  // Внутри окна -- форма с несохранёнными настройками: случайный клик по
+  // подложке стоил бы всей настройки. Целимся в левый верхний угол подложки,
+  // заведомо мимо содержимого окна.
+  await modal.click({ position: { x: 5, y: 5 } });
+  await expect(modal).toBeVisible();
+
+  // Выход остался на месте.
+  await page.locator('#routing-dns-over-vless-close').click();
+  await expect(modal).toBeHidden();
 });

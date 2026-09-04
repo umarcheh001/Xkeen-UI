@@ -857,7 +857,7 @@
               "accessible_name": true
             },
             {
-              "control": "control@2766",
+              "control": "control@2796",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -875,49 +875,49 @@
               "accessible_name": false
             },
             {
-              "control": "control@4651",
+              "control": "control@4681",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@5562",
+              "control": "control@5592",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@7030",
+              "control": "control@7060",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@7946",
+              "control": "control@7976",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@8663",
+              "control": "control@8693",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@10017",
+              "control": "control@10047",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@10527",
+              "control": "control@10557",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@11305",
+              "control": "control@11335",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -929,55 +929,55 @@
               "accessible_name": false
             },
             {
-              "control": "control@12679",
+              "control": "control@12709",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@13018",
+              "control": "control@13048",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@13759",
+              "control": "control@13789",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@14626",
+              "control": "control@14656",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@15892",
+              "control": "control@15922",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@17561",
+              "control": "control@17591",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@18295",
+              "control": "control@18325",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@19248",
+              "control": "control@19278",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@20154",
+              "control": "control@20184",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -8228,7 +8228,7 @@
       "xray-snapshot-status",
       "xray-snapshot-title"
     ],
-    "data_attribute_count": 601,
+    "data_attribute_count": 602,
     "data_attributes": [
       {
         "locator": "header.panel-header.panel-header-shell@L81",
@@ -10149,6 +10149,11 @@
         "locator": "#confirm-modal-cancel-btn",
         "name": "data-operator-dismiss-duplicate",
         "value": "true"
+      },
+      {
+        "locator": "#routing-dns-over-vless-modal",
+        "name": "data-modal-backdrop-close",
+        "value": "0"
       },
       {
         "locator": "#routing-dns-over-vless-modal",

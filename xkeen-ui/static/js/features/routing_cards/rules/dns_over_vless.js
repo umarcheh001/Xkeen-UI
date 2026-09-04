@@ -919,7 +919,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       // «Определить не удалось» -- это не «всё хорошо»: зелёным не обещаем.
       if (clients.some((item) => item.verdict === 'unknown')) return { text: 'обязательно', state: 'todo' };
       if (!applied) return { text: 'обязательно', state: 'todo' };
-      return { text: 'все доходят', state: 'done' };
+      return { text: 'все пользуются', state: 'done' };
     }
     return null;
   }
@@ -1531,8 +1531,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         if (status) render(status);
       });
     }
-    const modal = $(DOM.modal);
-    if (modal) modal.addEventListener('click', (event) => { if (event.target === modal && !busy) showModal(false); });
+    // Закрытия по клику мимо окна здесь нет намеренно: окно держит форму с
+    // несохранёнными настройками, и промах мимо неё стоил бы всей настройки.
+    // Общий механизм подложки выключен атрибутом data-modal-backdrop-close="0"
+    // в разметке; остаются крестик, «Отмена» и Escape.
     // Клик по переключателю в подшапке меняет настройку, а не сворачивает зону.
     // <summary> сворачивает <details> от клика в любом своём месте, а
     // переключатели зон records/devices сидят внутри него.
