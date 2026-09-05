@@ -126,13 +126,15 @@ def register_dns_over_vless_routes(
             return jsonify(result)
         except DnsOverVlessError as exc:
             audit(False, action=action, phase=exc.code, summary=str(exc))
+            rollback = exc.rollback if isinstance(exc.rollback, dict) else None
             return jsonify(
                 {
                     "ok": False,
                     "error": str(exc),
                     "code": exc.code,
                     "details": exc.details,
-                    "rolled_back": True,
+                    "rolled_back": bool(rollback and rollback.get("restored")),
+                    "rollback": rollback,
                 }
             ), 409
         except Exception:
@@ -140,8 +142,12 @@ def register_dns_over_vless_routes(
             return jsonify(
                 {
                     "ok": False,
-                    "error": "Не удалось применить DNS-over-VLESS; выполнен откат.",
+                    "error": "Не удалось применить DNS-over-VLESS.",
                     "code": "apply_failed",
-                    "rolled_back": True,
+                    # Exceptions raised before the transactional section have
+                    # no snapshot to restore; do not claim a rollback that did
+                    # not actually happen.
+                    "rolled_back": False,
+                    "rollback": None,
                 }
             ), 500

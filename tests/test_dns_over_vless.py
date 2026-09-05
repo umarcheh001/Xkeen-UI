@@ -193,6 +193,16 @@ def test_apply_rolls_back_files_and_router_setting_after_probe_failure(tmp_path:
         raise AssertionError("expected probe failure")
     except dns.DnsOverVlessError as exc:
         assert exc.code == "dns_probe_failed"
+        assert exc.rollback == {
+            "attempted": True,
+            "configuration_restored": True,
+            "router_restored": True,
+            "restart_requested": True,
+            "restart_ok": True,
+            "active_core": "xray",
+            "restored": True,
+            "error": "",
+        }
 
     assert routing_path.read_bytes() == before
     assert not (configs / dns.MANAGED_FRAGMENT).exists()
@@ -343,6 +353,19 @@ def test_frontend_has_dns_button_modal_and_guard_copy():
     assert "const otherCore = !unavailable && core !== 'xray'" in script
     assert "badge: installed ? 'Xray не запущен' : 'Нужно ядро Xray'" in script
     assert "xrayInstalled(data) ? 'Xray не запущен' : 'Нужно ядро Xray'" in script
+    # A rollback is a known transition, not a generic stopped-core state. The
+    # card follows it live and only asks for logs after the grace period.
+    assert "function followRollback(rollback, reason)" in script
+    assert "ROLLBACK_POLL_INTERVAL_MS = 1000" in script
+    assert "ROLLBACK_POLL_TIMEOUT_MS = 15000" in script
+    assert "Откат выполнен — проверяем запуск Xray" in script
+    assert "Конфигурация восстановлена, но Xray не запустился" in script
+    assert "Настройка применяется при работающем ядре Xray." in template
+    rollback_block = script[script.index("async function followRollback("):script.index("async function open()")]
+    assert "await getStatus()" in rollback_block
+    assert "coreOf(current) === 'xray'" in rollback_block
+    # This flow is exclusively about the Xray restart the panel just launched.
+    assert "Mihomo" not in rollback_block
     assert "конфигурация совместима, можно включать" in script
     assert "служебная конфигурация и настройка роутера согласованы" in script
     assert "осталась неполная настройка от прерванной операции" in script
@@ -906,6 +929,53 @@ def test_http_contract_accepts_a_list_of_targets(tmp_path: Path, monkeypatch):
 
     assert response.status_code == 200
     assert seen["target_tag"] == ["my_proxy_1", "my_proxy_2"]
+
+
+def test_http_contract_reports_only_a_rollback_that_really_happened(
+    tmp_path: Path, monkeypatch
+):
+    from routes.routing import dns_over_vless as dns_routes
+
+    configs, routing_path, state = _base_config(tmp_path)
+
+    def fake_apply(action, **_kwargs):
+        error = dns.DnsOverVlessError("test failure", code="test_failure")
+        if action == "enable":
+            error.rollback = {
+                "attempted": True,
+                "restored": True,
+                "restart_requested": True,
+                "restart_ok": False,
+                "active_core": "unknown",
+            }
+        raise error
+
+    monkeypatch.setattr(dns_routes, "apply_action", fake_apply)
+    app = Flask(__name__)
+    app.config["WTF_CSRF_ENABLED"] = False
+    dns_routes.register_dns_over_vless_routes(
+        app,
+        xray_configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_kwargs: True,
+    )
+
+    rolled_back = app.test_client().post(
+        "/api/routing/dns-over-vless", json={"action": "enable"}
+    )
+    early_failure = app.test_client().post(
+        "/api/routing/dns-over-vless", json={"action": "disable"}
+    )
+
+    assert rolled_back.status_code == 409
+    assert rolled_back.get_json()["rolled_back"] is True
+    assert rolled_back.get_json()["rollback"]["active_core"] == "unknown"
+    assert early_failure.status_code == 409
+    assert early_failure.get_json()["rolled_back"] is False
+    assert early_failure.get_json()["rollback"] is None
+
+
 def test_install_enabled_before_the_picker_keeps_working(tmp_path: Path, monkeypatch):
     """An upgrade must not disturb a configuration enabled by the old code."""
     configs, routing_path, state = _base_config(tmp_path)

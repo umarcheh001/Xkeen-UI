@@ -237,6 +237,10 @@ class DnsOverVlessError(RuntimeError):
         super().__init__(message)
         self.code = code
         self.details = details
+        # Filled only when apply_action reached its transactional section and
+        # actually attempted to restore the saved snapshot.  The HTTP layer
+        # can then distinguish a real rollback from an early validation error.
+        self.rollback: Optional[Dict[str, Any]] = None
 
 
 def _read_json(path: str, default: Any = None) -> Any:
@@ -3056,18 +3060,42 @@ def apply_action(
             }
         except Exception as exc:
             rollback_error = ""
+            rollback: Dict[str, Any] = {
+                "attempted": True,
+                "configuration_restored": False,
+                "router_restored": not router_changed,
+                "restart_requested": False,
+                "restart_ok": False,
+                "active_core": "unknown",
+            }
             try:
                 _restore_snapshot(manifest)
+                rollback["configuration_restored"] = True
                 if router_changed:
                     _set_dns_override(bool(before_override))
-                restart_xkeen(source="dns-over-vless-rollback")
+                    rollback["router_restored"] = True
+                rollback["restart_requested"] = True
+                rollback["restart_ok"] = bool(
+                    restart_xkeen(source="dns-over-vless-rollback")
+                )
             except Exception as rollback_exc:  # noqa: BLE001
                 rollback_error = str(rollback_exc)
+            try:
+                rollback["active_core"] = detect_running_core() or "unknown"
+            except Exception:
+                pass
+            rollback["restored"] = bool(
+                rollback["configuration_restored"] and rollback["router_restored"]
+            )
+            rollback["error"] = rollback_error
             if isinstance(exc, DnsOverVlessError):
+                exc.rollback = rollback
                 if rollback_error:
                     exc.details = {"cause": exc.details, "rollback_error": rollback_error}
                 raise
-            raise DnsOverVlessError(
+            wrapped = DnsOverVlessError(
                 "Не удалось применить DNS-over-VLESS; предыдущая конфигурация восстановлена.",
                 details={"cause": str(exc), "rollback_error": rollback_error},
-            ) from exc
+            )
+            wrapped.rollback = rollback
+            raise wrapped from exc

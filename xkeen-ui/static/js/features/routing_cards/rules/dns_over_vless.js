@@ -74,10 +74,21 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   let targetsTouched = false;
   let routePool = [];
   let routeVisible = false;
+  // A failed DNS test is followed by a real rollback restart. Keep that
+  // operation visible while the card polls the runtime instead of briefly
+  // presenting pidof's transitional "unknown" as a final diagnosis.
+  let rollbackStatus = null;
+  let rollbackPollGeneration = 0;
+  const ROLLBACK_POLL_INTERVAL_MS = 1000;
+  const ROLLBACK_POLL_TIMEOUT_MS = 15000;
 
   function showModal(open) {
     const modal = $(DOM.modal);
     if (!modal) return;
+    if (!open) {
+      rollbackPollGeneration += 1;
+      rollbackStatus = null;
+    }
     modal.classList.toggle('hidden', !open);
     document.body.classList.toggle('modal-open', !!open);
     if (open) setTimeout(() => { try { $(DOM.cancel).focus(); } catch (e) {} }, 0);
@@ -672,12 +683,54 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     return !Array.isArray(available) || available.indexOf('xray') !== -1;
   }
 
+  function rollbackCopy() {
+    if (!rollbackStatus) return null;
+    if (rollbackStatus.phase === 'restored') {
+      const featureResult = rollbackStatus.restoredEnabled
+        ? 'DNS-over-VLESS остался включён — сохранено состояние до неудачной операции.'
+        : 'DNS-over-VLESS остался выключен — исправьте исходную ошибку и повторите включение.';
+      return {
+        title: 'Откат завершён — Xray снова работает',
+        lead: `Панель восстановила предыдущую конфигурацию и уже видит работающий процесс Xray. ${featureResult}`,
+        badge: 'Откат завершён',
+        state: 'enabled',
+        summary: 'предыдущая конфигурация возвращена, Xray снова работает',
+        text: 'Состояние подтвердилось автоматически. Дополнительный перезапуск или переустановка ядра не нужны.',
+      };
+    }
+    if (rollbackStatus.phase === 'failed') {
+      return {
+        title: 'Конфигурация восстановлена, но Xray не запустился',
+        lead: 'Панель вернула предыдущие настройки и 15 секунд проверяла запуск Xray, но процесс так и не появился. Откройте состояние XKeen и журнал ошибок Xray.',
+        badge: 'Проверьте Xray',
+        state: 'blocked',
+        summary: 'откат выполнен, но процесс Xray не появился',
+        text: 'Это уже не краткий момент перезапуска: автоматическая проверка завершилась. Запустите или перезапустите XKeen и посмотрите error.log Xray.',
+      };
+    }
+    const elapsed = Math.max(0, Math.floor((Date.now() - rollbackStatus.startedAt) / 1000));
+    return {
+      title: 'Откат выполнен — проверяем запуск Xray',
+      lead: `Предыдущая конфигурация уже восстановлена. После перезапуска процесс Xray может появиться с задержкой — карточка обновляется автоматически${elapsed ? ` · ${elapsed} с` : ''}. Ничего нажимать не нужно.`,
+      badge: 'Проверяем Xray',
+      state: 'blocked',
+      summary: 'конфигурация восстановлена, ждём подтверждения запуска Xray',
+      text: 'Краткая пауза после перезапуска не считается ошибкой. Панель проверяет Xray каждую секунду и сама покажет итог.',
+    };
+  }
+
   const MIHOMO_HINT = 'У Mihomo свой защищённый DNS — кнопка «DNS» на вкладке Mihomo.';
 
   function renderLead(data) {
     const title = $(DOM.leadTitle);
     const text = $(DOM.leadText);
     if (!title || !text) return;
+    const rollback = rollbackCopy();
+    if (rollback) {
+      title.textContent = rollback.title;
+      text.textContent = rollback.lead;
+      return;
+    }
     const core = coreOf(data);
     if (core === 'xray') {
       title.textContent = 'DNS через защищённый туннель Xray';
@@ -693,9 +746,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     }
     if (coreUnavailable(core)) {
       const installed = xrayInstalled(data);
-      title.textContent = installed ? 'Процесс Xray не обнаружен' : 'Xray не установлен';
+      title.textContent = installed ? 'Xray сейчас не работает' : 'Xray не установлен';
       text.textContent = installed
-        ? 'Ядро Xray установлено, но панель сейчас не видит его работающий процесс. Подождите завершения перезапуска или проверьте состояние XKeen и журнал ошибок Xray.'
+        ? 'Панель не видит запущенный процесс Xray. Если XKeen только что перезапускали, обновите окно через несколько секунд; иначе проверьте состояние XKeen и журнал ошибок Xray.'
         : 'Панель не нашла установленное ядро Xray. Установите Xray, затем снова откройте это окно.';
       return;
     }
@@ -706,6 +759,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   // Каждому состоянию — короткая расшифровка рядом с бейджем и объяснение
   // обычными словами: что сейчас происходит с DNS и что делать дальше.
   function describeState(data, flags) {
+    const rollback = rollbackCopy();
+    if (rollback) return rollback;
     const core = coreOf(data);
     const unavailable = coreUnavailable(core);
     const installed = xrayInstalled(data);
@@ -762,7 +817,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         state: 'blocked',
         summary: installed ? 'работающий процесс Xray не обнаружен' : 'ядро Xray не установлено',
         text: installed
-          ? 'Xray установлен, но панель сейчас не видит его работающий процесс. Переустанавливать ядро или искать Mihomo не нужно: подождите завершения перезапуска либо проверьте состояние XKeen и журнал ошибок Xray, затем обновите окно.'
+          ? 'Xray установлен, но панель сейчас не видит его работающий процесс. Переустанавливать ядро не нужно: если перезапуск только что выполнялся, обновите окно через несколько секунд; иначе проверьте состояние XKeen и журнал ошибок Xray.'
           : 'Панель не нашла установленное ядро Xray. Установите его и повторите проверку.',
       };
     }
@@ -1007,7 +1062,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       badge.title = `${info.badge} — ${info.summary}`;
     }
     if (dot) {
-      dot.dataset.state = enabled ? 'enabled' : (info.state === 'ready' ? 'off' : 'blocked');
+      const rollbackRestored = rollbackStatus && rollbackStatus.phase === 'restored';
+      dot.dataset.state = enabled ? 'enabled' : ((info.state === 'ready' || rollbackRestored) ? 'off' : 'blocked');
     }
     if (text) {
       text.textContent = '';
@@ -1023,18 +1079,30 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
     if (data) {
       const core = coreOf(data);
-      addDetail(
-        core === 'xray'
-          ? 'Активное ядро: Xray — то, что нужно для DNS-over-VLESS.'
-          : (core === 'mihomo'
-            ? `Активное ядро: Mihomo. Это окно настраивает DNS-over-VLESS для Xray. ${MIHOMO_HINT}`
-            : (coreUnavailable(core)
-              ? (xrayInstalled(data)
-                ? 'Активное ядро: процесс не обнаружен. Xray установлен, но сейчас не запущен или ещё запускается.'
-                : 'Активное ядро: процесс не обнаружен. Xray не установлен.')
-              : `Активное ядро: ${coreName(core) || core}. Это окно настраивает DNS-over-VLESS для Xray.`)),
-        core === 'xray' ? 'ok' : 'warn',
-      );
+      if (rollbackStatus) {
+        if (rollbackStatus.reason) addDetail(`Причина отката: ${rollbackStatus.reason}`, 'warn');
+        addDetail(
+          rollbackStatus.phase === 'restored'
+            ? 'Xray обнаружен: откатный перезапуск завершён.'
+            : (rollbackStatus.phase === 'failed'
+              ? 'Xray не обнаружен после 15 секунд автоматической проверки.'
+              : 'Проверяем запуск Xray после отката…'),
+          rollbackStatus.phase === 'restored' ? 'ok' : 'warn',
+        );
+      } else {
+        addDetail(
+          core === 'xray'
+            ? 'Активное ядро: Xray — то, что нужно для DNS-over-VLESS.'
+            : (core === 'mihomo'
+              ? `Активное ядро: Mihomo. Это окно настраивает DNS-over-VLESS для Xray. ${MIHOMO_HINT}`
+              : (coreUnavailable(core)
+                ? (xrayInstalled(data)
+                  ? 'Активное ядро: процесс не обнаружен. Xray установлен, но сейчас не запущен или ещё запускается.'
+                  : 'Активное ядро: процесс не обнаружен. Xray не установлен.')
+                : `Активное ядро: ${coreName(core) || core}. Это окно настраивает DNS-over-VLESS для Xray.`)),
+          core === 'xray' ? 'ok' : 'warn',
+        );
+      }
       if (data.target && data.target.label) addDetail(`DNS-запросы идут через: ${data.target.label}`, 'ok');
       addDetail(
         data.dns_override === true
@@ -1057,7 +1125,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         }
         addDetail(`Балансировщик ${drift.source} изменился после включения (${parts.join('; ')}). Переключите DNS-over-VLESS, чтобы обновить маршрут.`, 'warn');
       }
-      (data.blockers || []).forEach((item) => addDetail(item, 'warn'));
+      if (!rollbackStatus) (data.blockers || []).forEach((item) => addDetail(item, 'warn'));
     }
 
     renderRoute(data);
@@ -1069,26 +1137,29 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     renderZoneSummaries(data);
 
     if (apply) {
+      const waitingForRollback = rollbackStatus && rollbackStatus.phase === 'waiting';
       // With nothing ticked there is no route to build: block the action and let
       // the line under the list say what is missing.
       const needsTarget = routeVisible && !chosenTargets.length;
-      apply.disabled = busy || (!enabled && !canDisable && (blocked || needsTarget));
+      apply.disabled = waitingForRollback || busy || (!enabled && !canDisable && (blocked || needsTarget));
       // «Включить безопасно» на неподходящем ядре обещало бы невозможное.
       const applyCore = coreOf(data);
       const unavailableCore = coreUnavailable(applyCore) && !enabled && !canDisable;
       const wrongCore = !unavailableCore && applyCore !== 'xray' && !enabled && !canDisable;
-      apply.textContent = busy
-        ? 'Выполняется…'
+      apply.textContent = waitingForRollback
+        ? 'Проверяем Xray…'
+        : (busy
+          ? 'Выполняется…'
         : ((enabled || canDisable)
           ? 'Отключить и восстановить'
           : (unavailableCore
             ? (xrayInstalled(data) ? 'Xray не запущен' : 'Нужно ядро Xray')
-            : (wrongCore ? 'Нужно ядро Xray' : 'Включить безопасно')));
+            : (wrongCore ? 'Нужно ядро Xray' : 'Включить безопасно'))));
       apply.classList.toggle('btn-danger', enabled || canDisable);
       apply.classList.toggle('btn-primary', !enabled && !canDisable);
     }
     const resetButton = $(DOM.reset);
-    if (resetButton) resetButton.disabled = busy;
+    if (resetButton) resetButton.disabled = busy || !!(rollbackStatus && rollbackStatus.phase === 'waiting');
   }
 
   function renderError(error) {
@@ -1264,7 +1335,55 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     }
   }
 
+  function wait(milliseconds) {
+    return new Promise((resolve) => setTimeout(resolve, milliseconds));
+  }
+
+  async function followRollback(rollback, reason) {
+    const generation = ++rollbackPollGeneration;
+    const startedAt = Date.now();
+    const restoredEnabled = !!(status && status.enabled);
+    rollbackStatus = { phase: 'waiting', startedAt, reason: String(reason || ''), restoredEnabled };
+
+    // The POST response reports what the rollback itself observed. Render it
+    // immediately, then replace it with fresh status calls every second.
+    const initial = Object.assign({}, status || {});
+    initial.active_core = String((rollback && rollback.active_core) || 'unknown');
+    if (!Array.isArray(initial.available_cores)) initial.available_cores = ['xray'];
+    status = initial;
+    render(initial);
+
+    const deadline = startedAt + ROLLBACK_POLL_TIMEOUT_MS;
+    while (generation === rollbackPollGeneration && Date.now() < deadline) {
+      try {
+        const current = await getStatus();
+        if (generation !== rollbackPollGeneration) return current;
+        status = current;
+        if (coreOf(current) === 'xray') {
+          rollbackStatus = { phase: 'restored', startedAt, reason: rollbackStatus.reason, restoredEnabled };
+          render(current);
+          return current;
+        }
+        render(current);
+      } catch (error) {
+        // A status request can overlap the service restart. Keep the last
+        // known card on screen and retry instead of replacing it with a
+        // second, unrelated error.
+        if (status) render(status);
+      }
+      await wait(ROLLBACK_POLL_INTERVAL_MS);
+    }
+
+    if (generation === rollbackPollGeneration) {
+      rollbackStatus = { phase: 'failed', startedAt, reason: rollbackStatus.reason, restoredEnabled };
+      render(status || initial);
+    }
+    return status;
+  }
+
   async function open() {
+    rollbackPollGeneration += 1;
+    rollbackStatus = null;
     showModal(true);
     applyLayout(readLayout());
     collapseZones();
@@ -1440,6 +1559,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     }
     if (!confirmed) return;
 
+    rollbackPollGeneration += 1;
+    rollbackStatus = null;
     busy = true;
     render(status);
     try {
@@ -1455,8 +1576,13 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     } catch (error) {
       const data = error && error.data ? error.data : null;
       const message = String((data && data.error) || error.message || 'Операция не выполнена.');
-      toast(`${message}${data && data.rolled_back ? ' Предыдущая конфигурация восстановлена.' : ''}`, true);
-      await refresh();
+      if (data && data.rolled_back) {
+        toast(`${message} Предыдущая конфигурация восстановлена; проверяем запуск Xray.`, true);
+        await followRollback(data.rollback || {}, message);
+      } else {
+        toast(message, true);
+        await refresh();
+      }
     } finally {
       busy = false;
       render(status || {});
