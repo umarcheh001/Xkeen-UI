@@ -2834,7 +2834,7 @@
                 <b>Маршрут и режим</b>
               </summary>
               <div class="xk-dns-zone-body routing-dns-over-vless-route mihomo-dns-mode-picker">
-                <div class="mihomo-dns-field">
+                <div class="mihomo-dns-field mihomo-dns-proxy-options">
                   <label for="mihomo-dns-proxy-group">Proxy-группа для DoH</label>
                   <select id="mihomo-dns-proxy-group"><option value="">Автоматический выбор</option></select>
                   <label class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-geodata-toggle mihomo-dns-selector-toggle" title="Добавить в Mihomo отдельную группу DNS Proxy с выбранным маршрутом и DIRECT.">
@@ -2844,7 +2844,7 @@
                   </label>
                   <p id="mihomo-dns-selector-hint" class="modal-hint" role="status" aria-live="polite">После запуска позволит переключать DNS между выбранной группой и DIRECT.</p>
                 </div>
-                <div class="mihomo-dns-field">
+                <div class="mihomo-dns-field mihomo-dns-mode-options">
                   <label for="mihomo-dns-mode">Режим обработки имён</label>
                   <select id="mihomo-dns-mode">
                     <option value="redir-host" selected>redir-host — реальные IP (рекомендуется)</option>
@@ -2852,19 +2852,19 @@
                   </select>
                   <p id="mihomo-dns-mode-hint" class="modal-hint">Совместимо с TProxy и большинством устройств LAN.</p>
                 </div>
-                <div class="mihomo-dns-field mihomo-dns-portable-options">
+                <div class="mihomo-dns-field mihomo-dns-portable-options mihomo-dns-tunnel-options">
                   <label for="mihomo-dns-tunnel-servers">DNS-серверы в туннеле</label>
                   <input id="mihomo-dns-tunnel-servers" type="text" value="https://8.8.8.8/dns-query, https://1.1.1.1/dns-query" autocomplete="off" spellcheck="false">
                   <p class="modal-hint">Через запятую. Mihomo направит их через выбранную proxy-группу.</p>
                 </div>
-                <div class="mihomo-dns-field mihomo-dns-portable-options">
+                <div class="mihomo-dns-field mihomo-dns-portable-options mihomo-dns-local-options">
                   <label for="mihomo-dns-local-servers">Локальные DNS для домашних имён</label>
                   <input id="mihomo-dns-local-servers" type="text" placeholder="например, 192.168.1.1" autocomplete="off" spellcheck="false">
                   <label for="mihomo-dns-local-domains">Домены локальной сети</label>
                   <input id="mihomo-dns-local-domains" type="text" placeholder="домены: lan, local" autocomplete="off" spellcheck="false">
                   <p class="modal-hint">Необязательно. Пара «серверы + домены» остаётся в локальной сети.</p>
                 </div>
-                <div class="mihomo-dns-field mihomo-dns-portable-options">
+                <div class="mihomo-dns-field mihomo-dns-portable-options mihomo-dns-direct-options">
                   <label for="mihomo-dns-direct-servers">DNS для доменов мимо туннеля</label>
                   <input id="mihomo-dns-direct-servers" type="text" placeholder="например, 192.168.1.1" autocomplete="off" spellcheck="false">
                   <label for="mihomo-dns-direct-domains">Домены прямого DNS</label>

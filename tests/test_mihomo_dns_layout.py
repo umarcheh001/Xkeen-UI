@@ -23,6 +23,20 @@ def test_mihomo_dns_has_named_settings_and_diagnostics_columns():
     assert 'data-zone="mihomo-route"' in MODAL
     assert 'data-zone="mihomo-fake"' in MODAL
     assert 'class="routing-dns-over-vless-foot mihomo-dns-foot"' in MODAL
+
+
+def test_mihomo_dns_packs_portable_resolver_controls_without_empty_grid_cells():
+    assert 'mihomo-dns-proxy-options' in MODAL
+    assert 'mihomo-dns-mode-options' in MODAL
+    assert 'mihomo-dns-tunnel-options' in MODAL
+    assert 'mihomo-dns-local-options' in MODAL
+    assert 'mihomo-dns-direct-options' in MODAL
+
+    start = CSS.index("body.panel-page #mihomo-dns-modal .mihomo-dns-mode-picker {")
+    desktop = CSS[start:CSS.index("body.panel-page #mihomo-dns-modal .mihomo-dns-field,", start)]
+    assert '"proxy mode"' in desktop
+    assert '"tunnel tunnel"' in desktop
+    assert '"local direct"' in desktop
     assert '"route state"' in CSS
     assert '"fake  fake"' in CSS
 

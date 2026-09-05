@@ -13441,9 +13441,25 @@ body.panel-page #mihomo-dns-modal .mihomo-dns-foot {
 
 body.panel-page #mihomo-dns-modal .mihomo-dns-mode-picker {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-areas:
+    "proxy mode"
+    "tunnel tunnel"
+    "local direct";
   gap: 10px 12px;
   align-items: start;
 }
+
+/* The three portable DNS blocks have a deliberately uneven amount of
+ * content: one tunnel input, then two fields plus an explanation for each
+ * policy.  Let the short tunnel field use the complete row and keep the two
+ * equally sized policy pairs beside each other.  Auto-placement previously
+ * put tunnel next to local and direct below it, creating two conspicuous
+ * unused rectangles in the form. */
+body.panel-page #mihomo-dns-modal .mihomo-dns-proxy-options { grid-area: proxy; }
+body.panel-page #mihomo-dns-modal .mihomo-dns-mode-options { grid-area: mode; }
+body.panel-page #mihomo-dns-modal .mihomo-dns-tunnel-options { grid-area: tunnel; }
+body.panel-page #mihomo-dns-modal .mihomo-dns-local-options { grid-area: local; }
+body.panel-page #mihomo-dns-modal .mihomo-dns-direct-options { grid-area: direct; }
 
 body.panel-page #mihomo-dns-modal .mihomo-dns-field,
 body.panel-page #mihomo-dns-modal .mihomo-dns-fake-core,
@@ -14969,6 +14985,15 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
   body.panel-page #mihomo-dns-modal .mihomo-dns-fake-core,
   body.panel-page #mihomo-dns-modal .mihomo-dns-sources {
     grid-template-columns: 1fr;
+  }
+
+  body.panel-page #mihomo-dns-modal .mihomo-dns-mode-picker {
+    grid-template-areas:
+      "proxy"
+      "mode"
+      "tunnel"
+      "local"
+      "direct";
   }
 
   body.panel-page #mihomo-dns-modal .mihomo-dns-sources {
