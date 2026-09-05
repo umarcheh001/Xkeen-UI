@@ -1496,12 +1496,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       if (address) where.appendChild(document.createTextNode(address));
       const why = document.createElement('span');
       why.className = 'routing-dns-over-vless-clients-why';
+      // Только положение устройства сейчас. Адрес резолвера прошивки здесь
+      // стоял советом на будущее — что вписать, чтобы не потерять домашние
+      // имена, — но висел он у каждого перехваченного устройства, а нужен
+      // немногим: обычный резолвер прошивки не знает ни одного имени, которого
+      // не знает публичный DNS, и незаменим он только там, где в него
+      // прописаны свои записи. Порты названы в подсказке к полю локальных
+      // резолверов, то есть там, где адрес и вписывают.
       why.textContent = item.reason || '';
-      // Домашние имена такого устройства знает резолвер его политики — назовём
-      // адрес прямо здесь, иначе искать его придётся по SSH.
-      if (item.can_capture && item.firmware_resolver) {
-        why.textContent += ` · домашние имена знает ${item.firmware_resolver}`;
-      }
       row.appendChild(title);
       row.appendChild(where);
       row.appendChild(why);

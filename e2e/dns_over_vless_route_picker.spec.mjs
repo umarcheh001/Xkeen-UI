@@ -395,9 +395,12 @@ test('devices are ticked one by one and only with the switch on', async ({ page 
   await expect(picks.first()).toBeEnabled();
 
   const phone = page.locator('#routing-dns-over-vless-clients-list li', { hasText: 'Телефон' });
-  // Адрес резолвера прошивки назван прямо в строке: он же отвечает за
-  // домашние имена, которые устройство потеряет.
-  await expect(phone).toContainText('127.0.0.1:41100');
+  // Адрес резолвера прошивки в строке не называется. Совет вписать его нужен
+  // меньшинству -- тем, у кого в резолвер прошивки прописаны свои записи, -- а
+  // читают строку все, и стоит она там, где объясняется положение устройства
+  // сейчас, а не что делать потом. Порты названы в подсказке к полю локальных
+  // резолверов, где адрес и вписывают.
+  await expect(phone).not.toContainText('127.0.0.1:41100');
   await phone.locator('.routing-dns-over-vless-clients-pick').check({ force: true });
 
   let sent = null;
