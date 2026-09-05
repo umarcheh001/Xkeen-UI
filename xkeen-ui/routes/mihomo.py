@@ -1463,6 +1463,28 @@ def create_mihomo_blueprint(
         geodata = bool(data.get("geodata"))
         rule_providers = data.get("rule_providers")
         dns_selector = data.get("dns_selector") is True
+        dns_options = data.get("dns_options") if isinstance(data.get("dns_options"), dict) else None
+        # Accept the flat spelling used by the Xray DNS form as well.  Xray's
+        # payload calls the local/direct fields singular (``local_resolver``
+        # and ``direct_resolver``), while a few older Mihomo integrations used
+        # plural names.  Normalize both spellings into the portable nested
+        # shape; an explicitly supplied nested object always wins.
+        flat_dns_aliases = {
+            "upstreams": "tunnel",
+            "nameservers": "tunnel",
+            "local_resolver": "local_resolvers",
+            "local_resolvers": "local_resolvers",
+            "local_domains": "local_domains",
+            "direct_resolver": "direct_resolvers",
+            "direct_resolvers": "direct_resolvers",
+            "direct_domains": "direct_domains",
+        }
+        if dns_options is None and any(key in data for key in flat_dns_aliases):
+            dns_options = {
+                normalized: data[key]
+                for key, normalized in flat_dns_aliases.items()
+                if key in data
+            }
         repair_legacy_exclusion = data.get("repair_legacy_exclusion") is True
         proxy_group = str(data.get("proxy_group") or "").strip() or None
         if data.get("confirmed") is not True:
@@ -1503,6 +1525,7 @@ def create_mihomo_blueprint(
                 rule_providers=rule_providers,
                 proxy_group=proxy_group,
                 dns_selector=dns_selector,
+                dns_options=dns_options,
                 repair_legacy_exclusion=repair_legacy_exclusion,
             )
             return jsonify(result), 200

@@ -215,6 +215,13 @@ def test_build_enabled_config_adds_recommended_fake_ip_profile_by_default():
     ) in content
 
 
+def test_fake_ip_status_defaults_match_the_generated_resolver_profile():
+    options = dns._normalize_dns_options(mode="fake-ip")
+
+    assert options["tunnel"] == [item[0] for item in dns.DEFAULT_FAKE_IP_ROUTED_NAMESERVERS]
+    assert options["tunnel"] != list(dns.DEFAULT_DNS_OPTIONS["tunnel"])
+
+
 def test_fake_ip_route_rejects_legacy_xkeen_rfc2544_return(monkeypatch):
     legacy = XKEEN_MANGLE_OK.replace(
         "-A xkeen -p udp",
@@ -326,6 +333,108 @@ def test_redir_host_keeps_the_existing_resolver_profile():
     assert "https://1.1.1.1/dns-query#Заблок. сервисы&name-cert-verify=cloudflare-dns.com" in content
     assert "geohide.ru" not in content
     assert "nameserver-policy" not in content
+
+
+def test_mihomo_dns_can_carry_xray_local_and_direct_resolver_zones():
+    content, _ = dns.build_enabled_config(
+        BASE,
+        dns_options={
+            "tunnel": ["https://8.8.8.8/dns-query", "https://1.1.1.1/dns-query"],
+            "local_resolvers": ["192.168.1.1"],
+            "local_domains": ["lan", "home.arpa"],
+            "direct_resolvers": ["https://9.9.9.9/dns-query"],
+            "direct_domains": ["cdn.example.org"],
+        },
+    )
+
+    assert "https://8.8.8.8/dns-query#Заблок. сервисы&name-cert-verify=dns.google" in content
+    assert "'+.lan':" in content
+    assert "'+.home.arpa':" in content
+    assert "- '192.168.1.1'" in content
+    assert "'+.cdn.example.org':" in content
+    assert "- 'https://9.9.9.9/dns-query#DIRECT'" in content
+
+
+@pytest.mark.parametrize(
+    "dns_options",
+    [
+        {"tunnel": ["https://9.9.9.9/dns-query#DIRECT"]},
+        {
+            "local_resolvers": ["192.168.1.1#DIRECT"],
+            "local_domains": ["lan"],
+        },
+        {
+            "direct_resolvers": ["https://9.9.9.9/dns-query#Заблок. сервисы"],
+            "direct_domains": ["example.org"],
+        },
+    ],
+)
+def test_mihomo_dns_portable_resolvers_cannot_override_the_selected_route(dns_options):
+    with pytest.raises(dns.MihomoDnsError) as captured:
+        dns.build_enabled_config(BASE, dns_options=dns_options)
+
+    assert captured.value.code == "dns_servers_invalid"
+
+
+def test_mihomo_dns_rejects_incomplete_local_policy():
+    with pytest.raises(dns.MihomoDnsError) as captured:
+        dns.build_enabled_config(
+            BASE,
+            dns_options={"local_resolvers": ["192.168.1.1"]},
+        )
+    assert captured.value.code == "dns_policy_incomplete"
+
+
+@pytest.mark.parametrize("resolver", ["127.0.0.1", "127.0.0.1:53", "[::1]:53", "localhost"])
+def test_mihomo_dns_rejects_policy_resolver_loop_into_its_port_53(resolver):
+    with pytest.raises(dns.MihomoDnsError) as captured:
+        dns.build_enabled_config(
+            BASE,
+            dns_options={
+                "local_resolvers": [resolver],
+                "local_domains": ["lan"],
+            },
+        )
+    assert captured.value.code == "dns_resolver_loop"
+
+
+def test_mihomo_dns_allows_loopback_resolver_on_an_explicit_non_dns_port():
+    content, _ = dns.build_enabled_config(
+        BASE,
+        dns_options={
+            "local_resolvers": ["127.0.0.1:41100"],
+            "local_domains": ["lan"],
+        },
+    )
+    assert "- '127.0.0.1:41100'" in content
+
+
+def test_mihomo_dns_rejects_the_router_lan_address_on_port_53(monkeypatch):
+    monkeypatch.setattr(dns, "_address_is_ours", lambda _address: True)
+
+    with pytest.raises(dns.MihomoDnsError) as captured:
+        dns.build_enabled_config(
+            BASE,
+            dns_options={
+                "local_resolvers": ["192.168.1.1"],
+                "local_domains": ["lan"],
+            },
+        )
+
+    assert captured.value.code == "dns_resolver_loop"
+
+
+def test_mihomo_dns_custom_policy_replaces_duplicate_fake_ip_policy_key():
+    content, _ = dns.build_enabled_config(
+        BASE,
+        mode="fake-ip",
+        dns_options={
+            "direct_resolvers": ["https://9.9.9.9/dns-query"],
+            "direct_domains": ["rule-set:category_ru@domain"],
+        },
+    )
+    assert content.count("'rule-set:category_ru@domain':") == 1
+    assert "- 'https://9.9.9.9/dns-query#DIRECT'" in content
 
 
 def test_build_refuses_existing_user_dns_without_rewriting_it():
@@ -1077,3 +1186,39 @@ def test_http_contract_forwards_rule_providers(tmp_path: Path, monkeypatch):
     assert captured["geodata"] is False
     assert captured["dns_selector"] is True
     assert captured["repair_legacy_exclusion"] is True
+
+
+def test_http_contract_forwards_portable_dns_options(tmp_path: Path, monkeypatch):
+    import routes.mihomo as mihomo_routes
+    from routes.mihomo import create_mihomo_blueprint
+
+    config, state = _status_ready(tmp_path, monkeypatch)
+    monkeypatch.setattr(mihomo_routes, "get_mihomo_dns_status", dns.get_status)
+    captured: dict[str, object] = {}
+
+    def fake_apply(action, **kwargs):
+        captured.update(kwargs)
+        return {"ok": True, "enabled": True}
+
+    monkeypatch.setattr(mihomo_routes, "apply_mihomo_dns_action", fake_apply)
+    app = Flask("mihomo-dns-options")
+    app.register_blueprint(create_mihomo_blueprint(
+        MIHOMO_CONFIG_FILE=str(config),
+        MIHOMO_TEMPLATES_DIR=str(tmp_path / "templates"),
+        MIHOMO_DEFAULT_TEMPLATE=str(tmp_path / "templates" / "default.yaml"),
+        restart_xkeen=lambda **_kwargs: True,
+        ui_state_dir=str(state),
+    ))
+
+    response = app.test_client().post("/api/mihomo/dns", json={
+        "confirmed": True,
+        "action": "enable",
+        "dns_options": {
+            "tunnel": ["https://9.9.9.9/dns-query"],
+            "local_resolvers": ["192.168.1.1"],
+            "local_domains": ["lan"],
+        },
+    })
+
+    assert response.status_code == 200
+    assert captured["dns_options"]["tunnel"] == ["https://9.9.9.9/dns-query"]

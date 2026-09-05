@@ -2852,6 +2852,25 @@
                   </select>
                   <p id="mihomo-dns-mode-hint" class="modal-hint">Совместимо с TProxy и большинством устройств LAN.</p>
                 </div>
+                <div class="mihomo-dns-field mihomo-dns-portable-options">
+                  <label for="mihomo-dns-tunnel-servers">DNS-серверы в туннеле</label>
+                  <input id="mihomo-dns-tunnel-servers" type="text" value="https://8.8.8.8/dns-query, https://1.1.1.1/dns-query" autocomplete="off" spellcheck="false">
+                  <p class="modal-hint">Через запятую. Mihomo направит их через выбранную proxy-группу.</p>
+                </div>
+                <div class="mihomo-dns-field mihomo-dns-portable-options">
+                  <label for="mihomo-dns-local-servers">Локальные DNS для домашних имён</label>
+                  <input id="mihomo-dns-local-servers" type="text" placeholder="например, 192.168.1.1" autocomplete="off" spellcheck="false">
+                  <label for="mihomo-dns-local-domains">Домены локальной сети</label>
+                  <input id="mihomo-dns-local-domains" type="text" placeholder="домены: lan, local" autocomplete="off" spellcheck="false">
+                  <p class="modal-hint">Необязательно. Пара «серверы + домены» остаётся в локальной сети.</p>
+                </div>
+                <div class="mihomo-dns-field mihomo-dns-portable-options">
+                  <label for="mihomo-dns-direct-servers">DNS для доменов мимо туннеля</label>
+                  <input id="mihomo-dns-direct-servers" type="text" placeholder="например, 192.168.1.1" autocomplete="off" spellcheck="false">
+                  <label for="mihomo-dns-direct-domains">Домены прямого DNS</label>
+                  <input id="mihomo-dns-direct-domains" type="text" placeholder="домены: example.org, cdn.example" autocomplete="off" spellcheck="false">
+                  <p class="modal-hint">Необязательно. Эти зоны получат DNS напрямую (с route DIRECT).</p>
+                </div>
               </div>
             </details>
 

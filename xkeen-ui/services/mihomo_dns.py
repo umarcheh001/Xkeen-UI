@@ -29,6 +29,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import Any, Callable, Optional
+from urllib.parse import urlsplit
 
 from services.cores import detect_running_core
 from services.io.atomic import _atomic_write_json, _atomic_write_text
@@ -82,6 +83,21 @@ DEFAULT_FAKE_IP_ROUTED_NAMESERVERS = (
 DEFAULT_FAKE_IP_DNS_POLICY = {
     "rule-set:category_ru@domain": DEFAULT_FAKE_IP_BOOTSTRAP,
     "rule-set:category-ai@domain": ("https://xbox-dns.ru/dns-query",),
+}
+# The Xray assistant lets the operator choose public, local and direct DNS
+# servers.  Mihomo has the same primitives, but expresses them as
+# ``nameserver`` and ``nameserver-policy`` entries.  Keep the defaults in one
+# place so the UI can show an honest preview and the generated YAML remains
+# deterministic.
+MAX_DNS_SERVERS = 8
+MAX_DNS_DOMAINS = 64
+DNS_SERVER_SCHEMES = ("http", "https", "quic", "tls", "tcp", "udp")
+DEFAULT_DNS_OPTIONS = {
+    "tunnel": tuple(item[0] for item in DEFAULT_REDIR_ROUTED_NAMESERVERS),
+    "local_resolvers": (),
+    "local_domains": (),
+    "direct_resolvers": (),
+    "direct_domains": (),
 }
 DNS_SELECTOR_NAME = "DNS Proxy"
 DNS_SELECTOR_ICON = "https://img.icons8.com/fluency/96/dns.png"
@@ -356,6 +372,331 @@ def _select_proxy_group(text: str) -> Optional[str]:
 
 def _yaml_single_quote(value: str) -> str:
     return "'" + str(value).replace("'", "''") + "'"
+
+
+def _split_dns_values(value: Any) -> list[str]:
+    """Turn a text/list field from the DNS form into clean scalar values."""
+
+    if value is None:
+        return []
+    if isinstance(value, str):
+        raw = re.split(r"[,\r\n]+", value)
+    elif isinstance(value, (list, tuple, set)):
+        raw = list(value)
+    else:
+        raw = []
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        text = str(item or "").strip()
+        if not text or text.lower() in seen:
+            continue
+        seen.add(text.lower())
+        result.append(text)
+    return result
+
+
+def _validate_dns_server(value: str, *, allow_system: bool = False) -> bool:
+    """Accept a raw Mihomo DNS server scalar without accepting YAML text.
+
+    The portable controls deliberately accept resolver addresses, not complete
+    Mihomo routing expressions.  In particular, ``#GROUP`` is appended by the
+    assistant after validation: accepting it from the form would let a tunnel
+    resolver silently choose ``DIRECT`` (or a different group) despite the
+    route selected immediately above it.
+    """
+
+    text = str(value or "").strip()
+    if not text or len(text) > 255 or any(char in text for char in "\r\n'\"#"):
+        return False
+    if allow_system and text.lower() == "system":
+        return True
+    base = text
+    if not base:
+        return False
+    if "://" in base:
+        try:
+            parsed = urlsplit(base)
+            if parsed.scheme.lower() not in DNS_SERVER_SCHEMES or not parsed.netloc:
+                return False
+            if parsed.username is not None or parsed.password is not None:
+                return False
+            # Accessing ``port`` performs the range check and also rejects
+            # malformed values such as ``host:abc``.
+            port = parsed.port
+            if port is not None and not (1 <= port <= 65535):
+                return False
+            if not parsed.hostname or any(ch.isspace() for ch in parsed.hostname):
+                return False
+        except (TypeError, ValueError):
+            return False
+        return True
+    # Plain IP/host[:port] values are useful for local resolvers and are also
+    # accepted by Mihomo as a nameserver policy value.  Parse an optional port
+    # instead of accepting arbitrary colons, otherwise a typo such as
+    # ``resolver:abc`` would only fail much later in Mihomo's startup log.
+    if any(ch.isspace() for ch in base) or "/" in base:
+        return False
+    host = base
+    port: Optional[int] = None
+    if base.startswith("["):
+        closing = base.find("]")
+        if closing <= 1:
+            return False
+        host = base[1:closing]
+        tail = base[closing + 1:]
+        if tail:
+            if not tail.startswith(":") or not tail[1:].isdigit():
+                return False
+            port = int(tail[1:])
+    elif base.count(":") == 1:
+        host, raw_port = base.rsplit(":", 1)
+        if not raw_port.isdigit():
+            return False
+        port = int(raw_port)
+    elif base.count(":") > 1:
+        # An unbracketed IPv6 literal has multiple colons and no unambiguous
+        # port.  Validate it as an address below.
+        host = base
+    if not host or (port is not None and not (1 <= port <= 65535)):
+        return False
+    try:
+        parsed_ip = ipaddress.ip_address(host)
+    except ValueError:
+        if not re.match(r"^[A-Za-z0-9._-]+$", host):
+            return False
+    else:
+        # Unspecified/multicast addresses are never useful as an upstream;
+        # private and loopback addresses remain valid because they can refer
+        # to a resolver on the far side of the selected proxy route.
+        if parsed_ip.is_unspecified or parsed_ip.is_multicast:
+            return False
+    return True
+
+
+def _dns_server_loops_into_listener(value: str) -> bool:
+    """Return whether a policy resolver would call Mihomo's own port 53.
+
+    The managed listener binds ``0.0.0.0:53``.  Sending a local or DIRECT
+    policy back to any address owned by this router on the default DNS port
+    therefore forms a resolver loop (and eventually exhausts Mihomo's DNS
+    workers).  This includes the router's LAN address: it is tempting to put
+    ``192.168.1.1`` in the "local DNS" field, but after dns-override that is
+    Mihomo itself, not Keenetic's resolver.  DoH/DoT URLs normally use another
+    port, so only an explicitly/default DNS-port plain address is rejected
+    here; the general scalar validator still owns syntax checking.
+    """
+
+    text = str(value or "").strip()
+    if not text or text.lower() == "system":
+        return False
+    base = text.split("#", 1)[0].strip()
+    if "://" in base:
+        try:
+            parsed = urlsplit(base)
+            host = parsed.hostname or ""
+            port = parsed.port
+            # HTTP(S) is not a DNS-port endpoint by default.  For the
+            # datagram/stream DNS schemes, omitted port means 53 for the
+            # purpose of this safety check.
+            if parsed.scheme.lower() in {"udp", "tcp"} and port is None:
+                port = 53
+            if port != 53:
+                return False
+        except (TypeError, ValueError):
+            return False
+    else:
+        host = base
+        port = None
+        if base.startswith("[") and "]" in base:
+            host = base[1:base.find("]")]
+            tail = base[base.find("]") + 1:]
+            if tail.startswith(":") and tail[1:].isdigit():
+                port = int(tail[1:])
+        elif base.count(":") == 1:
+            host, raw_port = base.rsplit(":", 1)
+            if raw_port.isdigit():
+                port = int(raw_port)
+        # A plain Mihomo nameserver without a port means DNS/53.
+        if port is not None and port != 53:
+            return False
+    try:
+        return _address_is_ours(ipaddress.ip_address(host))
+    except ValueError:
+        return host.lower() in {"localhost", "localhost."}
+
+
+def _address_is_ours(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Whether ``address`` is assigned to this router.
+
+    Binding a throwaway UDP socket is a portable, dependency-free check on
+    Entware and catches both loopback and every LAN/VPN address.  A failed
+    probe means the address can belong to another local resolver, so remain
+    permissive rather than reject a legitimate split-DNS setup.
+    """
+
+    if address.is_loopback:
+        return True
+    family = socket.AF_INET6 if address.version == 6 else socket.AF_INET
+    try:
+        with socket.socket(family, socket.SOCK_DGRAM) as probe:
+            probe.bind((str(address), 0))
+        return True
+    except OSError:
+        return False
+    except Exception:
+        return False
+
+
+def _normalize_dns_domains(value: Any) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in _split_dns_values(value):
+        text = item.strip()
+        if len(text) > 255 or any(char in text for char in "\r\n'\""):
+            raise MihomoDnsError("Список DNS-доменов содержит недопустимое значение.", code="dns_domains_invalid")
+        # Mihomo accepts domain:, geosite:, rule-set: and +.domain forms.  A
+        # bare domain is made a suffix match so ``lan`` also covers hosts below
+        # it, matching the way the Xray assistant treats local zones.  The
+        # common ``*.lan`` spelling is accepted as the equivalent ``+.lan``.
+        if not text or text.startswith("#"):
+            continue
+        lower = text.lower()
+        known_prefixes = ("domain:", "full:", "keyword:", "regexp:", "geosite:", "rule-set:", "ext:")
+        if text.startswith("*."):
+            tail = text[2:].strip().lower()
+            if not re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]*$", tail) or tail.endswith((".", "-")):
+                raise MihomoDnsError("Список DNS-доменов содержит недопустимое значение.", code="dns_domains_invalid")
+            normalized = "+." + tail
+        elif text.startswith("."):
+            tail = text[1:].strip().lower()
+            if not re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]*$", tail) or tail.endswith((".", "-")):
+                raise MihomoDnsError("Список DNS-доменов содержит недопустимое значение.", code="dns_domains_invalid")
+            normalized = "+." + tail
+        elif text.startswith("+"):
+            tail = text[2:].strip().lower() if text.startswith("+.") else ""
+            if not tail or not re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]*$", tail) or tail.endswith((".", "-")):
+                raise MihomoDnsError("Список DNS-доменов содержит недопустимое значение.", code="dns_domains_invalid")
+            normalized = "+." + tail
+        elif lower.startswith(known_prefixes):
+            prefix = text.split(":", 1)[0].lower()
+            tail = text.split(":", 1)[1].strip()
+            if not tail:
+                raise MihomoDnsError("Список DNS-доменов содержит пустое правило.", code="dns_domains_invalid")
+            if prefix != "regexp" and any(ch.isspace() for ch in tail):
+                raise MihomoDnsError("Список DNS-доменов содержит недопустимое значение.", code="dns_domains_invalid")
+            normalized = f"{prefix}:{tail.lower() if prefix != 'regexp' else tail}"
+        else:
+            if not re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]*$", text) or text.endswith((".", "-")):
+                raise MihomoDnsError("Список DNS-доменов содержит недопустимое значение.", code="dns_domains_invalid")
+            normalized = f"+.{text.lower()}"
+        if normalized in {"+.", "+.*"}:
+            raise MihomoDnsError("Список DNS-доменов содержит недопустимое значение.", code="dns_domains_invalid")
+        key = normalized.lower()
+        if key not in seen:
+            seen.add(key)
+            result.append(normalized)
+    if len(result) > MAX_DNS_DOMAINS:
+        raise MihomoDnsError(
+            f"Список DNS-доменов слишком длинный (максимум {MAX_DNS_DOMAINS}).",
+            code="dns_domains_invalid",
+        )
+    return result
+
+
+def _normalize_dns_options(value: Any = None, *, mode: str = "redir-host") -> dict[str, list[str]]:
+    """Validate the portable DNS controls shared with the Xray assistant."""
+
+    raw = value if isinstance(value, dict) else {}
+    aliases = {
+        "tunnel": ("tunnel", "upstreams", "nameservers"),
+        "local_resolvers": ("local_resolvers", "local_resolver", "local"),
+        "local_domains": ("local_domains", "local_zones"),
+        "direct_resolvers": ("direct_resolvers", "direct_resolver", "outside_resolvers", "direct"),
+        "direct_domains": ("direct_domains", "outside_domains", "direct_zones"),
+    }
+
+    def read(name: str) -> Any:
+        for alias in aliases[name]:
+            if alias in raw:
+                return raw.get(alias)
+        return None
+
+    tunnel = _split_dns_values(read("tunnel"))
+    if not tunnel:
+        # Fake-IP has a larger built-in public resolver profile.  Use the
+        # same defaults for the generated YAML and the status payload when
+        # the operator did not provide a portable DNS profile explicitly.
+        normalized_mode = _normalize_mode(mode) if str(mode or "").strip() else "redir-host"
+        defaults = (
+            tuple(item[0] for item in DEFAULT_FAKE_IP_ROUTED_NAMESERVERS)
+            if normalized_mode == "fake-ip"
+            else DEFAULT_DNS_OPTIONS["tunnel"]
+        )
+        tunnel = list(defaults)
+    local_resolvers = _split_dns_values(read("local_resolvers"))
+    direct_resolvers = _split_dns_values(read("direct_resolvers"))
+    for name, servers, allow_system in (
+        ("tunnel", tunnel, False),
+        ("local_resolvers", local_resolvers, True),
+        ("direct_resolvers", direct_resolvers, True),
+    ):
+        if len(servers) > MAX_DNS_SERVERS or any(not _validate_dns_server(item, allow_system=allow_system) for item in servers):
+            raise MihomoDnsError(
+                f"Список DNS-серверов «{name}» имеет неверный формат (максимум {MAX_DNS_SERVERS}).",
+                code="dns_servers_invalid",
+            )
+        if name != "tunnel" and any(_dns_server_loops_into_listener(item) for item in servers):
+            raise MihomoDnsError(
+                "Локальный DNS не может указывать на loopback-порт 53: это зациклит запросы на Mihomo.",
+                code="dns_resolver_loop",
+            )
+    local_domains = _normalize_dns_domains(read("local_domains"))
+    direct_domains = _normalize_dns_domains(read("direct_domains"))
+    if bool(local_resolvers) != bool(local_domains):
+        raise MihomoDnsError(
+            "Для локального DNS укажите и серверы, и доменные зоны.",
+            code="dns_policy_incomplete",
+        )
+    if bool(direct_resolvers) != bool(direct_domains):
+        raise MihomoDnsError(
+            "Для DNS мимо туннеля укажите и серверы, и доменные зоны.",
+            code="dns_policy_incomplete",
+        )
+    overlap = sorted({item.lower() for item in local_domains} & {item.lower() for item in direct_domains})
+    if overlap:
+        raise MihomoDnsError(
+            "Одна и та же DNS-зона указана и для локального, и для прямого резолвера: "
+            + ", ".join(overlap[:8])
+            + ". Выберите только один маршрут.",
+            code="dns_policy_overlap",
+            details=overlap,
+        )
+    return {
+        "tunnel": tunnel,
+        "local_resolvers": local_resolvers,
+        "local_domains": local_domains,
+        "direct_resolvers": direct_resolvers,
+        "direct_domains": direct_domains,
+    }
+
+
+def _routed_dns_server(server: str, group: str) -> str:
+    """Attach a Mihomo proxy-group fragment to an upstream DNS scalar."""
+
+    value = str(server or "").strip()
+    if not value:
+        return value
+    if "#" in value:
+        return value
+    return f"{value}#{group}"
+
+
+def _policy_server(server: str, *, route: str = "") -> str:
+    value = str(server or "").strip()
+    if route and "#" not in value:
+        return f"{value}#{route}"
+    return value
 
 
 def _with_dns_selector(text: str, upstream: str) -> str:
@@ -1370,14 +1711,25 @@ def _with_geodata_defaults(text: str) -> str:
     return prefix + source.lstrip("\r\n")
 
 
-def _managed_dns_block(group: str, *, mode: str = "redir-host", fake_ip: Any = None) -> str:
+def _managed_dns_block(
+    group: str,
+    *,
+    mode: str = "redir-host",
+    fake_ip: Any = None,
+    dns_options: Any = None,
+) -> str:
     target = str(group or "").strip()
     if not target:
         raise MihomoDnsError("Не найдена proxy-группа для защищённого DNS.", code="proxy_group_missing")
     normalized_mode = _normalize_mode(mode)
     fake = _normalize_fake_ip_options(fake_ip) if normalized_mode == "fake-ip" else None
     fake_block = ""
-    policy_block = ""
+    # Keep policy entries in a mapping while composing the block.  YAML
+    # duplicate keys are accepted by some parsers and rejected by others;
+    # using one entry per domain also lets an explicitly configured local or
+    # DIRECT zone intentionally override the built-in Fake-IP exceptions.
+    policy_entries: dict[str, list[str]] = {}
+    builtin_policy_keys: set[str] = set()
     if fake:
         filter_comments = {
             "rule-set:category_ru@domain": "Российские сайты",
@@ -1396,21 +1748,50 @@ def _managed_dns_block(group: str, *, mode: str = "redir-host", fake_ip: Any = N
                 for item in fake["filters"]
             )
         )
-        policy_lines = []
         fake_filters = {str(item).strip() for item in fake["filters"]}
         for policy_name, servers in DEFAULT_FAKE_IP_DNS_POLICY.items():
             if policy_name not in fake_filters:
                 continue
-            policy_lines.append(f"    {_yaml_single_quote(policy_name)}:\n")
-            policy_lines.extend(
-                f"      - {_yaml_single_quote(server) if str(server).startswith(('http://', 'https://', 'quic://', 'tls://')) else server}\n"
-                for server in servers
-            )
-        if policy_lines:
-            policy_block = "  nameserver-policy:\n" + "".join(policy_lines)
+            policy_entries[policy_name] = [str(server) for server in servers]
+            builtin_policy_keys.add(policy_name)
+    options = _normalize_dns_options(dns_options, mode=normalized_mode)
     bootstrap = DEFAULT_FAKE_IP_BOOTSTRAP if fake else DEFAULT_REDIR_BOOTSTRAP
     plain_nameservers = DEFAULT_FAKE_IP_NAMESERVERS if fake else ()
-    routed_nameservers = DEFAULT_FAKE_IP_ROUTED_NAMESERVERS if fake else DEFAULT_REDIR_ROUTED_NAMESERVERS
+    default_routed = DEFAULT_FAKE_IP_ROUTED_NAMESERVERS if fake else DEFAULT_REDIR_ROUTED_NAMESERVERS
+    if dns_options is None:
+        tunnel_servers = [item[0] for item in default_routed]
+    else:
+        tunnel_servers = options["tunnel"]
+    # Keep the verification name from the built-in IP-literal defaults.  For
+    # custom URLs Mihomo performs its normal TLS verification against the URL
+    # host; the user may also provide an explicit fragment in the value.
+    default_verify = {item[0]: item[1] for item in default_routed}
+    routed_nameservers = [
+        (_routed_dns_server(server, target), default_verify.get(server, ""))
+        for server in tunnel_servers
+    ]
+    if options["local_domains"] and options["local_resolvers"]:
+        for domain in options["local_domains"]:
+            policy_entries[domain] = [
+                _policy_server(server) for server in options["local_resolvers"]
+            ]
+            builtin_policy_keys.discard(domain)
+    if options["direct_domains"] and options["direct_resolvers"]:
+        for domain in options["direct_domains"]:
+            policy_entries[domain] = [
+                _policy_server(server, route="DIRECT")
+                for server in options["direct_resolvers"]
+            ]
+            builtin_policy_keys.discard(domain)
+    policy_block = ""
+    if policy_entries:
+        policy_block = "  nameserver-policy:\n"
+        for domain, servers in policy_entries.items():
+            policy_block += f"    {_yaml_single_quote(domain)}:\n"
+            policy_block += "".join(
+                f"      - {_yaml_single_quote(server) if (domain not in builtin_policy_keys or str(server).startswith(('http://', 'https://', 'quic://', 'tls://'))) else server}\n"
+                for server in servers
+            )
     return (
         f"{MANAGED_BEGIN}\n"
         "dns:\n"
@@ -1430,8 +1811,8 @@ def _managed_dns_block(group: str, *, mode: str = "redir-host", fake_ip: Any = N
         + "  nameserver:\n"
         + "".join(f"    - {_yaml_single_quote(server)}\n" for server in plain_nameservers)
         + "".join(
-            f"    - {_yaml_single_quote(url + '#' + target + '&name-cert-verify=' + verify)}\n"
-            for url, verify in routed_nameservers
+            f"    - {_yaml_single_quote(url + ('&name-cert-verify=' + _verify if _verify else ''))}\n"
+            for url, _verify in routed_nameservers
         )
         + policy_block
         + f"{MANAGED_END}\n"
@@ -1531,6 +1912,14 @@ def build_enabled_config(
     geodata: bool = False,
     rule_providers: Any = None,
     dns_selector: bool = False,
+    dns_options: Any = None,
+    upstreams: Any = None,
+    local_resolvers: Any = None,
+    local_resolver: Any = None,
+    local_domains: Any = None,
+    direct_resolvers: Any = None,
+    direct_resolver: Any = None,
+    direct_domains: Any = None,
 ) -> tuple[str, str]:
     original = str(text or "")
     if not original.strip():
@@ -1567,9 +1956,30 @@ def build_enabled_config(
     # Keep the managed block near the top-level runtime settings (normally
     # immediately after ``profile``), rather than at EOF after all providers,
     # groups and rules.
+    portable_dns = dns_options if isinstance(dns_options, dict) else {}
+    # Singular names mirror the Xray form and are accepted for callers that
+    # share one payload builder between the two engines.
+    if local_resolvers is None and local_resolver is not None:
+        local_resolvers = local_resolver
+    if direct_resolvers is None and direct_resolver is not None:
+        direct_resolvers = direct_resolver
+    explicit_dns = {
+        "tunnel": upstreams,
+        "local_resolvers": local_resolvers,
+        "local_domains": local_domains,
+        "direct_resolvers": direct_resolvers,
+        "direct_domains": direct_domains,
+    }
+    if any(value is not None for value in explicit_dns.values()):
+        portable_dns = {**portable_dns, **{key: value for key, value in explicit_dns.items() if value is not None}}
     patched = _insert_managed_dns_block(
         _remove_store_fake_ip(source),
-        _managed_dns_block(dns_target, mode=normalized_mode, fake_ip=fake_options),
+        _managed_dns_block(
+            dns_target,
+            mode=normalized_mode,
+            fake_ip=fake_options,
+            dns_options=portable_dns if (dns_options is not None or any(value is not None for value in explicit_dns.values())) else None,
+        ),
     )
     return patched, selected
 
@@ -1783,6 +2193,15 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
     group = str(state.get("proxy_group") or "") if exact else str(_select_proxy_group(text) or "")
     mode = str(state.get("mode") or dns_runtime.get("mode") or "redir-host").strip().lower()
     state_fake_ip = state.get("fake_ip") if isinstance(state.get("fake_ip"), dict) else {}
+    try:
+        dns_options = _normalize_dns_options(
+            state.get("dns_options") if isinstance(state.get("dns_options"), dict) else None,
+            mode=mode,
+        )
+    except MihomoDnsError:
+        # A stale state file must not make the status endpoint unusable.  The
+        # next enable starts from the safe defaults and writes a fresh state.
+        dns_options = _normalize_dns_options(mode=mode)
     state_dns_selector = state.get("dns_selector") if isinstance(state.get("dns_selector"), dict) else {}
     dns_selector_requested = bool(state_dns_selector.get("enabled"))
     dns_selector_present = DNS_SELECTOR_NAME in _proxy_groups(text)
@@ -1868,6 +2287,7 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         "mode": mode if mode in DNS_MODES else "redir-host",
         "fake_ip": state_fake_ip or None,
         "rule_providers": state.get("rule_providers") if isinstance(state.get("rule_providers"), list) else [],
+        "dns_options": dns_options,
         # Keep the boolean for API compatibility. Unlike the old value it is
         # true for TProxy only after the selected CIDR reaches the live target.
         "fake_ip_available": bool(fake_ip_route["available"]),
@@ -2024,6 +2444,14 @@ def apply_action(
     rule_providers: Any = None,
     proxy_group: Optional[str] = None,
     dns_selector: bool = False,
+    dns_options: Any = None,
+    upstreams: Any = None,
+    local_resolvers: Any = None,
+    local_resolver: Any = None,
+    local_domains: Any = None,
+    direct_resolvers: Any = None,
+    direct_resolver: Any = None,
+    direct_domains: Any = None,
     repair_legacy_exclusion: bool = False,
 ) -> dict[str, Any]:
     normalized = str(action or "").strip().lower()
@@ -2091,6 +2519,14 @@ def apply_action(
                 geodata=geodata,
                 rule_providers=rule_providers,
                 dns_selector=dns_selector is True,
+                dns_options=dns_options,
+                upstreams=upstreams,
+                local_resolvers=local_resolvers,
+                local_resolver=local_resolver,
+                local_domains=local_domains,
+                direct_resolvers=direct_resolvers,
+                direct_resolver=direct_resolver,
+                direct_domains=direct_domains,
             )
             validation = validate_config(new_content=prepared) or ""
             if not _validation_ok(validation):
@@ -2180,6 +2616,13 @@ def apply_action(
                         "upstream": group,
                     } if dns_selector is True else None,
                     "rule_providers": _normalize_domain_rule_providers(rule_providers) if normalized_mode == "fake-ip" and not geodata else [],
+                    "dns_options": _normalize_dns_options({
+                        "tunnel": upstreams,
+                        "local_resolvers": local_resolvers if local_resolvers is not None else local_resolver,
+                        "local_domains": local_domains,
+                        "direct_resolvers": direct_resolvers if direct_resolvers is not None else direct_resolver,
+                        "direct_domains": direct_domains,
+                    } if any(value is not None for value in (upstreams, local_resolvers, local_resolver, local_domains, direct_resolvers, direct_resolver, direct_domains)) else dns_options, mode=normalized_mode),
                     "xkeen_repair": repair_result,
                 }
                 _save_state(ui_state_dir, config_file, next_state)
@@ -2198,6 +2641,13 @@ def apply_action(
                         "upstream": group,
                     } if dns_selector is True else None,
                     "rule_providers": _normalize_domain_rule_providers(rule_providers) if normalized_mode == "fake-ip" and not geodata else [],
+                    "dns_options": _normalize_dns_options({
+                        "tunnel": upstreams,
+                        "local_resolvers": local_resolvers if local_resolvers is not None else local_resolver,
+                        "local_domains": local_domains,
+                        "direct_resolvers": direct_resolvers if direct_resolvers is not None else direct_resolver,
+                        "direct_domains": direct_domains,
+                    } if any(value is not None for value in (upstreams, local_resolvers, local_resolver, local_domains, direct_resolvers, direct_resolver, direct_domains)) else dns_options, mode=normalized_mode),
                     "xkeen_repair": repair_result,
                     "backup": str(getattr(backup, "filename", "") or "") or None,
                     "probe": probe,

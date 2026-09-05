@@ -33,12 +33,25 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     proxyGroup: 'mihomo-dns-proxy-group',
     dnsSelectorEnable: 'mihomo-dns-selector-enable',
     dnsSelectorHint: 'mihomo-dns-selector-hint',
+    tunnelServers: 'mihomo-dns-tunnel-servers',
+    localServers: 'mihomo-dns-local-servers',
+    localDomains: 'mihomo-dns-local-domains',
+    directServers: 'mihomo-dns-direct-servers',
+    directDomains: 'mihomo-dns-direct-domains',
   });
 
   const $ = (id) => document.getElementById(id);
   let current = null;
   let busy = false;
   let providerSelectionTouched = false;
+  let tunnelServersTouched = false;
+  const DEFAULT_REDIR_TUNNEL_SERVERS = ['https://8.8.8.8/dns-query', 'https://1.1.1.1/dns-query'];
+  const DEFAULT_FAKE_IP_TUNNEL_SERVERS = [
+    'https://cloudflare-dns.com/dns-query',
+    'https://dns.google/dns-query',
+    'tls://8.8.8.8',
+    'tls://1.1.1.1',
+  ];
   const LOCAL_FAKE_IP_FILTERS = ['*.lan', '*.local'];
   const DEFAULT_FAKE_IP_FILTERS = [
     'rule-set:category_ru@domain',
@@ -126,6 +139,13 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     if (open) setTimeout(() => { try { $(IDS.cancel)?.focus(); } catch (error) {} }, 0);
   }
 
+  function setDefaultTunnelServers(mode) {
+    const field = $(IDS.tunnelServers);
+    if (!field || tunnelServersTouched) return;
+    const defaults = mode === 'fake-ip' ? DEFAULT_FAKE_IP_TUNNEL_SERVERS : DEFAULT_REDIR_TUNNEL_SERVERS;
+    field.value = defaults.join(', ');
+  }
+
   async function requestStatus() {
     const client = getXkeenCoreHttpApi();
     if (client && typeof client.fetchJSON === 'function') {
@@ -143,6 +163,13 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       mode,
       proxy_group: $(IDS.proxyGroup)?.value || current?.proxy_group || undefined,
       dns_selector: !!$(IDS.dnsSelectorEnable)?.checked,
+      dns_options: {
+        tunnel: String($(IDS.tunnelServers)?.value || '').split(/[,\r\n]+/).map((item) => item.trim()).filter(Boolean),
+        local_resolvers: String($(IDS.localServers)?.value || '').split(/[,\r\n]+/).map((item) => item.trim()).filter(Boolean),
+        local_domains: String($(IDS.localDomains)?.value || '').split(/[,\r\n]+/).map((item) => item.trim()).filter(Boolean),
+        direct_resolvers: String($(IDS.directServers)?.value || '').split(/[,\r\n]+/).map((item) => item.trim()).filter(Boolean),
+        direct_domains: String($(IDS.directDomains)?.value || '').split(/[,\r\n]+/).map((item) => item.trim()).filter(Boolean),
+      },
     };
     if (mode === 'fake-ip') {
       const useGeodata = !!$(IDS.geodataEnable)?.checked;
@@ -285,6 +312,19 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     const proxyGroup = $(IDS.proxyGroup);
     const dnsSelectorEnable = $(IDS.dnsSelectorEnable);
     const dnsSelectorHint = $(IDS.dnsSelectorHint);
+    const dnsOptions = data?.dns_options || {};
+    const optionFields = [
+      [IDS.tunnelServers, dnsOptions.tunnel],
+      [IDS.localServers, dnsOptions.local_resolvers],
+      [IDS.localDomains, dnsOptions.local_domains],
+      [IDS.directServers, dnsOptions.direct_resolvers],
+      [IDS.directDomains, dnsOptions.direct_domains],
+    ];
+    if (!busy) optionFields.forEach(([id, value]) => {
+      const field = $(id);
+      if (!field || !Array.isArray(value)) return;
+      field.value = value.join(', ');
+    });
     const geodata = data?.geodata || null;
     const geodataEnable = $(IDS.geodataEnable);
     if (list) list.textContent = '';
@@ -298,11 +338,15 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     const releaseRecord = guardRelease(data);
     const released = !enabled && !!releaseRecord;
     const releasedByUser = released && releaseRecord?.source === 'user';
+    // Apply the server-reported mode before deriving any mode-specific state.
+    // On a fresh open the select still has the HTML default (redir-host), so
+    // calculating Fake-IP health before this assignment hides a broken route
+    // until the user changes the select manually.
+    if (mode && data?.mode && !busy) mode.value = data.mode;
     const activeMode = mode?.value || data?.mode;
     const fakeRouteUnready = activeMode === 'fake-ip'
       && (data?.fake_ip_available === false || data?.fake_ip_route?.available === false);
     const fakeRouteBlocked = fakeRouteUnready && data?.fake_ip_route?.confidence === 'blocked';
-    if (mode && data?.mode && !busy) mode.value = data.mode;
     if (proxyGroup && data?.proxy_groups && !busy) {
       const selected = data.proxy_group || '';
       proxyGroup.textContent = '';
@@ -345,6 +389,10 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     if (mode) mode.disabled = enabled || canDisable || altered;
     if (geodataEnable) geodataEnable.disabled = enabled || canDisable || altered;
     if (proxyGroup) proxyGroup.disabled = enabled || canDisable || altered;
+    [IDS.tunnelServers, IDS.localServers, IDS.localDomains, IDS.directServers, IDS.directDomains].forEach((id) => {
+      const field = $(id);
+      if (field) field.disabled = enabled || canDisable || altered;
+    });
     const state = enabled && !fakeRouteUnready ? 'enabled' : ((canDisable || canRecover || canRelease || blocked || altered || released || fakeRouteUnready) ? 'blocked' : 'ready');
     if (badge) {
       badge.dataset.state = state;
@@ -449,6 +497,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
 
   async function open() {
     providerSelectionTouched = false;
+    tunnelServersTouched = false;
     showModal(true);
     if ($(IDS.status)) $(IDS.status).textContent = 'Проверяем текущую конфигурацию…';
     if ($(IDS.badge)) $(IDS.badge).textContent = 'Проверка…';
@@ -527,6 +576,11 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     $(IDS.mode)?.addEventListener('change', () => {
       const fakeOptions = $(IDS.fakeOptions);
       const fake = $(IDS.mode)?.value === 'fake-ip';
+      // Keep the built-in resolver profile in sync with the selected mode until
+      // the operator edits the field.  Without this, switching to Fake-IP from
+      // the default redir-host view silently sent only the two redir-host
+      // resolvers and bypassed Mihomo's recommended fallback profile.
+      setDefaultTunnelServers(fake ? 'fake-ip' : 'redir-host');
       fakeOptions?.classList.toggle('hidden', !fake);
       if (fake) syncFakeIpFilters(!!$(IDS.geodataEnable)?.checked);
       const hint = $(IDS.modeHint);
@@ -560,6 +614,8 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       syncRuleProviderHighlights();
       syncRuleProviderUi(current || {});
     });
+    $(IDS.tunnelServers)?.addEventListener('input', () => { tunnelServersTouched = true; });
+    $(IDS.tunnelServers)?.addEventListener('change', () => { tunnelServersTouched = true; });
     $(IDS.modal)?.addEventListener('click', (event) => {
       if (event.target === $(IDS.modal) && !busy) showModal(false);
     });
