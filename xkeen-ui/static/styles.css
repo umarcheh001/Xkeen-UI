@@ -19484,6 +19484,9 @@ html[data-theme="light"] .routing-dns-over-vless-route-fallback[data-state="fail
 .routing-dns-over-vless-clients-pick:disabled { cursor: not-allowed; }
 .routing-dns-over-vless-capture-toggle { margin-top: 4px; }
 .routing-dns-over-vless-capture-cost { border-left: 3px solid #f59e0b; padding-left: 10px; }
+/* Панель сняла правило сама -- об этом нужно сказать так, чтобы человек это
+   увидел, а не обнаружил потом по пропавшей галочке. */
+.routing-dns-over-vless-clients-dropped { margin: 0; padding: 6px 10px; border-radius: 6px; border-left: 3px solid var(--sem-warning, #fbbf24); background: color-mix(in srgb, var(--sem-warning, #fbbf24) 12%, transparent); }
 /* Kept to the left of the closing buttons: it is a separate action, not a
    variant of "Применить".  It reads as a real button rather than a muted link
    because it was too easy to miss among the two below. */

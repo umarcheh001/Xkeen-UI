@@ -2781,3 +2781,144 @@ def test_a_core_that_does_not_know_the_rules_gets_the_form_it_understands(
     settings = settings["outbounds"][0]["settings"]
     assert settings["nonIPQuery"] == "skip"
     assert "rules" not in settings
+
+
+def _capture_state(tmp_path: Path, macs: list[str], **extra: Any) -> Path:
+    state_dir = tmp_path / "state"
+    state_dir.mkdir(exist_ok=True)
+    (state_dir / "dns_over_vless.json").write_text(
+        json.dumps(
+            {"enabled": True, "capture_clients": True, "capture_macs": macs, **extra},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    return state_dir
+
+
+def _capture_report(*clients: Dict[str, Any]) -> Dict[str, Any]:
+    macs = [item["mac"] for item in clients if item.get("captured")]
+    return {
+        "ok": True,
+        "available": True,
+        "clients": [dict(item) for item in clients],
+        "capture": {"available": True, "present": True, "first": True, "macs": macs, "error": ""},
+    }
+
+
+def _laptop(**over: Any) -> Dict[str, Any]:
+    # Устройство в политике доступа: правило панели для него и заводили.
+    base = {"mac": "10:f6:0a:a5:e7:9a", "title": "Galaxy Book 3 Pro (мой)", "can_capture": True, "captured": True}
+    return {**base, **over}
+
+
+def _phone(**over: Any) -> Dict[str, Any]:
+    # Из политики его вывели, и правило панели ему больше ничего не даёт.
+    base = {"mac": "3c:38:24:5f:86:c4", "title": "Xiaomi-MIX-Flip", "can_capture": False, "captured": True}
+    return {**base, **over}
+
+
+def test_a_rule_left_over_from_a_policy_is_taken_away(tmp_path: Path, monkeypatch):
+    state_dir = _capture_state(tmp_path, ["10:f6:0a:a5:e7:9a", "3c:38:24:5f:86:c4"])
+    asked: list[list[str]] = []
+    monkeypatch.setattr(
+        dns.dns_client_capture, "ensure", lambda macs: asked.append(list(macs)) or {"ok": True, "changed": True}
+    )
+    report = _capture_report(_laptop(), _phone())
+
+    dropped = dns.drop_stale_capture_macs(report, ui_state_dir=str(state_dir))
+
+    assert [item["title"] for item in dropped] == ["Xiaomi-MIX-Flip"]
+    # Firewall приводится к тому же, что записано: иначе окно снова покажет
+    # одно, а роутер будет держать другое.
+    assert asked == [["10:f6:0a:a5:e7:9a"]]
+    saved = json.loads((state_dir / "dns_over_vless.json").read_text(encoding="utf-8"))
+    assert saved["capture_macs"] == ["10:f6:0a:a5:e7:9a"]
+    assert saved["capture_clients"] is True
+    # И сам отчёт больше не говорит, что правило на устройстве есть.
+    assert report["clients"][1]["captured"] is False
+    assert report["capture"]["macs"] == ["10:f6:0a:a5:e7:9a"]
+
+
+def test_the_last_rule_taken_away_turns_the_switch_off(tmp_path: Path, monkeypatch):
+    state_dir = _capture_state(tmp_path, ["3c:38:24:5f:86:c4"])
+    monkeypatch.setattr(dns.dns_client_capture, "ensure", lambda macs: {"ok": True, "changed": True})
+
+    dropped = dns.drop_stale_capture_macs(_capture_report(_phone()), ui_state_dir=str(state_dir))
+
+    assert len(dropped) == 1
+    saved = json.loads((state_dir / "dns_over_vless.json").read_text(encoding="utf-8"))
+    # Переключатель без единого устройства -- обещание, которого никто не
+    # исполняет: цепочки в firewall при пустом списке не существует.
+    assert saved["capture_macs"] == []
+    assert saved["capture_clients"] is False
+
+
+def test_a_device_the_report_says_nothing_about_keeps_its_rule(tmp_path: Path, monkeypatch):
+    state_dir = _capture_state(tmp_path, ["aa:bb:cc:dd:ee:01"])
+    monkeypatch.setattr(dns.dns_client_capture, "ensure", lambda macs: pytest.fail("трогать нечего"))
+
+    # Прошивка про это устройство сейчас молчит -- о политике его мы ничего не
+    # знаем, а снимать правило по незнанию хуже, чем оставить лишнее.
+    assert dns.drop_stale_capture_macs(_capture_report(_laptop()), ui_state_dir=str(state_dir)) == []
+    saved = json.loads((state_dir / "dns_over_vless.json").read_text(encoding="utf-8"))
+    assert saved["capture_macs"] == ["aa:bb:cc:dd:ee:01"]
+
+
+def test_an_unreadable_report_changes_nothing(tmp_path: Path, monkeypatch):
+    state_dir = _capture_state(tmp_path, ["3c:38:24:5f:86:c4"])
+    monkeypatch.setattr(dns.dns_client_capture, "ensure", lambda macs: pytest.fail("трогать нечего"))
+    report = {"ok": False, "available": False, "clients": [], "error": "ndmc не найден"}
+
+    assert dns.drop_stale_capture_macs(report, ui_state_dir=str(state_dir)) == []
+    saved = json.loads((state_dir / "dns_over_vless.json").read_text(encoding="utf-8"))
+    assert saved["capture_macs"] == ["3c:38:24:5f:86:c4"]
+
+
+def test_a_firewall_that_refuses_leaves_the_choice_alone(tmp_path: Path, monkeypatch):
+    state_dir = _capture_state(tmp_path, ["3c:38:24:5f:86:c4"])
+
+    def _boom(_macs):
+        raise dns.dns_client_capture.CaptureError("не удалось определить адреса роутера")
+
+    monkeypatch.setattr(dns.dns_client_capture, "ensure", _boom)
+    report = _capture_report(_phone())
+
+    # Записать одно, а в firewall оставить другое -- ровно тот разъезд, ради
+    # которого всё это и затевалось.
+    assert dns.drop_stale_capture_macs(report, ui_state_dir=str(state_dir)) == []
+    saved = json.loads((state_dir / "dns_over_vless.json").read_text(encoding="utf-8"))
+    assert saved["capture_macs"] == ["3c:38:24:5f:86:c4"]
+    assert report["clients"][0]["captured"] is True
+
+
+def test_a_switched_off_capture_is_not_pruned(tmp_path: Path, monkeypatch):
+    state_dir = _capture_state(tmp_path, ["3c:38:24:5f:86:c4"], capture_clients=False)
+    monkeypatch.setattr(dns.dns_client_capture, "ensure", lambda macs: pytest.fail("трогать нечего"))
+
+    # Переключатель выключен -- цепочки нет, снимать нечего, а список ждёт
+    # своего часа: включат обратно, тогда и разберёмся.
+    assert dns.drop_stale_capture_macs(_capture_report(_phone()), ui_state_dir=str(state_dir)) == []
+
+
+def test_http_clients_report_names_the_rules_it_took_away(tmp_path: Path, monkeypatch):
+    from routes.routing import dns_over_vless as dns_routes
+
+    state_dir = _capture_state(tmp_path, ["10:f6:0a:a5:e7:9a", "3c:38:24:5f:86:c4"])
+    monkeypatch.setattr(dns_routes, "client_report", lambda: _capture_report(_laptop(), _phone()))
+    monkeypatch.setattr(dns.dns_client_capture, "ensure", lambda macs: {"ok": True, "changed": True})
+    app = Flask(__name__)
+    dns_routes.register_dns_over_vless_routes(
+        app,
+        xray_configs_dir=str(tmp_path / "configs"),
+        routing_file=str(tmp_path / "routing.json"),
+        ui_state_dir=str(state_dir),
+        restart_xkeen=lambda **_kwargs: True,
+    )
+
+    payload = app.test_client().get("/api/routing/dns-over-vless/clients").get_json()
+
+    # Окно узнаёт о снятом правиле из того же ответа, которым рисует список:
+    # иначе оно вернуло бы правило обратно ближайшим применением.
+    assert [item["title"] for item in payload["capture_dropped"]] == ["Xiaomi-MIX-Flip"]
+    assert payload["clients"][1]["captured"] is False

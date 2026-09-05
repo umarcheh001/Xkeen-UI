@@ -2350,6 +2350,52 @@ def last_capture_error() -> str:
     return str(_LAST_CAPTURE_NOTE.get("error") or "")
 
 
+def drop_stale_capture_macs(
+    report: Dict[str, Any],
+    *,
+    ui_state_dir: str,
+) -> List[Dict[str, str]]:
+    """Take away the rules that have nothing left to bring back.
+
+    A device is ticked because its policy was taking its DNS away.  Once it
+    leaves that policy it arrives on its own, the tick is no longer drawn for
+    it -- and the rule stayed anyway, held by a list of macs that outlives the
+    device's stay in a policy.  What the window showed and what the router held
+    were then two different things, with no way to tell from the window.
+
+    Runs on the report the window has already collected, so it costs nothing
+    extra to ask, and it moves only what the report is certain about: a device
+    the firmware did not mention this time keeps its rule.  The firewall is
+    brought in line first -- a saved choice the chain does not match is the
+    very split this is here to close.
+    """
+    clients = report.get("clients") if isinstance(report, dict) else None
+    if not report.get("ok") or report.get("available") is False or not clients:
+        return []
+    state = _load_state(ui_state_dir)
+    if not state.get("enabled") or not state.get("capture_clients"):
+        # No chain exists, so there is nothing to take away; the list waits for
+        # the switch to come back on.
+        return []
+    wanted = _safe_capture_macs(state.get("capture_macs"))
+    known = {str(item.get("mac") or ""): item for item in clients if item.get("mac")}
+    stale = [mac for mac in wanted if mac in known and not known[mac].get("can_capture")]
+    if not stale:
+        return []
+    kept = [mac for mac in wanted if mac not in stale]
+    try:
+        dns_client_capture.ensure(kept)
+    except Exception:  # noqa: BLE001 - the choice stays as it was
+        return []
+    _save_state(ui_state_dir, {**state, "capture_macs": kept, "capture_clients": bool(kept)})
+    for mac in stale:
+        known[mac]["captured"] = False
+    capture = report.get("capture")
+    if isinstance(capture, dict):
+        capture["macs"] = [mac for mac in capture.get("macs") or [] if mac not in stale]
+    return [{"mac": mac, "title": str(known[mac].get("title") or mac)} for mac in stale]
+
+
 def reapply_client_capture(*, ui_state_dir: str) -> Dict[str, Any]:
     """Put the capture chain back the way this install asked for it.
 

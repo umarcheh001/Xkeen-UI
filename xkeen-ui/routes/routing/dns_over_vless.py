@@ -8,7 +8,12 @@ from flask import Blueprint, jsonify, request
 
 from services.dns_clients import client_report
 from services.dns_guard import conflicting_protection
-from services.dns_over_vless import DnsOverVlessError, apply_action, get_status
+from services.dns_over_vless import (
+    DnsOverVlessError,
+    apply_action,
+    drop_stale_capture_macs,
+    get_status,
+)
 
 
 def register_dns_over_vless_routes(
@@ -49,7 +54,15 @@ def register_dns_over_vless_routes(
         # Kept out of the status call: reading the device list talks to the
         # firmware and is far slower than everything else the card needs.
         try:
-            return jsonify(client_report())
+            report = client_report()
+            # Правило устройства, вышедшего из политики, снимается здесь:
+            # прошивку только что спросили, и второй раз спрашивать незачем.
+            # Окно открывают именно затем, чтобы увидеть, как обстоят дела --
+            # значит и приводить дела в порядок правильнее в этот момент.
+            dropped = drop_stale_capture_macs(report, ui_state_dir=ui_state_dir)
+            if dropped:
+                report["capture_dropped"] = dropped
+            return jsonify(report)
         except Exception:
             return jsonify(
                 {

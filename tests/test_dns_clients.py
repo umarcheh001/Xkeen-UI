@@ -481,3 +481,37 @@ def test_a_rule_the_firmware_has_nothing_to_outrun_is_called_working(monkeypatch
     # состоит: до нашей цепочки пакет доходит, где бы она ни стояла.
     assert nas["verdict"] == dc.REACHES
     assert "ниже правила прошивки" not in nas["reason"]
+
+
+def test_a_device_outside_every_policy_keeps_its_own_explanation(monkeypatch):
+    monkeypatch.setattr(dc, "_iptables_chain", lambda chain: (REDIRECTS_4837, ""))
+    monkeypatch.setattr(
+        dc,
+        "_ndmc",
+        _sources(HOSTS_WITHOUT_POLICY_FIELD, POLICIES_4837, HOTSPOT_CONFIG),
+    )
+    # Правило панели осталось от тех времён, когда устройство состояло в
+    # политике: список MAC переживает выход устройства из политики.
+    monkeypatch.setattr(
+        dc.dns_client_capture,
+        "status",
+        lambda: {
+            "available": True,
+            "present": True,
+            "first": True,
+            "macs": ["10:f6:0a:a5:e7:9a", "3c:38:24:5f:86:c4"],
+            "error": "",
+        },
+    )
+
+    report = dc.client_report()
+    laptop, phone = report["clients"]
+
+    # Заслуга правила есть только там, где прошивка устройство забирала.
+    assert laptop["reason"] == "DNS заведён в туннель правилом панели"
+    # А это устройство доходило до функции и без правила -- окно говорит,
+    # почему оно доходит, а не хвалит правило, которого в нём даже не видно:
+    # галочки у такого устройства нет, снять её нельзя.
+    assert phone["captured"] is True
+    assert phone["can_capture"] is False
+    assert phone["reason"] == "устройство не состоит в политике доступа"

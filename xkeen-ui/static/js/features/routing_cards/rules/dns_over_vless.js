@@ -50,6 +50,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     clients: 'routing-dns-over-vless-clients',
     clientsSummary: 'routing-dns-over-vless-clients-summary',
     clientsList: 'routing-dns-over-vless-clients-list',
+    clientsDropped: 'routing-dns-over-vless-clients-dropped',
     capture: 'routing-dns-over-vless-capture',
     reset: 'routing-dns-over-vless-reset',
     lockedNote: 'routing-dns-over-vless-locked-note',
@@ -1415,12 +1416,40 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     loadClients();
   }
 
+  // Панель сама сняла правило, которому больше нечего заводить: устройство
+  // вышло из политики доступа, до функции доходит само, а правило висело на
+  // нём с прежних времён. Молча снять — значит оставить человека гадать, куда
+  // делась галочка; поэтому говорим об этом прямо и заметно.
+  function renderDroppedCapture(dropped) {
+    const slot = $(DOM.clientsDropped);
+    if (!slot) return;
+    if (!dropped.length) {
+      slot.textContent = '';
+      slot.classList.add('hidden');
+      return;
+    }
+    const names = dropped.map((item) => item.title || item.mac).join(', ');
+    slot.textContent = dropped.length === 1
+      ? `Правило панели снято: ${names} больше не состоит в политике доступа — его DNS идёт через туннель и без правила.`
+      : `Правила панели сняты: ${names} больше не состоят в политике доступа — их DNS идёт через туннель и без правил.`;
+    slot.classList.remove('hidden');
+    // Выбор на роутере уже почищен. Оставить снятые адреса в окне — значит
+    // вернуть правила обратно первым же «Применить».
+    dropped.forEach((item) => {
+      const at = capturedMacs.indexOf(item.mac);
+      if (at !== -1) capturedMacs.splice(at, 1);
+    });
+    const capture = $(DOM.capture);
+    if (capture && !capturedMacs.length && !capture.dataset.touched) capture.checked = false;
+  }
+
   function renderClients(data) {
     lastClients = data;
     const summary = $(DOM.clientsSummary);
     const list = $(DOM.clientsList);
     if (!summary || !list) return;
     list.textContent = '';
+    renderDroppedCapture((data && data.capture_dropped) || []);
     if (!data || data.available === false) {
       summary.textContent = (data && data.error) || 'Проверить не удалось.';
       renderZoneSummaries(status);

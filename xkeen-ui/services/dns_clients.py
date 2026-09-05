@@ -391,18 +391,20 @@ def client_report() -> Dict[str, Any]:
     # What the firewall holds right now, not what the panel asked for: the two
     # part company whenever the firmware rebuilds its chains.
     captured = dns_client_capture.status()
-    # Below the firmware's own redirect our chain is decoration -- but only for
-    # a device that redirect matches at all.  It matches on the policy mark, so
-    # a device no policy takes away falls through to our chain wherever the
-    # chain sits, and its rule works.  Saying "заведено" for the first kind
-    # would be a lie the user has no way to check; saying "не действует" for
-    # the second would be one too.
+    # The rule speaks only for a device the firmware was taking away: that is
+    # the one it brings back, and the only one the window offers a tick for.
+    # A device no policy touches arrives on its own, our rule changes nothing
+    # for it, and the list of macs outlives its stay in a policy -- so praising
+    # the rule there would hide the one thing there is to say about such a
+    # device, and hide it behind a tick that is not even drawn.
     first = bool(captured.get("first"))
     for item in clients:
         item["captured"] = item["mac"] in captured.get("macs", [])
-        if not item["captured"]:
+        if not item["captured"] or not item["can_capture"]:
             continue
-        if first or item["verdict"] == REACHES:
+        # Below the firmware's own redirect our chain is decoration: that rule
+        # ends the nat table before ours is reached.
+        if first:
             item["verdict"] = REACHES
             item["reason"] = "DNS заведён в туннель правилом панели"
         else:

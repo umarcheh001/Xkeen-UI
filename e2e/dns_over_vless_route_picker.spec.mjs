@@ -563,3 +563,49 @@ test('the dialog admits it when no node carries the other record types', async (
   // A and AAAA keep working: the reader has to know the outage is partial.
   await expect(health).toContainText('AAAA');
 });
+
+
+test('a rule taken away is announced, not just quietly gone', async ({ page }) => {
+  // Устройство вывели из политики доступа: правило панели ему больше нечего
+  // заводить, и панель снимает его сама при открытии окна.
+  const status = { ...STATUS, capture_clients: true, capture_macs: ['aa:bb:cc:dd:ee:01'] };
+  await routeClients(page, {
+    ...CLIENTS,
+    capture_dropped: [{ mac: 'aa:bb:cc:dd:ee:01', title: 'Ноутбук' }],
+  });
+  await openDialog(page, status);
+  await openZone(page, 'devices');
+
+  const note = page.locator('#routing-dns-over-vless-clients-dropped');
+  await expect(note).toBeVisible();
+  await expect(note).toContainText('Ноутбук');
+  await expect(note).toContainText('не состоит в политике доступа');
+  // Список опустел вместе с правилом, и переключатель обещать больше нечего.
+  await expect(page.locator('#routing-dns-over-vless-capture')).not.toBeChecked();
+
+  // И главное: снятое правило не возвращается ближайшим применением.
+  const toggle = page.locator('#routing-dns-over-vless-capture');
+  await toggle.check({ force: true });
+  const phone = page.locator('#routing-dns-over-vless-clients-list li', { hasText: 'Телефон' });
+  await phone.locator('.routing-dns-over-vless-clients-pick').check({ force: true });
+
+  let sent = null;
+  await page.route('**/api/routing/dns-over-vless', async (route) => {
+    if (route.request().method() === 'POST') {
+      sent = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, action: 'enable', enabled: true, restarted: true, probe: { ok: true } }),
+      });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(status) });
+  });
+
+  await page.locator('#routing-dns-over-vless-apply').click();
+  await expect(page.locator('#confirm-modal')).not.toHaveClass(/hidden/);
+  await page.locator('#confirm-modal-ok-btn').click();
+
+  await expect.poll(() => sent && sent.capture_macs).toEqual(['aa:bb:cc:dd:ee:02']);
+});
