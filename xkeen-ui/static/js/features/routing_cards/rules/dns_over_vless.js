@@ -660,6 +660,18 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     return CORE_NAMES[core] || '';
   }
 
+  function coreUnavailable(core) {
+    return !core || core === 'unknown';
+  }
+
+  function xrayInstalled(data) {
+    const available = data && data.available_cores;
+    // Older backends did not send the installed-core list.  The card itself
+    // is rendered only on Xray installations, so absence of the field keeps
+    // the compatible, truthful default.
+    return !Array.isArray(available) || available.indexOf('xray') !== -1;
+  }
+
   const MIHOMO_HINT = 'У Mihomo свой защищённый DNS — кнопка «DNS» на вкладке Mihomo.';
 
   function renderLead(data) {
@@ -679,9 +691,12 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       text.textContent = 'Настраивается он кнопкой «DNS» на вкладке Mihomo и прячет запросы так же. Это окно настраивает DNS-over-VLESS для ядра Xray, поэтому включение здесь доступно, только когда активно оно.';
       return;
     }
-    if (!core || core === 'unknown') {
-      title.textContent = 'Активное ядро не определено';
-      text.textContent = 'Панель не смогла понять, какое ядро сейчас работает. Это окно настраивает DNS-over-VLESS для ядра Xray — проверьте состояние служб и откройте окно снова.';
+    if (coreUnavailable(core)) {
+      const installed = xrayInstalled(data);
+      title.textContent = installed ? 'Процесс Xray не обнаружен' : 'Xray не установлен';
+      text.textContent = installed
+        ? 'Ядро Xray установлено, но панель сейчас не видит его работающий процесс. Подождите завершения перезапуска или проверьте состояние XKeen и журнал ошибок Xray.'
+        : 'Панель не нашла установленное ядро Xray. Установите Xray, затем снова откройте это окно.';
       return;
     }
     title.textContent = `Сейчас работает ядро ${core}`;
@@ -692,7 +707,23 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   // обычными словами: что сейчас происходит с DNS и что делать дальше.
   function describeState(data, flags) {
     const core = coreOf(data);
-    const otherCore = core && core !== 'xray' ? coreName(core) || core : '';
+    const unavailable = coreUnavailable(core);
+    const installed = xrayInstalled(data);
+    // ``unknown`` means that pidof found no running core.  It is not the name
+    // of another core and must never reach the "Нужно ядро Xray" branch.
+    const otherCore = !unavailable && core !== 'xray' ? coreName(core) || core : '';
+    if (flags.enabled && unavailable) {
+      return {
+        badge: installed ? 'Xray не запущен' : 'Нужно ядро Xray',
+        state: 'blocked',
+        summary: installed
+          ? 'защита настроена, но работающий процесс Xray не обнаружен'
+          : 'защита настроена, но ядро Xray не установлено',
+        text: installed
+          ? 'Служебная конфигурация сохранена, однако процесс Xray сейчас не найден и DNS через туннель не отвечает. Переустанавливать ядро не нужно: проверьте состояние XKeen и журнал ошибок Xray. Сторож вернёт DNS роутеру, если сбой сохранится.'
+          : 'Служебная конфигурация сохранена, однако ядро Xray не установлено и DNS через туннель не отвечает. Установите Xray; сторож вернёт DNS роутеру, если сбой сохранится.',
+      };
+    }
     if (flags.enabled && otherCore) {
       return {
         badge: 'Не действует',
@@ -725,20 +756,22 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         text: `${guardReleaseText(data)}${back}`,
       };
     }
+    if (unavailable) {
+      return {
+        badge: installed ? 'Xray не запущен' : 'Нужно ядро Xray',
+        state: 'blocked',
+        summary: installed ? 'работающий процесс Xray не обнаружен' : 'ядро Xray не установлено',
+        text: installed
+          ? 'Xray установлен, но панель сейчас не видит его работающий процесс. Переустанавливать ядро или искать Mihomo не нужно: подождите завершения перезапуска либо проверьте состояние XKeen и журнал ошибок Xray, затем обновите окно.'
+          : 'Панель не нашла установленное ядро Xray. Установите его и повторите проверку.',
+      };
+    }
     if (otherCore) {
       return {
         badge: 'Нужно ядро Xray',
         state: 'blocked',
         summary: `сейчас активно ядро ${otherCore}`,
         text: `Это окно готовит DNS-фрагмент и правила маршрутизации для Xray, поэтому с активным ядром ${otherCore} включать здесь нечего — свой защищённый DNS у него настраивается отдельно. Имена сейчас разрешает штатный резолвер роутера. Переключите активное ядро на Xray, чтобы включить DNS-over-VLESS.`,
-      };
-    }
-    if (!core || core === 'unknown') {
-      return {
-        badge: 'Ядро не определено',
-        state: 'blocked',
-        summary: 'непонятно, какое ядро сейчас работает',
-        text: 'Панель не смогла определить активное ядро, поэтому не берётся менять настройку DNS. Проверьте состояние служб на вкладке XKeen и откройте окно заново.',
       };
     }
     if (data && data.partial) {
@@ -995,7 +1028,11 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
           ? 'Активное ядро: Xray — то, что нужно для DNS-over-VLESS.'
           : (core === 'mihomo'
             ? `Активное ядро: Mihomo. Это окно настраивает DNS-over-VLESS для Xray. ${MIHOMO_HINT}`
-            : `Активное ядро: ${coreName(core) || core || 'не определено'}. Это окно настраивает DNS-over-VLESS для Xray.`),
+            : (coreUnavailable(core)
+              ? (xrayInstalled(data)
+                ? 'Активное ядро: процесс не обнаружен. Xray установлен, но сейчас не запущен или ещё запускается.'
+                : 'Активное ядро: процесс не обнаружен. Xray не установлен.')
+              : `Активное ядро: ${coreName(core) || core}. Это окно настраивает DNS-over-VLESS для Xray.`)),
         core === 'xray' ? 'ok' : 'warn',
       );
       if (data.target && data.target.label) addDetail(`DNS-запросы идут через: ${data.target.label}`, 'ok');
@@ -1037,10 +1074,16 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       const needsTarget = routeVisible && !chosenTargets.length;
       apply.disabled = busy || (!enabled && !canDisable && (blocked || needsTarget));
       // «Включить безопасно» на неподходящем ядре обещало бы невозможное.
-      const wrongCore = coreOf(data) !== 'xray' && !enabled && !canDisable;
+      const applyCore = coreOf(data);
+      const unavailableCore = coreUnavailable(applyCore) && !enabled && !canDisable;
+      const wrongCore = !unavailableCore && applyCore !== 'xray' && !enabled && !canDisable;
       apply.textContent = busy
         ? 'Выполняется…'
-        : ((enabled || canDisable) ? 'Отключить и восстановить' : (wrongCore ? 'Нужно ядро Xray' : 'Включить безопасно'));
+        : ((enabled || canDisable)
+          ? 'Отключить и восстановить'
+          : (unavailableCore
+            ? (xrayInstalled(data) ? 'Xray не запущен' : 'Нужно ядро Xray')
+            : (wrongCore ? 'Нужно ядро Xray' : 'Включить безопасно')));
       apply.classList.toggle('btn-danger', enabled || canDisable);
       apply.classList.toggle('btn-primary', !enabled && !canDisable);
     }

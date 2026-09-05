@@ -139,6 +139,28 @@ def test_status_requires_xray_and_exposes_safety_guards(tmp_path: Path, monkeypa
     }
 
 
+def test_status_distinguishes_installed_but_stopped_xray_from_another_core(
+    tmp_path: Path, monkeypatch
+):
+    configs, routing, state = _base_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: None)
+    monkeypatch.setattr(dns, "detect_available_cores", lambda: ["xray"])
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing), ui_state_dir=str(state)
+    )
+
+    assert result["active_core"] == "unknown"
+    assert result["available_cores"] == ["xray"]
+    assert result["can_enable"] is False
+    assert any(
+        "Xray установлен, но его работающий процесс не обнаружен" in item
+        for item in result["blockers"]
+    )
+    assert not any("переключите активное ядро" in item for item in result["blockers"])
+
+
 def test_apply_rolls_back_files_and_router_setting_after_probe_failure(tmp_path: Path, monkeypatch):
     configs, routing_path, state = _base_config(tmp_path)
     before = routing_path.read_bytes()
@@ -313,6 +335,14 @@ def test_frontend_has_dns_button_modal_and_guard_copy():
     assert "Xray" not in guard_code and "Mihomo" not in guard_code
     # Карточка объясняет состояние словами, а не только цветной меткой.
     assert "describeState" in script
+    # API uses ``unknown`` when pidof sees no process.  It is an unavailable
+    # runtime, not the name of another core: the card must not tell the user to
+    # install/switch to the Xray binary that is already present.
+    assert "function coreUnavailable(core)" in script
+    assert "function xrayInstalled(data)" in script
+    assert "const otherCore = !unavailable && core !== 'xray'" in script
+    assert "badge: installed ? 'Xray не запущен' : 'Нужно ядро Xray'" in script
+    assert "xrayInstalled(data) ? 'Xray не запущен' : 'Нужно ядро Xray'" in script
     assert "конфигурация совместима, можно включать" in script
     assert "служебная конфигурация и настройка роутера согласованы" in script
     assert "осталась неполная настройка от прерванной операции" in script

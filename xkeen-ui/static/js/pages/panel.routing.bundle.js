@@ -20,7 +20,7 @@ import '../features/routing_cards/rules/fields.js?v=20260308-stage1';
 import '../features/routing_cards/rules/dnd_pointer.js?v=20260308-stage3';
 import '../features/routing_cards/rules/render.js?v=20260317a';
 import '../features/routing_cards/rules/controls.js?v=20260317g';
-import '../features/routing_cards/rules/dns_over_vless.js?v=20260829a';
+import '../features/routing_cards/rules/dns_over_vless.js?v=20260905a';
 import '../features/routing_cards/rules/dat_bridge.js?v=20260304h4';
 import { initRoutingCards } from '../features/routing_cards.js';
 import '../features/compat/routing_cards.js';

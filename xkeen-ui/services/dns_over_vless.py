@@ -31,7 +31,7 @@ import re
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Optional
 
-from services.cores import detect_running_core
+from services.cores import detect_available_cores, detect_running_core
 from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.xray_config_files import jsonc_path_for
 from services import dns_client_capture
@@ -2517,6 +2517,7 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
     presence = _managed_presence(configs_dir, routing)
     override, override_detail = _dns_override_status()
     core = detect_running_core() or ""
+    available_cores = detect_available_cores()
     state = _load_state(ui_state_dir)
     complete_config = _managed_config_complete(presence)
     tampered = _managed_config_tampered(presence)
@@ -2545,7 +2546,22 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
             target = _select_target(runtime, selected_tags or default_tag, routing)
         except DnsOverVlessError as exc:
             blockers.append(str(exc))
-        if core != "xray":
+        if not core:
+            # Installation and runtime are different facts: available cores
+            # come from binaries on disk, while ``core`` comes from pidof.
+            # Telling this user to "switch to Xray" suggests that another core
+            # is active, even though no core process was detected at all.
+            if "xray" in available_cores:
+                blockers.append(
+                    "Xray установлен, но его работающий процесс не обнаружен. "
+                    "Запустите или перезапустите XKeen и повторите проверку."
+                )
+            else:
+                blockers.append(
+                    "Xray не установлен или его файл недоступен. "
+                    "Установите Xray и повторите проверку."
+                )
+        elif core != "xray":
             blockers.append("Для активации переключите активное ядро на Xray.")
         if override is None:
             blockers.append("Не удалось прочитать настройку DNS override Keenetic: " + override_detail)
@@ -2573,6 +2589,7 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
         "dns_override": override,
         "dns_override_detail": override_detail,
         "active_core": core or "unknown",
+        "available_cores": available_cores,
         "can_enable": not blockers,
         "can_disable": not tampered and (_managed_config_present(presence) or bool(state.get("enabled"))),
         "blockers": blockers,
