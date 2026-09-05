@@ -12,7 +12,17 @@ Three sources answer the question together:
 * ``iptables -t nat -S _NDM_HOTSPOT_DNSREDIR`` -- which policy marks have their
   port 53 redirected, and on which segment;
 * ``ndmc -c "show ip policy"`` -- the mark behind every policy name;
-* ``ndmc -c "show ip hotspot"`` -- the devices and the policy each one is in.
+* ``ndmc -c "show ip hotspot"`` -- the devices and the policy each one is in;
+* ``ndmc -c "show sc ip hotspot"`` -- the same binding as it is *configured*.
+
+The last source exists because the state view cannot be relied on to carry it.
+KeeneticOS 4.03.C.9.0 prints no ``policy`` field for any device at all, while
+the build on the other test router prints it for every device, empty ones
+included.  Read from the state view alone, a router of the first kind reports
+that nobody is in a policy and therefore that everybody uses the feature --
+which is the opposite of the truth for exactly the devices the window is about.
+The configuration answers the same question on both builds, so it fills the
+gaps; where the state view does say something, it stays the authority.
 """
 
 from __future__ import annotations
@@ -141,6 +151,7 @@ def parse_hosts(text: str) -> List[Dict[str, Any]]:
                 "hostname": "",
                 "name": "",
                 "interface": "",
+                "interface_name": "",
                 "policy": "",
                 "registered": False,
                 "active": False,
@@ -159,6 +170,11 @@ def parse_hosts(text: str) -> List[Dict[str, Any]]:
         if depth > own_depth:
             if block == "interface" and key == "id":
                 current["interface"] = value
+            elif block == "interface" and key == "name":
+                # The configuration names segments the way the user does
+                # (``Guest``), the device list by id (``Bridge1``); a policy
+                # bound to a whole segment has to be matched by either.
+                current["interface_name"] = value
             continue
         block = key if not value else ""
 
@@ -177,6 +193,75 @@ def parse_hosts(text: str) -> List[Dict[str, Any]]:
         elif key == "active":
             current["active"] = value.lower() == "yes"
     return hosts
+
+
+def parse_hotspot_config(text: str) -> Dict[str, Dict[str, str]]:
+    """Policy bindings from ``show sc ip hotspot``: per device and per segment.
+
+    The configuration tree names each entry rather than nesting silently::
+
+        config, name = host:
+               mac: 10:f6:0a:a5:e7:9a
+            config, name = policy, final = yes:
+                policy: Policy1
+
+    Only two entries matter -- ``host``, which binds one device, and
+    ``policy``, which binds a whole segment.  They sit at one depth; the blocks
+    inside them are deeper and never change which entry is being read.
+    """
+    hosts: Dict[str, str] = {}
+    segments: Dict[str, str] = {}
+    entry = ""
+    entry_depth = -1
+    subject = ""
+    for raw in str(text or "").splitlines():
+        opened = re.match(r"^(\s*)config,\s*name\s*=\s*([A-Za-z0-9_-]+)", raw)
+        if opened:
+            depth, name = len(opened.group(1)), opened.group(2)
+            if name == "hotspot":
+                continue
+            if entry_depth < 0:
+                entry_depth = depth
+            if depth <= entry_depth:
+                entry = name if name in {"host", "policy"} else ""
+                subject = ""
+            continue
+        pair = re.match(r"^\s*([A-Za-z0-9_-]+):\s*(.*)$", raw)
+        if not pair or not entry:
+            continue
+        key, value = pair.group(1), pair.group(2).strip()
+        if entry == "host" and key == "mac" and value:
+            subject = value.lower()
+        elif entry == "policy" and key == "interface" and value:
+            subject = value
+        elif key == "policy" and value and subject:
+            (hosts if entry == "host" else segments)[subject] = value
+    return {"hosts": hosts, "segments": segments}
+
+
+def apply_config_policies(
+    hosts: List[Dict[str, Any]],
+    bindings: Dict[str, Dict[str, str]],
+) -> None:
+    """Fill in the policy of every device the state view left blank.
+
+    Only the blanks: a firmware that does report the binding keeps the last
+    word, so reading the configuration cannot change what such a router shows.
+    """
+    by_mac = bindings.get("hosts") or {}
+    by_segment = bindings.get("segments") or {}
+    for host in hosts:
+        if str(host.get("policy") or "").strip():
+            continue
+        segment = next(
+            (
+                by_segment[name]
+                for name in (host.get("interface"), host.get("interface_name"))
+                if name and name in by_segment
+            ),
+            "",
+        )
+        host["policy"] = by_mac.get(str(host.get("mac") or "").lower(), "") or segment
 
 
 def judge(
@@ -283,6 +368,10 @@ def client_report() -> Dict[str, Any]:
     redirect_text, redirect_error = _iptables_chain(REDIR_CHAIN)
     policy_text, policy_error = _ndmc("show ip policy")
     host_text, host_error = _ndmc("show ip hotspot")
+    # A firmware that does not know this command leaves the state view to
+    # answer alone, exactly as before it was asked for: not being able to read
+    # the configuration is never a reason to refuse the report.
+    config_text, _config_error = _ndmc("show sc ip hotspot")
 
     problem = redirect_error or policy_error or host_error
     if host_error or policy_error:
@@ -296,19 +385,24 @@ def client_report() -> Dict[str, Any]:
 
     policies = parse_policies(policy_text)
     redirects = parse_redirects(redirect_text)
-    clients = judge(parse_hosts(host_text), policies, redirects)
+    hosts = parse_hosts(host_text)
+    apply_config_policies(hosts, parse_hotspot_config(config_text))
+    clients = judge(hosts, policies, redirects)
     # What the firewall holds right now, not what the panel asked for: the two
     # part company whenever the firmware rebuilds its chains.
     captured = dns_client_capture.status()
-    # Below the firmware's own redirect our chain is decoration: that rule ends
-    # the nat table before ours is reached.  Saying "заведено" then would be a
-    # lie the user has no way to check.
-    working = bool(captured.get("present") and captured.get("first"))
+    # Below the firmware's own redirect our chain is decoration -- but only for
+    # a device that redirect matches at all.  It matches on the policy mark, so
+    # a device no policy takes away falls through to our chain wherever the
+    # chain sits, and its rule works.  Saying "заведено" for the first kind
+    # would be a lie the user has no way to check; saying "не действует" for
+    # the second would be one too.
+    first = bool(captured.get("first"))
     for item in clients:
         item["captured"] = item["mac"] in captured.get("macs", [])
         if not item["captured"]:
             continue
-        if working:
+        if first or item["verdict"] == REACHES:
             item["verdict"] = REACHES
             item["reason"] = "DNS заведён в туннель правилом панели"
         else:

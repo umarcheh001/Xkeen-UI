@@ -169,11 +169,7 @@ def test_an_unreadable_policy_mark_is_admitted_rather_than_guessed():
 
 def test_report_counts_and_survives_an_unreadable_firewall(monkeypatch):
     monkeypatch.setattr(dc, "_iptables_chain", lambda chain: ("", "iptables не найден"))
-    monkeypatch.setattr(
-        dc,
-        "_ndmc",
-        lambda command: ((POLICIES, "") if "policy" in command else (HOSTS, "")),
-    )
+    monkeypatch.setattr(dc, "_ndmc", _sources(HOSTS))
 
     report = dc.client_report()
 
@@ -187,11 +183,7 @@ def test_report_counts_and_survives_an_unreadable_firewall(monkeypatch):
 
 def test_report_gives_up_when_the_device_list_cannot_be_read(monkeypatch):
     monkeypatch.setattr(dc, "_iptables_chain", lambda chain: (REDIRECTS, ""))
-    monkeypatch.setattr(
-        dc,
-        "_ndmc",
-        lambda command: ((POLICIES, "") if "policy" in command else ("", "ndmc не найден — это не Keenetic")),
-    )
+    monkeypatch.setattr(dc, "_ndmc", _sources("", failure="ndmc не найден — это не Keenetic"))
 
     report = dc.client_report()
 
@@ -202,11 +194,7 @@ def test_report_gives_up_when_the_device_list_cannot_be_read(monkeypatch):
 
 def test_report_marks_which_policies_intercept(monkeypatch):
     monkeypatch.setattr(dc, "_iptables_chain", lambda chain: (REDIRECTS, ""))
-    monkeypatch.setattr(
-        dc,
-        "_ndmc",
-        lambda command: ((POLICIES, "") if "policy" in command else (HOSTS, "")),
-    )
+    monkeypatch.setattr(dc, "_ndmc", _sources(HOSTS))
 
     report = dc.client_report()
     intercepting = {item["description"] for item in report["policies"] if item["intercepts"]}
@@ -239,11 +227,7 @@ def test_only_a_device_the_firmware_takes_away_is_offered_the_rule():
 
 def test_a_captured_device_is_counted_as_arriving(monkeypatch):
     monkeypatch.setattr(dc, "_iptables_chain", lambda chain: (REDIRECTS, ""))
-    monkeypatch.setattr(
-        dc,
-        "_ndmc",
-        lambda command: ((POLICIES, "") if "policy" in command else (HOSTS, "")),
-    )
+    monkeypatch.setattr(dc, "_ndmc", _sources(HOSTS))
     monkeypatch.setattr(
         dc.dns_client_capture,
         "status",
@@ -260,11 +244,7 @@ def test_a_captured_device_is_counted_as_arriving(monkeypatch):
 
 def test_a_rule_below_the_firmware_is_not_called_a_success(monkeypatch):
     monkeypatch.setattr(dc, "_iptables_chain", lambda chain: (REDIRECTS, ""))
-    monkeypatch.setattr(
-        dc,
-        "_ndmc",
-        lambda command: ((POLICIES, "") if "policy" in command else (HOSTS, "")),
-    )
+    monkeypatch.setattr(dc, "_ndmc", _sources(HOSTS))
     monkeypatch.setattr(
         dc.dns_client_capture,
         "status",
@@ -289,3 +269,215 @@ def test_the_window_learns_which_resolver_answers_the_home_names():
     assert verdicts[0]["firmware_resolver"] == "127.0.0.1:41100"
     # A device nobody redirects has no such address to name.
     assert verdicts[2]["firmware_resolver"] == ""
+
+
+# Настоящий вывод роутера Netcraze-4837 (KeeneticOS 4.03.C.9.0-0), снятый
+# 5 сентября 2026.  Эта прошивка поле ``policy`` в состоянии не печатает
+# вовсе -- ни у устройства с политикой, ни у устройства без неё.
+HOSTS_WITHOUT_POLICY_FIELD = """
+             host:
+                  mac: 10:f6:0a:a5:e7:9a
+                  via: 10:f6:0a:a5:e7:9a
+                   ip: 192.168.21.18
+             hostname: GalaxyBook3Pro
+                 name: Galaxy Book 3 Pro (мой)
+
+            interface:
+                       id: Bridge1
+                     name: Guest
+              description: Дачная сеть (мобильная)
+
+           registered: yes
+               access: permit
+             schedule:
+             priority: 6
+               active: yes
+        authenticated: yes
+               uptime: 961
+
+        traffic-shape:
+                       rx: 0
+                       tx: 0
+                     mode: mac
+                 schedule:
+
+             host:
+                  mac: 3c:38:24:5f:86:c4
+                  via: 3c:38:24:5f:86:c4
+                   ip: 192.168.21.60
+             hostname: Xiaomi-MIX-Flip
+                 name: Xiaomi-MIX-Flip
+
+            interface:
+                       id: Bridge1
+                     name: Guest
+              description: Дачная сеть (мобильная)
+
+           registered: yes
+               access: permit
+             schedule:
+             priority: 6
+               active: yes
+        authenticated: yes
+               uptime: 848
+
+        traffic-shape:
+                       rx: 0
+                       tx: 0
+                     mode: mac
+                 schedule:
+"""
+
+# ``show sc ip hotspot`` с того же роутера: привязка устройства к политике
+# живёт здесь, а не в состоянии.
+HOTSPOT_CONFIG = """
+           config, name = hotspot:
+               config, name = policy:
+                interface: Guest
+                   access: permit
+
+               config, name = host:
+                      mac: 3c:38:24:5f:86:c4
+                   access: permit
+
+                   config, name = permit, final = yes:
+                       permit: yes
+
+               config, name = host:
+                      mac: 10:f6:0a:a5:e7:9a
+                   access: permit
+
+                   config, name = permit, final = yes:
+                       permit: yes
+
+                   config, name = policy, final = yes:
+                       policy: Policy1
+
+               config, name = auto-register:
+                   config, name = disable, final = yes:
+                      disable: yes
+"""
+
+POLICIES_4837 = """
+           policy, name = Policy0, description = XKeen:
+                 mark: ffffaaa
+           policy, name = Policy1, description = XKeen-ALL:
+                 mark: ffffaab
+"""
+
+REDIRECTS_4837 = """
+-N _NDM_HOTSPOT_DNSREDIR
+-A _NDM_HOTSPOT_DNSREDIR -d 192.168.21.1/32 -i br1 -p udp -m mark --mark 0xffffaab -m pkttype --pkt-type unicast -m udp --dport 53 -j REDIRECT --to-ports 41101
+-A _NDM_HOTSPOT_DNSREDIR -d 192.168.21.1/32 -i br1 -p tcp -m mark --mark 0xffffaab -m pkttype --pkt-type unicast -m tcp --dport 53 -j REDIRECT --to-ports 41101
+"""
+
+
+def _sources(hosts, policies=POLICIES, config="", failure=""):
+    """Подменяет ndmc так, как отвечает роутер: три разные команды.
+
+    Прошивка без ``show sc ip hotspot`` отвечает на неё ошибкой -- ровно так и
+    подменяется по умолчанию, чтобы такой роутер проверялся сам собой.
+    """
+
+    def answer(command):
+        if "show sc" in command:
+            return (config, "") if config else ("", "no such command")
+        if "policy" in command:
+            return (policies, "")
+        return ("", failure) if failure else (hosts, "")
+
+    return answer
+
+
+def test_host_policy_is_read_from_the_configuration():
+    bindings = dc.parse_hotspot_config(HOTSPOT_CONFIG)
+
+    assert bindings["hosts"]["10:f6:0a:a5:e7:9a"] == "Policy1"
+    # Соседнее устройство привязки не имеет и не должно её получить.
+    assert "3c:38:24:5f:86:c4" not in bindings["hosts"]
+
+
+def test_a_policy_bound_to_a_whole_segment_is_read_too():
+    bindings = dc.parse_hotspot_config(
+        HOTSPOT_CONFIG.replace(
+            "                interface: Guest\n                   access: permit\n",
+            "                interface: Guest\n                   access: permit\n"
+            "                   config, name = policy, final = yes:\n"
+            "                       policy: Policy0\n",
+        )
+    )
+
+    assert bindings["segments"]["Guest"] == "Policy0"
+
+
+def test_a_prohibition_the_state_view_hides_is_filled_in_from_the_configuration():
+    hosts = dc.parse_hosts(HOSTS_WITHOUT_POLICY_FIELD)
+    # Эта прошивка про политику в состоянии молчит.
+    assert hosts[0]["policy"] == ""
+
+    dc.apply_config_policies(hosts, dc.parse_hotspot_config(HOTSPOT_CONFIG))
+
+    assert hosts[0]["policy"] == "Policy1"
+    assert hosts[1]["policy"] == ""
+
+
+def test_the_state_view_wins_where_the_firmware_does_report_a_policy():
+    # Прошивка, которая поле печатает, остаётся источником истины: иначе
+    # исправление для одной ветки прошивок ломает другую.
+    hosts = dc.parse_hosts(HOSTS)
+    dc.apply_config_policies(
+        hosts,
+        {"hosts": {"88:51:f2:72:21:5a": "Policy1"}, "segments": {"Home": "Policy1"}},
+    )
+
+    assert hosts[0]["policy"] == "Policy0"
+    # А вот пустое поле конфигурация заполнить вправе -- через сегмент.
+    assert hosts[2]["policy"] == "Policy1"
+
+
+def test_a_device_the_state_view_calls_free_is_still_intercepted(monkeypatch):
+    monkeypatch.setattr(dc, "_iptables_chain", lambda chain: (REDIRECTS_4837, ""))
+    monkeypatch.setattr(
+        dc,
+        "_ndmc",
+        _sources(HOSTS_WITHOUT_POLICY_FIELD, POLICIES_4837, HOTSPOT_CONFIG),
+    )
+    monkeypatch.setattr(dc.dns_client_capture, "status", lambda: {"macs": [], "first": False})
+
+    report = dc.client_report()
+    laptop, phone = report["clients"]
+
+    # Policy1 -- это XKeen-ALL, и её метка забирает 53-й порт на br1.
+    assert laptop["verdict"] == dc.INTERCEPTED
+    assert "XKeen-ALL" in laptop["reason"]
+    assert phone["verdict"] == dc.REACHES
+
+
+def test_a_firmware_without_the_configuration_command_is_no_worse_than_before(monkeypatch):
+    monkeypatch.setattr(dc, "_iptables_chain", lambda chain: (REDIRECTS, ""))
+    monkeypatch.setattr(dc, "_ndmc", _sources(HOSTS))
+    monkeypatch.setattr(dc.dns_client_capture, "status", lambda: {"macs": [], "first": False})
+
+    report = dc.client_report()
+
+    # Команды нет -- отчёт всё равно собирается по состоянию, как раньше.
+    assert report["ok"] is True
+    assert report["counts"][dc.INTERCEPTED] == 1
+
+
+def test_a_rule_the_firmware_has_nothing_to_outrun_is_called_working(monkeypatch):
+    monkeypatch.setattr(dc, "_iptables_chain", lambda chain: (REDIRECTS, ""))
+    monkeypatch.setattr(dc, "_ndmc", _sources(HOSTS))
+    monkeypatch.setattr(
+        dc.dns_client_capture,
+        "status",
+        lambda: {"available": True, "present": True, "first": False, "macs": ["00:30:18:a6:c4:72"], "error": ""},
+    )
+
+    report = dc.client_report()
+    nas = report["clients"][2]
+
+    # Правило прошивки бьёт по метке политики, а это устройство ни в одной не
+    # состоит: до нашей цепочки пакет доходит, где бы она ни стояла.
+    assert nas["verdict"] == dc.REACHES
+    assert "ниже правила прошивки" not in nas["reason"]
