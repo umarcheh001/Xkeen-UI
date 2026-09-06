@@ -11,6 +11,19 @@ const SNAPSHOT_MASKS = {
   files: ['.fm-list', '.fm-path-input', '#fm-footer-status', '#fm-disabled-note'],
 };
 
+// Маска рисуется по фактическому боксу элемента, поэтому строка «проверено: HH:MM»
+// (она же «проверяем...», «проверка не выполнена» или пустая) меняла ширину маски
+// от прогона к прогону и открывала соседние пиксели. Фиксируем геометрию, чтобы
+// маска всегда закрывала один и тот же прямоугольник.
+const STABLE_MASK_GEOMETRY = `
+  #cores-checked-at {
+    display: inline-block !important;
+    width: 190px !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+  }
+`;
+
 async function openPanel(page, theme, viewport = { width: 1440, height: 900 }) {
   await page.setViewportSize(viewport);
   await page.addInitScript((nextTheme) => {
@@ -27,6 +40,7 @@ async function freezeAnimations(page) {
   await page.addStyleTag({
     content: `*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }`,
   });
+  await page.addStyleTag({ content: STABLE_MASK_GEOMETRY });
 }
 
 async function expectNoOverflow(page) {
