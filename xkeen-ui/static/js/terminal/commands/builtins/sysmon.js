@@ -60,13 +60,13 @@ import {
     }
 
     const mode = safeArgs.includes('--full') ? 'full' : (safeArgs.includes('--short') ? 'short' : 'default');
-    emitPrint(ctx, `[sysmon] Р РµР¶РёРј: ${mode}`);
-    emitPrint(ctx, '[sysmon] РЎР±РѕСЂ РјРµС‚СЂРёРє...');
+    emitPrint(ctx, `[sysmon] Режим: ${mode}`);
+    emitPrint(ctx, '[sysmon] Сбор метрик...');
 
     const CJ = getTerminalCommandJobApi();
     if (!CJ || typeof CJ.runShellCommand !== 'function') {
-      emitToast(ctx, 'commandJob util РЅРµ РЅР°Р№РґРµРЅ (js/util/command_job.js)', 'error');
-      emitPrint(ctx, '[РћС€РёР±РєР°] РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РїСѓСЃС‚РёС‚СЊ sysmon: РЅРµС‚ СѓС‚РёР»РёС‚С‹ commandJob');
+      emitToast(ctx, 'commandJob util не найден (js/util/command_job.js)', 'error');
+      emitPrint(ctx, '[Ошибка] Не удалось запустить sysmon: нет утилиты commandJob');
       return { ok: false, error: 'no commandJob util' };
     }
 
@@ -90,13 +90,13 @@ import {
       const msg = (CJ && typeof CJ.describeRunCommandError === 'function')
         ? CJ.describeRunCommandError(data, r && r.res)
         : (data && data.error ? String(data.error) : 'sysmon failed');
-      emitToast(ctx, 'sysmon: РѕС€РёР±РєР° РІС‹РїРѕР»РЅРµРЅРёСЏ', 'error');
-      if (msg) emitPrint(ctx, '[РћС€РёР±РєР°] ' + msg);
+      emitToast(ctx, 'sysmon: ошибка выполнения', 'error');
+      if (msg) emitPrint(ctx, '[Ошибка] ' + msg);
       return { ok: false, data };
     }
 
     emitPrint(ctx, '');
-    emitPrint(ctx, '[sysmon] Р“РѕС‚РѕРІРѕ.');
+    emitPrint(ctx, '[sysmon] Готово.');
     return { ok: true, data };
   }
 

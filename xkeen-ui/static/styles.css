@@ -4922,6 +4922,35 @@ html[data-theme="light"] .xkeen-cm-help-section {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
+/* Предупреждение о недоступном WebSocket-рантайме над выводом терминала.
+   Без него панель молча прячет кнопку PTY, и причина lite-режима не видна. */
+.terminal-ws-notice {
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--sem-warning, #fbbf24) 45%, var(--border, #1f2937) 55%);
+  background: color-mix(in srgb, var(--sem-warning, #fbbf24) 12%, var(--card-bg, #020617) 88%);
+  color: var(--text, #e5e7eb);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.terminal-ws-notice.hidden {
+  display: none;
+}
+
+.terminal-ws-notice-title {
+  font-weight: 600;
+  color: var(--sem-warning, #fbbf24);
+}
+
+.terminal-ws-notice-detail {
+  margin-top: 2px;
+  color: var(--muted, #9ca3af);
+  word-break: break-word;
+}
+
 .terminal-output {
   width: 100%;
   background: var(--card-bg, #020617);

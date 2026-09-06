@@ -197,6 +197,12 @@ def detect_terminal_state(
     elif rt_mode == "router" and not _is_arm_arch(machine_arch):
         reason = "arch_not_arm"
 
+    # run_server.py publishes the gevent import failure here, so the UI can say
+    # why the terminal is stuck in lite mode instead of just hiding the button.
+    ws_error = str(env.get("XKEEN_WS_ERROR") or "").strip() or None
+    if ws_ok:
+        ws_error = None
+
     return {
         "lite": True,
         "pty": bool(pty_ok),
@@ -204,6 +210,7 @@ def detect_terminal_state(
         "shell": shell_policy,
         "arch": machine_arch,
         "reason": reason,
+        "ws_error": ws_error,
     }
 
 

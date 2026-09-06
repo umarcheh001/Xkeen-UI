@@ -217,8 +217,8 @@
                 type="button"
                 id="panel-core-ui-refresh-btn"
                 class="service-core-text xk-header-btn hidden"
-                title="РћР±РЅРѕРІРёС‚СЊ РїР°РЅРµР»СЊ РїРѕСЃР»Рµ РёР·РјРµРЅРµРЅРёСЏ РЅР°Р±РѕСЂР° СЏРґРµСЂ"
-              >РћР±РЅРѕРІРёС‚СЊ РїР°РЅРµР»СЊ</button>
+                title="Обновить панель после изменения набора ядер"
+              >Обновить панель</button>
             </div>
 
             <div class="panel-shell-actions-secondary" data-xk-shell-slot="session-actions">
@@ -2410,6 +2410,7 @@
 	          <span id="terminal-search-counter" class="terminal-search-counter" title="Совпадения" aria-label="Количество совпадений">0/0</span>
 	          <button type="button" class="terminal-search-btn" id="terminal-search-clear" title="Очистить" aria-label="Очистить поиск">{{ op_icon('close') }}</button>
 	        </div>
+        <div id="terminal-ws-notice" class="terminal-ws-notice hidden" role="status" aria-live="polite"></div>
         <div id="terminal-xterm" class="terminal-output hidden"></div>
         <pre id="terminal-output" class="terminal-output"></pre>
         <div class="terminal-footer" aria-label="Terminal footer toolbar">

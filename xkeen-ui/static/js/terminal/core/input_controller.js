@@ -97,7 +97,7 @@ import {
 
       const cmdText = cmdEl ? String(cmdEl.value || '').trim() : '';
       if (!cmdText) {
-        safeToast(ctx, 'Р’РІРµРґРёС‚Рµ РєРѕРјР°РЅРґСѓ', 'info');
+        safeToast(ctx, 'Введите команду', 'info');
         return false;
       }
 
@@ -125,7 +125,7 @@ import {
           transport.send(payload, { prefer: 'lite', run: true });
         }
       } catch (e9) {
-        safeToast(ctx, 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ РєРѕРјР°РЅРґСѓ', 'error');
+        safeToast(ctx, 'Не удалось отправить команду', 'error');
         return false;
       }
 

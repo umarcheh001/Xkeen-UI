@@ -10,6 +10,16 @@ INIT_SCRIPT="${XKEEN_UI_INIT_SCRIPT:-$INIT_SCRIPT_DEFAULT}"
 PYTHON_BIN="/opt/bin/python3"
 LOG_DIR="/opt/var/log"
 RUN_DIR="/opt/var/run"
+INSTALL_LOG="${XKEEN_INSTALL_LOG:-/opt/var/log/xkeen-ui-install.log}"
+
+# Предупреждение посреди двухсот строк вывода предупреждением не работает.
+# Всё важное дублируем в файл, чтобы итог установки можно было прочитать потом.
+log_install() {
+  echo "$@"
+  mkdir -p "$(dirname "$INSTALL_LOG")" 2>/dev/null || true
+  printf '%s %s
+' "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo '?')" "$*" >> "$INSTALL_LOG" 2>/dev/null || true
+}
 
 # Never reuse Entware's shared __pycache__. A power loss or interrupted package
 # upgrade can leave a stdlib .pyc truncated; Python then fails before the UI
@@ -388,6 +398,36 @@ pip_install_with_fallback() {
   return "$LAST_STATUS"
 }
 
+# Битую распаковку колеса не видно ни в `pip list`, ни в `pip check`: метаданные
+# целы, pip считает пакет установленным и на `pip install` отвечает «Requirement
+# already satisfied». Падает только импорт. Отличаем «не установлен» от
+# «установлен криво» — лечится это по-разному.
+python_module_installed_but_broken() {
+  MOD="$1"
+  PKG="$2"
+
+  "$PYTHON_BIN" -c "import $MOD" >/dev/null 2>&1 && return 1
+  "$PYTHON_BIN" -m pip show "$PKG" >/dev/null 2>&1 || return 1
+  return 0
+}
+
+# Сверяет файлы пакета с его dist-info/RECORD и называет потерянные файлы.
+# Именно так ловится обрезанное при распаковке имя .so.
+verify_python_package_files() {
+  INTEGRITY_CHECKER=""
+  for CANDIDATE in "$SRC_DIR/scripts/check_pydeps_integrity.py" "$UI_DIR/scripts/check_pydeps_integrity.py"; do
+    if [ -f "$CANDIDATE" ]; then
+      INTEGRITY_CHECKER="$CANDIDATE"
+      break
+    fi
+  done
+
+  [ -n "$INTEGRITY_CHECKER" ] || return 0
+
+  "$PYTHON_BIN" "$INTEGRITY_CHECKER" "$@" 2>&1 || return 1
+  return 0
+}
+
 echo "========================================"
 echo "  Xkeen Web UI — УСТАНОВКА"
 echo "========================================"
@@ -520,6 +560,18 @@ if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_GEVENT" -eq 1 ]; then
     if [ -n "$GEVENT_PIN_REASON" ]; then
       echo "[*] Архитектура $ARCH: использую '$GEVENT_PIP_SPEC' ($GEVENT_PIN_REASON)."
     fi
+
+    # Обычный `pip install` тут бесполезен: он ответит «Requirement already
+    # satisfied» и ничего не починит.
+    if python_module_installed_but_broken gevent gevent ||        python_module_installed_but_broken geventwebsocket gevent-websocket; then
+      log_install "[!] gevent числится установленным, но не импортируется — установка повреждена."
+      verify_python_package_files gevent gevent-websocket || true
+      log_install "[*] Переустанавливаю его принудительно (--force-reinstall)."
+      if ! pip_install_with_fallback "gevent-repair" --force-reinstall --no-deps "$GEVENT_PIP_SPEC" gevent-websocket; then
+        log_install "[!] Принудительная переустановка gevent/gevent-websocket не удалась."
+      fi
+    fi
+
     if ! pip_install_with_fallback "gevent" "$GEVENT_PIP_SPEC" gevent-websocket; then
       echo "[!] Не удалось полностью установить gevent/gevent-websocket через pip."
       echo "    Продолжаю установку, но WebSocket может быть недоступен."
@@ -536,7 +588,11 @@ if ! "$PYTHON_BIN" -c "import flask" >/dev/null 2>&1; then
   exit 1
 fi
 
-# gevent/geventwebsocket — опциональны: предупреждаем, но НЕ падаем
+# gevent/geventwebsocket — опциональны: предупреждаем, но НЕ падаем.
+# Вердикт запоминаем, чтобы напечатать его в итоге установки — предупреждение
+# посреди вывода никто не читает.
+WS_VERDICT="off"
+WS_VERDICT_REASON="архитектура $ARCH: gevent не устанавливался"
 if [ "$WANT_GEVENT" -eq 1 ]; then
   MISSING_GEVENT=""
   for MOD in gevent geventwebsocket; do
@@ -550,9 +606,15 @@ if [ "$WANT_GEVENT" -eq 1 ]; then
   done
 
   if [ -n "$MISSING_GEVENT" ]; then
+    WS_VERDICT="off"
+    WS_VERDICT_REASON="не импортируются модули: $MISSING_GEVENT"
     echo "[!] Следующие модули gevent недоступны: $MISSING_GEVENT"
     echo "    Продолжаю установку без WebSocket; логи Xray будут отображаться через HTTP-пулинг."
+    echo "[*] Проверяю, не повреждена ли распаковка пакетов..."
+    verify_python_package_files gevent gevent-websocket || true
   else
+    WS_VERDICT="on"
+    WS_VERDICT_REASON=""
     echo "[*] Flask и gevent найдены, WebSocket для логов Xray будет использован."
   fi
 else
@@ -1931,6 +1993,15 @@ echo "[*] Запускаю сервис..."
 echo "========================================"
 echo "  ✔ Xkeen Web UI установлен"
 echo "========================================"
+log_install "[=] Итог установки:"
+if [ "$WS_VERDICT" = "on" ]; then
+  log_install "[=] WebSocket: ВКЛ — доступен полноценный терминал (PTY) и потоковые логи Xray."
+else
+  log_install "[=] WebSocket: ВЫКЛ — $WS_VERDICT_REASON."
+  log_install "[=] Терминал останется в lite-режиме, логи Xray — через HTTP-пулинг."
+  log_install "[=] Проверить пакеты: $PYTHON_BIN $UI_DIR/scripts/check_pydeps_integrity.py gevent gevent-websocket"
+fi
+log_install "[=] Подробности установки: $INSTALL_LOG"
 PANEL_URL="http://<IP_роутера>:${PANEL_PORT}/"
 printf '\033[1;32mОткрой в браузере:  %s\033[0m\n' "$PANEL_URL"
 echo "Текущий порт панели: $PANEL_PORT"

@@ -44,3 +44,41 @@ def test_lite_terminal_output_controller_appends_to_pre_instead_of_hidden_xterm(
     assert "if (target === 'term')" in text
     assert "else if (target === 'pre')" in text
     assert 'appendToPre(ctx, out)' in text
+
+
+def test_lite_runner_never_writes_output_into_a_hidden_xterm():
+    text = Path('xkeen-ui/static/js/terminal/lite_runner.js').read_text(encoding='utf-8')
+
+    assert 'function xtermHostIsVisible() {' in text
+    assert "const host = byId('terminal-xterm');" in text
+    assert "host.classList.contains('hidden')" in text
+    assert "host.style.display === 'none'" in text
+    assert 'if (!xtermHostIsVisible()) return false;' in text
+
+
+def test_lite_pre_output_keeps_echo_exit_code_and_never_overwrites_command_output():
+    text = Path('xkeen-ui/static/js/terminal/lite_runner.js').read_text(encoding='utf-8')
+
+    assert 'function appendPre(outputEl, text) {' in text
+    assert r"appendPre(outputEl, '$ ' + cmdText + '\n');" in text
+    assert r"appendPre(outputEl, '\n[exit_code=' + exitCode + ']\n');" in text
+    assert r"appendPre(outputEl, '\n[Ошибка] ' + msg + '\n');" in text
+    # Errors are appended, not assigned over the output collected so far.
+    assert "outputEl.textContent = 'Ошибка: ' + msg;" not in text
+
+
+def test_lite_runner_treats_non_zero_exit_code_as_a_finished_job():
+    text = Path('xkeen-ui/static/js/terminal/lite_runner.js').read_text(encoding='utf-8')
+
+    assert 'const finishedWithExitCode = !!(data' in text
+    assert "&& data.status === 'finished'" in text
+    assert "&& typeof data.exit_code === 'number');" in text
+    assert 'if (!finishedWithExitCode && (!res.ok || !data || !data.ok)) {' in text
+
+
+def test_lite_runner_does_not_reprint_streamed_output_as_final_payload():
+    text = Path('xkeen-ui/static/js/terminal/lite_runner.js').read_text(encoding='utf-8')
+
+    assert 'let streamedAny = false;' in text
+    assert 'streamedAny = true;' in text
+    assert 'if (text && !streamedAny) onChunk(text);' in text

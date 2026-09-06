@@ -43,13 +43,13 @@ import { publishTerminalBuiltinCommandCompatApi } from '../../runtime.js';
       const lines = Array.isArray(data && data.lines) ? data.lines : [];
       return { ok: true, lines };
     } catch (e2) {
-      return { ok: false, lines: ['РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ Р¶СѓСЂРЅР°Р» РїРµСЂРµР·Р°РїСѓСЃРєР°.'], error: e2 };
+      return { ok: false, lines: ['Не удалось загрузить журнал перезапуска.'], error: e2 };
     }
   }
 
   async function run(ctx) {
     emitPrint(ctx, '');
-    emitPrint(ctx, '[xkeen] РџРµСЂРµР·Р°РїСѓСЃРє...');
+    emitPrint(ctx, '[xkeen] Перезапуск...');
 
     try {
       if (ctx && ctx.api && typeof ctx.api.apiFetch === 'function') {
@@ -58,8 +58,8 @@ import { publishTerminalBuiltinCommandCompatApi } from '../../runtime.js';
         await fetch('/api/restart', { method: 'POST', credentials: 'same-origin' });
       }
     } catch (e) {
-      emitToast(ctx, 'РћС€РёР±РєР° РїСЂРё РїРµСЂРµР·Р°РїСѓСЃРєРµ', 'error');
-      emitPrint(ctx, '[РћС€РёР±РєР°] РќРµ СѓРґР°Р»РѕСЃСЊ РІС‹РїРѕР»РЅРёС‚СЊ /api/restart');
+      emitToast(ctx, 'Ошибка при перезапуске', 'error');
+      emitPrint(ctx, '[Ошибка] Не удалось выполнить /api/restart');
       return { ok: false, error: e };
     }
 
@@ -68,7 +68,7 @@ import { publishTerminalBuiltinCommandCompatApi } from '../../runtime.js';
 
     emitPrint(ctx, '');
     if (!lines.length) {
-      emitPrint(ctx, '(Р¶СѓСЂРЅР°Р» РїСѓСЃС‚)');
+      emitPrint(ctx, '(журнал пуст)');
     } else {
       for (const ln of lines) emitPrint(ctx, String(ln || '').replace(/\r?\n$/, ''));
     }

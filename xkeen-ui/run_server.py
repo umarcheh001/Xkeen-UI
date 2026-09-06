@@ -11,15 +11,36 @@ except Exception:
     pass
 
 import os
+import sys
+import traceback
 
 GEVENT_AVAILABLE = True
+GEVENT_IMPORT_ERROR = None
 try:
     from gevent import pywsgi
     from geventwebsocket.handler import WebSocketHandler
-except Exception:
+except Exception as exc:
     GEVENT_AVAILABLE = False
+    GEVENT_IMPORT_ERROR = "%s: %s" % (type(exc).__name__, exc)
     pywsgi = None  # type: ignore
     WebSocketHandler = None  # type: ignore
+
+    # Do not degrade silently: without this the panel drops to the Werkzeug dev
+    # server, the terminal loses PTY, and nothing anywhere says why.
+    print(
+        "[!] WebSocket-рантайм недоступен: не импортируется gevent/gevent-websocket.\n"
+        "    %s\n"
+        "    Панель поднимется без WebSocket: терминал останется в lite-режиме,\n"
+        "    логи Xray будут идти через HTTP-пулинг.\n"
+        "    Проверить целостность пакетов:\n"
+        "      /opt/bin/python3 /opt/etc/xkeen-ui/scripts/check_pydeps_integrity.py gevent gevent-websocket"
+        % GEVENT_IMPORT_ERROR,
+        file=sys.stderr,
+    )
+    print(traceback.format_exc(), file=sys.stderr)
+
+# Publish the reason for /api/capabilities so the UI can explain the lite terminal.
+os.environ["XKEEN_WS_ERROR"] = GEVENT_IMPORT_ERROR or ""
 
 
 def _server_port() -> int:

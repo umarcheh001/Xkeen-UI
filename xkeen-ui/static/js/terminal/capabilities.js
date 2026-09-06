@@ -19,6 +19,8 @@ import { appendTerminalDebug } from '../features/terminal_debug.js';
   let HAS_PTY = false;
   let HAS_SHELL = true;
   let SHELL_POLICY = null;
+  let WS_REASON = null;
+  let WS_ERROR = null;
   let INIT_PROMISE = null;
   let INIT_DONE = false;
 
@@ -131,6 +133,15 @@ import { appendTerminalDebug } from '../features/terminal_debug.js';
     return !!(data && data.websocket);
   }
 
+  // Why the terminal is stuck in lite mode. Without this the UI just hides the
+  // PTY button and the user sees an unexplained half-working terminal.
+  function pickWsDiagnostics(data) {
+    const terminal = (data && data.terminal && typeof data.terminal === 'object') ? data.terminal : null;
+    const reason = terminal && terminal.reason ? String(terminal.reason) : null;
+    const error = terminal && terminal.ws_error ? String(terminal.ws_error) : null;
+    return { reason, error };
+  }
+
   function pickShellPolicy(data) {
     if (data && data.terminal && data.terminal.shell && typeof data.terminal.shell === 'object') {
       return normalizeShellPolicy(data.terminal.shell);
@@ -182,10 +193,15 @@ import { appendTerminalDebug } from '../features/terminal_debug.js';
         HAS_PTY = pickPtyCapability(data);
         SHELL_POLICY = pickShellPolicy(data);
         HAS_SHELL = !!(SHELL_POLICY && SHELL_POLICY.enabled);
+        const diagnostics = pickWsDiagnostics(data);
+        WS_REASON = diagnostics.reason;
+        WS_ERROR = diagnostics.error;
         appendTerminalDebug('terminal:capabilities:request-done', {
           websocket: HAS_WS,
           pty: HAS_PTY,
           shell: HAS_SHELL,
+          reason: WS_REASON,
+          wsError: WS_ERROR,
         });
       } catch (e) {
         const msg = e ? String(e.message || e) : 'unknown error';
@@ -234,14 +250,63 @@ import { appendTerminalDebug } from '../features/terminal_debug.js';
     return INIT_PROMISE;
   }
 
+  function wsNoticeText() {
+    if (HAS_PTY) return null;
+    if (WS_REASON === 'ws_unavailable') {
+      return {
+        title: 'WebSocket недоступен — терминал работает в lite-режиме.',
+        detail: WS_ERROR
+          ? ('Причина: ' + WS_ERROR)
+          : 'Панель запущена без gevent/gevent-websocket.',
+        hint: 'Проверить пакеты: /opt/bin/python3 /opt/etc/xkeen-ui/scripts/check_pydeps_integrity.py gevent gevent-websocket',
+      };
+    }
+    if (WS_REASON === 'arch_not_arm') {
+      return {
+        title: 'Полноценный терминал недоступен на этой архитектуре.',
+        detail: 'Доступен только lite-режим с построчным выполнением команд.',
+        hint: '',
+      };
+    }
+    return null;
+  }
+
+  function applyWsNotice() {
+    const host = byId('terminal-ws-notice');
+    if (!host) return;
+
+    const notice = wsNoticeText();
+    if (!notice) {
+      setVisible(host, false);
+      try { host.classList.add('hidden'); } catch (e) {}
+      try { host.textContent = ''; } catch (e2) {}
+      return;
+    }
+
+    try {
+      host.textContent = '';
+      const lines = [notice.title, notice.detail, notice.hint].filter(Boolean);
+      lines.forEach((line, index) => {
+        const row = document.createElement('div');
+        row.className = index === 0 ? 'terminal-ws-notice-title' : 'terminal-ws-notice-detail';
+        row.textContent = line;
+        host.appendChild(row);
+      });
+      host.classList.remove('hidden');
+      setVisible(host, true);
+    } catch (e3) {}
+  }
+
   // Apply capability-dependent UI.
   // Desired behavior:
   // - If PTY is available: show ONLY the full Interactive PTY shell button.
   // - If PTY is NOT available: show ONLY the lite HTTP terminal button.
   function applyWsCapabilityUi() {
-    // Buttons in "РљРѕРјР°РЅРґС‹" header
+    // Buttons in "Команды" header
     const shellBtn = byId('terminal-open-shell-btn');
     const ptyBtn = byId('terminal-open-pty-btn');
+
+    try { applyWsNotice(); } catch (e0) {}
 
     // If markup changed, best-effort: do nothing.
     if (!shellBtn && !ptyBtn) return;

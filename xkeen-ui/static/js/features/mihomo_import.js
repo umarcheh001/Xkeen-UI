@@ -2075,7 +2075,7 @@ let mihomoImportModuleApi = null;
   async function probeRegularProvider(url) {
     const http = getMihomoCoreHttpApi();
     const post = http && typeof http.postJSON === 'function' ? http.postJSON : null;
-    if (!post) throw new Error('core http.postJSON РЅРµРґРѕСЃС‚СѓРїРµРЅ');
+    if (!post) throw new Error('core http.postJSON недоступен');
     const data = await post('/api/mihomo/provider/probe', {
       url: String(url || '').trim(),
       insecure: false,

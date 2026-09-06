@@ -18,8 +18,11 @@ try:
     import gevent  # type: ignore
 
     HAS_GEVENT = True
-except Exception:  # gevent/geventwebsocket are optional
+    # Why it failed matters: a broken wheel looks exactly like "not installed".
+    GEVENT_IMPORT_ERROR = None
+except Exception as exc:  # gevent/geventwebsocket are optional
     HAS_GEVENT = False
+    GEVENT_IMPORT_ERROR = "%s: %s" % (type(exc).__name__, exc)
 
     class WebSocketError(Exception):
         """Fallback WebSocketError when geventwebsocket is not installed."""

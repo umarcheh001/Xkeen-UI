@@ -67,7 +67,7 @@ import {
     async function runLite(cmd, stdinValue, opts) {
       const CJ = getTerminalCommandJobApi();
       if (!CJ || typeof CJ.runShellCommand !== 'function') {
-        emitRaw('\r\n[РћС€РёР±РєР°] command_job util is not available\r\n', { kind: 'error' });
+        emitRaw('\r\n[Ошибка] command_job util is not available\r\n', { kind: 'error' });
         emitErr('command_job util is not available');
         return false;
       }
@@ -90,7 +90,7 @@ import {
           const msg = (CJ && typeof CJ.describeRunCommandError === 'function')
             ? CJ.describeRunCommandError(data, r && r.res)
             : ((data && data.error) ? String(data.error) : 'HTTP error');
-          emitRaw('\r\n[РћС€РёР±РєР°] ' + msg + '\r\n', { kind: 'error' });
+          emitRaw('\r\n[Ошибка] ' + msg + '\r\n', { kind: 'error' });
           emitErr(msg, { stage: 'create' });
           return false;
         }
@@ -99,7 +99,7 @@ import {
           const msg2 = (CJ && typeof CJ.describeRunCommandError === 'function')
             ? CJ.describeRunCommandError(data, r && r.res)
             : (data.error ? String(data.error) : 'command failed');
-          emitRaw('\r\n[РћС€РёР±РєР°] ' + msg2 + '\r\n', { kind: 'error' });
+          emitRaw('\r\n[Ошибка] ' + msg2 + '\r\n', { kind: 'error' });
           emitErr(msg2, { stage: 'wait', jobId: data.job_id });
           return false;
         }
@@ -110,7 +110,7 @@ import {
         return true;
       } catch (e) {
         const msg3 = (e && e.message) ? e.message : String(e);
-        emitRaw('\r\n[РћС€РёР±РєР°] ' + msg3 + '\r\n', { kind: 'error' });
+        emitRaw('\r\n[Ошибка] ' + msg3 + '\r\n', { kind: 'error' });
         emitErr(e);
         return false;
       }
@@ -131,7 +131,7 @@ import {
 
       const cmdText = payload.replace(/[\r\n]+$/g, '').trim();
       if (!cmdText) {
-        emitRaw('\r\n[РћС€РёР±РєР°] Р’РІРµРґРёС‚Рµ РєРѕРјР°РЅРґСѓ.\r\n', { kind: 'error' });
+        emitRaw('\r\n[Ошибка] Введите команду.\r\n', { kind: 'error' });
         emitErr('empty command');
         return false;
       }

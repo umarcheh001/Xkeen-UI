@@ -150,10 +150,35 @@ import {
   // --------------------
   // Lite runner main: read UI, run command, stream chunks, render output
   // --------------------
+  function xtermHostIsVisible() {
+    const host = byId('terminal-xterm');
+    if (!host) return false;
+    try { if (host.classList && host.classList.contains('hidden')) return false; } catch (e) {}
+    try { if (host.style && host.style.display === 'none') return false; } catch (e2) {}
+    return true;
+  }
+
   function getUseXterm() {
-    // Prefer xterm if present
+    // Lite mode keeps the plain <pre> output and hides the xterm host, while the
+    // xterm instance itself survives in shared state after a PTY session.
+    // Writing into a hidden xterm would silently swallow the whole output
+    // (command echo, chunks, errors), so the visible host decides the target.
+    if (!xtermHostIsVisible()) return false;
     try { return !!(state.xterm && typeof state.xterm.write === 'function'); } catch (e) {}
     return false;
+  }
+
+  // Append text to the <pre> fallback. Service lines (command echo, exit code,
+  // errors) go through the same path as command output, so nothing overwrites
+  // what the command already printed.
+  function appendPre(outputEl, text) {
+    if (!outputEl) return;
+    const s = String(text == null ? '' : text);
+    if (!s) return;
+    try {
+      outputEl.innerHTML += ansiToHtml(s).replace(/\n/g, '<br>');
+      outputEl.scrollTop = outputEl.scrollHeight;
+    } catch (e) {}
   }
 
   function xtermWriteln(term, text) {
@@ -207,16 +232,21 @@ import {
     // Hide confirm input once used (unless caller wants it kept)
     try { setConfirmVisible(false, { clear: false }); } catch (e) {}
 
-    // Prepare output
+    // Prepare output. The echo line matters in the <pre> fallback too: without it
+    // a command with empty output looks exactly like a dead terminal.
     if (useXterm) {
       xtermWriteln(term, '');
       xtermWriteln(term, '$ ' + cmdText);
     } else if (outputEl) {
       outputEl.textContent = '';
+      appendPre(outputEl, '$ ' + cmdText + '\n');
     }
+
+    let streamedAny = false;
 
     const onChunk = (chunk) => {
       if (!chunk) return;
+      streamedAny = true;
       let out = String(chunk);
       // Optional post-processing for lite output:
       // - strip ANSI for HTML fallback
@@ -230,12 +260,8 @@ import {
 
       if (useXterm) {
         try { term.write(out); } catch (e) {}
-      } else if (outputEl) {
-        try {
-          const html = ansiToHtml(out).replace(/\n/g, '<br>');
-          outputEl.innerHTML += html;
-          outputEl.scrollTop = outputEl.scrollHeight;
-        } catch (e) {}
+      } else {
+        appendPre(outputEl, out);
       }
 
       // detect confirm prompts and reveal input if needed
@@ -253,7 +279,15 @@ import {
 
       const { res, data } = await runner;
 
-      if (!res.ok || !data || !data.ok) {
+      // A finished job with a non-zero exit code is not a transport failure:
+      // the WS path reports it as ok=false while HTTP polling reports ok=true.
+      // Treat both the same way and let the exit code hint speak for itself.
+      const finishedWithExitCode = !!(data
+        && data.status === 'finished'
+        && !data.error
+        && typeof data.exit_code === 'number');
+
+      if (!finishedWithExitCode && (!res.ok || !data || !data.ok)) {
         const CJ = getTerminalCommandJobApi();
         const msg = (CJ && typeof CJ.describeRunCommandError === 'function')
           ? CJ.describeRunCommandError(data, res)
@@ -261,29 +295,33 @@ import {
         if (useXterm) {
           xtermWriteln(term, '');
           xtermWriteln(term, '[Ошибка] ' + msg);
-        } else if (outputEl) {
-          outputEl.textContent = 'Ошибка: ' + msg;
+        } else {
+          appendPre(outputEl, '\n[Ошибка] ' + msg + '\n');
         }
         return;
       }
 
-      // Final payload text (if any)
+      // Final payload text (if any). Streamed chunks already carry the whole
+      // output, so re-printing it here would double every line.
       const text = (data && (data.stdout || data.output || data.text)) ? String(data.stdout || data.output || data.text) : '';
-      if (text) onChunk(text);
+      if (text && !streamedAny) onChunk(text);
 
-      // Exit code hint (nonzero)
+      // Exit code hint: printed for every finished command, so a successful run
+      // with empty output is still distinguishable from a stuck terminal.
       const exitCode = (data && data.exit_code != null) ? (parseInt(data.exit_code, 10) || 0) : 0;
       if (useXterm) {
         xtermWriteln(term, '');
         xtermWriteln(term, '[exit_code=' + exitCode + ']');
+      } else {
+        appendPre(outputEl, '\n[exit_code=' + exitCode + ']\n');
       }
     } catch (e) {
       const msg = (e && e.message) ? e.message : String(e);
       if (useXterm) {
         xtermWriteln(term, '');
         xtermWriteln(term, '[Ошибка] ' + msg);
-      } else if (outputEl) {
-        outputEl.textContent = 'Ошибка: ' + msg;
+      } else {
+        appendPre(outputEl, '\n[Ошибка] ' + msg + '\n');
       }
     }
   }
