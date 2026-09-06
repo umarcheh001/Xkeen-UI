@@ -33,6 +33,8 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     proxyGroup: 'mihomo-dns-proxy-group',
     dnsSelectorEnable: 'mihomo-dns-selector-enable',
     dnsSelectorHint: 'mihomo-dns-selector-hint',
+    mobileBsEnable: 'mihomo-dns-mobile-bs-enable',
+    mobileBsHint: 'mihomo-dns-mobile-bs-hint',
     tunnelServers: 'mihomo-dns-tunnel-servers',
     localServers: 'mihomo-dns-local-servers',
     localDomains: 'mihomo-dns-local-domains',
@@ -163,6 +165,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       mode,
       proxy_group: $(IDS.proxyGroup)?.value || current?.proxy_group || undefined,
       dns_selector: !!$(IDS.dnsSelectorEnable)?.checked,
+      mobile_bs: !!$(IDS.mobileBsEnable)?.checked,
       dns_options: {
         tunnel: String($(IDS.tunnelServers)?.value || '').split(/[,\r\n]+/).map((item) => item.trim()).filter(Boolean),
         local_resolvers: String($(IDS.localServers)?.value || '').split(/[,\r\n]+/).map((item) => item.trim()).filter(Boolean),
@@ -311,6 +314,8 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     const modeHint = $(IDS.modeHint);
     const proxyGroup = $(IDS.proxyGroup);
     const dnsSelectorEnable = $(IDS.dnsSelectorEnable);
+    const mobileBsEnable = $(IDS.mobileBsEnable);
+    const mobileBsHint = $(IDS.mobileBsHint);
     const dnsSelectorHint = $(IDS.dnsSelectorHint);
     const dnsOptions = data?.dns_options || {};
     const optionFields = [
@@ -357,9 +362,12 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     }
     const selectorInfo = data?.dns_selector || {};
     if (dnsSelectorEnable && !busy) dnsSelectorEnable.checked = !!selectorInfo.enabled;
+    if (mobileBsEnable && !busy) mobileBsEnable.checked = data?.mobile_bs === true;
     if (dnsSelectorEnable) {
       dnsSelectorEnable.disabled = enabled || canDisable || altered || selectorInfo.conflict === true;
     }
+    if (mobileBsEnable) mobileBsEnable.disabled = enabled || canDisable || altered;
+    if (mobileBsHint) mobileBsHint.textContent = 'БС получают Yandex Safe DoT и реальные IP; остальные запросы — DoT Cloudflare/Google. Добавляется whitelist-yota и исключение Fake-IP.';
     if (dnsSelectorHint) {
       const upstream = selectorInfo.upstream || proxyGroup?.value || 'выбранный маршрут';
       if (selectorInfo.enabled) {

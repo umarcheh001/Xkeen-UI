@@ -2854,6 +2854,12 @@
                     <span class="dt-switch-label">Создать переключатель DNS Proxy</span>
                   </label>
                   <p id="mihomo-dns-selector-hint" class="modal-hint" role="status" aria-live="polite">После запуска позволит переключать DNS между выбранной группой и DIRECT.</p>
+                  <label class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-geodata-toggle mihomo-dns-selector-toggle" title="Направить домены из whitelist-yota в Yandex Safe DoT.">
+                    <input type="checkbox" id="mihomo-dns-mobile-bs-enable" aria-describedby="mihomo-dns-mobile-bs-hint">
+                    <span class="dt-switch-slider" aria-hidden="true"></span>
+                    <span class="dt-switch-label">Мобильные БС → Яндекс DoT</span>
+                  </label>
+                  <p id="mihomo-dns-mobile-bs-hint" class="modal-hint" role="status" aria-live="polite">Добавит whitelist-yota, Yandex Safe DoT для БС и DoT Cloudflare/Google для остальных запросов.</p>
                 </div>
                 <div class="mihomo-dns-field mihomo-dns-mode-options">
                   <label for="mihomo-dns-mode">Режим обработки имён</label>

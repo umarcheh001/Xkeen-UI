@@ -1528,6 +1528,7 @@ def create_mihomo_blueprint(
         geodata = bool(data.get("geodata"))
         rule_providers = data.get("rule_providers")
         dns_selector = data.get("dns_selector") is True
+        mobile_bs = data.get("mobile_bs") is True
         dns_options = data.get("dns_options") if isinstance(data.get("dns_options"), dict) else None
         # Accept the flat spelling used by the Xray DNS form as well.  Xray's
         # payload calls the local/direct fields singular (``local_resolver``
@@ -1591,6 +1592,7 @@ def create_mihomo_blueprint(
                 proxy_group=proxy_group,
                 dns_selector=dns_selector,
                 dns_options=dns_options,
+                mobile_bs=mobile_bs,
                 repair_legacy_exclusion=repair_legacy_exclusion,
             )
             return jsonify(result), 200

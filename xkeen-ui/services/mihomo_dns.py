@@ -61,7 +61,19 @@ DEFAULT_DOMAIN_RULE_PROVIDERS = {
     # name requested by the UI profile, but point it at the maintained
     # non-China AI/chat category which covers ChatGPT, Claude, Gemini, etc.
     "category-ai@domain": "https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/category-ai-chat-!cn.mrs",
+    # Mobile operator whitelist used by the optional protected-DNS preset.
+    "whitelist-yota": "https://raw.githubusercontent.com/tobedeclared/mihomo/rules/domains/whitelist-yota.mrs",
 }
+MOBILE_BS_PROVIDER = "whitelist-yota"
+MOBILE_BS_BOOTSTRAP = ("77.88.8.88", "77.88.8.2")
+MOBILE_BS_TUNNEL = (
+    ("tls://8.8.8.8", "dns.google"),
+    ("tls://1.1.1.1", "cloudflare-dns.com"),
+)
+MOBILE_BS_YANDEX = (
+    "tls://77.88.8.88#DIRECT&name-cert-verify=safe.dot.dns.yandex.net",
+    "tls://77.88.8.2#DIRECT&name-cert-verify=safe.dot.dns.yandex.net",
+)
 DEFAULT_REDIR_BOOTSTRAP = ("77.88.8.8", "1.1.1.1")
 DEFAULT_REDIR_ROUTED_NAMESERVERS = (
     ("https://8.8.8.8/dns-query", "dns.google"),
@@ -930,7 +942,7 @@ def _normalize_domain_rule_providers(value: Any) -> list[str]:
     """Normalize the UI's provider selection to known, safe provider IDs."""
 
     if value is True or value is None:
-        raw: list[Any] = list(DEFAULT_DOMAIN_RULE_PROVIDERS)
+        raw: list[Any] = [name for name in DEFAULT_DOMAIN_RULE_PROVIDERS if name != MOBILE_BS_PROVIDER]
     elif value is False:
         raw = []
     elif isinstance(value, str):
@@ -1717,6 +1729,7 @@ def _managed_dns_block(
     mode: str = "redir-host",
     fake_ip: Any = None,
     dns_options: Any = None,
+    mobile_bs: bool = False,
 ) -> str:
     target = str(group or "").strip()
     if not target:
@@ -1755,13 +1768,13 @@ def _managed_dns_block(
             policy_entries[policy_name] = [str(server) for server in servers]
             builtin_policy_keys.add(policy_name)
     options = _normalize_dns_options(dns_options, mode=normalized_mode)
-    bootstrap = DEFAULT_FAKE_IP_BOOTSTRAP if fake else DEFAULT_REDIR_BOOTSTRAP
-    plain_nameservers = DEFAULT_FAKE_IP_NAMESERVERS if fake else ()
-    default_routed = DEFAULT_FAKE_IP_ROUTED_NAMESERVERS if fake else DEFAULT_REDIR_ROUTED_NAMESERVERS
+    bootstrap = MOBILE_BS_BOOTSTRAP if mobile_bs else (DEFAULT_FAKE_IP_BOOTSTRAP if fake else DEFAULT_REDIR_BOOTSTRAP)
+    plain_nameservers = () if mobile_bs else (DEFAULT_FAKE_IP_NAMESERVERS if fake else ())
+    default_routed = MOBILE_BS_TUNNEL if mobile_bs else (DEFAULT_FAKE_IP_ROUTED_NAMESERVERS if fake else DEFAULT_REDIR_ROUTED_NAMESERVERS)
     if dns_options is None:
         tunnel_servers = [item[0] for item in default_routed]
     else:
-        tunnel_servers = options["tunnel"]
+        tunnel_servers = [item[0] for item in MOBILE_BS_TUNNEL] if mobile_bs else options["tunnel"]
     # Keep the verification name from the built-in IP-literal defaults.  For
     # custom URLs Mihomo performs its normal TLS verification against the URL
     # host; the user may also provide an explicit fragment in the value.
@@ -1783,6 +1796,11 @@ def _managed_dns_block(
                 for server in options["direct_resolvers"]
             ]
             builtin_policy_keys.discard(domain)
+    if mobile_bs:
+        # Keep the provider's answers real in Fake-IP and resolve it through
+        # Yandex Safe DNS directly.  The same policy is useful in redir-host.
+        policy_entries[f"rule-set:{MOBILE_BS_PROVIDER}"] = list(MOBILE_BS_YANDEX)
+        builtin_policy_keys.add(f"rule-set:{MOBILE_BS_PROVIDER}")
     policy_block = ""
     if policy_entries:
         policy_block = "  nameserver-policy:\n"
@@ -1920,6 +1938,7 @@ def build_enabled_config(
     direct_resolvers: Any = None,
     direct_resolver: Any = None,
     direct_domains: Any = None,
+    mobile_bs: bool = False,
 ) -> tuple[str, str]:
     original = str(text or "")
     if not original.strip():
@@ -1940,7 +1959,14 @@ def build_enabled_config(
     # fake-ip filters and avoids duplicate downloads at runtime.
     if normalized_mode == "fake-ip" and not geodata:
         source = _with_domain_rule_provider_defaults(source, rule_providers)
+    if mobile_bs:
+        source = _with_domain_rule_provider_defaults(source, [MOBILE_BS_PROVIDER])
     fake_options = _normalize_fake_ip_options(fake_ip, config_text=source) if normalized_mode == "fake-ip" else None
+    if mobile_bs and fake_options is not None:
+        if fake_options["filter_mode"] != "blacklist":
+            raise MihomoDnsError("Пресет мобильных БС для Fake-IP требует режим blacklist.", code="mobile_bs_filter_mode_invalid")
+        if f"rule-set:{MOBILE_BS_PROVIDER}" not in fake_options["filters"]:
+            fake_options["filters"].append(f"rule-set:{MOBILE_BS_PROVIDER}")
     selected = str(group or _select_proxy_group(original) or "").strip()
     if not selected:
         raise MihomoDnsError(
@@ -1979,6 +2005,7 @@ def build_enabled_config(
             mode=normalized_mode,
             fake_ip=fake_options,
             dns_options=portable_dns if (dns_options is not None or any(value is not None for value in explicit_dns.values())) else None,
+            mobile_bs=mobile_bs,
         ),
     )
     return patched, selected
@@ -2315,6 +2342,7 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         "mode": mode if mode in DNS_MODES else "redir-host",
         "fake_ip": state_fake_ip or None,
         "rule_providers": state.get("rule_providers") if isinstance(state.get("rule_providers"), list) else [],
+        "mobile_bs": bool(state.get("mobile_bs")),
         "dns_options": dns_options,
         # Keep the boolean for API compatibility. Unlike the old value it is
         # true for TProxy only after the selected CIDR reaches the live target.
@@ -2480,6 +2508,7 @@ def apply_action(
     direct_resolvers: Any = None,
     direct_resolver: Any = None,
     direct_domains: Any = None,
+    mobile_bs: bool = False,
     repair_legacy_exclusion: bool = False,
 ) -> dict[str, Any]:
     normalized = str(action or "").strip().lower()
@@ -2555,6 +2584,7 @@ def apply_action(
                 direct_resolvers=direct_resolvers,
                 direct_resolver=direct_resolver,
                 direct_domains=direct_domains,
+                mobile_bs=mobile_bs,
             )
             validation = validate_config(new_content=prepared) or ""
             if not _validation_ok(validation):
@@ -2644,6 +2674,7 @@ def apply_action(
                         "upstream": group,
                     } if dns_selector is True else None,
                     "rule_providers": _normalize_domain_rule_providers(rule_providers) if normalized_mode == "fake-ip" and not geodata else [],
+                    "mobile_bs": bool(mobile_bs),
                     "dns_options": _normalize_dns_options({
                         "tunnel": upstreams,
                         "local_resolvers": local_resolvers if local_resolvers is not None else local_resolver,
@@ -2669,6 +2700,7 @@ def apply_action(
                         "upstream": group,
                     } if dns_selector is True else None,
                     "rule_providers": _normalize_domain_rule_providers(rule_providers) if normalized_mode == "fake-ip" and not geodata else [],
+                    "mobile_bs": bool(mobile_bs),
                     "dns_options": _normalize_dns_options({
                         "tunnel": upstreams,
                         "local_resolvers": local_resolvers if local_resolvers is not None else local_resolver,

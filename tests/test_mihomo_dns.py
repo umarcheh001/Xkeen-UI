@@ -254,6 +254,30 @@ def test_fake_ip_status_defaults_match_the_generated_resolver_profile():
     assert options["tunnel"] != list(dns.DEFAULT_DNS_OPTIONS["tunnel"])
 
 
+def test_mobile_bs_preset_adds_provider_policy_and_fake_ip_exception():
+    content, _ = dns.build_enabled_config(BASE, mode="fake-ip", mobile_bs=True)
+
+    assert "whitelist-yota:" in content
+    assert "url: https://raw.githubusercontent.com/tobedeclared/mihomo/rules/domains/whitelist-yota.mrs" in content
+    assert "- 'rule-set:whitelist-yota'" in content
+    assert "'rule-set:whitelist-yota':" in content
+    assert "tls://77.88.8.88#DIRECT&name-cert-verify=safe.dot.dns.yandex.net" in content
+    assert "tls://77.88.8.2#DIRECT&name-cert-verify=safe.dot.dns.yandex.net" in content
+    assert "    - 'tls://8.8.8.8#Заблок. сервисы&name-cert-verify=dns.google'" in content
+    assert "https://geohide.ru/dns-query" not in content
+
+
+def test_mobile_bs_preset_rejects_fake_ip_whitelist_mode():
+    with pytest.raises(dns.MihomoDnsError) as captured:
+        dns.build_enabled_config(
+            BASE,
+            mode="fake-ip",
+            mobile_bs=True,
+            fake_ip={"filter_mode": "whitelist", "filters": ["rule-set:whitelist-yota"]},
+        )
+    assert captured.value.code == "mobile_bs_filter_mode_invalid"
+
+
 def test_fake_ip_route_rejects_legacy_xkeen_rfc2544_return(monkeypatch):
     legacy = XKEEN_MANGLE_OK.replace(
         "-A xkeen -p udp",
