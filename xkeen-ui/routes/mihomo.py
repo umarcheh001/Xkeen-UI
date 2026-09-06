@@ -56,6 +56,7 @@ from mihomo_server_core import (
     get_active_profile_name,
     save_config,
     restart_mihomo_and_get_log,
+    start_mihomo_standalone,
     validate_config,
 )
 from services.mihomo_proxy_parsers import parse_wireguard
@@ -1261,7 +1262,15 @@ def create_mihomo_blueprint(
 
             backup = save_config(content)
             backup_name = str(getattr(backup, "filename", "") or "")
-            restarted = bool(restart_xkeen(source="mihomo-api-setup"))
+            restart_xkeen(source="mihomo-api-setup")
+            # A successful XKeen command is not sufficient: on a system
+            # where Xray is the active core it can report success while no
+            # Mihomo process exists.  Verify the actual target process and
+            # fall back to a detached standalone launch when XKeen is not
+            # managing Mihomo (the setup described by the issue).
+            restarted = detect_running_core() == "mihomo"
+            if not restarted:
+                restarted = bool(start_mihomo_standalone(config_path=MIHOMO_CONFIG_FILE))
             if not restarted:
                 return jsonify(
                     {

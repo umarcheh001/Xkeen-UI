@@ -593,6 +593,30 @@ def parse_vless(link: str, custom_name: Optional[str] = None) -> ProxyParseResul
     return ProxyParseResult(name=name, yaml=yaml)
 
 
+def _normalize_persistent_keepalive(value: str) -> str:
+    """Return a Mihomo-compatible integer for WireGuard keepalive.
+
+    Amnezia exports randomized values such as ``25-35``.  Mihomo's
+    top-level ``persistent-keepalive`` is a plain integer (unlike AWG's
+    ranged options), so use the midpoint of an inclusive range while
+    retaining ordinary scalar values.  Reject malformed/out-of-range input
+    instead of emitting YAML that Mihomo cannot start with.
+    """
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    match = re.fullmatch(r"(\d+)(?:\s*-\s*(\d+))?", raw)
+    if not match:
+        raise ValueError("Invalid WireGuard PersistentKeepalive: expected an integer or N-M range")
+    low = int(match.group(1))
+    high = int(match.group(2) or low)
+    if low > high:
+        low, high = high, low
+    if high > 65535:
+        raise ValueError("Invalid WireGuard PersistentKeepalive: value must be between 0 and 65535")
+    return str((low + high) // 2)
+
+
 def parse_wireguard(conf_text: str, custom_name: Optional[str] = None) -> ProxyParseResult:
     """Parse WireGuard .conf and return ProxyParseResult with Mihomo YAML proxy."""
     section = None
@@ -654,7 +678,7 @@ def parse_wireguard(conf_text: str, custom_name: Optional[str] = None) -> ProxyP
 
     mtu = iface.get("mtu")
     allowed_ips = peer.get("allowedips", "0.0.0.0/0, ::/0")
-    keepalive = peer.get("persistentkeepalive", "")
+    keepalive = _normalize_persistent_keepalive(peer.get("persistentkeepalive", ""))
 
     def _first_value(*keys: str) -> str:
         for key in keys:

@@ -38,6 +38,7 @@ from services.mihomo_runtime import (
     clean_backups,
     save_config,
     restart_mihomo_and_get_log,
+    start_mihomo_standalone,
     validate_config,
 )
 from services.mihomo_proxy_parsers import (
@@ -105,5 +106,6 @@ __all__ = [
     # save + restart
     'save_config',
     'restart_mihomo_and_get_log',
+    'start_mihomo_standalone',
     'validate_config',
 ]

@@ -81,6 +81,81 @@ RESTART_CMD = os.environ.get("MIHOMO_RESTART_CMD", shlex.join(build_xkeen_cmd("-
 RESTART_TIMEOUT = int(os.environ.get("MIHOMO_RESTART_TIMEOUT", "60"))
 
 
+def _mihomo_binary() -> str | None:
+    """Resolve the standalone Mihomo executable on router and dev installs."""
+    candidates = (
+        os.environ.get("MIHOMO_BIN"),
+        "/opt/sbin/mihomo",
+        "/opt/bin/mihomo",
+        shutil.which("mihomo"),
+    )
+    for candidate in candidates:
+        if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
+
+
+def _mihomo_running() -> bool:
+    try:
+        result = subprocess.run(
+            ["pidof", "mihomo"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=1.0,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, OSError, subprocess.SubprocessError):
+        return False
+
+
+def start_mihomo_standalone(
+    *, config_path: str | os.PathLike[str] | None = None,
+    root: str | os.PathLike[str] | None = None,
+) -> bool:
+    """Start Mihomo directly when XKeen is not managing the selected core.
+
+    The API setup assistant is also useful on installations where Mihomo is
+    deployed next to (rather than through) XKeen.  In that case ``xkeen
+    -restart`` cannot create a process, so launch the daemon detached with the
+    same ``-d``/``-f`` arguments used by the router init scripts.
+    """
+    if _mihomo_running():
+        return True
+    binary = _mihomo_binary()
+    if not binary:
+        return False
+    run_root = Path(root or MIHOMO_ROOT).expanduser().resolve()
+    cfg = Path(config_path or CONFIG_PATH).expanduser().resolve()
+    if not cfg.is_file():
+        return False
+    run_root.mkdir(parents=True, exist_ok=True)
+    log_path = run_root / "mihomo-standalone.log"
+    try:
+        log_handle = log_path.open("ab")
+        proc = subprocess.Popen(
+            [binary, "-d", str(run_root), "-f", str(cfg)],
+            stdin=subprocess.DEVNULL,
+            stdout=log_handle,
+            stderr=subprocess.STDOUT,
+            close_fds=True,
+            start_new_session=True,
+        )
+        # The child owns the descriptor after Popen; close our copy.
+        log_handle.close()
+    except (OSError, ValueError):
+        try:
+            log_handle.close()  # type: ignore[possibly-undefined]
+        except Exception:
+            pass
+        return False
+    try:
+        proc.wait(timeout=0.25)
+        return proc.returncode == 0 and _mihomo_running()
+    except subprocess.TimeoutExpired:
+        return _mihomo_running() or proc.poll() is None
+
+
+
 @dataclass
 class ProfileInfo:
     name: str
@@ -439,5 +514,6 @@ __all__ = [
     "clean_backups",
     "save_config",
     "restart_mihomo_and_get_log",
+    "start_mihomo_standalone",
     "validate_config",
 ]

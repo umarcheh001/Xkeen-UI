@@ -152,6 +152,18 @@ def test_parse_wireguard_accepts_amnezia_wg_v2_options():
     assert "itime" not in amnezia
 
 
+def test_parse_wireguard_converts_amnezia_keepalive_range_to_integer():
+    config = AMNEZIA_WG_V2_CONF.replace("PersistentKeepalive = 25", "PersistentKeepalive = 25-35")
+    proxy = _parsed_proxy(parse_wireguard(config).yaml)
+    assert proxy["persistent-keepalive"] == 30
+
+
+def test_parse_wireguard_rejects_invalid_keepalive_range():
+    config = AMNEZIA_WG_V2_CONF.replace("PersistentKeepalive = 25", "PersistentKeepalive = 25-70000")
+    with pytest.raises(ValueError, match="PersistentKeepalive"):
+        parse_wireguard(config)
+
+
 def test_parse_wireguard_preserves_amnezia_wg_v3_and_v31_options():
     result = parse_wireguard(AMNEZIA_WG_V31_CONF, custom_name="amnezia-v31")
     proxy = _parsed_proxy(result.yaml)

@@ -177,6 +177,7 @@ def test_migration_apply_validates_then_saves_with_backup_contract(
         "discover_mihomo_clash_target",
         lambda *_args, **_kwargs: type("Discovery", (), {"target": object()})(),
     )
+    monkeypatch.setattr(mihomo_routes, "detect_running_core", lambda: "mihomo")
     client = app.test_client()
     preview = client.post(
         "/api/mihomo/security/migration-preview", json={"transport": "unix"}
@@ -280,6 +281,51 @@ def test_migration_apply_reports_saved_config_when_restart_fails(
     assert body["code"] == "migration_restart_failed"
     assert body["saved"] is True
     assert body["backup"] == "default_20260811_010203.yaml"
+
+
+def test_migration_apply_starts_standalone_mihomo_when_xkeen_restart_is_unavailable(
+    tmp_path: Path, monkeypatch
+):
+    config = tmp_path / "config.yaml"
+    config.write_text("mode: rule\n", encoding="utf-8")
+    monkeypatch.setattr(mihomo_routes, "ensure_mihomo_layout", lambda: None)
+    monkeypatch.setattr(mihomo_routes, "validate_config", lambda new_content=None: "[exit code: 0]")
+    monkeypatch.setattr(
+        mihomo_routes,
+        "save_config",
+        lambda _content: type("Backup", (), {"filename": "default_20260811_010203.yaml"})(),
+    )
+    started: list[str] = []
+    monkeypatch.setattr(
+        mihomo_routes,
+        "start_mihomo_standalone",
+        lambda **kwargs: started.append(str(kwargs["config_path"])) or True,
+    )
+    app = Flask("mihomo-migration-standalone")
+    app.config["TESTING"] = True
+    app.register_blueprint(
+        create_mihomo_blueprint(
+            MIHOMO_CONFIG_FILE=str(config),
+            MIHOMO_TEMPLATES_DIR=str(tmp_path / "templates"),
+            MIHOMO_DEFAULT_TEMPLATE=str(tmp_path / "templates" / "custom.yaml"),
+            restart_xkeen=lambda **_: False,
+        )
+    )
+    client = app.test_client()
+    preview = client.post(
+        "/api/mihomo/security/migration-preview", json={"transport": "unix"}
+    ).get_json()["preview"]
+    response = client.post(
+        "/api/mihomo/security/migration-apply",
+        json={
+            "transport": "unix",
+            "confirmed": True,
+            "preview_id": preview["preview_id"],
+        },
+    )
+    assert response.status_code == 200
+    assert response.get_json()["restarted"] is True
+    assert started == [str(config)]
 
 
 def test_archive_excludes_runtime_mihomo_config_profiles_and_socket():
