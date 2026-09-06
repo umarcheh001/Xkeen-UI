@@ -151,9 +151,14 @@ test('rules search, connection cross-link and provider actions stay explicit', a
   expect(inspectorLayout.display).toBe('grid');
   expect(inspectorLayout.columns).toBeGreaterThanOrEqual(2);
   const inspectorHeight = await page.locator('#mihomo-clash-provider-inspector').evaluate((element) => element.getBoundingClientRect().height);
+  // Вторую страницу держим до явного разрешения: проверки ниже описывают состояние
+  // «страница ещё грузится», и таймер здесь давал гонку — под нагрузкой полного
+  // прогона ответ успевал прийти раньше, чем проверялось старое содержимое списка.
+  let releaseSecondPage = () => {};
+  const secondPageGate = new Promise((resolve) => { releaseSecondPage = resolve; });
   await page.route(/\/api\/mihomo\/clash\/providers\/rule\/fixture-rules\/content(?:\?.*)?$/, async (route) => {
     const request = new URL(route.request().url());
-    if (request.searchParams.get('offset') === '200') await new Promise((resolve) => setTimeout(resolve, 180));
+    if (request.searchParams.get('offset') === '200') await secondPageGate;
     return route.fulfill({ json: providerContentPayload(route.request().url()) });
   });
   await page.locator('#mihomo-clash-provider-next').click();
@@ -161,6 +166,7 @@ test('rules search, connection cross-link and provider actions stay explicit', a
   await expect(page.locator('#mihomo-clash-provider-rules li')).toHaveCount(200);
   await expect(page.locator('#mihomo-clash-provider-rules li').first()).toContainText('example.test');
   await expect.poll(() => page.locator('#mihomo-clash-provider-inspector').evaluate((element) => element.getBoundingClientRect().height)).toBeCloseTo(inspectorHeight, 0);
+  releaseSecondPage();
   await expect(page.locator('#mihomo-clash-provider-rules li').first()).toContainText('page-rule-201.test');
   await expect(page.locator('#mihomo-clash-provider-inspector')).toHaveAttribute('aria-busy', 'false');
   await expect.poll(() => page.locator('#mihomo-clash-provider-inspector').evaluate((element) => element.getBoundingClientRect().height)).toBeCloseTo(inspectorHeight, 0);
