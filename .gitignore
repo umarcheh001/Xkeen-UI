@@ -53,6 +53,11 @@ e2e/.auth/
 /docs/mihomo-dns-one-click-analysis.md
 /docs/README-mihomo-dns-one-click.md
 
+# Local router diagnostic scripts may contain credentials.
+/api_check.py
+/check_router.py
+/check_router2.py
+
 .gobin/
 go-check.*/
 xray_geo_probe/
