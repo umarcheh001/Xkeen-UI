@@ -43,6 +43,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     directZones: 'routing-dns-over-vless-direct-zones',
     directZonesRow: 'routing-dns-over-vless-direct-zones-row',
     directFromRules: 'routing-dns-over-vless-direct-from-rules',
+    directClear: 'routing-dns-over-vless-direct-clear',
     pass: 'routing-dns-over-vless-pass',
     passRow: 'routing-dns-over-vless-pass-row',
     passNode: 'routing-dns-over-vless-pass-node',
@@ -127,9 +128,11 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     // Same rule as above: an empty string switches the bypass group off.
     if (direct) settings.direct_resolver = String(direct.value || '').trim();
     const directZones = $(DOM.directZones);
-    if (directZones && settings.direct_resolver) {
-      settings.direct_domains = String(directZones.value || '').trim();
-    }
+    // Отправляем безусловно, в паре с резолверами. Иначе очистка адресов
+    // оставляет поле без значения, сервер берёт прежние домены из сохранённого
+    // состояния, видит половину настройки и отказывается включаться — выключить
+    // область через интерфейс становится нельзя.
+    if (directZones) settings.direct_domains = String(directZones.value || '').trim();
     const pass = $(DOM.pass);
     if (pass) {
       settings.pass_non_ip = !!pass.checked;
@@ -499,16 +502,20 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
     const directZones = $(DOM.directZones);
     const directZonesRow = $(DOM.directZonesRow);
-    // Like the zone list above: the domains matter only once a resolver is
-    // named, so the field appears together with one.
-    const hasDirect = !!(direct && String(direct.value || '').trim());
-    if (directZonesRow) directZonesRow.classList.toggle('hidden', !hasDirect);
     if (directZones) {
       if (!directZones.dataset.touched) {
         directZones.value = ((data && data.direct_domains) || []).join(', ');
       }
       directZones.disabled = busy || fieldsLocked;
     }
+    // Like the zone list above: the domains matter only once a resolver is
+    // named, so the field appears together with one. Но пока в списке что-то
+    // лежит, прятать его нельзя: иначе после очистки адресов домены остаются
+    // на экране невидимыми, стереть их нечем, а сервер требует убрать обе
+    // половины сразу.
+    const hasDirect = !!(direct && String(direct.value || '').trim());
+    const directHasDomains = !!(directZones && String(directZones.value || '').trim());
+    if (directZonesRow) directZonesRow.classList.toggle('hidden', !hasDirect && !directHasDomains);
     const remote = $(DOM.remote);
     if (remote) {
       if (!remote.dataset.touched) remote.checked = !!(data && data.upstreams_remote);
@@ -563,6 +570,30 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         ? `Подставит домены из ваших правил: ${offered.join(', ')}`
         : 'В правилах роутинга нет доменов, ведущих напрямую';
     }
+    const directClear = $(DOM.directClear);
+    if (directClear) {
+      // Чистить нечего, пока обе половины пусты.
+      directClear.disabled = busy || fieldsLocked || (!hasDirect && !directHasDomains);
+    }
+  }
+
+  // Выключение области — явное действие. Чистим обе половины разом: сервер
+  // принимает только пустую пару, а по одному полю пользователь до сих пор
+  // упирался в «укажите и адреса DNS, и список доменов».
+  function clearDirectZone() {
+    const direct = $(DOM.direct);
+    const directZones = $(DOM.directZones);
+    // Без метки «поле трогали» следующий рендер подставит прежние значения.
+    if (direct) {
+      direct.value = '';
+      direct.dataset.touched = '1';
+    }
+    if (directZones) {
+      directZones.value = '';
+      directZones.dataset.touched = '1';
+    }
+    if (status) renderDnsFields(status);
+    renderZoneSummaries(status);
   }
 
   function passHealthMoment(seconds) {
@@ -1685,6 +1716,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         if (id === DOM.zones) renderZonePresets();
       });
     });
+    const directClear = $(DOM.directClear);
+    if (directClear) {
+      directClear.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (busy || fieldsLocked) return;
+        clearDirectZone();
+      });
+    }
     const fromRules = $(DOM.directFromRules);
     if (fromRules) {
       fromRules.addEventListener('click', () => {

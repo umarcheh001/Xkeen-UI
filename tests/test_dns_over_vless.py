@@ -1327,6 +1327,53 @@ def test_half_a_bypass_setting_is_refused(tmp_path: Path, monkeypatch):
     assert excinfo.value.code == "direct_incomplete"
 
 
+def test_clearing_both_bypass_fields_switches_the_group_off(tmp_path: Path, monkeypatch):
+    """Пустая пара «резолверы + домены» — это «область не используется».
+
+    Контракт, на который опирается окно: очистка обоих полей должна проходить
+    без `direct_incomplete` и стирать прежнюю группу, а не воскрешать её из
+    сохранённого состояния.
+    """
+
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(
+        dns, "_write_routing_preserving_comments", lambda path, obj, **_kwargs: _write(Path(path), obj)
+    )
+
+    common = dict(
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+    )
+
+    dns.apply_action(
+        "enable",
+        direct_resolver="77.88.8.8",
+        direct_domains="domain:ok.ru",
+        **common,
+    )
+
+    # Обе половины стёрты — ровно то, что теперь отправляет окно.
+    dns.apply_action("enable", direct_resolver="", direct_domains="", **common)
+
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["direct_resolvers"] == []
+    assert result["direct_domains"] == []
+
+
 def test_bypass_group_survives_read_back_without_looking_tampered(tmp_path: Path, monkeypatch):
     """Both groups are objects in the same list; telling them apart is what the
     drift check gets wrong if it guesses instead of reading the bypass rule."""
