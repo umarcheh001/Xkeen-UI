@@ -208,6 +208,10 @@ def parse_hotspot_config(text: str) -> Dict[str, Dict[str, str]]:
     Only two entries matter -- ``host``, which binds one device, and
     ``policy``, which binds a whole segment.  They sit at one depth; the blocks
     inside them are deeper and never change which entry is being read.
+
+    Every ``host`` entry is reported, those without a policy among them: an
+    empty value says "the firmware knows this device and puts it in no policy",
+    which is not the same answer as the device being absent altogether.
     """
     hosts: Dict[str, str] = {}
     segments: Dict[str, str] = {}
@@ -232,6 +236,7 @@ def parse_hotspot_config(text: str) -> Dict[str, Dict[str, str]]:
         key, value = pair.group(1), pair.group(2).strip()
         if entry == "host" and key == "mac" and value:
             subject = value.lower()
+            hosts.setdefault(subject, "")
         elif entry == "policy" and key == "interface" and value:
             subject = value
         elif key == "policy" and value and subject:
@@ -247,13 +252,26 @@ def apply_config_policies(
 
     Only the blanks: a firmware that does report the binding keeps the last
     word, so reading the configuration cannot change what such a router shows.
+
+    A policy bound to a whole segment reaches only the devices the firmware
+    does not know by name.  That is not a reading of the manual but of the
+    chain the firmware builds: a registered device carrying no policy of its
+    own leaves ``_NDM_HOTSPOT_PREROUTING_MANGL`` on a bare ``RETURN``, with no
+    mark at all, and the segment's mark is set by the tail rule on ``br0`` /
+    ``br1`` that only the rest ever reach.  Handing such a device the segment
+    policy would report an interception that does not happen -- and offer a
+    tick for a rule that has nothing to bring back.
     """
     by_mac = bindings.get("hosts") or {}
     by_segment = bindings.get("segments") or {}
     for host in hosts:
         if str(host.get("policy") or "").strip():
             continue
-        segment = next(
+        mac = str(host.get("mac") or "").lower()
+        if mac in by_mac:
+            host["policy"] = by_mac[mac]
+            continue
+        host["policy"] = next(
             (
                 by_segment[name]
                 for name in (host.get("interface"), host.get("interface_name"))
@@ -261,7 +279,6 @@ def apply_config_policies(
             ),
             "",
         )
-        host["policy"] = by_mac.get(str(host.get("mac") or "").lower(), "") or segment
 
 
 def judge(

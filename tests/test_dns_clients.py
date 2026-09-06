@@ -393,8 +393,9 @@ def test_host_policy_is_read_from_the_configuration():
     bindings = dc.parse_hotspot_config(HOTSPOT_CONFIG)
 
     assert bindings["hosts"]["10:f6:0a:a5:e7:9a"] == "Policy1"
-    # Соседнее устройство привязки не имеет и не должно её получить.
-    assert "3c:38:24:5f:86:c4" not in bindings["hosts"]
+    # Соседнее устройство прошивке известно, но привязки не имеет: пустая
+    # строка -- это её ответ «ни в какой политике не состоит», а не молчание.
+    assert bindings["hosts"]["3c:38:24:5f:86:c4"] == ""
 
 
 def test_a_policy_bound_to_a_whole_segment_is_read_too():
@@ -515,3 +516,91 @@ def test_a_device_outside_every_policy_keeps_its_own_explanation(monkeypatch):
     assert phone["captured"] is True
     assert phone["can_capture"] is False
     assert phone["reason"] == "устройство не состоит в политике доступа"
+
+
+# Настоящий вывод стенда с KeeneticOS 5.01.C.4.0-1, снятый 6 сентября 2026.
+# Эта прошивка поле ``policy`` печатает всегда -- в том числе пустым, и пустота
+# у неё означает «политики нет», а не «спроси в другом месте».
+HOSTS_5 = """
+             host:
+                  mac: 3C:2C:A6:C2:0B:AD
+                   ip: 192.168.45.31
+             hostname: MiTV
+                 name: Телек на кухне
+            interface:
+                       id: Bridge0
+                     name: Home
+           registered: yes
+               access: permit
+               policy:
+               active: yes
+
+             host:
+                  mac: 10:F6:0A:A5:E7:9A
+                   ip: 192.168.45.2
+             hostname: GalaxyBook3Pro
+                 name: Galaxy Book3 Pro
+            interface:
+                       id: Bridge0
+                     name: Home
+           registered: yes
+               access: permit
+               policy: Policy1
+               active: yes
+"""
+
+# ``show sc ip hotspot`` того же стенда: политика висит на обоих сегментах, а
+# телевизор записан в хостах без собственной привязки.
+HOTSPOT_CONFIG_5 = """
+           config, name = hotspot:
+               config, name = policy:
+                interface: Home
+                   policy: Policy3
+
+               config, name = policy:
+                interface: Guest
+                   policy: Policy3
+
+               config, name = host:
+                      mac: 3c:2c:a6:c2:0b:ad
+                   access: permit
+
+                   config, name = permit, final = yes:
+                       permit: yes
+
+               config, name = host:
+                      mac: 10:f6:0a:a5:e7:9a
+                   access: permit
+
+                   config, name = permit, final = yes:
+                       permit: yes
+
+                   config, name = policy, final = yes:
+                       policy: Policy1
+"""
+
+
+def test_a_registered_device_is_not_handed_the_policy_of_its_segment():
+    # Прошивка метит сегментной политикой только тех, кого нет в списке
+    # зарегистрированных: в её цепочке mangle такое устройство получает голый
+    # RETURN без метки, а метку сегмента -- лишь хвостовое правило на br0/br1.
+    hosts = dc.parse_hosts(HOSTS_5)
+
+    dc.apply_config_policies(hosts, dc.parse_hotspot_config(HOTSPOT_CONFIG_5))
+
+    by_mac = {host["mac"]: host["policy"] for host in hosts}
+    assert by_mac["3c:2c:a6:c2:0b:ad"] == ""
+    assert by_mac["10:f6:0a:a5:e7:9a"] == "Policy1"
+
+
+def test_a_device_the_firmware_never_registered_does_get_the_segment_policy():
+    # Обратная половина того же правила: политику сегмента прошивка вешает
+    # ровно на тех, кого нет в списке хостов, -- их и метит хвостовое правило.
+    # Без этого исправление первой половины отменило бы сегменты целиком.
+    guest = dc.parse_hosts(
+        HOSTS_5.replace("3C:2C:A6:C2:0B:AD", "AA:BB:CC:DD:EE:FF")
+    )[0]
+
+    dc.apply_config_policies([guest], dc.parse_hotspot_config(HOTSPOT_CONFIG_5))
+
+    assert guest["policy"] == "Policy3"
