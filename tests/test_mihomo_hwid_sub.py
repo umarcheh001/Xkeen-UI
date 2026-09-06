@@ -348,6 +348,30 @@ def test_hwid_provider_payload_converts_base64_share_links_to_provider_yaml():
     assert parsed["proxies"][0]["server"] == "one.example"
 
 
+def test_hwid_provider_payload_counts_yaml_nodes_when_name_is_not_first_key():
+    # Some providers serialize Mihomo mappings with flow/network before name
+    # and use YAML's valid indentless sequence form under proxies:.
+    payload = (
+        "proxies:\n"
+        "- flow: ''\n"
+        "  name: First\n"
+        "  type: vless\n"
+        "  server: one.example\n"
+        "  port: 443\n"
+        "- alpn:\n"
+        "  - h2\n"
+        "  name: Second\n"
+        "  type: vless\n"
+        "  server: two.example\n"
+        "  port: 443\n"
+    )
+
+    _payload, meta = hwid.provider_payload_from_subscription_text(payload)
+
+    assert meta["format"] == "yaml"
+    assert hwid._provider_payload_node_count(_payload) == 2
+
+
 def test_hwid_fetch_provider_payload_prefers_happ_json_when_it_has_more_nodes(monkeypatch):
     calls = []
 

@@ -390,7 +390,6 @@ def _mihomo_decode_base64_subscription(text: str) -> str:
 _MIHOMO_URI_RE = re.compile(
     r"(?mi)^\s*(?:vless|vmess|trojan|ss|ssr|shadowsocks|hysteria2|hy2|hysteria|tuic|wireguard)://"
 )
-_MIHOMO_YAML_PROXY_NAME_RE = re.compile(r"(?m)^\s*-\s*name\s*:\s*")
 _MIHOMO_LOOPBACK_PLACEHOLDER_RE = re.compile(r"://[^\s#]*@?0\.0\.0\.0:1(?=$|[/?#])", re.IGNORECASE)
 _MIHOMO_YAML_LOOPBACK_PLACEHOLDER_RE = re.compile(
     r"(?ims)^\s*-\s*name\s*:\s*.+?(?:^\s*server\s*:\s*[\"']?0\.0\.0\.0[\"']?\s*$)"
@@ -463,7 +462,7 @@ def _mihomo_provider_payload_summary(
 ) -> Dict[str, Any]:
     text = str(payload or "").strip()
     m = dict(meta or {})
-    yaml_proxy_markers = len(_MIHOMO_YAML_PROXY_NAME_RE.findall(text))
+    yaml_proxy_markers = _mihomo_yaml_proxy_item_count(text)
     raw_uri_markers = len(_MIHOMO_URI_RE.findall(text))
     decoded = _mihomo_decode_base64_subscription(text)
     base64_uri_markers = len(_MIHOMO_URI_RE.findall(decoded)) if decoded else 0
@@ -509,8 +508,49 @@ def _mihomo_provider_payload_summary(
     }
 
 
+def _mihomo_yaml_proxy_item_count(text: str) -> int:
+    """Count proxy mapping items without assuming ``name`` is the first key.
+
+    YAML mapping order is insignificant, but some subscription servers emit
+    items such as ``- flow: ...`` followed by ``name: ...``.  Restrict the
+    count to the first-level sequence under ``proxies:`` so nested lists (for
+    example ALPN values) are not mistaken for proxies.
+    """
+    lines = str(text or "").replace("\r\n", "\n").replace("\r", "\n").splitlines()
+    section_start = -1
+    section_indent = 0
+    for idx, line in enumerate(lines):
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(stripped)
+        if re.match(r"^proxies\s*:\s*(?:#.*)?$", stripped):
+            section_start = idx + 1
+            section_indent = indent
+            break
+
+    scan = lines[section_start:] if section_start >= 0 else lines
+    item_indent = None
+    count = 0
+    for line in scan:
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(stripped)
+        if section_start >= 0 and indent <= section_indent and re.match(r"^[A-Za-z0-9_.-]+\s*:", stripped):
+            break
+        if re.match(r"^-\s*[A-Za-z0-9_.-]+\s*:", stripped):
+            if item_indent is None:
+                item_indent = indent
+            if indent == item_indent:
+                count += 1
+    return count
+
+
 def _mihomo_proxy_name_from_yaml_line(line: str) -> str:
-    m = re.match(r"^\s*-\s*name\s*:\s*(.+?)\s*$", str(line or ""))
+    # ``name`` can be the first list key (``- name``) or a later mapping key
+    # (``- flow`` followed by ``name``), depending on the provider serializer.
+    m = re.match(r"^\s*(?:-\s*)?name\s*:\s*(.+?)\s*$", str(line or ""))
     if not m:
         return ""
     raw = m.group(1).strip()
@@ -545,14 +585,25 @@ def _mihomo_provider_payload_proxy_blocks(payload: str, *, max_count: int = 256)
     for line in lines[section_start:]:
         stripped = line.lstrip()
         indent = len(line) - len(stripped)
-        if stripped and not stripped.startswith("#") and indent <= section_indent:
+        # YAML permits an indentless sequence (``proxies:\n- name: ...``),
+        # so a list item at the section indentation is still part of the
+        # section.  Only a following top-level mapping closes the section.
+        if (
+            stripped
+            and not stripped.startswith("#")
+            and indent <= section_indent
+            and not stripped.startswith("-")
+        ):
             break
         section.append(line)
 
     starts: list[int] = []
     item_indent: int | None = None
     for idx, line in enumerate(section):
-        m = re.match(r"^(\s*)-\s*name\s*:", line)
+        # The first mapping key is provider-specific; ``name`` may appear
+        # after flow/alpn/network/etc.  Identify sequence items by any scalar
+        # mapping key and retain only the first (proxy) indentation level.
+        m = re.match(r"^(\s*)-\s*[A-Za-z0-9_.-]+\s*:", line)
         if not m:
             continue
         indent = len(m.group(1))
@@ -578,9 +629,14 @@ def _mihomo_provider_payload_proxy_blocks(payload: str, *, max_count: int = 256)
             normalized.pop()
         if not normalized:
             continue
-        name = _mihomo_proxy_name_from_yaml_line(normalized[0])
+        name = ""
+        for candidate in normalized:
+            candidate_name = _mihomo_proxy_name_from_yaml_line(candidate)
+            if candidate_name:
+                name = candidate_name
+                break
         yaml_block = "\n".join(normalized).rstrip() + "\n"
-        if name and yaml_block.lstrip().startswith("- name"):
+        if name:
             out.append({"proxy_name": name, "proxy_yaml": yaml_block})
     return out
 

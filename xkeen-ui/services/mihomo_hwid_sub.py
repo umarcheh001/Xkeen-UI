@@ -969,7 +969,38 @@ def _provider_payload_node_count(payload: str) -> int:
     text = str(payload or "").strip()
     if not text:
         return 0
-    yaml_markers = len(re.findall(r"(?m)^\s*-\s*name\s*:\s*", text))
+    # Mihomo accepts proxy mapping keys in any order.  A number of providers
+    # (including Remnawave/Happ feeds) serialize ``flow`` or ``alpn`` before
+    # ``name``.  Counting only ``- name:`` therefore incorrectly reports a
+    # non-empty provider as empty.  Count first-level mapping list items under
+    # the proxies section, regardless of which key happens to come first.
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").splitlines()
+    yaml_markers = 0
+    section_start = -1
+    section_indent = 0
+    for idx, line in enumerate(lines):
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(stripped)
+        if re.match(r"^proxies\s*:\s*(?:#.*)?$", stripped):
+            section_start = idx + 1
+            section_indent = indent
+            break
+    scan = lines[section_start:] if section_start >= 0 else lines
+    item_indent = None
+    for line in scan:
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(stripped)
+        if section_start >= 0 and indent <= section_indent and re.match(r"^[A-Za-z0-9_.-]+\s*:", stripped):
+            break
+        if re.match(r"^-\s*[A-Za-z0-9_.-]+\s*:", stripped):
+            if item_indent is None:
+                item_indent = indent
+            if indent == item_indent:
+                yaml_markers += 1
     if yaml_markers:
         return yaml_markers
     raw_markers = len(_PROXY_URI_RE.findall(text))
