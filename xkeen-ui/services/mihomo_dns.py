@@ -2017,7 +2017,35 @@ def _dns_override_status() -> tuple[Optional[bool], str]:
 
 def _set_dns_override(enabled: bool) -> None:
     _ndmc("opkg dns-override" if enabled else "no opkg dns-override")
+    if enabled:
+        # KeeneticOS 5.0 can restore the DNS filter interceptor during boot
+        # even though no ``dns-proxy filter engine`` line is stored in the
+        # configuration.  Per-policy DNS requests are then redirected to an
+        # ndnproxy port before they can reach Mihomo on :53.  Re-applying the
+        # explicit "disabled" choice fixes the live state; keeping it in the
+        # same saved transaction also mirrors what the web configurator does
+        # when the operator selects "Выключен" under Internet filters.
+        _disable_keenetic_dns_filter()
     _ndmc("system configuration save")
+
+
+def _disable_keenetic_dns_filter() -> None:
+    """Keep Internet filters from intercepting DNS owned by Mihomo.
+
+    The command is idempotent and deliberately does not save by itself.  The
+    activation transaction saves immediately afterwards, while the watchdog
+    uses this helper only to repair boot-time runtime drift without writing to
+    flash every polling interval.
+    """
+
+    _ndmc("dns-proxy no filter engine")
+
+
+def reconcile_keenetic_dns_filter() -> dict[str, Any]:
+    """Re-apply the runtime state KeeneticOS may undo during router boot."""
+
+    _disable_keenetic_dns_filter()
+    return {"ok": True, "filter_engine": "disabled"}
 
 
 def _port_53_in_use() -> bool:

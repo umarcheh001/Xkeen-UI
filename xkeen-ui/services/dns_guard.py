@@ -142,6 +142,11 @@ def build_protections(
                     restart_xkeen=restart_xkeen,
                     reason=reason,
                 ),
+                # KeeneticOS 5.0 may enable its DNS-filter interceptor during
+                # boot despite the saved "disabled" state.  The local health
+                # probe still reaches Mihomo, but policy-marked LAN clients do
+                # not, so a healthy tick must repair that runtime drift too.
+                reconcile=mihomo_dns.reconcile_keenetic_dns_filter,
             )
         )
     return protections

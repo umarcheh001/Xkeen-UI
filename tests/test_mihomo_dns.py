@@ -67,6 +67,38 @@ def _live_fake_ip_firewall(monkeypatch, init_script: Path):
     monkeypatch.setattr(dns, "resolve_xkeen_init_script", lambda: str(init_script))
 
 
+def test_enabling_override_also_disables_keenetic_internet_filter(monkeypatch):
+    calls = []
+    monkeypatch.setattr(dns, "_ndmc", lambda command, **_kwargs: calls.append(command) or "")
+
+    dns._set_dns_override(True)
+
+    assert calls == [
+        "opkg dns-override",
+        "dns-proxy no filter engine",
+        "system configuration save",
+    ]
+
+
+def test_disabling_override_does_not_change_internet_filter(monkeypatch):
+    calls = []
+    monkeypatch.setattr(dns, "_ndmc", lambda command, **_kwargs: calls.append(command) or "")
+
+    dns._set_dns_override(False)
+
+    assert calls == ["no opkg dns-override", "system configuration save"]
+
+
+def test_filter_reconcile_repairs_runtime_without_saving(monkeypatch):
+    calls = []
+    monkeypatch.setattr(dns, "_ndmc", lambda command, **_kwargs: calls.append(command) or "")
+
+    result = dns.reconcile_keenetic_dns_filter()
+
+    assert result == {"ok": True, "filter_engine": "disabled"}
+    assert calls == ["dns-proxy no filter engine"]
+
+
 def test_iptables_dump_uses_wait_syntax_supported_by_keenetic(monkeypatch):
     calls = []
 

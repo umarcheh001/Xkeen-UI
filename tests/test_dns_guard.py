@@ -541,6 +541,11 @@ def test_the_xray_protection_also_watches_its_pass_through(tmp_path: Path, monke
         "check_pass_non_ip",
         lambda **kwargs: calls.append(str(kwargs["ui_state_dir"])) or {"action": "ok"},
     )
+    monkeypatch.setattr(
+        mihomo_dns,
+        "reconcile_keenetic_dns_filter",
+        lambda: calls.append("mihomo-filter") or {"ok": True},
+    )
 
     protections = dns_guard.build_protections(
         configs_dir=str(tmp_path),
@@ -552,8 +557,8 @@ def test_the_xray_protection_also_watches_its_pass_through(tmp_path: Path, monke
     )
     by_name = {item.name: item for item in protections}
     assert by_name["dns-over-vless"].reconcile() == ""
-    # Mihomo resolves names itself: it has no pass-through to watch, and the
-    # guard must not invent one for it.
+    # Mihomo resolves names itself, but KeeneticOS can restore its Internet
+    # filter interceptor during boot, so that runtime state is reconciled.
     assert by_name["mihomo-dns"].reconcile() == ""
 
-    assert calls == [str(tmp_path)]
+    assert calls == [str(tmp_path), "mihomo-filter"]
