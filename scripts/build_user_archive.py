@@ -220,6 +220,47 @@ def copy_project_tree(src_root: Path, dst_root: Path) -> None:
     )
 
 
+# Скрипты уезжают на роутер, где их читает BusyBox-шелл: он видит `set -e` с
+# хвостовым CR как опцию `-e\r` и падает на второй строке («illegal option -»).
+# На Windows такой файл появляется в рабочем дереве сам собой: клон с
+# core.autocrlf=true выписал его с CRLF ещё до появления .gitattributes, а
+# задним числом git рабочее дерево не перевыписывает. Поэтому окончания строк
+# приводим к LF в самой упаковке — архив не должен зависеть от настроек машины,
+# на которой его собрали.
+SCRIPT_SUFFIXES = {".sh", ".py"}
+NUL_BYTE = b"\x00"
+
+
+def is_normalizable_script(path: Path) -> bool:
+    if path.suffix.lower() in SCRIPT_SUFFIXES:
+        return True
+    try:
+        with path.open("rb") as handle:
+            head = handle.read(2048)
+    except OSError:
+        return False
+    # Файл без расширения нормализуем, только если это точно текстовый скрипт:
+    # шебанг в начале и ни одного нулевого байта. Бинарники из bin/ трогать нельзя.
+    return head.startswith(b"#!") and NUL_BYTE not in head
+
+
+def normalize_script_line_endings(root: Path) -> int:
+    normalized = 0
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink() or not path.is_file():
+            continue
+        if not is_normalizable_script(path):
+            continue
+        data = path.read_bytes()
+        if b"\r" not in data:
+            continue
+        fixed = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+        if fixed != data:
+            path.write_bytes(fixed)
+            normalized += 1
+    return normalized
+
+
 def write_build_json(dst_root: Path, *, stamp: BuildStamp, update_url: str) -> None:
     payload = {
         "version": str(stamp.version or "").strip(),
@@ -314,6 +355,11 @@ def main() -> int:
         temp_root = Path(tmp_dir)
         package_root = temp_root / PROJECT_DIRNAME
         copy_project_tree(PROJECT_ROOT, package_root)
+        # До write_build_json: tree_sha256 должен описывать то дерево,
+        # которое действительно попадёт в архив.
+        normalized = normalize_script_line_endings(package_root)
+        if normalized:
+            print(f"[*] line endings normalized to LF in {normalized} script(s)")
         write_build_json(package_root, stamp=stamp, update_url=update_url)
 
         fd, temp_archive_raw = tempfile.mkstemp(
