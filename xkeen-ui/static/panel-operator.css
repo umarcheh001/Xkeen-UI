@@ -330,6 +330,45 @@ body.panel-page :is(code, pre, textarea) {
 /* ==========================================================================
  * 3. SHELL
  * ========================================================================== */
+/* Keep the panel chrome fixed to the viewport.  Each workspace is the scroll
+ * region, so a long Routing/Mihomo/Logs/Terminal view cannot push the header
+ * off-screen or make the document itself taller than the browser window.  The
+ * generator has its own full-screen shell and is intentionally excluded. */
+body.panel-page:not(.mihomo-generator-page) {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+body.panel-page:not(.mihomo-generator-page) .container.container-wide {
+  display: flex;
+  flex-direction: column;
+  /* A percentage height on a direct child of <body> is treated as
+   * content-sized by Chromium even when body itself has a viewport height.
+   * Use the viewport unit directly so the flex child has a definite size and
+   * can actually shrink the active workspace below its intrinsic content. */
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+body.panel-page:not(.mihomo-generator-page) .panel-header {
+  flex: 0 0 auto;
+}
+
+body.panel-page:not(.mihomo-generator-page) .view-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
 :is(body.panel-page, html[data-theme="light"] body.panel-page) .panel-header {
   position: relative;
   z-index: 20;
