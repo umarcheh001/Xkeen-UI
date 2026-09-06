@@ -11,6 +11,7 @@ from services.dns_guard import conflicting_protection
 from services.dns_over_vless import (
     DnsOverVlessError,
     apply_action,
+    apply_client_capture,
     drop_stale_capture_macs,
     get_status,
 )
@@ -100,6 +101,34 @@ def register_dns_over_vless_routes(
         # with a rule of our own, and which of them.
         capture_clients = payload.get("capture_clients", None)
         capture_macs = payload.get("capture_macs", None)
+        # Отметить устройство -- это правка firewall, а не самой защиты:
+        # цепочка уже стоит, меняются только правила в ней. Выключать и
+        # включать DNS-over-VLESS ради одного телефона значило бы отдать имена
+        # провайдеру на время перезапуска ядра.
+        if action == "capture":
+            try:
+                result = apply_client_capture(
+                    ui_state_dir=ui_state_dir,
+                    capture_clients=capture_clients,
+                    capture_macs=capture_macs,
+                )
+                audit(True, action=action, summary="Выбор устройств применён")
+                return jsonify(result)
+            except DnsOverVlessError as exc:
+                audit(False, action=action, phase=exc.code, summary=str(exc))
+                return jsonify(
+                    {"ok": False, "error": str(exc), "code": exc.code, "details": exc.details}
+                ), 409
+            except Exception:
+                audit(False, action=action, phase="unexpected", summary="Ошибка выбора устройств")
+                return jsonify(
+                    {
+                        "ok": False,
+                        "error": "Не удалось применить выбор устройств.",
+                        "code": "capture_failed",
+                    }
+                ), 500
+
         # Both assistants flip the same firmware switch and both want port 53.
         # Turning the second one on would overwrite the first one's record of the
         # original setting, leaving nothing able to put it back.

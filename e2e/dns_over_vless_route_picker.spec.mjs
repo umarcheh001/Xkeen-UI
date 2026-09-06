@@ -609,3 +609,91 @@ test('a rule taken away is announced, not just quietly gone', async ({ page }) =
 
   await expect.poll(() => sent && sent.capture_macs).toEqual(['aa:bb:cc:dd:ee:02']);
 });
+
+
+// Выбор устройств применяется сам по себе: цепочка уже стоит, и добавить
+// телефон, выключив и включив защиту, больше не нужно.
+const CLIENTS_LIVE = {
+  ...CLIENTS,
+  capture: { available: true, present: true, first: true, macs: ['aa:bb:cc:dd:ee:03'], error: '' },
+  clients: CLIENTS.clients.map((item) => (
+    item.mac === 'aa:bb:cc:dd:ee:03' ? { ...item, captured: true } : item
+  )),
+};
+
+const STATUS_LIVE = {
+  ...STATUS,
+  enabled: true,
+  can_enable: false,
+  can_disable: true,
+  capture_clients: true,
+  capture_macs: ['aa:bb:cc:dd:ee:03'],
+};
+
+
+test('a changed choice offers its own applying, without touching the protection', async ({ page }) => {
+  await routeClients(page, CLIENTS_LIVE);
+  await openDialog(page, STATUS_LIVE);
+  await openZone(page, 'devices');
+
+  const bar = page.locator('#routing-dns-over-vless-clients-actions');
+  // Пока отмеченное совпадает с тем, что стоит в цепочке, применять нечего.
+  await expect(bar).toBeHidden();
+
+  const phone = page.locator('#routing-dns-over-vless-clients-list li', { hasText: 'Телефон' });
+  await phone.locator('.routing-dns-over-vless-clients-pick').check({ force: true });
+
+  await expect(bar).toBeVisible();
+  await expect(bar).toContainText('Добавится 1 устройство: Телефон');
+  const apply = page.locator('#routing-dns-over-vless-clients-apply');
+  await expect(apply).toHaveText('Добавить 1 устройство');
+
+  let sent = null;
+  await page.route('**/api/routing/dns-over-vless', async (route) => {
+    if (route.request().method() === 'POST') {
+      sent = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          applied: true,
+          added: ['aa:bb:cc:dd:ee:02'],
+          removed: [],
+          capture_macs: ['aa:bb:cc:dd:ee:03', 'aa:bb:cc:dd:ee:02'],
+          capture_clients: true,
+        }),
+      });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(STATUS_LIVE) });
+  });
+
+  await apply.click();
+
+  await expect.poll(() => sent && sent.action).toBe('capture');
+  expect(sent.capture_macs).toEqual(['aa:bb:cc:dd:ee:03', 'aa:bb:cc:dd:ee:02']);
+  // Включение защиты — дорогая операция с перезапуском ядра, и выбор
+  // устройств её не задевает: подтверждения об этом не спрашивают.
+  await expect(page.locator('#confirm-modal')).toHaveClass(/hidden/);
+});
+
+
+test('cancelling puts the ticks back the way the router holds them', async ({ page }) => {
+  await routeClients(page, CLIENTS_LIVE);
+  await openDialog(page, STATUS_LIVE);
+  await openZone(page, 'devices');
+
+  const phone = page.locator('#routing-dns-over-vless-clients-list li', { hasText: 'Телефон' });
+  await phone.locator('.routing-dns-over-vless-clients-pick').check({ force: true });
+  const bar = page.locator('#routing-dns-over-vless-clients-actions');
+  await expect(bar).toBeVisible();
+
+  await page.locator('#routing-dns-over-vless-clients-cancel').click();
+
+  // Снимать галочки вручную по одной человек догадываться не обязан.
+  await expect(bar).toBeHidden();
+  await expect(phone.locator('.routing-dns-over-vless-clients-pick')).not.toBeChecked();
+  const camera = page.locator('#routing-dns-over-vless-clients-list li', { hasText: 'Камера' });
+  await expect(camera.locator('.routing-dns-over-vless-clients-pick')).toBeChecked();
+});

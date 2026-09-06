@@ -2396,6 +2396,61 @@ def drop_stale_capture_macs(
     return [{"mac": mac, "title": str(known[mac].get("title") or mac)} for mac in stale]
 
 
+def apply_client_capture(
+    *,
+    ui_state_dir: str,
+    capture_clients: Any,
+    capture_macs: Any,
+) -> Dict[str, Any]:
+    """Put the chosen devices' rules in place without touching the protection.
+
+    Ticking a device is a change to the firewall, not to DNS-over-VLESS
+    itself: the chain is already there and only its rules move.  Sending the
+    choice with ``enable`` -- the only way there used to be -- meant switching
+    the protection off and on again to add one phone, which hands names back
+    to the provider for the length of the round trip.
+
+    The firewall is brought in line first and the choice is saved only if that
+    worked, the same order ``drop_stale_capture_macs`` already keeps: a saved
+    list the chain does not match is exactly the split both are here to close.
+    """
+    state = _load_state(ui_state_dir)
+    before = _safe_capture_macs(state.get("capture_macs"))
+    wanted_on = bool(capture_clients) if capture_clients is not None else bool(state.get("capture_clients"))
+    wanted = _safe_capture_macs(capture_macs) if capture_macs is not None else before
+    if not wanted_on:
+        wanted = []
+    added = [mac for mac in wanted if mac not in before]
+    removed = [mac for mac in before if mac not in wanted]
+    # A chain exists only while the protection runs; with it off there is
+    # nothing to put the rules into, and the choice simply waits for the
+    # switch, exactly as it does today.
+    applied = bool(state.get("enabled"))
+    if applied:
+        try:
+            dns_client_capture.ensure(wanted)
+        except Exception as exc:  # noqa: BLE001 -- окно показывает причину
+            _LAST_CAPTURE_NOTE["error"] = str(exc)
+            raise DnsOverVlessError(
+                "Не удалось изменить правила устройств в firewall; выбор остался прежним.",
+                code="capture_failed",
+                details=str(exc),
+            ) from exc
+        _LAST_CAPTURE_NOTE.pop("error", None)
+    _save_state(
+        ui_state_dir,
+        {**state, "capture_macs": wanted, "capture_clients": bool(wanted) and wanted_on},
+    )
+    return {
+        "ok": True,
+        "applied": applied,
+        "added": added,
+        "removed": removed,
+        "capture_macs": wanted,
+        "capture_clients": bool(wanted) and wanted_on,
+    }
+
+
 def reapply_client_capture(*, ui_state_dir: str) -> Dict[str, Any]:
     """Put the capture chain back the way this install asked for it.
 

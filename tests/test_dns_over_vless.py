@@ -2969,3 +2969,100 @@ def test_http_clients_report_names_the_rules_it_took_away(tmp_path: Path, monkey
     # иначе оно вернуло бы правило обратно ближайшим применением.
     assert [item["title"] for item in payload["capture_dropped"]] == ["Xiaomi-MIX-Flip"]
     assert payload["clients"][1]["captured"] is False
+
+
+def test_a_ticked_device_gets_its_rule_without_touching_the_protection(tmp_path: Path, monkeypatch):
+    # Выбор устройств применяется сам по себе: включение защиты для этого
+    # передёргивать не нужно -- меняются только правила firewall.
+    state_dir = _capture_state(tmp_path, ["10:f6:0a:a5:e7:9a"])
+    asked: list[list[str]] = []
+    monkeypatch.setattr(
+        dns.dns_client_capture, "ensure", lambda macs: asked.append(list(macs)) or {"ok": True, "changed": True}
+    )
+
+    result = dns.apply_client_capture(
+        ui_state_dir=str(state_dir),
+        capture_clients=True,
+        capture_macs=["10:f6:0a:a5:e7:9a", "3c:38:24:5f:86:c4"],
+    )
+
+    assert result["ok"] is True
+    assert result["applied"] is True
+    assert result["added"] == ["3c:38:24:5f:86:c4"]
+    assert result["removed"] == []
+    assert asked == [["10:f6:0a:a5:e7:9a", "3c:38:24:5f:86:c4"]]
+    saved = json.loads((state_dir / "dns_over_vless.json").read_text(encoding="utf-8"))
+    assert saved["capture_macs"] == ["10:f6:0a:a5:e7:9a", "3c:38:24:5f:86:c4"]
+    # Сама защита остаётся включённой -- её никто не трогал.
+    assert saved["enabled"] is True
+
+
+def test_a_firewall_that_refused_leaves_the_choice_alone(tmp_path: Path, monkeypatch):
+    # Сохранённый выбор, которому не соответствует цепочка, -- ровно тот
+    # разрыв, ради которого firewall правится первым.
+    state_dir = _capture_state(tmp_path, ["10:f6:0a:a5:e7:9a"])
+
+    def refuse(macs):
+        raise dns.dns_client_capture.CaptureError("iptables не отвечает")
+
+    monkeypatch.setattr(dns.dns_client_capture, "ensure", refuse)
+
+    with pytest.raises(dns.DnsOverVlessError) as caught:
+        dns.apply_client_capture(
+            ui_state_dir=str(state_dir),
+            capture_clients=True,
+            capture_macs=["10:f6:0a:a5:e7:9a", "3c:38:24:5f:86:c4"],
+        )
+
+    assert caught.value.code == "capture_failed"
+    saved = json.loads((state_dir / "dns_over_vless.json").read_text(encoding="utf-8"))
+    assert saved["capture_macs"] == ["10:f6:0a:a5:e7:9a"]
+
+
+def test_with_the_protection_off_the_choice_is_only_remembered(tmp_path: Path, monkeypatch):
+    # Цепочки нет, ставить правила некуда -- выбор ждёт включения.
+    state_dir = _capture_state(tmp_path, ["10:f6:0a:a5:e7:9a"], enabled=False)
+    asked: list[list[str]] = []
+    monkeypatch.setattr(dns.dns_client_capture, "ensure", lambda macs: asked.append(list(macs)))
+
+    result = dns.apply_client_capture(
+        ui_state_dir=str(state_dir),
+        capture_clients=True,
+        capture_macs=["10:f6:0a:a5:e7:9a", "3c:38:24:5f:86:c4"],
+    )
+
+    assert result["applied"] is False
+    assert asked == []
+    saved = json.loads((state_dir / "dns_over_vless.json").read_text(encoding="utf-8"))
+    assert saved["capture_macs"] == ["10:f6:0a:a5:e7:9a", "3c:38:24:5f:86:c4"]
+
+
+def test_an_unticked_device_loses_its_rule(tmp_path: Path, monkeypatch):
+    state_dir = _capture_state(tmp_path, ["10:f6:0a:a5:e7:9a", "3c:38:24:5f:86:c4"])
+    asked: list[list[str]] = []
+    monkeypatch.setattr(
+        dns.dns_client_capture, "ensure", lambda macs: asked.append(list(macs)) or {"ok": True, "changed": True}
+    )
+
+    result = dns.apply_client_capture(
+        ui_state_dir=str(state_dir),
+        capture_clients=True,
+        capture_macs=["10:f6:0a:a5:e7:9a"],
+    )
+
+    assert result["removed"] == ["3c:38:24:5f:86:c4"]
+    assert result["added"] == []
+    assert asked == [["10:f6:0a:a5:e7:9a"]]
+
+
+def test_the_last_device_unticked_turns_the_switch_off(tmp_path: Path, monkeypatch):
+    # Переключатель без единого устройства обещает то, чего в firewall нет.
+    state_dir = _capture_state(tmp_path, ["10:f6:0a:a5:e7:9a"])
+    monkeypatch.setattr(dns.dns_client_capture, "ensure", lambda macs: {"ok": True, "changed": True})
+
+    result = dns.apply_client_capture(ui_state_dir=str(state_dir), capture_clients=True, capture_macs=[])
+
+    assert result["capture_clients"] is False
+    saved = json.loads((state_dir / "dns_over_vless.json").read_text(encoding="utf-8"))
+    assert saved["capture_clients"] is False
+    assert saved["capture_macs"] == []

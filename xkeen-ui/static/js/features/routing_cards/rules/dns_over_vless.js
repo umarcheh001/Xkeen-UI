@@ -52,6 +52,11 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     clientsSummary: 'routing-dns-over-vless-clients-summary',
     clientsList: 'routing-dns-over-vless-clients-list',
     clientsDropped: 'routing-dns-over-vless-clients-dropped',
+    clientsActions: 'routing-dns-over-vless-clients-actions',
+    clientsActionsWhat: 'routing-dns-over-vless-clients-actions-what',
+    clientsActionsWhy: 'routing-dns-over-vless-clients-actions-why',
+    clientsApply: 'routing-dns-over-vless-clients-apply',
+    clientsCancel: 'routing-dns-over-vless-clients-cancel',
     capture: 'routing-dns-over-vless-capture',
     reset: 'routing-dns-over-vless-reset',
     lockedNote: 'routing-dns-over-vless-locked-note',
@@ -67,6 +72,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   // экране: список перечитывается сам по себе, а выбор должен пережить
   // и перечитывание, и уход устройства из сети.
   let capturedMacs = [];
+  // Что реально стоит в цепочке роутера -- с этим и сравнивается выбор:
+  // сохранённый список пережил бы перестройку цепочек прошивкой, а рассказ
+  // окна должен идти от firewall, а не от намерений.
+  let appliedMacs = [];
   // Последний ответ про устройства: список перерисовывается и без нового
   // запроса — например, когда переключатель открывает галочки.
   let lastClients = null;
@@ -155,6 +164,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const list = Array.isArray(targets) ? targets.filter(Boolean) : [];
     const payload = list.length ? { action, targets: list } : { action };
     if (action === 'enable') Object.assign(payload, dnsSettings());
+    // Выбор устройств едет один, без остальных настроек окна: они применяются
+    // только при включении, и слать их отсюда значило бы применить незаметно
+    // то, чего человек не просил.
+    if (action === 'capture') {
+      const capture = $(DOM.capture);
+      payload.capture_clients = !!(capture && capture.checked);
+      payload.capture_macs = capturedMacs.slice();
+    }
     const client = http();
     if (client && typeof client.postJSON === 'function') {
       return client.postJSON('/api/routing/dns-over-vless', payload, { timeoutMs: 90000, retry: 0 });
@@ -1474,8 +1491,79 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     if (capture && !capturedMacs.length && !capture.dataset.touched) capture.checked = false;
   }
 
+  // Выбор устройств применяется сам по себе: цепочка уже стоит, меняются
+  // только правила в ней. Раньше список уходил на роутер лишь вместе с
+  // «Включить» -- то есть добавить телефон можно было, только выключив и
+  // включив защиту, а это отдаёт имена провайдеру на время перезапуска.
+  function captureDiff() {
+    const added = capturedMacs.filter((mac) => appliedMacs.indexOf(mac) === -1);
+    const removed = appliedMacs.filter((mac) => capturedMacs.indexOf(mac) === -1);
+    return { added, removed };
+  }
+
+  function nameOf(mac) {
+    const clients = (lastClients && lastClients.clients) || [];
+    for (let i = 0; i < clients.length; i += 1) {
+      if (clients[i] && clients[i].mac === mac) return clients[i].title || mac;
+    }
+    return mac;
+  }
+
+  function plural(count, one, few, many) {
+    const mod10 = count % 10;
+    const mod100 = count % 100;
+    if (mod10 === 1 && mod100 !== 11) return one;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+    return many;
+  }
+
+  function renderCaptureActions() {
+    const slot = $(DOM.clientsActions);
+    if (!slot) return;
+    const { added, removed } = captureDiff();
+    if (!added.length && !removed.length) {
+      slot.classList.add('hidden');
+      return;
+    }
+    slot.classList.remove('hidden');
+    const what = $(DOM.clientsActionsWhat);
+    const why = $(DOM.clientsActionsWhy);
+    const apply = $(DOM.clientsApply);
+    const cancel = $(DOM.clientsCancel);
+    const names = added.concat(removed).map(nameOf).join(', ');
+    if (what) {
+      const parts = [];
+      if (added.length) parts.push(`добавится ${added.length} ${plural(added.length, 'устройство', 'устройства', 'устройств')}`);
+      if (removed.length) parts.push(`уйдёт ${removed.length} ${plural(removed.length, 'устройство', 'устройства', 'устройств')}`);
+      what.textContent = `${parts.join(', ')}: ${names}`;
+      what.textContent = what.textContent.charAt(0).toUpperCase() + what.textContent.slice(1);
+    }
+    // Пока защита выключена, цепочки нет и ставить правила некуда: выбор
+    // ждёт включения, и об этом говорим прямо, а не гасим кнопку молча.
+    const live = !!(status && status.enabled);
+    if (why) {
+      why.textContent = live
+        ? 'Меняются только правила firewall — защита остаётся включённой.'
+        : 'Цепочки в firewall сейчас нет: пока защита выключена, ставить нечего.';
+    }
+    if (apply) {
+      apply.disabled = busy || !live;
+      // Подпись от существа правки: «добавить выбранное» соврало бы там,
+      // где галочку сняли.
+      if (added.length && !removed.length) {
+        apply.textContent = `Добавить ${added.length} ${plural(added.length, 'устройство', 'устройства', 'устройств')}`;
+      } else if (removed.length && !added.length) {
+        apply.textContent = `Убрать ${removed.length} ${plural(removed.length, 'устройство', 'устройства', 'устройств')}`;
+      } else {
+        apply.textContent = 'Применить выбор';
+      }
+    }
+    if (cancel) cancel.disabled = busy;
+  }
+
   function renderClients(data) {
     lastClients = data;
+    appliedMacs = ((data && data.capture && data.capture.macs) || []).slice();
     const summary = $(DOM.clientsSummary);
     const list = $(DOM.clientsList);
     if (!summary || !list) return;
@@ -1531,6 +1619,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
           if (pick.checked && at === -1) capturedMacs.push(item.mac);
           if (!pick.checked && at !== -1) capturedMacs.splice(at, 1);
           if (capture) capture.dataset.touched = '1';
+          renderCaptureActions();
         });
         title.appendChild(pick);
       }
@@ -1573,6 +1662,33 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     // Список пришёл позже остального окна: без этого свёрнутая зона так и
     // оставалась со сводкой «проверяем…».
     renderZoneSummaries(status);
+    renderCaptureActions();
+  }
+
+  // Правит только правила устройств: включение защиты не трогается, ядро не
+  // перезапускается. Список после этого перечитывается с роутера -- вердикты
+  // у отмеченных устройств меняются, и держать прежние значило бы врать.
+  async function applyCapture() {
+    if (busy) return;
+    const { added, removed } = captureDiff();
+    if (!added.length && !removed.length) return;
+    busy = true;
+    renderCaptureActions();
+    try {
+      const capture = $(DOM.capture);
+      const result = await postAction('capture', []);
+      const names = added.concat(removed).map(nameOf).join(', ');
+      if (added.length && !removed.length) toast(`Правило поставлено: ${names}`);
+      else if (removed.length && !added.length) toast(`Правило снято: ${names}`);
+      else toast('Выбор устройств применён.');
+      if (capture && result && result.capture_clients === false) capture.checked = false;
+    } catch (error) {
+      const data = error && error.data ? error.data : null;
+      toast(String((data && data.error) || (error && error.message) || 'Выбор применить не удалось.'), true);
+    } finally {
+      busy = false;
+    }
+    await loadClients();
   }
 
   async function loadClients() {
@@ -1751,6 +1867,18 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     if (passNodeBox) {
       passNodeBox.addEventListener('change', () => { passNodeBox.dataset.touched = '1'; });
     }
+    const applyPick = $(DOM.clientsApply);
+    if (applyPick) applyPick.addEventListener('click', (event) => { event.preventDefault(); applyCapture(); });
+    const cancelPick = $(DOM.clientsCancel);
+    if (cancelPick) {
+      cancelPick.addEventListener('click', (event) => {
+        event.preventDefault();
+        // Возврат к тому, что стоит на роутере: снимать галочки вручную по
+        // одной человек догадываться не обязан.
+        capturedMacs = appliedMacs.slice();
+        if (lastClients) renderClients(lastClients);
+      });
+    }
     const captureBox = $(DOM.capture);
     if (captureBox) {
       captureBox.addEventListener('change', () => {
@@ -1758,6 +1886,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         // Галочки у устройств живут только при включённом переключателе:
         // перерисуем список, чтобы это было видно, а не только на словах.
         if (lastClients) renderClients(lastClients);
+        renderCaptureActions();
       });
     }
     const multiBox = $(DOM.multi);

@@ -2763,6 +2763,14 @@
                   <span data-verdict="offline">не в сети — приглушены</span>
                 </p>
                 <ul id="routing-dns-over-vless-clients-list" class="routing-dns-over-vless-clients-list"></ul>
+                <div id="routing-dns-over-vless-clients-actions" class="routing-dns-over-vless-clients-actions hidden" role="group" aria-label="Применить выбор устройств">
+                  <span class="routing-dns-over-vless-clients-actions-text">
+                    <b id="routing-dns-over-vless-clients-actions-what"></b>
+                    <i id="routing-dns-over-vless-clients-actions-why"></i>
+                  </span>
+                  <button type="button" id="routing-dns-over-vless-clients-cancel" class="btn-secondary">Отменить</button>
+                  <button type="button" id="routing-dns-over-vless-clients-apply" class="btn-primary">Применить выбор</button>
+                </div>
 
                 <div class="modal-hint">Панель добавляет в firewall роутера собственную цепочку и ставит её перед правилом прошивки: DNS отмеченных устройств уходит к Xray, а не к резолверу прошивки.
                   <details class="xk-hint-more">

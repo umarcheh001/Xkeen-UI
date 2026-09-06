@@ -19516,6 +19516,13 @@ html[data-theme="light"] .routing-dns-over-vless-route-fallback[data-state="fail
 /* Панель сняла правило сама -- об этом нужно сказать так, чтобы человек это
    увидел, а не обнаружил потом по пропавшей галочке. */
 .routing-dns-over-vless-clients-dropped { margin: 0; padding: 6px 10px; border-radius: 6px; border-left: 3px solid var(--sem-warning, #fbbf24); background: color-mix(in srgb, var(--sem-warning, #fbbf24) 12%, transparent); }
+/* Полоса применения выбора устройств: появляется, только когда отмеченное
+   расходится с тем, что реально стоит в цепочке роутера. */
+.routing-dns-over-vless-clients-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 11px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--sem-warning, #fbbf24) 45%, transparent); background: color-mix(in srgb, var(--sem-warning, #fbbf24) 9%, transparent); }
+.routing-dns-over-vless-clients-actions-text { flex: 1 1 240px; min-width: 0; }
+.routing-dns-over-vless-clients-actions-text b { display: block; color: var(--sem-warning, #fbbf24); }
+.routing-dns-over-vless-clients-actions-text i { display: block; font-style: normal; color: var(--modal-muted); }
+.routing-dns-over-vless-clients-actions button { flex: none; }
 /* Kept to the left of the closing buttons: it is a separate action, not a
    variant of "Применить".  It reads as a real button rather than a muted link
    because it was too easy to miss among the two below. */
