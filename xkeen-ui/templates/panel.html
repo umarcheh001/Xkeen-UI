@@ -2657,6 +2657,10 @@
               <div class="xk-dns-zone-body">
                 <label for="routing-dns-over-vless-local">Локальные DNS для домашних имён</label>
                 <input type="text" id="routing-dns-over-vless-local" class="routing-rule-input" placeholder="не используется" autocomplete="off" spellcheck="false">
+                <div id="routing-dns-over-vless-local-hint" class="modal-hint hidden">
+                  <span id="routing-dns-over-vless-local-hint-text"></span>
+                  <button type="button" id="routing-dns-over-vless-local-apply" class="routing-dns-over-vless-zone-preset">Подставить</button>
+                </div>
                 <div class="modal-hint">Необязательно. Адреса резолверов, отвечающих за домашние имена — запросы к ним пойдут напрямую, мимо туннеля.
                   <details class="xk-hint-more">
                     <summary>Подробнее</summary>
