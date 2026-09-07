@@ -196,6 +196,12 @@ PASS_SWITCH_INTERVAL = 3600.0
 # restarting the core, which is far too heavy to do on every healthy tick.
 LOCAL_RESOLVER_RESYNC_INTERVAL = 3600.0
 
+# Версия файла состояния. Единица — записи панели, которая всегда сохраняла
+# поле локального резолвера, даже когда человек его не заполнял: пустой список
+# там означает не отказ, а отсутствие выбора. Двойка ставится с того момента,
+# как поле стало сохраняться только по решению человека.
+STATE_VERSION = 2
+
 _LOCK = threading.RLock()
 
 # Watchdog: while the feature is on, the firmware resolver is disabled and Xray
@@ -1247,6 +1253,20 @@ def _parse_resolver_list(value: Any, *, limit: int, noun: str, code: str) -> lis
     if len(result) > limit:
         raise DnsOverVlessError(f"Слишком много {noun}: не больше {limit}.", code=code)
     return result
+
+
+def _state_predates_choice(state: Dict[str, Any]) -> bool:
+    """Состояние писала панель, не умевшая отличать отказ от незаполненного поля.
+
+    Такое состояние узнаётся по версии: до ``STATE_VERSION`` окно отправляло
+    локальный резолвер при каждом включении, пустым в том числе, поэтому
+    сохранённый пустой список ничего не говорит о намерении человека.
+    Отсутствие версии считаем самым старым случаем.
+    """
+    try:
+        return int(state.get("version") or 1) < STATE_VERSION
+    except (TypeError, ValueError):
+        return True
 
 
 def _parse_local_resolvers(value: Any) -> list[Dict[str, Any]]:
@@ -2971,6 +2991,14 @@ def apply_action(
             wanted_local = _parse_local_resolvers(local_resolver)
         elif "local_resolvers" in stored_state:
             wanted_local = _parse_local_resolvers(stored_state.get("local_resolvers"))
+            if not wanted_local and normalized == "enable" and _state_predates_choice(stored_state):
+                # Разовый переход: до STATE_VERSION = 2 окно слало это поле
+                # всегда, поэтому пустой список в старом состоянии не отличим
+                # от «человек ничего не решил» -- а установок с таким состоянием
+                # ровно столько, сколько людей уже включали функцию.  Один раз
+                # подставляем найденное; кто откажется снова, тот сохранится уже
+                # во второй версии, и его выбор больше не тронут.
+                wanted_local = _parse_local_resolvers(firmware_resolvers.discover())
         elif normalized == "enable":
             wanted_local = _parse_local_resolvers(firmware_resolvers.discover())
         else:
@@ -3235,7 +3263,7 @@ def apply_action(
                 _save_state(
                     ui_state_dir,
                     {
-                        "version": 1,
+                        "version": STATE_VERSION,
                         "enabled": True,
                         "enabled_at": int(time.time()),
                         "original_dns_override": original_override_for_state,
@@ -3285,7 +3313,7 @@ def apply_action(
                 }
                 kept.update(
                     {
-                        "version": 1,
+                        "version": STATE_VERSION,
                         "enabled": False,
                         "disabled_at": int(time.time()),
                         "last_transaction": snapshot_dir,

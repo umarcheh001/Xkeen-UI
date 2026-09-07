@@ -3195,10 +3195,87 @@ def test_enable_with_an_empty_field_keeps_no_resolver(tmp_path: Path, monkeypatc
     assert saved["local_resolvers"] == []
 
 
+def test_old_state_with_an_empty_list_still_gets_the_firmware_resolver(tmp_path: Path, monkeypatch):
+    """Разовый переход для установок, настроенных прежней версией панели.
+
+    До ``STATE_VERSION = 2`` окно отправляло поле локального резолвера всегда,
+    даже пустым, поэтому пустой список в таком состоянии означает не отказ, а
+    отсутствие выбора — и на живых роутерах он есть у каждой установки, где
+    функцию хоть раз включали. Такой установке резолвер прошивки подставляется
+    один раз, а версия состояния поднимается, чтобы больше это не повторялось.
+    """
+    configs, routing_path, state = _scenario_config(tmp_path)
+    _write(state / dns.STATE_FILENAME, {"version": 1, "enabled": False, "local_resolvers": []})
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj, **_kwargs: _write(Path(path), obj))
+    monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda *a, **kw: ["127.0.0.1:41100"])
+
+    dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+    )
+
+    saved = dns._load_state(str(state))
+    assert saved["local_resolvers"] == ["127.0.0.1:41100"]
+    # Версия поднята — второй раз подстановки не будет.
+    assert saved["version"] == dns.STATE_VERSION
+
+    fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+    assert fragment["dns"]["servers"][0]["address"] == "127.0.0.1"
+
+
+def test_the_migration_does_not_override_a_field_cleared_by_hand(tmp_path: Path, monkeypatch):
+    """Переход одноразовый и явному отказу не мешает.
+
+    Даже в старом состоянии переданная пустая строка остаётся пустой: это
+    решение, принятое прямо сейчас, а не догадка о прошлом.
+    """
+    configs, routing_path, state = _scenario_config(tmp_path)
+    _write(state / dns.STATE_FILENAME, {"version": 1, "enabled": False, "local_resolvers": []})
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj, **_kwargs: _write(Path(path), obj))
+    monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda *a, **kw: ["127.0.0.1:41100"])
+
+    dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+        local_resolver="",
+    )
+
+    saved = dns._load_state(str(state))
+    assert saved["local_resolvers"] == []
+    assert saved["version"] == dns.STATE_VERSION
+
+
 def test_enable_keeps_a_previously_cleared_resolver_empty(tmp_path: Path, monkeypatch):
     configs, routing_path, state = _scenario_config(tmp_path)
     # Пользователь ранее уже очистил поле, и это состояние сохранилось.
-    _write(state / dns.STATE_FILENAME, {"enabled": False, "local_resolvers": []})
+    # Версия состояния — текущая: значит пустой список сюда записала панель,
+    # которая сохраняет это поле только по решению человека.
+    _write(
+        state / dns.STATE_FILENAME,
+        {"version": dns.STATE_VERSION, "enabled": False, "local_resolvers": []},
+    )
     monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
     monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
     monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
