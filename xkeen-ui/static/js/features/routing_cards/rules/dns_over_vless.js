@@ -36,6 +36,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     upstreams: 'routing-dns-over-vless-upstreams',
     remote: 'routing-dns-over-vless-remote',
     local: 'routing-dns-over-vless-local',
+    localHint: 'routing-dns-over-vless-local-hint',
+    localHintText: 'routing-dns-over-vless-local-hint-text',
+    localApply: 'routing-dns-over-vless-local-apply',
     zones: 'routing-dns-over-vless-zones',
     zonesRow: 'routing-dns-over-vless-zones-row',
     zonePresets: 'routing-dns-over-vless-zone-presets',
@@ -591,6 +594,45 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     if (directClear) {
       // Чистить нечего, пока обе половины пусты.
       directClear.disabled = busy || fieldsLocked || (!hasDirect && !directHasDomains);
+    }
+    renderLocalHint(data);
+  }
+
+  // Порт резолвера прошивки пользователю знать неоткуда: он равен 41100 плюс
+  // индекс политики доступа и уезжает вместе с ней. Показываем найденное и
+  // предупреждаем, когда записанный адрес среди найденного не значится.
+  function renderLocalHint(data) {
+    const row = $(DOM.localHint);
+    const text = $(DOM.localHintText);
+    const apply = $(DOM.localApply);
+    const field = $(DOM.local);
+    if (!row || !text || !field) return;
+    // Слушатель вешаем один раз: renderLocalHint зовётся на каждый ответ
+    // статуса, а повторная привязка плодила бы дубли обработчика.
+    if (apply && apply.dataset.wired !== '1') {
+      apply.dataset.wired = '1';
+      apply.addEventListener('click', () => {
+        field.value = apply.dataset.value || '';
+        // Иначе следующий ответ статуса затрёт подставленное значение.
+        field.dataset.touched = '1';
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    }
+    const found = (data && data.firmware_resolvers) || [];
+    if (!found.length) {
+      row.classList.add('hidden');
+      return;
+    }
+    row.classList.remove('hidden');
+    const current = parseZones(field.value || '');
+    const missing = current.length && !current.some((item) => found.indexOf(item) >= 0);
+    text.textContent = missing
+      ? `Записанный адрес прошивка больше не слушает. Она отвечает на ${found.join(', ')}.`
+      : `Прошивка отвечает на ${found.join(', ')}.`;
+    row.classList.toggle('routing-dns-over-vless-local-hint--warn', !!missing);
+    if (apply) {
+      apply.disabled = busy || fieldsLocked;
+      apply.dataset.value = found.join(', ');
     }
   }
 
