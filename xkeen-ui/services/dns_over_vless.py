@@ -2857,10 +2857,13 @@ def apply_action(
         # A resolver the user typed wins; then whatever this install already
         # chose; and only if neither exists do we look at what the firmware
         # offers.  An explicitly emptied field is a decision, not a blank: it
-        # arrives as "" rather than None and stops right here.
+        # arrives as "" rather than None and stops right here.  A stored empty
+        # list is likewise a decision the user made earlier -- it must not be
+        # overridden by a later call that simply omits the argument -- so the
+        # firmware is only consulted when the key was never saved at all.
         if local_resolver is not None:
             wanted_local = _parse_local_resolvers(local_resolver)
-        elif stored_state.get("local_resolvers"):
+        elif "local_resolvers" in stored_state:
             wanted_local = _parse_local_resolvers(stored_state.get("local_resolvers"))
         elif normalized == "enable":
             wanted_local = _parse_local_resolvers(firmware_resolvers.discover())

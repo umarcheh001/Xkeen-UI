@@ -3147,3 +3147,31 @@ def test_enable_with_an_empty_field_keeps_no_resolver(tmp_path: Path, monkeypatc
 
     saved = dns._load_state(str(state))
     assert saved["local_resolvers"] == []
+
+
+def test_enable_keeps_a_previously_cleared_resolver_empty(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    # Пользователь ранее уже очистил поле, и это состояние сохранилось.
+    _write(state / dns.STATE_FILENAME, {"enabled": False, "local_resolvers": []})
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj, **_kwargs: _write(Path(path), obj))
+    monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda *a, **kw: ["127.0.0.1:41100"])
+
+    dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+        # Аргумент не передан вовсе — вызывающая сторона просто ничего не просила менять.
+    )
+
+    saved = dns._load_state(str(state))
+    assert saved["local_resolvers"] == []
