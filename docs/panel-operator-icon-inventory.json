@@ -2810,7 +2810,7 @@
           "accessible_label": "Сохранить"
         },
         {
-          "location": "xkeen-ui/static/js/ui/diff_modal.js:L2428",
+          "location": "xkeen-ui/static/js/ui/diff_modal.js:L2439",
           "control_type": "runtime-action",
           "accessible_label": "Сохранить"
         },

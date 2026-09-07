@@ -7053,6 +7053,96 @@ html[data-theme="light"] body.panel-page .modal-actions {
   background: var(--op-surface) !important;
 }
 
+/* Diff is a dense comparison workbench, not a generic content modal.  Keep
+ * the title/actions stack compact and inset the source/editor surfaces so
+ * their borders do not touch the card edges. */
+body.panel-page .xkeen-diff-modal .modal-content.xkeen-diff-card {
+  box-sizing: border-box;
+  gap: 6px;
+  padding: 0 10px 10px !important;
+}
+
+body.panel-page .modal.xkeen-diff-modal .xkeen-diff-head {
+  min-height: 0 !important;
+  margin-left: -10px !important;
+  margin-right: -10px !important;
+  padding: 6px 12px !important;
+  gap: 4px;
+}
+
+body.panel-page .xkeen-diff-modal :is(.xkeen-diff-labels, .xkeen-diff-host, .xkeen-diff-error) {
+  width: auto;
+  margin-inline: 0;
+}
+
+body.panel-page .modal.xkeen-diff-modal .xkeen-diff-foot {
+  margin-left: -10px !important;
+  margin-right: -10px !important;
+}
+
+/* Monaco's diff overview ruler reserves a wide, nearly-black strip beside
+ * the actual scrollbar.  The changed lines already carry semantic markers in
+ * the editor, so keep one quiet, narrow scrollbar for the operator surface. */
+body.panel-page .xkeen-diff-modal .xkeen-diff-host :is(.scrollbar.vertical, .scrollbar.horizontal) {
+  background: transparent !important;
+}
+
+body.panel-page .xkeen-diff-modal .xkeen-diff-host .scrollbar.vertical {
+  width: 8px !important;
+}
+
+body.panel-page .xkeen-diff-modal .xkeen-diff-host .scrollbar.horizontal {
+  height: 8px !important;
+}
+
+body.panel-page .xkeen-diff-modal .xkeen-diff-host .scrollbar.vertical > .slider {
+  left: 1px !important;
+  width: 6px !important;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--op-border-strong) 72%, transparent) !important;
+}
+
+body.panel-page .xkeen-diff-modal .xkeen-diff-host .cm-scroller {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--op-border-strong) 72%, transparent) transparent;
+}
+
+body.panel-page .xkeen-diff-modal .xkeen-diff-host .cm-scroller::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+body.panel-page .xkeen-diff-modal .xkeen-diff-host .cm-scroller::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--op-border-strong) 72%, transparent);
+  background-clip: padding-box;
+}
+
+body.panel-page .xkeen-diff-modal .xkeen-diff-host .cm-scroller::-webkit-scrollbar-track,
+body.panel-page .xkeen-diff-modal .xkeen-diff-host .cm-scroller::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+@media (max-width: 720px) {
+  body.panel-page .xkeen-diff-modal .modal-content.xkeen-diff-card {
+    gap: 6px;
+    padding: 0 8px 8px !important;
+  }
+
+  body.panel-page .modal.xkeen-diff-modal .xkeen-diff-head {
+    margin-left: -8px !important;
+    margin-right: -8px !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  body.panel-page .modal.xkeen-diff-modal .xkeen-diff-foot {
+    margin-left: -8px !important;
+    margin-right: -8px !important;
+  }
+}
+
 body.panel-page .modal-title {
   color: var(--op-text-strong) !important;
   font-size: calc(14px * var(--xk-font-scale, 1));

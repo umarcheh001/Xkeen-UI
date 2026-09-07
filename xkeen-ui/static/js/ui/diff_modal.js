@@ -1161,7 +1161,18 @@ import { iconHtml } from './operator_icons.js';
       automaticLayout: true,
       scrollBeyondLastLine: false,
       minimap: { enabled: false },
-      renderOverviewRuler: true,
+      // The overview ruler adds a wide dark strip beside the scrollbar in a
+      // split diff. Changed lines are already marked in the editor surface,
+      // so keep the workbench focused with one narrow, quiet scrollbar.
+      renderOverviewRuler: false,
+      overviewRulerBorder: false,
+      scrollbar: {
+        verticalScrollbarSize: 8,
+        horizontalScrollbarSize: 8,
+        useShadows: false,
+        verticalHasArrows: false,
+        horizontalHasArrows: false,
+      },
       ignoreTrimWhitespace: !!_ignoreTrimWhitespace,
       diffWordWrap: 'on',
     });
