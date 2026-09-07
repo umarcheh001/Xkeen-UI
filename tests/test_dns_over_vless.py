@@ -3234,6 +3234,73 @@ def test_old_state_with_an_empty_list_still_gets_the_firmware_resolver(tmp_path:
     assert fragment["dns"]["servers"][0]["address"] == "127.0.0.1"
 
 
+def test_reapply_does_not_wait_for_a_port_the_core_itself_holds(tmp_path: Path, monkeypatch):
+    """Переприменение на уже работающей функции не ждёт освобождения порта 53.
+
+    Переключатель прошивки к этому моменту давно выключен, а порт держит наш
+    собственный Xray — ожидание «прошивка отдала порт» здесь не выполнится
+    никогда. На живом роутере на этом молча ломались и самопочинка локального
+    резолвера, и переключение узла для нестандартных записей: обе зовут
+    ``apply_action("enable")`` поверх включённой функции.
+    """
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    # Переключатель прошивки уже выключен: DNS у нас, а не у роутера.
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    # Порт занят — нашим же ядром.
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: False)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj, **_kwargs: _write(Path(path), obj))
+    monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda *a, **kw: ["127.0.0.1:41100"])
+
+    result = dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+        local_resolver="127.0.0.1:41101",
+    )
+
+    assert result["ok"] is True
+    assert dns._load_state(str(state))["local_resolvers"] == ["127.0.0.1:41101"]
+
+
+def test_first_enable_still_fails_when_the_router_keeps_port_53(tmp_path: Path, monkeypatch):
+    """А вот при первом включении ожидание остаётся: порт держит прошивка.
+
+    Сторожевой тест к правке выше — она не должна превратиться в «никогда не
+    проверять»: если роутер не отдал порт после выключения своего DNS, ядро
+    не поднимется, и человек обязан увидеть отказ, а не тихую поломку.
+    """
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    # Переключатель прошивки включён: порт 53 сейчас у роутера.
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: False)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj, **_kwargs: _write(Path(path), obj))
+    monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda *a, **kw: ["127.0.0.1:41100"])
+
+    with pytest.raises(dns.DnsOverVlessError) as excinfo:
+        dns.apply_action(
+            "enable",
+            configs_dir=str(configs),
+            routing_file=str(routing_path),
+            ui_state_dir=str(state),
+            restart_xkeen=lambda **_k: True,
+            target_tag="balancer_main",
+        )
+    assert excinfo.value.code == "dns_port_busy"
+
+
 def test_turning_the_feature_off_and_on_again_still_migrates(tmp_path: Path, monkeypatch):
     """Самый обычный путь: человек выключает функцию и включает снова.
 

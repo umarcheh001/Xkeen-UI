@@ -3200,11 +3200,18 @@ def apply_action(
                 if before_override is not True:
                     _set_dns_override(True)
                     router_changed = True
-                if not _wait_for_port_53(should_be_free=True):
-                    raise DnsOverVlessError(
-                        "Keenetic не освободил порт 53 после включения DNS override.",
-                        code="dns_port_busy",
-                    )
+                    # Ждать освобождения порта имеет смысл только там, где мы
+                    # сами его сейчас отобрали у прошивки.  При переприменении
+                    # на уже работающей функции переключатель прошивки давно
+                    # выключен, а порт 53 держит наш собственный Xray -- и
+                    # ожидание превращается в вечный отказ: именно на нём
+                    # молча ломались самопочинка локального резолвера и
+                    # переключение узла для нестандартных записей.
+                    if not _wait_for_port_53(should_be_free=True):
+                        raise DnsOverVlessError(
+                            "Keenetic не освободил порт 53 после включения DNS override.",
+                            code="dns_port_busy",
+                        )
             else:
                 # The captured devices go back to the firmware before the port
                 # changes hands: a rule pointing at a port Xray has left would
