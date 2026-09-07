@@ -19523,6 +19523,9 @@ html[data-theme="light"] .routing-dns-over-vless-route-fallback[data-state="fail
 .routing-dns-over-vless-clients-actions-text b { display: block; color: var(--sem-warning, #fbbf24); }
 .routing-dns-over-vless-clients-actions-text i { display: block; font-style: normal; color: var(--modal-muted); }
 .routing-dns-over-vless-clients-actions button { flex: none; }
+/* Кнопки переносятся группой: поодиночке главная уезжала на новую строку и
+   вставала левее «Отменить», переворачивая порядок «главное — крайнее справа». */
+.routing-dns-over-vless-clients-actions-buttons { display: flex; gap: 10px; flex: none; margin-left: auto; }
 /* Kept to the left of the closing buttons: it is a separate action, not a
    variant of "Применить".  It reads as a real button rather than a muted link
    because it was too easy to miss among the two below. */
