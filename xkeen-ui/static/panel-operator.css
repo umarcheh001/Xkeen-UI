@@ -175,14 +175,14 @@ html:has(> body.panel-page)::-webkit-scrollbar {
 }
 
 html:has(> body.panel-page)::-webkit-scrollbar-track {
-  border-radius: 999px;
+  border-radius: var(--op-scrollbar-radius);
   background: #14171c;
 }
 
 html:has(> body.panel-page)::-webkit-scrollbar-thumb {
   min-height: 36px;
   border: 2px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--op-scrollbar-radius);
   background: #3a414d;
   background-clip: padding-box;
 }
