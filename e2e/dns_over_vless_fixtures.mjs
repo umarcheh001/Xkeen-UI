@@ -33,6 +33,7 @@ export const STATUS = {
   upstreams: ['8.8.8.8'],
   default_upstreams: ['8.8.8.8'],
   local_resolvers: [],
+  firmware_resolvers: [],
   local_domains: [],
   default_local_domains: ['domain:lan'],
   zone_presets: { local: ['domain:lan'] },
