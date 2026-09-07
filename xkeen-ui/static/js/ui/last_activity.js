@@ -1,4 +1,5 @@
 import { getXkeenFilePath } from '../features/xkeen_runtime.js';
+import { iconHtml } from './operator_icons.js';
 
 (() => {
   "use strict";
@@ -84,6 +85,19 @@ import { getXkeenFilePath } from '../features/xkeen_runtime.js';
     return el;
   }
 
+  function renderActivityIcon(iconEl, kind) {
+    if (!iconEl) return;
+    if (kind === "saved") {
+      iconEl.innerHTML = iconHtml("save", "last-load-chip__icon-svg");
+    } else if (kind === "error") {
+      iconEl.innerHTML = iconHtml("alert", "last-load-chip__icon-svg");
+    } else if (kind === "loaded") {
+      iconEl.innerHTML = iconHtml("download", "last-load-chip__icon-svg");
+    } else {
+      iconEl.innerHTML = iconHtml("info", "last-load-chip__icon-svg");
+    }
+  }
+
   function setCollapsed(el, collapsed) {
     if (!el) return;
     el.classList.toggle("is-collapsed", !!collapsed);
@@ -120,6 +134,9 @@ import { getXkeenFilePath } from '../features/xkeen_runtime.js';
     const message = fullText(payload.kind, label, t);
     const prefix = prefixText(payload.kind);
     const detail = detailText(label, t);
+
+    const iconEl = el.querySelector(".last-load-chip__icon");
+    renderActivityIcon(iconEl, String(payload.kind || "info"));
 
     el.classList.remove("last-load-loaded", "last-load-saved", "last-load-error");
     if (payload.kind === "loaded") el.classList.add("last-load-loaded");

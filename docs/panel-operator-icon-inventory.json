@@ -130,6 +130,11 @@
           "accessible_label": "Предупреждение"
         },
         {
+          "location": "xkeen-ui/static/js/ui/last_activity.js:L93",
+          "control_type": "runtime-action",
+          "accessible_label": "Предупреждение"
+        },
+        {
           "location": "xkeen-ui/static/js/ui/toast.js:L64",
           "control_type": "runtime-action",
           "accessible_label": "Предупреждение"
@@ -1148,6 +1153,11 @@
           "accessible_label": "Скачать"
         },
         {
+          "location": "xkeen-ui/static/js/ui/last_activity.js:L95",
+          "control_type": "runtime-action",
+          "accessible_label": "Скачать"
+        },
+        {
           "location": "xkeen-ui/templates/panel.html:L1492",
           "control_type": "text+icon",
           "accessible_label": "Конфиг"
@@ -1839,6 +1849,11 @@
           "accessible_label": "Информация"
         },
         {
+          "location": "xkeen-ui/static/js/ui/last_activity.js:L97",
+          "control_type": "runtime-action",
+          "accessible_label": "Информация"
+        },
+        {
           "location": "xkeen-ui/static/js/ui/toast.js:L53",
           "control_type": "runtime-action",
           "accessible_label": "Информация"
@@ -1977,6 +1992,11 @@
         },
         {
           "location": "xkeen-ui/static/js/features/xray_logs.js:L3077",
+          "control_type": "runtime-action",
+          "accessible_label": "Загрузка"
+        },
+        {
+          "location": "xkeen-ui/static/js/ui/last_activity.js:L231",
           "control_type": "runtime-action",
           "accessible_label": "Загрузка"
         },
@@ -2851,6 +2871,11 @@
         },
         {
           "location": "xkeen-ui/static/js/ui/diff_modal.js:L2439",
+          "control_type": "runtime-action",
+          "accessible_label": "Сохранить"
+        },
+        {
+          "location": "xkeen-ui/static/js/ui/last_activity.js:L91",
           "control_type": "runtime-action",
           "accessible_label": "Сохранить"
         },

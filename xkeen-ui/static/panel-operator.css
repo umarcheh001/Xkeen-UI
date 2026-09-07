@@ -717,6 +717,51 @@ body.panel-page .last-load-chip {
   max-width: 300px;
 }
 
+/* Last config activity uses the same monochrome Operator SVG language as the
+ * rest of the panel.  The legacy chip painted a filled circle with a second
+ * dot, which reads like a status lamp and clashes with the surrounding icons. */
+body.panel-page .last-load-chip__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--op-accent-hover);
+}
+
+body.panel-page .last-load-chip__icon::before {
+  content: none !important;
+  display: none !important;
+}
+
+body.panel-page .last-load-chip__icon-svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+body.panel-page .last-load-chip.last-load-loaded .last-load-chip__icon {
+  color: var(--op-accent-hover);
+}
+
+body.panel-page .last-load-chip.last-load-saved .last-load-chip__icon {
+  color: var(--op-success);
+}
+
+body.panel-page .last-load-chip.last-load-error .last-load-chip__icon {
+  color: var(--op-danger);
+}
+
 /* Primary navigation behaves like a content rail, not a row of cards. */
 :is(body.panel-page, html[data-theme="light"] body.panel-page) .top-tabs.header-tabs {
   display: flex;
