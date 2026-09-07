@@ -2854,11 +2854,18 @@ def apply_action(
             if upstreams is not None
             else (_safe_upstreams(stored_state.get("upstreams")) or list(DEFAULT_UPSTREAMS))
         )
-        wanted_local = (
-            _parse_local_resolvers(local_resolver)
-            if local_resolver is not None
-            else _parse_local_resolvers(stored_state.get("local_resolvers"))
-        )
+        # A resolver the user typed wins; then whatever this install already
+        # chose; and only if neither exists do we look at what the firmware
+        # offers.  An explicitly emptied field is a decision, not a blank: it
+        # arrives as "" rather than None and stops right here.
+        if local_resolver is not None:
+            wanted_local = _parse_local_resolvers(local_resolver)
+        elif stored_state.get("local_resolvers"):
+            wanted_local = _parse_local_resolvers(stored_state.get("local_resolvers"))
+        elif normalized == "enable":
+            wanted_local = _parse_local_resolvers(firmware_resolvers.discover())
+        else:
+            wanted_local = []
         wanted_local_domains = (
             _local_domains(local_domains)
             if local_domains is not None
