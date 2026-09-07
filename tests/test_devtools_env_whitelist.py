@@ -150,6 +150,12 @@ def test_subscription_defaults_match_runtime(key, expected):
     assert _default_effective_value(key, str(ROOT / "state")) == expected
 
 
+def test_mihomo_ui_proxy_fallback_is_disabled_by_default():
+    assert _default_effective_value(
+        "XKEEN_MIHOMO_UI_ALLOW_PROXY_FALLBACK", str(ROOT / "state")
+    ) == "0"
+
+
 def test_lookahead_default_matches_subscription_services():
     import services.mihomo_subscriptions as mihomo_subscriptions
     import services.xray_subscriptions as xray_subscriptions

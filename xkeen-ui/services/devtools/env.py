@@ -32,6 +32,7 @@ ENV_WHITELIST: Tuple[str, ...] = (
     "XKEEN_ROUTING_SAVE_MAX_BYTES",
     "XKEEN_CONFIG_EXCHANGE_MAX_BYTES",
     "XKEEN_MIHOMO_HWID",
+    "XKEEN_MIHOMO_UI_ALLOW_PROXY_FALLBACK",
     "XKEEN_HAPP_HELPER_CMD",
     "XKEEN_HAPP_DECRYPTOR_CMD",
     "XKEEN_HAPP_DECRYPTOR_REMOTE_URL",
@@ -304,6 +305,9 @@ def _default_effective_value(
         return str(4 * 1024 * 1024)
     if k == "XKEEN_MIHOMO_HWID":
         return ""
+    if k == "XKEEN_MIHOMO_UI_ALLOW_PROXY_FALLBACK":
+        # Same-origin proxying of a loopback-only Zashboard is opt-in.
+        return "0"
     if k == "XKEEN_HAPP_HELPER_CMD":
         try:
             from services import happ_links
