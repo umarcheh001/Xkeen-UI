@@ -3066,3 +3066,32 @@ def test_the_last_device_unticked_turns_the_switch_off(tmp_path: Path, monkeypat
     saved = json.loads((state_dir / "dns_over_vless.json").read_text(encoding="utf-8"))
     assert saved["capture_clients"] is False
     assert saved["capture_macs"] == []
+
+
+def test_status_names_the_firmware_resolvers(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    # Прошивки под тестами нет: подменяем поиск, а не файловую систему.
+    monkeypatch.setattr(
+        dns.firmware_resolvers, "discover", lambda *a, **kw: ["127.0.0.1:41100", "127.0.0.1:41101"]
+    )
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["firmware_resolvers"] == ["127.0.0.1:41100", "127.0.0.1:41101"]
+
+
+def test_status_survives_a_router_without_the_firmware_configs(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    # На машине разработчика /var/ndnproxy_*.conf нет — это не ошибка.
+    assert result["firmware_resolvers"] == []

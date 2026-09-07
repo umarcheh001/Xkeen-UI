@@ -35,6 +35,7 @@ from services.cores import detect_available_cores, detect_running_core
 from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.xray_config_files import jsonc_path_for
 from services import dns_client_capture
+from services import firmware_resolvers
 from utils.firmware import ndmc_path as _resolve_ndmc, run_ndmc
 from utils.jsonc import strip_json_comments_text
 
@@ -2741,6 +2742,9 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
             state.get("local_resolvers") if isinstance(state.get("local_resolvers"), list) else []
         ),
         "max_local_resolvers": MAX_LOCAL_RESOLVERS,
+        # What the firmware itself still answers on: the card offers these
+        # instead of asking the user to know the port by heart.
+        "firmware_resolvers": firmware_resolvers.discover(),
         "local_domains": (
             state.get("local_domains")
             if isinstance(state.get("local_domains"), list)
