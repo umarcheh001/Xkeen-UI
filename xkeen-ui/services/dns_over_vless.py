@@ -94,16 +94,40 @@ PTR_172_ZONES = [f"domain:{octet}.172.in-addr.arpa" for octet in range(16, 32)]
 # Router vendor zones.  These are real public domains, listed because the
 # router resolves them for itself: the local web interface, the DDNS name the
 # box registers, and the redirect target used when opening it from the LAN.
+#
+# A KeenDNS name inside the LAN must come from the firmware, not from the far
+# end of the tunnel.  Measured on a router whose booked name is in
+# ``netcraze.pro``: ndnproxy answers 198.51.100.11 -- the TEST-NET-3 marker the
+# firmware DNATs to its own web interface -- while the same query through VLESS
+# comes back with the public cloud addresses, sending the client to its own
+# router the long way round.
+#
+# Which zones are KeenDNS was checked by delegation, not by guesswork: the
+# booking zones are the ones whose NS records point at the vendor's NDNS
+# servers (``ndns*.omni.ru`` for the Russian side, ``ndns*.knt9.xyz`` for the
+# global one).  Vendor sites that merely carry the brand -- keenetic.ru,
+# netcraze.net and friends on nic.ru -- are not in that set.
 KEENETIC_ZONES = [
-    "domain:keenetic.net",
-    "domain:keenetic.io",
+    # Booking zones, delegated to ndns110eu1/ndns11feu1.knt9.xyz.
     "domain:keenetic.pro",
     "domain:keenetic.name",
     "domain:keenetic.link",
+    "domain:mykeenetic.com",
+    "domain:mykeenetic.net",
+    # Not a booking zone: my.keenetic.net is the name the box redirects to
+    # when its web interface is opened from the LAN.
+    "domain:keenetic.net",
 ]
 NETCRAZE_ZONES = [
-    "domain:netcraze.net",
+    # Booking zones, delegated to ndns112-116.omni.ru.
     "domain:netcraze.pro",
+    "domain:netcraze.io",
+    "domain:netcraze.link",
+    "domain:crazedns.ru",
+    "domain:mykeenetic.ru",
+    # The vendor's own site: kept because the router talks to it for firmware
+    # updates and component downloads.
+    "domain:netcraze.net",
 ]
 
 DEFAULT_LOCAL_DOMAINS = [
