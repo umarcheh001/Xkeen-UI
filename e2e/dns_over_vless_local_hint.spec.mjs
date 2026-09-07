@@ -133,3 +133,46 @@ test('адрес вписан руками — включение уходит �
 
   await expect.poll(() => sent && sent.local_resolver).toBe('192.168.1.1');
 });
+
+
+test('сохранённый адрес стёрли руками — включение уходит с пустым local_resolver', async ({ page }) => {
+  // Обратная сторона той же развилки: панель подставляет своё только пока
+  // человек ничего не решил. Стёртое руками поле — это решение, и оно
+  // обязано доехать до сервера пустой строкой, иначе следующее включение
+  // молча вернёт резолвер прошивки вместо осознанного отказа.
+  const status = {
+    ...STATUS,
+    firmware_resolvers: ['127.0.0.1:41100'],
+    local_resolvers: ['127.0.0.1:41100'],
+    local_domains: ['domain:lan'],
+  };
+  await openDialog(page, status);
+  await openZone(page, 'home');
+
+  const field = page.locator('#routing-dns-over-vless-local');
+  await expect(field).toHaveValue('127.0.0.1:41100');
+  await field.fill('');
+
+  // См. комментарий выше: route регистрируется после openDialog нарочно.
+  let sent = null;
+  await page.route('**/api/routing/dns-over-vless', async (route) => {
+    if (route.request().method() === 'POST') {
+      sent = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, action: 'enable', enabled: true, restarted: true, probe: { ok: true } }),
+      });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(status) });
+  });
+
+  await page.locator('#routing-dns-over-vless-apply').click();
+  await expect(page.locator('#confirm-modal')).not.toHaveClass(/hidden/);
+  await page.locator('#confirm-modal-ok-btn').click();
+
+  await expect.poll(() => sent).not.toBeNull();
+  expect(Object.prototype.hasOwnProperty.call(sent, 'local_resolver')).toBe(true);
+  expect(sent.local_resolver).toBe('');
+});
