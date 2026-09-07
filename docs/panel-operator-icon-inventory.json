@@ -327,6 +327,11 @@
       "tabler_asset": "folder-open",
       "usage": [
         {
+          "location": "xkeen-ui/static/js/features/devtools/env.js:L592",
+          "control_type": "runtime-action",
+          "accessible_label": "Открыть каталог"
+        },
+        {
           "location": "xkeen-ui/static/js/features/file_manager/context_menu.js:L141",
           "control_type": "runtime-action",
           "accessible_label": "Открыть каталог"
@@ -1042,6 +1047,11 @@
       "tabler_asset": "network",
       "usage": [
         {
+          "location": "xkeen-ui/static/js/features/devtools/env.js:L535",
+          "control_type": "runtime-action",
+          "accessible_label": "Показать доменные имена"
+        },
+        {
           "location": "xkeen-ui/static/js/features/mihomo_clash/connections.js:L146",
           "control_type": "runtime-action",
           "accessible_label": "Показать доменные имена"
@@ -1604,6 +1614,11 @@
       "tabler_asset": "brand-github",
       "usage": [
         {
+          "location": "xkeen-ui/static/js/features/devtools/env.js:L575",
+          "control_type": "runtime-action",
+          "accessible_label": "GitHub"
+        },
+        {
           "location": "xkeen-ui/templates/panel.html:L1083",
           "control_type": "text+icon",
           "accessible_label": "Выгрузить в репозитарий"
@@ -1686,6 +1701,11 @@
       "semantic_name": "hwid",
       "tabler_asset": "fingerprint",
       "usage": [
+        {
+          "location": "xkeen-ui/static/js/features/devtools/env.js:L509",
+          "control_type": "runtime-action",
+          "accessible_label": "HWID"
+        },
         {
           "location": "xkeen-ui/static/js/features/outbounds.js:L6503",
           "control_type": "runtime-action",
@@ -1834,6 +1854,11 @@
       "semantic_name": "list-details",
       "tabler_asset": "list-details",
       "usage": [
+        {
+          "location": "xkeen-ui/static/js/features/devtools/env.js:L568",
+          "control_type": "runtime-action",
+          "accessible_label": "Список"
+        },
         {
           "location": "xkeen-ui/static/js/features/restart_log.js:L1741",
           "control_type": "runtime-action",
@@ -2014,6 +2039,11 @@
       "semantic_name": "more",
       "tabler_asset": "dots",
       "usage": [
+        {
+          "location": "xkeen-ui/static/js/features/devtools/env.js:L616",
+          "control_type": "runtime-action",
+          "accessible_label": "Дополнительные действия"
+        },
         {
           "location": "xkeen-ui/static/js/features/routing_cards/rules/render.js:L2322",
           "control_type": "runtime-action",
@@ -2346,6 +2376,11 @@
           "accessible_label": "Предпросмотр"
         },
         {
+          "location": "xkeen-ui/static/js/features/devtools/env.js:L560",
+          "control_type": "runtime-action",
+          "accessible_label": "Предпросмотр"
+        },
+        {
           "location": "xkeen-ui/static/js/features/mihomo_clash/rules.js:L175",
           "control_type": "runtime-action",
           "accessible_label": "Предпросмотр"
@@ -2408,6 +2443,11 @@
       "semantic_name": "refresh",
       "tabler_asset": "refresh",
       "usage": [
+        {
+          "location": "xkeen-ui/static/js/features/devtools/env.js:L552",
+          "control_type": "runtime-action",
+          "accessible_label": "Обновить"
+        },
         {
           "location": "xkeen-ui/static/js/features/file_manager/context_menu.js:L136",
           "control_type": "runtime-action",
@@ -2963,6 +3003,11 @@
       "tabler_asset": "settings",
       "usage": [
         {
+          "location": "xkeen-ui/static/js/features/devtools/env.js:L491",
+          "control_type": "runtime-action",
+          "accessible_label": "Настройки"
+        },
+        {
           "location": "xkeen-ui/static/js/features/file_manager/bookmarks.js:L202",
           "control_type": "runtime-action",
           "accessible_label": "Настройки"
@@ -3035,6 +3080,11 @@
       "tabler_asset": "device-usb",
       "usage": [
         {
+          "location": "xkeen-ui/static/js/features/devtools/env.js:L544",
+          "control_type": "runtime-action",
+          "accessible_label": "Хранилище"
+        },
+        {
           "location": "xkeen-ui/static/js/features/xray_logs.js:L2055",
           "control_type": "runtime-action",
           "accessible_label": "Хранилище"
@@ -3050,6 +3100,11 @@
       "semantic_name": "subscriptions",
       "tabler_asset": "refresh",
       "usage": [
+        {
+          "location": "xkeen-ui/static/js/features/devtools/env.js:L527",
+          "control_type": "runtime-action",
+          "accessible_label": "Подписки"
+        },
         {
           "location": "xkeen-ui/templates/panel.html:L821",
           "control_type": "text+icon",
@@ -3094,6 +3149,11 @@
       "tabler_asset": "terminal-2",
       "usage": [
         {
+          "location": "xkeen-ui/static/js/features/devtools/env.js:L583",
+          "control_type": "runtime-action",
+          "accessible_label": "Терминал"
+        },
+        {
           "location": "xkeen-ui/static/js/features/file_manager/context_menu.js:L139",
           "control_type": "runtime-action",
           "accessible_label": "Терминал"
@@ -3130,6 +3190,11 @@
       "tabler_asset": "tools",
       "usage": [
         {
+          "location": "xkeen-ui/static/js/features/devtools/env.js:L608",
+          "control_type": "runtime-action",
+          "accessible_label": "Инструменты"
+        },
+        {
           "location": "xkeen-ui/templates/panel.html:L1255",
           "control_type": "text+icon",
           "accessible_label": "Настроить автоматически"
@@ -3150,6 +3215,11 @@
       "semantic_name": "transfer",
       "tabler_asset": "arrows-exchange",
       "usage": [
+        {
+          "location": "xkeen-ui/static/js/features/devtools/env.js:L600",
+          "control_type": "runtime-action",
+          "accessible_label": "Перенести"
+        },
         {
           "location": "xkeen-ui/static/js/features/file_manager/context_menu.js:L137",
           "control_type": "runtime-action",

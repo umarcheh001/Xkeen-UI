@@ -1,4 +1,5 @@
 import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } from '../devtools_namespace.js';
+import { iconHtml } from '../../ui/operator_icons.js';
 
 (() => {
   'use strict';
@@ -487,6 +488,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   const ENV_GROUPS = [
     {
       id: 'core',
+      icon: 'settings',
       title: 'UI и безопасность',
       desc: 'Порт, сессии, логин и общие лимиты запросов.',
       keys: [
@@ -504,6 +506,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     },
     {
       id: 'mihomo',
+      icon: 'hwid',
       title: 'Mihomo и HWID',
       desc: 'Лимиты Mihomo API и HWID для premium/HWID-подписок.',
       keys: [
@@ -522,6 +525,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     },
     {
       id: 'subscriptions',
+      icon: 'subscriptions',
       title: 'Подписки и автообновление',
       desc: 'Политика URL подписок и фоновый планировщик обновления Xray/Mihomo.',
       keys: [],
@@ -529,6 +533,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     },
     {
       id: 'dns',
+      icon: 'dns',
       title: 'DNS-over-VLESS',
       desc: 'Сторож, который возвращает DNS прошивке, если ядро не поднимается.',
       keys: [],
@@ -536,6 +541,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     },
     {
       id: 'dat',
+      icon: 'storage',
       title: 'DAT / GeoIP',
       desc: 'Ограничения и allow-list для загрузки geoip/geosite/DAT.',
       keys: ['XKEEN_GEODAT_UPLOAD_MAX_BYTES'],
@@ -543,6 +549,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     },
     {
       id: 'updates',
+      icon: 'refresh',
       title: 'Обновления UI',
       desc: 'GitHub-репозиторий, канал, ветка, таймауты и проверки скачивания.',
       keys: [],
@@ -550,6 +557,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     },
     {
       id: 'visibility',
+      icon: 'preview',
       title: 'Видимость разделов',
       desc: 'Whitelist блоков панели и DevTools.',
       keys: ['XKEEN_UI_PANEL_SECTIONS_WHITELIST', 'XKEEN_UI_DEVTOOLS_SECTIONS_WHITELIST'],
@@ -557,6 +565,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     },
     {
       id: 'logs',
+      icon: 'list-details',
       title: 'Логи',
       desc: 'Каталоги, уровни логирования, ротация и смещение времени.',
       keys: ['XKEEN_RESTART_LOG_FILE', 'XKEEN_XRAY_LOG_TZ_OFFSET'],
@@ -564,6 +573,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     },
     {
       id: 'github',
+      icon: 'github',
       title: 'GitHub и config-server',
       desc: 'Импорт конфигов из GitHub и внешний сервер конфигураций.',
       keys: ['XKEEN_CONFIG_SERVER_BASE'],
@@ -571,6 +581,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     },
     {
       id: 'terminal',
+      icon: 'terminal',
       title: 'Терминал',
       desc: 'PTY-буфер, TTL сессий и доступ к shell-командам.',
       keys: ['XKEEN_ALLOW_SHELL'],
@@ -578,6 +589,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     },
     {
       id: 'files',
+      icon: 'catalog',
       title: 'Файловый менеджер',
       desc: 'RemoteFM, локальные корни, защита /tmp/mnt и корзина.',
       keys: ['XKEEN_LOCALFM_ROOTS', 'XKEEN_PROTECT_MNT_LABELS', 'XKEEN_PROTECTED_MNT_ROOT'],
@@ -585,6 +597,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     },
     {
       id: 'fileops',
+      icon: 'transfer',
       title: 'FileOps и ZIP',
       desc: 'Копирование, перемещение, спул и лимиты ZIP-архивов.',
       keys: [],
@@ -592,6 +605,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     },
     {
       id: 'xray',
+      icon: 'tools',
       title: 'Xray и списки XKeen',
       desc: 'Пути фрагментов Xray, preflight-таймаут и файлы списков портов/IP.',
       keys: ['XKEEN_XRAY_TEST_TIMEOUT', 'XKEEN_CONFIG_FILE', 'XKEEN_INIT_SCRIPT'],
@@ -599,6 +613,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     },
     {
       id: 'other',
+      icon: 'more',
       title: 'Прочее',
       desc: 'Редкие служебные переменные.',
       keys: [],
@@ -680,7 +695,8 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
 
     const icon = document.createElement('span');
     icon.className = 'dt-env-group-icon';
-    icon.textContent = collapsed ? '+' : '-';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML = iconHtml(group.icon || 'settings', 'dt-env-group-icon-svg');
 
     const text = document.createElement('span');
     text.className = 'dt-env-group-text';

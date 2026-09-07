@@ -37,7 +37,7 @@
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
   {# Flat Operator Console presentation. Keep it last: DevTools still ships the
      legacy component layer above for runtime compatibility. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='devtools-operator.css', v='20260729e') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='devtools-operator.css', v='20260907b') }}">
   {# Global Custom CSS (DevTools) — last in order so it can override everything. #}
 </head>
 <body class="devtools-page">
@@ -68,7 +68,7 @@
             id="theme-toggle-btn"
             class="theme-toggle-btn theme-toggle-header dt-header-btn dt-header-btn-theme"
             aria-label="Переключить тему" title="Переключить светлую/тёмную тему"
-          ><span class="theme-toggle-icon" aria-hidden="true">☀</span><span class="theme-toggle-text">Светлая тема</span></button>
+          ><svg class="xk-action-icon theme-toggle-icon" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg') }}#xk-sun"></use></svg><span class="theme-toggle-text">Светлая тема</span></button>
           <a href="{{ url_for('index') }}" class="btn-link dt-header-btn dt-header-btn-back" data-xk-top-nav="1">← Назад</a>
           <a
             href="#dt-update-card"

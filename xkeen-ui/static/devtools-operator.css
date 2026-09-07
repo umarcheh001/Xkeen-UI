@@ -309,6 +309,26 @@ body.devtools-page header.dt-page-header .header-actions :is(
   text-decoration: none;
 }
 
+/* DevTools gets the same monochrome Tabler/SVG icon contract as the main
+ * panel.  The legacy theme styles give this element a circular badge and
+ * leave the SVG unpainted, which makes the sun/moon read as a dot in the
+ * header. */
+body.devtools-page .theme-toggle-icon.xk-action-icon {
+  display: block !important;
+  flex: 0 0 16px;
+  width: 16px !important;
+  height: 16px !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
 body.devtools-page header.dt-page-header .header-actions .dt-header-btn-logout:hover {
   border-color: color-mix(in srgb, var(--op-danger) 52%, var(--op-border));
   background: var(--op-danger-soft) !important;
@@ -879,11 +899,11 @@ body.devtools-page #dt-env-card tbody tr.dt-env-group-row td {
 body.devtools-page .dt-env-group-toggle {
   --dt-env-group-accent: var(--op-accent);
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   width: 100%;
-  min-height: 40px;
-  padding: 5px 7px;
-  gap: 8px;
+  min-height: 56px;
+  padding: 10px 10px;
+  gap: 10px;
   border: 1px solid transparent !important;
   border-radius: var(--op-radius-sm) !important;
   background: transparent !important;
@@ -896,31 +916,59 @@ body.devtools-page .dt-env-group-toggle[aria-expanded="true"] {
   background: var(--op-surface-2) !important;
 }
 
+body.devtools-page .dt-env-group-toggle[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--dt-env-group-accent) 58%, var(--op-border)) !important;
+  background: color-mix(in srgb, var(--dt-env-group-accent) 8%, var(--op-surface-2)) !important;
+}
+
 body.devtools-page .dt-env-group-icon {
   display: inline-grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   border: 1px solid var(--op-border-strong) !important;
   border-radius: var(--op-radius-sm) !important;
   background: transparent !important;
   color: var(--op-muted) !important;
-  font-size: calc(11px * var(--xk-font-scale, 1));
+  line-height: 1;
+}
+
+body.devtools-page .dt-env-group-icon-svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+body.devtools-page .dt-env-group-toggle[aria-expanded="true"] .dt-env-group-icon {
+  border-color: color-mix(in srgb, var(--dt-env-group-accent) 72%, var(--op-border-strong)) !important;
+  background: color-mix(in srgb, var(--dt-env-group-accent) 16%, var(--op-surface-3)) !important;
+  color: var(--dt-env-group-accent) !important;
 }
 
 body.devtools-page .dt-env-group-text {
-  gap: 0;
+  justify-content: center;
+  gap: 4px;
+  min-height: 34px;
+  line-height: 1.24;
 }
 
 body.devtools-page .dt-env-group-text strong {
   color: var(--op-text-strong);
   font-size: calc(11.5px * var(--xk-font-scale, 1));
   font-weight: 650;
+  line-height: 1.24;
 }
 
 body.devtools-page .dt-env-group-desc {
   color: var(--op-muted) !important;
   font-size: calc(10px * var(--xk-font-scale, 1));
+  line-height: 1.28;
 }
 
 body.devtools-page .dt-env-group-count {
