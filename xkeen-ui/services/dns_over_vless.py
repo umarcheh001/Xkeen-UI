@@ -191,6 +191,10 @@ PASS_PROBE_FAILS = 2
 # connection on the router; a flapping node must not be able to do that in a
 # loop, so one switch an hour is the ceiling.
 PASS_SWITCH_INTERVAL = 3600.0
+# The firmware numbers its resolver ports by policy index, so deleting a policy
+# can take our address away.  Repairing that means rewriting the fragment and
+# restarting the core, which is far too heavy to do on every healthy tick.
+LOCAL_RESOLVER_RESYNC_INTERVAL = 3600.0
 
 _LOCK = threading.RLock()
 
@@ -2496,6 +2500,54 @@ def reapply_client_capture(*, ui_state_dir: str) -> Dict[str, Any]:
         raise
     _LAST_CAPTURE_NOTE.pop("error", None)
     return result
+
+
+def recheck_local_resolvers(
+    *,
+    configs_dir: str,
+    routing_file: str,
+    ui_state_dir: str,
+    restart_xkeen: Callable[..., Any],
+) -> str:
+    """Put the local resolver back when the firmware has moved its port.
+
+    Only for a feature that is on and whose local zones the user actually set
+    up: an install that never wanted local resolution is left alone.  A set
+    that still overlaps what the firmware offers is good enough -- the zones
+    ride every resolver, so one live address answers them all.
+    """
+    state = _load_state(ui_state_dir)
+    if not state.get("enabled"):
+        return ""
+    saved = [str(item) for item in (state.get("local_resolvers") or []) if str(item).strip()]
+    if not saved:
+        return ""
+    found = firmware_resolvers.discover()
+    if not found:
+        # The firmware's configs are unreadable right now.  Rewriting the
+        # setting on that basis would throw away a working address.
+        return ""
+    if set(saved) & set(found):
+        return ""
+    last = state.get("local_resolvers_synced_at")
+    now = time.time()
+    try:
+        if last is not None and (now - float(last)) < LOCAL_RESOLVER_RESYNC_INTERVAL:
+            return ""
+    except (TypeError, ValueError):
+        pass
+    apply_action(
+        "enable",
+        configs_dir=configs_dir,
+        routing_file=routing_file,
+        ui_state_dir=ui_state_dir,
+        restart_xkeen=restart_xkeen,
+        local_resolver=found,
+    )
+    fresh = _load_state(ui_state_dir)
+    fresh["local_resolvers_synced_at"] = now
+    _save_state(ui_state_dir, fresh)
+    return "локальный DNS переключён на " + ", ".join(found)
 
 
 def _pass_health_for_window(state: Dict[str, Any]) -> Optional[Dict[str, Any]]:

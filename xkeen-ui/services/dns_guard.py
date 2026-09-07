@@ -108,6 +108,14 @@ def build_protections(
             ui_state_dir=ui_state_dir,
             restart_xkeen=restart_xkeen,
         )
+        # Порт резолвера прошивки привязан к индексу политики доступа и уезжает
+        # вместе с ней. Молча: зона просто уходит в тоннель.
+        dns_over_vless.recheck_local_resolvers(
+            configs_dir=configs_dir,
+            routing_file=routing_file,
+            ui_state_dir=ui_state_dir,
+            restart_xkeen=restart_xkeen,
+        )
 
     protections: List[Protection] = [
         Protection(
