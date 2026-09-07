@@ -389,6 +389,27 @@ body.panel-page:not(.mihomo-generator-page) .view-section {
   -webkit-backdrop-filter: none !important;
 }
 
+/* A normal desktop panel keeps its compact, fully visible header.  On short
+ * windows and phones the responsive control row can be taller than the
+ * remaining viewport; let the header become its own bounded scroll region so
+ * the active workspace still receives a real flex height.  Keep each shell
+ * child at its intrinsic height so the overflow belongs to the header rather
+ * than collapsing its controls. */
+@media (max-height: 640px), (max-width: 720px) {
+  html body.panel-page:not(.mihomo-generator-page) .panel-header {
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: min(320px, calc(100dvh - 160px));
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+
+  html body.panel-page:not(.mihomo-generator-page) .panel-header > * {
+    flex: 0 0 auto;
+  }
+}
+
 body.panel-page :is(.header-main, .panel-header-shell-main) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -810,7 +831,7 @@ body.panel-page .top-tabs.header-tabs .top-tab-btn:focus-visible {
 }
 
 /* Clip the full-bleed control surface to its own lower corners.  The parent
- * header intentionally remains overflow-visible for floating helpers. */
+ * header clips the complete shell as well, keeping the rounded frame intact. */
 body.panel-page .xkeen-ctrl-row {
   border-bottom-left-radius: calc(var(--op-radius-lg) - 1px) !important;
   border-bottom-right-radius: calc(var(--op-radius-lg) - 1px) !important;
