@@ -16198,22 +16198,13 @@ button:disabled{
   min-height: 420px;
   height: clamp(420px, 70vh, 760px);
   max-height: 90vh;
-  --fm-shift-x: 0px;
-  transform: translateX(var(--fm-shift-x));
   width: 100%;
   max-width: none;
 }
 
-/*
-  File manager has two panels with fixed/min column widths.
-  In the default 960px container this can cause a horizontal scrollbar.
+/* The two-pane workspace owns its available width.  Keep the card inside that
+   width so persisted geometry cannot create a page-level horizontal overflow. */
 
-  On wide screens we expand the file manager card ~2cm on each side
-  (≈ +4cm total) relative to the main container, without affecting the header.
-*/
-
-.fm-resize-handle-left,
-.fm-resize-handle-right,
 .fm-resize-handle-bottom{
   /* Actual draggable area for bottom-corner resize (implemented in JS) */
   position: absolute;
@@ -16225,16 +16216,6 @@ button:disabled{
   touch-action: none;
 }
 
-.fm-resize-handle-left{
-  left: 6px;
-  cursor: nesw-resize;
-}
-
-.fm-resize-handle-right{
-  right: 6px;
-  cursor: nwse-resize;
-}
-
 .fm-resize-handle-bottom{
   left: 50%;
   bottom: 4px;
@@ -16244,8 +16225,6 @@ button:disabled{
   cursor: ns-resize;
 }
 
-.fm-resize-handle-left::before,
-.fm-resize-handle-right::before,
 .fm-resize-handle-bottom::before{
   /* Visual cue for the custom bottom-corner resize handles */
   content: "";
@@ -16255,18 +16234,6 @@ button:disabled{
   height: 14px;
   border-radius: 2px;
   pointer-events: none;
-}
-
-.fm-resize-handle-left::before{
-  left: 4px;
-  border-left: 2px solid color-mix(in srgb, var(--muted, #94a3b8) 35%, transparent);
-  border-bottom: 2px solid color-mix(in srgb, var(--muted, #94a3b8) 35%, transparent);
-}
-
-.fm-resize-handle-right::before{
-  right: 4px;
-  border-right: 2px solid color-mix(in srgb, var(--muted, #94a3b8) 35%, transparent);
-  border-bottom: 2px solid color-mix(in srgb, var(--muted, #94a3b8) 35%, transparent);
 }
 
 .fm-resize-handle-bottom::before{
@@ -16288,13 +16255,10 @@ button:disabled{
   max-width: none !important;
   max-height: none !important;
   resize: none !important;
-  --fm-shift-x: 0px !important;
   transform: none !important;
   z-index: 45;
 }
 
-.fm-card.is-fullscreen .fm-resize-handle-left,
-.fm-card.is-fullscreen .fm-resize-handle-right,
 .fm-card.is-fullscreen .fm-resize-handle-bottom{
   display: none;
 }
@@ -17122,8 +17086,6 @@ html[data-theme="light"] .fm-context-sep{
 
 @media (max-width: 920px){
   .fm-card{ resize: none; }
-  .fm-resize-handle-left,
-  .fm-resize-handle-right,
   .fm-resize-handle-bottom{ display:none; }
   .fm-two{ grid-template-columns: 1fr; }
   .fm-row{ grid-template-columns: 28px minmax(140px, 1fr) minmax(56px, 84px) minmax(64px, 92px) minmax(108px, 140px); }

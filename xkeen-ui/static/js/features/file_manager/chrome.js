@@ -99,10 +99,9 @@ import { iconHtml } from '../../ui/operator_icons.js';
 
   // -------------------------- card geometry (persisted resize) --------------------------
   const GEOM = {
-    minW: 520,
     minH: 420,
-    // The manager stays in document flow, so a tall workspace can use page
-    // scroll. The previous 90vh cap made the bottom grip stop near 760px.
+    // Height may exceed the default clamp on tall screens, but remains bounded
+    // by the operator workspace CSS so the footer never leaves the scrollport.
     maxH: 4096,
   };
 
@@ -126,62 +125,23 @@ import { iconHtml } from '../../ui/operator_icons.js';
     try {
       const j = JSON.parse(raw);
       if (!j || typeof j !== 'object') return null;
-      const w = Number(j.w);
       const h = Number(j.h);
-      const shiftX = Number.isFinite(Number(j.shiftX)) ? Number(j.shiftX) : 0;
-      if (!Number.isFinite(w) || !Number.isFinite(h)) return null;
-      if (w < GEOM.minW || h < GEOM.minH) return null;
-      return { w, h, shiftX };
+      if (!Number.isFinite(h) || h < GEOM.minH) return null;
+      return { h };
     } catch (e) {
       return null;
     }
   }
 
-  function getShiftX(card) {
-    if (!card || !card.style || typeof card.style.getPropertyValue !== 'function') return 0;
-    try {
-      const raw = String(card.style.getPropertyValue('--fm-shift-x') || '').trim();
-      const n = Number(raw.replace('px', '').trim());
-      return Number.isFinite(n) ? n : 0;
-    } catch (e) {
-      return 0;
-    }
-  }
-
-  function getCardMetrics(card) {
-    if (!card) return null;
-    try {
-      const rect = card.getBoundingClientRect();
-      const shiftX = getShiftX(card);
-      if (!rect || !Number.isFinite(rect.left)) return null;
-      return {
-        flowLeft: rect.left - shiftX,
-      };
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function clampGeom(g, metrics) {
+  function clampGeom(g) {
     if (!g) return null;
-    let w = Number(g.w);
     let h = Number(g.h);
-    let shiftX = Number.isFinite(Number(g.shiftX)) ? Number(g.shiftX) : 0;
-    if (!Number.isFinite(w) || !Number.isFinite(h)) return null;
+    if (!Number.isFinite(h)) return null;
 
-    const maxW = Math.max(GEOM.minW, Math.round(window.innerWidth * 0.98));
     const maxH = Math.max(GEOM.minH, GEOM.maxH);
-    if (w < GEOM.minW) w = GEOM.minW;
     if (h < GEOM.minH) h = GEOM.minH;
-    if (Number.isFinite(maxW) && maxW > 0 && w > maxW) w = maxW;
     if (Number.isFinite(maxH) && maxH > 0 && h > maxH) h = maxH;
-    if (metrics && Number.isFinite(metrics.flowLeft)) {
-      const minShift = Math.round(8 - metrics.flowLeft);
-      const maxShift = Math.round(window.innerWidth - 8 - metrics.flowLeft - w);
-      if (shiftX < minShift) shiftX = minShift;
-      if (shiftX > maxShift) shiftX = maxShift;
-    }
-    return { w, h, shiftX };
+    return { h };
   }
 
   function applyGeom(g) {
@@ -189,13 +149,11 @@ import { iconHtml } from '../../ui/operator_icons.js';
     if (!card || !g) return;
     if (!canResizeNow()) return;
 
-    const gg = clampGeom(g, getCardMetrics(card));
+    const gg = clampGeom(g);
     if (!gg) return;
 
     try {
-      card.style.width = Math.round(gg.w) + 'px';
       card.style.height = Math.round(gg.h) + 'px';
-      card.style.setProperty('--fm-shift-x', Math.round(gg.shiftX) + 'px');
     } catch (e) {}
   }
 
@@ -206,13 +164,12 @@ import { iconHtml } from '../../ui/operator_icons.js';
 
     let r = null;
     try { r = card.getBoundingClientRect(); } catch (e) { r = null; }
-    if (!r || !Number.isFinite(r.width) || !Number.isFinite(r.height)) return;
+    if (!r || !Number.isFinite(r.height)) return;
 
-    const w = Math.round(r.width);
     const h = Math.round(r.height);
-    if (w < GEOM.minW || h < GEOM.minH) return;
+    if (h < GEOM.minH) return;
 
-    const geom = clampGeom({ w, h, shiftX: getShiftX(card) }, getCardMetrics(card));
+    const geom = clampGeom({ h });
     if (!geom) return;
 
     geomTouched = true;
@@ -233,6 +190,14 @@ import { iconHtml } from '../../ui/operator_icons.js';
   function wireGeomPersistence() {
     const card = cardEl();
     if (!card) return;
+
+    // Width follows the responsive workspace.  Remove legacy inline geometry
+    // before reading the persisted height so an older left/right resize can no
+    // longer leave the card shifted or wider than the viewport.
+    try {
+      card.style.removeProperty('width');
+      card.style.removeProperty('--fm-shift-x');
+    } catch (e) {}
 
     // avoid double-wire
     try {
@@ -255,7 +220,7 @@ import { iconHtml } from '../../ui/operator_icons.js';
           if (!canResizeNow()) return;
           if (!geomTouched) {
             try {
-              const hasInline = !!(card.style && (card.style.width || card.style.height || card.style.getPropertyValue('--fm-shift-x')));
+              const hasInline = !!(card.style && card.style.height);
               if (!hasInline) return;
               geomTouched = true;
             } catch (e) { return; }
@@ -279,14 +244,21 @@ import { iconHtml } from '../../ui/operator_icons.js';
     } catch (e) {}
   }
 
-  // -------------------------- bottom/corner resize handles --------------------------
+  // -------------------------- vertical resize handle --------------------------
   function wireResizeHandles() {
     const card = cardEl();
     if (!card) return;
 
+    // Clean up side handles left by an older runtime/HMR session. Horizontal
+    // resize is intentionally disabled: the card always fits its workspace.
+    try {
+      ['.fm-resize-handle-left', '.fm-resize-handle-right'].forEach((selector) => {
+        const handle = qs(selector, card);
+        if (handle) handle.remove();
+      });
+    } catch (e) {}
+
     const handles = [
-      { side: 'left', className: 'fm-resize-handle-left', cursor: 'nesw-resize' },
-      { side: 'right', className: 'fm-resize-handle-right', cursor: 'nwse-resize' },
       { side: 'bottom', className: 'fm-resize-handle-bottom', cursor: 'ns-resize' },
     ];
 
@@ -309,12 +281,8 @@ import { iconHtml } from '../../ui/operator_icons.js';
       } catch (e) {}
 
       let dragging = false;
-      let startX = 0;
       let startY = 0;
-      let startW = 0;
       let startH = 0;
-      let startShiftX = 0;
-      let metrics = null;
       let prevBodyUserSelect = '';
       let prevBodyCursor = '';
 
@@ -323,16 +291,10 @@ import { iconHtml } from '../../ui/operator_icons.js';
           if (!canResizeNow()) return;
           if (ev && ev.pointerType === 'mouse' && ev.button !== 0) return;
           const r = card.getBoundingClientRect();
-          startX = ev.clientX;
           startY = ev.clientY;
-          startW = r.width;
           startH = r.height;
-          startShiftX = getShiftX(card);
-          metrics = getCardMetrics(card);
 
-          card.style.width = Math.round(startW) + 'px';
           card.style.height = Math.round(startH) + 'px';
-          card.style.setProperty('--fm-shift-x', Math.round(startShiftX) + 'px');
 
           dragging = true;
           geomTouched = true;
@@ -351,24 +313,12 @@ import { iconHtml } from '../../ui/operator_icons.js';
       function onMove(ev) {
         if (!dragging) return;
         try {
-          const dx = ev.clientX - startX;
           const dy = ev.clientY - startY;
 
-          let w = cfg.side === 'bottom'
-            ? startW
-            : (cfg.side === 'left' ? (startW - dx) : (startW + dx));
-          let h = startH + dy;
-          let shiftX = startShiftX;
-          if (cfg.side === 'left') {
-            shiftX = startShiftX + (startW - w);
-          }
-
-          const geom = clampGeom({ w, h, shiftX }, metrics);
+          const geom = clampGeom({ h: startH + dy });
           if (!geom) return;
 
-          card.style.width = Math.round(geom.w) + 'px';
           card.style.height = Math.round(geom.h) + 'px';
-          card.style.setProperty('--fm-shift-x', Math.round(geom.shiftX) + 'px');
 
           ev.preventDefault();
           ev.stopPropagation();

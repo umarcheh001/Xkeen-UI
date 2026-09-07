@@ -163,6 +163,36 @@ test.describe('Operator Console Stage 4 files', () => {
     expect(layout.iconRight).toBeLessThan(layout.labelLeft);
   });
 
+  test('legacy horizontal geometry is ignored and footer actions stay in view', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript(() => {
+      localStorage.setItem('xkeen.fm.geom_v3', JSON.stringify({ w: 1000, h: 4096, shiftX: -420 }));
+    });
+    await mockFiles(page);
+    await page.goto('/');
+    await page.locator('.top-tab-btn[data-view="files"]').click();
+    await expect(page.locator('#view-files')).toBeVisible();
+    await expect(page.locator('#fm-upload-btn')).toBeVisible();
+
+    const geometry = await page.evaluate(() => {
+      const view = document.querySelector('#view-files');
+      const card = document.querySelector('.fm-card');
+      const footer = document.querySelector('.fm-footer');
+      return {
+        card: card?.getBoundingClientRect().toJSON(),
+        view: view?.getBoundingClientRect().toJSON(),
+        footer: footer?.getBoundingClientRect().toJSON(),
+        sideHandles: document.querySelectorAll('.fm-resize-handle-left, .fm-resize-handle-right').length,
+      };
+    });
+
+    expect(geometry.sideHandles).toBe(0);
+    expect(Math.abs(geometry.card.left - geometry.view.left)).toBeLessThanOrEqual(1);
+    expect(Math.abs(geometry.card.width - geometry.view.width)).toBeLessThanOrEqual(2);
+    expect(geometry.card.bottom).toBeLessThanOrEqual(geometry.view.bottom + 1);
+    expect(geometry.footer.bottom).toBeLessThanOrEqual(geometry.view.bottom + 1);
+  });
+
   test('selection and keyboard focus remain distinct and accessible', async ({ page }) => {
     await openFiles(page, 'dark', { width: 1440, height: 900 });
     const list = page.locator('.fm-panel[data-side="left"] .fm-list');

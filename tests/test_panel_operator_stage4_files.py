@@ -101,15 +101,22 @@ def test_files_bottom_resize_and_same_folder_drop_cancel_are_explicit():
     dragdrop = DRAGDROP.read_text(encoding="utf-8")
 
     assert "{ side: 'bottom', className: 'fm-resize-handle-bottom', cursor: 'ns-resize' }" in chrome
-    assert "cfg.side === 'bottom'" in chrome
+    assert "className: 'fm-resize-handle-left'" not in chrome
+    assert "className: 'fm-resize-handle-right'" not in chrome
+    assert "side: 'bottom'" in chrome
     assert "maxH: 4096" in chrome
     assert "Math.round(window.innerHeight * 0.90)" not in chrome
+    assert "card.style.removeProperty('width')" in chrome
+    assert "card.style.removeProperty('--fm-shift-x')" in chrome
     assert ".fm-resize-handle-bottom{" in styles
     assert "cursor: ns-resize;" in styles
 
     operator = CSS.read_text(encoding="utf-8")
     card = operator[operator.index("body.panel-page .fm-card,") : operator.index("body.panel-page .fm-header {")]
-    assert "max-height: none;" in card
+    # Persisted geometry is still allowed to grow on tall screens, but the
+    # card must stay inside its viewport-bound files workspace so the footer
+    # actions cannot be pushed out of view by an old oversized height.
+    assert "max-height: 100%;" in card
 
     guard = dragdrop.index("if (sameLocalDir || sameRemoteDir) return;")
     modal = dragdrop.index("chosenOp = await openDropOpModal", guard)

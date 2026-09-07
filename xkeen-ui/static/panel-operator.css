@@ -4418,9 +4418,12 @@ body.panel-page .fm-card,
 html[data-theme="light"] body.panel-page .fm-card {
   height: clamp(460px, 64dvh, 680px);
   min-height: 420px;
-  /* Custom resize may intentionally exceed the viewport; the surrounding
-   * document scrolls and the bottom grip remains reusable. */
-  max-height: none;
+  /* Keep a persisted/custom height inside the visible files workspace.  The
+   * page shell is viewport-bound and scrolls each workspace independently;
+   * without this cap an old 900–1000px geometry pushes the footer toolbar
+   * below the scrollport, making the file actions look as if they vanished.
+   * A percentage cap still lets the resize grip grow on tall screens. */
+  max-height: 100%;
   padding: 0;
   overflow: hidden;
   background: var(--op-surface) !important;
@@ -4910,8 +4913,6 @@ body.panel-page .fm-busy-box {
   box-shadow: var(--op-shadow-float) !important;
 }
 
-body.panel-page .fm-resize-handle-left::before,
-body.panel-page .fm-resize-handle-right::before,
 body.panel-page .fm-resize-handle-bottom::before {
   border-color: var(--op-faint);
   opacity: 0.55;
