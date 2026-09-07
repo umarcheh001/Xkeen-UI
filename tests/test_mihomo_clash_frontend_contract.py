@@ -429,7 +429,7 @@ def test_expanded_group_uses_dense_node_grid_without_duplicate_state_column():
     assert "state: 'unavailable'" in groups
     assert "effectiveNode.availability === 'unavailable' || effectiveNode.alive === false" in groups
     assert "effectiveNode.alive === true" in groups
-    assert 'grid-template-columns: repeat(auto-fill, minmax(min(100%, 232px), 1fr));' in css
+    assert 'grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));' in css
     assert 'grid-auto-rows: minmax(82px, auto);' in css
     assert 'border-radius: var(--op-control-radius);' in css
     assert 'background: var(--op-editor);' in css

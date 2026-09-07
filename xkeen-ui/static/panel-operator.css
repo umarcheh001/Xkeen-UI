@@ -19726,7 +19726,11 @@ body.panel-page .xk-mihomo-group-flag {
 
 body.panel-page .xk-mihomo-node-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 232px), 1fr));
+  /* Keep five compact cards on the normal desktop workspace.  The fluid
+   * container leaves a few pixels less room than the legacy max layout; a
+   * 220px floor still keeps names and status badges readable while avoiding
+   * the abrupt 5→4 column drop at the standard 1280px viewport. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
   grid-auto-rows: minmax(82px, auto);
   gap: 8px;
   align-items: stretch;
