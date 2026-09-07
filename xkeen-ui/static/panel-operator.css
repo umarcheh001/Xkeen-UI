@@ -461,30 +461,33 @@ body.panel-page :is(code, pre, textarea) {
 /* ==========================================================================
  * 3. SHELL
  * ========================================================================== */
-/* Keep the panel chrome fixed to the viewport.  Each workspace is the scroll
- * region, so a long Routing/Mihomo/Logs/Terminal view cannot push the header
- * off-screen or make the document itself taller than the browser window.  The
- * generator has its own full-screen shell and is intentionally excluded. */
+/* Keep two useful scroll surfaces for the panel.  The document owns the
+ * outer scroll, so the complete shell (including the header) can be moved out
+ * of the way on compact screens or when a long panel is open.  The active
+ * workspace remains a viewport-sized scroll region as well; this preserves the
+ * existing focused-workspace workflow and lets the user choose the surface
+ * under the pointer (or pass through at an inner scroll boundary).  The
+ * generator has its own document-level shell and is intentionally excluded. */
 body.panel-page:not(.mihomo-generator-page) {
-  height: 100vh;
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
+  height: auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
 }
 
 body.panel-page:not(.mihomo-generator-page) .container.container-wide {
   display: flex;
   flex-direction: column;
-  /* A percentage height on a direct child of <body> is treated as
-   * content-sized by Chromium even when body itself has a viewport height.
-   * Use the viewport unit directly so the flex child has a definite size and
-   * can actually shrink the active workspace below its intrinsic content. */
-  height: 100vh;
-  height: 100dvh;
-  max-height: 100vh;
-  max-height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
+  /* The view below intentionally contributes a full viewport to the
+   * document.  Together with the header this gives the root scrollport enough
+   * range to move the shell while keeping the inner workspace scrollable. */
+  height: auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  max-height: none;
+  overflow: visible;
 }
 
 body.panel-page:not(.mihomo-generator-page) .panel-header {
@@ -492,12 +495,26 @@ body.panel-page:not(.mihomo-generator-page) .panel-header {
 }
 
 body.panel-page:not(.mihomo-generator-page) .view-section {
-  flex: 1 1 auto;
+  /* A full viewport is deliberate: the part hidden behind the header at the
+   * top of the page becomes reachable by the document scroll, while this
+   * element still owns its own scroll position. */
+  flex: 0 0 100vh;
+  flex-basis: 100dvh;
+  height: 100vh;
+  height: 100dvh;
   min-height: 0;
+  max-height: none;
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
   scrollbar-gutter: stable;
+}
+
+/* Fullscreen editors and modal families deliberately suspend both scroll
+ * surfaces.  Keep this lock after the dual-scroll shell rules so the panel
+ * selector cannot accidentally outrank the shared legacy lock. */
+body.panel-page:not(.mihomo-generator-page):is(.modal-open, .xk-no-scroll) {
+  overflow: hidden !important;
 }
 
 :is(body.panel-page, html[data-theme="light"] body.panel-page) .panel-header {

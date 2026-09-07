@@ -616,6 +616,55 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
     return nextView;
   }
 
+  // The panel intentionally has two scroll surfaces: the document can move
+  // the whole shell, while the active workspace keeps its existing viewport
+  // scroll.  Chromium does not consistently chain a wheel gesture from a
+  // nested scrollport at its edge, so bridge only that edge case.  A nested
+  // list/editor still consumes the gesture whenever it has room to move.
+  let _dualScrollBound = false;
+  function bindPanelDualScroll() {
+    if (_dualScrollBound) return;
+    _dualScrollBound = true;
+
+    document.querySelectorAll('.view-section').forEach((view) => {
+      view.addEventListener('wheel', (event) => {
+        if (!event || event.defaultPrevented) return;
+        const deltaY = Number(event.deltaY || 0);
+        if (!deltaY || Math.abs(deltaY) <= Math.abs(Number(event.deltaX || 0))) return;
+
+        const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+        const nodes = path.length ? path : [event.target];
+        const candidates = [];
+        for (const node of nodes) {
+          if (!(node instanceof Element)) continue;
+          candidates.push(node);
+          if (node === view) break;
+        }
+
+        for (const node of candidates) {
+          const style = getComputedStyle(node);
+          const canScroll = node.scrollHeight > node.clientHeight + 1
+            && ['auto', 'scroll'].includes(style.overflowY);
+          if (!canScroll) continue;
+          const maxTop = Math.max(0, node.scrollHeight - node.clientHeight);
+          const atEdge = deltaY > 0
+            ? node.scrollTop >= maxTop - 1
+            : node.scrollTop <= 1;
+          if (!atEdge) return;
+        }
+
+        const root = document.documentElement;
+        const maxWindowTop = Math.max(0, root.scrollHeight - window.innerHeight);
+        const currentWindowTop = Number(window.scrollY || window.pageYOffset || 0);
+        const nextWindowTop = Math.max(0, Math.min(maxWindowTop, currentWindowTop + deltaY));
+        if (Math.abs(nextWindowTop - currentWindowTop) <= 0.5) return;
+
+        event.preventDefault();
+        window.scrollTo(0, nextWindowTop);
+      }, { passive: false });
+    });
+  }
+
   function wireTabs() {
     const buttons = document.querySelectorAll('.top-tab-btn[data-view]');
     buttons.forEach((btn) => {
@@ -1193,6 +1242,7 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
     syncLightweightDonateButtonVisibility();
     ensureHeaderAsyncShellBinding();
     wireTabs();
+    bindPanelDualScroll();
     wireExplicitNavigation();
     wirePanelLazyFeatureClicks();
     startLightweightXkeenStatusPolling();

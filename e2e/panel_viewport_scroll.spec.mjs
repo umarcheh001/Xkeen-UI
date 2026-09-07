@@ -47,6 +47,7 @@ async function readScrollContract(page, viewId) {
       viewScrollTop: view.scrollTop,
       viewBottom: viewRect.bottom,
       viewportHeight: innerHeight,
+      outerScrollTop: window.scrollY,
       headerOverflowY: headerStyle.overflowY,
       headerScrollHeight: header.scrollHeight,
       headerClientHeight: header.clientHeight,
@@ -95,25 +96,50 @@ test('panel workspaces keep a usable scroll region across desktop and short view
       const label = `${viewport.width}x${viewport.height} ${tab}`;
       expect(['auto', 'scroll'], label).toContain(before.viewOverflowY);
       expect(before.viewClientHeight, label).toBeGreaterThan(0);
-      expect(before.viewBottom, label).toBeLessThanOrEqual(before.viewportHeight + 1);
+      expect(before.viewClientHeight, label).toBeGreaterThanOrEqual(before.viewportHeight - 1);
       expect(before.headerBottom, label).toBeLessThanOrEqual(before.viewportHeight + 1);
-      expect(before.containerOverflowY, label).toBe('hidden');
+      expect(['visible', 'auto'], label).toContain(before.containerOverflowY);
       expect(before.containerScrollHeight - before.containerClientHeight, label).toBeLessThanOrEqual(1);
       if (viewport.height <= 640 || viewport.width <= 720) {
         expect(before.headerOverflowY, label).toBe('auto');
         expect(before.headerClientHeight, label).toBeGreaterThan(0);
-        expect(before.headerScrollHeight, label).toBeGreaterThan(before.headerClientHeight);
+        // The outer page scroll now carries the header on short screens; the
+        // header remains locally scrollable when its controls need it, but it
+        // is valid for its intrinsic content to fit at a given width.
+        expect(before.headerScrollHeight, label).toBeGreaterThanOrEqual(before.headerClientHeight);
       }
-      expect(before.bodyOverflowY, label).toBe('hidden');
-      expect(before.bodyScrollHeight - before.bodyClientHeight, label).toBeLessThanOrEqual(1);
-      expect(before.rootScrollHeight - before.rootClientHeight, label).toBeLessThanOrEqual(1);
+      expect(['auto', 'scroll'], label).toContain(before.bodyOverflowY);
+      expect(before.rootScrollHeight - before.rootClientHeight, label).toBeGreaterThan(1);
       expect(before.viewScrollHeight, label).toBeGreaterThan(before.viewClientHeight);
 
       await view.evaluate((node) => { node.scrollTop = node.scrollHeight; });
-      const after = await readScrollContract(page, viewId);
-      expect(after.viewScrollTop, label).toBeGreaterThan(0);
+      const afterInner = await readScrollContract(page, viewId);
+      expect(afterInner.viewScrollTop, label).toBeGreaterThan(0);
+
+      // A wheel gesture at the inner bottom is bridged to the document
+      // scrollport, so users do not need to hunt for the second scrollbar.
+      await page.evaluate((id) => {
+        window.scrollTo(0, 0);
+        const node = document.getElementById(id);
+        node.dispatchEvent(new WheelEvent('wheel', {
+          bubbles: true,
+          cancelable: true,
+          deltaY: 120,
+        }));
+      }, viewId);
+      const afterWheel = await readScrollContract(page, viewId);
+      expect(afterWheel.outerScrollTop, label).toBeGreaterThan(0);
+
+      // The outer document and the active workspace retain independent
+      // positions: a page scroll must not reset the focused workspace.
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      const afterOuter = await readScrollContract(page, viewId);
+      expect(afterOuter.outerScrollTop, label).toBeGreaterThan(0);
+      expect(afterOuter.viewScrollTop, label).toBe(afterInner.viewScrollTop);
 
       await page.locator(`[data-issue33-probe="${viewId}"]`).evaluate((node) => node.remove());
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await view.evaluate((node) => { node.scrollTop = 0; });
     }
   }
 });
