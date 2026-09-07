@@ -11,6 +11,8 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "xkeen-ui"))
 
@@ -49,6 +51,8 @@ def test_resync_when_the_port_is_gone(tmp_path: Path, monkeypatch):
 
     assert "127.0.0.1:41101" in note
     assert called and called[0]["local_resolver"] == ["127.0.0.1:41101"]
+    # Штамп времени пережил вызов и лежит в сохранённом состоянии.
+    assert dns._load_state(str(state)).get("local_resolvers_synced_at")
 
 
 def test_resync_happens_at_most_once_an_hour(tmp_path: Path, monkeypatch):
@@ -104,3 +108,44 @@ def test_disabled_feature_is_not_touched(tmp_path: Path, monkeypatch):
         ui_state_dir=str(state), restart_xkeen=lambda *a, **kw: {"ok": True},
     ) == ""
     assert called == []
+
+
+def test_no_resync_when_discover_comes_back_empty(tmp_path: Path, monkeypatch):
+    # Конфигурация прошивки временно нечитаема — не стоит из-за этого
+    # отказываться от рабочего адреса, который уже сохранён.
+    state = tmp_path / "state"
+    state.mkdir()
+    dns._save_state(str(state), {"enabled": True, "local_resolvers": ["127.0.0.1:41100"]})
+    monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda *a, **kw: [])
+    called = []
+    monkeypatch.setattr(dns, "apply_action", lambda *a, **kw: called.append(kw))
+
+    note = dns.recheck_local_resolvers(
+        configs_dir=str(tmp_path), routing_file=str(tmp_path / "05_routing.json"),
+        ui_state_dir=str(state), restart_xkeen=lambda *a, **kw: {"ok": True},
+    )
+
+    assert note == ""
+    assert called == []
+
+
+def test_failed_resync_still_stamps_the_timestamp(tmp_path: Path, monkeypatch):
+    # Штамп ставится до вызова apply_action: даже если попытка провалилась,
+    # сторож не должен пытаться перезапустить ядро на каждом такте.
+    state = tmp_path / "state"
+    state.mkdir()
+    dns._save_state(str(state), {"enabled": True, "local_resolvers": ["127.0.0.1:41100"]})
+    monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda *a, **kw: ["127.0.0.1:41101"])
+
+    def _boom(*a, **kw):
+        raise RuntimeError("не удалось применить настройку")
+
+    monkeypatch.setattr(dns, "apply_action", _boom)
+
+    with pytest.raises(RuntimeError):
+        dns.recheck_local_resolvers(
+            configs_dir=str(tmp_path), routing_file=str(tmp_path / "05_routing.json"),
+            ui_state_dir=str(state), restart_xkeen=lambda *a, **kw: {"ok": True},
+        )
+
+    assert dns._load_state(str(state)).get("local_resolvers_synced_at")

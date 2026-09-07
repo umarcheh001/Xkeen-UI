@@ -2515,27 +2515,40 @@ def recheck_local_resolvers(
     up: an install that never wanted local resolution is left alone.  A set
     that still overlaps what the firmware offers is good enough -- the zones
     ride every resolver, so one live address answers them all.
+
+    The timestamp is stamped *before* ``apply_action`` runs, under ``_LOCK``,
+    not after it returns: it marks that a resync was attempted, not that it
+    succeeded, which is what the hourly interval is there to bound.  Without
+    that a persistently failing resync would re-enter on every healthy tick
+    and try to restart the core every 30 seconds.  A failure from
+    ``apply_action`` is not caught here -- it propagates out to the guard's
+    own ``Protection.reconcile``, which already turns it into the tick's
+    visible ``reconcile_error``.
     """
-    state = _load_state(ui_state_dir)
-    if not state.get("enabled"):
-        return ""
-    saved = [str(item) for item in (state.get("local_resolvers") or []) if str(item).strip()]
-    if not saved:
-        return ""
-    found = firmware_resolvers.discover()
-    if not found:
-        # The firmware's configs are unreadable right now.  Rewriting the
-        # setting on that basis would throw away a working address.
-        return ""
-    if set(saved) & set(found):
-        return ""
-    last = state.get("local_resolvers_synced_at")
-    now = time.time()
-    try:
-        if last is not None and (now - float(last)) < LOCAL_RESOLVER_RESYNC_INTERVAL:
+    with _LOCK:
+        state = _load_state(ui_state_dir)
+        if not state.get("enabled"):
             return ""
-    except (TypeError, ValueError):
-        pass
+        saved = [str(item) for item in (state.get("local_resolvers") or []) if str(item).strip()]
+        if not saved:
+            return ""
+        found = firmware_resolvers.discover()
+        if not found:
+            # The firmware's configs are unreadable right now.  Rewriting the
+            # setting on that basis would throw away a working address.
+            return ""
+        if set(saved) & set(found):
+            return ""
+        last = state.get("local_resolvers_synced_at")
+        now = time.time()
+        try:
+            if last is not None and (now - float(last)) < LOCAL_RESOLVER_RESYNC_INTERVAL:
+                return ""
+        except (TypeError, ValueError):
+            pass
+        state["local_resolvers_synced_at"] = now
+        _save_state(ui_state_dir, state)
+
     apply_action(
         "enable",
         configs_dir=configs_dir,
@@ -2544,9 +2557,6 @@ def recheck_local_resolvers(
         restart_xkeen=restart_xkeen,
         local_resolver=found,
     )
-    fresh = _load_state(ui_state_dir)
-    fresh["local_resolvers_synced_at"] = now
-    _save_state(ui_state_dir, fresh)
     return "локальный DNS переключён на " + ", ".join(found)
 
 
