@@ -132,8 +132,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     // Sent with the list itself: the same address is a mistake without it and
     // a deliberate choice with it.
     if (remote) settings.upstreams_remote = !!remote.checked;
-    // An empty string is meaningful here: it switches the local exception off.
-    if (local) settings.local_resolver = String(local.value || '').trim();
+    // An untouched empty field means "nothing decided yet": omit the key so
+    // the server can fall back to the firmware resolver (or a previously
+    // saved one). A field the user actually cleared is tracked by
+    // dataset.touched and still sends "" — that stays a deliberate switch-off.
+    if (local) {
+      const localValue = String(local.value || '').trim();
+      if (localValue || local.dataset.touched) settings.local_resolver = localValue;
+    }
     const zones = $(DOM.zones);
     if (zones && settings.local_resolver) settings.local_domains = String(zones.value || '').trim();
     const direct = $(DOM.direct);

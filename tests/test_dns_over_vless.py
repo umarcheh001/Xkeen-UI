@@ -3122,6 +3122,52 @@ def test_enable_without_a_resolver_takes_the_firmware_one(tmp_path: Path, monkey
     assert saved["local_resolvers"] == ["127.0.0.1:41100"]
 
 
+def test_enable_without_a_resolver_also_gets_a_non_empty_zone_list(tmp_path: Path, monkeypatch):
+    """Критерий 2 спеки: включение без явного адреса должно и подставить
+    резолвер прошивки, и создать правило ``xk_dns_over_vless_local`` с
+    непустым списком зон. Карточка шлёт ``local_domains`` только в паре с
+    ``local_resolver`` (dns_over_vless.js, ``dnsSettings()``), так что при
+    автоподстановке зоны с карточки не приезжают вовсе — они обязаны
+    взяться сами, из сохранённого состояния или из значения по умолчанию."""
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj, **_kwargs: _write(Path(path), obj))
+    monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda *a, **kw: ["127.0.0.1:41100"])
+
+    dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+        # Ни local_resolver, ни local_domains не переданы — ровно то, что
+        # шлёт карточка, когда поле резолвера пустое и его не трогали.
+    )
+
+    saved = dns._load_state(str(state))
+    assert saved["local_resolvers"] == ["127.0.0.1:41100"]
+    assert saved["local_domains"] == dns.DEFAULT_LOCAL_DOMAINS
+
+    fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+    home = fragment["dns"]["servers"][0]
+    assert home["address"] == "127.0.0.1"
+    # Не только адрес резолвера — реальный, непустой список зон.
+    assert home["domains"] == dns.DEFAULT_LOCAL_DOMAINS
+
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    rules = routing["routing"]["rules"]
+    local_rule = next((r for r in rules if r.get("ruleTag") == dns.LOCAL_RULE_TAG), None)
+    assert local_rule is not None
+    assert local_rule["ip"] == ["127.0.0.1/32"]
+
+
 def test_enable_with_an_empty_field_keeps_no_resolver(tmp_path: Path, monkeypatch):
     configs, routing_path, state = _scenario_config(tmp_path)
     monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
