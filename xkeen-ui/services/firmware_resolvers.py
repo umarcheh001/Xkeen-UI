@@ -23,7 +23,7 @@ from __future__ import annotations
 import glob
 import os
 import re
-from typing import List
+from typing import List, Optional
 
 # The firmware writes its generated configs here.
 NDNPROXY_CONF_DIR = "/var"
@@ -35,8 +35,13 @@ LISTENER_PORT = 53
 # Same ceiling as MAX_LOCAL_RESOLVERS in dns_over_vless: the whole list is
 # offered as local resolvers, so it must fit there.
 MAX_RESOLVERS = 16
+# The range ``discover`` can actually produce: port 41100 plus one per policy.
+# A guard uses this to tell "an address we could have written" from anything
+# else that happens to sit on loopback -- see ``looks_like_ours``.
+RESOLVER_PORT_BASE = 41100
+RESOLVER_PORT_CEILING = RESOLVER_PORT_BASE + MAX_RESOLVERS
 
-_PORT_RE = re.compile(r"^\s*dns_udp_port\s*=\s*(\d+)\s*$", re.MULTILINE)
+_PORT_RE = re.compile(r"^\s*dns_udp_port\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 
 
 def parse_listen_port(text: str) -> int:
@@ -51,12 +56,35 @@ def parse_listen_port(text: str) -> int:
     return port if 1 <= port <= 65535 else 0
 
 
-def discover(conf_dir: str = NDNPROXY_CONF_DIR) -> List[str]:
+def looks_like_ours(address: str) -> bool:
+    """Could ``discover`` plausibly have produced this address?
+
+    Used by the guard to tell a firmware resolver it once wrote from a
+    resolver the user pointed at something else entirely -- a home server,
+    Pi-hole, AdGuard -- which just as legitimately sits outside ``found`` and
+    must never be treated as stale.  Never raises: garbage in means "no".
+    """
+    text = str(address or "").strip()
+    if not text or ":" not in text:
+        return False
+    host, _, raw_port = text.rpartition(":")
+    if host != LOOPBACK:
+        return False
+    try:
+        port = int(raw_port)
+    except ValueError:
+        return False
+    return RESOLVER_PORT_BASE <= port <= RESOLVER_PORT_CEILING
+
+
+def discover(conf_dir: Optional[str] = None) -> List[str]:
     """Addresses of the firmware's own resolvers, lowest port first.
 
     Never raises: a machine that is not a Keenetic simply has no such files,
     and the caller shows an empty list instead of an error.
     """
+    if conf_dir is None:
+        conf_dir = NDNPROXY_CONF_DIR
     try:
         paths = sorted(glob.glob(os.path.join(str(conf_dir), NDNPROXY_CONF_PATTERN)))
     except Exception:

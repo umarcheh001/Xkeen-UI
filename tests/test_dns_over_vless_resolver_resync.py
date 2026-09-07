@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import time
 from pathlib import Path
@@ -17,6 +18,60 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "xkeen-ui"))
 
 from services import dns_over_vless as dns  # noqa: E402
+
+
+def _write(path: Path, value: dict) -> None:
+    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _base_config(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """A minimal routable install: one balancer, one direct outbound."""
+    configs = tmp_path / "configs"
+    state = tmp_path / "state"
+    configs.mkdir()
+    state.mkdir()
+    _write(
+        configs / "04_outbounds.json",
+        {
+            "outbounds": [
+                {"tag": "direct", "protocol": "freedom"},
+                {"tag": "proxy-a", "protocol": "vless"},
+                {"tag": "proxy-b", "protocol": "vless"},
+            ]
+        },
+    )
+    routing = configs / "05_routing.json"
+    _write(
+        routing,
+        {
+            "routing": {
+                "rules": [{"type": "field", "outboundTag": "direct", "network": "tcp,udp"}],
+                "balancers": [
+                    {
+                        "tag": "proxy",
+                        "selector": ["proxy-a", "proxy-b"],
+                        "strategy": {"type": "leastPing"},
+                        "fallbackTag": "direct",
+                    }
+                ],
+            }
+        },
+    )
+    return configs, routing, state
+
+
+def _patch_apply_action_plumbing(monkeypatch) -> None:
+    """Everything ``apply_action`` needs beyond the filesystem to run for real."""
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(
+        dns, "_write_routing_preserving_comments", lambda path, obj, **_k: _write(Path(path), obj)
+    )
 
 
 def test_no_resync_when_the_addresses_still_match(tmp_path: Path, monkeypatch):
@@ -37,9 +92,65 @@ def test_no_resync_when_the_addresses_still_match(tmp_path: Path, monkeypatch):
 
 
 def test_resync_when_the_port_is_gone(tmp_path: Path, monkeypatch):
+    # apply_action не подменяется лямбдой: только настоящий вызов пишет
+    # "enable" своим собственным словарём состояния и может стереть штамп,
+    # который recheck_local_resolvers поставил до вызова.
+    configs, routing_path, state = _base_config(tmp_path)
+    _patch_apply_action_plumbing(monkeypatch)
+
+    dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="proxy",
+        local_resolver="127.0.0.1:41100",
+    )
+
+    monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda *a, **kw: ["127.0.0.1:41101"])
+
+    note = dns.recheck_local_resolvers(
+        configs_dir=str(configs), routing_file=str(routing_path),
+        ui_state_dir=str(state), restart_xkeen=lambda **_k: True,
+    )
+
+    assert "127.0.0.1:41101" in note
+    saved = dns._load_state(str(state))
+    assert saved.get("local_resolvers") == ["127.0.0.1:41101"]
+    # Штамп времени пережил настоящий вызов apply_action, а не только лямбду.
+    assert saved.get("local_resolvers_synced_at")
+
+
+def test_addresses_the_user_chose_themselves_are_left_alone(tmp_path: Path, monkeypatch):
+    # Pi-hole, AdGuard или домашний сервер — не резолвер прошивки, сторожу
+    # трогать эту запись нельзя, даже если она "устарела" по сравнению с
+    # найденными портами.
     state = tmp_path / "state"
     state.mkdir()
-    dns._save_state(str(state), {"enabled": True, "local_resolvers": ["127.0.0.1:41100"]})
+    dns._save_state(str(state), {"enabled": True, "local_resolvers": ["192.168.10.5:53"]})
+    monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda *a, **kw: ["127.0.0.1:41100"])
+    called = []
+    monkeypatch.setattr(dns, "apply_action", lambda *a, **kw: called.append(kw))
+
+    note = dns.recheck_local_resolvers(
+        configs_dir=str(tmp_path), routing_file=str(tmp_path / "05_routing.json"),
+        ui_state_dir=str(state), restart_xkeen=lambda *a, **kw: {"ok": True},
+    )
+
+    assert note == ""
+    assert called == []
+
+
+def test_mixed_set_keeps_the_users_address_and_swaps_the_firmware_one(tmp_path: Path, monkeypatch):
+    # Смешанный набор: один адрес пользователь вписал сам, другой — то, что
+    # когда-то нашёл сторож. Устарел только второй, первый трогать нельзя.
+    state = tmp_path / "state"
+    state.mkdir()
+    dns._save_state(
+        str(state),
+        {"enabled": True, "local_resolvers": ["192.168.10.5:53", "127.0.0.1:41100"]},
+    )
     monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda *a, **kw: ["127.0.0.1:41101"])
     called = []
     monkeypatch.setattr(dns, "apply_action", lambda *a, **kw: called.append(kw) or {"ok": True})
@@ -50,9 +161,8 @@ def test_resync_when_the_port_is_gone(tmp_path: Path, monkeypatch):
     )
 
     assert "127.0.0.1:41101" in note
-    assert called and called[0]["local_resolver"] == ["127.0.0.1:41101"]
-    # Штамп времени пережил вызов и лежит в сохранённом состоянии.
-    assert dns._load_state(str(state)).get("local_resolvers_synced_at")
+    assert "192.168.10.5:53" in note
+    assert called and called[0]["local_resolver"] == ["192.168.10.5:53", "127.0.0.1:41101"]
 
 
 def test_resync_happens_at_most_once_an_hour(tmp_path: Path, monkeypatch):
@@ -77,6 +187,34 @@ def test_resync_happens_at_most_once_an_hour(tmp_path: Path, monkeypatch):
 
     assert note == ""
     assert called == []
+
+
+def test_a_stamp_from_the_future_does_not_mute_the_resync_forever(tmp_path: Path, monkeypatch):
+    # Keenetic грузится без часов реального времени: штамп может оказаться
+    # "в будущем" относительно временно неверных часов роутера. Без защиты
+    # (now - last) уходит в минус, разница меньше часа навсегда, и резолвер
+    # прошивки остаётся молчаливо устаревшим до перезапуска панели.
+    state = tmp_path / "state"
+    state.mkdir()
+    dns._save_state(
+        str(state),
+        {
+            "enabled": True,
+            "local_resolvers": ["127.0.0.1:41100"],
+            "local_resolvers_synced_at": time.time() + 7200.0,
+        },
+    )
+    monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda *a, **kw: ["127.0.0.1:41101"])
+    called = []
+    monkeypatch.setattr(dns, "apply_action", lambda *a, **kw: called.append(kw) or {"ok": True})
+
+    note = dns.recheck_local_resolvers(
+        configs_dir=str(tmp_path), routing_file=str(tmp_path / "05_routing.json"),
+        ui_state_dir=str(state), restart_xkeen=lambda *a, **kw: {"ok": True},
+    )
+
+    assert "127.0.0.1:41101" in note
+    assert called and called[0]["local_resolver"] == ["127.0.0.1:41101"]
 
 
 def test_untouched_setting_is_left_alone(tmp_path: Path, monkeypatch):

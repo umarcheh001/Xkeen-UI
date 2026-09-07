@@ -74,3 +74,36 @@ def test_parse_listen_port_reads_the_udp_port():
     assert fr.parse_listen_port(POLICY_CONF.format(port=41100)) == 41100
     assert fr.parse_listen_port(MAIN_CONF) == 0
     assert fr.parse_listen_port("dns_udp_port = не число") == 0
+
+
+def test_parse_listen_port_survives_a_trailing_comment():
+    # Конфиги прошивки не гарантируют отсутствие хвостового комментария на
+    # этой строке -- как у dns_server выше в этом же файле.
+    assert fr.parse_listen_port("dns_udp_port = 41100 # policy 0") == 41100
+    assert fr.parse_listen_port("dns_udp_port = 41100# без пробела") == 41100
+
+
+def test_discover_uses_the_default_directory_looked_up_at_call_time(tmp_path: Path, monkeypatch):
+    # Раньше значение по умолчанию связывалось при определении discover(), и
+    # подмена NDNPROXY_CONF_DIR в тестах ничего не меняла.
+    _policy(tmp_path, 0, 41100)
+    monkeypatch.setattr(fr, "NDNPROXY_CONF_DIR", str(tmp_path))
+
+    assert fr.discover() == ["127.0.0.1:41100"]
+
+
+def test_looks_like_ours_accepts_only_loopback_in_the_ndnproxy_range():
+    assert fr.looks_like_ours("127.0.0.1:41100") is True
+    assert fr.looks_like_ours("127.0.0.1:" + str(fr.RESOLVER_PORT_CEILING)) is True
+    # Домашний резолвер -- Pi-hole, AdGuard -- не в этом диапазоне.
+    assert fr.looks_like_ours("192.168.10.5:53") is False
+    # Тот же порт, но не на loopback -- тоже не наш.
+    assert fr.looks_like_ours("192.168.10.5:41100") is False
+    # Loopback, но порт вне диапазона политик.
+    assert fr.looks_like_ours("127.0.0.1:53") is False
+    assert fr.looks_like_ours("127.0.0.1:" + str(fr.RESOLVER_PORT_CEILING + 1)) is False
+
+
+def test_looks_like_ours_never_raises_on_junk():
+    for junk in ("", None, "не адрес", "127.0.0.1", "127.0.0.1:порт", ":41100", "[::1]:41100"):
+        assert fr.looks_like_ours(junk) is False

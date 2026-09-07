@@ -2516,14 +2516,29 @@ def recheck_local_resolvers(
     that still overlaps what the firmware offers is good enough -- the zones
     ride every resolver, so one live address answers them all.
 
-    The timestamp is stamped *before* ``apply_action`` runs, under ``_LOCK``,
-    not after it returns: it marks that a resync was attempted, not that it
-    succeeded, which is what the hourly interval is there to bound.  Without
-    that a persistently failing resync would re-enter on every healthy tick
-    and try to restart the core every 30 seconds.  A failure from
-    ``apply_action`` is not caught here -- it propagates out to the guard's
-    own ``Protection.reconcile``, which already turns it into the tick's
-    visible ``reconcile_error``.
+    ``saved`` may hold an address this guard never wrote: the LAN-side
+    resolver is documented (``_parse_local_resolver``) as pointing at
+    whatever still answers local names "on the router or in the network" --
+    a Pi-hole, an AdGuard box, a home server.  Such an address never overlaps
+    ``found`` (it is not on loopback at all), and treating that as staleness
+    would silently hand the setting back to the firmware every hour.  So the
+    comparison and the rewrite both work only on the subset of ``saved`` that
+    ``firmware_resolvers.looks_like_ours`` recognises as something this guard
+    itself could have written; anything else in ``saved`` rides along
+    unchanged in the new list.
+
+    The timestamp is stamped twice.  *Before* ``apply_action`` runs, under
+    ``_LOCK``, it marks that a resync was attempted, not that it succeeded --
+    that covers the path where ``apply_action`` raises: without it, a
+    persistently failing resync would re-enter on every healthy tick and try
+    to restart the core every 30 seconds.  A failure from ``apply_action`` is
+    not caught here -- it propagates out to the guard's own
+    ``Protection.reconcile``, which already turns it into the tick's visible
+    ``reconcile_error``.  *After* a successful call, ``_stamp_local_resolvers_synced``
+    puts the same key back: the enable branch of ``apply_action`` saves a
+    freshly built state dict that does not carry it, so without this second
+    stamp a healthy resync would erase its own mark and the next tick would
+    read ``last`` as unset and resync again immediately.
     """
     with _LOCK:
         state = _load_state(ui_state_dir)
@@ -2532,32 +2547,61 @@ def recheck_local_resolvers(
         saved = [str(item) for item in (state.get("local_resolvers") or []) if str(item).strip()]
         if not saved:
             return ""
+        ours_saved = [item for item in saved if firmware_resolvers.looks_like_ours(item)]
+        if not ours_saved:
+            # Everything here is something the user pointed at themselves --
+            # a home resolver this guard never wrote and has no business
+            # touching.
+            return ""
         found = firmware_resolvers.discover()
         if not found:
             # The firmware's configs are unreadable right now.  Rewriting the
             # setting on that basis would throw away a working address.
             return ""
-        if set(saved) & set(found):
+        if set(ours_saved) & set(found):
             return ""
         last = state.get("local_resolvers_synced_at")
         now = time.time()
         try:
-            if last is not None and (now - float(last)) < LOCAL_RESOLVER_RESYNC_INTERVAL:
+            # A stamp from the future means the router's clock moved, not
+            # that a resync just ran: Keenetic boots without a real-time
+            # clock, and waiting it out would mute this resync for as long as
+            # the clock stayed behind.
+            if last is not None and 0 <= (now - float(last)) < LOCAL_RESOLVER_RESYNC_INTERVAL:
                 return ""
         except (TypeError, ValueError):
             pass
         state["local_resolvers_synced_at"] = now
         _save_state(ui_state_dir, state)
 
+    # Addresses the user set up themselves keep their place; only the
+    # firmware-owned ones are replaced by what was just found.
+    foreign = [item for item in saved if item not in ours_saved]
+    new_local = foreign + found
     apply_action(
         "enable",
         configs_dir=configs_dir,
         routing_file=routing_file,
         ui_state_dir=ui_state_dir,
         restart_xkeen=restart_xkeen,
-        local_resolver=found,
+        local_resolver=new_local,
     )
-    return "локальный DNS переключён на " + ", ".join(found)
+    _stamp_local_resolvers_synced(ui_state_dir, now)
+    return "локальный DNS переключён на " + ", ".join(new_local)
+
+
+def _stamp_local_resolvers_synced(ui_state_dir: str, moment: float) -> None:
+    """Keep the resync mark next to the settings it describes.
+
+    ``apply_action``'s enable branch saves a freshly built state dict that
+    does not carry ``local_resolvers_synced_at`` at all, which would erase
+    the mark set just before the call.  Re-read and merge one key under
+    ``_LOCK``, by the same pattern as ``_store_pass_health``.
+    """
+    with _LOCK:
+        state = _load_state(ui_state_dir)
+        state["local_resolvers_synced_at"] = moment
+        _save_state(ui_state_dir, state)
 
 
 def _pass_health_for_window(state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
