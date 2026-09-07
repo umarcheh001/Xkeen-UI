@@ -809,26 +809,51 @@ def create_xray_configs_blueprint(
             seen.add(value)
             paths.append(value)
 
-        for path in (INBOUNDS_FILE, OUTBOUNDS_FILE, ROUTING_FILE):
-            _append_path(path)
+        default_specs = (
+            ("inbounds", INBOUNDS_FILE),
+            ("outbounds", OUTBOUNDS_FILE),
+            ("routing", ROUTING_FILE),
+        )
+        resolved_defaults: list[tuple[str, str]] = []
+        for kind, default_path in default_specs:
+            # Resolve defaults through the same boundary as user-selected
+            # fragments.  Besides keeping all paths inside the configured
+            # directory, this makes the collector deterministic for callers
+            # that provide an alternate fragment resolver.
+            try:
+                resolved = resolve_xray_fragment_file(
+                    "", kind=kind, default_path=default_path
+                )
+            except Exception:
+                resolved = default_path
+            resolved = _normalize_main_json_path(resolved)
+            resolved_defaults.append((kind, resolved))
+            _append_path(resolved)
 
         if all_fragments:
             try:
-                if os.path.isdir(XRAY_CONFIGS_DIR):
-                    for name in os.listdir(XRAY_CONFIGS_DIR):
+                # Derive the scan roots from resolved defaults.  Do not reach
+                # into a process user's unrelated global config directory
+                # when an alternate resolver supplies an isolated test (or
+                # embedded) config tree.
+                scan_roots = {
+                    os.path.dirname(path)
+                    for _kind, path in resolved_defaults
+                    if os.path.dirname(path)
+                }
+                for scan_root in scan_roots:
+                    if not os.path.isdir(scan_root):
+                        continue
+                    for name in os.listdir(scan_root):
                         lname = str(name or "").lower()
                         if not lname.endswith(".json"):
                             continue
                         if lname == "01_log.json":
                             continue
-                        _append_path(_normalize_main_json_path(os.path.join(XRAY_CONFIGS_DIR, name)))
+                        _append_path(_normalize_main_json_path(os.path.join(scan_root, name)))
             except Exception:
                 pass
-            for kind, default_path in (
-                ("inbounds", INBOUNDS_FILE),
-                ("outbounds", OUTBOUNDS_FILE),
-                ("routing", ROUTING_FILE),
-            ):
+            for kind, default_path in default_specs:
                 try:
                     fragments = list_xray_fragments(kind)
                 except Exception:

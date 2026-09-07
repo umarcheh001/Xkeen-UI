@@ -511,8 +511,12 @@ def _trace_command(target: str, *, which: Callable[[str], str | None] = shutil.w
     keenetic_trace = "/usr/sbin/traceroute"
     if Path(keenetic_trace).is_file():
         return ([keenetic_trace, "-c", "3", "-w", "1", "-s", "52", "-t", "8", "-T", "tcp", target], "keenetic-tcp", 15)
-    portable_trace = which("traceroute") or "traceroute"
-    return ([portable_trace, "-n", "-m", "8", "-q", "1", "-w", "1", target], "traceroute", 12)
+    # Keep the portable invocation symbolic.  BusyBox installations commonly
+    # expose the command through PATH, and using an absolute host-specific
+    # result from ``shutil.which`` makes the payload and tests environment
+    # dependent while offering no runtime benefit.
+    _ = which
+    return (["traceroute", "-n", "-m", "8", "-q", "1", "-w", "1", target], "traceroute", 12)
 
 
 def channel_check(
