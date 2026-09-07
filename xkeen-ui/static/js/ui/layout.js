@@ -21,9 +21,9 @@
     cardDescScale: 1,
     hideUnused: false,
     // fixed | fluid | max
-    // The redesigned panel is full-width by default. The narrower modes stay
-    // available for users who prefer a denser, centred workspace.
-    container: 'max',
+    // New installations start with the responsive workspace. The narrower
+    // fixed and edge-to-edge modes stay available as explicit preferences.
+    container: 'fluid',
     // Tab ordering is persisted as stable keys (see tabKey())
     tabOrder: [],
     tabFav: [],
