@@ -19399,7 +19399,8 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
 .routing-dns-over-vless-route > input[type="text"] { width: 100%; }
 .routing-dns-over-vless-zones { display: grid; gap: 6px; }
 .routing-dns-over-vless-zone-presets { display: flex; flex-wrap: wrap; gap: 6px; }
-.routing-dns-over-vless-zone-presets button {
+.routing-dns-over-vless-zone-presets button,
+.routing-dns-over-vless-zone-preset {
   font: inherit;
   font-size: 12px;
   line-height: 1.2;
@@ -19410,7 +19411,8 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
   color: var(--modal-muted);
   cursor: pointer;
 }
-.routing-dns-over-vless-zone-presets button:hover { color: var(--modal-text); }
+.routing-dns-over-vless-zone-presets button:hover,
+.routing-dns-over-vless-zone-preset:hover { color: var(--modal-text); }
 .routing-dns-over-vless-zone-presets button[data-active="1"] {
   border-color: #60a5fa;
   background: rgba(96, 165, 250, .28);

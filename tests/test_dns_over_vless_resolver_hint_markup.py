@@ -14,6 +14,7 @@ HTML = (ROOT / "xkeen-ui/templates/panel.html").read_text(encoding="utf-8")
 
 def test_hint_and_button_exist():
     assert 'id="routing-dns-over-vless-local-hint"' in HTML
+    assert 'id="routing-dns-over-vless-local-hint-text"' in HTML
     assert 'id="routing-dns-over-vless-local-apply"' in HTML
 
 
