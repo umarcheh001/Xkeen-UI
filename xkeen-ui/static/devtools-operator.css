@@ -42,6 +42,12 @@ body.devtools-page {
   --op-control-h: 32px;
   --op-control-compact-h: 28px;
   --op-touch-target: 40px;
+  --op-scrollbar-size: 12px;
+  --op-scrollbar-track: color-mix(in srgb, var(--op-surface) 72%, var(--op-bg));
+  --op-scrollbar-thumb: color-mix(in srgb, var(--op-border-strong) 90%, var(--op-accent) 10%);
+  --op-scrollbar-thumb-hover: color-mix(in srgb, var(--op-accent) 72%, var(--op-border-strong));
+  --op-scrollbar-thumb-active: var(--op-accent-hover);
+  --op-scrollbar-radius: 999px;
 
   /* Global tooltip runtime is shared with the main panel and mounts its
      portal directly under <body>. Bridge it explicitly so DevTools cannot
@@ -96,6 +102,121 @@ body.devtools-page {
 }
 
 /* ========================================================================== 
+ * 1.1. SCROLLBARS
+ * ========================================================================== */
+body.devtools-page,
+body.devtools-page * {
+  scrollbar-color: var(--op-scrollbar-thumb) var(--op-scrollbar-track);
+  scrollbar-width: thin;
+}
+
+body.devtools-page::-webkit-scrollbar,
+body.devtools-page *::-webkit-scrollbar {
+  width: var(--op-scrollbar-size);
+  height: var(--op-scrollbar-size);
+}
+
+body.devtools-page::-webkit-scrollbar-track,
+body.devtools-page *::-webkit-scrollbar-track {
+  border-radius: var(--op-scrollbar-radius);
+  background: var(--op-scrollbar-track);
+}
+
+body.devtools-page::-webkit-scrollbar-thumb,
+body.devtools-page *::-webkit-scrollbar-thumb {
+  min-height: 36px;
+  border: 2px solid transparent;
+  border-radius: var(--op-scrollbar-radius);
+  background: var(--op-scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+body.devtools-page::-webkit-scrollbar-thumb:hover,
+body.devtools-page *::-webkit-scrollbar-thumb:hover {
+  background: var(--op-scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+body.devtools-page::-webkit-scrollbar-thumb:active,
+body.devtools-page *::-webkit-scrollbar-thumb:active {
+  background: var(--op-scrollbar-thumb-active);
+  background-clip: padding-box;
+}
+
+body.devtools-page::-webkit-scrollbar-corner,
+body.devtools-page *::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+body.devtools-page::-webkit-scrollbar-button,
+body.devtools-page *::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+html:has(> body.devtools-page) {
+  scrollbar-width: thin;
+  scrollbar-color: #3a414d #14171c;
+}
+
+html:has(> body.devtools-page)::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+html:has(> body.devtools-page)::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #14171c;
+}
+
+html:has(> body.devtools-page)::-webkit-scrollbar-thumb {
+  min-height: 36px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #3a414d;
+  background-clip: padding-box;
+}
+
+html:has(> body.devtools-page)::-webkit-scrollbar-thumb:hover {
+  background: #7477e8;
+  background-clip: padding-box;
+}
+
+html:has(> body.devtools-page)::-webkit-scrollbar-thumb:active {
+  background: #8588f2;
+  background-clip: padding-box;
+}
+
+html:has(> body.devtools-page)::-webkit-scrollbar-corner,
+html:has(> body.devtools-page)::-webkit-scrollbar-button {
+  background: transparent;
+}
+
+html[data-theme="light"]:has(> body.devtools-page) {
+  scrollbar-color: #c1c6d0 #ffffff;
+}
+
+html[data-theme="light"]:has(> body.devtools-page)::-webkit-scrollbar-track {
+  background: #ffffff;
+}
+
+html[data-theme="light"]:has(> body.devtools-page)::-webkit-scrollbar-thumb {
+  background: #c1c6d0;
+  background-clip: padding-box;
+}
+
+html[data-theme="light"]:has(> body.devtools-page)::-webkit-scrollbar-thumb:hover {
+  background: #5b5fc7;
+  background-clip: padding-box;
+}
+
+html[data-theme="light"]:has(> body.devtools-page)::-webkit-scrollbar-thumb:active {
+  background: #4d51b7;
+  background-clip: padding-box;
+}
+
+/* ==========================================================================
  * 2. LEGACY BOUNDARY
  * ========================================================================== */
 body.devtools-page,
@@ -1184,6 +1305,10 @@ html[data-theme="light"] body.devtools-page {
   --op-danger-soft: rgba(189, 79, 90, 0.09);
   --op-shadow: 0 1px 2px rgba(25, 28, 35, 0.06);
   --op-shadow-float: 0 14px 36px rgba(25, 28, 35, 0.14);
+  --op-scrollbar-track: color-mix(in srgb, var(--op-surface) 78%, var(--op-bg));
+  --op-scrollbar-thumb: color-mix(in srgb, var(--op-border-strong) 92%, var(--op-accent) 8%);
+  --op-scrollbar-thumb-hover: color-mix(in srgb, var(--op-accent) 72%, var(--op-border-strong));
+  --op-scrollbar-thumb-active: var(--op-accent-hover);
   background: var(--op-bg) !important;
   color-scheme: light;
 }
