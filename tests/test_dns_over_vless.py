@@ -3234,6 +3234,54 @@ def test_old_state_with_an_empty_list_still_gets_the_firmware_resolver(tmp_path:
     assert fragment["dns"]["servers"][0]["address"] == "127.0.0.1"
 
 
+def test_turning_the_feature_off_and_on_again_still_migrates(tmp_path: Path, monkeypatch):
+    """Самый обычный путь: человек выключает функцию и включает снова.
+
+    Выключение ничего не говорит о локальном резолвере, поэтому версию
+    состояния оно поднимать не должно — иначе разовый переход пропал бы
+    ровно у тех, кто пойдёт этим путём (а через него проходит каждый, кто
+    хочет поменять настройки: при включённой функции поля заблокированы).
+    """
+    configs, routing_path, state = _scenario_config(tmp_path)
+    _write(
+        state / dns.STATE_FILENAME,
+        {"version": 1, "enabled": True, "local_resolvers": [], "upstreams": ["8.8.8.8"]},
+    )
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(dns, "_write_routing_preserving_comments", lambda path, obj, **_kwargs: _write(Path(path), obj))
+    monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda *a, **kw: ["127.0.0.1:41100"])
+
+    dns.apply_action(
+        "disable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+    )
+    after_off = dns._load_state(str(state))
+    # Выключение версию не трогает: решения о резолвере в нём нет.
+    assert after_off["version"] == 1
+
+    dns.apply_action(
+        "enable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+    )
+
+    saved = dns._load_state(str(state))
+    assert saved["local_resolvers"] == ["127.0.0.1:41100"]
+    assert saved["version"] == dns.STATE_VERSION
+
+
 def test_the_migration_does_not_override_a_field_cleared_by_hand(tmp_path: Path, monkeypatch):
     """Переход одноразовый и явному отказу не мешает.
 

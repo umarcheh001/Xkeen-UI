@@ -3313,7 +3313,13 @@ def apply_action(
                 }
                 kept.update(
                     {
-                        "version": STATE_VERSION,
+                        # Версию поднимает только запись, где поле локального
+                        # резолвера действительно решал человек, то есть
+                        # включение.  Выключение о нём ничего не говорит, и
+                        # поднять версию здесь значило бы отменить разовый
+                        # переход для тех, кто просто выключил функцию и
+                        # включил снова, -- а это самый обычный путь.
+                        "version": int(previous_state.get("version") or STATE_VERSION),
                         "enabled": False,
                         "disabled_at": int(time.time()),
                         "last_transaction": snapshot_dir,
