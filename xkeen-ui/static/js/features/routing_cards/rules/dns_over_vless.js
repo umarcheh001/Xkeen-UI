@@ -36,9 +36,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     upstreams: 'routing-dns-over-vless-upstreams',
     remote: 'routing-dns-over-vless-remote',
     local: 'routing-dns-over-vless-local',
+    firmware: 'routing-dns-over-vless-firmware',
     localHint: 'routing-dns-over-vless-local-hint',
     localHintText: 'routing-dns-over-vless-local-hint-text',
-    localApply: 'routing-dns-over-vless-local-apply',
     zones: 'routing-dns-over-vless-zones',
     zonesRow: 'routing-dns-over-vless-zones-row',
     zonePresets: 'routing-dns-over-vless-zone-presets',
@@ -132,16 +132,18 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     // Sent with the list itself: the same address is a mistake without it and
     // a deliberate choice with it.
     if (remote) settings.upstreams_remote = !!remote.checked;
-    // An untouched empty field means "nothing decided yet": omit the key so
-    // the server can fall back to the firmware resolver (or a previously
-    // saved one). A field the user actually cleared is tracked by
-    // dataset.touched and still sends "" — that stays a deliberate switch-off.
-    if (local) {
-      const localValue = String(local.value || '').trim();
-      if (localValue || local.dataset.touched) settings.local_resolver = localValue;
-    }
+    // Резолвер прошивки — отдельное решение, и оно всегда состояние, а не
+    // событие: сервер должен знать его при каждом включении.
+    const firmware = $(DOM.firmware);
+    if (firmware) settings.use_firmware_resolver = !!firmware.checked;
+    // Поле хранит только свои резолверы, поэтому уходит как есть: пустое
+    // значит «своих нет», а не «отказываюсь от домашних имён».
+    if (local) settings.local_resolver = String(local.value || '').trim();
     const zones = $(DOM.zones);
-    if (zones && settings.local_resolver) settings.local_domains = String(zones.value || '').trim();
+    // Зоны нужны обеим половинам: их обслуживает и прошивка, и свой резолвер.
+    if (zones && (settings.local_resolver || settings.use_firmware_resolver)) {
+      settings.local_domains = String(zones.value || '').trim();
+    }
     const direct = $(DOM.direct);
     // Same rule as above: an empty string switches the bypass group off.
     if (direct) settings.direct_resolver = String(direct.value || '').trim();
@@ -486,7 +488,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     fieldsLocked = !!locked;
     const note = $(DOM.lockedNote);
     if (note) note.classList.toggle('hidden', !fieldsLocked);
-    const ids = [DOM.upstreams, DOM.remote, DOM.local, DOM.zones, DOM.direct,
+    const ids = [DOM.upstreams, DOM.remote, DOM.firmware, DOM.local, DOM.zones, DOM.direct,
       DOM.directZones, DOM.pass, DOM.passNode, DOM.capture];
     for (let i = 0; i < ids.length; i += 1) {
       const field = $(ids[i]);
@@ -503,13 +505,21 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     if (local && !local.dataset.touched) {
       local.value = ((data && data.local_resolvers) || []).join(', ');
     }
+    const firmware = $(DOM.firmware);
+    // Умолчание — включено: без резолвера прошивки домашние имена молча
+    // уходят в туннель. Ответ статуса эту настройку всегда несёт.
+    if (firmware && !firmware.dataset.touched) {
+      firmware.checked = !(data && data.use_firmware_resolver === false);
+    }
     if (upstreams) upstreams.disabled = busy || fieldsLocked;
     if (local) local.disabled = busy || fieldsLocked;
+    if (firmware) firmware.disabled = busy || fieldsLocked;
 
     const zones = $(DOM.zones);
     const zonesRow = $(DOM.zonesRow);
-    // The zone list only means something once a local resolver answers them.
-    const hasLocal = !!(local && String(local.value || '').trim());
+    // Зоны имеют смысл, пока на них кто-то отвечает: прошивка или свой резолвер.
+    const hasLocal = !!(local && String(local.value || '').trim())
+      || !!(firmware && firmware.checked);
     if (zonesRow) zonesRow.classList.toggle('hidden', !hasLocal);
     if (zones) {
       if (!zones.dataset.touched) {
@@ -604,42 +614,38 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     renderLocalHint(data);
   }
 
-  // Порт резолвера прошивки пользователю знать неоткуда: он равен 41100 плюс
-  // индекс политики доступа и уезжает вместе с ней. Показываем найденное и
-  // предупреждаем, когда записанный адрес среди найденного не значится.
+  // Адрес резолвера прошивки панель находит сама: порт равен 41100 плюс номер
+  // по порядку создания политик доступа и уезжает вместе с ними. Человеку
+  // остаётся видеть, что именно нашлось, — и узнать, если нашлось не то, что
+  // записано в конфигурации: до часовой самопочинки домашние имена молчат.
   function renderLocalHint(data) {
     const row = $(DOM.localHint);
     const text = $(DOM.localHintText);
-    const apply = $(DOM.localApply);
-    const field = $(DOM.local);
-    if (!row || !text || !field) return;
-    // Слушатель вешаем один раз: renderLocalHint зовётся на каждый ответ
-    // статуса, а повторная привязка плодила бы дубли обработчика.
-    if (apply && apply.dataset.wired !== '1') {
-      apply.dataset.wired = '1';
-      apply.addEventListener('click', () => {
-        field.value = apply.dataset.value || '';
-        // Иначе следующий ответ статуса затрёт подставленное значение.
-        field.dataset.touched = '1';
-        field.dispatchEvent(new Event('input', { bubbles: true }));
-      });
-    }
-    const found = (data && data.firmware_resolvers) || [];
-    if (!found.length) {
+    const firmware = $(DOM.firmware);
+    if (!row || !text) return;
+    if (firmware && !firmware.checked) {
       row.classList.add('hidden');
       return;
     }
+    const found = (data && data.firmware_resolvers) || [];
+    const applied = (data && data.firmware_resolvers_applied) || [];
     row.classList.remove('hidden');
-    const current = parseZones(field.value || '');
-    const missing = current.length && !current.some((item) => found.indexOf(item) >= 0);
-    text.textContent = missing
-      ? `Записанный адрес прошивка больше не слушает. Она отвечает на ${found.join(', ')}.`
-      : `Прошивка отвечает на ${found.join(', ')}.`;
-    row.classList.toggle('routing-dns-over-vless-local-hint--warn', !!missing);
-    if (apply) {
-      apply.disabled = busy || fieldsLocked;
-      apply.dataset.value = found.join(', ');
+    let warn = false;
+    if (!found.length) {
+      warn = true;
+      text.textContent = 'Резолвер прошивки не найден: домашние имена разрешать некому.';
+    } else if (data && data.enabled && !applied.length) {
+      // Найден, но в конфигурацию не попал: его адрес занят группой «мимо
+      // туннеля» — панель уступает явной настройке, и молчать об этом нельзя.
+      warn = true;
+      text.textContent = `Резолвер прошивки не задействован: адрес ${found.join(', ')} уже занят в группе «DNS для доменов мимо туннеля».`;
+    } else if (applied.length && !applied.some((item) => found.indexOf(item) >= 0)) {
+      warn = true;
+      text.textContent = `Записанный адрес прошивка больше не слушает. Она отвечает на ${found.join(', ')} — панель переключится сама в течение часа.`;
+    } else {
+      text.textContent = `Прошивка отвечает на ${found.join(', ')}.`;
     }
+    row.classList.toggle('routing-dns-over-vless-local-hint--warn', warn);
   }
 
   // Выключение области — явное действие. Чистим обе половины разом: сервер
@@ -982,10 +988,27 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       return { text: `${list.length} ${plural(list.length, 'сервер', 'сервера', 'серверов')}` };
     }
     if (zone === 'home') {
-      const list = (data && data.local_resolvers) || [];
-      if (!list.length) return { text: 'не настроена' };
+      const firmware = $(DOM.firmware);
+      // Считаем по окну, а не по ответу сервера: сводка обязана меняться
+      // вместе с галочкой, ещё до применения.
+      const firmwareOn = firmware
+        ? !!firmware.checked
+        : !(data && data.use_firmware_resolver === false);
+      const own = parseZones(($(DOM.local) || {}).value || '');
+      // Галочка без найденной прошивки — не настройка, а пустое обещание:
+      // отвечать на домашние имена в этом случае некому.
+      const firmwareLive = firmwareOn && !!((data && data.firmware_resolvers) || []).length;
+      if (!firmwareLive && !own.length) {
+        return {
+          text: firmwareOn ? 'резолвер прошивки не найден' : 'домашние имена в туннеле',
+          tone: 'warn',
+        };
+      }
       const zones = parseZones(($(DOM.zones) || {}).value || '');
-      return { text: `${list.length} резолвер(ов) · ${zones.length} зон` };
+      const parts = [];
+      if (firmwareLive) parts.push('прошивка');
+      if (own.length) parts.push(`${own.length} ${plural(own.length, 'свой', 'своих', 'своих')}`);
+      return { text: `${parts.join(' + ')} · ${zones.length} зон` };
     }
     if (zone === 'direct') {
       const list = (data && data.direct_resolvers) || [];
@@ -1299,6 +1322,13 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       box.checked = false;
       box.dataset.touched = '1';
     });
+    // Умолчание здесь обратное остальным переключателям: сброс — это
+    // возврат к тому, что панель предложила бы сама, а не отказ от домашних имён.
+    const firmwareDefault = $(DOM.firmware);
+    if (firmwareDefault) {
+      firmwareDefault.checked = true;
+      firmwareDefault.dataset.touched = '1';
+    }
     const node = $(DOM.passNode);
     if (node) delete node.dataset.touched;
     capturedMacs = [];
@@ -1492,7 +1522,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     // Все поля, а не три: тронутый один раз переключатель иначе навсегда
     // переставал обновляться с сервера, даже после переоткрытия окна.
     [
-      DOM.upstreams, DOM.local, DOM.zones, DOM.direct, DOM.directZones,
+      DOM.upstreams, DOM.local, DOM.firmware, DOM.zones, DOM.direct, DOM.directZones,
       DOM.remote, DOM.pass, DOM.passNode, DOM.capture, DOM.multi,
     ].forEach((id) => {
       const field = $(id);
@@ -1903,6 +1933,16 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const remoteBox = $(DOM.remote);
     if (remoteBox) {
       remoteBox.addEventListener('change', () => { remoteBox.dataset.touched = '1'; });
+    }
+    const firmwareBox = $(DOM.firmware);
+    if (firmwareBox) {
+      firmwareBox.addEventListener('change', () => {
+        firmwareBox.dataset.touched = '1';
+        // Список зон и сводка держатся на этой настройке: снятая галочка без
+        // своих резолверов оставляет домашние имена без ответа.
+        if (status) renderDnsFields(status);
+        renderZoneSummaries(status);
+      });
     }
     const passBox = $(DOM.pass);
     if (passBox) {

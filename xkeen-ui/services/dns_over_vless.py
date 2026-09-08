@@ -199,8 +199,12 @@ LOCAL_RESOLVER_RESYNC_INTERVAL = 3600.0
 # Версия файла состояния. Единица — записи панели, которая всегда сохраняла
 # поле локального резолвера, даже когда человек его не заполнял: пустой список
 # там означает не отказ, а отсутствие выбора. Двойка ставится с того момента,
-# как поле стало сохраняться только по решению человека.
-STATE_VERSION = 2
+# как поле стало сохраняться только по решению человека. Тройка — с того, как
+# резолвер прошивки переехал в собственную настройку (``use_firmware_resolver``)
+# и перестал делить список с резолверами, которые человек вписал сам: до неё
+# отказ выглядел как пустое необязательное поле, и по окну нельзя было понять,
+# работают домашние имена или нет.
+STATE_VERSION = 3
 
 _LOCK = threading.RLock()
 
@@ -1255,18 +1259,38 @@ def _parse_resolver_list(value: Any, *, limit: int, noun: str, code: str) -> lis
     return result
 
 
-def _state_predates_choice(state: Dict[str, Any]) -> bool:
-    """Состояние писала панель, не умевшая отличать отказ от незаполненного поля.
+def _firmware_resolvers_applied(state: Dict[str, Any]) -> list[str]:
+    """Адреса прошивки, записанные в конфигурацию прямо сейчас.
 
-    Такое состояние узнаётся по версии: до ``STATE_VERSION`` окно отправляло
-    локальный резолвер при каждом включении, пустым в том числе, поэтому
-    сохранённый пустой список ничего не говорит о намерении человека.
-    Отсутствие версии считаем самым старым случаем.
+    Снимок пишет включение: сторожу нужно знать не намерение, а факт — что
+    именно стоит во фрагменте, с чем сравнивать найденное. У состояния старше
+    третьей версии снимка нет, там адреса прошивки лежат вперемешку со своими
+    и узнаются так же, как при переходе.
     """
+    value = state.get("firmware_resolvers_applied")
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item).strip()]
+    saved = [str(item) for item in (state.get("local_resolvers") or []) if str(item).strip()]
+    return [item for item in saved if firmware_resolvers.looks_like_ours(item)]
+
+
+def _own_local_resolvers(state: Dict[str, Any]) -> list[str]:
+    """Резолверы, которые человек вписал сам, без адресов прошивки.
+
+    До третьей версии оба вида лежали в одном списке: панель дописывала туда
+    найденный адрес прошивки, и отличить его от домашнего резолвера можно было
+    только по виду. Отличаем так же, как это уже делает часовой сторож, —
+    ``firmware_resolvers.looks_like_ours``: адрес на петле в диапазоне портов
+    прошивки её и есть, всё прочее человек указал сам.
+    """
+    saved = [str(item) for item in (state.get("local_resolvers") or []) if str(item).strip()]
     try:
-        return int(state.get("version") or 1) < STATE_VERSION
+        version = int(state.get("version") or 1)
     except (TypeError, ValueError):
-        return True
+        version = 1
+    if version >= STATE_VERSION:
+        return saved
+    return [item for item in saved if not firmware_resolvers.looks_like_ours(item)]
 
 
 def _parse_local_resolvers(value: Any) -> list[Dict[str, Any]]:
@@ -2529,23 +2553,17 @@ def recheck_local_resolvers(
     ui_state_dir: str,
     restart_xkeen: Callable[..., Any],
 ) -> str:
-    """Put the local resolver back when the firmware has moved its port.
+    """Put the firmware resolver back when the firmware has moved its port.
 
-    Only for a feature that is on and whose local zones the user actually set
-    up: an install that never wanted local resolution is left alone.  A set
-    that still overlaps what the firmware offers is good enough -- the zones
-    ride every resolver, so one live address answers them all.
+    Only for a feature that is on and whose configuration actually holds a
+    firmware address: an install that said no to it is left alone.  A set that
+    still overlaps what the firmware offers is good enough -- the zones ride
+    every resolver, so one live address answers them all.
 
-    ``saved`` may hold an address this guard never wrote: the LAN-side
-    resolver is documented (``_parse_local_resolver``) as pointing at
-    whatever still answers local names "on the router or in the network" --
-    a Pi-hole, an AdGuard box, a home server.  Such an address never overlaps
-    ``found`` (it is not on loopback at all), and treating that as staleness
-    would silently hand the setting back to the firmware every hour.  So the
-    comparison and the rewrite both work only on the subset of ``saved`` that
-    ``firmware_resolvers.looks_like_ours`` recognises as something this guard
-    itself could have written; anything else in ``saved`` rides along
-    unchanged in the new list.
+    Addresses the user pointed at themselves -- a Pi-hole, an AdGuard box, a
+    domain controller -- are never part of this comparison: they live in their
+    own setting, and ``apply_action`` carries them over untouched while only
+    the firmware half is looked up afresh.
 
     The timestamp is stamped twice.  *Before* ``apply_action`` runs, under
     ``_LOCK``, it marks that a resync was attempted, not that it succeeded --
@@ -2564,21 +2582,17 @@ def recheck_local_resolvers(
         state = _load_state(ui_state_dir)
         if not state.get("enabled"):
             return ""
-        saved = [str(item) for item in (state.get("local_resolvers") or []) if str(item).strip()]
-        if not saved:
-            return ""
-        ours_saved = [item for item in saved if firmware_resolvers.looks_like_ours(item)]
-        if not ours_saved:
-            # Everything here is something the user pointed at themselves --
-            # a home resolver this guard never wrote and has no business
-            # touching.
+        applied = _firmware_resolvers_applied(state)
+        if not applied:
+            # Прошивку эта установка не спрашивает -- ни по галочке, ни по
+            # старому списку адресов. Чинить нечего, и включать самим нельзя.
             return ""
         found = firmware_resolvers.discover()
         if not found:
             # The firmware's configs are unreadable right now.  Rewriting the
             # setting on that basis would throw away a working address.
             return ""
-        if set(ours_saved) & set(found):
+        if set(applied) & set(found):
             return ""
         last = state.get("local_resolvers_synced_at")
         now = time.time()
@@ -2594,20 +2608,18 @@ def recheck_local_resolvers(
         state["local_resolvers_synced_at"] = now
         _save_state(ui_state_dir, state)
 
-    # Addresses the user set up themselves keep their place; only the
-    # firmware-owned ones are replaced by what was just found.
-    foreign = [item for item in saved if item not in ours_saved]
-    new_local = foreign + found
+    # Свои резолверы ``apply_action`` возьмёт из состояния сам и не тронет;
+    # адрес прошивки он ищет заново, поэтому передавать его сюда не нужно.
     apply_action(
         "enable",
         configs_dir=configs_dir,
         routing_file=routing_file,
         ui_state_dir=ui_state_dir,
         restart_xkeen=restart_xkeen,
-        local_resolver=new_local,
+        use_firmware_resolver=True,
     )
     _stamp_local_resolvers_synced(ui_state_dir, now)
-    return "локальный DNS переключён на " + ", ".join(new_local)
+    return "резолвер прошивки переключён на " + ", ".join(found)
 
 
 def _stamp_local_resolvers_synced(ui_state_dir: str, moment: float) -> None:
@@ -2864,13 +2876,24 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
         "max_capture_clients": dns_client_capture.MAX_CAPTURE_CLIENTS,
         "default_remote_upstream": DEFAULT_REMOTE_UPSTREAM,
         "max_upstreams": MAX_UPSTREAMS,
-        "local_resolvers": (
-            state.get("local_resolvers") if isinstance(state.get("local_resolvers"), list) else []
-        ),
+        # Только свои резолверы: адрес прошивки живёт в настройке рядом, и
+        # показывать его как пользовательский ввод нельзя — человек его не
+        # писал и стирать его руками не должен.
+        "local_resolvers": _own_local_resolvers(state),
         "max_local_resolvers": MAX_LOCAL_RESOLVERS,
+        # Домашние имена отдаём резолверу прошивки, пока человек не отказался:
+        # у состояния старше третьей версии решения нет, и умолчание общее.
+        "use_firmware_resolver": (
+            bool(state.get("use_firmware_resolver"))
+            if "use_firmware_resolver" in state
+            else True
+        ),
         # What the firmware itself still answers on: the card offers these
         # instead of asking the user to know the port by heart.
         "firmware_resolvers": firmware_resolvers.discover(),
+        # Что из найденного записано в конфигурацию прямо сейчас: по
+        # расхождению видно, что прошивка переставила порт.
+        "firmware_resolvers_applied": _firmware_resolvers_applied(state),
         "local_domains": (
             state.get("local_domains")
             if isinstance(state.get("local_domains"), list)
@@ -2936,6 +2959,7 @@ def apply_action(
     target_tag: Any = "",
     upstreams: Any = None,
     local_resolver: Any = None,
+    use_firmware_resolver: Any = None,
     local_domains: Any = None,
     direct_resolver: Any = None,
     direct_domains: Any = None,
@@ -2981,28 +3005,33 @@ def apply_action(
             else (_safe_upstreams(stored_state.get("upstreams")) or list(DEFAULT_UPSTREAMS))
         )
         # A resolver the user typed wins; then whatever this install already
-        # chose; and only if neither exists do we look at what the firmware
-        # offers.  An explicitly emptied field is a decision, not a blank: it
-        # arrives as "" rather than None and stops right here.  A stored empty
-        # list is likewise a decision the user made earlier -- it must not be
-        # overridden by a later call that simply omits the argument -- so the
-        # firmware is only consulted when the key was never saved at all.
-        if local_resolver is not None:
-            wanted_local = _parse_local_resolvers(local_resolver)
-        elif "local_resolvers" in stored_state:
-            wanted_local = _parse_local_resolvers(stored_state.get("local_resolvers"))
-            if not wanted_local and normalized == "enable" and _state_predates_choice(stored_state):
-                # Разовый переход: до STATE_VERSION = 2 окно слало это поле
-                # всегда, поэтому пустой список в старом состоянии не отличим
-                # от «человек ничего не решил» -- а установок с таким состоянием
-                # ровно столько, сколько людей уже включали функцию.  Один раз
-                # подставляем найденное; кто откажется снова, тот сохранится уже
-                # во второй версии, и его выбор больше не тронут.
-                wanted_local = _parse_local_resolvers(firmware_resolvers.discover())
-        elif normalized == "enable":
-            wanted_local = _parse_local_resolvers(firmware_resolvers.discover())
+        # chose.  An explicitly emptied field is a decision, not a blank: it
+        # arrives as "" rather than None and stops right here.
+        #
+        # Резолвер прошивки в это поле не попадает: адрес человеку неоткуда
+        # знать, он уезжает вместе с политиками доступа, и держит его панель
+        # сама — отдельной настройкой, включённой по умолчанию.  Без неё
+        # домашние имена молча уходят в тоннель и возвращаются NXDOMAIN, а
+        # осознанно этого почти никто не хочет.
+        if use_firmware_resolver is not None:
+            wanted_firmware = bool(use_firmware_resolver)
+        elif "use_firmware_resolver" in stored_state:
+            wanted_firmware = bool(stored_state.get("use_firmware_resolver"))
         else:
-            wanted_local = []
+            # Состояние старше третьей версии об этом выборе ничего не говорит:
+            # прежний отказ выглядел как пустое необязательное поле, и по окну
+            # нельзя было понять, работают домашние имена или нет.  Один раз
+            # включаем всем; дальше решение человека записано явно и живёт.
+            wanted_firmware = True
+        wanted_own = (
+            _parse_local_resolvers(local_resolver)
+            if local_resolver is not None
+            else _parse_local_resolvers(_own_local_resolvers(stored_state))
+        )
+        firmware_found = firmware_resolvers.discover() if wanted_firmware else []
+        # Собирается ниже, когда станут известны адреса группы «мимо туннеля»:
+        # с ними резолвер прошивки может не ужиться.
+        wanted_local: list[Dict[str, Any]] = []
         wanted_local_domains = (
             _local_domains(local_domains)
             if local_domains is not None
@@ -3062,6 +3091,24 @@ def apply_action(
                 "Для доменов мимо туннеля укажите и адреса DNS, и список доменов.",
                 code="direct_incomplete",
             )
+        # Адрес прошивки панель добавляет сама, и на петле у человека может уже
+        # что-то жить: AdGuard Home на роутере занимает тот же 127.0.0.1.
+        # Группы различаются по адресу и вместе на одном не уживаются — значит
+        # уступает автоматика, а не явная настройка: иначе включение упиралось
+        # бы в ошибку у того, кто ничего не менял.  Что записать не удалось,
+        # видно по пустому снимку в состоянии.
+        direct_addresses = {item["address"] for item in wanted_direct}
+        firmware_found = [
+            item
+            for item in firmware_found
+            if (_parse_local_resolver(item) or {}).get("address") not in direct_addresses
+        ]
+        # Свои впереди: человек указал их осознанно, а Xray на пустой ответ
+        # всё равно спросит следующий сервер из списка.
+        wanted_local = list(wanted_own)
+        for item in _parse_local_resolvers(firmware_found):
+            if item not in wanted_local:
+                wanted_local.append(item)
         # Both groups live in one ``servers`` list and are told apart on read-back
         # by the addresses named in the bypass rule — by address alone, port and
         # zones do not enter into it.  An address in both groups therefore reads
@@ -3275,7 +3322,9 @@ def apply_action(
                         "enabled_at": int(time.time()),
                         "original_dns_override": original_override_for_state,
                         "upstreams": wanted_upstreams,
-                        "local_resolvers": [_resolver_label(item) for item in wanted_local],
+                        "use_firmware_resolver": wanted_firmware,
+                        "local_resolvers": [_resolver_label(item) for item in wanted_own],
+                        "firmware_resolvers_applied": list(firmware_found),
                         "local_domains": wanted_local_domains if wanted_local else None,
                         "direct_resolvers": [_resolver_label(item) for item in wanted_direct],
                         "direct_domains": wanted_direct_domains if wanted_direct else None,

@@ -97,6 +97,9 @@ def test_resync_when_the_port_is_gone(tmp_path: Path, monkeypatch):
     # который recheck_local_resolvers поставил до вызова.
     configs, routing_path, state = _base_config(tmp_path)
     _patch_apply_action_plumbing(monkeypatch)
+    # Включение само находит резолвер прошивки — с него и начинается снимок,
+    # с которым сторож потом сверяет найденное.
+    monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda *a, **kw: ["127.0.0.1:41100"])
 
     dns.apply_action(
         "enable",
@@ -105,7 +108,6 @@ def test_resync_when_the_port_is_gone(tmp_path: Path, monkeypatch):
         ui_state_dir=str(state),
         restart_xkeen=lambda **_k: True,
         target_tag="proxy",
-        local_resolver="127.0.0.1:41100",
     )
 
     monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda *a, **kw: ["127.0.0.1:41101"])
@@ -117,7 +119,7 @@ def test_resync_when_the_port_is_gone(tmp_path: Path, monkeypatch):
 
     assert "127.0.0.1:41101" in note
     saved = dns._load_state(str(state))
-    assert saved.get("local_resolvers") == ["127.0.0.1:41101"]
+    assert saved.get("firmware_resolvers_applied") == ["127.0.0.1:41101"]
     # Штамп времени пережил настоящий вызов apply_action, а не только лямбду.
     assert saved.get("local_resolvers_synced_at")
 
@@ -161,8 +163,10 @@ def test_mixed_set_keeps_the_users_address_and_swaps_the_firmware_one(tmp_path: 
     )
 
     assert "127.0.0.1:41101" in note
-    assert "192.168.10.5:53" in note
-    assert called and called[0]["local_resolver"] == ["192.168.10.5:53", "127.0.0.1:41101"]
+    # Свой адрес сторож не пересылает: ``apply_action`` возьмёт его из
+    # состояния сам и не тронет — сторожу принадлежит только половина прошивки.
+    assert called and called[0]["use_firmware_resolver"] is True
+    assert "local_resolver" not in called[0]
 
 
 def test_resync_happens_at_most_once_an_hour(tmp_path: Path, monkeypatch):
@@ -214,7 +218,7 @@ def test_a_stamp_from_the_future_does_not_mute_the_resync_forever(tmp_path: Path
     )
 
     assert "127.0.0.1:41101" in note
-    assert called and called[0]["local_resolver"] == ["127.0.0.1:41101"]
+    assert called and called[0]["use_firmware_resolver"] is True
 
 
 def test_untouched_setting_is_left_alone(tmp_path: Path, monkeypatch):

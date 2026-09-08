@@ -2651,20 +2651,31 @@
 
             <details class="xk-dns-zone" data-zone="home">
               <summary class="xk-dns-zone-head">
-                <b>Локальные DNS для домашних имён</b>
+                <b>Домашние имена</b>
                 <span class="xk-dns-zone-sum" data-zone-sum="home"></span>
               </summary>
               <div class="xk-dns-zone-body">
-                <label for="routing-dns-over-vless-local">Локальные DNS для домашних имён</label>
-                <input type="text" id="routing-dns-over-vless-local" class="routing-rule-input" placeholder="не используется" autocomplete="off" spellcheck="false">
+                <label class="dt-switch xk-switch-bare" title="Имя роутера, хостнеймы из DHCP и обратные зоны разрешает резолвер прошивки, а не зарубежный сервер в туннеле.">
+                  <input type="checkbox" id="routing-dns-over-vless-firmware" checked>
+                  <span class="dt-switch-slider" aria-hidden="true"></span>
+                  <span class="dt-switch-label">Домашние имена разрешает резолвер прошивки</span>
+                </label>
                 <div id="routing-dns-over-vless-local-hint" class="modal-hint hidden">
                   <span id="routing-dns-over-vless-local-hint-text"></span>
-                  <button type="button" id="routing-dns-over-vless-local-apply" class="routing-dns-over-vless-zone-preset">Подставить</button>
                 </div>
-                <div class="modal-hint">Необязательно. Адреса резолверов, отвечающих за домашние имена — запросы к ним пойдут напрямую, мимо туннеля.
+                <div class="modal-hint">Адрес панель находит сама и чинит, когда прошивка переставляет порты. Выключайте, только если домашние имена должны разрешаться из туннеля.
                   <details class="xk-hint-more">
                     <summary>Подробнее</summary>
-                    <p>Через запятую, если сегментов сети несколько; порт указывайте, если резолвер слушает не на 53. Только адрес и порт — схемы вроде <code>https://</code> здесь не принимаются: эти запросы уходят напрямую, мимо туннеля. На Keenetic домашние имена и хостнеймы из DHCP знает резолвер прошивки: он слушает на <code>127.0.0.1:41100</code> и дальше по одному порту на каждую политику доступа — <code>41101</code>, <code>41102</code>. Порт 53 здесь занят самим DNS-over-VLESS: указать его нельзя, запрос вернулся бы сюда же и зациклился.</p>
+                    <p>На Keenetic домашние имена и хостнеймы из DHCP знает резолвер прошивки: он слушает на <code>127.0.0.1:41100</code> и дальше по одному порту на каждую политику доступа — <code>41101</code>, <code>41102</code>. Номер порта раздаётся по порядку создания политик, а не по их номеру, поэтому вычислить его нельзя — панель читает его из конфигурации прошивки. Без этого <code>router.lan</code>, имена устройств из DHCP и обратные зоны уходят в туннель и возвращаются ни с чем.</p>
+                  </details>
+                </div>
+
+                <label for="routing-dns-over-vless-local">Свои локальные DNS</label>
+                <input type="text" id="routing-dns-over-vless-local" class="routing-rule-input" placeholder="нет" autocomplete="off" spellcheck="false">
+                <div class="modal-hint">Необязательно. Собственные резолверы вашей сети — контроллер домена, Pi-hole, DNS отдельного сегмента. Запросы к ним пойдут напрямую, мимо туннеля.
+                  <details class="xk-hint-more">
+                    <summary>Подробнее</summary>
+                    <p>Через запятую, если сегментов сети несколько; порт указывайте, если резолвер слушает не на 53. Только адрес и порт — схемы вроде <code>https://</code> здесь не принимаются: эти запросы уходят напрямую, мимо туннеля. Спрашиваются по очереди, свои раньше резолвера прошивки. Порт 53 здесь занят самим DNS-over-VLESS: указать его нельзя, запрос вернулся бы сюда же и зациклился.</p>
                   </details>
                 </div>
 

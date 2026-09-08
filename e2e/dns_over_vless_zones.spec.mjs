@@ -151,7 +151,10 @@ test('неопределённое устройство держит метку 
 test('свёрнутая шапка называет состояние зоны, включая незаполненную обязательную', async ({ page }) => {
   await openDialog(page);
 
-  await expect(page.locator('[data-zone-sum="home"]')).toHaveText('не настроена');
+  // Галочка стоит, но резолверов прошивки в этом снимке нет, своих тоже:
+  // отвечать на домашние имена некому, и шапка говорит об этом словом и цветом.
+  await expect(page.locator('[data-zone-sum="home"]')).toHaveText('резолвер прошивки не найден');
+  await expect(page.locator('[data-zone-sum="home"]')).toHaveAttribute('data-tone', 'warn');
   await expect(page.locator('[data-zone-sum="servers"]')).toHaveText('1 сервер');
   // Маршрут по умолчанию подставлен, поэтому предупреждать не о чем.
   await expect(page.locator('[data-zone-sum="route"]')).toHaveText('proxy');

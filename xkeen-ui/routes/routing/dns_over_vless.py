@@ -88,6 +88,9 @@ def register_dns_over_vless_routes(
         # local resolver means "switch the local exception off".
         upstreams = payload.get("upstreams", None)
         local_resolver = payload.get("local_resolver", None)
+        # Отдавать ли домашние имена резолверу прошивки: адреса панель
+        # находит сама, окно присылает только решение.
+        use_firmware_resolver = payload.get("use_firmware_resolver", None)
         local_domains = payload.get("local_domains", None)
         direct_resolver = payload.get("direct_resolver", None)
         direct_domains = payload.get("direct_domains", None)
@@ -155,6 +158,7 @@ def register_dns_over_vless_routes(
                 target_tag=target_tag,
                 upstreams=upstreams,
                 local_resolver=local_resolver,
+                use_firmware_resolver=use_firmware_resolver,
                 local_domains=local_domains,
                 direct_resolver=direct_resolver,
                 direct_domains=direct_domains,

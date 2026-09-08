@@ -1630,14 +1630,19 @@ def test_one_address_in_both_resolver_groups_is_refused(tmp_path: Path, monkeypa
 
 
 def test_field_hint_names_the_firmware_resolver_ports():
-    # The addresses are not guessable, so the hint has to carry them; without
-    # this the field reads as if there were nothing to put in it.
+    # Адреса не угадываются, и подставляет их сама панель, но подсказка
+    # обязана объяснять, что именно она нашла и чего стоит отказ.
     markup = Path("xkeen-ui/templates/panel.html").read_text(encoding="utf-8")
-    hint_start = markup.index('for="routing-dns-over-vless-local"')
+    hint_start = markup.index('id="routing-dns-over-vless-firmware"')
     hint = markup[hint_start : hint_start + 1600]
     assert "127.0.0.1:41100" in hint
     assert "41101" in hint and "41102" in hint
-    assert "зациклил" in hint
+    assert "router.lan" in hint
+
+    # У собственного поля — своя подсказка про формат и граблю с портом 53.
+    field_start = markup.index('for="routing-dns-over-vless-local"')
+    field_hint = markup[field_start : field_start + 1600]
+    assert "зациклил" in field_hint
 
 
 def test_managed_jsonc_header_is_not_duplicated_on_rewrite(tmp_path: Path, monkeypatch):
@@ -3119,7 +3124,9 @@ def test_enable_without_a_resolver_takes_the_firmware_one(tmp_path: Path, monkey
     )
 
     saved = dns._load_state(str(state))
-    assert saved["local_resolvers"] == ["127.0.0.1:41100"]
+    assert saved["use_firmware_resolver"] is True
+    assert saved["firmware_resolvers_applied"] == ["127.0.0.1:41100"]
+    assert saved["local_resolvers"] == []
 
 
 def test_enable_without_a_resolver_also_gets_a_non_empty_zone_list(tmp_path: Path, monkeypatch):
@@ -3152,7 +3159,7 @@ def test_enable_without_a_resolver_also_gets_a_non_empty_zone_list(tmp_path: Pat
     )
 
     saved = dns._load_state(str(state))
-    assert saved["local_resolvers"] == ["127.0.0.1:41100"]
+    assert saved["firmware_resolvers_applied"] == ["127.0.0.1:41100"]
     assert saved["local_domains"] == dns.DEFAULT_LOCAL_DOMAINS
 
     fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
@@ -3226,8 +3233,9 @@ def test_old_state_with_an_empty_list_still_gets_the_firmware_resolver(tmp_path:
     )
 
     saved = dns._load_state(str(state))
-    assert saved["local_resolvers"] == ["127.0.0.1:41100"]
-    # Версия поднята — второй раз подстановки не будет.
+    assert saved["use_firmware_resolver"] is True
+    assert saved["firmware_resolvers_applied"] == ["127.0.0.1:41100"]
+    # Версия поднята — дальше решает записанная галочка, а не догадка о прошлом.
     assert saved["version"] == dns.STATE_VERSION
 
     fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
@@ -3345,15 +3353,16 @@ def test_turning_the_feature_off_and_on_again_still_migrates(tmp_path: Path, mon
     )
 
     saved = dns._load_state(str(state))
-    assert saved["local_resolvers"] == ["127.0.0.1:41100"]
+    assert saved["use_firmware_resolver"] is True
+    assert saved["firmware_resolvers_applied"] == ["127.0.0.1:41100"]
     assert saved["version"] == dns.STATE_VERSION
 
 
-def test_the_migration_does_not_override_a_field_cleared_by_hand(tmp_path: Path, monkeypatch):
-    """Переход одноразовый и явному отказу не мешает.
+def test_an_empty_own_field_does_not_cancel_the_firmware_resolver(tmp_path: Path, monkeypatch):
+    """Пустое поле своих резолверов — это «своих нет», а не отказ.
 
-    Даже в старом состоянии переданная пустая строка остаётся пустой: это
-    решение, принятое прямо сейчас, а не догадка о прошлом.
+    Раньше оба решения жили в одном поле, и пустая строка выключала домашние
+    имена целиком. Отказ переехал в галочку, и поле больше ничего не решает за прошивку.
     """
     configs, routing_path, state = _scenario_config(tmp_path)
     _write(state / dns.STATE_FILENAME, {"version": 1, "enabled": False, "local_resolvers": []})
@@ -3379,17 +3388,23 @@ def test_the_migration_does_not_override_a_field_cleared_by_hand(tmp_path: Path,
 
     saved = dns._load_state(str(state))
     assert saved["local_resolvers"] == []
+    assert saved["use_firmware_resolver"] is True
+    assert saved["firmware_resolvers_applied"] == ["127.0.0.1:41100"]
     assert saved["version"] == dns.STATE_VERSION
 
 
 def test_enable_keeps_a_previously_cleared_resolver_empty(tmp_path: Path, monkeypatch):
     configs, routing_path, state = _scenario_config(tmp_path)
-    # Пользователь ранее уже очистил поле, и это состояние сохранилось.
-    # Версия состояния — текущая: значит пустой список сюда записала панель,
-    # которая сохраняет это поле только по решению человека.
+    # Своих резолверов у человека нет, а от резолвера прошивки он отказался
+    # галочкой. Ни то, ни другое не должно ожить само при следующем включении.
     _write(
         state / dns.STATE_FILENAME,
-        {"version": dns.STATE_VERSION, "enabled": False, "local_resolvers": []},
+        {
+            "version": dns.STATE_VERSION,
+            "enabled": False,
+            "use_firmware_resolver": False,
+            "local_resolvers": [],
+        },
     )
     monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
     monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
@@ -3413,3 +3428,5 @@ def test_enable_keeps_a_previously_cleared_resolver_empty(tmp_path: Path, monkey
 
     saved = dns._load_state(str(state))
     assert saved["local_resolvers"] == []
+    assert saved["use_firmware_resolver"] is False
+    assert saved["firmware_resolvers_applied"] == []
