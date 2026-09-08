@@ -195,6 +195,11 @@ PASS_SWITCH_INTERVAL = 3600.0
 # can take our address away.  Repairing that means rewriting the fragment and
 # restarting the core, which is far too heavy to do on every healthy tick.
 LOCAL_RESOLVER_RESYNC_INTERVAL = 3600.0
+# Проба живости резолвера прошивки: спрашивается имя, на которое он отвечает
+# из кеша или апстрима, и ждать долго незачем — на роутере живой резолвер
+# отвечает за доли секунды, а молчащий не ответит и за десять.
+FIRMWARE_PROBE_DOMAIN = PROBE_DOMAIN
+FIRMWARE_PROBE_TIMEOUT = 2.0
 
 # Версия файла состояния. Единица — записи панели, которая всегда сохраняла
 # поле локального резолвера, даже когда человек его не заполнял: пустой список
@@ -1257,6 +1262,53 @@ def _parse_resolver_list(value: Any, *, limit: int, noun: str, code: str) -> lis
     if len(result) > limit:
         raise DnsOverVlessError(f"Слишком много {noun}: не больше {limit}.", code=code)
     return result
+
+
+def _resolver_answers(label: str, timeout: float = FIRMWARE_PROBE_TIMEOUT) -> bool:
+    """Отвечает ли резолвер по этому адресу вообще.
+
+    Живость, а не правильность: годится любой ответ с нашим идентификатором,
+    включая NXDOMAIN, — вопрос лишь в том, есть ли на том конце кто-то живой.
+    Порт может слушаться, пока сам ``ndnproxy`` уже не отвечает, и такое
+    молчание отличимо от уехавшего порта только запросом.
+    """
+    try:
+        parsed = _parse_local_resolver(label)
+    except DnsOverVlessError:
+        return False
+    if not parsed:
+        return False
+    txid = random.randint(0, 65535)
+    packet = _dns_query_packet(FIRMWARE_PROBE_DOMAIN, QTYPE_A, txid)
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(max(0.2, float(timeout or 0)))
+            sock.sendto(packet, (parsed["address"], int(parsed.get("port") or 53)))
+            data, _peer = sock.recvfrom(4096)
+    except Exception:  # noqa: BLE001 - молчание и есть ответ на наш вопрос
+        return False
+    if len(data) < 12:
+        return False
+    return struct.unpack("!H", data[:2])[0] == txid
+
+
+def _pick_firmware_resolver(found: list[str]) -> list[str]:
+    """Один адрес прошивки из найденных — первый, который отвечает.
+
+    Записывать все три бессмысленно: список серверов в Xray — очередь, а не
+    маршрутизация по клиенту, поэтому устройству из другой политики всё равно
+    отвечает первый в списке.  Зато каждый молчащий сервер добавляет свой
+    таймаут к промаху по домашнему имени: на живом роутере несуществующее имя
+    в зоне ``lan`` отвечало 10 секунд против 3 с одним резолвером.
+
+    Если не отвечает никто, берём первый: проба короткая и может прийтись на
+    перезапуск ``ndnproxy``, а остаться вовсе без локального резолвера хуже —
+    сторож перепроверит адрес через час.
+    """
+    for item in found:
+        if _resolver_answers(item):
+            return [item]
+    return found[:1]
 
 
 def _firmware_resolvers_applied(state: Dict[str, Any]) -> list[str]:
@@ -2592,7 +2644,7 @@ def recheck_local_resolvers(
             # The firmware's configs are unreadable right now.  Rewriting the
             # setting on that basis would throw away a working address.
             return ""
-        if set(applied) & set(found):
+        if set(applied) & set(found) and all(_resolver_answers(item) for item in applied):
             return ""
         last = state.get("local_resolvers_synced_at")
         now = time.time()
@@ -3098,11 +3150,11 @@ def apply_action(
         # бы в ошибку у того, кто ничего не менял.  Что записать не удалось,
         # видно по пустому снимку в состоянии.
         direct_addresses = {item["address"] for item in wanted_direct}
-        firmware_found = [
+        firmware_found = _pick_firmware_resolver([
             item
             for item in firmware_found
             if (_parse_local_resolver(item) or {}).get("address") not in direct_addresses
-        ]
+        ])
         # Свои впереди: человек указал их осознанно, а Xray на пустой ответ
         # всё равно спросит следующий сервер из списка.
         wanted_local = list(wanted_own)

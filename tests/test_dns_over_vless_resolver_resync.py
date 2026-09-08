@@ -78,6 +78,9 @@ def test_no_resync_when_the_addresses_still_match(tmp_path: Path, monkeypatch):
     state = tmp_path / "state"
     state.mkdir()
     dns._save_state(str(state), {"enabled": True, "local_resolvers": ["127.0.0.1:41100"]})
+    # Сторож спрашивает записанный адрес о живости; здесь речь не о ней, а
+    # о совпадении адресов — без подмены проба ушла бы в сеть машины с тестами.
+    monkeypatch.setattr(dns, "_resolver_answers", lambda *_a, **_k: True)
     monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda *a, **kw: ["127.0.0.1:41100"])
     called = []
     monkeypatch.setattr(dns, "apply_action", lambda *a, **kw: called.append(kw))

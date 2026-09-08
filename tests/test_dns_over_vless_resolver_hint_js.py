@@ -54,3 +54,14 @@ def test_a_firmware_resolver_that_could_not_be_written_is_reported():
     body = _function_body("renderLocalHint")
     assert "data.enabled" in body or "enabled" in body
     assert "не записан" in body or "не задействован" in body
+
+
+def test_the_hint_names_the_address_actually_in_use():
+    """Найдено три, спрашивается один — подсказка обязана сказать какой.
+
+    Иначе человек читает «прошивка отвечает на 41100, 41101, 41102» и думает,
+    что используются все три.
+    """
+    body = _function_body("renderLocalHint")
+    assert "applied" in body
+    assert "Запросы идут" in body or "запросы идут" in body

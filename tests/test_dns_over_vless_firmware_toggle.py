@@ -387,3 +387,95 @@ def test_an_overlap_the_user_created_themselves_is_still_refused(tmp_path: Path,
         )
 
     assert excinfo.value.code == "resolver_group_overlap"
+
+
+def test_only_one_firmware_resolver_is_written(tmp_path: Path, monkeypatch):
+    """Резолверы прошивки спрашиваются по очереди, а не по политике клиента.
+
+    Три записи не дают устройству резолвер его политики — Xray опрашивает их
+    сверху вниз и берёт первый непустой ответ, то есть отвечает всегда первый.
+    Зато каждый молчащий добавляет свои три секунды к любому промаху по
+    домашнему имени: на живом роутере `z1.lan` отвечал 10 секунд вместо 3.
+    """
+    configs, routing, state = _scenario(tmp_path)
+    _patch_plumbing(monkeypatch, ["127.0.0.1:41100", "127.0.0.1:41101", "127.0.0.1:41102"])
+    monkeypatch.setattr(dns, "_resolver_answers", lambda *_a, **_k: True)
+
+    _enable(configs, routing, state)
+
+    saved = dns._load_state(str(state))
+    assert saved["firmware_resolvers_applied"] == ["127.0.0.1:41100"]
+
+    fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+    homes = [s for s in fragment["dns"]["servers"] if isinstance(s, dict) and s.get("domains")]
+    assert [s.get("port") for s in homes] == [41100]
+
+
+def test_a_silent_firmware_resolver_is_skipped_at_enable(tmp_path: Path, monkeypatch):
+    """Первый по порядку может быть жив по порту и молчать — берём следующий."""
+    configs, routing, state = _scenario(tmp_path)
+    _patch_plumbing(monkeypatch, ["127.0.0.1:41100", "127.0.0.1:41101"])
+    monkeypatch.setattr(dns, "_resolver_answers", lambda label, **_k: label.endswith("41101"))
+
+    _enable(configs, routing, state)
+
+    saved = dns._load_state(str(state))
+    assert saved["firmware_resolvers_applied"] == ["127.0.0.1:41101"]
+
+
+def test_all_silent_still_writes_something(tmp_path: Path, monkeypatch):
+    """Молчат все — записываем первый, а не отказываемся от домашних имён.
+
+    Проба короткая и может не попасть в момент перезапуска ndnproxy; остаться
+    вовсе без локального резолвера здесь хуже, чем записать адрес, который
+    сторож потом перепроверит.
+    """
+    configs, routing, state = _scenario(tmp_path)
+    _patch_plumbing(monkeypatch, ["127.0.0.1:41100", "127.0.0.1:41101"])
+    monkeypatch.setattr(dns, "_resolver_answers", lambda *_a, **_k: False)
+
+    _enable(configs, routing, state)
+
+    saved = dns._load_state(str(state))
+    assert saved["firmware_resolvers_applied"] == ["127.0.0.1:41100"]
+
+
+def test_the_guard_switches_away_from_a_resolver_that_went_silent(tmp_path: Path, monkeypatch):
+    """Порт на месте, а ответов нет — сторож обязан это заметить.
+
+    Раньше он смотрел только на исчезнувший порт: замолчавший `ndnproxy`
+    оставлял домашние имена без ответов до перезапуска панели.
+    """
+    configs, routing, state = _scenario(tmp_path)
+    _patch_plumbing(monkeypatch, ["127.0.0.1:41100", "127.0.0.1:41101"])
+    monkeypatch.setattr(dns, "_resolver_answers", lambda *_a, **_k: True)
+    _enable(configs, routing, state)
+    assert dns._load_state(str(state))["firmware_resolvers_applied"] == ["127.0.0.1:41100"]
+
+    monkeypatch.setattr(dns, "_resolver_answers", lambda label, **_k: label.endswith("41101"))
+    message = dns.recheck_local_resolvers(
+        configs_dir=str(configs),
+        routing_file=str(routing),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+    )
+
+    assert "127.0.0.1:41101" in message
+    assert dns._load_state(str(state))["firmware_resolvers_applied"] == ["127.0.0.1:41101"]
+
+
+def test_the_guard_leaves_a_healthy_resolver_alone(tmp_path: Path, monkeypatch):
+    """Сторожевой тест: проверка живости не должна дёргать ядро на ровном месте."""
+    configs, routing, state = _scenario(tmp_path)
+    _patch_plumbing(monkeypatch, ["127.0.0.1:41100", "127.0.0.1:41101"])
+    monkeypatch.setattr(dns, "_resolver_answers", lambda *_a, **_k: True)
+    _enable(configs, routing, state)
+
+    message = dns.recheck_local_resolvers(
+        configs_dir=str(configs),
+        routing_file=str(routing),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+    )
+
+    assert message == ""

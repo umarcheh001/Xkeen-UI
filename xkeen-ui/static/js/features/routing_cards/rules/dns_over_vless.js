@@ -642,6 +642,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     } else if (applied.length && !applied.some((item) => found.indexOf(item) >= 0)) {
       warn = true;
       text.textContent = `Записанный адрес прошивка больше не слушает. Она отвечает на ${found.join(', ')} — панель переключится сама в течение часа.`;
+    } else if (applied.length) {
+      // Найденных бывает несколько — по одному на политику доступа, — а
+      // спрашивается один: Xray опрашивает список по очереди, и лишние адреса
+      // добавляют только ожидание на именах, которых в сети нет.
+      const rest = found.filter((item) => applied.indexOf(item) < 0);
+      text.textContent = rest.length
+        ? `Запросы идут на ${applied.join(', ')}; прошивка отвечает также на ${rest.join(', ')}.`
+        : `Запросы идут на ${applied.join(', ')}.`;
     } else {
       text.textContent = `Прошивка отвечает на ${found.join(', ')}.`;
     }
