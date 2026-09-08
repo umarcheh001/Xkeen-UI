@@ -98,6 +98,14 @@ def test_workspace_lifecycle_aborts_network_outside_runtime_subviews():
     assert "retry: 0" in client
 
 
+def test_telemetry_status_tooltip_updates_the_portal_tooltip_attribute():
+    feature = _text(FEATURE)
+
+    assert "const tooltip = receivedAt" in feature
+    assert "target.setAttribute('data-tooltip', tooltip);" in feature
+    assert "target.removeAttribute('title');" in feature
+
+
 def test_workspace_status_matrix_and_accessibility_contract_are_explicit():
     state = _text(STATE)
     markup = _mihomo_markup()

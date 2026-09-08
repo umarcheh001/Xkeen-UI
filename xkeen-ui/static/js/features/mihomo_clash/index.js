@@ -558,9 +558,14 @@ export function initMihomoClashWorkspace() {
     target.textContent = labels[state] || `Telemetry · ${state}`;
     target.dataset.state = state;
     const receivedAt = Number(frame?.received_at_ms) || 0;
-    target.title = receivedAt
+    const tooltip = receivedAt
       ? `Последний успешный кадр: ${new Date(receivedAt).toLocaleString('ru-RU')}`
       : 'Последний успешный кадр ещё не получен';
+    // The global tooltip runtime migrates `title` into `data-tooltip` only
+    // once. Update its canonical attribute directly so an initial paused
+    // replay cannot leave a stale "not received" message after live frames.
+    target.setAttribute('data-tooltip', tooltip);
+    target.removeAttribute('title');
   });
   renderStatus('idle', null);
   applySubview(currentSubview, { reason: 'init' });
