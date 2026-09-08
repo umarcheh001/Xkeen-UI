@@ -46,6 +46,16 @@ MANAGED_BEGIN = "# BEGIN XKeen UI Mihomo DNS (managed)"
 MANAGED_END = "# END XKeen UI Mihomo DNS (managed)"
 DNS_LISTEN = "0.0.0.0:53"
 PROBE_DOMAIN = "example.com"
+# How long the guard may reuse the firmware's answer about ``opkg
+# dns-override``.  Only the panel and a person at the CLI ever flip that
+# switch: the panel refreshes this cache itself, and a hand-made change is
+# noticed on the next read.  Ten minutes turns 20 router-log sessions into one.
+OVERRIDE_STATUS_CACHE_TTL = 600.0
+_OVERRIDE_STATUS_CACHE: dict[str, Any] = {}
+# The same idea for ``dns-proxy no filter engine``: it repairs drift that only
+# appears when the router boots, so repeating it every guard tick buys nothing.
+FILTER_RECONCILE_INTERVAL = 600.0
+_FILTER_RECONCILE_STATE: dict[str, float] = {}
 DEFAULT_FAKE_IP_RANGE = "198.18.0.1/16"
 DEFAULT_FAKE_IP_FILTER_MODE = "blacklist"
 DEFAULT_FAKE_IP_FILTERS = ("*.lan", "*.local")
@@ -2029,17 +2039,43 @@ def _ndmc(command: str, *, timeout: int = 15) -> str:
     return re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", output)
 
 
-def _dns_override_status() -> tuple[Optional[bool], str]:
+def _dns_override_status(*, max_age: Optional[float] = None) -> tuple[Optional[bool], str]:
+    """Is ``opkg dns-override`` on, per the firmware itself.
+
+    ``show running-config`` is the only place that answer lives, and reading it
+    starts a session on ``/var/run/ndm.core.socket`` -- two lines in the router
+    log every time.  Callers that ask on a timer (the guard, every 30 seconds)
+    pass ``max_age`` and get the previous answer back while it is that fresh;
+    the panel asks without it and always sees the live state.
+
+    Only a definite answer is remembered.  An unreadable ndmc is a temporary
+    condition, and caching it would keep the guard blind for the whole window.
+    """
+
+    if max_age:
+        stamp = _OVERRIDE_STATUS_CACHE.get("at")
+        cached = _OVERRIDE_STATUS_CACHE.get("value")
+        if cached is not None and stamp is not None and 0 <= time.monotonic() - stamp < float(max_age):
+            return cached
+
     try:
         output = _ndmc("show running-config", timeout=10)
     except MihomoDnsError as exc:
         return None, str(exc.details or exc)
     lines = [line.strip().lower() for line in output.splitlines()]
     if any(line == "no opkg dns-override" or line.startswith("no opkg dns-override ") for line in lines):
-        return False, "running-config"
-    if any(line == "opkg dns-override" or line.startswith("opkg dns-override ") for line in lines):
-        return True, "running-config"
-    return False, "running-config (команда отсутствует)"
+        result = (False, "running-config")
+    elif any(line == "opkg dns-override" or line.startswith("opkg dns-override ") for line in lines):
+        result = (True, "running-config")
+    else:
+        result = (False, "running-config (команда отсутствует)")
+    _remember_dns_override(result)
+    return result
+
+
+def _remember_dns_override(result: tuple[Optional[bool], str]) -> None:
+    _OVERRIDE_STATUS_CACHE["value"] = result
+    _OVERRIDE_STATUS_CACHE["at"] = time.monotonic()
 
 
 def _set_dns_override(enabled: bool) -> None:
@@ -2054,6 +2090,9 @@ def _set_dns_override(enabled: bool) -> None:
         # when the operator selects "Выключен" under Internet filters.
         _disable_keenetic_dns_filter()
     _ndmc("system configuration save")
+    # The switch was just written, so nobody has to read it back to learn what
+    # it says: the guard's next tick can use this instead of another session.
+    _remember_dns_override((bool(enabled), "panel"))
 
 
 def _disable_keenetic_dns_filter() -> None:
@@ -2066,11 +2105,23 @@ def _disable_keenetic_dns_filter() -> None:
     """
 
     _ndmc("dns-proxy no filter engine")
+    _FILTER_RECONCILE_STATE["at"] = time.monotonic()
 
 
 def reconcile_keenetic_dns_filter() -> dict[str, Any]:
-    """Re-apply the runtime state KeeneticOS may undo during router boot."""
+    """Re-apply the runtime state KeeneticOS may undo during router boot.
 
+    The drift this repairs appears once, when the router boots and restores its
+    Internet-filter interceptor -- so the command belongs at the start of the
+    panel's life, not on every guard tick 30 seconds apart, where it only fills
+    the router log with ndm sessions.  The panel is started by the same boot
+    that causes the drift, so an interval kept in memory is enough: a reboot
+    resets it and the first tick after it repairs the filter again.
+    """
+
+    stamp = _FILTER_RECONCILE_STATE.get("at")
+    if stamp is not None and 0 <= time.monotonic() - stamp < FILTER_RECONCILE_INTERVAL:
+        return {"ok": True, "filter_engine": "recent"}
     _disable_keenetic_dns_filter()
     return {"ok": True, "filter_engine": "disabled"}
 
@@ -2876,14 +2927,26 @@ def apply_action(
             ) from exc
 
 
-def is_enabled(*, config_file: str, ui_state_dir: str) -> bool:
-    """Does Mihomo currently own router DNS, including user-authored setups?"""
+def is_enabled(*, config_file: str, ui_state_dir: str, max_age: Optional[float] = None) -> bool:
+    """Does Mihomo currently own router DNS, including user-authored setups?
+
+    ``max_age`` is passed on to ``_dns_override_status``: the guard asks on a
+    timer and may reuse a recent answer, the panel asks about now.
+    """
 
     try:
         state = _load_state(ui_state_dir, config_file)
     except Exception:
         state = {}
-    override, _detail = _dns_override_status()
+    text = _read_text(config_file, "") or ""
+    listener_configured = bool(_dns_runtime_config(text).get("listener_configured"))
+    # Neither this panel nor the profile claims port 53, and no answer the
+    # firmware could give changes that -- every branch below returns False.
+    # Asking anyway would start an ndm session (two lines in the router log)
+    # every 30 seconds on installs that do not use Mihomo DNS at all.
+    if not state.get("enabled") and not listener_configured:
+        return False
+    override, _detail = _dns_override_status(max_age=max_age)
     # A confirmed disabled switch means Keenetic already owns DNS; stale panel
     # state must not keep the guard active forever.  If ndmc is temporarily
     # unreadable, retain the transaction marker as the conservative fallback.
@@ -2899,8 +2962,7 @@ def is_enabled(*, config_file: str, ui_state_dir: str) -> bool:
     # back -- so it remains eligible together with a running Mihomo.
     if detect_running_core() not in {"", "mihomo"}:
         return False
-    text = _read_text(config_file, "") or ""
-    return bool(_dns_runtime_config(text).get("listener_configured"))
+    return listener_configured
 
 
 def emergency_release(

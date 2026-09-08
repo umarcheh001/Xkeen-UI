@@ -375,7 +375,7 @@ def test_user_authored_mihomo_dns_is_watched_without_assistant_state(tmp_path: P
         "dns:\n  enable: true\n  listen: 0.0.0.0:53\n  nameserver: [https://user.example/dns-query]\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(mihomo_dns, "_dns_override_status", lambda: (True, "test"))
+    monkeypatch.setattr(mihomo_dns, "_dns_override_status", lambda **_kwargs: (True, "test"))
     monkeypatch.setattr(mihomo_dns, "detect_running_core", lambda: "mihomo")
 
     assert mihomo_dns.is_enabled(
@@ -389,7 +389,7 @@ def test_inactive_user_mihomo_profile_is_not_mistaken_for_xray_dns(tmp_path: Pat
         "dns:\n  enable: true\n  listen: 0.0.0.0:53\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(mihomo_dns, "_dns_override_status", lambda: (True, "test"))
+    monkeypatch.setattr(mihomo_dns, "_dns_override_status", lambda **_kwargs: (True, "test"))
     monkeypatch.setattr(mihomo_dns, "detect_running_core", lambda: "xray")
 
     assert mihomo_dns.is_enabled(
@@ -443,7 +443,7 @@ def test_the_mihomo_window_still_sees_that_the_guard_stood_the_protection_down(
     trace = mihomo_dns.read_release(config_file=str(config_file), ui_state_dir=str(tmp_path))
     assert trace and "DNS возвращён прошивке" in trace["reason"]
 
-    monkeypatch.setattr(mihomo_dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(mihomo_dns, "_dns_override_status", lambda **_kwargs: (False, "test"))
     monkeypatch.setattr(mihomo_dns, "detect_running_core", lambda: "mihomo")
     status = mihomo_dns.get_status(config_file=str(config_file), ui_state_dir=str(tmp_path))
     assert status["enabled"] is False
@@ -562,3 +562,37 @@ def test_the_xray_protection_also_watches_its_pass_through(tmp_path: Path, monke
     assert by_name["mihomo-dns"].reconcile() == ""
 
     assert calls == [str(tmp_path), "mihomo-filter"]
+
+
+def test_the_guard_asks_the_firmware_once_per_cache_window(tmp_path: Path, monkeypatch):
+    """Каждый ``ndmc`` — сессия ndm в системном журнале роутера.
+
+    Тик идёт раз в 30 секунд, поэтому «включена ли защита Mihomo?» не должно
+    стоить роутеру пары строк в журнале на каждом тике.
+    """
+    config_file, _snapshot = _mihomo_install(tmp_path)
+    calls: List[str] = []
+    monkeypatch.setattr(
+        mihomo_dns,
+        "_ndmc",
+        lambda command, **_kwargs: calls.append(command) or "opkg dns-override\n",
+    )
+    monkeypatch.setattr(mihomo_dns, "detect_running_core", lambda: "mihomo")
+    mihomo_dns._OVERRIDE_STATUS_CACHE.clear()
+
+    protections = dns_guard.build_protections(
+        configs_dir=str(tmp_path),
+        routing_file=str(tmp_path / "routing.json"),
+        ui_state_dir=str(tmp_path),
+        mihomo_config_file=str(config_file),
+        save_mihomo_config=lambda text: None,
+        restart_xkeen=lambda **kwargs: True,
+    )
+    by_name = {item.name: item for item in protections}
+
+    try:
+        assert [by_name["mihomo-dns"].enabled() for _ in range(3)] == [True, True, True]
+    finally:
+        mihomo_dns._OVERRIDE_STATUS_CACHE.clear()
+
+    assert calls == ["show running-config"]

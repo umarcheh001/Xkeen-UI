@@ -1278,3 +1278,162 @@ def test_http_contract_forwards_portable_dns_options(tmp_path: Path, monkeypatch
 
     assert response.status_code == 200
     assert captured["dns_options"]["tunnel"] == ["https://9.9.9.9/dns-query"]
+
+
+# --- Тишина в журнале роутера ---------------------------------------------
+#
+# Каждый запуск ``ndmc`` открывает сессию в ``/var/run/ndm.core.socket``, и
+# прошивка пишет об этом две строки в системный журнал.  Сторож тикает раз в
+# 30 секунд, поэтому любой лишний вызов оттуда -- 2880 пар записей в сутки.
+# Тесты ниже считают команды поимённо: важно не «что ответили», а «сколько раз
+# вообще спросили».
+
+
+@pytest.fixture(autouse=True)
+def _reset_firmware_call_caches():
+    dns._OVERRIDE_STATUS_CACHE.clear()
+    dns._FILTER_RECONCILE_STATE.clear()
+    yield
+    dns._OVERRIDE_STATUS_CACHE.clear()
+    dns._FILTER_RECONCILE_STATE.clear()
+
+
+def _count_ndmc(monkeypatch, *, running_config: str = "opkg dns-override\n") -> list[str]:
+    calls: list[str] = []
+
+    def record(command, **_kwargs):
+        calls.append(command)
+        return running_config if command == "show running-config" else ""
+
+    monkeypatch.setattr(dns, "_ndmc", record)
+    return calls
+
+
+def test_the_firmware_is_not_asked_when_no_mihomo_dns_is_configured(tmp_path: Path, monkeypatch):
+    config = tmp_path / "config.yaml"
+    config.write_text(BASE, encoding="utf-8")
+    calls = _count_ndmc(monkeypatch)
+
+    assert dns.is_enabled(config_file=str(config), ui_state_dir=str(tmp_path)) is False
+    assert calls == []
+
+
+def test_a_configured_listener_is_still_checked_against_the_firmware(tmp_path: Path, monkeypatch):
+    config = tmp_path / "config.yaml"
+    config.write_text("dns:\n  enable: true\n  listen: 0.0.0.0:53\n", encoding="utf-8")
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "mihomo")
+    calls = _count_ndmc(monkeypatch)
+
+    assert dns.is_enabled(config_file=str(config), ui_state_dir=str(tmp_path)) is True
+    assert calls == ["show running-config"]
+
+
+def test_a_recent_override_answer_is_reused_within_the_cache_window(tmp_path: Path, monkeypatch):
+    config = tmp_path / "config.yaml"
+    config.write_text("dns:\n  enable: true\n  listen: 0.0.0.0:53\n", encoding="utf-8")
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "mihomo")
+    calls = _count_ndmc(monkeypatch)
+
+    answers = [
+        dns.is_enabled(
+            config_file=str(config),
+            ui_state_dir=str(tmp_path),
+            max_age=dns.OVERRIDE_STATUS_CACHE_TTL,
+        )
+        for _ in range(3)
+    ]
+
+    assert answers == [True, True, True]
+    assert calls == ["show running-config"]
+
+
+def test_a_stale_override_answer_is_read_from_the_firmware_again(tmp_path: Path, monkeypatch):
+    config = tmp_path / "config.yaml"
+    config.write_text("dns:\n  enable: true\n  listen: 0.0.0.0:53\n", encoding="utf-8")
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "mihomo")
+    calls = _count_ndmc(monkeypatch)
+
+    dns.is_enabled(
+        config_file=str(config), ui_state_dir=str(tmp_path), max_age=dns.OVERRIDE_STATUS_CACHE_TTL
+    )
+    dns._OVERRIDE_STATUS_CACHE["at"] -= dns.OVERRIDE_STATUS_CACHE_TTL + 1
+    dns.is_enabled(
+        config_file=str(config), ui_state_dir=str(tmp_path), max_age=dns.OVERRIDE_STATUS_CACHE_TTL
+    )
+
+    assert calls == ["show running-config", "show running-config"]
+
+
+def test_the_panel_itself_always_reads_the_live_override(tmp_path: Path, monkeypatch):
+    """Окно панели показывает состояние сейчас, а не то, что видел сторож."""
+    config = tmp_path / "config.yaml"
+    config.write_text("dns:\n  enable: true\n  listen: 0.0.0.0:53\n", encoding="utf-8")
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "mihomo")
+    calls = _count_ndmc(monkeypatch)
+
+    dns.is_enabled(config_file=str(config), ui_state_dir=str(tmp_path))
+    dns.is_enabled(config_file=str(config), ui_state_dir=str(tmp_path))
+
+    assert calls == ["show running-config", "show running-config"]
+
+
+def test_switching_the_override_refreshes_the_cached_answer(monkeypatch):
+    calls = _count_ndmc(monkeypatch)
+
+    dns._set_dns_override(False)
+
+    assert dns._dns_override_status(max_age=dns.OVERRIDE_STATUS_CACHE_TTL) == (False, "panel")
+    assert calls == ["no opkg dns-override", "system configuration save"]
+
+
+def test_an_unreadable_firmware_answer_is_never_cached(tmp_path: Path, monkeypatch):
+    config = tmp_path / "config.yaml"
+    config.write_text("dns:\n  enable: true\n  listen: 0.0.0.0:53\n", encoding="utf-8")
+    calls: list[str] = []
+
+    def refuse(command, **_kwargs):
+        calls.append(command)
+        raise dns.MihomoDnsError("Не найден ndmc", code="ndmc_missing")
+
+    monkeypatch.setattr(dns, "_ndmc", refuse)
+
+    for _ in range(2):
+        assert dns._dns_override_status(max_age=dns.OVERRIDE_STATUS_CACHE_TTL)[0] is None
+
+    assert calls == ["show running-config", "show running-config"]
+
+
+def test_filter_reconcile_is_not_repeated_on_every_guard_tick(monkeypatch):
+    calls = _count_ndmc(monkeypatch)
+
+    first = dns.reconcile_keenetic_dns_filter()
+    second = dns.reconcile_keenetic_dns_filter()
+
+    assert first == {"ok": True, "filter_engine": "disabled"}
+    assert second == {"ok": True, "filter_engine": "recent"}
+    assert calls == ["dns-proxy no filter engine"]
+
+
+def test_filter_reconcile_runs_again_once_its_interval_has_passed(monkeypatch):
+    calls = _count_ndmc(monkeypatch)
+
+    dns.reconcile_keenetic_dns_filter()
+    dns._FILTER_RECONCILE_STATE["at"] -= dns.FILTER_RECONCILE_INTERVAL + 1
+    dns.reconcile_keenetic_dns_filter()
+
+    assert calls == ["dns-proxy no filter engine", "dns-proxy no filter engine"]
+
+
+def test_enabling_the_override_counts_as_a_fresh_filter_reconcile(monkeypatch):
+    """Команда только что ушла: повторять её через 30 секунд незачем."""
+    calls = _count_ndmc(monkeypatch)
+
+    dns._set_dns_override(True)
+    result = dns.reconcile_keenetic_dns_filter()
+
+    assert result == {"ok": True, "filter_engine": "recent"}
+    assert calls == [
+        "opkg dns-override",
+        "dns-proxy no filter engine",
+        "system configuration save",
+    ]

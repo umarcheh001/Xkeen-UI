@@ -140,8 +140,13 @@ def build_protections(
             Protection(
                 "mihomo-dns",
                 expected_core="mihomo",
+                # The guard asks on a timer, so it may reuse the firmware's
+                # recent answer about ``opkg dns-override`` instead of opening
+                # an ndm session -- and a log record -- every tick.
                 is_enabled=lambda: mihomo_dns.is_enabled(
-                    config_file=mihomo_config_file, ui_state_dir=ui_state_dir
+                    config_file=mihomo_config_file,
+                    ui_state_dir=ui_state_dir,
+                    max_age=mihomo_dns.OVERRIDE_STATUS_CACHE_TTL,
                 ),
                 release=lambda reason: mihomo_dns.emergency_release(
                     config_file=mihomo_config_file,
