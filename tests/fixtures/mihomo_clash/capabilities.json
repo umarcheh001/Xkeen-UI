@@ -1,0 +1,16 @@
+{
+  "matrix_version": 1,
+  "core_versions": [
+    {"version": "Mihomo Meta v1.18.9", "traffic": true, "dns_query": true, "dns_flush": true, "fake_ip_flush": true, "rule_counters": false, "rules_disable": false},
+    {"version": "Mihomo Meta v1.19.0", "traffic": true, "dns_query": true, "dns_flush": true, "fake_ip_flush": true, "rule_counters": true, "rules_disable": true},
+    {"version": "Mihomo Meta v1.19.12", "traffic": true, "dns_query": true, "dns_flush": true, "fake_ip_flush": true, "rule_counters": true, "rules_disable": true}
+  ],
+  "flags": {
+    "traffic": false,
+    "telemetry_stream": false,
+    "dns_query": false,
+    "dns_flush": false,
+    "fake_ip_flush": false,
+    "cache_etag": false
+  }
+}

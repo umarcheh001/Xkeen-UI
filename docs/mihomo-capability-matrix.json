@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "description": "Xkeen UI Mihomo Clash capability baseline; version gates are conservative and runtime readiness is probed separately.",
+  "capabilities": [
+    {"name": "traffic", "endpoint": "/traffic", "method": "GET", "min_version": "1.18.0", "probe": "traffic_snapshot", "flag": "XKEEN_MIHOMO_TRAFFIC_ENABLE"},
+    {"name": "telemetry_stream", "endpoint": "/ws/mihomo-clash/telemetry", "method": "WS", "min_version": null, "probe": "ws_runtime", "flag": "XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE"},
+    {"name": "dns_query", "endpoint": "/dns/query", "method": "GET", "min_version": "1.18.0", "probe": "dns_query", "flag": "XKEEN_MIHOMO_DNS_QUERY_ENABLE"},
+    {"name": "dns_flush", "endpoint": "/cache/dns/flush", "method": "POST", "min_version": "1.18.0", "probe": null, "flag": "XKEEN_MIHOMO_DNS_FLUSH_ENABLE"},
+    {"name": "fake_ip_flush", "endpoint": "/cache/fakeip/flush", "method": "POST", "min_version": "1.18.0", "probe": null, "flag": "XKEEN_MIHOMO_FAKE_IP_FLUSH_ENABLE"},
+    {"name": "rule_counters", "endpoint": "/rules", "method": "GET", "min_version": "1.19.0", "probe": "rules", "flag": "XKEEN_MIHOMO_RULE_COUNTERS_ENABLE"},
+    {"name": "rules_disable", "endpoint": "/rules/disable", "method": "PATCH", "min_version": "1.19.0", "probe": null, "flag": "XKEEN_MIHOMO_RULES_DISABLE_ENABLE"},
+    {"name": "cache_etag", "endpoint": "xkeen://mihomo-cache", "method": "INTERNAL", "min_version": null, "probe": null, "flag": "XKEEN_MIHOMO_CACHE_ETAG_ENABLE"}
+  ]
+}

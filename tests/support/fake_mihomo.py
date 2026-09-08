@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 
 def connection_payload(count: int, *, generation: int = 0) -> dict[str, Any]:
@@ -60,6 +60,12 @@ class FakeMihomoState:
     provider_updates: list[tuple[str, str]] = field(default_factory=list)
     provider_healthchecks: list[str] = field(default_factory=list)
     disconnected_ids: set[str] = field(default_factory=set)
+    traffic_enabled: bool = True
+    dns_enabled: bool = True
+    rules_disable_enabled: bool = True
+    dns_flushes: int = 0
+    fake_ip_flushes: int = 0
+    disabled_rules: dict[str, bool] = field(default_factory=dict)
     requests: list[dict[str, Any]] = field(default_factory=list)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
@@ -283,6 +289,26 @@ class FakeMihomo(AbstractContextManager["FakeMihomo"]):
                     )
                 elif path == "/connections":
                     self._send(200, state.snapshot())
+                elif path == "/traffic":
+                    if not state.traffic_enabled:
+                        self._send(404, {"message": "missing"})
+                    else:
+                        generation = max(0, int(state.generation))
+                        self._send(200, {"up": generation * 1024, "down": generation * 4096})
+                elif path == "/dns/query":
+                    if not state.dns_enabled:
+                        self._send(404, {"message": "missing"})
+                    else:
+                        query_params = parse_qs(_query)
+                        query = str((query_params.get("name") or [""])[0])
+                        self._send(
+                            200,
+                            {
+                                "Status": 0,
+                                "Question": [{"name": query, "type": 1, "class": 1}],
+                                "Answer": [{"name": query, "type": 1, "TTL": 60, "data": "192.0.2.44"}],
+                            },
+                        )
                 elif path == "/memory":
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
@@ -297,6 +323,20 @@ class FakeMihomo(AbstractContextManager["FakeMihomo"]):
                     self._send(204)
                 elif path.endswith("/delay") or path.endswith("/healthcheck"):
                     self._send(200, {"delay": 42})
+                else:
+                    self._send(404, {"message": "missing"})
+
+            def do_POST(self):  # noqa: N802
+                prepared = self._prepare()
+                if prepared is None:
+                    return
+                path, _query = prepared
+                if path == "/cache/dns/flush":
+                    state.dns_flushes += 1
+                    self._send(204)
+                elif path == "/cache/fakeip/flush":
+                    state.fake_ip_flushes += 1
+                    self._send(204)
                 else:
                     self._send(404, {"message": "missing"})
 
@@ -332,6 +372,19 @@ class FakeMihomo(AbstractContextManager["FakeMihomo"]):
                     return
                 path, _query = prepared
                 if path != "/configs":
+                    if path == "/rules/disable" and state.rules_disable_enabled:
+                        size = int(self.headers.get("Content-Length") or 0)
+                        try:
+                            body = json.loads(self.rfile.read(size) or b"{}")
+                        except (TypeError, ValueError, json.JSONDecodeError):
+                            self._send(400, {"message": "invalid json"})
+                            return
+                        if not isinstance(body, dict):
+                            self._send(400, {"message": "invalid rules"})
+                            return
+                        state.disabled_rules.update({str(key): bool(value) for key, value in body.items()})
+                        self._send(204)
+                        return
                     self._send(404, {"message": "missing"})
                     return
                 size = int(self.headers.get("Content-Length") or 0)

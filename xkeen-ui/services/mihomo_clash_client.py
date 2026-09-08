@@ -105,6 +105,13 @@ MIHOMO_CLASH_ENDPOINTS: Mapping[str, MihomoClashEndpoint] = MappingProxyType(
             512 * 1024,
         ),
         "connections_snapshot": MihomoClashEndpoint("GET", "/connections", 5.0),
+        # Stage 0 optional capabilities.  They are exposed as named
+        # operations only; callers cannot supply an arbitrary controller path.
+        "traffic": MihomoClashEndpoint("GET", "/traffic", 2.0, 256 * 1024, stream=True),
+        "dns_query": MihomoClashEndpoint("GET", "/dns/query", 5.0, 512 * 1024),
+        "dns_flush": MihomoClashEndpoint("POST", "/cache/dns/flush", 5.0, 64 * 1024),
+        "fake_ip_flush": MihomoClashEndpoint("POST", "/cache/fakeip/flush", 5.0, 64 * 1024),
+        "rules_disable": MihomoClashEndpoint("PATCH", "/rules/disable", 5.0, 64 * 1024),
         # Mihomo exposes core heap usage as an NDJSON stream.  A plain HTTP
         # request deliberately reports zero in its first frame for legacy
         # dashboard compatibility, so callers must consume the next frame.
@@ -256,6 +263,127 @@ class MihomoClashClient:
             body=body,
             expect_json=False,
         )
+
+    def request_traffic(self) -> MihomoClashJSONResponse:
+        """Read the bounded optional ``/traffic`` snapshot."""
+
+        started = time.monotonic()
+        payload: Any = None
+        size_bytes = 0
+        frames = self.iter_json_frames("traffic")
+        try:
+            payload = next(frames, None)
+            if payload is not None:
+                size_bytes = len(
+                    json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+                )
+        finally:
+            close = getattr(frames, "close", None)
+            if callable(close):
+                close()
+        if payload is None:
+            raise MihomoClashClientError(
+                "upstream_invalid_payload",
+                "Mihomo returned an empty traffic stream.",
+                status=502,
+            )
+        return MihomoClashJSONResponse(
+            payload=payload,
+            status=200,
+            elapsed_ms=round((time.monotonic() - started) * 1000.0, 1),
+            size_bytes=size_bytes,
+        )
+
+    _DNS_TYPES = frozenset({"A", "AAAA", "CNAME", "TXT"})
+
+    @classmethod
+    def _dns_name(cls, name: str) -> str:
+        value = str(name or "").strip().rstrip(".")
+        if not value or len(value) > 253 or any(ord(char) < 32 or char.isspace() for char in value):
+            raise MihomoClashClientError(
+                "dns_name_invalid",
+                "The DNS query name is invalid.",
+                status=400,
+            )
+        labels = value.split(".")
+        if any(
+            not label
+            or len(label) > 63
+            or label.startswith("-")
+            or label.endswith("-")
+            or not all(char.isalnum() or char == "-" or ord(char) >= 128 for char in label)
+            for label in labels
+        ):
+            raise MihomoClashClientError(
+                "dns_name_invalid",
+                "The DNS query name is invalid.",
+                status=400,
+            )
+        try:
+            # IDNA validation bounds unicode labels without leaking the raw
+            # name into an error message.
+            "".join(label.encode("idna").decode("ascii") for label in labels)
+        except (UnicodeError, UnicodeEncodeError):
+            raise MihomoClashClientError(
+                "dns_name_invalid",
+                "The DNS query name is invalid.",
+                status=400,
+            )
+        return value
+
+    def query_dns(self, name: str, qtype: str = "A") -> MihomoClashJSONResponse:
+        """Query only a validated DNS name and one of four supported types."""
+
+        normalized_type = str(qtype or "A").strip().upper()
+        if normalized_type not in self._DNS_TYPES:
+            raise MihomoClashClientError(
+                "dns_type_invalid",
+                "Only A, AAAA, CNAME and TXT DNS queries are supported.",
+                status=400,
+            )
+        spec = self._endpoint("dns_query", stream=False)
+        query = urlencode({"name": self._dns_name(name), "type": normalized_type})
+        return self._request(spec, path=f"{spec.path}?{query}", expect_json=True)
+
+    def flush_dns_cache(self) -> MihomoClashJSONResponse:
+        """Flush the upstream DNS cache through the dedicated operation."""
+
+        spec = self._endpoint("dns_flush", stream=False)
+        return self._request(spec, path=spec.path, expect_json=False)
+
+    def flush_fake_ip_cache(self) -> MihomoClashJSONResponse:
+        """Flush the upstream fake-IP cache through the dedicated operation."""
+
+        spec = self._endpoint("fake_ip_flush", stream=False)
+        return self._request(spec, path=spec.path, expect_json=False)
+
+    def disable_rules(self, rules: Mapping[Any, Any]) -> MihomoClashJSONResponse:
+        """Apply a bounded temporary rule enable/disable map.
+
+        This low-level method still carries no preview/CSRF semantics; those
+        belong to the facade action layer.  It strictly validates indexes and
+        boolean values so it cannot become a generic PATCH relay.
+        """
+
+        if not isinstance(rules, Mapping) or not rules or len(rules) > 128:
+            raise MihomoClashClientError(
+                "rules_disable_payload_invalid",
+                "The rule disable payload is invalid.",
+                status=400,
+            )
+        normalized: dict[str, bool] = {}
+        for raw_index, value in rules.items():
+            index = str(raw_index)
+            if not index.isascii() or not index.isdigit() or int(index) > 100_000 or not isinstance(value, bool):
+                raise MihomoClashClientError(
+                    "rules_disable_payload_invalid",
+                    "The rule disable payload is invalid.",
+                    status=400,
+                )
+            normalized[str(int(index))] = value
+        spec = self._endpoint("rules_disable", stream=False)
+        body = json.dumps(normalized, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        return self._request(spec, path=spec.path, body=body, expect_json=False)
 
     def select_proxy(self, group_name: str, proxy_name: str) -> MihomoClashJSONResponse:
         """Select one group member without exposing a generic method/path relay."""

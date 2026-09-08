@@ -1,0 +1,7 @@
+{
+  "frames": [
+    {"schema_version": 1, "sequence": 1, "state": "live"},
+    {"schema_version": 1, "sequence": 2, "state": "reconnecting", "error": {"code": "upstream_unreachable", "retryable": true}},
+    {"schema_version": 1, "sequence": 3, "state": "live"}
+  ]
+}

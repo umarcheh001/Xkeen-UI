@@ -24,6 +24,13 @@ from services.mihomo_clash_dto import (
     build_mihomo_clash_proxy_groups_dto,
     build_mihomo_clash_rules_dto,
     build_mihomo_clash_status_dto,
+    build_mihomo_clash_snapshot_envelope,
+)
+from services.mihomo_clash_capabilities import (
+    build_capability_state,
+    capability_matrix_payload,
+    mihomo_feature_flags,
+    probe_non_mutating_capabilities,
 )
 from services.mihomo_clash_guard import MihomoClashActionGuard, MihomoClashActionRejected
 from services.mihomo_rule_provider_inspector import (
@@ -76,8 +83,12 @@ def _capabilities(
     provider_healthcheck: bool | None = None,
     logs: bool | None = None,
     logs_stream: bool | None = None,
-) -> dict[str, bool | None]:
-    return {
+    version_payload: Any = None,
+    runtime_probe: Mapping[str, bool] | None = None,
+    status_ready: bool | None = None,
+    include_details: bool = False,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
         "status": status,
         "runtime_mode_switch": runtime_mode_switch,
         "proxy_groups": proxy_groups,
@@ -94,6 +105,20 @@ def _capabilities(
         "logs": logs,
         "logs_stream": logs_stream,
     }
+    # New optional capabilities are computed independently so all legacy
+    # keys retain their historical values and consumers can roll back to the
+    # existing connections WS/HTTP fallback without a schema change.
+    optional, details = build_capability_state(
+        version_payload,
+        status_ready=bool(status_ready if status_ready is not None else status),
+        ws_runtime=_ws_runtime_available(),
+        env=os.environ,
+        runtime_probe=runtime_probe,
+    )
+    result.update(optional)
+    if include_details:
+        result["capability_details"] = details
+    return result
 
 
 def _ws_runtime_available() -> bool:
@@ -208,6 +233,7 @@ def _status_payload(
     config_payload: Any = None,
     status_capability: bool | None,
     telemetry: dict[str, Any] | None = None,
+    runtime_probe: Mapping[str, bool] | None = None,
 ) -> dict[str, Any]:
     payload = build_mihomo_clash_status_dto(
         discovery,
@@ -226,6 +252,10 @@ def _status_payload(
             provider_healthcheck=status_capability,
             logs=status_capability,
             logs_stream=_ws_runtime_available() if status_capability else False,
+            version_payload=version_payload,
+            runtime_probe=runtime_probe,
+            status_ready=state == "ready",
+            include_details=True,
         ),
     )
     payload["ok"] = state == "ready"
@@ -621,6 +651,54 @@ def create_mihomo_clash_blueprint(
             return None, _guard_rejected(rejected)
         return lease, None
 
+    @bp.get("/api/mihomo/clash/capabilities")
+    def api_mihomo_clash_capabilities():
+        """Return the Stage 0 matrix and current runtime readiness.
+
+        This is a read-only diagnostic endpoint.  It performs only the
+        version probe by default; optional endpoint probing is enabled with
+        ``XKEEN_MIHOMO_CAPABILITY_PROBE=1`` and remains bounded/read-only.
+        """
+
+        discovery = discovery_factory(mihomo_config_file, root)
+        version_payload: Any = None
+        state = "target_unavailable"
+        runtime_probe: Mapping[str, bool] = {}
+        if discovery.target is not None:
+            try:
+                client = client_factory(discovery.target)
+                version_payload = client.request_json("version").payload
+                state = "ready"
+                if str(os.environ.get("XKEEN_MIHOMO_CAPABILITY_PROBE") or "").strip().lower() in {
+                    "1", "true", "yes", "on",
+                }:
+                    runtime_probe = probe_non_mutating_capabilities(client)
+            except MihomoClashClientError as exc:
+                state = exc.code
+            except Exception:
+                state = "probe_failed"
+
+        values, details = build_capability_state(
+            version_payload,
+            status_ready=state == "ready",
+            ws_runtime=_ws_runtime_available(),
+            env=os.environ,
+            runtime_probe=runtime_probe,
+        )
+        matrix = capability_matrix_payload()
+        return jsonify(
+            {
+                "ok": state == "ready",
+                "schema_version": 1,
+                "state": state,
+                "matrix_version": matrix["version"],
+                "matrix": matrix["capabilities"],
+                "flags": mihomo_feature_flags(os.environ),
+                "capabilities": values,
+                "capability_details": details,
+            }
+        ), 200
+
     @bp.get("/api/mihomo/clash/status")
     def api_mihomo_clash_status():
         discovery = discovery_factory(mihomo_config_file, root)
@@ -631,11 +709,17 @@ def create_mihomo_clash_blueprint(
                 state = "not_configured"
             elif "port_not_allowed" in codes:
                 state = "blocked"
+            status_payload = _status_payload(
+                discovery,
+                state=state,
+                status_capability=False,
+            )
             return jsonify(
-                _status_payload(
-                    discovery,
+                build_mihomo_clash_snapshot_envelope(
+                    status_payload,
+                    stream_type="mihomo-clash-status",
+                    sequence=0,
                     state=state,
-                    status_capability=False,
                 )
             ), 200
 
@@ -658,7 +742,14 @@ def create_mihomo_clash_blueprint(
                 "code": exc.code,
                 "retryable": exc.retryable,
             }
-            return jsonify(payload), 200
+            return jsonify(
+                build_mihomo_clash_snapshot_envelope(
+                    payload,
+                    stream_type="mihomo-clash-status",
+                    sequence=0,
+                    state=state,
+                )
+            ), 200
         except Exception:
             return error_response(
                 "Не удалось получить состояние Mihomo API.",
@@ -667,13 +758,23 @@ def create_mihomo_clash_blueprint(
                 code="mihomo_clash_status_failed",
             )
 
-        return jsonify(
-            _status_payload(
+        # Runtime probing is opt-in because even a read-only /traffic or DNS
+        # request consumes resources on a weak router.  Static version gates
+        # and the detailed ``capability_details`` contract are still returned
+        # on every status call.
+        runtime_probe: Mapping[str, bool] = {}
+        if str(os.environ.get("XKEEN_MIHOMO_CAPABILITY_PROBE") or "").strip().lower() in {
+            "1", "true", "yes", "on",
+        }:
+            runtime_probe = probe_non_mutating_capabilities(client)
+
+        status_payload = _status_payload(
                 discovery,
                 state="ready",
                 version_payload=version.payload,
                 config_payload=configs.payload,
                 status_capability=True,
+                runtime_probe=runtime_probe,
                 telemetry={
                     "version": {
                         "elapsed_ms": version.elapsed_ms,
@@ -684,6 +785,13 @@ def create_mihomo_clash_blueprint(
                         "size_bytes": configs.size_bytes,
                     },
                 },
+            )
+        return jsonify(
+            build_mihomo_clash_snapshot_envelope(
+                status_payload,
+                stream_type="mihomo-clash-status",
+                sequence=1,
+                state="ready",
             )
         ), 200
 
@@ -877,7 +985,14 @@ def create_mihomo_clash_blueprint(
             "proxies": {"elapsed_ms": proxies.elapsed_ms, "size_bytes": proxies.size_bytes},
             "providers": {"elapsed_ms": providers.elapsed_ms, "size_bytes": providers.size_bytes},
         }
-        return jsonify(payload), 200
+        return jsonify(
+            build_mihomo_clash_snapshot_envelope(
+                payload,
+                stream_type="mihomo-clash-proxy-groups",
+                sequence=1,
+                state="live",
+            )
+        ), 200
 
     @bp.get("/api/mihomo/clash/rules")
     def api_mihomo_clash_rules():
@@ -902,7 +1017,14 @@ def create_mihomo_clash_blueprint(
             "elapsed_ms": result.elapsed_ms,
             "size_bytes": result.size_bytes,
         }
-        return jsonify(payload), 200
+        return jsonify(
+            build_mihomo_clash_snapshot_envelope(
+                payload,
+                stream_type="mihomo-clash-rules",
+                sequence=1,
+                state="live",
+            )
+        ), 200
 
     @bp.get("/api/mihomo/clash/providers")
     def api_mihomo_clash_providers():
@@ -942,7 +1064,14 @@ def create_mihomo_clash_blueprint(
                 "size_bytes": rule_result.size_bytes,
             },
         }
-        return jsonify(payload), 200
+        return jsonify(
+            build_mihomo_clash_snapshot_envelope(
+                payload,
+                stream_type="mihomo-clash-providers",
+                sequence=1,
+                state="live",
+            )
+        ), 200
 
     @bp.get("/api/mihomo/clash/providers/rule/<path:provider_name>/content")
     def api_mihomo_clash_rule_provider_content(provider_name: str):
@@ -1512,7 +1641,14 @@ def create_mihomo_clash_blueprint(
             "elapsed_ms": snapshot.elapsed_ms,
             "size_bytes": snapshot.size_bytes,
         }
-        return jsonify(payload), 200
+        return jsonify(
+            build_mihomo_clash_snapshot_envelope(
+                payload,
+                stream_type="mihomo-clash-connections",
+                sequence=1,
+                state="live",
+            )
+        ), 200
 
     @bp.delete("/api/mihomo/clash/connections/<path:connection_id>")
     def api_mihomo_clash_disconnect_connection(connection_id: str):

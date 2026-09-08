@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "sequence": 7,
+  "received_at_ms": 1786610000000,
+  "state": "stale",
+  "stale_since": 1786610005000,
+  "source_age_ms": 5000,
+  "payload": {"download_total": 4096, "upload_total": 1024, "connections": []}
+}

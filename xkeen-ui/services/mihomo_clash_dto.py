@@ -42,6 +42,17 @@ MIHOMO_CLASH_CAPABILITY_KEYS = (
     "provider_healthcheck",
     "logs",
     "logs_stream",
+    # Stage 0 capability/contract baseline.  Keep the existing keys above
+    # unchanged; these optional surfaces are tri-state until runtime readiness
+    # is known and are never treated as enabled by the frontend unless true.
+    "traffic",
+    "telemetry_stream",
+    "dns_query",
+    "dns_flush",
+    "fake_ip_flush",
+    "cache_etag",
+    "rule_counters",
+    "rules_disable",
 )
 
 _SENSITIVE_LOG_KEY = re.compile(
@@ -212,7 +223,7 @@ def build_mihomo_clash_status_dto(
     config = _mapping(config_payload)
     tun = _mapping(config.get("tun"))
     capability_values = _mapping(capabilities)
-    return {
+    result = {
         "schema_version": MIHOMO_CLASH_SCHEMA_VERSION,
         "api": discovery.public_dict(),
         "core": {
@@ -231,6 +242,85 @@ def build_mihomo_clash_status_dto(
             for key in MIHOMO_CLASH_CAPABILITY_KEYS
         },
     }
+    # Detailed matrix information is optional and server-generated.  Preserve
+    # only bounded scalar fields so a future probe cannot accidentally expose
+    # controller paths, secrets, or arbitrary upstream payloads.
+    details = capability_values.get("capability_details")
+    if isinstance(details, Mapping):
+        safe_details: dict[str, dict[str, Any]] = {}
+        for raw_name, raw_item in list(details.items())[:32]:
+            if str(raw_name) not in MIHOMO_CLASH_CAPABILITY_KEYS or not isinstance(raw_item, Mapping):
+                continue
+            item: dict[str, Any] = {}
+            for key in (
+                "endpoint",
+                "method",
+                "min_version",
+                "version",
+                "reason",
+            ):
+                value = raw_item.get(key)
+                if value is None or isinstance(value, (str, int, bool)):
+                    item[key] = value
+            for key in ("static_supported", "runtime_ready", "enabled", "mutating"):
+                value = raw_item.get(key)
+                if value is None or isinstance(value, bool):
+                    item[key] = value
+            safe_details[str(raw_name)] = item
+        result["capability_details"] = safe_details
+    return result
+
+
+def build_mihomo_clash_snapshot_envelope(
+    payload: Mapping[str, Any] | None,
+    *,
+    stream_type: str = "mihomo-clash-snapshot",
+    sequence: int = 1,
+    state: str = "live",
+    error: Mapping[str, Any] | None = None,
+    stale_since: int | None = None,
+    source_age_ms: int | None = None,
+) -> dict[str, Any]:
+    """Build the common v1 snapshot envelope while retaining legacy fields.
+
+    Existing HTTP consumers read DTO keys directly.  The envelope therefore
+    contains a bounded ``payload`` copy *and* exposes those same keys at the
+    top level for backwards compatibility with schema version 1 clients.
+    """
+
+    safe_payload = dict(payload) if isinstance(payload, Mapping) else {}
+    envelope: dict[str, Any] = {
+        "type": str(stream_type or "mihomo-clash-snapshot")[:64],
+        "schema_version": MIHOMO_CLASH_SCHEMA_VERSION,
+        "sequence": max(0, int(sequence)),
+        "received_at_ms": __import__("time").time_ns() // 1_000_000,
+        "state": str(state or "live")[:24],
+        "payload": safe_payload,
+    }
+    if stale_since is not None:
+        try:
+            envelope["stale_since"] = max(0, int(stale_since))
+        except (TypeError, ValueError, OverflowError):
+            pass
+    if source_age_ms is not None:
+        try:
+            envelope["source_age_ms"] = max(0, int(source_age_ms))
+        except (TypeError, ValueError, OverflowError):
+            pass
+    if isinstance(error, Mapping):
+        safe_error = {
+            str(key)[:32]: value
+            for key, value in list(error.items())[:8]
+            if isinstance(value, (str, int, bool)) or value is None
+        }
+        if safe_error:
+            envelope["error"] = safe_error
+    # Legacy fields win over no envelope fields, but never overwrite the
+    # sequence/state metadata above if a DTO happens to contain those names.
+    for key, value in safe_payload.items():
+        if key not in envelope:
+            envelope[key] = value
+    return envelope
 
 
 def _provider_index(
@@ -779,5 +869,6 @@ __all__ = [
     "build_mihomo_clash_connections_dto",
     "build_mihomo_clash_delay_dto",
     "build_mihomo_clash_proxy_groups_dto",
+    "build_mihomo_clash_snapshot_envelope",
     "build_mihomo_clash_status_dto",
 ]

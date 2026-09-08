@@ -1,0 +1,5 @@
+{
+  "Status": 0,
+  "Question": [{"name": "example.invalid", "type": 1, "class": 1}],
+  "Answer": [{"name": "example.invalid", "type": 1, "TTL": 60, "data": "192.0.2.44"}]
+}

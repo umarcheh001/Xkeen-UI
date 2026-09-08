@@ -14,6 +14,7 @@ cadence in the implementation-plan README.
 Files:
 
 - `version.json` — `/version` probe.
+- `capabilities.json` — Stage 0 version matrix and default rollout flags.
 - `configs.json` — read-only `/configs` runtime values.
 - `proxies.json` — `/proxies` groups and nodes in operator order.
 - `group.json` — `/group` policy-group collection shape.
@@ -21,4 +22,8 @@ Files:
 - `rules.json` — ordered read-only `/rules` contract.
 - `providers-rules.json` — `/providers/rules` state without source URL/path.
 - `connections-01.json` through `connections-03.json` — bounded live snapshots.
+- `traffic-01.json` and `dns-query.json` — optional read-only endpoint shapes.
+- `stale-snapshot.json` and `reconnect.json` — common envelope lifecycle states.
+- `malformed.ndjson` and `oversized.ndjson` — malformed/oversized stream
+  frames; the actual byte limits are exercised by `mihomo_clash_stream` tests.
 - `errors.json` — representative status/error classes with sensitive details removed.
