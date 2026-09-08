@@ -356,6 +356,58 @@ test('выбор раскладки уходит на сервер, когда �
 });
 
 
+test('одна осечка сохранения не пугает человека', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 1000 });
+  await openDialog(page);
+
+  // Панель после обновления поднимается за пару секунд. Нажатие, попавшее в
+  // эту щель, роняло запрос — и человек читал, что раскладка не сохранилась,
+  // хотя вторая попытка доехала бы.
+  let attempts = 0;
+  await page.route('**/api/ui-settings', async (route) => {
+    if (route.request().method() === 'PATCH') {
+      attempts += 1;
+      if (attempts === 1) {
+        await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'boom' }) });
+        return;
+      }
+    }
+    await route.fallback();
+  });
+
+  await page.locator('#routing-dns-over-vless-layout').click();
+  await expect(page.locator('#routing-dns-over-vless-modal .modal-content'))
+    .toHaveAttribute('data-dns-layout', 'single');
+
+  await expect.poll(() => attempts, { timeout: 6000 }).toBeGreaterThan(1);
+  await expect(page.locator('#toast-container .toast')).toHaveCount(0);
+});
+
+
+test('устойчивый отказ сервера панель называет вслух и пишет в консоль', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 1000 });
+  const warnings = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'warning') warnings.push(msg.text());
+  });
+  await openDialog(page);
+
+  await page.route('**/api/ui-settings', async (route) => {
+    if (route.request().method() === 'PATCH') {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'boom' }) });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.locator('#routing-dns-over-vless-layout').click();
+  await expect(page.locator('#toast-container .toast')).toContainText('не сохранилась на роутере', { timeout: 8000 });
+  // Причину тост назвать не может, но терять её нельзя: без неё она
+  // достаётся только из журнала роутера.
+  await expect.poll(() => warnings.join(' | ')).toContain('раскладка не сохранилась');
+});
+
+
 test('на узком экране раскладка всегда одноколоночная, каким бы ни был выбор', async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 1000 });
   await openDialog(page);

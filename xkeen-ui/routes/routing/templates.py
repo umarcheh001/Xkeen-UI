@@ -14,6 +14,7 @@ from typing import Any, Callable, Dict
 from flask import Blueprint, request, jsonify, current_app
 
 from routes.common.errors import error_response, exception_response
+from services.io.atomic import _atomic_write_text
 
 from services.routing.templates import (
     _compose_template_text,
@@ -187,10 +188,7 @@ def register_templates_routes(
         final_text = _compose_template_text(title, desc, content)
 
         try:
-            tmp_path = path + ".tmp"
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                f.write(final_text)
-            os.replace(tmp_path, path)
+            _atomic_write_text(path, final_text)
         except Exception as e:
             return exception_response(
                 "Не удалось сохранить шаблон маршрутизации.",

@@ -23,6 +23,7 @@ import subprocess
 from flask import Blueprint, current_app, jsonify, request
 
 from routes.common.errors import log_route_exception
+from services.io.atomic import _atomic_write_json
 
 
 _CACHE_FORMAT_VERSION = 3
@@ -229,10 +230,7 @@ def _write_json_atomic(path: str, data: dict, trusted_root: str) -> None:
         os.makedirs(os.path.dirname(resolved), exist_ok=True)
     except Exception:
         pass
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)
+    _atomic_write_json(path, data)
 
 
 def _opkg_primary_arch() -> str:

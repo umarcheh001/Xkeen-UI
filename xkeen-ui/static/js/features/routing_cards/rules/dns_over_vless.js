@@ -1362,6 +1362,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   const LAYOUT_MODES = ['auto', 'single', 'split'];
   const LAYOUT_MIN_SPLIT_PX = 1100;
   const LAYOUT_STORAGE_KEY = 'xkeen-dns-over-vless-layout';
+  // Столько ждём перед второй попыткой сохранить раскладку: панель после
+  // обновления поднимается за пару секунд, а нажатие в эту щель не должно
+  // выглядеть поломкой.
+  const LAYOUT_SAVE_RETRY_MS = 1200;
   // Выбор этого сеанса главнее сохранённого. Раньше следующий режим считался
   // от значения с сервера, и там, где запись настроек не доходила до диска,
   // кнопка после первого нажатия всё время получала одно и то же значение —
@@ -1444,16 +1448,35 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   }
 
   async function persistLayout(mode) {
-    try {
-      await window.XKeen.ui.settings.patch({ routing: { dnsOverVlessLayout: mode } });
-      layoutSaveWarned = false;
-    } catch (e) {
-      // Раскладка уже применена на экране и записана в браузере; молчать
-      // нельзя только о том, что на другом устройстве её не будет.
-      if (!layoutSaveWarned) {
-        layoutSaveWarned = true;
-        toast('Раскладка не сохранилась на роутере — запомнил её в этом браузере.', true);
+    let lastError = null;
+    // Панель перезапускается после обновления за пару секунд, и нажатие,
+    // попавшее в эту щель, роняло запрос. Одна осечка предупреждения не
+    // стоит: сначала вторая попытка.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (attempt) await wait(LAYOUT_SAVE_RETRY_MS);
+      try {
+        await window.XKeen.ui.settings.patch({ routing: { dnsOverVlessLayout: mode } });
+        layoutSaveWarned = false;
+        return;
+      } catch (e) {
+        lastError = e;
       }
+    }
+
+    // Причину тост назвать не может — она бывает и про CSRF, и про запись на
+    // диск. Но и терять её нельзя: без неё она достаётся только из журнала
+    // роутера.
+    try {
+      console.warn('DNS-over-VLESS: раскладка не сохранилась на роутере', lastError);
+    } catch (e) {
+      // Консоли может не быть — на диагностику это не влияет.
+    }
+
+    // Раскладка уже применена на экране и записана в браузере; молчать
+    // нельзя только о том, что на другом устройстве её не будет.
+    if (!layoutSaveWarned) {
+      layoutSaveWarned = true;
+      toast('Раскладка не сохранилась на роутере — запомнил её в этом браузере.', true);
     }
   }
 

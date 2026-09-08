@@ -43,3 +43,21 @@ def test_next_layout_is_computed_from_the_screen_not_from_the_saved_value():
 
 def test_auto_resolves_by_width():
     assert "1100" in JS
+
+
+def test_layout_save_retries_once_before_warning():
+    # Панель перезапускается после обновления за пару секунд, и нажатие в эту
+    # щель роняло запрос. Пугать человека одной осечкой не за что: сначала
+    # вторая попытка, предупреждение — только если и она не доехала.
+    body = JS[JS.index("async function persistLayout("):]
+    body = body[:body.index(chr(10) + "  }")]
+    assert "LAYOUT_SAVE_RETRY_MS" in body
+    assert "attempt" in body
+
+
+def test_layout_save_failure_reports_the_real_error():
+    # Настоящую причину полвечера доставали из журнала роутера: тост её
+    # проглатывал целиком.
+    body = JS[JS.index("async function persistLayout("):]
+    body = body[:body.index(chr(10) + "  }")]
+    assert "console.warn" in body

@@ -20,6 +20,7 @@ import glob
 from typing import Any, Dict, List, Optional, Tuple
 
 from services.io import read_json
+from services.io.atomic import _atomic_write_json
 
 
 def _is_dir_writable(path: str) -> bool:
@@ -161,11 +162,7 @@ def read_status(status_file: str) -> Dict[str, Any]:
 def write_status(status_file: str, status: Dict[str, Any]) -> None:
     """Write status.json atomically (best-effort)."""
     try:
-        os.makedirs(os.path.dirname(status_file) or ".", exist_ok=True)
-        tmp = status_file + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(status, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, status_file)
+        _atomic_write_json(status_file, status)
     except Exception:
         # Status is diagnostic; failures must not crash API.
         pass

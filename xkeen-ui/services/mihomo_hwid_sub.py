@@ -29,6 +29,7 @@ from typing import Any, Dict
 from urllib.parse import urlparse
 
 from services import happ_links
+from services.io.atomic import _atomic_write_text
 from services.net import net_call
 from services.url_policy import URLPolicy, env_flag, is_url_allowed
 
@@ -285,22 +286,11 @@ def _hwid_from_generated_state() -> tuple[str | None, str | None]:
 
     hwid = _new_random_hwid()
     try:
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        tmp = path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            f.write(hwid + "\n")
-        try:
-            os.chmod(tmp, 0o600)
-        except Exception:
-            pass
-        os.replace(tmp, path)
+        # Общая атомарная запись сама убирает за собой временный файл и не
+        # берёт имя, которое может занять второй пишущий.
+        _atomic_write_text(path, hwid + "\n", mode=0o600)
         return hwid, "generated_state"
     except Exception:
-        try:
-            if "tmp" in locals() and os.path.exists(tmp):
-                os.remove(tmp)
-        except Exception:
-            pass
         return hwid, "generated_ephemeral"
 
 

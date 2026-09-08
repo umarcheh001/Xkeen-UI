@@ -11,6 +11,8 @@ import re
 import time
 from typing import Any, Dict, Optional
 
+from services.io.atomic import _atomic_write_json
+
 
 _REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,80}$")
 _DEFAULT_LIMIT = 50
@@ -100,11 +102,7 @@ def save_operation_diagnostic(
     }
 
     path = _diagnostic_path(ui_state_dir, safe_ref)
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(record, f, ensure_ascii=False, indent=2)
-        f.write("\n")
-    os.replace(tmp, path)
+    _atomic_write_json(path, record)
     prune_operation_diagnostics(ui_state_dir, keep=keep)
     return record
 

@@ -9,6 +9,7 @@ import os
 import subprocess
 import urllib.error
 import urllib.parse
+import uuid
 from typing import Any, Dict
 
 import ipaddress
@@ -1020,7 +1021,10 @@ def register_dat_routes(bp: Blueprint) -> None:
         except Exception:
             st0 = None
 
-        tmp_path = rp + ".tmp"
+        # Имя уникально для каждой загрузки: два одновременных скачивания
+        # одного файла писали в общий «путь + .tmp» и перемешивались, а тот,
+        # кто заканчивал вторым, падал на подмене.
+        tmp_path = f"{rp}.download-{uuid.uuid4().hex}.tmp"
         try:
             size = download_to_file_with_policy(url, tmp_path, max_bytes, policy=policy)
             os.replace(tmp_path, rp)
