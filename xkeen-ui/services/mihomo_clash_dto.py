@@ -323,6 +323,43 @@ def build_mihomo_clash_snapshot_envelope(
     return envelope
 
 
+def build_mihomo_clash_telemetry_envelope(
+    payload: Mapping[str, Any] | None,
+    *,
+    sequence: int = 1,
+    state: str = "live",
+    error: Mapping[str, Any] | None = None,
+    stale_since: int | None = None,
+    source_age_ms: int | None = None,
+    received_at_ms: int | None = None,
+) -> dict[str, Any]:
+    """Build the bounded v1 envelope used by the shared telemetry stream."""
+
+    source = payload if isinstance(payload, Mapping) else {}
+    safe_payload: dict[str, Any] = {"schema_version": MIHOMO_CLASH_SCHEMA_VERSION}
+    for key in ("traffic", "connections", "memory", "rates", "sources"):
+        value = source.get(key)
+        if isinstance(value, Mapping):
+            safe_payload[key] = dict(value)
+    envelope = build_mihomo_clash_snapshot_envelope(
+        safe_payload,
+        stream_type="mihomo-clash-telemetry",
+        sequence=sequence,
+        state=state,
+        error=error,
+        stale_since=stale_since,
+        source_age_ms=source_age_ms,
+    )
+    # Fan-out keeps the upstream receipt time; do not replace it with the time
+    # at which an individual browser subscriber happened to dequeue the frame.
+    if received_at_ms is not None:
+        try:
+            envelope["received_at_ms"] = max(0, int(received_at_ms))
+        except (TypeError, ValueError, OverflowError):
+            pass
+    return envelope
+
+
 def _provider_index(
     providers_payload: Any,
 ) -> tuple[list[dict[str, Any]], dict[str, list[str]], dict[str, Mapping[str, Any]]]:
@@ -871,4 +908,5 @@ __all__ = [
     "build_mihomo_clash_proxy_groups_dto",
     "build_mihomo_clash_snapshot_envelope",
     "build_mihomo_clash_status_dto",
+    "build_mihomo_clash_telemetry_envelope",
 ]

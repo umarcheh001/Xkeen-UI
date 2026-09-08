@@ -22,6 +22,7 @@ WS_TOKEN_SCOPES = {
     "events",
     "mihomo-clash",
     "mihomo-clash-logs",
+    "mihomo-clash-telemetry",
 }
 
 # token -> (expires_ts, scope)

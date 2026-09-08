@@ -141,6 +141,12 @@ controller или path.
 
 ## Этап 1 — Telemetry Hub (P0)
 
+Статус: **выполнен**. Добавлен process-local hub по fingerprint target,
+независимые readers для traffic/connections/memory, bounded fan-out/history,
+idle shutdown, отдельный scoped telemetry WS и frontend adapter с сохранением
+connections WS/HTTP fallback. Детали контракта и rollout описаны в
+`docs/panel-operator-stage1-telemetry-hub.md`.
+
 ### Что есть сейчас
 
 `/ws/mihomo-clash/connections` является per-browser poller: он последовательно

@@ -33,6 +33,11 @@ import {
   initMihomoClashLogs,
 } from './logs.js';
 import {
+  closeMihomoTelemetry,
+  connectMihomoTelemetry,
+  subscribeMihomoTelemetry,
+} from './telemetry.js';
+import {
   mihomoClashStateCopy,
   normalizeMihomoClashState,
   normalizeMihomoClashSubview,
@@ -195,6 +200,12 @@ function renderStatus(state, payload = null) {
   // Prefixing it again made the compact status strip repeat “Mihomo”.
   setText('mihomo-clash-status-version', version || 'Версия —');
   renderRuntimeModeSwitch(payload);
+  if (state === 'ready' && active && visible && currentSubview !== 'config'
+      && payload?.capabilities?.telemetry_stream === true) {
+    connectMihomoTelemetry({ enabled: true });
+  } else if (state !== 'loading') {
+    closeMihomoTelemetry(state === 'paused' ? 'paused' : 'fallback');
+  }
 
   const stateBox = byId('mihomo-clash-control-state');
   const content = byId('mihomo-clash-control-content');
@@ -408,6 +419,7 @@ function applySubview(name, options = {}) {
   });
   setHidden(runtimeRoot(), next === 'config');
   if (next === 'config') {
+    closeMihomoTelemetry('paused');
     abortStatusRequest();
     deactivateMihomoClashGroups();
     deactivateMihomoClashEgress();
@@ -509,6 +521,7 @@ function bindVisibility() {
   document.addEventListener('visibilitychange', () => {
     visible = document.visibilityState !== 'hidden';
     if (!visible) {
+      closeMihomoTelemetry('paused');
       abortStatusRequest();
       deactivateMihomoClashGroups();
       deactivateMihomoClashEgress();
@@ -534,6 +547,21 @@ export function initMihomoClashWorkspace() {
   initMihomoClashConnections();
   initMihomoClashRules();
   initMihomoClashLogs();
+  subscribeMihomoTelemetry(({ state, frame }) => {
+    const target = byId('mihomo-clash-telemetry-state');
+    if (!target) return;
+    const labels = {
+      live: 'Telemetry · live', connecting: 'Telemetry · подключение',
+      reconnecting: 'Telemetry · reconnecting', stale: 'Telemetry · stale',
+      paused: 'Telemetry · paused', fallback: 'Telemetry · fallback', error: 'Telemetry · error',
+    };
+    target.textContent = labels[state] || `Telemetry · ${state}`;
+    target.dataset.state = state;
+    const receivedAt = Number(frame?.received_at_ms) || 0;
+    target.title = receivedAt
+      ? `Последний успешный кадр: ${new Date(receivedAt).toLocaleString('ru-RU')}`
+      : 'Последний успешный кадр ещё не получен';
+  });
   renderStatus('idle', null);
   applySubview(currentSubview, { reason: 'init' });
   return true;
@@ -560,6 +588,7 @@ export function deactivateMihomoClashWorkspace() {
   deactivateMihomoClashConnections();
   deactivateMihomoClashRules();
   deactivateMihomoClashLogs();
+  closeMihomoTelemetry('paused');
   return true;
 }
 

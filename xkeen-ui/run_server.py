@@ -70,6 +70,7 @@ from services.ws_pty import handle_pty_request, start_cleanup_loop as start_pty_
 from services.mihomo_clash_ws import (
     handle_mihomo_clash_connections_request,
     handle_mihomo_clash_logs_request,
+    handle_mihomo_clash_telemetry_request,
 )
 from services.mihomo_runtime import CONFIG_PATH as MIHOMO_CONFIG_FILE, MIHOMO_ROOT
 from services.ws_wsgi import (
@@ -162,6 +163,17 @@ def application(environ, start_response):
 
     if GEVENT_AVAILABLE and path == "/ws/mihomo-clash/connections":
         return handle_mihomo_clash_connections_request(
+            environ,
+            start_response,
+            fallback_app=app,
+            validate_ws_token=validate_ws_token,
+            ws_debug=ws_debug,
+            mihomo_config_file=str(MIHOMO_CONFIG_FILE),
+            mihomo_root=str(MIHOMO_ROOT),
+        )
+
+    if GEVENT_AVAILABLE and path == "/ws/mihomo-clash/telemetry":
+        return handle_mihomo_clash_telemetry_request(
             environ,
             start_response,
             fallback_app=app,

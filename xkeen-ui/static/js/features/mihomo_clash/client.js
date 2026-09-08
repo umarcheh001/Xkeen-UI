@@ -247,6 +247,13 @@ export function mihomoClashConnectionsWsUrl(token) {
   return url.toString();
 }
 
+export function mihomoClashTelemetryWsUrl(token) {
+  const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = new URL('/ws/mihomo-clash/telemetry', `${scheme}//${window.location.host}`);
+  url.searchParams.set('token', String(token || ''));
+  return url.toString();
+}
+
 export function mihomoClashLogsWsUrl(token) {
   const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = new URL('/ws/mihomo-clash/logs', `${scheme}//${window.location.host}`);

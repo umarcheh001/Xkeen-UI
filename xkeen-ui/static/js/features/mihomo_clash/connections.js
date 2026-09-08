@@ -8,6 +8,10 @@ import {
   mihomoClashConnectionsWsUrl,
   requestMihomoClashWsToken,
 } from './client.js';
+import {
+  connectMihomoTelemetry,
+  subscribeMihomoTelemetry,
+} from './telemetry.js';
 import { mihomoCountryFlag, mihomoNodeCountryCode, mihomoNodeDisplayName } from './visuals.js';
 
 const HTTP_FALLBACK_INTERVAL_MS = 2000;
@@ -37,6 +41,8 @@ let selectedId = '';
 let pendingId = '';
 let pendingAll = false;
 let routeVisuals = new Map();
+let telemetryUnsubscribe = null;
+let telemetryFallbackTriggered = false;
 
 function byId(id) { return document.getElementById(id); }
 
@@ -454,8 +460,59 @@ function closeSocket() {
   if (socket) { socket.onopen = null; socket.onmessage = null; socket.onerror = null; socket.onclose = null; try { socket.close(); } catch (error) {} }
 }
 
+function closeTelemetry() {
+  if (telemetryUnsubscribe) {
+    try { telemetryUnsubscribe(); } catch (error) {}
+    telemetryUnsubscribe = null;
+  }
+}
+
+function openTelemetry(runGeneration) {
+  if (telemetryUnsubscribe) return true;
+  telemetryUnsubscribe = subscribeMihomoTelemetry(({ state: nextState, frame }) => {
+    if (!active || runGeneration !== generation) return;
+    const copy = {
+      live: 'Live', connecting: 'Подключение', reconnecting: 'Переподключение',
+      stale: 'Устаревшие данные', error: 'Ошибка', fallback: 'HTTP fallback',
+    }[nextState] || nextState;
+    setStreamState(nextState, copy);
+    if (nextState === 'live') {
+      telemetryFallbackTriggered = false;
+      clearScheduled();
+      abortRequest();
+    }
+    if (nextState === 'error' && !telemetryFallbackTriggered) {
+      // The hub is an optimization, never a hard dependency. Keep the
+      // existing bounded HTTP snapshot path warm while the socket retries.
+      telemetryFallbackTriggered = true;
+      void pollSnapshot(runGeneration, true);
+    }
+    if (frame?.payload?.connections && applySnapshot(frame.payload.connections, Number(frame.received_at_ms) || Date.now())) {
+      const trafficLive = frame.payload.sources?.traffic?.state === 'live'
+        ? frame.payload.traffic
+        : null;
+      const upstreamRates = trafficLive || frame.payload.rates;
+      if (upstreamRates) {
+        rates = {
+          download: Math.max(0, Number(upstreamRates.download ?? upstreamRates.download_bps) || 0),
+          upload: Math.max(0, Number(upstreamRates.upload ?? upstreamRates.upload_bps) || 0),
+        };
+        renderSummary();
+      }
+      if (nextState === 'stale') setNotice('Telemetry Hub: показываем последний успешный кадр.', 'warning');
+      else if (nextState === 'live') setNotice('Telemetry Hub активен.', 'positive');
+    }
+    if (nextState === 'fallback') {
+      telemetryFallbackTriggered = true;
+      void pollSnapshot(runGeneration, true);
+    }
+  });
+  return connectMihomoTelemetry({ enabled: capabilities.telemetry_stream === true });
+}
+
 function scheduleFallback(runGeneration, delay = HTTP_FALLBACK_INTERVAL_MS) {
   clearScheduled();
+  if (capabilities.telemetry_stream === true && !telemetryFallbackTriggered) return;
   timer = window.setTimeout(() => { if (active && runGeneration === generation) void pollSnapshot(runGeneration); }, delay);
 }
 
@@ -705,13 +762,19 @@ async function startRuntime() {
     })
     .catch(() => {})
     .finally(() => { if (visualRequest === visualsController) visualRequest = null; });
+  if (capabilities.telemetry_stream === true) {
+    root?.setAttribute('aria-busy', 'false');
+    openTelemetry(runGeneration);
+    return;
+  }
   try {
     const bootstrap = await fetchMihomoClashConnections({ signal: controller?.signal });
     if (!active || runGeneration !== generation) return;
     capabilities = bootstrap?.capabilities || {};
     applySnapshot(bootstrap, Date.now());
     root?.setAttribute('aria-busy', 'false');
-    if (capabilities.connections_stream === true) void openSocket(runGeneration);
+    if (capabilities.telemetry_stream === true) openTelemetry(runGeneration);
+    else if (capabilities.connections_stream === true) void openSocket(runGeneration);
     else {
       setStreamState('fallback', 'HTTP fallback');
       setFallbackNotice();
@@ -735,6 +798,7 @@ export function activateMihomoClashConnections(nextCapabilities = {}) {
   capabilities = nextCapabilities || {};
   generation += 1;
   reconnectAttempt = 0;
+  telemetryFallbackTriggered = false;
   previousTotals = null;
   routeVisuals = new Map();
   void startRuntime();
@@ -744,7 +808,7 @@ export function activateMihomoClashConnections(nextCapabilities = {}) {
 export function deactivateMihomoClashConnections() {
   active = false;
   generation += 1;
-  clearScheduled(); abortRequest(); abortVisualRequest(); closeSocket();
+  clearScheduled(); abortRequest(); abortVisualRequest(); closeSocket(); closeTelemetry();
   setStreamState('paused', 'Пауза');
   root?.setAttribute('aria-busy', 'false');
   return true;

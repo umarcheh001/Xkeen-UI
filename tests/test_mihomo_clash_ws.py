@@ -8,6 +8,7 @@ from services.mihomo_clash_target import MihomoClashDiscovery, MihomoClashTarget
 from services.mihomo_clash_ws import (
     handle_mihomo_clash_connections_request,
     handle_mihomo_clash_logs_request,
+    handle_mihomo_clash_telemetry_request,
     is_same_origin_websocket,
 )
 import services.mihomo_clash_ws as clash_ws
@@ -265,3 +266,70 @@ def test_ws_global_limit_is_race_safe():
     assert len(accepted) == clash_ws.MAX_ACTIVE_STREAMS
     for key in accepted:
         clash_ws._release_stream(key)
+
+
+def test_telemetry_ws_requires_dedicated_scope_and_sends_hub_frame(monkeypatch):
+    class Subscription:
+        def __init__(self):
+            self.closed = False
+
+        def get(self, timeout=None):
+            if self.closed:
+                raise RuntimeError("closed")
+            self.closed = True
+            return {
+                "type": "mihomo-clash-telemetry",
+                "schema_version": 1,
+                "sequence": 1,
+                "received_at_ms": 123,
+                "state": "live",
+                "payload": {
+                    "connections": {"schema_version": 1, "connections": []},
+                    "memory": {"inuse": 10},
+                },
+            }
+
+        def close(self, reason="closed"):
+            self.closed = True
+
+    class Hub:
+        def subscribe(self):
+            return Subscription()
+
+    class Discovery:
+        target = discovery().target
+
+    ws = StubWebSocket()
+    with clash_ws._STREAM_LOCK:
+        clash_ws._ACTIVE_STREAMS.clear()
+    monkeypatch.setattr(clash_ws, "_cooperative_sleep", lambda _seconds: None)
+    handle_mihomo_clash_telemetry_request(
+        environ(ws),
+        lambda *_args: None,
+        fallback_app=lambda *_args: [],
+        validate_ws_token=lambda token, scope: token == "one-time-secret" and scope == "mihomo-clash-telemetry",
+        ws_debug=lambda *_args, **_kwargs: None,
+        mihomo_config_file="/safe/config.yaml",
+        mihomo_root="/safe",
+        discovery_factory=lambda *_args: Discovery(),
+        hub_factory=lambda *_args, **_kwargs: Hub(),
+        feature_flags_factory=lambda: {"telemetry_stream": True, "traffic": False},
+    )
+    assert ws.messages[0]["type"] == "mihomo-clash-telemetry"
+    assert ws.messages[0]["payload"]["memory"]["inuse"] == 10
+    assert ws.closed is True
+
+
+def test_telemetry_ws_fails_closed_when_feature_flag_is_off():
+    ws = StubWebSocket()
+    handle_mihomo_clash_telemetry_request(
+        environ(ws),
+        lambda *_args: None,
+        fallback_app=lambda *_args: [],
+        validate_ws_token=lambda *args, **kwargs: True,
+        ws_debug=lambda *_args, **_kwargs: None,
+        mihomo_config_file="/safe/config.yaml",
+        mihomo_root="/safe",
+        feature_flags_factory=lambda: {"telemetry_stream": False, "traffic": False},
+    )
+    assert ws.messages[0]["error"]["code"] == "telemetry_disabled"
