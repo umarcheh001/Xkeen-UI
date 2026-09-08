@@ -43,7 +43,11 @@ def test_stage0_matrix_has_required_optional_surfaces_and_no_arbitrary_paths():
     assert all(item["endpoint"].startswith(("/", "xkeen://")) for item in matrix["capabilities"])
 
 
-def test_stage0_flags_are_opt_in_and_kill_switch_keeps_legacy_fallback():
+def test_stage0_telemetry_is_default_and_kill_switch_keeps_legacy_fallback():
+    defaults = mihomo_feature_flags({})
+    assert defaults["telemetry_stream"] is True
+    assert defaults["traffic"] is False
+
     enabled = mihomo_feature_flags(
         {
             "XKEEN_MIHOMO_TRAFFIC_ENABLE": "1",

@@ -56,10 +56,10 @@ flag, отсутствии WebSocket или ошибке/reconnect exhaustion.
 
 ## Rollout
 
-Hub остаётся opt-in в соответствии с Этапом 0:
+Hub включён по умолчанию. При необходимости можно вернуть legacy transport:
 
 ```text
-XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE=1
+XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE=0
 XKEEN_MIHOMO_TRAFFIC_ENABLE=1        # optional, после resource measurement
 ```
 

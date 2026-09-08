@@ -33,6 +33,10 @@ ENV_WHITELIST: Tuple[str, ...] = (
     "XKEEN_CONFIG_EXCHANGE_MAX_BYTES",
     "XKEEN_MIHOMO_HWID",
     "XKEEN_MIHOMO_UI_ALLOW_PROXY_FALLBACK",
+    # Mihomo operator telemetry rollout.
+    "XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE",
+    "XKEEN_MIHOMO_TRAFFIC_ENABLE",
+    "XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH",
     "XKEEN_HAPP_HELPER_CMD",
     "XKEEN_HAPP_DECRYPTOR_CMD",
     "XKEEN_HAPP_DECRYPTOR_REMOTE_URL",
@@ -307,6 +311,15 @@ def _default_effective_value(
         return ""
     if k == "XKEEN_MIHOMO_UI_ALLOW_PROXY_FALLBACK":
         # Same-origin proxying of a loopback-only Zashboard is opt-in.
+        return "0"
+    if k == "XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE":
+        # Telemetry Hub is the default connection telemetry transport.
+        return "1"
+    if k == "XKEEN_MIHOMO_TRAFFIC_ENABLE":
+        # /traffic is an optional additional telemetry reader.
+        return "0"
+    if k == "XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH":
+        # Emergency override: 1 disables both telemetry and optional traffic.
         return "0"
     if k == "XKEEN_HAPP_HELPER_CMD":
         try:

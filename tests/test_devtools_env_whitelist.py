@@ -144,6 +144,9 @@ def test_every_whitelisted_key_is_described_and_grouped():
         ("XKEEN_MIHOMO_SUBSCRIPTIONS_RESTART_BATCH", "1"),
         ("XKEEN_SUBSCRIPTION_ALLOW_HTTP", "1"),
         ("XKEEN_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS", "0"),
+        ("XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE", "1"),
+        ("XKEEN_MIHOMO_TRAFFIC_ENABLE", "0"),
+        ("XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH", "0"),
     ],
 )
 def test_subscription_defaults_match_runtime(key, expected):

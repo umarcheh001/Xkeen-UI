@@ -47,11 +47,12 @@ CAPABILITY_MATRIX_VERSION = 1
 CAPABILITY_FLAG_PREFIX = "XKEEN_MIHOMO_"
 CAPABILITY_KILL_SWITCH_ENV = "XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH"
 
-# New surfaces are opt-in until the hub/adapter implementations are enabled.
-# The existing connections stream is independent and remains available.
+# Telemetry Hub is the default transport for connection telemetry. Other new
+# surfaces remain opt-in; the established connections stream is still kept as
+# a resilient fallback and can be forced by the telemetry kill-switch.
 DEFAULT_FLAGS: Mapping[str, bool] = {
     "traffic": False,
-    "telemetry_stream": False,
+    "telemetry_stream": True,
     "dns_query": False,
     "dns_flush": False,
     "fake_ip_flush": False,

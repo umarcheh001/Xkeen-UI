@@ -21,12 +21,13 @@ runtime readiness: старый core даёт `static_supported: false`, неи�
 
 ## Rollout flags
 
-Optional surfaces выключены по умолчанию. Их можно включать точечно через
-`XKEEN_MIHOMO_<CAPABILITY>_ENABLE=1`. Аварийный
-`XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH=1` отключает traffic/telemetry и оставляет
-текущий connections WS/HTTP fallback без изменений. Runtime probe включается
-отдельно переменной `XKEEN_MIHOMO_CAPABILITY_PROBE=1`; он выполняет только
-bounded read-only probes и никогда не вызывает flush или rule mutation.
+Telemetry Hub включён по умолчанию; остальные optional surfaces выключены и
+включаются точечно через `XKEEN_MIHOMO_<CAPABILITY>_ENABLE=1`.
+`XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE=0` возвращает прежний transport, а
+аварийный `XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH=1` отключает traffic/telemetry и
+оставляет текущий connections WS/HTTP fallback без изменений. Runtime probe
+включается отдельно переменной `XKEEN_MIHOMO_CAPABILITY_PROBE=1`; он выполняет
+только bounded read-only probes и никогда не вызывает flush или rule mutation.
 
 ## Snapshot envelope
 

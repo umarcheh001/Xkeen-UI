@@ -210,6 +210,9 @@ import { iconHtml } from '../../ui/operator_icons.js';
   ENV_HELP.XKEEN_CONFIG_EXCHANGE_MAX_BYTES = 'Максимальный размер входящего тела для config exchange import/export API, в байтах. По умолчанию 4194304.';
   ENV_HELP.XKEEN_MIHOMO_HWID = 'Ручной override x-hwid для premium/HWID-подписок Mihomo. Обычно оставьте пустым: панель сама определит HWID роутера. Заполняйте только если провайдер уже привязал подписку к конкретному HWID или ожидает значение из кабинета/поддержки. Применяется при следующей проверке/генерации HWID-подписки без Restart UI.';
   ENV_HELP.XKEEN_MIHOMO_UI_ALLOW_PROXY_FALLBACK = 'Разрешить same-origin proxy для Zashboard, когда Mihomo controller доступен только через loopback. По умолчанию 0 (выключено): браузерные файлы Zashboard не получают origin и cookies панели. Включайте только осознанно в доверенной LAN/VPN; применяется при следующем открытии Zashboard без Restart UI.';
+  ENV_HELP.XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE = 'Включить Telemetry Hub в разделе «Соединения». Значение 1 открывает один same-origin WebSocket панели и объединяет snapshots connections/memory; 0 возвращает текущий поток соединений или HTTP fallback. По умолчанию 1. Применяется после повторного открытия вкладки «Соединения», Restart UI не нужен.';
+  ENV_HELP.XKEEN_MIHOMO_TRAFFIC_ENABLE = 'Добавить в Telemetry Hub отдельный reader Mihomo /traffic с опросом раз в секунду. Значение 1 полезно для точных текущих скоростей; 0 оставляет вычисление скорости по connections. Работает только вместе с XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE=1. По умолчанию 0, Restart UI не нужен.';
+  ENV_HELP.XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH = 'Аварийно отключить Telemetry Hub и optional /traffic. Значение 1 принудительно возвращает раздел «Соединения» к прежнему WS/HTTP fallback, даже если оба флага включения равны 1. По умолчанию 0, Restart UI не нужен.';
   ENV_HELP.XKEEN_HAPP_HELPER_CMD = 'Команда helper-дешифратора для Happ/INCY подписок. Если переменная пуста, панель попробует bundled helper `scripts/happ_transport_helper.py` автоматически. В команде можно использовать `%LINK%` как placeholder входной ссылки.';
   ENV_HELP.XKEEN_HAPP_DECRYPTOR_CMD = 'Команда внешнего decryptor для raw `happ://crypt...` deep-link. Если переменная пуста, панель попробует auto-detect drop-in decryptor в `xkeen-ui/bin` или `xkeen-ui/scripts`. В команде можно использовать `%LINK%` как placeholder входной ссылки.';
   ENV_HELP.XKEEN_HAPP_DECRYPTOR_REMOTE_URL = 'Необязательный HTTPS endpoint для remote fallback расшифровки raw `happ://crypt...`. Можно указать либо JSON API endpoint: панель отправит POST `{ \"url\": \"happ://crypt...\" }` и будет ждать JSON с `decryptedUrl`/`url`/`result`, либо URL-шаблон с `%LINK_ENCODED%`/`%LINK%`, который будет вызван через GET. По умолчанию выключено: включайте только если осознанно доверяете внешнему сервису.';
@@ -386,6 +389,9 @@ import { iconHtml } from '../../ui/operator_icons.js';
   ENV_NO_RESTART_KEYS.add('XKEEN_GEODAT_ALLOW_PRIVATE_HOSTS');
   ENV_NO_RESTART_KEYS.add('XKEEN_MIHOMO_HWID');
   ENV_NO_RESTART_KEYS.add('XKEEN_MIHOMO_UI_ALLOW_PROXY_FALLBACK');
+  ENV_NO_RESTART_KEYS.add('XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE');
+  ENV_NO_RESTART_KEYS.add('XKEEN_MIHOMO_TRAFFIC_ENABLE');
+  ENV_NO_RESTART_KEYS.add('XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH');
   ENV_NO_RESTART_KEYS.add('XKEEN_HAPP_HELPER_CMD');
   ENV_NO_RESTART_KEYS.add('XKEEN_HAPP_DECRYPTOR_CMD');
   ENV_NO_RESTART_KEYS.add('XKEEN_HAPP_DECRYPTOR_REMOTE_URL');
@@ -508,11 +514,14 @@ import { iconHtml } from '../../ui/operator_icons.js';
       id: 'mihomo',
       icon: 'hwid',
       title: 'Mihomo и HWID',
-      desc: 'Лимиты Mihomo API и HWID для premium/HWID-подписок.',
+      desc: 'Лимиты Mihomo API, Telemetry Hub и HWID для premium/HWID-подписок.',
       keys: [
         'XKEEN_MIHOMO_JSON_MAX_BYTES',
         'XKEEN_MIHOMO_HWID',
         'XKEEN_MIHOMO_UI_ALLOW_PROXY_FALLBACK',
+        'XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE',
+        'XKEEN_MIHOMO_TRAFFIC_ENABLE',
+        'XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH',
         'XKEEN_HAPP_HELPER_CMD',
         'XKEEN_HAPP_DECRYPTOR_CMD',
         'XKEEN_HAPP_DECRYPTOR_REMOTE_URL',

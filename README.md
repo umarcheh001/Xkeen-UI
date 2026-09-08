@@ -112,6 +112,22 @@ printf "\nexport PYTHONPYCACHEPREFIX='/tmp/xkeen-ui-pycache'\n" \
 
 Кнопка Zashboard открывает его через `/mihomo_panel/ui/`: для browser-reachable controller используется прямой адрес Mihomo, а loopback-only same-origin proxy fallback отключён по умолчанию и включается только явной настройкой `XKEEN_MIHOMO_UI_ALLOW_PROXY_FALLBACK=1`. Используйте Zashboard и любой LAN-доступ к controller только в доверенной сети или VPN.
 
+### Telemetry Hub Mihomo
+
+Telemetry Hub — транспорт по умолчанию для вкладки **«Соединения»**. При
+недоступности WebSocket, ошибке или явном отключении панель автоматически
+использует существующий поток соединений либо HTTP polling:
+
+- `XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE=0` — отключить единый WebSocket
+  telemetry для connections и memory и вернуться к прежнему транспорту;
+- `XKEEN_MIHOMO_TRAFFIC_ENABLE=1` — дополнительно опрашивать `/traffic` раз в
+  секунду для текущих скоростей;
+- `XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH=1` — аварийно отключить оба механизма и
+  вернуться к прежнему WS/HTTP fallback.
+
+Все три переменные доступны в **DevTools → ENV → Mihomo и HWID** и применяются
+без Restart UI после повторного открытия вкладки «Соединения».
+
 ## Установка xk-geodat
 
 `xk-geodat` добавляет просмотр GeoIP/GeoSite, список тегов, поиск и вставку значений в Routing. Панель работает и без него, но DAT-возможности будут ограничены.
