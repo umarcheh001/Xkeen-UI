@@ -13714,9 +13714,10 @@ body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-d
   resize: none !important;
 }
 
-/* Mihomo needs fewer controls than DNS-over-VLESS. Keep it inside the shared
- * 1160px modal width and use the second column for live diagnostics instead
- * of stretching two selects across an ultra-wide, mostly empty canvas. */
+/* Mihomo needs fewer controls than DNS-over-VLESS. Its frame stops growing
+ * earlier than the DNS-over-VLESS one (1280px against 1440px) and uses the
+ * second column for live diagnostics instead of stretching two selects
+ * across an ultra-wide, mostly empty canvas. */
 body.panel-page #mihomo-dns-modal .mihomo-dns-body {
   grid-template-columns: minmax(0, 1.12fr) minmax(380px, .88fr);
   grid-template-areas:
@@ -13989,7 +13990,11 @@ body.panel-page [data-dns-layout="single"] .routing-dns-over-vless-body {
  * между свёрнутыми зонами не остаётся. Раньше каждая зона была отдельной
  * строкой общего грида, и высокий блок устройств растягивал строки напротив. */
 body.panel-page [data-dns-layout="split"] .routing-dns-over-vless-body {
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  /* Колонки равны: при 1.25:1 левая читалась заметно шире, потому что её
+   * зоны обведены рамками, а правая -- сплошной текст. Зазор больше шага
+   * сетки: на выросшей ширине рельсы в 10 px выглядели слипшимися. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px 18px;
   grid-template-rows: auto auto 1fr;
   grid-template-areas:
     "lead lead"
@@ -14758,6 +14763,11 @@ body.panel-page .modal .xk-modal-width-980 { --xk-modal-width: 980px; }
 body.panel-page .modal .xk-modal-width-1020 { --xk-modal-width: 1020px; }
 body.panel-page .modal .xk-modal-width-1040 { --xk-modal-width: 1040px; }
 body.panel-page .modal .xk-modal-width-1160 { --xk-modal-width: 1160px; }
+/* Резиновые ширины для двух окон DNS. Нижняя граница равна прежним 1160 px,
+ * поэтому ни на одном экране окно не становится уже, чем было; верхняя
+ * держит строку прозы в читаемых пределах, когда экран сильно шире. */
+body.panel-page .modal .xk-modal-width-fluid-1440 { --xk-modal-width: clamp(1160px, 92vw, 1440px); }
+body.panel-page .modal .xk-modal-width-fluid-1280 { --xk-modal-width: clamp(1160px, 92vw, 1280px); }
 
 body.panel-page .modal .xk-modal-max-width-220 { max-width: 220px; }
 body.panel-page .modal .xk-modal-max-width-420 { max-width: 420px; }

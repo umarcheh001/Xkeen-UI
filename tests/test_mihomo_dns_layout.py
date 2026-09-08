@@ -12,7 +12,7 @@ MODAL = TEMPLATE[
 
 
 def test_mihomo_dns_uses_the_shared_compact_modal_width():
-    assert "xk-modal-width-1160" in MODAL
+    assert "xk-modal-width-fluid-1280" in MODAL
     assert "--xk-modal-width: 2200px" not in CSS
     assert "width: 70vw" not in CSS
 

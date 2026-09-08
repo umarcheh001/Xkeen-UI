@@ -857,7 +857,7 @@
               "accessible_name": true
             },
             {
-              "control": "control@2796",
+              "control": "control@2802",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -875,55 +875,55 @@
               "accessible_name": false
             },
             {
-              "control": "control@4681",
+              "control": "control@4687",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@5592",
+              "control": "control@5598",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@7060",
+              "control": "control@7066",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@7976",
+              "control": "control@7982",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@9090",
+              "control": "control@9096",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@10165",
+              "control": "control@10171",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@11367",
+              "control": "control@11373",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@11877",
+              "control": "control@11883",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@12655",
+              "control": "control@12661",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -941,31 +941,31 @@
               "accessible_name": false
             },
             {
-              "control": "control@14283",
+              "control": "control@14289",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@14622",
+              "control": "control@14628",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@15363",
+              "control": "control@15369",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@16230",
+              "control": "control@16236",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@17496",
+              "control": "control@17502",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -983,25 +983,25 @@
               "accessible_name": false
             },
             {
-              "control": "control@20112",
+              "control": "control@20118",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@20993",
+              "control": "control@20999",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@21942",
+              "control": "control@21948",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@22803",
+              "control": "control@22809",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -1062,13 +1062,13 @@
               "accessible_name": true
             },
             {
-              "control": "control@2200",
+              "control": "control@2206",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@6721",
+              "control": "control@6727",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -10226,7 +10226,7 @@
         "value": "confirm-compact-form"
       },
       {
-        "locator": "div.modal-content.xk-modal-width.xk-modal-width-1160@L2578",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-fluid-1440@L2578",
         "name": "data-dns-layout",
         "value": "single"
       },

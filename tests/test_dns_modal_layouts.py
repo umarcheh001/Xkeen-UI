@@ -11,7 +11,7 @@ MODAL = TEMPLATE[TEMPLATE.index('<div id="routing-dns-over-vless-modal"'):TEMPLA
 def test_modal_starts_in_a_known_layout():
     assert 'data-dns-layout="single"' in MODAL
     # Ширина берётся из существующего размера системы, а не заводится своя.
-    assert "xk-modal-width-1160" in MODAL
+    assert "xk-modal-width-fluid-1440" in MODAL
 
 
 def test_both_layouts_are_declared():

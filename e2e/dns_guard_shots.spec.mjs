@@ -371,7 +371,9 @@ test('Mihomo DNS: redir-host uses the compact two-column layout', async ({ page 
     page.locator('#mihomo-dns-modal .mihomo-dns-route-zone').boundingBox(),
     page.locator('#mihomo-dns-modal .mihomo-dns-state').boundingBox(),
   ]);
-  expect(modal.width).toBeLessThanOrEqual(1162);
+  // Окно резиновое в границах 1160..1280: сторож следит не за конкретным
+  // числом, а за тем, что оно не расползается во всю ширину экрана.
+  expect(modal.width).toBeLessThanOrEqual(1282);
   expect(settings.x + settings.width).toBeLessThanOrEqual(state.x);
   expect(Math.abs(settings.y - state.y)).toBeLessThanOrEqual(2);
   await expect(page.locator('#mihomo-dns-fake-options')).toBeHidden();
