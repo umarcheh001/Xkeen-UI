@@ -14,6 +14,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
   const DOM = {
     modal: 'routing-dns-over-vless-modal',
+    toolbarButton: 'routing-dns-over-vless-toolbar-btn',
     layout: 'routing-dns-over-vless-layout',
     close: 'routing-dns-over-vless-close',
     cancel: 'routing-dns-over-vless-cancel',
@@ -24,6 +25,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     status: 'routing-dns-over-vless-status',
     details: 'routing-dns-over-vless-details',
     dot: 'routing-dns-over-vless-dot',
+    toolbarDot: 'routing-dns-over-vless-toolbar-dot',
     route: 'routing-dns-over-vless-route',
     target: 'routing-dns-over-vless-target',
     targetTools: 'routing-dns-over-vless-target-tools',
@@ -1171,7 +1173,6 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const text = $(DOM.status);
     const list = $(DOM.details);
     const apply = $(DOM.apply);
-    const dot = $(DOM.dot);
     if (list) list.textContent = '';
 
     const enabled = !!(data && data.enabled);
@@ -1189,9 +1190,15 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       // для тех, кто читает карточку экранным диктором.
       badge.title = `${info.badge} — ${info.summary}`;
     }
-    if (dot) {
+    {
       const rollbackRestored = rollbackStatus && rollbackStatus.phase === 'restored';
-      dot.dataset.state = enabled ? 'enabled' : ((info.state === 'ready' || rollbackRestored) ? 'off' : 'blocked');
+      const dotState = enabled ? 'enabled' : ((info.state === 'ready' || rollbackRestored) ? 'off' : 'blocked');
+      // Кнопок у функции две — в блоке правил и в тулбаре редактора; точка
+      // состояния должна быть одинаковой на обеих.
+      [DOM.dot, DOM.toolbarDot].forEach((id) => {
+        const el = $(id);
+        if (el) el.dataset.state = dotState;
+      });
     }
     if (text) {
       text.textContent = '';
@@ -1854,10 +1861,17 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   }
 
   function init() {
-    const button = $(IDS.dnsOverVless || 'routing-dns-over-vless-btn');
-    if (!button || button.dataset.wired === '1') return;
-    button.dataset.wired = '1';
-    button.addEventListener('click', (event) => { event.preventDefault(); open(); });
+    const buttons = [];
+    [IDS.dnsOverVless || 'routing-dns-over-vless-btn', DOM.toolbarButton].forEach((id) => {
+      const el = $(id);
+      if (el && buttons.indexOf(el) < 0) buttons.push(el);
+    });
+    const fresh = buttons.filter((el) => el.dataset.wired !== '1');
+    if (!fresh.length) return;
+    fresh.forEach((el) => {
+      el.dataset.wired = '1';
+      el.addEventListener('click', (event) => { event.preventDefault(); open(); });
+    });
     const layoutBtn = $(DOM.layout);
     if (layoutBtn) layoutBtn.addEventListener('click', toggleLayout);
     window.addEventListener('resize', () => applyLayout(readLayout()));

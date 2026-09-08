@@ -19240,6 +19240,27 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
   border-color: rgba(96, 165, 250, 0.42);
 }
 
+/* Тот же вход в DNS-over-VLESS, но в тулбаре над редактором: пилюля с
+   подписью в высоту соседних кнопок, точка состояния — общая с основной. */
+.xk-routing-toolbararea .routing-dns-over-vless-toolbar-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 10px 0 8px;
+  border-radius: 9999px;
+  color: #bfdbfe;
+  border-color: rgba(96, 165, 250, 0.42);
+}
+
+.xk-routing-toolbararea .routing-dns-over-vless-toolbar-btn .xk-action-icon {
+  width: 15px;
+  height: 15px;
+}
+
 .routing-dns-over-vless-dot {
   position: absolute;
   top: 4px;

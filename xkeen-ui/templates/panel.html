@@ -1040,6 +1040,16 @@
                   {{ op_icon('restore') }}
                 </button>
 
+                <button
+                  id="routing-dns-over-vless-toolbar-btn"
+                  type="button"
+                  class="terminal-tool-btn routing-dns-over-vless-btn routing-dns-over-vless-toolbar-btn"
+                  data-tooltip="DNS-over-VLESS: безопасная настройка DNS через Xray"
+                  aria-label="DNS-over-VLESS"
+                >
+                  {{ op_icon('dns') }}<span class="xk-action-label">DNS</span><span id="routing-dns-over-vless-toolbar-dot" class="routing-dns-over-vless-dot" aria-hidden="true"></span>
+                </button>
+
                 <details class="dt-log-menu xk-routing-menu">
                   <summary class="terminal-tool-btn xk-routing-menu-trigger" data-tooltip="Меню" aria-label="Меню">{{ op_icon('more') }}</summary>
 
