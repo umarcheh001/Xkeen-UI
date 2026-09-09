@@ -2707,7 +2707,12 @@ def recheck_local_resolvers(
         use_firmware_resolver=True,
     )
     _stamp_local_resolvers_synced(ui_state_dir, now)
-    return "резолвер прошивки переключён на " + ", ".join(found)
+    # Записан ровно один адрес — тот, который ``apply_action`` выбрал из
+    # найденных. Перечислять здесь весь ``found`` значит обещать в журнале
+    # переключение сразу на все порты прошивки, чего не произошло.
+    with _LOCK:
+        written = _firmware_resolvers_applied(_load_state(ui_state_dir)) or found[:1]
+    return "резолвер прошивки переключён на " + ", ".join(written)
 
 
 def _stamp_local_resolvers_synced(ui_state_dir: str, moment: float) -> None:

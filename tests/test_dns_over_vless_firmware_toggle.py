@@ -479,3 +479,29 @@ def test_the_guard_leaves_a_healthy_resolver_alone(tmp_path: Path, monkeypatch):
     )
 
     assert message == ""
+
+
+def test_the_message_names_the_address_that_was_written(tmp_path: Path, monkeypatch):
+    """Сообщение сторожа называет записанный адрес, а не весь список найденных.
+
+    Перечисление всех портов читалось как «переключён сразу на три резолвера»,
+    хотя записывается ровно один — первый отвечающий.
+    """
+    configs, routing, state = _scenario(tmp_path)
+    _patch_plumbing(monkeypatch, ["127.0.0.1:41100", "127.0.0.1:41101", "127.0.0.1:41102"])
+    monkeypatch.setattr(dns, "_resolver_answers", lambda *_a, **_k: True)
+    _enable(configs, routing, state)
+    assert dns._load_state(str(state))["firmware_resolvers_applied"] == ["127.0.0.1:41100"]
+
+    monkeypatch.setattr(dns, "_resolver_answers", lambda label, **_k: label.endswith("41102"))
+    message = dns.recheck_local_resolvers(
+        configs_dir=str(configs),
+        routing_file=str(routing),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+    )
+
+    assert dns._load_state(str(state))["firmware_resolvers_applied"] == ["127.0.0.1:41102"]
+    assert "127.0.0.1:41102" in message
+    assert "41100" not in message
+    assert "41101" not in message

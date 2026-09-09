@@ -74,6 +74,24 @@ def _patch_apply_action_plumbing(monkeypatch) -> None:
     )
 
 
+def _recording_apply_action(state_dir: Path, written: list[str], calls: list):
+    """Заглушка ``apply_action``, которая, как настоящая, пишет выбранный адрес.
+
+    Сообщение сторожа называет то, что оказалось записано, поэтому заглушка,
+    молча пропускающая запись, оставляла бы в состоянии старый адрес и лгала
+    о результате — проверялся бы артефакт подмены, а не поведение панели.
+    """
+
+    def _apply(*_a, **kw):
+        calls.append(kw)
+        state = dns._load_state(str(state_dir))
+        state["firmware_resolvers_applied"] = list(written)
+        dns._save_state(str(state_dir), state)
+        return {"ok": True}
+
+    return _apply
+
+
 def test_no_resync_when_the_addresses_still_match(tmp_path: Path, monkeypatch):
     state = tmp_path / "state"
     state.mkdir()
@@ -158,7 +176,9 @@ def test_mixed_set_keeps_the_users_address_and_swaps_the_firmware_one(tmp_path: 
     )
     monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda *a, **kw: ["127.0.0.1:41101"])
     called = []
-    monkeypatch.setattr(dns, "apply_action", lambda *a, **kw: called.append(kw) or {"ok": True})
+    monkeypatch.setattr(
+        dns, "apply_action", _recording_apply_action(state, ["127.0.0.1:41101"], called)
+    )
 
     note = dns.recheck_local_resolvers(
         configs_dir=str(tmp_path), routing_file=str(tmp_path / "05_routing.json"),
@@ -213,7 +233,9 @@ def test_a_stamp_from_the_future_does_not_mute_the_resync_forever(tmp_path: Path
     )
     monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda *a, **kw: ["127.0.0.1:41101"])
     called = []
-    monkeypatch.setattr(dns, "apply_action", lambda *a, **kw: called.append(kw) or {"ok": True})
+    monkeypatch.setattr(
+        dns, "apply_action", _recording_apply_action(state, ["127.0.0.1:41101"], called)
+    )
 
     note = dns.recheck_local_resolvers(
         configs_dir=str(tmp_path), routing_file=str(tmp_path / "05_routing.json"),
