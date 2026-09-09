@@ -99,6 +99,122 @@ def test_filter_reconcile_repairs_runtime_without_saving(monkeypatch):
     assert calls == ["dns-proxy no filter engine"]
 
 
+def test_running_config_reports_transit_and_provider_dns_policy():
+    running = """interface GigabitEthernet1
+    rename ISP
+    ip address dhcp
+    ip dhcp client dns-routes
+!
+interface UsbQmi0
+    security-level public
+    ip no name-servers
+    ipv6 no name-servers
+!
+dns-proxy
+    intercept enable
+!
+"""
+
+    result = dns._dns_policy_from_running_config(running)
+
+    assert result["transit_intercept"] is True
+    assert result["provider_ignored"] is False
+    assert result["provider_interfaces"] == [
+        {
+            "name": "GigabitEthernet1",
+            "ignored": False,
+            "ipv4_ignored": False,
+            "ipv6_ignored": False,
+        },
+        {
+            "name": "UsbQmi0",
+            "ignored": True,
+            "ipv4_ignored": True,
+            "ipv6_ignored": True,
+        },
+    ]
+
+
+def test_running_config_includes_wireless_isp_but_not_guest_or_lan_interfaces():
+    running = """interface WifiMaster0/AccessPoint1
+    security-level public
+    ip dhcp client dns-routes
+!
+interface WifiMaster0/WifiStation0
+    security-level public
+    ip dhcp client dns-routes
+    ip no name-servers
+    ipv6 no name-servers
+!
+interface Bridge0
+    security-level private
+    ip address 192.168.1.1 255.255.255.0
+    ip dhcp client dns-routes
+!
+"""
+
+    result = dns._dns_policy_from_running_config(running)
+
+    assert result["provider_interfaces"] == [{
+        "name": "WifiMaster0/WifiStation0",
+        "ignored": True,
+        "ipv4_ignored": True,
+        "ipv6_ignored": True,
+    }]
+    assert result["provider_ignored"] is True
+
+
+def test_running_config_without_wan_interfaces_reports_unknown_provider_policy():
+    result = dns._dns_policy_from_running_config("dns-proxy\n    intercept enable\n!\n")
+
+    assert result["transit_intercept"] is True
+    assert result["provider_interfaces"] == []
+    assert result["provider_ignored"] is None
+
+
+def test_configure_keenetic_dns_disables_transit_and_each_wan(monkeypatch):
+    calls = []
+    monkeypatch.setattr(dns, "_ndmc", lambda command, **_kwargs: calls.append(command) or "")
+
+    dns._configure_keenetic_dns_for_mihomo({
+        "provider_interfaces": [
+            {"name": "GigabitEthernet1", "ignored": False},
+            {"name": "UsbQmi0", "ignored": True},
+        ]
+    })
+
+    assert calls == [
+        "dns-proxy no intercept enable",
+        "interface GigabitEthernet1 ip no name-servers",
+        "interface GigabitEthernet1 ipv6 no name-servers",
+        "interface UsbQmi0 ip no name-servers",
+        "interface UsbQmi0 ipv6 no name-servers",
+        "system configuration save",
+    ]
+
+
+def test_restore_keenetic_dns_policy_replays_previous_values(monkeypatch):
+    calls = []
+    monkeypatch.setattr(dns, "_ndmc", lambda command, **_kwargs: calls.append(command) or "")
+
+    dns._restore_keenetic_dns_policy({
+        "transit_intercept": True,
+        "provider_interfaces": [
+            {"name": "GigabitEthernet1", "ignored": False},
+            {"name": "UsbQmi0", "ignored": True},
+        ],
+    })
+
+    assert calls == [
+        "dns-proxy intercept enable",
+        "interface GigabitEthernet1 ip name-servers",
+        "interface GigabitEthernet1 ipv6 name-servers",
+        "interface UsbQmi0 ip no name-servers",
+        "interface UsbQmi0 ipv6 no name-servers",
+        "system configuration save",
+    ]
+
+
 def test_iptables_dump_uses_wait_syntax_supported_by_keenetic(monkeypatch):
     calls = []
 
@@ -693,6 +809,64 @@ def test_enable_validates_saves_switches_restarts_and_probes(tmp_path: Path, mon
     saved_state = json.loads((state / "mihomo-dns" / dns.STATE_FILENAME).read_text(encoding="utf-8"))
     assert saved_state["proxy_group"] == "Заблок. сервисы"
     assert Path(saved_state["original_config"]).read_text(encoding="utf-8") == BASE
+
+
+def test_enable_persists_and_applies_keenetic_dns_policy_before_override(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    calls: list[object] = []
+    override = {"value": False}
+    running = """interface GigabitEthernet1
+    security-level public
+    ip address dhcp
+    ip name-servers
+    ipv6 name-servers
+!
+dns-proxy
+    intercept enable
+!
+"""
+
+    def read_override(**_kwargs):
+        dns._RUNNING_CONFIG_CACHE["output"] = running
+        return override["value"], "test"
+
+    monkeypatch.setattr(dns, "_dns_override_status", read_override)
+    monkeypatch.setattr(
+        dns,
+        "_set_dns_override",
+        lambda enabled: (calls.append(("override", enabled)), override.update(value=enabled)),
+    )
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda **kwargs: calls.append(("port", kwargs["should_be_free"])) or True)
+    monkeypatch.setattr(dns, "_wait_for_mihomo", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda: {"ok": True, "latency_ms": 1})
+    monkeypatch.setattr(dns, "_ndmc", lambda command, **_kwargs: calls.append(("ndmc", command)) or "")
+
+    def save_config(content):
+        calls.append(("save", content))
+        config.write_text(content, encoding="utf-8")
+        return type("Backup", (), {"filename": "before.yaml"})()
+
+    result = dns.apply_action(
+        "enable",
+        config_file=str(config),
+        ui_state_dir=str(state),
+        validate_config=lambda **_kwargs: "[exit code: 0]",
+        save_config=save_config,
+        restart_xkeen=lambda **kwargs: calls.append(("restart", kwargs["source"])) or True,
+    )
+
+    assert result["ok"] is True
+    ndmc = [item[1] for item in calls if item[0] == "ndmc"]
+    assert ndmc == [
+        "dns-proxy no intercept enable",
+        "interface GigabitEthernet1 ip no name-servers",
+        "interface GigabitEthernet1 ipv6 no name-servers",
+        "system configuration save",
+    ]
+    assert calls.index(("override", True)) > calls.index(("ndmc", "system configuration save"))
+    saved_state = json.loads((state / "mihomo-dns" / dns.STATE_FILENAME).read_text(encoding="utf-8"))
+    assert saved_state["original_dns_policy"]["transit_intercept"] is True
+    assert saved_state["original_dns_policy"]["provider_interfaces"][0]["ipv6_ignored"] is False
 
 
 def test_enable_probe_failure_rolls_back_config_and_dns_override(tmp_path: Path, monkeypatch):
@@ -1292,9 +1466,11 @@ def test_http_contract_forwards_portable_dns_options(tmp_path: Path, monkeypatch
 @pytest.fixture(autouse=True)
 def _reset_firmware_call_caches():
     dns._OVERRIDE_STATUS_CACHE.clear()
+    dns._RUNNING_CONFIG_CACHE.clear()
     dns._FILTER_RECONCILE_STATE.clear()
     yield
     dns._OVERRIDE_STATUS_CACHE.clear()
+    dns._RUNNING_CONFIG_CACHE.clear()
     dns._FILTER_RECONCILE_STATE.clear()
 
 

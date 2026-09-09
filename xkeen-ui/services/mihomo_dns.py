@@ -52,6 +52,11 @@ PROBE_DOMAIN = "example.com"
 # noticed on the next read.  Ten minutes turns 20 router-log sessions into one.
 OVERRIDE_STATUS_CACHE_TTL = 600.0
 _OVERRIDE_STATUS_CACHE: dict[str, Any] = {}
+# ``show running-config`` is already needed to determine dns-override.  Keep
+# the same output around so the DNS assistant can inspect the two adjacent
+# Keenetic DNS switches without opening another ndm session (and without
+# making the watchdog noisier on low-power routers).
+_RUNNING_CONFIG_CACHE: dict[str, Any] = {}
 # The same idea for ``dns-proxy no filter engine``: it repairs drift that only
 # appears when the router boots, so repeating it every guard tick buys nothing.
 FILTER_RECONCILE_INTERVAL = 600.0
@@ -2061,7 +2066,10 @@ def _dns_override_status(*, max_age: Optional[float] = None) -> tuple[Optional[b
     try:
         output = _ndmc("show running-config", timeout=10)
     except MihomoDnsError as exc:
+        _RUNNING_CONFIG_CACHE.clear()
         return None, str(exc.details or exc)
+    _RUNNING_CONFIG_CACHE["output"] = output
+    _RUNNING_CONFIG_CACHE["at"] = time.monotonic()
     lines = [line.strip().lower() for line in output.splitlines()]
     if any(line == "no opkg dns-override" or line.startswith("no opkg dns-override ") for line in lines):
         result = (False, "running-config")
@@ -2076,6 +2084,202 @@ def _dns_override_status(*, max_age: Optional[float] = None) -> tuple[Optional[b
 def _remember_dns_override(result: tuple[Optional[bool], str]) -> None:
     _OVERRIDE_STATUS_CACHE["value"] = result
     _OVERRIDE_STATUS_CACHE["at"] = time.monotonic()
+
+
+def _dns_policy_from_running_config(output: str) -> dict[str, Any]:
+    """Read the Keenetic switches used by the protected-DNS wizard.
+
+    ``dns-proxy intercept enable`` is the system-profile "Transit requests"
+    switch.  ``ip no name-servers`` is the firmware spelling of "Ignore DNS
+    from ISP".  The latter is attached to a WAN interface, so keep the
+    interface list in the result: it lets a later disable restore exactly the
+    interfaces that were changed instead of guessing that every interface is
+    named ``ISP``.
+
+    This parser intentionally understands the exported running-config rather
+    than the localized web UI.  Unknown/custom interfaces are left alone
+    unless they are clearly WAN-like; LAN bridge and access-point interfaces
+    must never be treated as provider links.
+    """
+
+    source = str(output or "")
+    lines = [re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", line).rstrip() for line in source.splitlines()]
+    transit = False
+    in_dns_proxy = False
+    blocks: list[tuple[str, list[str]]] = []
+    current_name: Optional[str] = None
+    current: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if re.match(r"^interface\s+\S", stripped) and not line.startswith((" ", "\t")):
+            if current_name is not None:
+                blocks.append((current_name, current))
+            current_name = stripped.split(None, 1)[1].strip()
+            current = []
+            continue
+        if current_name is not None:
+            if line and not line.startswith((" ", "\t")) and stripped == "!":
+                blocks.append((current_name, current))
+                current_name = None
+                current = []
+            else:
+                current.append(stripped)
+        if stripped == "dns-proxy":
+            in_dns_proxy = True
+            continue
+        if in_dns_proxy and stripped == "intercept enable":
+            transit = True
+        elif in_dns_proxy and line and not line.startswith((" ", "\t")) and stripped not in {"dns-proxy", "!"}:
+            in_dns_proxy = False
+    if current_name is not None:
+        blocks.append((current_name, current))
+
+    def is_wan(name: str, body: list[str]) -> bool:
+        lowered = name.lower()
+        # LAN/guest objects can contain DHCP-related lines too.  Exclude those
+        # before using Keenetic's public security level as the authoritative
+        # signal; WifiStation is intentionally not excluded because it is the
+        # interface behind Wireless ISP.
+        if any(token in lowered for token in ("bridge", "accesspoint", "vlan")):
+            return False
+        if lowered.startswith("wifimaster") and "/wifistation" not in lowered:
+            return False
+        # The canonical aliases cover builds that omit a security-level line
+        # on the primary ISP block.  Other VPN/custom connections are changed
+        # only when the firmware itself marks them public.
+        known = (
+            lowered == "isp",
+            lowered.startswith("usbqmi"),
+            lowered == "gigabitethernet1",
+            lowered == "ethernet1",
+            "wan" in lowered,
+        )
+        if any(known):
+            return True
+        return "security-level public" in body
+
+    provider_interfaces: list[dict[str, Any]] = []
+    for name, body in blocks:
+        if not is_wan(name, body):
+            continue
+        ipv4_ignored = any(
+            item in {"ip no name-servers", "ip dhcp client no name-servers", "ipcp no name-servers"}
+            for item in body
+        )
+        ipv6_ignored = any(
+            item in {"ipv6 no name-servers", "ipv6 dhcp client no name-servers"}
+            for item in body
+        )
+        provider_interfaces.append({
+            "name": name,
+            "ignored": ipv4_ignored and ipv6_ignored,
+            "ipv4_ignored": ipv4_ignored,
+            "ipv6_ignored": ipv6_ignored,
+        })
+
+    return {
+        "transit_intercept": transit,
+        "provider_ignored": (
+            all(item["ignored"] for item in provider_interfaces)
+            if provider_interfaces
+            else None
+        ),
+        "provider_interfaces": provider_interfaces,
+    }
+
+
+def _cached_dns_policy() -> Optional[dict[str, Any]]:
+    output = _RUNNING_CONFIG_CACHE.get("output")
+    if not isinstance(output, str) or not output.strip():
+        return None
+    return _dns_policy_from_running_config(output)
+
+
+def _capture_dns_policy() -> Optional[dict[str, Any]]:
+    """Return firmware DNS policy before changing it, if running-config is known."""
+
+    policy = _cached_dns_policy()
+    if policy is not None:
+        return policy
+    # Unit tests and installations where ndmc is unavailable can still use
+    # the file-only part of the assistant.  Do not turn that into a hard
+    # dependency merely to collect rollback metadata.
+    return None
+
+
+def _provider_targets(policy: Optional[dict[str, Any]]) -> list[str]:
+    if not isinstance(policy, dict):
+        return []
+    targets: list[str] = []
+    for item in policy.get("provider_interfaces") or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        if name and name not in targets:
+            targets.append(name)
+    return targets
+
+
+def _configure_keenetic_dns_for_mihomo(policy: Optional[dict[str, Any]]) -> None:
+    """Disable transit interception and provider DNS before Mihomo owns :53."""
+
+    if not isinstance(policy, dict):
+        return
+    # Both commands are idempotent.  Keep the explicit filter-engine command
+    # in ``_set_dns_override`` for backwards compatibility, while these two
+    # switches are part of the Mihomo assistant transaction itself.
+    _ndmc("dns-proxy no intercept enable")
+    for name in _provider_targets(policy):
+        _ndmc(f"interface {name} ip no name-servers")
+        _ndmc(f"interface {name} ipv6 no name-servers")
+    _ndmc("system configuration save")
+
+
+def _restore_keenetic_dns_policy(policy: Any) -> None:
+    """Restore the pre-assistant transit/provider settings when available."""
+
+    if not isinstance(policy, dict):
+        return
+    transit = bool(policy.get("transit_intercept"))
+    _ndmc("dns-proxy intercept enable" if transit else "dns-proxy no intercept enable")
+    for item in policy.get("provider_interfaces") or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        # ``ignored`` is retained as a compatibility fallback for state files
+        # written by the first implementation, which tracked IPv4 only.
+        legacy = bool(item.get("ignored"))
+        ipv4_ignored = bool(item.get("ipv4_ignored", legacy))
+        ipv6_ignored = bool(item.get("ipv6_ignored", legacy))
+        _ndmc(f"interface {name} ip {'no ' if ipv4_ignored else ''}name-servers")
+        _ndmc(f"interface {name} ipv6 {'no ' if ipv6_ignored else ''}name-servers")
+    _ndmc("system configuration save")
+
+
+def _restore_keenetic_dns_policy_best_effort(
+    policy: Any,
+    steps: list[str],
+    *,
+    success_step: str = "dns_policy_restored",
+    failure_step: str = "dns_policy_restore_failed",
+) -> None:
+    """Restore firmware DNS switches without making a release fail closed.
+
+    The emergency watchdog must always hand port 53 back to Keenetic, even if
+    one of the policy commands is rejected by a particular firmware build.
+    Keep the failure in the release trace so the operator can see that the
+    switches need a manual review.
+    """
+
+    if not isinstance(policy, dict):
+        return
+    try:
+        _restore_keenetic_dns_policy(policy)
+        steps.append(success_step)
+    except Exception as exc:  # noqa: BLE001
+        steps.append(f"{failure_step}:{exc}")
 
 
 def _set_dns_override(enabled: bool) -> None:
@@ -2273,6 +2477,7 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
     text = _read_text(config_file, "") or ""
     state = _load_state(ui_state_dir, config_file)
     override, override_detail = _dns_override_status()
+    firmware_dns_policy = _cached_dns_policy()
     core = detect_running_core() or ""
     has_begin = MANAGED_BEGIN in text
     has_end = MANAGED_END in text
@@ -2386,6 +2591,7 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         "proxy_group": group or None,
         "proxy_groups": _proxy_groups(text),
         "dns_override": override,
+        "keenetic_dns_policy": firmware_dns_policy,
         "dns_present": has_dns,
         "dns_enabled": bool(dns_runtime["enabled"]),
         "dns_listener_configured": bool(dns_runtime["listener_configured"]),
@@ -2440,6 +2646,7 @@ def _release_current_dns(
     """
 
     current = _read_text(config_file, "") or ""
+    state = _load_state(ui_state_dir, config_file)
     runtime = _dns_runtime_config(current)
     parked, changed = _with_dns_disabled(current)
     if runtime.get("listener_configured") and not changed:
@@ -2460,6 +2667,7 @@ def _release_current_dns(
     backup = None
     saved = False
     override_changed = False
+    dns_policy = state.get("original_dns_policy")
     restart_ok = True
     try:
         if changed:
@@ -2483,6 +2691,11 @@ def _release_current_dns(
                 "Системный DNS Keenetic не занял порт 53.",
                 code="firmware_dns_failed",
             )
+        # The assistant also changes Keenetic's transit/provider DNS policy.
+        # Restore those switches after the firmware has reclaimed :53 so a
+        # soft release does not leave the router ignoring all WAN resolvers.
+        if isinstance(dns_policy, dict):
+            _restore_keenetic_dns_policy(dns_policy)
     except Exception as exc:
         # An explicit button remains transactional.  If the firmware cannot
         # take over, put the active user config and override back as they were.
@@ -2490,6 +2703,11 @@ def _release_current_dns(
         if saved:
             try:
                 save_config(current)
+            except Exception as rollback_exc:  # noqa: BLE001
+                rollback_errors.append(str(rollback_exc))
+        if isinstance(dns_policy, dict):
+            try:
+                _configure_keenetic_dns_for_mihomo(dns_policy)
             except Exception as rollback_exc:  # noqa: BLE001
                 rollback_errors.append(str(rollback_exc))
         if override_changed:
@@ -2521,6 +2739,7 @@ def _release_current_dns(
             "dns_disabled_in_place" if changed else "dns_listener_absent",
             "core_restarted" if restart_ok else "core_restart_failed",
             "dns_override_disabled",
+            *(["dns_policy_restored"] if isinstance(dns_policy, dict) else []),
         ],
     }
     _record_release(ui_state_dir, config_file, released)
@@ -2570,6 +2789,10 @@ def apply_action(
         status = get_status(config_file=config_file, ui_state_dir=ui_state_dir)
         current = _read_text(config_file, "") or ""
         state = _load_state(ui_state_dir, config_file)
+        # ``get_status`` above may have used an older running-config snapshot;
+        # the transaction must capture the firmware state from this operation,
+        # not reuse data left by a previous panel request.
+        _RUNNING_CONFIG_CACHE.clear()
         original_override, _detail = _dns_override_status()
 
         if normalized == "enable":
@@ -2645,8 +2868,10 @@ def apply_action(
                     details=validation[-4000:],
                 )
             snapshot = _snapshot_original(ui_state_dir, config_file, current)
+            original_dns_policy = _capture_dns_policy()
             saved = False
             override_changed = False
+            dns_policy_changed = False
             repair_applied = False
             try:
                 if repair_plan is not None:
@@ -2676,8 +2901,14 @@ def apply_action(
                         "XKeen сейчас настроен на другое ядро; DNS Mihomo не применён.",
                         code="active_core_changed",
                     )
-                _set_dns_override(True)
+                dns_policy_changed = original_dns_policy is not None
+                _configure_keenetic_dns_for_mihomo(original_dns_policy)
+                # Release the firmware resolver only after its transit and
+                # provider-DNS switches are in the desired state.  This
+                # avoids a brief window where dns-override can redirect a
+                # query into the still-enabled Keenetic interceptor.
                 override_changed = original_override is not True
+                _set_dns_override(True)
                 if not _wait_for_port_53(should_be_free=True):
                     raise MihomoDnsError(
                         "Keenetic не освободил порт 53 для Mihomo.",
@@ -2715,6 +2946,7 @@ def apply_action(
                     "original_sha256": _sha256(current),
                     "applied_sha256": _sha256(prepared),
                     "original_dns_override": original_override,
+                    "original_dns_policy": original_dns_policy,
                     "proxy_group": group,
                     "listen": DNS_LISTEN,
                     "mode": normalized_mode,
@@ -2773,6 +3005,11 @@ def apply_action(
                 if original_override is not None and (override_changed or original_override is not True):
                     try:
                         _set_dns_override(bool(original_override))
+                    except Exception as rollback_exc:
+                        rollback_errors.append(str(rollback_exc))
+                if dns_policy_changed and original_dns_policy is not None:
+                    try:
+                        _restore_keenetic_dns_policy(original_dns_policy)
                     except Exception as rollback_exc:
                         rollback_errors.append(str(rollback_exc))
                 if repair_applied and repair_plan is not None:
@@ -2889,6 +3126,7 @@ def apply_action(
                 raise MihomoDnsError("Сервис не запустился после восстановления.", code="restore_restart_failed")
             restore_override = bool(state.get("original_dns_override"))
             _set_dns_override(restore_override)
+            _restore_keenetic_dns_policy(state.get("original_dns_policy"))
             # A restored config without a port-53 listener must never leave the
             # LAN without DNS merely because an earlier, unrelated assistant
             # had already enabled dns-override.
@@ -2914,6 +3152,7 @@ def apply_action(
             # complete; this mirrors the enable transaction in reverse.
             try:
                 save_config(current)
+                _configure_keenetic_dns_for_mihomo(state.get("original_dns_policy"))
                 _set_dns_override(True)
                 restart_xkeen(source="mihomo-dns-rollback")
             except Exception:
@@ -3049,6 +3288,11 @@ def emergency_release(
 
     if not _wait_for_port_53(should_be_free=False):
         steps.append("port_53_still_free")
+
+    # A guarded release must also undo the policy changes made by the wizard.
+    # Keep this best-effort: returning port 53 to the firmware is the primary
+    # safety property, while a failed policy replay is visible in the trace.
+    _restore_keenetic_dns_policy_best_effort(state.get("original_dns_policy"), steps)
 
     released = {
         "released_at": int(time.time()),

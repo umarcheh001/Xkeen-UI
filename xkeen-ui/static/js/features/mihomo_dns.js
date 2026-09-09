@@ -453,6 +453,17 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
         listenerConfigured ? 'ok' : 'warn',
       );
       addDetail(`Keenetic DNS override: ${data.dns_override === true ? 'включён' : (data.dns_override === false ? 'выключен' : 'не определён')}`, data.dns_override == null ? 'warn' : 'ok');
+      const keeneticPolicy = data.keenetic_dns_policy || null;
+      if (keeneticPolicy) {
+        addDetail(
+          `Транзит запросов: ${keeneticPolicy.transit_intercept === true ? 'включён' : 'выключен'} · мастер при включении отключает перехват`,
+          keeneticPolicy.transit_intercept === true ? 'warn' : 'ok',
+        );
+        addDetail(
+          `DNS провайдера: ${keeneticPolicy.provider_ignored === true ? 'игнорируется' : (keeneticPolicy.provider_ignored === false ? 'используется' : 'не определён')} · мастер при включении отключает его на WAN`,
+          keeneticPolicy.provider_ignored === true ? 'ok' : 'warn',
+        );
+      }
       const guard = guardNotice(data, enabled);
       addDetail(guard.text, guard.kind);
       if ((mode?.value || data?.mode) === 'fake-ip' && data?.fake_ip_route?.message) {
