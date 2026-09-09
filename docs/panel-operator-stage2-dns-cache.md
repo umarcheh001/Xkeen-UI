@@ -60,11 +60,17 @@ update/healthcheck, `save_config`, restart и DNS flush. Config fingerprint
 
 ## Rollout
 
-DNS capabilities сохраняют Stage 0 rollout gates:
+DNS capabilities доступны по умолчанию и сохраняют Stage 0 rollout gates как
+явные kill-switch переменные:
 
-- `XKEEN_MIHOMO_DNS_QUERY_ENABLE=1`;
-- `XKEEN_MIHOMO_DNS_FLUSH_ENABLE=1`;
-- `XKEEN_MIHOMO_FAKE_IP_FLUSH_ENABLE=1`.
+- `XKEEN_MIHOMO_DNS_QUERY_ENABLE=1` (default);
+- `XKEEN_MIHOMO_DNS_FLUSH_ENABLE=1` (default);
+- `XKEEN_MIHOMO_FAKE_IP_FLUSH_ENABLE=1` (default).
+
+Все три настройки находятся в **DevTools → ENV → Mihomo и HWID** и
+применяются сразу, без Restart UI. Для сборок Mihomo без semver mutating flush
+остаётся отключённым до подтверждения совместимой версии; read-only query
+проверяется фактическим запросом к `/dns/query`.
 
 `XKEEN_MIHOMO_CAPABILITY_PROBE=1` по-прежнему управляет только диагностическим
 runtime probe в capability/status response; сам явный DNS query выполняется

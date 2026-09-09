@@ -128,6 +128,16 @@ Telemetry Hub — транспорт по умолчанию для вкладк
 Все три переменные доступны в **DevTools → ENV → Mihomo и HWID** и применяются
 без Restart UI после повторного открытия вкладки «Соединения».
 
+### DNS diagnostics Mihomo
+
+Раздел **Mihomo → Управление → DNS** включён по умолчанию и выполняет
+ограниченный read-only запрос через `/dns/query`. Кнопки очистки DNS и Fake-IP
+кэша также доступны по умолчанию, но всегда требуют отдельного подтверждения и
+не изменяют `config.yaml`. При необходимости их можно отключить в
+**DevTools → ENV → Mihomo и HWID** переменными
+`XKEEN_MIHOMO_DNS_QUERY_ENABLE`, `XKEEN_MIHOMO_DNS_FLUSH_ENABLE` и
+`XKEEN_MIHOMO_FAKE_IP_FLUSH_ENABLE` (значение `0`, применяется сразу).
+
 ## Установка xk-geodat
 
 `xk-geodat` добавляет просмотр GeoIP/GeoSite, список тегов, поиск и вставку значений в Routing. Панель работает и без него, но DAT-возможности будут ограничены.

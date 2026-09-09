@@ -39,6 +39,10 @@ ENV_WHITELIST: Tuple[str, ...] = (
     "XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE",
     "XKEEN_MIHOMO_TRAFFIC_ENABLE",
     "XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH",
+    # Mihomo DNS diagnostics/cache maintenance rollout.
+    "XKEEN_MIHOMO_DNS_QUERY_ENABLE",
+    "XKEEN_MIHOMO_DNS_FLUSH_ENABLE",
+    "XKEEN_MIHOMO_FAKE_IP_FLUSH_ENABLE",
     "XKEEN_HAPP_HELPER_CMD",
     "XKEEN_HAPP_DECRYPTOR_CMD",
     "XKEEN_HAPP_DECRYPTOR_REMOTE_URL",
@@ -323,6 +327,15 @@ def _default_effective_value(
     if k == "XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH":
         # Emergency override: 1 disables both telemetry and optional traffic.
         return "0"
+    if k in (
+        "XKEEN_MIHOMO_DNS_QUERY_ENABLE",
+        "XKEEN_MIHOMO_DNS_FLUSH_ENABLE",
+        "XKEEN_MIHOMO_FAKE_IP_FLUSH_ENABLE",
+    ):
+        # DNS diagnostics/cache maintenance are enabled by default. The
+        # backend still gates old/unknown cores and flushes require explicit
+        # confirmation in the UI.
+        return "1"
     if k == "XKEEN_HAPP_HELPER_CMD":
         try:
             from services import happ_links

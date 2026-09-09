@@ -102,6 +102,22 @@ def test_stage0_capability_state_distinguishes_old_core_and_unknown_runtime():
     assert enabled_details["rules_disable"]["runtime_ready"] is True
 
 
+def test_dns_query_is_available_for_healthy_vendor_build_without_semver():
+    values, details = build_capability_state(
+        {"version": "alpha-65287f0"},
+        status_ready=True,
+        ws_runtime=False,
+        env={},
+    )
+    assert values["dns_query"] is True
+    assert details["dns_query"]["static_supported"] is None
+    assert details["dns_query"]["runtime_ready"] is True
+    # Mutating operations remain conservatively gated until a compatible
+    # semver is known, even though their rollout flags default to enabled.
+    assert values["dns_flush"] is False
+    assert values["fake_ip_flush"] is False
+
+
 def test_snapshot_envelope_keeps_schema_v1_legacy_fields_and_stale_metadata():
     envelope = build_mihomo_clash_snapshot_envelope(
         {"schema_version": 1, "connections": []},

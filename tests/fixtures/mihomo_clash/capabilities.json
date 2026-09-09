@@ -7,10 +7,10 @@
   ],
   "flags": {
     "traffic": false,
-    "telemetry_stream": false,
-    "dns_query": false,
-    "dns_flush": false,
-    "fake_ip_flush": false,
+    "telemetry_stream": true,
+    "dns_query": true,
+    "dns_flush": true,
+    "fake_ip_flush": true,
     "cache_etag": false
   }
 }

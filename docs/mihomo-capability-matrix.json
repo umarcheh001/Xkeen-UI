@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Xkeen UI Mihomo Clash capability baseline; version gates are conservative and runtime readiness is probed separately.",
+  "description": "Xkeen UI Mihomo Clash capability baseline; version gates are conservative, DNS query is checked by the bounded facade request, and mutating readiness remains statically gated.",
   "capabilities": [
     {"name": "traffic", "endpoint": "/traffic", "method": "GET", "min_version": "1.18.0", "probe": "traffic_snapshot", "flag": "XKEEN_MIHOMO_TRAFFIC_ENABLE"},
     {"name": "telemetry_stream", "endpoint": "/ws/mihomo-clash/telemetry", "method": "WS", "min_version": null, "probe": "ws_runtime", "flag": "XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE"},

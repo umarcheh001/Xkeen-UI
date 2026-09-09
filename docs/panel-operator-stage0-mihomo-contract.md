@@ -11,18 +11,25 @@ fallback остаются canonical owner-ами.
 [`mihomo-capability-matrix.json`](mihomo-capability-matrix.json), а redacted
 upstream shape — в `tests/fixtures/mihomo_clash/`. Версионный gate отделён от
 runtime readiness: старый core даёт `static_supported: false`, неизвестная
-версия — `null`, а optional endpoint без включённого probe не объявляется
-готовым.
+версия — `null`. Read-only DNS query проверяется фактическим bounded-запросом
+в фасаде, поэтому для vendor-сборок без semver она может быть доступна без
+отдельного probe; mutating endpoints по-прежнему требуют известной версии.
 
 Публичные ключи добавлены обратно совместимо: `traffic`,
 `telemetry_stream`, `dns_query`, `dns_flush`, `fake_ip_flush`, `cache_etag`.
 Значения имеют тип `boolean | null`; frontend включает новую возможность
-только при строгом `=== true`.
+только при строгом `=== true`. Если конкретная сборка не реализует
+`/dns/query`, реальный запрос вернёт честный `501 Not supported`.
 
 ## Rollout flags
 
-Telemetry Hub включён по умолчанию; остальные optional surfaces выключены и
+Telemetry Hub и DNS diagnostics включены по умолчанию. DNS query остаётся
+строго allow-listed/read-only, а очистка DNS/Fake-IP cache требует явного
+подтверждения и action guard. Остальные optional surfaces выключены и
 включаются точечно через `XKEEN_MIHOMO_<CAPABILITY>_ENABLE=1`.
+Для аварийного отключения DNS без перезапуска доступны
+`XKEEN_MIHOMO_DNS_QUERY_ENABLE=0`, `XKEEN_MIHOMO_DNS_FLUSH_ENABLE=0` и
+`XKEEN_MIHOMO_FAKE_IP_FLUSH_ENABLE=0`.
 `XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE=0` возвращает прежний transport, а
 аварийный `XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH=1` отключает traffic/telemetry и
 оставляет текущий connections WS/HTTP fallback без изменений. Runtime probe

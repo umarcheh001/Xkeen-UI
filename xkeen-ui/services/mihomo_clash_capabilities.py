@@ -47,15 +47,17 @@ CAPABILITY_MATRIX_VERSION = 1
 CAPABILITY_FLAG_PREFIX = "XKEEN_MIHOMO_"
 CAPABILITY_KILL_SWITCH_ENV = "XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH"
 
-# Telemetry Hub is the default transport for connection telemetry. Other new
-# surfaces remain opt-in; the established connections stream is still kept as
-# a resilient fallback and can be forced by the telemetry kill-switch.
+# Telemetry Hub is the default transport for connection telemetry. DNS
+# diagnostics and cache maintenance are also enabled by default: the facade
+# keeps the query allow-listed/read-only and requires explicit confirmation for
+# the two mutating flush actions. The flags remain available as a kill switch
+# for deployments that do not expose these upstream endpoints.
 DEFAULT_FLAGS: Mapping[str, bool] = {
     "traffic": False,
     "telemetry_stream": True,
-    "dns_query": False,
-    "dns_flush": False,
-    "fake_ip_flush": False,
+    "dns_query": True,
+    "dns_flush": True,
+    "fake_ip_flush": True,
     "rule_counters": False,
     "rules_disable": False,
     "cache_etag": False,
@@ -160,6 +162,15 @@ def build_capability_state(
             runtime_ready = False
         elif item.name in probes:
             runtime_ready = bool(probes[item.name])
+        elif item.name == "dns_query":
+            # A DNS query is itself the bounded read-only runtime check. Keep
+            # it available when the controller is healthy and the static
+            # version gate is not an explicit failure; the route performs the
+            # real endpoint call and returns a truthful 501 if this particular
+            # Mihomo build does not implement /dns/query. This is important
+            # for vendor builds that report hashes such as alpha-65287f0
+            # instead of a semver version.
+            runtime_ready = bool(status_ready and static_supported is not False)
         elif item.mutating:
             # Mutations are deliberately not executed as a readiness probe.
             # A known-compatible version is the safe static readiness signal;
@@ -171,6 +182,13 @@ def build_capability_state(
 
         if not enabled or static_supported is False or runtime_ready is False:
             public: bool | None = False
+        elif item.name == "dns_query" and runtime_ready is True:
+            # DNS query is a read-only endpoint and the route performs the
+            # bounded real request. Vendor builds often omit semver (for
+            # example ``alpha-65287f0``), so do not turn a healthy controller
+            # into a misleading ``null`` capability solely because its build
+            # string cannot pass the static version parser.
+            public = True
         elif static_supported is None or runtime_ready is None:
             public = None
         else:

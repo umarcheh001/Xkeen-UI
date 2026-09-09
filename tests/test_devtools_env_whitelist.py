@@ -147,6 +147,9 @@ def test_every_whitelisted_key_is_described_and_grouped():
         ("XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE", "1"),
         ("XKEEN_MIHOMO_TRAFFIC_ENABLE", "0"),
         ("XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH", "0"),
+        ("XKEEN_MIHOMO_DNS_QUERY_ENABLE", "1"),
+        ("XKEEN_MIHOMO_DNS_FLUSH_ENABLE", "1"),
+        ("XKEEN_MIHOMO_FAKE_IP_FLUSH_ENABLE", "1"),
     ],
 )
 def test_subscription_defaults_match_runtime(key, expected):

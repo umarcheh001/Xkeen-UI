@@ -49,7 +49,7 @@ function renderCapabilities() {
   if (fakeIpFlush) fakeIpFlush.disabled = busy || !fakeIpFlushSupported;
   if (!querySupported) {
     setText('mihomo-clash-dns-state', 'not supported');
-    setText('mihomo-clash-dns-result', 'DNS query отключён capability-флагом или не поддерживается текущим Mihomo.');
+    setText('mihomo-clash-dns-result', 'DNS query отключён capability-флагом или не поддерживается текущим Mihomo. Переключатели доступны в DevTools → ENV → Mihomo и HWID.');
   } else {
     setText('mihomo-clash-dns-state', 'Готово');
   }
