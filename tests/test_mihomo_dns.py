@@ -268,6 +268,15 @@ def test_mihomo_capture_rule_matches_router_dns_on_each_lan_bridge():
     assert rules[-1][-2:] == ["--to-ports", "53"]
 
 
+def test_mihomo_capture_removal_is_noop_without_keenetic(monkeypatch):
+    monkeypatch.setattr(
+        dns,
+        "_iptables_nat",
+        lambda _args: (1, "", "iptables: permission denied"),
+    )
+    monkeypatch.setattr(dns, "_resolve_ndmc", lambda: "")
+
+    assert dns._remove_mihomo_dns_capture() is False
 
 
 def test_build_enabled_config_is_additive_routed_and_router_safe():

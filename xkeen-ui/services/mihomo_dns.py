@@ -1393,6 +1393,15 @@ def _remove_mihomo_dns_capture() -> bool:
     changed = False
     rc, parent_text, error = _iptables_nat(["-S", "PREROUTING"])
     if rc != 0:
+        # The file-only assistant is also exercised on desktop/CI installs
+        # where neither Keenetic's ``ndmc`` nor a usable netfilter namespace
+        # exists.  There is no panel-owned chain to remove there; do not turn
+        # an otherwise successful config restore into a false rollback.  A
+        # real Keenetic still has ndmc, so command errors remain fatal and are
+        # surfaced to the operator.
+        if not _resolve_ndmc():
+            _MIHOMO_DNS_CAPTURE_STATE.update({"active": False, "at": 0.0})
+            return False
         if error and error != "iptables не найден" and "No chain" not in error and "does not exist" not in error:
             raise MihomoDnsError(
                 "Не удалось прочитать PREROUTING для DNS Mihomo.",
@@ -1409,6 +1418,9 @@ def _remove_mihomo_dns_capture() -> bool:
         _iptables_nat_must(["-F", MIHOMO_DNS_CAPTURE_CHAIN])
         _iptables_nat_must(["-X", MIHOMO_DNS_CAPTURE_CHAIN])
         changed = True
+    elif not _resolve_ndmc():
+        _MIHOMO_DNS_CAPTURE_STATE.update({"active": False, "at": 0.0})
+        return changed
     elif error and error != "iptables не найден" and "No chain" not in error and "does not exist" not in error:
         raise MihomoDnsError(
             "Не удалось прочитать цепочку DNS Mihomo.",
