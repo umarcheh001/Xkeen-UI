@@ -200,6 +200,12 @@ LOCAL_RESOLVER_RESYNC_INTERVAL = 3600.0
 # отвечает за доли секунды, а молчащий не ответит и за десять.
 FIRMWARE_PROBE_DOMAIN = PROBE_DOMAIN
 FIRMWARE_PROBE_TIMEOUT = 2.0
+# Запрос уходит одной датаграммой, а апстримы у резолвера прошивки зашифрованы
+# и ведут наружу: просевший на секунду канал съедает её целиком. Делим прежний
+# срок на несколько попыток — потерянный пакет перестаёт быть приговором, а
+# длиннее проба не становится: выбор адреса при включении опрашивает резолверы
+# по очереди, и растянутая проба растянула бы включение.
+FIRMWARE_PROBE_ATTEMPTS = 2
 
 # Версия файла состояния. Единица — записи панели, которая всегда сохраняла
 # поле локального резолвера, даже когда человек его не заполнял: пустой список
@@ -1271,6 +1277,11 @@ def _resolver_answers(label: str, timeout: float = FIRMWARE_PROBE_TIMEOUT) -> bo
     включая NXDOMAIN, — вопрос лишь в том, есть ли на том конце кто-то живой.
     Порт может слушаться, пока сам ``ndnproxy`` уже не отвечает, и такое
     молчание отличимо от уехавшего порта только запросом.
+
+    Спрашивается несколько раз внутри одного срока: потерянная датаграмма —
+    не молчание резолвера, а обычная для UDP потеря, и принимать её за отказ
+    дорого. Каждая попытка идёт со своим идентификатором, поэтому запоздалый
+    ответ на прошлый запрос не засчитывается за ответ на текущий.
     """
     try:
         parsed = _parse_local_resolver(label)
@@ -1278,18 +1289,32 @@ def _resolver_answers(label: str, timeout: float = FIRMWARE_PROBE_TIMEOUT) -> bo
         return False
     if not parsed:
         return False
-    txid = random.randint(0, 65535)
-    packet = _dns_query_packet(FIRMWARE_PROBE_DOMAIN, QTYPE_A, txid)
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.settimeout(max(0.2, float(timeout or 0)))
-            sock.sendto(packet, (parsed["address"], int(parsed.get("port") or 53)))
-            data, _peer = sock.recvfrom(4096)
-    except Exception:  # noqa: BLE001 - молчание и есть ответ на наш вопрос
-        return False
-    if len(data) < 12:
-        return False
-    return struct.unpack("!H", data[:2])[0] == txid
+    address = parsed["address"]
+    port = int(parsed.get("port") or 53)
+    budget = max(0.2, float(timeout or 0))
+    attempts = max(1, FIRMWARE_PROBE_ATTEMPTS)
+    deadline = time.monotonic() + budget
+    per_attempt = max(0.2, budget / attempts)
+    # Попытки считаются, а не отмеряются одним сроком: закрытый порт отвечает
+    # отказом мгновенно, и цикл «пока не вышло время» превратился бы в штурм
+    # этого порта датаграммами вместо двух вежливых запросов.
+    for _attempt in range(attempts):
+        left = deadline - time.monotonic()
+        if left <= 0:
+            break
+        txid = random.randint(0, 65535)
+        packet = _dns_query_packet(FIRMWARE_PROBE_DOMAIN, QTYPE_A, txid)
+        data = b""
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                sock.settimeout(min(per_attempt, left))
+                sock.sendto(packet, (address, port))
+                data, _peer = sock.recvfrom(4096)
+        except Exception:  # noqa: BLE001 - молчание и есть ответ на наш вопрос
+            data = b""
+        if len(data) >= 12 and struct.unpack("!H", data[:2])[0] == txid:
+            return True
+    return False
 
 
 def _pick_firmware_resolver(found: list[str]) -> list[str]:
@@ -2644,7 +2669,18 @@ def recheck_local_resolvers(
             # The firmware's configs are unreadable right now.  Rewriting the
             # setting on that basis would throw away a working address.
             return ""
-        if set(applied) & set(found) and all(_resolver_answers(item) for item in applied):
+        still_there = set(applied) & set(found)
+        if still_there and all(_resolver_answers(item) for item in applied):
+            return ""
+        # Уехавший порт (пересечения нет) переписывается без разговоров: адреса
+        # в конфигурации больше не существует. А вот молчание адреса, который
+        # никуда не делся, — ещё не повод переписывать конфигурацию: проба
+        # короткая, а резолвер прошивки ходит наружу через зашифрованные
+        # апстримы, и просевший на секунду канал её промахивает. Переписывать
+        # тут имеет смысл, только если выбор действительно даёт другой адрес;
+        # иначе ``apply_action`` запишет ровно то, что уже записано, и
+        # перезапустит ядро впустую, оборвав все соединения в сети.
+        if still_there and _pick_firmware_resolver(found) == applied:
             return ""
         last = state.get("local_resolvers_synced_at")
         now = time.time()

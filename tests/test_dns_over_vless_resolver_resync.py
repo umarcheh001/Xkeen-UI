@@ -294,3 +294,83 @@ def test_failed_resync_still_stamps_the_timestamp(tmp_path: Path, monkeypatch):
         )
 
     assert dns._load_state(str(state)).get("local_resolvers_synced_at")
+
+
+def test_a_silent_resolver_alone_does_not_trigger_a_pointless_restart(tmp_path: Path, monkeypatch):
+    """Молчание без замены адреса не повод перезапускать ядро.
+
+    Ночь 9 сентября 2026 на 45.1: проба резолвера прошивки — одна датаграмма
+    с двухсекундным сроком, а апстримы у ``ndnproxy`` зашифрованные и уходят
+    в интернет. Канал моргнул, проба промахнулась, и сторож переприменил ту
+    же самую конфигурацию: адрес после этого остался прежним, файлы Xray не
+    изменились ни на байт, а ядро перезапустилось и оборвало все соединения
+    в сети. Переприменять стоит только тогда, когда выбор действительно даёт
+    другой адрес.
+    """
+    state = tmp_path / "state"
+    state.mkdir()
+    dns._save_state(
+        str(state),
+        {
+            "enabled": True,
+            "use_firmware_resolver": True,
+            "firmware_resolvers_applied": ["127.0.0.1:41100"],
+        },
+    )
+    monkeypatch.setattr(
+        dns.firmware_resolvers,
+        "discover",
+        lambda *a, **kw: ["127.0.0.1:41100", "127.0.0.1:41101", "127.0.0.1:41102"],
+    )
+    # Ни один не отвечает: резолверы прошивки лежат целиком, и переписывание
+    # конфигурации тем же адресом их не поднимет.
+    monkeypatch.setattr(dns, "_resolver_answers", lambda *_a, **_k: False)
+    called = []
+    monkeypatch.setattr(dns, "apply_action", lambda *a, **kw: called.append(kw))
+
+    note = dns.recheck_local_resolvers(
+        configs_dir=str(tmp_path), routing_file=str(tmp_path / "05_routing.json"),
+        ui_state_dir=str(state), restart_xkeen=lambda *a, **kw: {"ok": True},
+    )
+
+    assert note == ""
+    assert called == []
+
+
+def test_a_single_missed_probe_does_not_trigger_a_pointless_restart(tmp_path: Path, monkeypatch):
+    """Промах одной датаграммы — не то же самое, что уехавший резолвер.
+
+    Проба потеряла ответ, но адрес на месте и на следующий запрос отвечает:
+    выбор вернёт тот же самый адрес, писать нечего.
+    """
+    state = tmp_path / "state"
+    state.mkdir()
+    dns._save_state(
+        str(state),
+        {
+            "enabled": True,
+            "use_firmware_resolver": True,
+            "firmware_resolvers_applied": ["127.0.0.1:41100"],
+        },
+    )
+    monkeypatch.setattr(
+        dns.firmware_resolvers,
+        "discover",
+        lambda *a, **kw: ["127.0.0.1:41100", "127.0.0.1:41101"],
+    )
+    answers = iter([False])
+
+    def _flaky(*_a, **_k) -> bool:
+        return next(answers, True)
+
+    monkeypatch.setattr(dns, "_resolver_answers", _flaky)
+    called = []
+    monkeypatch.setattr(dns, "apply_action", lambda *a, **kw: called.append(kw))
+
+    note = dns.recheck_local_resolvers(
+        configs_dir=str(tmp_path), routing_file=str(tmp_path / "05_routing.json"),
+        ui_state_dir=str(state), restart_xkeen=lambda *a, **kw: {"ok": True},
+    )
+
+    assert note == ""
+    assert called == []
