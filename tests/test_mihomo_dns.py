@@ -241,6 +241,35 @@ def test_iptables_dump_uses_wait_syntax_supported_by_keenetic(monkeypatch):
     ]
 
 
+def test_mihomo_capture_uses_lan_bridges_only(monkeypatch):
+    class Proc:
+        returncode = 0
+        stdout = """9: ezcfg0    inet 78.47.125.180/32 scope global ezcfg0
+35: qmi_br1   inet 26.161.20.24/28 scope global qmi_br1
+36: br0       inet 192.168.1.1/24 scope global br0
+37: br1       inet 192.168.10.1/24 scope global br1
+"""
+        stderr = ""
+
+    monkeypatch.setattr(dns.subprocess, "run", lambda *args, **kwargs: Proc())
+
+    assert dns._router_lan_addresses() == ["192.168.1.1", "192.168.10.1"]
+
+
+def test_mihomo_capture_rule_matches_router_dns_on_each_lan_bridge():
+    rules = dns._mihomo_dns_capture_rules(["192.168.1.1", "192.168.10.1"])
+
+    assert len(rules) == 4
+    assert rules[0] == [
+        "-d", "192.168.1.1/32", "-i", "br+", "-p", "udp", "-m", "udp",
+        "--dport", "53", "-j", "REDIRECT", "--to-ports", "53",
+    ]
+    assert rules[-1][0:4] == ["-d", "192.168.10.1/32", "-i", "br+"]
+    assert rules[-1][-2:] == ["--to-ports", "53"]
+
+
+
+
 def test_build_enabled_config_is_additive_routed_and_router_safe():
     content, group = dns.build_enabled_config(BASE)
 

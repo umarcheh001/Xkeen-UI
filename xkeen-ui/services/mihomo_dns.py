@@ -131,8 +131,16 @@ DNS_SELECTOR_ICON = "https://img.icons8.com/fluency/96/dns.png"
 DNS_MODES = ("redir-host", "fake-ip")
 FAKE_IP_FILTER_MODES = ("blacklist", "whitelist", "rule")
 IPTABLES_BINARIES = ("/opt/sbin/iptables", "iptables")
+IP_BINARIES = ("/opt/sbin/ip", "ip")
 XKEEN_FIREWALL_CHAIN = "xkeen"
 XKEEN_INIT_SCRIPT = "/opt/etc/init.d/S05xkeen"
+# Keenetic creates a separate DNS redirect for every access policy.  The
+# system-profile switch and ``opkg dns-override`` do not remove those rules,
+# so Mihomo needs its own first-in-PREROUTING chain to bring LAN queries back
+# to the listener on port 53.  The firmware chains remain untouched.
+MIHOMO_DNS_CAPTURE_CHAIN = "XKEEN_UI_MIHOMO_DNS"
+MIHOMO_DNS_CAPTURE_INTERVAL = 30.0
+_MIHOMO_DNS_CAPTURE_STATE: dict[str, Any] = {"active": False, "at": 0.0}
 LEGACY_FAKE_IP_EXCLUSION = "198.18.0.0/15"
 _LOCK = threading.RLock()
 
@@ -1185,6 +1193,238 @@ def _iptables_table_rules(table: str) -> tuple[str, str]:
         detail = (proc.stderr or proc.stdout or "").strip()
         last_error = detail[-300:] if detail else f"iptables вернул код {proc.returncode}"
     return "", last_error or "не удалось прочитать iptables"
+
+
+def _iptables_nat(args: list[str]) -> tuple[int, str, str]:
+    """Run one IPv4 nat-table command with the Keenetic-compatible lock wait."""
+
+    last_error = "iptables не найден"
+    for binary in IPTABLES_BINARIES:
+        try:
+            proc = subprocess.run(
+                [binary, "-w", "-t", "nat", *args],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except FileNotFoundError:
+            continue
+        except Exception as exc:  # noqa: BLE001 - reported to the caller
+            last_error = str(exc)
+            continue
+        return proc.returncode, proc.stdout or "", (proc.stderr or "").strip()
+    return 127, "", last_error
+
+
+def _iptables_nat_must(args: list[str]) -> None:
+    rc, output, error = _iptables_nat(args)
+    if rc != 0:
+        detail = error or output or f"iptables вернул код {rc}"
+        raise MihomoDnsError(
+            f"Не удалось настроить DNS-перехват Mihomo: {detail}",
+            code="mihomo_dns_capture_failed",
+            details={"command": args, "error": detail},
+        )
+
+
+def _router_lan_addresses() -> list[str]:
+    """Return IPv4 addresses on Keenetic LAN bridges (never WAN addresses)."""
+
+    last_error = "ip не найден"
+    for binary in IP_BINARIES:
+        try:
+            proc = subprocess.run(
+                [binary, "-4", "-o", "addr", "show", "scope", "global"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except FileNotFoundError:
+            continue
+        except Exception as exc:  # noqa: BLE001 - reported by the caller
+            last_error = str(exc)
+            continue
+        if proc.returncode != 0:
+            last_error = (proc.stderr or "").strip() or f"ip вернул код {proc.returncode}"
+            continue
+        found: list[str] = []
+        for raw in (proc.stdout or "").splitlines():
+            match = re.match(r"^\s*\d+:\s*(\S+)\s+inet\s+([0-9.]+)/", raw)
+            if not match:
+                continue
+            interface, address = match.groups()
+            # Keenetic exposes home/guest segments as Linux bridges (br0,
+            # br1, ...).  qmi_br*, ezcfg* and physical WAN interfaces must not
+            # be caught: only clients arriving from a LAN bridge should be
+            # returned to Mihomo.
+            if not interface.lower().startswith("br") or address.startswith("127."):
+                continue
+            if address not in found:
+                found.append(address)
+        return found
+    return []
+
+
+def _nat_chain_rules(text: str, chain: str) -> list[list[str]]:
+    """Parse ``iptables -S`` output for one chain, preserving rule order."""
+
+    found: list[list[str]] = []
+    for raw in str(text or "").splitlines():
+        try:
+            tokens = shlex.split(raw, comments=False, posix=True)
+        except ValueError:
+            continue
+        if len(tokens) >= 3 and tokens[0] in {"-A", "--append"} and tokens[1] == chain:
+            found.append(tokens[2:])
+    return found
+
+
+def _nat_chain_jumps(text: str, chain: str) -> list[int]:
+    """Return zero-based positions of jumps to ``chain`` in a nat chain."""
+
+    positions: list[int] = []
+    index = 0
+    for raw in str(text or "").splitlines():
+        try:
+            tokens = shlex.split(raw, comments=False, posix=True)
+        except ValueError:
+            continue
+        if len(tokens) < 3 or tokens[0] not in {"-A", "--append"}:
+            continue
+        if tokens[1] != "PREROUTING":
+            continue
+        if "-j" in tokens:
+            jump_index = tokens.index("-j")
+            if jump_index + 1 < len(tokens) and tokens[jump_index + 1] == chain:
+                positions.append(index)
+        index += 1
+    return positions
+
+
+def _mihomo_dns_capture_rules(addresses: list[str]) -> list[list[str]]:
+    """Rules that return LAN DNS requests to Mihomo's local port 53."""
+
+    rules: list[list[str]] = []
+    for address in addresses:
+        for protocol in ("udp", "tcp"):
+            rules.append([
+                "-d", f"{address}/32",
+                "-i", "br+",
+                "-p", protocol,
+                "-m", protocol,
+                "--dport", "53",
+                "-j", "REDIRECT",
+                "--to-ports", "53",
+            ])
+    return rules
+
+
+def _ensure_mihomo_dns_capture() -> dict[str, Any]:
+    """Put the panel-owned DNS return chain before Keenetic's policy chain."""
+
+    addresses = _router_lan_addresses()
+    if not addresses:
+        # Development installs and older non-Keenetic targets may not ship
+        # ``ip``.  The ordinary port-53 path still works there; leave the
+        # policy-capture part explicitly unconfigured instead of turning an
+        # otherwise valid Mihomo activation into a false rollback.  On a real
+        # Keenetic, however, missing LAN addresses mean the policy clients
+        # cannot be protected safely and activation must fail closed.
+        if _resolve_ndmc():
+            raise MihomoDnsError(
+                "Не удалось определить IPv4-адреса LAN для DNS Mihomo.",
+                code="mihomo_dns_capture_unavailable",
+            )
+        return {
+            "ok": False,
+            "changed": False,
+            "chain": MIHOMO_DNS_CAPTURE_CHAIN,
+            "addresses": [],
+            "error": "LAN-адреса не определены",
+        }
+    desired = _mihomo_dns_capture_rules(addresses)
+    changed = False
+
+    rc, chain_text, error = _iptables_nat(["-S", MIHOMO_DNS_CAPTURE_CHAIN])
+    if rc != 0:
+        if not ("No chain" in error or "does not exist" in error):
+            raise MihomoDnsError(
+                "Не удалось прочитать цепочку DNS Mihomo.",
+                code="mihomo_dns_capture_failed",
+                details=error,
+            )
+        _iptables_nat_must(["-N", MIHOMO_DNS_CAPTURE_CHAIN])
+        chain_text = ""
+        changed = True
+
+    if _nat_chain_rules(chain_text, MIHOMO_DNS_CAPTURE_CHAIN) != desired:
+        if _nat_chain_rules(chain_text, MIHOMO_DNS_CAPTURE_CHAIN):
+            _iptables_nat_must(["-F", MIHOMO_DNS_CAPTURE_CHAIN])
+        for rule in desired:
+            _iptables_nat_must(["-A", MIHOMO_DNS_CAPTURE_CHAIN, *rule])
+        changed = True
+
+    rc, parent_text, error = _iptables_nat(["-S", "PREROUTING"])
+    if rc != 0:
+        raise MihomoDnsError(
+            "Не удалось прочитать PREROUTING для DNS Mihomo.",
+            code="mihomo_dns_capture_failed",
+            details=error,
+        )
+    positions = _nat_chain_jumps(parent_text, MIHOMO_DNS_CAPTURE_CHAIN)
+    if positions != [0]:
+        for _ in positions:
+            _iptables_nat_must(["-D", "PREROUTING", "-j", MIHOMO_DNS_CAPTURE_CHAIN])
+        _iptables_nat_must(["-I", "PREROUTING", "1", "-j", MIHOMO_DNS_CAPTURE_CHAIN])
+        changed = True
+
+    _MIHOMO_DNS_CAPTURE_STATE["at"] = time.monotonic()
+    return {
+        "ok": True,
+        "changed": changed,
+        "chain": MIHOMO_DNS_CAPTURE_CHAIN,
+        "addresses": addresses,
+    }
+
+
+def _remove_mihomo_dns_capture() -> bool:
+    """Remove only the panel-owned chain and leave Keenetic chains intact."""
+
+    changed = False
+    rc, parent_text, error = _iptables_nat(["-S", "PREROUTING"])
+    if rc != 0:
+        if error and error != "iptables не найден" and "No chain" not in error and "does not exist" not in error:
+            raise MihomoDnsError(
+                "Не удалось прочитать PREROUTING для DNS Mihomo.",
+                code="mihomo_dns_capture_failed",
+                details=error,
+            )
+        parent_text = ""
+    for _ in _nat_chain_jumps(parent_text, MIHOMO_DNS_CAPTURE_CHAIN):
+        _iptables_nat_must(["-D", "PREROUTING", "-j", MIHOMO_DNS_CAPTURE_CHAIN])
+        changed = True
+
+    rc, _chain_text, error = _iptables_nat(["-S", MIHOMO_DNS_CAPTURE_CHAIN])
+    if rc == 0:
+        _iptables_nat_must(["-F", MIHOMO_DNS_CAPTURE_CHAIN])
+        _iptables_nat_must(["-X", MIHOMO_DNS_CAPTURE_CHAIN])
+        changed = True
+    elif error and error != "iptables не найден" and "No chain" not in error and "does not exist" not in error:
+        raise MihomoDnsError(
+            "Не удалось прочитать цепочку DNS Mihomo.",
+            code="mihomo_dns_capture_failed",
+            details=error,
+        )
+    _MIHOMO_DNS_CAPTURE_STATE.update({"active": False, "at": 0.0})
+    return changed
+
+
+def _remove_mihomo_dns_capture_best_effort(steps: list[str]) -> None:
+    try:
+        if _remove_mihomo_dns_capture():
+            steps.append("dns_capture_removed")
+    except Exception as exc:  # noqa: BLE001 - DNS recovery remains primary
+        steps.append(f"dns_capture_remove_failed:{exc}")
 
 
 def _iptables_rules(text: str) -> dict[str, list[list[str]]]:
@@ -2325,9 +2565,27 @@ def reconcile_keenetic_dns_filter() -> dict[str, Any]:
 
     stamp = _FILTER_RECONCILE_STATE.get("at")
     if stamp is not None and 0 <= time.monotonic() - stamp < FILTER_RECONCILE_INTERVAL:
-        return {"ok": True, "filter_engine": "recent"}
-    _disable_keenetic_dns_filter()
-    return {"ok": True, "filter_engine": "disabled"}
+        filter_state = "recent"
+    else:
+        _disable_keenetic_dns_filter()
+        filter_state = "disabled"
+
+    # Keenetic can rebuild _NDM_HOTSPOT_DNSREDIR when a policy or interface
+    # changes.  Re-install our first PREROUTING jump while Mihomo owns :53;
+    # otherwise only clients in the default policy would see Fake-IP.
+    if _MIHOMO_DNS_CAPTURE_STATE.get("active"):
+        capture_stamp = _MIHOMO_DNS_CAPTURE_STATE.get("at")
+        if capture_stamp is None or time.monotonic() - float(capture_stamp) >= MIHOMO_DNS_CAPTURE_INTERVAL:
+            try:
+                _ensure_mihomo_dns_capture()
+            except Exception:
+                # The DNS health probe remains authoritative.  A capture
+                # repair failure is deliberately non-fatal here; the next
+                # interval retries it and the panel can report the live chain.
+                pass
+    # Preserve the long-standing response shape consumed by the watchdog and
+    # older panel bundles.
+    return {"ok": True, "filter_engine": filter_state}
 
 
 def _port_53_in_use() -> bool:
@@ -2691,6 +2949,7 @@ def _release_current_dns(
                 "Системный DNS Keenetic не занял порт 53.",
                 code="firmware_dns_failed",
             )
+        _remove_mihomo_dns_capture()
         # The assistant also changes Keenetic's transit/provider DNS policy.
         # Restore those switches after the firmware has reclaimed :53 so a
         # soft release does not leave the router ignoring all WAN resolvers.
@@ -2720,6 +2979,11 @@ def _release_current_dns(
                 restart_xkeen(source="mihomo-dns-soft-release-rollback")
             except Exception as rollback_exc:  # noqa: BLE001
                 rollback_errors.append(str(rollback_exc))
+        try:
+            _MIHOMO_DNS_CAPTURE_STATE["active"] = True
+            _ensure_mihomo_dns_capture()
+        except Exception as rollback_exc:  # noqa: BLE001
+            rollback_errors.append(str(rollback_exc))
         if isinstance(exc, MihomoDnsError):
             if rollback_errors:
                 exc.details = {"cause": exc.details, "rollback": rollback_errors}
@@ -2731,6 +2995,7 @@ def _release_current_dns(
         ) from exc
 
     _clear_state(ui_state_dir, config_file)
+    _MIHOMO_DNS_CAPTURE_STATE.update({"active": False, "at": 0.0})
     released = {
         "released_at": int(time.time()),
         "source": "user",
@@ -2872,6 +3137,8 @@ def apply_action(
             saved = False
             override_changed = False
             dns_policy_changed = False
+            dns_capture_attempted = False
+            dns_capture_applied = False
             repair_applied = False
             try:
                 if repair_plan is not None:
@@ -2931,6 +3198,14 @@ def apply_action(
                             ),
                             details=applied_route,
                         )
+                # Policy-marked LAN clients are redirected by Keenetic's
+                # _NDM_HOTSPOT_DNSREDIR before they can reach port 53.  Put
+                # the panel chain first only after Mihomo is listening, so a
+                # failed install never leaves a redirect to an empty socket.
+                dns_capture_attempted = True
+                capture_result = _ensure_mihomo_dns_capture()
+                dns_capture_applied = bool(capture_result.get("ok"))
+                _MIHOMO_DNS_CAPTURE_STATE["active"] = dns_capture_applied
                 probe = _dns_probe()
                 if not probe.get("ok"):
                     raise MihomoDnsError(
@@ -2947,6 +3222,7 @@ def apply_action(
                     "applied_sha256": _sha256(prepared),
                     "original_dns_override": original_override,
                     "original_dns_policy": original_dns_policy,
+                    "dns_capture": dns_capture_applied,
                     "proxy_group": group,
                     "listen": DNS_LISTEN,
                     "mode": normalized_mode,
@@ -2997,6 +3273,11 @@ def apply_action(
                 }
             except Exception as exc:
                 rollback_errors: list[str] = []
+                if dns_capture_attempted:
+                    try:
+                        _remove_mihomo_dns_capture()
+                    except Exception as rollback_exc:
+                        rollback_errors.append(str(rollback_exc))
                 if saved:
                     try:
                         save_config(current)
@@ -3087,7 +3368,9 @@ def apply_action(
                     "Системный DNS Keenetic не вернул порт 53 после перезапуска Mihomo.",
                     code="recover_firmware_dns_failed",
                 )
+            _remove_mihomo_dns_capture()
             _clear_state(ui_state_dir, config_file)
+            _MIHOMO_DNS_CAPTURE_STATE.update({"active": False, "at": 0.0})
             _clear_release(ui_state_dir, config_file)
             return {
                 "ok": True,
@@ -3137,7 +3420,9 @@ def apply_action(
                 override_adjusted = True
             if not restore_override and not _wait_for_port_53(should_be_free=False):
                 raise MihomoDnsError("Системный DNS Keenetic не вернул порт 53.", code="firmware_dns_failed")
+            _remove_mihomo_dns_capture()
             _clear_state(ui_state_dir, config_file)
+            _MIHOMO_DNS_CAPTURE_STATE.update({"active": False, "at": 0.0})
             _clear_release(ui_state_dir, config_file)
             return {
                 "ok": True,
@@ -3155,6 +3440,8 @@ def apply_action(
                 _configure_keenetic_dns_for_mihomo(state.get("original_dns_policy"))
                 _set_dns_override(True)
                 restart_xkeen(source="mihomo-dns-rollback")
+                _MIHOMO_DNS_CAPTURE_STATE["active"] = True
+                _ensure_mihomo_dns_capture()
             except Exception:
                 pass
             if isinstance(exc, MihomoDnsError):
@@ -3184,23 +3471,32 @@ def is_enabled(*, config_file: str, ui_state_dir: str, max_age: Optional[float] 
     # Asking anyway would start an ndm session (two lines in the router log)
     # every 30 seconds on installs that do not use Mihomo DNS at all.
     if not state.get("enabled") and not listener_configured:
+        _MIHOMO_DNS_CAPTURE_STATE["active"] = False
         return False
     override, _detail = _dns_override_status(max_age=max_age)
     # A confirmed disabled switch means Keenetic already owns DNS; stale panel
     # state must not keep the guard active forever.  If ndmc is temporarily
     # unreadable, retain the transaction marker as the conservative fallback.
     if override is False:
+        _MIHOMO_DNS_CAPTURE_STATE["active"] = False
         return False
     if state.get("enabled"):
+        _MIHOMO_DNS_CAPTURE_STATE["active"] = True
         return True
     if override is not True:
+        _MIHOMO_DNS_CAPTURE_STATE["active"] = False
         return False
     # Without our transaction marker, a running Xray proves that this inactive
     # profile does not own port 53.  An empty result can instead mean Mihomo has
     # just crashed -- exactly when the guard must keep watching and give DNS
     # back -- so it remains eligible together with a running Mihomo.
     if detect_running_core() not in {"", "mihomo"}:
+        _MIHOMO_DNS_CAPTURE_STATE["active"] = False
         return False
+    # A user-authored Mihomo config is watched for port-53 safety, but the
+    # assistant must not install a firewall chain unless it owns the
+    # transaction (or an earlier assistant state explicitly requested it).
+    _MIHOMO_DNS_CAPTURE_STATE["active"] = bool(state.get("dns_capture"))
     return listener_configured
 
 
@@ -3292,6 +3588,7 @@ def emergency_release(
     # A guarded release must also undo the policy changes made by the wizard.
     # Keep this best-effort: returning port 53 to the firmware is the primary
     # safety property, while a failed policy replay is visible in the trace.
+    _remove_mihomo_dns_capture_best_effort(steps)
     _restore_keenetic_dns_policy_best_effort(state.get("original_dns_policy"), steps)
 
     released = {
@@ -3306,6 +3603,7 @@ def emergency_release(
         _clear_state(ui_state_dir, config_file)
     except Exception:
         pass
+    _MIHOMO_DNS_CAPTURE_STATE.update({"active": False, "at": 0.0})
     # Clearing the state is what makes the assistant look untouched again, so
     # the trace has to be written afterwards and separately: without it the
     # panel would show a plain "ready" and never tell the operator that the

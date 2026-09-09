@@ -453,6 +453,14 @@ def validate_config(new_content: Optional[str] = None) -> str:
     ensure_mihomo_layout()
 
     validate_cmd_tpl = os.environ.get("MIHOMO_VALIDATE_CMD")
+    # Older XKeen UI installations persisted only the Mihomo binary path
+    # (for example ``/opt/sbin/mihomo``) instead of the complete validation
+    # command.  Running that value without ``-t`` starts a second daemon and
+    # can block the wizard while the active Mihomo already owns its ports.
+    # Keep explicit templates untouched, but make a bare binary path behave
+    # like the installer default so upgrades remain transactional.
+    if validate_cmd_tpl and "{config}" not in validate_cmd_tpl:
+        validate_cmd_tpl = f"{validate_cmd_tpl.strip()} -t -d {{root}} -f {{config}}"
     root = MIHOMO_ROOT
     tmp_path: Optional[Path] = None
     try:
