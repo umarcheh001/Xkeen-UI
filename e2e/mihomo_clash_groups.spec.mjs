@@ -986,7 +986,7 @@ test('group delay probes unique nodes without group endpoint and reconciles the 
 });
 
 
-test('nested group card inherits the delay of its selected terminal proxy', async ({ page }) => {
+test('nested group card probes itself and falls back to its selected terminal proxy', async ({ page }) => {
   const data = groupsPayload();
   data.groups = [
     {
@@ -1024,7 +1024,7 @@ test('nested group card inherits the delay of its selected terminal proxy', asyn
       json: {
         ok: true,
         schema_version: 1,
-        results: [{ name: 'XXX Germany.98.1016', delay_ms: 205 }],
+        results: [{ name: body.name, delay_ms: 205 }],
       },
     });
   });
@@ -1052,7 +1052,7 @@ test('nested group card inherits the delay of its selected terminal proxy', asyn
   await expect(page.locator('#toast-container .toast')).toContainText('Успешно: 1');
   expect(requests).toEqual([
     { scope: 'proxy', name: 'XXX Germany.98.1016', preset: 'auto' },
-    { scope: 'proxy', name: 'XXX Germany.98.1016', preset: 'auto' },
+    { scope: 'proxy', name: 'Blocked services', preset: 'auto' },
   ]);
 });
 

@@ -255,6 +255,20 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
     assert "bottom: auto" in css
 
 
+def test_delay_queue_keeps_nested_group_targets_distinct_from_selected_children():
+    groups = _text(GROUPS)
+
+    # Zashboard probes Fallback/Fastest as nodes of the parent selector. The
+    # panel must not resolve those names to their current child before building
+    # the queue, otherwise a 21-node group is silently reduced to 19 requests.
+    assert "const providerCandidates = Array.isArray(node?.provider_candidates)" in groups
+    assert "name: String(node?.name || '')" in groups
+    assert "identity: latestDelayKey(node?.name, node?.provider)" in groups
+    assert "const directMeasured = delayHistories.get(directIdentity)" in groups
+    assert "if (directMeasured.length) return directMeasured;" in groups
+    assert "const history = delayHistoryForNode(node);" in groups
+
+
 def test_groups_start_collapsed_persist_lazy_picker_and_keep_actions_on_one_baseline():
     markup = _mihomo_markup()
     groups = _text(GROUPS)

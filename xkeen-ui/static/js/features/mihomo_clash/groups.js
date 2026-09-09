@@ -396,18 +396,33 @@ function normalizedDelayHistory(history) {
 }
 
 function delayHistoryForNode(node) {
+  // A nested group is a probeable node in its parent group. Prefer its own
+  // history so cards such as Fallback and Fastest do not inherit the latency
+  // of their currently selected child. The effective child remains a useful
+  // read-only fallback when the core has never recorded a measurement for the
+  // nested group itself.
+  const directIdentity = latestDelayKey(node?.name, node?.provider);
+  const directMeasured = delayHistories.get(directIdentity)
+    || normalizedDelayHistory(node?.delay_history);
+  if (directMeasured.length) return directMeasured;
+  if (Number.isFinite(node?.delay_ms) && Number(node.delay_ms) > 0) {
+    return [{ delay: Number(node.delay_ms), measuredAt: '' }];
+  }
+
   const effectiveNode = effectiveDelayNode(node);
-  const identity = latestDelayKey(effectiveNode?.name, effectiveNode?.provider);
-  const measured = delayHistories.get(identity) || normalizedDelayHistory(effectiveNode?.delay_history);
-  if (measured.length) return measured;
-  return Number.isFinite(effectiveNode?.delay_ms) && Number(effectiveNode.delay_ms) > 0
+  if (!effectiveNode || effectiveNode === node) return [];
+  const effectiveIdentity = latestDelayKey(effectiveNode.name, effectiveNode.provider);
+  const effectiveMeasured = delayHistories.get(effectiveIdentity)
+    || normalizedDelayHistory(effectiveNode.delay_history);
+  if (effectiveMeasured.length) return effectiveMeasured;
+  return Number.isFinite(effectiveNode.delay_ms) && Number(effectiveNode.delay_ms) > 0
     ? [{ delay: Number(effectiveNode.delay_ms), measuredAt: '' }]
     : [];
 }
 
 function latestNodeMeasurement(node) {
   const effectiveNode = effectiveDelayNode(node);
-  const history = delayHistoryForNode(effectiveNode);
+  const history = delayHistoryForNode(node);
   const latest = history[history.length - 1];
   if (!latest || !Number.isFinite(latest.delay)) return null;
   return {
@@ -593,7 +608,7 @@ function nodeDelayResult(group, node) {
 function nodeProbeStatus(group, node) {
   const result = nodeDelayResult(group, node);
   const effectiveNode = effectiveDelayNode(node);
-  const measurement = latestNodeMeasurement(effectiveNode);
+  const measurement = latestNodeMeasurement(node);
   const chainCopy = effectiveNode !== node && effectiveNode?.name
     ? ` Текущий узел цепочки: ${effectiveNode.name}.`
     : '';
@@ -1309,22 +1324,23 @@ async function unfixProxy(groupName) {
 }
 
 function delayTarget(groupName, node) {
-  const effectiveNode = effectiveDelayNode(node);
-  const providerCandidates = Array.isArray(effectiveNode?.provider_candidates)
-    ? effectiveNode.provider_candidates
+  const providerCandidates = Array.isArray(node?.provider_candidates)
+    ? node.provider_candidates
     : [];
   // Mihomo can omit provider-name when the same node is present in several
   // providers. Zashboard resolves that case to the first provider containing
   // the node and uses the provider-scoped healthcheck endpoint. Do the same
   // instead of falling back to /proxies/{name}/delay, where provider-only or
-  // same-name nodes can incorrectly appear unavailable.
-  const probeProvider = String(effectiveNode?.provider || providerCandidates[0] || '');
+  // same-name nodes can incorrectly appear unavailable. Keep the node itself
+  // as the probe target: if it is a nested group (Fallback/Fastest), probing
+  // the selected child would silently drop that card from the run.
+  const probeProvider = String(node?.provider || providerCandidates[0] || '');
   return {
     group: String(groupName || ''),
-    name: String(effectiveNode?.name || ''),
+    name: String(node?.name || ''),
     provider: probeProvider,
     key: delayKey(groupName, node?.name, node?.provider),
-    identity: latestDelayKey(effectiveNode?.name, effectiveNode?.provider),
+    identity: latestDelayKey(node?.name, node?.provider),
   };
 }
 
