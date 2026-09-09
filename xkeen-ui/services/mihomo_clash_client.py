@@ -298,7 +298,13 @@ class MihomoClashClient:
 
     @classmethod
     def _dns_name(cls, name: str) -> str:
-        value = str(name or "").strip().rstrip(".")
+        if not isinstance(name, str):
+            raise MihomoClashClientError(
+                "dns_name_invalid",
+                "The DNS query name is invalid.",
+                status=400,
+            )
+        value = name.strip().rstrip(".")
         if not value or len(value) > 253 or any(ord(char) < 32 or char.isspace() for char in value):
             raise MihomoClashClientError(
                 "dns_name_invalid",
@@ -334,7 +340,13 @@ class MihomoClashClient:
     def query_dns(self, name: str, qtype: str = "A") -> MihomoClashJSONResponse:
         """Query only a validated DNS name and one of four supported types."""
 
-        normalized_type = str(qtype or "A").strip().upper()
+        if not isinstance(qtype, str):
+            raise MihomoClashClientError(
+                "dns_type_invalid",
+                "Only A, AAAA, CNAME and TXT DNS queries are supported.",
+                status=400,
+            )
+        normalized_type = qtype.strip().upper()
         if normalized_type not in self._DNS_TYPES:
             raise MihomoClashClientError(
                 "dns_type_invalid",

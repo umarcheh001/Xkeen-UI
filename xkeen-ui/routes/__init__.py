@@ -48,6 +48,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     from .xray_subscriptions import create_xray_subscriptions_blueprint
     from .mihomo import create_mihomo_blueprint
     from .mihomo_clash import create_mihomo_clash_blueprint
+    from services.mihomo_clash_cache import get_shared_mihomo_clash_cache
     from .backups import create_backups_blueprint
     from .service import create_service_blueprint
     from .xray_logs import create_xray_logs_blueprint
@@ -128,6 +129,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
             mihomo_config_file=ctx.mihomo_config_file,
             mihomo_root=os.path.dirname(ctx.mihomo_config_file),
             audit_logger=ctx.append_restart_log,
+            cache=get_shared_mihomo_clash_cache(),
         )
     )
 

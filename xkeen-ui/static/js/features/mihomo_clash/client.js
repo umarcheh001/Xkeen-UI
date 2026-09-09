@@ -1,6 +1,9 @@
 import { getMihomoCoreHttpApi } from '../mihomo_runtime.js';
 
 const STATUS_ENDPOINT = '/api/mihomo/clash/status';
+const DNS_QUERY_ENDPOINT = '/api/mihomo/clash/dns/query';
+const DNS_FLUSH_ENDPOINT = '/api/mihomo/clash/dns/flush';
+const FAKE_IP_FLUSH_ENDPOINT = '/api/mihomo/clash/fake-ip/flush';
 const RUNTIME_MODE_ENDPOINT = '/api/mihomo/clash/runtime-mode';
 const GROUPS_ENDPOINT = '/api/mihomo/clash/proxy-groups';
 const EGRESS_INFO_ENDPOINT = '/api/mihomo/clash/egress-info';
@@ -49,6 +52,45 @@ export async function fetchMihomoClashStatus(options = {}) {
     signal: options && options.signal ? options.signal : undefined,
   };
   return requestJSON(STATUS_ENDPOINT, init);
+}
+
+export function queryMihomoClashDns(name, type = 'A', options = {}) {
+  const params = new URLSearchParams({
+    name: String(name || '').trim(),
+    type: String(type || 'A').toUpperCase(),
+  });
+  return requestJSON(`${DNS_QUERY_ENDPOINT}?${params.toString()}`, {
+    method: 'GET',
+    cache: 'no-store',
+    credentials: 'same-origin',
+    timeoutMs: 8000,
+    retry: 0,
+    signal: options.signal,
+  });
+}
+
+export function flushMihomoClashDnsCache(options = {}) {
+  return requestJSON(DNS_FLUSH_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirmed: true }),
+    credentials: 'same-origin',
+    timeoutMs: 8000,
+    retry: 0,
+    signal: options.signal,
+  });
+}
+
+export function flushMihomoClashFakeIpCache(options = {}) {
+  return requestJSON(FAKE_IP_FLUSH_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirmed: true }),
+    credentials: 'same-origin',
+    timeoutMs: 8000,
+    retry: 0,
+    signal: options.signal,
+  });
 }
 
 export function setMihomoClashRuntimeMode(mode, options = {}) {
@@ -283,6 +325,9 @@ export function applyMihomoClashMigration(transport, previewId, options = {}) {
 
 export const mihomoClashClientApi = Object.freeze({
   fetchStatus: fetchMihomoClashStatus,
+  queryDns: queryMihomoClashDns,
+  flushDnsCache: flushMihomoClashDnsCache,
+  flushFakeIpCache: flushMihomoClashFakeIpCache,
   setRuntimeMode: setMihomoClashRuntimeMode,
   fetchGroups: fetchMihomoClashGroups,
   selectProxy: selectMihomoClashProxy,

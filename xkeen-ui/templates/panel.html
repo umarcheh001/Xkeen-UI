@@ -1267,6 +1267,40 @@
             <button type="button" id="mihomo-clash-egress-setup" class="btn-secondary" data-mihomo-clash-action="egress-setup" hidden>{{ op_icon('tools') }}<span>Настроить автоматически</span></button>
           </div>
         </section>
+        <section id="mihomo-clash-dns-diagnostics" class="xk-mihomo-dns-diagnostics" aria-labelledby="mihomo-clash-dns-title" aria-busy="false">
+          <div class="xk-mihomo-dns-head">
+            <div>
+              <h3 id="mihomo-clash-dns-title">DNS diagnostics</h3>
+              <p>Read-only запрос через текущий DNS Mihomo. Обслуживание кэша запускается отдельно и не меняет конфигурацию.</p>
+            </div>
+            <span id="mihomo-clash-dns-state" class="xk-mihomo-dns-state" role="status" aria-live="polite">Ожидание</span>
+          </div>
+          <div class="xk-mihomo-dns-query-row">
+            <label for="mihomo-clash-dns-name">Имя</label>
+            <input id="mihomo-clash-dns-name" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="example.com" maxlength="253">
+            <label for="mihomo-clash-dns-type">Тип</label>
+            <select id="mihomo-clash-dns-type">
+              <option value="A">A</option>
+              <option value="AAAA">AAAA</option>
+              <option value="CNAME">CNAME</option>
+              <option value="TXT">TXT</option>
+            </select>
+            <button type="button" id="mihomo-clash-dns-query" class="btn-primary">{{ op_icon('search') }}<span>Проверить</span></button>
+          </div>
+          <div id="mihomo-clash-dns-result" class="xk-mihomo-dns-result" role="status" aria-live="polite">
+            Введите имя и запустите проверку.
+          </div>
+          <div class="xk-mihomo-dns-maintenance">
+            <div>
+              <strong>Обслуживание кэша</strong>
+              <span>Требует отдельного подтверждения. Автоматическое исправление DNS не выполняется.</span>
+            </div>
+            <div class="xk-mihomo-dns-maintenance-actions">
+              <button type="button" id="mihomo-clash-dns-flush" class="btn-secondary" disabled>{{ op_icon('clear') }}<span>Очистить DNS cache</span></button>
+              <button type="button" id="mihomo-clash-fake-ip-flush" class="btn-secondary" disabled>{{ op_icon('clear') }}<span>Очистить Fake-IP</span></button>
+            </div>
+          </div>
+        </section>
         <div id="mihomo-clash-groups" aria-busy="false">
           <div class="xk-mihomo-groups-toolbar" role="toolbar" aria-label="Управление группами Mihomo">
             <label class="xk-mihomo-groups-search" for="mihomo-clash-groups-filter">

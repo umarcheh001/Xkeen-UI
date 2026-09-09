@@ -397,6 +397,16 @@ def save_config(new_content: str) -> BackupInfo:
     backup_info = create_backup_for_active_profile()
     active_path = _active_profile_path()
     active_path.write_text(new_content, encoding="utf-8")
+    try:
+        from services.mihomo_clash_cache import invalidate_shared_mihomo_cache
+
+        invalidate_shared_mihomo_cache(
+            namespaces={"status", "groups", "providers", "rules", "yaml", "dns"}
+        )
+    except Exception:
+        # Cache invalidation is an optimization and must never make a
+        # successful config save fail on a minimal router installation.
+        pass
     return backup_info
 
 

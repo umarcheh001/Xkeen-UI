@@ -260,6 +260,16 @@ def restart_xkeen(
         dispatch_timeout=dispatch_timeout,
         settle_timeout=8.0,
     )
+    try:
+        from services.mihomo_clash_cache import invalidate_shared_mihomo_cache
+
+        invalidate_shared_mihomo_cache(
+            namespaces={"status", "groups", "providers", "rules", "yaml", "dns"}
+        )
+    except Exception:
+        # Restart/cache coordination is best-effort and must not alter the
+        # historical restart result contract.
+        pass
     duration_ms = max(0, int(round((time.monotonic() - started_at) * 1000)))
     append_restart_log(log_file, ok, source=source, duration_ms=duration_ms, **get_xkeen_runtime_status())
     return ok

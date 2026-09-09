@@ -33,6 +33,15 @@ from services.mihomo_clash_capabilities import (
     probe_non_mutating_capabilities,
 )
 from services.mihomo_clash_guard import MihomoClashActionGuard, MihomoClashActionRejected
+from services.mihomo_clash_cache import (
+    MihomoClashCache,
+    build_cache_key,
+)
+from services.mihomo_clash_dns import (
+    DNS_TYPES,
+    dns_error_payload,
+    normalize_dns_query,
+)
 from services.mihomo_rule_provider_inspector import (
     RuleProviderInspectorError,
     inspect_rule_provider,
@@ -64,6 +73,17 @@ AUTOMATIC_GROUP_TYPES = {"urltest", "fallback", "smart", "loadbalance", "load-ba
 MAX_PROXY_DETAIL_CONFIG_BYTES = 4 * 1024 * 1024
 AuditLogger = Callable[..., Any]
 ActionGuard = MihomoClashActionGuard
+Cache = MihomoClashCache
+DNS_QUERY_CACHE_TTL_SECONDS = 1.0
+# The status endpoint is also the controller health probe. Version is
+# single-flight only while the redacted config fragment uses the short
+# status/config TTL. This preserves fast failure detection without making
+# concurrent status requests duplicate the two upstream calls.
+STATUS_CACHE_TTL_SECONDS = 1.5
+GROUPS_CACHE_TTL_SECONDS = 1.0
+PROVIDERS_CACHE_TTL_SECONDS = 10.0
+RULES_CACHE_TTL_SECONDS = 10.0
+MAX_DNS_QUERY_NAME_CHARS = 253
 
 
 def _capabilities(
@@ -272,6 +292,144 @@ def _safe_client_error(exc: MihomoClashClientError):
         exc.status,
         ok=False,
         **exc.public_dict(),
+    )
+
+
+def _safe_version_payload(payload: Any) -> dict[str, Any]:
+    """Keep only version fields needed by capability/status decisions."""
+
+    if not isinstance(payload, Mapping):
+        return {}
+    result: dict[str, Any] = {}
+    version = payload.get("version")
+    if isinstance(version, (str, int, float)) and not isinstance(version, bool):
+        result["version"] = str(version)[:96]
+    if isinstance(payload.get("meta"), bool):
+        result["meta"] = payload["meta"]
+    return result
+
+
+def _safe_config_payload(payload: Any) -> dict[str, Any]:
+    """Redact controller config before it can enter the process cache."""
+
+    if not isinstance(payload, Mapping):
+        return {}
+    result: dict[str, Any] = {}
+    for key in ("mode", "log-level", "allow-lan", "ipv6"):
+        value = payload.get(key)
+        if isinstance(value, (str, int, float, bool)):
+            result[key] = value[:96] if isinstance(value, str) else value
+    tun = payload.get("tun")
+    if isinstance(tun, Mapping) and isinstance(tun.get("enable"), bool):
+        result["tun"] = {"enable": tun["enable"]}
+    dns = payload.get("dns")
+    if isinstance(dns, Mapping):
+        # Only the mode switch is useful to the diagnostics DTO. Resolver
+        # addresses, nameserver URLs and secrets never enter the cache.
+        safe_dns: dict[str, Any] = {}
+        for key in ("enable", "enhanced-mode", "enhanced_mode"):
+            value = dns.get(key)
+            if isinstance(value, (str, bool)):
+                safe_dns[key] = value[:96] if isinstance(value, str) else value
+        if safe_dns:
+            result["dns"] = safe_dns
+    return result
+
+
+def _safe_response_payload(operation: str, response: Any) -> dict[str, Any]:
+    payload = getattr(response, "payload", None)
+    if operation == "version":
+        return _safe_version_payload(payload)
+    if operation == "configs":
+        return _safe_config_payload(payload)
+    return payload if isinstance(payload, Mapping) else {}
+
+
+def _safe_response_snapshot(operation: str, response: Any) -> dict[str, Any]:
+    """Cache a redacted payload together with non-sensitive request metrics."""
+
+    return {
+        "payload": _safe_response_payload(operation, response),
+        "telemetry": {
+            "elapsed_ms": float(getattr(response, "elapsed_ms", 0.0) or 0.0),
+            "size_bytes": int(getattr(response, "size_bytes", 0) or 0),
+        },
+    }
+
+
+def _dns_request_values() -> tuple[str, str, Any]:
+    """Read a diagnostic query without accepting arbitrary upstream inputs."""
+
+    source: Mapping[str, Any]
+    if request.method == "POST":
+        source = request.get_json(silent=True) or {}
+        if not isinstance(source, Mapping):
+            source = {}
+    else:
+        source = request.args
+    raw_name = source.get("name")
+    raw_type = source.get("type", "A")
+    if not isinstance(raw_name, str) or not raw_name.strip():
+        raise MihomoClashClientError(
+            "dns_name_invalid",
+            "The DNS query name is invalid.",
+            status=400,
+        )
+    if len(raw_name.strip().rstrip(".")) > MAX_DNS_QUERY_NAME_CHARS:
+        raise MihomoClashClientError(
+            "dns_name_invalid",
+            "The DNS query name is invalid.",
+            status=400,
+        )
+    if not isinstance(raw_type, str) or raw_type.strip().upper() not in DNS_TYPES:
+        raise MihomoClashClientError(
+            "dns_type_invalid",
+            "Only A, AAAA, CNAME and TXT DNS queries are supported.",
+            status=400,
+        )
+    # Validate at the facade boundary as well as in the low-level client so
+    # test doubles and future adapters cannot turn this route into a generic
+    # resolver primitive.
+    normalized_name = MihomoClashClient._dns_name(raw_name)
+    return normalized_name, raw_type.strip().upper(), source
+
+
+def _dns_capability_state(client: Any, capability: str) -> tuple[bool, Any]:
+    """Resolve one optional DNS capability without executing mutations."""
+
+    version_response = client.request_json("version")
+    version_payload = getattr(version_response, "payload", None)
+    values, details = build_capability_state(
+        version_payload,
+        status_ready=True,
+        ws_runtime=_ws_runtime_available(),
+        env=os.environ,
+        runtime_probe={},
+    )
+    item = details.get(capability, {})
+    # An explicit DNS query is itself the bounded runtime check. Avoid sending
+    # a second synthetic query for ``example.invalid`` immediately before the
+    # user's query. Mutating cache flushes remain statically gated and never
+    # use a mutation as a capability probe.
+    if capability == "dns_query":
+        supported = bool(
+            item.get("enabled") is True
+            and item.get("static_supported") is not False
+        )
+    else:
+        supported = values.get(capability) is True
+    return supported, item
+
+
+def _dns_not_supported(capability: str, details: Mapping[str, Any] | None = None):
+    return error_response(
+        "Эта возможность DNS не поддерживается или отключена для текущего Mihomo.",
+        501,
+        ok=False,
+        code="not_supported",
+        capability=str(capability),
+        reason=str((details or {}).get("reason") or "capability_unavailable")[:64],
+        retryable=False,
     )
 
 
@@ -592,12 +750,17 @@ def create_mihomo_clash_blueprint(
     client_factory: ClientFactory = MihomoClashClient,
     audit_logger: AuditLogger | None = None,
     action_guard: ActionGuard | None = None,
+    cache: Cache | None = None,
     device_map_factory: DeviceMapFactory = get_mihomo_clash_device_map,
     egress_info_factory: EgressInfoFactory = get_mihomo_egress_info,
 ) -> Blueprint:
     bp = Blueprint("mihomo_clash", __name__)
     root = str(mihomo_root or Path(mihomo_config_file).parent)
     guard = action_guard or MihomoClashActionGuard()
+    # A standalone blueprint (including unit-test fixtures) gets an isolated
+    # cache. The production app passes the process-wide shared instance below
+    # so config/runtime mutations can invalidate every Mihomo facade route.
+    snapshot_cache = cache or MihomoClashCache()
 
     def _client_or_response():
         discovery = discovery_factory(mihomo_config_file, root)
@@ -610,6 +773,27 @@ def create_mihomo_clash_blueprint(
                 retryable=False,
             )
         return client_factory(discovery.target), None
+
+    def _cache_key(namespace: str, discovery: MihomoClashDiscovery, variant: str = ""):
+        return build_cache_key(
+            namespace,
+            target=discovery.target,
+            config_path=mihomo_config_file,
+            variant=variant,
+        )
+
+    def _cached_yaml_transport_index(discovery: MihomoClashDiscovery) -> dict[str, Any]:
+        key = _cache_key("yaml", discovery, "proxy-transport")
+        return snapshot_cache.get_or_set(
+            key,
+            lambda: _load_proxy_transport_index(mihomo_config_file, root),
+            ttl_seconds=None,
+        )
+
+    def _invalidate_snapshots(*namespaces: str) -> None:
+        snapshot_cache.invalidate(
+            namespaces=set(namespaces) if namespaces else None,
+        )
 
     def _audit_action(action: str, ok: bool, **metadata: Any) -> None:
         if audit_logger is None:
@@ -626,6 +810,9 @@ def create_mihomo_clash_blueprint(
                 "mode",
                 "previous_mode",
                 "timeout_ms",
+                "qtype",
+                "dns_name",
+                "cache_kind",
             }
             and isinstance(value, (str, int, bool))
         }
@@ -699,6 +886,255 @@ def create_mihomo_clash_blueprint(
             }
         ), 200
 
+    @bp.route(
+        "/api/mihomo/clash/dns/query",
+        methods=("GET", "POST"),
+    )
+    def api_mihomo_clash_dns_query():
+        """Run one bounded, allow-listed DNS diagnostic query."""
+
+        try:
+            name, qtype, _source = _dns_request_values()
+        except MihomoClashClientError as exc:
+            return error_response(
+                "Некорректный DNS-запрос.",
+                exc.status,
+                ok=False,
+                code=exc.code,
+                retryable=False,
+            )
+
+        lease, rejected_response = _acquire_action("dns-query")
+        if rejected_response:
+            return rejected_response
+        discovery = discovery_factory(mihomo_config_file, root)
+        if discovery.target is None:
+            lease.release()
+            return error_response(
+                "Mihomo controller не настроен или заблокирован.",
+                503,
+                ok=False,
+                code="mihomo_clash_target_unavailable",
+                retryable=False,
+            )
+        client = client_factory(discovery.target)
+        try:
+            supported, details = _dns_capability_state(client, "dns_query")
+            if not supported:
+                return _dns_not_supported("dns_query", details)
+
+            cache_key = _cache_key(
+                "dns",
+                discovery,
+                f"{name.strip().rstrip('.').casefold()}|{qtype}",
+            )
+
+            def load_query() -> dict[str, Any]:
+                result = client.query_dns(name, qtype)
+                config_payload: Mapping[str, Any] = {}
+                try:
+                    config_result = client.request_json("configs")
+                    config_payload = _safe_config_payload(
+                        getattr(config_result, "payload", None)
+                    )
+                except Exception:
+                    # DNS remains useful when a compatible core exposes
+                    # /dns/query but not the optional /configs shape.
+                    config_payload = {}
+                return normalize_dns_query(
+                    getattr(result, "payload", None),
+                    name=name.strip().rstrip("."),
+                    qtype=qtype,
+                    latency_ms=float(getattr(result, "elapsed_ms", 0.0) or 0.0),
+                    config_payload=config_payload,
+                )
+
+            lookup = snapshot_cache.fetch(
+                cache_key,
+                load_query,
+                ttl_seconds=DNS_QUERY_CACHE_TTL_SECONDS,
+            )
+            payload = dict(lookup.value or {})
+            payload["cached"] = bool(lookup.hit)
+            payload["cache"] = {
+                "hit": bool(lookup.hit),
+                "waited": bool(lookup.waited),
+            }
+            return jsonify(payload), 200
+        except MihomoClashClientError as exc:
+            if exc.code == "endpoint_not_supported":
+                return _dns_not_supported("dns_query", {"reason": "upstream_unsupported"})
+            return jsonify(
+                dns_error_payload(
+                    name=name,
+                    qtype=qtype,
+                    reason=exc.code,
+                )
+            ), exc.status
+        except Exception:
+            return jsonify(
+                dns_error_payload(
+                    name=name,
+                    qtype=qtype,
+                    reason="upstream_error",
+                )
+            ), 502
+        finally:
+            lease.release()
+
+    def _flush_dns_cache(kind: str):
+        """Confirm, guard, execute and audit one cache maintenance action."""
+
+        capability = "dns_flush" if kind == "dns" else "fake_ip_flush"
+        action = "dns-flush" if kind == "dns" else "fake-ip-flush"
+        try:
+            body = _read_action_body() or {}
+        except PayloadTooLargeError:
+            _audit_action(action, False, error_code="payload_too_large", cache_kind=kind)
+            return error_response(
+                "Тело запроса слишком большое.",
+                413,
+                ok=False,
+                code="payload_too_large",
+            )
+        if body.get("confirmed") is not True:
+            _audit_action(action, False, error_code="confirmation_required", cache_kind=kind)
+            return error_response(
+                "Для очистки кэша требуется явное подтверждение.",
+                400,
+                ok=False,
+                code="confirmation_required",
+            )
+
+        lease, rejected_response = _acquire_action(action)
+        if rejected_response:
+            _audit_action(action, False, error_code="guard_rejected", cache_kind=kind)
+            return rejected_response
+        client, unavailable = _client_or_response()
+        if unavailable:
+            lease.release()
+            _audit_action(action, False, error_code="target_unavailable", cache_kind=kind)
+            return unavailable
+        try:
+            supported, details = _dns_capability_state(client, capability)
+            if not supported:
+                _audit_action(action, False, error_code="not_supported", cache_kind=kind)
+                return _dns_not_supported(capability, details)
+            if kind == "dns":
+                result = client.flush_dns_cache()
+            else:
+                result = client.flush_fake_ip_cache()
+        except MihomoClashClientError as exc:
+            _audit_action(action, False, error_code=exc.code, cache_kind=kind)
+            if exc.code == "endpoint_not_supported":
+                return _dns_not_supported(capability, {"reason": "upstream_unsupported"})
+            return _safe_client_error(exc)
+        except Exception:
+            _audit_action(action, False, error_code="internal_error", cache_kind=kind)
+            return error_response(
+                "Не удалось очистить кэш Mihomo.",
+                502,
+                ok=False,
+                code="mihomo_dns_flush_failed",
+                retryable=True,
+            )
+        finally:
+            lease.release()
+
+        snapshot_cache.invalidate(namespaces={"dns"})
+        _audit_action(action, True, cache_kind=kind)
+        return jsonify(
+            {
+                "ok": True,
+                "schema_version": 1,
+                "cache": kind,
+                "flushed": True,
+                "upstream_status": int(getattr(result, "status", 204) or 204),
+            }
+        ), 200
+
+    @bp.post("/api/mihomo/clash/dns/flush")
+    def api_mihomo_clash_dns_flush():
+        return _flush_dns_cache("dns")
+
+    @bp.post("/api/mihomo/clash/fake-ip/flush")
+    def api_mihomo_clash_fake_ip_flush():
+        return _flush_dns_cache("fake-ip")
+
+    @bp.get("/api/mihomo/clash/dns/cache")
+    def api_mihomo_clash_dns_cache_search():
+        """Expose cache search only when an explicit client adapter exists."""
+
+        client, unavailable = _client_or_response()
+        if unavailable:
+            return unavailable
+        query = str(request.args.get("q") or "").strip()
+        search = getattr(client, "search_dns_cache", None)
+        if not callable(search):
+            return _dns_not_supported("dns_cache_search", {"reason": "api_unavailable"})
+        try:
+            result = search(query)
+        except MihomoClashClientError as exc:
+            return _safe_client_error(exc)
+        except Exception:
+            return error_response(
+                "Не удалось прочитать DNS cache Mihomo.",
+                502,
+                ok=False,
+                code="mihomo_dns_cache_failed",
+                retryable=True,
+            )
+        return jsonify(
+            {
+                "ok": True,
+                "schema_version": 1,
+                "cache": "dns",
+                "query": query[:128],
+                "entries": list(getattr(result, "payload", []) or [])[:256],
+            }
+        ), 200
+
+    @bp.get("/api/mihomo/clash/fake-ip/cache")
+    def api_mihomo_clash_fake_ip_cache_search():
+        client, unavailable = _client_or_response()
+        if unavailable:
+            return unavailable
+        query = str(request.args.get("q") or "").strip()
+        search = getattr(client, "search_fake_ip_cache", None)
+        if not callable(search):
+            return _dns_not_supported("fake_ip_cache_search", {"reason": "api_unavailable"})
+        try:
+            result = search(query)
+        except MihomoClashClientError as exc:
+            return _safe_client_error(exc)
+        except Exception:
+            return error_response(
+                "Не удалось прочитать Fake-IP cache Mihomo.",
+                502,
+                ok=False,
+                code="mihomo_fake_ip_cache_failed",
+                retryable=True,
+            )
+        return jsonify(
+            {
+                "ok": True,
+                "schema_version": 1,
+                "cache": "fake-ip",
+                "query": query[:128],
+                "entries": list(getattr(result, "payload", []) or [])[:256],
+            }
+        ), 200
+
+    @bp.get("/api/mihomo/clash/cache")
+    def api_mihomo_clash_cache_stats():
+        return jsonify(
+            {
+                "ok": True,
+                "schema_version": 1,
+                "cache": snapshot_cache.stats(),
+            }
+        ), 200
+
     @bp.get("/api/mihomo/clash/status")
     def api_mihomo_clash_status():
         discovery = discovery_factory(mihomo_config_file, root)
@@ -725,8 +1161,36 @@ def create_mihomo_clash_blueprint(
 
         client = client_factory(discovery.target)
         try:
-            version = client.request_json("version")
-            configs = client.request_json("configs")
+            version_lookup = snapshot_cache.fetch(
+                _cache_key("status", discovery, "version"),
+                lambda: _safe_response_snapshot(
+                    "version", client.request_json("version")
+                ),
+                ttl_seconds=0.0,
+            )
+            config_lookup = snapshot_cache.fetch(
+                _cache_key("config", discovery, "runtime"),
+                lambda: _safe_response_snapshot(
+                    "configs", client.request_json("configs")
+                ),
+                ttl_seconds=STATUS_CACHE_TTL_SECONDS,
+            )
+            status_inputs = {
+                "version": (version_lookup.value or {}).get("payload", {}),
+                "configs": (config_lookup.value or {}).get("payload", {}),
+                "telemetry": {
+                    "version": (version_lookup.value or {}).get("telemetry", {}),
+                    "configs": (config_lookup.value or {}).get("telemetry", {}),
+                    "cache": {
+                        "version_hit": bool(version_lookup.hit),
+                        "version_waited": bool(version_lookup.waited),
+                        "config_hit": bool(config_lookup.hit),
+                        "config_waited": bool(config_lookup.waited),
+                    },
+                },
+            }
+            version_payload = status_inputs.get("version", {})
+            config_payload = status_inputs.get("configs", {})
         except MihomoClashClientError as exc:
             state = "error"
             if exc.code == "api_unauthorized":
@@ -769,23 +1233,18 @@ def create_mihomo_clash_blueprint(
             runtime_probe = probe_non_mutating_capabilities(client)
 
         status_payload = _status_payload(
-                discovery,
-                state="ready",
-                version_payload=version.payload,
-                config_payload=configs.payload,
-                status_capability=True,
-                runtime_probe=runtime_probe,
-                telemetry={
-                    "version": {
-                        "elapsed_ms": version.elapsed_ms,
-                        "size_bytes": version.size_bytes,
-                    },
-                    "configs": {
-                        "elapsed_ms": configs.elapsed_ms,
-                        "size_bytes": configs.size_bytes,
-                    },
-                },
-            )
+            discovery,
+            state="ready",
+            version_payload=version_payload,
+            config_payload=config_payload,
+            status_capability=True,
+            runtime_probe=runtime_probe,
+            telemetry={
+                "version": status_inputs.get("telemetry", {}).get("version", {}),
+                "configs": status_inputs.get("telemetry", {}).get("configs", {}),
+                "cache": snapshot_cache.stats(),
+            },
+        )
         return jsonify(
             build_mihomo_clash_snapshot_envelope(
                 status_payload,
@@ -919,6 +1378,8 @@ def create_mihomo_clash_blueprint(
         finally:
             lease.release()
 
+        if previous_mode != current_mode:
+            _invalidate_snapshots("status", "config", "groups", "providers", "rules")
         reconciled = current_mode == mode
         _audit_action(
             "runtime-mode",
@@ -944,24 +1405,52 @@ def create_mihomo_clash_blueprint(
         client, unavailable = _client_or_response()
         if unavailable:
             return unavailable
+        discovery = discovery_factory(mihomo_config_file, root)
+        if discovery.target is None:
+            return error_response(
+                "Mihomo controller не настроен или заблокирован.",
+                503,
+                ok=False,
+                code="mihomo_clash_target_unavailable",
+                retryable=False,
+            )
         try:
-            # These are independent read-only snapshots. Use separate clients
-            # so TCP/Unix connections are never shared across worker threads.
-            discovery = discovery_factory(mihomo_config_file, root)
-            if discovery.target is None:
-                return error_response(
-                    "Mihomo controller не настроен или заблокирован.",
-                    503,
-                    ok=False,
-                    code="mihomo_clash_target_unavailable",
-                    retryable=False,
+            def load_groups() -> dict[str, Any]:
+                # These are independent read-only snapshots. Use separate
+                # clients so TCP/Unix connections are never shared across
+                # worker threads.
+                with ThreadPoolExecutor(
+                    max_workers=2, thread_name_prefix="mihomo-groups"
+                ) as executor:
+                    proxies_future = executor.submit(client.request_json, "proxies")
+                    providers_client = client_factory(discovery.target)
+                    providers_future = executor.submit(
+                        providers_client.request_json, "providers_proxies"
+                    )
+                    proxies = proxies_future.result()
+                    providers = providers_future.result()
+                payload = build_mihomo_clash_proxy_groups_dto(
+                    proxies.payload,
+                    providers.payload,
+                    _cached_yaml_transport_index(discovery),
                 )
-            with ThreadPoolExecutor(max_workers=2, thread_name_prefix="mihomo-groups") as executor:
-                proxies_future = executor.submit(client.request_json, "proxies")
-                providers_client = client_factory(discovery.target)
-                providers_future = executor.submit(providers_client.request_json, "providers_proxies")
-                proxies = proxies_future.result()
-                providers = providers_future.result()
+                payload["telemetry"] = {
+                    "proxies": {
+                        "elapsed_ms": proxies.elapsed_ms,
+                        "size_bytes": proxies.size_bytes,
+                    },
+                    "providers": {
+                        "elapsed_ms": providers.elapsed_ms,
+                        "size_bytes": providers.size_bytes,
+                    },
+                }
+                return payload
+
+            lookup = snapshot_cache.fetch(
+                _cache_key("groups", discovery, "proxy-groups"),
+                load_groups,
+                ttl_seconds=GROUPS_CACHE_TTL_SECONDS,
+            )
         except MihomoClashClientError as exc:
             return _safe_client_error(exc)
         except Exception:
@@ -972,8 +1461,7 @@ def create_mihomo_clash_blueprint(
                 code="mihomo_clash_proxy_groups_failed",
             )
 
-        details = _load_proxy_transport_index(mihomo_config_file, root)
-        payload = build_mihomo_clash_proxy_groups_dto(proxies.payload, providers.payload, details)
+        payload = dict(lookup.value or {})
         payload["ok"] = True
         payload["capabilities"] = _capabilities(
             status=True,
@@ -981,9 +1469,9 @@ def create_mihomo_clash_blueprint(
             proxy_select=True,
             proxy_delay=True,
         )
-        payload["telemetry"] = {
-            "proxies": {"elapsed_ms": proxies.elapsed_ms, "size_bytes": proxies.size_bytes},
-            "providers": {"elapsed_ms": providers.elapsed_ms, "size_bytes": providers.size_bytes},
+        payload["telemetry"]["cache"] = {
+            "hit": bool(lookup.hit),
+            "waited": bool(lookup.waited),
         }
         return jsonify(
             build_mihomo_clash_snapshot_envelope(
@@ -999,8 +1487,24 @@ def create_mihomo_clash_blueprint(
         client, unavailable = _client_or_response()
         if unavailable:
             return unavailable
+        discovery = discovery_factory(mihomo_config_file, root)
+        if discovery.target is None:
+            return unavailable
         try:
-            result = client.request_json("rules")
+            def load_rules() -> dict[str, Any]:
+                result = client.request_json("rules")
+                payload = build_mihomo_clash_rules_dto(result.payload)
+                payload["telemetry"] = {
+                    "elapsed_ms": result.elapsed_ms,
+                    "size_bytes": result.size_bytes,
+                }
+                return payload
+
+            lookup = snapshot_cache.fetch(
+                _cache_key("rules", discovery, "rules"),
+                load_rules,
+                ttl_seconds=RULES_CACHE_TTL_SECONDS,
+            )
         except MihomoClashClientError as exc:
             return _safe_client_error(exc)
         except Exception:
@@ -1010,12 +1514,12 @@ def create_mihomo_clash_blueprint(
                 ok=False,
                 code="mihomo_clash_rules_failed",
             )
-        payload = build_mihomo_clash_rules_dto(result.payload)
+        payload = dict(lookup.value or {})
         payload["ok"] = True
         payload["capabilities"] = _capabilities(status=True, rules=True)
-        payload["telemetry"] = {
-            "elapsed_ms": result.elapsed_ms,
-            "size_bytes": result.size_bytes,
+        payload["telemetry"]["cache"] = {
+            "hit": bool(lookup.hit),
+            "waited": bool(lookup.waited),
         }
         return jsonify(
             build_mihomo_clash_snapshot_envelope(
@@ -1031,9 +1535,34 @@ def create_mihomo_clash_blueprint(
         client, unavailable = _client_or_response()
         if unavailable:
             return unavailable
+        discovery = discovery_factory(mihomo_config_file, root)
+        if discovery.target is None:
+            return unavailable
         try:
-            proxy_result = client.request_json("providers_proxies")
-            rule_result = client.request_json("providers_rules")
+            def load_providers() -> dict[str, Any]:
+                proxy_result = client.request_json("providers_proxies")
+                rule_result = client.request_json("providers_rules")
+                payload = build_mihomo_clash_providers_dto(
+                    proxy_result.payload,
+                    rule_result.payload,
+                )
+                payload["telemetry"] = {
+                    "proxy": {
+                        "elapsed_ms": proxy_result.elapsed_ms,
+                        "size_bytes": proxy_result.size_bytes,
+                    },
+                    "rule": {
+                        "elapsed_ms": rule_result.elapsed_ms,
+                        "size_bytes": rule_result.size_bytes,
+                    },
+                }
+                return payload
+
+            lookup = snapshot_cache.fetch(
+                _cache_key("providers", discovery, "providers"),
+                load_providers,
+                ttl_seconds=PROVIDERS_CACHE_TTL_SECONDS,
+            )
         except MihomoClashClientError as exc:
             return _safe_client_error(exc)
         except Exception:
@@ -1043,10 +1572,7 @@ def create_mihomo_clash_blueprint(
                 ok=False,
                 code="mihomo_clash_providers_failed",
             )
-        payload = build_mihomo_clash_providers_dto(
-            proxy_result.payload,
-            rule_result.payload,
-        )
+        payload = dict(lookup.value or {})
         payload["ok"] = True
         payload["capabilities"] = _capabilities(
             status=True,
@@ -1054,15 +1580,9 @@ def create_mihomo_clash_blueprint(
             provider_update=True,
             provider_healthcheck=True,
         )
-        payload["telemetry"] = {
-            "proxy": {
-                "elapsed_ms": proxy_result.elapsed_ms,
-                "size_bytes": proxy_result.size_bytes,
-            },
-            "rule": {
-                "elapsed_ms": rule_result.elapsed_ms,
-                "size_bytes": rule_result.size_bytes,
-            },
+        payload["telemetry"]["cache"] = {
+            "hit": bool(lookup.hit),
+            "waited": bool(lookup.waited),
         }
         return jsonify(
             build_mihomo_clash_snapshot_envelope(
@@ -1163,6 +1683,7 @@ def create_mihomo_clash_blueprint(
             )
         finally:
             lease.release()
+        _invalidate_snapshots("providers", "groups", "rules")
         _audit_action("provider-update", True, provider_kind=provider_kind)
         return jsonify(
             {"ok": True, "schema_version": 1, "updated": True, "kind": provider_kind}
@@ -1217,6 +1738,7 @@ def create_mihomo_clash_blueprint(
             )
         finally:
             lease.release()
+        _invalidate_snapshots("providers", "groups", "rules")
         _audit_action("provider-healthcheck", True)
         return jsonify(
             {"ok": True, "schema_version": 1, "healthcheck_started": True}
@@ -1354,9 +1876,10 @@ def create_mihomo_clash_blueprint(
         groups_payload = build_mihomo_clash_proxy_groups_dto(
             refreshed.payload,
             refreshed_providers.payload,
-            _load_proxy_transport_index(mihomo_config_file, root),
+            _cached_yaml_transport_index(discovery_factory(mihomo_config_file, root)),
         )
         current = _proxy_group_from_dto(groups_payload, group)
+        _invalidate_snapshots("groups", "providers")
         _audit_action("proxy-select", True, group=group)
         return jsonify(
             {
@@ -1441,9 +1964,10 @@ def create_mihomo_clash_blueprint(
         groups_after = build_mihomo_clash_proxy_groups_dto(
             refreshed.payload,
             refreshed_providers.payload,
-            _load_proxy_transport_index(mihomo_config_file, root),
+            _cached_yaml_transport_index(discovery_factory(mihomo_config_file, root)),
         ).get("groups", [])
         current = next((item for item in groups_after if item.get("name") == group), None)
+        _invalidate_snapshots("groups", "providers")
         _audit_action("proxy-unfix", True, group=group)
         return jsonify({
             "ok": True,

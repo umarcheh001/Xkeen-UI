@@ -10,15 +10,14 @@ optional traffic stream have independent cadences and failures.
 from __future__ import annotations
 
 import copy
-import hashlib
 import queue
 import threading
 import time
 from collections import deque
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from services.mihomo_clash_cache import target_fingerprint
 from services.mihomo_clash_client import MihomoClashClient, MihomoClashClientError
 from services.mihomo_clash_capabilities import parse_mihomo_version
 from services.mihomo_clash_dto import build_mihomo_clash_connections_dto
@@ -41,18 +40,7 @@ IDLE_STOP_SECONDS = 4.0
 def mihomo_target_fingerprint(target: MihomoClashTarget) -> str:
     """Return a stable, secret-free key for one discovered controller target."""
 
-    socket_path = getattr(target, "socket_path", None)
-    parts = (
-        str(getattr(target, "transport", "")),
-        str(getattr(target, "port", "") or ""),
-        str(getattr(target, "loopback_host", "") or ""),
-        str(Path(socket_path).resolve()) if socket_path else "",
-        # Credential changes must not reuse a poller authenticated with the
-        # previous secret. The value is only input to SHA-256 and is never
-        # stored in the public fingerprint or emitted in telemetry.
-        str(getattr(target, "secret", "") or ""),
-    )
-    return hashlib.sha256("|".join(parts).encode("utf-8", "replace")).hexdigest()[:32]
+    return target_fingerprint(target)
 
 
 class TelemetrySubscriptionClosed(RuntimeError):
