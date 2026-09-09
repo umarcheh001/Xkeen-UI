@@ -1189,6 +1189,9 @@
       <button type="button" id="mihomo-clash-egress-toggle" class="btn-secondary xk-mihomo-panel-switch xk-mihomo-egress-toggle" data-mihomo-clash-action="egress-toggle" aria-controls="mihomo-clash-egress" aria-expanded="false" aria-pressed="false" data-tooltip="Показать сведения о публичном IP через Mihomo" hidden>
         {{ op_icon('preview') }}<span>IP выхода</span>
       </button>
+      <button type="button" id="mihomo-clash-dns-toggle" class="btn-secondary xk-mihomo-panel-switch xk-mihomo-dns-toggle" data-mihomo-clash-action="dns-toggle" aria-controls="mihomo-clash-dns-diagnostics" aria-expanded="false" aria-pressed="false" data-tooltip="Показать диагностику DNS через Mihomo" hidden>
+        {{ op_icon('dns') }}<span>DNS</span>
+      </button>
     </div>
 
     <div id="mihomo-clash-security-warning" class="xk-mihomo-security-warning" role="alert" hidden>
@@ -1267,7 +1270,7 @@
             <button type="button" id="mihomo-clash-egress-setup" class="btn-secondary" data-mihomo-clash-action="egress-setup" hidden>{{ op_icon('tools') }}<span>Настроить автоматически</span></button>
           </div>
         </section>
-        <section id="mihomo-clash-dns-diagnostics" class="xk-mihomo-dns-diagnostics" aria-labelledby="mihomo-clash-dns-title" aria-busy="false">
+        <section id="mihomo-clash-dns-diagnostics" class="xk-mihomo-dns-diagnostics" aria-labelledby="mihomo-clash-dns-title" aria-busy="false" hidden>
           <div class="xk-mihomo-dns-head">
             <div>
               <h3 id="mihomo-clash-dns-title">DNS diagnostics</h3>

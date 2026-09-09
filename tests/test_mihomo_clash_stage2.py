@@ -245,3 +245,22 @@ def test_dns_cache_search_is_honestly_not_supported():
     )
     assert response.status_code == 501
     assert response.get_json()["code"] == "not_supported"
+
+
+def test_dns_diagnostics_ui_has_inline_actions_and_visibility_toggle():
+    from pathlib import Path
+
+    root = Path(__file__).parents[1]
+    template = (root / "xkeen-ui" / "templates" / "panel.html").read_text(encoding="utf-8")
+    styles = (root / "xkeen-ui" / "static" / "panel-operator.css").read_text(encoding="utf-8")
+    script = (root / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "dns.js").read_text(encoding="utf-8")
+
+    assert 'id="mihomo-clash-dns-toggle"' in template
+    assert 'aria-controls="mihomo-clash-dns-diagnostics"' in template
+    assert 'id="mihomo-clash-dns-diagnostics" class="xk-mihomo-dns-diagnostics"' in template
+    assert 'aria-busy="false" hidden' in template
+    assert '.xk-mihomo-dns-query-row > button' in styles
+    assert '.xk-mihomo-dns-maintenance-actions > button' in styles
+    assert 'display: inline-flex !important;' in styles
+    assert "xkeen:mihomo-clash-dns-visible" in script
+    assert "applyVisibility(!expanded, { persist: true })" in script

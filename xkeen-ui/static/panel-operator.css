@@ -6663,6 +6663,8 @@ body.panel-page .xk-mihomo-dns-diagnostics {
   background: var(--op-surface);
 }
 
+body.panel-page .xk-mihomo-dns-diagnostics[hidden] { display: none !important; }
+
 body.panel-page .xk-mihomo-dns-head,
 body.panel-page .xk-mihomo-dns-maintenance {
   display: flex;
@@ -6776,6 +6778,27 @@ body.panel-page .xk-mihomo-dns-maintenance-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+}
+
+/* Keep the glyph and label on the same baseline.  The shared operator icon
+ * contract intentionally uses display:block, which is correct for standalone
+ * glyphs but makes an unstyled text button stack its label below the icon. */
+body.panel-page .xk-mihomo-dns-query-row > button,
+body.panel-page .xk-mihomo-dns-maintenance-actions > button {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+body.panel-page .xk-mihomo-dns-query-row > button .xk-action-icon,
+body.panel-page .xk-mihomo-dns-maintenance-actions > button .xk-action-icon {
+  flex: 0 0 auto;
+}
+
+body.panel-page .xk-mihomo-dns-maintenance-actions > button {
+  min-width: max-content;
 }
 
 body.panel-page .xk-mihomo-backups-filter,
@@ -18189,6 +18212,11 @@ body.panel-page .xk-mihomo-egress-toggle[aria-expanded="true"] {
   color: var(--op-accent);
 }
 
+body.panel-page .xk-mihomo-dns-toggle[aria-expanded="true"] {
+  border-color: var(--op-accent);
+  color: var(--op-accent);
+}
+
 body.panel-page .xk-mihomo-security-warning > div { display: grid; gap: 3px; }
 body.panel-page .xk-mihomo-security-warning span { color: var(--op-text-muted); }
 body.panel-page .xk-mihomo-security-warning code {
@@ -21382,5 +21410,21 @@ body.panel-page .xk-incident-row[data-state="offline"] strong { color: var(--op-
   body.panel-page .xk-mihomo-dns-maintenance {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  body.panel-page .xk-mihomo-dns-maintenance-actions {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  body.panel-page .xk-mihomo-dns-maintenance-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  body.panel-page .xk-mihomo-dns-maintenance-actions > button {
+    width: 100%;
+    min-width: 0;
   }
 }

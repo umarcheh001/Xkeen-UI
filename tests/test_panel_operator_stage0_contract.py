@@ -94,8 +94,9 @@ def test_stage0_inventory_covers_views_accordions_engines_and_all_modals(tmp_pat
     accordions = payload["accordions"]
     # The HWID subscription editor replaced its two diagnostic accordions
     # with direct, editable device-profile fields. The optional Mihomo egress
-    # card and the DNS guidance disclosure extend the ten remaining controls.
-    assert len(accordions) == 12
+    # and DNS diagnostic cards plus the DNS guidance disclosure extend the ten
+    # remaining controls.
+    assert len(accordions) == 13
     assert all(item["target_id"] and item["target_present"] for item in accordions)
     assert all(item["states"] == ["collapsed", "expanded"] for item in accordions)
     dns_guidance = next(item for item in accordions if item["control_id"] == "xk-internet-check-dns-row")

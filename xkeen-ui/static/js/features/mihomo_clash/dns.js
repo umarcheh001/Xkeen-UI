@@ -10,6 +10,9 @@ let root = null;
 let active = false;
 let capabilities = {};
 let busy = false;
+let expanded = false;
+
+const VISIBILITY_STORAGE_KEY = 'xkeen:mihomo-clash-dns-visible';
 
 function byId(id) { return document.getElementById(id); }
 
@@ -35,6 +38,34 @@ function setBusy(value) {
   [byId('mihomo-clash-dns-name'), byId('mihomo-clash-dns-type')].forEach((item) => {
     if (item) item.disabled = busy;
   });
+}
+
+function storedVisibility() {
+  try {
+    return window.localStorage.getItem(VISIBILITY_STORAGE_KEY) === '1';
+  } catch (error) {
+    return false;
+  }
+}
+
+function storeVisibility(value) {
+  try {
+    window.localStorage.setItem(VISIBILITY_STORAGE_KEY, value ? '1' : '0');
+  } catch (error) {}
+}
+
+function applyVisibility(value, options = {}) {
+  expanded = value === true;
+  const toggle = byId('mihomo-clash-dns-toggle');
+  if (root) root.hidden = !expanded;
+  if (toggle) {
+    toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    toggle.setAttribute('aria-pressed', expanded ? 'true' : 'false');
+    toggle.setAttribute('data-tooltip', expanded
+      ? 'Скрыть диагностику DNS через Mihomo'
+      : 'Показать диагностику DNS через Mihomo');
+  }
+  if (options.persist === true) storeVisibility(expanded);
 }
 
 function renderCapabilities() {
@@ -147,6 +178,10 @@ export function initMihomoClashDns() {
   root = byId('mihomo-clash-dns-diagnostics');
   if (!root || root.dataset.bound === '1') return !!root;
   root.dataset.bound = '1';
+  expanded = storedVisibility();
+  byId('mihomo-clash-dns-toggle')?.addEventListener('click', () => {
+    applyVisibility(!expanded, { persist: true });
+  });
   byId('mihomo-clash-dns-query')?.addEventListener('click', () => { void runQuery(); });
   byId('mihomo-clash-dns-name')?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
@@ -156,6 +191,7 @@ export function initMihomoClashDns() {
   });
   byId('mihomo-clash-dns-flush')?.addEventListener('click', () => { void flush('dns'); });
   byId('mihomo-clash-fake-ip-flush')?.addEventListener('click', () => { void flush('fake-ip'); });
+  applyVisibility(expanded);
   return true;
 }
 
@@ -165,6 +201,9 @@ export function activateMihomoClashDns(nextCapabilities = {}) {
   capabilities = nextCapabilities && typeof nextCapabilities === 'object'
     ? nextCapabilities
     : {};
+  const toggle = byId('mihomo-clash-dns-toggle');
+  if (toggle) toggle.hidden = false;
+  applyVisibility(expanded);
   renderCapabilities();
   return true;
 }
@@ -172,5 +211,7 @@ export function activateMihomoClashDns(nextCapabilities = {}) {
 export function deactivateMihomoClashDns() {
   active = false;
   if (root) root.setAttribute('aria-busy', 'false');
+  const toggle = byId('mihomo-clash-dns-toggle');
+  if (toggle) toggle.hidden = true;
   return true;
 }

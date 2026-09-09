@@ -170,6 +170,76 @@ test('Mihomo egress card shows routed IP, refreshes and stays compact on mobile'
 });
 
 
+test('Mihomo DNS diagnostics toggle keeps action labels inline', async ({ page }) => {
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({
+    json: {
+      ...statusPayload(),
+      capabilities: {
+        ...statusPayload().capabilities,
+        dns_query: true,
+        dns_flush: true,
+        fake_ip_flush: true,
+      },
+    },
+  }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: groupsPayload() }));
+
+  await page.goto('/');
+  await page.addInitScript(() => localStorage.removeItem('xkeen:mihomo-clash-dns-visible'));
+  await page.reload();
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-dns-diagnostics' });
+  });
+
+  const toggle = page.locator('#mihomo-clash-dns-toggle');
+  const diagnostics = page.locator('#mihomo-clash-dns-diagnostics');
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(diagnostics).toBeHidden();
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(diagnostics).toBeVisible();
+
+  const actionLayout = await page.evaluate(() => {
+    const read = (id) => {
+      const button = document.getElementById(id);
+      const icon = button?.querySelector('.xk-action-icon')?.getBoundingClientRect();
+      const label = button?.querySelector('span:not(.xk-action-icon)')?.getBoundingClientRect();
+      return {
+        display: button ? getComputedStyle(button).display : '',
+        whiteSpace: button ? getComputedStyle(button).whiteSpace : '',
+        sameRow: !!icon && !!label && Math.abs(icon.top - label.top) < 5,
+      };
+    };
+    return {
+      query: read('mihomo-clash-dns-query'),
+      dnsFlush: read('mihomo-clash-dns-flush'),
+      fakeIpFlush: read('mihomo-clash-fake-ip-flush'),
+    };
+  });
+  for (const action of Object.values(actionLayout)) {
+    expect(['flex', 'inline-flex']).toContain(action.display);
+    expect(action.whiteSpace).toBe('nowrap');
+    expect(action.sameRow).toBe(true);
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileLayout = await page.locator('.xk-mihomo-dns-maintenance-actions').evaluate((element) => ({
+    display: getComputedStyle(element).display,
+    overflow: [...element.children].some((button) => button.scrollWidth > button.clientWidth + 1),
+  }));
+  expect(mobileLayout.display).toBe('grid');
+  expect(mobileLayout.overflow).toBe(false);
+  await expect(page.locator('#mihomo-clash-dns-toggle')).toBeVisible();
+  await toggle.click();
+  await expect(diagnostics).toBeHidden();
+  expect(await page.evaluate(() => localStorage.getItem('xkeen:mihomo-clash-dns-visible'))).toBe('0');
+});
+
+
 test('Mihomo egress card offers confirmed automatic loopback listener setup', async ({ page }) => {
   let configured = false;
   const setupCalls = [];
