@@ -85,7 +85,10 @@ function formatAge(row) {
 function uidDisplay(metadata) {
   const value = metadata?.uid;
   if (value === null || value === undefined || value === '') return '';
-  if (Number(value) === 0) return 'Не определён (Mihomo: 0)';
+  // On router-forwarded traffic Mihomo commonly reports UID 0 because there
+  // is no meaningful local process owner. Treat it as unavailable instead of
+  // repeating a misleading "not detected" row for every connection.
+  if (Number(value) === 0) return '';
   return String(value);
 }
 
@@ -107,6 +110,15 @@ function destination(row) {
 function destinationHost(row) {
   const metadata = row?.metadata || {};
   return metadata.sniff_host || metadata.host || metadata.destination_ip || '';
+}
+
+function distinctRemoteDestination(metadata) {
+  const remote = String(metadata?.remote_destination || '').trim();
+  if (!remote) return '';
+  const ip = String(metadata?.destination_ip || '').trim();
+  const port = String(metadata?.destination_port || '').trim();
+  if (ip && (remote === ip || (port && remote === `${ip}:${port}`))) return '';
+  return remote;
 }
 
 function source(row) {
@@ -169,19 +181,15 @@ function routeMarkup(row) {
   return `<span class="xk-mihomo-connection-route">${chains.map((name, index) => `${index ? '<span class="xk-mihomo-connection-route-arrow" aria-hidden="true">→</span>' : ''}${routeHopMarkup(name)}`).join('')}</span>`;
 }
 
-function routeExplainMarkup(explanation) {
+function routeEvidenceBadge(explanation) {
   const evidence = explanation && typeof explanation === 'object' ? explanation : null;
-  if (!evidence) return '<span class="xk-mihomo-route-evidence is-unknown">Доказательства маршрута не получены.</span>';
-  const links = Array.isArray(evidence.chain) ? evidence.chain : [];
-  const labels = { device: 'Устройство', host: 'Host', rule: 'Правило', group: 'Группа', selected_node: 'Узел' };
-  const chain = links.map((link) => {
-    const label = labels[String(link?.kind || '')] || String(link?.kind || 'Звено');
-    const value = link?.value ? String(link.value) : `нет данных (${String(link?.reason || 'не сообщено')})`;
-    const source = link?.source ? ` · ${String(link.source)}` : '';
-    return `<li><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span><small>${escapeHtml(source.replace(/^ · /, ''))}</small></li>`;
-  }).join('');
+  if (!evidence) return '';
   const confirmed = evidence.confirmed === true && evidence.complete === true;
-  return `<div class="xk-mihomo-route-evidence ${confirmed ? 'is-confirmed' : 'is-partial'}"><strong>${confirmed ? 'Маршрут подтверждён' : 'Маршрут неполный'}</strong><ol>${chain}</ol>${confirmed ? '' : '<small>Неполная цепочка не считается доказанным маршрутом.</small>'}</div>`;
+  const label = confirmed ? 'Подтверждён' : 'Неполные данные';
+  const tooltip = confirmed
+    ? 'Mihomo подтвердил полную цепочку маршрута'
+    : 'Mihomo не предоставил достаточно данных для подтверждения всей цепочки';
+  return `<span class="xk-mihomo-route-evidence ${confirmed ? 'is-confirmed' : 'is-partial'}" aria-label="${escapeHtml(tooltip)}" title="${escapeHtml(tooltip)}">${escapeHtml(label)}</span>`;
 }
 
 function searchText(row) {
@@ -378,21 +386,16 @@ function renderInspector() {
   const traffic = `↓ ${formatBytes(row.download || 0)} · ↑ ${formatBytes(row.upload || 0)}`;
   const summaryFields = [
     ['Состояние', closed ? 'Недавно закрыто' : 'Активно', 'status'],
-    ['Цепочка', routeMarkup(row), 'route'],
+    ['Цепочка', `<span class="xk-mihomo-route-summary">${routeMarkup(row)}${routeEvidenceBadge(row.routing_explanation)}</span>`, 'route'],
     ['Правило', filterButton(row.rule_payload || row.rule, 'правилу', escapeHtml(rule)), 'rule'],
     ['Трафик', escapeHtml(traffic), 'traffic'],
   ];
   summary.innerHTML = summaryFields.map(([label, value, kind]) => `<div data-summary-kind="${kind}"><dt>${escapeHtml(label)}</dt><dd>${value}</dd></div>`).join('');
   const fields = [
-    ['Устройство', origin.name, origin.name],
-    ['IP источника', metadata.source_ip, metadata.source_ip],
-    ['Порт источника', metadata.source_port],
-    ['Назначение', destination(row), destinationHost(row)],
     ['IP назначения', metadata.destination_ip, metadata.destination_ip],
     ['ASN назначения', metadata.destination_ip_asn, metadata.destination_ip_asn],
     ['Геолокация назначения', (Array.isArray(metadata.destination_geoip) ? metadata.destination_geoip : []).join(' · ')],
-    ['Порт назначения', metadata.destination_port],
-    ['Удалённый адрес', metadata.remote_destination, metadata.remote_destination],
+    ['Удалённый адрес', distinctRemoteDestination(metadata), distinctRemoteDestination(metadata)],
     ['Сеть', metadata.network, metadata.network], ['Тип', metadata.type],
     ['DNS режим', metadata.dns_mode],
     ['Inbound', metadata.inbound_name],
@@ -410,8 +413,7 @@ function renderInspector() {
       ]
       : [['Длительность', formatAge(row)]]),
   ].filter(([, value]) => value !== null && value !== undefined && value !== '');
-  details.innerHTML = fields.map(([label, value, filterValue, copyValue]) => `<div><dt>${escapeHtml(label)}</dt><dd><span>${filterValue ? filterButton(filterValue, label, escapeHtml(value)) : escapeHtml(value)}</span>${copyButton(copyValue || value, label)}</dd></div>`).join('')
-    + `<div class="xk-mihomo-route-explanation-row"><dt>Объяснение маршрута</dt><dd>${routeExplainMarkup(row.routing_explanation)}</dd></div>`;
+  details.innerHTML = fields.map(([label, value, filterValue, copyValue]) => `<div><dt>${escapeHtml(label)}</dt><dd><span>${filterValue ? filterButton(filterValue, label, escapeHtml(value)) : escapeHtml(value)}</span>${copyButton(copyValue || value, label)}</dd></div>`).join('');
 }
 
 function render() { renderSummary(); renderViewTabs(); renderRows(); renderInspector(); }

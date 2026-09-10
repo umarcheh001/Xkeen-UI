@@ -66,6 +66,17 @@ function connectionsPayload(ids = ['connection-one', 'connection-two']) {
       provider_chains: [],
       rule: 'DomainSuffix',
       rule_payload: 'example',
+      routing_explanation: {
+        confirmed: true,
+        complete: true,
+        chain: [
+          { kind: 'device', value: index ? 'Phone' : 'Laptop', source: 'keenetic-map' },
+          { kind: 'host', value: index ? 'video.example' : 'docs.example', source: 'mihomo' },
+          { kind: 'rule', value: 'DomainSuffix', source: 'mihomo' },
+          { kind: 'group', value: 'DE AUTO', source: 'mihomo' },
+          { kind: 'selected_node', value: index ? 'node-b' : 'node-a', source: 'mihomo' },
+        ],
+      },
     })),
   };
 }
@@ -173,9 +184,16 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   await expect(page.locator('#mihomo-clash-connection-inspector-summary')).toContainText('↓ 200 Б · ↑ 100 Б');
   await expect(page.locator('#mihomo-clash-connection-inspector-disconnect')).toBeVisible();
   await expect(page.locator('#mihomo-clash-connection-inspector-summary')).toContainText('DomainSuffix');
+  await expect(page.locator('#mihomo-clash-connection-inspector-summary')).toContainText('Подтверждён');
   await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('normal-redir');
   await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('AS64500');
-  await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('Не определён (Mihomo: 0)');
+  await expect(page.locator('#mihomo-clash-connection-inspector-details')).not.toContainText('Не определён');
+  await expect(page.locator('#mihomo-clash-connection-inspector-details')).not.toContainText('Объяснение маршрута');
+  await expect(page.locator('#mihomo-clash-connection-inspector-details dt').filter({ hasText: /^Удалённый адрес$/ })).toHaveCount(0);
+  const detailLabels = page.locator('#mihomo-clash-connection-inspector-details dt');
+  for (const repeatedLabel of ['Устройство', 'IP источника', 'Порт источника', 'Назначение', 'Порт назначения', 'UID']) {
+    await expect(detailLabels.filter({ hasText: new RegExp(`^${repeatedLabel}$`) })).toHaveCount(0);
+  }
   await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('Длительность');
   await expect(page.locator('#mihomo-clash-connection-inspector-details')).not.toContainText('Закрыто—');
   const inspectorLayout = await page.locator('#mihomo-clash-connection-inspector').evaluate((element) => {
@@ -196,6 +214,12 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   });
   await page.locator('#mihomo-clash-connection-copy').click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('Источник: 192.0.2.1:5000');
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).not.toContain('UID:');
+
+  await page.locator('[data-connection-id="connection-two"]').click();
+  await expect(page.locator('#mihomo-clash-connection-inspector-details dt').filter({ hasText: /^UID$/ })).toHaveCount(1);
+  await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('1000');
+  await page.locator('[data-connection-id="connection-one"]').click();
 
   await page.locator('#mihomo-clash-connection-inspector-disconnect').click();
   await expect(page.locator('#confirm-modal')).not.toHaveClass(/hidden/);
