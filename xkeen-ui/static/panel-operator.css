@@ -19489,7 +19489,7 @@ body.panel-page .xk-mihomo-route-evidence {
   min-height: 18px;
   padding: 1px 6px;
   border: 1px solid color-mix(in srgb, var(--op-warning) 38%, var(--op-border));
-  border-radius: 999px;
+  border-radius: var(--op-control-radius);
   background: color-mix(in srgb, var(--op-warning) 10%, transparent);
   color: var(--op-warning);
   font-size: calc(9px * var(--xk-font-scale, 1));
