@@ -60,7 +60,7 @@ def test_sample_dns_diagnostics_uses_logread_then_dmesg_fallback():
     assert payload["failures"][0]["transport"] == "DoT"
 
 
-def test_light_snapshot_marks_dns_failed_when_encrypted_transport_errors_are_recent():
+def test_light_snapshot_does_not_read_router_log():
     proc = {
         "/proc/sys/net/netfilter/nf_conntrack_count": "1",
         "/proc/sys/net/netfilter/nf_conntrack_max": "10",
@@ -74,10 +74,7 @@ def test_light_snapshot_marks_dns_failed_when_encrypted_transport_errors_are_rec
         raise AssertionError(path)
 
     def runner(_command, **_kwargs):
-        return SimpleNamespace(
-            stdout='https-dns-proxy: CURLINFO_SSL_VERIFYRESULT: Error (unable to establish TLS connection)',
-            stderr="",
-        )
+        raise AssertionError("periodic snapshot must not read router logs")
 
     payload = sample_router_diagnostics(
         reader=lambda path: proc[path.as_posix()],
@@ -87,7 +84,7 @@ def test_light_snapshot_marks_dns_failed_when_encrypted_transport_errors_are_rec
     )
 
     assert payload["internet"]["dns"] is True
-    assert payload["internet"]["dns_diagnostics"]["state"] == "error"
+    assert "dns_diagnostics" not in payload["internet"]
 
 
 def test_normalize_internet_status_handles_keenetic_accessibility_flags():

@@ -8,6 +8,7 @@ from services.router_diagnostics import (
     cached_router_capabilities,
     cached_router_diagnostics,
     channel_check,
+    sample_dns_diagnostics,
     sample_router_clients,
     sample_router_lte,
     sample_router_processes,
@@ -57,6 +58,25 @@ def create_system_resources_blueprint() -> Blueprint:
                 503,
                 ok=False,
                 code="router_processes_unavailable",
+                retryable=True,
+            )
+        payload["ok"] = True
+        response = jsonify(payload)
+        response.headers["Cache-Control"] = "no-store"
+        return response, 200
+
+    @bp.get("/api/system/router/dns-diagnostics")
+    def api_router_dns_diagnostics():
+        """Read the bounded router log only after an explicit UI request."""
+
+        try:
+            payload = sample_dns_diagnostics()
+        except Exception:  # noqa: BLE001 - optional on-demand telemetry
+            return error_response(
+                "Журнал DNS недоступен.",
+                503,
+                ok=False,
+                code="router_dns_diagnostics_unavailable",
                 retryable=True,
             )
         payload["ok"] = True

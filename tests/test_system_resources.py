@@ -143,6 +143,42 @@ def test_process_route_is_separate_and_no_store(monkeypatch):
     assert response.headers["Cache-Control"] == "no-store"
 
 
+def test_dns_diagnostics_route_reads_log_only_on_request(monkeypatch):
+    calls = []
+
+    def sample():
+        calls.append(True)
+        return {"available": True, "state": "ok", "failure_count": 0}
+
+    monkeypatch.setattr(resource_routes, "sample_dns_diagnostics", sample)
+    app = Flask(__name__)
+    app.register_blueprint(create_system_resources_blueprint())
+
+    response = app.test_client().get("/api/system/router/dns-diagnostics")
+
+    assert response.status_code == 200
+    assert calls == [True]
+    assert response.get_json()["state"] == "ok"
+    assert response.get_json()["ok"] is True
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_dns_diagnostics_route_hides_sampler_failure(monkeypatch):
+    monkeypatch.setattr(
+        resource_routes,
+        "sample_dns_diagnostics",
+        lambda: (_ for _ in ()).throw(RuntimeError("secret log command")),
+    )
+    app = Flask(__name__)
+    app.register_blueprint(create_system_resources_blueprint())
+
+    response = app.test_client().get("/api/system/router/dns-diagnostics")
+
+    assert response.status_code == 503
+    assert response.get_json()["code"] == "router_dns_diagnostics_unavailable"
+    assert "secret log command" not in response.get_data(as_text=True)
+
+
 def test_on_demand_router_routes_keep_rci_branches_separate(monkeypatch):
     monkeypatch.setattr(resource_routes, "sample_router_clients", lambda: {"available": True, "top": [{"name": "laptop"}]})
     monkeypatch.setattr(resource_routes, "sample_router_lte", lambda: {"available": False})

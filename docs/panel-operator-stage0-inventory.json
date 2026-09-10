@@ -455,49 +455,49 @@
               "accessible_name": true
             },
             {
-              "control": "control@7664",
+              "control": "control@7753",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@7808",
+              "control": "control@7897",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@8586",
+              "control": "control@8675",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@8741",
+              "control": "control@8830",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@9593",
+              "control": "control@9682",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@9751",
+              "control": "control@9840",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@10578",
+              "control": "control@10667",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@11456",
+              "control": "control@11545",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -509,31 +509,31 @@
               "accessible_name": false
             },
             {
-              "control": "control@12828",
+              "control": "control@12917",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@13096",
+              "control": "control@13185",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@13660",
+              "control": "control@13749",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@14080",
+              "control": "control@14169",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@15301",
+              "control": "control@15390",
               "icons": [
                 "processes"
               ],
@@ -549,7 +549,7 @@
               "accessible_name": false
             },
             {
-              "control": "control@16685",
+              "control": "control@16774",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -7003,8 +7003,8 @@
     ]
   },
   "dom_contract": {
-    "id_count": 1287,
-    "unique_id_count": 1287,
+    "id_count": 1289,
+    "unique_id_count": 1289,
     "duplicate_ids": [],
     "ids": [
       "backups-clear-snapshots-btn",
@@ -8160,6 +8160,8 @@
       "xk-conntrack-state",
       "xk-conntrack-usage",
       "xk-dns-guidance",
+      "xk-dns-guidance-note",
+      "xk-dns-guidance-title",
       "xk-incidents-list",
       "xk-incidents-panel",
       "xk-interface-panel",
@@ -8295,7 +8297,7 @@
       "xray-snapshot-status",
       "xray-snapshot-title"
     ],
-    "data_attribute_count": 606,
+    "data_attribute_count": 607,
     "data_attributes": [
       {
         "locator": "header.panel-header.panel-header-shell@L81",
@@ -8681,6 +8683,11 @@
         "locator": "#xk-conntrack-panel",
         "name": "data-tone",
         "value": "unknown"
+      },
+      {
+        "locator": "#xk-dns-guidance",
+        "name": "data-state",
+        "value": "idle"
       },
       {
         "locator": "article.xk-resource-stat@L355",
@@ -11505,7 +11512,7 @@
       "#outbounds-file-code",
       ".xk-mihomo-topbar .xk-routing-active-inline"
     ],
-    "js_referenced_template_id_count": 1210,
+    "js_referenced_template_id_count": 1212,
     "js_referenced_template_ids": {
       "backups-clear-snapshots-btn": [
         "xkeen-ui/static/js/features/backups.js"
@@ -15033,6 +15040,12 @@
         "xkeen-ui/static/js/features/resource_monitor.js"
       ],
       "xk-dns-guidance": [
+        "xkeen-ui/static/js/features/resource_monitor.js"
+      ],
+      "xk-dns-guidance-note": [
+        "xkeen-ui/static/js/features/resource_monitor.js"
+      ],
+      "xk-dns-guidance-title": [
         "xkeen-ui/static/js/features/resource_monitor.js"
       ],
       "xk-incidents-list": [

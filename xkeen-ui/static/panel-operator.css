@@ -21040,6 +21040,14 @@ body.panel-page .xk-internet-meta dd { margin: 2px 0 0; overflow: hidden; color:
 body.panel-page .xk-dns-guidance { display: flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%; padding: 8px 10px; border: 1px solid var(--op-danger); border-radius: var(--op-radius); background: var(--op-danger-soft); }
 body.panel-page .xk-dns-guidance[hidden] { display: none; }
 body.panel-page .xk-dns-guidance-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--op-danger); box-shadow: 0 0 0 2px color-mix(in srgb, var(--op-danger) 18%, transparent); }
+body.panel-page .xk-dns-guidance[data-state="idle"],
+body.panel-page .xk-dns-guidance[data-state="loading"] { border-color: var(--op-border); background: var(--op-surface-2); }
+body.panel-page .xk-dns-guidance[data-state="idle"] .xk-dns-guidance-dot,
+body.panel-page .xk-dns-guidance[data-state="loading"] .xk-dns-guidance-dot { background: var(--op-muted); box-shadow: 0 0 0 2px color-mix(in srgb, var(--op-muted) 18%, transparent); }
+body.panel-page .xk-dns-guidance[data-state="ok"] { border-color: var(--op-accent); background: color-mix(in srgb, var(--op-accent) 8%, var(--op-surface-2)); }
+body.panel-page .xk-dns-guidance[data-state="ok"] .xk-dns-guidance-dot { background: var(--op-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--op-accent) 18%, transparent); }
+body.panel-page .xk-dns-guidance[data-state="unavailable"] { border-color: var(--op-warning); background: color-mix(in srgb, var(--op-warning) 8%, var(--op-surface-2)); }
+body.panel-page .xk-dns-guidance[data-state="unavailable"] .xk-dns-guidance-dot { background: var(--op-warning); box-shadow: 0 0 0 2px color-mix(in srgb, var(--op-warning) 18%, transparent); }
 body.panel-page .xk-dns-guidance > div { display: flex; flex-wrap: wrap; gap: 2px 7px; min-width: 0; }
 body.panel-page .xk-dns-guidance strong { color: var(--op-text); font-size: calc(10px * var(--xk-font-scale, 1)); }
 body.panel-page .xk-dns-guidance > div > span { color: var(--op-muted); font-size: calc(9px * var(--xk-font-scale, 1)); }

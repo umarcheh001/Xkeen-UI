@@ -573,12 +573,11 @@ def _record_incident(snapshot: dict[str, Any], *, now: int) -> None:
     global _previous_health
     internet = snapshot.get("internet") or {}
     conntrack = snapshot.get("conntrack") or {}
-    dns = internet.get("dns_diagnostics") or {}
     state = (
         "offline"
         if internet.get("available") is False or internet.get("internet") is False
         else "degraded"
-        if conntrack.get("tone") in {"warning", "danger"} or dns.get("state") == "error"
+        if conntrack.get("tone") in {"warning", "danger"}
         else "normal"
     )
     if state != _previous_health:
@@ -591,7 +590,7 @@ def _record_incident(snapshot: dict[str, Any], *, now: int) -> None:
                     "previous": _previous_health,
                     "message": {
                         "offline": "Связь с интернетом потеряна",
-                        "degraded": "Зашифрованный DNS или таблица соединений работает с ошибками",
+                        "degraded": "Таблица соединений работает с повышенной нагрузкой",
                         "normal": "Состояние восстановлено",
                     }[state],
                 },
@@ -963,9 +962,16 @@ def sample_router_diagnostics(
     command_runner: Callable[..., Any] = subprocess.run,
     clock: Callable[[], float] = time.time,
 ) -> dict[str, Any]:
-    """Return the lightweight diagnostics snapshot; individual branches may fail."""
+    """Return the lightweight diagnostics snapshot; individual branches may fail.
+
+    ``command_runner`` remains in the signature for callers which used to
+    inject the system-log reader.  Reading that log is deliberately kept out
+    of this periodic snapshot; use :func:`sample_dns_diagnostics` through the
+    explicit on-demand route instead.
+    """
 
     now = clock()
+    del command_runner
     result: dict[str, Any] = {
         "schema_version": 1,
         "sampled_at": int(now),
@@ -978,8 +984,6 @@ def sample_router_diagnostics(
     except RciUnavailable as exc:
         rci_states.append(exc.state)
         result["internet"] = {"available": False}
-    dns_diagnostics = sample_dns_diagnostics(runner=command_runner, clock=clock)
-    result["internet"]["dns_diagnostics"] = dns_diagnostics
     try:
         interface_payload = rci_fetcher("show/interface")
         interface_stats: dict[str, Any] = {}

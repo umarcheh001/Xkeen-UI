@@ -3,6 +3,7 @@ const PROCESS_ENDPOINT = "/api/system/processes";
 const CLIENTS_ENDPOINT = "/api/system/router/clients";
 const LTE_ENDPOINT = "/api/system/router/lte";
 const CHANNEL_ENDPOINT = "/api/system/router/channel-check";
+const DNS_DIAGNOSTICS_ENDPOINT = "/api/system/router/dns-diagnostics";
 const POLL_MS = 5000;
 const HIDDEN_POLL_MS = 30000;
 const COLLAPSIBLE_PANEL_SELECTOR = "details.xk-collapsible-panel";
@@ -24,6 +25,10 @@ let channelRequest = null;
 let interfaceFilter = "active";
 let latestInterfaces = null;
 let dnsGuidanceOpen = false;
+let latestResourcePayload = null;
+let dnsDiagnostics = null;
+let dnsDiagnosticsRequest = null;
+let dnsDiagnosticsLoaded = false;
 const chartState = new Map();
 
 function syncCollapsiblePanelState(panel) {
@@ -200,6 +205,7 @@ function setDashboardOpen(open) {
 }
 
 function render(payload) {
+  latestResourcePayload = payload;
   const root = byId("xk-resource-monitor");
   const cpu = byId("xk-resource-cpu");
   const memory = byId("xk-resource-memory");
@@ -255,7 +261,7 @@ function renderDashboard(payload) {
   const swapTotal = Number(payload?.memory?.swap_total_bytes) || 0;
   const values = [cpu, memory, Number(storage.percent) || 0];
   const routerInternet = payload?.router?.internet || {};
-  const routerDnsDiagnostics = routerInternet?.dns_diagnostics || {};
+  const routerDnsDiagnostics = dnsDiagnostics || routerInternet?.dns_diagnostics || {};
   const routerDnsError = routerDnsDiagnostics.state === "error";
   const routerProblem = [
     routerInternet.internet,
@@ -402,6 +408,7 @@ function syncDnsGuidanceState(canToggle) {
   if (panel) {
     panel.hidden = !visible;
     panel.setAttribute("aria-hidden", visible ? "false" : "true");
+    renderDnsGuidance();
   }
   if (row) {
     row.dataset.dnsToggle = available ? "true" : "false";
@@ -411,6 +418,81 @@ function syncDnsGuidanceState(canToggle) {
   }
 }
 
+function renderDnsGuidance() {
+  const panel = byId("xk-dns-guidance");
+  if (!panel) return;
+  const title = byId("xk-dns-guidance-title");
+  const note = byId("xk-dns-guidance-note");
+  const set = (element, value) => {
+    if (element) element.textContent = value;
+  };
+  if (dnsDiagnosticsRequest) {
+    set(title, "Проверяем журнал DNS…");
+    set(note, "Запрашиваем журнал роутера по требованию.");
+    panel.dataset.state = "loading";
+    panel.setAttribute("aria-busy", "true");
+    return;
+  }
+  panel.setAttribute("aria-busy", "false");
+  if (!dnsDiagnosticsLoaded) {
+    set(title, "Ошибки DNS (DoH/DoT)");
+    set(note, "Нажмите DNS, чтобы запросить журнал диагностики Keenetic.");
+    panel.dataset.state = "idle";
+    return;
+  }
+  const state = dnsDiagnostics?.state;
+  if (!dnsDiagnostics?.available || state === "unavailable") {
+    set(title, "Журнал DNS недоступен");
+    set(note, "Не удалось получить журнал диагностики Keenetic.");
+    panel.dataset.state = "unavailable";
+  } else if (state === "error") {
+    set(title, "Ошибки DNS (DoH/DoT)");
+    set(note, dnsDiagnostics.summary || "Ошибки зашифрованного DNS обнаружены в журнале.");
+    panel.dataset.state = "error";
+  } else {
+    set(title, "Ошибок DNS (DoH/DoT) не обнаружено");
+    set(note, dnsDiagnostics.summary || "В последнем фрагменте журнала ошибок нет.");
+    panel.dataset.state = "ok";
+  }
+}
+
+async function loadDnsDiagnostics({ force = false } = {}) {
+  if (dnsDiagnosticsRequest) return dnsDiagnosticsRequest;
+  if (dnsDiagnosticsLoaded && !force) {
+    renderDnsGuidance();
+    return null;
+  }
+  const controller = new AbortController();
+  const requestPromise = (async () => {
+    try {
+      const response = await fetch(DNS_DIAGNOSTICS_ENDPOINT, {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      dnsDiagnostics = await response.json();
+      dnsDiagnosticsLoaded = true;
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      dnsDiagnostics = {
+        available: false,
+        state: "unavailable",
+        summary: "Не удалось получить журнал диагностики Keenetic.",
+      };
+      dnsDiagnosticsLoaded = true;
+    } finally {
+      if (dnsDiagnosticsRequest === requestPromise) dnsDiagnosticsRequest = null;
+      if (latestResourcePayload) renderDashboard(latestResourcePayload);
+      else renderDnsGuidance();
+    }
+  })();
+  dnsDiagnosticsRequest = requestPromise;
+  renderDnsGuidance();
+  return requestPromise;
+}
+
 function toggleDnsGuidance(event) {
   const row = event?.currentTarget || byId("xk-internet-check-dns-row");
   if (!row || row.dataset.dnsToggle !== "true") return;
@@ -418,13 +500,14 @@ function toggleDnsGuidance(event) {
   event?.stopPropagation();
   dnsGuidanceOpen = !dnsGuidanceOpen;
   syncDnsGuidanceState(true);
+  if (dnsGuidanceOpen) void loadDnsDiagnostics();
 }
 
 function renderInternet(internet, freshness, rci) {
   const panel = byId("xk-internet-health");
   const available = internet?.available === true;
-  const dnsDiagnostics = internet?.dns_diagnostics || {};
-  const dnsError = dnsDiagnostics.state === "error";
+  const currentDnsDiagnostics = dnsDiagnostics || internet?.dns_diagnostics || {};
+  const dnsError = currentDnsDiagnostics.state === "error";
   const dnsCheck = dnsError ? false : internet?.dns;
   const checks = [
     internet?.internet,
@@ -460,7 +543,7 @@ function renderInternet(internet, freshness, rci) {
         ? "RCI отклонил токен доступа"
         : "Проверка KeeneticOS недоступна"
       : dnsError
-        ? dnsDiagnostics.summary || "Ошибки зашифрованного DNS"
+        ? currentDnsDiagnostics.summary || "Ошибки зашифрованного DNS"
       : state === "normal"
         ? "Все проверки подключения пройдены"
         : "Одна или несколько проверок не пройдены",
@@ -482,7 +565,7 @@ function renderInternet(internet, freshness, rci) {
   setCheck("gateway", available ? internet?.gateway : null);
   setCheck("dns", available ? dnsCheck : null, dnsError ? "Ошибка DoH/DoT" : "");
   setCheck("captive", available ? internet?.captive : null);
-  syncDnsGuidanceState(available && dnsError);
+  syncDnsGuidanceState(available);
 }
 
 function renderConntrack(conntrack) {
@@ -1437,7 +1520,10 @@ export function initResourceMonitor() {
   );
   byId("xk-resource-dashboard-refresh")?.addEventListener(
     "click",
-    () => void refresh(),
+    () => {
+      void refresh();
+      void loadDnsDiagnostics({ force: true });
+    },
   );
   const processPanel = byId("xk-process-panel");
   const syncProcessPanelState = () => {
