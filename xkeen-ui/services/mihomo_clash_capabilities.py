@@ -58,7 +58,10 @@ DEFAULT_FLAGS: Mapping[str, bool] = {
     "dns_query": True,
     "dns_flush": True,
     "fake_ip_flush": True,
-    "rule_counters": False,
+    # Stage 3 normalizes counters already present in the read-only /rules
+    # response. It opens no additional upstream socket, so the feature can be
+    # on by default while retaining an immediate rollout kill-switch.
+    "rule_counters": True,
     "rules_disable": False,
     "cache_etag": False,
 }

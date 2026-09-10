@@ -169,6 +169,21 @@ function routeMarkup(row) {
   return `<span class="xk-mihomo-connection-route">${chains.map((name, index) => `${index ? '<span class="xk-mihomo-connection-route-arrow" aria-hidden="true">→</span>' : ''}${routeHopMarkup(name)}`).join('')}</span>`;
 }
 
+function routeExplainMarkup(explanation) {
+  const evidence = explanation && typeof explanation === 'object' ? explanation : null;
+  if (!evidence) return '<span class="xk-mihomo-route-evidence is-unknown">Доказательства маршрута не получены.</span>';
+  const links = Array.isArray(evidence.chain) ? evidence.chain : [];
+  const labels = { device: 'Устройство', host: 'Host', rule: 'Правило', group: 'Группа', selected_node: 'Узел' };
+  const chain = links.map((link) => {
+    const label = labels[String(link?.kind || '')] || String(link?.kind || 'Звено');
+    const value = link?.value ? String(link.value) : `нет данных (${String(link?.reason || 'не сообщено')})`;
+    const source = link?.source ? ` · ${String(link.source)}` : '';
+    return `<li><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span><small>${escapeHtml(source.replace(/^ · /, ''))}</small></li>`;
+  }).join('');
+  const confirmed = evidence.confirmed === true && evidence.complete === true;
+  return `<div class="xk-mihomo-route-evidence ${confirmed ? 'is-confirmed' : 'is-partial'}"><strong>${confirmed ? 'Маршрут подтверждён' : 'Маршрут неполный'}</strong><ol>${chain}</ol>${confirmed ? '' : '<small>Неполная цепочка не считается доказанным маршрутом.</small>'}</div>`;
+}
+
 function searchText(row) {
   const metadata = row?.metadata || {};
   return [
@@ -395,7 +410,8 @@ function renderInspector() {
       ]
       : [['Длительность', formatAge(row)]]),
   ].filter(([, value]) => value !== null && value !== undefined && value !== '');
-  details.innerHTML = fields.map(([label, value, filterValue, copyValue]) => `<div><dt>${escapeHtml(label)}</dt><dd><span>${filterValue ? filterButton(filterValue, label, escapeHtml(value)) : escapeHtml(value)}</span>${copyButton(copyValue || value, label)}</dd></div>`).join('');
+  details.innerHTML = fields.map(([label, value, filterValue, copyValue]) => `<div><dt>${escapeHtml(label)}</dt><dd><span>${filterValue ? filterButton(filterValue, label, escapeHtml(value)) : escapeHtml(value)}</span>${copyButton(copyValue || value, label)}</dd></div>`).join('')
+    + `<div class="xk-mihomo-route-explanation-row"><dt>Объяснение маршрута</dt><dd>${routeExplainMarkup(row.routing_explanation)}</dd></div>`;
 }
 
 function render() { renderSummary(); renderViewTabs(); renderRows(); renderInspector(); }
@@ -526,8 +542,13 @@ async function pollSnapshot(runGeneration, immediate = false) {
   try {
     const payload = await fetchMihomoClashConnections({ signal: controller?.signal });
     if (!active || runGeneration !== generation) return;
-    capabilities = payload?.capabilities || capabilities;
-    applySnapshot(payload, Date.now());
+    capabilities = payload?.capabilities || payload?.payload?.capabilities || capabilities;
+    // New envelopes keep the full routing evidence in ``payload``. The
+    // compact legacy top-level rows intentionally omit that optional object
+    // to stay below the bounded HTTP response budget.
+    const snapshotPayload = payload?.payload && typeof payload.payload === 'object'
+      ? payload.payload : payload;
+    applySnapshot(snapshotPayload, Number(payload?.received_at_ms) || Date.now());
     setFallbackNotice();
   } catch (error) {
     if (!controller?.signal.aborted && active) {

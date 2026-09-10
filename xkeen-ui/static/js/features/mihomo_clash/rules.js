@@ -47,7 +47,18 @@ function setNotice(copy, tone = 'neutral') {
 }
 
 function ruleSearchText(rule) {
-  return [rule?.index, rule?.type, rule?.payload, rule?.target].join(' ').toLocaleLowerCase('ru');
+  return [rule?.index, rule?.type, rule?.payload, rule?.target,
+    rule?.hitCount, rule?.hitAt, rule?.missCount, rule?.missAt].join(' ').toLocaleLowerCase('ru');
+}
+
+function ruleCounterMarkup(rule) {
+  const values = [];
+  if (rule && rule.hitCount !== undefined) values.push(`hits: ${Math.max(0, Number(rule.hitCount) || 0)}`);
+  if (rule && rule.missCount !== undefined) values.push(`misses: ${Math.max(0, Number(rule.missCount) || 0)}`);
+  if (!values.length) return '';
+  const times = [rule.hitAt, rule.missAt].filter((value) => value !== undefined && value !== null && value !== '')
+    .map((value) => String(value)).join(' · ');
+  return `<small class="xk-mihomo-rule-counters" title="Счётчики Mihomo${times ? ` · ${escapeHtml(times)}` : ''}">${escapeHtml(values.join(' · '))}</small>`;
 }
 
 function filteredRules() {
@@ -64,7 +75,7 @@ function renderRules() {
   const visible = filteredRules();
   rows.innerHTML = visible.map((rule) => `<tr data-rule-index="${Number(rule.index) || 0}" tabindex="0">
     <td data-label="#"><strong>${Number(rule.index) + 1}</strong></td>
-    <td data-label="Тип"><strong>${escapeHtml(rule.type || '—')}</strong>${rule.disabled === true ? '<small>временно отключено</small>' : ''}</td>
+    <td data-label="Тип"><strong>${escapeHtml(rule.type || '—')}</strong>${rule.disabled === true ? '<small>временно отключено</small>' : ''}${ruleCounterMarkup(rule)}</td>
     <td data-label="Payload"><strong>${escapeHtml(rule.payload || '—')}</strong></td>
     <td data-label="Маршрут"><strong>${escapeHtml(rule.target || '—')}</strong></td>
   </tr>`).join('');
@@ -304,7 +315,12 @@ async function loadRuntime(runGeneration, { preserveNotice = false } = {}) {
     if (!active || generation !== runGeneration) return;
     rulesPayload = nextRules; providersPayload = nextProviders;
     renderRules(); renderProviders();
-    if (!preserveNotice) setNotice('Правила read-only. Обновление providers выполняется только вручную.', 'neutral');
+    if (!preserveNotice) {
+      const counterState = nextRules?.rule_counters?.available
+        ? 'Счётчики hits/misses получены от Mihomo.'
+        : 'Счётчики hits/misses недоступны для этой версии Mihomo.';
+      setNotice(`Правила read-only. ${counterState} Обновление providers выполняется только вручную.`, 'neutral');
+    }
   } catch (error) {
     if (active && generation === runGeneration
       && !rulesController.signal.aborted && !providersController.signal.aborted) {

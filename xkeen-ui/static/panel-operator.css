@@ -19348,6 +19348,7 @@ body.panel-page .xk-mihomo-rules-table td strong,
 body.panel-page .xk-mihomo-rules-table td small { display: block; overflow-wrap: anywhere; }
 body.panel-page .xk-mihomo-rules-table td strong { color: var(--op-text); font-size: calc(10.5px * var(--xk-font-scale, 1)); font-weight: 600; }
 body.panel-page .xk-mihomo-rules-table td small { color: var(--op-warning); font-size: calc(9.5px * var(--xk-font-scale, 1)); }
+body.panel-page .xk-mihomo-rules-table td small.xk-mihomo-rule-counters { color: var(--op-data-muted); font-family: "SFMono-Regular", Consolas, monospace; }
 
 body.panel-page .xk-mihomo-providers-list { display: grid; gap: 6px; padding: 7px; }
 body.panel-page .xk-mihomo-provider { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 8px; padding: 7px; border: 1px solid var(--op-border); border-radius: 5px; background: var(--op-editor); }
@@ -19473,6 +19474,36 @@ body.panel-page .xk-mihomo-connection-inspector-summary [data-summary-kind="traf
   font-family: "SFMono-Regular", Consolas, monospace;
   font-variant-numeric: tabular-nums;
 }
+
+body.panel-page .xk-mihomo-route-evidence {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  font-size: calc(10px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .xk-mihomo-route-evidence > strong { color: var(--op-warning); }
+body.panel-page .xk-mihomo-route-evidence.is-confirmed > strong { color: var(--op-success); }
+body.panel-page .xk-mihomo-route-evidence > ol {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+body.panel-page .xk-mihomo-route-evidence > ol li {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
+  gap: 5px;
+  min-width: 0;
+  color: var(--op-text);
+}
+body.panel-page .xk-mihomo-route-evidence > ol li > span { overflow-wrap: anywhere; }
+body.panel-page .xk-mihomo-route-evidence > ol li > small {
+  color: var(--op-muted);
+  font-size: .9em;
+}
+body.panel-page .xk-mihomo-route-evidence > small { color: var(--op-warning); font-weight: 500; }
 
 body.panel-page .xk-mihomo-connection-inspector-summary .xk-mihomo-connection-route {
   flex-wrap: wrap;

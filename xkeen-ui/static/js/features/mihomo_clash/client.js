@@ -296,10 +296,13 @@ export function mihomoClashTelemetryWsUrl(token) {
   return url.toString();
 }
 
-export function mihomoClashLogsWsUrl(token) {
+export function mihomoClashLogsWsUrl(token, level = 'info') {
   const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = new URL('/ws/mihomo-clash/logs', `${scheme}//${window.location.host}`);
   url.searchParams.set('token', String(token || ''));
+  const allowed = new Set(['debug', 'info', 'warning', 'error']);
+  url.searchParams.set('level', allowed.has(String(level || '').toLowerCase())
+    ? String(level).toLowerCase() : 'info');
   return url.toString();
 }
 

@@ -23,6 +23,7 @@ MAX_CONNECTION_ROWS = 250
 MAX_DELAY_RESULTS = 1024
 MAX_DELAY_HISTORY = 10
 MAX_RULES = 4096
+MAX_RULE_EXTRA_FIELDS = 16
 MAX_PROVIDERS = 512
 MAX_LOG_FIELDS = 32
 MAX_LOG_DEVICES = 8
@@ -580,29 +581,105 @@ def build_mihomo_clash_rules_dto(payload: Any) -> dict[str, Any]:
         else []
     )
     rules: list[dict[str, Any]] = []
+    counters_available = False
     for index, raw_rule in enumerate(candidates[:MAX_RULES]):
         rule = _mapping(raw_rule)
-        rules.append(
-            {
-                "index": _optional_nonnegative_int(rule.get("index"))
-                if rule.get("index") is not None
-                else index,
-                "type": _text(rule.get("type"), 96),
-                "payload": _text(rule.get("payload"), 1024),
-                "target": _text(rule.get("proxy") or rule.get("target"), 256),
-                "disabled": _optional_bool(
-                    _mapping(rule.get("extra")).get("disabled")
-                    if _mapping(rule.get("extra")).get("disabled") is not None
-                    else rule.get("disabled")
-                ),
-                "size": _optional_nonnegative_int(rule.get("size")),
-            }
+        extra = _mapping(rule.get("extra"))
+        normalized: dict[str, Any] = {
+            "index": _optional_nonnegative_int(rule.get("index"))
+            if rule.get("index") is not None
+            else index,
+            "type": _text(rule.get("type"), 96),
+            "payload": _text(rule.get("payload"), 1024),
+            "target": _text(rule.get("proxy") or rule.get("target"), 256),
+            "disabled": _optional_bool(
+                extra.get("disabled")
+                if extra.get("disabled") is not None
+                else rule.get("disabled")
+            ),
+            "size": _optional_nonnegative_int(rule.get("size")),
+        }
+
+        # Rule counters are optional in Mihomo and are nested in ``extra`` on
+        # some releases.  Keep the public names stable and only add fields
+        # when the core actually supplied them so old DTO snapshots remain
+        # byte-for-byte compatible.  Timestamps are intentionally retained as
+        # bounded scalar values: compatible cores use either RFC3339 text or a
+        # Unix timestamp.
+        counter_specs = (
+            ("hitCount", ("hitCount", "hit_count"), False),
+            ("hitAt", ("hitAt", "hit_at"), True),
+            ("missCount", ("missCount", "miss_count"), False),
+            ("missAt", ("missAt", "miss_at"), True),
         )
+        for field, aliases, timestamp in counter_specs:
+            raw_value = _mapping_value_casefold(extra, *aliases)
+            if raw_value is None:
+                raw_value = _mapping_value_casefold(rule, *aliases)
+            if raw_value is None:
+                continue
+            value: Any
+            if timestamp:
+                if isinstance(raw_value, bool):
+                    continue
+                if isinstance(raw_value, (int, float)):
+                    value = max(0, int(raw_value))
+                else:
+                    value = _text(raw_value, 96)
+                    if not value:
+                        continue
+            else:
+                value = _optional_nonnegative_int(raw_value)
+                if value is None:
+                    continue
+            normalized[field] = value
+            counters_available = True
+
+        # Preserve a small, redacted subset of future optional ``extra``
+        # fields.  This lets newer Mihomo builds add harmless metadata without
+        # silently throwing it away while keeping the DTO bounded and free of
+        # nested objects, URLs or credentials.
+        safe_extra: dict[str, Any] = {}
+        raw_extra_items = [*list(extra.items()), *list(rule.items())]
+        known_rule_keys = {"index", "type", "payload", "proxy", "target", "disabled", "size", "extra"}
+        for raw_key, raw_value in raw_extra_items[:MAX_RULE_EXTRA_FIELDS * 2]:
+            key = _text(raw_key, 64)
+            if not key or _SENSITIVE_LOG_KEY.search(key) or key.casefold() in known_rule_keys or key.casefold() in {
+                "disabled", "hitcount", "hitat", "misscount", "missat",
+                "hit_count", "hit_at", "miss_count", "miss_at",
+            }:
+                continue
+            if isinstance(raw_value, bool):
+                safe_extra[key] = raw_value
+            elif isinstance(raw_value, (int, float)):
+                safe_extra[key] = raw_value
+            elif isinstance(raw_value, str):
+                text_value = _text(raw_value, 256)
+                # Unknown rule metadata is not a reason to expose config
+                # URLs, filesystem paths or credential-shaped values.
+                if (
+                    text_value
+                    and "://" not in text_value
+                    and not text_value.startswith(("/", "\\"))
+                    and not _SENSITIVE_LOG_VALUE.search(text_value)
+                ):
+                    safe_extra[key] = text_value
+        if safe_extra:
+            normalized["extra"] = safe_extra
+        rules.append(normalized)
     return {
         "schema_version": MIHOMO_CLASH_SCHEMA_VERSION,
         "rules": rules,
         "total_rules": len(raw_rules) if isinstance(raw_rules, Sequence) and not isinstance(raw_rules, (str, bytes, bytearray)) else 0,
         "truncated": len(candidates) > MAX_RULES,
+        "rule_counters": {
+            "available": counters_available,
+            "fields": [
+                field
+                for field in ("hitCount", "hitAt", "missCount", "missAt")
+                if any(field in item for item in rules)
+            ],
+        },
     }
 
 
@@ -815,6 +892,130 @@ def _connection_asn(value: Any) -> str:
     return asn
 
 
+def _routing_link(
+    kind: str,
+    value: Any,
+    *,
+    source: str,
+    timestamp: Any = None,
+    reason: str = "",
+) -> dict[str, Any]:
+    """Build one bounded evidence link for the routing explanation chain."""
+
+    item: dict[str, Any] = {
+        "kind": str(kind or "unknown")[:32],
+        "value": _text(value, 512) or None,
+        "source": str(source or "inferred")[:32],
+        "timestamp": _text(timestamp, 96) or None,
+    }
+    if reason:
+        item["reason"] = str(reason)[:128]
+    return item
+
+
+def build_mihomo_clash_routing_explanation(
+    connection: Any,
+    *,
+    device_map: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Explain a connection route as evidence, never as an invented route.
+
+    Mihomo does not expose a single portable "why this route" endpoint.  The
+    connection snapshot does, however, carry the evaluated host, rule and
+    chain.  We present those observations as a five-link chain and mark it
+    ``confirmed`` only when every required link is present.  Missing links are
+    explicit, which prevents a partial chain from being rendered as a proof.
+    """
+
+    raw = _mapping(connection)
+    metadata = _mapping(raw.get("metadata"))
+    devices = device_map if isinstance(device_map, Mapping) else {}
+    source_ip = _text(metadata.get("sourceIP"), 64)
+    source_name = _device_name(devices, source_ip)
+    device_entry = _mapping(devices.get(source_ip)) if source_ip else {}
+    device_timestamp = device_entry.get("updated_at") or device_entry.get("updatedAt")
+    connection_timestamp = _text(raw.get("start"), 96) or None
+
+    sniff_host = _text(metadata.get("sniffHost"), 512)
+    host = _text(metadata.get("host"), 512)
+    host_value = sniff_host or host
+    # Both ``sniffHost`` and the original ``host`` are observations returned
+    # by Mihomo. The latter is only a fallback choice between two observations
+    # and must not be mislabeled as a different source.
+    host_source = "mihomo" if host_value else "inferred"
+    host_reason = "" if host_value else "mihomo_host_not_reported"
+
+    raw_rule = _text(raw.get("rule"), 256)
+    raw_rule_payload = _text(raw.get("rulePayload"), 1024)
+    rule_value = raw_rule or raw_rule_payload
+    rule_source = "mihomo" if rule_value else "inferred"
+    rule_reason = "" if rule_value else "mihomo_rule_not_reported"
+
+    chains = _string_list(raw.get("chains"), limit=32, item_limit=256)
+    group_value = chains[0] if len(chains) >= 2 else ""
+    selected_value = chains[-1] if chains else ""
+    # A one-hop DIRECT/REJECT route has no policy group.  Keep the explicit
+    # target as the selected endpoint but explain why the group link is absent.
+    terminal_targets = {"DIRECT", "REJECT", "PASS", "COMPATIBLE", "dns"}
+    if not group_value and selected_value and selected_value.upper() in terminal_targets:
+        group_reason = "direct_route_without_group"
+    else:
+        group_reason = "mihomo_group_not_reported" if not group_value else ""
+    selected_reason = "mihomo_selected_node_not_reported" if not selected_value else ""
+
+    links = [
+        _routing_link(
+            "device",
+            source_name,
+            source="keenetic-map" if source_name else "inferred",
+            timestamp=device_timestamp or connection_timestamp,
+            reason="device_not_in_keenetic_map" if not source_name else "",
+        ),
+        _routing_link(
+            "host",
+            host_value,
+            source=host_source,
+            timestamp=connection_timestamp,
+            reason=host_reason,
+        ),
+        _routing_link(
+            "rule",
+            rule_value,
+            source=rule_source,
+            timestamp=connection_timestamp,
+            reason=rule_reason,
+        ),
+        _routing_link(
+            "group",
+            group_value,
+            source="mihomo" if group_value else "inferred",
+            timestamp=connection_timestamp,
+            reason=group_reason,
+        ),
+        _routing_link(
+            "selected_node",
+            selected_value,
+            source="mihomo" if selected_value else "inferred",
+            timestamp=connection_timestamp,
+            reason=selected_reason,
+        ),
+    ]
+    missing = [item["kind"] for item in links if not item.get("value")]
+    complete = not missing
+    return {
+        "schema_version": MIHOMO_CLASH_SCHEMA_VERSION,
+        "status": "confirmed" if complete else "partial",
+        "confirmed": complete,
+        "complete": complete,
+        "chain": links,
+        "missing": missing,
+        # Keep the reason machine-readable and short; the frontend supplies
+        # the localized explanation. This matters for a 250-row bounded
+        # snapshot where the envelope retains legacy top-level fields too.
+        "reason": "" if complete else "incomplete_chain",
+    }
+
+
 def _connection_dto(raw_connection: Any, device_map: Mapping[str, Any]) -> dict[str, Any] | None:
     connection = _mapping(raw_connection)
     connection_id = _text(connection.get("id"), 160)
@@ -822,7 +1023,7 @@ def _connection_dto(raw_connection: Any, device_map: Mapping[str, Any]) -> dict[
         return None
     metadata = _mapping(connection.get("metadata"))
     source_ip = _text(metadata.get("sourceIP"), 64)
-    return {
+    result = {
         "id": connection_id,
         "metadata": {
             "network": _text(metadata.get("network"), 24).lower(),
@@ -856,6 +1057,13 @@ def _connection_dto(raw_connection: Any, device_map: Mapping[str, Any]) -> dict[
         "rule": _text(connection.get("rule"), 96),
         "rule_payload": _text(connection.get("rulePayload"), 1024),
     }
+    # Keep explainability adjacent to the existing connection fields so old
+    # consumers can ignore it while the inspector can render evidence links.
+    result["routing_explanation"] = build_mihomo_clash_routing_explanation(
+        connection,
+        device_map=device_map,
+    )
+    return result
 
 
 def build_mihomo_clash_connections_dto(
@@ -905,6 +1113,7 @@ __all__ = [
     "MIHOMO_CLASH_SCHEMA_VERSION",
     "build_mihomo_clash_connections_dto",
     "build_mihomo_clash_delay_dto",
+    "build_mihomo_clash_routing_explanation",
     "build_mihomo_clash_proxy_groups_dto",
     "build_mihomo_clash_snapshot_envelope",
     "build_mihomo_clash_status_dto",

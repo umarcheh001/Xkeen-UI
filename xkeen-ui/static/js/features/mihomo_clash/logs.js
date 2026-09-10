@@ -20,6 +20,13 @@ let renderFrame = 0;
 let reconnectTimer = 0;
 let reconnectAttempt = 0;
 
+function upstreamLogLevel() {
+  // Mihomo's level is a minimum threshold. The economical default is info;
+  // selecting "all" keeps the local filter broad without enabling debug.
+  return ['debug', 'info', 'warning', 'error'].includes(level) && level !== 'all'
+    ? level : 'info';
+}
+
 function byId(id) { return document.getElementById(id); }
 
 function escapeHtml(value) {
@@ -168,7 +175,7 @@ async function openStream(runGeneration) {
       scope: 'mihomo-clash-logs',
     });
     if (!active || generation !== runGeneration || !token) return;
-    const nextSocket = new WebSocket(mihomoClashLogsWsUrl(token));
+    const nextSocket = new WebSocket(mihomoClashLogsWsUrl(token, upstreamLogLevel()));
     socket = nextSocket;
     nextSocket.onopen = () => { reconnectAttempt = 0; render(); };
     nextSocket.onmessage = (event) => {
@@ -176,6 +183,15 @@ async function openStream(runGeneration) {
       let message = null;
       try { message = JSON.parse(event.data); } catch (error) { return; }
       if (message?.type !== 'mihomo-clash-logs' || Number(message.schema_version) !== 1) return;
+      if (message.state === 'ended' && message?.payload?.reason === 'debug_window_expired') {
+        // The server deliberately caps debug. Return the next reconnect to
+        // the economical info stream instead of reopening debug forever.
+        level = 'all';
+        const select = byId('mihomo-clash-logs-level');
+        if (select) select.value = 'all';
+        setState('Debug завершён через 5 минут · возвращаем upstream info.', 'warning');
+        return;
+      }
       if (message.state === 'error') {
         const code = String(message?.error?.code || 'stream_failed');
         setState(code === 'stream_busy'
@@ -219,7 +235,13 @@ function bind() {
   byId('mihomo-clash-logs-pause')?.addEventListener('click', () => setPaused(!paused));
   byId('mihomo-clash-logs-clear')?.addEventListener('click', () => { rows = []; render(); });
   byId('mihomo-clash-logs-level')?.addEventListener('change', (event) => {
-    level = event.target.value || 'all'; render();
+    level = event.target.value || 'all';
+    render();
+    // Changing the level is an upstream operation: close the old socket first
+    // so Mihomo does not keep a second stream alive while the new one starts.
+    closeStream();
+    reconnectAttempt = 0;
+    if (active) void openStream(generation);
   });
   byId('mihomo-clash-logs-filter')?.addEventListener('input', (event) => {
     query = event.target.value || ''; render();

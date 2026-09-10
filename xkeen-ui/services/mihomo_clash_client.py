@@ -34,6 +34,11 @@ MAX_OPERATION_NAME_BYTES = 1024
 # holding a worker for an unreasonable time; the upper bound also keeps the
 # probe below the ``proxy_delay`` endpoint socket timeout.
 MIHOMO_CLASH_DELAY_TIMEOUT_BOUNDS = (1000, 10000)
+# Mihomo accepts a minimum upstream log level.  Keep this allow-list local to
+# the client so a browser can never smuggle an arbitrary query string into the
+# controller.  ``debug`` is opt-in and is additionally time-bounded by the WS
+# facade.
+MIHOMO_CLASH_LOG_LEVELS = ("debug", "info", "warning", "error")
 
 
 @dataclass(frozen=True)
@@ -92,7 +97,7 @@ MIHOMO_CLASH_ENDPOINTS: Mapping[str, MihomoClashEndpoint] = MappingProxyType(
             "GET", "/providers/proxies/{name}/healthcheck", 20.0, 512 * 1024
         ),
         "logs_stream": MihomoClashEndpoint(
-            "GET", "/logs?level=debug&format=structured", 300.0, 64 * 1024, stream=True
+            "GET", "/logs?level=info&format=structured", 300.0, 64 * 1024, stream=True
         ),
         "proxy_select": MihomoClashEndpoint("PUT", "/proxies/{name}", 5.0, 64 * 1024),
         "proxy_unfix": MihomoClashEndpoint("DELETE", "/proxies/{name}", 5.0, 64 * 1024),
@@ -647,16 +652,31 @@ class MihomoClashClient:
         *,
         should_stop: Callable[[], bool] | None = None,
         stop_poll_seconds: float = 0.5,
+        log_level: str | None = None,
     ) -> Iterator[Any]:
         """Yield bounded NDJSON frames and always close the upstream socket."""
 
         spec = self._endpoint(operation, stream=True)
+        path = spec.path
+        if operation == "logs_stream" and log_level is not None:
+            normalized_level = str(log_level or "").strip().lower()
+            if normalized_level not in MIHOMO_CLASH_LOG_LEVELS:
+                raise MihomoClashClientError(
+                    "log_level_not_allowed",
+                    "The requested Mihomo log level is not allowed.",
+                    status=400,
+                )
+            # Rebuild the complete query from the fixed endpoint template;
+            # callers can replace only the allow-listed ``level`` value.
+            path = "/logs?" + urlencode(
+                {"level": normalized_level, "format": "structured"}
+            )
         connection: http.client.HTTPConnection | None = None
         response: http.client.HTTPResponse | None = None
         parser = BoundedNDJSONParser(max_frame_bytes=spec.max_response_bytes)
         try:
             connection = self._open_connection(spec.timeout_seconds)
-            connection.request(spec.method, spec.path, headers=self._headers())
+            connection.request(spec.method, path, headers=self._headers())
             response = connection.getresponse()
             self._validate_response(response, require_json=True)
             while True:
@@ -877,6 +897,7 @@ __all__ = [
     "MAX_OPERATION_NAME_BYTES",
     "MIHOMO_CLASH_DELAY_PRESETS",
     "MIHOMO_CLASH_DELAY_TIMEOUT_BOUNDS",
+    "MIHOMO_CLASH_LOG_LEVELS",
     "MIHOMO_CLASH_ENDPOINTS",
     "MihomoClashClient",
     "MihomoClashClientError",

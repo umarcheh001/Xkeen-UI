@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -1515,8 +1516,31 @@ def create_mihomo_clash_blueprint(
                 code="mihomo_clash_rules_failed",
             )
         payload = dict(lookup.value or {})
+        counter_flag = bool(mihomo_feature_flags(os.environ).get("rule_counters"))
+        if not counter_flag:
+            payload["rules"] = [
+                {
+                    key: value
+                    for key, value in item.items()
+                    if key not in {"hitCount", "hitAt", "missCount", "missAt"}
+                }
+                for item in payload.get("rules", [])
+                if isinstance(item, Mapping)
+            ]
+            payload["rule_counters"] = {
+                "available": False,
+                "fields": [],
+                "reason": "disabled",
+            }
         payload["ok"] = True
         payload["capabilities"] = _capabilities(status=True, rules=True)
+        # Reading /rules is the actual bounded runtime proof. Avoid another
+        # version/probe request and report the flag plus observed fields.
+        payload["capabilities"]["rule_counters"] = bool(
+            counter_flag
+            and isinstance(payload.get("rule_counters"), Mapping)
+            and payload["rule_counters"].get("available") is True
+        )
         payload["telemetry"]["cache"] = {
             "hit": bool(lookup.hit),
             "waited": bool(lookup.waited),
@@ -2165,14 +2189,28 @@ def create_mihomo_clash_blueprint(
             "elapsed_ms": snapshot.elapsed_ms,
             "size_bytes": snapshot.size_bytes,
         }
-        return jsonify(
-            build_mihomo_clash_snapshot_envelope(
-                payload,
-                stream_type="mihomo-clash-connections",
-                sequence=1,
-                state="live",
-            )
-        ), 200
+        envelope = build_mihomo_clash_snapshot_envelope(
+            payload,
+            stream_type="mihomo-clash-connections",
+            sequence=1,
+            state="live",
+        )
+        # The v1 envelope intentionally keeps legacy top-level fields. A
+        # routing explanation is a comparatively large optional object and
+        # duplicating it for every row can break the existing 512 KiB response
+        # budget on a 250-row snapshot. Preserve the evidence for normal small
+        # snapshots (so old clients can inspect it), and compact only when the
+        # encoded response would exceed the established budget; the complete
+        # evidence always remains in the versioned ``payload``.
+        if len(json.dumps(envelope, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) >= 512 * 1024:
+            legacy_rows = []
+            for row in payload.get("connections", []):
+                if isinstance(row, Mapping):
+                    compact = dict(row)
+                    compact.pop("routing_explanation", None)
+                    legacy_rows.append(compact)
+            envelope["connections"] = legacy_rows
+        return jsonify(envelope), 200
 
     @bp.delete("/api/mihomo/clash/connections/<path:connection_id>")
     def api_mihomo_clash_disconnect_connection(connection_id: str):

@@ -10,7 +10,11 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 from urllib.parse import parse_qs, urlsplit
 
-from services.mihomo_clash_client import MihomoClashClient, MihomoClashClientError
+from services.mihomo_clash_client import (
+    MIHOMO_CLASH_LOG_LEVELS,
+    MihomoClashClient,
+    MihomoClashClientError,
+)
 from services.mihomo_clash_dto import (
     build_mihomo_clash_connections_dto,
     build_mihomo_clash_log_entry_dto,
@@ -54,6 +58,7 @@ class _StreamLease:
 
 _ACTIVE_STREAMS: dict[str, _StreamLease] = {}
 MAX_ACTIVE_STREAMS = 8
+MAX_DEBUG_STREAM_SECONDS = 5 * 60
 
 
 def _request_host(environ: dict[str, Any]) -> str:
@@ -276,6 +281,22 @@ def handle_mihomo_clash_logs_request(
         _close_ws(ws)
         return []
 
+    # ``/logs`` takes a minimum level. Keep the value in the same strict
+    # allow-list as the low-level client and default to the economical info
+    # stream. Invalid values fail closed before opening an upstream socket.
+    requested_level = str((params.get("level") or ["info"])[0] or "info").strip().lower()
+    if requested_level not in MIHOMO_CLASH_LOG_LEVELS:
+        _send(
+            ws,
+            _log_envelope(
+                sequence=0,
+                state="error",
+                error={"code": "log_level_not_allowed", "retryable": False},
+            ),
+        )
+        _close_ws(ws)
+        return []
+
     client_key = str(environ.get("REMOTE_ADDR") or "unknown")
     lease = _acquire_stream_lease(client_key, "logs", replace_existing=True)
     if lease is None:
@@ -284,7 +305,11 @@ def handle_mihomo_clash_logs_request(
         return []
 
     sequence = 0
-    ws_debug("mihomo clash logs stream opened", client=environ.get("REMOTE_ADDR", "unknown"))
+    ws_debug(
+        "mihomo clash logs stream opened",
+        client=environ.get("REMOTE_ADDR", "unknown"),
+        level=requested_level,
+    )
     try:
         discovery = discovery_factory(mihomo_config_file, mihomo_root)
         if discovery.target is None:
@@ -298,11 +323,24 @@ def handle_mihomo_clash_logs_request(
             )
             return []
         client = client_factory(discovery.target)
+        debug_started = time.monotonic()
+
+        def should_stop() -> bool:
+            # Debug is useful for a short incident window, but an accidentally
+            # left-open tab must not keep the core in a high-volume mode.
+            return lease.cancelled.is_set() or (
+                requested_level == "debug"
+                and time.monotonic() - debug_started >= MAX_DEBUG_STREAM_SECONDS
+            )
+
+        debug_expired = False
         for raw_frame in client.iter_json_frames(
             "logs_stream",
-            should_stop=lease.cancelled.is_set,
+            should_stop=should_stop,
+            log_level=requested_level,
         ):
-            if lease.cancelled.is_set():
+            if should_stop():
+                debug_expired = requested_level == "debug" and not lease.cancelled.is_set()
                 break
             sequence += 1
             entry = build_mihomo_clash_log_entry_dto(
@@ -314,6 +352,23 @@ def handle_mihomo_clash_logs_request(
             message = _log_envelope(sequence=sequence, state="live", payload=entry)
             if not _send(ws, message):
                 break
+        if requested_level == "debug" and not lease.cancelled.is_set() and (
+            time.monotonic() - debug_started >= MAX_DEBUG_STREAM_SECONDS
+        ):
+            debug_expired = True
+        if debug_expired:
+            _send(
+                ws,
+                _log_envelope(
+                    sequence=sequence,
+                    state="ended",
+                    payload={
+                        "level": "debug",
+                        "reason": "debug_window_expired",
+                        "next_level": "info",
+                    },
+                ),
+            )
     except MihomoClashClientError as exc:
         _send(
             ws,
@@ -335,7 +390,11 @@ def handle_mihomo_clash_logs_request(
     finally:
         _close_ws(ws)
         _release_stream(client_key, "logs", lease)
-        ws_debug("mihomo clash logs stream closed", frames=sequence)
+        ws_debug(
+            "mihomo clash logs stream closed",
+            frames=sequence,
+            level=requested_level,
+        )
     return []
 
 
@@ -456,6 +515,7 @@ def handle_mihomo_clash_telemetry_request(
 
 __all__ = [
     "MAX_ACTIVE_STREAMS",
+    "MAX_DEBUG_STREAM_SECONDS",
     "handle_mihomo_clash_connections_request",
     "handle_mihomo_clash_logs_request",
     "handle_mihomo_clash_telemetry_request",

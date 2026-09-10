@@ -138,6 +138,19 @@ Telemetry Hub — транспорт по умолчанию для вкладк
 `XKEEN_MIHOMO_DNS_QUERY_ENABLE`, `XKEEN_MIHOMO_DNS_FLUSH_ENABLE` и
 `XKEEN_MIHOMO_FAKE_IP_FLUSH_ENABLE` (значение `0`, применяется сразу).
 
+### Explainability и экономные Mihomo logs
+
+Вкладка **Соединения** показывает evidence-chain `устройство → host/sniffHost
+→ правило → группа → выбранный узел` с источником и временем каждого звена.
+Неполные данные явно помечаются и не выдаются за подтверждённый маршрут.
+Вкладка **Rules** сохраняет counters `hitCount`/`missCount` (если их отдаёт
+ядро) и сообщает, когда версия Mihomo их не поддерживает.
+
+Поток логов теперь запрашивается у Mihomo с `level=info` по умолчанию. Debug
+включается только явно, ограничен пятиминутным окном и после него возвращается
+к info. Allowlist уровней, redaction и bounded ring buffer сохраняются.
+Подробнее: [`docs/panel-operator-stage3-explainability-logs.md`](docs/panel-operator-stage3-explainability-logs.md).
+
 ## Установка xk-geodat
 
 `xk-geodat` добавляет просмотр GeoIP/GeoSite, список тегов, поиск и вставку значений в Routing. Панель работает и без него, но DAT-возможности будут ограничены.

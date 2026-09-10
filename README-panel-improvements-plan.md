@@ -231,6 +231,9 @@ secret в нём нет, на flash он не сохраняется.
 
 ## Этап 3 — explainability и экономные server-side logs (P1)
 
+Статус: **выполнен**. Реализация и контрактные проверки описаны в
+`docs/panel-operator-stage3-explainability-logs.md`.
+
 ### Routing explainability
 
 Расширить существующие rules/connections DTO, не создавая новую routing
