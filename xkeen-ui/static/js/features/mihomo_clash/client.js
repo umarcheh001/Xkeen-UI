@@ -2,6 +2,7 @@ import { getMihomoCoreHttpApi } from '../mihomo_runtime.js';
 
 const STATUS_ENDPOINT = '/api/mihomo/clash/status';
 const DNS_QUERY_ENDPOINT = '/api/mihomo/clash/dns/query';
+const DNS_ROUTE_CHECK_ENDPOINT = '/api/mihomo/clash/dns/route-check';
 const DNS_FLUSH_ENDPOINT = '/api/mihomo/clash/dns/flush';
 const FAKE_IP_FLUSH_ENDPOINT = '/api/mihomo/clash/fake-ip/flush';
 const RUNTIME_MODE_ENDPOINT = '/api/mihomo/clash/runtime-mode';
@@ -64,6 +65,21 @@ export function queryMihomoClashDns(name, type = 'A', options = {}) {
     cache: 'no-store',
     credentials: 'same-origin',
     timeoutMs: 8000,
+    retry: 0,
+    signal: options.signal,
+  });
+}
+
+export function probeMihomoClashDnsRoute(name, type = 'A', options = {}) {
+  const params = new URLSearchParams({
+    name: String(name || '').trim(),
+    type: String(type || 'A').toUpperCase(),
+  });
+  return requestJSON(`${DNS_ROUTE_CHECK_ENDPOINT}?${params.toString()}`, {
+    method: 'GET',
+    cache: 'no-store',
+    credentials: 'same-origin',
+    timeoutMs: 5000,
     retry: 0,
     signal: options.signal,
   });

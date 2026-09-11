@@ -263,7 +263,7 @@ def build_mihomo_clash_status_dto(
                 value = raw_item.get(key)
                 if value is None or isinstance(value, (str, int, bool)):
                     item[key] = value
-            for key in ("static_supported", "runtime_ready", "enabled", "mutating"):
+            for key in ("static_supported", "runtime_ready", "enabled", "mutating", "actionable"):
                 value = raw_item.get(key)
                 if value is None or isinstance(value, bool):
                     item[key] = value

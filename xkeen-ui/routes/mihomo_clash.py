@@ -42,6 +42,7 @@ from services.mihomo_clash_dns import (
     DNS_TYPES,
     dns_error_payload,
     normalize_dns_query,
+    probe_dns_listener,
 )
 from services.mihomo_rule_provider_inspector import (
     RuleProviderInspectorError,
@@ -85,6 +86,7 @@ GROUPS_CACHE_TTL_SECONDS = 1.0
 PROVIDERS_CACHE_TTL_SECONDS = 10.0
 RULES_CACHE_TTL_SECONDS = 10.0
 MAX_DNS_QUERY_NAME_CHARS = 253
+MAX_CONFIG_FILE_BYTES = 512 * 1024
 
 
 def _capabilities(
@@ -328,13 +330,64 @@ def _safe_config_payload(payload: Any) -> dict[str, Any]:
         # Only the mode switch is useful to the diagnostics DTO. Resolver
         # addresses, nameserver URLs and secrets never enter the cache.
         safe_dns: dict[str, Any] = {}
-        for key in ("enable", "enhanced-mode", "enhanced_mode"):
+        for key in (
+            "enable",
+            "enhanced-mode",
+            "enhanced_mode",
+            "listen",
+            # These values are useful for explaining Fake-IP diagnostics and
+            # are not credentials or resolver addresses.
+            "fake-ip-range",
+            "fake-ip-range6",
+            "fake-ip-filter-mode",
+        ):
             value = dns.get(key)
             if isinstance(value, (str, bool)):
                 safe_dns[key] = value[:96] if isinstance(value, str) else value
         if safe_dns:
             result["dns"] = safe_dns
     return result
+
+
+def _safe_config_file_payload(config_path: str) -> dict[str, Any]:
+    """Read only the bounded, redacted DNS fragment from active config.yaml.
+
+    Some Mihomo vendor builds omit the ``dns`` object from ``GET /configs``
+    even though the resolver is fully configured and working.  The local
+    active config is the authoritative fallback for diagnostics; it is parsed
+    with ``safe_load`` and immediately reduced by ``_safe_config_payload`` so
+    secrets and resolver URLs never enter the API response or cache.
+    """
+
+    if _yaml is None or not config_path:
+        return {}
+    try:
+        path = Path(config_path)
+        if path.stat().st_size > MAX_CONFIG_FILE_BYTES:
+            return {}
+        parsed = _yaml.safe_load(path.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 - optional diagnostic fallback only
+        return {}
+    return _safe_config_payload(parsed)
+
+
+def _merge_dns_config_fallback(config_payload: Any, config_path: str) -> dict[str, Any]:
+    """Fill a missing runtime DNS fragment from config.yaml without overwrite."""
+
+    safe_runtime = _safe_config_payload(config_payload)
+    safe_file = _safe_config_file_payload(config_path)
+    file_dns = safe_file.get("dns")
+    if not isinstance(file_dns, Mapping):
+        return safe_runtime
+    merged = dict(safe_runtime)
+    merged_dns = dict(file_dns)
+    runtime_dns = safe_runtime.get("dns")
+    if isinstance(runtime_dns, Mapping):
+        # Runtime values take precedence; config.yaml fills only fields which
+        # this Mihomo build omitted from GET /configs.
+        merged_dns.update(runtime_dns)
+    merged["dns"] = merged_dns
+    return merged
 
 
 def _safe_response_payload(operation: str, response: Any) -> dict[str, Any]:
@@ -410,13 +463,23 @@ def _dns_capability_state(client: Any, capability: str) -> tuple[bool, Any]:
     item = details.get(capability, {})
     # An explicit DNS query is itself the bounded runtime check. Avoid sending
     # a second synthetic query for ``example.invalid`` immediately before the
-    # user's query. Mutating cache flushes remain statically gated and never
-    # use a mutation as a capability probe.
+    # user's query. Cache flushes are never probed automatically; an unknown
+    # hash build becomes actionable only after the user's confirmation and the
+    # real allow-listed POST then determines endpoint support.
     if capability == "dns_query":
         supported = bool(
             item.get("enabled") is True
             and item.get("static_supported") is not False
         )
+    elif (
+        item.get("actionable") is True
+    ):
+        # Vendor/nightly builds commonly report a git hash (for example
+        # ``alpha-65287f0``) instead of semver.  The endpoint is still
+        # allow-listed and the user has explicitly confirmed the action, so
+        # let the real request determine support instead of disabling the
+        # button forever. A genuine 404/501 remains a truthful failure.
+        supported = True
     else:
         supported = values.get(capability) is True
     return supported, item
@@ -935,13 +998,14 @@ def create_mihomo_clash_blueprint(
                 config_payload: Mapping[str, Any] = {}
                 try:
                     config_result = client.request_json("configs")
-                    config_payload = _safe_config_payload(
-                        getattr(config_result, "payload", None)
+                    config_payload = _merge_dns_config_fallback(
+                        getattr(config_result, "payload", None),
+                        mihomo_config_file,
                     )
                 except Exception:
                     # DNS remains useful when a compatible core exposes
                     # /dns/query but not the optional /configs shape.
-                    config_payload = {}
+                    config_payload = _safe_config_file_payload(mihomo_config_file)
                 return normalize_dns_query(
                     getattr(result, "payload", None),
                     name=name.strip().rstrip("."),
@@ -980,6 +1044,82 @@ def create_mihomo_clash_blueprint(
                     reason="upstream_error",
                 )
             ), 502
+        finally:
+            lease.release()
+
+    @bp.route(
+        "/api/mihomo/clash/dns/route-check",
+        methods=("GET",),
+    )
+    def api_mihomo_clash_dns_route_check():
+        """Probe the local UDP/53 listener, separately from controller DNS API."""
+
+        try:
+            name, qtype, _source = _dns_request_values()
+        except MihomoClashClientError as exc:
+            return error_response(
+                "Некорректный DNS-запрос.",
+                exc.status,
+                ok=False,
+                code=exc.code,
+                retryable=False,
+            )
+        if qtype not in {"A", "AAAA"}:
+            return error_response(
+                "Проверка listener поддерживает только записи A и AAAA.",
+                400,
+                ok=False,
+                code="dns_route_type_invalid",
+                retryable=False,
+            )
+        lease, rejected_response = _acquire_action("dns-route-check")
+        if rejected_response:
+            return rejected_response
+        discovery = discovery_factory(mihomo_config_file, root)
+        if discovery.target is None:
+            lease.release()
+            return error_response(
+                "Mihomo controller не настроен или заблокирован.",
+                503,
+                ok=False,
+                code="mihomo_clash_target_unavailable",
+                retryable=False,
+            )
+        client = client_factory(discovery.target)
+        try:
+            config_payload: Mapping[str, Any] = {}
+            try:
+                config_result = client.request_json("configs")
+                config_payload = _merge_dns_config_fallback(
+                    getattr(config_result, "payload", None),
+                    mihomo_config_file,
+                )
+            except Exception:
+                config_payload = _safe_config_file_payload(mihomo_config_file)
+            return jsonify(
+                probe_dns_listener(
+                    name,
+                    qtype=qtype,
+                    config_payload=config_payload,
+                )
+            ), 200
+        except ValueError as exc:
+            return error_response(
+                "Проверка DNS listener недоступна для этого запроса.",
+                400,
+                ok=False,
+                code="dns_route_probe_invalid",
+                retryable=False,
+                detail=str(exc)[:128],
+            )
+        except Exception:
+            return error_response(
+                "Не удалось проверить DNS listener роутера.",
+                502,
+                ok=False,
+                code="dns_route_probe_failed",
+                retryable=True,
+            )
         finally:
             lease.release()
 

@@ -6695,7 +6695,7 @@ body.panel-page .xk-mihomo-dns-state {
 
 body.panel-page .xk-mihomo-dns-query-row {
   display: grid;
-  grid-template-columns: auto minmax(150px, 1fr) auto 88px auto;
+  grid-template-columns: auto minmax(150px, 1fr) auto 88px repeat(2, auto);
   gap: 6px;
   align-items: center;
 }
@@ -6741,6 +6741,43 @@ body.panel-page .xk-mihomo-dns-result-head {
 body.panel-page .xk-mihomo-dns-result-head span {
   color: var(--op-muted);
   font-size: calc(9px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .xk-mihomo-dns-route {
+  margin-top: 5px;
+  color: var(--op-muted);
+  font-size: calc(9px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .xk-mihomo-dns-route[data-state="fake-ip-range"] {
+  color: var(--op-success);
+}
+
+body.panel-page .xk-mihomo-dns-route[data-state="upstream-address"],
+body.panel-page .xk-mihomo-dns-route[data-state="range-unavailable"],
+body.panel-page .xk-mihomo-dns-route[data-state="not-checked"] {
+  color: var(--op-warning);
+}
+
+body.panel-page .xk-mihomo-dns-route-result {
+  margin-top: 7px;
+  padding: 6px 8px;
+  border: 1px dashed var(--op-border);
+  border-radius: var(--op-control-radius);
+  color: var(--op-muted);
+  font-size: calc(9px * var(--xk-font-scale, 1));
+}
+
+body.panel-page .xk-mihomo-dns-route-result[data-state="fake-ip"] {
+  border-color: color-mix(in srgb, var(--op-success) 48%, var(--op-border));
+  color: var(--op-success);
+}
+
+body.panel-page .xk-mihomo-dns-route-result[data-state="real-ip"],
+body.panel-page .xk-mihomo-dns-route-result[data-state="unreachable"],
+body.panel-page .xk-mihomo-dns-route-result[data-state="range-unavailable"] {
+  border-color: color-mix(in srgb, var(--op-warning) 48%, var(--op-border));
+  color: var(--op-warning);
 }
 
 body.panel-page .xk-mihomo-dns-result ul {

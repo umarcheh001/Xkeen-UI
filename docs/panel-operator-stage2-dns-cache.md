@@ -10,6 +10,7 @@ same-origin auth-контур.
 Фасад предоставляет:
 
 - `GET /api/mihomo/clash/dns/query?name=example.com&type=A`;
+- `GET /api/mihomo/clash/dns/route-check?name=example.com&type=A`;
 - `POST /api/mihomo/clash/dns/flush` с JSON
   `{ "confirmed": true }`;
 - `POST /api/mihomo/clash/fake-ip/flush` с JSON
@@ -22,7 +23,16 @@ same-origin auth-контур.
 DNS query принимает только `A`, `AAAA`, `CNAME` и `TXT`. Имя проверяется на
 границе facade и повторно в low-level client; arbitrary controller, path,
 upstream DNS и URL не передаются из браузера. DTO содержит `ttl`, `latency_ms`,
-`dns_mode`, `rcode_name`, `answers` и нормализованный `error_reason`.
+`dns_mode`, `rcode_name`, `answers`, нормализованный `error_reason`,
+`answer_observation` и `route_check`. `answer_observation` описывает только
+форму ответа самого controller API (адрес похож на Fake-IP CIDR или является
+upstream-адресом). `route_check` намеренно имеет состояние `not-checked`:
+`/dns/query` не является проверкой клиентского listener на порту 53. Кнопка
+«Проверить listener 53» вызывает отдельный read-only route-check, который
+посылает ограниченный UDP A/AAAA запрос на `127.0.0.1:53` и классифицирует
+полученный адрес относительно Fake-IP CIDR. Это проверяет живой listener
+роутера, но не заменяет проверку реального подключения клиента через
+TUN/TProxy.
 
 Flush — отдельное обслуживающее действие. Оно не вызывает managed DNS
 configuration assistant, не меняет `config.yaml`, требует CSRF/session,
@@ -68,14 +78,18 @@ DNS capabilities доступны по умолчанию и сохраняют 
 - `XKEEN_MIHOMO_FAKE_IP_FLUSH_ENABLE=1` (default).
 
 Все три настройки находятся в **DevTools → ENV → Mihomo и HWID** и
-применяются сразу, без Restart UI. Для сборок Mihomo без semver mutating flush
-остаётся отключённым до подтверждения совместимой версии; read-only query
-проверяется фактическим запросом к `/dns/query`.
+применяются сразу, без Restart UI. Для сборок Mihomo без semver кнопки flush
+остаются доступными после явного подтверждения: endpoint allow-listed, а
+совместимость проверяется самим запросом. Для старого core или отключённого
+флага кнопка остаётся недоступной с объяснением причины.
 
 `XKEEN_MIHOMO_CAPABILITY_PROBE=1` по-прежнему управляет только диагностическим
 runtime probe в capability/status response; сам явный DNS query выполняется
 через bounded allow-list и, при неизвестной runtime readiness, даёт честную
 ошибку upstream вместо имитации успеха.
+
+Route-check ограничен отдельной rate/concurrency policy (`dns-route-check`) и
+не выполняет mutation или изменение `config.yaml`.
 
 ## Проверки
 

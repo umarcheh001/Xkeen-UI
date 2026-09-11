@@ -13,12 +13,16 @@ upstream shape — в `tests/fixtures/mihomo_clash/`. Версионный gate 
 runtime readiness: старый core даёт `static_supported: false`, неизвестная
 версия — `null`. Read-only DNS query проверяется фактическим bounded-запросом
 в фасаде, поэтому для vendor-сборок без semver она может быть доступна без
-отдельного probe; mutating endpoints по-прежнему требуют известной версии.
+отдельного probe. Для DNS flush endpoints неизвестная semver не блокирует
+подтверждённое действие: capability details помечает его как
+`actionable: true`, а реальный `POST /cache/*/flush` остаётся единственной
+проверкой совместимости и честно возвращает `501`, если endpoint отсутствует.
 
 Публичные ключи добавлены обратно совместимо: `traffic`,
 `telemetry_stream`, `dns_query`, `dns_flush`, `fake_ip_flush`, `cache_etag`.
 Значения имеют тип `boolean | null`; frontend включает новую возможность
-только при строгом `=== true`. Если конкретная сборка не реализует
+только при строгом `=== true`, кроме DNS maintenance с отдельным
+`capability_details.<name>.actionable`. Если конкретная сборка не реализует
 `/dns/query`, реальный запрос вернёт честный `501 Not supported`.
 
 ## Rollout flags

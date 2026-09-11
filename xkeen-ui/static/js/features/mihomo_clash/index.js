@@ -219,7 +219,10 @@ function renderStatus(state, payload = null) {
   if (state === 'ready' && active && visible && currentSubview === 'control') {
     activateMihomoClashGroups(payload?.capabilities || {}, runtimeMode);
     activateMihomoClashEgress();
-    activateMihomoClashDns(payload?.capabilities || {});
+    activateMihomoClashDns({
+      ...(payload?.capabilities || {}),
+      capability_details: payload?.capability_details || {},
+    });
   } else {
     deactivateMihomoClashGroups();
     deactivateMihomoClashEgress();

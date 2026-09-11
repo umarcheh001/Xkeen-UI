@@ -66,6 +66,14 @@ DEFAULT_FLAGS: Mapping[str, bool] = {
     "cache_etag": False,
 }
 
+# Mihomo Meta vendor/nightly builds frequently identify themselves with a git
+# hash (``alpha-65287f0``) rather than semver.  These two endpoints have been
+# stable across the supported API and are explicitly confirmed in the UI. The
+# matrix keeps its conservative public boolean for compatibility, while the
+# separate ``actionable`` detail lets the DNS surface offer a confirmed
+# best-effort action and let the real endpoint prove support.
+UNKNOWN_VERSION_ACTIONABLE = frozenset({"dns_flush", "fake_ip_flush"})
+
 
 def parse_mihomo_version(value: Any) -> tuple[int, int, int] | None:
     """Parse a semantic ``major.minor.patch`` version from Mihomo output."""
@@ -139,8 +147,10 @@ def build_capability_state(
     Public values intentionally remain tri-state.  ``None`` means that the
     core version or an optional non-mutating runtime probe is unknown; it is
     never treated as success by the frontend.  Mutating endpoints are not
-    probed, so a true value for them requires an explicit feature flag and a
-    known compatible version.
+    probed automatically, so their public value remains conservative.  The
+    two allow-listed DNS flush actions additionally expose ``actionable`` for
+    a healthy hash/alpha build; after confirmation the real POST is the
+    compatibility check and a 404/501 is reported honestly.
     """
 
     flags = mihomo_feature_flags(env)
@@ -208,6 +218,12 @@ def build_capability_state(
             "runtime_ready": runtime_ready,
             "enabled": enabled,
             "mutating": item.mutating,
+            "actionable": bool(
+                enabled
+                and status_ready
+                and static_supported is None
+                and item.name in UNKNOWN_VERSION_ACTIONABLE
+            ),
             "reason": (
                 "disabled"
                 if not enabled

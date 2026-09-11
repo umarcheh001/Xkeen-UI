@@ -112,10 +112,13 @@ def test_dns_query_is_available_for_healthy_vendor_build_without_semver():
     assert values["dns_query"] is True
     assert details["dns_query"]["static_supported"] is None
     assert details["dns_query"]["runtime_ready"] is True
-    # Mutating operations remain conservatively gated until a compatible
-    # semver is known, even though their rollout flags default to enabled.
+    # Mutating operations keep the conservative public boolean for legacy
+    # consumers, while DNS maintenance exposes a confirmed best-effort action
+    # for hash/alpha builds through capability_details.
     assert values["dns_flush"] is False
     assert values["fake_ip_flush"] is False
+    assert details["dns_flush"]["actionable"] is True
+    assert details["fake_ip_flush"]["actionable"] is True
 
 
 def test_snapshot_envelope_keeps_schema_v1_legacy_fields_and_stale_metadata():

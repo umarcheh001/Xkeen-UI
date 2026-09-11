@@ -39,6 +39,7 @@ MIHOMO_CLASH_ACTION_POLICIES: Mapping[str, MihomoClashActionPolicy] = MappingPro
         "provider-update": MihomoClashActionPolicy(2, 2, 120, 60.0),
         "provider-healthcheck": MihomoClashActionPolicy(2, 1, 20, 60.0),
         "dns-query": MihomoClashActionPolicy(4, 2, 120, 60.0),
+        "dns-route-check": MihomoClashActionPolicy(2, 1, 60, 60.0),
         "dns-flush": MihomoClashActionPolicy(1, 1, 6, 60.0),
         "fake-ip-flush": MihomoClashActionPolicy(1, 1, 6, 60.0),
     }

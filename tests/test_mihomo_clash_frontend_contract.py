@@ -98,6 +98,27 @@ def test_workspace_lifecycle_aborts_network_outside_runtime_subviews():
     assert "retry: 0" in client
 
 
+def test_dns_maintenance_exposes_hash_build_fallback_and_route_check():
+    markup = _mihomo_markup()
+    dns = _text(ROOT / "xkeen-ui/static/js/features/mihomo_clash/dns.js")
+    dto = _text(ROOT / "xkeen-ui/services/mihomo_clash_dto.py")
+    service = _text(ROOT / "xkeen-ui/services/mihomo_clash_dns.py")
+    index = _text(FEATURE)
+
+    assert 'id="mihomo-clash-dns-maintenance-hint"' in markup
+    assert 'id="mihomo-clash-dns-route-check"' in markup
+    assert 'id="mihomo-clash-dns-route-result"' in markup
+    assert "capabilityDetails(name)" in dns
+    assert "actionable === true" in dns
+    assert "route_check" in dns
+    assert "answer_observation" in dns
+    assert "answer_observation" in service
+    assert "probeMihomoClashDnsRoute" in dns
+    assert "DNS_ROUTE_CHECK_ENDPOINT" in _text(ROOT / "xkeen-ui/static/js/features/mihomo_clash/client.js")
+    assert '"actionable"' in dto
+    assert "capability_details: payload?.capability_details || {}" in index
+
+
 def test_telemetry_status_tooltip_updates_the_portal_tooltip_attribute():
     feature = _text(FEATURE)
 

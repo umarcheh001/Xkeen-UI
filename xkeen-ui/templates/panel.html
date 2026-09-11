@@ -1289,14 +1289,18 @@
               <option value="TXT">TXT</option>
             </select>
             <button type="button" id="mihomo-clash-dns-query" class="btn-primary">{{ op_icon('search') }}<span>Проверить</span></button>
+            <button type="button" id="mihomo-clash-dns-route-check" class="btn-secondary" disabled>{{ op_icon('dns') }}<span>Проверить listener 53</span></button>
           </div>
           <div id="mihomo-clash-dns-result" class="xk-mihomo-dns-result" role="status" aria-live="polite">
             Введите имя и запустите проверку.
           </div>
+          <div id="mihomo-clash-dns-route-result" class="xk-mihomo-dns-route-result" data-state="not-checked" role="status" aria-live="polite">
+            Listener 127.0.0.1:53 ещё не проверен.
+          </div>
           <div class="xk-mihomo-dns-maintenance">
             <div>
               <strong>Обслуживание кэша</strong>
-              <span>Требует отдельного подтверждения. Автоматическое исправление DNS не выполняется.</span>
+              <span id="mihomo-clash-dns-maintenance-hint">Требует отдельного подтверждения. Автоматическое исправление DNS не выполняется.</span>
             </div>
             <div class="xk-mihomo-dns-maintenance-actions">
               <button type="button" id="mihomo-clash-dns-flush" class="btn-secondary" disabled>{{ op_icon('clear') }}<span>Очистить DNS cache</span></button>
