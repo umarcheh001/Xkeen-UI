@@ -643,6 +643,174 @@ def test_capture_failure_is_remembered_for_the_window(tmp_path: Path, monkeypatc
     assert dns.last_capture_error() == ""
 
 
+# Журнал прошивки 4.03 (стенд 4, 12.09.2026) как его отдаёт ``ndmc -c 'show log'``:
+# длинные записи переносятся на строки с отступом, последней идёт запись о
+# сессии самого читателя, в хвосте -- управляющая последовательность терминала.
+_FIRMWARE_LOG = "\n".join(
+    [
+        'I [Sep 12 23:30:00] ndm: Hotspot::Manager: policy "Policy0" applied to',
+        '                    interface "Bridge0". ',
+        "I [Sep 12 23:58:37] ndm: Core::Server: started Session",
+        "                    /var/run/ndm.core.socket. ",
+        'I [Sep 12 23:58:37] ndm: Hotspot::Manager: policy "Policy1" applied to',
+        '                    interface "Bridge1". ',
+        "I [Sep 12 23:58:37] ndm: Netfilter::Util::Conntrack: flushed 61 IPv4",
+        "                    connections. ",
+        "I [Sep 12 23:59:00] dropbear[13672]: Child connection from 192.168.21.18:61723",
+        "I [Sep 12 23:59:00] ndm: Core::Server: started Session",
+        "                    /var/run/ndm.core.socket. ",
+        "\x1b[K",
+    ]
+)
+
+
+class _LogRun:
+    rc = 0
+    stdout = _FIRMWARE_LOG
+    stderr = ""
+
+
+def test_a_rule_the_guard_puts_back_leaves_a_line_in_the_journal(tmp_path: Path, monkeypatch):
+    # Стенд 4, 12.09.2026: прошивка перестроила цепочки после смены политики
+    # сегмента, сторож за секунды вернул правило наверх -- и в core.log не
+    # осталось ни следа. Разбирать такую гонку потом было бы не по чему.
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    (state_dir / "dns_over_vless.json").write_text(
+        json.dumps({"enabled": True, "capture_clients": True, "capture_macs": ["aa:bb:cc:dd:ee:01"]}),
+        encoding="utf-8",
+    )
+    journal: list[tuple[str, str, dict]] = []
+    monkeypatch.setattr(dns, "_core_log", lambda level, msg, **extra: journal.append((level, msg, extra)))
+
+    monkeypatch.setattr(
+        dns.dns_client_capture,
+        "ensure",
+        lambda macs: {
+            "ok": True,
+            "changed": True,
+            "macs": list(macs),
+            "repairs": ["jump"],
+            "jump_was": 2,
+            "above": "-A PREROUTING -m set --match-set xkeen_deny_mac src -j RETURN",
+        },
+    )
+    monkeypatch.setattr(dns, "run_ndmc", lambda *_a, **_k: _LogRun())
+    dns.reapply_client_capture(ui_state_dir=str(state_dir))
+
+    # Строку читает пользователь, присылая журнал: сначала человеческая фраза
+    # -- что случилось и что перед этим сделала прошивка, -- а поля в хвосте.
+    # Наверху при этом стояло правило XKeen: его хук переставляет свои правила
+    # после каждой перестройки firewall, так что по верхнему правилу причину
+    # не узнать -- только по журналу прошивки.
+    assert len(journal) == 1
+    level, msg, extra = journal[0]
+    assert level == "info"
+    assert msg.startswith("DNS-over-VLESS: правило устройств восстановлено")
+    assert "было на месте 2" in msg
+    assert 'policy "Policy1" applied to interface "Bridge1" (23:58:37)' in msg
+    assert extra == {
+        "event": "dns_over_vless.capture_restored",
+        "repairs": "jump",
+        "jump_was": 2,
+        "above": "-A PREROUTING -m set --match-set xkeen_deny_mac src -j RETURN",
+        "macs": 1,
+    }
+
+    # Тик, которому чинить нечего, журнал не засоряет и журнал прошивки не
+    # читает: сторож ходит часто.
+    journal.clear()
+    monkeypatch.setattr(dns.dns_client_capture, "ensure", lambda macs: {"ok": True, "changed": False, "repairs": []})
+    monkeypatch.setattr(dns, "run_ndmc", lambda *_a, **_k: pytest.fail("читать журнал прошивки незачем"))
+    dns.reapply_client_capture(ui_state_dir=str(state_dir))
+    assert journal == []
+
+
+def test_the_firmware_log_names_the_policy_change_just_before_the_repair():
+    events, rebuilt = dns.parse_firmware_events(_FIRMWARE_LOG)
+
+    # Окно отсчитывается от записи о сессии самого читателя -- это часы
+    # прошивки, и пояс Python панели тут ни на что не влияет. Смена политики
+    # получасовой давности к этой починке отношения не имеет.
+    assert events == ['policy "Policy1" applied to interface "Bridge1" (23:58:37)']
+    assert rebuilt is True
+
+
+def test_the_firmware_log_is_read_across_the_new_year():
+    # Года в журнале нет, а однозначные дни прошивка выравнивает пробелом.
+    text = "\n".join(
+        [
+            'I [Dec 31 23:59:50] ndm: Hotspot::Manager: policy "permit" applied to interface',
+            '                    "Bridge1". ',
+            "I [Jan  1 00:00:20] ndm: Core::Server: started Session",
+        ]
+    )
+
+    events, rebuilt = dns.parse_firmware_events(text)
+
+    assert events == ['policy "permit" applied to interface "Bridge1" (23:59:50)']
+    assert rebuilt is False
+
+
+_JUMP = {"repairs": ["jump"], "jump_was": 2, "above": "-A PREROUTING -m set --match-set xkeen_deny_mac src -j RETURN"}
+
+
+def test_the_journal_line_quotes_what_the_firmware_did():
+    msg = dns._describe_capture_repair(
+        _JUMP, firmware=(['policy "Policy1" applied to interface "Bridge1" (23:58:37)'], True)
+    )
+    # Ровно случай стенда 4: пользователь узнаёт в строке свою смену политики.
+    assert 'Перед этим прошивка применила: policy "Policy1" applied to interface "Bridge1" (23:58:37).' in msg
+    # А не вывод по верхнему правилу -- на стенде он оказался ложным.
+    assert "ни при чём" not in msg
+
+
+def test_a_rebuild_without_a_policy_change_is_said_as_such():
+    msg = dns._describe_capture_repair(_JUMP, firmware=([], True))
+    assert "Прошивка перестроила firewall, но смены политики доступа в её журнале нет" in msg
+
+
+def test_with_a_quiet_firmware_the_line_points_at_xkeen():
+    msg = dns._describe_capture_repair(_JUMP, firmware=([], False))
+    assert "Событий прошивки за последние полторы минуты нет" in msg
+    assert "вероятно, правила переставил сам XKeen" in msg
+
+
+def test_an_unreadable_firmware_log_is_said_rather_than_guessed():
+    msg = dns._describe_capture_repair(_JUMP, firmware=None)
+    assert "Журнал прошивки прочитать не удалось" in msg
+    assert "XKeen" not in msg
+
+
+def test_a_chain_wiped_whole_is_not_put_on_xkeen():
+    msg = dns._describe_capture_repair(
+        {"repairs": ["chain", "rules", "jump"], "jump_was": 0, "above": "-A PREROUTING -j _NDM_DNS_REDIRECT"},
+        firmware=([], False),
+    )
+    assert "цепочка правил панели пропала и создана заново" in msg
+    assert "перезагрузки роутера" in msg
+    assert "переставил сам XKeen" not in msg
+
+
+def test_a_device_ticked_by_hand_is_not_logged_as_a_restoration(tmp_path: Path, monkeypatch):
+    # Строка в журнале -- про вмешательство прошивки. Выбор пользователя
+    # восстановлением не является.
+    state_dir = _capture_state(tmp_path, ["10:f6:0a:a5:e7:9a"])
+    journal: list[str] = []
+    monkeypatch.setattr(dns, "_core_log", lambda level, msg, **extra: journal.append(msg))
+    monkeypatch.setattr(
+        dns.dns_client_capture, "ensure", lambda macs: {"ok": True, "changed": True, "repairs": ["rules"]}
+    )
+
+    dns.apply_client_capture(
+        ui_state_dir=str(state_dir),
+        capture_clients=True,
+        capture_macs=["10:f6:0a:a5:e7:9a", "3c:38:24:5f:86:c4"],
+    )
+
+    assert journal == []
+
+
 def test_fallback_reason_says_nothing_about_the_guard_when_it_is_off(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_WATCHDOG", "0")
     configs, routing_path, _state = _base_config(tmp_path)

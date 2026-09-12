@@ -250,10 +250,23 @@ def ensure(macs: Any) -> Dict[str, Any]:
     there is nothing to do and exact when there is: the firmware rebuilds its
     own chains whenever policies or interfaces change, and our jump can end up
     below the redirect it is meant to precede.
+
+    Besides ``changed`` the result says what was mended (``repairs``), where
+    the jump stood before (``jump_was``, 0 when absent) and which rule held the
+    top of PREROUTING then (``above``): a guard that quietly puts things back
+    leaves nothing else to tell a firmware rebuild from XKeen's own rules.
     """
     wanted = normalize_macs(macs)
     if not wanted:
-        return {"ok": True, "changed": remove(), "macs": []}
+        removed = remove()
+        return {
+            "ok": True,
+            "changed": removed,
+            "macs": [],
+            "repairs": ["removed"] if removed else [],
+            "jump_was": 0,
+            "above": "",
+        }
 
     addresses = lan_addresses()
     if not addresses:
@@ -262,14 +275,14 @@ def ensure(macs: Any) -> Dict[str, Any]:
             "правило не поставлено."
         )
 
-    changed = False
+    repairs: List[str] = []
     rc, chain_text, chain_err = _run(["-S", CHAIN])
     if rc != 0:
         if not ("No chain" in chain_err or "does not exist" in chain_err):
             raise CaptureError(chain_err or "не удалось прочитать правила")
         _must(["-N", CHAIN])
         chain_text = ""
-        changed = True
+        repairs.append("chain")
 
     # Compared rule by rule, not device by device: a segment added or an
     # address changed has to reach the chain as surely as a new device does.
@@ -284,18 +297,34 @@ def ensure(macs: Any) -> Dict[str, Any]:
             _must(["-F", CHAIN])
         for rule in desired:
             _must(rule)
-        changed = True
+        repairs.append("rules")
 
     rc, parent_text, parent_err = _run(["-S", PARENT_CHAIN])
     if rc != 0:
         raise CaptureError(parent_err or "не удалось прочитать PREROUTING")
     position = _jump_index(parent_text)
+    above = ""
     if position != 1:
+        above = next(
+            (
+                line.strip()
+                for line in parent_text.splitlines()
+                if line.startswith(f"-A {PARENT_CHAIN} ")
+            ),
+            "",
+        )
         # Below the firmware's own redirect the chain is decoration: that rule
         # ends the table before ours is reached.
         if position:
             _must(["-D", PARENT_CHAIN, "-j", CHAIN])
         _must(["-I", PARENT_CHAIN, "1", "-j", CHAIN])
-        changed = True
+        repairs.append("jump")
 
-    return {"ok": True, "changed": changed, "macs": wanted}
+    return {
+        "ok": True,
+        "changed": bool(repairs),
+        "macs": wanted,
+        "repairs": repairs,
+        "jump_was": position,
+        "above": above,
+    }

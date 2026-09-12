@@ -2601,6 +2601,135 @@ def apply_client_capture(
     }
 
 
+def _core_log(level: str, msg: str, **extra: Any) -> None:
+    """core.log when the panel has one; never raises, never required."""
+    try:
+        from core.logging import core_log
+    except Exception:  # noqa: BLE001 - a module run on its own has no journal
+        return
+    core_log(level, msg, **extra)
+
+
+FIRMWARE_EVENT_WINDOW = 90.0
+_FIRMWARE_RECORD_RE = re.compile(
+    r"^[A-Z] \[([A-Z][a-z]{2})\s+(\d{1,2}) (\d{2}):(\d{2}):(\d{2})\] ([^:]+): (.*)$"
+)
+_FIRMWARE_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+_TERMINAL_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def parse_firmware_events(text: str, window: float = FIRMWARE_EVENT_WINDOW) -> Any:
+    """What the firmware did in the last ``window`` seconds of ``show log``.
+
+    Returns ``(events, rebuilt)``: the ``Hotspot::Manager`` records -- policy
+    and access changes, quoted as the firmware wrote them -- and whether a
+    ``Netfilter`` record says the firewall was rebuilt.  ``None`` when the text
+    holds no record at all.
+
+    The window is measured from the last record, not from the panel's clock:
+    reading the log leaves a session record of its own, so the last one is
+    "now" on the firmware's clock, and a Python without the router's time zone
+    cannot shift it.  The log carries no year either -- a record later than
+    "now" belongs to the year before.
+
+    Why the log and not the firewall: after any rebuild XKeen's netfilter hook
+    puts its own rule back on top, so the rule found above ours looks the same
+    whether a policy was changed or XKeen restarted (measured on the bench,
+    12.09.2026).
+    """
+    from datetime import datetime, timedelta
+
+    records: List[List[Any]] = []
+    for raw in str(text or "").splitlines():
+        line = _TERMINAL_ESCAPE_RE.sub("", raw).rstrip()
+        match = _FIRMWARE_RECORD_RE.match(line)
+        if match:
+            month, day, hour, minute, second, ident, message = match.groups()
+            try:
+                stamp = datetime(
+                    2000, _FIRMWARE_MONTHS.index(month) + 1, int(day), int(hour), int(minute), int(second)
+                )
+            except ValueError:
+                stamp = None
+            records.append([stamp, ident.strip(), message.strip(), f"{hour}:{minute}:{second}"])
+        elif records and line.strip() and raw[:1].isspace():
+            # A long record goes on over indented lines.
+            records[-1][2] = f"{records[-1][2]} {line.strip()}"
+    dated = [record for record in records if record[0] is not None]
+    if not dated:
+        return None
+    now = dated[-1][0]
+    events: List[str] = []
+    rebuilt = False
+    for stamp, ident, message, clock in dated:
+        if stamp > now:
+            try:
+                stamp = stamp.replace(year=1999)
+            except ValueError:
+                continue
+        if ident != "ndm" or now - stamp > timedelta(seconds=window):
+            continue
+        if message.startswith("Hotspot::Manager:"):
+            item = f"{message[len('Hotspot::Manager:'):].strip().rstrip(' .')} ({clock})"
+            if item not in events:
+                events.append(item)
+        elif message.startswith("Netfilter::"):
+            rebuilt = True
+    # A reboot applies a rule per host; the last few are the ones to show.
+    return events[-3:], rebuilt
+
+
+def _firmware_events() -> Any:
+    """Recent firmware events for the journal line; ``None`` when unreadable."""
+    try:
+        run = run_ndmc("show log", timeout=10)
+    except Exception:  # noqa: BLE001 - the line says the log was not read
+        return None
+    if run.rc != 0 and not run.stdout:
+        return None
+    return parse_firmware_events(run.stdout or "")
+
+
+def _describe_capture_repair(result: Dict[str, Any], firmware: Any = None) -> str:
+    """One sentence a user can read in core.log: what was mended and why.
+
+    ``firmware`` is what ``parse_firmware_events`` found, ``None`` when the log
+    could not be read.  The firmware's own words answer the question a user's
+    report is sent for -- was a policy changed just before -- and nothing is
+    guessed from the rule that happened to be on top.
+    """
+    repairs = list(result.get("repairs") or [])
+    jump_was = int(result.get("jump_was") or 0)
+    events, rebuilt = firmware if firmware is not None else ([], False)
+    applied = f" Перед этим прошивка применила: {'; '.join(events)}." if events else ""
+    head = "DNS-over-VLESS: правило устройств восстановлено — "
+    if "removed" in repairs:
+        return "DNS-over-VLESS: лишнее правило устройств снято — выбранных устройств больше нет."
+    if "chain" in repairs:
+        return (
+            head
+            + "цепочка правил панели пропала и создана заново. "
+            + "Обычно так бывает после перезагрузки роутера или полного сброса firewall."
+            + applied
+        )
+    parts: List[str] = []
+    if "rules" in repairs:
+        parts.append("правила устройств не совпадали с выбором или адресами роутера и переписаны")
+    if "jump" in repairs:
+        if jump_was:
+            parts.append(f"оно снова стоит первым, а было на месте {jump_was}")
+        else:
+            parts.append("переход в правила панели пропал и поставлен заново")
+    text = head + "; ".join(parts) + "."
+    if firmware is None:
+        return text + " Журнал прошивки прочитать не удалось."
+    if events or "jump" not in repairs:
+        return text + applied
+    if rebuilt:
+        return text + " Прошивка перестроила firewall, но смены политики доступа в её журнале нет."
+    return text + " Событий прошивки за последние полторы минуты нет — вероятно, правила переставил сам XKeen."
+
+
 def reapply_client_capture(*, ui_state_dir: str) -> Dict[str, Any]:
     """Put the capture chain back the way this install asked for it.
 
@@ -2608,6 +2737,10 @@ def reapply_client_capture(*, ui_state_dir: str) -> Dict[str, Any]:
     interfaces change, and our jump can end up below the redirect it is meant
     to precede -- where it is decoration.  The guard calls this on every
     healthy tick, so it has to be cheap when there is nothing to do.
+
+    Every repair leaves one line in core.log.  Without it a user's report shows
+    a chain in order and nothing else: whether a policy was changed, and who
+    pushed the rule down -- the firmware or XKeen -- would be lost.
     """
     state = _load_state(ui_state_dir)
     if not state.get("enabled"):
@@ -2620,6 +2753,16 @@ def reapply_client_capture(*, ui_state_dir: str) -> Dict[str, Any]:
         _LAST_CAPTURE_NOTE["error"] = str(exc)
         raise
     _LAST_CAPTURE_NOTE.pop("error", None)
+    if isinstance(result, dict) and result.get("changed"):
+        _core_log(
+            "info",
+            _describe_capture_repair(result, firmware=_firmware_events()),
+            event="dns_over_vless.capture_restored",
+            repairs=",".join(result.get("repairs") or []),
+            jump_was=result.get("jump_was", 0),
+            above=result.get("above") or "",
+            macs=len(wanted),
+        )
     return result
 
 

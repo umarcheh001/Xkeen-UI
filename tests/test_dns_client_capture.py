@@ -118,6 +118,27 @@ def test_a_jump_that_slipped_below_the_firmware_is_put_back_on_top(firewall):
     assert result["changed"] is True
     assert firewall.parent[0].endswith(f"-j {cap.CHAIN}")
     assert firewall.parent.count(f"-A {cap.PARENT_CHAIN} -j {cap.CHAIN}") == 1
+    # The journal has to be able to say what was mended and where the jump had
+    # slid to -- a race with the firmware leaves no other trace.
+    assert result["repairs"] == ["jump"]
+    assert result["jump_was"] == 2
+    # And who pushed it: the firmware's own chain and XKeen's deny rule both
+    # land on top, and a user's report only helps if it names which one did.
+    assert result["above"] == f"-A {cap.PARENT_CHAIN} -j _NDM_HOTSPOT_DNSREDIR"
+
+
+def test_the_result_names_every_part_that_had_to_be_rebuilt(firewall):
+    created = cap.ensure(["10:f6:0a:a5:e7:9a"])
+    assert created["repairs"] == ["chain", "rules", "jump"]
+    assert created["jump_was"] == 0
+    assert created["above"] == f"-A {cap.PARENT_CHAIN} -j _NDM_DNS_REDIRECT"
+
+    untouched = cap.ensure(["10:f6:0a:a5:e7:9a"])
+    assert untouched["repairs"] == []
+    assert untouched["above"] == ""
+
+    removed = cap.ensure([])
+    assert removed["repairs"] == ["removed"]
 
 
 def test_a_changed_device_list_is_rewritten_whole(firewall):
