@@ -1193,7 +1193,7 @@ def fetch_provider_payload(
 ) -> tuple[str, Dict[str, Any]]:
     """Fetch a HWID subscription and return provider-compatible YAML/text."""
 
-    u = (url or "").strip()
+    u = happ_links.normalize_happ_deep_link(url)
     effective_policy = policy or _hwid_subscription_policy()
     if happ_links.is_happ_deep_link(u):
         try:

@@ -1254,7 +1254,7 @@ def fetch_subscription_body(
     *,
     _happ_depth: int = 0,
 ) -> Tuple[str, Dict[str, str]]:
-    url_s = str(url or "").strip()
+    url_s = happ_links.normalize_happ_deep_link(url)
     if _happ_depth > 2:
         raise RuntimeError("happ_helper_resolution_loop")
     if happ_links.is_happ_deep_link(url_s):
@@ -1650,6 +1650,7 @@ def fetch_subscription_body_for_xray(url: str) -> Tuple[str, Dict[str, str], Dic
     only retry when the response looks unusable or HWID-gated.
     """
 
+    url = happ_links.normalize_happ_deep_link(url)
     direct_fetch_error: Exception | None = None
     body = ""
     headers: Dict[str, str] = {}

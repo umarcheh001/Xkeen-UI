@@ -227,6 +227,9 @@ func decryptCrypt5(payload string) (string, error) {
 
 func decrypt(link string) (string, string, int, error) {
 	value := strings.TrimSpace(link)
+	if strings.HasPrefix(strings.ToLower(value), "happ\\") {
+		value = "happ" + value[5:]
+	}
 	if strings.HasPrefix(value, "happ://") {
 		value = strings.TrimPrefix(value, "happ://")
 	}

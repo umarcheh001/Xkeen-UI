@@ -4922,7 +4922,7 @@ let outboundsModuleApi = null;
         id: String(($(SUB_IDS.id) && $(SUB_IDS.id).value) || _subscriptionEditId || '').trim(),
         name: String(($(SUB_IDS.name) && $(SUB_IDS.name).value) || '').trim(),
         tag: String(($(SUB_IDS.tag) && $(SUB_IDS.tag).value) || '').trim(),
-        url: String(($(SUB_IDS.url) && $(SUB_IDS.url).value) || '').trim(),
+        url: normalizeHappDeepLink(String(($(SUB_IDS.url) && $(SUB_IDS.url).value) || '').trim()),
         name_filter: String(($(SUB_IDS.nameFilter) && $(SUB_IDS.nameFilter).value) || '').trim(),
         type_filter: String(($(SUB_IDS.typeFilter) && $(SUB_IDS.typeFilter).value) || '').trim(),
         transport_filter: String(($(SUB_IDS.transportFilter) && $(SUB_IDS.transportFilter).value) || '').trim(),
@@ -4935,6 +4935,11 @@ let outboundsModuleApi = null;
         enabled: !!($(SUB_IDS.enabled) && $(SUB_IDS.enabled).checked),
         ping_enabled: !!($(SUB_IDS.ping) && $(SUB_IDS.ping).checked),
       };
+    }
+
+    function normalizeHappDeepLink(value) {
+      const text = String(value || '').trim();
+      return text.replace(/^happ\\*:(?:\\?\/){2}/i, 'happ://');
     }
 
     function subsResolveDraftDefaults(formState) {

@@ -36,11 +36,45 @@ def test_normalize_helper_output_supports_decrypted_url_json():
     assert parsed == {"kind": "url", "value": "https://example.com/sub", "headers": {}}
 
 
+def test_normalize_helper_output_canonicalizes_escaped_happ_url():
+    parsed = happ_links._normalize_helper_output(r"happ\://crypt5/demo-token")
+
+    assert parsed == {"kind": "url", "value": "happ://crypt5/demo-token", "headers": {}}
+
+
 def test_extract_happ_links_from_connector_query_url():
     encoded = "happ%3A%2F%2Fcrypt4%2Fdemo-token"
     source = f"https://connector.example/mobile.html?link={encoded}&cb=c2"
 
     assert happ_links.extract_happ_links_from_url(source) == ["happ://crypt4/demo-token"]
+
+
+def test_escaped_happ_scheme_is_normalized_for_detection_and_extraction():
+    escaped = r"happ\://crypt5/demo-token"
+    slash_escaped = r"happ:\/\/crypt5/second-token"
+
+    assert happ_links.normalize_happ_deep_link(escaped) == "happ://crypt5/demo-token"
+    assert happ_links.is_happ_deep_link(escaped)
+    assert happ_links.extract_happ_links(f"{escaped} {slash_escaped}") == [
+        "happ://crypt5/demo-token",
+        "happ://crypt5/second-token",
+    ]
+
+
+def test_resolve_source_passes_canonical_link_to_decryptor(monkeypatch):
+    calls: list[str] = []
+
+    def fake_run_decryptor(value):
+        calls.append(value)
+        return {"kind": "text", "value": "vless://demo", "headers": {}}
+
+    monkeypatch.setattr(happ_links, "decryptor_configured", lambda: True)
+    monkeypatch.setattr(happ_links, "run_decryptor", fake_run_decryptor)
+
+    resolved = happ_links.resolve_source(r"happ\://crypt5/demo-token")
+
+    assert resolved["candidate"] == "happ://crypt5/demo-token"
+    assert calls == ["happ://crypt5/demo-token"]
 
 
 def test_resolve_source_uses_happ_link_embedded_in_http_connector_url(monkeypatch):

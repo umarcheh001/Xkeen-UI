@@ -29,7 +29,9 @@ _DEFAULT_HELPER_TIMEOUT_SECONDS = 15.0
 _DEFAULT_DECRYPTOR_TIMEOUT_SECONDS = 45.0
 _MAX_TIMEOUT_SECONDS = 120.0
 _HTML_LANDING_RE = re.compile(r"(?is)^\s*(?:<!doctype html|<html\b)")
-_HAPP_LINK_RE = re.compile(r"(?i)\bhapp://crypt[0-9]*/[^\s\"'<>]+")
+# Accept the escaped scheme emitted by some provider panels/JSON exports
+# (``happ\://`` and ``happ:\/\/``) as well as the native ``happ://`` form.
+_HAPP_LINK_RE = re.compile(r"(?i)\bhapp\\*:(?:\\?/){2}crypt[0-9]*/[^\s\"'<>]+")
 _INCY_IMPORT_RE = re.compile(r"(?i)\bincy://import/([^\s\"'<>]+)")
 _RESULT_HEADER_RE = re.compile(r"(?i)^result\s*:?\s*$")
 _SUPPORTED_TEXT_SCHEMES = (
@@ -204,7 +206,7 @@ def remote_decryptor_configured() -> bool:
 
 def _remote_decryptor_template_url(target: str, link: str) -> str:
     template = str(target or "").strip()
-    source = str(link or "").strip()
+    source = normalize_happ_deep_link(link)
     if not template or not source:
         return ""
     encoded = quote(source, safe="")
@@ -248,7 +250,22 @@ def decryptor_timeout_seconds() -> float:
 
 
 def is_happ_deep_link(value: Any) -> bool:
-    return str(value or "").strip().lower().startswith("happ://crypt")
+    return normalize_happ_deep_link(value).lower().startswith("happ://crypt")
+
+
+def normalize_happ_deep_link(value: Any) -> str:
+    """Normalize provider-escaped Happ schemes to ``happ://``.
+
+    A few subscription panels copy the URI out of JSON/YAML with a literal
+    backslash before the colon or slashes.  Keep the payload untouched and
+    only rewrite the leading scheme so the decryptor and URL policy see the
+    same canonical deep-link.
+    """
+
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    return re.sub(r"(?i)^happ\\*:(?:\\?/){2}", "happ://", raw, count=1)
 
 
 def looks_like_html_landing(text: Any, *, content_type: Any = None) -> bool:
@@ -262,7 +279,7 @@ def extract_happ_links(text: Any) -> List[str]:
     out: List[str] = []
     seen: set[str] = set()
     for match in _HAPP_LINK_RE.finditer(body):
-        link = str(match.group(0) or "").strip()
+        link = normalize_happ_deep_link(match.group(0))
         if link and link not in seen:
             seen.add(link)
             out.append(link)
@@ -298,7 +315,7 @@ def extract_happ_links_from_url(value: Any) -> List[str]:
     for key, raw_value in pairs:
         if str(key or "").strip().lower() not in keys:
             continue
-        candidate = unquote(str(raw_value or "").strip()).strip()
+        candidate = normalize_happ_deep_link(unquote(str(raw_value or "").strip()))
         if not is_happ_deep_link(candidate):
             continue
         if candidate not in seen:
@@ -353,7 +370,7 @@ def _json_helper_value(obj: Any) -> Dict[str, Any] | None:
     if isinstance(obj, dict):
         headers = obj.get("headers") if isinstance(obj.get("headers"), dict) else {}
         for key in ("url", "uri", "link", "decryptedUrl", "decrypted_url"):
-            value = str(obj.get(key) or "").strip()
+            value = normalize_happ_deep_link(obj.get(key))
             if value:
                 return {"kind": "url", "value": value, "headers": headers}
         for key in ("text", "body", "payload", "result", "output", "decrypted"):
@@ -398,6 +415,10 @@ def _normalize_helper_output(text: Any) -> Dict[str, Any] | None:
     raw = str(text or "").strip()
     if not raw:
         return None
+
+    normalized_link = normalize_happ_deep_link(raw)
+    if is_happ_deep_link(normalized_link):
+        return {"kind": "url", "value": normalized_link, "headers": {}}
 
     try:
         data = json.loads(raw)
@@ -467,10 +488,15 @@ def run_helper(link: str) -> Dict[str, Any]:
 
 
 def run_decryptor(link: str) -> Dict[str, Any]:
-    return _run_command(decryptor_command_parts(), link, error_prefix="happ_decryptor_")
+    return _run_command(
+        decryptor_command_parts(),
+        normalize_happ_deep_link(link),
+        error_prefix="happ_decryptor_",
+    )
 
 
 def run_remote_decryptor(link: str) -> Dict[str, Any]:
+    link = normalize_happ_deep_link(link)
     target = remote_decryptor_url()
     if not str(link or "").strip():
         raise RuntimeError("happ_decryptor_remote_invalid_input")
@@ -555,7 +581,7 @@ def _resolve_candidates(
 
 
 def resolve_source(url: str, *, body: Any = None, content_type: Any = None) -> Dict[str, Any] | None:
-    raw_url = str(url or "").strip()
+    raw_url = normalize_happ_deep_link(url)
     if not raw_url and body is None:
         return None
 

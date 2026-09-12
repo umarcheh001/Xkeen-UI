@@ -1894,8 +1894,13 @@ let mihomoImportModuleApi = null;
     return protocols[protocol](uri);
   }
 
-  function isBackendSubscriptionLink(value) {
+  function normalizeHappDeepLink(value) {
     const text = String(value || '').trim();
+    return text.replace(/^happ\\*:(?:\\?\/){2}/i, 'happ://');
+  }
+
+  function isBackendSubscriptionLink(value) {
+    const text = normalizeHappDeepLink(value);
     return /^https?:\/\//i.test(text) || /^happ:\/\/crypt[0-9]*\//i.test(text);
   }
 
@@ -2449,6 +2454,7 @@ let mihomoImportModuleApi = null;
       const lines = rawText
         .split(/\r?\n/)
         .map((s) => String(s || '').trim())
+        .map((s) => normalizeHappDeepLink(s))
         .filter(Boolean);
 
       if (!lines.length) {

@@ -124,6 +124,9 @@ function evalCjs(src) {
 
 function parseInput(value) {
   let raw = String(value || '').trim();
+  // Some provider panels export the URI with an escaped scheme (`happ\\://`).
+  // Canonicalize the leading backslash before selecting the crypt mode.
+  if (raw.slice(0, 5).toLowerCase() === 'happ\\') raw = 'happ' + raw.slice(5);
   if (raw.startsWith('happ://')) raw = raw.slice('happ://'.length);
   const modes = [
     ['crypt5/', 'crypt5', 4],
