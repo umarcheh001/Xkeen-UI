@@ -303,7 +303,7 @@ def test_fetch_subscription_body_for_xray_retries_raw_happ_with_happ_hwid_after_
     assert _vless("Recovered") in body
     assert headers["x-xkeen-happ-resolved"] == "decryptor"
     assert meta["fetch_mode"] == "happ_hwid"
-    assert any("Happ helper" in line for line in meta["warnings"])
+    assert "Подписка получена по ссылке Happ." in meta["warnings"]
     assert any("Happ User-Agent" in line for line in meta["warnings"])
     assert calls == [
         {},
@@ -1282,6 +1282,23 @@ def test_refresh_subscription_keeps_preview_exclusions_when_reality_sid_and_spx_
     assert {item["name"] for item in saved["last_nodes"] if item.get("tag")} == {
         "VLESS-XHTTP-NL-Keenetic-Digu-X"
     }
+
+
+def test_happ_resolution_warning_does_not_reveal_decrypted_subscription_url():
+    import services.xray_subscriptions as subs
+    from services import happ_links
+
+    warnings = subs._subscription_happ_resolution_warnings(
+        {
+            happ_links.HAPP_RESOLVED_HEADER: "decryptor",
+            happ_links.HAPP_LINK_HEADER: "https://secret-provider.example/sub/token-123",
+        }
+    )
+
+    assert len(warnings) == 1
+    assert "secret-provider.example" not in warnings[0]
+    assert "token-123" not in warnings[0]
+    assert "helper" not in warnings[0].lower()
 
 
 def test_preview_subscription_requires_url():

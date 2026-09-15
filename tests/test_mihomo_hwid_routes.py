@@ -562,6 +562,30 @@ def test_regular_provider_probe_returns_raw_happ_as_static_proxies(monkeypatch, 
     ]
 
 
+def test_happ_provider_probe_explains_decryptor_failure_instead_of_raw_reason(monkeypatch, client):
+    from services import happ_links
+
+    def _fail(url, **kwargs):
+        raise RuntimeError(
+            "landing_page_html:happ_decryptor_failed:happ-decrypt-universal: "
+            'unknown_key: crypt5 marker "QQQQfoff" is not in crypt5-keys.json'
+        )
+
+    monkeypatch.setattr(mihomo, "_mh_hwid_fetch_provider_payload", _fail)
+
+    response = client.post(
+        "/api/mihomo/provider/probe",
+        json={"url": "happ://crypt5/demo-token"},
+    )
+
+    assert response.status_code == 422
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert payload["code"] == "happ_decryptor_failed"
+    assert payload["error"] == happ_links.decryptor_failure_message("happ_decryptor_failed: unknown_key")
+    assert "landing_page_html" not in response.get_data(as_text=True)
+
+
 def test_regular_provider_probe_accepts_yaml_items_with_name_after_other_keys(monkeypatch, client):
     payload = (
         "proxies:\n"

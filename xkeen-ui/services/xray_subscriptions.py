@@ -1354,13 +1354,15 @@ def _subscription_hwid_warning_messages(headers: Dict[str, str] | None) -> List[
 
 def _subscription_happ_resolution_warnings(headers: Dict[str, str] | None) -> List[str]:
     h = {str(k or "").strip().lower(): str(v or "").strip() for k, v in (headers or {}).items()}
-    if not str(h.get(happ_links.HAPP_RESOLVED_HEADER) or "").strip():
+    via = str(h.get(happ_links.HAPP_RESOLVED_HEADER) or "").strip().lower()
+    if not via:
         return []
-    candidate = str(h.get(happ_links.HAPP_LINK_HEADER) or "").strip()
-    message = "Подписка была получена через Happ helper-дешифратор."
-    if candidate:
-        message += f" Источник: {candidate}."
-    return [message]
+    # The resolved address is what the Happ link hides, so it is never repeated in warnings.
+    if via == "decryptor-remote":
+        return [f"Ссылка Happ расшифрована внешним сервисом из {happ_links.HAPP_DECRYPTOR_REMOTE_URL_ENV}."]
+    if via == "decryptor":
+        return ["Подписка получена по ссылке Happ."]
+    return ["Подписка получена через Happ helper."]
 
 
 _HWID_PLACEHOLDER_LINK_RE = re.compile(r"://[^\s#]*@?0\.0\.0\.0:1(?=$|[/?#])", re.IGNORECASE)

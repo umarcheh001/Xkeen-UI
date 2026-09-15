@@ -67,3 +67,22 @@ def test_single_node_ping_keeps_request_failures_as_4xx(monkeypatch, failure, ex
 
     assert response.status_code == expected_status
     assert response.get_json()["ok"] is False
+
+
+def test_preview_reports_provider_placeholder_instead_of_internal_error(monkeypatch):
+    from routes import xray_subscriptions as routes
+    from services.xray_subscriptions import SubscriptionPlaceholderError
+
+    def _preview(_payload):
+        raise SubscriptionPlaceholderError("unsupported-client")
+
+    monkeypatch.setattr(routes, "preview_subscription", _preview)
+    client = _client(monkeypatch, lambda *_args, **_kwargs: {})
+
+    response = client.post("/api/xray/subscriptions/preview", json={"url": "happ://crypt5/demo-token"})
+
+    assert response.status_code == 422
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert payload["code"] == "subscription_placeholder"
+    assert payload["error"] == str(SubscriptionPlaceholderError("unsupported-client"))

@@ -14,6 +14,7 @@ from services.xray_subscriptions import (
     list_subscription_routing_balancers,
     list_subscriptions,
     preview_subscription,
+    SubscriptionPlaceholderError,
     probe_subscription_node_latency,
     probe_subscription_nodes_latency,
     refresh_due_subscriptions,
@@ -111,6 +112,14 @@ def create_xray_subscriptions_blueprint(
             result = preview_subscription(payload)
         except ValueError as exc:
             return error_response(str(exc), 400, ok=False)
+        except SubscriptionPlaceholderError as exc:
+            return error_response(
+                str(exc),
+                422,
+                ok=False,
+                code="subscription_placeholder",
+                hint="Проверьте данные устройства/HWID и повторите импорт исходной Happ-ссылки.",
+            )
         except Exception as exc:
             return exception_response(
                 "Не удалось получить предпросмотр подписки Xray.",

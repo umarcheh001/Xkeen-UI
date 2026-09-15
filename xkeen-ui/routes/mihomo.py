@@ -894,7 +894,11 @@ def create_mihomo_blueprint(
                     hint="Проверьте данные устройства/HWID и повторите импорт исходной Happ-ссылки.",
                 )
             except Exception as exc:
-                return _mihomo_fetch_failed_response(_subscription_fetch_failure_reason(exc))
+                reason = _subscription_fetch_failure_reason(exc)
+                decryptor_message = happ_links.decryptor_failure_message(reason)
+                if decryptor_message:
+                    return _mihomo_error(decryptor_message, status=422, code="happ_decryptor_failed")
+                return _mihomo_fetch_failed_response(reason)
 
             summary = _mihomo_provider_payload_summary(payload, meta)
             provider_proxies = _mihomo_provider_payload_proxy_blocks(payload)
