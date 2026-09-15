@@ -252,3 +252,36 @@ def test_upload_keys_rejects_oversized_file(world):
     )
     assert resp.status_code == 413
     assert resp.get_json()["error"] == "payload too large"
+
+
+class CheckingRun(FakeRun):
+    def __init__(self, result):
+        super().__init__()
+        self.result = result
+
+    def __call__(self, argv, timeout):
+        if "-json" in argv:
+            self.calls.append(list(argv))
+            return self.result
+        return super().__call__(argv, timeout)
+
+
+def test_check_link_route_returns_the_result(world):
+    world["bin"].write_bytes(world["binary"])
+    run = CheckingRun((0, json.dumps({"ok": True, "format": "crypt5", "layout": "salted", "url": "https://example.com/sub"}), ""))
+
+    body = _client(world, FakeFetch({}), run).post("/api/happ-decryptor/check", json={"link": "happ://crypt5/abc"}).get_json()
+
+    assert body["ok"] is True, body
+    assert body["check"] == {"format": "crypt5", "layout": "salted", "url": "https://example.com/sub"}
+
+
+def test_check_link_route_explains_a_missing_key(world):
+    world["bin"].write_bytes(world["binary"])
+    message = 'crypt5 marker "vdQx7r2p" is not in crypt5-keys.json; update the Happ keys'
+    run = CheckingRun((4, json.dumps({"ok": False, "error": "unknown_key", "message": message}), ""))
+
+    body = _client(world, FakeFetch({}), run).post("/api/happ-decryptor/check", json={"link": "happ://crypt5/abc"}).get_json()
+
+    assert body["ok"] is False and body["error"] == "unknown_key"
+    assert "vdQx7r2p" in body["hint"]

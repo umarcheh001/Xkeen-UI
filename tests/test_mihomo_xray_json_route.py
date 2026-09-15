@@ -275,7 +275,7 @@ def test_parse_xray_json_surfaces_happ_decryptor_hint(client):
     assert r.status_code == 422
     payload = r.get_json()
     assert payload["code"] == "happ_landing_page"
-    assert "XKEEN_HAPP_DECRYPTOR_CMD" in payload["hint"]
+    assert "«Декриптор Happ»" in payload["hint"]
     assert payload["ok"] is False
 
 

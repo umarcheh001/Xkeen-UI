@@ -1991,6 +1991,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/features/devtools/happ_decryptor.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/features/devtools/terminal_theme.js",
           "globals": [],
           "lazy_features": []

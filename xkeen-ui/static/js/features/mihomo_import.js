@@ -9,6 +9,7 @@ import {
 } from './mihomo_runtime.js';
 import { getXkeenFilePath } from './xkeen_runtime.js';
 import { iconHtml } from '../ui/operator_icons.js';
+import { appendHappDecryptorCardLink } from '../ui/happ_decryptor_link.js';
 
 let mihomoImportModuleApi = null;
 
@@ -192,6 +193,7 @@ let mihomoImportModuleApi = null;
       return;
     }
     el.textContent = text;
+    appendHappDecryptorCardLink(el, text);
   }
 
   function setStatus(msg, isErr, kind, opts) {
@@ -215,6 +217,7 @@ let mihomoImportModuleApi = null;
     if (!el) return;
     const value = String(msg || '');
     el.textContent = value;
+    appendHappDecryptorCardLink(el, value);
     el.classList.toggle('hidden', !value.trim());
   }
 

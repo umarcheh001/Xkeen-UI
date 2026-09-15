@@ -18,7 +18,6 @@ from .errors import HappDecryptorError
 
 BIN_NAME = "happ-decrypt-universal"
 ASSET_PREFIX = BIN_NAME + "-linux-"
-BIN_PATH_ENV = "XKEEN_HAPP_DECRYPTOR_BIN"
 RELEASE_URL_ENV = "XKEEN_HAPP_DECRYPTOR_RELEASE_URL"
 DEFAULT_RELEASE_URL = "https://github.com/umarcheh001/Xkeen-UI/releases/latest/download/"
 MAX_BINARY_BYTES = 32 * 1024 * 1024
@@ -34,9 +33,6 @@ _ELF_MACHINE_MIPS = 8
 
 
 def default_bin_path() -> str:
-    override = str(os.environ.get(BIN_PATH_ENV) or "").strip()
-    if override:
-        return override
     # Same place services/happ_links.py looks for a decryptor: <panel>/bin/.
     return str(Path(__file__).resolve().parents[2] / "bin" / BIN_NAME)
 
@@ -295,6 +291,50 @@ def verify_keys_with_engine(bin_path: str, staging_dir: str, run: Run) -> None:
     missing = [f for f in required if f not in formats]
     if not any_present or missing:
         raise HappDecryptorError("keys_check_failed", "Движок Happ не принял ключи — файлы не установлены.")
+
+
+_CHECK_HINTS = {
+    "unknown_key": (
+        "Для этой ссылки нет ключа — Happ выпустил новые ключи. Нажмите «Обновить ключи»; "
+        "если в happ-decryptor их ещё нет — загрузите файл ключей вручную."
+    ),
+    "no_keys": "Ключи Happ не установлены — нажмите «Обновить ключи» или загрузите файл ключей.",
+    "bad_link": "Ссылка повреждена или обрезана — скопируйте её заново.",
+    "corrupt": "Ссылка не расшифровалась: она повреждена или ключ не подходит.",
+}
+_MARKER_RE = re.compile(r'marker "([^"]{1,16})"')
+
+
+def check_link(bin_path: str, link: str, run: Run) -> dict[str, str]:
+    """Decrypt ``link`` with the installed engine and explain a failure in plain words."""
+    link = str(link or "").strip()
+    if not link.lower().startswith("happ://"):
+        raise HappDecryptorError("bad_link", "Вставьте ссылку вида happ://crypt….")
+    if detect_kind(bin_path) != "native":
+        raise HappDecryptorError("not_installed", "Движок Happ не установлен — сначала установите декриптор.")
+
+    _rc, out, _err = _safe_run(run, [bin_path, "-json", "-assets", assets_dir_for(bin_path), link])
+    try:
+        report = json.loads(out)
+    except ValueError:
+        report = None
+    if not isinstance(report, dict):
+        raise HappDecryptorError("check_failed", "Движок Happ не смог проверить ссылку.")
+    if report.get("ok"):
+        return {
+            "format": str(report.get("format") or ""),
+            "layout": str(report.get("layout") or ""),
+            "url": str(report.get("url") or ""),
+        }
+
+    code = str(report.get("error") or "")
+    hint = _CHECK_HINTS.get(code)
+    if hint is None:
+        raise HappDecryptorError("check_failed", "Движок Happ не смог проверить ссылку.")
+    marker = _MARKER_RE.search(str(report.get("message") or ""))
+    if code == "unknown_key" and marker:
+        hint = f"Для этой ссылки нет ключа (маркер {marker.group(1)}) — " + hint.split(" — ", 1)[1]
+    raise HappDecryptorError(code, hint)
 
 
 def status(bin_path: str, run: Run, platform: dict[str, Any] | None = None) -> dict[str, Any]:

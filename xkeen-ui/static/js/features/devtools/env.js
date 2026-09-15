@@ -217,10 +217,12 @@ import { iconHtml } from '../../ui/operator_icons.js';
   ENV_HELP.XKEEN_MIHOMO_DNS_FLUSH_ENABLE = 'Разрешить кнопку очистки DNS cache через `/cache/dns/flush`. Значение 1 включено по умолчанию; операция требует явного подтверждения и не меняет config.yaml. Применяется сразу, Restart UI не нужен.';
   ENV_HELP.XKEEN_MIHOMO_FAKE_IP_FLUSH_ENABLE = 'Разрешить кнопку очистки Fake-IP cache через `/cache/fakeip/flush`. Значение 1 включено по умолчанию; операция требует явного подтверждения и не меняет config.yaml. Применяется сразу, Restart UI не нужен.';
   ENV_HELP.XKEEN_HAPP_HELPER_CMD = 'Команда helper-дешифратора для Happ/INCY подписок. Если переменная пуста, панель попробует bundled helper `scripts/happ_transport_helper.py` автоматически. В команде можно использовать `%LINK%` как placeholder входной ссылки.';
-  ENV_HELP.XKEEN_HAPP_DECRYPTOR_CMD = 'Команда внешнего decryptor для raw `happ://crypt...` deep-link. Если переменная пуста, панель попробует auto-detect drop-in decryptor в `xkeen-ui/bin` или `xkeen-ui/scripts`. В команде можно использовать `%LINK%` как placeholder входной ссылки.';
+  ENV_HELP.XKEEN_HAPP_DECRYPTOR_CMD = 'Команда декриптора для ссылок `happ://crypt...`. Обычно не нужна: панель сама находит движок `happ-decrypt-universal`, установленный в DevTools → «Декриптор Happ», а также drop-in декрипторы в `xkeen-ui/bin` или `xkeen-ui/scripts`. В команде можно использовать `%LINK%` как placeholder входной ссылки.';
   ENV_HELP.XKEEN_HAPP_DECRYPTOR_REMOTE_URL = 'Необязательный HTTPS endpoint для remote fallback расшифровки raw `happ://crypt...`. Можно указать либо JSON API endpoint: панель отправит POST `{ \"url\": \"happ://crypt...\" }` и будет ждать JSON с `decryptedUrl`/`url`/`result`, либо URL-шаблон с `%LINK_ENCODED%`/`%LINK%`, который будет вызван через GET. По умолчанию выключено: включайте только если осознанно доверяете внешнему сервису.';
   ENV_HELP.XKEEN_HAPP_HELPER_TIMEOUT = 'Таймаут запуска Happ helper в секундах. По умолчанию 15. Применяется к следующей попытке импорта или обновления без Restart UI.';
-  ENV_HELP.XKEEN_HAPP_DECRYPTOR_TIMEOUT = 'Таймаут запуска raw Happ decryptor в секундах. По умолчанию 45, потому что `crypt5` на роутере может считаться заметно дольше обычного helper. Применяется к следующей попытке импорта или обновления без Restart UI.';
+  ENV_HELP.XKEEN_HAPP_DECRYPTOR_TIMEOUT = 'Таймаут запуска декриптора Happ в секундах. По умолчанию 15 для движка `happ-decrypt-universal` (он отвечает меньше чем за секунду) и 45 для скриптовых декрипторов, например старого Node-скрипта. Применяется к следующей попытке импорта или обновления без Restart UI.';
+  ENV_HELP.XKEEN_HAPP_DECRYPTOR_RELEASE_URL = 'Откуда DevTools → «Декриптор Happ» и install.sh скачивают движок `happ-decrypt-universal-linux-<arch>` вместе с `SHA256SUMS`. По умолчанию — последний релиз Xkeen-UI на GitHub. Меняйте только для своего зеркала релизов; адреса не на GitHub дополнительно требуют `XKEEN_HAPP_DECRYPTOR_ALLOW_CUSTOM_URLS=1`.';
+  ENV_HELP.XKEEN_HAPP_KEYS_MANIFEST_URL = 'Адрес манифеста ключей Happ: коммит LeeeeT/happ-decryptor и sha256 файлов, без самих ключей. По умолчанию — копия из репозитория Xkeen-UI на GitHub; если она недоступна, панель берёт манифест, встроенный в свою версию.';
   ENV_HELP.XKEEN_HAPP_HELPER_HWID = 'Необязательный ручной HWID для bundled Happ helper. Обычно оставьте пустым: helper возьмёт HWID роутера автоматически.';
   ENV_HELP.XKEEN_SUBSCRIPTION_HAPP_USER_AGENT = 'User-Agent для bundled Happ helper и Happ fallback-запросов. По умолчанию: Happ/3.18.3/Android/17771400994551771562.';
   ENV_HELP.XKEEN_SUBSCRIPTION_ALLOW_HTTP = 'Разрешить подписки по plain HTTP. По умолчанию 1: провайдеры до сих пор часто публикуют публичные фиды по HTTP. Значение 0 требует HTTPS. Private- и локальные адреса блокируются отдельно, независимо от этой настройки. Применяется к следующей загрузке подписки без Restart UI.';
@@ -403,6 +405,8 @@ import { iconHtml } from '../../ui/operator_icons.js';
   ENV_NO_RESTART_KEYS.add('XKEEN_HAPP_DECRYPTOR_REMOTE_URL');
   ENV_NO_RESTART_KEYS.add('XKEEN_HAPP_HELPER_TIMEOUT');
   ENV_NO_RESTART_KEYS.add('XKEEN_HAPP_DECRYPTOR_TIMEOUT');
+  ENV_NO_RESTART_KEYS.add('XKEEN_HAPP_DECRYPTOR_RELEASE_URL');
+  ENV_NO_RESTART_KEYS.add('XKEEN_HAPP_KEYS_MANIFEST_URL');
   ENV_NO_RESTART_KEYS.add('XKEEN_HAPP_HELPER_HWID');
   ENV_NO_RESTART_KEYS.add('XKEEN_SUBSCRIPTION_HAPP_USER_AGENT');
   ENV_NO_RESTART_KEYS.add('XKEEN_XRAY_TEST_TIMEOUT');
@@ -439,6 +443,8 @@ import { iconHtml } from '../../ui/operator_icons.js';
   ENV_RESTART_KEYS.delete('XKEEN_HAPP_DECRYPTOR_REMOTE_URL');
   ENV_RESTART_KEYS.delete('XKEEN_HAPP_HELPER_TIMEOUT');
   ENV_RESTART_KEYS.delete('XKEEN_HAPP_DECRYPTOR_TIMEOUT');
+  ENV_RESTART_KEYS.delete('XKEEN_HAPP_DECRYPTOR_RELEASE_URL');
+  ENV_RESTART_KEYS.delete('XKEEN_HAPP_KEYS_MANIFEST_URL');
   ENV_RESTART_KEYS.delete('XKEEN_HAPP_HELPER_HWID');
   ENV_RESTART_KEYS.delete('XKEEN_SUBSCRIPTION_HAPP_USER_AGENT');
   ENV_RESTART_KEYS.delete('XKEEN_XRAY_TEST_TIMEOUT');
@@ -536,6 +542,8 @@ import { iconHtml } from '../../ui/operator_icons.js';
         'XKEEN_HAPP_DECRYPTOR_REMOTE_URL',
         'XKEEN_HAPP_HELPER_TIMEOUT',
         'XKEEN_HAPP_DECRYPTOR_TIMEOUT',
+        'XKEEN_HAPP_DECRYPTOR_RELEASE_URL',
+        'XKEEN_HAPP_KEYS_MANIFEST_URL',
         'XKEEN_HAPP_HELPER_HWID',
         'XKEEN_SUBSCRIPTION_HAPP_USER_AGENT',
       ],

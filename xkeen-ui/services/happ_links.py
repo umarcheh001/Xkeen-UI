@@ -27,6 +27,10 @@ HAPP_ERROR_HEADER = "x-xkeen-happ-error"
 
 _DEFAULT_HELPER_TIMEOUT_SECONDS = 15.0
 _DEFAULT_DECRYPTOR_TIMEOUT_SECONDS = 45.0
+# happ-decrypt-universal answers in well under a second even on a router.
+_NATIVE_DECRYPTOR_TIMEOUT_SECONDS = 15.0
+# Where messages send the user to install the decryptor or update its keys.
+HAPP_DECRYPTOR_CARD_LABEL = "DevTools → «Декриптор Happ»"
 _MAX_TIMEOUT_SECONDS = 120.0
 _HTML_LANDING_RE = re.compile(r"(?is)^\s*(?:<!doctype html|<html\b)")
 # Accept the escaped scheme emitted by some provider panels/JSON exports
@@ -116,24 +120,35 @@ def _bundled_helper_command_parts() -> List[str]:
     return _command_parts_from_path(_bundled_helper_script_path())
 
 
-def _bundled_decryptor_command_parts() -> List[str]:
+def _is_native_binary(path: str) -> bool:
     try:
-        here = Path(__file__).resolve()
-        roots = (
-            here.parents[1],
-            here.parents[2],
-        )
-        for root in roots:
-            for relative_dir in ("bin", "scripts"):
-                base = root / relative_dir
-                if not base.is_dir():
-                    continue
-                for name in _DECRYPTOR_DROPIN_NAMES:
-                    candidate = base / name
-                    if candidate.is_file():
-                        parts = _command_parts_from_path(str(candidate))
-                        if parts:
-                            return parts
+        with open(path, "rb") as f:
+            return f.read(4) == b"\x7fELF"
+    except OSError:
+        return False
+
+
+def _bundled_decryptor_command_parts(roots=None) -> List[str]:
+    try:
+        if roots is None:
+            here = Path(__file__).resolve()
+            roots = (here.parents[1], here.parents[2])
+        candidates = [
+            root / relative_dir / name
+            for root in roots
+            for relative_dir in ("bin", "scripts")
+            for name in _DECRYPTOR_DROPIN_NAMES
+            if (root / relative_dir / name).is_file()
+        ]
+        # The engine installed from DevTools is a native binary; it wins over
+        # script drop-ins left from earlier manual setups.
+        for candidate in candidates:
+            if _is_native_binary(str(candidate)):
+                return [str(candidate)]
+        for candidate in candidates:
+            parts = _command_parts_from_path(str(candidate))
+            if parts:
+                return parts
     except Exception:
         pass
     return []
@@ -242,11 +257,20 @@ def helper_timeout_seconds() -> float:
     return _timeout_seconds(os.environ.get(HAPP_HELPER_TIMEOUT_ENV), _DEFAULT_HELPER_TIMEOUT_SECONDS)
 
 
+def default_decryptor_timeout_seconds() -> float:
+    """Short budget for the native engine, the long one for script decryptors."""
+    parts = decryptor_command_parts()
+    if parts and _is_native_binary(parts[0]):
+        return _NATIVE_DECRYPTOR_TIMEOUT_SECONDS
+    return _DEFAULT_DECRYPTOR_TIMEOUT_SECONDS
+
+
 def decryptor_timeout_seconds() -> float:
+    default = default_decryptor_timeout_seconds()
     raw = os.environ.get(HAPP_DECRYPTOR_TIMEOUT_ENV)
     if str(raw or "").strip():
-        return _timeout_seconds(raw, _DEFAULT_DECRYPTOR_TIMEOUT_SECONDS)
-    return max(_DEFAULT_DECRYPTOR_TIMEOUT_SECONDS, helper_timeout_seconds())
+        return _timeout_seconds(raw, default)
+    return max(default, helper_timeout_seconds())
 
 
 def is_happ_deep_link(value: Any) -> bool:
@@ -493,6 +517,31 @@ def run_decryptor(link: str) -> Dict[str, Any]:
         normalize_happ_deep_link(link),
         error_prefix="happ_decryptor_",
     )
+
+
+def decryptor_failure_message(reason: Any) -> str | None:
+    """Russian explanation of a local decryptor failure, or None for other failures.
+
+    happ-decrypt-universal prints ``happ-decrypt-universal: <code>: …`` on stderr,
+    which reaches this function inside ``happ_decryptor_failed:``.
+    """
+    text = str(reason or "").lower()
+    card = HAPP_DECRYPTOR_CARD_LABEL
+    if "happ_decryptor_not_configured" in text:
+        return f"Для ссылок happ://crypt… нужен декриптор Happ. Установите его: {card}."
+    if "happ_decryptor_" not in text:
+        return None
+    if "unknown_key" in text:
+        return f"Для этой ссылки нет ключа — Happ выпустил новые ключи. Обновите ключи: {card}."
+    if "no_keys" in text:
+        return f"Ключи Happ не установлены. Установите их: {card}."
+    if "bad_link" in text or "corrupt" in text:
+        return "Ссылка Happ повреждена или обрезана — скопируйте её заново."
+    if "happ_decryptor_timeout" in text:
+        return f"Декриптор Happ не ответил вовремя. Проверьте его: {card}."
+    if "happ_decryptor_missing" in text:
+        return f"Декриптор Happ не найден. Установите его: {card}."
+    return f"Декриптор Happ не смог расшифровать ссылку. Проверьте её: {card}."
 
 
 def run_remote_decryptor(link: str) -> Dict[str, Any]:

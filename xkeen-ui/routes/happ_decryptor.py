@@ -111,4 +111,10 @@ def create_happ_decryptor_blueprint(
 
         return _respond(install_uploads, "upload_keys_failed")
 
+    @bp.post("/api/happ-decryptor/check")
+    def api_happ_decryptor_check():
+        body = request.get_json(silent=True) or {}
+        link = str(body.get("link") or "")
+        return _respond(lambda: {"check": engine.check_link(_bin(), link, run_cmd)}, "check_failed")
+
     return bp

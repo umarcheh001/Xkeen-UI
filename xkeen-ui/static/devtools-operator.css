@@ -874,6 +874,27 @@ body.devtools-page .dt-logging-actions {
   gap: 5px;
 }
 
+body.devtools-page .dt-happ-formats {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  vertical-align: middle;
+}
+
+body.devtools-page .dt-happ-check-row {
+  display: flex;
+  gap: 8px;
+}
+
+body.devtools-page .dt-happ-check-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+body.devtools-page #dt-happ-decryptor-card .dt-k {
+  white-space: nowrap;
+}
+
 body.devtools-page .dt-actions-grid {
   grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
 }

@@ -12,6 +12,7 @@ import {
   toastXkeen,
 } from './xkeen_runtime.js';
 import { iconHtml } from '../ui/operator_icons.js';
+import { appendHappDecryptorCardLink } from '../ui/happ_decryptor_link.js';
 
 let outboundsModuleApi = null;
 
@@ -5808,6 +5809,7 @@ let outboundsModuleApi = null;
         return;
       }
       el.innerHTML = subsRenderStatusLine(text);
+      appendHappDecryptorCardLink(el, text);
     }
 
     function subsSetStatus(msg, isErr, isOk, opts) {

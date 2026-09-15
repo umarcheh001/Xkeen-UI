@@ -249,3 +249,63 @@ def test_status_for_the_old_node_decryptor_does_not_run_it(bin_path):
     st = engine.status(str(bin_path), run, platform={})
     assert st["kind"] == "node" and st["installed"] is False and st["keys"] is None
     assert run.calls == []
+
+
+class CheckRun:
+    def __init__(self, result) -> None:
+        self.result = result
+        self.calls: list[list[str]] = []
+
+    def __call__(self, argv, timeout):
+        self.calls.append(list(argv))
+        return self.result
+
+
+def test_check_link_returns_format_and_url(bin_path):
+    bin_path.write_bytes(_elf("arm64"))
+    run = CheckRun((0, json.dumps({"ok": True, "format": "crypt5", "layout": "salted", "url": "https://example.com/sub"}), ""))
+
+    result = engine.check_link(str(bin_path), "  happ://crypt5/abc \n", run)
+
+    assert result == {"format": "crypt5", "layout": "salted", "url": "https://example.com/sub"}
+    assert run.calls == [[str(bin_path), "-json", "-assets", str(bin_path) + ".assets", "happ://crypt5/abc"]]
+
+
+@pytest.mark.parametrize(
+    "error,message,code,needle",
+    [
+        ("unknown_key", 'crypt5 marker "vdQx7r2p" is not in crypt5-keys.json; update the Happ keys', "unknown_key", "vdQx7r2p"),
+        ("no_keys", "crypt5-keys.json is not installed", "no_keys", "Обновить ключи"),
+        ("bad_link", "crypt5 payload is too short", "bad_link", "повреждена"),
+        ("corrupt", "crypt5 authentication failed", "corrupt", "повреждена"),
+        ("something_new", "?", "check_failed", "не смог"),
+    ],
+)
+def test_check_link_explains_engine_errors(bin_path, error, message, code, needle):
+    bin_path.write_bytes(_elf("arm64"))
+    run = CheckRun((4, json.dumps({"ok": False, "error": error, "message": message}), ""))
+
+    with pytest.raises(HappDecryptorError) as exc:
+        engine.check_link(str(bin_path), "happ://crypt5/abc", run)
+
+    assert exc.value.code == code
+    assert needle in exc.value.hint
+
+
+def test_check_link_survives_unparsable_output(bin_path):
+    bin_path.write_bytes(_elf("arm64"))
+    with pytest.raises(HappDecryptorError) as exc:
+        engine.check_link(str(bin_path), "happ://crypt4/abc", CheckRun((1, "Segmentation fault", "")))
+    assert exc.value.code == "check_failed"
+
+
+def test_check_link_needs_a_happ_link_and_the_native_engine(bin_path):
+    run = CheckRun((0, "{}", ""))
+    with pytest.raises(HappDecryptorError) as exc:
+        engine.check_link(str(bin_path), "https://example.com/sub", run)
+    assert exc.value.code == "bad_link"
+
+    with pytest.raises(HappDecryptorError) as exc:
+        engine.check_link(str(bin_path), "happ://crypt5/abc", run)
+    assert exc.value.code == "not_installed"
+    assert run.calls == []
