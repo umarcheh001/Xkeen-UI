@@ -34,6 +34,12 @@ jobs:
           node-version: "20"
           cache: "npm"
 
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: tools/happ-decryptor/go.mod
+          cache-dependency-path: tools/happ-decryptor/go.sum
+
       - name: Install Python dependencies
         run: python -m pip install -r requirements-dev.txt
 
@@ -48,6 +54,17 @@ jobs:
 
       - name: Verify frontend build
         run: node scripts/verify_frontend_build.mjs
+
+      - name: Test happ-decryptor
+        working-directory: tools/happ-decryptor
+        run: |
+          go vet ./...
+          go test ./...
+          # Сборка под архитектуры роутеров ловит то, что не видно на amd64.
+          for arch in arm64 mips mipsle; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" GOMIPS=softfloat \
+              go build -trimpath -o /dev/null ./cmd/happ-decrypt-universal
+          done
 
       - name: Install Chromium for Mihomo local acceptance
         timeout-minutes: 15

@@ -133,18 +133,54 @@ jobs:
             -o ../../dist/xk-geodat-linux-mipsle \
             ./cmd/xk-geodat
 
+      # Движку Happ нужен более свежий Go (golang.org/x/crypto), чем xk-geodat.
+      # xk-geodat уже собран выше на своей версии, поэтому второй setup-go — здесь.
+      - name: Set up Go for happ-decryptor
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: tools/happ-decryptor/go.mod
+          cache-dependency-path: tools/happ-decryptor/go.sum
+
+      - name: Test happ-decryptor
+        working-directory: tools/happ-decryptor
+        run: |
+          go vet ./...
+          go test ./...
+
+      - name: Build happ-decrypt-universal binaries
+        working-directory: tools/happ-decryptor
+        run: |
+          mkdir -p ../../dist
+
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            VERSION="${GITHUB_SHA::7}"
+          fi
+          export VERSION COMMIT="${GITHUB_SHA::7}"
+
+          GOOS=linux GOARCH=arm64 OUT=../../dist/happ-decrypt-universal-linux-arm64 bash build.sh
+          GOOS=linux GOARCH=mips GOMIPS=softfloat OUT=../../dist/happ-decrypt-universal-linux-mips bash build.sh
+          GOOS=linux GOARCH=mipsle GOMIPS=softfloat OUT=../../dist/happ-decrypt-universal-linux-mipsle bash build.sh
+
       - name: Create checksums
         run: |
           sha256sum dist/xkeen-ui-routing.tar.gz > dist/xkeen-ui-routing.tar.gz.sha256
           sha256sum dist/xk-geodat-linux-arm64 > dist/xk-geodat-linux-arm64.sha256
           sha256sum dist/xk-geodat-linux-mips > dist/xk-geodat-linux-mips.sha256
           sha256sum dist/xk-geodat-linux-mipsle > dist/xk-geodat-linux-mipsle.sha256
+          sha256sum dist/happ-decrypt-universal-linux-arm64 > dist/happ-decrypt-universal-linux-arm64.sha256
+          sha256sum dist/happ-decrypt-universal-linux-mips > dist/happ-decrypt-universal-linux-mips.sha256
+          sha256sum dist/happ-decrypt-universal-linux-mipsle > dist/happ-decrypt-universal-linux-mipsle.sha256
 
           sha256sum \
             dist/xkeen-ui-routing.tar.gz \
             dist/xk-geodat-linux-arm64 \
             dist/xk-geodat-linux-mips \
             dist/xk-geodat-linux-mipsle \
+            dist/happ-decrypt-universal-linux-arm64 \
+            dist/happ-decrypt-universal-linux-mips \
+            dist/happ-decrypt-universal-linux-mipsle \
             > dist/SHA256SUMS
 
       - name: Upload workflow artifact
@@ -160,6 +196,12 @@ jobs:
             dist/xk-geodat-linux-mips.sha256
             dist/xk-geodat-linux-mipsle
             dist/xk-geodat-linux-mipsle.sha256
+            dist/happ-decrypt-universal-linux-arm64
+            dist/happ-decrypt-universal-linux-arm64.sha256
+            dist/happ-decrypt-universal-linux-mips
+            dist/happ-decrypt-universal-linux-mips.sha256
+            dist/happ-decrypt-universal-linux-mipsle
+            dist/happ-decrypt-universal-linux-mipsle.sha256
             dist/SHA256SUMS
 
       - name: Ensure GitHub CLI is available
@@ -187,6 +229,12 @@ jobs:
               dist/xk-geodat-linux-mips.sha256 \
               dist/xk-geodat-linux-mipsle \
               dist/xk-geodat-linux-mipsle.sha256 \
+              dist/happ-decrypt-universal-linux-arm64 \
+              dist/happ-decrypt-universal-linux-arm64.sha256 \
+              dist/happ-decrypt-universal-linux-mips \
+              dist/happ-decrypt-universal-linux-mips.sha256 \
+              dist/happ-decrypt-universal-linux-mipsle \
+              dist/happ-decrypt-universal-linux-mipsle.sha256 \
               dist/SHA256SUMS \
               --clobber
           else
@@ -199,6 +247,12 @@ jobs:
               dist/xk-geodat-linux-mips.sha256 \
               dist/xk-geodat-linux-mipsle \
               dist/xk-geodat-linux-mipsle.sha256 \
+              dist/happ-decrypt-universal-linux-arm64 \
+              dist/happ-decrypt-universal-linux-arm64.sha256 \
+              dist/happ-decrypt-universal-linux-mips \
+              dist/happ-decrypt-universal-linux-mips.sha256 \
+              dist/happ-decrypt-universal-linux-mipsle \
+              dist/happ-decrypt-universal-linux-mipsle.sha256 \
               dist/SHA256SUMS \
               --title "$TAG" \
               --generate-notes
