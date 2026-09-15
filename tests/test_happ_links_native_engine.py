@@ -22,6 +22,49 @@ def test_native_engine_wins_over_script_dropins(tmp_path):
     assert happ_links._bundled_decryptor_command_parts(roots=(tmp_path,)) == [str(native)]
 
 
+def _failing_engine(monkeypatch, reason):
+    def fail(parts, link, *, error_prefix):
+        raise RuntimeError(reason)
+
+    logged = []
+    monkeypatch.setattr(happ_links, "decryptor_command_parts", lambda: ["/opt/etc/xkeen-ui/bin/happ-decrypt-universal"])
+    monkeypatch.setattr(happ_links, "_run_command", fail)
+    monkeypatch.setattr(happ_links, "_log", lambda level, message, **extra: logged.append((level, message, extra)), raising=False)
+    return logged
+
+
+def test_unknown_key_is_logged_with_the_marker_but_not_the_link(monkeypatch):
+    reason = 'happ_decryptor_failed:happ-decrypt-universal: unknown_key: crypt5 marker "QQQQfoff" is not in crypt5-keys.json'
+    logged = _failing_engine(monkeypatch, reason)
+
+    with pytest.raises(RuntimeError) as exc:
+        happ_links.run_decryptor("happ://crypt5/QQQQ" + "A" * 80)
+
+    assert str(exc.value) == reason
+    assert len(logged) == 1
+    level, _message, extra = logged[0]
+    assert level == "warning"
+    assert extra.get("marker") == "QQQQfoff"
+    assert "happ://" not in repr(logged)
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "happ_decryptor_failed:happ-decrypt-universal: corrupt: crypt5 payload does not decrypt",
+        "happ_decryptor_failed:happ-decrypt-universal: bad_link: payload is too short",
+        "happ_decryptor_timeout",
+    ],
+)
+def test_other_decryptor_failures_are_not_logged(monkeypatch, reason):
+    logged = _failing_engine(monkeypatch, reason)
+
+    with pytest.raises(RuntimeError):
+        happ_links.run_decryptor("happ://crypt5/AAAA" + "A" * 80)
+
+    assert logged == []
+
+
 def test_script_dropin_is_used_when_there_is_no_native_engine(tmp_path):
     (tmp_path / "bin").mkdir()
     script = tmp_path / "bin" / "happ_decryptor.py"

@@ -511,12 +511,32 @@ def run_helper(link: str) -> Dict[str, Any]:
     return _run_command(helper_command_parts(), link, error_prefix="happ_helper_")
 
 
+_UNKNOWN_KEY_MARKER_RE = re.compile(r'marker "([A-Za-z0-9+/=_-]{8})"')
+
+
+def _log(level: str, message: str, **extra: Any) -> None:
+    try:
+        from core.logging import core_log
+
+        core_log(level, message, **extra)
+    except Exception:
+        pass
+
+
 def run_decryptor(link: str) -> Dict[str, Any]:
-    return _run_command(
-        decryptor_command_parts(),
-        normalize_happ_deep_link(link),
-        error_prefix="happ_decryptor_",
-    )
+    try:
+        return _run_command(
+            decryptor_command_parts(),
+            normalize_happ_deep_link(link),
+            error_prefix="happ_decryptor_",
+        )
+    except RuntimeError as exc:
+        reason = str(exc)
+        if "unknown_key" in reason:
+            # The marker tells which key set is missing; the link itself stays out of the log.
+            match = _UNKNOWN_KEY_MARKER_RE.search(reason)
+            _log("warning", "happ decryptor: no key for link", marker=match.group(1) if match else "")
+        raise
 
 
 def decryptor_failure_message(reason: Any) -> str | None:
