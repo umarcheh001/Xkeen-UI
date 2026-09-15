@@ -46,6 +46,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     from .routing import create_routing_blueprint
     from .xray_configs import create_xray_configs_blueprint
     from .xray_subscriptions import create_xray_subscriptions_blueprint
+    from .happ_decryptor import create_happ_decryptor_blueprint
     from .mihomo import create_mihomo_blueprint
     from .mihomo_clash import create_mihomo_clash_blueprint
     from services.mihomo_clash_cache import get_shared_mihomo_clash_cache
@@ -114,6 +115,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
             snapshot_xray_config_before_overwrite=ctx.snapshot_xray_config_before_overwrite,
         )
     )
+    app.register_blueprint(create_happ_decryptor_blueprint())
 
     app.register_blueprint(
         create_mihomo_blueprint(

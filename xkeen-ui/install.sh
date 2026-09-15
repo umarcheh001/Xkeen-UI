@@ -1751,6 +1751,13 @@ if [ -f "$SRC_DIR/scripts/install_xk_geodat.sh" ]; then
   sh "$SRC_DIR/scripts/install_xk_geodat.sh" || true
 fi
 
+# --- Optional: декриптор ссылок Happ (happ://crypt…) ---
+# Запускается копия из $UI_DIR: движок и ключи ложатся в $UI_DIR/bin рядом с панелью.
+# Ключи Happ скачиваются только после явного «да» — без терминала шаг пропускается.
+if [ -f "$UI_DIR/scripts/install_happ_decryptor.py" ]; then
+  "$PYTHON_BIN" "$UI_DIR/scripts/install_happ_decryptor.py" || true
+fi
+
 # --- Init-скрипт ---
 
 echo "[*] Создаю init-скрипт $INIT_SCRIPT..."

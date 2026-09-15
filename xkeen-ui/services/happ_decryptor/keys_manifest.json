@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "source": {
+    "repo": "LeeeeT/happ-decryptor",
+    "commit": "5a05cfe59f45db8684be26077ce28979a3ee3208"
+  },
+  "files": [
+    {
+      "name": "crypt5-keys.json",
+      "path": "public/data/crypt5-keys.json",
+      "sha256": "ca0ab8d1e1db196311b72ba9e7dcb91814392bdcdd9feb718b1fb2d40580621a",
+      "size": 114522
+    },
+    {
+      "name": "legacy_keys.json",
+      "path": "src/decrypt.js",
+      "sha256": "bac28ba6443264b337dc887fbe7e82431b3b84f3c76c58191b02a2c29eccde79",
+      "size": 16696,
+      "extract": "pkcs1_keys_b64"
+    }
+  ]
+}
