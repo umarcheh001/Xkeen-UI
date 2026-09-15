@@ -90,10 +90,14 @@ import { getDevtoolsSharedApi, setDevtoolsNamespaceApi } from '../devtools_names
     el.style.display = value ? '' : 'none';
   }
 
+  // "happ-decrypt-universal v1.4.0 (8af0af5, …)" → label "v1.4.0", commit "8af0af5".
+  // Local builds already carry the commit in the version ("d1dbdfa4-local"), so it is not repeated.
   function parseVersion(line) {
     const match = String(line || '').match(/^happ-decrypt-universal\s+(\S+)(?:\s+\(([^,)]+))?/);
     if (!match) return { label: String(line || ''), commit: '' };
-    return { label: `happ-decrypt-universal ${match[1]}`, commit: match[2] || '' };
+    const version = match[1];
+    const commit = match[2] || '';
+    return { label: version, commit: commit && version.startsWith(commit) ? '' : commit };
   }
 
   function archOf(platform) {

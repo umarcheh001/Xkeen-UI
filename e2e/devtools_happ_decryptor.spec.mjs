@@ -55,7 +55,7 @@ test('happ decryptor card shows a ready engine with its key set', async ({ page 
   await openCard(page);
 
   await expect(page.locator('#dt-happ-verdict')).toHaveText('Готов к расшифровке');
-  await expect(page.locator('#dt-happ-engine')).toHaveText('happ-decrypt-universal v1.4.0');
+  await expect(page.locator('#dt-happ-engine')).toHaveText('v1.4.0');
   await expect(page.locator('#dt-happ-engine-sub')).toHaveText('arm64 · 8af0af5');
   await expect(page.locator('#dt-happ-formats code')).toHaveText(['crypt', 'crypt2', 'crypt3', 'crypt4', 'crypt5']);
   await expect(page.locator('#dt-happ-keys')).toHaveText('36 для crypt5 · 4 для crypt…crypt4');
@@ -64,6 +64,16 @@ test('happ decryptor card shows a ready engine with its key set', async ({ page 
   await expect(page.locator('#dt-happ-update-keys')).toBeVisible();
   await expect(page.locator('#dt-happ-refresh')).toHaveText('Обновить');
   await expect(page.locator('#dt-happ-alert')).toBeHidden();
+});
+
+test('a local engine build does not repeat its commit', async ({ page }) => {
+  const local = { ...READY, version: 'happ-decrypt-universal d1dbdfa4-local (d1dbdfa4, 2026-09-15T12:34:02Z)' };
+  await page.route('**/api/happ-decryptor/status', (route) => route.fulfill({ json: { ok: true, status: local } }));
+
+  await openCard(page);
+
+  await expect(page.locator('#dt-happ-engine')).toHaveText('d1dbdfa4-local');
+  await expect(page.locator('#dt-happ-engine-sub')).toHaveText('arm64');
 });
 
 test('installing from the card asks first and then shows the installed engine', async ({ page }) => {
