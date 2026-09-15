@@ -50,6 +50,7 @@ ENV_WHITELIST: Tuple[str, ...] = (
     "XKEEN_HAPP_DECRYPTOR_TIMEOUT",
     "XKEEN_HAPP_DECRYPTOR_RELEASE_URL",
     "XKEEN_HAPP_KEYS_MANIFEST_URL",
+    "XKEEN_HAPP_DECRYPTOR_ALLOW_CUSTOM_URLS",
     "XKEEN_HAPP_HELPER_HWID",
     "XKEEN_SUBSCRIPTION_HAPP_USER_AGENT",
     # Subscriptions: URL policy + background auto-refresh (Xray and Mihomo)
@@ -376,6 +377,8 @@ def _default_effective_value(
         from services.happ_decryptor import keys as happ_keys
 
         return happ_keys.DEFAULT_MANIFEST_URL
+    if k == "XKEEN_HAPP_DECRYPTOR_ALLOW_CUSTOM_URLS":
+        return "0"
     if k == "XKEEN_HAPP_HELPER_HWID":
         return ""
     if k == "XKEEN_SUBSCRIPTION_HAPP_USER_AGENT":
