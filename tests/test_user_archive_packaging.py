@@ -24,18 +24,16 @@ def test_local_user_archive_script_matches_ci_packaging_expectations():
     assert 'Path(str(archive_path) + ".sha256")' in script
 
 
-def test_happ_decryptor_aarch64_build_script_is_local_only():
-    script = (ROOT / "scripts" / "build_happ_decryptor_aarch64.py").read_text(encoding="utf-8")
+def test_local_happ_decryptor_files_stay_out_of_git():
+    # Happ key material lives in bin/happ-decrypt-universal.assets/, research copies in .tmp/.
     gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
 
-    assert "LeeeeT/happ-decryptor.git" in script
-    assert "PKCS1_KEYS_B64" in script
-    assert "public/data/expanded_rsa_keys.json" in script
-    assert '"GOARCH": goarch' in script
-    assert '"arm64"' in script
     assert "/xkeen-ui/bin/happ-decrypt*" in gitignore
     assert "!/xkeen-ui/bin/README.happ-decryptor.txt" in gitignore
     assert "/.tmp/leeeet-happ-decryptor/" in gitignore
+    assert "\n.tmp/" in gitignore
+    assert "/handoff/" in gitignore
+    assert not (ROOT / "scripts" / "build_happ_decryptor_aarch64.py").exists(), "old builder embedded Happ keys"
 
 
 def test_happ_decryptor_node_build_script_uses_current_local_emulator_assets():
