@@ -255,5 +255,5 @@ jobs:
               dist/happ-decrypt-universal-linux-mipsle.sha256 \
               dist/SHA256SUMS \
               --title "$TAG" \
-              --generate-notes
+              --notes "Установочный архив панели, Android-приложение и бинарники вспомогательных утилит."
           fi
