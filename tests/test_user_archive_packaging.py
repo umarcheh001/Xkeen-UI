@@ -17,8 +17,8 @@ def test_local_user_archive_script_matches_ci_packaging_expectations():
     assert '["npm", "run", "frontend:build"]' in script
     assert 'tarfile.open(archive_path, "w:gz", format=tarfile.USTAR_FORMAT)' in script
     assert 'write_build_json(package_root, stamp=stamp, update_url=update_url)' in script
-    assert 'filter=normalize_archive_tarinfo' in script
     assert 'happ-decrypt-universal' in script
+    assert 'LOCAL_DECRYPTOR_BIN_DIR' in script
     assert 'replace_file_with_retries(temp_archive, archive_path)' in script
     assert 'derive_fallback_archive_path(archive_path)' in script
     assert 'Path(str(archive_path) + ".sha256")' in script

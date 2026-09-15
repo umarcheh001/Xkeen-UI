@@ -43,13 +43,14 @@ EXCLUDED_PROJECT_RELATIVE_FILES = {
 EXCLUDED_PROJECT_RELATIVE_FILE_PARENTS = {
     Path("opt/etc/mihomo/profiles"),
 }
-EXECUTABLE_BIN_NAMES = {
-    "happ-decryptor",
-    "happ_decryptor",
-    "happ-decrypt-universal",
-    "happ_decrypt_universal",
-    "happwner",
-}
+# A local drop-in Happ decryptor in xkeen-ui/bin/ (happ-decrypt-universal, its
+# .assets/ with Happ key material, .bak copies, happwner and friends) stays out of
+# the archive: install.sh copies the archive over the panel with rsync and would
+# overwrite the Go engine a tester installed on the router. The engine and its keys
+# are installed on the router itself (services/happ_decryptor).
+LOCAL_DECRYPTOR_BIN_DIR = Path("bin")
+LOCAL_DECRYPTOR_NAME_PREFIXES = ("happ",)
+LOCAL_DECRYPTOR_KEEP_NAMES = {"README.happ-decryptor.txt"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -203,6 +204,13 @@ def ignore_project_entries(_src_dir: str, names: list[str]) -> set[str]:
         ):
             ignored.add(name)
             continue
+        if (
+            rel_dir == LOCAL_DECRYPTOR_BIN_DIR
+            and name.lower().startswith(LOCAL_DECRYPTOR_NAME_PREFIXES)
+            and name not in LOCAL_DECRYPTOR_KEEP_NAMES
+        ):
+            ignored.add(name)
+            continue
         if name in EXCLUDED_DIR_NAMES or name in EXCLUDED_FILE_NAMES:
             ignored.add(name)
             continue
@@ -281,19 +289,7 @@ def build_archive(src_root: Path, archive_path: Path) -> None:
     # Keep the release archive максимально portable for BusyBox tar on Keenetic.
     # The tree fits into classic tar limits, so we avoid PAX headers entirely.
     with tarfile.open(archive_path, "w:gz", format=tarfile.USTAR_FORMAT) as tar:
-        tar.add(src_root, arcname=PROJECT_DIRNAME, filter=normalize_archive_tarinfo)
-
-
-def normalize_archive_tarinfo(info: tarfile.TarInfo) -> tarfile.TarInfo:
-    try:
-        rel = Path(info.name).as_posix()
-        if info.isfile() and rel.startswith(f"{PROJECT_DIRNAME}/bin/"):
-            stem = Path(rel).name
-            if stem in EXECUTABLE_BIN_NAMES:
-                info.mode = 0o755
-    except Exception:
-        pass
-    return info
+        tar.add(src_root, arcname=PROJECT_DIRNAME)
 
 
 def write_sha256(archive_path: Path, sha_path: Path) -> str:
