@@ -194,6 +194,38 @@ def test_install_engine_from_uploaded_file_skips_download(bin_path, tmp_path):
     assert upload.exists(), "the caller owns the uploaded file"
 
 
+OLD_EMULATOR_FILES = ("emu_core.mjs", "keytable.json", "liberror-code.so", "unicorn-wrapper.js", "unicorn_aarch64.js")
+
+
+def _assets_with_old_emulator(bin_path) -> Path:
+    assets = Path(engine.assets_dir_for(str(bin_path)))
+    assets.mkdir()
+    for name in OLD_EMULATOR_FILES + ("crypt5-keys.json", "legacy_keys.json", "happ-keys.json", "notes.txt"):
+        (assets / name).write_bytes(b"x")
+    return assets
+
+
+def test_install_engine_removes_old_emulator_files_and_keeps_everything_else(bin_path, tmp_path):
+    assets = _assets_with_old_emulator(bin_path)
+    upload = tmp_path / "upload"
+    upload.write_bytes(_elf("arm64"))
+
+    engine.install_engine(str(bin_path), asset=ARM64, fetch=FakeFetch({}), run=FakeRun(), local_file=str(upload))
+
+    assert sorted(p.name for p in assets.iterdir()) == ["crypt5-keys.json", "happ-keys.json", "legacy_keys.json", "notes.txt"]
+
+
+def test_install_engine_keeps_old_emulator_files_when_candidate_is_bad(bin_path, tmp_path):
+    assets = _assets_with_old_emulator(bin_path)
+    upload = tmp_path / "upload"
+    upload.write_bytes(b"<!doctype html>blocked")
+
+    with pytest.raises(HappDecryptorError):
+        engine.install_engine(str(bin_path), asset=ARM64, fetch=FakeFetch({}), run=FakeRun(), local_file=str(upload))
+
+    assert all((assets / name).exists() for name in OLD_EMULATOR_FILES)
+
+
 def test_detect_kind(tmp_path):
     native, node, other = tmp_path / "native", tmp_path / "node", tmp_path / "other"
     native.write_bytes(_elf("arm64"))

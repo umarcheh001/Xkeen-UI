@@ -191,6 +191,18 @@ def _published_sha256(fetch: Fetch, base: str, asset: str, work_dir: str) -> str
     )
 
 
+# Files the old Node/emulator decryptor kept next to its keys; the Go engine never reads them.
+OLD_EMULATOR_FILES = ("emu_core.mjs", "keytable.json", "liberror-code.so", "unicorn-wrapper.js", "unicorn_aarch64.js")
+
+
+def _remove_old_emulator_files(assets_dir: str) -> None:
+    for name in OLD_EMULATOR_FILES:
+        try:
+            os.remove(os.path.join(assets_dir, name))
+        except OSError:
+            pass
+
+
 def install_engine(
     bin_path: str,
     *,
@@ -254,6 +266,7 @@ def install_engine(
             if backup:
                 os.replace(backup, bin_path)
             raise HappDecryptorError("install_failed", "Не удалось поставить движок Happ на место.") from exc
+        _remove_old_emulator_files(assets_dir_for(bin_path))
         return {"path": bin_path, "asset": asset, "version": version, "backup": backup}
     finally:
         if os.path.exists(candidate):
