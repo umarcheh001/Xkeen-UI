@@ -49,7 +49,9 @@ def _fake_repo(tmp_path: Path, python_exit: int | None) -> tuple[Path, Path, Pat
 
 
 def _run_hook(repo: Path, bin_dir: Path, name: str, *args: str, env_extra: dict[str, str] | None = None):
-    env = {"PATH": str(bin_dir) + os.pathsep + os.path.dirname(SH or ""), "GIT_DIR_FOR_TEST": str(repo)}
+    # The hooks use only shell built-ins, so PATH holds nothing but the stub python. Adding the
+    # directory of sh would leak a real python3 on Linux runners (/usr/bin) and break the checks.
+    env = {"PATH": str(bin_dir), "GIT_DIR_FOR_TEST": str(repo)}
     env.update(env_extra or {})
     return subprocess.run(
         [SH, str(repo / ".githooks" / name), *args],
