@@ -357,24 +357,23 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-node-row')).toHaveCount(0);
   await expect(page.locator('[data-group-name="AUTO"] [data-mihomo-picker-toggle]')).toHaveAttribute('role', 'combobox');
   await expect(page.locator('[data-group-name="AUTO"] [data-mihomo-picker-toggle]')).toContainText('node-a');
-  await expect(page.locator('#mihomo-clash-groups-collapse')).toHaveText('Развернуть');
+  await expect(page.locator('#mihomo-clash-groups-collapse')).toHaveAccessibleName('Развернуть все группы');
+  await expect(page.locator('#mihomo-clash-groups-collapse > span')).toBeHidden();
   await expect(page.locator('#mihomo-clash-test-visible')).toBeDisabled();
   const collapseGeometry = await page.locator('#mihomo-clash-groups-collapse').evaluate((button) => {
     const icon = button.querySelector('.xk-action-icon');
-    const label = button.querySelector('span:not(.xk-action-icon)');
     const iconBox = icon?.getBoundingClientRect();
-    const labelBox = label?.getBoundingClientRect();
+    const buttonBox = button.getBoundingClientRect();
     return {
       iconFlexShrink: icon ? getComputedStyle(icon).flexShrink : null,
-      labelRightOfIcon: !!iconBox && !!labelBox && labelBox.left >= iconBox.right,
-      verticallyAligned: !!iconBox && !!labelBox
-        && Math.abs((iconBox.top + iconBox.height / 2) - (labelBox.top + labelBox.height / 2)) <= 1,
+      centered: !!iconBox
+        && Math.abs(iconBox.x + iconBox.width / 2 - buttonBox.x - buttonBox.width / 2) <= 1
+        && Math.abs(iconBox.y + iconBox.height / 2 - buttonBox.y - buttonBox.height / 2) <= 1,
     };
   });
   expect(collapseGeometry).toEqual({
     iconFlexShrink: '0',
-    labelRightOfIcon: true,
-    verticallyAligned: true,
+    centered: true,
   });
 
   await page.locator('[data-group-name="AUTO"] [data-mihomo-picker-toggle]').click();
@@ -424,7 +423,9 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await expect(page.locator('#mihomo-clash-delay-history-popover .xk-mihomo-delay-history-row')).toHaveCount(3);
   await expect(page.locator('#mihomo-clash-delay-history-popover')).toContainText('44 мс');
 
+  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
   await page.locator('#mihomo-clash-show-hidden').check();
+  await page.keyboard.press('Escape');
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('HIDDEN');
   await expect(page.locator('[data-group-name="HIDDEN"] .xk-mihomo-group-icon--default')).toHaveCount(1);
   await expect(page.locator('[data-group-name="HIDDEN"] .xk-mihomo-group-icon--default use')).toHaveAttribute('href', /#xk-dns$/);
@@ -698,6 +699,7 @@ test('Mihomo latency stays visible but is marked stale after five minutes and gr
   await expect(page.locator('#mihomo-clash-delay-history-popover')).toContainText('44 мс');
 
   const requestsBeforeReturn = groupRequests;
+  await page.locator('[aria-controls="xk-mihomo-sections-menu"]').click();
   await page.locator('.top-tab-btn[data-view="routing"]').click();
   await page.locator('.top-tab-btn[data-view="mihomo"]').click();
   await expect.poll(() => groupRequests).toBeGreaterThan(requestsBeforeReturn);
@@ -1148,7 +1150,9 @@ test('automatic fixed group shows lock, unfix action and sorting', async ({ page
 
   await page.goto('/');
   await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
   await page.locator('#mihomo-clash-show-hidden').check();
+  await page.keyboard.press('Escape');
   await page.locator('[data-group-name="HIDDEN"] .xk-mihomo-group-head').click();
   await page.locator('[data-group-name="FALLBACK"] .xk-mihomo-group-head').click();
   await expect(page.locator('[data-group-name="HIDDEN"]')).toContainText('Зафиксирован: hidden-node');
@@ -1211,6 +1215,7 @@ test('sorting keeps service nodes in config slots and workspace settings persist
     (nodes) => nodes.map((node) => node.dataset.nodeName),
   )).toEqual(['z-node', 'DIRECT', 'a-node', 'b-node']);
   await page.locator('#mihomo-clash-groups-sort').selectOption('delay');
+  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
   await page.locator('#mihomo-clash-latency-preset').selectOption('google');
   await expect.poll(() => patches.some((patch) => patch.mihomo?.proxySortOrder === 'delay')).toBe(true);
   await expect.poll(() => patches.some((patch) => patch.mihomo?.latencyPreset === 'google')).toBe(true);
@@ -1340,7 +1345,9 @@ test('Mihomo group disclosures keep the workspace compact and keyboard accessibl
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('AUTO');
 
   const hiddenToggle = page.locator('[data-group-name="HIDDEN"] .xk-mihomo-group-head');
+  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
   await page.locator('#mihomo-clash-show-hidden').check();
+  await page.keyboard.press('Escape');
   await expect(hiddenToggle).toHaveAttribute('aria-expanded', 'false');
   await hiddenToggle.focus();
   await hiddenToggle.press('Enter');

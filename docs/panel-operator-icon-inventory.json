@@ -3,7 +3,7 @@
   "generated_from": "scripts/generate_operator_icon_inventory.py",
   "sprite": "xkeen-ui/static/icons/operator.svg",
   "license": "xkeen-ui/static/icons/tabler-icons.LICENSE",
-  "item_count": 79,
+  "item_count": 80,
   "unknown_direct_semantic_names": [],
   "unused_semantic_names": [],
   "items": [
@@ -414,6 +414,16 @@
           "accessible_label": "Раскрыть"
         },
         {
+          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L1628",
+          "control_type": "runtime-action",
+          "accessible_label": "Раскрыть"
+        },
+        {
+          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L3442",
+          "control_type": "runtime-action",
+          "accessible_label": "Раскрыть"
+        },
+        {
           "location": "xkeen-ui/static/js/features/outbounds.js:L5560",
           "control_type": "runtime-action",
           "accessible_label": "Раскрыть"
@@ -425,6 +435,16 @@
         },
         {
           "location": "xkeen-ui/static/js/features/routing_cards/rules/render.js:L2322",
+          "control_type": "runtime-action",
+          "accessible_label": "Раскрыть"
+        },
+        {
+          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L117",
+          "control_type": "runtime-action",
+          "accessible_label": "Раскрыть"
+        },
+        {
+          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L145",
           "control_type": "runtime-action",
           "accessible_label": "Раскрыть"
         },
@@ -1905,6 +1925,11 @@
           "accessible_label": "Список"
         },
         {
+          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L68",
+          "control_type": "runtime-action",
+          "accessible_label": "Список"
+        },
+        {
           "location": "xkeen-ui/templates/panel.html:L1130",
           "control_type": "icon-only",
           "accessible_label": "Показать все записи"
@@ -3083,6 +3108,16 @@
           "accessible_label": "Настройки"
         },
         {
+          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L116",
+          "control_type": "runtime-action",
+          "accessible_label": "Настройки"
+        },
+        {
+          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L70",
+          "control_type": "runtime-action",
+          "accessible_label": "Настройки"
+        },
+        {
           "location": "xkeen-ui/templates/panel.html:L1161",
           "control_type": "text+icon",
           "accessible_label": "Конфигурация"
@@ -3091,6 +3126,17 @@
           "location": "xkeen-ui/templates/panel.html:L189",
           "control_type": "text+icon",
           "accessible_label": "UI settings"
+        }
+      ]
+    },
+    {
+      "semantic_name": "statistics",
+      "tabler_asset": "chart-bar",
+      "usage": [
+        {
+          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L124",
+          "control_type": "runtime-action",
+          "accessible_label": "statistics"
         }
       ]
     },

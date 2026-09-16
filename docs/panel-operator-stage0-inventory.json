@@ -7003,8 +7003,8 @@
     ]
   },
   "dom_contract": {
-    "id_count": 1292,
-    "unique_id_count": 1292,
+    "id_count": 1293,
+    "unique_id_count": 1293,
     "duplicate_ids": [],
     "ids": [
       "backups-clear-snapshots-btn",
@@ -7396,6 +7396,7 @@
       "mihomo-clash-connections-notice",
       "mihomo-clash-connections-refresh",
       "mihomo-clash-connections-rows",
+      "mihomo-clash-connections-summary",
       "mihomo-clash-connections-table-wrap",
       "mihomo-clash-control-content",
       "mihomo-clash-control-message",
@@ -11520,7 +11521,7 @@
       "#outbounds-file-code",
       ".xk-mihomo-topbar .xk-routing-active-inline"
     ],
-    "js_referenced_template_id_count": 1215,
+    "js_referenced_template_id_count": 1220,
     "js_referenced_template_ids": {
       "backups-clear-snapshots-btn": [
         "xkeen-ui/static/js/features/backups.js"
@@ -12591,6 +12592,7 @@
         "xkeen-ui/static/js/ui/json_editor_modal.js"
       ],
       "last-load": [
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js",
         "xkeen-ui/static/js/ui/last_activity.js"
       ],
       "local-config-file-input": [
@@ -12686,8 +12688,12 @@
       "mihomo-clash-connections-rows": [
         "xkeen-ui/static/js/features/mihomo_clash/connections.js"
       ],
+      "mihomo-clash-connections-summary": [
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js"
+      ],
       "mihomo-clash-control-content": [
-        "xkeen-ui/static/js/features/mihomo_clash/index.js"
+        "xkeen-ui/static/js/features/mihomo_clash/index.js",
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js"
       ],
       "mihomo-clash-control-message": [
         "xkeen-ui/static/js/features/mihomo_clash/index.js"
@@ -12732,7 +12738,8 @@
         "xkeen-ui/static/js/features/mihomo_clash/dns.js"
       ],
       "mihomo-clash-dns-toggle": [
-        "xkeen-ui/static/js/features/mihomo_clash/dns.js"
+        "xkeen-ui/static/js/features/mihomo_clash/dns.js",
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js"
       ],
       "mihomo-clash-dns-type": [
         "xkeen-ui/static/js/features/mihomo_clash/dns.js"
@@ -12774,7 +12781,8 @@
         "xkeen-ui/static/js/features/mihomo_clash/egress.js"
       ],
       "mihomo-clash-egress-toggle": [
-        "xkeen-ui/static/js/features/mihomo_clash/egress.js"
+        "xkeen-ui/static/js/features/mihomo_clash/egress.js",
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js"
       ],
       "mihomo-clash-egress-version": [
         "xkeen-ui/static/js/features/mihomo_clash/egress.js"
@@ -12789,19 +12797,23 @@
         "xkeen-ui/static/js/features/mihomo_clash/groups.js"
       ],
       "mihomo-clash-groups-count": [
-        "xkeen-ui/static/js/features/mihomo_clash/groups.js"
+        "xkeen-ui/static/js/features/mihomo_clash/groups.js",
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js"
       ],
       "mihomo-clash-groups-filter": [
-        "xkeen-ui/static/js/features/mihomo_clash/groups.js"
+        "xkeen-ui/static/js/features/mihomo_clash/groups.js",
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js"
       ],
       "mihomo-clash-groups-list": [
         "xkeen-ui/static/js/features/mihomo_clash/groups.js"
       ],
       "mihomo-clash-groups-sort": [
-        "xkeen-ui/static/js/features/mihomo_clash/groups.js"
+        "xkeen-ui/static/js/features/mihomo_clash/groups.js",
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js"
       ],
       "mihomo-clash-latency-preset": [
-        "xkeen-ui/static/js/features/mihomo_clash/groups.js"
+        "xkeen-ui/static/js/features/mihomo_clash/groups.js",
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js"
       ],
       "mihomo-clash-logs": [
         "xkeen-ui/static/js/features/mihomo_clash/logs.js"
@@ -12855,7 +12867,8 @@
         "xkeen-ui/static/js/features/mihomo_clash/index.js"
       ],
       "mihomo-clash-mode-switch": [
-        "xkeen-ui/static/js/features/mihomo_clash/index.js"
+        "xkeen-ui/static/js/features/mihomo_clash/index.js",
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js"
       ],
       "mihomo-clash-panel-config": [
         "xkeen-ui/static/js/features/mihomo_clash/index.js"
@@ -12921,7 +12934,8 @@
         "xkeen-ui/static/js/features/mihomo_clash/rules.js"
       ],
       "mihomo-clash-runtime": [
-        "xkeen-ui/static/js/features/mihomo_clash/index.js"
+        "xkeen-ui/static/js/features/mihomo_clash/index.js",
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js"
       ],
       "mihomo-clash-security-warning": [
         "xkeen-ui/static/js/features/mihomo_clash/index.js"
@@ -12941,11 +12955,24 @@
       "mihomo-clash-status-mode-value": [
         "xkeen-ui/static/js/features/mihomo_clash/index.js"
       ],
+      "mihomo-clash-status-strip": [
+        "xkeen-ui/static/js/features/mihomo_clash/index.js",
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js"
+      ],
       "mihomo-clash-status-version": [
         "xkeen-ui/static/js/features/mihomo_clash/index.js"
       ],
       "mihomo-clash-stream-state": [
         "xkeen-ui/static/js/features/mihomo_clash/connections.js"
+      ],
+      "mihomo-clash-tab-config": [
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js"
+      ],
+      "mihomo-clash-tab-connections": [
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js"
+      ],
+      "mihomo-clash-tab-control": [
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js"
       ],
       "mihomo-clash-telemetry-state": [
         "xkeen-ui/static/js/features/mihomo_clash/index.js"
@@ -14966,9 +14993,11 @@
         "xkeen-ui/static/js/ui/layout.js"
       ],
       "view-mihomo": [
+        "xkeen-ui/static/js/features/mihomo_clash/groups.js",
         "xkeen-ui/static/js/features/mihomo_clash/index.js",
         "xkeen-ui/static/js/features/mihomo_panel.js",
         "xkeen-ui/static/js/features/routing_cards.js",
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js",
         "xkeen-ui/static/js/pages/panel_shell.shared.js"
       ],
       "view-routing": [
@@ -15256,10 +15285,12 @@
       ],
       "xkeen-service-lamp": [
         "xkeen-ui/static/js/features/service_status.js",
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js",
         "xkeen-ui/static/js/pages/panel_shell.shared.js"
       ],
       "xkeen-service-text": [
         "xkeen-ui/static/js/features/service_status.js",
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js",
         "xkeen-ui/static/js/pages/panel_shell.shared.js"
       ],
       "xkeen-start-btn": [

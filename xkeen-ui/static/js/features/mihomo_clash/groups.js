@@ -1648,6 +1648,11 @@ function groupNodeQueue(name) {
 function bind() {
   if (!root || root.dataset.bound === '1') return;
   root.dataset.bound = '1';
+  // The operator header keeps the toolbar outside the hideable runtime panel.
+  const eventRoot = root.closest('#view-mihomo') || root;
+  const bindControls = (type, handler) => eventRoot.addEventListener(type, (event) => {
+    if (root.contains(event.target) || event.target?.closest?.('.xk-mihomo-groups-toolbar')) handler(event);
+  });
   root.addEventListener('pointerover', (event) => {
     if (event.pointerType && event.pointerType !== 'mouse') return;
     const owner = event.target?.closest?.('[data-mihomo-delay-history]');
@@ -1669,7 +1674,7 @@ function bind() {
   });
   window.addEventListener('scroll', hideDelayHistory, true);
   window.addEventListener('resize', hideDelayHistory, true);
-  root.addEventListener('input', (event) => {
+  bindControls('input', (event) => {
     if (event.target?.id === 'mihomo-clash-groups-filter') {
       filterText = String(event.target.value || '');
       pickerGroup = '';
@@ -1684,7 +1689,7 @@ function bind() {
       if (group && options) options.innerHTML = renderPickerOptions(group);
     }
   });
-  root.addEventListener('change', (event) => {
+  bindControls('change', (event) => {
     if (event.target?.id === 'mihomo-clash-groups-sort') {
       sortMode = String(event.target.value || 'config');
       persistMihomoViewSettings({ proxySortOrder: sortMode });
@@ -1709,7 +1714,7 @@ function bind() {
     }
     render();
   });
-  root.addEventListener('click', (event) => {
+  bindControls('click', (event) => {
     const target = event.target?.closest?.('[data-mihomo-groups-collapse], .xk-mihomo-group-head, [data-mihomo-picker-toggle], [data-mihomo-group-select], [data-mihomo-group-unfix], [data-mihomo-node-delay], [data-mihomo-group-delay], [data-mihomo-delay-visible], #mihomo-clash-show-timeout-hidden');
     if (!target) {
       if (pickerGroup && !event.target?.closest?.('[data-mihomo-group-picker]')) {

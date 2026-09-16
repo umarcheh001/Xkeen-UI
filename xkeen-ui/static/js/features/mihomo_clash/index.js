@@ -186,6 +186,8 @@ function renderStatus(state, payload = null) {
   const copy = mihomoClashStateCopy(state);
   root.dataset.mihomoClashState = state;
   root.dataset.tone = stateTone(state);
+  const statusStrip = byId('mihomo-clash-status-strip');
+  if (statusStrip) statusStrip.dataset.tone = root.dataset.tone;
   root.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
   setText('mihomo-clash-status-label', copy[0]);
   const statusLabel = byId('mihomo-clash-status-label');
@@ -455,7 +457,8 @@ function applySubview(name, options = {}) {
 }
 
 function focusSiblingTab(current, direction) {
-  const tabs = Array.from(document.querySelectorAll('[data-mihomo-clash-subview]:not([aria-disabled="true"])'));
+  const tabs = Array.from(document.querySelectorAll('[data-mihomo-clash-subview]:not([aria-disabled="true"])'))
+    .filter((tab) => tab.getClientRects().length > 0);
   const index = tabs.indexOf(current);
   if (index < 0 || !tabs.length) return;
   const nextIndex = (index + direction + tabs.length) % tabs.length;

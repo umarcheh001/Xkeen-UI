@@ -49,6 +49,7 @@ ICONS = {
     "ping": "stopwatch",
     "pool": "stack-2",
     "processes": "cpu",
+    "statistics": "chart-bar",
     "quick-start": "bolt",
     "refresh": "refresh",
     "reload": "reload",

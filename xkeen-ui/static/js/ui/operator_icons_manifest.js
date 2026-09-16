@@ -67,6 +67,7 @@ const OPERATOR_ICON_NAMES = Object.freeze([
   "search",
   "server-off",
   "settings",
+  "statistics",
   "stop",
   "storage",
   "subscriptions",

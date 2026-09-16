@@ -278,6 +278,69 @@ test('Mihomo connections fill the desktop viewport and scroll inside the table',
 });
 
 
+test('Mihomo connection summary can be hidden, keeps updating and remembers its visibility', async ({ page }) => {
+  let ids = Array.from({ length: 30 }, (_, index) => `summary-${index}`);
+  await page.route('**/api/mihomo/clash/status', route => route.fulfill({ json: statusPayload() }));
+  await page.route('**/api/mihomo/clash/connections', route => route.fulfill({ json: connectionsPayload(ids) }));
+  await page.goto('/');
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  const toggle = page.locator('#mihomo-clash-connections-summary-toggle');
+  const summary = page.locator('#mihomo-clash-connections-summary');
+  const table = page.locator('#mihomo-clash-connections-table-wrap');
+  await expect(toggle).toBeHidden();
+  await page.locator('#mihomo-clash-tab-connections').click();
+  await expect(page.locator('#mihomo-clash-connections-rows tr')).toHaveCount(30);
+  await expect(summary).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(toggle.locator('use')).toHaveAttribute('href', /#xk-statistics$/);
+  const parametersBox = await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').boundingBox();
+  const toggleBox = await toggle.boundingBox();
+  const configBox = await page.locator('#mihomo-clash-tab-config').boundingBox();
+  expect(toggleBox.x).toBeGreaterThan(parametersBox.x + parametersBox.width);
+  expect(configBox.x).toBeGreaterThan(toggleBox.x + toggleBox.width);
+  const expandedTable = await table.boundingBox();
+  const summaryBox = await summary.boundingBox();
+  await toggle.click();
+  await expect(summary).toBeHidden();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  const compactTable = await table.boundingBox();
+  expect(expandedTable.y - compactTable.y).toBeGreaterThanOrEqual(summaryBox.height);
+  expect(compactTable.height - expandedTable.height).toBeGreaterThanOrEqual(summaryBox.height);
+
+  // Hiding the statistics must not stop polling or remove the connection inspector.
+  ids = ['summary-0'];
+  await expect(page.locator('#mihomo-clash-connection-count')).toHaveText('1');
+  await expect(page.locator('#mihomo-clash-connections-rows tr')).toHaveCount(1);
+  await page.locator('[data-connection-id="summary-0"]').click();
+  const inspector = page.locator('#mihomo-clash-connection-inspector');
+  await expect(inspector).toBeVisible();
+  expect((await inspector.boundingBox()).y).toBe((await table.boundingBox()).y);
+  await page.locator('#mihomo-clash-tab-rules').click();
+  await expect(toggle).toBeHidden();
+  await page.locator('#mihomo-clash-tab-connections').click();
+  await expect(summary).toBeHidden();
+  await page.reload();
+  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.locator('#mihomo-clash-tab-connections').click();
+  await expect(summary).toBeHidden();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await toggle.click();
+  await expect(summary).toBeVisible();
+  await expect(page.locator('#mihomo-clash-connection-count')).toHaveText('1');
+  for (const theme of ['dark', 'light']) {
+    await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 960 });
+      await toggle.click();
+      await expect(summary).toBeHidden();
+      await page.screenshot({ path: `.tmp/mihomo-connections-compact-${theme}-${width}.png` });
+      await toggle.press('Space');
+      await expect(summary).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+  }
+});
+
 test('Mihomo connections mobile table becomes records without horizontal overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));

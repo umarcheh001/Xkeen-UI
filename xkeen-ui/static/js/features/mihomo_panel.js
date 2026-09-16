@@ -1623,9 +1623,9 @@ let mihomoPanelModuleApi = null;
     const body = $(IDS.body);
     const arrow = $(IDS.arrow);
     if (!body || !arrow) return;
-    const willOpen = (body.style.display === '' || body.style.display === 'none');
+    const willOpen = getComputedStyle(body).display === 'none';
     body.style.display = willOpen ? 'block' : 'none';
-    arrow.textContent = willOpen ? '▲' : '▼';
+    arrow.innerHTML = iconHtml('chevron-down', 'xk-disclosure-chevron');
     syncMihomoCardToggleState(willOpen);
     if (willOpen) refreshEditorIfAny();
   }
@@ -3438,7 +3438,10 @@ let mihomoPanelModuleApi = null;
           e.preventDefault();
           const visible = panel.style.display !== 'none';
           panel.style.display = visible ? 'none' : 'block';
-          if (arrow) arrow.textContent = visible ? '▼' : '▲';
+          if (arrow) {
+            arrow.innerHTML = iconHtml('chevron-down', 'xk-disclosure-chevron');
+            arrow.dataset.expanded = String(!visible);
+          }
           if (!visible) {
             await MP.loadProfiles();
             await MP.loadBackups();

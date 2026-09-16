@@ -1,6 +1,6 @@
 <!doctype html>
 {% macro op_icon(name, class_name='') -%}
-<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260822a') }}#xk-{{ name }}"></use></svg>
+<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260916a') }}#xk-{{ name }}"></use></svg>
 {%- endmacro %}
 <html lang="ru">
 <head>
@@ -69,7 +69,7 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260910a') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260916f') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
@@ -1351,7 +1351,7 @@
 
     <div id="mihomo-clash-panel-connections" class="xk-mihomo-runtime-panel" data-mihomo-clash-panel="connections" role="tabpanel" aria-labelledby="mihomo-clash-tab-connections" hidden>
       <div id="mihomo-clash-connections" class="xk-mihomo-connections" aria-busy="false">
-        <div class="xk-mihomo-connections-summary" aria-label="Сводка соединений Mihomo">
+        <div id="mihomo-clash-connections-summary" class="xk-mihomo-connections-summary" aria-label="Сводка соединений Mihomo">
           <div class="xk-mihomo-connection-stat"><span>Состояние</span><strong id="mihomo-clash-stream-state">Ожидание</strong></div>
           <div class="xk-mihomo-connection-stat"><span>Активные</span><strong id="mihomo-clash-connection-count">0</strong></div>
           <div class="xk-mihomo-connection-stat"><span>Загрузка</span><strong id="mihomo-clash-download-rate">0 Б/с</strong><small id="mihomo-clash-download-total">всего 0 Б</small></div>
@@ -1488,8 +1488,8 @@
   <div id="mihomo-clash-panel-config" class="xk-mihomo-config-subview" data-mihomo-clash-panel="config" role="tabpanel" aria-labelledby="mihomo-clash-tab-config" hidden>
   <section class="card">
     <div class="commands-header" data-xk-toggle="mihomo-card" role="button" tabindex="0" aria-controls="mihomo-body" aria-expanded="true">
-      <h2>Роутинг Mihomo</h2>
-      <span id="mihomo-arrow">▼</span>
+      <h2>Редактор конфигурации</h2>
+      <span id="mihomo-arrow" aria-hidden="true">{{ op_icon('chevron-down', 'xk-disclosure-chevron') }}</span>
     </div>
 
     <div id="mihomo-body">
@@ -1624,7 +1624,7 @@
       <!-- Профили и бэкапы Mihomo -->
       <div class="commands-header" id="mihomo-profiles-link" role="button" tabindex="0">
         <h3>Профили и бэкапы Mihomo</h3>
-        <span id="mihomo-profiles-arrow">▼</span>
+        <span id="mihomo-profiles-arrow" aria-hidden="true">{{ op_icon('chevron-down', 'xk-disclosure-chevron') }}</span>
       </div>
 
       <div id="mihomo-profiles-panel" class="xk-mihomo-vault" style="display:none;">

@@ -9,6 +9,7 @@ import { getCurrentPanelShellView, showPanelShellView } from './panel_shell.shar
 import { applyPanelViewRuntime } from './panel.view_runtime.js';
 import { hasXkeenMihomoCore, hasXkeenXrayCore } from '../features/xkeen_runtime.js';
 import { bootPanelPage } from './panel.bootstrap_tail.bundle.js';
+import { initMihomoOperatorHeader } from './panel.mihomo_header.js';
 
 let _panelFeatureBundlesPromise = null;
 
@@ -68,6 +69,7 @@ let _panelTopLevelApi = null;
 
 export async function bootPanelScreen() {
   await loadPanelFeatureBundles();
+  initMihomoOperatorHeader();
   bootPanelPage();
 
   if (!_panelTopLevelApi) {
