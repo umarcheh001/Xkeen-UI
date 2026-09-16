@@ -730,6 +730,11 @@
           "path": "static/js/features/resource_monitor.js",
           "globals": [],
           "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/panel.mihomo_header.js",
+          "globals": [],
+          "lazy_features": []
         }
       ],
       "direct_init_globals": [],
