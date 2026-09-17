@@ -138,15 +138,14 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   const firstSource = page.locator('[data-connection-id="connection-one"] td').first();
   await expect(firstSource).toContainText('192.0.2.1:5000');
   await expect(firstSource.locator('.xk-mihomo-device-name')).toHaveText('Laptop');
-  const deviceStyle = await firstSource.locator('.xk-mihomo-device-name').evaluate((element) => {
+  await expect.poll(() => firstSource.locator('.xk-mihomo-device-name').evaluate((element) => {
     const style = getComputedStyle(element);
     return {
       background: style.backgroundColor,
       borderRadius: style.borderRadius,
       borderLeftStyle: style.borderLeftStyle,
     };
-  });
-  expect(deviceStyle).toEqual({
+  })).toEqual({
     background: 'rgb(236, 238, 242)',
     borderRadius: '999px',
     borderLeftStyle: 'solid',
