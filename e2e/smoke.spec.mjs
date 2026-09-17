@@ -67,6 +67,8 @@ test('panel navigation style survives generator and DevTools round trips', async
 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator('body')).toHaveClass(/\bpanel-page\b/);
+  await expect(page.locator('body')).not.toHaveClass(/xk-operator-header-pending/);
+  await expect(page.locator('.panel-header-shell')).toHaveCSS('visibility', 'visible');
   await page.locator('[aria-controls="xk-mihomo-sections-menu"]').click();
   await expect(panelTabs).toBeVisible();
 

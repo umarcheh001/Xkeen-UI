@@ -82,6 +82,31 @@ async function collectLayout(page) {
 
 
 test.describe('Operator Console Stage 2 shell and workspace contract', () => {
+  test('legacy header stays hidden until the compact header is ready', async ({ page }) => {
+    let releaseEntry = () => {};
+    let markEntryBlocked = () => {};
+    const entryBlocked = new Promise((resolve) => { markEntryBlocked = resolve; });
+
+    await page.route('**/frontend-build/assets/panel-bridge.js*', async (route) => {
+      markEntryBlocked();
+      await new Promise((resolve) => { releaseEntry = resolve; });
+      await route.continue();
+    });
+
+    await page.goto('/', { waitUntil: 'commit' });
+    await entryBlocked;
+    try {
+      await expect(page.locator('body')).toHaveClass(/xk-operator-header-pending/);
+      await expect(page.locator('.panel-header-shell')).toHaveCSS('visibility', 'hidden');
+    } finally {
+      releaseEntry();
+    }
+
+    await expect(page.locator('body')).toHaveClass(/xk-operator-header-active/);
+    await expect(page.locator('body')).not.toHaveClass(/xk-operator-header-pending/);
+    await expect(page.locator('.panel-header-shell')).toHaveCSS('visibility', 'visible');
+  });
+
   test('DevTools container modes size and centre the redesigned panel', async ({ page }) => {
     await openPanel(page, 'dark', { width: 1920, height: 1080 });
 

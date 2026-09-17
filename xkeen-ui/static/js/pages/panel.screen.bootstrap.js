@@ -34,6 +34,7 @@ export async function loadPanelFeatureBundles() {
 function createPanelTopLevelApi() {
   return {
     activate() {
+      initPanelOperatorHeader();
       try {
         const currentView = String(getCurrentPanelShellView() || '');
         if (currentView) {
@@ -68,8 +69,8 @@ function createPanelTopLevelApi() {
 let _panelTopLevelApi = null;
 
 export async function bootPanelScreen() {
-  await loadPanelFeatureBundles();
   initPanelOperatorHeader();
+  await loadPanelFeatureBundles();
   bootPanelPage();
 
   if (!_panelTopLevelApi) {

@@ -6,6 +6,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PANEL_TEMPLATE = ROOT / "xkeen-ui/templates/panel.html"
 OPERATOR_CSS = ROOT / "xkeen-ui/static/panel-operator.css"
+OPERATOR_HEADER = ROOT / "xkeen-ui/static/js/pages/panel.mihomo_header.js"
+PANEL_BOOTSTRAP = ROOT / "xkeen-ui/static/js/pages/panel.screen.bootstrap.js"
 PLAN_DOC = ROOT / "docs/panel-operator-redesign-completion-plan.md"
 CONTRACT_DOC = ROOT / "docs/panel-operator-stage2-shell-grid.md"
 DOCS_INDEX = ROOT / "docs/README.md"
@@ -18,7 +20,7 @@ def test_stage2_header_has_two_zones_without_replacing_runtime_nodes():
     assert 'data-xk-shell-zone="identity"' in template
     assert 'data-xk-shell-zone="global-actions"' in template
     assert 'class="top-tabs header-tabs" role="navigation" aria-label="Разделы панели"' in template
-    assert "filename='panel-operator.css', v='20260917d'" in template
+    assert "filename='panel-operator.css', v='20260917e'" in template
 
     identity_start = template.index('class="panel-shell-identity"')
     actions_start = template.index('data-xk-shell-zone="global-actions"')
@@ -76,6 +78,22 @@ def test_stage2_shell_and_grid_rules_live_in_canonical_sections():
     assert "@media (max-width: 720px)" in responsive
     assert "grid-template-columns: minmax(0, 1fr);" in responsive
     assert "final fixes" not in responsive.lower()
+
+
+def test_compact_header_blocks_legacy_first_paint_and_initializes_early():
+    template = PANEL_TEMPLATE.read_text(encoding="utf-8")
+    css = OPERATOR_CSS.read_text(encoding="utf-8")
+    header_js = OPERATOR_HEADER.read_text(encoding="utf-8")
+    bootstrap = PANEL_BOOTSTRAP.read_text(encoding="utf-8")
+
+    assert '<body class="panel-page xk-operator-header-pending' in template
+    assert "document.body.classList.remove('xk-operator-header-pending')" in template
+    assert "body.panel-page.xk-operator-header-pending .panel-header.panel-header-shell" in css
+    assert "visibility: hidden !important;" in css
+    assert "releaseHeaderPaintGuard();" in header_js
+    assert header_js.index("syncView(document.querySelector") < header_js.rindex("releaseHeaderPaintGuard();")
+    assert bootstrap.index("initPanelOperatorHeader();") < bootstrap.index("await loadPanelFeatureBundles();")
+    assert bootstrap.count("initPanelOperatorHeader();") == 2
 
 
 def test_stage2_container_width_respects_layout_preferences():

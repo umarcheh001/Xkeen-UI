@@ -2,12 +2,22 @@
 import { iconHtml, setIcon } from '../ui/operator_icons.js';
 let initialized = false;
 
+function releaseHeaderPaintGuard() {
+  document.body?.classList.remove('xk-operator-header-pending');
+}
+
 export function initPanelOperatorHeader() {
-  if (initialized) return;
+  if (initialized) {
+    releaseHeaderPaintGuard();
+    return;
+  }
   const header = document.querySelector('.panel-header-shell');
   const compactViews = new Set(['routing', 'mihomo', 'xkeen', 'xray-logs', 'commands', 'files']);
   const mihomoView = document.getElementById('view-mihomo');
-  if (!header || ![...compactViews].some((name) => document.getElementById(`view-${name}`))) return;
+  if (!header || ![...compactViews].some((name) => document.getElementById(`view-${name}`))) {
+    releaseHeaderPaintGuard();
+    return;
+  }
   initialized = true;
   const byId = (id) => document.getElementById(id);
   const create = (tag, className, text) => {
@@ -241,6 +251,7 @@ export function initPanelOperatorHeader() {
   }
   document.addEventListener('xkeen:panel-view-changed', (event) => syncView(event.detail?.view));
   syncView(document.querySelector('.top-tab-btn.active[data-view]')?.dataset.view);
+  releaseHeaderPaintGuard();
 }
 
 // Kept for integrations that imported the first, Mihomo-specific name.
