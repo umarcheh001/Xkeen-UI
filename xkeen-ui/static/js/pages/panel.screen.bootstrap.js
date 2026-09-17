@@ -12,6 +12,65 @@ import { bootPanelPage } from './panel.bootstrap_tail.bundle.js';
 import { initPanelOperatorHeader } from './panel.mihomo_header.js';
 
 let _panelFeatureBundlesPromise = null;
+let _panelStartupReleased = false;
+
+function now() {
+  try { return window.performance ? window.performance.now() : Date.now(); } catch (error) { return Date.now(); }
+}
+
+function waitForDocumentReady() {
+  if (document.readyState !== 'loading') return Promise.resolve();
+  return new Promise((resolve) => {
+    document.addEventListener('DOMContentLoaded', resolve, { once: true });
+  });
+}
+
+function waitForStablePaint() {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(fallback);
+      resolve();
+    };
+    const fallback = window.setTimeout(finish, 250);
+    window.requestAnimationFrame(() => window.requestAnimationFrame(finish));
+  });
+}
+
+function releasePanelStartupOverlay() {
+  if (_panelStartupReleased) return Promise.resolve();
+  _panelStartupReleased = true;
+
+  try { window.clearTimeout(window.__xkPanelStartupFailOpen); } catch (error) {}
+  const overlay = document.getElementById('global-xkeen-spinner');
+  const startedAt = Number(window.__xkPanelStartupAt || 0);
+  const delay = Math.max(0, 320 - (startedAt ? now() - startedAt : 320));
+
+  return new Promise((resolve) => {
+    window.setTimeout(() => {
+      document.body?.classList.remove('xk-panel-startup');
+      if (!overlay || !overlay.classList.contains('is-startup')) {
+        resolve();
+        return;
+      }
+
+      overlay.setAttribute('aria-busy', 'false');
+      overlay.classList.add('is-leaving');
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        overlay.removeEventListener('transitionend', finish);
+        overlay.classList.remove('is-active', 'is-startup', 'is-leaving');
+        resolve();
+      };
+      overlay.addEventListener('transitionend', finish);
+      window.setTimeout(finish, 260);
+    }, delay);
+  });
+}
 
 export async function loadPanelFeatureBundles() {
   if (_panelFeatureBundlesPromise) return _panelFeatureBundlesPromise;
@@ -70,8 +129,14 @@ let _panelTopLevelApi = null;
 
 export async function bootPanelScreen() {
   initPanelOperatorHeader();
-  await loadPanelFeatureBundles();
-  bootPanelPage();
+  try {
+    await loadPanelFeatureBundles();
+    await waitForDocumentReady();
+    bootPanelPage();
+    await waitForStablePaint();
+  } finally {
+    await releasePanelStartupOverlay();
+  }
 
   if (!_panelTopLevelApi) {
     _panelTopLevelApi = createPanelTopLevelApi();

@@ -98,12 +98,19 @@ test.describe('Operator Console Stage 2 shell and workspace contract', () => {
     try {
       await expect(page.locator('body')).toHaveClass(/xk-operator-header-pending/);
       await expect(page.locator('.panel-header-shell')).toHaveCSS('visibility', 'hidden');
+      await expect(page.locator('#global-xkeen-spinner')).toHaveClass(/is-startup/);
+      await expect(page.locator('#global-xkeen-spinner')).toBeVisible();
+      await expect(page.locator('#global-xkeen-spinner-text')).toHaveText('Загружаем панель…');
+      await expect(page.locator('#global-xkeen-spinner')).toHaveAttribute('aria-busy', 'true');
     } finally {
       releaseEntry();
     }
 
     await expect(page.locator('body')).toHaveClass(/xk-operator-header-active/);
     await expect(page.locator('body')).not.toHaveClass(/xk-operator-header-pending/);
+    await expect(page.locator('body')).not.toHaveClass(/xk-panel-startup/);
+    await expect(page.locator('#global-xkeen-spinner')).toBeHidden();
+    await expect(page.locator('#global-xkeen-spinner')).toHaveAttribute('aria-busy', 'false');
     await expect(page.locator('.panel-header-shell')).toHaveCSS('visibility', 'visible');
   });
 

@@ -20,7 +20,7 @@ def test_stage2_header_has_two_zones_without_replacing_runtime_nodes():
     assert 'data-xk-shell-zone="identity"' in template
     assert 'data-xk-shell-zone="global-actions"' in template
     assert 'class="top-tabs header-tabs" role="navigation" aria-label="Разделы панели"' in template
-    assert "filename='panel-operator.css', v='20260917e'" in template
+    assert "filename='panel-operator.css', v='20260917f'" in template
 
     identity_start = template.index('class="panel-shell-identity"')
     actions_start = template.index('data-xk-shell-zone="global-actions"')
@@ -86,10 +86,15 @@ def test_compact_header_blocks_legacy_first_paint_and_initializes_early():
     header_js = OPERATOR_HEADER.read_text(encoding="utf-8")
     bootstrap = PANEL_BOOTSTRAP.read_text(encoding="utf-8")
 
-    assert '<body class="panel-page xk-operator-header-pending' in template
+    assert '<body class="panel-page xk-panel-startup xk-operator-header-pending' in template
     assert "document.body.classList.remove('xk-operator-header-pending')" in template
+    assert "top_level_spinner_class = 'is-active is-startup'" in template
+    assert "top_level_spinner_initial_active = true" in template
+    assert "Загружаем панель…" in template
     assert "body.panel-page.xk-operator-header-pending .panel-header.panel-header-shell" in css
     assert "visibility: hidden !important;" in css
+    assert "body.panel-page #global-xkeen-spinner.is-startup" in css
+    assert "releasePanelStartupOverlay()" in bootstrap
     assert "releaseHeaderPaintGuard();" in header_js
     assert header_js.index("syncView(document.querySelector") < header_js.rindex("releaseHeaderPaintGuard();")
     assert bootstrap.index("initPanelOperatorHeader();") < bootstrap.index("await loadPanelFeatureBundles();")

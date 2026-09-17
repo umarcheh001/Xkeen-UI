@@ -69,17 +69,26 @@
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260917e') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260917f') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
-<body class="panel-page xk-operator-header-pending{% if is_mips %} xk-perf-lite{% endif %}">
+<body class="panel-page xk-panel-startup xk-operator-header-pending{% if is_mips %} xk-perf-lite{% endif %}">
   <script>
-    // Fail open if a runtime error prevents the compact header from booting.
-    window.setTimeout(function () {
+    window.__xkPanelStartupAt = window.performance ? window.performance.now() : Date.now();
+    // Fail open if a runtime error prevents the panel bootstrap from finishing.
+    window.__xkPanelStartupFailOpen = window.setTimeout(function () {
       if (document.body) document.body.classList.remove('xk-operator-header-pending');
-    }, 4000);
+      if (document.body) document.body.classList.remove('xk-panel-startup');
+      var overlay = document.getElementById('global-xkeen-spinner');
+      if (overlay && overlay.classList.contains('is-startup')) {
+        overlay.classList.remove('is-active', 'is-startup', 'is-leaving');
+        overlay.setAttribute('aria-busy', 'false');
+      }
+    }, 12000);
   </script>
-  {% set top_level_spinner_text = 'Применяем изменения и перезапускаем xkeen…' %}
+  {% set top_level_spinner_text = 'Загружаем панель…' %}
+  {% set top_level_spinner_class = 'is-active is-startup' %}
+  {% set top_level_spinner_initial_active = true %}
   {% include '_top_level_global_spinner.html' %}
 
   <!-- Wider container (match DevTools page width) -->

@@ -104,6 +104,59 @@ body.panel-page {
   line-height: 1.42;
 }
 
+/* The server marks the first panel frame as loading. Keep the existing
+ * operation overlay available, but give its startup state a quiet full-page
+ * treatment that covers the legacy shell until bootstrap is complete. */
+body.panel-page #global-xkeen-spinner.is-startup {
+  display: flex;
+  z-index: 2147483000;
+  background: color-mix(in srgb, var(--op-bg) 94%, transparent);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 180ms ease, visibility 180ms ease;
+}
+
+body.panel-page #global-xkeen-spinner.is-startup.is-leaving {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+body.panel-page #global-xkeen-spinner.is-startup .global-spinner-box {
+  min-width: 0;
+  max-width: min(320px, calc(100vw - 48px));
+  padding: 18px 24px;
+  flex-direction: column;
+  gap: 13px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+body.panel-page #global-xkeen-spinner.is-startup .global-spinner-icon {
+  width: 24px;
+  height: 24px;
+  border: 2px solid color-mix(in srgb, var(--op-accent) 24%, transparent);
+  border-top-color: var(--op-accent-hover);
+  border-right-color: var(--op-success);
+  box-shadow: 0 0 0 5px var(--op-accent-soft);
+  animation-duration: 760ms;
+}
+
+body.panel-page #global-xkeen-spinner.is-startup .global-spinner-text {
+  color: var(--op-muted);
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+html[data-theme="light"] body.panel-page #global-xkeen-spinner.is-startup {
+  background: rgba(241, 242, 245, 0.96);
+}
+
 /* ==========================================================================
  * 1.1. SCROLLBARS
  * ========================================================================== */
@@ -14153,6 +14206,14 @@ body.panel-page :is(.fm-panel-error-retry, .fm-empty-action) .xk-action-icon {
  * 8. RESPONSIVE
  * ========================================================================== */
 @media (prefers-reduced-motion: reduce) {
+  body.panel-page #global-xkeen-spinner.is-startup {
+    transition: none;
+  }
+
+  body.panel-page #global-xkeen-spinner.is-startup .global-spinner-icon {
+    animation-duration: 1600ms;
+  }
+
   body.panel-page.xk-operator-header-active .panel-shell-branding[data-service-state="running"] #xk-brand-title {
     animation: none;
     color: var(--op-success);

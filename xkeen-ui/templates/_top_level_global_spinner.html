@@ -1,4 +1,11 @@
-<div id="global-xkeen-spinner">
+<div
+  id="global-xkeen-spinner"
+  class="{{ top_level_spinner_class|default('') }}"
+  role="status"
+  aria-live="polite"
+  aria-atomic="true"
+  aria-busy="{{ 'true' if top_level_spinner_initial_active|default(false) else 'false' }}"
+>
   <div class="global-spinner-box">
     <div class="global-spinner-icon"></div>
     <div class="global-spinner-text" id="global-xkeen-spinner-text">

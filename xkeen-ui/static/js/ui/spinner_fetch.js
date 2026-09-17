@@ -52,6 +52,7 @@
 
     if (overlay) {
       overlay.classList.add('is-active');
+      overlay.setAttribute('aria-busy', 'true');
     }
   }
 
@@ -62,7 +63,10 @@
 
     state.spinnerDepth = Math.max(0, state.spinnerDepth - 1);
     if (state.spinnerDepth === 0) {
-      if (overlay) overlay.classList.remove('is-active');
+      if (overlay) {
+        overlay.classList.remove('is-active');
+        overlay.setAttribute('aria-busy', 'false');
+      }
       if (inlineSpinner) inlineSpinner.classList.remove('is-active');
       try { document.body.classList.remove('xk-global-busy-inline'); } catch (e) {}
     }
