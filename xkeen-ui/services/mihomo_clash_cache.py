@@ -59,6 +59,10 @@ class MihomoCacheLookup:
     waited: bool
 
 
+class MihomoClashCacheWaitTimeout(TimeoutError):
+    """Raised when a single-flight producer stops making bounded progress."""
+
+
 @dataclass
 class _CacheEntry:
     value: Any
@@ -121,11 +125,17 @@ class MihomoClashCache:
         loader: Callable[[], Any],
         *,
         ttl_seconds: float | None,
+        wait_timeout_seconds: float | None = None,
     ) -> MihomoCacheLookup:
         """Return a fresh value, coalescing concurrent loads for ``key``."""
 
         cache_key = self._key_tuple(key)
         ttl = None if ttl_seconds is None else max(0.0, float(ttl_seconds))
+        wait_timeout = (
+            None
+            if wait_timeout_seconds is None
+            else max(0.01, float(wait_timeout_seconds))
+        )
         waited = False
 
         while True:
@@ -161,7 +171,16 @@ class MihomoClashCache:
                 break
 
             waited = True
-            flight.event.wait()
+            if not flight.event.wait(wait_timeout):
+                # A browser timeout does not stop the WSGI handler that owns
+                # the producer. Detach a stalled flight so a later request can
+                # recover without restarting the panel process.
+                with self._lock:
+                    if self._inflight.get(cache_key) is flight:
+                        self._inflight.pop(cache_key, None)
+                raise MihomoClashCacheWaitTimeout(
+                    "Timed out waiting for an in-flight Mihomo cache load."
+                )
             if flight.error is not None:
                 raise flight.error
             # Prefer the entry if the producer was allowed to cache it.  If an
@@ -175,14 +194,18 @@ class MihomoClashCache:
             value = loader()
         except BaseException as exc:
             with self._lock:
-                current = self._inflight.pop(cache_key, None)
-                if current is not None:
-                    current.error = exc
-                    current.event.set()
+                if self._inflight.get(cache_key) is flight:
+                    self._inflight.pop(cache_key, None)
+                # This exact flight can already be detached and replaced.
+                # Its original waiters still need a terminal signal.
+                flight.error = exc
+                flight.event.set()
             raise
 
         with self._lock:
-            current = self._inflight.pop(cache_key, None)
+            current = self._inflight.get(cache_key)
+            if current is flight:
+                self._inflight.pop(cache_key, None)
             # An invalidation during the upstream call means the result is
             # already stale.  Waiters still receive it once, but it is not
             # inserted into the cache.
@@ -191,7 +214,7 @@ class MihomoClashCache:
                 self._global_generation,
                 self._namespace_generations.get(namespace, 0),
             )
-            if current is not None and current.generation == current_generation:
+            if current is flight and flight.generation == current_generation:
                 expires_at = None if ttl is None else float(self._clock()) + ttl
                 self._entries[cache_key] = _CacheEntry(
                     value=_copy(value),
@@ -202,9 +225,8 @@ class MihomoClashCache:
                 while len(self._entries) > self.max_entries:
                     self._entries.popitem(last=False)
                     self._evictions += 1
-            if current is not None:
-                current.value = _copy(value)
-                current.event.set()
+            flight.value = _copy(value)
+            flight.event.set()
         return MihomoCacheLookup(value, False, False)
 
     def get_or_set(
@@ -361,6 +383,7 @@ __all__ = [
     "MihomoCacheKey",
     "MihomoCacheLookup",
     "MihomoClashCache",
+    "MihomoClashCacheWaitTimeout",
     "build_cache_key",
     "config_fingerprint",
     "get_shared_mihomo_clash_cache",

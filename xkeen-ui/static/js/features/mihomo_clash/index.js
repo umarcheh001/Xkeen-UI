@@ -207,7 +207,7 @@ function renderStatus(state, payload = null) {
   // Prefixing it again made the compact status strip repeat “Mihomo”.
   setText('mihomo-clash-status-version', version || 'Версия —');
   renderRuntimeModeSwitch(payload);
-  if (state === 'ready' && active && visible && currentSubview !== 'config'
+  if (state === 'ready' && active && visible && currentSubview === 'connections'
       && payload?.capabilities?.telemetry_stream === true) {
     connectMihomoTelemetry({ enabled: true });
   } else if (state !== 'loading') {
@@ -445,6 +445,7 @@ function applySubview(name, options = {}) {
       }));
     } catch (error) {}
   } else if (active && visible) {
+    if (next !== 'connections') closeMihomoTelemetry('paused');
     if (next !== 'control') deactivateMihomoClashGroups();
     if (next !== 'control') deactivateMihomoClashEgress();
     if (next !== 'control') deactivateMihomoClashDns();

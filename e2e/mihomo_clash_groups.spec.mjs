@@ -106,6 +106,55 @@ function egressPayload(cached = false) {
 }
 
 
+test('Mihomo groups recover from transient snapshot failures without restarting the panel', async ({ page }) => {
+  let requests = 0;
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route('**/api/mihomo/clash/proxy-groups', (route) => {
+    requests += 1;
+    if (requests <= 2) {
+      return route.fulfill({
+        status: 503,
+        json: { ok: false, retryable: true, code: 'upstream_busy', error: 'Mihomo API временно занят.' },
+      });
+    }
+    return route.fulfill({ json: groupsPayload() });
+  });
+
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  await expect(page.locator('[data-mihomo-groups-retry]')).toBeVisible();
+  expect(requests).toBe(2);
+  await page.locator('[data-mihomo-groups-retry]').click();
+  await expect(page.locator('#mihomo-clash-groups-list')).toContainText('AUTO');
+  expect(requests).toBe(3);
+});
+
+
+test('Mihomo control view does not start connections telemetry beside group loading', async ({ page }) => {
+  let tokenRequests = 0;
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({
+    json: {
+      ...statusPayload(),
+      capabilities: { ...statusPayload().capabilities, telemetry_stream: true },
+    },
+  }));
+  await page.route('**/api/mihomo/clash/proxy-groups', (route) => route.fulfill({ json: groupsPayload() }));
+  await page.route('**/api/ws-token', (route) => {
+    if (route.request().postDataJSON()?.scope === 'mihomo-clash-telemetry') tokenRequests += 1;
+    return route.fulfill({ json: { ok: true, token: 'e2e-telemetry-token' } });
+  });
+
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  await expect(page.locator('#mihomo-clash-groups-list')).toContainText('AUTO');
+  await page.waitForTimeout(300);
+  expect(tokenRequests).toBe(0);
+
+  await page.locator('#mihomo-clash-tab-connections').click();
+  await expect.poll(() => tokenRequests).toBeGreaterThan(0);
+});
+
+
 test('Mihomo egress card shows routed IP, refreshes and stays compact on mobile', async ({ page }) => {
   const egressRequests = [];
   await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));

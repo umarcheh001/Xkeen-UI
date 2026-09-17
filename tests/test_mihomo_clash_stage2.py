@@ -9,6 +9,7 @@ import pytest
 
 from services.mihomo_clash_cache import (
     MihomoClashCache,
+    MihomoClashCacheWaitTimeout,
     build_cache_key,
     target_fingerprint,
 )
@@ -101,6 +102,37 @@ def test_common_cache_invalidation_does_not_reinsert_inflight_mutation_result():
     fresh = cache.fetch(key, lambda: {"fresh": True}, ttl_seconds=60)
     assert fresh.hit is False
     assert fresh.value == {"fresh": True}
+
+
+def test_common_cache_detaches_stalled_flight_without_losing_fresh_replacement():
+    cache = MihomoClashCache()
+    started = threading.Event()
+    release = threading.Event()
+    key = build_cache_key("groups", target_fingerprint_value="target")
+
+    def stalled_loader():
+        started.set()
+        assert release.wait(2)
+        return {"stale": True}
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        stalled = executor.submit(cache.fetch, key, stalled_loader, ttl_seconds=60)
+        assert started.wait(2)
+        with pytest.raises(MihomoClashCacheWaitTimeout):
+            cache.fetch(
+                key,
+                lambda: pytest.fail("waiter must not become producer"),
+                ttl_seconds=60,
+                wait_timeout_seconds=0.05,
+            )
+
+        fresh = cache.fetch(key, lambda: {"fresh": True}, ttl_seconds=60)
+        assert fresh.value == {"fresh": True}
+        release.set()
+        assert stalled.result(timeout=2).value == {"stale": True}
+
+    cached = cache.fetch(key, lambda: pytest.fail("fresh value was lost"), ttl_seconds=60)
+    assert cached.value == {"fresh": True}
 
 
 def test_cache_key_and_target_fingerprint_never_expose_secret():

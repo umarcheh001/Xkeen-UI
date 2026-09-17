@@ -56,6 +56,7 @@ let filterText = '';
 let showHidden = false;
 let request = null;
 let requestSequence = 0;
+let loadError = '';
 let selection = null;
 let capabilities = {};
 let sortMode = 'config';
@@ -1117,9 +1118,16 @@ function render() {
     const label = collapseButton.querySelector('span:not(.xk-action-icon)');
     if (label) label.textContent = allCollapsed ? 'Развернуть' : 'Свернуть';
   }
-  list.innerHTML = visibleGroups.length
-    ? visibleGroups.map(renderGroup).join('')
-    : '<div class="xk-mihomo-groups-empty">Группы или узлы по текущему фильтру не найдены.</div>';
+  list.innerHTML = loadError && !payload
+    ? `<div class="xk-mihomo-groups-empty" role="alert">
+        <p>${escapeHtml(loadError)}</p>
+        <button type="button" class="btn-secondary" data-mihomo-groups-retry>
+          ${iconHtml('refresh')}<span class="xk-action-label">Повторить</span>
+        </button>
+      </div>`
+    : visibleGroups.length
+      ? visibleGroups.map(renderGroup).join('')
+      : '<div class="xk-mihomo-groups-empty">Группы или узлы по текущему фильтру не найдены.</div>';
   syncDelayControls(visibleExpandedNodes);
 }
 
@@ -1213,18 +1221,22 @@ export async function refreshMihomoClashGroups() {
   const sequence = ++requestSequence;
   const controller = typeof AbortController === 'function' ? new AbortController() : null;
   request = controller;
+  loadError = '';
   root?.setAttribute('aria-busy', 'true');
   try {
     const next = await fetchMihomoClashGroups({ signal: controller?.signal });
     if (!active || sequence !== requestSequence) return false;
     payloadLoadedAt = Date.now();
     payload = next && typeof next === 'object' ? next : { groups: [] };
+    loadError = '';
     seedDelayHistories(allGroups());
     seedCollapsedGroups(allGroups());
     render();
     return true;
   } catch (error) {
     if (controller?.signal.aborted || sequence !== requestSequence) return false;
+    loadError = error?.data?.error || error?.message || 'Не удалось загрузить группы Mihomo.';
+    if (!payload) render();
     return false;
   } finally {
     if (sequence === requestSequence) request = null;
@@ -1715,7 +1727,7 @@ function bind() {
     render();
   });
   bindControls('click', (event) => {
-    const target = event.target?.closest?.('[data-mihomo-groups-collapse], .xk-mihomo-group-head, [data-mihomo-picker-toggle], [data-mihomo-group-select], [data-mihomo-group-unfix], [data-mihomo-node-delay], [data-mihomo-group-delay], [data-mihomo-delay-visible], #mihomo-clash-show-timeout-hidden');
+    const target = event.target?.closest?.('[data-mihomo-groups-retry], [data-mihomo-groups-collapse], .xk-mihomo-group-head, [data-mihomo-picker-toggle], [data-mihomo-group-select], [data-mihomo-group-unfix], [data-mihomo-node-delay], [data-mihomo-group-delay], [data-mihomo-delay-visible], #mihomo-clash-show-timeout-hidden');
     if (!target) {
       if (pickerGroup && !event.target?.closest?.('[data-mihomo-group-picker]')) {
         pickerGroup = '';
@@ -1724,6 +1736,10 @@ function bind() {
       return;
     }
     hideDelayHistory();
+    if (target.hasAttribute('data-mihomo-groups-retry')) {
+      void refreshMihomoClashGroups();
+      return;
+    }
     if (target.hasAttribute('data-mihomo-groups-collapse')) {
       const visibleGroups = filteredGroups();
       const shouldExpand = target.dataset.mode === 'expand';

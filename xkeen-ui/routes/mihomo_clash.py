@@ -36,6 +36,7 @@ from services.mihomo_clash_capabilities import (
 from services.mihomo_clash_guard import MihomoClashActionGuard, MihomoClashActionRejected
 from services.mihomo_clash_cache import (
     MihomoClashCache,
+    MihomoClashCacheWaitTimeout,
     build_cache_key,
 )
 from services.mihomo_clash_dns import (
@@ -83,6 +84,7 @@ DNS_QUERY_CACHE_TTL_SECONDS = 1.0
 # concurrent status requests duplicate the two upstream calls.
 STATUS_CACHE_TTL_SECONDS = 1.5
 GROUPS_CACHE_TTL_SECONDS = 1.0
+GROUPS_CACHE_WAIT_SECONDS = 9.0
 PROVIDERS_CACHE_TTL_SECONDS = 10.0
 RULES_CACHE_TTL_SECONDS = 10.0
 MAX_DNS_QUERY_NAME_CHARS = 253
@@ -1571,10 +1573,18 @@ def create_mihomo_clash_blueprint(
                         providers_client.request_json, "providers_proxies"
                     )
                     proxies = proxies_future.result()
-                    providers = providers_future.result()
+                    provider_error = ""
+                    try:
+                        providers = providers_future.result()
+                    except MihomoClashClientError as exc:
+                        providers = None
+                        provider_error = exc.code
+                    except Exception:
+                        providers = None
+                        provider_error = "provider_enrichment_failed"
                 payload = build_mihomo_clash_proxy_groups_dto(
                     proxies.payload,
-                    providers.payload,
+                    providers.payload if providers is not None else None,
                     _cached_yaml_transport_index(discovery),
                 )
                 payload["telemetry"] = {
@@ -1582,10 +1592,17 @@ def create_mihomo_clash_blueprint(
                         "elapsed_ms": proxies.elapsed_ms,
                         "size_bytes": proxies.size_bytes,
                     },
-                    "providers": {
-                        "elapsed_ms": providers.elapsed_ms,
-                        "size_bytes": providers.size_bytes,
-                    },
+                    "providers": (
+                        {
+                            "elapsed_ms": providers.elapsed_ms,
+                            "size_bytes": providers.size_bytes,
+                        }
+                        if providers is not None
+                        else {
+                            "degraded": True,
+                            "error": provider_error,
+                        }
+                    ),
                 }
                 return payload
 
@@ -1593,6 +1610,15 @@ def create_mihomo_clash_blueprint(
                 _cache_key("groups", discovery, "proxy-groups"),
                 load_groups,
                 ttl_seconds=GROUPS_CACHE_TTL_SECONDS,
+                wait_timeout_seconds=GROUPS_CACHE_WAIT_SECONDS,
+            )
+        except MihomoClashCacheWaitTimeout:
+            return error_response(
+                "Предыдущая загрузка групп Mihomo зависла. Повторите запрос.",
+                503,
+                ok=False,
+                code="mihomo_clash_groups_wait_timeout",
+                retryable=True,
             )
         except MihomoClashClientError as exc:
             return _safe_client_error(exc)

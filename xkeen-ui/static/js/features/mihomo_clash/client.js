@@ -126,8 +126,8 @@ export function fetchMihomoClashGroups(options = {}) {
     method: 'GET',
     cache: 'no-store',
     credentials: 'same-origin',
-    timeoutMs: 10000,
-    retry: 0,
+    timeoutMs: 12000,
+    retry: 1,
     signal: options.signal,
   });
 }

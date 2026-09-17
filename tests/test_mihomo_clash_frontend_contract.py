@@ -207,6 +207,7 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
             'dt-switch-slider',
             'data-mihomo-delay-visible',
             "fetchMihomoClashGroups",
+        "data-mihomo-groups-retry",
         "selectMihomoClashProxy",
         "unfixMihomoClashProxy",
         "testMihomoClashDelay",
@@ -511,6 +512,13 @@ def test_groups_lifecycle_stops_load_and_delay_work_outside_control_view():
         "if (!active) return false;",
     ):
         assert fragment in feature or fragment in groups
+
+
+def test_telemetry_starts_only_for_connections_subview():
+    feature = _text(FEATURE)
+
+    assert "currentSubview === 'connections'" in feature
+    assert "currentSubview !== 'config'\n      && payload?.capabilities?.telemetry_stream" not in feature
 
 
 def test_connections_ui_has_live_fallback_overview_and_guarded_actions():

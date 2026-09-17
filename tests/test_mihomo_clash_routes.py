@@ -580,6 +580,38 @@ def test_proxy_groups_reads_independent_upstreams_concurrently():
     assert sorted(client.operations) == ["providers_proxies", "proxies"]
 
 
+def test_proxy_groups_remain_available_when_provider_enrichment_fails():
+    client = StubClient(
+        responses={
+            "proxies": MihomoClashJSONResponse(groups_payload(), 200, 2, 200),
+        }
+    )
+
+    def request_json(operation):
+        client.operations.append(operation)
+        if operation == "providers_proxies":
+            raise MihomoClashClientError(
+                "upstream_timeout",
+                "provider endpoint timed out",
+                retryable=True,
+            )
+        return client.responses[operation]
+
+    client.request_json = request_json
+    response = make_app(ready_discovery(), client).test_client().get(
+        "/api/mihomo/clash/proxy-groups"
+    )
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body["groups"][0]["name"] == "AUTO"
+    assert body["providers"] == []
+    assert body["telemetry"]["providers"] == {
+        "degraded": True,
+        "error": "upstream_timeout",
+    }
+
+
 def test_rules_and_providers_routes_return_safe_versioned_dtos():
     client = StubClient(
         responses={
