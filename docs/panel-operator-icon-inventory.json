@@ -439,12 +439,12 @@
           "accessible_label": "Раскрыть"
         },
         {
-          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L118",
+          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L117",
           "control_type": "runtime-action",
           "accessible_label": "Раскрыть"
         },
         {
-          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L146",
+          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L145",
           "control_type": "runtime-action",
           "accessible_label": "Раскрыть"
         },
@@ -1925,7 +1925,7 @@
           "accessible_label": "Список"
         },
         {
-          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L70",
+          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L69",
           "control_type": "runtime-action",
           "accessible_label": "Список"
         },
@@ -3123,12 +3123,12 @@
           "accessible_label": "Настройки"
         },
         {
-          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L117",
+          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L116",
           "control_type": "runtime-action",
           "accessible_label": "Настройки"
         },
         {
-          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L72",
+          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L71",
           "control_type": "runtime-action",
           "accessible_label": "Настройки"
         },
@@ -3149,7 +3149,7 @@
       "tabler_asset": "chart-bar",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L125",
+          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L124",
           "control_type": "runtime-action",
           "accessible_label": "statistics"
         }

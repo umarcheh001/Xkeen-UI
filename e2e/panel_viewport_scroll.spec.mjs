@@ -101,19 +101,13 @@ test('panel workspaces keep a usable scroll region across desktop and short view
       expect(['visible', 'auto'], label).toContain(before.containerOverflowY);
       expect(before.containerScrollHeight - before.containerClientHeight, label).toBeLessThanOrEqual(1);
       if (viewport.height <= 640 || viewport.width <= 720) {
-        // Компактная операторская шапка роутинга вывешивает меню наружу,
-        // поэтому overflow обязан быть `visible` (panel-operator.css).
-        // Собственная прокрутка ей не нужна: содержимое укладывается целиком.
-        if (tab === 'routing' || tab === 'mihomo') {
-          expect(before.headerOverflowY, label).toBe('visible');
-          expect(before.headerScrollHeight - before.headerClientHeight, label).toBeLessThanOrEqual(1);
-        } else {
-          expect(before.headerOverflowY, label).toBe('auto');
-        }
+        // Every in-panel workspace now uses the compact shell. Its popovers
+        // open outside the header, so the header must not become a scroll box.
+        expect(before.headerOverflowY, label).toBe('visible');
+        expect(before.headerScrollHeight - before.headerClientHeight, label).toBeLessThanOrEqual(1);
         expect(before.headerClientHeight, label).toBeGreaterThan(0);
-        // The outer page scroll now carries the header on short screens; the
-        // header remains locally scrollable when its controls need it, but it
-        // is valid for its intrinsic content to fit at a given width.
+        // The outer document carries the compact header on short screens;
+        // its intrinsic content must fit without a second scroll position.
         expect(before.headerScrollHeight, label).toBeGreaterThanOrEqual(before.headerClientHeight);
       }
       expect(['auto', 'scroll'], label).toContain(before.bodyOverflowY);

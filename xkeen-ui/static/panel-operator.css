@@ -1268,7 +1268,7 @@ body.panel-page.xk-operator-header-active .panel-header.panel-header-shell {
   box-shadow: none !important;
   margin-bottom: 0 !important;
 }
-body.panel-page:is(.xk-routing-header-active, .xk-xray-logs-header-active) .panel-header.panel-header-shell {
+body.panel-page.xk-operator-header-active:not(.xk-mihomo-header-active) .panel-header.panel-header-shell {
   border-radius: var(--op-radius-lg) !important;
   margin-bottom: 12px !important;
 }
@@ -1288,7 +1288,7 @@ body.panel-page.xk-operator-header-active .panel-shell-identity {
   gap: 26px;
 }
 body.panel-page.xk-operator-header-active .container.container-wide { width: 100%; max-width: none; padding: 14px 0; }
-body.panel-page.xk-operator-header-active :is(#view-routing, #view-mihomo, #view-xray-logs) { margin-top: 0; scrollbar-gutter: auto; }
+body.panel-page.xk-operator-header-active :is(#view-routing, #view-mihomo, #view-xkeen, #view-xray-logs, #view-commands, #view-files) { margin-top: 0; scrollbar-gutter: auto; }
 body.panel-page.xk-operator-header-active .panel-header #xk-brand-title { font-size: 21px; }
 body.panel-page.xk-operator-header-active .header-right { gap: 28px; }
 body.panel-page.xk-operator-header-active #xk-resource-monitor {

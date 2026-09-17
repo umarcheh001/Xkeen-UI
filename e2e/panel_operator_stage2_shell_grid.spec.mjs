@@ -274,7 +274,10 @@ test.describe('Operator Console Stage 2 shell and workspace contract', () => {
       const commandsTab = page.locator('.top-tab-btn[data-view="commands"]');
       await selectPanelView(page, 'commands');
       await expect(commandsTab).toHaveClass(/\bactive\b/);
-      await page.locator('#theme-toggle-btn').focus();
+      const sectionsTrigger = page.locator('[aria-controls="xk-mihomo-sections-menu"]');
+      await sectionsTrigger.click();
+      await expect(page.locator('#xk-mihomo-sections-menu')).toBeVisible();
+      await sectionsTrigger.focus();
       let reachedByKeyboard = false;
       for (let index = 0; index < 20; index += 1) {
         await page.keyboard.press('Tab');
@@ -291,16 +294,18 @@ test.describe('Operator Console Stage 2 shell and workspace contract', () => {
           outlineStyle: style.outlineStyle,
           outlineWidth: style.outlineWidth,
           shadow: style.boxShadow,
-          marker: marker.backgroundColor,
-          markerHeight: marker.height,
+          background: style.backgroundColor,
+          border: style.borderTopColor,
+          markerDisplay: marker.display,
         };
       });
       expect(navState.focusVisible).toBe(true);
       expect(navState.outlineStyle).not.toBe('none');
       expect(Number.parseFloat(navState.outlineWidth)).toBeGreaterThanOrEqual(2);
       expect(navState.shadow).toBe('none');
-      expect(navState.marker).not.toBe('rgba(0, 0, 0, 0)');
-      expect(navState.markerHeight).toBe('2px');
+      expect(navState.background).not.toBe('rgba(0, 0, 0, 0)');
+      expect(navState.border).not.toBe('rgba(0, 0, 0, 0)');
+      expect(navState.markerDisplay).toBe('none');
     });
 
     test(`service and routing focus controls stay flat and restrained in ${theme}`, async ({ page }) => {

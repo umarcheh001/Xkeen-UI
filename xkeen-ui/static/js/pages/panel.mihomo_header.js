@@ -5,10 +5,9 @@ let initialized = false;
 export function initPanelOperatorHeader() {
   if (initialized) return;
   const header = document.querySelector('.panel-header-shell');
-  const routingView = document.getElementById('view-routing');
+  const compactViews = new Set(['routing', 'mihomo', 'xkeen', 'xray-logs', 'commands', 'files']);
   const mihomoView = document.getElementById('view-mihomo');
-  const xrayLogsView = document.getElementById('view-xray-logs');
-  if (!header || (!routingView && !mihomoView && !xrayLogsView)) return;
+  if (!header || ![...compactViews].some((name) => document.getElementById(`view-${name}`))) return;
   initialized = true;
   const byId = (id) => document.getElementById(id);
   const create = (tag, className, text) => {
@@ -80,8 +79,8 @@ export function initPanelOperatorHeader() {
   header.querySelector('.header-main').prepend(sections.container);
   header.querySelector('.header-right').append(panel.container);
 
-  // Compact shell is shared by the routing and Xray logs workspaces. Anchors restore the
-  // legacy shell for the remaining panel sections without cloning controls.
+  // Compact shell is shared by the panel workspaces without cloning controls.
+  // Anchors remain as a safe fallback for integrations that add a legacy view.
   const moves = [];
   function shellMove(node, target) {
     if (!node) return;
@@ -211,7 +210,7 @@ export function initPanelOperatorHeader() {
   function syncView(name) {
     const focused = (document.activeElement && document.activeElement !== document.body
       && document.activeElement !== document.documentElement) ? document.activeElement : null;
-    const active = name === 'routing' || name === 'mihomo' || name === 'xray-logs';
+    const active = compactViews.has(name);
     const focusedMove = focused && active
       ? moves.find(({ node }) => node === focused || node.contains(focused))
       : null;

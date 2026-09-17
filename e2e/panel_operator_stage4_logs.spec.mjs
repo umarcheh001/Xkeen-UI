@@ -136,8 +136,8 @@ test.describe('Operator Console Stage 4 logs', () => {
 
     await page.setViewportSize({ width: 1440, height: 900 });
     await selectPanelView(page, 'xkeen');
-    await expect(page.locator('body')).not.toHaveClass(/xk-operator-header-active/);
-    await expect(page.locator('.panel-header-shell > .header-tabs')).toBeVisible();
+    await expect(page.locator('body')).toHaveClass(/xk-operator-header-active/);
+    await expect(page.locator('#xk-mihomo-sections-menu .header-tabs')).toBeHidden();
     await selectPanelView(page, 'xray-logs');
     await expect(page.locator('body')).toHaveClass(/xk-xray-logs-header-active/);
     await expect(page.locator('#xkeen-restart-btn')).toHaveCount(1);

@@ -122,7 +122,7 @@ export const test = base.extend({
 export async function selectPanelView(page, view) {
   const tab = page.locator(`.top-tab-btn[data-view="${view}"]`);
   const activeView = await page.locator('.top-tab-btn.active[data-view]').getAttribute('data-view');
-  if (activeView === 'routing' || activeView === 'mihomo' || activeView === 'xray-logs') {
+  if (['routing', 'mihomo', 'xkeen', 'xray-logs', 'commands', 'files'].includes(activeView)) {
     await expect(page.locator('body')).toHaveClass(/xk-operator-header-active/);
   }
   if (activeView === view && await page.locator(`#view-${view}`).isVisible()) return;
