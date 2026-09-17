@@ -505,6 +505,27 @@ def test_delay_uses_backend_preset_and_never_accepts_arbitrary_url():
     assert captured.value.code == "delay_preset_not_allowed"
 
 
+def test_delay_supports_the_allowlisted_yandex_dns_probe():
+    endpoints = {"proxy_delay": MihomoClashEndpoint("GET", "/proxies/{name}/delay", 2, 1024)}
+    expected_path = (
+        "/proxies/node/delay?"
+        "url=https%3A%2F%2Fcommon.dot.dns.yandex.net%2Fdns-query%3Fdns%3D"
+        "AAABAAABAAAAAAAAAnlhAnJ1AAABAAE&timeout=5000"
+    )
+    with tcp_server({expected_path: (200, "application/json", b'{"delay":48}')}) as (
+        port,
+        handler,
+    ):
+        response = client_for_port(port, endpoints).request_delay(
+            "proxy",
+            "node",
+            preset="yandex",
+        )
+
+    assert response.payload == {"delay": 48}
+    assert handler.seen[0]["path"] == expected_path
+
+
 @pytest.mark.parametrize("name", ["", "bad\nheader", "x" * 1025])
 def test_named_operations_reject_invalid_resource_names_before_connecting(name: str):
     endpoints = {"proxy_select": MihomoClashEndpoint("PUT", "/proxies/{name}", 2, 1024)}

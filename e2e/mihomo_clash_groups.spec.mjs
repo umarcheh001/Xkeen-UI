@@ -1223,6 +1223,10 @@ test('sorting keeps service nodes in config slots and workspace settings persist
   await page.locator('#mihomo-clash-latency-preset').selectOption('google');
   await expect.poll(() => patches.some((patch) => patch.mihomo?.proxySortOrder === 'delay')).toBe(true);
   await expect.poll(() => patches.some((patch) => patch.mihomo?.latencyPreset === 'google')).toBe(true);
+  await page.locator('#mihomo-clash-latency-preset').selectOption('yandex');
+  await expect.poll(() => patches.some((patch) => patch.mihomo?.latencyPreset === 'yandex')).toBe(true);
+  await page.locator('#mihomo-clash-latency-preset').selectOption('all');
+  await expect.poll(() => patches.some((patch) => patch.mihomo?.latencyPreset === 'all')).toBe(true);
 });
 
 

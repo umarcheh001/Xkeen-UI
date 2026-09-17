@@ -73,6 +73,13 @@ MIHOMO_CLASH_DELAY_PRESETS: Mapping[str, MihomoClashDelayPreset] = MappingProxyT
             "https://cp.cloudflare.com/",
             5000,
         ),
+        # A small DNS-over-HTTPS query keeps the Yandex target deterministic:
+        # it returns a bounded DNS message instead of a portal page or CAPTCHA.
+        # The encoded wire query asks Yandex DNS for the A record of ``ya.ru``.
+        "yandex": MihomoClashDelayPreset(
+            "https://common.dot.dns.yandex.net/dns-query?dns=AAABAAABAAAAAAAAAnlhAnJ1AAABAAE",
+            5000,
+        ),
     }
 )
 

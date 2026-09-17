@@ -994,22 +994,104 @@ def test_delay_route_retries_transient_auto_failure_with_allowlisted_cloudflare(
     ]
 
 
-def test_delay_route_reports_zero_delay_as_a_measured_result_without_a_fallback():
-    client = StubClient(
-        responses={"delay": MihomoClashJSONResponse({"delay": 0}, 200, 3, 12)}
-    )
+def test_delay_route_retries_zero_delay_across_all_auto_targets():
+    class ZeroFallbackClient(StubClient):
+        def request_delay(
+            self,
+            scope: str,
+            name: str,
+            *,
+            preset: str,
+            timeout_ms: int | None = None,
+        ):
+            self.delays.append((scope, name, preset))
+            self.delay_timeouts.append(timeout_ms)
+            delay = 68 if preset == "yandex" else 0
+            return MihomoClashJSONResponse({"delay": delay}, 200, 3, 12)
+
+    client = ZeroFallbackClient()
     response = make_app(ready_discovery(), client).test_client().post(
         "/api/mihomo/clash/delay",
         json={"scope": "proxy", "name": "node-a", "preset": "auto"},
     )
 
-    # Zero means "the node did not answer the probe" and the panel renders it
-    # as a timeout badge. Retrying against Cloudflare would only double the
-    # load on a node that is already known to be silent.
     assert response.status_code == 200
-    assert response.get_json()["results"] == [{"name": "node-a", "delay_ms": 0}]
+    assert response.get_json()["results"] == [{"name": "node-a", "delay_ms": 68}]
+    assert response.get_json()["effective_preset"] == "yandex"
+    assert response.get_json()["fallback_used"] is True
+    assert client.delays == [
+        ("proxy", "node-a", "auto"),
+        ("proxy", "node-a", "cloudflare"),
+        ("proxy", "node-a", "yandex"),
+    ]
+
+
+def test_delay_route_all_preset_uses_fastest_positive_result():
+    class AllTargetsClient(StubClient):
+        def request_delay(
+            self,
+            scope: str,
+            name: str,
+            *,
+            preset: str,
+            timeout_ms: int | None = None,
+        ):
+            self.delays.append((scope, name, preset))
+            self.delay_timeouts.append(timeout_ms)
+            delays = {"google": 0, "cloudflare": 92, "yandex": 57}
+            return MihomoClashJSONResponse({"delay": delays[preset]}, 200, 3, 12)
+
+    client = AllTargetsClient()
+    response = make_app(ready_discovery(), client).test_client().post(
+        "/api/mihomo/clash/delay",
+        json={"scope": "proxy", "name": "node-a", "preset": "all"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["results"] == [{"name": "node-a", "delay_ms": 57}]
+    assert response.get_json()["effective_preset"] == "all"
     assert response.get_json()["fallback_used"] is False
-    assert client.delays == [("proxy", "node-a", "auto")]
+    assert client.delays == [
+        ("proxy", "node-a", "google"),
+        ("proxy", "node-a", "cloudflare"),
+        ("proxy", "node-a", "yandex"),
+    ]
+
+
+def test_auto_group_delay_fills_zero_results_from_fallback_targets():
+    class PartialGroupClient(StubClient):
+        def request_delay(
+            self,
+            scope: str,
+            name: str,
+            *,
+            preset: str,
+            timeout_ms: int | None = None,
+        ):
+            self.delays.append((scope, name, preset))
+            self.delay_timeouts.append(timeout_ms)
+            payloads = {
+                "auto": {"node-a": 45, "node-b": 0},
+                "cloudflare": {"node-a": 51, "node-b": 73},
+            }
+            return MihomoClashJSONResponse(payloads[preset], 200, 3, 20)
+
+    client = PartialGroupClient()
+    response = make_app(ready_discovery(), client).test_client().post(
+        "/api/mihomo/clash/delay",
+        json={"scope": "group", "name": "AUTO", "preset": "auto"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["results"] == [
+        {"name": "node-a", "delay_ms": 45},
+        {"name": "node-b", "delay_ms": 73},
+    ]
+    assert response.get_json()["effective_preset"] == "cloudflare"
+    assert client.delays == [
+        ("group", "AUTO", "auto"),
+        ("group", "AUTO", "cloudflare"),
+    ]
 
 
 def test_delay_route_forwards_and_clamps_the_requested_probe_timeout():

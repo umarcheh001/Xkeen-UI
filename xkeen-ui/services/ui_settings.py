@@ -625,7 +625,7 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
         latency_preset = mihomo_raw.get("latencyPreset")
         if latency_preset is not None:
             normalized_latency_preset = _as_lower_str(latency_preset)
-            if normalized_latency_preset in {"auto", "google", "cloudflare"}:
+            if normalized_latency_preset in {"auto", "google", "cloudflare", "yandex", "all"}:
                 out["mihomo"]["latencyPreset"] = normalized_latency_preset
             else:
                 rep.warnings.append({"path": "mihomo.latencyPreset", "warning": "invalid value; ignored"})
@@ -964,7 +964,7 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
 
             if "latencyPreset" in mihomo_patch:
                 v = _as_lower_str(mihomo_patch.get("latencyPreset"))
-                if v in {"auto", "google", "cloudflare"}:
+                if v in {"auto", "google", "cloudflare", "yandex", "all"}:
                     p["latencyPreset"] = v
                 else:
                     rep.errors.append({"path": "mihomo.latencyPreset", "error": "unsupported preset"})

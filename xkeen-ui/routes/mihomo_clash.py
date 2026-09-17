@@ -87,6 +87,8 @@ PROVIDERS_CACHE_TTL_SECONDS = 10.0
 RULES_CACHE_TTL_SECONDS = 10.0
 MAX_DNS_QUERY_NAME_CHARS = 253
 MAX_CONFIG_FILE_BYTES = 512 * 1024
+MIHOMO_CLASH_AUTO_DELAY_PRESETS = ("auto", "cloudflare", "yandex")
+MIHOMO_CLASH_ALL_DELAY_PRESETS = ("google", "cloudflare", "yandex")
 
 
 def _capabilities(
@@ -2167,6 +2169,7 @@ def create_mihomo_clash_blueprint(
             not name
             or scope not in {"proxy", "group", "provider-proxy"}
             or not isinstance(preset, str)
+            or preset not in {*MIHOMO_CLASH_DELAY_PRESETS, "all"}
             or (scope == "provider-proxy" and not provider)
         ):
             return error_response(
@@ -2190,6 +2193,10 @@ def create_mihomo_clash_blueprint(
             return unavailable
         effective_preset = preset
         fallback_used = False
+        attempted_presets: list[str] = []
+        merged_results: dict[str, int] = {}
+        result_truncated = False
+        last_retryable_error: MihomoClashClientError | None = None
 
         def _request_delay(delay_preset: str):
             if scope == "provider-proxy":
@@ -2206,28 +2213,55 @@ def create_mihomo_clash_blueprint(
                 timeout_ms=timeout_ms,
             )
 
+        if preset == "auto":
+            probe_presets = MIHOMO_CLASH_AUTO_DELAY_PRESETS
+        elif preset == "all":
+            probe_presets = MIHOMO_CLASH_ALL_DELAY_PRESETS
+        else:
+            probe_presets = (preset,)
+
         try:
-            try:
-                result = _request_delay(preset)
-            except MihomoClashClientError as primary_error:
-                # A second allow-listed target helps when the probe service or
-                # its route is temporarily unavailable. Never retry semantic
-                # failures such as 404/authorization/invalid payloads.
-                fallback_preset = "cloudflare" if preset == "auto" else None
-                if (
-                    fallback_preset is None
-                    or not (
-                        primary_error.code in {"upstream_timeout", "upstream_unreachable"}
+            for delay_preset in probe_presets:
+                attempted_presets.append(delay_preset)
+                try:
+                    result = _request_delay(delay_preset)
+                except MihomoClashClientError as probe_error:
+                    retryable = (
+                        probe_error.code in {"upstream_timeout", "upstream_unreachable"}
                         or (
-                            primary_error.code == "upstream_http_error"
-                            and primary_error.retryable
+                            probe_error.code == "upstream_http_error"
+                            and probe_error.retryable
                         )
                     )
+                    if len(probe_presets) == 1 or not retryable:
+                        raise
+                    last_retryable_error = probe_error
+                    continue
+
+                probe_payload = build_mihomo_clash_delay_dto(
+                    result.payload,
+                    scope=scope,
+                    name=name,
+                    preset=preset,
+                )
+                result_truncated = result_truncated or bool(probe_payload["truncated"])
+                for item in probe_payload["results"]:
+                    result_name = item["name"]
+                    delay_ms = item["delay_ms"]
+                    previous = merged_results.get(result_name)
+                    if previous is None or (previous == 0 and delay_ms > 0):
+                        merged_results[result_name] = delay_ms
+                    elif preset == "all" and delay_ms > 0 and previous > 0:
+                        merged_results[result_name] = min(previous, delay_ms)
+
+                if preset == "auto" and merged_results and all(
+                    delay_ms > 0 for delay_ms in merged_results.values()
                 ):
-                    raise
-                effective_preset = fallback_preset
-                fallback_used = True
-                result = _request_delay(fallback_preset)
+                    effective_preset = delay_preset
+                    break
+
+            if not merged_results and last_retryable_error is not None:
+                raise last_retryable_error
         except MihomoClashClientError as exc:
             _audit_action(
                 "delay",
@@ -2255,12 +2289,20 @@ def create_mihomo_clash_blueprint(
             )
         finally:
             lease.release()
-        payload = build_mihomo_clash_delay_dto(
-            result.payload,
-            scope=scope,
-            name=name,
-            preset=preset,
-        )
+        fallback_used = preset == "auto" and len(attempted_presets) > 1
+        if preset == "all":
+            effective_preset = "all"
+        payload = {
+            "schema_version": 1,
+            "scope": scope,
+            "name": name,
+            "preset": preset,
+            "results": [
+                {"name": result_name, "delay_ms": delay_ms}
+                for result_name, delay_ms in merged_results.items()
+            ],
+            "truncated": result_truncated,
+        }
         if not payload["results"]:
             _audit_action(
                 "delay",

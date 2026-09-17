@@ -151,6 +151,17 @@ def test_ui_settings_persists_bounded_mihomo_workspace_preferences(tmp_path):
     assert reloaded["mihomo"]["latencyMediumMs"] == 900
 
 
+def test_ui_settings_accepts_yandex_and_all_latency_presets(tmp_path):
+    for preset in ("yandex", "all"):
+        patched, report = ui_settings.patch_settings(
+            {"mihomo": {"latencyPreset": preset}},
+            ui_state_dir=str(tmp_path),
+        )
+
+        assert report["errors"] == []
+        assert patched["mihomo"]["latencyPreset"] == preset
+
+
 def test_ui_settings_rejects_arbitrary_latency_url_and_invalid_workspace_state(tmp_path):
     invalid = (
         ({"mihomo": {"latencyPreset": "https://router/private"}}, "mihomo.latencyPreset"),

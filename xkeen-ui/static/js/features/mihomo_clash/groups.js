@@ -238,7 +238,7 @@ function applyMihomoUiSettings(settings) {
   sortMode = ['config', 'name', 'delay', 'availability'].includes(String(mihomo.proxySortOrder || ''))
     ? String(mihomo.proxySortOrder)
     : 'config';
-  latencyPreset = ['auto', 'google', 'cloudflare'].includes(String(mihomo.latencyPreset || ''))
+  latencyPreset = ['auto', 'google', 'cloudflare', 'yandex', 'all'].includes(String(mihomo.latencyPreset || ''))
     ? String(mihomo.latencyPreset)
     : 'auto';
   latencyFreshness = ['auto', '5', '15', '30'].includes(String(mihomo.latencyFreshness || ''))
@@ -1697,7 +1697,7 @@ function bind() {
       return;
     }
     if (event.target?.id === 'mihomo-clash-latency-preset') {
-      latencyPreset = ['google', 'cloudflare'].includes(String(event.target.value || ''))
+      latencyPreset = ['google', 'cloudflare', 'yandex', 'all'].includes(String(event.target.value || ''))
         ? String(event.target.value)
         : 'auto';
       persistMihomoViewSettings({ latencyPreset });
