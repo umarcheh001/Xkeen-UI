@@ -25,4 +25,9 @@ def test_zones_collapse_to_one_column_on_narrow_screens():
     narrow = css[css.index("@media (max-width: 1024px)"):]
     narrow = narrow[: narrow.index("/* Log controls */")]
     assert ".dt-zone {" in narrow
-    assert "grid-template-columns: minmax(0, 1fr);" in narrow
+
+    # Именно у .dt-zone, а не у любого соседа в том же медиазапросе:
+    # без среза до закрывающей скобки ассерта проходила бы и без правки.
+    zone_rule = narrow[narrow.index(".dt-zone {"):]
+    zone_rule = zone_rule[: zone_rule.index("}")]
+    assert "grid-template-columns: minmax(0, 1fr);" in zone_rule
