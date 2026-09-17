@@ -1,9 +1,46 @@
 """Helpers for working with Xray log configuration and log files."""
 
-import os
 import datetime
+import os
 import re
 from typing import Dict, List, Any
+
+
+_TAIL_MIN_BYTES = 256 * 1024
+_TAIL_MAX_BYTES = 2 * 1024 * 1024
+_TAIL_BYTES_PER_LINE = 1024
+
+
+def _bounded_tail_bytes(path: str, *, max_lines: int, max_bytes: int) -> List[str]:
+    """Read a bounded suffix without materializing the whole log file."""
+
+    line_limit = max(1, int(max_lines or 1))
+    byte_limit = max(16 * 1024, int(max_bytes or _TAIL_MIN_BYTES))
+    chunks: List[bytes] = []
+    buffered = 0
+    newline_count = 0
+
+    try:
+        with open(path, "rb") as stream:
+            stream.seek(0, os.SEEK_END)
+            position = stream.tell()
+            while position > 0 and buffered < byte_limit and newline_count <= line_limit:
+                step = min(16 * 1024, position, byte_limit - buffered)
+                if step <= 0:
+                    break
+                position -= step
+                stream.seek(position, os.SEEK_SET)
+                chunk = stream.read(step)
+                chunks.append(chunk)
+                buffered += len(chunk)
+                newline_count += chunk.count(b"\n")
+    except (FileNotFoundError, OSError):
+        return []
+
+    if not chunks:
+        return []
+    raw_lines = b"".join(reversed(chunks)).splitlines(True)
+    return [line.decode("utf-8", "replace") for line in raw_lines[-line_limit:]]
 
 
 def load_xray_log_config(load_json, config_path: str, access_log: str, error_log: str) -> Dict[str, Any]:
@@ -29,10 +66,17 @@ def load_xray_log_config(load_json, config_path: str, access_log: str, error_log
 
 
 def tail_lines(path: str, max_lines: int = 800, cache: Dict[str, Dict[str, Any]] | None = None) -> List[str]:
-    """Return last max_lines lines from file with simple caching.
+    """Return a memory-bounded tail with optional metadata-aware caching.
 
-    If cache is provided, it should be a dict mapping path -> {"size","mtime","ino","lines"}.
+    The old implementation used ``readlines()`` and cached the complete log,
+    even when callers requested only a small tail.  Large access logs could
+    therefore remain resident for the lifetime of the UI process.
     """
+    line_limit = max(1, int(max_lines or 1))
+    byte_limit = min(
+        _TAIL_MAX_BYTES,
+        max(_TAIL_MIN_BYTES, line_limit * _TAIL_BYTES_PER_LINE),
+    )
     try:
         st = os.stat(path)
     except (FileNotFoundError, OSError):
@@ -40,30 +84,25 @@ def tail_lines(path: str, max_lines: int = 800, cache: Dict[str, Dict[str, Any]]
 
     if cache is not None:
         info = cache.get(path)
-        # Include inode in cache key to avoid returning stale data after log rotation.
         if (
             info
             and info.get("size") == st.st_size
             and info.get("mtime") == st.st_mtime
             and int(info.get("ino", 0) or 0) == int(getattr(st, "st_ino", 0) or 0)
+            and int(info.get("max_lines", 0) or 0) >= line_limit
         ):
-            lines = info.get("lines", [])
+            lines = list(info.get("lines", []))[-line_limit:]
         else:
-            try:
-                with open(path, "r") as f:
-                    lines = f.readlines()
-            except (FileNotFoundError, OSError):
-                return []
-            cache[path] = {"size": st.st_size, "mtime": st.st_mtime, "ino": int(getattr(st, "st_ino", 0) or 0), "lines": lines}
+            lines = _bounded_tail_bytes(path, max_lines=line_limit, max_bytes=byte_limit)
+            cache[path] = {
+                "size": st.st_size,
+                "mtime": st.st_mtime,
+                "ino": int(getattr(st, "st_ino", 0) or 0),
+                "max_lines": line_limit,
+                "lines": lines,
+            }
     else:
-        try:
-            with open(path, "r") as f:
-                lines = f.readlines()
-        except (FileNotFoundError, OSError):
-            return []
-
-    if max_lines and len(lines) > max_lines:
-        return lines[-max_lines:]
+        lines = _bounded_tail_bytes(path, max_lines=line_limit, max_bytes=byte_limit)
     return lines
 
 
@@ -85,29 +124,11 @@ def tail_lines_fast(path: str, max_lines: int = 800, max_bytes: int = 256 * 1024
     except (FileNotFoundError, OSError):
         return []
 
-    max_lines = max(1, int(max_lines or 800))
-    max_bytes = max(16 * 1024, int(max_bytes or 256 * 1024))
-
-    block = 4096
-    buf = b""
-
-    try:
-        with open(path, "rb") as f:
-            f.seek(0, os.SEEK_END)
-            pos = f.tell()
-
-            while pos > 0 and buf.count(b"\n") <= max_lines and len(buf) < max_bytes:
-                step = block if pos >= block else pos
-                pos -= step
-                f.seek(pos, os.SEEK_SET)
-                buf = f.read(step) + buf
-
-        parts = buf.splitlines(True)  # keepends=True
-        if len(parts) > max_lines:
-            parts = parts[-max_lines:]
-        return [p.decode("utf-8", "replace") for p in parts]
-    except (FileNotFoundError, OSError):
-        return []
+    return _bounded_tail_bytes(
+        path,
+        max_lines=max(1, int(max_lines or 800)),
+        max_bytes=max_bytes,
+    )
 
 
 def read_new_lines(

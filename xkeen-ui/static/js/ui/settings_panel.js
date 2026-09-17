@@ -730,6 +730,46 @@ import { getFeatureApi } from '../features/feature_access.js';
       ],
     },
     {
+      key: 'resources',
+      navLabel: 'Ресурсы',
+      eyebrow: 'Система',
+      title: 'Память процесса UI',
+      description: 'Мягкий бюджет контролирует физическую память Python-процесса (RSS), а не виртуальное адресное пространство VIRT.',
+      items: [
+        createServerSelect(
+          'runtime-memory-budget',
+          'runtime.memoryBudget',
+          'Бюджет памяти',
+          'При приближении к бюджету панель очищает восстанавливаемые кэши, собирает циклический мусор и возвращает свободные арены памяти системе. Это мягкая граница: активный запрос не прерывается.',
+          [
+            { value: 'auto', label: 'Авто (рекомендуется)' },
+            { value: '128', label: '128 МБ' },
+            { value: '192', label: '192 МБ' },
+            { value: '256', label: '256 МБ' },
+            { value: '384', label: '384 МБ' },
+            { value: '512', label: '512 МБ' },
+            { value: 'off', label: 'Выключено' },
+          ],
+          'Бюджет памяти применён.'
+        ),
+        {
+          id: 'runtime-memory-budget-note',
+          type: 'status',
+          label: 'Режим «Авто»',
+          description: 'Для роутера с 512 МБ RAM бюджет составит 128 МБ. На устройствах с большим объёмом памяти автоматическое значение ограничено 256 МБ.',
+          getValue() {
+            return '25% RAM · диапазон 128-256 МБ';
+          },
+          getMeta() {
+            return 'Контроль срабатывает также при критически низком объёме свободной RAM в системе.';
+          },
+          getTone() {
+            return 'neutral';
+          },
+        },
+      ],
+    },
+    {
       key: 'logs',
       navLabel: 'Логи',
       eyebrow: 'Логи',

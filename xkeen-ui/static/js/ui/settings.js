@@ -17,7 +17,7 @@
 
   // Keep defaults in sync with services/ui_settings.py
   const DEFAULTS = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     editor: {
       engine: 'codemirror',
       codemirrorFontScale: 100,
@@ -37,6 +37,9 @@
       ws2: false,
       // Xray logs view preferences (migrated from localStorage in Commit 14)
       view: {},
+    },
+    runtime: {
+      memoryBudget: 'auto',
     },
     routing: {
       guiEnabled: false,

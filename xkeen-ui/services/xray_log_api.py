@@ -72,6 +72,15 @@ def tail_lines(path: str, max_lines: int = 800) -> List[str]:
         return xray_logs.tail_lines(path, max_lines=max_lines, cache=LOG_CACHE)
 
 
+def clear_log_cache() -> int:
+    """Drop bounded log tails under memory pressure and return entry count."""
+
+    with _LOG_CACHE_LOCK:
+        count = len(LOG_CACHE)
+        LOG_CACHE.clear()
+        return count
+
+
 def adjust_log_timezone(lines: List[str], offset_hours: Optional[int] = None) -> List[str]:
     """Shift timestamps in log lines."""
     return xray_logs.adjust_log_timezone(lines, int(offset_hours if offset_hours is not None else _TZ_OFFSET_HOURS))

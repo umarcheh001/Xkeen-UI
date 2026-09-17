@@ -85,6 +85,14 @@ def create_ui_settings_blueprint() -> Blueprint:
                 log_tag="ui_settings.save_failed",
             )
 
+        if isinstance(payload.get("runtime"), dict) and "memoryBudget" in payload["runtime"]:
+            try:
+                from services.memory_guard import notify_memory_guard
+
+                notify_memory_guard()
+            except Exception:
+                pass
+
         # Client can ignore report; it is helpful for debugging.
         resp: dict[str, Any] = {"ok": True, "settings": cfg}
         if isinstance(report, dict) and (report.get("warnings") or report.get("errors")):

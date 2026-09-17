@@ -80,6 +80,7 @@ from services.ws_wsgi import (
     handle_command_status_request,
     handle_events_request,
 )
+from services.memory_guard import start_memory_guard
 
 
 try:
@@ -199,6 +200,10 @@ def application(environ, start_response):
 
 if __name__ == "__main__":
     server_port = _server_port()
+    try:
+        start_memory_guard()
+    except Exception:
+        pass
     if GEVENT_AVAILABLE:
         try:
             start_pty_cleanup_loop()

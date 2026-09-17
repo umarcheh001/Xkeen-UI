@@ -17,6 +17,15 @@ _GEODAT_INFLIGHT: Dict[Tuple[Any, ...], threading.Event] = {}
 _GEODAT_INFLIGHT_LOCK = threading.Lock()
 
 
+def clear_geodat_cache() -> int:
+    """Drop completed geodat payloads without disturbing in-flight work."""
+
+    with _GEODAT_CACHE_LOCK:
+        count = len(_GEODAT_CACHE)
+        _GEODAT_CACHE.clear()
+        return count
+
+
 def _geodat_cache_get(key: Tuple[Any, ...], ttl_s: int) -> Any | None:
     if ttl_s <= 0:
         return None

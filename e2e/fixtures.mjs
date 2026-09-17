@@ -9,7 +9,7 @@ import { test as base, expect } from '@playwright/test';
 // The persistence API itself is covered by the Python contract tests. E2E
 // tests cover consumers of this API and need a fresh, realistic snapshot.
 const DEFAULT_UI_SETTINGS = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   editor: {
     engine: 'codemirror',
     codemirrorFontScale: 100,
@@ -27,6 +27,9 @@ const DEFAULT_UI_SETTINGS = {
     ansi: false,
     ws2: false,
     view: {},
+  },
+  runtime: {
+    memoryBudget: 'auto',
   },
   routing: {
     guiEnabled: true,

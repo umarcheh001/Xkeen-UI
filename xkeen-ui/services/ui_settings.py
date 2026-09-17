@@ -29,7 +29,7 @@ from utils.deep_merge import deep_merge
 log = logging.getLogger(__name__)
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Keep the file small and predictable on router flash.
 _MAX_FILE_CHARS = 64 * 1024
@@ -81,6 +81,11 @@ DEFAULTS: Dict[str, Any] = {
         # Keep empty by default so we can detect "unset" state and seed from legacy
         # client storage on first use.
         "view": {},
+    },
+    "runtime": {
+        # Soft RSS budget for the Python UI process. "auto" uses 25% of the
+        # router RAM, clamped to 128..256 MiB; "off" disables the guard.
+        "memoryBudget": "auto",
     },
     "routing": {
         # Show extra GUI layer for routing rules card.
@@ -187,6 +192,9 @@ def _canonical_empty() -> Dict[str, Any]:
             "ansi": bool(DEFAULTS["logs"]["ansi"]),
             "ws2": bool(DEFAULTS["logs"]["ws2"]),
             "view": {},
+        },
+        "runtime": {
+            "memoryBudget": str(DEFAULTS["runtime"]["memoryBudget"]),
         },
         "routing": {
             "guiEnabled": bool(DEFAULTS["routing"]["guiEnabled"]),
@@ -494,6 +502,27 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 rep.warnings.append({"path": f"logs.{k}", "warning": "unknown key dropped"})
                 rep.changed = True
 
+    # ---- runtime ----
+    runtime_raw = raw.get("runtime")
+    if runtime_raw is None:
+        pass
+    elif not isinstance(runtime_raw, dict):
+        rep.warnings.append({"path": "runtime", "warning": "must be an object; reset"})
+        rep.changed = True
+    else:
+        if "memoryBudget" in runtime_raw:
+            memory_budget = _as_lower_str(runtime_raw.get("memoryBudget"))
+            if memory_budget in {"auto", "128", "192", "256", "384", "512", "off"}:
+                out["runtime"]["memoryBudget"] = memory_budget
+            else:
+                rep.warnings.append({"path": "runtime.memoryBudget", "warning": "unsupported preset; reset"})
+                rep.changed = True
+
+        for k in runtime_raw.keys():
+            if k not in ("memoryBudget",):
+                rep.warnings.append({"path": f"runtime.{k}", "warning": "unknown key dropped"})
+                rep.changed = True
+
     # ---- routing ----
     routing_raw = raw.get("routing")
     if routing_raw is None:
@@ -653,7 +682,7 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
 
     # ---- top-level unknown keys ----
     for k in raw.keys():
-        if k not in ("schemaVersion", "editor", "format", "logs", "routing", "mihomo"):
+        if k not in ("schemaVersion", "editor", "format", "logs", "runtime", "routing", "mihomo"):
             rep.warnings.append({"path": k, "warning": "unknown key dropped"})
             rep.changed = True
 
@@ -821,6 +850,27 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
             if p:
                 out["logs"] = p
 
+    # runtime
+    if "runtime" in patch:
+        runtime_patch = patch.get("runtime")
+        if not isinstance(runtime_patch, dict):
+            rep.errors.append({"path": "runtime", "error": "must be an object"})
+        else:
+            p: Dict[str, Any] = {}
+            if "memoryBudget" in runtime_patch:
+                v = _as_lower_str(runtime_patch.get("memoryBudget"))
+                if v in {"auto", "128", "192", "256", "384", "512", "off"}:
+                    p["memoryBudget"] = v
+                else:
+                    rep.errors.append({"path": "runtime.memoryBudget", "error": "unsupported preset"})
+
+            for k in runtime_patch.keys():
+                if k not in ("memoryBudget",):
+                    rep.warnings.append({"path": f"runtime.{k}", "warning": "unknown key dropped"})
+
+            if p:
+                out["runtime"] = p
+
     # routing
     if "routing" in patch:
         routing_patch = patch.get("routing")
@@ -965,7 +1015,7 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 out["mihomo"] = p
 
     for k in patch.keys():
-        if k not in ("schemaVersion", "editor", "format", "logs", "routing", "mihomo"):
+        if k not in ("schemaVersion", "editor", "format", "logs", "runtime", "routing", "mihomo"):
             rep.warnings.append({"path": k, "warning": "unknown key dropped"})
 
     return out, rep

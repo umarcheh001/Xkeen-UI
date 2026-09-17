@@ -14,6 +14,7 @@ from services.router_diagnostics import (
     sample_router_processes,
 )
 from services.system_resources import sample_system_resources
+from services.memory_guard import get_memory_guard_status
 
 
 def create_system_resources_blueprint() -> Blueprint:
@@ -43,6 +44,10 @@ def create_system_resources_blueprint() -> Blueprint:
                 "conntrack": {"available": False},
                 "interfaces": {"available": False, "count": 0, "items": [], "truncated": False},
             }
+        try:
+            payload["ui_process"] = get_memory_guard_status()
+        except Exception:  # noqa: BLE001 - optional process telemetry
+            pass
         payload["ok"] = True
         response = jsonify(payload)
         response.headers["Cache-Control"] = "no-store"
