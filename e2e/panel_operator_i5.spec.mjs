@@ -33,6 +33,8 @@ async function openPanel(page, theme, viewport = { width: 1440, height: 900 }) {
   await page.goto('/');
   await expect(page.locator('body')).toHaveClass(/\bpanel-page\b/);
   await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+  await expect(page.locator('#xk-top-level-screen-mount [data-xk-top-level-screen-root]').first()).toBeAttached();
+  await expect(page.locator('.xk-header-sections-trigger')).toBeVisible();
   await page.evaluate(() => document.fonts?.ready);
 }
 

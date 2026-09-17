@@ -208,14 +208,33 @@ export function initPanelOperatorHeader() {
   if (status) new MutationObserver(syncService).observe(status, { childList: true, characterData: true, subtree: true });
   syncService();
   function syncView(name) {
-    closeMenus();
+    const focused = (document.activeElement && document.activeElement !== document.body
+      && document.activeElement !== document.documentElement) ? document.activeElement : null;
     const active = name === 'routing' || name === 'mihomo';
+    const focusedMove = focused && active
+      ? moves.find(({ node }) => node === focused || node.contains(focused))
+      : null;
+    const focusedMenu = focusedMove
+      ? menus.find((menu) => menu.content === focusedMove.target)
+      : null;
+    closeMenus();
+    // A focused legacy control may be moved into a compact-header popover
+    // during startup. Keep its destination visible so the browser can retain
+    // and restore focus instead of silently falling back to <body>.
+    if (focusedMenu) {
+      focusedMenu.content.hidden = false;
+      focusedMenu.trigger.setAttribute('aria-expanded', 'true');
+    }
     document.body.classList.toggle('xk-operator-header-active', active);
     document.body.classList.toggle('xk-routing-header-active', name === 'routing');
     document.body.classList.toggle('xk-mihomo-header-active', name === 'mihomo');
     for (const { node, target, anchor } of moves) {
       if (active && node.parentNode !== target) target.append(node);
       else if (!active && anchor.nextSibling !== node) anchor.after(node);
+    }
+    if (focused && focused.isConnected && document.activeElement !== focused
+      && typeof focused.focus === 'function') {
+      try { focused.focus({ preventScroll: true }); } catch (_) {}
     }
     service.trigger.tabIndex = active ? 0 : -1;
   }
