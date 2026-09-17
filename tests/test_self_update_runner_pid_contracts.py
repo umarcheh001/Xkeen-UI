@@ -47,3 +47,11 @@ def test_self_update_runner_stops_after_failed_or_empty_asset_download():
     assert "Архив обновления отсутствует или пустой после скачивания. Extract не запускаем." in runner_text
     assert "Не удалось скачать checksum. Это обычно та же проблема сети/DNS/блокировки" in runner_text
     assert "Ошибка проверки checksum" in runner_text
+
+
+def test_self_update_runs_installer_noninteractively_with_stable_optional_defaults():
+    runner_text = Path("xkeen-ui/scripts/update_xkeen_ui.sh").read_text(encoding="utf-8")
+
+    assert 'XKEEN_GEODAT_INSTALL="${XKEEN_GEODAT_INSTALL:-1}" \\' in runner_text
+    assert 'XKEEN_HAPP_DECRYPTOR_INSTALL="${XKEEN_HAPP_DECRYPTOR_INSTALL:-0}" \\' in runner_text
+    assert 'sh "$INSTALL_SH" </dev/null' in runner_text

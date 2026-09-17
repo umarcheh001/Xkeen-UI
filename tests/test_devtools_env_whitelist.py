@@ -31,7 +31,14 @@ README = ROOT / "README.md"
 
 # Documented in README on purpose, but deliberately kept out of the ENV editor.
 # Add a key here only together with a comment saying why it must stay hidden.
-README_ONLY_KEYS: frozenset[str] = frozenset()
+README_ONLY_KEYS: frozenset[str] = frozenset(
+    {
+        # One-shot install choices; they are intentionally not persisted in
+        # the panel's editable runtime environment.
+        "XKEEN_GEODAT_INSTALL",
+        "XKEEN_HAPP_DECRYPTOR_INSTALL",
+    }
+)
 
 # Whitelisted keys with no meaningful default: an empty value means "show
 # everything", so inventing a default would be misleading.

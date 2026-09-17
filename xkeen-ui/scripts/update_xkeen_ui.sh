@@ -1951,7 +1951,9 @@ INSTALL_DIR="$(cd "$(dirname "$INSTALL_SH")" && pwd)"
   XKEEN_UI_UPDATE_BRANCH="${BRANCH:-}" \
   XKEEN_UI_VERSION="${TAG:-}" \
   XKEEN_UI_COMMIT="${COMMIT:-}" \
-  sh "$INSTALL_SH"
+  XKEEN_GEODAT_INSTALL="${XKEEN_GEODAT_INSTALL:-1}" \
+  XKEEN_HAPP_DECRYPTOR_INSTALL="${XKEEN_HAPP_DECRYPTOR_INSTALL:-0}" \
+  sh "$INSTALL_SH" </dev/null
 ) >>"$LOG_FILE" 2>&1 || {
   log "[!] install.sh failed"
   write_status "failed" "install" "install.sh failed" "install.sh failed"

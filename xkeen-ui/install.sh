@@ -12,14 +12,194 @@ LOG_DIR="/opt/var/log"
 RUN_DIR="/opt/var/run"
 INSTALL_LOG="${XKEEN_INSTALL_LOG:-/opt/var/log/xkeen-ui-install.log}"
 
-# Предупреждение посреди двухсот строк вывода предупреждением не работает.
-# Всё важное дублируем в файл, чтобы итог установки можно было прочитать потом.
-log_install() {
-  echo "$@"
-  mkdir -p "$(dirname "$INSTALL_LOG")" 2>/dev/null || true
-  printf '%s %s
-' "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo '?')" "$*" >> "$INSTALL_LOG" 2>/dev/null || true
+# The terminal is the installer's UI; stdout/stderr below are the diagnostic
+# channel. Keep the screen concise while preserving every useful detail.
+exec 3>&1
+INSTALL_UI_FD=3
+INSTALL_FINISHED=0
+INSTALL_STAGE="Подготовка"
+INSTALL_ERROR_HINT=""
+
+UI_RESET=""
+UI_BOLD=""
+UI_DIM=""
+UI_CYAN=""
+UI_GREEN=""
+UI_YELLOW=""
+UI_RED=""
+UI_HEADER_RIGHT=""
+if [ -t "$INSTALL_UI_FD" ] && [ "${TERM:-dumb}" != "dumb" ] && [ -z "${NO_COLOR:-}" ]; then
+  UI_ESC="$(printf '\033')"
+  UI_RESET="${UI_ESC}[0m"
+  UI_BOLD="${UI_ESC}[1m"
+  UI_DIM="${UI_ESC}[2m"
+  UI_CYAN="${UI_ESC}[1;36m"
+  UI_GREEN="${UI_ESC}[1;32m"
+  UI_YELLOW="${UI_ESC}[1;33m"
+  UI_RED="${UI_ESC}[1;31m"
+  # Same approach as sysmon: pin the right border to a terminal column.
+  UI_HEADER_RIGHT="${UI_ESC}[44G"
+fi
+
+ui_header() {
+  UI_HEADER_BAR="════════════════════════════════════════"
+  printf '\n%b  ╔%s╗%b\n' "$UI_CYAN" "$UI_HEADER_BAR" "$UI_RESET" >&3
+  if [ -n "$UI_HEADER_RIGHT" ]; then
+    printf '%b  ║%b  %bXK / XKEEN UI%b%b%b║%b\n' \
+      "$UI_CYAN" "$UI_RESET" "$UI_BOLD" "$UI_RESET" "$UI_HEADER_RIGHT" "$UI_CYAN" "$UI_RESET" >&3
+    printf '%b  ║%b     ROUTER CONTROL%b%b║%b\n' \
+      "$UI_CYAN" "$UI_RESET" "$UI_HEADER_RIGHT" "$UI_CYAN" "$UI_RESET" >&3
+  else
+    printf '%b  ║%b  %-38s%b║%b\n' "$UI_CYAN" "$UI_RESET" "XK / XKEEN UI" "$UI_CYAN" "$UI_RESET" >&3
+    printf '%b  ║%b  %-38s%b║%b\n' "$UI_CYAN" "$UI_RESET" "   ROUTER CONTROL" "$UI_CYAN" "$UI_RESET" >&3
+  fi
+  printf '%b  ╚%s╝%b\n\n' "$UI_CYAN" "$UI_HEADER_BAR" "$UI_RESET" >&3
 }
+
+ui_stage() {
+  INSTALL_STAGE="$2"
+  printf '  %b%s%b  %s\n' "$UI_CYAN" "$1" "$UI_RESET" "$2" >&3
+}
+
+ui_info() {
+  printf '      %s\n' "$*" >&3
+}
+
+ui_success() {
+  printf '%b  ✓%b  %s\n' "$UI_GREEN" "$UI_RESET" "$*" >&3
+}
+
+ui_warning() {
+  printf '%b  !%b  %s\n' "$UI_YELLOW" "$UI_RESET" "$*" >&3
+}
+
+ui_error() {
+  printf '\n%b  ×  %s%b\n' "$UI_RED" "$*" "$UI_RESET" >&3
+}
+
+choose_geodat_option() {
+  case "${XKEEN_GEODAT_INSTALL:-}" in
+    1)
+      GEODAT_OPTION="1"
+      XKEEN_GEODAT_INSTALL="$GEODAT_OPTION"
+      export XKEEN_GEODAT_INSTALL
+      printf '  %bДополнение:%b  просмотрщик DAT будет установлен\n' "$UI_DIM" "$UI_RESET" >&3
+      return 0
+      ;;
+    0)
+      GEODAT_OPTION="0"
+      XKEEN_GEODAT_INSTALL="$GEODAT_OPTION"
+      export XKEEN_GEODAT_INSTALL
+      printf '  %bДополнение:%b  просмотрщик DAT пропущен\n' "$UI_DIM" "$UI_RESET" >&3
+      return 0
+      ;;
+  esac
+
+  # Preserve the historical behavior for unattended installs: xk-geodat is on.
+  GEODAT_OPTION="1"
+  if [ -t 0 ] && [ -r /dev/tty ]; then
+    printf '  %bДополнение%b   Просмотрщик DAT-файлов\n' "$UI_BOLD" "$UI_RESET" >&3
+    ui_info "Показывает содержимое GeoIP/GeoSite и помогает добавлять теги."
+    printf '      Установить xk-geodat? [Y/n]: ' >&3
+    IFS= read -r GEODAT_ANSWER < /dev/tty || GEODAT_ANSWER=""
+    case "$GEODAT_ANSWER" in
+      n|N|no|NO|No|н|Н|нет|НЕТ|Нет) GEODAT_OPTION="0" ;;
+    esac
+    printf '\n' >&3
+  fi
+  XKEEN_GEODAT_INSTALL="$GEODAT_OPTION"
+  export XKEEN_GEODAT_INSTALL
+}
+
+choose_happ_option() {
+  case "${XKEEN_HAPP_DECRYPTOR_INSTALL:-}" in
+    1)
+      HAPP_OPTION="1"
+      XKEEN_HAPP_DECRYPTOR_INSTALL="$HAPP_OPTION"
+      export XKEEN_HAPP_DECRYPTOR_INSTALL
+      printf '  %bДополнение:%b  Happ-декриптор будет установлен\n' "$UI_DIM" "$UI_RESET" >&3
+      return 0
+      ;;
+    0)
+      HAPP_OPTION="0"
+      XKEEN_HAPP_DECRYPTOR_INSTALL="$HAPP_OPTION"
+      export XKEEN_HAPP_DECRYPTOR_INSTALL
+      printf '  %bДополнение:%b  Happ-декриптор пропущен\n' "$UI_DIM" "$UI_RESET" >&3
+      return 0
+      ;;
+  esac
+
+  HAPP_OPTION="0"
+  if [ -t 0 ] && [ -r /dev/tty ]; then
+    printf '  %bДополнение%b   Декриптор ссылок Happ\n' "$UI_BOLD" "$UI_RESET" >&3
+    ui_info "Нужен для happ://crypt. Ключи: LeeeeT/happ-decryptor на GitHub."
+    printf '      Установить? [y/N]: ' >&3
+    IFS= read -r HAPP_ANSWER < /dev/tty || HAPP_ANSWER=""
+    case "$HAPP_ANSWER" in
+      y|Y|yes|YES|Yes|д|Д|да|ДА|Да) HAPP_OPTION="1" ;;
+    esac
+    printf '\n' >&3
+  fi
+  XKEEN_HAPP_DECRYPTOR_INSTALL="$HAPP_OPTION"
+  export XKEEN_HAPP_DECRYPTOR_INSTALL
+}
+
+fail_install() {
+  INSTALL_ERROR_HINT="$1"
+  exit "${2:-1}"
+}
+
+installer_on_exit() {
+  INSTALL_STATUS="$1"
+  trap - 0
+  if [ "$INSTALL_STATUS" -ne 0 ] && [ "$INSTALL_FINISHED" -ne 1 ]; then
+    ui_error "Установка остановлена"
+    if [ -n "$INSTALL_ERROR_HINT" ]; then
+      ui_info "$INSTALL_ERROR_HINT"
+    else
+      ui_info "Не удалось завершить этап: $INSTALL_STAGE."
+    fi
+    ui_info "Подробности: $INSTALL_LOG"
+    printf '\n' >&3
+  fi
+}
+
+prepare_install_log() {
+  INSTALL_LOG_PARENT="$(dirname "$INSTALL_LOG")"
+  if ! mkdir -p "$INSTALL_LOG_PARENT" 2>/dev/null || ! touch "$INSTALL_LOG" 2>/dev/null; then
+    INSTALL_LOG="${TMPDIR:-/tmp}/xkeen-ui-install.log"
+    touch "$INSTALL_LOG" 2>/dev/null || return 0
+  fi
+  if [ -s "$INSTALL_LOG" ]; then
+    mv -f "$INSTALL_LOG" "$INSTALL_LOG.previous" 2>/dev/null || : > "$INSTALL_LOG"
+  fi
+  printf '===== Xkeen UI install: %s =====\n' "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo '?')" > "$INSTALL_LOG"
+  exec >> "$INSTALL_LOG" 2>&1
+}
+
+# Important events use timestamps in the diagnostic log. User-facing output
+# is emitted only through ui_* helpers on descriptor 3.
+log_install() {
+  printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo '?')" "$*" >> "$INSTALL_LOG" 2>/dev/null || true
+}
+
+prepare_install_log
+trap 'installer_on_exit $?' 0
+trap 'INSTALL_ERROR_HINT="Операция прервана пользователем."; exit 130' HUP INT TERM
+
+if [ -f "$UI_DIR/app.py" ] || [ -f "$UI_DIR/run_server.py" ]; then
+  INSTALL_MODE="Обновление"
+else
+  INSTALL_MODE="Новая установка"
+fi
+
+ui_header
+printf '  %bРежим:%b       %s\n' "$UI_DIM" "$UI_RESET" "$INSTALL_MODE" >&3
+printf '  %bАрхитектура:%b %s\n' "$UI_DIM" "$UI_RESET" "$(uname -m 2>/dev/null || echo unknown)" >&3
+choose_geodat_option
+choose_happ_option
+printf '\n' >&3
+ui_stage "01/05" "Проверка окружения"
 
 # Never reuse Entware's shared __pycache__. A power loss or interrupted package
 # upgrade can leave a stdlib .pyc truncated; Python then fails before the UI
@@ -64,7 +244,7 @@ assert_safe_ui_init_target() {
 }
 
 if ! assert_safe_ui_init_target "$INIT_SCRIPT"; then
-  exit 1
+  fail_install "Путь $INIT_SCRIPT уже занят чужим init-скриптом. Укажите другой путь через XKEEN_UI_INIT_SCRIPT."
 fi
 
 # JSONC sidecar-dir для "сырого" текста с комментариями (routing/inbounds/outbounds).
@@ -428,13 +608,16 @@ verify_python_package_files() {
   return 0
 }
 
+ui_success "Устройство распознано"
 echo "========================================"
 echo "  Xkeen Web UI — УСТАНОВКА"
 echo "========================================"
+ui_stage "02/05" "Подготовка компонентов"
 
 # --- Python3 ---
 
 if [ ! -x "$PYTHON_BIN" ]; then
+  ui_info "Устанавливаю Python 3 через Entware..."
   echo "[*] Python3 не найден по пути $PYTHON_BIN."
   echo "[*] Пытаюсь установить python3 через Entware (opkg)..."
 
@@ -445,23 +628,23 @@ if [ ! -x "$PYTHON_BIN" ]; then
   else
     echo "[!] Не найден пакетный менеджер opkg Entware."
     echo "    Установи Entware и python3 вручную, затем запусти установщик ещё раз."
-    exit 1
+    fail_install "Не найден Entware (opkg). Установите Entware и повторите запуск."
   fi
 
   if ! "$OPKG_BIN" update; then
     echo "[!] Не удалось выполнить 'opkg update'."
-    exit 1
+    fail_install "Entware не смог обновить список пакетов. Проверьте интернет-соединение."
   fi
 
   if ! "$OPKG_BIN" install python3; then
     echo "[!] Установка python3 через opkg завершилась с ошибкой."
-    exit 1
+    fail_install "Не удалось установить Python 3 через Entware."
   fi
 fi
 
 if [ ! -x "$PYTHON_BIN" ]; then
   echo "[!] Python3 по пути $PYTHON_BIN не найден даже после установки."
-  exit 1
+  fail_install "Python 3 не найден после установки."
 fi
 
 # --- Flask + gevent ---
@@ -492,6 +675,7 @@ else
 fi
 
 if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_GEVENT" -eq 1 ]; then
+  ui_info "Настраиваю Python-зависимости панели..."
   echo "[*] Flask и/или gevent не найдены. Пытаюсь установить зависимости через Entware и pip..."
 
   if command -v opkg >/dev/null 2>&1; then
@@ -513,17 +697,17 @@ if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_GEVENT" -eq 1 ]; then
       echo "      $PYTHON_BIN -m pip install --upgrade --index-url \"\$XKEEN_PIP_INDEX_URL\" flask"
     fi
     echo "    После этого запусти установщик ещё раз."
-    exit 1
+    fail_install "Не найден Entware (opkg), необходимый для Python-зависимостей."
   fi
 
   if ! "$OPKG_BIN" update; then
     echo "[!] Не удалось выполнить 'opkg update' при установке зависимостей."
-    exit 1
+    fail_install "Не удалось обновить пакеты Entware для установки зависимостей."
   fi
 
   if ! "$OPKG_BIN" install python3 python3-pip; then
     echo "[!] Установка python3 и python3-pip через opkg завершилась с ошибкой."
-    exit 1
+    fail_install "Не удалось установить python3-pip через Entware."
   fi
 
   # Auto-repair python3-pip if an Entware update left it structurally broken.
@@ -532,7 +716,7 @@ if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_GEVENT" -eq 1 ]; then
       echo "[!] Не удалось автоматически восстановить python3-pip."
       echo "    Выполни вручную и запусти установщик ещё раз:"
       echo "      opkg remove python3-pip && opkg update && opkg install python3-pip"
-      exit 1
+      fail_install "Python pip повреждён и не восстановился автоматически."
     fi
   fi
 
@@ -548,7 +732,7 @@ if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_GEVENT" -eq 1 ]; then
       echo "[!] Не удалось установить Flask через доступные pip-индексы."
       echo "    Можно повторить установку с зеркалом вручную, например:"
       echo "      XKEEN_PIP_INDEX_URL=$PIP_FALLBACK_INDEX_DEFAULT sh install.sh"
-      exit 1
+      fail_install "Не удалось загрузить Flask. Проверьте интернет-соединение или pip-зеркало."
     fi
   else
     echo "[*] Flask уже доступен из $PYTHON_BIN, отдельная pip-установка не требуется."
@@ -585,7 +769,7 @@ fi
 if ! "$PYTHON_BIN" -c "import flask" >/dev/null 2>&1; then
   echo "[!] Модуль flask по-прежнему не виден из $PYTHON_BIN."
   echo "    Без него панель не запустится. Завершаю установку."
-  exit 1
+  fail_install "Flask установлен некорректно, поэтому панель не сможет запуститься."
 fi
 
 # gevent/geventwebsocket — опциональны: предупреждаем, но НЕ падаем.
@@ -630,6 +814,7 @@ echo "[*] Python-зависимости в порядке."
 echo "[*] Проверяю наличие lftp для файлового менеджера..."
 
 if ! command -v lftp >/dev/null 2>&1; then
+  ui_info "Добавляю файловый менеджер..."
   echo "[*] lftp не найден. Пытаюсь установить lftp через Entware (opkg)..."
 
   if command -v opkg >/dev/null 2>&1; then
@@ -639,23 +824,23 @@ if ! command -v lftp >/dev/null 2>&1; then
   else
     echo "[!] Не найден пакетный менеджер opkg Entware."
     echo "    Установи Entware и lftp вручную, затем запусти установщик ещё раз."
-    exit 1
+    fail_install "Не найден Entware (opkg), необходимый для файлового менеджера."
   fi
 
   if ! "$OPKG_BIN" update; then
     echo "[!] Не удалось выполнить 'opkg update' при установке lftp."
-    exit 1
+    fail_install "Не удалось обновить пакеты Entware для установки lftp."
   fi
 
   if ! "$OPKG_BIN" install lftp; then
     echo "[!] Установка lftp через opkg завершилась с ошибкой."
-    exit 1
+    fail_install "Не удалось установить lftp через Entware."
   fi
 fi
 
 if ! command -v lftp >/dev/null 2>&1; then
   echo "[!] lftp не найден даже после установки."
-  exit 1
+  fail_install "lftp не найден после установки."
 fi
 
 
@@ -690,6 +875,8 @@ if [ -n "$SYSMON_PKGS" ]; then
 else
   echo "[*] Утилиты sysmon уже установлены."
 fi
+
+ui_success "Системные компоненты готовы"
 
 
 # --- Функции ---
@@ -1098,6 +1285,8 @@ os.replace(tmp, path)
 PY
 }
 
+ui_stage "03/05" "Настройка панели"
+
 EXISTING_APP="$UI_DIR/app.py"
 EXISTING_RUN="$UI_DIR/run_server.py"
 EXISTING_ENV_FILE="$UI_DIR/devtools.env"
@@ -1192,13 +1381,14 @@ if [ -z "$EXISTING_PORT" ] || [ "${USE_EXISTING:-0}" -eq 0 ]; then
 
       if [ -z "$PANEL_PORT" ]; then
         echo "[!] Не удалось найти свободный порт в диапазоне 8100–8199."
-        exit 1
+        fail_install "Не найден свободный порт для панели (проверены 8088, 8091 и 8100–8199)."
       fi
     fi
   fi
   echo "[*] Выбран порт панели: $PANEL_PORT"
   echo "[install] Текущий порт панели: $PANEL_PORT" >> "$LOG_DIR/xkeen-ui.log"
 fi
+ui_info "Порт панели: $PANEL_PORT"
 
 # --- Бэкапы Xray на самой первой установке ---
 
@@ -1229,6 +1419,8 @@ fi
 
 # --- Копирование файлов панели ---
 
+ui_success "Параметры панели подготовлены"
+ui_stage "04/05" "Установка файлов"
 echo "[*] Создаю директории..."
 mkdir -p "$UI_DIR" "$INIT_DIR" "$LOG_DIR" "$RUN_DIR" "$BACKUP_DIR" "$JSONC_DIR"
 
@@ -1393,7 +1585,7 @@ if [ "$XTERM_MISSING" -ne 0 ]; then
   echo "[!] Критическая ошибка: отсутствуют один или несколько файлов xterm для терминала в веб-панели."
   echo "    Убедись, что архив с панелью содержит каталог static/xterm"
   echo "    с файлами xterm.js, xterm-addon-fit.js и xterm.css, и запусти установку снова."
-  exit 1
+  fail_install "Установочный архив повреждён: отсутствуют файлы веб-терминала."
 fi
 
 # --- Sysmon wrapper ---
@@ -1741,14 +1933,25 @@ if [ -f "$APP_FILE" ] && grep -q 'app\.run' "$APP_FILE"; then
 fi
 
 if [ "$UPDATED" -eq 0 ]; then
+  PORT_UPDATE_WARNING=1
   echo "[!] Внимание: не удалось автоматически изменить порт ни в run_server.py, ни в app.py."
   echo "    Порт может остаться по умолчанию, проверь файлы вручную."
 fi
 
 # --- Optional: xk-geodat (DAT GeoIP/GeoSite: "Содержимое" и "В routing") ---
-if [ -f "$SRC_DIR/scripts/install_xk_geodat.sh" ]; then
-  echo "[*] (Опционально) Устанавливаю xk-geodat для DAT GeoIP/GeoSite..."
-  sh "$SRC_DIR/scripts/install_xk_geodat.sh" || true
+GEODAT_VERDICT="skip"
+if [ "${GEODAT_OPTION:-1}" = "1" ]; then
+  if [ -f "$SRC_DIR/scripts/install_xk_geodat.sh" ]; then
+    echo "[*] (Опционально) Устанавливаю xk-geodat для DAT GeoIP/GeoSite..."
+    if sh "$SRC_DIR/scripts/install_xk_geodat.sh"; then
+      GEODAT_VERDICT="on"
+    else
+      GEODAT_VERDICT="off"
+    fi
+  else
+    GEODAT_VERDICT="off"
+    echo "[!] Установщик xk-geodat не найден в архиве."
+  fi
 fi
 
 # --- Optional: декриптор ссылок Happ (happ://crypt…) ---
@@ -1760,6 +1963,8 @@ fi
 
 # --- Init-скрипт ---
 
+ui_success "Основные файлы установлены"
+ui_stage "05/05" "Запуск и проверка"
 echo "[*] Создаю init-скрипт $INIT_SCRIPT..."
 
 cat > "$INIT_SCRIPT" << 'EOF'
@@ -1995,11 +2200,10 @@ if [ "$INIT_SCRIPT" != "$LEGACY_INIT_SCRIPT" ] && [ -e "$LEGACY_INIT_SCRIPT" ] &
 fi
 
 echo "[*] Запускаю сервис..."
-"$INIT_SCRIPT" restart || true
+if ! "$INIT_SCRIPT" restart 3>&- || ! "$INIT_SCRIPT" status 3>&-; then
+  fail_install "Сервис Xkeen UI не запустился. Проверьте журнал запуска панели."
+fi
 
-echo "========================================"
-echo "  ✔ Xkeen Web UI установлен"
-echo "========================================"
 log_install "[=] Итог установки:"
 if [ "$WS_VERDICT" = "on" ]; then
   log_install "[=] WebSocket: ВКЛ — доступен полноценный терминал (PTY) и потоковые логи Xray."
@@ -2009,14 +2213,6 @@ else
   log_install "[=] Проверить пакеты: $PYTHON_BIN $UI_DIR/scripts/check_pydeps_integrity.py gevent gevent-websocket"
 fi
 log_install "[=] Подробности установки: $INSTALL_LOG"
-PANEL_URL="http://<IP_роутера>:${PANEL_PORT}/"
-printf '\033[1;32mОткрой в браузере:  %s\033[0m\n' "$PANEL_URL"
-echo "Текущий порт панели: $PANEL_PORT"
-echo "Файлы UI:           $UI_DIR"
-echo "Init script:        $INIT_SCRIPT"
-echo "Логи (install):     $LOG_DIR/xkeen-ui.log"
-echo "Логи (runtime):     /opt/var/log/xkeen-ui/core.log (и access.log/ws.log)"
-echo "========================================"
 
 # --- ОЧИСТКА УСТАНОВОЧНЫХ ФАЙЛОВ ---
 
@@ -2038,3 +2234,31 @@ if [ "$INSTALL_SRC_DIR" != "$UI_DIR" ] && [ -d "$INSTALL_SRC_DIR" ]; then
   cd / || cd "$UI_DIR" || true
   rm -rf "$INSTALL_SRC_DIR" || echo "[!] Не удалось удалить директорию $INSTALL_SRC_DIR"
 fi
+
+PANEL_IP="$(ip -4 addr show br0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/p' | head -n 1 || true)"
+[ -n "$PANEL_IP" ] || PANEL_IP="<IP_роутера>"
+PANEL_URL="http://${PANEL_IP}:${PANEL_PORT}/"
+
+printf '\n' >&3
+if [ "$INSTALL_MODE" = "Обновление" ]; then
+  ui_success "Xkeen UI обновлена и запущена"
+else
+  ui_success "Xkeen UI установлена и запущена"
+fi
+printf '      %bОткрыть:%b  %s\n' "$UI_BOLD" "$UI_RESET" "$PANEL_URL" >&3
+
+if [ "$WS_VERDICT" != "on" ]; then
+  ui_warning "Терминал работает в lite-режиме: $WS_VERDICT_REASON."
+fi
+if [ "$GEODAT_VERDICT" = "off" ]; then
+  ui_warning "xk-geodat не установился; основная панель продолжит работать."
+fi
+if [ "${HAPP_OPTION:-0}" = "1" ] && [ ! -x "$UI_DIR/bin/happ-decrypt-universal" ]; then
+  ui_warning "Декриптор Happ не установился; его можно добавить позже из DevTools."
+fi
+if [ "${PORT_UPDATE_WARNING:-0}" -eq 1 ]; then
+  ui_warning "Проверьте порт панели в DevTools после первого входа."
+fi
+
+printf '      %bДиагностика:%b %s\n\n' "$UI_DIM" "$UI_RESET" "$INSTALL_LOG" >&3
+INSTALL_FINISHED=1
