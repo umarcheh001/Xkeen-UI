@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 
 function statusPayload() {
@@ -118,7 +118,7 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   });
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e' });
@@ -253,7 +253,7 @@ test('Mihomo connections fill the desktop viewport and scroll inside the table',
   await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
   await page.route('**/api/mihomo/clash/connections', (route) => route.fulfill({ json: connectionsPayload(ids) }));
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.locator('#mihomo-clash-tab-connections').click();
   await expect(page.locator('#mihomo-clash-connections-rows tr')).toHaveCount(60);
 
@@ -283,7 +283,7 @@ test('Mihomo connection summary can be hidden, keeps updating and remembers its 
   await page.route('**/api/mihomo/clash/status', route => route.fulfill({ json: statusPayload() }));
   await page.route('**/api/mihomo/clash/connections', route => route.fulfill({ json: connectionsPayload(ids) }));
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   const toggle = page.locator('#mihomo-clash-connections-summary-toggle');
   const summary = page.locator('#mihomo-clash-connections-summary');
   const table = page.locator('#mihomo-clash-connections-table-wrap');
@@ -320,7 +320,7 @@ test('Mihomo connection summary can be hidden, keeps updating and remembers its 
   await page.locator('#mihomo-clash-tab-connections').click();
   await expect(summary).toBeHidden();
   await page.reload();
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.locator('#mihomo-clash-tab-connections').click();
   await expect(summary).toBeHidden();
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
@@ -346,7 +346,7 @@ test('Mihomo connections mobile table becomes records without horizontal overflo
   await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
   await page.route('**/api/mihomo/clash/connections', (route) => route.fulfill({ json: connectionsPayload(['mobile-one']) }));
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-mobile' });
@@ -414,7 +414,7 @@ test('Mihomo connections keeps one WebSocket and closes it outside the subview',
   await page.route('**/api/ws-token', (route) => route.fulfill({ json: { ok: true, token: 'fixture-token', scope: 'mihomo-clash', ttl: 60 } }));
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.locator('#mihomo-clash-tab-connections').click();
   await expect(page.locator('#mihomo-clash-stream-state')).toHaveText('Live');
   await expect(page.locator('[data-connection-id="ws-one"]')).toBeVisible();

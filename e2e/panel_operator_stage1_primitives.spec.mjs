@@ -1,4 +1,4 @@
-import { test, expect, switchTopView } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 
 async function openPanel(page, theme, viewport = null) {
@@ -93,6 +93,7 @@ test.describe('Operator Console Stage 1 primitive contract', () => {
       await openPanel(page, theme);
       await exposePanelChrome(page);
 
+      await page.locator('[aria-controls="xk-mihomo-panel-menu"]').click();
       await page.locator('#ui-settings-open-btn').click();
       await expect(page.locator('#ui-settings-modal')).toBeVisible();
       expect(await collectChromeEffects(page), `legacy effects in settings/${theme}`).toEqual([]);
@@ -100,7 +101,7 @@ test.describe('Operator Console Stage 1 primitive contract', () => {
       await expect(page.locator('#ui-settings-modal')).toBeHidden();
 
       for (const view of ['routing', 'mihomo', 'xkeen', 'xray-logs', 'commands', 'files']) {
-        await switchTopView(page, view);
+        await selectPanelView(page, view);
         await expect(page.locator(`#view-${view}`)).toBeVisible();
         expect(await collectChromeEffects(page), `legacy effects in ${view}/${theme}`).toEqual([]);
 

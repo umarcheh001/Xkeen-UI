@@ -2,11 +2,12 @@
 import { iconHtml, setIcon } from '../ui/operator_icons.js';
 let initialized = false;
 
-export function initMihomoOperatorHeader() {
+export function initPanelOperatorHeader() {
   if (initialized) return;
   const header = document.querySelector('.panel-header-shell');
-  const view = document.getElementById('view-mihomo');
-  if (!header || !view) return;
+  const routingView = document.getElementById('view-routing');
+  const mihomoView = document.getElementById('view-mihomo');
+  if (!header || (!routingView && !mihomoView)) return;
   initialized = true;
   const byId = (id) => document.getElementById(id);
   const create = (tag, className, text) => {
@@ -63,14 +64,14 @@ export function initMihomoOperatorHeader() {
   });
   window.addEventListener('resize', () => closeMenus());
 
-  const sections = disclosure('Разделы', 'xk-mihomo-sections-menu', 'xk-mihomo-shell-only');
-  const panel = disclosure('Панель', 'xk-mihomo-panel-menu', 'xk-mihomo-shell-only');
+  const sections = disclosure('Разделы', 'xk-mihomo-sections-menu', 'xk-operator-shell-only xk-mihomo-shell-only');
+  const panel = disclosure('Панель', 'xk-mihomo-panel-menu', 'xk-operator-shell-only xk-mihomo-shell-only');
   setIcon(sections.trigger, 'list-details', { label: 'Разделы' });
   sections.trigger.classList.add('xk-header-sections-trigger');
   setIcon(panel.trigger, 'settings');
   panel.trigger.classList.add('xk-header-panel-trigger');
   panel.trigger.setAttribute('aria-label', 'Настройки панели');
-  const service = disclosure('', 'xk-mihomo-service-menu', 'xk-mihomo-service-menu');
+  const service = disclosure('', 'xk-mihomo-service-menu', 'xk-operator-service-menu xk-mihomo-service-menu');
   service.trigger.className = 'xk-brand-service-trigger';
   service.trigger.setAttribute('aria-describedby', 'xkeen-service-text');
   const branding = header.querySelector('.panel-shell-branding');
@@ -78,11 +79,12 @@ export function initMihomoOperatorHeader() {
   header.querySelector('.header-main').prepend(sections.container);
   header.querySelector('.header-right').append(panel.container);
 
-  // Shell changes apply only to Mihomo. Comment anchors restore exact order.
+  // Compact shell is shared by both routing workspaces. Anchors restore the
+  // legacy shell for the remaining panel sections without cloning controls.
   const moves = [];
   function shellMove(node, target) {
     if (!node) return;
-    const anchor = document.createComment('mihomo header: original location');
+    const anchor = document.createComment('operator header: original location');
     node.before(anchor);
     moves.push({ node, target, anchor });
   }
@@ -94,105 +96,104 @@ export function initMihomoOperatorHeader() {
   shellMove(byId('last-load'), panel.content);
   byId('last-load')?.append(create('span', 'xk-last-activity-menu-label', 'Последняя операция'));
 
-  const titleRow = create('div', 'xk-mihomo-operator-title');
-  titleRow.append(create('h2', '', 'Роутинг Mihomo'));
-  const titleActions = create('div', 'xk-mihomo-operator-actions');
-  view.prepend(titleRow);
-  for (const id of ['mihomo-clash-egress-toggle', 'mihomo-clash-dns-toggle']) {
-    if (byId(id)) titleActions.append(byId(id));
-  }
-  const config = byId('mihomo-clash-tab-config');
-  const tabs = view.querySelector('.xk-mihomo-workspace-tabs');
-  tabs?.after(titleActions);
-  // Config remains a workspace tab, now owned across the shared toolbar.
-  if (tabs && config) tabs.setAttribute('aria-owns', config.id);
-  const toolbar = view.querySelector('.xk-mihomo-groups-toolbar');
-  const runtime = byId('mihomo-clash-runtime');
-  const controlContent = byId('mihomo-clash-control-content');
-  const mode = byId('mihomo-clash-mode-switch');
-  const strip = byId('mihomo-clash-status-strip');
-  const params = disclosure('Параметры', 'xk-mihomo-parameters-menu');
-  params.container.classList.add('xk-mihomo-parameters');
-  setIcon(params.trigger, 'settings', { label: 'Параметры' });
-  params.trigger.insertAdjacentHTML('beforeend', iconHtml('chevron-down', 'xk-disclosure-chevron'));
-  const summary = byId('mihomo-clash-connections-summary');
-  const summaryToggle = create('button', 'btn-secondary');
-  summaryToggle.id = 'mihomo-clash-connections-summary-toggle';
-  summaryToggle.type = 'button';
-  summaryToggle.hidden = true;
-  summaryToggle.setAttribute('aria-controls', 'mihomo-clash-connections-summary');
-  setIcon(summaryToggle, 'statistics', { label: 'Сводка' });
-  const summaryStorageKey = 'xkeen:mihomo-clash-connections-summary-visible';
-  let summaryVisible = true;
-  try { summaryVisible = localStorage.getItem(summaryStorageKey) !== '0'; } catch (_) {}
-  function syncSummary() {
-    if (summary) summary.hidden = !summaryVisible;
-    summaryToggle.setAttribute('aria-expanded', String(summaryVisible));
-    summaryToggle.setAttribute('aria-pressed', String(summaryVisible));
-    summaryToggle.setAttribute('data-tooltip', summaryVisible ? 'Скрыть сводку соединений' : 'Показать сводку соединений');
-  }
-  summaryToggle.addEventListener('click', () => {
-    summaryVisible = !summaryVisible;
-    syncSummary();
-    try { localStorage.setItem(summaryStorageKey, summaryVisible ? '1' : '0'); } catch (_) {}
-  });
-  syncSummary();
-  function wrapSelect(select) {
-    if (!select) return;
-    const field = create('div', 'xk-mihomo-select-field');
-    select.before(field);
-    field.append(select);
-    field.insertAdjacentHTML('beforeend', iconHtml('chevron-down', 'xk-disclosure-chevron'));
-  }
-  if (toolbar) {
-    // Keep configuration reachable when the runtime/control panel is hidden.
-    runtime?.before(toolbar);
-    const sort = byId('mihomo-clash-groups-sort');
-    const configOrder = sort?.querySelector('option[value="config"]');
-    if (configOrder) configOrder.textContent = 'Из конфигурации';
-    const order = create('label', 'xk-mihomo-toolbar-field');
-    order.append(create('span', '', 'Порядок'));
-    if (sort) order.append(sort);
-    const modeField = create('div', 'xk-mihomo-toolbar-field xk-mihomo-mode-field');
-    modeField.append(create('span', '', 'Режим'));
-    if (mode) modeField.append(mode);
-    toolbar.prepend(modeField, order);
-    wrapSelect(sort);
-    const latencyPreset = byId('mihomo-clash-latency-preset');
-    for (const node of [latencyPreset, toolbar.querySelector('.xk-mihomo-groups-hidden-toggle'), toolbar.querySelector('.xk-mihomo-groups-disconnect-toggle')]) {
-      if (node) params.content.append(node);
+  if (mihomoView) {
+    const titleActions = create('div', 'xk-mihomo-operator-actions');
+    for (const id of ['mihomo-clash-egress-toggle', 'mihomo-clash-dns-toggle']) {
+      if (byId(id)) titleActions.append(byId(id));
     }
-    wrapSelect(latencyPreset);
-    if (strip) params.content.append(strip);
-    const search = toolbar.querySelector('.xk-mihomo-groups-search');
-    const searchInput = byId('mihomo-clash-groups-filter');
-    if (searchInput) searchInput.placeholder = 'Группа, узел или IP';
-    if (search) search.after(params.container);
-    if (config) params.container.after(config);
-    params.container.after(summaryToggle);
-    const count = byId('mihomo-clash-groups-count');
-    if (count) view.querySelector('.xk-mihomo-workspace-head').append(count);
-    function syncSubview() {
-      closeMenus();
-      const control = byId('mihomo-clash-tab-control')?.getAttribute('aria-selected') === 'true';
-      const configuration = config?.getAttribute('aria-selected') === 'true';
-      summaryToggle.hidden = !summary || byId('mihomo-clash-tab-connections')?.getAttribute('aria-selected') !== 'true';
-      titleActions.hidden = configuration;
-      toolbar.hidden = configuration;
-      toolbar.dataset.controlReady = String(control && !controlContent?.hidden);
-      if (count) count.hidden = !control;
-      if (configuration) {
-        // Keep a visible entry point in the tablist while its selected tab is hidden.
-        byId('mihomo-clash-tab-control').tabIndex = 0;
-        if (toolbar.contains(document.activeElement) || runtime?.contains(document.activeElement)) {
-          view.querySelector('[data-xk-toggle="mihomo-card"]')?.focus({ preventScroll: true });
+    const config = byId('mihomo-clash-tab-config');
+    const tabs = mihomoView.querySelector('.xk-mihomo-workspace-tabs');
+    tabs?.after(titleActions);
+    // Config remains a workspace tab, now owned across the shared toolbar.
+    if (tabs && config) tabs.setAttribute('aria-owns', config.id);
+    const toolbar = mihomoView.querySelector('.xk-mihomo-groups-toolbar');
+    const runtime = byId('mihomo-clash-runtime');
+    const controlContent = byId('mihomo-clash-control-content');
+    const mode = byId('mihomo-clash-mode-switch');
+    const strip = byId('mihomo-clash-status-strip');
+    const params = disclosure('Параметры', 'xk-mihomo-parameters-menu');
+    params.container.classList.add('xk-mihomo-parameters');
+    setIcon(params.trigger, 'settings', { label: 'Параметры' });
+    params.trigger.insertAdjacentHTML('beforeend', iconHtml('chevron-down', 'xk-disclosure-chevron'));
+    const summary = byId('mihomo-clash-connections-summary');
+    const summaryToggle = create('button', 'btn-secondary');
+    summaryToggle.id = 'mihomo-clash-connections-summary-toggle';
+    summaryToggle.type = 'button';
+    summaryToggle.hidden = true;
+    summaryToggle.setAttribute('aria-controls', 'mihomo-clash-connections-summary');
+    setIcon(summaryToggle, 'statistics', { label: 'Сводка' });
+    const summaryStorageKey = 'xkeen:mihomo-clash-connections-summary-visible';
+    let summaryVisible = true;
+    try { summaryVisible = localStorage.getItem(summaryStorageKey) !== '0'; } catch (_) {}
+    function syncSummary() {
+      if (summary) summary.hidden = !summaryVisible;
+      summaryToggle.setAttribute('aria-expanded', String(summaryVisible));
+      summaryToggle.setAttribute('aria-pressed', String(summaryVisible));
+      summaryToggle.setAttribute('data-tooltip', summaryVisible ? 'Скрыть сводку соединений' : 'Показать сводку соединений');
+    }
+    summaryToggle.addEventListener('click', () => {
+      summaryVisible = !summaryVisible;
+      syncSummary();
+      try { localStorage.setItem(summaryStorageKey, summaryVisible ? '1' : '0'); } catch (_) {}
+    });
+    syncSummary();
+    function wrapSelect(select) {
+      if (!select) return;
+      const field = create('div', 'xk-mihomo-select-field');
+      select.before(field);
+      field.append(select);
+      field.insertAdjacentHTML('beforeend', iconHtml('chevron-down', 'xk-disclosure-chevron'));
+    }
+    if (toolbar) {
+      // Keep configuration reachable when the runtime/control panel is hidden.
+      runtime?.before(toolbar);
+      const sort = byId('mihomo-clash-groups-sort');
+      const configOrder = sort?.querySelector('option[value="config"]');
+      if (configOrder) configOrder.textContent = 'Из конфигурации';
+      const order = create('label', 'xk-mihomo-toolbar-field');
+      order.append(create('span', '', 'Порядок'));
+      if (sort) order.append(sort);
+      const modeField = create('div', 'xk-mihomo-toolbar-field xk-mihomo-mode-field');
+      modeField.append(create('span', '', 'Режим'));
+      if (mode) modeField.append(mode);
+      toolbar.prepend(modeField, order);
+      wrapSelect(sort);
+      const latencyPreset = byId('mihomo-clash-latency-preset');
+      for (const node of [latencyPreset, toolbar.querySelector('.xk-mihomo-groups-hidden-toggle'), toolbar.querySelector('.xk-mihomo-groups-disconnect-toggle')]) {
+        if (node) params.content.append(node);
+      }
+      wrapSelect(latencyPreset);
+      if (strip) params.content.append(strip);
+      const search = toolbar.querySelector('.xk-mihomo-groups-search');
+      const searchInput = byId('mihomo-clash-groups-filter');
+      if (searchInput) searchInput.placeholder = 'Группа, узел или IP';
+      if (search) search.after(params.container);
+      if (config) params.container.after(config);
+      params.container.after(summaryToggle);
+      const count = byId('mihomo-clash-groups-count');
+      if (count) mihomoView.querySelector('.xk-mihomo-workspace-head').append(count);
+      function syncSubview() {
+        closeMenus();
+        const control = byId('mihomo-clash-tab-control')?.getAttribute('aria-selected') === 'true';
+        const configuration = config?.getAttribute('aria-selected') === 'true';
+        summaryToggle.hidden = !summary || byId('mihomo-clash-tab-connections')?.getAttribute('aria-selected') !== 'true';
+        titleActions.hidden = configuration;
+        toolbar.hidden = configuration;
+        toolbar.dataset.controlReady = String(control && !controlContent?.hidden);
+        if (count) count.hidden = !control;
+        if (configuration) {
+          // Keep a visible entry point in the tablist while its selected tab is hidden.
+          byId('mihomo-clash-tab-control').tabIndex = 0;
+          if (toolbar.contains(document.activeElement) || runtime?.contains(document.activeElement)) {
+            mihomoView.querySelector('[data-xk-toggle="mihomo-card"]')?.focus({ preventScroll: true });
+          }
         }
       }
+      if (tabs) new MutationObserver(syncSubview).observe(tabs, { attributes: true, attributeFilter: ['aria-selected'], subtree: true });
+      if (config) new MutationObserver(syncSubview).observe(config, { attributes: true, attributeFilter: ['aria-selected'] });
+      if (controlContent) new MutationObserver(syncSubview).observe(controlContent, { attributes: true, attributeFilter: ['hidden'] });
+      syncSubview();
     }
-    if (tabs) new MutationObserver(syncSubview).observe(tabs, { attributes: true, attributeFilter: ['aria-selected'], subtree: true });
-    if (config) new MutationObserver(syncSubview).observe(config, { attributes: true, attributeFilter: ['aria-selected'] });
-    if (controlContent) new MutationObserver(syncSubview).observe(controlContent, { attributes: true, attributeFilter: ['hidden'] });
-    syncSubview();
   }
   function syncService() {
     const state = byId('xkeen-service-lamp')?.dataset.state || 'pending';
@@ -208,8 +209,10 @@ export function initMihomoOperatorHeader() {
   syncService();
   function syncView(name) {
     closeMenus();
-    const active = name === 'mihomo';
-    document.body.classList.toggle('xk-mihomo-header-active', active);
+    const active = name === 'routing' || name === 'mihomo';
+    document.body.classList.toggle('xk-operator-header-active', active);
+    document.body.classList.toggle('xk-routing-header-active', name === 'routing');
+    document.body.classList.toggle('xk-mihomo-header-active', name === 'mihomo');
     for (const { node, target, anchor } of moves) {
       if (active && node.parentNode !== target) target.append(node);
       else if (!active && anchor.nextSibling !== node) anchor.after(node);
@@ -219,3 +222,6 @@ export function initMihomoOperatorHeader() {
   document.addEventListener('xkeen:panel-view-changed', (event) => syncView(event.detail?.view));
   syncView(document.querySelector('.top-tab-btn.active[data-view]')?.dataset.view);
 }
+
+// Kept for integrations that imported the first, Mihomo-specific name.
+export const initMihomoOperatorHeader = initPanelOperatorHeader;

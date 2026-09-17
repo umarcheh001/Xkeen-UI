@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 
 async function openCommands(page, theme, viewport) {
@@ -8,8 +8,7 @@ async function openCommands(page, theme, viewport) {
   }, theme);
   await page.goto('/');
   const commandsTab = page.locator('.top-tab-btn[data-view="commands"]');
-  await expect(commandsTab).toBeVisible();
-  await commandsTab.click();
+  await selectPanelView(page, 'commands');
   await expect(commandsTab).toHaveClass(/\bactive\b/);
   await expect(page.locator('#view-commands')).toBeVisible();
 }

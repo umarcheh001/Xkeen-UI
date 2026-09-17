@@ -1,4 +1,4 @@
-import { test, expect, switchTopView } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 
 async function openPanel(page, theme = 'dark') {
@@ -36,11 +36,12 @@ test.describe('Operator Console Stage 0 runtime contract', () => {
   test('critical view, accordion, theme and modal handlers remain connected', async ({ page }) => {
     await openPanel(page, 'dark');
 
+    await page.locator('[aria-controls="xk-mihomo-panel-menu"]').click();
     await page.locator('#theme-toggle-btn').click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 
     for (const view of ['mihomo', 'xkeen', 'xray-logs', 'commands', 'files', 'routing']) {
-      await switchTopView(page, view);
+      await selectPanelView(page, view);
       await expect(page.locator(`#view-${view}`)).toBeVisible();
     }
     await expect(page.locator('#routing-rules-header')).toHaveAttribute('data-xk-collapse-wired', '1');
@@ -82,6 +83,7 @@ test.describe('Operator Console Stage 0 runtime contract', () => {
   test('switches preserve the same indigo on/off geometry in light and dark themes', async ({ page }) => {
     for (const theme of ['dark', 'light']) {
       await openPanel(page, theme);
+      await page.locator('.xk-brand-service-trigger').click();
       const toggle = page.locator('.xk-global-autorestart-switch');
       const input = toggle.locator('input');
       const slider = toggle.locator('.dt-switch-slider');
@@ -109,6 +111,9 @@ test.describe('Operator Console Stage 0 runtime contract', () => {
 
       await input.evaluate((node) => { node.checked = false; });
       await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+      await expect
+        .poll(async () => (await read()).thumbTransform)
+        .toBe('none');
       const off = await read();
       expect(off.width).toBe(34);
       expect(off.height).toBe(18);
@@ -117,9 +122,6 @@ test.describe('Operator Console Stage 0 runtime contract', () => {
       expect(off.thumbBackgroundColor).toBe(
         theme === 'dark' ? 'rgb(232, 234, 240)' : 'rgb(48, 51, 58)',
       );
-      await expect
-        .poll(async () => (await read()).thumbTransform)
-        .toBe('none');
     }
   });
 
@@ -141,11 +143,11 @@ test.describe('Operator Console Stage 0 runtime contract', () => {
     await expect(page.locator('#outbounds-file-code')).toBeAttached();
     await expect(page.locator('#outbounds-file-code').locator('..')).toBeHidden();
 
-    await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+    await selectPanelView(page, 'mihomo');
     await expect(page.locator('.xk-mihomo-topbar .xk-routing-active-inline')).toBeAttached();
     await expect(page.locator('.xk-mihomo-topbar .xk-routing-active-inline')).toBeHidden();
 
-    await switchTopView(page, 'routing');
+    await selectPanelView(page, 'routing');
     await page.locator('#outbounds-open-editor-btn').click();
     await expect(page.locator('#json-editor-file-label')).toBeAttached();
     await expect(page.locator('#json-editor-file-label')).toBeHidden();

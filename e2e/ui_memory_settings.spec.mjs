@@ -3,6 +3,7 @@ import { test, expect } from './fixtures.mjs';
 
 async function openMemorySettings(page) {
   await page.goto('/');
+  await page.locator('[aria-controls="xk-mihomo-panel-menu"]').click();
   await page.locator('#ui-settings-open-btn').click();
   await expect(page.locator('#ui-settings-modal')).toBeVisible();
   await page.locator('#ui-settings-nav-btn-resources').click();
@@ -20,6 +21,7 @@ test('memory budget is persisted through the shared settings API', async ({ page
   await expect(budget).toHaveValue('128');
 
   await page.locator('#ui-settings-close-btn').click();
+  await page.locator('[aria-controls="xk-mihomo-panel-menu"]').click();
   await page.locator('#ui-settings-open-btn').click();
   await page.locator('#ui-settings-nav-btn-resources').click();
   await expect(budget).toHaveValue('128');

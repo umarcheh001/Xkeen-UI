@@ -1,9 +1,9 @@
-import { test, expect } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 
 test('Mihomo import uses the resizable Operator workbench and stretches its YAML preview', async ({ page }) => {
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
   await page.locator('#mihomo-clash-tab-config').click();
   const menu = page.locator('.xk-mihomo-menu');
@@ -57,7 +57,7 @@ test('Mihomo import uses the resizable Operator workbench and stretches its YAML
 
 test('global error toasts stay above the Mihomo import modal', async ({ page }) => {
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.locator('#mihomo-clash-tab-config').click();
   await page.locator('.xk-mihomo-menu summary').click();
   await page.locator('#mihomo-import-node-btn').click();

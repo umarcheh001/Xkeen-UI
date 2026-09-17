@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 
 const VIEWPORTS = [
@@ -156,7 +156,7 @@ async function openMihomo(page, theme, viewport) {
     localStorage.setItem('xkeen-theme', nextTheme);
   }, theme);
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await expect(page.locator('#mihomo-clash-runtime')).toBeVisible();
 }
 

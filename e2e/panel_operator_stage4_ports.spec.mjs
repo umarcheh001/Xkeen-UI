@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 
 const editorContracts = [
@@ -59,7 +59,7 @@ async function openPorts(page, theme, viewport) {
   await mockPorts(page);
   await page.goto('/');
   await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-  await page.locator('.top-tab-btn[data-view="xkeen"]').click();
+  await selectPanelView(page, 'xkeen');
   await expect(page.locator('#view-xkeen')).toBeVisible();
   await expect(page.locator('#view-xkeen .xkeen-mini-editor')).toHaveCount(4);
   await expect(page.locator('#view-xkeen .xkeen-mini-editor .xkeen-cm6-host')).toHaveCount(4);

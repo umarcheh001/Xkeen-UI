@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 
 function statusPayload() {
@@ -118,7 +118,7 @@ test('Mihomo egress card shows routed IP, refreshes and stays compact on mobile'
   await page.goto('/');
   await page.evaluate(() => localStorage.removeItem('xkeen:mihomo-clash-egress-visible'));
   await page.reload();
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-egress-card' });
@@ -152,7 +152,7 @@ test('Mihomo egress card shows routed IP, refreshes and stays compact on mobile'
 
   expect(await page.evaluate(() => localStorage.getItem('xkeen:mihomo-clash-egress-visible'))).toBe('1');
   await page.reload();
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-egress-persisted' });
@@ -187,7 +187,7 @@ test('Mihomo DNS diagnostics toggle keeps action labels inline', async ({ page }
   await page.goto('/');
   await page.addInitScript(() => localStorage.removeItem('xkeen:mihomo-clash-dns-visible'));
   await page.reload();
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-dns-diagnostics' });
@@ -275,7 +275,7 @@ test('Mihomo egress card offers confirmed automatic loopback listener setup', as
   await page.goto('/');
   await page.evaluate(() => localStorage.setItem('xkeen:mihomo-clash-egress-visible', '1'));
   await page.reload();
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-egress-auto-setup' });
@@ -325,7 +325,7 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   });
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e' });
@@ -495,7 +495,7 @@ test('collapsed picker stays above sibling cards and shows nested group icon and
   await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: data }));
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   const youtube = page.locator('[data-group-name="YouTube"]');
   const trigger = youtube.locator('[data-mihomo-picker-toggle]');
   await expect(trigger.locator('.xk-mihomo-picker-node-icon--group img')).toHaveAttribute('src', blockedIcon);
@@ -528,7 +528,7 @@ test('Mihomo group disclosure state survives reload without mounting collapsed c
   await page.goto('/');
   await page.evaluate(() => localStorage.removeItem('xkeen:mihomo-clash-collapsed-groups'));
   await page.reload();
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-disclosure-persistence' });
@@ -543,7 +543,7 @@ test('Mihomo group disclosure state survives reload without mounting collapsed c
   ).AUTO)).toBe(false);
 
   await page.reload();
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-disclosure-restored' });
@@ -621,7 +621,7 @@ test('Mihomo GLOBAL selector follows runtime mode and reconciles selection local
   });
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-global-selector' });
@@ -676,7 +676,7 @@ test('Mihomo latency stays visible but is marked stale after five minutes and gr
   });
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-delay-freshness' });
@@ -700,8 +700,8 @@ test('Mihomo latency stays visible but is marked stale after five minutes and gr
 
   const requestsBeforeReturn = groupRequests;
   await page.locator('[aria-controls="xk-mihomo-sections-menu"]').click();
-  await page.locator('.top-tab-btn[data-view="routing"]').click();
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'routing');
+  await selectPanelView(page, 'mihomo');
   await expect.poll(() => groupRequests).toBeGreaterThan(requestsBeforeReturn);
   await expect(latency).toContainText('44 мс');
 });
@@ -730,7 +730,7 @@ test('auto freshness follows provider healthcheck interval and core group mode u
   });
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const settings = window.XKeen?.ui?.settings;
     settings?.setLocal?.({ mihomo: { latencyFreshness: 'auto', latencyTestMode: 'core' } });
@@ -770,7 +770,7 @@ test('core batch mode still probes a selector group node by node', async ({ page
   });
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const settings = window.XKeen?.ui?.settings;
     settings?.setLocal?.({ mihomo: { latencyTestMode: 'core' } });
@@ -796,7 +796,7 @@ test('server cards replace provider emoji with one rectangular country flag', as
   await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
   await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: data }));
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-country' });
@@ -817,7 +817,7 @@ test('complex country flags use complete inline SVG artwork', async ({ page }) =
   await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
   await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: data }));
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-complex-flags' });
@@ -848,7 +848,7 @@ test('visible delay test probes every node beyond the old eight-item limit and r
     await route.fulfill({ json: { ok: true, schema_version: 1, results: [{ name: body.name, delay_ms: 50 }] } });
   });
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-complete-delay-queue' });
@@ -883,7 +883,7 @@ test('visible delay test waits for the backend rolling limit instead of failing 
   });
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-delay-rate-limit' });
@@ -913,7 +913,7 @@ test('retryable Mihomo 503 reads as a node that did not answer, not a panel erro
   }));
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-delay-503-timeout' });
@@ -955,7 +955,7 @@ test('group delay probes unique nodes without group endpoint and reconciles the 
   });
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-group-delay-batch' });
@@ -1032,7 +1032,7 @@ test('nested group card probes itself and falls back to its selected terminal pr
   });
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-nested-group-delay' });
@@ -1080,7 +1080,7 @@ test('visible delay de-duplicates the same provider node across expanded groups'
   });
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-visible-delay-deduplication' });
@@ -1118,7 +1118,7 @@ test('group delay test keeps shared node progress inside the selected group', as
   });
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-group-delay-scope' });
@@ -1149,7 +1149,7 @@ test('automatic fixed group shows lock, unfix action and sorting', async ({ page
   });
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   // Операторская шапка переносит переключатели групп в меню «Параметры» уже
   // после отрисовки вкладки и закрывает меню, если открыть его раньше. Ждём,
   // пока переключатель окажется внутри меню, а не спим наугад.
@@ -1211,7 +1211,7 @@ test('sorting keeps service nodes in config slots and workspace settings persist
   await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: data }));
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await expect(page.locator('#mihomo-clash-groups-sort')).toHaveValue('name');
   await expect(page.locator('#mihomo-clash-latency-preset')).toHaveValue('cloudflare');
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head')).toHaveAttribute('aria-expanded', 'true');
@@ -1246,7 +1246,7 @@ test('LoadBalance cannot be selected but API fixed state can be removed', async 
   });
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await expect(page.locator('[data-group-name="AUTO"] [data-mihomo-picker-toggle]')).toHaveAttribute('disabled', '');
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
   await expect(page.locator('[data-group-name="AUTO"] [data-mihomo-group-select][data-node="node-b"]')).toHaveAttribute('disabled', '');
@@ -1312,7 +1312,7 @@ test('timeout hiding uses Mihomo history across groups and restores a node after
   });
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('AUTO');
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
   await page.locator('[data-group-name="FALLBACK"] .xk-mihomo-group-head').click();
@@ -1341,7 +1341,7 @@ test('Mihomo group disclosures keep the workspace compact and keyboard accessibl
   }));
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     const mod = await import('/static/js/features/mihomo_clash/index.js');
     mod.activateMihomoClashWorkspace({ reason: 'e2e' });

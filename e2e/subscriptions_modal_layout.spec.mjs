@@ -1,4 +1,4 @@
-import { test, expect, switchTopView } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 function buildDemoNodes() {
   const specs = [
@@ -461,10 +461,10 @@ test('main outbounds pool card relayouts cleanly after switching between Routing
   expect(poolPresentation.summaryMode).toBe(true);
   expect(poolPresentation.hintsDisplay).toBe('none');
 
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
 
-  await switchTopView(page, 'routing');
+  await selectPanelView(page, 'routing');
   await expect(page.locator('#view-routing')).toBeVisible();
   await expect(page.locator('#outbounds-nodes-panel')).toBeVisible();
   await page.waitForTimeout(450);

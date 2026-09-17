@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 
 const leftItems = [
@@ -47,7 +47,7 @@ async function openFiles(page, theme, viewport) {
   }, theme);
   await mockFiles(page);
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="files"]').click();
+  await selectPanelView(page, 'files');
   await expect(page.locator('#view-files')).toBeVisible();
   await expect(page.locator('.fm-panel[data-side="left"] .fm-row[data-name]')).toHaveCount(3);
   await expect(page.locator('.fm-panel[data-side="right"] .fm-empty')).toBeVisible();
@@ -170,7 +170,7 @@ test.describe('Operator Console Stage 4 files', () => {
     });
     await mockFiles(page);
     await page.goto('/');
-    await page.locator('.top-tab-btn[data-view="files"]').click();
+    await selectPanelView(page, 'files');
     await expect(page.locator('#view-files')).toBeVisible();
     await expect(page.locator('#fm-upload-btn')).toBeVisible();
 

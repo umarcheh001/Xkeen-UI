@@ -1,10 +1,10 @@
-import { test, expect } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 
 test('HWID subscription uses the resizable Operator workbench and stretches its YAML preview', async ({ page }) => {
   await page.addInitScript(() => localStorage.removeItem('xk.modal.state.v1.mihomo-hwid'));
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
   await page.locator('#mihomo-clash-tab-config').click();
   const menu = page.locator('.xk-mihomo-menu');
@@ -60,7 +60,7 @@ test('HWID subscription uses the resizable Operator workbench and stretches its 
 test('HWID device profile is compact, editable, and resets to Mihomo panel defaults', async ({ page }) => {
   await page.addInitScript(() => localStorage.removeItem('xkeen.mihomo.hwid.device-profile.v1'));
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
   await page.locator('#mihomo-clash-tab-config').click();
   const menu = page.locator('.xk-mihomo-menu');

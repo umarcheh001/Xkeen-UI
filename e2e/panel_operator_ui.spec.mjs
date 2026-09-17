@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { test, expect } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 
 const captureEnabled = process.env.XKEEN_CAPTURE_UI === '1';
@@ -52,7 +52,7 @@ test('operator stylesheet is isolated and loaded last', async ({ page }) => {
 
 test('ports workspace uses dense editor rows instead of pill actions', async ({ page }) => {
   await openInteractivePanel(page);
-  await page.locator('.top-tab-btn[data-view="xkeen"]').click();
+  await selectPanelView(page, 'xkeen');
 
   await expect(page.locator('#view-xkeen')).toBeVisible();
   await expect(page.locator('.xkeen-mini-editor')).toHaveCount(4);
@@ -90,7 +90,7 @@ test('ports and Xray logs keep a standard gap before the operation journal', asy
   ];
 
   for (const workspace of workspaces) {
-    await page.locator(`.top-tab-btn[data-view="${workspace.tab}"]`).click();
+    await selectPanelView(page, workspace.tab);
     await expect(page.locator(workspace.view)).toBeVisible();
 
     const gap = await page.evaluate(({ primary, journal }) => {
@@ -165,7 +165,7 @@ test.describe('mobile operator shell', () => {
     await expect(page.locator('.panel-header')).toBeVisible();
     await expectNoPageOverflow(page);
 
-    await page.locator('.top-tab-btn[data-view="xkeen"]').click();
+    await selectPanelView(page, 'xkeen');
     await expect(page.locator('#view-xkeen')).toBeVisible();
     await expectNoPageOverflow(page);
     await capture(page, 'panel-operator-ports-mobile.png');

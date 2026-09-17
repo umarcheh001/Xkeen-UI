@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 test('Mihomo header preserves controls, service state and navigation in both themes', async ({ page }) => {
   // Спека обходит два оформления, три ширины и пять меню со скриншотами: на
@@ -24,9 +24,10 @@ test('Mihomo header preserves controls, service state and navigation in both the
     ],
   } }));
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await page.locator('[aria-controls="xk-mihomo-sections-menu"]').click();
+  await selectPanelView(page, 'mihomo');
   await expect(page.locator('body')).toHaveClass(/xk-mihomo-header-active/);
-  await expect(page.locator('.xk-mihomo-operator-title h2')).toHaveText('Роутинг Mihomo');
+  await expect(page.locator('.xk-mihomo-operator-title')).toHaveCount(0);
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('Заблок. сервисы');
   await expect(page.locator('#mihomo-clash-status-strip')).toHaveAttribute('data-tone', 'positive');
   await expect(page.locator('.panel-shell-status')).not.toBeInViewport();
@@ -67,7 +68,7 @@ test('Mihomo header preserves controls, service state and navigation in both the
   await expect(page.locator('#mihomo-clash-runtime')).toBeHidden();
   await expect(page.locator('#mihomo-clash-tab-config')).toBeHidden();
   await expect(page.locator('.xk-mihomo-groups-toolbar')).toBeHidden();
-  await expect(page.locator('#mihomo-clash-panel-config .commands-header h2')).toHaveText('Редактор конфигурации');
+  await expect(page.locator('#mihomo-clash-panel-config .commands-header h2')).toHaveText('Редактор конфигурации Mihomo');
   const editorHeader = page.locator('[data-xk-toggle="mihomo-card"]');
   await expect(editorHeader).toBeFocused();
   await expect(page.locator('#mihomo-arrow use')).toHaveAttribute('href', /#xk-chevron-down$/);
@@ -77,7 +78,6 @@ test('Mihomo header preserves controls, service state and navigation in both the
   await editorHeader.press('Enter');
   await expect(page.locator('#mihomo-body')).toBeVisible();
   await expect(editorHeader).toHaveAttribute('aria-expanded', 'true');
-  await page.locator('.xk-mihomo-operator-title h2').click();
   await page.screenshot({ path: '.tmp/mihomo-header-config-fixed.png' });
   await page.locator('#mihomo-clash-tab-control').focus();
   await page.keyboard.press('ArrowLeft');
@@ -108,7 +108,7 @@ test('Mihomo header preserves controls, service state and navigation in both the
     }
     for (const width of [1668, 1024, 390, 360]) {
       await page.setViewportSize({ width, height: 960 });
-      await page.locator('.xk-mihomo-operator-title h2').click();
+      await page.keyboard.press('Escape');
       await expect(page.locator('#mihomo-clash-test-visible')).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       // The approved header has inline controls: icons and labels must not stack.
@@ -130,11 +130,11 @@ test('Mihomo header preserves controls, service state and navigation in both the
       await page.screenshot({ path: `.tmp/mihomo-header-${theme}-${width}.png` });
       if (width === 1668) {
         const header = await page.locator('.panel-header-shell').boundingBox();
-        const title = await page.locator('.xk-mihomo-operator-title').boundingBox();
+        const workspaceHead = await page.locator('.xk-mihomo-workspace-head').boundingBox();
         const toolbar = await page.locator('.xk-mihomo-groups-toolbar').boundingBox();
-        expect(Math.abs(title.y - header.y - header.height)).toBeLessThanOrEqual(1);
-        expect(Math.abs(title.x - header.x)).toBeLessThanOrEqual(1);
-        expect(Math.abs(title.width - header.width)).toBeLessThanOrEqual(1);
+        expect(Math.abs(workspaceHead.y - header.y - header.height)).toBeLessThanOrEqual(1);
+        expect(Math.abs(workspaceHead.x - header.x)).toBeLessThanOrEqual(1);
+        expect(Math.abs(workspaceHead.width - header.width)).toBeLessThanOrEqual(1);
         expect(toolbar.y + toolbar.height - header.y).toBeLessThanOrEqual(215);
         const order = await page.locator('.xk-mihomo-toolbar-field').nth(1).boundingBox();
         const search = await page.locator('.xk-mihomo-groups-search').boundingBox();
@@ -203,10 +203,13 @@ test('Mihomo header preserves controls, service state and navigation in both the
   }
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.locator('[aria-controls="xk-mihomo-sections-menu"]').click();
-  await page.locator('.top-tab-btn[data-view="routing"]').click();
+  await selectPanelView(page, 'routing');
   await expect(page.locator('body')).not.toHaveClass(/xk-mihomo-header-active/);
-  await expect(page.locator('.panel-header > .header-tabs')).toBeVisible();
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await expect(page.locator('body')).toHaveClass(/xk-operator-header-active/);
+  await expect(page.locator('body')).toHaveClass(/xk-routing-header-active/);
+  await expect(page.locator('#xk-mihomo-sections-menu .header-tabs')).toBeHidden();
+  await page.locator('[aria-controls="xk-mihomo-sections-menu"]').click();
+  await selectPanelView(page, 'mihomo');
   await expect(page.locator('body')).toHaveClass(/xk-mihomo-header-active/);
   await expect(page.locator('#xkeen-restart-btn')).toHaveCount(1);
   expect(errors).toEqual([]);

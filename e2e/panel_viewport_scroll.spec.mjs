@@ -101,11 +101,10 @@ test('panel workspaces keep a usable scroll region across desktop and short view
       expect(['visible', 'auto'], label).toContain(before.containerOverflowY);
       expect(before.containerScrollHeight - before.containerClientHeight, label).toBeLessThanOrEqual(1);
       if (viewport.height <= 640 || viewport.width <= 720) {
-        // Операторская шапка Mihomo вывешивает свои меню наружу, поэтому там
-        // overflow обязан быть `visible` (panel-operator.css). Собственная
-        // прокрутка ей и не нужна: шапка компактная и ничего не обрезает —
-        // проверяем именно это, а не конкретное значение свойства.
-        if (tab === 'mihomo') {
+        // Компактная операторская шапка роутинга вывешивает меню наружу,
+        // поэтому overflow обязан быть `visible` (panel-operator.css).
+        // Собственная прокрутка ей не нужна: содержимое укладывается целиком.
+        if (tab === 'routing' || tab === 'mihomo') {
           expect(before.headerOverflowY, label).toBe('visible');
           expect(before.headerScrollHeight - before.headerClientHeight, label).toBeLessThanOrEqual(1);
         } else {

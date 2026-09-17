@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 
 const viewports = [
@@ -203,17 +203,17 @@ test.describe('Operator Console Stage 2 shell and workspace contract', () => {
         expect(layout.pageOverflow, `${viewport.width}x${viewport.height}`).toBeLessThanOrEqual(1);
         expect(layout.shellOverflow, `shell ${viewport.width}x${viewport.height}`).toBeLessThanOrEqual(1);
         expect(layout.serviceOverflow, `service ${viewport.width}x${viewport.height}`).toBeLessThanOrEqual(1);
-        expect(layout.railOverflowMode).toBe('auto');
+        expect(layout.railOverflowMode).toBe('visible');
         expect(layout.header.x).toBeGreaterThanOrEqual(0);
         expect(layout.header.right).toBeLessThanOrEqual(viewport.width + 0.5);
         expect(layout.identity.width).toBeGreaterThan(0);
         expect(layout.globalActions.width).toBeGreaterThan(0);
 
         if (viewport.width > 720) {
-          expect(layout.core.right, `core vs summary ${viewport.width}x${viewport.height}`)
-            .toBeLessThanOrEqual((layout.summary?.x ?? layout.actionButtons.x) + 0.5);
-          expect(layout.summary?.right ?? layout.core.right, `summary vs actions ${viewport.width}x${viewport.height}`)
-            .toBeLessThanOrEqual(layout.actionButtons.x + 0.5);
+          expect(layout.core.width, `service menu ${viewport.width}x${viewport.height}`).toBe(0);
+          expect(layout.actionButtons.width, `panel menu ${viewport.width}x${viewport.height}`).toBe(0);
+          expect(layout.summary.right, `summary ${viewport.width}x${viewport.height}`)
+            .toBeLessThanOrEqual(layout.globalActions.right + 0.5);
         }
 
         if (viewport.width > 720) {
@@ -222,9 +222,9 @@ test.describe('Operator Console Stage 2 shell and workspace contract', () => {
           // but no longer has the old fixed 130px height.
           expect(layout.header.height).toBeLessThanOrEqual(170);
         } else {
-          expect(layout.shellMain.height).toBeLessThanOrEqual(103);
-          // Mobile navigation naturally spans multiple rows. Keep a bounded
-          // shell, rather than preserving a pre-I6 hard-coded height.
+          expect(layout.shellMain.height).toBeLessThanOrEqual(104);
+          // The compact mobile shell may wrap its global actions once, but it
+          // no longer includes the full navigation rail.
           expect(layout.header.height).toBeLessThanOrEqual(360);
         }
 
@@ -272,7 +272,7 @@ test.describe('Operator Console Stage 2 shell and workspace contract', () => {
       expect(actionStyles[0].shadow).toBe('none');
 
       const commandsTab = page.locator('.top-tab-btn[data-view="commands"]');
-      await commandsTab.click();
+      await selectPanelView(page, 'commands');
       await expect(commandsTab).toHaveClass(/\bactive\b/);
       await page.locator('#theme-toggle-btn').focus();
       let reachedByKeyboard = false;

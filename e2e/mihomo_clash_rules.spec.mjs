@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 
 function statusPayload() {
@@ -103,7 +103,7 @@ test('rules search, connection cross-link and provider actions stay explicit', a
   const runtime = await mockPr9(page);
   const { actions } = runtime;
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.locator('#mihomo-clash-tab-rules').click();
 
   await expect(page.locator('#mihomo-clash-rules-rows tr')).toHaveCount(3);
@@ -224,7 +224,7 @@ test('HTTP provider batch confirms count, limits concurrency, reports progress a
   });
 
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.locator('#mihomo-clash-tab-rules').click();
   await expect(page.locator('#mihomo-clash-providers-update-http')).toContainText('Обновить HTTP (8)');
   await expect.poll(() => page.locator('#mihomo-clash-providers-list').evaluate((list) => (
@@ -257,7 +257,7 @@ test('structured logs use a full workspace tab, one on-demand socket, ring buffe
   });
   await mockPr9(page);
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.locator('#mihomo-clash-tab-logs').click();
   await expect(page.locator('#mihomo-clash-panel-logs')).toBeVisible();
   await expect(page.locator('#mihomo-clash-panel-rules')).toBeHidden();
@@ -330,7 +330,7 @@ test('rules/providers remain responsive on mobile without page overflow', async 
   await page.setViewportSize({ width: 390, height: 844 });
   await mockPr9(page);
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await page.locator('#mihomo-clash-tab-rules').click();
   await expect(page.locator('#mihomo-clash-rules-rows tr').first()).toBeVisible();
   const metrics = await page.evaluate(() => ({

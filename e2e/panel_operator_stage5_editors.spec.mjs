@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 
 async function openPanel(page, theme, viewport = { width: 1440, height: 900 }) {
@@ -13,8 +13,7 @@ async function openPanel(page, theme, viewport = { width: 1440, height: 900 }) {
 }
 
 async function openJsonEditor(page) {
-  const routingTab = page.locator('.top-tab-btn[data-view="routing"]');
-  await routingTab.click();
+  await selectPanelView(page, 'routing');
   await expect(page.locator('#view-routing')).toBeVisible();
   const outbounds = page.locator('#outbounds-body');
   if (!(await outbounds.isVisible())) await page.locator('#outbounds-header').click();
@@ -43,7 +42,7 @@ async function openProxyGenerator(page) {
 }
 
 async function openQuickBalancer(page) {
-  await page.locator('.top-tab-btn[data-view="routing"]').click();
+  await selectPanelView(page, 'routing');
   await expect(page.locator('#view-routing')).toBeVisible();
   const rules = page.locator('#routing-rules-body');
   if (!(await rules.isVisible())) await page.locator('#routing-rules-header').click();
@@ -52,7 +51,7 @@ async function openQuickBalancer(page) {
 }
 
 async function openForcedRules(page) {
-  await page.locator('.top-tab-btn[data-view="routing"]').click();
+  await selectPanelView(page, 'routing');
   await expect(page.locator('#view-routing')).toBeVisible();
   const rules = page.locator('#routing-rules-body');
   if (!(await rules.isVisible())) await page.locator('#routing-rules-header').click();
@@ -61,7 +60,7 @@ async function openForcedRules(page) {
 }
 
 async function openBalancerHelp(page) {
-  await page.locator('.top-tab-btn[data-view="routing"]').click();
+  await selectPanelView(page, 'routing');
   await expect(page.locator('#view-routing')).toBeVisible();
   const rules = page.locator('#routing-rules-body');
   if (!(await rules.isVisible())) await page.locator('#routing-rules-header').click();
@@ -76,7 +75,7 @@ async function openEditorHelp(page) {
 }
 
 async function switchToMonaco(page, { tab, select, host }) {
-  await page.locator(`.top-tab-btn[data-view="${tab}"]`).click();
+  await selectPanelView(page, tab);
   if (tab === 'mihomo') {
     // Редактор живёт во вкладке «Конфигурация» рабочей области Mihomo.
     await expect(page.locator('#view-mihomo')).toBeVisible();

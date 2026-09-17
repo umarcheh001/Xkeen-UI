@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 const TOP_LEVEL_VIEWS = ['routing', 'xkeen', 'commands', 'files'];
 
@@ -134,7 +134,7 @@ test.describe('Operator Console I5 accessibility and responsive contract', () =>
     await openPanel(page, 'dark');
     await freezeAnimations(page);
     for (const view of TOP_LEVEL_VIEWS) {
-      await page.locator(`.top-tab-btn[data-view="${view}"]`).click();
+      await selectPanelView(page, view);
       await expect(page.locator(`#view-${view}`)).toBeVisible();
       await expect(page.locator(`#view-${view}`)).toHaveScreenshot(`i5-${view}-dark-desktop.png`, {
         animations: 'disabled',
@@ -144,7 +144,7 @@ test.describe('Operator Console I5 accessibility and responsive contract', () =>
       });
     }
 
-    await page.locator('.top-tab-btn[data-view="routing"]').click();
+    await selectPanelView(page, 'routing');
     const outboundsBody = page.locator('#outbounds-body');
     if (!(await outboundsBody.isVisible())) await page.locator('#outbounds-header').click();
     await page.locator('#outbounds-open-editor-btn').click();

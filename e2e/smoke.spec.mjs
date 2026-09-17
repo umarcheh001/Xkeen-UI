@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 async function waitForMihomoGeneratorPreview(page) {
   await expect(page.locator('#profileSelect')).toBeVisible();
@@ -33,6 +33,7 @@ test('panel shell renders top-level navigation', async ({ page }) => {
   await page.goto('/');
 
   await expect(page).toHaveTitle(/Xkeen UI/i);
+  await page.locator('[aria-controls="xk-mihomo-sections-menu"]').click();
   await expect(page.locator('#top-tab-mihomo-generator')).toBeVisible();
   await expect(page.locator('body')).toContainText('Mihomo Генератор');
   await expect(page.locator('body')).toContainText('DevTools');
@@ -44,6 +45,7 @@ test('panel navigation style survives generator and DevTools round trips', async
 
   const panelTabs = page.locator('.top-tabs.header-tabs');
   const routingTab = page.locator('.top-tabs.header-tabs .top-tab-btn').first();
+  await page.locator('[aria-controls="xk-mihomo-sections-menu"]').click();
   await expect(panelTabs).toBeVisible();
   await expect(page.locator('body')).toHaveClass(/\bpanel-page\b/);
 
@@ -65,6 +67,7 @@ test('panel navigation style survives generator and DevTools round trips', async
 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator('body')).toHaveClass(/\bpanel-page\b/);
+  await page.locator('[aria-controls="xk-mihomo-sections-menu"]').click();
   await expect(panelTabs).toBeVisible();
 
   const restoredStylesheetCount = await page.locator('link[rel="stylesheet"]').evaluateAll((links) => (
@@ -81,6 +84,8 @@ test('panel navigation style survives generator and DevTools round trips', async
   expect(restoredStylesheetCount).toBe(initialStylesheetCount);
   expect(restoredTabStyle).toEqual(initialTabStyle);
 
+  await page.keyboard.press('Escape');
+  await page.locator('[aria-controls="xk-mihomo-panel-menu"]').click();
   await page.locator('.panel-header .xk-header-btn-devtools').click();
   await expect(page).toHaveURL(/\/devtools$/);
   await expect(page.locator('body')).toHaveClass(/\bdevtools-page\b/);
@@ -88,6 +93,7 @@ test('panel navigation style survives generator and DevTools round trips', async
 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator('body')).toHaveClass(/\bpanel-page\b/);
+  await page.locator('[aria-controls="xk-mihomo-sections-menu"]').click();
   await expect(panelTabs).toBeVisible();
 
   const devtoolsRoundTripStylesheetCount = await page.locator('link[rel="stylesheet"]').evaluateAll((links) => (
@@ -393,7 +399,7 @@ test('mihomo bulk import presents a guided operator flow without legacy blue chr
 
 test('routing Mihomo proxy tools use a compact operator empty state', async ({ page }) => {
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
   await page.locator('#mihomo-clash-tab-config').click();
 
@@ -430,7 +436,7 @@ test('routing Mihomo proxy tools use a compact operator empty state', async ({ p
 
 test('routing Mihomo proxy tools keep a scrollable resize-safe workbench and aligned action labels', async ({ page }) => {
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
   await page.locator('#mihomo-clash-tab-config').click();
 

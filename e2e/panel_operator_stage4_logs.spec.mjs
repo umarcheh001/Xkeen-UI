@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 
 // Расстояние между блоками шапки: gap: 7px у .header-center и соседей.
@@ -69,7 +69,7 @@ async function openLogs(page, theme, viewport) {
   }, theme);
   await mockLogs(page);
   await page.goto('/');
-  await page.locator('.top-tab-btn[data-view="xray-logs"]').click();
+  await selectPanelView(page, 'xray-logs');
   await expect(page.locator('#view-xray-logs')).toBeVisible();
   await expect(page.locator('#xray-log-output')).toContainText('sample ERROR line');
   await expect(page.locator('[data-xk-restart-log="1"]').last()).toContainText('Xray preflight');
