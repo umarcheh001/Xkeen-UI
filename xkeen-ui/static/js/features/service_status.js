@@ -1103,9 +1103,24 @@ let serviceStatusModuleApi = null;
       });
     }
 
+    // Проверка в начале функции устаревает за время запроса: пользователь
+    // успевает нажать start/stop/restart, пока ответ в пути. Такой ответ
+    // описывает состояние ДО операции, и записывать его нельзя — он снимает
+    // признак «идёт операция», после чего операция теряет право показать свой
+    // итог, а сообщение «Перезапускаем xkeen...» висит до конца своего таймера.
+    const isStaleForActiveControl = () => {
+      if (o.allowPending) return false;
+      const now = readControlSnapshot();
+      if (!now.pending) return false;
+      return !(o.requestId && Number(o.requestId) === now.requestId);
+    };
+
     try {
       const snapshot = await fetchServiceStatusSnapshot();
       if (o.requestId && !isActiveControlRequest(o.requestId)) {
+        return readShellSnapshot();
+      }
+      if (isStaleForActiveControl()) {
         return readShellSnapshot();
       }
 
@@ -1117,6 +1132,9 @@ let serviceStatusModuleApi = null;
     } catch (e) {
       console.error('xkeen status error', e);
       if (o.requestId && !isActiveControlRequest(o.requestId)) {
+        return readShellSnapshot();
+      }
+      if (isStaleForActiveControl()) {
         return readShellSnapshot();
       }
 
