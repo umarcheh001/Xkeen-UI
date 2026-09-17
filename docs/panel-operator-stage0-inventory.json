@@ -15006,6 +15006,7 @@
         "xkeen-ui/static/js/features/routing_cards/common.js",
         "xkeen-ui/static/js/features/routing_cards/rules/controls.js",
         "xkeen-ui/static/js/pages/panel.init.js",
+        "xkeen-ui/static/js/pages/panel.mihomo_header.js",
         "xkeen-ui/static/js/pages/panel_shell.shared.js",
         "xkeen-ui/static/js/ui/sections.js"
       ],
