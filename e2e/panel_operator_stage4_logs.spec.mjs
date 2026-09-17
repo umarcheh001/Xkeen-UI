@@ -1,9 +1,5 @@
 import { test, expect, selectPanelView } from './fixtures.mjs';
 
-
-// Расстояние между блоками шапки: gap: 7px у .header-center и соседей.
-const headerGap = 7;
-
 const restartLines = [
   '[2026-07-29 09:10:00] source=routing result=OK file=03_routing.json duration_ms=41\n',
   '[2026-07-29 09:12:00] source=xray-preflight result=FAIL file=04_outbounds.json phase=validation returncode=23 summary=invalid_rule\n',
@@ -104,45 +100,47 @@ async function readLogsGeometry(page) {
 
 
 test.describe('Operator Console Stage 4 logs', () => {
-  // Шапка сознательно ушла от абсолютного центрирования: ядро и бейдж логов
-  // теперь участвуют в потоке, чтобы широкая сводка справа сдвигала их, а не
-  // закрашивала. См. комментарий у .panel-shell-center в panel-operator.css.
-  test('header keeps the Xray status separate from the core selector', async ({ page }) => {
+  test('Xray logs use the compact operator header in desktop and mobile layouts', async ({ page }) => {
     await openLogs(page, 'dark', { width: 1440, height: 900 });
 
-    const geometry = await page.evaluate(() => {
-      const core = document.querySelector('#xkeen-core-text');
-      const badge = document.querySelector('#xray-logs-badge');
-      core.classList.remove('hidden');
-      core.textContent = 'Ядро';
-      badge.dataset.state = 'on';
+    await expect(page.locator('body')).toHaveClass(/xk-operator-header-active/);
+    await expect(page.locator('body')).toHaveClass(/xk-xray-logs-header-active/);
+    await expect(page.locator('body')).not.toHaveClass(/xk-routing-header-active|xk-mihomo-header-active/);
+    await expect(page.locator('.panel-shell-status')).not.toBeInViewport();
+    await expect(page.locator('#xk-mihomo-sections-menu .header-tabs')).toBeAttached();
 
-      const box = (node) => {
-        const rect = node.getBoundingClientRect();
-        return { left: rect.left, right: rect.right, center: rect.left + rect.width / 2, width: rect.width };
-      };
-      const coreBox = box(core);
-      const badgeBox = box(badge);
-      return {
-        core: coreBox,
-        badge: badgeBox,
-        badgePosition: getComputedStyle(badge.parentElement).position,
-        badgeTransform: getComputedStyle(badge.parentElement).transform,
-        headerCenter: box(document.querySelector('.header-center')),
-        headerLeft: box(document.querySelector('.header-title-group')),
-        headerRight: box(document.querySelector('.header-right')),
-        pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      };
-    });
-
-    // Группа стоит в потоке между заголовком и правой сводкой, ничего не перекрывая.
-    expect(geometry.badgePosition).toBe('static');
-    expect(geometry.badgeTransform).toBe('none');
-    expect(geometry.badge.left).toBeGreaterThanOrEqual(geometry.core.right + headerGap);
-    expect(geometry.headerCenter.left).toBeGreaterThanOrEqual(geometry.headerLeft.right + headerGap);
-    expect(geometry.headerCenter.right).toBeLessThanOrEqual(geometry.headerRight.left);
-    expect(geometry.pageOverflow).toBeLessThanOrEqual(1);
+    await page.locator('.xk-brand-service-trigger').click();
+    await expect(page.locator('#xkeen-restart-btn')).toBeVisible();
+    await expect(page.locator('#global-autorestart-xkeen')).toBeVisible();
     await expect(page.locator('#xray-logs-badge use')).toHaveAttribute('href', /#xk-terminal$/);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.xk-brand-service-trigger')).toBeFocused();
+
+    for (const width of [1440, 390, 360]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      const header = await page.locator('.panel-header-shell').boundingBox();
+      const logs = await page.locator('#view-xray-logs > .xk-logs-live-card').boundingBox();
+      expect(logs.y - header.y - header.height).toBeGreaterThanOrEqual(11);
+      expect(logs.y - header.y - header.height).toBeLessThanOrEqual(13);
+
+      for (const id of ['xk-mihomo-sections-menu', 'xk-mihomo-panel-menu', 'xk-mihomo-service-menu']) {
+        await page.locator(`[aria-controls="${id}"]`).click();
+        const box = await page.locator(`#${id}`).boundingBox();
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(width);
+        await page.keyboard.press('Escape');
+      }
+      await page.screenshot({ path: `.tmp/xray-logs-header-dark-${width}.png` });
+    }
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await selectPanelView(page, 'xkeen');
+    await expect(page.locator('body')).not.toHaveClass(/xk-operator-header-active/);
+    await expect(page.locator('.panel-header-shell > .header-tabs')).toBeVisible();
+    await selectPanelView(page, 'xray-logs');
+    await expect(page.locator('body')).toHaveClass(/xk-xray-logs-header-active/);
+    await expect(page.locator('#xkeen-restart-btn')).toHaveCount(1);
   });
 
   test('screen cleanup uses a broom while log-file cleanup retains trash', async ({ page }) => {

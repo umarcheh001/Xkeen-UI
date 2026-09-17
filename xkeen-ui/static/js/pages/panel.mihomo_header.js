@@ -7,7 +7,8 @@ export function initPanelOperatorHeader() {
   const header = document.querySelector('.panel-header-shell');
   const routingView = document.getElementById('view-routing');
   const mihomoView = document.getElementById('view-mihomo');
-  if (!header || (!routingView && !mihomoView)) return;
+  const xrayLogsView = document.getElementById('view-xray-logs');
+  if (!header || (!routingView && !mihomoView && !xrayLogsView)) return;
   initialized = true;
   const byId = (id) => document.getElementById(id);
   const create = (tag, className, text) => {
@@ -79,7 +80,7 @@ export function initPanelOperatorHeader() {
   header.querySelector('.header-main').prepend(sections.container);
   header.querySelector('.header-right').append(panel.container);
 
-  // Compact shell is shared by both routing workspaces. Anchors restore the
+  // Compact shell is shared by the routing and Xray logs workspaces. Anchors restore the
   // legacy shell for the remaining panel sections without cloning controls.
   const moves = [];
   function shellMove(node, target) {
@@ -210,7 +211,7 @@ export function initPanelOperatorHeader() {
   function syncView(name) {
     const focused = (document.activeElement && document.activeElement !== document.body
       && document.activeElement !== document.documentElement) ? document.activeElement : null;
-    const active = name === 'routing' || name === 'mihomo';
+    const active = name === 'routing' || name === 'mihomo' || name === 'xray-logs';
     const focusedMove = focused && active
       ? moves.find(({ node }) => node === focused || node.contains(focused))
       : null;
@@ -228,6 +229,7 @@ export function initPanelOperatorHeader() {
     document.body.classList.toggle('xk-operator-header-active', active);
     document.body.classList.toggle('xk-routing-header-active', name === 'routing');
     document.body.classList.toggle('xk-mihomo-header-active', name === 'mihomo');
+    document.body.classList.toggle('xk-xray-logs-header-active', name === 'xray-logs');
     for (const { node, target, anchor } of moves) {
       if (active && node.parentNode !== target) target.append(node);
       else if (!active && anchor.nextSibling !== node) anchor.after(node);
