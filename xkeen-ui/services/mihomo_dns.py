@@ -2846,6 +2846,7 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
     if partial and not state:
         blockers.append("Обнаружен неполный служебный DNS-блок.")
     can_disable = bool(exact and state)
+    can_reconfigure = bool(enabled and exact and state)
     can_enable = bool(not state and not has_dns and not has_begin and not has_end and core == "mihomo" and group and override is not None)
     return {
         "ok": True,
@@ -2857,6 +2858,7 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         "can_release": can_release,
         "can_enable": can_enable,
         "can_disable": can_disable,
+        "can_reconfigure": can_reconfigure,
         "active_core": core,
         "proxy_group": group or None,
         "proxy_groups": _proxy_groups(text),
@@ -3033,6 +3035,270 @@ def _release_current_dns(
     }
 
 
+def _reconfigure_managed_dns(
+    *,
+    current: str,
+    state: dict[str, Any],
+    status: dict[str, Any],
+    config_file: str,
+    ui_state_dir: str,
+    validate_config: Callable[..., str],
+    save_config: Callable[[str], Any],
+    restart_xkeen: Callable[..., Any],
+    mode: str,
+    fake_ip: Any,
+    geodata: bool,
+    rule_providers: Any,
+    proxy_group: Optional[str],
+    dns_selector: bool,
+    dns_options: Any,
+    upstreams: Any,
+    local_resolvers: Any,
+    local_resolver: Any,
+    local_domains: Any,
+    direct_resolvers: Any,
+    direct_resolver: Any,
+    direct_domains: Any,
+    mobile_bs: bool,
+    repair_legacy_exclusion: bool,
+) -> dict[str, Any]:
+    """Rebuild an exact managed profile without losing its original snapshot."""
+
+    if not status.get("can_reconfigure") or not state:
+        raise MihomoDnsError(
+            "Активный DNS-профиль нельзя безопасно перенастроить.",
+            code="reconfigure_blocked",
+            details=status.get("blockers"),
+        )
+    original_path = str(state.get("original_config") or "")
+    original = _read_text(original_path, None)
+    if original is None or _sha256(original) != str(state.get("original_sha256") or ""):
+        raise MihomoDnsError(
+            "Снимок исходной конфигурации повреждён; перенастройка остановлена.",
+            code="snapshot_invalid",
+        )
+
+    normalized_mode = _normalize_mode(mode)
+    fake_options = (
+        _normalize_fake_ip_options(fake_ip, config_text=current)
+        if normalized_mode == "fake-ip"
+        else None
+    )
+    repair_plan = None
+    repair_result = None
+    if fake_options is not None:
+        route = _fake_ip_route_info(current, fake_options["range"])
+        if not route.get("available"):
+            repair = _fake_ip_repair_status(route)
+            if repair.get("needed") and repair_legacy_exclusion is True:
+                if not repair.get("can_repair"):
+                    raise MihomoDnsError(
+                        str(repair.get("message") or "Стартовый скрипт XKeen нельзя исправить автоматически."),
+                        code=str(repair.get("code") or "fake_ip_repair_unavailable"),
+                        details=repair,
+                    )
+                repair_plan = _legacy_xkeen_repair_plan(str(repair.get("script") or ""))
+            else:
+                code = (
+                    "fake_ip_repair_confirmation_required"
+                    if repair.get("needed") and repair.get("can_repair")
+                    else (
+                        "fake_ip_firewall_excluded"
+                        if route.get("confidence") == "blocked"
+                        else "fake_ip_route_unverified"
+                    )
+                )
+                raise MihomoDnsError(
+                    (
+                        "Подтвердите исправление устаревшего исключения XKeen и включение Fake-IP."
+                        if code == "fake_ip_repair_confirmation_required"
+                        else str(route.get("message") or "Маршрут Fake-IP не подтверждён.")
+                    ),
+                    code=code,
+                    details={"route": route, "repair": repair} if code == "fake_ip_repair_confirmation_required" else route,
+                )
+
+    prepared, group = build_enabled_config(
+        original,
+        str(proxy_group or status.get("proxy_group") or ""),
+        mode=normalized_mode,
+        fake_ip=fake_ip,
+        geodata=geodata,
+        rule_providers=rule_providers,
+        dns_selector=dns_selector is True,
+        dns_options=dns_options,
+        upstreams=upstreams,
+        local_resolvers=local_resolvers,
+        local_resolver=local_resolver,
+        local_domains=local_domains,
+        direct_resolvers=direct_resolvers,
+        direct_resolver=direct_resolver,
+        direct_domains=direct_domains,
+        mobile_bs=mobile_bs,
+    )
+    validation = validate_config(new_content=prepared) or ""
+    if not _validation_ok(validation):
+        raise MihomoDnsError(
+            "Mihomo не подтвердил обновлённую конфигурацию; ничего не изменено.",
+            code="mihomo_preflight_failed",
+            details=validation[-4000:],
+        )
+    if not _mihomo_selected_for_restart():
+        raise MihomoDnsError(
+            "XKeen сейчас настроен на другое ядро; DNS Mihomo не изменён.",
+            code="active_core_changed",
+        )
+
+    backup = None
+    saved = False
+    repair_applied = False
+    try:
+        if repair_plan is not None:
+            repair_result = _apply_legacy_xkeen_repair(
+                repair_plan,
+                ui_state_dir=ui_state_dir,
+                config_file=config_file,
+            )
+            repair_applied = True
+            if not bool(restart_xkeen(source="mihomo-dns-fake-ip-repair")):
+                raise MihomoDnsError(
+                    "XKeen не перезапустился после исправления исключения Fake-IP.",
+                    code="fake_ip_repair_restart_failed",
+                    details=repair_result,
+                )
+            repaired_route = _wait_for_fake_ip_route(current, fake_options["range"])
+            if not repaired_route.get("available"):
+                raise MihomoDnsError(
+                    str(repaired_route.get("message") or "После исправления маршрут Fake-IP не появился."),
+                    code="fake_ip_repair_route_failed",
+                    details={"repair": repair_result, "route": repaired_route},
+                )
+
+        backup = save_config(prepared)
+        saved = True
+        if not bool(restart_xkeen(source="mihomo-dns-reconfigure")):
+            raise MihomoDnsError(
+                "Mihomo не запустился с обновлённой DNS-конфигурацией.",
+                code="mihomo_restart_failed",
+            )
+        if not _wait_for_mihomo() or not _wait_for_port_53(should_be_free=False):
+            raise MihomoDnsError(
+                "Обновлённый DNS-слушатель Mihomo не запустился на порту 53.",
+                code="dns_listener_failed",
+            )
+        applied_route = None
+        if fake_options is not None:
+            applied_route = _wait_for_fake_ip_route(prepared, fake_options["range"])
+            if not applied_route.get("available"):
+                raise MihomoDnsError(
+                    str(applied_route.get("message") or "После перезапуска маршрут Fake-IP не подтверждён."),
+                    code=(
+                        "fake_ip_firewall_excluded"
+                        if applied_route.get("confidence") == "blocked"
+                        else "fake_ip_route_unverified"
+                    ),
+                    details=applied_route,
+                )
+        capture_result = _ensure_mihomo_dns_capture()
+        capture_applied = bool(capture_result.get("ok"))
+        _MIHOMO_DNS_CAPTURE_STATE["active"] = capture_applied
+        probe = _dns_probe()
+        if not probe.get("ok"):
+            raise MihomoDnsError(
+                "Mihomo запущен, но обновлённый защищённый DNS не ответил.",
+                code="dns_probe_failed",
+                details=probe,
+            )
+
+        normalized_options = _normalize_dns_options({
+            "tunnel": upstreams,
+            "local_resolvers": local_resolvers if local_resolvers is not None else local_resolver,
+            "local_domains": local_domains,
+            "direct_resolvers": direct_resolvers if direct_resolvers is not None else direct_resolver,
+            "direct_domains": direct_domains,
+        } if any(value is not None for value in (
+            upstreams,
+            local_resolvers,
+            local_resolver,
+            local_domains,
+            direct_resolvers,
+            direct_resolver,
+            direct_domains,
+        )) else dns_options, mode=normalized_mode)
+        next_state = dict(state)
+        next_state.update({
+            "enabled": True,
+            "updated_at": int(time.time()),
+            "applied_sha256": _sha256(prepared),
+            "dns_capture": capture_applied,
+            "proxy_group": group,
+            "listen": DNS_LISTEN,
+            "mode": normalized_mode,
+            "fake_ip": ({k: v for k, v in fake_options.items() if k != "network"} if fake_options else None),
+            "dns_selector": {
+                "enabled": True,
+                "name": DNS_SELECTOR_NAME,
+                "upstream": group,
+            } if dns_selector is True else None,
+            "rule_providers": _normalize_domain_rule_providers(rule_providers) if normalized_mode == "fake-ip" and not geodata else [],
+            "mobile_bs": bool(mobile_bs),
+            "dns_options": normalized_options,
+            "xkeen_repair": repair_result or state.get("xkeen_repair"),
+        })
+        _save_state(ui_state_dir, config_file, next_state)
+        _clear_release(ui_state_dir, config_file)
+        return {
+            "ok": True,
+            "enabled": True,
+            "reconfigured": True,
+            "proxy_group": group,
+            "listen": DNS_LISTEN,
+            "mode": normalized_mode,
+            "fake_ip": next_state["fake_ip"],
+            "fake_ip_route": applied_route,
+            "dns_selector": next_state["dns_selector"],
+            "rule_providers": next_state["rule_providers"],
+            "mobile_bs": bool(mobile_bs),
+            "dns_options": normalized_options,
+            "backup": str(getattr(backup, "filename", "") or "") or None,
+            "probe": probe,
+        }
+    except Exception as exc:
+        rollback_errors: list[str] = []
+        if saved:
+            try:
+                save_config(current)
+            except Exception as rollback_exc:
+                rollback_errors.append(str(rollback_exc))
+        if repair_applied and repair_plan is not None:
+            try:
+                _restore_legacy_xkeen_repair(repair_plan)
+            except Exception as rollback_exc:
+                rollback_errors.append(str(rollback_exc))
+        if saved or repair_applied:
+            try:
+                restart_xkeen(source="mihomo-dns-reconfigure-rollback")
+            except Exception as rollback_exc:
+                rollback_errors.append(str(rollback_exc))
+        if state.get("dns_capture"):
+            try:
+                _MIHOMO_DNS_CAPTURE_STATE["active"] = True
+                _ensure_mihomo_dns_capture()
+            except Exception as rollback_exc:
+                rollback_errors.append(str(rollback_exc))
+        if isinstance(exc, MihomoDnsError):
+            exc.rolled_back = bool(saved or repair_applied)
+            if rollback_errors:
+                exc.details = {"cause": exc.details, "rollback": rollback_errors}
+            raise
+        raise MihomoDnsError(
+            "Не удалось обновить DNS Mihomo; предыдущая конфигурация восстановлена.",
+            code="reconfigure_failed",
+            details={"cause": str(exc), "rollback": rollback_errors},
+            rolled_back=bool(saved or repair_applied),
+        ) from exc
+
+
 def apply_action(
     action: str,
     *,
@@ -3059,7 +3325,7 @@ def apply_action(
     repair_legacy_exclusion: bool = False,
 ) -> dict[str, Any]:
     normalized = str(action or "").strip().lower()
-    if normalized not in {"enable", "disable", "release"}:
+    if normalized not in {"enable", "disable", "release", "reconfigure"}:
         raise MihomoDnsError("Неизвестное действие DNS Mihomo.", code="invalid_action")
 
     with _LOCK:
@@ -3071,6 +3337,34 @@ def apply_action(
         # not reuse data left by a previous panel request.
         _RUNNING_CONFIG_CACHE.clear()
         original_override, _detail = _dns_override_status()
+
+        if normalized == "reconfigure":
+            return _reconfigure_managed_dns(
+                current=current,
+                state=state,
+                status=status,
+                config_file=config_file,
+                ui_state_dir=ui_state_dir,
+                validate_config=validate_config,
+                save_config=save_config,
+                restart_xkeen=restart_xkeen,
+                mode=mode,
+                fake_ip=fake_ip,
+                geodata=geodata,
+                rule_providers=rule_providers,
+                proxy_group=proxy_group,
+                dns_selector=dns_selector,
+                dns_options=dns_options,
+                upstreams=upstreams,
+                local_resolvers=local_resolvers,
+                local_resolver=local_resolver,
+                local_domains=local_domains,
+                direct_resolvers=direct_resolvers,
+                direct_resolver=direct_resolver,
+                direct_domains=direct_domains,
+                mobile_bs=mobile_bs,
+                repair_legacy_exclusion=repair_legacy_exclusion,
+            )
 
         if normalized == "enable":
             if not status.get("can_enable"):

@@ -76,6 +76,7 @@ const MIHOMO_ENABLED = {
   prepared: true,
   can_enable: false,
   can_disable: true,
+  can_reconfigure: true,
   dns_override: true,
   dns_present: true,
   dns_enabled: true,
@@ -299,6 +300,43 @@ test('Mihomo DNS: optional DNS Proxy selector reaches the activation payload', a
   await expect.poll(() => postBodies.length).toBe(1);
   expect(postBodies[0].dns_selector).toBe(true);
   expect(postBodies[0].proxy_group).toBe('PROXY');
+});
+
+test('Mihomo DNS: active managed profile can be reconfigured transactionally', async ({ page }) => {
+  const status = {
+    ...structuredClone(MIHOMO_ENABLED),
+    proxy_groups: ['PROXY'],
+    dns_options: {
+      tunnel: ['https://8.8.8.8/dns-query'],
+      local_resolvers: [],
+      local_domains: [],
+      direct_resolvers: [],
+      direct_domains: [],
+    },
+  };
+  const postBodies = [];
+  await openMihomo(page, status);
+  await page.route('**/api/mihomo/dns', async (route) => {
+    if (route.request().method() === 'POST') {
+      postBodies.push(route.request().postDataJSON());
+      await route.fulfill({ json: { ok: true, reconfigured: true, probe: { ok: true, latency_ms: 9 } } });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await expect(page.locator('#mihomo-dns-listener-state')).toHaveText('Mihomo :53 · включён');
+  await expect(page.locator('#mihomo-dns-override-state')).toHaveText('Keenetic override · включён');
+  await expect(page.locator('#mihomo-dns-update')).toBeVisible();
+  await expect(page.locator('#mihomo-dns-tunnel-servers')).toBeEnabled();
+  await page.locator('#mihomo-dns-tunnel-servers').fill('https://9.9.9.9/dns-query');
+  await page.locator('#mihomo-dns-update').click();
+  await expect(page.locator('#confirm-modal')).toContainText('При ошибке будет возвращена предыдущая рабочая конфигурация');
+  await page.locator('#confirm-modal-ok-btn').click();
+
+  await expect.poll(() => postBodies.length).toBe(1);
+  expect(postBodies[0].action).toBe('reconfigure');
+  expect(postBodies[0].dns_options.tunnel).toEqual(['https://9.9.9.9/dns-query']);
 });
 
 test('Mihomo DNS: rule-provider buttons fill the fake-ip payload', async ({ page }) => {

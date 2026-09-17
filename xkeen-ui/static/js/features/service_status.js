@@ -1,6 +1,7 @@
 import { getRestartLogApi as getRestartLogFeatureApi } from './restart_log.js';
 import {
   closeXkeenModal,
+  confirmXkeenAction,
   dismissXkeenToast,
   getXkeenCommandJobApi,
   getXkeenModalApi,
@@ -22,6 +23,7 @@ let serviceStatusModuleApi = null;
   let _coreModalLoading = false;
   let _shellUnsubscribe = null;
   let _activeControlPromise = null;
+  let _activeStopRequestPromise = null;
   let _controlRequestSeq = 0;
 
   function hasServiceStatusHost() {
@@ -539,7 +541,7 @@ let serviceStatusModuleApi = null;
     return normalizeAction(action) === 'restart' ? 25000 : 12000;
   }
 
-  async function postControlRequest(url, action) {
+  async function postControlRequest(url, action, payload) {
     const timeoutMs = controlRequestTimeoutMs(action);
     const controller = typeof AbortController === 'function' ? new AbortController() : null;
     const timer = controller
@@ -549,8 +551,12 @@ let serviceStatusModuleApi = null;
       : null;
 
     try {
+      const hasPayload = payload && typeof payload === 'object';
+      const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
       return await fetch(url, {
         method: 'POST',
+        headers: hasPayload ? { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf } : undefined,
+        body: hasPayload ? JSON.stringify(payload) : undefined,
         signal: controller ? controller.signal : undefined,
       });
     } finally {
@@ -696,8 +702,46 @@ let serviceStatusModuleApi = null;
     return false;
   }
 
-  function controlXkeen(action) {
+  async function prepareStopPayload() {
+    try {
+      const response = await fetch('/api/xkeen/stop-check', { cache: 'no-store' });
+      const data = await response.json().catch(() => ({}));
+      const protection = data && data.dns_protection;
+      if (!response.ok || !protection || protection.active !== true) return {};
+      const label = String(protection.label || 'защищённый DNS');
+      const confirmed = await confirmXkeenAction({
+        title: 'Вернуть DNS Keenetic и остановить?',
+        message: `Сейчас активна ${label}. Простая остановка xkeen оставит устройства без DNS.`,
+        details: 'Панель сначала безопасно отключит защиту, вернёт порт 53 прошивке Keenetic и только затем остановит сервис.',
+        okText: 'Вернуть DNS и остановить',
+        cancelText: 'Отмена',
+        danger: true,
+      });
+      return confirmed ? { release_dns: true } : null;
+    } catch (e) {
+      // The POST endpoint repeats this check and fails closed if DNS is active.
+      return {};
+    }
+  }
+
+  function requestSafeStop() {
+    if (_activeStopRequestPromise) return _activeStopRequestPromise;
+    let requestPromise = null;
+    requestPromise = (async () => {
+      if (isControlPending()) return _activeControlPromise || false;
+      const payload = await prepareStopPayload();
+      if (payload === null) return false;
+      return controlXkeen('stop', { payload });
+    })().finally(() => {
+      if (_activeStopRequestPromise === requestPromise) _activeStopRequestPromise = null;
+    });
+    _activeStopRequestPromise = requestPromise;
+    return requestPromise;
+  }
+
+  function controlXkeen(action, options) {
     const normalizedAction = normalizeAction(action);
+    const controlOptions = options && typeof options === 'object' ? options : {};
     const map = {
       start: '/api/xkeen/start',
       stop: '/api/xkeen/stop',
@@ -787,7 +831,7 @@ let serviceStatusModuleApi = null;
           return settled;
         }
 
-        const res = await postControlRequest(url, normalizedAction);
+        const res = await postControlRequest(url, normalizedAction, controlOptions.payload);
         const data = await readControlResponseData(res, normalizedAction);
         const ok = !!res.ok && (!data || data.ok !== false);
         const failureMessage = ok
@@ -857,7 +901,7 @@ let serviceStatusModuleApi = null;
       stopBtn.addEventListener('click', (e) => {
         e.preventDefault();
         if (stopBtn.disabled) return;
-        void controlXkeen('stop');
+        void requestSafeStop();
       });
       if (stopBtn.dataset) stopBtn.dataset.xkeenBound = '1';
     }

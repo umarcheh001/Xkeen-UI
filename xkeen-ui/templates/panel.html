@@ -2902,6 +2902,11 @@
           <div class="routing-dns-over-vless-state mihomo-dns-state">
             <div id="mihomo-dns-status" class="routing-dns-over-vless-status" role="status" aria-live="polite">Проверяем текущую конфигурацию…</div>
 
+            <div class="mihomo-dns-runtime-status" aria-label="Состояние DNS-тракта">
+              <span id="mihomo-dns-listener-state" data-state="unknown">Mihomo :53 · проверка</span>
+              <span id="mihomo-dns-override-state" data-state="unknown">Keenetic override · проверка</span>
+            </div>
+
             <div class="routing-dns-over-vless-safety" aria-label="Защита операции">
               <div>{{ op_icon('validate') }}<span><b>Mihomo preflight</b><small>Проверка временного YAML до записи</small></span></div>
               <div>{{ op_icon('backup') }}<span><b>Полный снимок</b><small>Исходный config.yaml и DNS override</small></span></div>
@@ -3020,6 +3025,7 @@ rule-set:category-ai@domain
           </div>
         </div>
         <div class="modal-actions routing-dns-over-vless-actions">
+          <button type="button" id="mihomo-dns-update" class="btn-secondary" hidden disabled>{{ op_icon('save') }}<span id="mihomo-dns-update-label" class="xk-action-label">Применить изменения</span></button>
           <button type="button" id="mihomo-dns-cancel" class="btn-secondary" data-operator-dismiss-duplicate="true">Закрыть</button>
           <button type="button" id="mihomo-dns-apply" class="btn-primary" disabled>Проверяем…</button>
         </div>

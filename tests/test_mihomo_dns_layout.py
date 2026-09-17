@@ -69,5 +69,15 @@ def test_existing_runtime_hooks_remain_inside_the_modal():
         "mihomo-dns-selector-enable",
         "mihomo-dns-geodata-enable",
         "mihomo-dns-rule-providers",
+        "mihomo-dns-listener-state",
+        "mihomo-dns-override-state",
+        "mihomo-dns-update",
     ):
         assert f'id="{element_id}"' in MODAL, element_id
+
+
+def test_active_managed_dns_has_a_separate_reconfigure_action():
+    script = (ROOT / "xkeen-ui/static/js/features/mihomo_dns.js").read_text(encoding="utf-8")
+    assert "current?.can_reconfigure" in script
+    assert "postAction('reconfigure')" in script
+    assert "Настройки защищённого DNS применены" in script

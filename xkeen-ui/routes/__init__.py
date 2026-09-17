@@ -50,6 +50,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     from .mihomo import create_mihomo_blueprint
     from .mihomo_clash import create_mihomo_clash_blueprint
     from services.mihomo_clash_cache import get_shared_mihomo_clash_cache
+    from services.dns_service_lifecycle import get_stop_protection, release_for_service_stop
     from .backups import create_backups_blueprint
     from .service import create_service_blueprint
     from .xray_logs import create_xray_logs_blueprint
@@ -161,6 +162,18 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
             read_restart_log=ctx.read_restart_log,
             clear_restart_log=ctx.clear_restart_log,
             read_operation_diagnostic=ctx.read_operation_diagnostic,
+            dns_stop_status=lambda: get_stop_protection(
+                ui_state_dir=ctx.ui_state_dir,
+                mihomo_config_file=ctx.mihomo_config_file,
+            ),
+            dns_stop_release=lambda owner: release_for_service_stop(
+                expected_owner=owner,
+                configs_dir=ctx.xray_configs_dir,
+                routing_file=ctx.routing_file,
+                ui_state_dir=ctx.ui_state_dir,
+                mihomo_config_file=ctx.mihomo_config_file,
+                restart_xkeen=ctx.restart_xkeen,
+            ),
         )
     )
 

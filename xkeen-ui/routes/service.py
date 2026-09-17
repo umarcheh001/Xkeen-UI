@@ -49,6 +49,8 @@ def create_service_blueprint(
     read_restart_log: Callable[..., list[str]] | None = None,
     clear_restart_log: Callable[..., None] | None = None,
     read_operation_diagnostic: Callable[..., dict[str, Any] | None] | None = None,
+    dns_stop_status: Callable[[], dict[str, Any]] | None = None,
+    dns_stop_release: Callable[[str], dict[str, Any]] | None = None,
 ) -> Blueprint:
     """Create blueprint with xkeen service-control endpoints."""
     bp = Blueprint("service", __name__)
@@ -155,6 +157,12 @@ def create_service_blueprint(
         except Exception:
             return ""
 
+    def _dns_stop_snapshot() -> dict[str, Any]:
+        if dns_stop_status is None:
+            return {"active": False, "owner": "", "label": ""}
+        snapshot = dns_stop_status()
+        return snapshot if isinstance(snapshot, dict) else {"active": False, "owner": "", "label": ""}
+
     def _core_switch_meta(
         *,
         core: str,
@@ -238,15 +246,75 @@ def create_service_blueprint(
             return jsonify({"ok": False}), 500
 
 
+    @bp.get("/api/xkeen/stop-check")
+    def api_xkeen_stop_check() -> Any:
+        try:
+            return jsonify({"ok": True, "dns_protection": _dns_stop_snapshot()}), 200
+        except Exception as e:  # noqa: BLE001
+            return _service_exception(
+                "Не удалось проверить защищённый DNS перед остановкой xkeen.",
+                code="dns_stop_check_failed",
+                hint="Остановка отменена, чтобы не оставить сеть без DNS.",
+                exc=e,
+                status=503,
+            )
+
+
     @bp.post("/api/xkeen/stop")
     def api_xkeen_stop() -> Any:
         started_at = time.monotonic()
+        data = request.get_json(silent=True) or {}
+        try:
+            protection = _dns_stop_snapshot()
+        except Exception as e:  # noqa: BLE001
+            return _service_exception(
+                "Не удалось проверить защищённый DNS перед остановкой xkeen.",
+                code="dns_stop_check_failed",
+                hint="Остановка отменена, чтобы не оставить сеть без DNS.",
+                exc=e,
+                status=503,
+            )
+
+        dns_release = None
+        if protection.get("active"):
+            if data.get("release_dns") is not True:
+                label = str(protection.get("label") or "защита DNS")
+                return _service_error(
+                    f"Активна {label}. Перед остановкой верните DNS прошивке Keenetic.",
+                    409,
+                    code="dns_protection_active",
+                    hint="Подтвердите безопасное отключение DNS и повторите остановку.",
+                    dns_protection=protection,
+                )
+            if dns_stop_release is None:
+                return _service_error(
+                    "Безопасное отключение DNS перед остановкой недоступно.",
+                    503,
+                    code="dns_stop_release_unavailable",
+                    hint="Остановите защищённый DNS в его окне и повторите.",
+                    dns_protection=protection,
+                )
+            try:
+                dns_release = dns_stop_release(str(protection.get("owner") or ""))
+            except Exception as e:  # noqa: BLE001
+                return _service_exception(
+                    "Не удалось вернуть DNS прошивке Keenetic; xkeen не остановлен.",
+                    code="dns_stop_release_failed",
+                    hint="Проверьте состояние DNS в панели и повторите.",
+                    exc=e,
+                    status=409,
+                )
+
         try:
             ok = control_xkeen_action("stop", prefer_init=True)
             _append_restart_log(ok, source="api-stop", **_restart_log_runtime_meta(started_at))
             if ok:
                 _core_log("info", "xkeen.stop", source="api-stop")
-                return jsonify({"ok": True}), 200
+                return jsonify({
+                    "ok": True,
+                    "dns_released": bool(dns_release and dns_release.get("released")),
+                    "dns_release": dns_release,
+                }), 200
             _core_log("error", "xkeen.stop_failed", source="api-stop")
             return jsonify({"ok": False}), 500
         except Exception:

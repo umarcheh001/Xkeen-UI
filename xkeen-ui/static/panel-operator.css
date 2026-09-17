@@ -14308,6 +14308,47 @@ body.panel-page #mihomo-dns-modal .mihomo-dns-state {
   min-width: 0;
 }
 
+body.panel-page #mihomo-dns-modal .mihomo-dns-runtime-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+body.panel-page #mihomo-dns-modal .mihomo-dns-runtime-status > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-control-radius);
+  background: var(--op-surface-3);
+  color: var(--op-muted);
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 620;
+  line-height: 1.25;
+}
+
+body.panel-page #mihomo-dns-modal .mihomo-dns-runtime-status > [data-state="enabled"] {
+  border-color: color-mix(in srgb, #22c55e 48%, var(--op-border));
+  color: #4ade80;
+  background: color-mix(in srgb, #16a34a 12%, var(--op-surface-3));
+}
+
+body.panel-page #mihomo-dns-modal .mihomo-dns-runtime-status > [data-state="off"] {
+  border-color: color-mix(in srgb, #f59e0b 42%, var(--op-border));
+  color: #fbbf24;
+  background: color-mix(in srgb, #d97706 10%, var(--op-surface-3));
+}
+
+html[data-theme="light"] body.panel-page #mihomo-dns-modal .mihomo-dns-runtime-status > [data-state="enabled"] {
+  color: #15803d;
+}
+
+html[data-theme="light"] body.panel-page #mihomo-dns-modal .mihomo-dns-runtime-status > [data-state="off"] {
+  color: #a16207;
+}
+
 body.panel-page #mihomo-dns-modal .mihomo-dns-foot {
   grid-area: foot;
   display: grid;

@@ -14,8 +14,12 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     close: 'mihomo-dns-close',
     cancel: 'mihomo-dns-cancel',
     apply: 'mihomo-dns-apply',
+    update: 'mihomo-dns-update',
+    updateLabel: 'mihomo-dns-update-label',
     badge: 'mihomo-dns-badge',
     status: 'mihomo-dns-status',
+    listenerState: 'mihomo-dns-listener-state',
+    overrideState: 'mihomo-dns-override-state',
     details: 'mihomo-dns-details',
     mode: 'mihomo-dns-mode',
     modeHint: 'mihomo-dns-mode-hint',
@@ -240,15 +244,16 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
   function syncRuleProviderUi(data) {
     const container = $(IDS.ruleProviders);
     const geodataEnabled = !!$(IDS.geodataEnable)?.checked;
-    const enabled = !!data?.enabled || !!data?.can_disable || !!data?.tampered;
+    const isConfigured = !!data?.enabled || !!data?.can_disable || !!data?.tampered;
+    const locked = busy || (isConfigured && !data?.can_reconfigure);
     if (container) container.classList.toggle('hidden', geodataEnabled);
 
     if (!providerSelectionTouched && !busy && data) {
-      const configured = data?.geodata?.domain_providers || data?.geodata?.rule_providers || {};
+      const providerConfig = data?.geodata?.domain_providers || data?.geodata?.rule_providers || {};
       const selected = new Set();
-      if (enabled) {
+      if (isConfigured) {
         DOMAIN_RULE_PROVIDER_FILTERS
-          .filter(([name]) => configured?.[name]?.configured)
+          .filter(([name]) => providerConfig?.[name]?.configured)
           .forEach(([name]) => selected.add(name));
       } else {
         DOMAIN_RULE_PROVIDER_FILTERS.forEach(([name]) => selected.add(name));
@@ -259,7 +264,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     DOMAIN_RULE_PROVIDER_FILTERS.forEach(([, , id]) => setRuleProviderButton(
       id,
       $(id)?.getAttribute('aria-pressed') === 'true',
-      enabled || geodataEnabled,
+      locked || geodataEnabled,
     ));
 
     const selected = selectedRuleProviders();
@@ -277,6 +282,8 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
 
   function syncApplyControl(data) {
     const apply = $(IDS.apply);
+    const update = $(IDS.update);
+    const updateLabel = $(IDS.updateLabel);
     if (!apply) return;
     const enabled = !!data?.enabled;
     const canDisable = !!data?.can_disable;
@@ -300,6 +307,20 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
               : 'Включить защищённый DNS'))));
     apply.classList.toggle('btn-danger', enabled || canDisable || canRelease);
     apply.classList.toggle('btn-primary', !enabled && !canDisable && !canRelease);
+    if (update) {
+      const canReconfigure = !!data?.can_reconfigure;
+      update.hidden = !canReconfigure;
+      update.disabled = busy || !canReconfigure;
+      if (updateLabel) updateLabel.textContent = busy ? 'Применяется…' : 'Применить изменения';
+    }
+  }
+
+  function setRuntimeState(id, value, enabledText, disabledText) {
+    const element = $(id);
+    if (!element) return;
+    const known = value === true || value === false;
+    element.dataset.state = known ? (value ? 'enabled' : 'off') : 'unknown';
+    element.textContent = known ? (value ? enabledText : disabledText) : `${enabledText.split(' · ')[0]} · неизвестно`;
   }
 
   function render(data) {
@@ -336,10 +357,12 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
 
     const enabled = !!data?.enabled;
     const canDisable = !!data?.can_disable;
+    const canReconfigure = !!data?.can_reconfigure;
     const canRecover = !!data?.can_recover;
     const canRelease = !!data?.can_release;
     const blocked = !enabled && !canDisable && !canRecover && !canRelease && !data?.can_enable;
     const altered = !!data?.tampered;
+    const settingsLocked = busy || ((enabled || canDisable || altered) && !canReconfigure);
     const releaseRecord = guardRelease(data);
     const released = !enabled && !!releaseRecord;
     const releasedByUser = released && releaseRecord?.source === 'user';
@@ -364,9 +387,9 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     if (dnsSelectorEnable && !busy) dnsSelectorEnable.checked = !!selectorInfo.enabled;
     if (mobileBsEnable && !busy) mobileBsEnable.checked = data?.mobile_bs === true;
     if (dnsSelectorEnable) {
-      dnsSelectorEnable.disabled = enabled || canDisable || altered || selectorInfo.conflict === true;
+      dnsSelectorEnable.disabled = settingsLocked || selectorInfo.conflict === true;
     }
-    if (mobileBsEnable) mobileBsEnable.disabled = enabled || canDisable || altered;
+    if (mobileBsEnable) mobileBsEnable.disabled = settingsLocked;
     if (mobileBsHint) mobileBsHint.textContent = 'БС получают Yandex Safe DoT и реальные IP; остальные запросы — DoT Cloudflare/Google. Добавляется whitelist-yota и исключение Fake-IP.';
     if (dnsSelectorHint) {
       const upstream = selectorInfo.upstream || proxyGroup?.value || 'выбранный маршрут';
@@ -382,6 +405,12 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     }
     if (fakeOptions) fakeOptions.classList.toggle('hidden', (mode?.value || data?.mode) !== 'fake-ip');
     if (geodataEnable && !busy && geodata) geodataEnable.checked = !!(geodata.enabled || geodata.geosite_configured);
+    const fakeIp = data?.fake_ip || null;
+    if (!busy && fakeIp) {
+      if ($(IDS.fakeRange) && fakeIp.range) $(IDS.fakeRange).value = fakeIp.range;
+      if ($(IDS.fakeFilterMode) && fakeIp.filter_mode) $(IDS.fakeFilterMode).value = fakeIp.filter_mode;
+      if ($(IDS.fakeFilters) && Array.isArray(fakeIp.filters)) $(IDS.fakeFilters).value = fakeIp.filters.join('\n');
+    }
     syncRuleProviderUi(data);
     if ((mode?.value || data?.mode) === 'fake-ip') syncFakeIpFilters(!!geodataEnable?.checked);
     if (modeHint) modeHint.textContent = (mode?.value || data?.mode) === 'fake-ip'
@@ -394,13 +423,34 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       geodataHint.classList.toggle('hidden', !useGeodata);
       geodataHint.classList.remove('is-warning', 'is-ok');
     }
-    if (mode) mode.disabled = enabled || canDisable || altered;
-    if (geodataEnable) geodataEnable.disabled = enabled || canDisable || altered;
-    if (proxyGroup) proxyGroup.disabled = enabled || canDisable || altered;
-    [IDS.tunnelServers, IDS.localServers, IDS.localDomains, IDS.directServers, IDS.directDomains].forEach((id) => {
+    if (mode) mode.disabled = settingsLocked;
+    if (geodataEnable) geodataEnable.disabled = settingsLocked;
+    if (proxyGroup) proxyGroup.disabled = settingsLocked;
+    [
+      IDS.tunnelServers,
+      IDS.localServers,
+      IDS.localDomains,
+      IDS.directServers,
+      IDS.directDomains,
+      IDS.fakeRange,
+      IDS.fakeFilterMode,
+      IDS.fakeFilters,
+    ].forEach((id) => {
       const field = $(id);
-      if (field) field.disabled = enabled || canDisable || altered;
+      if (field) field.disabled = settingsLocked;
     });
+    setRuntimeState(
+      IDS.listenerState,
+      data?.dns_listener_configured,
+      'Mihomo :53 · включён',
+      'Mihomo :53 · выключен',
+    );
+    setRuntimeState(
+      IDS.overrideState,
+      data?.dns_override,
+      'Keenetic override · включён',
+      'Keenetic override · выключен',
+    );
     const state = enabled && !fakeRouteUnready ? 'enabled' : ((canDisable || canRecover || canRelease || blocked || altered || released || fakeRouteUnready) ? 'blocked' : 'ready');
     if (badge) {
       badge.dataset.state = state;
@@ -492,6 +542,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     const badge = $(IDS.badge);
     const status = $(IDS.status);
     const apply = $(IDS.apply);
+    const update = $(IDS.update);
     if (badge) {
       badge.dataset.state = 'blocked';
       badge.textContent = 'Ошибка проверки';
@@ -501,6 +552,12 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       apply.disabled = true;
       apply.textContent = 'Недоступно';
     }
+    if (update) {
+      update.hidden = true;
+      update.disabled = true;
+    }
+    setRuntimeState(IDS.listenerState, null, 'Mihomo :53 · включён', 'Mihomo :53 · выключен');
+    setRuntimeState(IDS.overrideState, null, 'Keenetic override · включён', 'Keenetic override · выключен');
   }
 
   async function refresh() {
@@ -521,7 +578,41 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     if ($(IDS.status)) $(IDS.status).textContent = 'Проверяем текущую конфигурацию…';
     if ($(IDS.badge)) $(IDS.badge).textContent = 'Проверка…';
     if ($(IDS.apply)) $(IDS.apply).disabled = true;
+    if ($(IDS.update)) $(IDS.update).disabled = true;
     await refresh();
+  }
+
+  async function reconfigure() {
+    if (busy || !current?.can_reconfigure) return;
+    const message = 'Панель соберёт новый DNS-блок из исходного снимка, проверит временный YAML, перезапустит Mihomo и выполнит DNS-пробу. При ошибке будет возвращена предыдущая рабочая конфигурация.';
+    const confirmed = await confirmMihomoAction({
+      title: 'Применить настройки DNS?',
+      message,
+      okText: 'Применить',
+      cancelText: 'Отмена',
+      danger: false,
+    }, message);
+    if (!confirmed) return;
+
+    busy = true;
+    render(current);
+    try {
+      const result = await postAction('reconfigure');
+      toastXkeen(`Настройки защищённого DNS применены${result?.probe?.latency_ms != null ? ` · ${result.probe.latency_ms} мс` : ''}`, 'success');
+      const panel = getMihomoPanelApi();
+      if (panel && typeof panel.reloadFromDiskIfClean === 'function') {
+        await panel.reloadFromDiskIfClean();
+      }
+      await refresh();
+    } catch (error) {
+      const data = error?.data || null;
+      const messageText = String(data?.error || error?.message || 'Настройки не применены.');
+      toastXkeen(`${messageText}${data?.rolled_back ? ' Предыдущая конфигурация восстановлена.' : ''}`, 'error');
+      await refresh();
+    } finally {
+      busy = false;
+      render(current || {});
+    }
   }
 
   async function apply() {
@@ -587,6 +678,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
       if (!busy) showModal(false);
     }));
     $(IDS.apply)?.addEventListener('click', (event) => { event.preventDefault(); void apply(); });
+    $(IDS.update)?.addEventListener('click', (event) => { event.preventDefault(); void reconfigure(); });
     $(IDS.proxyGroup)?.addEventListener('change', () => {
       const hint = $(IDS.dnsSelectorHint);
       if (!hint || current?.dns_selector?.enabled || current?.dns_selector?.conflict) return;

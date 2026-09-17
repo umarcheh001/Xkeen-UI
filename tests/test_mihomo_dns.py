@@ -907,6 +907,105 @@ dns-proxy
     assert saved_state["original_dns_policy"]["provider_interfaces"][0]["ipv6_ignored"] is False
 
 
+def test_reconfigure_updates_exact_managed_dns_and_keeps_original_snapshot(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    prepared, group = dns.build_enabled_config(BASE)
+    config.write_text(prepared, encoding="utf-8")
+    snapshot = tmp_path / "before.yaml"
+    snapshot.write_text(BASE, encoding="utf-8")
+    dns._save_state(str(state), str(config), {
+        "enabled": True,
+        "original_config": str(snapshot),
+        "original_sha256": dns._sha256(BASE),
+        "applied_sha256": dns._sha256(prepared),
+        "original_dns_override": False,
+        "proxy_group": group,
+        "dns_capture": True,
+    })
+    calls: list[object] = []
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    monkeypatch.setattr(dns, "_wait_for_mihomo", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda **_kwargs: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda: {"ok": True, "latency_ms": 7})
+    monkeypatch.setattr(dns, "_ensure_mihomo_dns_capture", lambda: {"ok": True})
+
+    def save_config(content):
+        calls.append(("save", content))
+        config.write_text(content, encoding="utf-8")
+        return type("Backup", (), {"filename": "managed.yaml"})()
+
+    result = dns.apply_action(
+        "reconfigure",
+        config_file=str(config),
+        ui_state_dir=str(state),
+        validate_config=lambda **kwargs: calls.append(("validate", kwargs["new_content"])) or "[exit code: 0]",
+        save_config=save_config,
+        restart_xkeen=lambda **kwargs: calls.append(("restart", kwargs["source"])) or True,
+        dns_selector=True,
+        dns_options={"tunnel": ["https://9.9.9.9/dns-query"]},
+    )
+
+    updated = config.read_text(encoding="utf-8")
+    saved_state = json.loads((state / "mihomo-dns" / dns.STATE_FILENAME).read_text(encoding="utf-8"))
+    assert result["reconfigured"] is True
+    assert "https://9.9.9.9/dns-query#DNS Proxy" in updated
+    assert "name: 'DNS Proxy'" in updated
+    assert snapshot.read_text(encoding="utf-8") == BASE
+    assert saved_state["original_sha256"] == dns._sha256(BASE)
+    assert saved_state["applied_sha256"] == dns._sha256(updated)
+    assert saved_state["dns_selector"]["enabled"] is True
+    assert ("restart", "mihomo-dns-reconfigure") in calls
+
+
+def test_reconfigure_probe_failure_restores_previous_managed_config(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    prepared, group = dns.build_enabled_config(BASE)
+    config.write_text(prepared, encoding="utf-8")
+    snapshot = tmp_path / "before.yaml"
+    snapshot.write_text(BASE, encoding="utf-8")
+    dns._save_state(str(state), str(config), {
+        "enabled": True,
+        "original_config": str(snapshot),
+        "original_sha256": dns._sha256(BASE),
+        "applied_sha256": dns._sha256(prepared),
+        "original_dns_override": False,
+        "proxy_group": group,
+        "dns_capture": True,
+    })
+    calls: list[object] = []
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    monkeypatch.setattr(dns, "_wait_for_mihomo", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda **_kwargs: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda: {"ok": False, "error": "timeout"})
+    monkeypatch.setattr(dns, "_ensure_mihomo_dns_capture", lambda: {"ok": True})
+
+    def save_config(content):
+        calls.append(("save", content))
+        config.write_text(content, encoding="utf-8")
+        return type("Backup", (), {"filename": "managed.yaml"})()
+
+    with pytest.raises(dns.MihomoDnsError) as captured:
+        dns.apply_action(
+            "reconfigure",
+            config_file=str(config),
+            ui_state_dir=str(state),
+            validate_config=lambda **_kwargs: "[exit code: 0]",
+            save_config=save_config,
+            restart_xkeen=lambda **kwargs: calls.append(("restart", kwargs["source"])) or True,
+            dns_options={"tunnel": ["https://9.9.9.9/dns-query"]},
+        )
+
+    saved_state = json.loads((state / "mihomo-dns" / dns.STATE_FILENAME).read_text(encoding="utf-8"))
+    assert captured.value.code == "dns_probe_failed"
+    assert captured.value.rolled_back is True
+    assert config.read_text(encoding="utf-8") == prepared
+    assert saved_state["applied_sha256"] == dns._sha256(prepared)
+    assert calls[-2:] == [
+        ("save", prepared),
+        ("restart", "mihomo-dns-reconfigure-rollback"),
+    ]
+
+
 def test_enable_probe_failure_rolls_back_config_and_dns_override(tmp_path: Path, monkeypatch):
     config, state = _status_ready(tmp_path, monkeypatch)
     calls: list[object] = []
