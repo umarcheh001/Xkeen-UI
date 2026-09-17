@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from pathlib import Path
 
 
@@ -210,7 +212,14 @@ def test_outbounds_subscription_refresh_relies_on_restart_log_for_changed_restar
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
     refresh_marker = "async function subsRefresh("
     subs_refresh_src = outbounds_src.split(refresh_marker, 1)[1].split("async function subsRefreshDue() {", 1)[0]
-    subs_refresh_due_src = outbounds_src.split("async function subsRefreshDue() {", 1)[1]
+    # Срез обязан кончаться на самой функции: пока subsRefreshDue была последней
+    # в файле, «всё до конца» работало случайно, и первая же соседка ниже ломала
+    # проверку «эта функция не тостит успех сама».
+    subs_refresh_due_src = re.split(
+        r"\n    (?:async )?function ",
+        outbounds_src.split("async function subsRefreshDue() {", 1)[1],
+        maxsplit=1,
+    )[0]
 
     assert "const fileChanged = !!data.changed;" in outbounds_src
     assert "const observatoryChanged = !!data.observatory_changed;" in outbounds_src
@@ -221,9 +230,9 @@ def test_outbounds_subscription_refresh_relies_on_restart_log_for_changed_restar
     assert "Подписка Xray обновлена." in outbounds_src
     assert "const restartedCount = results.filter((item) => !!(item && item.restarted)).length;" in outbounds_src
     assert "const failedItems = results.filter((item) => item && item.ok === false);" in subs_refresh_due_src
-    assert "Due-подписки: успешно" in subs_refresh_due_src
-    assert "Due-подписки не обновились" in subs_refresh_due_src
-    assert "Ошибка due-обновления:" in subs_refresh_due_src
+    assert "Просроченные подписки: успешно" in subs_refresh_due_src
+    assert "Просроченные подписки не обновились" in subs_refresh_due_src
+    assert "Ошибка обновления просроченных:" in subs_refresh_due_src
     assert "toastXkeen(msg, 'success');" not in subs_refresh_src
     assert "toastXkeen(msg, 'success');" not in subs_refresh_due_src
 

@@ -193,6 +193,7 @@ let mihomoGeneratorModuleApi = null;
         const managedSubscriptionsList = document.getElementById("mihomoManagedSubscriptionsList");
         const reloadManagedSubscriptionsBtn = document.getElementById("reloadMihomoManagedSubsBtn");
         const refreshManagedDueBtn = document.getElementById("refreshMihomoManagedDueBtn");
+        const alignManagedScheduleBtn = document.getElementById("alignMihomoManagedScheduleBtn");
         const ruleGroupsList = document.getElementById("ruleGroupsList");
         const ruleGroupsSelectAll = document.getElementById("ruleGroupsSelectAll");
         const proxiesList = document.getElementById("proxiesList");
@@ -1858,6 +1859,15 @@ function initEngineToggle() {
           if (managedSubscriptionsBlock) {
             managedSubscriptionsBlock.hidden = !subs.length;
           }
+          if (alignManagedScheduleBtn) {
+            // Черновики сюда не считаются: расписание у них появляется только
+            // после применения конфига, и сервер их не видит.
+            const moments = subs
+              .filter((sub) => sub && sub.enabled !== false && !(sub.draft && !sub.applied))
+              .map((sub) => Number((sub && sub.next_update_ts) || 0))
+              .filter((ts) => Number.isFinite(ts) && ts > 0);
+            alignManagedScheduleBtn.disabled = moments.length < 2 || new Set(moments).size < 2;
+          }
           if (!subs.length) {
             return;
           }
@@ -2143,8 +2153,115 @@ function initEngineToggle() {
           }
         }
 
+        function pluralManagedSubscriptions(count) {
+          const n = Math.abs(Number(count) || 0);
+          const tail = n % 100;
+          if (tail >= 11 && tail <= 14) return "подписок";
+          switch (n % 10) {
+            case 1: return "подписку";
+            case 2:
+            case 3:
+            case 4: return "подписки";
+            default: return "подписок";
+          }
+        }
+
+        function overdueManagedPhrase(count) {
+          const n = Math.abs(Number(count) || 0);
+          const tail = n % 100;
+          const last = n % 10;
+          if (tail < 11 || tail > 14) {
+            if (last === 1) return n + " подписка просрочена";
+            if (last >= 2 && last <= 4) return n + " подписки просрочены";
+          }
+          return n + " подписок просрочены";
+        }
+
+        function formatManagedShift(seconds) {
+          const total = Math.abs(Math.round(Number(seconds) || 0));
+          const hours = Math.floor(total / 3600);
+          const minutes = Math.round((total % 3600) / 60);
+          if (hours && minutes) return hours + " ч " + minutes + " мин";
+          if (hours) return hours + " ч";
+          return minutes + " мин";
+        }
+
+        async function fetchManagedAlignmentPlan(dry) {
+          const res = await fetch("/api/mihomo/subscriptions/align-schedule" + (dry ? "?dry=1" : ""), { method: "POST" });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
+          return data;
+        }
+
+        async function alignManagedSubscriptionsSchedule() {
+          setStatus("Считаю общий срок обновления...", "ok");
+          let plan;
+          try {
+            plan = await fetchManagedAlignmentPlan(true);
+          } catch (e) {
+            const msg = "Не удалось посчитать выравнивание: " + (e && e.message ? e.message : e);
+            setStatus(msg, "err");
+            try { toast(msg, "error"); } catch (e2) {}
+            return;
+          }
+
+          const reason = String(plan.reason || "");
+          if (reason === "nothing_to_align" || reason === "already_aligned") {
+            const msg = reason === "already_aligned"
+              ? "Сроки уже сведены к одному моменту."
+              : "Выравнивать нечего: расписание есть меньше чем у двух подписок.";
+            setStatus(msg, "warn");
+            try { toast(msg, "info"); } catch (e) {}
+            return;
+          }
+
+          const total = Number(plan.total || 0);
+          const deferred = !!plan.anchor_deferred;
+          const overdue = Number(plan.overdue_count || 0);
+          const moves = Array.isArray(plan.moves) ? plan.moves : [];
+          const widest = moves.reduce((acc, item) => {
+            const shift = Math.abs(Number(item && item.shift_sec) || 0);
+            return shift > Math.abs(Number(acc && acc.shift_sec) || 0) ? item : acc;
+          }, null);
+
+          const details = [];
+          if (widest) {
+            const who = String((widest.tag || widest.id) || "").trim();
+            details.push("Самый большой сдвиг — " + formatManagedShift(widest.shift_sec) + (who ? (" (" + who + ").") : "."));
+          }
+          details.push(deferred
+            ? (overdueManagedPhrase(overdue) + ": выравнивание запустит " + (overdue === 1 ? "её" : "их")
+               + " обновление в ближайшую минуту, одним перезапуском ядра.")
+            : "Подписки не скачиваются, конфиг не переписывается, ядро не перезапускается.");
+
+          const ok = await confirmMihomoAction({
+            title: "Выровнять расписание",
+            message: "Сведу " + total + " " + pluralManagedSubscriptions(total) + " на "
+              + formatMihomoSubTime(plan.anchor_ts) + (deferred ? " — через минуту." : "."),
+            details,
+            okText: "Выровнять",
+            cancelText: "Остаться",
+            danger: false,
+          }, "Выровнять расписание обновления подписок?");
+          if (!ok) return;
+
+          try {
+            const applied = await fetchManagedAlignmentPlan(false);
+            const appliedTotal = Number(applied.total || total);
+            const msg = "Расписание выровнено: " + appliedTotal + " " + pluralManagedSubscriptions(appliedTotal)
+              + " на " + formatMihomoSubTime(applied.anchor_ts);
+            await loadManagedSubscriptions(true);
+            setStatus(msg, "ok");
+            try { toast(msg, "success"); } catch (e) {}
+          } catch (e) {
+            const msg = "Не удалось выровнять расписание: " + (e && e.message ? e.message : e);
+            setStatus(msg, "err");
+            try { toast(msg, "error"); } catch (e2) {}
+          }
+        }
+
         async function refreshManagedDueSubscriptions() {
-          setStatus("Проверяю плановые Xray-JSON обновления Mihomo...", "ok");
+          setStatus("Проверяю просроченные Xray-JSON подписки Mihomo...", "ok");
           try {
             const res = await fetch("/api/mihomo/subscriptions/refresh-due", { method: "POST" });
             const data = await res.json().catch(() => ({}));
@@ -2153,12 +2270,12 @@ function initEngineToggle() {
             const updated = Number(data.updated || 0);
             const okCount = Number(data.ok_count || 0);
             const msg = updated
-              ? ("Плановые обновления: " + okCount + " из " + updated + " успешно.")
+              ? ("Просроченные обновлены: " + okCount + " из " + updated + " успешно.")
               : "Сейчас нет подписок, которым пора обновляться.";
             setStatus(msg, okCount === updated ? "ok" : "warn");
             try { toast(msg, okCount === updated ? "success" : "info"); } catch (e) {}
           } catch (e) {
-            const msg = "Не удалось запустить плановое обновление: " + (e && e.message ? e.message : e);
+            const msg = "Не удалось обновить просроченные подписки: " + (e && e.message ? e.message : e);
             setStatus(msg, "err");
             try { toast(msg, "error"); } catch (e2) {}
           }
@@ -5082,6 +5199,7 @@ function initEngineToggle() {
         if (normalizeProxiesBtn) normalizeProxiesBtn.onclick = () => applyTemplatesToExistingProxies();
         if (reloadManagedSubscriptionsBtn) reloadManagedSubscriptionsBtn.onclick = () => loadManagedSubscriptions(false);
         if (refreshManagedDueBtn) refreshManagedDueBtn.onclick = () => refreshManagedDueSubscriptions();
+        if (alignManagedScheduleBtn) alignManagedScheduleBtn.onclick = () => alignManagedSubscriptionsSchedule();
         if (bulkImportApplyBtn) bulkImportApplyBtn.onclick = () => doBulkImport();
         wireBulkImportSummaryUpdates();
         wireBulkImportScrollSafety();

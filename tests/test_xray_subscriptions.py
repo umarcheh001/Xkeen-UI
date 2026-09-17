@@ -6801,3 +6801,79 @@ def test_subscription_fragment_snapshot_can_be_restored_by_env(tmp_path: Path, m
 
     output_path = str(xray_dir / f"04_outbounds.{sub_id}.json")
     assert output_path in seen
+
+
+def _due_moments(subs, ui_state_dir: Path) -> dict:
+    state = subs.load_subscription_state(str(ui_state_dir))
+    return {item["id"]: item["next_update_ts"] for item in state["subscriptions"]}
+
+
+def test_align_schedule_brings_every_subscription_to_one_moment(tmp_path: Path, monkeypatch):
+    """Выравнивание правит только расписание: ни сети, ни перезапуска ядра."""
+    from services import xray_subscriptions as subs
+
+    ids = ["sub_a", "sub_b", "sub_c"]
+    ui_state_dir, _xray_dir = _prepare_batch_subscriptions(tmp_path, monkeypatch, subs, ids)
+    _set_due_offsets(subs, ui_state_dir, {"sub_a": 1800, "sub_b": 2100, "sub_c": 20000})
+
+    def _no_network(*_args, **_kwargs):
+        raise AssertionError("выравнивание не должно скачивать подписки")
+
+    monkeypatch.setattr(subs, "fetch_subscription_body", _no_network)
+
+    plan = subs.apply_schedule_alignment(str(ui_state_dir))
+
+    assert plan["total"] == 3
+    assert plan["moved"] == 2
+    assert set(_due_moments(subs, ui_state_dir).values()) == {plan["anchor_ts"]}
+
+
+def test_align_schedule_dry_run_leaves_the_state_alone(tmp_path: Path, monkeypatch):
+    """Панель показывает план до записи, поэтому расчёт обязан быть холостым."""
+    from services import xray_subscriptions as subs
+
+    ids = ["sub_a", "sub_b", "sub_c"]
+    ui_state_dir, _xray_dir = _prepare_batch_subscriptions(tmp_path, monkeypatch, subs, ids)
+    _set_due_offsets(subs, ui_state_dir, {"sub_a": 1800, "sub_b": 2100, "sub_c": 20000})
+    before = _due_moments(subs, ui_state_dir)
+
+    plan = subs.plan_schedule_alignment(str(ui_state_dir))
+
+    assert plan["moved"] == 2
+    assert _due_moments(subs, ui_state_dir) == before
+
+
+def test_aligned_subscriptions_refresh_as_a_single_batch(tmp_path: Path, monkeypatch):
+    """Ради этого всё и затевалось: одна пачка и один перезапуск ядра."""
+    from services import xray_subscriptions as subs
+
+    ids = ["sub_a", "sub_b", "sub_c"]
+    ui_state_dir, xray_dir = _prepare_batch_subscriptions(tmp_path, monkeypatch, subs, ids)
+    _set_due_offsets(subs, ui_state_dir, {"sub_a": 1800, "sub_b": 2100, "sub_c": 20000})
+
+    plan = subs.apply_schedule_alignment(str(ui_state_dir))
+    monkeypatch.setattr(subs, "_now", lambda: plan["anchor_ts"] + 1)
+
+    restarts = []
+    results = subs.refresh_due_subscriptions(
+        str(ui_state_dir),
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **kwargs: restarts.append(kwargs) or True,
+        restart=True,
+    )
+
+    assert sorted(item["id"] for item in results) == ids
+    assert [entry["source"] for entry in restarts] == ["xray-subscriptions-batch"]
+
+
+def test_align_schedule_reports_nothing_to_align_for_one_subscription(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir, _xray_dir = _prepare_batch_subscriptions(tmp_path, monkeypatch, subs, ["sub_a"])
+    before = _due_moments(subs, ui_state_dir)
+
+    plan = subs.apply_schedule_alignment(str(ui_state_dir))
+
+    assert plan["reason"] == "nothing_to_align"
+    assert _due_moments(subs, ui_state_dir) == before

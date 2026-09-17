@@ -28,6 +28,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from services import happ_links, happ_payloads
 from services.io.atomic import _atomic_write_json, _atomic_write_text
+from services.subscription_schedule import plan_alignment
 from services.url_policy import URLPolicy, env_flag, is_url_allowed
 from services.xray_config_files import OUTBOUNDS_FILE, ROUTING_FILE, ensure_xray_jsonc_dir, jsonc_path_for
 from services.xray_outbounds import (
@@ -5742,6 +5743,37 @@ def refresh_subscription(
             _write_state(ui_state_dir, _normalize_state(state))
 
     return result
+
+
+def plan_schedule_alignment(ui_state_dir: str) -> Dict[str, Any]:
+    """Посчитать общий срок обновления, не трогая состояние."""
+    return plan_alignment(list_subscriptions(ui_state_dir), now_ts=_now())
+
+
+def apply_schedule_alignment(ui_state_dir: str) -> Dict[str, Any]:
+    """Свести сроки обновления к одному моменту.
+
+    Подписки не скачиваются и ядро не перезапускается: меняется только
+    ``next_update_ts``. Дальше созревшие уходят одной пачкой, а её уже
+    обслуживает ``refresh_due_subscriptions`` с единственным перезапуском.
+    """
+    with _STATE_LOCK:
+        state = load_subscription_state(ui_state_dir)
+        subs = state.get("subscriptions")
+        if not isinstance(subs, list):
+            subs = []
+        plan = plan_alignment(subs, now_ts=_now())
+        if not plan["moves"]:
+            return plan
+
+        anchor = plan["anchor_ts"]
+        targets = {str(move["id"]) for move in plan["moves"]}
+        for sub in subs:
+            if isinstance(sub, dict) and str(sub.get("id") or "") in targets:
+                sub["next_update_ts"] = anchor
+        _write_state(ui_state_dir, state)
+
+    return plan
 
 
 def _refresh_lookahead_seconds() -> int:

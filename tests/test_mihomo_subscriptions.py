@@ -713,3 +713,77 @@ def test_refresh_due_subscriptions_lookahead_can_be_disabled(tmp_path, monkeypat
     )
 
     assert [item["id"] for item in results] == ["sub-one"]
+
+
+def _due_moments(tmp_path):
+    state = svc.load_subscription_state(str(tmp_path))
+    return {item["id"]: item["next_update_ts"] for item in state["subscriptions"]}
+
+
+def test_align_schedule_brings_every_subscription_to_one_moment(tmp_path, monkeypatch):
+    """Выравнивание правит только расписание: ни сети, ни перезаписи конфига."""
+    config_path, _save = _prepare_two_subscriptions(tmp_path, monkeypatch)
+    _set_due_offsets(tmp_path, {"sub-one": 1800, "sub-two": 20000})
+    config_before = config_path.read_text(encoding="utf-8")
+
+    def _no_network(*_args, **_kwargs):
+        raise AssertionError("выравнивание не должно скачивать подписки")
+
+    monkeypatch.setattr(svc, "fetch_subscription_body", _no_network)
+
+    plan = svc.apply_schedule_alignment(str(tmp_path))
+
+    assert plan["total"] == 2
+    assert plan["moved"] == 1
+    assert set(_due_moments(tmp_path).values()) == {plan["anchor_ts"]}
+    assert config_path.read_text(encoding="utf-8") == config_before
+
+
+def test_align_schedule_keeps_the_generator_snapshot(tmp_path, monkeypatch):
+    """Состояние Mihomo хранит не только список — потерять остальное нельзя."""
+    _config_path, _save = _prepare_two_subscriptions(tmp_path, monkeypatch)
+    _set_due_offsets(tmp_path, {"sub-one": 1800, "sub-two": 20000})
+    before = svc.load_subscription_state(str(tmp_path))
+
+    svc.apply_schedule_alignment(str(tmp_path))
+    after = svc.load_subscription_state(str(tmp_path))
+
+    assert after["generator_state"] == before["generator_state"]
+    assert after["last_config_hash"] == before["last_config_hash"]
+    assert after["last_synced_ts"] == before["last_synced_ts"]
+
+
+def test_align_schedule_dry_run_leaves_the_state_alone(tmp_path, monkeypatch):
+    _config_path, _save = _prepare_two_subscriptions(tmp_path, monkeypatch)
+    _set_due_offsets(tmp_path, {"sub-one": 1800, "sub-two": 20000})
+    before = _due_moments(tmp_path)
+
+    plan = svc.plan_schedule_alignment(str(tmp_path))
+
+    assert plan["moved"] == 1
+    assert _due_moments(tmp_path) == before
+
+
+def test_aligned_subscriptions_refresh_as_a_single_batch(tmp_path, monkeypatch):
+    """Ради этого всё и затевалось: одна пачка и один перезапуск ядра."""
+    config_path, save = _prepare_two_subscriptions(tmp_path, monkeypatch)
+    _set_due_offsets(tmp_path, {"sub-one": 1800, "sub-two": 20000})
+
+    plan = svc.apply_schedule_alignment(str(tmp_path))
+    monkeypatch.setattr(svc, "_now", lambda: plan["anchor_ts"] + 1)
+
+    restarts: list[str] = []
+
+    def _restart(*, source="api"):
+        restarts.append(source)
+
+    results = svc.refresh_due_subscriptions(
+        str(tmp_path),
+        mihomo_config_file=str(config_path),
+        restart_xkeen=_restart,
+        restart=True,
+        save_callback=save,
+    )
+
+    assert sorted(item["id"] for item in results) == ["sub-one", "sub-two"]
+    assert restarts == ["mihomo-subscriptions-batch"]

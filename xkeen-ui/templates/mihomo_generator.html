@@ -2070,8 +2070,11 @@
                 <button type="button" id="reloadMihomoManagedSubsBtn" class="btn btn-ghost btn-xs" data-tooltip="Обновить список управляемых Xray-JSON подписок.">
                   {{ op_icon('refresh') }}<span class="xk-action-label">Обновить список</span>
                 </button>
-                <button type="button" id="refreshMihomoManagedDueBtn" class="btn btn-ghost btn-xs" data-tooltip="Запустить обновление подписок, у которых подошло время.">
-                  {{ op_icon('refresh') }}<span class="xk-action-label">Обновить due</span>
+                <button type="button" id="refreshMihomoManagedDueBtn" class="btn btn-ghost btn-xs" title="Обновить просроченные" data-tooltip="Обновить подписки, у которых срок следующего обновления уже наступил.">
+                  {{ op_icon('refresh') }}<span class="xk-action-label">Обновить просроченные</span>
+                </button>
+                <button type="button" id="alignMihomoManagedScheduleBtn" class="btn btn-ghost btn-xs" title="Выровнять расписание" data-tooltip="Свести время следующего обновления всех подписок к одному моменту, чтобы дальше они обновлялись одной пачкой.">
+                  {{ op_icon('refresh') }}<span class="xk-action-label">Выровнять расписание</span>
                 </button>
               </div>
               <div class="hint xk-card-desc">

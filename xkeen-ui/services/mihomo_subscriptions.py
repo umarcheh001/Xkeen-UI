@@ -22,6 +22,7 @@ from mihomo_config_generator import build_full_config
 from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.mihomo_proxy_config import apply_proxy_insert
 from services.mihomo_xray_json import convert_subscription_source_text, convert_subscription_text
+from services.subscription_schedule import plan_alignment
 from services.url_policy import env_flag
 from services.xray_subscriptions import fetch_subscription_body_for_xray as fetch_subscription_body
 from utils.fs import load_text
@@ -1211,6 +1212,38 @@ def _refresh_lookahead_seconds() -> int:
     return max(0, min(MAX_REFRESH_LOOKAHEAD_SECONDS, raw))
 
 
+def plan_schedule_alignment(ui_state_dir: str) -> Dict[str, Any]:
+    """Посчитать общий срок обновления, не трогая состояние."""
+    return plan_alignment(list_subscriptions(ui_state_dir), now_ts=_now())
+
+
+def apply_schedule_alignment(ui_state_dir: str) -> Dict[str, Any]:
+    """Свести сроки обновления к одному моменту.
+
+    Подписки не скачиваются, конфиг не переписывается и ядро не
+    перезапускается: меняется только ``next_update_ts``. Состояние пишется
+    целиком — рядом со списком в нём лежат ``generator_state`` и хеш
+    последнего конфига, и собирать словарь заново значит их потерять.
+    """
+    with _STATE_LOCK:
+        state = load_subscription_state(ui_state_dir)
+        subs = state.get("subscriptions")
+        if not isinstance(subs, list):
+            subs = []
+        plan = plan_alignment(subs, now_ts=_now())
+        if not plan["moves"]:
+            return plan
+
+        anchor = plan["anchor_ts"]
+        targets = {str(move["id"]) for move in plan["moves"]}
+        for sub in subs:
+            if isinstance(sub, dict) and str(sub.get("id") or "") in targets:
+                sub["next_update_ts"] = anchor
+        _write_state(ui_state_dir, state)
+
+    return plan
+
+
 def _refresh_result_needs_restart(result: Any) -> bool:
     return bool(isinstance(result, dict) and result.get("ok") and result.get("changed"))
 
@@ -1356,9 +1389,11 @@ def start_subscription_scheduler(
 __all__ = [
     "DEFAULT_INTERVAL_HOURS",
     "STATE_FILENAME",
+    "apply_schedule_alignment",
     "delete_subscription",
     "load_subscription_state",
     "list_subscriptions",
+    "plan_schedule_alignment",
     "refresh_due_subscriptions",
     "refresh_subscription",
     "start_subscription_scheduler",

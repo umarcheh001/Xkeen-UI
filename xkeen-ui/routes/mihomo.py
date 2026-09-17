@@ -86,7 +86,9 @@ from services.mihomo_xray_json import (
     format_proxies_section as _xray_format_proxies_section,
 )
 from services.mihomo_subscriptions import (
+    apply_schedule_alignment as _mh_sub_apply_schedule_alignment,
     delete_subscription as _mh_sub_delete_subscription,
+    plan_schedule_alignment as _mh_sub_plan_schedule_alignment,
     list_subscriptions as _mh_sub_list_subscriptions,
     refresh_due_subscriptions as _mh_sub_refresh_due_subscriptions,
     refresh_subscription as _mh_sub_refresh_subscription,
@@ -2950,6 +2952,26 @@ def create_mihomo_blueprint(
             )
         ok_count = sum(1 for item in results if item.get("ok"))
         return jsonify({"ok": True, "updated": len(results), "ok_count": ok_count, "results": results}), 200
+
+    @bp.post("/api/mihomo/subscriptions/align-schedule")
+    def api_mihomo_subscriptions_align_schedule():
+        """Свести сроки обновления подписок Mihomo к одному моменту."""
+        dry = _bool_arg("dry", False)
+        try:
+            plan = (
+                _mh_sub_plan_schedule_alignment(ui_state_dir)
+                if dry
+                else _mh_sub_apply_schedule_alignment(ui_state_dir)
+            )
+        except Exception as e:
+            return _mihomo_exception(
+                "Не удалось выровнять расписание подписок Mihomo.",
+                code="mihomo_subscription_align_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                status=500,
+            )
+        return jsonify({"ok": True, "dry": dry, **plan}), 200
 
     @bp.post("/api/mihomo/subscriptions/imported-xray")
     def api_mihomo_subscription_register_imported_xray():

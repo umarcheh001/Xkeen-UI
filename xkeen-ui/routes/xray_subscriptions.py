@@ -9,10 +9,12 @@ from flask import Blueprint, jsonify, request
 from routes.common.errors import error_response, exception_response
 from services.latency_jobs import create_latency_job, get_latency_job
 from services.xray_subscriptions import (
+    apply_schedule_alignment,
     delete_subscription,
     get_subscription_routing_meta,
     list_subscription_routing_balancers,
     list_subscriptions,
+    plan_schedule_alignment,
     preview_subscription,
     SubscriptionPlaceholderError,
     probe_subscription_node_latency,
@@ -297,5 +299,22 @@ def create_xray_subscriptions_blueprint(
             )
         ok_count = sum(1 for item in results if item.get("ok"))
         return jsonify({"ok": True, "updated": len(results), "ok_count": ok_count, "results": results}), 200
+
+    @bp.post("/api/xray/subscriptions/align-schedule")
+    def api_align_xray_subscriptions_schedule():
+        dry = _bool_arg("dry", False)
+        try:
+            plan = plan_schedule_alignment(ui_state_dir) if dry else apply_schedule_alignment(ui_state_dir)
+        except Exception as exc:
+            return exception_response(
+                "Не удалось выровнять расписание подписок Xray.",
+                500,
+                ok=False,
+                code="subscription_align_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=exc,
+                log_tag="xray_subscriptions.align_failed",
+            )
+        return jsonify({"ok": True, "dry": dry, **plan}), 200
 
     return bp

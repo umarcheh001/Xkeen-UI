@@ -508,7 +508,7 @@ def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
     assert "await subsRefresh(id, { skipDraftConfirm: true });" in outbounds_src
     assert "Закрыть окно подписок и потерять текущий черновик?" in outbounds_src
     assert "Очистить форму подписки и потерять текущий черновик?" in outbounds_src
-    assert "Обновить due-подписки и потерять текущий черновик формы?" in outbounds_src
+    assert "Обновить просроченные подписки и потерять текущий черновик формы?" in outbounds_src
     assert "Удалить подписку и потерять текущий черновик формы?" in outbounds_src
     assert "Некорректный regex для" in outbounds_src
     assert ".xk-sub-field-note {" in styles_src

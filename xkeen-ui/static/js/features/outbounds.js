@@ -4583,6 +4583,7 @@ let outboundsModuleApi = null;
       reset: 'outbounds-subscriptions-reset-btn',
       preview: 'outbounds-subscriptions-preview-btn',
       refreshDue: 'outbounds-subscriptions-refresh-due-btn',
+      align: 'outbounds-subscriptions-align-btn',
       tbody: 'outbounds-subscriptions-tbody',
       empty: 'outbounds-subscriptions-empty',
       status: 'outbounds-subscriptions-status',
@@ -5504,7 +5505,7 @@ let outboundsModuleApi = null;
                   </div>
                   <div class="xk-sub-update-note">
                     <div class="xk-sub-update-title">Автообновление</div>
-                    <div class="xk-sub-update-text">Интервал задаётся в форме ниже. <b>Обновить due</b> запускает только просроченные подписки, а <b>Обновить сразу</b> скачивает узлы и создаёт fragment после сохранения.</div>
+                    <div class="xk-sub-update-text">Интервал задаётся в форме ниже. <b>Обновить просроченные</b> запускает только те подписки, у которых срок уже наступил, <b>Выровнять расписание</b> сводит их сроки к одному моменту, а <b>Обновить сразу</b> скачивает узлы и создаёт fragment после сохранения.</div>
                   </div>
                 </div>
               </details>
@@ -5617,7 +5618,8 @@ let outboundsModuleApi = null;
                     </div>
                     <div class="xk-sub-list-head-actions">
                       <div id="outbounds-subscriptions-summary" class="xk-pool-summary">0</div>
-                      <button type="button" id="outbounds-subscriptions-refresh-due-btn" class="btn-secondary btn-compact" title="Обновить due" data-tooltip="Обновить все подписки, у которых уже наступило время next update.">Обновить due</button>
+                      <button type="button" id="outbounds-subscriptions-refresh-due-btn" class="btn-secondary btn-compact" title="Обновить просроченные" data-tooltip="Обновить все подписки, у которых уже наступило время следующего обновления.">Обновить просроченные</button>
+                      <button type="button" id="outbounds-subscriptions-align-btn" class="btn-secondary btn-compact" title="Выровнять расписание" data-tooltip="Свести время следующего обновления всех подписок к одному моменту, чтобы дальше они обновлялись одной пачкой.">Выровнять расписание</button>
                     </div>
                   </div>
                   <div class="xk-sub-tablewrap">
@@ -6794,6 +6796,16 @@ let outboundsModuleApi = null;
 
       try { if (empty) empty.style.display = items.length ? 'none' : 'block'; } catch (e) {}
       try { if (summary) summary.textContent = String(items.length) + ' шт.'; } catch (e) {}
+      try {
+        const alignBtn = $(SUB_IDS.align);
+        if (alignBtn) {
+          const moments = items
+            .filter((item) => item && item.enabled !== false)
+            .map((item) => subsTimestamp(item && item.next_update_ts))
+            .filter((ts) => ts > 0);
+          alignBtn.disabled = moments.length < 2 || new Set(moments).size < 2;
+        }
+      } catch (e) {}
 
       Array.from(tbody.querySelectorAll('.xk-sub-file-link')).forEach((btn) => {
         btn.addEventListener('click', (e) => {
@@ -7673,12 +7685,12 @@ let outboundsModuleApi = null;
 
     async function subsRefreshDue() {
       const ok = await subsConfirmDiscardDraft({
-        message: 'Обновить due-подписки и потерять текущий черновик формы?',
-        okText: 'Обновить due',
+        message: 'Обновить просроченные подписки и потерять текущий черновик формы?',
+        okText: 'Обновить просроченные',
         cancelText: 'Остаться',
       });
       if (!ok) return false;
-      subsSetStatus('Проверяю due-подписки…', false, false, { busy: true });
+      subsSetStatus('Проверяю просроченные подписки…', false, false, { busy: true });
       const prevActive = getActiveFragment();
       const restart = shouldRestartAfterSave();
       try {
@@ -7697,7 +7709,7 @@ let outboundsModuleApi = null;
         const failedItems = results.filter((item) => item && item.ok === false);
         const failedCount = failedItems.length;
         const firstError = String((failedItems[0] && (failedItems[0].error || failedItems[0].message)) || '').trim();
-        const msg = `Due обновлены: ${okCount} / ${updatedCount}` + (failedCount ? ` · ошибок ${failedCount}` : '');
+        const msg = `Просроченные обновлены: ${okCount} / ${updatedCount}` + (failedCount ? ` · ошибок ${failedCount}` : '');
         subsSetStatus(msg, !!failedCount, !failedCount);
         await subsSyncOutboundsViewAfterMutation({
           prevActive,
@@ -7719,13 +7731,13 @@ let outboundsModuleApi = null;
         if (failedCount) {
           const errorNote = firstError ? ` Последняя ошибка: ${firstError}` : '';
           const failureMsg = okCount > 0
-            ? `Due-подписки: успешно ${okCount}, ошибок ${failedCount}.${errorNote}`
-            : `Due-подписки не обновились: ошибок ${failedCount}.${errorNote}`;
+            ? `Просроченные подписки: успешно ${okCount}, ошибок ${failedCount}.${errorNote}`
+            : `Просроченные подписки не обновились: ошибок ${failedCount}.${errorNote}`;
           try { toastXkeen(failureMsg, okCount > 0 ? 'warning' : 'error'); } catch (eFail) {}
         } else if (!changedCount) {
           const idleMsg = updatedCount > 0
-            ? 'Due-подписки проверены: изменений нет.'
-            : 'Due-подписки: обновлять пока нечего.';
+            ? 'Просроченные подписки проверены: изменений нет.'
+            : 'Обновлять пока нечего: просроченных подписок нет.';
           try { toastXkeen(idleMsg, 'info'); } catch (e3) {}
         } else if (!restartedCount) {
           const restartNote = restart ? ' Перезапуск xkeen не выполнялся.' : ' Авто-перезапуск xkeen выключен.';
@@ -7736,7 +7748,138 @@ let outboundsModuleApi = null;
       } catch (e) {
         const errText = String(e && e.message ? e.message : e);
         subsSetStatus('Ошибка: ' + errText, true);
-        try { toastXkeen('Ошибка due-обновления: ' + errText, 'error'); } catch (e2) {}
+        try { toastXkeen('Ошибка обновления просроченных: ' + errText, 'error'); } catch (e2) {}
+        await subsLoad();
+        return false;
+      }
+    }
+
+    function subsPluralSubscriptions(count) {
+      const n = Math.abs(Number(count) || 0);
+      const tail = n % 100;
+      if (tail >= 11 && tail <= 14) return 'подписок';
+      switch (n % 10) {
+        case 1: return 'подписку';
+        case 2:
+        case 3:
+        case 4: return 'подписки';
+        default: return 'подписок';
+      }
+    }
+
+    function subsOverduePhrase(count) {
+      const n = Math.abs(Number(count) || 0);
+      const tail = n % 100;
+      const last = n % 10;
+      if (tail < 11 || tail > 14) {
+        if (last === 1) return `${n} подписка просрочена`;
+        if (last >= 2 && last <= 4) return `${n} подписки просрочены`;
+      }
+      return `${n} подписок просрочены`;
+    }
+
+    function subsFormatShift(seconds) {
+      const total = Math.abs(Math.round(Number(seconds) || 0));
+      const hours = Math.floor(total / 3600);
+      const minutes = Math.round((total % 3600) / 60);
+      if (hours && minutes) return `${hours} ч ${minutes} мин`;
+      if (hours) return `${hours} ч`;
+      return `${minutes} мин`;
+    }
+
+    async function subsFetchAlignmentPlan(dry) {
+      const res = await fetch('/api/xray/subscriptions/align-schedule' + (dry ? '?dry=1' : ''), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data || data.ok === false) {
+        throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
+      }
+      return data;
+    }
+
+    async function subsAlignSchedule() {
+      const allowed = await subsConfirmDiscardDraft({
+        message: 'Выровнять расписание подписок и потерять текущий черновик формы?',
+        okText: 'Выровнять',
+        cancelText: 'Остаться',
+      });
+      if (!allowed) return false;
+
+      subsSetStatus('Считаю общий срок обновления…', false, false, { busy: true });
+      let plan;
+      try {
+        plan = await subsFetchAlignmentPlan(true);
+      } catch (e) {
+        const errText = String(e && e.message ? e.message : e);
+        subsSetStatus('Ошибка: ' + errText, true);
+        try { toastXkeen('Не удалось посчитать выравнивание: ' + errText, 'error'); } catch (e2) {}
+        return false;
+      }
+
+      if (String(plan.reason || '') === 'nothing_to_align') {
+        subsSetStatus('Выравнивать нечего: расписание есть меньше чем у двух подписок.', false, true);
+        try { toastXkeen('Выравнивать нечего: расписание есть меньше чем у двух подписок.', 'info'); } catch (e) {}
+        return false;
+      }
+      if (String(plan.reason || '') === 'already_aligned') {
+        subsSetStatus('Сроки уже сведены к одному моменту.', false, true);
+        try { toastXkeen('Сроки уже сведены к одному моменту.', 'info'); } catch (e) {}
+        return false;
+      }
+
+      const total = Number(plan.total || 0);
+      const anchorLabel = subsFormatTime(plan.anchor_ts);
+      const deferred = !!plan.anchor_deferred;
+      const overdue = Number(plan.overdue_count || 0);
+      const moves = Array.isArray(plan.moves) ? plan.moves : [];
+      const widest = moves.reduce((acc, item) => {
+        const shift = Math.abs(Number(item && item.shift_sec) || 0);
+        return shift > Math.abs(Number(acc && acc.shift_sec) || 0) ? item : acc;
+      }, null);
+
+      const details = [];
+      if (widest) {
+        const who = String((widest.tag || widest.id) || '').trim();
+        details.push(`Самый большой сдвиг — ${subsFormatShift(widest.shift_sec)}` + (who ? ` (${who}).` : '.'));
+      }
+      if (deferred) {
+        details.push(
+          `${subsOverduePhrase(overdue)}: выравнивание запустит ${overdue === 1 ? 'её' : 'их'} обновление `
+          + 'в ближайшую минуту, одним перезапуском ядра.'
+        );
+      } else {
+        details.push('Подписки не скачиваются, ядро не перезапускается.');
+      }
+
+      const confirmed = await confirmXkeenAction({
+        title: 'Выровнять расписание',
+        message: `Сведу ${total} ${subsPluralSubscriptions(total)} на ${anchorLabel}` + (deferred ? ' — через минуту.' : '.'),
+        details,
+        okText: 'Выровнять',
+        cancelText: 'Остаться',
+        danger: false,
+      });
+      if (!confirmed) {
+        subsSetStatus('Выравнивание отменено.', false, true);
+        return false;
+      }
+
+      subsSetStatus('Выравниваю расписание…', false, false, { busy: true });
+      try {
+        const applied = await subsFetchAlignmentPlan(false);
+        const appliedTotal = Number(applied.total || total);
+        const msg = `Расписание выровнено: ${appliedTotal} ${subsPluralSubscriptions(appliedTotal)} на ${subsFormatTime(applied.anchor_ts)}`;
+        subsSetStatus(msg, false, true);
+        try { toastXkeen(msg, 'success'); } catch (e) {}
+        await subsLoad();
+        return true;
+      } catch (e) {
+        const errText = String(e && e.message ? e.message : e);
+        subsSetStatus('Ошибка: ' + errText, true);
+        try { toastXkeen('Ошибка выравнивания: ' + errText, 'error'); } catch (e2) {}
         await subsLoad();
         return false;
       }
@@ -7899,6 +8042,7 @@ let outboundsModuleApi = null;
         subsSetStatus('', false);
       });
       wireButton(SUB_IDS.refreshDue, () => { void subsRefreshDue(); });
+      wireButton(SUB_IDS.align, () => { void subsAlignSchedule(); });
       wireButton(SUB_IDS.preview, () => { void subsPreview(); });
       wireButton(SUB_IDS.nodesPingAll, () => {
         void subsProbeAllNodes();

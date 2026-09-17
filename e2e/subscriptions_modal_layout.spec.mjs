@@ -1231,6 +1231,7 @@ test('subscriptions workbench collapses empty rows and keeps refresh due in the 
     const listPanel = document.querySelector('#outbounds-subscriptions-modal .xk-sub-list-panel');
     const panelHead = listPanel?.querySelector('.xk-sub-panelhead');
     const due = document.querySelector('#outbounds-subscriptions-refresh-due-btn');
+    const align = document.querySelector('#outbounds-subscriptions-align-btn');
     const tableWrap = document.querySelector('#outbounds-subscriptions-modal .xk-sub-tablewrap');
     const table = tableWrap?.querySelector('table');
     const nodesList = document.querySelector('#outbounds-subscriptions-nodes-list');
@@ -1239,6 +1240,7 @@ test('subscriptions workbench collapses empty rows and keeps refresh due in the 
     const modalRect = modal?.getBoundingClientRect();
     const headRect = panelHead?.getBoundingClientRect();
     const dueRect = due?.getBoundingClientRect();
+    const alignRect = align?.getBoundingClientRect();
     const tableRect = table?.getBoundingClientRect();
     const wrapRect = tableWrap?.getBoundingClientRect();
     const listRect = nodesList?.getBoundingClientRect();
@@ -1248,6 +1250,12 @@ test('subscriptions workbench collapses empty rows and keeps refresh due in the 
     return {
       modalHeight: modalRect ? Math.round(modalRect.height) : 0,
       dueInsideHead: !!(headRect && dueRect && dueRect.top >= headRect.top - 1 && dueRect.bottom <= headRect.bottom + 1),
+      alignInsideHead: !!(headRect && alignRect && alignRect.top >= headRect.top - 1 && alignRect.bottom <= headRect.bottom + 1),
+      // Заголовок списка несёт счётчик и две кнопки: они обязаны остаться внутри панели.
+      alignWithinPanel: (() => {
+        const panelRect = listPanel?.getBoundingClientRect();
+        return !!(panelRect && alignRect && alignRect.right <= panelRect.right + 1);
+      })(),
       // Dead space left under the table inside its own column, status line aside.
       columnSlack: (() => {
         const panelRect = listPanel?.getBoundingClientRect();
@@ -1261,6 +1269,8 @@ test('subscriptions workbench collapses empty rows and keeps refresh due in the 
   });
 
   expect(layout.dueInsideHead).toBe(true);
+  expect(layout.alignInsideHead).toBe(true);
+  expect(layout.alignWithinPanel).toBe(true);
   // The table wrapper fills its column instead of collapsing around the rows.
   expect(layout.columnSlack).toBeLessThanOrEqual(24);
   expect(layout.nodeSlack).toBeLessThanOrEqual(3);
