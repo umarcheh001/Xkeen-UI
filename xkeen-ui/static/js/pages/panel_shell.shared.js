@@ -25,6 +25,7 @@ import {
   ensureXkeenUiBucket,
   getXkeenCoreHttpApi,
   getXkeenPageApi,
+  getXkeenSettingsApi,
   getXkeenUiShellApi,
   hasXkeenXrayCore,
   publishXkeenPageApi,
@@ -50,6 +51,51 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
 
   function getUiShellApi() {
     return getXkeenUiShellApi();
+  }
+
+  let _scrollSettingsUnsubscribe = null;
+
+  function applyPanelScrollSettings(settings) {
+    const body = document.body;
+    if (!body || !body.classList.contains('panel-page')) return;
+
+    const layout = settings && settings.layout && typeof settings.layout === 'object'
+      ? settings.layout
+      : {};
+    let pageScrollEnabled = layout.pageScrollEnabled !== false;
+    const workspaceScrollEnabled = layout.workspaceScrollEnabled !== false;
+    if (!pageScrollEnabled && !workspaceScrollEnabled) pageScrollEnabled = true;
+
+    const pageWasEnabled = !body.classList.contains('xk-page-scroll-disabled');
+    const workspaceWasEnabled = !body.classList.contains('xk-workspace-scroll-disabled');
+    body.classList.toggle('xk-page-scroll-disabled', !pageScrollEnabled);
+    body.classList.toggle('xk-workspace-scroll-disabled', !workspaceScrollEnabled);
+
+    if (pageWasEnabled && !pageScrollEnabled) {
+      try { window.scrollTo(0, 0); } catch (error) {}
+    }
+    if (workspaceWasEnabled && !workspaceScrollEnabled) {
+      document.querySelectorAll('.view-section').forEach((view) => {
+        try { view.scrollTop = 0; } catch (error) {}
+      });
+    }
+  }
+
+  function initPanelScrollSettings() {
+    const settingsApi = getXkeenSettingsApi();
+    if (!settingsApi) return;
+
+    if (typeof settingsApi.get === 'function') {
+      try { applyPanelScrollSettings(settingsApi.get()); } catch (error) {}
+    }
+    if (!_scrollSettingsUnsubscribe && typeof settingsApi.subscribe === 'function') {
+      _scrollSettingsUnsubscribe = settingsApi.subscribe((snapshot) => {
+        applyPanelScrollSettings(snapshot);
+      });
+    }
+    if (typeof settingsApi.fetchOnce === 'function') {
+      void settingsApi.fetchOnce().then(applyPanelScrollSettings).catch(() => {});
+    }
   }
 
   function getRoutingCardsNamespaceApi() {
@@ -629,6 +675,11 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
     document.querySelectorAll('.view-section').forEach((view) => {
       view.addEventListener('wheel', (event) => {
         if (!event || event.defaultPrevented) return;
+        const body = document.body;
+        if (body && (
+          body.classList.contains('xk-page-scroll-disabled')
+          || body.classList.contains('xk-workspace-scroll-disabled')
+        )) return;
         const deltaY = Number(event.deltaY || 0);
         if (!deltaY || Math.abs(deltaY) <= Math.abs(Number(event.deltaX || 0))) return;
 
@@ -1243,6 +1294,7 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
     ensureHeaderAsyncShellBinding();
     wireTabs();
     bindPanelDualScroll();
+    initPanelScrollSettings();
     wireExplicitNavigation();
     wirePanelLazyFeatureClicks();
     startLightweightXkeenStatusPolling();
@@ -1282,6 +1334,7 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
     init,
     showView,
     getCurrentView,
+    applyScrollSettings: initPanelScrollSettings,
     isInitialized() {
       return _initialized;
     },
@@ -1321,6 +1374,10 @@ export function initPanelShell(...args) {
 
 export function showPanelShellView(...args) {
   return callPanelShellApi('showView', ...args);
+}
+
+export function applyPanelShellScrollSettings(...args) {
+  return callPanelShellApi('applyScrollSettings', ...args);
 }
 
 export function getCurrentPanelShellView(...args) {

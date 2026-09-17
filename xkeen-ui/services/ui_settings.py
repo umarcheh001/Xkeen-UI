@@ -29,7 +29,7 @@ from utils.deep_merge import deep_merge
 log = logging.getLogger(__name__)
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # Keep the file small and predictable on router flash.
 _MAX_FILE_CHARS = 64 * 1024
@@ -70,6 +70,12 @@ DEFAULTS: Dict[str, Any] = {
         # Prettier formatting options (optional)
         "tabWidth": 2,
         "printWidth": 80,
+    },
+    "layout": {
+        # The panel can expose the document and workspace scrollports together,
+        # or keep either one as the sole scrolling surface.
+        "pageScrollEnabled": True,
+        "workspaceScrollEnabled": True,
     },
     "logs": {
         # Render ANSI colors in UI (future feature flag).
@@ -187,6 +193,10 @@ def _canonical_empty() -> Dict[str, Any]:
             "preferPrettier": bool(DEFAULTS["format"]["preferPrettier"]),
             "tabWidth": int(DEFAULTS["format"]["tabWidth"]),
             "printWidth": int(DEFAULTS["format"]["printWidth"]),
+        },
+        "layout": {
+            "pageScrollEnabled": bool(DEFAULTS["layout"]["pageScrollEnabled"]),
+            "workspaceScrollEnabled": bool(DEFAULTS["layout"]["workspaceScrollEnabled"]),
         },
         "logs": {
             "ansi": bool(DEFAULTS["logs"]["ansi"]),
@@ -470,6 +480,36 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 rep.warnings.append({"path": f"format.{k}", "warning": "unknown key dropped"})
                 rep.changed = True
 
+    # ---- layout ----
+    layout_raw = raw.get("layout")
+    if layout_raw is None:
+        pass
+    elif not isinstance(layout_raw, dict):
+        rep.warnings.append({"path": "layout", "warning": "must be an object; reset"})
+        rep.changed = True
+    else:
+        for key in ("pageScrollEnabled", "workspaceScrollEnabled"):
+            if key not in layout_raw:
+                continue
+            value = layout_raw.get(key)
+            if _is_bool(value):
+                out["layout"][key] = bool(value)
+            else:
+                rep.warnings.append({"path": f"layout.{key}", "warning": "invalid type; ignored"})
+                rep.changed = True
+
+        for k in layout_raw.keys():
+            if k not in ("pageScrollEnabled", "workspaceScrollEnabled"):
+                rep.warnings.append({"path": f"layout.{k}", "warning": "unknown key dropped"})
+                rep.changed = True
+
+        if not out["layout"]["pageScrollEnabled"] and not out["layout"]["workspaceScrollEnabled"]:
+            # A corrupt/manual file must never leave the panel without a usable
+            # scroll surface. Prefer document scrolling as the recovery mode.
+            out["layout"]["pageScrollEnabled"] = True
+            rep.warnings.append({"path": "layout", "warning": "at least one scroll mode must be enabled"})
+            rep.changed = True
+
     # ---- logs ----
     logs_raw = raw.get("logs")
     if logs_raw is None:
@@ -682,7 +722,7 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
 
     # ---- top-level unknown keys ----
     for k in raw.keys():
-        if k not in ("schemaVersion", "editor", "format", "logs", "runtime", "routing", "mihomo"):
+        if k not in ("schemaVersion", "editor", "format", "layout", "logs", "runtime", "routing", "mihomo"):
             rep.warnings.append({"path": k, "warning": "unknown key dropped"})
             rep.changed = True
 
@@ -814,6 +854,29 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
 
             if p:
                 out["format"] = p
+
+    # layout
+    if "layout" in patch:
+        layout_patch = patch.get("layout")
+        if not isinstance(layout_patch, dict):
+            rep.errors.append({"path": "layout", "error": "must be an object"})
+        else:
+            p: Dict[str, Any] = {}
+            for key in ("pageScrollEnabled", "workspaceScrollEnabled"):
+                if key not in layout_patch:
+                    continue
+                value = layout_patch.get(key)
+                if _is_bool(value):
+                    p[key] = bool(value)
+                else:
+                    rep.errors.append({"path": f"layout.{key}", "error": "must be boolean"})
+
+            for k in layout_patch.keys():
+                if k not in ("pageScrollEnabled", "workspaceScrollEnabled"):
+                    rep.warnings.append({"path": f"layout.{k}", "warning": "unknown key dropped"})
+
+            if p:
+                out["layout"] = p
 
     # logs
     if "logs" in patch:
@@ -1015,7 +1078,7 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 out["mihomo"] = p
 
     for k in patch.keys():
-        if k not in ("schemaVersion", "editor", "format", "logs", "runtime", "routing", "mihomo"):
+        if k not in ("schemaVersion", "editor", "format", "layout", "logs", "runtime", "routing", "mihomo"):
             rep.warnings.append({"path": k, "warning": "unknown key dropped"})
 
     return out, rep
@@ -1106,6 +1169,16 @@ def patch_settings(patch: Any, ui_state_dir: str = UI_STATE_DIR) -> Tuple[Dict[s
         )
 
     merged = deep_merge(current, patch_clean)
+
+    layout = merged.get("layout") if isinstance(merged, dict) else None
+    if isinstance(layout, dict):
+        page_scroll = layout.get("pageScrollEnabled") is not False
+        workspace_scroll = layout.get("workspaceScrollEnabled") is not False
+        if not page_scroll and not workspace_scroll:
+            raise UISettingsValidationError(
+                "bad patch",
+                errors=[{"path": "layout", "error": "at least one scroll mode must be enabled"}],
+            )
 
     # Enforce server-owned schemaVersion.
     if isinstance(merged, dict):

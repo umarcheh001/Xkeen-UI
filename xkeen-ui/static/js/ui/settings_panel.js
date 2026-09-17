@@ -601,6 +601,45 @@ import { getFeatureApi } from '../features/feature_access.js';
     };
   }
 
+  function createScrollSwitch(id, path, otherPath, otherLabel, label, description) {
+    return {
+      id,
+      type: 'switch',
+      label,
+      description,
+      getValue(ctx) {
+        return getPath(ctx.settings, path) !== false;
+      },
+      isDisabled(ctx) {
+        if (ctx.loading || ctx.busy || !ctx.serverReady) return true;
+        const enabled = getPath(ctx.settings, path) !== false;
+        const otherEnabled = getPath(ctx.settings, otherPath) !== false;
+        return enabled && !otherEnabled;
+      },
+      getMeta(ctx) {
+        if (!ctx.serverReady) return ctx.settingsError || 'Нужен загруженный снимок /api/ui-settings.';
+        const enabled = getPath(ctx.settings, path) !== false;
+        const otherEnabled = getPath(ctx.settings, otherPath) !== false;
+        return enabled && !otherEnabled
+          ? 'Сначала включите «' + otherLabel + '»: панель должна сохранить хотя бы одну прокрутку.'
+          : '';
+      },
+      onChange(checked, ctx) {
+        const otherEnabled = getPath(ctx.settings, otherPath) !== false;
+        if (!checked && !otherEnabled) {
+          const msg = 'Нельзя отключить обе прокрутки одновременно.';
+          setStatus(msg, true);
+          toast({ id: 'ui-settings-scroll-required', message: msg, kind: 'error' });
+          return Promise.reject(new Error(msg));
+        }
+        return saveServerPatch(
+          buildPatch(path, !!checked),
+          checked ? 'Прокрутка включена.' : 'Прокрутка отключена.'
+        );
+      },
+    };
+  }
+
   function createServerNumber(id, path, label, description, min, max, fallback, successMessage) {
     return {
       id,
@@ -652,6 +691,31 @@ import { getFeatureApi } from '../features/feature_access.js';
   }
 
   const SECTION_SCHEMA = [
+    {
+      key: 'scrolling',
+      navLabel: 'Прокрутка',
+      eyebrow: 'Интерфейс',
+      title: 'Области прокрутки',
+      description: 'Выберите, где прокручивать длинные рабочие области. Можно оставить обе прокрутки или только одну.',
+      items: [
+        createScrollSwitch(
+          'layout-page-scroll',
+          'layout.pageScrollEnabled',
+          'layout.workspaceScrollEnabled',
+          'Прокрутка рабочей области',
+          'Прокрутка страницы',
+          'Прокручивает всю панель вместе с шапкой и активной рабочей областью.'
+        ),
+        createScrollSwitch(
+          'layout-workspace-scroll',
+          'layout.workspaceScrollEnabled',
+          'layout.pageScrollEnabled',
+          'Прокрутка страницы',
+          'Прокрутка рабочей области',
+          'Прокручивает содержимое активной вкладки внутри панели, оставляя шапку на месте.'
+        ),
+      ],
+    },
     {
       key: 'editor',
       navLabel: 'Редактор',
@@ -1136,13 +1200,22 @@ import { getFeatureApi } from '../features/feature_access.js';
     _state.activeSection = nextKey;
     syncSectionNavState();
 
+    let sectionTop = 0;
+    try {
+      const sectionRect = sectionEl.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      sectionTop = container.scrollTop + sectionRect.top - containerRect.top;
+    } catch (e) {
+      sectionTop = sectionEl.offsetTop;
+    }
+
     try {
       container.scrollTo({
-        top: Math.max(0, sectionEl.offsetTop - 8),
+        top: Math.max(0, sectionTop - 8),
         behavior: 'smooth',
       });
     } catch (e) {
-      container.scrollTop = Math.max(0, sectionEl.offsetTop - 8);
+      container.scrollTop = Math.max(0, sectionTop - 8);
     }
   }
 
@@ -1161,7 +1234,14 @@ import { getFeatureApi } from '../features/feature_access.js';
 
     SECTION_SCHEMA.forEach((section) => {
       const el = _sectionEls.get(section.key);
-      if (el && el.offsetTop <= threshold) active = section.key;
+      if (!el) return;
+      let sectionTop = el.offsetTop;
+      try {
+        sectionTop = container.scrollTop
+          + el.getBoundingClientRect().top
+          - container.getBoundingClientRect().top;
+      } catch (e) {}
+      if (sectionTop <= threshold) active = section.key;
     });
 
     if (active && active !== _state.activeSection) {
@@ -1198,6 +1278,7 @@ import { getFeatureApi } from '../features/feature_access.js';
     const input = document.createElement('input');
     input.type = 'checkbox';
     input.dataset.uiSettingsControl = item.id;
+    input.setAttribute('aria-label', item.label);
 
     const slider = document.createElement('span');
     slider.className = 'dt-switch-slider';

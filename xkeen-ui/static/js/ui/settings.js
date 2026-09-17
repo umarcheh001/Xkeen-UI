@@ -17,7 +17,7 @@
 
   // Keep defaults in sync with services/ui_settings.py
   const DEFAULTS = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     editor: {
       engine: 'codemirror',
       codemirrorFontScale: 100,
@@ -31,6 +31,10 @@
       // Optional Prettier formatting parameters
       tabWidth: 2,
       printWidth: 80,
+    },
+    layout: {
+      pageScrollEnabled: true,
+      workspaceScrollEnabled: true,
     },
     logs: {
       ansi: false,

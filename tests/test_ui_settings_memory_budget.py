@@ -8,7 +8,7 @@ from services import ui_settings
 def test_memory_budget_defaults_to_auto(tmp_path):
     loaded = ui_settings.load_settings(ui_state_dir=str(tmp_path))
 
-    assert loaded["schemaVersion"] == 3
+    assert loaded["schemaVersion"] == 4
     assert loaded["runtime"] == {"memoryBudget": "auto"}
 
 

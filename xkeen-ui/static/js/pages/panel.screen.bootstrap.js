@@ -5,7 +5,11 @@ import './config_shell.shared.js';
 import './editor.shared.js';
 import './codemirror6.shared.js';
 import './panel.shared_compat.bundle.js';
-import { getCurrentPanelShellView, showPanelShellView } from './panel_shell.shared.js';
+import {
+  applyPanelShellScrollSettings,
+  getCurrentPanelShellView,
+  showPanelShellView,
+} from './panel_shell.shared.js';
 import { applyPanelViewRuntime } from './panel.view_runtime.js';
 import { hasXkeenMihomoCore, hasXkeenXrayCore } from '../features/xkeen_runtime.js';
 import { bootPanelPage } from './panel.bootstrap_tail.bundle.js';
@@ -94,6 +98,7 @@ function createPanelTopLevelApi() {
   return {
     activate() {
       initPanelOperatorHeader();
+      applyPanelShellScrollSettings();
       try {
         const currentView = String(getCurrentPanelShellView() || '');
         if (currentView) {

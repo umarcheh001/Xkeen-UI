@@ -24,7 +24,7 @@ MIHOMO_TEMPLATE_DIR = REPO_ROOT / "xkeen-ui" / "opt" / "etc" / "mihomo" / "templ
 
 
 DEFAULT_UI_SETTINGS = """{
-  \"schemaVersion\": 3,
+  \"schemaVersion\": 4,
   \"editor\": {
     \"engine\": \"codemirror\",
     \"codemirrorFontScale\": 100,
@@ -34,6 +34,7 @@ DEFAULT_UI_SETTINGS = """{
     \"expertModeEnabled\": false
   },
   \"format\": {\"preferPrettier\": false, \"tabWidth\": 2, \"printWidth\": 80},
+  \"layout\": {\"pageScrollEnabled\": true, \"workspaceScrollEnabled\": true},
   \"logs\": {\"ansi\": false, \"ws2\": false, \"view\": {}},
   \"runtime\": {\"memoryBudget\": \"auto\"},
   \"routing\": {\"guiEnabled\": true, \"autoApply\": false, \"showActiveOutbound\": false, \"showScenarioCard\": true}

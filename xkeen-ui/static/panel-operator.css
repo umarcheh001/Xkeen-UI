@@ -563,6 +563,40 @@ body.panel-page:not(.mihomo-generator-page) .view-section {
   scrollbar-gutter: stable;
 }
 
+/* UI settings may keep either shell scrollport as the sole scrolling surface.
+ * The default (no classes) preserves the dual-scroll contract above. */
+body.panel-page:not(.mihomo-generator-page).xk-page-scroll-disabled {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow-y: hidden;
+  overscroll-behavior-y: none;
+}
+
+body.panel-page:not(.mihomo-generator-page).xk-page-scroll-disabled .container.container-wide {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  max-height: 100vh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
+body.panel-page:not(.mihomo-generator-page).xk-page-scroll-disabled .view-section {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+
+body.panel-page:not(.mihomo-generator-page).xk-workspace-scroll-disabled .view-section {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  overflow-x: clip;
+  overflow-y: visible;
+  scrollbar-gutter: auto;
+}
+
 /* Fullscreen editors and modal families deliberately suspend both scroll
  * surfaces.  Keep this lock after the dual-scroll shell rules so the panel
  * selector cannot accidentally outrank the shared legacy lock. */

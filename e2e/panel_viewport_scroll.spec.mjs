@@ -26,6 +26,15 @@ async function openPanel(page, viewport) {
 }
 
 
+async function openScrollSettings(page) {
+  await page.locator('[aria-controls="xk-mihomo-panel-menu"]').click();
+  await page.locator('#ui-settings-open-btn').click();
+  await expect(page.locator('#ui-settings-modal')).toBeVisible();
+  await page.locator('#ui-settings-nav-btn-scrolling').click();
+  await expect(page.locator('#ui-settings-section-scrolling')).toBeVisible();
+}
+
+
 async function readScrollContract(page, viewId) {
   return page.evaluate((id) => {
     const view = document.getElementById(id);
@@ -144,4 +153,65 @@ test('panel workspaces keep a usable scroll region across desktop and short view
       await view.evaluate((node) => { node.scrollTop = 0; });
     }
   }
+});
+
+
+test('UI settings can keep either panel scroll surface without allowing both off', async ({ page }) => {
+  test.setTimeout(60_000);
+  await openPanel(page, { width: 1024, height: 600 });
+  await page.evaluate(() => {
+    const spacer = document.createElement('div');
+    spacer.dataset.scrollModeProbe = '1';
+    spacer.style.cssText = 'height: 1400px; width: 1px; pointer-events: none;';
+    document.getElementById('view-routing').appendChild(spacer);
+  });
+
+  await openScrollSettings(page);
+  const pageScroll = page.locator('[data-ui-settings-control="layout-page-scroll"]');
+  const workspaceScroll = page.locator('[data-ui-settings-control="layout-workspace-scroll"]');
+  const pageScrollSlider = page.locator('[data-item-id="layout-page-scroll"] .dt-switch-slider');
+  const workspaceScrollSlider = page.locator('[data-item-id="layout-workspace-scroll"] .dt-switch-slider');
+  await expect(pageScroll).toBeChecked();
+  await expect(workspaceScroll).toBeChecked();
+
+  await pageScrollSlider.click();
+  await expect(pageScroll).not.toBeChecked();
+  await expect(page.locator('#ui-settings-status')).toContainText('Сохранено');
+  await expect(workspaceScroll).toBeDisabled();
+  await page.locator('#ui-settings-close-btn').click();
+
+  await expect(page.locator('body')).toHaveClass(/xk-page-scroll-disabled/);
+  let contract = await readScrollContract(page, 'view-routing');
+  expect(contract.bodyOverflowY).toBe('hidden');
+  expect(['auto', 'scroll']).toContain(contract.viewOverflowY);
+  expect(contract.viewScrollHeight).toBeGreaterThan(contract.viewClientHeight);
+  await page.locator('#view-routing').evaluate((node) => { node.scrollTop = node.scrollHeight; });
+  contract = await readScrollContract(page, 'view-routing');
+  expect(contract.viewScrollTop).toBeGreaterThan(0);
+  expect(contract.outerScrollTop).toBe(0);
+
+  await openScrollSettings(page);
+  await pageScrollSlider.click();
+  await expect(pageScroll).toBeChecked();
+  await expect(workspaceScroll).toBeEnabled();
+  await workspaceScrollSlider.click();
+  await expect(workspaceScroll).not.toBeChecked();
+  await expect(page.locator('#ui-settings-status')).toContainText('Сохранено');
+  await expect(pageScroll).toBeDisabled();
+  await page.locator('#ui-settings-close-btn').click();
+
+  await expect(page.locator('body')).toHaveClass(/xk-workspace-scroll-disabled/);
+  contract = await readScrollContract(page, 'view-routing');
+  expect(['auto', 'scroll']).toContain(contract.bodyOverflowY);
+  expect(contract.viewOverflowY).toBe('visible');
+  expect(contract.viewScrollTop).toBe(0);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  contract = await readScrollContract(page, 'view-routing');
+  expect(contract.outerScrollTop).toBeGreaterThan(0);
+
+  await page.evaluate(() => window.XKeen.topLevel.router.navigate('/devtools'));
+  await expect(page.locator('body')).toHaveClass(/devtools-page/);
+  await page.evaluate(() => window.XKeen.topLevel.router.navigate('/'));
+  await expect(page.locator('body')).toHaveClass(/panel-page/);
+  await expect(page.locator('body')).toHaveClass(/xk-workspace-scroll-disabled/);
 });
