@@ -117,22 +117,23 @@ choose_happ_option() {
       HAPP_OPTION="1"
       XKEEN_HAPP_DECRYPTOR_INSTALL="$HAPP_OPTION"
       export XKEEN_HAPP_DECRYPTOR_INSTALL
-      printf '  %bДополнение:%b  Happ-декриптор будет установлен\n' "$UI_DIM" "$UI_RESET" >&3
+      printf '  %bДополнение:%b  режим разработчика для подписок включён\n' "$UI_DIM" "$UI_RESET" >&3
       return 0
       ;;
     0)
       HAPP_OPTION="0"
       XKEEN_HAPP_DECRYPTOR_INSTALL="$HAPP_OPTION"
       export XKEEN_HAPP_DECRYPTOR_INSTALL
-      printf '  %bДополнение:%b  Happ-декриптор пропущен\n' "$UI_DIM" "$UI_RESET" >&3
+      printf '  %bДополнение:%b  режим разработчика для подписок пропущен\n' "$UI_DIM" "$UI_RESET" >&3
       return 0
       ;;
   esac
 
   HAPP_OPTION="0"
   if [ -t 0 ] && [ -r /dev/tty ]; then
-    printf '  %bДополнение%b   Декриптор ссылок Happ\n' "$UI_BOLD" "$UI_RESET" >&3
-    ui_info "Нужен для happ://crypt. Ключи: LeeeeT/happ-decryptor на GitHub."
+    printf '  %bДополнение%b   Режим разработчика для подписок\n' "$UI_BOLD" "$UI_RESET" >&3
+    ui_info "Расширенная обработка ссылок при импорте подписок."
+    ui_info "Компоненты загрузятся с GitHub."
     printf '      Установить? [y/N]: ' >&3
     IFS= read -r HAPP_ANSWER < /dev/tty || HAPP_ANSWER=""
     case "$HAPP_ANSWER" in

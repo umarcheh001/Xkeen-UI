@@ -86,7 +86,7 @@ def test_without_terminal_nothing_is_downloaded():
 def test_explicit_yes_installs(answer):
     code, text, installer, _stdin = _run({}, answer=answer, tty=True)
     assert (code, installer.calls) == (0, 1)
-    assert "LeeeeT/happ-decryptor" in text, "the question names where the keys come from"
+    assert "Компоненты загрузятся с GitHub." in text, "the question says that something is downloaded"
 
 
 @pytest.mark.parametrize("answer", ["", "n", "no", "нет", "н"])

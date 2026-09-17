@@ -59,8 +59,8 @@ def test_installer_exposes_optional_component_choices_without_child_prompt_noise
     assert 'export XKEEN_GEODAT_INSTALL' in text
     assert 'if [ "${GEODAT_OPTION:-1}" = "1" ]; then' in text
     assert 'choose_happ_option() {' in text
-    assert 'Декриптор ссылок Happ' in text
-    assert 'LeeeeT/happ-decryptor' in text
+    assert 'Режим разработчика для подписок' in text
+    assert 'Компоненты загрузятся с GitHub.' in text
     assert 'Установить? [y/N]:' in text
     assert 'export XKEEN_HAPP_DECRYPTOR_INSTALL' in text
 

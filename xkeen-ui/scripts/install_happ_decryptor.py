@@ -40,8 +40,8 @@ def _wants_install(env, stdin, out) -> bool:
         return False
 
     print("", file=out)
-    print("Установить декриптор ссылок Happ (happ://crypt…)?", file=out)
-    print("Движок скачается из релиза Xkeen-UI, ключи Happ — из репозитория LeeeeT/happ-decryptor на GitHub.", file=out)
+    print("Установить режим разработчика для подписок?", file=out)
+    print("Расширенная обработка ссылок при импорте подписок. Компоненты загрузятся с GitHub.", file=out)
     out.write("Введите y/N: ")
     out.flush()
     answer = (stdin.readline() or "").strip().lower()
