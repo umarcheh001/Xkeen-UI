@@ -3227,6 +3227,49 @@ html[data-theme="light"] .btn-link:hover {
   margin-top: 0;
 }
 
+/* DevTools: named zones below the top row */
+.dt-zone-block {
+  margin-top: 24px;
+}
+
+.dt-zone-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 4px 12px;
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted, #94a3b8);
+}
+
+.dt-zone-head::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: linear-gradient(90deg, var(--border, #334155), transparent);
+}
+
+.dt-zone {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+
+.dt-zone > .card {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.dt-zone > .dt-card-wide { grid-column: 1 / -1; }
+
+/* Зона, у которой ENV-вайтлист спрятал все карточки, уходит вместе с подписью */
+.dt-zone-block:not(:has(.card:not([data-xk-force-hidden]))) {
+  display: none;
+}
+
 @media (max-width: 1024px) {
   .layout-2col {
     grid-template-columns: minmax(0, 1fr);
@@ -3241,6 +3284,10 @@ html[data-theme="light"] .btn-link:hover {
 
   /* On smaller screens: keep DevTools readable */
   .dt-tools-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dt-zone {
     grid-template-columns: minmax(0, 1fr);
   }
 }
