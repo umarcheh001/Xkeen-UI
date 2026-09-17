@@ -514,11 +514,28 @@ def test_groups_lifecycle_stops_load_and_delay_work_outside_control_view():
         assert fragment in feature or fragment in groups
 
 
+def test_duplicate_group_activation_does_not_restart_a_healthy_load():
+    groups = _text(GROUPS)
+
+    assert "const ACTIVATION_REFRESH_GUARD_MS = 1500;" in groups
+    assert "const wasActive = active;" in groups
+    assert "wasActive && (request || (payload && Date.now() - payloadLoadedAt" in groups
+
+
 def test_telemetry_starts_only_for_connections_subview():
     feature = _text(FEATURE)
 
     assert "currentSubview === 'connections'" in feature
     assert "currentSubview !== 'config'\n      && payload?.capabilities?.telemetry_stream" not in feature
+
+
+def test_connections_defer_group_visuals_until_a_snapshot_has_rows():
+    connections = _text(CONNECTIONS)
+
+    assert "function ensureRouteVisuals(runGeneration)" in connections
+    assert "if (!rows.length) return;" in connections
+    assert "snapshot = next;\n  render();\n  ensureRouteVisuals(generation);" in connections
+    assert connections.count("fetchMihomoClashGroups({ signal:") == 1
 
 
 def test_connections_ui_has_live_fallback_overview_and_guarded_actions():

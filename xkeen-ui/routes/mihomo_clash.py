@@ -83,7 +83,10 @@ DNS_QUERY_CACHE_TTL_SECONDS = 1.0
 # status/config TTL. This preserves fast failure detection without making
 # concurrent status requests duplicate the two upstream calls.
 STATUS_CACHE_TTL_SECONDS = 1.5
-GROUPS_CACHE_TTL_SECONDS = 1.0
+# Building the provider-enriched DTO is expensive on small routers and can
+# approach a megabyte of JSON. Keep the normalized result warm long enough to
+# absorb duplicate lifecycle requests without making group changes feel stale.
+GROUPS_CACHE_TTL_SECONDS = 5.0
 GROUPS_CACHE_WAIT_SECONDS = 9.0
 PROVIDERS_CACHE_TTL_SECONDS = 10.0
 RULES_CACHE_TTL_SECONDS = 10.0

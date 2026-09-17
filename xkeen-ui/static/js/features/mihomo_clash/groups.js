@@ -47,6 +47,10 @@ const NO_SORT_TYPES = new Set([
   'load-balance',
 ]);
 const COLLAPSED_GROUPS_STORAGE_KEY = 'xkeen:mihomo-clash-collapsed-groups';
+// A status refresh can finish while the previous group activation is still
+// rendering. Do not abort a healthy request (or immediately refetch its
+// result) when the same view is activated twice in quick succession.
+const ACTIVATION_REFRESH_GUARD_MS = 1500;
 
 let root = null;
 let active = false;
@@ -1833,12 +1837,17 @@ export function initMihomoClashGroups() {
 
 export function activateMihomoClashGroups(nextCapabilities = {}, nextRuntimeMode = '') {
   if (!initMihomoClashGroups()) return false;
+  const wasActive = active;
   active = true;
   capabilities = nextCapabilities || {};
   runtimeMode = String(nextRuntimeMode || '').toLowerCase();
   // Re-read Mihomo whenever the operator returns to Clash API. This mirrors
   // the useful part of Zashboard's lifecycle and updates alive/group state;
   // the freshness TTL still prevents old core history from looking current.
+  if (wasActive && (request || (payload && Date.now() - payloadLoadedAt < ACTIVATION_REFRESH_GUARD_MS))) {
+    render();
+    return true;
+  }
   void refreshMihomoClashGroups();
   return true;
 }

@@ -160,6 +160,26 @@ def test_slow_consumer_is_disconnected_without_blocking_registry():
     assert subscription.closed_reason == "slow_consumer"
 
 
+def test_published_frames_are_isolated_without_mutating_source_payloads():
+    hub = TelemetryHub(target(), client_factory=StubClient, stop_grace_seconds=0)
+    connections = {
+        "schema_version": 1,
+        "connections": [{"id": "one", "metadata": {"host": "example.test"}}],
+        "download_total": 100,
+        "upload_total": 40,
+    }
+
+    hub._publish_success("connections", connections)
+    hub._publish_success("memory", {"inuse": 2048})
+
+    latest = hub.history[-1]
+    assert latest["payload"]["connections"]["memory"] == 2048
+    assert "memory" not in connections
+
+    latest["payload"]["connections"]["connections"][0]["id"] = "mutated"
+    assert hub.history[-1]["payload"]["connections"]["connections"][0]["id"] == "one"
+
+
 def test_registry_deduplicates_target_and_idle_hub_can_be_recreated():
     stop_all_telemetry_hubs()
     first = get_telemetry_hub(target(), client_factory=StubClient, stop_grace_seconds=0)

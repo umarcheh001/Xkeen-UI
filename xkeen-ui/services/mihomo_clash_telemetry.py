@@ -368,7 +368,11 @@ class TelemetryHub:
         ages: list[int] = []
         for name, state in self._sources.items():
             if state.payload is not None:
-                source_payload[name] = copy.deepcopy(state.payload)
+                # Source payloads are replaced atomically by _publish_success
+                # and are never mutated after publication. Reusing the
+                # object here avoids copying a potentially large connections
+                # list once for every source update.
+                source_payload[name] = state.payload
             item: dict[str, Any] = {"state": state.state}
             if state.error:
                 item["error"] = copy.deepcopy(state.error)
@@ -386,13 +390,13 @@ class TelemetryHub:
         if isinstance(connection, Mapping) and isinstance(memory, Mapping):
             # Keep the existing connections DTO shape so consumers can switch
             # transports without changing inspectors or summary rendering.
-            connection = copy.deepcopy(dict(connection))
+            connection = dict(connection)
             connection["memory"] = max(0, int(memory.get("inuse") or 0))
             source_payload["connections"] = connection
         if updated_source == "connections":
             self._last_rates = self._connection_rates(connection, now)
         if self._last_rates:
-            source_payload["rates"] = copy.deepcopy(self._last_rates)
+            source_payload["rates"] = self._last_rates
         states = [state.state for state in self._sources.values() if state.last_success_ms is not None or state.error]
         if not states or all(state == "error" for state in states):
             overall = "error"
@@ -416,7 +420,11 @@ class TelemetryHub:
             frame["stale_since"] = min(stale_since_values)
         if ages:
             frame["source_age_ms"] = max(ages)
-        self._history.append(copy.deepcopy(frame))
+        # Frames own the dictionaries assembled above; source DTOs are
+        # immutable after assignment. Keep one frame in history and copy only
+        # at the subscriber boundary so fan-out does not multiply the deep
+        # copy cost while the lock is held.
+        self._history.append(frame)
         for subscription in list(self._subscribers.values()):
             try:
                 subscription.queue.put_nowait(copy.deepcopy(frame))

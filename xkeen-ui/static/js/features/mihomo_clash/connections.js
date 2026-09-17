@@ -41,6 +41,7 @@ let selectedId = '';
 let pendingId = '';
 let pendingAll = false;
 let routeVisuals = new Map();
+let routeVisualsAttempted = false;
 let telemetryUnsubscribe = null;
 let telemetryFallbackTriggered = false;
 
@@ -151,6 +152,25 @@ function rebuildRouteVisuals(next) {
       if (nodeName && !routeVisuals.has(nodeName)) routeVisuals.set(nodeName, { icon: String(node?.icon || ''), kind: 'node' });
     }
   }
+}
+
+function ensureRouteVisuals(runGeneration) {
+  if (!active || runGeneration !== generation || routeVisualsAttempted || visualRequest) return;
+  const rows = Array.isArray(snapshot?.connections) ? snapshot.connections : [];
+  if (!rows.length) return;
+  routeVisualsAttempted = true;
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  visualRequest = controller;
+  void fetchMihomoClashGroups({ signal: controller?.signal })
+    .then((next) => {
+      if (!active || runGeneration !== generation) return;
+      rebuildRouteVisuals(next);
+      renderRows();
+    })
+    .catch(() => {})
+    .finally(() => {
+      if (visualRequest === controller) visualRequest = null;
+    });
 }
 
 function routeHopMarkup(name) {
@@ -457,6 +477,7 @@ function applySnapshot(next, receivedAt = Date.now()) {
   rememberClosedConnections(Array.isArray(next.connections) ? next.connections : [], receivedAt, next.truncated !== true);
   snapshot = next;
   render();
+  ensureRouteVisuals(generation);
   return true;
 }
 
@@ -775,16 +796,6 @@ async function startRuntime() {
   root?.setAttribute('aria-busy', 'true');
   const controller = typeof AbortController === 'function' ? new AbortController() : null;
   request = controller;
-  const visualsController = typeof AbortController === 'function' ? new AbortController() : null;
-  visualRequest = visualsController;
-  void fetchMihomoClashGroups({ signal: visualsController?.signal })
-    .then((next) => {
-      if (!active || runGeneration !== generation) return;
-      rebuildRouteVisuals(next);
-      renderRows();
-    })
-    .catch(() => {})
-    .finally(() => { if (visualRequest === visualsController) visualRequest = null; });
   if (capabilities.telemetry_stream === true) {
     root?.setAttribute('aria-busy', 'false');
     openTelemetry(runGeneration);
@@ -824,6 +835,7 @@ export function activateMihomoClashConnections(nextCapabilities = {}) {
   telemetryFallbackTriggered = false;
   previousTotals = null;
   routeVisuals = new Map();
+  routeVisualsAttempted = false;
   void startRuntime();
   return true;
 }
