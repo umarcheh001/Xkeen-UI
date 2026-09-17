@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.mjs';
+import { test, expect, switchTopView } from './fixtures.mjs';
 
 
 async function openPanel(page, theme, viewport = null) {
@@ -100,7 +100,7 @@ test.describe('Operator Console Stage 1 primitive contract', () => {
       await expect(page.locator('#ui-settings-modal')).toBeHidden();
 
       for (const view of ['routing', 'mihomo', 'xkeen', 'xray-logs', 'commands', 'files']) {
-        await page.locator(`.top-tab-btn[data-view="${view}"]`).click();
+        await switchTopView(page, view);
         await expect(page.locator(`#view-${view}`)).toBeVisible();
         expect(await collectChromeEffects(page), `legacy effects in ${view}/${theme}`).toEqual([]);
 

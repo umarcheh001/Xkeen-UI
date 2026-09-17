@@ -1150,6 +1150,10 @@ test('automatic fixed group shows lock, unfix action and sorting', async ({ page
 
   await page.goto('/');
   await page.locator('.top-tab-btn[data-view="mihomo"]').click();
+  // Операторская шапка переносит переключатели групп в меню «Параметры» уже
+  // после отрисовки вкладки и закрывает меню, если открыть его раньше. Ждём,
+  // пока переключатель окажется внутри меню, а не спим наугад.
+  await expect(page.locator('#xk-mihomo-parameters-menu #mihomo-clash-show-hidden')).toBeAttached();
   await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
   await page.locator('#mihomo-clash-show-hidden').check();
   await page.keyboard.press('Escape');

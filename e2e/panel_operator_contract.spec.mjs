@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.mjs';
+import { test, expect, switchTopView } from './fixtures.mjs';
 
 
 async function openPanel(page, theme = 'dark') {
@@ -40,7 +40,7 @@ test.describe('Operator Console Stage 0 runtime contract', () => {
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 
     for (const view of ['mihomo', 'xkeen', 'xray-logs', 'commands', 'files', 'routing']) {
-      await page.locator(`.top-tab-btn[data-view="${view}"]`).click();
+      await switchTopView(page, view);
       await expect(page.locator(`#view-${view}`)).toBeVisible();
     }
     await expect(page.locator('#routing-rules-header')).toHaveAttribute('data-xk-collapse-wired', '1');
@@ -145,7 +145,7 @@ test.describe('Operator Console Stage 0 runtime contract', () => {
     await expect(page.locator('.xk-mihomo-topbar .xk-routing-active-inline')).toBeAttached();
     await expect(page.locator('.xk-mihomo-topbar .xk-routing-active-inline')).toBeHidden();
 
-    await page.locator('.top-tab-btn[data-view="routing"]').click();
+    await switchTopView(page, 'routing');
     await page.locator('#outbounds-open-editor-btn').click();
     await expect(page.locator('#json-editor-file-label')).toBeAttached();
     await expect(page.locator('#json-editor-file-label')).toBeHidden();

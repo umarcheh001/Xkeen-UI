@@ -119,4 +119,17 @@ export const test = base.extend({
 });
 
 
+// Операторская шапка Mihomo уносит строку вкладок в свёрнутое меню «Разделы»
+// (panel.mihomo_header.js переносит `.header-tabs` при активной вкладке Mihomo).
+// Кнопки вкладок остаются в DOM, но невидимы, и прямой клик по ним висит до
+// таймаута. Переключать вид только через этот помощник.
+export async function switchTopView(page, view) {
+  const tab = page.locator(`.top-tab-btn[data-view="${view}"]`);
+  if (!(await tab.isVisible())) {
+    await page.locator('[aria-controls="xk-mihomo-sections-menu"]').click();
+  }
+  await tab.click();
+}
+
+
 export { expect };

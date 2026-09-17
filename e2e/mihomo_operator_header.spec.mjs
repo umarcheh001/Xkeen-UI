@@ -1,7 +1,10 @@
 import { test, expect } from './fixtures.mjs';
 
 test('Mihomo header preserves controls, service state and navigation in both themes', async ({ page }) => {
-  test.setTimeout(60_000);
+  // Спека обходит два оформления, три ширины и пять меню со скриншотами: на
+  // машине помедленнее это около полутора минут, и в 60 с она не укладывалась —
+  // падала то на клике, то на скриншоте, смотря где кончался бюджет.
+  test.setTimeout(180_000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/api/system/resources', route => route.fulfill({ json: {
