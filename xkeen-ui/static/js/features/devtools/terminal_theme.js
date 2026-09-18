@@ -274,7 +274,7 @@ import { getDevtoolsSharedApi, setDevtoolsNamespaceApi } from '../devtools_names
 
       const n = document.createElement('div');
       n.className = 'dt-theme-alpha-name';
-      n.textContent = 'Opacity';
+      n.textContent = 'Прозрачность';
 
       alphaRange = document.createElement('input');
       alphaRange.type = 'range';
@@ -352,7 +352,7 @@ import { getDevtoolsSharedApi, setDevtoolsNamespaceApi } from '../devtools_names
     const sep = document.createElement('div');
     sep.style.marginTop = '12px';
     sep.style.opacity = '0.85';
-    sep.textContent = 'ANSI palette (16 colors)';
+    sep.textContent = 'Палитра ANSI (16 цветов)';
     host.appendChild(sep);
 
     const palGrid = document.createElement('div');

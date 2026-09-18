@@ -101,12 +101,12 @@
           <section class="card" id="dt-service-card" data-xk-section="service dt-service-card">
             <h2 style="margin-top:0;">Сервис панели</h2>
             <div class="dt-service-actions" aria-label="UI controls">
-              <button type="button" id="dt-ui-start" class="xkeen-ctrl-btn dt-ui-action dt-ui-action-start" title="Запустить сервис веб‑панели (UI).">Start</button>
-              <button type="button" id="dt-ui-stop" class="xkeen-ctrl-btn dt-ui-action dt-ui-action-stop" title="Остановить сервис UI. Текущая вкладка может оборваться — это нормально.">Stop</button>
-              <button type="button" id="dt-ui-restart" class="xkeen-ctrl-btn dt-ui-action dt-ui-action-restart" title="Перезапустить сервис UI (часть настроек применяется после перезапуска). Вкладка может оборваться — это нормально.">Restart</button>
+              <button type="button" id="dt-ui-start" class="xkeen-ctrl-btn dt-ui-action dt-ui-action-start" title="Запустить сервис веб‑панели (UI).">Запустить</button>
+              <button type="button" id="dt-ui-stop" class="xkeen-ctrl-btn dt-ui-action dt-ui-action-stop" title="Остановить сервис UI. Текущая вкладка может оборваться — это нормально.">Остановить</button>
+              <button type="button" id="dt-ui-restart" class="xkeen-ctrl-btn dt-ui-action dt-ui-action-restart" title="Перезапустить сервис UI (часть настроек применяется после перезапуска). Вкладка может оборваться — это нормально.">Перезапустить</button>
             </div>
             <div class="dt-service-actions-secondary">
-              <button type="button" id="dt-ui-refresh" class="btn-secondary dt-ui-refresh-btn" title="Обновить статус сервиса UI.">Refresh</button>
+              <button type="button" id="dt-ui-refresh" class="btn-secondary dt-ui-refresh-btn" title="Обновить статус сервиса UI.">Обновить статус</button>
             </div>
 
             <div id="dt-ui-status" class="status" style="margin-top:10px;">Загрузка…</div>
@@ -128,9 +128,9 @@
               </div>
 
               <div class="dt-update-meta dt-kv-grid small" style="margin-bottom:10px;">
-                <div class="dt-kv"><span class="dt-k">Repo:</span> <code id="dt-update-repo" class="dt-badge dt-badge-info">—</code></div>
-                <div class="dt-kv"><span class="dt-k">Channel:</span> <code id="dt-update-channel" class="dt-badge dt-badge-muted">—</code></div>
-                <div class="dt-kv"><span class="dt-k">Branch:</span> <code id="dt-update-branch" class="dt-badge dt-badge-muted">—</code></div>
+                <div class="dt-kv"><span class="dt-k">Репозиторий:</span> <code id="dt-update-repo" class="dt-badge dt-badge-info">—</code></div>
+                <div class="dt-kv"><span class="dt-k">Канал:</span> <code id="dt-update-channel" class="dt-badge dt-badge-muted">—</code></div>
+                <div class="dt-kv"><span class="dt-k">Ветка:</span> <code id="dt-update-branch" class="dt-badge dt-badge-muted">—</code></div>
               </div>
 
               <div class="dt-kv small" style="margin-bottom:6px;">
@@ -141,7 +141,7 @@
               <div class="small" id="dt-update-current-built" style="margin-bottom:10px; opacity:0.85;"></div>
 
               <div class="dt-kv small" style="margin-bottom:6px;">
-                <span class="dt-k">Latest (<span id="dt-update-latest-kind">—</span>):</span>
+                <span class="dt-k">Последняя (<span id="dt-update-latest-kind">—</span>):</span>
                 <span id="dt-update-latest-version" class="dt-value dt-value-neutral">—</span>
                 <span id="dt-update-latest-date" class="dt-sub"></span>
               </div>
@@ -180,11 +180,11 @@
 
 
               <div class="dt-update-actions" aria-label="Update actions">
-                <button type="button" id="dt-update-check" class="btn-secondary" title="Проверить обновления (stable releases / main tarball).">Check</button>
-                <button type="button" id="dt-update-run" class="xkeen-ctrl-btn" title="Запустить обновление в фоне. Панель перезапустится.">Update</button>
-                <button type="button" id="dt-update-rollback" class="btn-secondary" title="Откатиться на предыдущую версию (из локального backup).">Rollback</button>
-                <button type="button" id="dt-update-refresh" class="btn-secondary" title="Обновить локальный статус и лог операции.">Refresh</button>
-                <button type="button" id="dt-update-open-logs" class="btn-secondary" title="Перейти во вкладку Logs.">Open logs</button>
+                <button type="button" id="dt-update-check" class="btn-secondary" title="Проверить обновления (stable releases / main tarball).">Проверить</button>
+                <button type="button" id="dt-update-run" class="xkeen-ctrl-btn" title="Запустить обновление в фоне. Панель перезапустится.">Обновить панель</button>
+                <button type="button" id="dt-update-rollback" class="btn-secondary" title="Откатиться на предыдущую версию (из локального backup).">Откатить</button>
+                <button type="button" id="dt-update-refresh" class="btn-secondary" title="Обновить локальный статус и лог операции.">Обновить статус</button>
+                <button type="button" id="dt-update-open-logs" class="btn-secondary" title="Перейти во вкладку Logs.">Открыть логи</button>
               </div>
 
               <div id="dt-update-status" class="status" style="margin-top:10px;">—</div>
@@ -227,15 +227,15 @@
             </div>
             <div class="small" id="dt-env-file" style="margin-bottom:10px; opacity:0.9;"></div>
             <div class="small" style="margin-bottom:10px; opacity:0.9;">
-              Значения сохраняются в env-файл. Часть настроек применяется только после Restart UI.
+              Значения сохраняются в env-файл. Часть настроек применяется только после перезапуска панели.
             </div>
             <div class="dt-env-scroll">
               <table>
                 <thead>
                   <tr>
-                    <th>Key</th>
-                    <th>Current</th>
-                    <th>Value</th>
+                    <th>Ключ</th>
+                    <th>Текущее</th>
+                    <th>Новое значение</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -334,12 +334,12 @@
             <div class="dt-collapsible-body">
 
             <div class="small" style="margin-bottom:8px; opacity:0.9;">
-              Настройки логов (часть применяется сразу, часть — после Restart UI).
+              Настройки логов (часть применяется сразу, часть — после перезапуска панели).
             </div>
 
             <div class="dt-logging-grid" role="group" aria-label="Logging settings">
               <label class="dt-logging-field">
-                <span class="dt-logging-label">Core level</span>
+                <span class="dt-logging-label">Уровень логов</span>
                 <select
                   id="dt-log-core-level"
                   class="dt-pill-field"
@@ -355,17 +355,17 @@
               <label class="dt-switch dt-logging-switch" title="Включить/выключить core.log. При выключении записи в core.log не ведутся.">
                 <input id="dt-log-core-enable" type="checkbox" aria-label="Core log">
                 <span class="dt-switch-slider" aria-hidden="true"></span>
-                <span class="dt-switch-label">Core log</span>
+                <span class="dt-switch-label">Лог ядра панели</span>
               </label>
 
               <label class="dt-switch dt-logging-switch" title="Включить подробный лог WebSocket (ws.log). Может сильно увеличить объём логов.">
                 <input id="dt-log-ws-enable" type="checkbox" aria-label="WS debug">
                 <span class="dt-switch-slider" aria-hidden="true"></span>
-                <span class="dt-switch-label">WS debug</span>
+                <span class="dt-switch-label">Отладка WebSocket</span>
               </label>
 
               <label class="dt-logging-field">
-                <span class="dt-logging-label">Rotate (MB)</span>
+                <span class="dt-logging-label">Ротация (МБ)</span>
                 <input
                   id="dt-log-rotate-mb"
                   class="dt-pill-field"
@@ -379,7 +379,7 @@
               </label>
 
               <label class="dt-logging-field">
-                <span class="dt-logging-label">Backups</span>
+                <span class="dt-logging-label">Копий лога</span>
                 <input
                   id="dt-log-rotate-backups"
                   class="dt-pill-field"
@@ -394,7 +394,7 @@
             </div>
 
             <div class="dt-logging-actions">
-              <button type="button" id="dt-log-settings-save" class="btn-secondary" title="Сохранить настройки логирования в env‑файл и применить (часть — после Restart UI).">Save</button>
+              <button type="button" id="dt-log-settings-save" class="btn-secondary" title="Сохранить настройки логирования в env‑файл и применить (часть — после перезапуска панели).">Сохранить</button>
             </div>
 
             <div class="small" style="margin-top:8px; opacity:0.85;">
@@ -417,20 +417,20 @@
                 <label class="dt-switch" title="Включить независимую тему терминала.">
                   <input id="dt-term-enabled" type="checkbox" aria-label="Terminal theme enabled">
                   <span class="dt-switch-slider" aria-hidden="true"></span>
-                  <span class="dt-switch-label">Enabled</span>
+                  <span class="dt-switch-label">Включена</span>
                 </label>
 
                 <div class="dt-theme-target" role="group" aria-label="Terminal target theme">
-                  <button type="button" id="dt-term-target-dark" class="dt-chip-btn active" aria-selected="true" title="Редактировать настройки для тёмной темы терминала.">Dark</button>
-                  <button type="button" id="dt-term-target-light" class="dt-chip-btn" aria-selected="false" title="Редактировать настройки для светлой темы терминала.">Light</button>
+                  <button type="button" id="dt-term-target-dark" class="dt-chip-btn active" aria-selected="true" title="Редактировать настройки для тёмной темы терминала.">Тёмная</button>
+                  <button type="button" id="dt-term-target-light" class="dt-chip-btn" aria-selected="false" title="Редактировать настройки для светлой темы терминала.">Светлая</button>
                 </div>
               </div>
 
               <div id="dt-term-fields"></div>
 
               <div class="dt-logging-actions" style="margin-top:12px; flex-wrap:wrap;">
-                <button type="button" id="dt-term-save" class="btn-secondary" title="Сохранить и применить тему терминала.">Save</button>
-                <button type="button" id="dt-term-reset" class="btn-secondary" title="Удалить terminal_theme.* и вернуться к наследованию глобальной темы.">Reset</button>
+                <button type="button" id="dt-term-save" class="btn-secondary" title="Сохранить и применить тему терминала.">Сохранить</button>
+                <button type="button" id="dt-term-reset" class="btn-secondary" title="Удалить terminal_theme.* и вернуться к наследованию глобальной темы.">Сбросить</button>
               </div>
               <div class="small" id="dt-term-meta" style="margin-top:10px; opacity:0.85;"></div>
               <div class="small" id="dt-term-status" style="margin-top:10px; opacity:0.85;"></div>
@@ -465,10 +465,10 @@
                   <div class="dt-branding-row">
                     <input id="dt-branding-logo-url" type="url" class="dt-pill-field" placeholder="https://... или data:image/..." autocomplete="off">
                     <label id="dt-branding-logo-upload-btn" class="btn-secondary dt-btn-like dt-file-label" role="button" tabindex="0" title="Загрузить файл логотипа (изображение).">
-                      Upload
+                      Загрузить
                       <input id="dt-branding-logo-file" type="file" accept="image/*" class="dt-file-input-overlay">
                     </label>
-                    <button type="button" id="dt-branding-logo-clear" class="btn-secondary" title="Очистить логотип (убрать URL/файл).">Clear</button>
+                    <button type="button" id="dt-branding-logo-clear" class="btn-secondary" title="Очистить логотип (убрать URL/файл).">Очистить</button>
                   </div>
                   <img id="dt-branding-logo-preview" class="dt-branding-preview hidden" alt="Logo preview">
                 </div>
@@ -478,10 +478,10 @@
                   <div class="dt-branding-row">
                     <input id="dt-branding-favicon-url" type="url" class="dt-pill-field" placeholder="https://... или data:image/..." autocomplete="off">
                     <label id="dt-branding-favicon-upload-btn" class="btn-secondary dt-btn-like dt-file-label" role="button" tabindex="0" title="Загрузить файл favicon (.ico или изображение).">
-                      Upload
+                      Загрузить
                       <input id="dt-branding-favicon-file" type="file" accept="image/*,.ico" class="dt-file-input-overlay">
                     </label>
-                    <button type="button" id="dt-branding-favicon-clear" class="btn-secondary" title="Очистить favicon (убрать URL/файл).">Clear</button>
+                    <button type="button" id="dt-branding-favicon-clear" class="btn-secondary" title="Очистить favicon (убрать URL/файл).">Очистить</button>
                   </div>
                   <img id="dt-branding-favicon-preview" class="dt-branding-preview hidden" alt="Favicon preview">
                 </div>
@@ -526,8 +526,8 @@
               </div>
 
               <div class="dt-logging-actions" style="margin-top:12px;">
-                <button type="button" id="dt-branding-save" class="btn-secondary" title="Сохранить и применить настройки брендинга (на роутере).">Save</button>
-                <button type="button" id="dt-branding-reset" class="btn-secondary" title="Сбросить брендинг по умолчанию (на роутере).">Reset</button>
+                <button type="button" id="dt-branding-save" class="btn-secondary" title="Сохранить и применить настройки брендинга (на роутере).">Сохранить</button>
+                <button type="button" id="dt-branding-reset" class="btn-secondary" title="Сбросить брендинг по умолчанию (на роутере).">Сбросить</button>
               </div>
               <div id="dt-branding-status" class="small" style="margin-top:8px; opacity:0.85;"></div>
             </div>
@@ -602,7 +602,7 @@
               </div>
 
               <div class="dt-logging-actions">
-                <button type="button" id="dt-typo-reset" class="btn-secondary" title="Сбросить настройки типографики.">Reset</button>
+                <button type="button" id="dt-typo-reset" class="btn-secondary" title="Сбросить настройки типографики.">Сбросить</button>
               </div>
             </div>
             </div>
@@ -728,7 +728,7 @@
               </div>
 
               <div class="dt-logging-actions">
-                <button type="button" class="btn-secondary" id="dt-layout-tabs-reset" title="Сбросить порядок/избранные вкладок.">Reset tabs</button>
+                <button type="button" class="btn-secondary" id="dt-layout-tabs-reset" title="Сбросить порядок/избранные вкладок.">Сбросить вкладки</button>
               </div>
             </div>
           </details>
@@ -747,7 +747,7 @@
       <aside class="dt-logs-sidebar" aria-label="Log list">
         <div class="dt-logs-sidebar-top">
           <div class="small" style="opacity:0.9;">Logs</div>
-          <button type="button" id="dt-log-list-refresh" class="btn-secondary dt-log-btn" title="Обновить список логов.">Refresh</button>
+          <button type="button" id="dt-log-list-refresh" class="btn-secondary dt-log-btn" title="Обновить список логов.">Обновить</button>
         </div>
 
         <div id="dt-log-list" class="dt-log-list" role="listbox" aria-label="Список логов">
@@ -761,26 +761,26 @@
       <div class="dt-logs-main">
         <div class="dt-log-topbar" aria-label="Log controls">
           <div class="small dt-log-current" style="white-space:nowrap;">
-            Log: <strong id="dt-log-current-name">—</strong>
+            Лог: <strong id="dt-log-current-name">—</strong>
           </div>
 
           <!-- Hidden legacy select (kept for backward compatibility with existing JS logic) -->
           <select id="dt-log-select" style="display:none;"></select>
 
           <div class="dt-log-topbar-actions">
-            <button type="button" id="dt-log-refresh" class="btn-secondary dt-log-btn" title="Загрузить хвост выбранного лога.">Refresh</button>
-            <button type="button" id="dt-log-copy" class="btn-secondary dt-log-btn" title="Скопировать все видимые строки (с учётом фильтров).">Copy</button>
+            <button type="button" id="dt-log-refresh" class="btn-secondary dt-log-btn" title="Загрузить хвост выбранного лога.">Обновить</button>
+            <button type="button" id="dt-log-copy" class="btn-secondary dt-log-btn" title="Скопировать все видимые строки (с учётом фильтров).">Копировать</button>
 
             <details class="dt-log-menu" id="dt-log-more">
               <summary class="btn-secondary dt-log-btn" title="Дополнительно" aria-label="Дополнительно">⋯</summary>
               <div class="dt-log-menu-panel" role="menu" aria-label="Дополнительные действия">
                 <label class="small dt-log-menu-row">
-                  lines
+                  строк
                   <input id="dt-log-lines" type="number" min="50" max="2000" value="400" class="dt-log-lines-input" title="Сколько последних строк показать (50–2000).">
                 </label>
-                <button type="button" id="dt-log-load-more" class="btn-secondary dt-log-btn" title="Подгрузить более старые строки (увеличить окно назад).">Load more</button>
-                <button type="button" id="dt-log-download" class="btn-secondary dt-log-btn" title="Скачать выбранный лог‑файл.">Download</button>
-                <button type="button" id="dt-log-clear" class="btn-danger dt-log-btn" title="Очистить (обнулить) выбранный лог‑файл.">Clear</button>
+                <button type="button" id="dt-log-load-more" class="btn-secondary dt-log-btn" title="Подгрузить более старые строки (увеличить окно назад).">Загрузить ещё</button>
+                <button type="button" id="dt-log-download" class="btn-secondary dt-log-btn" title="Скачать выбранный лог‑файл.">Скачать</button>
+                <button type="button" id="dt-log-clear" class="btn-danger dt-log-btn" title="Очистить (обнулить) выбранный лог‑файл.">Очистить</button>
               </div>
             </details>
           </div>
@@ -808,26 +808,26 @@
           <label class="dt-switch" title="Live режим (tail -f): авто‑подтягивание новых строк.">
             <input id="dt-log-live" type="checkbox" />
             <span class="dt-switch-slider" aria-hidden="true"></span>
-            <span class="dt-switch-label">Live</span>
+            <span class="dt-switch-label">Онлайн</span>
           </label>
           <!-- Legacy Auto checkbox (kept for backward compatibility with existing JS logic) -->
           <input id="dt-log-auto" type="checkbox" style="display:none;" />
 
           <div class="dt-log-interval" title="Интервал авто‑обновления.">
-            <span class="dt-log-interval-label">every</span>
+            <span class="dt-log-interval-label">каждые</span>
             <select id="dt-log-interval" class="xray-log-select">
-              <option value="1000">1s</option>
-              <option value="2000">2s</option>
-              <option value="5000" selected>5s</option>
-              <option value="10000">10s</option>
-              <option value="30000">30s</option>
+              <option value="1000">1 с</option>
+              <option value="2000">2 с</option>
+              <option value="5000" selected>5 с</option>
+              <option value="10000">10 с</option>
+              <option value="30000">30 с</option>
             </select>
           </div>
 
           <label class="dt-switch" title="Авто‑прокрутка в конец при обновлении.">
             <input id="dt-log-follow" type="checkbox" checked />
             <span class="dt-switch-slider" aria-hidden="true"></span>
-            <span class="dt-switch-label">Follow</span>
+            <span class="dt-switch-label">В конец</span>
           </label>
 
           <span class="small dt-log-stats" id="dt-log-stats" aria-live="polite"></span>
@@ -865,7 +865,7 @@
           </div>
           <div class="modal-actions">
             <button type="button" id="confirm-modal-cancel-btn" title="Отменить действие и закрыть окно подтверждения.">Отменить</button>
-            <button type="button" id="confirm-modal-ok-btn" class="btn-danger" title="Подтвердить действие.">OK</button>
+            <button type="button" id="confirm-modal-ok-btn" class="btn-danger" title="Подтвердить действие.">Подтвердить</button>
           </div>
         </div>
       </div>
@@ -875,7 +875,7 @@
         <div class="modal-content" style="max-width: 980px;">
           <div class="modal-header">
             <div style="display:flex; flex-direction:column; gap:2px;">
-              <span class="modal-title" id="dt-log-context-title">Context</span>
+              <span class="modal-title" id="dt-log-context-title">Контекст</span>
               <span id="dt-log-context-subtitle" class="modal-hint" style="margin:0; font-size: 0.82rem; opacity:0.75;"></span>
             </div>
             <button type="button" class="modal-close" id="dt-log-context-close-btn" title="Закрыть">×</button>
@@ -884,7 +884,7 @@
             <pre id="dt-log-context-body" class="log-block" style="margin:0; white-space:pre-wrap;"></pre>
           </div>
           <div class="modal-actions" style="justify-content: space-between;">
-            <button type="button" id="dt-log-context-copy-btn" class="btn-secondary" title="Скопировать весь показанный контекст.">Copy context</button>
+            <button type="button" id="dt-log-context-copy-btn" class="btn-secondary" title="Скопировать весь показанный контекст.">Копировать контекст</button>
             <button type="button" id="dt-log-context-ok-btn" title="Закрыть окно.">Закрыть</button>
           </div>
         </div>

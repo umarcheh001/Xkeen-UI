@@ -1140,7 +1140,7 @@ function _maybeToastTailReset() {
   const now = Date.now();
   if (now - _lastTailResetToastAt < 8000) return;
   _lastTailResetToastAt = now;
-  toast('Log reset/rotated — reloading window');
+  toast('Лог очищен или ротирован — перезагружаем окно');
 }
 
 function _renderLogViewFull(view, name, lineChunks, opts) {
@@ -2270,7 +2270,7 @@ function _resetLogBufferAndCursorUi() {
     try { view.dataset.rawText = ''; view.dataset.visibleText = ''; } catch (e) {}
   }
   const statsEl = byId('dt-log-stats');
-  if (statsEl) statsEl.textContent = 'Lines: 0';
+  if (statsEl) statsEl.textContent = 'Строк: 0';
 }
 
 async function clearLog() {
@@ -2950,11 +2950,11 @@ function _wireLogLineActions() {
         const next = Math.min(maxLines, cur + step);
 
         if (!linesEl) {
-          toast('Load more: lines input not found', true);
+          toast('Загрузить ещё: поле «строк» не найдено', true);
           return;
         }
         if (next <= cur) {
-          toast('Load more: already at max window');
+          toast('Загрузить ещё: уже показан максимум строк');
           return;
         }
 

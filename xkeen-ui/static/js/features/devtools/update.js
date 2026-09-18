@@ -1133,8 +1133,8 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
       const hasBk = !!(data && (data.has_backup || (bks && bks.length)));
       if (btnRb) {
         btnRb.style.display = hasBk ? '' : 'none';
-        if (hasBk && bks && bks.length) btnRb.textContent = 'Rollback (' + bks.length + ')';
-        else btnRb.textContent = 'Rollback';
+        if (hasBk && bks && bks.length) btnRb.textContent = 'Откатить (' + bks.length + ')';
+        else btnRb.textContent = 'Откатить';
         btnRb.disabled = (stateVal === 'running');
       }
     } catch (e) {}
@@ -1249,7 +1249,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
           _setProgress(true, 95, true, 'Перезапуск сервиса…');
         }
       } else if (!isSilent) {
-        _setStatus('Status error: ' + (e && e.message ? e.message : String(e)), 'bad');
+        _setStatus('Не удалось получить статус: ' + (e && e.message ? e.message : String(e)), 'bad');
       }
     }
   }
@@ -1265,7 +1265,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
       });
       if (!ok) return;
 
-      _setStatus('Starting rollback…', 'warn');
+      _setStatus('Запускаем откат…', 'warn');
       const data = await postJSON('/api/devtools/update/rollback', {});
       if (data && data.ok) {
         if (data.started) {
@@ -1282,10 +1282,10 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
         }
       } else {
         const err = data && (data.hint || data.error) ? String(data.hint || data.error) : 'rollback_failed';
-        _setStatus('Rollback failed: ' + err, 'bad');
+        _setStatus('Не удалось запустить откат: ' + _ruText(err), 'bad');
       }
     } catch (e) {
-      _setStatus('Rollback error: ' + (e && e.message ? e.message : String(e)), 'bad');
+      _setStatus('Ошибка отката: ' + (e && e.message ? e.message : String(e)), 'bad');
     }
   }
 
@@ -1346,7 +1346,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
 
       const payload = (resolved && resolved.asset_url) ? { resolved } : {};
 
-      _setStatus('Starting update…', 'warn');
+      _setStatus('Запускаем обновление…', 'warn');
       let data = await postJSON('/api/devtools/update/run', payload);
       if (!(data && data.ok) && _isBackupTarUnsupported(data)) {
         _renderBackupTarUnsupported(data);
@@ -1361,7 +1361,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
         if (!skipBackup) return;
 
         const noBackupPayload = Object.assign({}, payload || {}, { skip_backup: true });
-        _setStatus('Starting update without backup…', 'warn');
+        _setStatus('Запускаем обновление без резервной копии…', 'warn');
         data = await postJSON('/api/devtools/update/run', noBackupPayload);
       }
       if (data && data.ok) {
@@ -1379,10 +1379,10 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
         }
       } else {
         const err = data && (data.hint || data.error) ? String(data.hint || data.error) : 'run_failed';
-        _setStatus('Run failed: ' + err, 'bad');
+        _setStatus('Не удалось запустить обновление: ' + _ruText(err), 'bad');
       }
     } catch (e) {
-      _setStatus('Run error: ' + (e && e.message ? e.message : String(e)), 'bad');
+      _setStatus('Ошибка запуска: ' + (e && e.message ? e.message : String(e)), 'bad');
     }
   }
 

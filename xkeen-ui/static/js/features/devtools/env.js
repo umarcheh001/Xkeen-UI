@@ -118,7 +118,7 @@ import { iconHtml } from '../../ui/operator_icons.js';
   // ------------------------- ENV -------------------------
 
   const ENV_HELP = {
-    'XKEEN_UI_PORT': 'Порт веб-панели Xkeen UI. По умолчанию: 8088. Installer сохраняет его в devtools.env, чтобы обновления не сбрасывали порт назад на дефолт. После изменения нужен Restart UI.',
+    'XKEEN_UI_PORT': 'Порт веб-панели Xkeen UI. По умолчанию: 8088. Installer сохраняет его в devtools.env, чтобы обновления не сбрасывали порт назад на дефолт. После изменения нужен перезапуск панели.',
     'XKEEN_UI_STATE_DIR': 'Каталог состояния UI (auth, devtools.env, restart.log и т.п.). По умолчанию: /opt/etc/xkeen-ui.',
     'XKEEN_UI_ENV_FILE': 'Путь к env‑файлу DevTools (по умолчанию <UI_STATE_DIR>/devtools.env). Обычно менять не нужно. Эта переменная отображается только для информации (read‑only).',
     'XKEEN_UI_SECRET_KEY': 'Секретный ключ Flask/сессий. При смене ключа текущие сессии станут недействительными. Значение не отображается.',
@@ -197,7 +197,7 @@ import { iconHtml } from '../../ui/operator_icons.js';
   };
 
   ENV_HELP.XKEEN_INIT_SCRIPT = 'Rezervnyi put k init.d-skriptu XKeen dlya fallback-scenariev sovmestimosti. Osnovnoi put upravleniya - CLI `xkeen`; pri ego nedostupnosti UI ishet S05xkeen, potom S99xkeen.';
-  ENV_HELP.XKEEN_ALLOW_SHELL = 'Arbitrary shell в UI. По умолчанию 0 (выключено). Значение 1 включает shell для новых запусков терминала без Restart UI. Включайте только в доверенной сети.';
+  ENV_HELP.XKEEN_ALLOW_SHELL = 'Arbitrary shell в UI. По умолчанию 0 (выключено). Значение 1 включает shell для новых запусков терминала без перезапуска панели. Включайте только в доверенной сети.';
   ENV_HELP.XKEEN_AUTH_LOGIN_WINDOW_SECONDS = 'Окно учёта неудачных логинов в секундах. По умолчанию 300.';
   ENV_HELP.XKEEN_AUTH_LOGIN_MAX_ATTEMPTS = 'Максимум неудачных попыток входа с одного адреса в пределах окна. По умолчанию 5. Значение 0 отключает lockout.';
   ENV_HELP.XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS = 'На сколько секунд блокировать новые попытки входа после исчерпания лимита. По умолчанию 900. Значение 0 отключает lockout.';
@@ -208,40 +208,40 @@ import { iconHtml } from '../../ui/operator_icons.js';
   ENV_HELP.XKEEN_GEODAT_UPLOAD_MAX_BYTES = 'Максимальный размер загружаемого бинарника xk-geodat через UI, в байтах. По умолчанию 16777216 (16 MiB).';
   ENV_HELP.XKEEN_ROUTING_SAVE_MAX_BYTES = 'Максимальный размер тела для сохранения JSON/JSONC роутинга Xray, в байтах. По умолчанию 1048576.';
   ENV_HELP.XKEEN_CONFIG_EXCHANGE_MAX_BYTES = 'Максимальный размер входящего тела для config exchange import/export API, в байтах. По умолчанию 4194304.';
-  ENV_HELP.XKEEN_MIHOMO_HWID = 'Ручной override x-hwid для premium/HWID-подписок Mihomo. Обычно оставьте пустым: панель сама определит HWID роутера. Заполняйте только если провайдер уже привязал подписку к конкретному HWID или ожидает значение из кабинета/поддержки. Применяется при следующей проверке/генерации HWID-подписки без Restart UI.';
-  ENV_HELP.XKEEN_MIHOMO_UI_ALLOW_PROXY_FALLBACK = 'Разрешить same-origin proxy для Zashboard, когда Mihomo controller доступен только через loopback. По умолчанию 0 (выключено): браузерные файлы Zashboard не получают origin и cookies панели. Включайте только осознанно в доверенной LAN/VPN; применяется при следующем открытии Zashboard без Restart UI.';
-  ENV_HELP.XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE = 'Включить Telemetry Hub в разделе «Соединения». Значение 1 открывает один same-origin WebSocket панели и объединяет snapshots connections/memory; 0 возвращает текущий поток соединений или HTTP fallback. По умолчанию 1. Применяется после повторного открытия вкладки «Соединения», Restart UI не нужен.';
-  ENV_HELP.XKEEN_MIHOMO_TRAFFIC_ENABLE = 'Добавить в Telemetry Hub отдельный reader Mihomo /traffic с опросом раз в секунду. Значение 1 полезно для точных текущих скоростей; 0 оставляет вычисление скорости по connections. Работает только вместе с XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE=1. По умолчанию 0, Restart UI не нужен.';
-  ENV_HELP.XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH = 'Аварийно отключить Telemetry Hub и optional /traffic. Значение 1 принудительно возвращает раздел «Соединения» к прежнему WS/HTTP fallback, даже если оба флага включения равны 1. По умолчанию 0, Restart UI не нужен.';
-  ENV_HELP.XKEEN_MIHOMO_DNS_QUERY_ENABLE = 'Включить DNS diagnostics: read-only запрос через текущий Mihomo `/dns/query`. Значение 1 включено по умолчанию; endpoint и версия ядра всё равно проверяются, а неподдерживаемые сборки честно показывают ошибку. Применяется сразу, Restart UI не нужен.';
-  ENV_HELP.XKEEN_MIHOMO_DNS_FLUSH_ENABLE = 'Разрешить кнопку очистки DNS cache через `/cache/dns/flush`. Значение 1 включено по умолчанию; операция требует явного подтверждения и не меняет config.yaml. Применяется сразу, Restart UI не нужен.';
-  ENV_HELP.XKEEN_MIHOMO_FAKE_IP_FLUSH_ENABLE = 'Разрешить кнопку очистки Fake-IP cache через `/cache/fakeip/flush`. Значение 1 включено по умолчанию; операция требует явного подтверждения и не меняет config.yaml. Применяется сразу, Restart UI не нужен.';
+  ENV_HELP.XKEEN_MIHOMO_HWID = 'Ручной override x-hwid для premium/HWID-подписок Mihomo. Обычно оставьте пустым: панель сама определит HWID роутера. Заполняйте только если провайдер уже привязал подписку к конкретному HWID или ожидает значение из кабинета/поддержки. Применяется при следующей проверке/генерации HWID-подписки без перезапуска панели.';
+  ENV_HELP.XKEEN_MIHOMO_UI_ALLOW_PROXY_FALLBACK = 'Разрешить same-origin proxy для Zashboard, когда Mihomo controller доступен только через loopback. По умолчанию 0 (выключено): браузерные файлы Zashboard не получают origin и cookies панели. Включайте только осознанно в доверенной LAN/VPN; применяется при следующем открытии Zashboard без перезапуска панели.';
+  ENV_HELP.XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE = 'Включить Telemetry Hub в разделе «Соединения». Значение 1 открывает один same-origin WebSocket панели и объединяет snapshots connections/memory; 0 возвращает текущий поток соединений или HTTP fallback. По умолчанию 1. Применяется после повторного открытия вкладки «Соединения», перезапуск панели не нужен.';
+  ENV_HELP.XKEEN_MIHOMO_TRAFFIC_ENABLE = 'Добавить в Telemetry Hub отдельный reader Mihomo /traffic с опросом раз в секунду. Значение 1 полезно для точных текущих скоростей; 0 оставляет вычисление скорости по connections. Работает только вместе с XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE=1. По умолчанию 0, перезапуск панели не нужен.';
+  ENV_HELP.XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH = 'Аварийно отключить Telemetry Hub и optional /traffic. Значение 1 принудительно возвращает раздел «Соединения» к прежнему WS/HTTP fallback, даже если оба флага включения равны 1. По умолчанию 0, перезапуск панели не нужен.';
+  ENV_HELP.XKEEN_MIHOMO_DNS_QUERY_ENABLE = 'Включить DNS diagnostics: read-only запрос через текущий Mihomo `/dns/query`. Значение 1 включено по умолчанию; endpoint и версия ядра всё равно проверяются, а неподдерживаемые сборки честно показывают ошибку. Применяется сразу, перезапуск панели не нужен.';
+  ENV_HELP.XKEEN_MIHOMO_DNS_FLUSH_ENABLE = 'Разрешить кнопку очистки DNS cache через `/cache/dns/flush`. Значение 1 включено по умолчанию; операция требует явного подтверждения и не меняет config.yaml. Применяется сразу, перезапуск панели не нужен.';
+  ENV_HELP.XKEEN_MIHOMO_FAKE_IP_FLUSH_ENABLE = 'Разрешить кнопку очистки Fake-IP cache через `/cache/fakeip/flush`. Значение 1 включено по умолчанию; операция требует явного подтверждения и не меняет config.yaml. Применяется сразу, перезапуск панели не нужен.';
   ENV_HELP.XKEEN_HAPP_HELPER_CMD = 'Команда helper-дешифратора для Happ/INCY подписок. Если переменная пуста, панель попробует bundled helper `scripts/happ_transport_helper.py` автоматически. В команде можно использовать `%LINK%` как placeholder входной ссылки.';
   ENV_HELP.XKEEN_HAPP_DECRYPTOR_CMD = 'Команда декриптора для ссылок `happ://crypt...`. Обычно не нужна: панель сама находит движок `happ-decrypt-universal`, установленный в DevTools → «Декриптор Happ», а также drop-in декрипторы в `xkeen-ui/bin` или `xkeen-ui/scripts`. В команде можно использовать `%LINK%` как placeholder входной ссылки.';
   ENV_HELP.XKEEN_HAPP_DECRYPTOR_REMOTE_URL = 'Необязательный HTTPS endpoint для remote fallback расшифровки raw `happ://crypt...`. Можно указать либо JSON API endpoint: панель отправит POST `{ \"url\": \"happ://crypt...\" }` и будет ждать JSON с `decryptedUrl`/`url`/`result`, либо URL-шаблон с `%LINK_ENCODED%`/`%LINK%`, который будет вызван через GET. По умолчанию выключено: включайте только если осознанно доверяете внешнему сервису.';
-  ENV_HELP.XKEEN_HAPP_HELPER_TIMEOUT = 'Таймаут запуска Happ helper в секундах. По умолчанию 15. Применяется к следующей попытке импорта или обновления без Restart UI.';
-  ENV_HELP.XKEEN_HAPP_DECRYPTOR_TIMEOUT = 'Таймаут запуска декриптора Happ в секундах. По умолчанию 15 для движка `happ-decrypt-universal` (он отвечает меньше чем за секунду) и 45 для скриптовых декрипторов, например старого Node-скрипта. Применяется к следующей попытке импорта или обновления без Restart UI.';
+  ENV_HELP.XKEEN_HAPP_HELPER_TIMEOUT = 'Таймаут запуска Happ helper в секундах. По умолчанию 15. Применяется к следующей попытке импорта или обновления без перезапуска панели.';
+  ENV_HELP.XKEEN_HAPP_DECRYPTOR_TIMEOUT = 'Таймаут запуска декриптора Happ в секундах. По умолчанию 15 для движка `happ-decrypt-universal` (он отвечает меньше чем за секунду) и 45 для скриптовых декрипторов, например старого Node-скрипта. Применяется к следующей попытке импорта или обновления без перезапуска панели.';
   ENV_HELP.XKEEN_HAPP_DECRYPTOR_RELEASE_URL = 'Откуда DevTools → «Декриптор Happ» и install.sh скачивают движок `happ-decrypt-universal-linux-<arch>` вместе с `SHA256SUMS`. По умолчанию — последний релиз Xkeen-UI на GitHub. Меняйте только для своего зеркала релизов; адреса не на GitHub дополнительно требуют `XKEEN_HAPP_DECRYPTOR_ALLOW_CUSTOM_URLS=1`.';
   ENV_HELP.XKEEN_HAPP_KEYS_MANIFEST_URL = 'Адрес манифеста ключей Happ: коммит LeeeeT/happ-decryptor и sha256 файлов, без самих ключей. По умолчанию — копия из репозитория Xkeen-UI на GitHub; если она недоступна, панель берёт манифест, встроенный в свою версию.';
   ENV_HELP.XKEEN_HAPP_DECRYPTOR_ALLOW_CUSTOM_URLS = 'Разрешить DevTools → «Декриптор Happ» и install.sh скачивать движок и манифест ключей с public URL вне allow-list GitHub — например, из своего зеркала в `XKEEN_HAPP_DECRYPTOR_RELEASE_URL`. По умолчанию 0. Контрольные суммы проверяются в любом случае.';
   ENV_HELP.XKEEN_HAPP_HELPER_HWID = 'Необязательный ручной HWID для bundled Happ helper. Обычно оставьте пустым: helper возьмёт HWID роутера автоматически.';
   ENV_HELP.XKEEN_SUBSCRIPTION_HAPP_USER_AGENT = 'User-Agent для bundled Happ helper и Happ fallback-запросов. По умолчанию: Happ/3.18.3/Android/17771400994551771562.';
-  ENV_HELP.XKEEN_SUBSCRIPTION_ALLOW_HTTP = 'Разрешить подписки по plain HTTP. По умолчанию 1: провайдеры до сих пор часто публикуют публичные фиды по HTTP. Значение 0 требует HTTPS. Private- и локальные адреса блокируются отдельно, независимо от этой настройки. Применяется к следующей загрузке подписки без Restart UI.';
-  ENV_HELP.XKEEN_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS = 'Разрешить подписки с локальных/private адресов, в том числе через редиректы. По умолчанию 0. Включайте только если фид действительно раздаётся внутри вашей сети. Применяется к следующей загрузке подписки без Restart UI.';
-  ENV_HELP.XKEEN_SUBSCRIPTIONS_SCHEDULER = 'Фоновое автообновление Xray-подписок. По умолчанию 1 (включено). Значение 0 полностью отключает планировщик: подписки обновляются только вручную. Требует Restart UI.';
-  ENV_HELP.XKEEN_SUBSCRIPTIONS_SCHEDULER_TICK = 'Период опроса планировщика Xray-подписок в секундах: как часто панель проверяет, не подошёл ли срок обновления. По умолчанию 60, диапазон 15–3600. Требует Restart UI.';
-  ENV_HELP.XKEEN_SUBSCRIPTIONS_LOOKAHEAD_SEC = 'Окно подтягивания «почти созревших» Xray-подписок в секундах. По умолчанию 300 (5 минут), максимум 3600. Подписки, срок которых наступит в пределах окна, обновляются вместе с уже созревшими — так их расписания выравниваются и дальше они идут одной пачкой. Значение 0 отключает подтягивание. Окно работает только когда хотя бы одна подписка реально созрела, поэтому расписание не уезжает вперёд само по себе. Применяется к следующему прогону без Restart UI.';
-  ENV_HELP.XKEEN_SUBSCRIPTIONS_RESTART_BATCH = 'Перезапускать ядро один раз на всю пачку обновлённых Xray-подписок. По умолчанию 1. Значение 0 возвращает старое поведение: отдельный перезапуск на каждую подписку (десять подписок — десять обрывов связи). Применяется к следующему прогону без Restart UI.';
-  ENV_HELP.XKEEN_SUBSCRIPTIONS_SNAPSHOT = 'Создавать rollback-копию сгенерированного фрагмента подписки перед перезаписью. По умолчанию 0 (не создавать): фрагмент полностью восстанавливается повторным обновлением подписки, а копия на каждую подписку только копится в configs/backups и изнашивает flash роутера при каждом изменении фида. Значение 1 возвращает прежнее поведение. Конфиги, которые правит человек (роутинг, inbounds, observatory), копируются всегда, независимо от этой настройки. Применяется к следующему обновлению без Restart UI.';
-  ENV_HELP.XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER = 'То же, что XKEEN_SUBSCRIPTIONS_SCHEDULER, но для подписок Mihomo. По умолчанию 1. Требует Restart UI.';
-  ENV_HELP.XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER_TICK = 'Период опроса планировщика подписок Mihomo в секундах. По умолчанию 60, диапазон 15–3600. Требует Restart UI.';
-  ENV_HELP.XKEEN_MIHOMO_SUBSCRIPTIONS_LOOKAHEAD_SEC = 'Окно подтягивания «почти созревших» подписок Mihomo в секундах. По умолчанию 300, максимум 3600, 0 отключает. Применяется к следующему прогону без Restart UI.';
-  ENV_HELP.XKEEN_MIHOMO_SUBSCRIPTIONS_RESTART_BATCH = 'Один перезапуск ядра на всю пачку обновлённых подписок Mihomo. По умолчанию 1, значение 0 возвращает перезапуск на каждую подписку. Применяется к следующему прогону без Restart UI.';
-  ENV_HELP.XKEEN_DNS_OVER_VLESS_WATCHDOG = 'Фоновый сторож DNS-over-VLESS. По умолчанию 1. Пока защита включена, порт 53 принадлежит ядру, и сторож возвращает DNS прошивке, если ядро не поднимается. Значение 0 отключает сторожа: при отказе ядра сеть останется без DNS до ручного вмешательства. Требует Restart UI.';
-  ENV_HELP.XKEEN_DNS_OVER_VLESS_WATCHDOG_INTERVAL = 'Период проверки сторожа DNS-over-VLESS в секундах. По умолчанию 30, диапазон 5–3600. Требует Restart UI.';
-  ENV_HELP.XKEEN_DNS_OVER_VLESS_WATCHDOG_FAILS = 'Сколько неудачных проверок подряд сторож считает отказом ядра. По умолчанию 3, диапазон 1–100. Требует Restart UI.';
-  ENV_HELP.XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS = 'Сколько раз сторож пробует перезапустить ядро перед тем, как вернуть DNS прошивке. По умолчанию 2, диапазон 0–20. Значение 0 — отдавать DNS сразу. Требует Restart UI.';
-  ENV_HELP.XKEEN_XRAY_TEST_TIMEOUT = 'Таймаут preflight-проверки Xray (`xray -test`) в секундах. По умолчанию 30 секунд для всех роутеров, минимум 5. Пользователь может подобрать значение под своё устройство; применяется при следующем сохранении без Restart UI.';
+  ENV_HELP.XKEEN_SUBSCRIPTION_ALLOW_HTTP = 'Разрешить подписки по plain HTTP. По умолчанию 1: провайдеры до сих пор часто публикуют публичные фиды по HTTP. Значение 0 требует HTTPS. Private- и локальные адреса блокируются отдельно, независимо от этой настройки. Применяется к следующей загрузке подписки без перезапуска панели.';
+  ENV_HELP.XKEEN_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS = 'Разрешить подписки с локальных/private адресов, в том числе через редиректы. По умолчанию 0. Включайте только если фид действительно раздаётся внутри вашей сети. Применяется к следующей загрузке подписки без перезапуска панели.';
+  ENV_HELP.XKEEN_SUBSCRIPTIONS_SCHEDULER = 'Фоновое автообновление Xray-подписок. По умолчанию 1 (включено). Значение 0 полностью отключает планировщик: подписки обновляются только вручную. Требует перезапуска панели.';
+  ENV_HELP.XKEEN_SUBSCRIPTIONS_SCHEDULER_TICK = 'Период опроса планировщика Xray-подписок в секундах: как часто панель проверяет, не подошёл ли срок обновления. По умолчанию 60, диапазон 15–3600. Требует перезапуска панели.';
+  ENV_HELP.XKEEN_SUBSCRIPTIONS_LOOKAHEAD_SEC = 'Окно подтягивания «почти созревших» Xray-подписок в секундах. По умолчанию 300 (5 минут), максимум 3600. Подписки, срок которых наступит в пределах окна, обновляются вместе с уже созревшими — так их расписания выравниваются и дальше они идут одной пачкой. Значение 0 отключает подтягивание. Окно работает только когда хотя бы одна подписка реально созрела, поэтому расписание не уезжает вперёд само по себе. Применяется к следующему прогону без перезапуска панели.';
+  ENV_HELP.XKEEN_SUBSCRIPTIONS_RESTART_BATCH = 'Перезапускать ядро один раз на всю пачку обновлённых Xray-подписок. По умолчанию 1. Значение 0 возвращает старое поведение: отдельный перезапуск на каждую подписку (десять подписок — десять обрывов связи). Применяется к следующему прогону без перезапуска панели.';
+  ENV_HELP.XKEEN_SUBSCRIPTIONS_SNAPSHOT = 'Создавать rollback-копию сгенерированного фрагмента подписки перед перезаписью. По умолчанию 0 (не создавать): фрагмент полностью восстанавливается повторным обновлением подписки, а копия на каждую подписку только копится в configs/backups и изнашивает flash роутера при каждом изменении фида. Значение 1 возвращает прежнее поведение. Конфиги, которые правит человек (роутинг, inbounds, observatory), копируются всегда, независимо от этой настройки. Применяется к следующему обновлению без перезапуска панели.';
+  ENV_HELP.XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER = 'То же, что XKEEN_SUBSCRIPTIONS_SCHEDULER, но для подписок Mihomo. По умолчанию 1. Требует перезапуска панели.';
+  ENV_HELP.XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER_TICK = 'Период опроса планировщика подписок Mihomo в секундах. По умолчанию 60, диапазон 15–3600. Требует перезапуска панели.';
+  ENV_HELP.XKEEN_MIHOMO_SUBSCRIPTIONS_LOOKAHEAD_SEC = 'Окно подтягивания «почти созревших» подписок Mihomo в секундах. По умолчанию 300, максимум 3600, 0 отключает. Применяется к следующему прогону без перезапуска панели.';
+  ENV_HELP.XKEEN_MIHOMO_SUBSCRIPTIONS_RESTART_BATCH = 'Один перезапуск ядра на всю пачку обновлённых подписок Mihomo. По умолчанию 1, значение 0 возвращает перезапуск на каждую подписку. Применяется к следующему прогону без перезапуска панели.';
+  ENV_HELP.XKEEN_DNS_OVER_VLESS_WATCHDOG = 'Фоновый сторож DNS-over-VLESS. По умолчанию 1. Пока защита включена, порт 53 принадлежит ядру, и сторож возвращает DNS прошивке, если ядро не поднимается. Значение 0 отключает сторожа: при отказе ядра сеть останется без DNS до ручного вмешательства. Требует перезапуска панели.';
+  ENV_HELP.XKEEN_DNS_OVER_VLESS_WATCHDOG_INTERVAL = 'Период проверки сторожа DNS-over-VLESS в секундах. По умолчанию 30, диапазон 5–3600. Требует перезапуска панели.';
+  ENV_HELP.XKEEN_DNS_OVER_VLESS_WATCHDOG_FAILS = 'Сколько неудачных проверок подряд сторож считает отказом ядра. По умолчанию 3, диапазон 1–100. Требует перезапуска панели.';
+  ENV_HELP.XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS = 'Сколько раз сторож пробует перезапустить ядро перед тем, как вернуть DNS прошивке. По умолчанию 2, диапазон 0–20. Значение 0 — отдавать DNS сразу. Требует перезапуска панели.';
+  ENV_HELP.XKEEN_XRAY_TEST_TIMEOUT = 'Таймаут preflight-проверки Xray (`xray -test`) в секундах. По умолчанию 30 секунд для всех роутеров, минимум 5. Пользователь может подобрать значение под своё устройство; применяется при следующем сохранении без перезапуска панели.';
   ENV_HELP.XKEEN_DAT_ALLOW_HOSTS = 'Доверенные хосты для обновления DAT по URL. Формат: через запятую. По умолчанию: GitHub/release/raw хосты.';
   ENV_HELP.XKEEN_DAT_ALLOW_HTTP = 'Разрешить plain HTTP для DAT update. По умолчанию 0 (только HTTPS).';
   ENV_HELP.XKEEN_DAT_ALLOW_CUSTOM_URLS = 'Разрешить DAT update с произвольных public URL вне allow-list. По умолчанию 0. Включайте только осознанно.';
@@ -786,12 +786,12 @@ import { iconHtml } from '../../ui/operator_icons.js';
 
     parts.push('<h3 style="margin:12px 0 6px 0;">Кнопки Save / Unset</h3>');
     parts.push('<ul style="margin-top:0;">');
-    parts.push('<li><strong>Save</strong> — записывает значение в env‑файл (devtools.env) и выставляет его в окружение текущего процесса. Для части настроек нужен <strong>Restart UI</strong>, см. ниже.</li>');
+    parts.push('<li><strong>Save</strong> — записывает значение в env‑файл (devtools.env) и выставляет его в окружение текущего процесса. Для части настроек нужен <strong>перезапуск панели</strong>, см. ниже.</li>');
     parts.push('<li><strong>Unset</strong> — удаляет переменную из env‑файла и из окружения процесса. После этого UI вернётся к встроенному значению по умолчанию (или к значению, которое задаёт ваш init‑скрипт/система).</li>');
     parts.push('</ul>');
 
-    parts.push('<h3 style="margin:12px 0 6px 0;">Когда нужен Restart UI</h3>');
-    parts.push('<p style="margin-top:0;">Правило простое: если переменная влияет на <em>инициализацию</em> (регистрацию маршрутов, включение фич, пути каталогов, лимиты/TTL, безопасность, секреты), то изменения надёжно применяются только после <strong>Restart UI</strong>. Некоторые параметры логирования применяются сразу.</p>');
+    parts.push('<h3 style="margin:12px 0 6px 0;">Когда нужен перезапуск панели</h3>');
+    parts.push('<p style="margin-top:0;">Правило простое: если переменная влияет на <em>инициализацию</em> (регистрацию маршрутов, включение фич, пути каталогов, лимиты/TTL, безопасность, секреты), то изменения надёжно применяются только после <strong>перезапуска панели</strong>. Некоторые параметры логирования применяются сразу.</p>');
 
     parts.push('<div class="small" style="opacity:0.9; margin-bottom:6px;">Точно применяются без рестарта:</div>');
     parts.push('<ul style="margin-top:0;">');
@@ -800,7 +800,7 @@ import { iconHtml } from '../../ui/operator_icons.js';
     parts.push('<li><code>XKEEN_UI_MAX_CONTENT_LENGTH</code>, <code>XKEEN_JSON_BODY_MAX_BYTES</code>, <code>XKEEN_JSON_HEAVY_MAX_BYTES</code>, <code>XKEEN_MIHOMO_JSON_MAX_BYTES</code>, <code>XKEEN_GEODAT_UPLOAD_MAX_BYTES</code>, <code>XKEEN_ROUTING_SAVE_MAX_BYTES</code>, <code>XKEEN_CONFIG_EXCHANGE_MAX_BYTES</code> — новые лимиты запросов применяются сразу для следующих API-вызовов.</li>');
     parts.push('</ul>');
 
-    parts.push('<div class="small" style="opacity:0.9; margin-bottom:6px;">Рекомендуется делать Restart UI после изменений (самое частое):</div>');
+    parts.push('<div class="small" style="opacity:0.9; margin-bottom:6px;">Рекомендуется делать перезапуск панели после изменений (самое частое):</div>');
     parts.push('<ul style="margin-top:0;">');
     parts.push('<li>UI/сессии: <code>XKEEN_UI_STATE_DIR</code>, <code>XKEEN_UI_SECRET_KEY</code>, <code>XKEEN_UI_ENV_FILE</code>.</li>');
     parts.push('<li>Включение/инициализация фич: <code>XKEEN_REMOTEFM_*</code>, <code>XKEEN_PTY_*</code>, <code>XKEEN_ALLOW_SHELL</code>.</li>');
@@ -811,19 +811,19 @@ import { iconHtml } from '../../ui/operator_icons.js';
     parts.push('<h3 style="margin:12px 0 6px 0;">Как вернуть всё по умолчанию</h3>');
     parts.push('<ul style="margin-top:0;">');
     parts.push('<li>Для одной переменной: нажмите <strong>Unset</strong> — UI вернётся к дефолту.</li>');
-    parts.push('<li>Для полного сброса: удалите все заданные значения (Unset для нужных строк) или удалите файл <code>devtools.env</code> целиком (через SSH/файловый менеджер). Затем сделайте <strong>Restart UI</strong>.</li>');
+    parts.push('<li>Для полного сброса: удалите все заданные значения (Unset для нужных строк) или удалите файл <code>devtools.env</code> целиком (через SSH/файловый менеджер). Затем сделайте <strong>перезапуск панели</strong>.</li>');
     parts.push('<li>Если меняли <code>XKEEN_UI_SECRET_KEY</code>: Unset вернёт использование ключа из <code>&lt;UI_STATE_DIR&gt;/secret.key</code>. Чтобы сгенерировать новый ключ «как с нуля» — удалите файл <code>secret.key</code> (через SSH) и перезапустите UI.</li>');
     parts.push('</ul>');
 
     parts.push('<h3 style="margin:12px 0 6px 0;">Список переменных (whitelist)</h3>');
-    parts.push('<div class="small" style="opacity:0.85; margin-bottom:8px;">В таблице ниже: назначение и подсказка по необходимости Restart UI.</div>');
+    parts.push('<div class="small" style="opacity:0.85; margin-bottom:8px;">В таблице ниже: назначение и подсказка по необходимости перезапуска панели.</div>');
 
     parts.push('<div class="dt-env-help-table-wrap">');
     parts.push('<table class="dt-env-help-table">');
     parts.push('<thead><tr>');
     parts.push('<th class="dt-env-help-col-key">Key</th>');
     parts.push('<th class="dt-env-help-col-desc">Описание</th>');
-    parts.push('<th class="dt-env-help-col-restart">Restart UI</th>');
+    parts.push('<th class="dt-env-help-col-restart">Перезапуск</th>');
     parts.push('</tr></thead>');
     parts.push('<tbody>');
 
@@ -1013,40 +1013,40 @@ import { iconHtml } from '../../ui/operator_icons.js';
     const btnSave = document.createElement('button');
     btnSave.type = 'button';
     btnSave.className = 'btn-secondary';
-    btnSave.textContent = 'Save';
-    btnSave.title = 'Сохранить значение в env‑файл (devtools.env) и применить в текущем процессе. Для части настроек нужен Restart UI.';
+    btnSave.textContent = 'Сохранить';
+    btnSave.title = 'Сохранить значение в env‑файл (devtools.env) и применить в текущем процессе. Для части настроек нужен перезапуск панели.';
     if (isReadonly) {
       btnSave.disabled = true;
-      btnSave.title = 'Read-only';
+      btnSave.title = 'Только для чтения';
     }
     btnSave.addEventListener('click', async () => {
       const v = String(inp.value || '');
       try {
         const data = await postJSON('/api/devtools/env', { updates: { [key]: v } });
-        toast('Saved: ' + key);
+        toast('Сохранено: ' + key);
         renderEnv(data.items || [], data.env_file || '');
       } catch (e) {
-        toast('Save failed: ' + key + ' — ' + (e && e.message ? e.message : String(e)), true);
+        toast('Не удалось сохранить: ' + key + ' — ' + (e && e.message ? e.message : String(e)), true);
       }
     });
 
     const btnUnset = document.createElement('button');
     btnUnset.type = 'button';
     btnUnset.className = 'btn-danger';
-    btnUnset.textContent = 'Unset';
-    btnUnset.title = 'Удалить переменную из env‑файла (devtools.env) и из окружения процесса. Для части настроек нужен Restart UI.';
+    btnUnset.textContent = 'Сбросить';
+    btnUnset.title = 'Удалить переменную из env‑файла (devtools.env) и из окружения процесса. Для части настроек нужен перезапуск панели.';
     btnUnset.style.marginLeft = '6px';
     if (isReadonly) {
       btnUnset.disabled = true;
-      btnUnset.title = 'Read-only';
+      btnUnset.title = 'Только для чтения';
     }
     btnUnset.addEventListener('click', async () => {
       try {
         const data = await postJSON('/api/devtools/env', { updates: { [key]: null } });
-        toast('Unset: ' + key);
+        toast('Сброшено: ' + key);
         renderEnv(data.items || [], data.env_file || '');
       } catch (e) {
-        toast('Unset failed: ' + key + ' — ' + (e && e.message ? e.message : String(e)), true);
+        toast('Не удалось сбросить: ' + key + ' — ' + (e && e.message ? e.message : String(e)), true);
       }
     });
 
@@ -1154,7 +1154,7 @@ import { iconHtml } from '../../ui/operator_icons.js';
 
     try {
       const data = await postJSON('/api/devtools/env', { updates });
-      toast('Logging settings saved');
+      toast('Настройки логирования сохранены');
       renderEnv(data.items || [], data.env_file || '');
 
       // Refresh logs list/tail (if module is present)
@@ -1162,7 +1162,7 @@ import { iconHtml } from '../../ui/operator_icons.js';
       if (logs && typeof logs.loadLogList === 'function') await logs.loadLogList(true);
       if (logs && typeof logs.loadLogTail === 'function') await logs.loadLogTail(false);
     } catch (e) {
-      toast('Save logging settings failed: ' + (e && e.message ? e.message : String(e)), true);
+      toast('Не удалось сохранить настройки логирования: ' + (e && e.message ? e.message : String(e)), true);
     }
   }
 

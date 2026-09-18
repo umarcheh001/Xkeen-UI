@@ -194,7 +194,7 @@ let uiPrefsIoModuleApi = null;
         try { a.remove(); } catch (e) {}
       }, 0);
     } catch (e) {
-      toast('Download failed: ' + (e && e.message ? e.message : String(e)), true);
+      toast('Не удалось скачать: ' + (e && e.message ? e.message : String(e)), true);
     }
   }
 
@@ -386,7 +386,7 @@ let uiPrefsIoModuleApi = null;
           downloadText(name, txt || '');
           setStatus('Downloaded: ' + name);
         } catch (e) {
-          setStatus('Download failed: ' + (e && e.message ? e.message : String(e)), true);
+          setStatus('Не удалось скачать: ' + (e && e.message ? e.message : String(e)), true);
         }
       });
     }
@@ -451,7 +451,7 @@ let uiPrefsIoModuleApi = null;
           toast('Импорт применён');
         } catch (e) {
           setStatus('Import failed: ' + (e && e.message ? e.message : String(e)), true);
-          toast('Import failed', true);
+          toast('Не удалось импортировать', true);
         }
       });
     }
@@ -512,7 +512,7 @@ let uiPrefsIoModuleApi = null;
           toast('UI-настройки сброшены');
         } catch (e) {
           setStatus('Reset failed: ' + (e && e.message ? e.message : String(e)), true);
-          toast('Reset failed', true);
+          toast('Не удалось сбросить', true);
         }
       });
     }

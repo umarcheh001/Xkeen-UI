@@ -36,7 +36,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
 
       if (managed === 'external' || runningVal === null) {
         if (out) {
-          out.textContent = 'UI: managed externally (dev)';
+          out.textContent = 'Панель управляется извне (режим разработки)';
           out.className = 'status warn';
         }
         return;
@@ -55,16 +55,25 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     }
   }
 
+  // Действия сервиса панели называем так же, как подписаны кнопки.
+  const ACTION_LABELS = {
+    start: 'Запуск панели',
+    stop: 'Остановка панели',
+    restart: 'Перезапуск панели',
+  };
+
   async function runUiAction(action) {
     try {
       const data = await postJSON('/api/devtools/ui/' + encodeURIComponent(action), {});
+      const label = ACTION_LABELS[action] || action;
       if (data && data.ok) {
-        toast('UI: ' + action + ' OK');
+        toast(label + ': готово');
       } else {
-        toast('UI: ' + action + ' error', true);
+        toast(label + ': не удалось', true);
       }
     } catch (e) {
-      toast('UI: ' + action + ' — ' + (e && e.message ? e.message : String(e)), true);
+      const label = ACTION_LABELS[action] || action;
+      toast(label + ': ' + (e && e.message ? e.message : String(e)), true);
     }
     // status may change quickly
     setTimeout(loadUiStatus, 600);
@@ -89,7 +98,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
           try { if (btnRestart) btnRestart.disabled = true; } catch (e) {}
           const out = byId('dt-ui-status');
           if (out) {
-            out.textContent = 'UI: managed externally (dev)';
+            out.textContent = 'Панель управляется извне (режим разработки)';
             out.className = 'status warn';
           }
           const card = byId('dt-service-card');
