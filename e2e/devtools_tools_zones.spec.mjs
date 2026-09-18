@@ -239,7 +239,10 @@ test.describe('DevTools Tools zones', () => {
         updateBottom: b('#dt-update-card').bottom,
         envBottom: b('#dt-env-card').bottom,
         logTop: b('.dt-update-log-summary').top,
+        logBottom: b('.dt-update-log-summary').bottom,
         substatusBottom: b('#dt-update-substatus').bottom,
+        verdictRowBottom: b('.dt-update-verdict-row').bottom,
+        autocheckTop: b('.dt-update-autocheck-row').top,
       };
     });
 
@@ -247,6 +250,15 @@ test.describe('DevTools Tools zones', () => {
     expect(Math.abs(row.updateBottom - row.envBottom)).toBeLessThanOrEqual(2);
     // ...а строка итога по логу стоит сразу под статусом, а не у нижнего края.
     expect(row.logTop - row.substatusBottom).toBeLessThanOrEqual(12);
+
+    // Блок лога обрамлён одинаково: сверху — столько же, сколько снизу до края карточки.
+    const above = row.logTop - row.substatusBottom;
+    const below = row.updateBottom - row.logBottom;
+    expect(Math.abs(above - below)).toBeLessThanOrEqual(2);
+
+    // Свободная высота растянутой карточки собирается над блоком автопроверки,
+    // поэтому зазор под вердиктом заметно больше зазора вокруг блока лога.
+    expect(row.autocheckTop - row.verdictRowBottom).toBeGreaterThan(below);
   });
 
   test('zones collapse to one column on a narrow screen', async ({ page }) => {

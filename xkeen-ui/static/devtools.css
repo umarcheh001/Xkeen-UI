@@ -574,6 +574,16 @@ details.dt-subcard .dt-collapsible-body {
   opacity: 0.85;
 }
 
+/* Блок автопроверки в карточке обновления. Свободная высота растянутой карточки
+   собирается НАД ним (`margin-top: auto` во флекс-колонке карточки), поэтому низ
+   карточки остаётся прижат к блоку лога, а не зияет пустотой под ним. В обычном
+   потоке `auto` даёт ноль, так что верхнее поле задано padding'ом. */
+.dt-update-autocheck-row {
+  margin: 0 0 6px 0;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
 /* Итог по update.log: шапка, строка вердикта и — при находках — кнопка в Logs. */
 .dt-update-log-summary {
   margin-top: 12px;

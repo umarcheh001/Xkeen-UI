@@ -803,6 +803,13 @@ body.devtools-page :is(.card, details.dt-collapsible, .dt-update-log-summary, de
   box-shadow: var(--op-shadow) !important;
 }
 
+/* Правило карточек выше обнуляет margin, но блоку лога он нужен: сверху ровно
+   столько же, сколько остаётся под ним до края карточки (поле 11px + рамка).
+   Целимся по id: у правила с `:is()` специфичность выше, чем у одного класса. */
+body.devtools-page #dt-update-log-box {
+  margin-top: 12px;
+}
+
 body.devtools-page .dt-tools-left > :is(.card, details.card),
 body.devtools-page .dt-zone > .card,
 body.devtools-page .dt-zone > details.card,

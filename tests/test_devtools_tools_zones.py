@@ -188,6 +188,31 @@ def test_top_row_stretches_the_last_card_to_match_env():
     assert "minmax(400px, 440px) minmax(0, 1fr)" in top_row
 
 
+def test_slack_of_the_stretched_update_card_gathers_above_the_autocheck_block():
+    """Блок лога обрамлён одинаково: сверху поле, снизу — столько же до края карточки."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+    glass = GLASS_CSS.read_text(encoding="utf-8")
+    operator = OPERATOR_CSS.read_text(encoding="utf-8")
+
+    # Инлайновый отступ перебил бы `margin-top: auto`, поэтому его в разметке нет.
+    label_at = template.index('aria-label="Update auto-check settings"')
+    grid = template[template.rfind("<div", 0, label_at) : template.index(">", label_at) + 1]
+    assert "dt-update-autocheck-row" in grid
+    assert "style=" not in grid
+
+    # Свободная высота растянутой карточки собирается над блоком автопроверки.
+    row = glass[glass.index(".dt-update-autocheck-row {"):]
+    row = row[: row.index("}")]
+    assert "margin-top: auto;" in row
+    # В обычном потоке `auto` даёт ноль, верхнее поле держит padding.
+    assert "padding-top: 12px;" in row
+
+    # Тема оператора обнуляет margin у всех карточек — блоку лога он возвращён.
+    log_box = operator[operator.index("body.devtools-page #dt-update-log-box {"):]
+    log_box = log_box[: log_box.index("}")]
+    assert "margin-top: 12px;" in log_box
+
+
 def test_update_log_is_reduced_to_a_verdict_line():
     template = TEMPLATE.read_text(encoding="utf-8")
     glass = GLASS_CSS.read_text(encoding="utf-8")
