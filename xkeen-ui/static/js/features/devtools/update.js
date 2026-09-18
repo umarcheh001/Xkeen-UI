@@ -63,45 +63,6 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   const LS_NOTIFY_ENABLED = 'xk_update_notify_enabled';
   const LS_NOTIFY_INTERVAL_H = 'xk_update_notify_interval_h';
 
-  // Persist update log collapse state (DevTools → Update card)
-  const LS_UPDATE_LOG_OPEN = 'xk_dt_update_log_open';
-
-  function _getUpdateLogBoxEl() {
-    try {
-      const el = byId('dt-update-log-box');
-      if (!el) return null;
-      const tag = (el.tagName || '').toLowerCase();
-      if (tag !== 'details') return null;
-      return el;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function _setUpdateLogOpen(isOpen, persist) {
-    const el = _getUpdateLogBoxEl();
-    if (!el) return;
-    try { el.open = !!isOpen; } catch (e) {}
-    if (persist) {
-      try { window.localStorage.setItem(LS_UPDATE_LOG_OPEN, (isOpen ? '1' : '0')); } catch (e) {}
-    }
-  }
-
-  function _initUpdateLogBox() {
-    const el = _getUpdateLogBoxEl();
-    if (!el) return;
-    try {
-      const v = String(window.localStorage.getItem(LS_UPDATE_LOG_OPEN) || '').trim();
-      if (v === '1') el.open = true;
-      else if (v === '0') el.open = false;
-    } catch (e) {}
-    try {
-      el.addEventListener('toggle', () => {
-        try { window.localStorage.setItem(LS_UPDATE_LOG_OPEN, (el.open ? '1' : '0')); } catch (e) {}
-      });
-    } catch (e) {}
-  }
-
   function _clampNotifyHours(v) {
     const n = Number(v);
     if (n === 1 || n === 6 || n === 24) return n;
@@ -200,19 +161,42 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     try { el.textContent = String(msg || ''); } catch (e) {}
   }
 
-  function _renderLog(lines) {
-    const pre = byId('dt-update-log');
-    if (!pre) return;
+  // Хвост update.log в карточке больше не показываем: полный лог живёт во вкладке
+  // Logs, здесь остаётся только вердикт — были ли во время обновлений ошибки.
+  // Скрипт обновления помечает проблемные строки префиксом «[!]».
+  const UPDATE_LOG_ALERT_RE = /\[!\]/;
+
+  const UPDATE_LOG_VERDICTS = {
+    empty: { text: 'Обновления ещё не запускались', link: false },
+    clean: { text: 'Во время обновлений ошибок не обнаружено', link: false },
+    warn: { text: 'Во время обновлений были предупреждения', link: true },
+    failed: { text: 'Во время обновлений обнаружены ошибки', link: true },
+  };
+
+  function _classifyUpdateLog(lines, stateVal, err) {
+    if (stateVal === 'failed' || err) return 'failed';
+    if (!lines || !lines.length) return 'empty';
     try {
-      if (!lines || !lines.length) {
-        pre.textContent = '';
-        return;
+      for (let i = 0; i < lines.length; i += 1) {
+        if (UPDATE_LOG_ALERT_RE.test(String(lines[i] || ''))) return 'warn';
       }
-      // Backend returns lines with keepends; join as-is.
-      pre.textContent = lines.join('');
-    } catch (e) {
-      try { pre.textContent = ''; } catch (e2) {}
-    }
+    } catch (e) {}
+    return 'clean';
+  }
+
+  function _renderLog(lines, stateVal, err) {
+    const box = byId('dt-update-log-verdict');
+    const textEl = byId('dt-update-log-verdict-text');
+    const linkEl = byId('dt-update-log-open');
+    if (!box || !textEl) return;
+
+    const verdict = _classifyUpdateLog(lines, stateVal, err);
+    const spec = UPDATE_LOG_VERDICTS[verdict] || UPDATE_LOG_VERDICTS.empty;
+    try {
+      box.setAttribute('data-verdict', verdict);
+      textEl.textContent = spec.text;
+      if (linkEl) linkEl.style.display = spec.link ? '' : 'none';
+    } catch (e) {}
   }
 
 
@@ -1067,18 +1051,8 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     _setSubStatus(parts.join(' · '));
 
     const logTail = (data && Array.isArray(data.log_tail)) ? data.log_tail : [];
-    _renderLog(logTail);
-
-    // Auto-open the log when an operation starts or fails (still user-collapsible).
-    try {
-      if ((stateVal === 'running' && state.lastRunState !== 'running') ||
-          (stateVal === 'failed' && state.lastRunState !== 'failed')) {
-        _setUpdateLogOpen(true, true);
-      }
-      state.lastRunState = stateVal;
-    } catch (e) {
-      state.lastRunState = stateVal;
-    }
+    _renderLog(logTail, stateVal, err);
+    state.lastRunState = stateVal;
 
     // Rollback button visibility (only when backups exist)
     try {
@@ -1428,18 +1402,17 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     const btnRollback = byId('dt-update-rollback');
     const btnRefresh = byId('dt-update-refresh');
     const btnOpenLogs = byId('dt-update-open-logs');
+    const btnVerdictLog = byId('dt-update-log-open');
 
     if (btnCheck) btnCheck.addEventListener('click', () => checkLatest(true, false, false));
     if (btnRun) btnRun.addEventListener('click', () => runUpdate());
     if (btnRollback) btnRollback.addEventListener('click', () => runRollback());
     if (btnRefresh) btnRefresh.addEventListener('click', () => loadStatus(false));
     if (btnOpenLogs) btnOpenLogs.addEventListener('click', openLogsTab);
+    if (btnVerdictLog) btnVerdictLog.addEventListener('click', openLogsTab);
 
     // Auto-check settings UI (shared with global header notifier)
     try { _initAutoCheckControls(); } catch (e) {}
-
-    // Update log (collapsible)
-    try { _initUpdateLogBox(); } catch (e) {}
 
     // Initial paint
     loadInfo().catch(() => {});

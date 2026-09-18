@@ -43,29 +43,46 @@ test.describe('DevTools Tools zones', () => {
     expect(Math.abs(geometry.trayBottom - geometry.envBottom)).toBeLessThanOrEqual(2);
     expect(Math.abs(geometry.prefsBottom - geometry.ioBottom)).toBeLessThanOrEqual(2);
 
+    // Вместо простыни update.log в карточке стоит одна строка вердикта.
     const logBox = page.locator('#dt-update-log-box');
-    await expect(logBox).not.toHaveAttribute('open', /.*/);
-    await logBox.locator('summary').click();
-    await expect(logBox).toHaveAttribute('open', /.*/);
+    await expect(logBox).toBeVisible();
+    await expect(logBox.locator('.dt-update-log-head')).toHaveText('Лог обновлений');
+    await expect(page.locator('#dt-update-card pre')).toHaveCount(0);
 
-    const opened = await page.evaluate(() => {
+    const verdict = await page.evaluate(() => {
       const bottom = (id) => document.getElementById(id).getBoundingClientRect().bottom;
-      const log = document.getElementById('dt-update-log');
+      const box = document.getElementById('dt-update-log-verdict');
+      const openBtn = document.getElementById('dt-update-log-open');
       return {
-        logHeight: log.getBoundingClientRect().height,
-        logBottom: log.getBoundingClientRect().bottom,
-        logScrolls: log.scrollHeight <= log.clientHeight + 1,
+        state: box.getAttribute('data-verdict'),
+        text: document.getElementById('dt-update-log-verdict-text').textContent.trim(),
+        openBtnVisible: !!(openBtn && openBtn.offsetParent !== null),
+        boxBottom: box.getBoundingClientRect().bottom,
         cardBottom: bottom('dt-update-card'),
-        trayBottom: document.querySelector('.dt-tools-left').getBoundingClientRect().bottom,
-        envBottom: bottom('dt-env-card'),
       };
     });
 
-    // Раскрытый лог живёт внутри карточки и скроллится сам, а не выталкивает
-    // поднос из ряда: обе колонки верхнего ряда по-прежнему кончаются вместе.
-    expect(opened.logBottom).toBeLessThanOrEqual(opened.cardBottom + 2);
-    expect(opened.logScrolls).toBe(true);
-    expect(Math.abs(opened.trayBottom - opened.envBottom)).toBeLessThanOrEqual(2);
+    // На чистом стенде обновлений не было: строка спокойная, кнопка в Logs спрятана.
+    expect(['empty', 'clean']).toContain(verdict.state);
+    expect(verdict.openBtnVisible).toBe(false);
+    expect(verdict.boxBottom).toBeLessThanOrEqual(verdict.cardBottom + 2);
+  });
+
+  test('update log verdict offers the full log only when something went wrong', async ({ page }) => {
+    await openTools(page, { width: 1600, height: 1000 });
+
+    // Ошибку рисует тот же путь, что и живой статус: состояние операции + хвост лога.
+    await page.evaluate(() => {
+      const box = document.getElementById('dt-update-log-verdict');
+      box.setAttribute('data-verdict', 'failed');
+      document.getElementById('dt-update-log-verdict-text').textContent =
+        'Во время обновлений обнаружены ошибки';
+      document.getElementById('dt-update-log-open').style.display = '';
+    });
+
+    await page.locator('#dt-update-log-open').click();
+    await expect(page.locator('#dt-tab-logs')).toBeVisible();
+    await expect(page.locator('#dt-tab-btn-logs')).toHaveAttribute('aria-selected', 'true');
   });
 
   test('zones collapse to one column on a narrow screen', async ({ page }) => {

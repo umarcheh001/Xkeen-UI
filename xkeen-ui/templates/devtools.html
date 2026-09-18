@@ -191,21 +191,13 @@
               <div class="small" id="dt-update-substatus" style="margin-top:6px; opacity:0.85;"></div>
 
 
-              <details id="dt-update-log-box" class="dt-collapsible dt-update-log-box" style="margin-top:10px;">
-                <summary class="dt-collapsible-summary" title="update.log (tail)">
-                  <div style="display:flex; flex-direction:column; gap:2px;">
-                    <span>Лог обновления</span>
-                    <span class="small" style="opacity:0.75;">Показаны последние строки <code>update.log</code></span>
-                  </div>
-                  <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
-                </summary>
-                <div class="dt-collapsible-body">
-                  <pre id="dt-update-log" class="log-block dt-update-log" title="update.log (tail)" style="margin:0;"></pre>
-                  <div class="small" style="margin-top:6px; opacity:0.8;">
-                    Лог автоматически очищается при каждом обновлении. Полный лог можно открыть во вкладке Logs.
-                  </div>
+              <div id="dt-update-log-box" class="dt-update-log-summary" aria-label="Лог обновлений">
+                <div class="dt-update-log-head">Лог обновлений</div>
+                <div id="dt-update-log-verdict" class="dt-update-log-verdict" data-verdict="empty">
+                  <span id="dt-update-log-verdict-text" class="small">Обновления ещё не запускались</span>
+                  <button type="button" id="dt-update-log-open" class="btn-secondary" style="display:none;" title="Открыть update.log целиком во вкладке Logs.">Открыть полный лог</button>
                 </div>
-              </details>
+              </div>
 
             </div>
           </details>
@@ -317,7 +309,7 @@
 
               <div id="dt-happ-status" class="status" style="margin-top:10px; display:none;"></div>
 
-              <details id="dt-happ-check-box" class="dt-collapsible dt-update-log-box" style="margin-top:10px;">
+              <details id="dt-happ-check-box" class="dt-collapsible dt-subcard" style="margin-top:10px;">
                 <summary class="dt-collapsible-summary">
                   <span>Проверить ссылку</span>
                   <span class="dt-collapsible-icon" aria-hidden="true">▾</span>

@@ -269,7 +269,7 @@ body.devtools-page .dt-zone > details > summary h2::before {
   .dt-log-topbar,
   .dt-log-controls,
   .dt-log-view,
-  .dt-update-log,
+  .dt-update-log-summary,
   .modal-content,
   .modal-header,
   .modal-actions
@@ -342,6 +342,15 @@ body.devtools-page :is(code, pre, textarea) {
 body.devtools-page .small,
 body.devtools-page :is(.dt-k, .dt-sub, .dt-logging-label, .dt-switch-label, .dt-page-header p) {
   color: var(--op-muted) !important;
+}
+
+/* Вердикт по update.log: приглушённый .small выше перебил бы цвет находки. */
+body.devtools-page .dt-update-log-verdict[data-verdict="warn"] > .small {
+  color: var(--op-warning) !important;
+}
+
+body.devtools-page .dt-update-log-verdict[data-verdict="failed"] > .small {
+  color: var(--op-danger) !important;
 }
 
 /* ========================================================================== 
@@ -776,7 +785,7 @@ body.devtools-page .dt-tools-left {
   box-shadow: none !important;
 }
 
-body.devtools-page :is(.card, details.dt-collapsible, details.dt-update-log-box) {
+body.devtools-page :is(.card, details.dt-collapsible, .dt-update-log-summary, details.dt-subcard) {
   position: relative;
   margin: 0;
   padding: 11px 12px;
@@ -832,7 +841,7 @@ body.devtools-page details.dt-collapsible > summary {
 }
 
 body.devtools-page details.dt-collapsible[open] > summary,
-body.devtools-page details.dt-update-log-box[open] > summary {
+body.devtools-page details.dt-subcard[open] > summary {
   border-bottom: 1px solid var(--op-border);
   border-radius: var(--op-radius) var(--op-radius) 0 0;
 }
@@ -1230,7 +1239,7 @@ body.devtools-page .dt-log-interval .xray-log-select {
   color: var(--op-text) !important;
 }
 
-body.devtools-page :is(.dt-log-view, .dt-update-log, #dt-log-context-body) {
+body.devtools-page :is(.dt-log-view, #dt-log-context-body) {
   border: 1px solid var(--op-border) !important;
   border-radius: var(--op-radius) !important;
   background: var(--op-editor) !important;

@@ -156,30 +156,63 @@ def test_wide_cards_use_multi_column_inner_grids():
     assert 'class="dt-layout-split"' in layout_card
 
 
-def test_top_row_stretches_and_update_log_takes_the_slack():
+def test_top_row_no_longer_stretches_for_the_update_log():
     base = BASE_CSS.read_text(encoding="utf-8")
     glass = GLASS_CSS.read_text(encoding="utf-8")
     operator = OPERATOR_CSS.read_text(encoding="utf-8")
 
-    assert "#dt-update-card[open] {" in base
-    update_rule = base[base.index("#dt-update-card[open] {"):]
-    update_rule = update_rule[: update_rule.index("}")]
-    assert "flex: 1 1 auto;" in update_rule
-
-    assert "#dt-update-log {" in base
-    log_rule = base[base.index("#dt-update-log {"):]
-    log_rule = log_rule[: log_rule.index("}")]
-    assert "overflow: auto;" in log_rule
-    assert "max-height: none;" in log_rule
-
-    # Хвост лога больше не заперт фиксированной высотой
-    assert ".dt-update-log {\n  max-height: 240px;\n}" not in glass
+    # Хвоста update.log в карточке больше нет — ни разметки, ни правил под него,
+    # ни растяжки карточки, которая существовала только ради этого хвоста.
+    assert "#dt-update-card[open]" not in base
+    assert "#dt-update-log {" not in base
+    assert "#dt-update-log-box[open]" not in base
+    assert ".dt-update-log " not in glass
+    assert ".dt-update-log," not in glass
 
     # В теме оператора верхний ряд тоже растягивается
     top_row = operator[operator.index("body.devtools-page .dt-tools-layout {"):]
     top_row = top_row[: top_row.index("}")]
     assert "align-items: stretch;" in top_row
     assert "minmax(400px, 440px) minmax(0, 1fr)" in top_row
+
+
+def test_update_log_is_reduced_to_a_verdict_line():
+    template = TEMPLATE.read_text(encoding="utf-8")
+    glass = GLASS_CSS.read_text(encoding="utf-8")
+    script = (ROOT / "xkeen-ui/static/js/features/devtools/update.js").read_text(encoding="utf-8")
+
+    card = template[template.index('id="dt-update-card"'):]
+    card = card[: card.index('id="dt-env-card"')]
+
+    # Вместо простыни лога — шапка, строка вердикта и кнопка в полный лог.
+    assert "<pre" not in card
+    assert 'class="dt-update-log-head">Лог обновлений<' in card
+    assert 'id="dt-update-log-verdict"' in card
+    assert 'id="dt-update-log-open"' in card
+
+    # Кнопка ведёт во вкладку Logs тем же путём, что и «Open logs».
+    assert "btnVerdictLog.addEventListener('click', openLogsTab)" in script
+
+    # Три исхода: чисто, предупреждения, ошибки.
+    assert "Во время обновлений ошибок не обнаружено" in script
+    assert "Во время обновлений обнаружены ошибки" in script
+    assert "Во время обновлений были предупреждения" in script
+
+    # Ошибку опознаём и по состоянию операции, и по маркеру «[!]» в логе.
+    verdict_fn = script[script.index("function _classifyUpdateLog("):]
+    verdict_fn = verdict_fn[: verdict_fn.index("return 'clean';")]
+    assert "stateVal === 'failed'" in verdict_fn
+    assert "UPDATE_LOG_ALERT_RE" in verdict_fn
+
+    # Цвет строки зависит от вердикта, а не от соседних правил.
+    assert '.dt-update-log-verdict[data-verdict="failed"] > .small {' in glass
+
+    # Тема оператора красит .small приглушённым !important, поэтому находке нужно
+    # собственное правило в её слое — и только внутри body.devtools-page.
+    operator = OPERATOR_CSS.read_text(encoding="utf-8")
+    for verdict in ("warn", "failed"):
+        rule = 'body.devtools-page .dt-update-log-verdict[data-verdict="%s"] > .small {' % verdict
+        assert rule in operator, verdict
 
 
 def test_prefs_io_columns_are_built_the_same_way():
