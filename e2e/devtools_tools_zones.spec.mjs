@@ -261,6 +261,31 @@ test.describe('DevTools Tools zones', () => {
     expect(row.autocheckTop - row.verdictRowBottom).toBeGreaterThan(below);
   });
 
+  test('the update verdict pill is roomy enough to read', async ({ page }) => {
+    await openTools(page, { width: 1600, height: 1000 });
+
+    const pill = await page.evaluate(() => {
+      const el = document.getElementById('dt-update-verdict');
+      const cs = getComputedStyle(el);
+      return {
+        padTop: parseFloat(cs.paddingTop),
+        padBottom: parseFloat(cs.paddingBottom),
+        fontSize: parseFloat(cs.fontSize),
+        height: el.getBoundingClientRect().height,
+        switchHeight: document
+          .querySelector('.dt-update-autocheck-row .dt-switch')
+          .getBoundingClientRect().height,
+      };
+    });
+
+    // Поля вокруг текста одинаковые сверху и снизу...
+    expect(pill.padTop).toBe(pill.padBottom);
+    // ...кегль не мельче остального текста карточки...
+    expect(pill.fontSize).toBeGreaterThanOrEqual(12);
+    // ...и пилюля не ниже переключателя рядом: строки идут одним ритмом.
+    expect(pill.height).toBeGreaterThanOrEqual(pill.switchHeight);
+  });
+
   test('zones collapse to one column on a narrow screen', async ({ page }) => {
     await openTools(page, { width: 900, height: 900 });
 

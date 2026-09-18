@@ -213,6 +213,22 @@ def test_slack_of_the_stretched_update_card_gathers_above_the_autocheck_block():
     assert "margin-top: 12px;" in log_box
 
 
+def test_verdict_pill_is_larger_than_the_small_badges():
+    """Вердикт — сообщение, а не бейдж: поля равные, кегль как у текста карточки."""
+    operator = OPERATOR_CSS.read_text(encoding="utf-8")
+
+    # Общее правило бейджей оставляет мелкими коды репозитория, канала и ветки.
+    shared = operator[operator.index("body.devtools-page :is(.dt-badge, .dt-pill,"):]
+    shared = shared[: shared.index("}")]
+    assert "padding: 2px 7px;" in shared
+
+    # А пилюля вердикта крупнее: поля одинаковые по вертикали, шрифт 12px.
+    pill = operator[operator.index("body.devtools-page .dt-pill {"):]
+    pill = pill[: pill.index("}")]
+    assert "padding: 7px 12px;" in pill
+    assert "font-size: calc(12px * var(--xk-font-scale, 1));" in pill
+
+
 def test_update_log_is_reduced_to_a_verdict_line():
     template = TEMPLATE.read_text(encoding="utf-8")
     glass = GLASS_CSS.read_text(encoding="utf-8")

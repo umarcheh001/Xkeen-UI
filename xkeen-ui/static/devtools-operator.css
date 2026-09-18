@@ -658,6 +658,14 @@ body.devtools-page :is(.dt-badge, .dt-pill, .dt-custom-css-badge, .dt-log-badge,
   font-weight: 600;
 }
 
+/* Вердикт — это сообщение, а не бейдж: поля вокруг текста одинаковые, кегль как у
+   остального текста карточки. Правило идёт отдельно от бейджей выше, чтобы коды
+   репозитория, канала и ветки остались мелкими; вес селекторов равный, решает порядок. */
+body.devtools-page .dt-pill {
+  padding: 7px 12px;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+}
+
 /* Включённая тема терминала отмечается тем же зелёным, что и прочие «включено». */
 body.devtools-page .dt-custom-css-badge.is-on {
   border-color: color-mix(in srgb, var(--op-success) 38%, var(--op-border)) !important;
