@@ -86,8 +86,8 @@
     </header>
 
     <div class="top-tabs dt-tabs" role="tablist" aria-label="DevTools tabs">
-      <button type="button" id="dt-tab-btn-tools" class="top-tab-btn dt-top-tab dt-top-tab-tools active" data-xk-section="tools dt-tab-btn-tools" role="tab" aria-selected="true" aria-controls="dt-tab-tools" title="Открыть вкладку Tools (инструменты DevTools).">Tools</button>
-      <button type="button" id="dt-tab-btn-logs" class="top-tab-btn dt-top-tab dt-top-tab-logs" data-xk-section="logs dt-tab-btn-logs" role="tab" aria-selected="false" aria-controls="dt-tab-logs" title="Открыть вкладку Logs (логи панели).">Logs</button>
+      <button type="button" id="dt-tab-btn-tools" class="top-tab-btn dt-top-tab dt-top-tab-tools active" data-xk-section="tools dt-tab-btn-tools" role="tab" aria-selected="true" aria-controls="dt-tab-tools" title="Открыть вкладку «Инструменты» (настройки и обслуживание панели).">Инструменты</button>
+      <button type="button" id="dt-tab-btn-logs" class="top-tab-btn dt-top-tab dt-top-tab-logs" data-xk-section="logs dt-tab-btn-logs" role="tab" aria-selected="false" aria-controls="dt-tab-logs" title="Открыть вкладку «Логи» (логи панели).">Логи</button>
     </div>
 
     <div id="dt-tab-tools" class="view-section" data-xk-section="tools dt-tab-tools" role="tabpanel" aria-labelledby="dt-tab-btn-tools">
@@ -208,7 +208,7 @@
         <div class="layout-main dt-tools-right">
           <section class="card dt-main-card" id="dt-env-card" data-xk-section="env dt-env-card">
             <div class="dt-env-head">
-              <h2 style="margin-top:0;">ENV (whitelist)</h2>
+              <h2 style="margin-top:0;">ENV (разрешённые переменные)</h2>
               <div class="dt-env-head-actions">
                 <div class="dt-env-search-wrap">
                   <input
@@ -222,7 +222,7 @@
                   />
                   <button type="button" id="dt-env-search-clear" class="btn-secondary dt-env-search-clear" title="Очистить поиск">×</button>
                 </div>
-                <button type="button" id="dt-env-help-btn" class="btn-secondary" title="Открыть справку по ENV (whitelist).">Справка</button>
+                <button type="button" id="dt-env-help-btn" class="btn-secondary" title="Открыть справку по разрешённым переменным ENV.">Справка</button>
               </div>
             </div>
             <div class="small" id="dt-env-file" style="margin-bottom:10px; opacity:0.9;"></div>
@@ -665,9 +665,9 @@
                 <div>
                   <div class="dt-layout-switches">
                     <label class="dt-switch" title="Компактный режим: меньше padding/отступов почти везде.">
-                      <input id="dt-layout-compact" type="checkbox" aria-label="Compact mode">
+                      <input id="dt-layout-compact" type="checkbox" aria-label="Компактный режим">
                       <span class="dt-switch-slider" aria-hidden="true"></span>
-                      <span class="dt-switch-label">Compact mode (меньше отступов)</span>
+                      <span class="dt-switch-label">Компактный режим (меньше отступов)</span>
                     </label>
 
                     <label class="dt-switch" title="Спрятать подсказки/описания (small‑текст, help‑строки).">
@@ -746,7 +746,7 @@
       <!-- Left: log list -->
       <aside class="dt-logs-sidebar" aria-label="Log list">
         <div class="dt-logs-sidebar-top">
-          <div class="small" style="opacity:0.9;">Logs</div>
+          <div class="small" style="opacity:0.9;">Файлы логов</div>
           <button type="button" id="dt-log-list-refresh" class="btn-secondary dt-log-btn" title="Обновить список логов.">Обновить</button>
         </div>
 
@@ -805,7 +805,7 @@
             >✖</button>
           </div>
 
-          <label class="dt-switch" title="Live режим (tail -f): авто‑подтягивание новых строк.">
+          <label class="dt-switch" title="Онлайн-режим (tail -f): новые строки подтягиваются сами.">
             <input id="dt-log-live" type="checkbox" />
             <span class="dt-switch-slider" aria-hidden="true"></span>
             <span class="dt-switch-label">Онлайн</span>
@@ -840,10 +840,10 @@
   </section>
 </div>
 
-      <div id="dt-env-help-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Справка по ENV (whitelist)">
+      <div id="dt-env-help-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Справка по разрешённым переменным ENV">
         <div class="modal-content" style="max-width: 980px;" data-modal-key="devtools-env-help">
           <div class="modal-header">
-            <span class="modal-title">Справка: ENV (whitelist)</span>
+            <span class="modal-title">Справка: ENV (разрешённые переменные)</span>
             <button type="button" class="modal-close" id="dt-env-help-close-btn" title="Закрыть">×</button>
           </div>
           <div id="dt-env-help-body" class="modal-body modal-body-logs"></div>

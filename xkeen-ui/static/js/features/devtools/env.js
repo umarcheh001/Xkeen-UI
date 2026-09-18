@@ -776,7 +776,7 @@ import { iconHtml } from '../../ui/operator_icons.js';
     const parts = [];
     parts.push('<div style="line-height:1.55;">');
 
-    parts.push('<p style="margin-top:0;"><strong>ENV (whitelist)</strong> — это список разрешённых переменных окружения, которые можно безопасно менять из UI. Значения сохраняются в env‑файл <code>devtools.env</code> и (частично) применяются сразу.</p>');
+    parts.push('<p style="margin-top:0;"><strong>ENV (разрешённые переменные)</strong> — это список переменных окружения, которые можно безопасно менять из UI. Значения сохраняются в env‑файл <code>devtools.env</code> и (частично) применяются сразу.</p>');
 
     parts.push('<h3 style="margin:12px 0 6px 0;">Колонки</h3>');
     parts.push('<ul style="margin-top:0;">');
