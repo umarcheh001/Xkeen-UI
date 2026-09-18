@@ -663,32 +663,40 @@
 
               <div class="dt-layout-split">
                 <div>
-                  <label class="dt-switch" title="Компактный режим: меньше padding/отступов почти везде.">
-                    <input id="dt-layout-compact" type="checkbox" aria-label="Compact mode">
-                    <span class="dt-switch-slider" aria-hidden="true"></span>
-                    <span class="dt-switch-label">Compact mode (меньше отступов)</span>
-                  </label>
+                  <div class="dt-layout-switches">
+                    <label class="dt-switch" title="Компактный режим: меньше padding/отступов почти везде.">
+                      <input id="dt-layout-compact" type="checkbox" aria-label="Compact mode">
+                      <span class="dt-switch-slider" aria-hidden="true"></span>
+                      <span class="dt-switch-label">Compact mode (меньше отступов)</span>
+                    </label>
 
-                  <label class="dt-switch" style="margin-top:10px;" title="Спрятать подсказки/описания (small‑текст, help‑строки).">
-                    <input id="dt-layout-hide-hints" type="checkbox" aria-label="Скрыть подсказки">
-                    <span class="dt-switch-slider" aria-hidden="true"></span>
-                    <span class="dt-switch-label">Скрыть подсказки/описания</span>
-                  </label>
+                    <label class="dt-switch" title="Спрятать подсказки/описания (small‑текст, help‑строки).">
+                      <input id="dt-layout-hide-hints" type="checkbox" aria-label="Скрыть подсказки">
+                      <span class="dt-switch-slider" aria-hidden="true"></span>
+                      <span class="dt-switch-label">Скрыть подсказки/описания</span>
+                    </label>
 
-                  <label class="dt-switch" style="margin-top:10px;" title="Спрятать описательные тексты внутри карточек (например подписи под режимами inbounds).">
-                    <input id="dt-layout-hide-card-desc" type="checkbox" aria-label="Скрыть описания в карточках">
-                    <span class="dt-switch-slider" aria-hidden="true"></span>
-                    <span class="dt-switch-label">Скрыть описания в карточках</span>
-                  </label>
+                    <label class="dt-switch" title="Спрятать описательные тексты внутри карточек (например подписи под режимами inbounds).">
+                      <input id="dt-layout-hide-card-desc" type="checkbox" aria-label="Скрыть описания в карточках">
+                      <span class="dt-switch-slider" aria-hidden="true"></span>
+                      <span class="dt-switch-label">Скрыть описания в карточках</span>
+                    </label>
 
-                  <label class="dt-switch" style="margin-top:10px;" title="Спрятать нижнюю строку подсказок горячих клавиш в файловом менеджере (Tab/Enter/F5… и т.д.). Применяется сразу и сохраняется в браузере.">
-                    <input id="dt-layout-hide-fm-hotkeys" type="checkbox" aria-label="Скрыть подсказки горячих клавиш файлового менеджера">
-                    <span class="dt-switch-slider" aria-hidden="true"></span>
-                    <span class="dt-switch-label">Скрыть подсказки горячих клавиш (Файловый менеджер)</span>
-                  </label>
+                    <label class="dt-switch" title="Спрятать нижнюю строку подсказок горячих клавиш в файловом менеджере (Tab/Enter/F5… и т.д.). Применяется сразу и сохраняется в браузере.">
+                      <input id="dt-layout-hide-fm-hotkeys" type="checkbox" aria-label="Скрыть подсказки горячих клавиш файлового менеджера">
+                      <span class="dt-switch-slider" aria-hidden="true"></span>
+                      <span class="dt-switch-label">Скрыть подсказки горячих клавиш (Файловый менеджер)</span>
+                    </label>
 
-                  <div style="margin-top:12px;">
-                    <label class="dt-logging-field" style="max-width: 420px;">
+                    <label class="dt-switch" title="Скрывать вкладки/блоки, которые выключены feature flags (например XKEEN_REMOTEFM_ENABLE=0).">
+                      <input id="dt-layout-hide-unused" type="checkbox" aria-label="Скрыть неиспользуемое">
+                      <span class="dt-switch-slider" aria-hidden="true"></span>
+                      <span class="dt-switch-label">Скрыть неиспользуемые вкладки/карточки</span>
+                    </label>
+                  </div>
+
+                  <div class="dt-layout-fields">
+                    <label class="dt-logging-field">
                       <span class="dt-logging-label">Размер описаний</span>
                       <select id="dt-layout-desc-scale" class="dt-pill-field" title="Масштаб описательных текстов внутри карточек.">
                         <option value="0.8">80%</option>
@@ -700,16 +708,8 @@
                         <option value="1.4">140%</option>
                       </select>
                     </label>
-                  </div>
 
-                  <label class="dt-switch" style="margin-top:10px;" title="Скрывать вкладки/блоки, которые выключены feature flags (например XKEEN_REMOTEFM_ENABLE=0).">
-                    <input id="dt-layout-hide-unused" type="checkbox" aria-label="Скрыть неиспользуемое">
-                    <span class="dt-switch-slider" aria-hidden="true"></span>
-                    <span class="dt-switch-label">Скрыть неиспользуемые вкладки/карточки</span>
-                  </label>
-
-                  <div style="margin-top:12px;">
-                    <label class="dt-logging-field" style="max-width: 420px;">
+                    <label class="dt-logging-field">
                       <span class="dt-logging-label">Ширина контейнера</span>
                       <select id="dt-layout-container" class="dt-pill-field" title="Фиксированная / резиновая / максимальная ширина">
                         <option value="fluid">Резиновая (до 1680px)</option>

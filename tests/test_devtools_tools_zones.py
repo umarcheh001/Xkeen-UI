@@ -241,9 +241,10 @@ def test_prefs_io_columns_are_built_the_same_way():
 
     # Три линии держит subgrid: кнопка с переносом в одной колонке поднимает ряд
     # кнопок и во второй, иначе низы колонок разъезжаются.
-    split_rule = css[css.index(".dt-io-split {"):]
-    split_rule = split_rule[: split_rule.index("}")]
-    assert "grid-template-rows: auto 1fr auto;" in split_rule
+    rows_rule = css[css.index("/* Три общие линии колонок экспорта"):]
+    rows_rule = rows_rule[: rows_rule.index("}")]
+    assert rows_rule.count(".dt-io-split {") == 1
+    assert "grid-template-rows: auto 1fr auto;" in rows_rule
 
     col_rule = css[css.index(".dt-prefs-io-flex {"):]
     col_rule = col_rule[: col_rule.index("}")]
@@ -255,6 +256,42 @@ def test_prefs_io_columns_are_built_the_same_way():
     narrow = narrow[: narrow.index("@media (max-width: 760px)")]
     assert "grid-template-rows: none;" in narrow
     assert "grid-row: auto;" in narrow
+
+
+def test_layout_card_lays_switches_and_tabs_in_two_columns():
+    template = TEMPLATE.read_text(encoding="utf-8")
+    base = BASE_CSS.read_text(encoding="utf-8")
+    glass = GLASS_CSS.read_text(encoding="utf-8")
+
+    card = template[template.index('id="dt-layout-card"'):]
+    card = card[: card.index("</details>")]
+
+    # Переключатели и пара селектов собраны в свои сетки, а не идут потоком.
+    assert 'class="dt-layout-switches"' in card
+    assert 'class="dt-layout-fields"' in card
+    assert card.count('class="dt-switch"') == 5
+    assert "margin-top:10px;\" title=\"Спрятать" not in card
+
+    for name in ("dt-layout-switches", "dt-layout-fields"):
+        rule = base[base.index("." + name + " {"):]
+        rule = rule[: rule.index("}")]
+        assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in rule, name
+
+    # Список вкладок — два столбика, порядок читается слева направо.
+    tabs_rule = glass[glass.index(".dt-tab-list{"):]
+    tabs_rule = tabs_rule[: tabs_rule.index("}")]
+    assert "display: grid;" in tabs_rule
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in tabs_rule
+
+    # На узком экране всё сворачивается в одну колонку.
+    narrow = glass[glass.index("@media (max-width: 1180px) {"):]
+    narrow = narrow[: narrow.index("}")]
+    assert ".dt-tab-list" in narrow
+
+    # Строки subgrid остались только у карточки экспорта.
+    split_rule = base[base.index(".dt-layout-split,"):]
+    split_rule = split_rule[: split_rule.index("}")]
+    assert "grid-template-rows:" not in split_rule
 
 
 def test_button_rows_breathe_like_the_card_padding():
@@ -287,8 +324,9 @@ def test_terminal_save_and_reset_sit_on_the_right():
     row_rule = row_rule[: row_rule.index("}")]
     assert "justify-content: flex-end;" in row_rule
 
-    btn_rule = base[base.index("#dt-terminal-theme-card .dt-logging-actions button {"):]
+    btn_rule = base[base.index("#dt-terminal-theme-card .dt-logging-actions button,"):]
     btn_rule = btn_rule[: btn_rule.index("}")]
+    assert "#dt-layout-card .dt-logging-actions button {" in btn_rule
     assert "width: auto;" in btn_rule
 
 

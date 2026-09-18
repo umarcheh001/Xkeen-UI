@@ -144,6 +144,42 @@ test.describe('DevTools Tools zones', () => {
     expect(row.rightInset).toBeLessThanOrEqual(16);
   });
 
+  test('layout tweaks show tabs in two columns', async ({ page }) => {
+    await openTools(page, { width: 1600, height: 1000 });
+
+    const wide = await page.evaluate(() => {
+      const items = [...document.querySelectorAll('#dt-layout-tab-list .dt-tab-item')];
+      const tops = new Set(items.map((el) => Math.round(el.getBoundingClientRect().top)));
+      const switches = [...document.querySelectorAll('.dt-layout-switches .dt-switch')];
+      const switchTops = new Set(switches.map((el) => Math.round(el.getBoundingClientRect().top)));
+      const card = document.getElementById('dt-layout-card').getBoundingClientRect();
+      const resetBtn = document.querySelector('#dt-layout-card .dt-logging-actions button')
+        .getBoundingClientRect();
+      return {
+        items: items.length,
+        rows: tops.size,
+        switchRows: switchTops.size,
+        switches: switches.length,
+        resetShare: resetBtn.width / card.width,
+      };
+    });
+
+    // Восемь вкладок ложатся в четыре ряда по два, пять переключателей — в три.
+    expect(wide.items).toBe(8);
+    expect(wide.rows).toBe(4);
+    expect(wide.switches).toBe(5);
+    expect(wide.switchRows).toBe(3);
+    // «Reset tabs» — компактная кнопка, а не полоса во всю карточку.
+    expect(wide.resetShare).toBeLessThan(0.2);
+
+    await page.setViewportSize({ width: 900, height: 1000 });
+    const narrowRows = await page.evaluate(() => {
+      const items = [...document.querySelectorAll('#dt-layout-tab-list .dt-tab-item')];
+      return new Set(items.map((el) => Math.round(el.getBoundingClientRect().top))).size;
+    });
+    expect(narrowRows).toBe(8);
+  });
+
   test('zones collapse to one column on a narrow screen', async ({ page }) => {
     await openTools(page, { width: 900, height: 900 });
 

@@ -12904,7 +12904,8 @@ div.toast-icon {
   justify-content: flex-end;
 }
 
-#dt-terminal-theme-card .dt-logging-actions button {
+#dt-terminal-theme-card .dt-logging-actions button,
+#dt-layout-card .dt-logging-actions button {
   width: auto;
   min-width: 96px;
 }
@@ -12958,8 +12959,38 @@ div.toast-icon {
 .dt-io-split {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: auto 1fr auto;
   gap: 16px;
+}
+
+/* Три общие линии колонок экспорта держит subgrid (см. .dt-prefs-io-flex). */
+.dt-io-split {
+  grid-template-rows: auto 1fr auto;
+}
+
+/* Layout-твики: переключатели идут парами, как и список вкладок справа. */
+.dt-layout-switches {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  align-items: start;
+}
+
+.dt-layout-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin-top: 12px;
+}
+
+.dt-layout-fields .dt-logging-field {
+  max-width: none;
+}
+
+@media (max-width: 1180px) {
+  .dt-layout-switches,
+  .dt-layout-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* Обе колонки идут по одной схеме — подпись, поле, ряд кнопок. Общие строки
@@ -13008,8 +13039,8 @@ div.toast-icon {
   }
 
   .dt-card-wide .dt-branding-split,
-  .dt-layout-split,
   /* В одну колонку subgrid тянуть некуда: строки задаёт только первый блок. */
+  .dt-layout-split,
   .dt-io-split {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: none;

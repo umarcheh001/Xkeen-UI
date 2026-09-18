@@ -278,13 +278,21 @@ details.dt-theme-group .dt-collapsible-icon{
    Layout tweaks: tab order editor
    -------------------------------------------------------------- */
 
+/* Восемь вкладок одной колонкой вытягивали карточку и оставляли левую половину
+   пустой — раскладываем их в два столбика, порядок читается слева направо. */
 .dt-tab-list{
   list-style: none;
   padding: 0;
   margin: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+@media (max-width: 1180px) {
+  .dt-tab-list{
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .dt-tab-item{
