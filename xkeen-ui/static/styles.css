@@ -12944,27 +12944,24 @@ div.toast-icon {
 .dt-io-split {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: auto 1fr auto;
   gap: 16px;
-  align-items: start;
 }
 
-/* Поля JSON тянутся по высоте карточки, а не по атрибуту rows */
+/* Обе колонки идут по одной схеме — подпись, поле, ряд кнопок. Общие строки
+   держит subgrid: подпись длиннее или кнопка с переносом в одной колонке
+   поднимают ту же линию и во второй, и низы карточки совпадают. */
 .dt-prefs-io-flex {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  row-gap: 8px;
   min-height: 0;
 }
 
-/* Обе колонки идут по одной схеме — подпись, поле, кнопки, — поэтому три эти
-   линии совпадают по высоте слева и справа. */
 .dt-io-col-head {
   font-weight: 600;
   opacity: 0.9;
-  margin-bottom: 6px;
-}
-
-.dt-prefs-io-flex > .dt-actions-grid {
-  margin-top: 8px;
 }
 
 /* Сброс — подвал карточки, а не третья колонка. */
@@ -12982,7 +12979,7 @@ div.toast-icon {
 .dt-prefs-io-flex .dt-codearea {
   flex: 1 1 auto;
   min-height: 96px;
-  height: auto;
+  height: 100%;
 }
 
 @media (max-width: 1400px) {
@@ -12998,8 +12995,16 @@ div.toast-icon {
 
   .dt-card-wide .dt-branding-split,
   .dt-layout-split,
+  /* В одну колонку subgrid тянуть некуда: строки задаёт только первый блок. */
   .dt-io-split {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+
+  .dt-prefs-io-flex {
+    display: flex;
+    flex-direction: column;
+    grid-row: auto;
   }
 }
 

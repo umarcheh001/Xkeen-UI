@@ -531,6 +531,12 @@ details.dt-theme-group .dt-collapsible-icon{
   margin-top: 10px;
 }
 
+/* Кнопки обновления делят ширину карточки поровну от своего текста: ряд
+   заполняется целиком, зазоры между кнопками везде одинаковые. */
+.dt-update-actions > * {
+  flex: 1 1 auto;
+}
+
 /* Вложенная карточка внутри карточки (проверка ссылки Happ и т.п.). */
 details.dt-subcard {
   border: 1px solid var(--border, #1f2937);

@@ -239,6 +239,31 @@ def test_prefs_io_columns_are_built_the_same_way():
     assert "border-top:" in reset_rule
     assert "justify-content: space-between;" in reset_rule
 
+    # Три линии держит subgrid: кнопка с переносом в одной колонке поднимает ряд
+    # кнопок и во второй, иначе низы колонок разъезжаются.
+    split_rule = css[css.index(".dt-io-split {"):]
+    split_rule = split_rule[: split_rule.index("}")]
+    assert "grid-template-rows: auto 1fr auto;" in split_rule
+
+    col_rule = css[css.index(".dt-prefs-io-flex {"):]
+    col_rule = col_rule[: col_rule.index("}")]
+    assert "grid-template-rows: subgrid;" in col_rule
+    assert "grid-row: span 3;" in col_rule
+
+    # В одну колонку subgrid не работает — там колонки снова обычный flex.
+    narrow = css[css.index("@media (max-width: 1180px)"):]
+    narrow = narrow[: narrow.index("@media (max-width: 760px)")]
+    assert "grid-template-rows: none;" in narrow
+    assert "grid-row: auto;" in narrow
+
+
+def test_update_actions_fill_the_card_width():
+    glass = GLASS_CSS.read_text(encoding="utf-8")
+
+    rule = glass[glass.index(".dt-update-actions > * {"):]
+    rule = rule[: rule.index("}")]
+    assert "flex: 1 1 auto;" in rule
+
 
 def test_prefs_io_buttons_are_labelled_in_russian():
     template = TEMPLATE.read_text(encoding="utf-8")
