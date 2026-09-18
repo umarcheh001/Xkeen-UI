@@ -180,3 +180,38 @@ def test_top_row_stretches_and_update_log_takes_the_slack():
     top_row = top_row[: top_row.index("}")]
     assert "align-items: stretch;" in top_row
     assert "minmax(400px, 440px) minmax(0, 1fr)" in top_row
+
+
+def test_prefs_io_columns_are_built_the_same_way():
+    template = TEMPLATE.read_text(encoding="utf-8")
+    css = BASE_CSS.read_text(encoding="utf-8")
+
+    card = template[template.index('id="dt-ui-prefs-io-card"'):]
+    card = card[: card.index("</details>")]
+
+    columns = card.split('class="dt-prefs-io-flex"')[1:]
+    assert len(columns) == 2
+
+    # Обе колонки идут по одной схеме: подпись, поле, ряд кнопок под ним.
+    for column in columns:
+        assert column.index("dt-io-col-head") < column.index("dt-codearea") < column.index("dt-actions-grid")
+
+    # Сброс уехал в подвал карточки, отделённый линией.
+    footer = card[card.index('class="dt-io-reset"'):]
+    assert 'id="dt-ui-prefs-resetall"' in footer
+    assert "dt-codearea" not in footer
+
+    reset_rule = css[css.index(".dt-io-reset {"):]
+    reset_rule = reset_rule[: reset_rule.index("}")]
+    assert "border-top:" in reset_rule
+    assert "justify-content: space-between;" in reset_rule
+
+
+def test_prefs_io_buttons_are_labelled_in_russian():
+    template = TEMPLATE.read_text(encoding="utf-8")
+
+    card = template[template.index('id="dt-ui-prefs-io-card"'):]
+    card = card[: card.index("</details>")]
+
+    for label in ("Экспортировать", "Копировать", "Скачать", "Импортировать", "Сбросить всё"):
+        assert label in card, label

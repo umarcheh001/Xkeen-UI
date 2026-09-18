@@ -628,30 +628,31 @@
 
               <div class="dt-io-split">
                 <div class="dt-prefs-io-flex">
-                  <div class="dt-actions-grid" aria-label="Export actions">
-                    <button type="button" id="dt-ui-prefs-export" class="btn-secondary" title="Собрать текущие UI‑настройки в JSON ниже.">Export JSON</button>
-                    <button type="button" id="dt-ui-prefs-copy" class="btn-secondary" title="Скопировать JSON в буфер обмена.">Copy</button>
-                    <button type="button" id="dt-ui-prefs-download" class="btn-secondary" title="Скачать JSON файлом.">Download</button>
+                  <div class="small dt-io-col-head">Экспорт настроек</div>
+                  <textarea id="dt-ui-prefs-export-text" class="dt-codearea" rows="4" spellcheck="false" placeholder="Нажмите «Экспортировать» — JSON появится здесь…" readonly></textarea>
+                  <div class="dt-actions-grid" aria-label="Действия экспорта">
+                    <button type="button" id="dt-ui-prefs-export" class="btn-secondary" title="Собрать текущие UI‑настройки в JSON выше.">Экспортировать</button>
+                    <button type="button" id="dt-ui-prefs-copy" class="btn-secondary" title="Скопировать JSON в буфер обмена.">Копировать</button>
+                    <button type="button" id="dt-ui-prefs-download" class="btn-secondary" title="Скачать JSON файлом.">Скачать</button>
                   </div>
-                  <textarea id="dt-ui-prefs-export-text" class="dt-codearea" rows="4" spellcheck="false" placeholder="Нажмите Export JSON…" readonly></textarea>
                 </div>
 
                 <div class="dt-prefs-io-flex">
-                  <div class="small" style="margin-bottom:6px; opacity:0.9;"><b>Import JSON</b> (вставьте или загрузите файл)</div>
-                  <textarea id="dt-ui-prefs-import-text" class="dt-codearea" rows="4" spellcheck="false" placeholder='{ "kind": "xkeen-ui-prefs", "prefs": { ... } }'></textarea>
-                  <div class="dt-actions-grid" style="margin-top:8px;" aria-label="Import actions">
-                    <button type="button" id="dt-ui-prefs-import" class="btn-secondary" title="Применить JSON из поля выше (перезапишет UI‑настройки).">Import JSON</button>
+                  <div class="small dt-io-col-head">Импорт настроек</div>
+                  <textarea id="dt-ui-prefs-import-text" class="dt-codearea" rows="4" spellcheck="false" placeholder='Вставьте JSON или загрузите файл: { "kind": "xkeen-ui-prefs", "prefs": { ... } }'></textarea>
+                  <div class="dt-actions-grid" aria-label="Действия импорта">
+                    <button type="button" id="dt-ui-prefs-import" class="btn-secondary" title="Применить JSON из поля выше (перезапишет UI‑настройки).">Импортировать</button>
                     <label id="dt-ui-prefs-import-file-btn" class="btn-secondary dt-btn-like dt-file-label" role="button" tabindex="0" title="Загрузить JSON из файла и вставить в поле импорта.">
-                      Import from file
+                      Из файла
                       <input id="dt-ui-prefs-import-file" type="file" accept="application/json" class="dt-file-input-overlay">
                     </label>
                   </div>
                 </div>
               </div>
 
-              <div class="dt-logging-actions" style="margin-top:12px; justify-content:space-between; align-items:center;">
-                <span class="small" style="opacity:0.9;"><b>Reset all UI prefs</b> — сброс настроек в этом браузере</span>
-                <button type="button" id="dt-ui-prefs-resetall" class="btn-danger" title="Полный сброс UI‑настроек (в браузере): тема/типографика/layout/скрытия/перетасовка вкладок и т.д.">Reset all</button>
+              <div class="dt-io-reset">
+                <span class="small" style="opacity:0.9;">Сброс всех UI‑настроек в этом браузере</span>
+                <button type="button" id="dt-ui-prefs-resetall" class="btn-danger" title="Полный сброс UI‑настроек (в браузере): тема/типографика/layout/скрытия/перетасовка вкладок и т.д.">Сбросить всё</button>
               </div>
 
               <div id="dt-ui-prefs-io-status" class="small" style="margin-top:8px; opacity:0.85;"></div>

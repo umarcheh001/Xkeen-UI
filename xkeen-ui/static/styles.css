@@ -13005,6 +13005,30 @@ div.toast-icon {
   min-height: 0;
 }
 
+/* Обе колонки идут по одной схеме — подпись, поле, кнопки, — поэтому три эти
+   линии совпадают по высоте слева и справа. */
+.dt-io-col-head {
+  font-weight: 600;
+  opacity: 0.9;
+  margin-bottom: 6px;
+}
+
+.dt-prefs-io-flex > .dt-actions-grid {
+  margin-top: 8px;
+}
+
+/* Сброс — подвал карточки, а не третья колонка. */
+.dt-io-reset {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #1f2937);
+}
+
 .dt-prefs-io-flex .dt-codearea {
   flex: 1 1 auto;
   min-height: 96px;

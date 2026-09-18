@@ -801,6 +801,10 @@ body.devtools-page .dt-zone-head {
   letter-spacing: 0.12em;
 }
 
+body.devtools-page .dt-io-reset {
+  border-top-color: var(--op-border);
+}
+
 body.devtools-page .dt-zone-head::after {
   background: var(--op-border);
 }
