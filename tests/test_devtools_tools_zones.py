@@ -317,17 +317,29 @@ def test_button_rows_breathe_like_the_card_padding():
     assert ".dt-logging-actions" not in tight
 
 
-def test_terminal_save_and_reset_sit_on_the_right():
+def test_wide_cards_keep_their_buttons_together_on_the_right():
     base = BASE_CSS.read_text(encoding="utf-8")
+    template = TEMPLATE.read_text(encoding="utf-8")
 
-    row_rule = base[base.index("#dt-terminal-theme-card .dt-logging-actions {"):]
+    # Одно правило на все широкие карточки — терминал, брендинг, Layout-твики.
+    row_rule = base[base.index(".dt-card-wide .dt-logging-actions {"):]
     row_rule = row_rule[: row_rule.index("}")]
     assert "justify-content: flex-end;" in row_rule
 
-    btn_rule = base[base.index("#dt-terminal-theme-card .dt-logging-actions button,"):]
+    btn_rule = base[base.index(".dt-card-wide .dt-logging-actions button {"):]
     btn_rule = btn_rule[: btn_rule.index("}")]
-    assert "#dt-layout-card .dt-logging-actions button {" in btn_rule
     assert "width: auto;" in btn_rule
+
+    # Никаких адресных исключений и инлайновых стилей на тех же рядах.
+    assert "#dt-terminal-theme-card .dt-logging-actions" not in base
+    assert "#dt-layout-card .dt-logging-actions" not in base
+    assert 'class="dt-logging-actions" style="justify-content:flex-end;"' not in template
+
+    wide_ids = ("dt-terminal-theme-card", "dt-branding-card", "dt-layout-card")
+    for card_id in wide_ids:
+        card = template[template.index('id="%s"' % card_id):]
+        card = card[: card.index("</details>")]
+        assert 'class="dt-logging-actions"' in card, card_id
 
 
 def test_check_result_stays_in_the_pill_next_to_latest():

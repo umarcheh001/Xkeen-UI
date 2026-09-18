@@ -94,14 +94,12 @@ test.describe('DevTools Tools zones', () => {
       const buttons = [...row.querySelectorAll('button')].map((b) => b.getBoundingClientRect());
       const box = card.getBoundingClientRect();
       return {
-        leftInset: buttons[0].left - box.left,
         rightInset: box.right - buttons[buttons.length - 1].right,
         between: buttons[1].left - buttons[0].right,
       };
     });
 
-    // Зазор между Save и Reset равен отступу кнопок от границ карточки.
-    expect(Math.abs(branding.between - branding.leftInset)).toBeLessThanOrEqual(1);
+    // Зазор между Save и Reset равен отступу пары от края карточки.
     expect(Math.abs(branding.between - branding.rightInset)).toBeLessThanOrEqual(1);
 
     const service = await page.evaluate(() => {
@@ -117,31 +115,46 @@ test.describe('DevTools Tools zones', () => {
     expect(Math.abs(service.firstGap - service.secondGap)).toBeLessThanOrEqual(1);
   });
 
-  test('terminal save and reset sit together on the right', async ({ page }) => {
+  test('wide cards keep save and reset together on the right', async ({ page }) => {
     await openTools(page, { width: 1600, height: 1000 });
 
-    const card = page.locator('#dt-terminal-theme-card');
-    await card.locator('summary').click();
-    await expect(card).toHaveAttribute('open', /.*/);
+    const terminal = page.locator('#dt-terminal-theme-card');
+    await terminal.locator('summary').click();
+    await expect(terminal).toHaveAttribute('open', /.*/);
 
-    const row = await page.evaluate(() => {
-      const el = document.getElementById('dt-terminal-theme-card');
-      const rect = el.getBoundingClientRect();
-      const buttons = [...el.querySelectorAll('.dt-logging-actions button')]
-        .map((b) => b.getBoundingClientRect());
+    const rows = await page.evaluate(() => {
+      const read = (id) => {
+        const el = document.getElementById(id);
+        const rect = el.getBoundingClientRect();
+        const buttons = [...el.querySelectorAll('.dt-logging-actions button')]
+          .map((b) => b.getBoundingClientRect());
+        const width = buttons.reduce((sum, b) => sum + b.width, 0);
+        return {
+          count: buttons.length,
+          sameRow: buttons.every((b) => Math.abs(b.top - buttons[0].top) <= 1),
+          widthShare: width / rect.width,
+          rightInset: rect.right - buttons[buttons.length - 1].right,
+        };
+      };
       return {
-        count: buttons.length,
-        sameRow: Math.abs(buttons[0].top - buttons[1].top) <= 1,
-        widthShare: (buttons[0].width + buttons[1].width) / rect.width,
-        rightInset: rect.right - buttons[buttons.length - 1].right,
+        terminal: read('dt-terminal-theme-card'),
+        branding: read('dt-branding-card'),
+        layout: read('dt-layout-card'),
       };
     });
 
-    expect(row.count).toBe(2);
-    expect(row.sameRow).toBe(true);
-    // Пара кнопок больше не занимает всю ширину карточки и прижата вправо.
-    expect(row.widthShare).toBeLessThan(0.5);
-    expect(row.rightInset).toBeLessThanOrEqual(16);
+    // Во всех широких карточках кнопки живут компактной группой у правого края.
+    for (const key of ['terminal', 'branding', 'layout']) {
+      const row = rows[key];
+      expect(row.count).toBeGreaterThanOrEqual(1);
+      expect(row.sameRow).toBe(true);
+      expect(row.widthShare).toBeLessThan(0.5);
+      expect(row.rightInset).toBeLessThanOrEqual(16);
+    }
+
+    expect(rows.terminal.count).toBe(2);
+    expect(rows.branding.count).toBe(2);
+    expect(rows.layout.count).toBe(1);
   });
 
   test('layout tweaks show tabs in two columns', async ({ page }) => {

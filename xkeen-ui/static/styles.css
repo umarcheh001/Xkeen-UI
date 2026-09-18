@@ -12898,14 +12898,15 @@ div.toast-icon {
   width: 100%;
 }
 
-/* Терминал: пара кнопок прижата к правому краю и по ширине своего текста —
-   растянутые во всю карточку Save и Reset выглядели как основное действие. */
-#dt-terminal-theme-card .dt-logging-actions {
+/* Широкие карточки (терминал, брендинг, Layout-твики): ряд кнопок — компактная
+   пара у правого края. Растянутые во всю полосу Save и Reset читались как главное
+   действие карточки, хотя это её подпись внизу. В узких карточках кнопки
+   по-прежнему занимают всю ширину. */
+.dt-card-wide .dt-logging-actions {
   justify-content: flex-end;
 }
 
-#dt-terminal-theme-card .dt-logging-actions button,
-#dt-layout-card .dt-logging-actions button {
+.dt-card-wide .dt-logging-actions button {
   width: auto;
   min-width: 96px;
 }
