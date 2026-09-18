@@ -3210,9 +3210,36 @@ html[data-theme="light"] .btn-link:hover {
   align-items: stretch;
 }
 
-/* Карточка обновления идёт по своему содержимому: тянуть её на всю высоту ряда
-   имело смысл, только пока внизу лежал хвост update.log. Теперь там одна строка
-   вердикта, и растянутая карточка давала бы пустую рамку под ней. */
+/* Левая колонка верхнего ряда кончается вровень с ENV: последняя карточка
+   забирает остаток высоты, а строка итога по логу прижата к её низу — иначе
+   под ней зияла бы пустая рамка. */
+.dt-tools-left > #dt-update-card[open] {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Chrome 131+ отдаёт содержимое <details> через слот ::details-content: без
+   правила на самом слоте высота до тела карточки не доходит. */
+.dt-tools-left > #dt-update-card[open]::details-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.dt-tools-left > #dt-update-card[open] > .dt-collapsible-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.dt-tools-left > #dt-update-card[open] .dt-update-log-summary {
+  margin-top: auto;
+}
+
 .dt-tools-left {
   min-width: 0;
 }
@@ -12837,7 +12864,7 @@ div.toast-icon {
 }
 
 .dt-service-actions-secondary {
-  margin-top: 8px;
+  margin-top: 12px;
   display: flex;
 }
 
@@ -12894,33 +12921,14 @@ div.toast-icon {
   gap: 12px;
 }
 
-.dt-logging-actions button {
-  width: 100%;
-}
-
-/* Широкие карточки (терминал, брендинг, Layout-твики): ряд кнопок — компактная
-   пара у правого края. Растянутые во всю полосу Save и Reset читались как главное
-   действие карточки, хотя это её подпись внизу. В узких карточках кнопки
-   по-прежнему занимают всю ширину. */
-.dt-card-wide .dt-logging-actions {
+/* Ряд кнопок карточки — компактная группа у правого края, одинаково в широких
+   и узких карточках. Растянутые во всю полосу Save и Reset читались как главное
+   действие карточки, хотя это её подпись внизу. */
+.dt-logging-actions {
   justify-content: flex-end;
 }
 
-.dt-card-wide .dt-logging-actions button {
-  width: auto;
-  min-width: 96px;
-}
-
-/* Узкие карточки с одиночной кнопкой (логирование, интерфейс): кнопка того же
-   размера, что и в широких карточках, но у левого края — справа её не с чем
-   выравнивать, а растянутая во всю полосу она спорит с содержимым карточки. */
-#dt-logging-card .dt-logging-actions,
-#dt-ui-prefs-card .dt-logging-actions {
-  justify-content: flex-start;
-}
-
-#dt-logging-card .dt-logging-actions button,
-#dt-ui-prefs-card .dt-logging-actions button {
+.dt-logging-actions button {
   width: auto;
   min-width: 96px;
 }

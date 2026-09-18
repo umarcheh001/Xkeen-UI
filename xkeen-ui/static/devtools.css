@@ -565,6 +565,15 @@ details.dt-subcard .dt-collapsible-body {
   padding: 10px 12px 12px;
 }
 
+/* Состояние темы терминала стоит над кнопками, а не прижимается к нижнему краю. */
+.dt-term-state {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+  opacity: 0.85;
+}
+
 /* Итог по update.log: шапка, строка вердикта и — при находках — кнопка в Logs. */
 .dt-update-log-summary {
   margin-top: 10px;

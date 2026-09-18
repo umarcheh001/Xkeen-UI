@@ -115,7 +115,7 @@ test.describe('DevTools Tools zones', () => {
     expect(Math.abs(service.firstGap - service.secondGap)).toBeLessThanOrEqual(1);
   });
 
-  test('wide cards keep save and reset together on the right', async ({ page }) => {
+  test('every card keeps save and reset together on the right', async ({ page }) => {
     await openTools(page, { width: 1600, height: 1000 });
 
     const terminal = page.locator('#dt-terminal-theme-card');
@@ -140,11 +140,13 @@ test.describe('DevTools Tools zones', () => {
         terminal: read('dt-terminal-theme-card'),
         branding: read('dt-branding-card'),
         layout: read('dt-layout-card'),
+        logging: read('dt-logging-card'),
+        prefs: read('dt-ui-prefs-card'),
       };
     });
 
-    // Во всех широких карточках кнопки живут компактной группой у правого края.
-    for (const key of ['terminal', 'branding', 'layout']) {
+    // Одинаково во всех карточках: компактная группа у правого края.
+    for (const key of ['terminal', 'branding', 'layout', 'logging', 'prefs']) {
       const row = rows[key];
       expect(row.count).toBeGreaterThanOrEqual(1);
       expect(row.sameRow).toBe(true);
@@ -226,27 +228,6 @@ test.describe('DevTools Tools zones', () => {
     expect(layout.heads).toHaveLength(2);
     expect(Math.abs(layout.heads[0] - layout.heads[1])).toBeLessThanOrEqual(1);
     expect(Math.abs(layout.bodies[0] - layout.bodies[1])).toBeLessThanOrEqual(1);
-  });
-
-  test('single-button cards keep the button small and on the left', async ({ page }) => {
-    await openTools(page, { width: 1600, height: 1000 });
-
-    const rows = await page.evaluate(() => {
-      const read = (id) => {
-        const card = document.getElementById(id).getBoundingClientRect();
-        const btn = document.querySelector('#' + id + ' .dt-logging-actions button').getBoundingClientRect();
-        return {
-          leftInset: btn.left - card.left,
-          widthShare: btn.width / card.width,
-        };
-      };
-      return { logging: read('dt-logging-card'), prefs: read('dt-ui-prefs-card') };
-    });
-
-    for (const key of ['logging', 'prefs']) {
-      expect(rows[key].leftInset).toBeLessThanOrEqual(16);
-      expect(rows[key].widthShare).toBeLessThan(0.35);
-    }
   });
 
   test('zones collapse to one column on a narrow screen', async ({ page }) => {

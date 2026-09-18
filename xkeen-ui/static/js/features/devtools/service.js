@@ -44,7 +44,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
 
       const running = !!(data && data.running);
       if (out) {
-        out.textContent = running ? 'UI: running' : 'UI: stopped';
+        out.textContent = running ? 'Панель работает' : 'Панель остановлена';
         out.className = 'status ' + (running ? 'ok' : 'warn');
       }
     } catch (e) {
@@ -108,7 +108,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
             note.className = 'small';
             note.style.marginTop = '8px';
             note.style.opacity = '0.85';
-            note.textContent = 'Dev mode: управление сервисом UI недоступно (запуск/остановка делается из вашей среды запуска).';
+            note.textContent = 'Режим разработки: управление сервисом панели недоступно — запуск и остановка делаются из вашей среды запуска.';
             card.appendChild(note);
           }
         }

@@ -111,7 +111,7 @@
 
             <div id="dt-ui-status" class="status" style="margin-top:10px;">Загрузка…</div>
             <p class="small" style="margin-top:8px; opacity:0.9;">
-              Примечание: Stop/Restart могут оборвать текущую вкладку — это нормально.
+              Примечание: «Остановить» и «Перезапустить» могут оборвать текущую вкладку — это нормально.
             </p>
           </section>
 
@@ -428,12 +428,15 @@
 
               <div id="dt-term-fields"></div>
 
+              <div class="dt-term-state">
+                <div class="small" id="dt-term-meta"></div>
+                <div class="small" id="dt-term-status"></div>
+              </div>
+
               <div class="dt-logging-actions" style="margin-top:12px; flex-wrap:wrap;">
                 <button type="button" id="dt-term-save" class="btn-secondary" title="Сохранить и применить тему терминала.">Сохранить</button>
                 <button type="button" id="dt-term-reset" class="btn-secondary" title="Удалить terminal_theme.* и вернуться к наследованию глобальной темы.">Сбросить</button>
               </div>
-              <div class="small" id="dt-term-meta" style="margin-top:10px; opacity:0.85;"></div>
-              <div class="small" id="dt-term-status" style="margin-top:10px; opacity:0.85;"></div>
             </div>
           </details>
 

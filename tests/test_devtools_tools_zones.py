@@ -156,18 +156,28 @@ def test_wide_cards_use_multi_column_inner_grids():
     assert 'class="dt-layout-split"' in layout_card
 
 
-def test_top_row_no_longer_stretches_for_the_update_log():
+def test_top_row_stretches_the_last_card_to_match_env():
     base = BASE_CSS.read_text(encoding="utf-8")
     glass = GLASS_CSS.read_text(encoding="utf-8")
     operator = OPERATOR_CSS.read_text(encoding="utf-8")
 
-    # Хвоста update.log в карточке больше нет — ни разметки, ни правил под него,
-    # ни растяжки карточки, которая существовала только ради этого хвоста.
-    assert "#dt-update-card[open]" not in base
+    # Хвоста update.log в карточке больше нет — ни разметки, ни правил под него.
     assert "#dt-update-log {" not in base
     assert "#dt-update-log-box[open]" not in base
     assert ".dt-update-log " not in glass
     assert ".dt-update-log," not in glass
+
+    # Зато последняя карточка левой колонки тянется до низа ряда, вровень с ENV,
+    # а строка итога по логу прижата к её низу — без пустой рамки под собой.
+    stretch = base[base.index(".dt-tools-left > #dt-update-card[open] {"):]
+    stretch = stretch[: stretch.index("}")]
+    assert "flex: 1 1 auto;" in stretch
+
+    assert ".dt-tools-left > #dt-update-card[open]::details-content {" in base
+
+    pinned = base[base.index(".dt-tools-left > #dt-update-card[open] .dt-update-log-summary {"):]
+    pinned = pinned[: pinned.index("}")]
+    assert "margin-top: auto;" in pinned
 
     # В теме оператора верхний ряд тоже растягивается
     top_row = operator[operator.index("body.devtools-page .dt-tools-layout {"):]
@@ -258,18 +268,24 @@ def test_prefs_io_columns_are_built_the_same_way():
     assert "grid-row: auto;" in narrow
 
 
-def test_narrow_cards_put_their_single_button_on_the_left():
+def test_every_card_row_keeps_its_buttons_small_and_on_the_right():
     base = BASE_CSS.read_text(encoding="utf-8")
 
-    row_rule = base[base.index("#dt-logging-card .dt-logging-actions,"):]
+    # Одно правило на все карточки — и широкие, и узкие.
+    marker = ".dt-logging-actions {" + chr(10) + "  justify-content"
+    row_rule = base[base.index(marker):]
     row_rule = row_rule[: row_rule.index("}")]
-    assert "#dt-ui-prefs-card .dt-logging-actions {" in row_rule
-    assert "justify-content: flex-start;" in row_rule
+    assert "justify-content: flex-end;" in row_rule
 
-    btn_rule = base[base.index("#dt-logging-card .dt-logging-actions button,"):]
+    btn_rule = base[base.index(".dt-logging-actions button {"):]
     btn_rule = btn_rule[: btn_rule.index("}")]
     assert "width: auto;" in btn_rule
     assert "min-width: 96px;" in btn_rule
+
+    # Кнопок во всю ширину и адресных исключений не осталось.
+    assert "width: 100%;" not in base[base.index(".dt-logging-actions button {"):][:200]
+    assert "#dt-logging-card .dt-logging-actions" not in base
+    assert "#dt-ui-prefs-card .dt-logging-actions" not in base
 
 
 def test_export_card_stretches_its_fields_to_the_card_height():
@@ -386,28 +402,17 @@ def test_button_rows_breathe_like_the_card_padding():
     assert "gap: 12px;" in update_row
 
 
-def test_wide_cards_keep_their_buttons_together_on_the_right():
+def test_no_card_overrides_the_shared_button_row():
     base = BASE_CSS.read_text(encoding="utf-8")
     template = TEMPLATE.read_text(encoding="utf-8")
 
-    # Одно правило на все широкие карточки — терминал, брендинг, Layout-твики.
-    row_rule = base[base.index(".dt-card-wide .dt-logging-actions {"):]
-    row_rule = row_rule[: row_rule.index("}")]
-    assert "justify-content: flex-end;" in row_rule
-
-    btn_rule = base[base.index(".dt-card-wide .dt-logging-actions button {"):]
-    btn_rule = btn_rule[: btn_rule.index("}")]
-    assert "width: auto;" in btn_rule
-
-    # Никаких адресных исключений и инлайновых стилей на тех же рядах.
-    assert "#dt-terminal-theme-card .dt-logging-actions" not in base
-    assert "#dt-layout-card .dt-logging-actions" not in base
+    assert ".dt-card-wide .dt-logging-actions" not in base
     assert 'class="dt-logging-actions" style="justify-content:flex-end;"' not in template
 
-    wide_ids = ("dt-terminal-theme-card", "dt-branding-card", "dt-layout-card")
-    for card_id in wide_ids:
+    for card_id in ("dt-terminal-theme-card", "dt-branding-card", "dt-layout-card",
+                    "dt-logging-card", "dt-ui-prefs-card"):
         card = template[template.index('id="%s"' % card_id):]
-        card = card[: card.index("</details>")]
+        card = card[: card.index("</details>")] if "</details>" in card else card
         assert 'class="dt-logging-actions"' in card, card_id
 
 

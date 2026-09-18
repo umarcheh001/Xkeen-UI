@@ -658,6 +658,13 @@ body.devtools-page :is(.dt-badge, .dt-pill, .dt-custom-css-badge, .dt-log-badge,
   font-weight: 600;
 }
 
+/* Включённая тема терминала отмечается тем же зелёным, что и прочие «включено». */
+body.devtools-page .dt-custom-css-badge.is-on {
+  border-color: color-mix(in srgb, var(--op-success) 38%, var(--op-border)) !important;
+  background: var(--op-success-soft) !important;
+  color: var(--op-success) !important;
+}
+
 body.devtools-page :is(.dt-badge-ok, .dt-pill-ok) {
   border-color: color-mix(in srgb, var(--op-success) 38%, var(--op-border)) !important;
   background: var(--op-success-soft) !important;
@@ -887,12 +894,14 @@ body.devtools-page .dt-service-actions-secondary button:hover {
   color: var(--op-text) !important;
 }
 
+/* «Обновить статус» отбит от верхнего ряда и от плашки состояния тем же
+   расстоянием, что и кнопки между собой. */
 body.devtools-page .dt-service-actions-secondary {
-  margin-top: 5px;
+  margin-top: 12px;
 }
 
 body.devtools-page #dt-service-card :is(.status, p) {
-  margin-top: 7px !important;
+  margin-top: 12px !important;
   margin-bottom: 0;
 }
 
