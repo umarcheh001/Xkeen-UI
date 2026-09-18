@@ -42,6 +42,24 @@ test.describe('DevTools Tools zones', () => {
     expect(geometry.layoutZone).toBe('Вид интерфейса');
     expect(Math.abs(geometry.trayBottom - geometry.envBottom)).toBeLessThanOrEqual(2);
     expect(Math.abs(geometry.prefsBottom - geometry.ioBottom)).toBeLessThanOrEqual(2);
+
+    const logBox = page.locator('#dt-update-log-box');
+    await expect(logBox).not.toHaveAttribute('open', /.*/);
+    await logBox.locator('summary').click();
+    await expect(logBox).toHaveAttribute('open', /.*/);
+
+    const logGeometry = await page.evaluate(() => {
+      const log = document.getElementById('dt-update-log');
+      const card = document.getElementById('dt-update-card');
+      return {
+        logHeight: log.getBoundingClientRect().height,
+        logBottom: log.getBoundingClientRect().bottom,
+        cardBottom: card.getBoundingClientRect().bottom,
+      };
+    });
+
+    expect(logGeometry.logHeight).toBeGreaterThan(240);
+    expect(logGeometry.logBottom).toBeLessThanOrEqual(logGeometry.cardBottom + 2);
   });
 
   test('zones collapse to one column on a narrow screen', async ({ page }) => {
