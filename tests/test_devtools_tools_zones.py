@@ -167,17 +167,19 @@ def test_top_row_stretches_the_last_card_to_match_env():
     assert ".dt-update-log " not in glass
     assert ".dt-update-log," not in glass
 
-    # Зато последняя карточка левой колонки тянется до низа ряда, вровень с ENV,
-    # а строка итога по логу прижата к её низу — без пустой рамки под собой.
-    stretch = base[base.index(".dt-tools-left > #dt-update-card[open] {"):]
-    stretch = stretch[: stretch.index("}")]
-    assert "flex: 1 1 auto;" in stretch
+    # Последняя карточка каждой колонки тянется до низа ряда, поэтому обе половины
+    # кончаются на одной линии.
+    for selector in (".dt-tools-left > #dt-update-card[open] {", ".dt-tools-right > #dt-env-card {"):
+        stretch = base[base.index(selector):]
+        stretch = stretch[: stretch.index("}")]
+        assert "flex: 1 1 auto;" in stretch, selector
 
     assert ".dt-tools-left > #dt-update-card[open]::details-content {" in base
 
-    pinned = base[base.index(".dt-tools-left > #dt-update-card[open] .dt-update-log-summary {"):]
-    pinned = pinned[: pinned.index("}")]
-    assert "margin-top: auto;" in pinned
+    # Содержимое остаётся вверху: строка итога по логу стоит сразу под статусом.
+    pinned_rule = ".dt-update-log-summary {" + chr(10) + "  margin-top: auto;"
+    assert pinned_rule not in base
+    assert "#dt-update-card[open] .dt-update-log-summary" not in base
 
     # В теме оператора верхний ряд тоже растягивается
     top_row = operator[operator.index("body.devtools-page .dt-tools-layout {"):]

@@ -3210,9 +3210,9 @@ html[data-theme="light"] .btn-link:hover {
   align-items: stretch;
 }
 
-/* Левая колонка верхнего ряда кончается вровень с ENV: последняя карточка
-   забирает остаток высоты, а строка итога по логу прижата к её низу — иначе
-   под ней зияла бы пустая рамка. */
+/* Обе половины верхнего ряда кончаются на одной линии: последняя карточка каждой
+   колонки забирает остаток высоты. Содержимое при этом остаётся вверху — строка
+   итога по логу стоит сразу под статусом, а не съезжает к нижнему краю. */
 .dt-tools-left > #dt-update-card[open] {
   flex: 1 1 auto;
   min-height: 0;
@@ -3236,8 +3236,9 @@ html[data-theme="light"] .btn-link:hover {
   min-height: 0;
 }
 
-.dt-tools-left > #dt-update-card[open] .dt-update-log-summary {
-  margin-top: auto;
+.dt-tools-right > #dt-env-card {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .dt-tools-left {

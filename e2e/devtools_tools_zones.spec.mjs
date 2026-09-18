@@ -230,6 +230,25 @@ test.describe('DevTools Tools zones', () => {
     expect(Math.abs(layout.bodies[0] - layout.bodies[1])).toBeLessThanOrEqual(1);
   });
 
+  test('top row halves end on the same line with the log right under the status', async ({ page }) => {
+    await openTools(page, { width: 1600, height: 1000 });
+
+    const row = await page.evaluate(() => {
+      const b = (s) => document.querySelector(s).getBoundingClientRect();
+      return {
+        updateBottom: b('#dt-update-card').bottom,
+        envBottom: b('#dt-env-card').bottom,
+        logTop: b('.dt-update-log-summary').top,
+        substatusBottom: b('#dt-update-substatus').bottom,
+      };
+    });
+
+    // Обе половины ряда кончаются вместе...
+    expect(Math.abs(row.updateBottom - row.envBottom)).toBeLessThanOrEqual(2);
+    // ...а строка итога по логу стоит сразу под статусом, а не у нижнего края.
+    expect(row.logTop - row.substatusBottom).toBeLessThanOrEqual(12);
+  });
+
   test('zones collapse to one column on a narrow screen', async ({ page }) => {
     await openTools(page, { width: 900, height: 900 });
 

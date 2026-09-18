@@ -569,7 +569,7 @@ details.dt-subcard .dt-collapsible-body {
 .dt-term-state {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   margin-top: 12px;
   opacity: 0.85;
 }
