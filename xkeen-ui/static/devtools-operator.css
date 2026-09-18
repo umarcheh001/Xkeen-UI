@@ -797,7 +797,7 @@ body.devtools-page .dt-logs-card {
 }
 
 body.devtools-page .dt-zone-head {
-  color: var(--op-text-muted);
+  color: var(--op-muted);
   letter-spacing: 0.12em;
 }
 
