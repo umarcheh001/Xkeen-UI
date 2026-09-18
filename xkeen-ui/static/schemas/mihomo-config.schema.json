@@ -865,9 +865,9 @@
           },
           "type": {
             "type": "string",
-            "enum": ["http", "socks", "mixed", "redir", "tproxy", "tunnel", "tun", "shadowsocks", "vmess"],
-            "description": "Протокол входа: `mixed` принимает HTTP и SOCKS5, `http` — только HTTP proxy, `socks` — только SOCKS5. `redir`/`tproxy`/`tun` предназначены для системного перехвата трафика.",
-            "x-ui-explain": "Тип определяет, как приложения или систем�� подключаются к Mihomo. Для локальной проверки обычно удобнее `mixed`.",
+            "enum": ["http", "socks", "mixed", "redir", "tproxy", "tunnel", "tun", "shadowsocks", "snell", "vmess", "vless", "trojan", "anytls", "mieru", "sudoku", "trusttunnel", "tuic", "shadowquic", "hysteria2", "hysteria2-realm"],
+            "description": "Протокол входа: `mixed` принимает HTTP и SOCKS5, `http` — только HTTP proxy, `socks` — только SOCKS5. `redir`/`tproxy`/`tun` предназначены для системного перехвата трафика. Остальные значения поднимают полноценный сервер соответствующего протокола, к которому подключаются чужие клиенты, — для них нужны свои ключи и сертификаты.",
+            "x-ui-explain": "Тип определяет, как приложения или система подключаются к Mihomo. Для локальной проверки обычно удобнее `mixed`.",
             "x-ui-use-case": "Выберите `mixed` для универсального локального proxy-входа; `redir`/`tproxy`/`tun` настраивайте только для сценариев перехвата трафика роутером.",
             "x-ui-example": "type: mixed",
             "x-ui-warning": "`redir`, `tproxy` и `tun` требуют дополнительных системных правил и прав. Не заменяйте ими обычный `mixed` listener для диагностики."
@@ -894,7 +894,7 @@
             "type": "boolean",
             "default": true,
             "description": "Разрешает UDP через listener, если выбранный тип и маршрут его поддерживают.",
-            "x-ui-explain": "В��лючает передачу UDP вместе с TCP через этот вход.",
+            "x-ui-explain": "Включает передачу UDP вместе с TCP через этот вход.",
             "x-ui-use-case": "Для HTTP-проверки IP можно оставить `false`; для обычного SOCKS/mixed proxy при необходимости используйте `true`.",
             "x-ui-example": "udp: false",
             "x-ui-warning": "UDP может быть не нужен для служебного listener и увеличивает поверхность работы входа."
@@ -1054,9 +1054,11 @@
           "description": "uTLS ClientHello fingerprint. Исходники Mihomo используют `ios` в нижнем регистре; документированное написание `iOS` сохранено как compatibility-вариант. Для reality обычно указывают `chrome`, `firefox`, `ios` или `random`."
         },
         "network": {
-          "type": "string",
-          "enum": ["raw", "tcp", "ws", "grpc", "h2", "http", "xhttp"],
-          "description": "Транспортный протокол поверх TCP/TLS. `raw` и `tcp` выбирают обычный TCP (так же Mihomo обрабатывает отсутствующее/иное значение); `ws` — WebSocket, `xhttp` — современный HTTP-based transport, `grpc` — gRPC, `h2`/`http` — HTTP/2.",
+          "anyOf": [
+            { "type": "string", "enum": ["raw", "tcp", "ws", "grpc", "h2", "http", "xhttp"] },
+            { "type": "string" }
+          ],
+          "description": "Значение зависит от типа прокси. У VMess/VLESS/Trojan это транспорт поверх TCP/TLS: `raw` и `tcp` — обычный TCP (так же Mihomo обрабатывает отсутствующее значение), `ws` — WebSocket, `xhttp` — современный HTTP-based transport, `grpc` — gRPC, `h2`/`http` — HTTP/2. У MASQUE это режим соединения (`quic`, `h2`, `h3-l4proxy`), у ZeroTier — идентификатор сети из 16 hex-символов.",
           "x-ui-explain": "Это способ, которым прокси маскирует или упаковывает трафик поверх базового TCP/TLS-соединения.",
           "x-ui-use-case": "Меняют, когда сервер работает не на чистом TCP, а через CDN, WebSocket, XHTTP или другой transport.",
           "x-ui-example": "\"network\": \"xhttp\"",
@@ -1189,7 +1191,7 @@
         },
         "key": {
           "type": "string",
-          "description": "OpenVPN client private key PEM. Используется вместе с `cert`."
+          "description": "OpenVPN: client private key PEM, используется вместе с `cert`. Sudoku: приватный ключ ED25519 или UUID, совпадающий с серверным."
         },
         "tls-crypt": {
           "type": "string",
@@ -1265,8 +1267,13 @@
         "ip-stack": { "$ref": "#/definitions/wireGuardIPStack" },
         "peers": {
           "type": "array",
-          "items": { "$ref": "#/definitions/wireGuardPeer" },
-          "description": "Полная форма WireGuard с несколькими peer. При её использовании server/port/public-key верхнего уровня игнорируются."
+          "items": {
+            "anyOf": [
+              { "$ref": "#/definitions/wireGuardPeer" },
+              { "type": "string" }
+            ]
+          },
+          "description": "У WireGuard — полная форма с несколькими peer (объекты); при её использовании server/port/public-key верхнего уровня игнорируются. У EasyTier — список входных узлов строками-URI вида `tcp://192.0.2.10:11010`."
         },
         "amnezia-wg-option": { "$ref": "#/definitions/amneziaWGOption" },
 
@@ -1465,14 +1472,549 @@
               }
             }
           }
+        },
+
+        "port-range": {
+          "type": "string",
+          "description": "mieru: диапазон портов сервера, например `2000-3000`. Задаётся вместо `port`, вместе с ним нельзя.",
+          "examples": [
+            "2000-3000"
+          ]
+        },
+        "transport": {
+          "type": "string",
+          "enum": [
+            "TCP",
+            "UDP"
+          ],
+          "description": "mieru: транспорт соединения."
+        },
+        "multiplexing": {
+          "type": "string",
+          "enum": [
+            "OFF",
+            "LOW",
+            "MIDDLE",
+            "HIGH"
+          ],
+          "description": "mieru: степень мультиплексирования соединений. По умолчанию `LOW`."
+        },
+        "handshake-mode": {
+          "type": "string",
+          "enum": [
+            "STANDARD",
+            "NO_WAIT"
+          ],
+          "description": "mieru: режим рукопожатия. `NO_WAIT` даёт 0-RTT, но требует поддержки на сервере."
+        },
+        "traffic-pattern": {
+          "type": "string",
+          "description": "mieru: base64-профиль поведения трафика (подгоняет форму пакетов под заданный шаблон)."
+        },
+        "aead-method": {
+          "type": "string",
+          "enum": [
+            "chacha20-poly1305",
+            "aes-128-gcm",
+            "none"
+          ],
+          "description": "sudoku: алгоритм шифрования полезной нагрузки."
+        },
+        "padding-min": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "sudoku: нижняя граница доли набивки, 0–100."
+        },
+        "padding-max": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "sudoku: верхняя граница доли набивки, 0–100 и не меньше `padding-min`."
+        },
+        "table-type": {
+          "type": "string",
+          "description": "sudoku: предпочитаемый режим байтовой раскладки."
+        },
+        "custom-table": {
+          "type": "string",
+          "description": "sudoku: своя байтовая раскладка (`2x`, `2p`, `4v`) для повышения энтропии."
+        },
+        "custom-tables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "sudoku: список своих байтовых раскладок. Перекрывает `custom-table`."
+        },
+        "multiplex": {
+          "type": "string",
+          "enum": [
+            "off",
+            "auto",
+            "on"
+          ],
+          "description": "sudoku: мультиплексирование соединений."
+        },
+        "httpmask": {
+          "type": "object",
+          "description": "sudoku: маскировка под обычный HTTP-трафик.",
+          "properties": {
+            "disable": {
+              "type": "boolean",
+              "description": "Выключить маскировку."
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "legacy",
+                "stream",
+                "poll",
+                "auto",
+                "ws"
+              ],
+              "description": "Форма HTTP-обмена."
+            },
+            "tls": {
+              "type": "boolean",
+              "description": "Принудительно HTTPS (`true`) или HTTP (`false`)."
+            },
+            "host": {
+              "type": "string",
+              "description": "Подменить заголовок Host и SNI."
+            },
+            "path-root": {
+              "type": "string",
+              "description": "Префикс пути HTTP-туннеля."
+            },
+            "multiplex": {
+              "type": "string",
+              "enum": [
+                "off",
+                "auto",
+                "on"
+              ],
+              "description": "Перекрывает `multiplex` верхнего уровня."
+            }
+          }
+        },
+        "enable-pure-downlink": {
+          "type": "boolean",
+          "description": "sudoku: `false` — режим с оптимизацией полосы, `true` — чистый Sudoku на обратном канале."
+        },
+        "handshake-timeout": {
+          "type": "integer",
+          "description": "MASQUE: таймаут рукопожатия в секундах. `0` — значение по умолчанию ядра."
+        },
+        "quic-versions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "v1",
+              "v2"
+            ]
+          },
+          "description": "ShadowQUIC: допустимые версии QUIC. По умолчанию `v1`."
+        },
+        "udp-over-stream": {
+          "type": "boolean",
+          "description": "ShadowQUIC: гнать UDP внутри потоков, а не датаграммами. По умолчанию выключено."
+        },
+        "zero-rtt": {
+          "type": "boolean",
+          "description": "ShadowQUIC: рукопожатие 0-RTT."
+        },
+        "keep-alive-interval": {
+          "type": "integer",
+          "description": "ShadowQUIC: интервал keep-alive в миллисекундах."
+        },
+        "up": {
+          "description": "ShadowQUIC/Hysteria: заявляемая скорость отдачи для согласования Brutal (`100 Mbps` или число Мбит/с)."
+        },
+        "down": {
+          "description": "ShadowQUIC/Hysteria: заявляемая скорость приёма для согласования Brutal."
+        },
+        "cwnd": {
+          "type": "integer",
+          "description": "ShadowQUIC: начальное congestion window. По умолчанию 32."
+        },
+        "max-datagram-frame-size": {
+          "type": "integer",
+          "description": "ShadowQUIC: предельный размер датаграммного кадра в байтах. По умолчанию 1400."
+        },
+        "max-open-streams": {
+          "type": "integer",
+          "description": "ShadowQUIC: предел одновременно открытых потоков. По умолчанию 1024."
+        },
+        "recv-window-conn": {
+          "type": "integer",
+          "description": "ShadowQUIC: окно приёма на поток."
+        },
+        "recv-window": {
+          "type": "integer",
+          "description": "ShadowQUIC: окно приёма на всё соединение."
+        },
+        "disable-mtu-discovery": {
+          "type": "boolean",
+          "description": "ShadowQUIC: отключить поиск MTU по пути."
+        },
+        "forward": {
+          "type": "boolean",
+          "description": "gost-relay: режим проброса (forward) вместо обычного relay."
+        },
+        "mux": {
+          "type": "boolean",
+          "description": "gost-relay: мультиплексировать соединения в одном потоке."
+        },
+        "identity-secret": {
+          "type": "string",
+          "description": "ZeroTier: содержимое identity.secret целиком — опознаёт узел в сети."
+        },
+        "planet": {
+          "type": "string",
+          "description": "ZeroTier: свой Planet-файл вместо стандартного Earth."
+        },
+        "physical-mtu": {
+          "type": "integer",
+          "minimum": 510,
+          "maximum": 10324,
+          "description": "ZeroTier: MTU полезной нагрузки UDP. По умолчанию 1432."
+        },
+        "primary-port": {
+          "type": "integer",
+          "description": "ZeroTier: основной UDP-порт. `0` — выбрать автоматически."
+        },
+        "secondary-port": {
+          "type": "integer",
+          "description": "ZeroTier: дополнительный UDP-порт. `0` — автоматически, `-1` — выключить."
+        },
+        "tcp-fallback-mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "force",
+            "disable"
+          ],
+          "description": "ZeroTier: переход на TCP, когда UDP не проходит."
+        },
+        "tcp-fallback-relay": {
+          "type": "string",
+          "description": "ZeroTier: адрес relay-сервера для запасного TCP."
+        },
+        "low-bandwidth": {
+          "type": "boolean",
+          "description": "ZeroTier: экономный режим для узких каналов."
+        },
+        "encrypted-hello": {
+          "type": "boolean",
+          "description": "ZeroTier: шифровать рукопожатия."
+        },
+        "orbit": {
+          "type": "object",
+          "description": "ZeroTier: подключение к Moon (своему корневому узлу).",
+          "properties": {
+            "world": {
+              "type": "string",
+              "description": "Moon World ID — 16 hex-символов."
+            },
+            "seed": {
+              "type": "string",
+              "description": "Идентификатор корневого узла Moon — 10 цифр."
+            }
+          }
+        },
+        "network-name": {
+          "type": "string",
+          "description": "EasyTier: имя сети — обязательное поле, узлы с разными именами друг друга не видят."
+        },
+        "network-secret": {
+          "type": "string",
+          "description": "EasyTier: общий ключ сети. Без него в сеть войдёт любой, кто знает имя."
+        },
+        "ipv4": {
+          "type": "string",
+          "description": "EasyTier: адрес узла в наложенной сети в форме CIDR.",
+          "examples": [
+            "10.126.126.1/24"
+          ]
+        },
+        "dhcp": {
+          "type": "boolean",
+          "description": "EasyTier: получать адрес наложенной сети автоматически вместо `ipv4`."
+        },
+        "secure-mode": {
+          "type": "boolean",
+          "description": "EasyTier: сквозное шифрование Noise между узлами."
+        },
+        "local-private-key": {
+          "type": "string",
+          "description": "EasyTier: приватный ключ X25519 узла в base64."
+        },
+        "local-public-key": {
+          "type": "string",
+          "description": "EasyTier: публичный ключ X25519 узла в base64."
+        },
+        "listeners": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "EasyTier: URI, которые слушает сам узел."
+        },
+        "no-listener": {
+          "type": "boolean",
+          "description": "EasyTier: ничего не слушать. По умолчанию включено."
+        },
+        "exit-nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "EasyTier: узлы, через которые выпускать трафик наружу."
+        },
+        "proxy-networks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "EasyTier: удалённые подсети, которые нужно маршрутизировать через сеть."
+        },
+        "instance-name": {
+          "type": "string",
+          "description": "EasyTier: имя экземпляра. По умолчанию совпадает с именем прокси."
+        },
+        "accept-dns": {
+          "type": "boolean",
+          "description": "EasyTier: принимать настройки DNS от сети."
+        },
+        "enable-exit-node": {
+          "type": "boolean",
+          "description": "EasyTier: работать выходным узлом для соседей."
+        },
+        "enable-encryption": {
+          "type": "boolean",
+          "description": "EasyTier: шифровать трафик между узлами."
+        },
+        "encryption-algorithm": {
+          "type": "string",
+          "description": "EasyTier: алгоритм шифрования, по умолчанию `aes-gcm`."
+        },
+        "private-mode": {
+          "type": "boolean",
+          "description": "EasyTier: приватный режим сети."
+        },
+        "latency-first": {
+          "type": "boolean",
+          "description": "EasyTier: выбирать путь с наименьшей задержкой."
+        },
+        "disable-p2p": {
+          "type": "boolean",
+          "description": "EasyTier: запретить прямые P2P-соединения, работать только через relay."
+        },
+        "enable-kcp-proxy": {
+          "type": "boolean",
+          "description": "EasyTier: заворачивать TCP в KCP."
+        },
+        "enable-quic-proxy": {
+          "type": "boolean",
+          "description": "EasyTier: заворачивать TCP в QUIC."
+        },
+        "tld-dns-zone": {
+          "type": "string",
+          "description": "EasyTier: зона MagicDNS, по умолчанию `et.net.`."
         }
       },
       "allOf": [
+{
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "mieru"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "server"
+            ],
+            "anyOf": [
+              {
+                "required": [
+                  "port"
+                ]
+              },
+              {
+                "required": [
+                  "port-range"
+                ]
+              }
+            ]
+          }
+        },
+{
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "enum": [
+                  "vmess",
+                  "vless",
+                  "trojan"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "network": {
+                "enum": [
+                  "raw",
+                  "tcp",
+                  "ws",
+                  "grpc",
+                  "h2",
+                  "http",
+                  "xhttp"
+                ]
+              }
+            }
+          }
+        },
+{
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "masque"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "private-key",
+              "public-key"
+            ],
+            "properties": {
+              "network": {
+                "enum": [
+                  "quic",
+                  "h2",
+                  "h3-l4proxy"
+                ]
+              }
+            }
+          }
+        },
+{
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "wireguard"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "peers": {
+                "items": {
+                  "$ref": "#/definitions/wireGuardPeer"
+                }
+              }
+            }
+          }
+        },
+{
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "easytier"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "network-name"
+            ],
+            "properties": {
+              "peers": {
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+{
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "zerotier"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "network"
+            ]
+          }
+        },
+{
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "sudoku"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "key"
+            ]
+          }
+        },
+{
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "shadowquic"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "username",
+              "password"
+            ]
+          }
+        },
         {
           "if": {
             "required": ["type"],
             "properties": {
-              "type": { "not": { "enum": ["direct", "dns", "reject", "rematch", "tailscale", "zerotier", "easytier"] } }
+              "type": { "not": { "enum": ["direct", "dns", "reject", "rematch", "tailscale", "zerotier", "easytier", "mieru"] } }
             }
           },
           "then": {

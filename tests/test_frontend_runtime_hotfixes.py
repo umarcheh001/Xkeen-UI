@@ -1042,7 +1042,10 @@ def test_mihomo_schema_tracks_xhttp_transport_and_multiplexing_fields():
     schema = json.loads(Path('xkeen-ui/static/schemas/mihomo-config.schema.json').read_text(encoding='utf-8'))
     proxy_props = schema['definitions']['proxy']['properties']
 
-    assert 'xhttp' in proxy_props['network']['enum']
+    # Транспорты остались подсказкой в первой ветке anyOf: у ZeroTier и MASQUE
+    # то же поле `network` значит другое, поэтому закрытого enum тут больше нет.
+    transports = proxy_props['network']['anyOf'][0]['enum']
+    assert 'xhttp' in transports
     assert proxy_props['xhttp-opts']['$ref'] == '#/definitions/xhttpOpts'
     assert 'encryption' in proxy_props
     assert 'packet-encoding' in proxy_props

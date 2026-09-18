@@ -585,7 +585,7 @@ def test_mihomo_yaml_schema_runtime_still_asks_dialing_types_for_server_and_port
     result = _run_mihomo_yaml_schema(
         "\n".join([
             "proxies:",
-            "  - { name: Узел, type: mieru }",
+            "  - { name: Узел, type: anytls }",
             "",
         ])
     )
@@ -593,3 +593,122 @@ def test_mihomo_yaml_schema_runtime_still_asks_dialing_types_for_server_and_port
     assert result["ok"] is False
     messages = " ".join(str(item["message"]) for item in result["diagnostics"])
     assert "server" in messages and "port" in messages
+
+def test_mihomo_yaml_schema_runtime_takes_mieru_with_a_port_range_instead_of_a_port():
+    result = _run_mihomo_yaml_schema(
+        "\n".join([
+            "proxies:",
+            "  - name: mieru-node",
+            "    type: mieru",
+            "    server: edge.example.com",
+            "    port-range: 2000-3000",
+            "    username: user",
+            "    password: secret",
+            "    multiplexing: LOW",
+            "",
+        ])
+    )
+
+    assert result["ok"] is True
+    assert result["diagnostics"] == []
+
+
+def test_mihomo_yaml_schema_runtime_asks_mieru_for_a_port_or_a_range():
+    result = _run_mihomo_yaml_schema(
+        "\n".join([
+            "proxies:",
+            "  - { name: mieru-node, type: mieru, server: edge.example.com }",
+            "",
+        ])
+    )
+
+    assert result["ok"] is False
+
+
+def test_mihomo_yaml_schema_runtime_reads_network_by_the_proxy_type():
+    """`network` — транспорт у VLESS, идентификатор сети у ZeroTier, режим у MASQUE."""
+    zerotier = _run_mihomo_yaml_schema(
+        "\n".join([
+            "proxies:",
+            "  - name: zt",
+            "    type: zerotier",
+            "    network: 8056c2e21c000001",
+            "",
+        ])
+    )
+    assert zerotier["ok"] is True
+
+    masque = _run_mihomo_yaml_schema(
+        "\n".join([
+            "proxies:",
+            "  - name: masque-node",
+            "    type: masque",
+            "    server: edge.example.com",
+            "    port: 443",
+            "    private-key: cHJpdmF0ZQ==",
+            "    public-key: cHVibGlj",
+            "    network: quic",
+            "",
+        ])
+    )
+    assert masque["ok"] is True
+
+    # А у VLESS список транспортов по-прежнему закрытый.
+    vless = _run_mihomo_yaml_schema(
+        "\n".join([
+            "proxies:",
+            "  - name: vless-node",
+            "    type: vless",
+            "    server: edge.example.com",
+            "    port: 443",
+            "    uuid: 11111111-1111-1111-1111-111111111111",
+            "    network: quic",
+            "",
+        ])
+    )
+    assert vless["ok"] is False
+
+
+def test_mihomo_yaml_schema_runtime_reads_peers_by_the_proxy_type():
+    easytier = _run_mihomo_yaml_schema(
+        "\n".join([
+            "proxies:",
+            "  - name: mesh",
+            "    type: easytier",
+            "    network-name: home",
+            "    network-secret: secret",
+            "    peers:",
+            "      - tcp://192.0.2.10:11010",
+            "",
+        ])
+    )
+    assert easytier["ok"] is True
+
+    # У WireGuard peers — объекты, строка тут ошибка.
+    wireguard = _run_mihomo_yaml_schema(
+        "\n".join([
+            "proxies:",
+            "  - name: wg",
+            "    type: wireguard",
+            "    server: edge.example.com",
+            "    port: 51820",
+            "    private-key: cHJpdmF0ZQ==",
+            "    peers:",
+            "      - tcp://192.0.2.10:11010",
+            "",
+        ])
+    )
+    assert wireguard["ok"] is False
+
+
+def test_mihomo_yaml_schema_runtime_asks_sudoku_for_its_key():
+    result = _run_mihomo_yaml_schema(
+        "\n".join([
+            "proxies:",
+            "  - { name: sudoku-node, type: sudoku, server: edge.example.com, port: 443 }",
+            "",
+        ])
+    )
+
+    assert result["ok"] is False
+    assert "key" in " ".join(str(item["message"]) for item in result["diagnostics"])
