@@ -789,7 +789,7 @@
 
     "proxy-groups": {
       "type": "array",
-      "description": "Группы прокси — агрегаты нескольких узлов с общей стратегией. `select` — ручной выбор, `url-test` — автоматический по задержке, `fallback` — переход на следующий при сбое, `load-balance` — балансировка, `relay` — цепочка.",
+      "description": "Группы прокси — агрегаты нескольких узлов с общей стратегией. `select` — ручной выбор, `url-test` — автоматический по задержке, `fallback` — переход на следующий при сбое, `load-balance` — балансировка. Группы `relay` в Mihomo больше нет: цепочку собирают через `dialer-proxy` у самого прокси.",
       "items": { "$ref": "#/definitions/proxyGroup" },
       "x-ui-explain": "Группы — это «виртуальные» прокси. В `rules` маршрут указывает на имя группы, а группа уже сама выбирает конкретный узел из `proxies` или `use`.",
       "x-ui-use-case": "`select` — для ручного переключения из UI; `url-test` — авто-выбор самого быстрого; `fallback` — резервирование.",
@@ -959,8 +959,8 @@
         },
         "type": {
           "type": "string",
-          "enum": ["ss", "ssr", "vmess", "vless", "trojan", "hysteria", "hysteria2", "wireguard", "openvpn", "tailscale", "tuic", "trusttunnel", "socks5", "http", "ssh", "snell", "anytls", "direct"],
-          "description": "Тип протокола или встроенной политики. Помимо сетевых протоколов Mihomo поддерживает `direct`: трафик идёт напрямую, без `server` и `port`. `vless`+`reality` и `hysteria2` — современные рекомендуемые варианты."
+          "enum": ["ss", "ssr", "vmess", "vless", "trojan", "hysteria", "hysteria2", "wireguard", "openvpn", "tuic", "trusttunnel", "socks5", "http", "ssh", "snell", "anytls", "mieru", "sudoku", "masque", "shadowquic", "gost-relay", "tailscale", "zerotier", "easytier", "direct", "dns", "reject", "rematch"],
+          "description": "Тип протокола или встроенной политики. Кроме сетевых протоколов Mihomo понимает встроенные `direct` (напрямую), `reject` (оборвать соединение), `dns` (запросы во встроенный DNS) и `rematch` (прогнать соединение по правилам заново), а также mesh-сети `tailscale`, `zerotier` и `easytier` — им `server` и `port` не нужны. `vless`+`reality` и `hysteria2` — современные рекомендуемые варианты."
         },
         "server": {
           "type": "string",
@@ -1472,7 +1472,7 @@
           "if": {
             "required": ["type"],
             "properties": {
-              "type": { "not": { "enum": ["tailscale", "direct"] } }
+              "type": { "not": { "enum": ["direct", "dns", "reject", "rematch", "tailscale", "zerotier", "easytier"] } }
             }
           },
           "then": {
@@ -2306,8 +2306,8 @@
         },
         "type": {
           "type": "string",
-          "enum": ["select", "url-test", "fallback", "load-balance", "relay"],
-          "description": "Тип группы. `select` — ручной выбор через API/UI; `url-test` — автовыбор по минимальной задержке; `fallback` — первый рабочий из списка (по порядку); `load-balance` — распределение по стратегии; `relay` — цепочка (трафик идёт последовательно через все прокси в списке)."
+          "enum": ["select", "url-test", "fallback", "load-balance"],
+          "description": "Тип группы. `select` — ручной выбор через API/UI; `url-test` — автовыбор по минимальной задержке; `fallback` — первый рабочий из списка (по порядку); `load-balance` — распределение по стратегии. Тип `relay` из ядра убран — на запуске Mihomo отвечает «The group with relay type was removed»; вместо цепочки задают `dialer-proxy` у прокси."
         },
         "proxies": {
           "type": "array",

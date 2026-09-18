@@ -364,7 +364,7 @@
         },
         "network": {
           "type": "string",
-          "description": "Legacy-имя поля транспорта, всё ещё принимаемое Xray. `raw`/`tcp` — прямой TCP/UDP transport; `ws`/`websocket`, `kcp`/`mkcp` и `xhttp`/`splithttp` — совместимые пары имён.",
+          "description": "Legacy-имя поля транспорта, всё ещё принимаемое Xray. `raw`/`tcp` — прямой TCP/UDP transport; `ws`/`websocket`, `kcp`/`mkcp` и `xhttp`/`splithttp` — совместимые пары имён. Транспорты `http`/`h2`, `h3` и `quic` из ядра удалены — конфиг с ними не запустится, вместо них XHTTP.",
           "enum": [
             "raw",
             "tcp",
@@ -372,8 +372,6 @@
             "kcp",
             "websocket",
             "ws",
-            "http",
-            "quic",
             "grpc",
             "httpupgrade",
             "splithttp",
@@ -822,9 +820,16 @@
                 "AsIs",
                 "UseIP",
                 "UseIPv4",
-                "UseIPv6"
+                "UseIPv6",
+                "UseIPv4v6",
+                "UseIPv6v4",
+                "ForceIP",
+                "ForceIPv4",
+                "ForceIPv6",
+                "ForceIPv4v6",
+                "ForceIPv6v4"
               ],
-              "description": "Стратегия резолвинга адреса назначения при dial. `UseIP` — резолвить через встроенный DNS."
+              "description": "Стратегия резолвинга адреса назначения при dial. `UseIP` — резолвить через встроенный DNS. Варианты с суффиксом (`UseIPv4v6`, `UseIPv6v4` и такие же `Force*`) задают порядок перебора семейств адресов: первым идёт названный."
             },
             "dialerProxy": {
               "type": "string",
@@ -1312,11 +1317,15 @@
             "UseIP",
             "UseIPv4",
             "UseIPv6",
+            "UseIPv4v6",
+            "UseIPv6v4",
             "ForceIP",
             "ForceIPv4",
-            "ForceIPv6"
+            "ForceIPv6",
+            "ForceIPv4v6",
+            "ForceIPv6v4"
           ],
-          "description": "Стратегия резолвинга доменов при исходящем соединении. `AsIs` — передать домен как есть (резолвит удалённый сервер), `UseIP`/`UseIPv4`/`UseIPv6` — резолвить через встроенный DNS и отправлять IP, `ForceIP*` — жёстко требовать resolve, отбрасывать соединение если DNS вернул пустой ответ."
+          "description": "Стратегия резолвинга доменов при исходящем соединении. `AsIs` — передать домен как есть (резолвит удалённый сервер), `UseIP`/`UseIPv4`/`UseIPv6` — резолвить через встроенный DNS и отправлять IP, `ForceIP*` — жёстко требовать resolve, отбрасывать соединение если DNS вернул пустой ответ. Пары вида `UseIPv4v6`/`UseIPv6v4` задают порядок семейств адресов: сначала названное первым."
         }
       },
       "required": [

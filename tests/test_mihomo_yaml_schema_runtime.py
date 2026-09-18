@@ -563,3 +563,33 @@ def test_mihomo_yaml_schema_runtime_accepts_documented_direct_proxy_without_serv
     assert result["ok"] is True
     assert result["parseOk"] is True
     assert result["diagnostics"] == []
+
+def test_mihomo_yaml_schema_runtime_accepts_builtin_types_without_server_and_port():
+    """`reject`, `dns`, `rematch` и mesh-сети никуда не звонят — сервер им не нужен."""
+    result = _run_mihomo_yaml_schema(
+        "\n".join([
+            "proxies:",
+            "  - { name: Блокировать соединение, type: reject }",
+            "  - { name: Во встроенный DNS, type: dns }",
+            "  - { name: По правилам заново, type: rematch }",
+            "  - { name: Сетка, type: easytier, network-name: home }",
+            "",
+        ])
+    )
+
+    assert result["ok"] is True
+    assert result["diagnostics"] == []
+
+
+def test_mihomo_yaml_schema_runtime_still_asks_dialing_types_for_server_and_port():
+    result = _run_mihomo_yaml_schema(
+        "\n".join([
+            "proxies:",
+            "  - { name: Узел, type: mieru }",
+            "",
+        ])
+    )
+
+    assert result["ok"] is False
+    messages = " ".join(str(item["message"]) for item in result["diagnostics"])
+    assert "server" in messages and "port" in messages

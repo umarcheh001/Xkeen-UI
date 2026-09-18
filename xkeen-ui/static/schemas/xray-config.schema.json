@@ -818,7 +818,7 @@
         },
         "network": {
           "type": "string",
-          "enum": ["raw", "tcp", "mkcp", "kcp", "websocket", "ws", "http", "quic", "grpc", "httpupgrade", "splithttp", "hysteria", "xhttp"],
+          "enum": ["raw", "tcp", "mkcp", "kcp", "websocket", "ws", "grpc", "httpupgrade", "splithttp", "hysteria", "xhttp"],
           "deprecatedValues": ["grpc"],
           "deprecationMessage": "Transport gRPC устарел в актуальных версиях Xray; по возможности используйте XHTTP (stream-up H2).",
           "default": "raw",
@@ -1013,7 +1013,7 @@
             "mark": { "type": "integer" },
             "tcpFastOpen": { "type": "boolean" },
             "tproxy": { "type": "string", "enum": ["redirect", "tproxy", "off"] },
-            "domainStrategy": { "type": "string", "enum": ["AsIs", "UseIP", "UseIPv4", "UseIPv6"] },
+            "domainStrategy": { "type": "string", "enum": ["AsIs", "UseIP", "UseIPv4", "UseIPv6", "UseIPv4v6", "UseIPv6v4", "ForceIP", "ForceIPv4", "ForceIPv6", "ForceIPv4v6", "ForceIPv6v4"] },
             "dialerProxy": { "type": "string" },
             "tcpKeepAliveInterval": { "type": "integer" },
             "tcpKeepAliveIdle": { "type": "integer" },
@@ -1181,7 +1181,7 @@
             "xudpProxyUDP443": { "type": "string", "enum": ["reject", "allow", "skip"] }
           }
         },
-        "domainStrategy": { "type": "string", "enum": ["AsIs", "UseIP", "UseIPv4", "UseIPv6", "ForceIP", "ForceIPv4", "ForceIPv6"] }
+        "domainStrategy": { "type": "string", "enum": ["AsIs", "UseIP", "UseIPv4", "UseIPv6", "UseIPv4v6", "UseIPv6v4", "ForceIP", "ForceIPv4", "ForceIPv6", "ForceIPv4v6", "ForceIPv6v4"] }
       },
       "required": ["protocol"]
     }
