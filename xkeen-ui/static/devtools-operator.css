@@ -896,7 +896,6 @@ body.devtools-page #dt-service-card :is(.status, p) {
   margin-bottom: 0;
 }
 
-body.devtools-page .dt-update-actions,
 body.devtools-page .dt-actions-grid {
   gap: 5px;
 }

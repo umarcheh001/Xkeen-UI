@@ -12911,6 +12911,20 @@ div.toast-icon {
   min-width: 96px;
 }
 
+/* Узкие карточки с одиночной кнопкой (логирование, интерфейс): кнопка того же
+   размера, что и в широких карточках, но у левого края — справа её не с чем
+   выравнивать, а растянутая во всю полосу она спорит с содержимым карточки. */
+#dt-logging-card .dt-logging-actions,
+#dt-ui-prefs-card .dt-logging-actions {
+  justify-content: flex-start;
+}
+
+#dt-logging-card .dt-logging-actions button,
+#dt-ui-prefs-card .dt-logging-actions button {
+  width: auto;
+  min-width: 96px;
+}
+
 
 
 /* DevTools: theme editor */
@@ -12968,6 +12982,21 @@ div.toast-icon {
   grid-template-rows: auto 1fr auto;
 }
 
+/* Layout-твики: обе колонки идут по схеме «подпись → содержимое», общие линии
+   держит subgrid — иначе правая колонка с подписью уезжает выше левой. */
+.dt-layout-split {
+  grid-template-rows: auto 1fr;
+}
+
+.dt-layout-split > * {
+  display: grid;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+  row-gap: 8px;
+  align-content: start;
+  min-height: 0;
+}
+
 /* Layout-твики: переключатели идут парами, как и список вкладок справа. */
 .dt-layout-switches {
   display: grid;
@@ -12991,6 +13020,12 @@ div.toast-icon {
   .dt-layout-switches,
   .dt-layout-fields {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* В одну колонку subgrid тянуть некуда. */
+  .dt-layout-split > * {
+    display: block;
+    grid-row: auto;
   }
 }
 
@@ -13026,6 +13061,33 @@ div.toast-icon {
   flex: 1 1 auto;
   min-height: 96px;
   height: 100%;
+}
+
+/* Карточка встаёт вровень с соседней по зоне, поэтому снизу оставалась пустота.
+   Тянем цепочку до полей ввода: тело карточки → сетка колонок → строка с полем.
+   ::details-content — слот, через который <details> отдаёт высоту детям. */
+#dt-ui-prefs-io-card[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+#dt-ui-prefs-io-card[open]::details-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+#dt-ui-prefs-io-card[open] > .dt-collapsible-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+#dt-ui-prefs-io-card .dt-io-split {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 @media (max-width: 1400px) {

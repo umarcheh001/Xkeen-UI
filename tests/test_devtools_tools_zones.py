@@ -258,6 +258,62 @@ def test_prefs_io_columns_are_built_the_same_way():
     assert "grid-row: auto;" in narrow
 
 
+def test_narrow_cards_put_their_single_button_on_the_left():
+    base = BASE_CSS.read_text(encoding="utf-8")
+
+    row_rule = base[base.index("#dt-logging-card .dt-logging-actions,"):]
+    row_rule = row_rule[: row_rule.index("}")]
+    assert "#dt-ui-prefs-card .dt-logging-actions {" in row_rule
+    assert "justify-content: flex-start;" in row_rule
+
+    btn_rule = base[base.index("#dt-logging-card .dt-logging-actions button,"):]
+    btn_rule = btn_rule[: btn_rule.index("}")]
+    assert "width: auto;" in btn_rule
+    assert "min-width: 96px;" in btn_rule
+
+
+def test_export_card_stretches_its_fields_to_the_card_height():
+    base = BASE_CSS.read_text(encoding="utf-8")
+
+    # Карточка встаёт вровень с соседней, поэтому высоту надо протянуть до полей.
+    for selector in (
+        "#dt-ui-prefs-io-card[open] {",
+        "#dt-ui-prefs-io-card[open]::details-content {",
+        "#dt-ui-prefs-io-card[open] > .dt-collapsible-body {",
+        "#dt-ui-prefs-io-card .dt-io-split {",
+    ):
+        rule = base[base.index(selector):]
+        rule = rule[: rule.index("}")]
+        assert "flex" in rule, selector
+
+    area_rule = base[base.index(".dt-prefs-io-flex .dt-codearea {"):]
+    area_rule = area_rule[: area_rule.index("}")]
+    assert "height: 100%;" in area_rule
+
+
+def test_layout_columns_start_on_the_same_line():
+    template = TEMPLATE.read_text(encoding="utf-8")
+    base = BASE_CSS.read_text(encoding="utf-8")
+
+    card = template[template.index('id="dt-layout-card"'):]
+    card = card[: card.index("</details>")]
+
+    # У обеих колонок своя подпись, и под ней ровно один контейнер — иначе subgrid
+    # разложит содержимое по чужим строкам.
+    assert card.count('class="small dt-io-col-head"') == 2
+    assert "Плотность и подсказки" in card
+    assert "Вкладки основной панели</div>" in card
+
+    split_rule = base[base.index(".dt-layout-split {"):]
+    split_rule = split_rule[: split_rule.index("}")]
+    assert "grid-template-rows: auto 1fr;" in split_rule
+
+    col_rule = base[base.index(".dt-layout-split > * {"):]
+    col_rule = col_rule[: col_rule.index("}")]
+    assert "grid-template-rows: subgrid;" in col_rule
+    assert "grid-row: span 2;" in col_rule
+
+
 def test_layout_card_lays_switches_and_tabs_in_two_columns():
     template = TEMPLATE.read_text(encoding="utf-8")
     base = BASE_CSS.read_text(encoding="utf-8")
@@ -296,6 +352,7 @@ def test_layout_card_lays_switches_and_tabs_in_two_columns():
 
 def test_button_rows_breathe_like_the_card_padding():
     base = BASE_CSS.read_text(encoding="utf-8")
+    glass = GLASS_CSS.read_text(encoding="utf-8")
     operator = OPERATOR_CSS.read_text(encoding="utf-8")
 
     # Зазор ряда кнопок задан в базовом слое и равен отступу карточки (12px).
@@ -311,10 +368,18 @@ def test_button_rows_breathe_like_the_card_padding():
     card_rule = card_rule[: card_rule.index("}")]
     assert "padding: 11px 12px;" in card_rule
 
-    # Тема оператора больше не ужимает ряд Save/Reset до 5px.
-    tight = operator[operator.index("body.devtools-page .dt-update-actions,"):]
+    # Тема оператора ужимает до 5px только сетку действий внутри карточки экспорта;
+    # ряды кнопок карточек живут на общем зазоре.
+    tight = operator[operator.index("body.devtools-page .dt-actions-grid {"):]
     tight = tight[: tight.index("}")]
+    assert "gap: 5px;" in tight
     assert ".dt-logging-actions" not in tight
+    assert ".dt-update-actions" not in tight
+
+    # Ряд кнопок обновления и декриптора — тот же зазор, что у Save/Reset.
+    update_row = glass[glass.index(".dt-update-actions {"):]
+    update_row = update_row[: update_row.index("}")]
+    assert "gap: 12px;" in update_row
 
 
 def test_wide_cards_keep_their_buttons_together_on_the_right():

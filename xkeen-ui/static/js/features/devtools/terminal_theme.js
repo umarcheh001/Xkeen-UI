@@ -144,15 +144,15 @@ import { getDevtoolsSharedApi, setDevtoolsNamespaceApi } from '../devtools_names
     const v = Number(m.version || 0);
     const age = _formatAgeRu(v);
 
-    const badge = `<span class="dt-custom-css-badge ${enabled ? 'is-on' : 'is-off'}">${enabled ? '● Enabled' : '● Disabled'}</span>`;
+    const badge = `<span class="dt-custom-css-badge ${enabled ? 'is-on' : 'is-off'}">${enabled ? '● Включена' : '● Выключена'}</span>`;
     const parts = [];
     parts.push(badge);
-    parts.push(exists ? 'file: ok' : 'empty');
+    parts.push(exists ? 'файл темы есть' : 'файла темы нет');
     if (v) parts.push(age);
     try {
       el.innerHTML = parts.join(' &nbsp;•&nbsp; ');
     } catch (e) {
-      el.textContent = `${enabled ? 'Enabled' : 'Disabled'} • ${exists ? 'file: ok' : 'empty'}${v ? ' • ' + age : ''}`;
+      el.textContent = `${enabled ? 'Включена' : 'Выключена'} • ${exists ? 'файл темы есть' : 'файла темы нет'}${v ? ' • ' + age : ''}`;
     }
   }
 
@@ -381,7 +381,7 @@ import { getDevtoolsSharedApi, setDevtoolsNamespaceApi } from '../devtools_names
       _renderTermMeta(resp);
       _termRenderFields();
       _termSyncUiFromState();
-      _termStatus(resp.exists ? `Загружено (v=${resp.version || 0}).` : 'Загружено (empty).', false);
+      _termStatus(resp.exists ? `Загружено (версия ${resp.version || 0}).` : 'Файла темы нет — терминал берёт тему интерфейса.', false);
     } catch (e) {
       _termStatus('Ошибка загрузки: ' + (e && e.message ? e.message : String(e)), true);
     }

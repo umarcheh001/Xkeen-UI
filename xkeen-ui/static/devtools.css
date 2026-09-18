@@ -534,7 +534,7 @@ details.dt-theme-group .dt-collapsible-icon{
 .dt-update-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
   margin-top: 10px;
 }

@@ -193,6 +193,62 @@ test.describe('DevTools Tools zones', () => {
     expect(narrowRows).toBe(8);
   });
 
+  test('export card fills its height and layout columns start together', async ({ page }) => {
+    await openTools(page, { width: 1600, height: 1000 });
+
+    const io = await page.evaluate(() => {
+      const card = document.getElementById('dt-ui-prefs-io-card').getBoundingClientRect();
+      const reset = document.querySelector('#dt-ui-prefs-io-card .dt-io-reset').getBoundingClientRect();
+      const area = document.querySelector('#dt-ui-prefs-io-card .dt-codearea').getBoundingClientRect();
+      const neighbour = document.getElementById('dt-ui-prefs-card').getBoundingClientRect();
+      return {
+        cardBottom: card.bottom,
+        neighbourBottom: neighbour.bottom,
+        gapUnderReset: card.bottom - reset.bottom,
+        areaHeight: area.height,
+      };
+    });
+
+    // Карточка по-прежнему вровень с соседней, но пустоты под подвалом больше нет:
+    // высоту забирают поля ввода.
+    expect(Math.abs(io.cardBottom - io.neighbourBottom)).toBeLessThanOrEqual(2);
+    expect(io.gapUnderReset).toBeLessThanOrEqual(24);
+    expect(io.areaHeight).toBeGreaterThan(120);
+
+    const layout = await page.evaluate(() => {
+      const heads = [...document.querySelectorAll('#dt-layout-card .dt-io-col-head')]
+        .map((el) => el.getBoundingClientRect().top);
+      const bodies = [...document.querySelectorAll('#dt-layout-card .dt-layout-split > * > *:last-child')]
+        .map((el) => el.getBoundingClientRect().top);
+      return { heads, bodies };
+    });
+
+    expect(layout.heads).toHaveLength(2);
+    expect(Math.abs(layout.heads[0] - layout.heads[1])).toBeLessThanOrEqual(1);
+    expect(Math.abs(layout.bodies[0] - layout.bodies[1])).toBeLessThanOrEqual(1);
+  });
+
+  test('single-button cards keep the button small and on the left', async ({ page }) => {
+    await openTools(page, { width: 1600, height: 1000 });
+
+    const rows = await page.evaluate(() => {
+      const read = (id) => {
+        const card = document.getElementById(id).getBoundingClientRect();
+        const btn = document.querySelector('#' + id + ' .dt-logging-actions button').getBoundingClientRect();
+        return {
+          leftInset: btn.left - card.left,
+          widthShare: btn.width / card.width,
+        };
+      };
+      return { logging: read('dt-logging-card'), prefs: read('dt-ui-prefs-card') };
+    });
+
+    for (const key of ['logging', 'prefs']) {
+      expect(rows[key].leftInset).toBeLessThanOrEqual(16);
+      expect(rows[key].widthShare).toBeLessThan(0.35);
+    }
+  });
+
   test('zones collapse to one column on a narrow screen', async ({ page }) => {
     await openTools(page, { width: 900, height: 900 });
 
