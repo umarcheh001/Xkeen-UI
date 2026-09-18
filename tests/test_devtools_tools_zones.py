@@ -298,11 +298,15 @@ def test_layout_columns_start_on_the_same_line():
     card = template[template.index('id="dt-layout-card"'):]
     card = card[: card.index("</details>")]
 
-    # У обеих колонок своя подпись, и под ней ровно один контейнер — иначе subgrid
-    # разложит содержимое по чужим строкам.
-    assert card.count('class="small dt-io-col-head"') == 2
-    assert "Плотность и подсказки" in card
-    assert "Вкладки основной панели</div>" in card
+    # У обеих колонок своя подпись одной роли, и под ней ровно один контейнер —
+    # иначе subgrid разложит содержимое по чужим строкам.
+    assert card.count('class="small dt-layout-col-head"') == 2
+    assert "Настройки раскладки и плотности UI" in card
+    assert "Вкладки основной панели: перетаскивайте" in card
+
+    # Описание карточки живёт в левой колонке, а не отдельной строкой над сеткой.
+    body = card[card.index('class="dt-collapsible-body"'):]
+    assert body.index("dt-layout-split") < body.index("Настройки раскладки и плотности UI")
 
     split_rule = base[base.index(".dt-layout-split {"):]
     split_rule = split_rule[: split_rule.index("}")]

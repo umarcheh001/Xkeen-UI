@@ -12982,6 +12982,13 @@ div.toast-icon {
   grid-template-rows: auto 1fr auto;
 }
 
+/* Подписи колонок Layout-твиков: одинаковые по роли строки, поэтому встают на
+   одну линию и задают верх обеих колонок. */
+.dt-layout-col-head {
+  opacity: 0.9;
+  margin-bottom: 2px;
+}
+
 /* Layout-твики: обе колонки идут по схеме «подпись → содержимое», общие линии
    держит subgrid — иначе правая колонка с подписью уезжает выше левой. */
 .dt-layout-split {
@@ -12997,19 +13004,35 @@ div.toast-icon {
   min-height: 0;
 }
 
-/* Layout-твики: переключатели идут парами, как и список вкладок справа. */
+/* Layout-твики: переключатели идут парами, как и список вкладок справа. Тело
+   колонки забирает всю её высоту, а переключатели раздвигаются по свободному
+   месту — иначе левая половина выглядит поджатой рядом со списком вкладок. */
+.dt-layout-split > *:first-child > *:last-child {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .dt-layout-switches {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 16px;
-  align-items: start;
+  gap: 8px 16px;
+  align-items: stretch;
+  align-content: start;
+  flex: 0 0 auto;
+}
+
+/* Переключатели — такие же «кирпичи», как строки списка вкладок справа: та же
+   высота и тот же зазор, поэтому обе половины карточки читаются одинаково. */
+#dt-layout-card .dt-layout-switches .dt-switch {
+  min-height: 44px;
 }
 
 .dt-layout-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 16px;
-  margin-top: 12px;
+  gap: 8px 16px;
+  margin-top: 8px;
 }
 
 .dt-layout-fields .dt-logging-field {

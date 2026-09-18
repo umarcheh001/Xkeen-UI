@@ -216,7 +216,7 @@ test.describe('DevTools Tools zones', () => {
     expect(io.areaHeight).toBeGreaterThan(120);
 
     const layout = await page.evaluate(() => {
-      const heads = [...document.querySelectorAll('#dt-layout-card .dt-io-col-head')]
+      const heads = [...document.querySelectorAll('#dt-layout-card .dt-layout-col-head')]
         .map((el) => el.getBoundingClientRect().top);
       const bodies = [...document.querySelectorAll('#dt-layout-card .dt-layout-split > * > *:last-child')]
         .map((el) => el.getBoundingClientRect().top);

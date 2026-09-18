@@ -943,8 +943,10 @@ body.devtools-page .dt-branding-preview {
   box-shadow: none !important;
 }
 
+/* Зазор подобран так, чтобы четыре строки списка кончались вровень с левой
+   половиной карточки (три переключателя плюс ряд полей). */
 body.devtools-page .dt-tab-list {
-  gap: 4px;
+  gap: 10px;
 }
 
 body.devtools-page .dt-tab-item {
