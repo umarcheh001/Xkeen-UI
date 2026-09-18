@@ -462,14 +462,12 @@
                 Настройки шапки основной панели (глобально, сохраняются на роутере в UI_STATE_DIR). Применяются на всех устройствах.
               </div>
 
-              <div class="dt-logging-grid" role="group" aria-label="Branding settings">
-                <label class="dt-logging-field" style="grid-column: 1 / -1;">
-                  <span class="dt-logging-label">Заголовок панели</span>
-                  <input id="dt-branding-title" type="text" class="dt-pill-field" placeholder="Xkeen UI" autocomplete="off">
-                </label>
-              </div>
-
               <div class="dt-branding-split">
+                <div class="dt-branding-block">
+                  <div class="small" style="opacity:0.9; margin-bottom:6px;"><b>Заголовок панели</b></div>
+                  <input id="dt-branding-title" type="text" class="dt-pill-field" placeholder="Xkeen UI" autocomplete="off">
+                </div>
+
                 <div class="dt-branding-block">
                   <div class="small" style="opacity:0.9; margin-bottom:6px;"><b>Лого</b> (URL или upload)</div>
                   <div class="dt-branding-row">
@@ -628,28 +626,31 @@
                 Экспорт/импорт локальных UI‑предпочтений (тема, типографика, скрытые элементы, layout, брендинг, DevTools‑сворачивания).
               </div>
 
-              <div class="dt-actions-grid" aria-label="Export actions">
-                <button type="button" id="dt-ui-prefs-export" class="btn-secondary" title="Собрать текущие UI‑настройки в JSON ниже.">Export JSON</button>
-                <button type="button" id="dt-ui-prefs-copy" class="btn-secondary" title="Скопировать JSON в буфер обмена.">Copy</button>
-                <button type="button" id="dt-ui-prefs-download" class="btn-secondary" title="Скачать JSON файлом.">Download</button>
-              </div>
+              <div class="dt-io-split">
+                <div class="dt-prefs-io-flex">
+                  <div class="dt-actions-grid" aria-label="Export actions">
+                    <button type="button" id="dt-ui-prefs-export" class="btn-secondary" title="Собрать текущие UI‑настройки в JSON ниже.">Export JSON</button>
+                    <button type="button" id="dt-ui-prefs-copy" class="btn-secondary" title="Скопировать JSON в буфер обмена.">Copy</button>
+                    <button type="button" id="dt-ui-prefs-download" class="btn-secondary" title="Скачать JSON файлом.">Download</button>
+                  </div>
+                  <textarea id="dt-ui-prefs-export-text" class="dt-codearea" rows="4" spellcheck="false" placeholder="Нажмите Export JSON…" readonly></textarea>
+                </div>
 
-              <textarea id="dt-ui-prefs-export-text" class="dt-codearea" rows="6" spellcheck="false" placeholder="Нажмите Export JSON…" readonly></textarea>
-
-              <div style="margin-top:12px;">
-                <div class="small" style="margin-bottom:6px; opacity:0.9;"><b>Import JSON</b> (вставьте или загрузите файл)</div>
-                <textarea id="dt-ui-prefs-import-text" class="dt-codearea" rows="6" spellcheck="false" placeholder='{ "kind": "xkeen-ui-prefs", "prefs": { ... } }'></textarea>
-                <div class="dt-actions-grid" style="margin-top:8px;" aria-label="Import actions">
-                  <button type="button" id="dt-ui-prefs-import" class="btn-secondary" title="Применить JSON из поля выше (перезапишет UI‑настройки).">Import JSON</button>
-                  <label id="dt-ui-prefs-import-file-btn" class="btn-secondary dt-btn-like dt-file-label" role="button" tabindex="0" title="Загрузить JSON из файла и вставить в поле импорта.">
-                    Import from file
-                    <input id="dt-ui-prefs-import-file" type="file" accept="application/json" class="dt-file-input-overlay">
-                  </label>
+                <div class="dt-prefs-io-flex">
+                  <div class="small" style="margin-bottom:6px; opacity:0.9;"><b>Import JSON</b> (вставьте или загрузите файл)</div>
+                  <textarea id="dt-ui-prefs-import-text" class="dt-codearea" rows="4" spellcheck="false" placeholder='{ "kind": "xkeen-ui-prefs", "prefs": { ... } }'></textarea>
+                  <div class="dt-actions-grid" style="margin-top:8px;" aria-label="Import actions">
+                    <button type="button" id="dt-ui-prefs-import" class="btn-secondary" title="Применить JSON из поля выше (перезапишет UI‑настройки).">Import JSON</button>
+                    <label id="dt-ui-prefs-import-file-btn" class="btn-secondary dt-btn-like dt-file-label" role="button" tabindex="0" title="Загрузить JSON из файла и вставить в поле импорта.">
+                      Import from file
+                      <input id="dt-ui-prefs-import-file" type="file" accept="application/json" class="dt-file-input-overlay">
+                    </label>
+                  </div>
                 </div>
               </div>
 
-              <div style="margin-top:12px;">
-                <div class="small" style="margin-bottom:6px; opacity:0.9;"><b>Reset all UI prefs</b></div>
+              <div class="dt-logging-actions" style="margin-top:12px; justify-content:space-between; align-items:center;">
+                <span class="small" style="opacity:0.9;"><b>Reset all UI prefs</b> — сброс настроек в этом браузере</span>
                 <button type="button" id="dt-ui-prefs-resetall" class="btn-danger" title="Полный сброс UI‑настроек (в браузере): тема/типографика/layout/скрытия/перетасовка вкладок и т.д.">Reset all</button>
               </div>
 
@@ -667,68 +668,71 @@
                 Настройки раскладки/плотности UI (локально, сохраняется в браузере).
               </div>
 
-              <label class="dt-switch" title="Компактный режим: меньше padding/отступов почти везде.">
-                <input id="dt-layout-compact" type="checkbox" aria-label="Compact mode">
-                <span class="dt-switch-slider" aria-hidden="true"></span>
-                <span class="dt-switch-label">Compact mode (меньше отступов)</span>
-              </label>
+              <div class="dt-layout-split">
+                <div>
+                  <label class="dt-switch" title="Компактный режим: меньше padding/отступов почти везде.">
+                    <input id="dt-layout-compact" type="checkbox" aria-label="Compact mode">
+                    <span class="dt-switch-slider" aria-hidden="true"></span>
+                    <span class="dt-switch-label">Compact mode (меньше отступов)</span>
+                  </label>
 
-              <label class="dt-switch" style="margin-top:10px;" title="Спрятать подсказки/описания (small‑текст, help‑строки).">
-                <input id="dt-layout-hide-hints" type="checkbox" aria-label="Скрыть подсказки">
-                <span class="dt-switch-slider" aria-hidden="true"></span>
-                <span class="dt-switch-label">Скрыть подсказки/описания</span>
-              </label>
+                  <label class="dt-switch" style="margin-top:10px;" title="Спрятать подсказки/описания (small‑текст, help‑строки).">
+                    <input id="dt-layout-hide-hints" type="checkbox" aria-label="Скрыть подсказки">
+                    <span class="dt-switch-slider" aria-hidden="true"></span>
+                    <span class="dt-switch-label">Скрыть подсказки/описания</span>
+                  </label>
 
-              <label class="dt-switch" style="margin-top:10px;" title="Спрятать описательные тексты внутри карточек (например подписи под режимами inbounds).">
-                <input id="dt-layout-hide-card-desc" type="checkbox" aria-label="Скрыть описания в карточках">
-                <span class="dt-switch-slider" aria-hidden="true"></span>
-                <span class="dt-switch-label">Скрыть описания в карточках</span>
-              </label>
+                  <label class="dt-switch" style="margin-top:10px;" title="Спрятать описательные тексты внутри карточек (например подписи под режимами inbounds).">
+                    <input id="dt-layout-hide-card-desc" type="checkbox" aria-label="Скрыть описания в карточках">
+                    <span class="dt-switch-slider" aria-hidden="true"></span>
+                    <span class="dt-switch-label">Скрыть описания в карточках</span>
+                  </label>
 
-              <label class="dt-switch" style="margin-top:10px;" title="Спрятать нижнюю строку подсказок горячих клавиш в файловом менеджере (Tab/Enter/F5… и т.д.). Применяется сразу и сохраняется в браузере.">
-                <input id="dt-layout-hide-fm-hotkeys" type="checkbox" aria-label="Скрыть подсказки горячих клавиш файлового менеджера">
-                <span class="dt-switch-slider" aria-hidden="true"></span>
-                <span class="dt-switch-label">Скрыть подсказки горячих клавиш (Файловый менеджер)</span>
-              </label>
+                  <label class="dt-switch" style="margin-top:10px;" title="Спрятать нижнюю строку подсказок горячих клавиш в файловом менеджере (Tab/Enter/F5… и т.д.). Применяется сразу и сохраняется в браузере.">
+                    <input id="dt-layout-hide-fm-hotkeys" type="checkbox" aria-label="Скрыть подсказки горячих клавиш файлового менеджера">
+                    <span class="dt-switch-slider" aria-hidden="true"></span>
+                    <span class="dt-switch-label">Скрыть подсказки горячих клавиш (Файловый менеджер)</span>
+                  </label>
 
-              <div style="margin-top:12px;">
-                <label class="dt-logging-field" style="max-width: 420px;">
-                  <span class="dt-logging-label">Размер описаний</span>
-                  <select id="dt-layout-desc-scale" class="dt-pill-field" title="Масштаб описательных текстов внутри карточек.">
-                    <option value="0.8">80%</option>
-                    <option value="0.9">90%</option>
-                    <option value="1">100%</option>
-                    <option value="1.1">110%</option>
-                    <option value="1.2">120%</option>
-                    <option value="1.3">130%</option>
-                    <option value="1.4">140%</option>
-                  </select>
-                </label>
+                  <div style="margin-top:12px;">
+                    <label class="dt-logging-field" style="max-width: 420px;">
+                      <span class="dt-logging-label">Размер описаний</span>
+                      <select id="dt-layout-desc-scale" class="dt-pill-field" title="Масштаб описательных текстов внутри карточек.">
+                        <option value="0.8">80%</option>
+                        <option value="0.9">90%</option>
+                        <option value="1">100%</option>
+                        <option value="1.1">110%</option>
+                        <option value="1.2">120%</option>
+                        <option value="1.3">130%</option>
+                        <option value="1.4">140%</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <label class="dt-switch" style="margin-top:10px;" title="Скрывать вкладки/блоки, которые выключены feature flags (например XKEEN_REMOTEFM_ENABLE=0).">
+                    <input id="dt-layout-hide-unused" type="checkbox" aria-label="Скрыть неиспользуемое">
+                    <span class="dt-switch-slider" aria-hidden="true"></span>
+                    <span class="dt-switch-label">Скрыть неиспользуемые вкладки/карточки</span>
+                  </label>
+
+                  <div style="margin-top:12px;">
+                    <label class="dt-logging-field" style="max-width: 420px;">
+                      <span class="dt-logging-label">Ширина контейнера</span>
+                      <select id="dt-layout-container" class="dt-pill-field" title="Фиксированная / резиновая / максимальная ширина">
+                        <option value="fluid">Резиновая (до 1680px)</option>
+                        <option value="fixed">Фиксированная (960px)</option>
+                        <option value="max">Макс ширина (почти во весь экран)</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <div class="small" style="margin-bottom:8px; opacity:0.9;">
+                    Вкладки основной панели: перетаскивайте для перестановки, ⭐ закрепляет вкладку слева.
+                  </div>
+                  <ul class="dt-tab-list" id="dt-layout-tab-list" aria-label="Tab order editor"></ul>
+                </div>
               </div>
-
-              <label class="dt-switch" style="margin-top:10px;" title="Скрывать вкладки/блоки, которые выключены feature flags (например XKEEN_REMOTEFM_ENABLE=0).">
-                <input id="dt-layout-hide-unused" type="checkbox" aria-label="Скрыть неиспользуемое">
-                <span class="dt-switch-slider" aria-hidden="true"></span>
-                <span class="dt-switch-label">Скрыть неиспользуемые вкладки/карточки</span>
-              </label>
-
-              <div style="margin-top:12px;">
-                <label class="dt-logging-field" style="max-width: 420px;">
-                  <span class="dt-logging-label">Ширина контейнера</span>
-                  <select id="dt-layout-container" class="dt-pill-field" title="Фиксированная / резиновая / максимальная ширина">
-                    <option value="fluid">Резиновая (до 1680px)</option>
-                    <option value="fixed">Фиксированная (960px)</option>
-                    <option value="max">Макс ширина (почти во весь экран)</option>
-                  </select>
-                </label>
-              </div>
-
-              <hr style="border:0; border-top:1px solid #334155; margin:12px 0;">
-
-              <div class="small" style="margin-bottom:8px; opacity:0.9;">
-                Вкладки основной панели: перетаскивайте для перестановки, ⭐ закрепляет вкладку слева.
-              </div>
-              <ul class="dt-tab-list" id="dt-layout-tab-list" aria-label="Tab order editor"></ul>
 
               <div class="dt-logging-actions" style="justify-content:flex-end;">
                 <button type="button" class="btn-secondary" id="dt-layout-tabs-reset" title="Сбросить порядок/избранные вкладок.">Reset tabs</button>

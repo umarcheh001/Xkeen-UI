@@ -12935,6 +12935,77 @@ div.toast-icon {
   .dt-theme-grid { grid-template-columns: 1fr; }
 }
 
+/* DevTools: карточки во всю ширину раскладывают своё содержимое в колонки */
+.dt-card-wide .dt-theme-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dt-card-wide .dt-rename-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+
+/* Внутри широкой карточки строке переименования хватает меньших минимумов,
+   иначе четыре колонки не помещаются и грид переполняет карточку. */
+.dt-card-wide .dt-rename-row {
+  grid-template-columns: minmax(110px, 1fr) minmax(150px, 1.6fr);
+}
+
+.dt-card-wide .dt-branding-split {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+  margin-top: 0;
+}
+
+.dt-layout-split,
+.dt-io-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+/* Поля JSON тянутся по высоте карточки, а не по атрибуту rows */
+.dt-prefs-io-flex {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dt-prefs-io-flex .dt-codearea {
+  flex: 1 1 auto;
+  min-height: 96px;
+  height: auto;
+}
+
+@media (max-width: 1400px) {
+  .dt-card-wide .dt-rename-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1180px) {
+  .dt-card-wide .dt-theme-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dt-card-wide .dt-branding-split,
+  .dt-layout-split,
+  .dt-io-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .dt-card-wide .dt-theme-grid,
+  .dt-card-wide .dt-rename-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .dt-theme-field {
   display: flex;
   flex-direction: column;

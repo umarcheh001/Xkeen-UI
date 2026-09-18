@@ -121,6 +121,41 @@ def test_both_themes_style_zone_cards():
     assert "body.devtools-page .dt-zone > .card" in operator
 
 
+def test_terminal_card_starts_collapsed_and_others_do_not():
+    template = TEMPLATE.read_text(encoding="utf-8")
+
+    terminal = template[template.index('id="dt-terminal-theme-card"'):]
+    terminal = terminal[: terminal.index(">")]
+    assert " open" not in terminal
+
+    for card_id in ("dt-update-card", "dt-happ-decryptor-card", "dt-logging-card",
+                    "dt-ui-prefs-card", "dt-branding-card", "dt-ui-prefs-io-card",
+                    "dt-layout-card"):
+        opening = template[template.index('id="%s"' % card_id):]
+        opening = opening[: opening.index(">")]
+        assert " open" in opening, card_id
+
+
+def test_wide_cards_use_multi_column_inner_grids():
+    css = BASE_CSS.read_text(encoding="utf-8")
+    template = TEMPLATE.read_text(encoding="utf-8")
+
+    assert ".dt-card-wide .dt-theme-grid" in css
+    assert ".dt-card-wide .dt-rename-list" in css
+    assert ".dt-card-wide .dt-branding-split" in css
+
+    io_card = template[template.index('id="dt-ui-prefs-io-card"'): template.index('id="dt-layout-card"')]
+    assert 'class="dt-io-split"' in io_card
+    assert "dt-prefs-io-flex" in css
+
+    # Терминал стоит РАНЬШЕ Layout-карточки (зона «Система» перед «Вид
+    # интерфейса»), поэтому срез по dt-terminal-theme-card был бы пустым.
+    # Обрезаем по собственному закрывающему тегу карточки.
+    layout_card = template[template.index('id="dt-layout-card"'):]
+    layout_card = layout_card[: layout_card.index("</details>")]
+    assert 'class="dt-layout-split"' in layout_card
+
+
 def test_top_row_stretches_and_update_log_takes_the_slack():
     base = BASE_CSS.read_text(encoding="utf-8")
     glass = GLASS_CSS.read_text(encoding="utf-8")
