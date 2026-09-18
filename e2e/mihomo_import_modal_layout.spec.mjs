@@ -85,3 +85,59 @@ test('global error toasts stay above the Mihomo import modal', async ({ page }) 
   expect(layers.toastZ).toBeGreaterThan(layers.modalZ);
   expect(layers.toastOwnsTopPoint).toBe(true);
 });
+
+
+test('busy spinner in the import status is centred on the first line of text', async ({ page }) => {
+  let releaseParse;
+  let resolveParseStarted;
+  const parseStarted = new Promise((resolve) => {
+    resolveParseStarted = resolve;
+  });
+  await page.route('**/api/mihomo/parse/xray-json', async (route) => {
+    resolveParseStarted();
+    await new Promise((resume) => {
+      releaseParse = resume;
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: false, code: 'not_xray_json' }),
+    });
+  });
+
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  await page.locator('#mihomo-clash-tab-config').click();
+  await page.locator('.xk-mihomo-menu summary').click();
+  await page.locator('#mihomo-import-node-btn').click();
+  await expect(page.locator('#mihomo-import-modal')).toBeVisible();
+
+  await page.locator('#mihomo-import-input').fill(
+    'https://right-side.example.com/api/v1/client/subscribe?token=0123456789abcdef0123456789abcdef',
+  );
+  await page.locator('#mihomo-import-parse-btn').click();
+  await parseStarted;
+
+  const busy = page.locator('#mihomo-import-status .xk-status-inline.is-busy');
+  await expect(busy).toBeVisible();
+
+  const geometry = await busy.evaluate((wrap) => {
+    const spinner = wrap.querySelector('.xk-inline-spinner');
+    const message = wrap.querySelector('.xk-status-message');
+    const spinnerRect = spinner.getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(message);
+    const firstLine = range.getClientRects()[0];
+    return {
+      spinnerCentre: spinnerRect.top + spinnerRect.height / 2,
+      firstLineCentre: firstLine.top + firstLine.height / 2,
+      lines: range.getClientRects().length,
+    };
+  });
+
+  // Кружок должен стоять по центру первой строки, а не по центру всего блока
+  // и не над ним: при многострочном сообщении разъезд особенно заметен.
+  expect(Math.abs(geometry.spinnerCentre - geometry.firstLineCentre)).toBeLessThanOrEqual(1);
+
+  releaseParse();
+});

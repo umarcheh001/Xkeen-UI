@@ -1770,3 +1770,62 @@ test('subscriptions advanced settings remember their expanded state', async ({ p
   await page.locator('#outbounds-subscriptions-btn').click();
   await expect(page.locator('#outbounds-subscriptions-modal .xk-sub-advanced')).not.toHaveAttribute('open', '');
 });
+
+test('subscriptions status spinner is centred on the first line of text', async ({ page }) => {
+  const nodes = buildDemoNodes();
+  const subscription = buildDemoSubscription(nodes);
+  let releaseBulkProbe;
+  let resolveBulkProbeStarted;
+  const bulkProbeStarted = new Promise((resolve) => {
+    resolveBulkProbeStarted = resolve;
+  });
+  await page.route('**/api/xray/subscriptions/demo-sub/nodes/ping-bulk', async (route) => {
+    resolveBulkProbeStarted();
+    await new Promise((resume) => {
+      releaseBulkProbe = resume;
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, requested: nodes.length, ok_count: nodes.length, failed_count: 0, results: [] }),
+    });
+  });
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscriptions: [subscription] }),
+    });
+  });
+
+  await openSubscriptionsModal(page);
+  await page.locator('tr[data-sub-id="demo-sub"]').click();
+  await page.locator('#outbounds-subscriptions-nodes-pingall').click();
+  await bulkProbeStarted;
+
+  const busy = page.locator('#outbounds-subscriptions-status .xk-status-inline.is-busy');
+  await expect(busy).toBeVisible();
+
+  const geometry = await busy.evaluate((wrap) => {
+    const spinner = wrap.querySelector('.xk-inline-spinner');
+    const message = wrap.querySelector('.xk-status-message');
+    const spinnerRect = spinner.getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(message);
+    const firstLine = range.getClientRects()[0];
+    return {
+      spinnerCentre: spinnerRect.top + spinnerRect.height / 2,
+      firstLineCentre: firstLine.top + firstLine.height / 2,
+    };
+  });
+
+  // Тот же кружок и та же строка статуса, что и в окне импорта Mihomo:
+  // общий класс .xk-inline-spinner, поэтому сторожим обе точки применения.
+  expect(Math.abs(geometry.spinnerCentre - geometry.firstLineCentre)).toBeLessThanOrEqual(1);
+
+  releaseBulkProbe();
+});

@@ -8791,7 +8791,10 @@ html[data-theme="light"] #routing-forced-rules-modal .xk-chip[data-kind="ip"] {
   width: 14px;
   height: 14px;
   flex: 0 0 14px;
+  /* По центру первой строки сообщения, а не по центру всего блока:
+     при переносе на несколько строк это единственная верная опора. */
   margin-top: 1px;
+  margin-top: calc((1lh - 14px) / 2);
   border-radius: 999px;
   border: 2px solid rgba(191, 219, 254, 0.18);
   border-top-color: #dbeafe;
@@ -13384,8 +13387,10 @@ div.toast-icon {
 }
 
 @keyframes xkeen-spinner {
-  from { transform: translateY(-50%) rotate(0deg); }
-  to   { transform: translateY(-50%) rotate(360deg); }
+  /* Только вращение: сдвиг на половину высоты делают сами правила
+     (top: 50% + отрицательный margin-top), иначе кружок уезжает вверх. */
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 
@@ -13414,8 +13419,10 @@ div.toast-icon {
 }
 
 @keyframes xkeen-spinner {
-  from { transform: translateY(-50%) rotate(0deg); }
-  to   { transform: translateY(-50%) rotate(360deg); }
+  /* Только вращение: сдвиг на половину высоты делают сами правила
+     (top: 50% + отрицательный margin-top), иначе кружок уезжает вверх. */
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 

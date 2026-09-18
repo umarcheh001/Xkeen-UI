@@ -2390,3 +2390,27 @@ def test_terminal_xray_tail_reclaims_pty_after_stop_or_disable():
     assert "clearRestartTimer();" in stop_body
     assert "await stopViewerAndSettle({ force: true });" in disable_body
     assert "void stopViewerAndSettle({ force: true });" in text
+
+
+def test_inline_spinner_keyframes_only_rotate():
+    """Кадры xkeen-spinner не должны двигать кружок.
+
+    Три места опираются на эту анимацию: встроенный кружок строки статуса
+    (.xk-inline-spinner) и два кнопочных псевдоэлемента, которые центруются
+    парой `top: 50%` + отрицательный `margin-top`. Любой `translate` в кадрах
+    поднимает кружок ещё на половину высоты — ровно та рассинхронизация,
+    из-за которой индикатор импорта стоял выше первой строки текста.
+    """
+    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    blocks = [
+        chunk.split('}', 1)[0]
+        for chunk in styles.split('@keyframes xkeen-spinner {')[1:]
+    ]
+
+    assert blocks, 'кадры xkeen-spinner пропали из styles.css'
+    for block in blocks:
+        assert 'rotate(' in block
+        assert 'translate' not in block
+
+    spinner_block = styles.split('.xk-inline-spinner {', 1)[1].split('}', 1)[0]
+    assert 'margin-top: calc((1lh - 14px) / 2);' in spinner_block
