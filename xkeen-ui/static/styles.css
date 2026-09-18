@@ -3274,7 +3274,9 @@ html[data-theme="light"] .btn-link:hover {
 
 /* DevTools: named zones below the top row */
 .dt-zone-block {
-  margin-top: 24px;
+  /* Зоны стоят ближе друг к другу: карточки почти доходят до подписи следующей
+     зоны, без широкой пустой полосы между ними. */
+  margin-top: 14px;
 }
 
 .dt-zone-head {

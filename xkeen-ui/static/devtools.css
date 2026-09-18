@@ -576,8 +576,9 @@ details.dt-subcard .dt-collapsible-body {
 
 /* Итог по update.log: шапка, строка вердикта и — при находках — кнопка в Logs. */
 .dt-update-log-summary {
-  margin-top: 10px;
-  padding: 10px 12px;
+  margin-top: 12px;
+  /* Поля блока равны зазору между кнопками, чтобы строка итога не липла к рамке. */
+  padding: 12px;
   border: 1px solid var(--border, #1f2937);
   border-radius: 14px;
   background: color-mix(in srgb, var(--card-bg, #020617) 92%, var(--text, #e5e7eb) 8%);
@@ -585,7 +586,7 @@ details.dt-subcard .dt-collapsible-body {
 
 .dt-update-log-head {
   font-weight: 600;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .dt-update-log-verdict {
