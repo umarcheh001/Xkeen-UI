@@ -758,7 +758,7 @@ body.devtools-page .view-section {
 body.devtools-page .dt-tools-layout {
   grid-template-columns: minmax(400px, 440px) minmax(0, 1fr);
   gap: 9px;
-  align-items: start;
+  align-items: stretch;
 }
 
 body.devtools-page :is(.dt-tools-left, .dt-tools-right, .dt-logs-main, .dt-logs-sidebar) {

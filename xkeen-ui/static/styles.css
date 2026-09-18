@@ -3205,6 +3205,43 @@ html[data-theme="light"] .btn-link:hover {
   grid-template-columns: minmax(260px, 420px) minmax(0, 1fr);
 }
 
+/* DevTools: левая колонка верхнего ряда идёт вровень с карточкой ENV */
+.dt-tools-layout {
+  align-items: stretch;
+}
+
+#dt-update-card[open] {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+#dt-update-card[open] > .dt-collapsible-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#dt-update-log-box[open] {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#dt-update-log-box[open] > .dt-collapsible-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#dt-update-log {
+  flex: 1 1 auto;
+  min-height: 96px;
+  max-height: none;
+  overflow: auto;
+}
+
 .dt-tools-left {
   min-width: 0;
 }

@@ -119,3 +119,29 @@ def test_both_themes_style_zone_cards():
 
     assert "body.devtools-page .dt-zone-head" in operator
     assert "body.devtools-page .dt-zone > .card" in operator
+
+
+def test_top_row_stretches_and_update_log_takes_the_slack():
+    base = BASE_CSS.read_text(encoding="utf-8")
+    glass = GLASS_CSS.read_text(encoding="utf-8")
+    operator = OPERATOR_CSS.read_text(encoding="utf-8")
+
+    assert "#dt-update-card[open] {" in base
+    update_rule = base[base.index("#dt-update-card[open] {"):]
+    update_rule = update_rule[: update_rule.index("}")]
+    assert "flex: 1 1 auto;" in update_rule
+
+    assert "#dt-update-log {" in base
+    log_rule = base[base.index("#dt-update-log {"):]
+    log_rule = log_rule[: log_rule.index("}")]
+    assert "overflow: auto;" in log_rule
+    assert "max-height: none;" in log_rule
+
+    # Хвост лога больше не заперт фиксированной высотой
+    assert ".dt-update-log {\n  max-height: 240px;\n}" not in glass
+
+    # В теме оператора верхний ряд тоже растягивается
+    top_row = operator[operator.index("body.devtools-page .dt-tools-layout {"):]
+    top_row = top_row[: top_row.index("}")]
+    assert "align-items: stretch;" in top_row
+    assert "minmax(400px, 440px) minmax(0, 1fr)" in top_row

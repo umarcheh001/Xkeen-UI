@@ -532,7 +532,8 @@ details.dt-theme-group .dt-collapsible-icon{
 }
 
 .dt-update-log {
-  max-height: 240px;
+  /* Высоту задаёт растяжка верхнего ряда: см. #dt-update-log в styles.css */
+  min-height: 96px;
 }
 
 /* Update log: collapsible container */
