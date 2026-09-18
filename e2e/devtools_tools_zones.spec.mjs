@@ -85,6 +85,65 @@ test.describe('DevTools Tools zones', () => {
     await expect(page.locator('#dt-tab-btn-logs')).toHaveAttribute('aria-selected', 'true');
   });
 
+  test('button rows keep the same gap as the card padding', async ({ page }) => {
+    await openTools(page, { width: 1600, height: 1000 });
+
+    const branding = await page.evaluate(() => {
+      const card = document.getElementById('dt-branding-card');
+      const row = card.querySelector('.dt-logging-actions');
+      const buttons = [...row.querySelectorAll('button')].map((b) => b.getBoundingClientRect());
+      const box = card.getBoundingClientRect();
+      return {
+        leftInset: buttons[0].left - box.left,
+        rightInset: box.right - buttons[buttons.length - 1].right,
+        between: buttons[1].left - buttons[0].right,
+      };
+    });
+
+    // Зазор между Save и Reset равен отступу кнопок от границ карточки.
+    expect(Math.abs(branding.between - branding.leftInset)).toBeLessThanOrEqual(1);
+    expect(Math.abs(branding.between - branding.rightInset)).toBeLessThanOrEqual(1);
+
+    const service = await page.evaluate(() => {
+      const buttons = [...document.querySelectorAll('.dt-service-actions button')]
+        .map((b) => b.getBoundingClientRect());
+      return {
+        firstGap: buttons[1].left - buttons[0].right,
+        secondGap: buttons[2].left - buttons[1].right,
+      };
+    });
+
+    expect(service.firstGap).toBeGreaterThanOrEqual(10);
+    expect(Math.abs(service.firstGap - service.secondGap)).toBeLessThanOrEqual(1);
+  });
+
+  test('terminal save and reset sit together on the right', async ({ page }) => {
+    await openTools(page, { width: 1600, height: 1000 });
+
+    const card = page.locator('#dt-terminal-theme-card');
+    await card.locator('summary').click();
+    await expect(card).toHaveAttribute('open', /.*/);
+
+    const row = await page.evaluate(() => {
+      const el = document.getElementById('dt-terminal-theme-card');
+      const rect = el.getBoundingClientRect();
+      const buttons = [...el.querySelectorAll('.dt-logging-actions button')]
+        .map((b) => b.getBoundingClientRect());
+      return {
+        count: buttons.length,
+        sameRow: Math.abs(buttons[0].top - buttons[1].top) <= 1,
+        widthShare: (buttons[0].width + buttons[1].width) / rect.width,
+        rightInset: rect.right - buttons[buttons.length - 1].right,
+      };
+    });
+
+    expect(row.count).toBe(2);
+    expect(row.sameRow).toBe(true);
+    // Пара кнопок больше не занимает всю ширину карточки и прижата вправо.
+    expect(row.widthShare).toBeLessThan(0.5);
+    expect(row.rightInset).toBeLessThanOrEqual(16);
+  });
+
   test('zones collapse to one column on a narrow screen', async ({ page }) => {
     await openTools(page, { width: 900, height: 900 });
 

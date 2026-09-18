@@ -12826,7 +12826,7 @@ div.toast-icon {
 .dt-service-actions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 12px;
 }
 
 .dt-service-actions button.dt-ui-action {
@@ -12886,13 +12886,27 @@ div.toast-icon {
   align-self: flex-start;
 }
 
+/* Зазор между кнопками ряда равен отступу карточки от её границы (12px в теме
+   оператора), иначе Save и Reset выглядят слипшимися. */
 .dt-logging-actions {
   margin-top: 10px;
   display: flex;
+  gap: 12px;
 }
 
 .dt-logging-actions button {
   width: 100%;
+}
+
+/* Терминал: пара кнопок прижата к правому краю и по ширине своего текста —
+   растянутые во всю карточку Save и Reset выглядели как основное действие. */
+#dt-terminal-theme-card .dt-logging-actions {
+  justify-content: flex-end;
+}
+
+#dt-terminal-theme-card .dt-logging-actions button {
+  width: auto;
+  min-width: 96px;
 }
 
 

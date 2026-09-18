@@ -257,6 +257,41 @@ def test_prefs_io_columns_are_built_the_same_way():
     assert "grid-row: auto;" in narrow
 
 
+def test_button_rows_breathe_like_the_card_padding():
+    base = BASE_CSS.read_text(encoding="utf-8")
+    operator = OPERATOR_CSS.read_text(encoding="utf-8")
+
+    # Зазор ряда кнопок задан в базовом слое и равен отступу карточки (12px).
+    row_rule = base[base.index(".dt-logging-actions {"):]
+    row_rule = row_rule[: row_rule.index("}")]
+    assert "gap: 12px;" in row_rule
+
+    service_rule = operator[operator.index("body.devtools-page .dt-service-actions {"):]
+    service_rule = service_rule[: service_rule.index("}")]
+    assert "gap: 12px;" in service_rule
+
+    card_rule = operator[operator.index("body.devtools-page :is(.card, details.dt-collapsible"):]
+    card_rule = card_rule[: card_rule.index("}")]
+    assert "padding: 11px 12px;" in card_rule
+
+    # Тема оператора больше не ужимает ряд Save/Reset до 5px.
+    tight = operator[operator.index("body.devtools-page .dt-update-actions,"):]
+    tight = tight[: tight.index("}")]
+    assert ".dt-logging-actions" not in tight
+
+
+def test_terminal_save_and_reset_sit_on_the_right():
+    base = BASE_CSS.read_text(encoding="utf-8")
+
+    row_rule = base[base.index("#dt-terminal-theme-card .dt-logging-actions {"):]
+    row_rule = row_rule[: row_rule.index("}")]
+    assert "justify-content: flex-end;" in row_rule
+
+    btn_rule = base[base.index("#dt-terminal-theme-card .dt-logging-actions button {"):]
+    btn_rule = btn_rule[: btn_rule.index("}")]
+    assert "width: auto;" in btn_rule
+
+
 def test_check_result_stays_in_the_pill_next_to_latest():
     script = (ROOT / "xkeen-ui/static/js/features/devtools/update.js").read_text(encoding="utf-8")
 

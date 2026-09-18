@@ -864,8 +864,10 @@ body.devtools-page #dt-service-card h2 {
   margin-bottom: 9px !important;
 }
 
+/* Start / Stop / Restart стоят по отдельности, а не слипшимся блоком:
+   зазор как у остальных рядов кнопок — по отступу карточки. */
 body.devtools-page .dt-service-actions {
-  gap: 5px;
+  gap: 12px;
 }
 
 body.devtools-page .dt-service-actions button.dt-ui-action,
@@ -895,8 +897,7 @@ body.devtools-page #dt-service-card :is(.status, p) {
 }
 
 body.devtools-page .dt-update-actions,
-body.devtools-page .dt-actions-grid,
-body.devtools-page .dt-logging-actions {
+body.devtools-page .dt-actions-grid {
   gap: 5px;
 }
 

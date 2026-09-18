@@ -922,7 +922,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
       _setText('dt-update-latest-kind', '—');
       _setText('dt-update-latest-version', '—');
       _setText('dt-update-latest-date', '');
-      _setText('dt-update-verdict', '⚠️ Не удалось получить информацию о latest');
+      _setText('dt-update-verdict', '⚠️ Не удалось получить информацию о последней версии');
       _setClass('dt-update-verdict', 'dt-pill dt-pill-bad');
       // Плашка статуса принадлежит операции обновления: результат проверки версии
       // живёт в пилюле рядом с «Latest», иначе одно затирает другое.
