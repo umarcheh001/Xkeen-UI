@@ -213,5 +213,12 @@ def test_prefs_io_buttons_are_labelled_in_russian():
     card = template[template.index('id="dt-ui-prefs-io-card"'):]
     card = card[: card.index("</details>")]
 
-    for label in ("Экспортировать", "Копировать", "Скачать", "Импортировать", "Сбросить всё"):
+    for label in (
+        "Собрать JSON",
+        "Копировать в буфер",
+        "Сохранить в файл",
+        "Применить из поля",
+        "Загрузить из файла",
+        "Сбросить всё",
+    ):
         assert label in card, label

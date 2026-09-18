@@ -629,11 +629,11 @@
               <div class="dt-io-split">
                 <div class="dt-prefs-io-flex">
                   <div class="small dt-io-col-head">Экспорт настроек</div>
-                  <textarea id="dt-ui-prefs-export-text" class="dt-codearea" rows="4" spellcheck="false" placeholder="Нажмите «Экспортировать» — JSON появится здесь…" readonly></textarea>
+                  <textarea id="dt-ui-prefs-export-text" class="dt-codearea" rows="4" spellcheck="false" placeholder="Нажмите «Собрать JSON» — он появится здесь…" readonly></textarea>
                   <div class="dt-actions-grid" aria-label="Действия экспорта">
-                    <button type="button" id="dt-ui-prefs-export" class="btn-secondary" title="Собрать текущие UI‑настройки в JSON выше.">Экспортировать</button>
-                    <button type="button" id="dt-ui-prefs-copy" class="btn-secondary" title="Скопировать JSON в буфер обмена.">Копировать</button>
-                    <button type="button" id="dt-ui-prefs-download" class="btn-secondary" title="Скачать JSON файлом.">Скачать</button>
+                    <button type="button" id="dt-ui-prefs-export" class="btn-secondary" title="Собрать текущие UI‑настройки в JSON выше.">Собрать JSON</button>
+                    <button type="button" id="dt-ui-prefs-copy" class="btn-secondary" title="Скопировать JSON в буфер обмена.">Копировать в буфер</button>
+                    <button type="button" id="dt-ui-prefs-download" class="btn-secondary" title="Сохранить JSON файлом на диск.">Сохранить в файл</button>
                   </div>
                 </div>
 
@@ -641,9 +641,9 @@
                   <div class="small dt-io-col-head">Импорт настроек</div>
                   <textarea id="dt-ui-prefs-import-text" class="dt-codearea" rows="4" spellcheck="false" placeholder='Вставьте JSON или загрузите файл: { "kind": "xkeen-ui-prefs", "prefs": { ... } }'></textarea>
                   <div class="dt-actions-grid" aria-label="Действия импорта">
-                    <button type="button" id="dt-ui-prefs-import" class="btn-secondary" title="Применить JSON из поля выше (перезапишет UI‑настройки).">Импортировать</button>
+                    <button type="button" id="dt-ui-prefs-import" class="btn-secondary" title="Применить JSON из поля выше (перезапишет UI‑настройки).">Применить из поля</button>
                     <label id="dt-ui-prefs-import-file-btn" class="btn-secondary dt-btn-like dt-file-label" role="button" tabindex="0" title="Загрузить JSON из файла и вставить в поле импорта.">
-                      Из файла
+                      Загрузить из файла
                       <input id="dt-ui-prefs-import-file" type="file" accept="application/json" class="dt-file-input-overlay">
                     </label>
                   </div>
