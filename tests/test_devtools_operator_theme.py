@@ -67,6 +67,7 @@ def test_devtools_operator_layer_covers_shell_tools_env_logs_modals_and_mobile()
         ".dt-page-header",
         ".dt-tabs",
         ".dt-tools-layout",
+        ".dt-zone",
         "#dt-service-card",
         "#dt-env-card",
         ".dt-env-group-toggle",

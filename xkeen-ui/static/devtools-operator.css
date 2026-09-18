@@ -238,7 +238,9 @@ body.devtools-page .dt-top-tab::after,
 body.devtools-page .dt-header-btn::before,
 body.devtools-page .dt-header-btn::after,
 body.devtools-page .dt-tools-left > :is(section, details) > h2::before,
-body.devtools-page .dt-tools-left > details > summary h2::before {
+body.devtools-page .dt-tools-left > details > summary h2::before,
+body.devtools-page .dt-zone > :is(section, details) > h2::before,
+body.devtools-page .dt-zone > details > summary h2::before {
   content: none !important;
   display: none !important;
 }
@@ -786,10 +788,21 @@ body.devtools-page :is(.card, details.dt-collapsible, details.dt-update-log-box)
 }
 
 body.devtools-page .dt-tools-left > :is(.card, details.card),
+body.devtools-page .dt-zone > .card,
+body.devtools-page .dt-zone > details.card,
 body.devtools-page .dt-tools-right > .card,
 body.devtools-page .dt-logs-card {
   border-color: var(--op-border) !important;
   background: var(--op-surface) !important;
+}
+
+body.devtools-page .dt-zone-head {
+  color: var(--op-text-muted);
+  letter-spacing: 0.12em;
+}
+
+body.devtools-page .dt-zone-head::after {
+  background: var(--op-border);
 }
 
 body.devtools-page .card h2,
@@ -1340,6 +1353,10 @@ html[data-theme="light"] body.devtools-page {
 @media (max-width: 1180px) {
   body.devtools-page .dt-tools-layout,
   body.devtools-page .dt-logs-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.devtools-page .dt-zone {
     grid-template-columns: minmax(0, 1fr);
   }
 

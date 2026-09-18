@@ -1149,7 +1149,9 @@ body.devtools-page .dt-env-search-clear {
 }
 
 body.devtools-page .dt-tools-left > .card,
-body.devtools-page .dt-tools-left > details.card {
+body.devtools-page .dt-tools-left > details.card,
+body.devtools-page .dt-zone > .card,
+body.devtools-page .dt-zone > details.card {
   --dt-side-accent: rgba(96, 165, 250, 0.88);
   --dt-card-glyph: "◌";
   margin-bottom: 0;
@@ -1186,7 +1188,9 @@ body.devtools-page details.dt-collapsible > summary h2 {
 }
 
 body.devtools-page .dt-tools-left > section.card > h2::before,
-body.devtools-page .dt-tools-left > details.card > summary h2::before {
+body.devtools-page .dt-tools-left > details.card > summary h2::before,
+body.devtools-page .dt-zone > section.card > h2::before,
+body.devtools-page .dt-zone > details.card > summary h2::before {
   content: var(--dt-card-glyph);
   display: inline-grid;
   place-items: center;
@@ -1205,6 +1209,14 @@ body.devtools-page .dt-tools-left > details.card > summary h2::before {
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.08),
     0 8px 16px color-mix(in srgb, var(--dt-side-accent) 18%, transparent);
+}
+
+body.devtools-page .dt-zone-head {
+  color: #8fb0e0;
+}
+
+body.devtools-page .dt-zone-head::after {
+  background: linear-gradient(90deg, rgba(96, 165, 250, 0.38), rgba(96, 165, 250, 0.04));
 }
 
 body.devtools-page .small,
@@ -1617,7 +1629,9 @@ html[data-theme="light"] body.devtools-page details.dt-collapsible > summary h2 
 }
 
 html[data-theme="light"] body.devtools-page .dt-tools-left > section.card > h2::before,
-html[data-theme="light"] body.devtools-page .dt-tools-left > details.card > summary h2::before {
+html[data-theme="light"] body.devtools-page .dt-tools-left > details.card > summary h2::before,
+html[data-theme="light"] body.devtools-page .dt-zone > section.card > h2::before,
+html[data-theme="light"] body.devtools-page .dt-zone > details.card > summary h2::before {
   border-color: color-mix(in srgb, var(--dt-side-accent) 26%, rgba(63, 111, 203, 0.12));
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--dt-side-accent) 12%, rgba(255,255,255,0.98)), rgba(243,248,255,0.92));

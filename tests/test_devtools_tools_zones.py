@@ -107,3 +107,15 @@ def test_wide_cards_span_both_columns():
     for card_id in ("dt-terminal-theme-card", "dt-branding-card", "dt-layout-card"):
         opening = template[template.index('id="%s"' % card_id) - 200: template.index('id="%s"' % card_id)]
         assert "dt-card-wide" in opening, card_id
+
+
+def test_both_themes_style_zone_cards():
+    glass = GLASS_CSS.read_text(encoding="utf-8")
+    operator = OPERATOR_CSS.read_text(encoding="utf-8")
+
+    assert "body.devtools-page .dt-zone > .card" in glass
+    assert "body.devtools-page .dt-zone-head" in glass
+    assert "body.devtools-page .dt-zone > details.card > summary h2::before" in glass
+
+    assert "body.devtools-page .dt-zone-head" in operator
+    assert "body.devtools-page .dt-zone > .card" in operator
