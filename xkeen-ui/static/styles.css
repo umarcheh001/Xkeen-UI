@@ -3213,11 +3213,25 @@ html[data-theme="light"] .btn-link:hover {
 #dt-update-card[open] {
   flex: 1 1 auto;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Chrome 131+ отдаёт содержимое <details> через слот ::details-content, который
+   стоит между элементом и его детьми. display:flex на самом <details> лишь
+   раскладывает [summary, слот], а высоту дальше по цепочке передаёт только
+   правило на самом слоте — без него растяжка обрывается здесь. */
+#dt-update-card[open]::details-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 #dt-update-card[open] > .dt-collapsible-body {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   min-height: 0;
 }
 
@@ -3226,6 +3240,13 @@ html[data-theme="light"] .btn-link:hover {
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+#dt-update-log-box[open]::details-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 #dt-update-log-box[open] > .dt-collapsible-body {
@@ -3248,6 +3269,15 @@ html[data-theme="light"] .btn-link:hover {
 
 .dt-tools-right {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* DevTools: карточка ENV держит всю высоту верхнего ряда. Без этого поднос
+   слева, выросший из-за раскрытого лога, оставляет под ENV пустое место. */
+#dt-env-card {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .layout-main {

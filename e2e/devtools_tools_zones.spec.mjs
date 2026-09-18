@@ -48,18 +48,24 @@ test.describe('DevTools Tools zones', () => {
     await logBox.locator('summary').click();
     await expect(logBox).toHaveAttribute('open', /.*/);
 
-    const logGeometry = await page.evaluate(() => {
+    const opened = await page.evaluate(() => {
+      const bottom = (id) => document.getElementById(id).getBoundingClientRect().bottom;
       const log = document.getElementById('dt-update-log');
-      const card = document.getElementById('dt-update-card');
       return {
         logHeight: log.getBoundingClientRect().height,
         logBottom: log.getBoundingClientRect().bottom,
-        cardBottom: card.getBoundingClientRect().bottom,
+        logScrolls: log.scrollHeight <= log.clientHeight + 1,
+        cardBottom: bottom('dt-update-card'),
+        trayBottom: document.querySelector('.dt-tools-left').getBoundingClientRect().bottom,
+        envBottom: bottom('dt-env-card'),
       };
     });
 
-    expect(logGeometry.logHeight).toBeGreaterThan(240);
-    expect(logGeometry.logBottom).toBeLessThanOrEqual(logGeometry.cardBottom + 2);
+    // Раскрытый лог живёт внутри карточки и скроллится сам, а не выталкивает
+    // поднос из ряда: обе колонки верхнего ряда по-прежнему кончаются вместе.
+    expect(opened.logBottom).toBeLessThanOrEqual(opened.cardBottom + 2);
+    expect(opened.logScrolls).toBe(true);
+    expect(Math.abs(opened.trayBottom - opened.envBottom)).toBeLessThanOrEqual(2);
   });
 
   test('zones collapse to one column on a narrow screen', async ({ page }) => {
