@@ -124,10 +124,10 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   function _fmtAgeSec(sec) {
     try {
       const v = Math.max(0, Number(sec || 0));
-      if (v < 60) return Math.floor(v) + 's';
-      if (v < 3600) return Math.floor(v / 60) + 'm';
-      if (v < 86400) return Math.floor(v / 3600) + 'h';
-      return Math.floor(v / 86400) + 'd';
+      if (v < 60) return Math.floor(v) + ' с';
+      if (v < 3600) return Math.floor(v / 60) + ' мин';
+      if (v < 86400) return Math.floor(v / 3600) + ' ч';
+      return Math.floor(v / 86400) + ' дн';
     } catch (e) {
       return '';
     }
@@ -214,6 +214,77 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     rollback_stop: 'Откат: остановка UI…',
     rollback_restore: 'Откат: восстановление…',
   };
+
+  // Названия шагов без многоточия — для строки расшифровки под статусом.
+  const STEP_NAMES = {
+    spawn: 'запуск',
+    init: 'подготовка',
+    backup: 'резервная копия',
+    check_latest: 'проверка GitHub',
+    download: 'скачивание',
+    verify: 'проверка контрольной суммы',
+    extract: 'распаковка',
+    install: 'установка',
+    restart: 'перезапуск панели',
+    lock: 'блокировка',
+    done: 'готово',
+    rollback_select: 'откат: выбор копии',
+    rollback_stop: 'откат: остановка панели',
+    rollback_restore: 'откат: восстановление',
+  };
+
+  // Скрипт обновления пишет шаг, сообщение и код ошибки по-английски. Показываем
+  // их по-русски; незнакомый текст оставляем как есть, чтобы ничего не потерять.
+  const UPDATE_TEXTS = {
+    'starting': 'запуск',
+    'update completed': 'обновление завершено',
+    'rollback completed': 'откат завершён',
+    'creating backup': 'создаём резервную копию',
+    'selecting backup': 'выбираем резервную копию',
+    'stopping ui service': 'останавливаем панель',
+    'restoring backup': 'восстанавливаем из резервной копии',
+    'restarting ui service': 'перезапускаем панель',
+    'fetching latest info': 'запрашиваем данные о последней версии',
+    'fetching latest release info': 'запрашиваем данные о последнем релизе',
+    'downloading release asset': 'скачиваем архив обновления',
+    'verifying sha256': 'проверяем контрольную сумму',
+    'extracting archive': 'распаковываем архив',
+    'running install.sh': 'запускаем установщик install.sh',
+    'lock already exists': 'обновление уже выполняется',
+    'backup not found': 'резервная копия не найдена',
+    'backup failed': 'не удалось создать резервную копию',
+    'backup_tar_unsupported': 'tar на роутере не поддерживает --exclude',
+    'failed to move current dir': 'не удалось убрать текущую папку панели',
+    'move failed': 'не удалось убрать текущую папку панели',
+    'extract failed': 'не удалось распаковать архив',
+    'unsafe archive': 'архив не прошёл проверку безопасности',
+    'failed to fetch latest commit': 'не удалось получить последний коммит',
+    'failed to fetch latest release': 'не удалось получить последний релиз',
+    'release asset not found': 'в релизе нет нужного архива',
+    'checksum required but missing': 'нет файла контрольных сумм',
+    'checksum missing': 'нет файла контрольных сумм',
+    'checksum entry missing': 'в контрольных суммах нет записи для архива',
+    'checksum has no entry for asset': 'в контрольных суммах нет записи для архива',
+    'checksum download failed': 'не удалось скачать контрольные суммы',
+    'checksum verify failed': 'не удалось проверить контрольную сумму',
+    'sha256 mismatch': 'контрольная сумма не совпала',
+    'install.sh not found': 'установщик install.sh не найден',
+    'install.sh failed': 'установщик install.sh завершился с ошибкой',
+    'spawn_failed': 'не удалось запустить процесс обновления',
+  };
+
+  function _ruText(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const known = UPDATE_TEXTS[raw.toLowerCase()];
+    return known || raw;
+  }
+
+  function _ruStep(step) {
+    const raw = String(step || '').trim();
+    if (!raw) return '';
+    return STEP_NAMES[raw] || raw;
+  }
 
   const STEP_PCT = {
     spawn: 3,
@@ -851,10 +922,11 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
       _setText('dt-update-latest-kind', '—');
       _setText('dt-update-latest-version', '—');
       _setText('dt-update-latest-date', '');
-      _setText('dt-update-latest-hint', '');
       _setText('dt-update-verdict', '⚠️ Не удалось получить информацию о latest');
       _setClass('dt-update-verdict', 'dt-pill dt-pill-bad');
-      _setStatus(blockedSummary, 'bad');
+      // Плашка статуса принадлежит операции обновления: результат проверки версии
+      // живёт в пилюле рядом с «Latest», иначе одно затирает другое.
+      _setText('dt-update-latest-hint', blockedSummary);
       if (btnRun) {
         _setRunBlockedState(btnRun, true, 'check_failed', blockedSummary);
         try { btnRun.title = blockedSummary; } catch (e) {}
@@ -905,25 +977,23 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
       const blockedSummary = _summarizeSecurityBlock(data && data.security);
       _setText('dt-update-verdict', '⛔ Обновление заблокировано политикой безопасности');
       _setClass('dt-update-verdict', 'dt-pill dt-pill-bad');
-      _setStatus(blockedSummary, 'bad');
       _setClass('dt-update-latest-version', 'dt-value dt-value-neutral');
+      hintParts.push(blockedSummary);
       if (btnRun) {
         _setRunBlockedState(btnRun, true, 'policy', blockedSummary);
         try { btnRun.disabled = false; } catch (e) {}
         try { btnRun.title = blockedSummary; } catch (e) {}
       }
     } else if (updateAvail) {
-      _setText('dt-update-verdict', '⬆️ Доступно обновление');
+      _setText('dt-update-verdict', '⬆️ Доступно обновление: ' + verLabel);
       _setClass('dt-update-verdict', 'dt-pill dt-pill-warn');
       _setClass('dt-update-latest-version', 'dt-value dt-value-warn');
       _setClass('dt-update-current-version', 'dt-value dt-value-neutral');
-      _setStatus('Доступно обновление: ' + verLabel, 'warn');
     } else {
       _setText('dt-update-verdict', '✅ У вас актуальная версия');
       _setClass('dt-update-verdict', 'dt-pill dt-pill-ok');
       _setClass('dt-update-latest-version', 'dt-value dt-value-ok');
       _setClass('dt-update-current-version', 'dt-value dt-value-ok');
-      _setStatus('У вас актуальная версия', 'ok');
       if (btnRun) {
         try { btnRun.dataset.uptodate = '1'; } catch (e) {}
         try { btnRun.title = 'Версия актуальна. Можно нажать Update, чтобы переустановить поверх (с подтверждением).'; } catch (e) {}
@@ -991,7 +1061,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
               if (spS) label += ' · ' + spS + '/s';
             }
             const eta = Number(prog.eta_sec || 0);
-            if (eta > 0 && eta < 86400) label += ' · ETA ' + _fmtAgeSec(eta);
+            if (eta > 0 && eta < 86400) label += ' · осталось ' + _fmtAgeSec(eta);
           } else {
             // totals unknown — keep indeterminate bar
             ind = true;
@@ -1023,29 +1093,31 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     }
 
     const parts = [];
-    if (step && stateVal !== 'running') parts.push('Step: ' + step);
-    if (err) parts.push('Error: ' + err);
+    const errRu = _ruText(err);
+    if (step && stateVal !== 'running') parts.push('Шаг: ' + _ruStep(step));
+    if (errRu) parts.push('Ошибка: ' + errRu);
 
     try {
       if (lock && lock.exists) {
         const pid = lock.pid ? String(lock.pid) : '?';
         const age = (lock.age_sec !== null && lock.age_sec !== undefined) ? _fmtAgeSec(lock.age_sec) : '';
-        parts.push('Lock: pid ' + pid + (age ? (', age ' + age) : ''));
+        parts.push('Блокировка: процесс ' + pid + (age ? (', держится ' + age) : ''));
       }
     } catch (e) {}
 
     // backups info (for rollback)
     try {
       const bks = (data && Array.isArray(data.backups)) ? data.backups : [];
-      if (bks && bks.length) parts.push('Backups: ' + bks.length);
+      if (bks && bks.length) parts.push('Резервных копий: ' + bks.length);
     } catch (e) {}
 
     // runner pid if known
     try {
       const pid = st && st.pid ? String(st.pid) : '';
-      if (pid) parts.push('Runner pid: ' + pid);
-      const msg = st && st.message ? String(st.message) : '';
-      if (msg) parts.push(msg);
+      if (pid) parts.push('Процесс обновления: ' + pid);
+      // Сообщение панели часто пересказывает ту же ошибку — второй раз не пишем.
+      const msg = _ruText(st && st.message);
+      if (msg && msg.toLowerCase() !== errRu.toLowerCase()) parts.push(msg);
     } catch (e) {}
 
     _setSubStatus(parts.join(' · '));
@@ -1120,7 +1192,10 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
 
   async function checkLatest(forceRefresh, silentToast, silentStatus) {
     try {
-      if (!silentStatus) _setStatus('Checking GitHub…', 'warn');
+      if (!silentStatus) {
+        _setText('dt-update-verdict', 'Проверяем GitHub…');
+        _setClass('dt-update-verdict', 'dt-pill dt-pill-muted');
+      }
       const data = await postJSON('/api/devtools/update/check', {
         force_refresh: !!forceRefresh,
         wait_seconds: 2.5,
@@ -1129,8 +1204,6 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
       if (data && data.ok) {
         _renderCheck(data);
       } else {
-        const err = data && data.error ? String(data.error) : 'check_failed';
-        _setStatus('Check failed: ' + err, 'bad');
         _renderCheck(data || {});
       }
     } catch (e) {

@@ -146,7 +146,7 @@ def test_devtools_spawn_failed_hides_exception_details_in_response_and_status(mo
     raw = json.dumps(payload, ensure_ascii=False)
     assert payload["ok"] is False
     assert payload["error"] == "spawn_failed"
-    assert payload["hint"] == "Не удалось запустить update runner. Подробности смотрите в server logs."
+    assert payload["hint"] == "Не удалось запустить процесс обновления. Подробности — в логах панели."
     assert "spawn failure" not in raw
     assert "/opt/etc/xkeen-ui" not in raw
     assert "meta" not in payload
@@ -155,7 +155,7 @@ def test_devtools_spawn_failed_hides_exception_details_in_response_and_status(mo
     status_payload = status_response.get_json()
     status_raw = json.dumps(status_payload, ensure_ascii=False)
     assert status_payload["status"]["error"] == "spawn_failed"
-    assert status_payload["status"]["message"] == "Не удалось запустить update runner"
+    assert status_payload["status"]["message"] == "Не удалось запустить процесс обновления"
     assert "spawn failure" not in status_raw
     assert "/opt/etc/xkeen-ui" not in status_raw
 

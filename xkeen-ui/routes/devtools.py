@@ -503,7 +503,7 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
             "error": None,
             "pid": None,
             "op": "update",
-            "message": "Starting update runner",
+            "message": "Запускаем процесс обновления",
             "updated_ts": now,
         }
         write_status(paths["status_file"], base_status)
@@ -567,7 +567,7 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
             base_status["state"] = "failed"
             base_status["step"] = "spawn"
             base_status["error"] = "spawn_failed"
-            base_status["message"] = "Не удалось запустить update runner"
+            base_status["message"] = "Не удалось запустить процесс обновления"
             base_status["finished_ts"] = time.time()
             base_status["updated_ts"] = time.time()
             write_status(paths["status_file"], base_status)
@@ -576,7 +576,7 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
             return jsonify({
                 "ok": False,
                 "error": "spawn_failed",
-                "hint": "Не удалось запустить update runner. Подробности смотрите в server logs.",
+                "hint": "Не удалось запустить процесс обновления. Подробности — в логах панели.",
             })
 
 

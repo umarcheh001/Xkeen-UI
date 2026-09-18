@@ -257,6 +257,55 @@ def test_prefs_io_columns_are_built_the_same_way():
     assert "grid-row: auto;" in narrow
 
 
+def test_check_result_stays_in_the_pill_next_to_latest():
+    script = (ROOT / "xkeen-ui/static/js/features/devtools/update.js").read_text(encoding="utf-8")
+
+    render_check = script[script.index("function _renderCheck("):]
+    render_check = render_check[: render_check.index("function _renderStatus(")]
+
+    # Плашка статуса принадлежит операции обновления: результат проверки версии
+    # пишется только в пилюлю рядом с «Latest» и в подсказку под ней.
+    assert "_setStatus(" not in render_check
+    assert "'⬆️ Доступно обновление: ' + verLabel" in render_check
+    assert "'✅ У вас актуальная версия'" in render_check
+
+    # Ход самой проверки — тоже в пилюле, а не поверх состояния операции.
+    check_fn = script[script.index("async function checkLatest("):]
+    check_fn = check_fn[: check_fn.index("async function loadStatus(")]
+    assert "_setStatus(" not in check_fn
+    assert "'Проверяем GitHub…'" in check_fn
+
+    # Состояние операции по-прежнему рисует только _renderStatus.
+    render_status = script[script.index("function _renderStatus("):]
+    render_status = render_status[: render_status.index("function _fmtBytes(")] if "function _fmtBytes(" in render_status else render_status
+    assert "'Ошибка обновления'" in render_status
+
+
+def test_update_substatus_speaks_russian():
+    script = (ROOT / "xkeen-ui/static/js/features/devtools/update.js").read_text(encoding="utf-8")
+
+    render_status = script[script.index("function _renderStatus("):]
+
+    # Строка под статусом собирается по-русски.
+    assert "'Шаг: ' + _ruStep(step)" in render_status
+    assert "const errRu = _ruText(err);" in render_status
+    assert "'Ошибка: ' + errRu" in render_status
+    # Сообщение панели не повторяет ту же ошибку второй строкой.
+    assert "msg.toLowerCase() !== errRu.toLowerCase()" in render_status
+    assert "'Резервных копий: '" in render_status
+    assert "'Процесс обновления: '" in render_status
+    assert "Step: " not in render_status
+    assert "Runner pid" not in render_status
+
+    # Коды и сообщения скрипта обновления переводятся по словарю,
+    # незнакомый текст остаётся как есть.
+    assert "'spawn_failed': 'не удалось запустить процесс обновления'," in script
+    assert "'sha256 mismatch': 'контрольная сумма не совпала'," in script
+    ru_fn = script[script.index("function _ruText("):]
+    ru_fn = ru_fn[: ru_fn.index("function _ruStep(")]
+    assert "return known || raw;" in ru_fn
+
+
 def test_update_actions_fill_the_card_width():
     glass = GLASS_CSS.read_text(encoding="utf-8")
 
