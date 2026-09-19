@@ -12674,6 +12674,27 @@ body.panel-page #outbounds-subscriptions-modal :is(.xk-sub-list-head-actions, .x
   box-shadow: none !important;
 }
 
+body.panel-page #outbounds-subscriptions-modal .xk-sub-probe-mode {
+  border-color: var(--op-border-strong) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-surface-2) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-probe-mode-btn {
+  border: 0 !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-probe-mode-btn.is-active {
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent-hover) !important;
+  box-shadow: inset 0 0 0 1px var(--op-accent-border) !important;
+}
+
 /* The feature stylesheet makes the diagnostics body a flex container.  That
  * explicit display value otherwise wins over the browser's closed-details
  * rule, leaving the contents visible after the summary is collapsed. */

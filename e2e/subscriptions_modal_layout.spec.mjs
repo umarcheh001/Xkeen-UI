@@ -89,6 +89,12 @@ async function openSubscriptionsModal(page) {
   await expect(page.locator('#outbounds-subscriptions-modal')).toBeVisible();
 }
 
+async function selectSubscriptionProbeMode(page, mode) {
+  const button = page.locator(`#outbounds-subscriptions-nodes-probe-mode [data-probe-mode="${mode}"]`);
+  await button.click();
+  await expect(button).toHaveAttribute('aria-pressed', 'true');
+}
+
 async function openOutboundsPanel(page) {
   await page.goto('/');
   const body = page.locator('#outbounds-body');
@@ -794,6 +800,7 @@ test('Xray latency values use the same color scale as Mihomo', async ({ page }) 
 
   await openSubscriptionsModal(page);
   await page.locator('tr[data-sub-id="demo-sub"]').click();
+  await selectSubscriptionProbeMode(page, 'proxy');
 
   const probes = page.locator('#outbounds-subscriptions-nodes-list .xk-xray-node-probe');
   await expect(probes).toHaveCount(3);
@@ -803,6 +810,36 @@ test('Xray latency values use the same color scale as Mihomo', async ({ page }) 
 
   const colors = await probes.evaluateAll((items) => items.map((item) => window.getComputedStyle(item).color));
   expect(new Set(colors).size).toBe(3);
+});
+
+test('subscription TCP and Proxy modes keep independent latency histories', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-05-03T03:09:37Z') });
+  const nodes = buildDemoNodes().slice(0, 1);
+  const checkedAt = 1777777777;
+  const subscription = buildDemoSubscription(nodes, {
+    node_tcp_latency: {
+      [nodes[0].key]: { status: 'ok', delay_ms: 111, checked_at: checkedAt },
+    },
+    node_latency: {
+      [nodes[0].key]: { status: 'ok', delay_ms: 777, checked_at: checkedAt },
+    },
+  });
+
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({ json: { ok: true, subscriptions: [subscription] } });
+  });
+
+  await openSubscriptionsModal(page);
+  await page.locator('tr[data-sub-id="demo-sub"]').click();
+
+  const probe = page.locator('#outbounds-subscriptions-nodes-list .xk-xray-node-probe');
+  await expect(probe).toHaveText('111 мс');
+  await expect(probe).toHaveAttribute('data-probe-mode', 'tcp');
+
+  await selectSubscriptionProbeMode(page, 'proxy');
+  await expect(probe).toHaveText('777 мс');
+  await expect(probe).toHaveAttribute('data-probe-mode', 'proxy');
 });
 
 test('Xray server cards use Mihomo-style latency icons, concise hints and history', async ({ page }) => {
@@ -839,6 +876,7 @@ test('Xray server cards use Mihomo-style latency icons, concise hints and histor
 
   await openSubscriptionsModal(page);
   await page.locator('tr[data-sub-id="demo-sub"]').click();
+  await selectSubscriptionProbeMode(page, 'proxy');
 
   const probes = page.locator('#outbounds-subscriptions-nodes-list .xk-xray-node-probe');
   const measured = probes.nth(0);
@@ -850,7 +888,10 @@ test('Xray server cards use Mihomo-style latency icons, concise hints and histor
   await expect(measured).toHaveAttribute('data-tooltip-silent', '1');
   await expect(failed.locator('use')).toHaveAttribute('href', /#xk-alert$/);
   await expect(idle.locator('use')).toHaveAttribute('href', /#xk-bolt$/);
-  await expect(idle).toHaveAttribute('data-tooltip', 'Задержка не измерена. Нажмите, чтобы проверить.');
+  await expect(idle).toHaveAttribute(
+    'data-tooltip',
+    /Задержка не измерена\. Нажмите, чтобы проверить\.[\s\S]*Proxy-проверка/,
+  );
 
   await measured.hover();
   const history = page.locator('#xray-delay-history-popover');
@@ -913,6 +954,7 @@ test('Xray latency stays visible but becomes muted after five minutes on cards a
   await page.locator('#outbounds-subscriptions-btn').click();
   await expect(page.locator('#outbounds-subscriptions-modal')).toBeVisible();
   await page.locator('tr[data-sub-id="demo-sub"]').click();
+  await selectSubscriptionProbeMode(page, 'proxy');
   const subscriptionProbe = page.locator('#outbounds-subscriptions-nodes-list .xk-xray-node-probe');
   await expect(subscriptionProbe).toHaveText('180 мс');
   await expect(subscriptionProbe).toHaveAttribute('data-probe-tone', 'good');
@@ -1447,6 +1489,7 @@ test('subscriptions modal ping-all button shows compact spinner while probing', 
     resolveBulkProbeStarted = resolve;
   });
   await page.route('**/api/xray/subscriptions/demo-sub/nodes/ping-bulk', async (route) => {
+    expect(route.request().postDataJSON()).toEqual(expect.objectContaining({ mode: 'tcp' }));
     resolveBulkProbeStarted();
     await new Promise((resume) => {
       releaseBulkProbe = resume;

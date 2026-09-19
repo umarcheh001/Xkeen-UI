@@ -216,6 +216,18 @@ def _to_bool(v) -> bool:
     return s in ("1", "true", "yes", "on", "y")
 
 
+def _apply_tls_share_fields(tls: Dict[str, Any], qs: Dict[str, List[str]]) -> None:
+    """Copy current Xray TLS share-link fields without interpreting them."""
+    for query_key, config_key in (
+        ("ech", "echConfigList"),
+        ("pcs", "pinnedPeerCertSha256"),
+        ("vcn", "verifyPeerCertByName"),
+    ):
+        value = _first(qs, query_key, None)
+        if value is not None:
+            tls[config_key] = str(value)
+
+
 def _normalize_xhttp_mode(value: Any) -> str | None:
     text = unquote(str(value or "")).strip()
     if not text or text.lower() == "auto":
@@ -328,6 +340,13 @@ def build_vless_url_from_config(cfg):
                 params.append("alpn=" + ",".join(str(x) for x in alpn if x))
             if allow_insecure:
                 params.append("allowInsecure=1")
+            for config_key, query_key in (
+                ("echConfigList", "ech"),
+                ("pinnedPeerCertSha256", "pcs"),
+                ("verifyPeerCertByName", "vcn"),
+            ):
+                if config_key in tls:
+                    params.append(f"{query_key}=" + quote(str(tls.get(config_key) or ""), safe=""))
 
         elif security == "reality":
             reality = stream.get("realitySettings") or {}
@@ -1061,6 +1080,7 @@ def build_outbounds_config_from_vless(url, *, proxy_tags: Optional[List[str]] = 
             tls["alpn"] = alpn
         if allow_insecure:
             tls["allowInsecure"] = True
+        _apply_tls_share_fields(tls, qs)
         stream_settings["tlsSettings"] = tls
 
     elif security == "reality":
@@ -1241,6 +1261,7 @@ def _build_stream_settings_from_qs(qs: dict, host_fallback: str, default_securit
             tls['alpn'] = alpn
         if allow_insecure:
             tls['allowInsecure'] = True
+        _apply_tls_share_fields(tls, qs)
         stream_settings['tlsSettings'] = tls
 
     elif security == 'reality':

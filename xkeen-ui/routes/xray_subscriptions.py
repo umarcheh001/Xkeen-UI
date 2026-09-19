@@ -18,7 +18,9 @@ from services.xray_subscriptions import (
     preview_subscription,
     SubscriptionPlaceholderError,
     probe_subscription_node_latency,
+    probe_subscription_node_tcp_latency,
     probe_subscription_nodes_latency,
+    probe_subscription_nodes_tcp_latency,
     refresh_due_subscriptions,
     refresh_subscription,
     upsert_subscription,
@@ -55,6 +57,12 @@ def create_xray_subscriptions_blueprint(
             return str(raw or "").strip().lower() in {"1", "true", "yes", "on", "y"}
         except Exception:
             return bool(default)
+
+    def _probe_mode(payload: dict[str, Any]) -> str:
+        value = str(payload.get("mode") or request.args.get("mode") or "proxy").strip().lower()
+        if value not in {"proxy", "tcp"}:
+            raise ValueError("mode must be proxy or tcp")
+        return value
 
     @bp.get("/api/xray/latency-jobs/<string:job_id>")
     def api_xray_latency_job_status(job_id: str):
@@ -199,17 +207,29 @@ def create_xray_subscriptions_blueprint(
         ).strip()
         timeout_raw = payload.get("timeout_s", payload.get("timeoutSec", payload.get("timeout")))
         try:
-            timeout_s = float(timeout_raw) if timeout_raw is not None and str(timeout_raw).strip() != "" else 8.0
-        except Exception:
-            timeout_s = 8.0
+            mode = _probe_mode(payload)
+        except ValueError as exc:
+            return error_response(str(exc), 400, ok=False)
         try:
-            result = probe_subscription_node_latency(
-                ui_state_dir,
-                sub_id,
-                node_key,
-                xray_configs_dir=xray_configs_dir,
-                timeout_s=timeout_s,
-            )
+            timeout_s = float(timeout_raw) if timeout_raw is not None and str(timeout_raw).strip() != "" else (3.0 if mode == "tcp" else 8.0)
+        except Exception:
+            timeout_s = 3.0 if mode == "tcp" else 8.0
+        try:
+            if mode == "tcp":
+                result = probe_subscription_node_tcp_latency(
+                    ui_state_dir,
+                    sub_id,
+                    node_key,
+                    timeout_s=timeout_s,
+                )
+            else:
+                result = probe_subscription_node_latency(
+                    ui_state_dir,
+                    sub_id,
+                    node_key,
+                    xray_configs_dir=xray_configs_dir,
+                    timeout_s=timeout_s,
+                )
         except KeyError as exc:
             msg = str(exc)
             if "subscription" in msg:
@@ -238,28 +258,34 @@ def create_xray_subscriptions_blueprint(
         node_keys = payload.get("node_keys", payload.get("nodeKeys", payload.get("keys")))
         timeout_raw = payload.get("timeout_s", payload.get("timeoutSec", payload.get("timeout")))
         try:
-            timeout_s = float(timeout_raw) if timeout_raw is not None and str(timeout_raw).strip() != "" else 8.0
+            mode = _probe_mode(payload)
+        except ValueError as exc:
+            return error_response(str(exc), 400, ok=False)
+        try:
+            timeout_s = float(timeout_raw) if timeout_raw is not None and str(timeout_raw).strip() != "" else (3.0 if mode == "tcp" else 8.0)
         except Exception:
-            timeout_s = 8.0
-        if _bool_payload(payload, "async", False) or _bool_payload(payload, "background", False):
-            job = create_latency_job(
-                lambda: probe_subscription_nodes_latency(
+            timeout_s = 3.0 if mode == "tcp" else 8.0
+        def _run_probe():
+            if mode == "tcp":
+                return probe_subscription_nodes_tcp_latency(
                     ui_state_dir,
                     sub_id,
                     node_keys,
-                    xray_configs_dir=xray_configs_dir,
                     timeout_s=timeout_s,
                 )
-            )
-            return jsonify({"ok": True, "async": True, "job_id": job.id, "status": job.status}), 202
-        try:
-            result = probe_subscription_nodes_latency(
+            return probe_subscription_nodes_latency(
                 ui_state_dir,
                 sub_id,
                 node_keys,
                 xray_configs_dir=xray_configs_dir,
                 timeout_s=timeout_s,
             )
+
+        if _bool_payload(payload, "async", False) or _bool_payload(payload, "background", False):
+            job = create_latency_job(_run_probe)
+            return jsonify({"ok": True, "async": True, "job_id": job.id, "status": job.status}), 202
+        try:
+            result = _run_probe()
         except KeyError:
             return error_response("subscription not found", 404, ok=False)
         except ValueError as exc:

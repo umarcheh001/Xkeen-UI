@@ -4591,6 +4591,7 @@ let outboundsModuleApi = null;
       nodesPanel: 'outbounds-subscriptions-nodes-panel',
       nodesCaption: 'outbounds-subscriptions-nodes-caption',
       nodesSummary: 'outbounds-subscriptions-nodes-summary',
+      nodesProbeMode: 'outbounds-subscriptions-nodes-probe-mode',
       nodesPingAll: 'outbounds-subscriptions-nodes-pingall',
       nodesShowHidden: 'outbounds-subscriptions-nodes-show-hidden',
       nodesList: 'outbounds-subscriptions-nodes-list',
@@ -4602,6 +4603,7 @@ let outboundsModuleApi = null;
     let _subscriptionEditId = '';
     let _subscriptionNodePingState = Object.create(null);
     let _subscriptionPingAllBusy = false;
+    let _subscriptionProbeMode = 'tcp';
     let _subscriptionPreview = null;
     let _subscriptionShowHidden = false;
     let _subscriptionBaseline = null;
@@ -5463,13 +5465,13 @@ let outboundsModuleApi = null;
 
     function subsPingAllTooltipText(sub, hasPingable) {
       if (_subscriptionPingAllBusy) {
-        return 'Идёт проверка задержки для активных узлов этой подписки.';
+        return `Идёт ${subsProbeModeLabel()}-проверка активных узлов этой подписки.`;
       }
       if (!sub) {
         return 'Сначала выбери подписку в списке справа, чтобы увидеть её узлы и запустить массовую проверку задержки.';
       }
       if (hasPingable) {
-        return 'Запустить проверку задержки для всех активных узлов, входящих в generated fragment.';
+        return `${subsProbeModeDescription()} Запустить для всех поддерживаемых активных узлов.`;
       }
       return 'Нет активных узлов в generated fragment. Сначала обнови подписку кнопкой ↻ в списке справа или сохрани её с флагом «Обновить сразу». Поле Tag prefix задаёт только префикс: Xray использует его в selector и subjectSelector по prefix-match, а сами generated tags назначаются узлам автоматически после обновления подписки.';
     }
@@ -5654,6 +5656,10 @@ let outboundsModuleApi = null;
                   </div>
                   <div class="xk-sub-nodes-head-actions">
                     <button type="button" id="outbounds-subscriptions-nodes-show-hidden" class="btn-secondary btn-compact xk-sub-show-hidden-btn" title="Показать скрытые узлы" data-tooltip="Показать узлы, которые сейчас скрыты фильтрами или исключены кнопкой ×. Нажми ещё раз, чтобы снова скрыть их." hidden>Показать скрытые</button>
+                    <div id="outbounds-subscriptions-nodes-probe-mode" class="xk-sub-probe-mode" role="group" aria-label="Режим проверки задержки">
+                      <button type="button" class="xk-sub-probe-mode-btn is-active" data-probe-mode="tcp" aria-pressed="true" data-tooltip="Проверить доступность TCP-порта, как HAPP. Это не подтверждает работу прокси.">TCP</button>
+                      <button type="button" class="xk-sub-probe-mode-btn" data-probe-mode="proxy" aria-pressed="false" data-tooltip="Выполнить контрольный HTTPS-запрос через узел и Xray.">Proxy</button>
+                    </div>
                     <button type="button" id="outbounds-subscriptions-nodes-pingall" class="btn-secondary btn-compact xk-sub-icon-btn" title="Пинг всех узлов" data-tooltip="Запустить проверку задержки для всех активных узлов, входящих в generated fragment." aria-label="Пинг всех узлов" disabled>
                       ${iconHtml('ping', 'xk-sub-icon-glyph xk-sub-pingall-glyph')}
                       <span class="xk-sub-pingall-spinner" aria-hidden="true"></span>
@@ -5849,21 +5855,61 @@ let outboundsModuleApi = null;
       }
     }
 
-    function subsNodePingStateKey(subId, nodeKey) {
-      return String(subId || '') + '::' + String(nodeKey || '');
+    function subsNodePingStateKey(subId, nodeKey, mode) {
+      return String(subId || '') + '::' + String(mode || _subscriptionProbeMode) + '::' + String(nodeKey || '');
     }
 
-    function subsNodeLatencyMap(sub) {
-      const raw = sub && typeof sub === 'object' ? sub.node_latency : null;
+    function subsNodeLatencyMap(sub, mode) {
+      const field = String(mode || _subscriptionProbeMode) === 'tcp' ? 'node_tcp_latency' : 'node_latency';
+      const raw = sub && typeof sub === 'object' ? sub[field] : null;
       return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
     }
 
-    function subsNodeLatencyEntry(sub, nodeKey) {
+    function subsNodeLatencyEntry(sub, nodeKey, mode) {
       const key = String(nodeKey || '').trim();
       if (!key) return null;
-      const map = subsNodeLatencyMap(sub);
+      const map = subsNodeLatencyMap(sub, mode);
       const entry = map[key];
       return entry && typeof entry === 'object' ? entry : null;
+    }
+
+    function subsNodeSupportsTcpProbe(node) {
+      const transport = String(node && node.transport || '').trim().toLowerCase();
+      const protocol = String(node && node.protocol || '').trim().toLowerCase();
+      const unsupported = new Set(['hysteria', 'hysteria2', 'hy2', 'kcp', 'mkcp', 'quic', 'tuic', 'wireguard']);
+      return !!(node && node.host && node.port && !unsupported.has(transport) && !unsupported.has(protocol));
+    }
+
+    function subsProbeModeLabel() {
+      return _subscriptionProbeMode === 'tcp' ? 'TCP' : 'Proxy';
+    }
+
+    function subsProbeModeDescription() {
+      return _subscriptionProbeMode === 'tcp'
+        ? 'TCP-проверка показывает доступность порта, как HAPP; она не подтверждает работу прокси.'
+        : 'Proxy-проверка выполняет HTTPS-запрос через Xray и подтверждает реальный трафик.';
+    }
+
+    function subsSyncProbeModeControl() {
+      const root = $(SUB_IDS.nodesProbeMode);
+      if (!root || !root.querySelectorAll) return;
+      root.querySelectorAll('[data-probe-mode]').forEach((button) => {
+        const active = String(button.getAttribute('data-probe-mode') || '') === _subscriptionProbeMode;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        button.disabled = !!_subscriptionPingAllBusy;
+      });
+    }
+
+    function subsSetProbeMode(mode) {
+      const next = String(mode || '').trim().toLowerCase();
+      if (!['tcp', 'proxy'].includes(next) || next === _subscriptionProbeMode || _subscriptionPingAllBusy) return;
+      _subscriptionProbeMode = next;
+      xrayHideDelayHistory();
+      subsSyncProbeModeControl();
+      subsUpdatePingAllBtnState();
+      try { subsRenderNodeList(); } catch (e) {}
+      subsSetStatus(subsProbeModeDescription(), false, false);
     }
 
     // Latency checks are HTTPS requests sent *through* the selected node,
@@ -6012,7 +6058,10 @@ let outboundsModuleApi = null;
         });
       };
       collect(_outboundsNodeLatency);
-      _subscriptions.forEach((sub) => collect(subsNodeLatencyMap(sub)));
+      _subscriptions.forEach((sub) => {
+        collect(subsNodeLatencyMap(sub, 'proxy'));
+        collect(subsNodeLatencyMap(sub, 'tcp'));
+      });
       return entries;
     }
 
@@ -6085,7 +6134,7 @@ let outboundsModuleApi = null;
       if (scope === 'outbounds') return outboundsNodeLatencyEntry(nodeKey);
       if (scope === 'subscription') {
         const sub = subsFindById(owner?.dataset?.subId || '');
-        return subsNodeLatencyEntry(sub, nodeKey);
+        return subsNodeLatencyEntry(sub, nodeKey, owner?.dataset?.probeMode || 'proxy');
       }
       return null;
     }
@@ -6195,6 +6244,7 @@ let outboundsModuleApi = null;
       const extraClass = escapeHtml(String(opts.extraClass || ''));
       const scope = escapeHtml(String(opts.scope || ''));
       const subId = escapeHtml(String(opts.subId || ''));
+      const probeMode = escapeHtml(String(opts.probeMode || 'proxy'));
       const hasHistory = xrayDelayHistoryEntries(opts.entry).length > 0;
       const statusIcon = pending
         ? 'loading'
@@ -6209,7 +6259,7 @@ let outboundsModuleApi = null;
         ? `data-xray-delay-history="1" data-xray-delay-scope="${scope}" data-tooltip-silent="1"`
         : `data-tooltip="${tooltip}"`;
       return `<button type="button" class="xk-xray-node-probe xk-sub-node-latency xk-sub-node-ping ${extraClass}${pending ? ' is-busy' : ''}"
-        data-node-key="${nodeKey}" ${nodeTag ? `data-node-tag="${nodeTag}"` : ''} ${subId ? `data-sub-id="${subId}"` : ''}
+        data-node-key="${nodeKey}" data-probe-mode="${probeMode}" ${nodeTag ? `data-node-tag="${nodeTag}"` : ''} ${subId ? `data-sub-id="${subId}"` : ''}
         data-probe-tone="${escapeHtml(tone)}" ${historyData}
         aria-label="${escapeHtml(pending ? 'Проверяется задержка узла' : `Проверить задержку узла: ${label}`)}"
         ${pending ? 'aria-busy="true"' : ''} ${disabled ? 'disabled' : ''}>${content}</button>`;
@@ -7002,12 +7052,17 @@ let outboundsModuleApi = null;
         const reasonLabel = escapeHtml(subsNodeReasonLabel(reasons));
         const manualExcluded = !!(node && node.key && excluded.has(String(node.key)));
         const nodeTag = String(node && node.tag ? node.tag : '').trim();
-        const canPing = enabled && !!nodeTag && !isPreview;
-        const pingStateKey = subsNodePingStateKey(subId, String(node && node.key ? node.key : ''));
+        const canPing = enabled && !!nodeTag && !isPreview
+          && (_subscriptionProbeMode !== 'tcp' || subsNodeSupportsTcpProbe(node));
+        const pingStateKey = subsNodePingStateKey(subId, String(node && node.key ? node.key : ''), _subscriptionProbeMode);
         const pingBusy = !!_subscriptionNodePingState[pingStateKey];
-        const latencyEntry = subsNodeLatencyEntry(sub, String(node && node.key ? node.key : ''));
+        const latencyEntry = subsNodeLatencyEntry(sub, String(node && node.key ? node.key : ''), _subscriptionProbeMode);
         const latencyLabel = subsNodeLatencyLabel(latencyEntry, pingBusy, canPing);
-        const latencyTooltip = subsNodeLatencyTooltip(latencyEntry, pingBusy, canPing);
+        const latencyTooltip = canPing
+          ? `${subsNodeLatencyTooltip(latencyEntry, pingBusy, canPing)}\n${subsProbeModeDescription()}`
+          : (_subscriptionProbeMode === 'tcp' && enabled && nodeTag && !isPreview
+            ? 'TCP-проверка недоступна для UDP/QUIC-транспорта.'
+            : subsNodeLatencyTooltip(latencyEntry, pingBusy, canPing));
         const latencyClass = subsNodeLatencyTone(latencyEntry, pingBusy, canPing);
         const toggleTitle = manualExcluded ? 'Вернуть узел' : 'Исключить узел';
         const toggleTooltip = manualExcluded
@@ -7028,6 +7083,7 @@ let outboundsModuleApi = null;
           entry: latencyEntry,
           scope: 'subscription',
           subId,
+          probeMode: _subscriptionProbeMode,
         });
         rows.push(`
           <div class="xk-sub-node-item ${enabled ? 'is-enabled' : 'is-disabled'}" data-node-key="${key}">
@@ -7125,35 +7181,36 @@ let outboundsModuleApi = null;
       const sid = String(subId || '').trim();
       const key = String(nodeKey || '').trim();
       if (!sid || !key) return false;
-      const pendingKey = subsNodePingStateKey(sid, key);
+      const mode = _subscriptionProbeMode;
+      const pendingKey = subsNodePingStateKey(sid, key, mode);
       if (_subscriptionNodePingState[pendingKey]) return false;
       _subscriptionNodePingState[pendingKey] = true;
       try { subsRenderNodeList(); } catch (e) {}
-      subsSetStatus('Проверяю задержку узла…', false, false, { busy: true });
+      subsSetStatus(`Проверяю ${mode === 'tcp' ? 'TCP-доступность' : 'реальный трафик'} узла…`, false, false, { busy: true });
       try {
         const res = await fetch(`/api/xray/subscriptions/${encodeURIComponent(sid)}/nodes/ping`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ node_key: key }),
+          body: JSON.stringify({ node_key: key, mode }),
         });
         const data = await res.json().catch(() => ({}));
         const sub = _subscriptions.find((item) => String(item && item.id || '') === sid);
         if (sub && data && data.entry) {
-          const map = subsNodeLatencyMap(sub);
+          const map = subsNodeLatencyMap(sub, mode);
           map[key] = data.entry;
-          sub.node_latency = map;
+          sub[mode === 'tcp' ? 'node_tcp_latency' : 'node_latency'] = map;
         }
         if (!res.ok || !data || data.ok === false) {
           const rawError = String((data && (data.error || data.message)) || '');
           const msg = rawError
-            ? subsProbeFailureMessage(rawError, 'узел')
+            ? (mode === 'tcp' ? `TCP-порт узла недоступен: ${rawError}` : subsProbeFailureMessage(rawError, 'узел'))
             : 'Не удалось начать проверку подключения через узел. Повторите попытку позже.';
           subsSetStatus(msg, false, false, { warning: true });
           return false;
         }
         const delay = Number(data.delay_ms || (data.entry && data.entry.delay_ms));
         const msg = Number.isFinite(delay) && delay >= 0
-          ? `Задержка узла: ${Math.round(delay)} мс.`
+          ? `${mode === 'tcp' ? 'TCP-задержка' : 'Задержка через proxy'}: ${Math.round(delay)} мс.`
           : 'Проверка узла завершена.';
         subsSetStatus(msg, false, true);
         return true;
@@ -7170,6 +7227,7 @@ let outboundsModuleApi = null;
     function subsUpdatePingAllBtnState() {
       const btn = $(SUB_IDS.nodesPingAll);
       if (!btn) return;
+      subsSyncProbeModeControl();
       const subId = String(_subscriptionEditId || '').trim();
       const sub = subId
         ? _subscriptions.find((item) => String(item && item.id || '') === subId) || null
@@ -7183,11 +7241,13 @@ let outboundsModuleApi = null;
           transport: subsCompilePreviewRegex(SUB_IDS.transportFilter),
         };
         hasPingable = sub.last_nodes.some((node) => (
-          node && node.tag && subsNodeReasonCodes(node, draft, compiled).length === 0
+          node && node.tag
+          && (_subscriptionProbeMode !== 'tcp' || subsNodeSupportsTcpProbe(node))
+          && subsNodeReasonCodes(node, draft, compiled).length === 0
         ));
       }
       const tooltip = subsPingAllTooltipText(sub, hasPingable);
-      const busyTooltip = 'Идёт проверка задержки для активных узлов этой подписки.';
+      const busyTooltip = `Идёт ${subsProbeModeLabel()}-проверка активных узлов этой подписки.`;
       btn.setAttribute('data-tooltip', tooltip);
       btn.setAttribute('title', tooltip);
       btn.setAttribute('aria-label', hasPingable ? 'Пинг всех узлов' : 'Пинг всех узлов: нужна подготовка подписки');
@@ -7207,6 +7267,7 @@ let outboundsModuleApi = null;
 
     async function subsProbeAllNodes() {
       if (_subscriptionPingAllBusy) return false;
+      const mode = _subscriptionProbeMode;
       const subId = String(_subscriptionEditId || '').trim();
       if (!subId) {
         subsSetStatus('Сначала выбери подписку в списке справа, чтобы запустить массовую проверку задержки.', false);
@@ -7228,6 +7289,7 @@ let outboundsModuleApi = null;
       const hasPingableNodes = nodes.some((node) => node && node.tag);
       const targets = nodes.filter((node) => {
         if (!node || !node.key || !node.tag) return false;
+        if (mode === 'tcp' && !subsNodeSupportsTcpProbe(node)) return false;
         return subsNodeReasonCodes(node, draft, compiled).length === 0;
       });
       if (targets.length === 0) {
@@ -7240,37 +7302,38 @@ let outboundsModuleApi = null;
 
       _subscriptionPingAllBusy = true;
       const pendingStateKeys = targets
-        .map((node) => subsNodePingStateKey(subId, String(node && node.key ? node.key : '')))
+        .map((node) => subsNodePingStateKey(subId, String(node && node.key ? node.key : ''), mode))
         .filter(Boolean);
       pendingStateKeys.forEach((key) => {
         _subscriptionNodePingState[key] = true;
       });
       subsUpdatePingAllBtnState();
       try { subsRenderNodeList(); } catch (e) {}
-      subsSetStatus(`Проверяю задержку: ${targets.length} узлов…`, false, false, { busy: true });
+      subsSetStatus(`${mode === 'tcp' ? 'Проверяю TCP-порты' : 'Проверяю реальный трафик'}: ${targets.length} узлов…`, false, false, { busy: true });
 
       try {
         const data = await postLatencyProbe(`/api/xray/subscriptions/${encodeURIComponent(subId)}/nodes/ping-bulk`, {
           node_keys: targets.map((node) => String(node && node.key ? node.key : '')).filter(Boolean),
+          mode,
         }, {
           label: 'bulk subscription latency probe',
           onPoll: (job) => {
             const status = String(job && job.status || '').trim();
             if (status === 'queued' || status === 'running') {
-              subsSetStatus(`Проверяю задержку в фоне: ${targets.length} узлов…`, false, false, { busy: true });
+              subsSetStatus(`${mode === 'tcp' ? 'Проверяю TCP-порты' : 'Проверяю реальный трафик'} в фоне: ${targets.length} узлов…`, false, false, { busy: true });
             }
           },
         });
 
         const sub2 = _subscriptions.find((item) => String(item && item.id || '') === subId);
         if (sub2 && Array.isArray(data.results)) {
-          const map = subsNodeLatencyMap(sub2);
+          const map = subsNodeLatencyMap(sub2, mode);
           data.results.forEach((item) => {
             const key = String(item && item.node_key || '').trim();
             if (!key || !item || !item.entry) return;
             map[key] = item.entry;
           });
-          sub2.node_latency = map;
+          sub2[mode === 'tcp' ? 'node_tcp_latency' : 'node_latency'] = map;
         }
 
         const ok = Number(data.ok_count || 0);
@@ -8047,6 +8110,18 @@ let outboundsModuleApi = null;
       wireButton(SUB_IDS.nodesPingAll, () => {
         void subsProbeAllNodes();
       });
+      const probeModeRoot = $(SUB_IDS.nodesProbeMode);
+      if (probeModeRoot && (!probeModeRoot.dataset || probeModeRoot.dataset.xkProbeModeBound !== '1')) {
+        probeModeRoot.addEventListener('click', (event) => {
+          const button = event && event.target && event.target.closest
+            ? event.target.closest('[data-probe-mode]')
+            : null;
+          if (!button || button.disabled) return;
+          subsSetProbeMode(button.getAttribute('data-probe-mode'));
+        });
+        if (probeModeRoot.dataset) probeModeRoot.dataset.xkProbeModeBound = '1';
+      }
+      subsSyncProbeModeControl();
       wireButton(SUB_IDS.nodesShowHidden, () => {
         _subscriptionShowHidden = !_subscriptionShowHidden;
         try { subsRenderNodeList(); } catch (e) {}

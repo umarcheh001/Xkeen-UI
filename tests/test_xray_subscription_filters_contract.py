@@ -319,14 +319,21 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "xk-sub-update-note" in outbounds_src
     assert "Автообновление" in outbounds_src
     assert "LeastPing и generated fragments" in outbounds_src
-    assert "function subsNodeLatencyEntry(sub, nodeKey) {" in outbounds_src
+    assert "nodesProbeMode: 'outbounds-subscriptions-nodes-probe-mode'" in outbounds_src
+    assert 'data-probe-mode="tcp"' in outbounds_src
+    assert 'data-probe-mode="proxy"' in outbounds_src
+    assert "let _subscriptionProbeMode = 'tcp';" in outbounds_src
+    assert "function subsNodeLatencyEntry(sub, nodeKey, mode) {" in outbounds_src
+    assert "'node_tcp_latency' : 'node_latency'" in outbounds_src
     assert "function subsProbeNode(subId, nodeKey) {" in outbounds_src
+    assert "body: JSON.stringify({ node_key: key, mode })" in outbounds_src
     assert "function subsProbeFailureInfo(value) {" in outbounds_src
     assert "function subsProbeFailureTooltip(value) {" in outbounds_src
     assert "Её сбой не обязательно означает, что сам узел не работает." in outbounds_src
     assert "if (status === 'error') return 'нет ответа';" in outbounds_src
     assert "Технические детали:" not in outbounds_src
     assert ".xk-sub-node-latency.is-check-failed" in styles_src
+    assert ".xk-sub-probe-mode" in styles_src
     assert "subsSetStatus(msg, false, false, { warning: true });" in outbounds_src
     assert ".xk-sub-status.is-warning" in styles_src
     assert "function subsPingAllTooltipText(sub, hasPingable) {" in outbounds_src
@@ -586,5 +593,4 @@ def test_xray_subscription_modal_has_no_diagnostics_block():
     # Чип ссылки переехал под свою настоящую роль — статус-строку модалки.
     assert "'xk-sub-link'" in outbounds_src
     assert ".xk-sub-link {" in styles_src
-
 

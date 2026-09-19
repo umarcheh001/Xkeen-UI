@@ -22,6 +22,28 @@ def test_build_outbounds_config_from_vless_uses_compact_settings_format():
     assert "vnext" not in proxy["settings"]
 
 
+def test_vless_tls_share_fields_round_trip():
+    from services import xray_outbounds as outbounds
+
+    cfg = outbounds.build_outbounds_config_from_vless(
+        "vless://11111111-1111-1111-1111-111111111111@example.com:443"
+        "?type=grpc&security=tls&sni=edge.example.com&serviceName=grpc"
+        "&ech=ZWNoLWNvbmZpZw%3D%3D&pcs=sha256-a%2Csha256-b&vcn=verify.example.com"
+        "&encryption=none#demo"
+    )
+
+    tls = cfg["outbounds"][0]["streamSettings"]["tlsSettings"]
+    assert tls["echConfigList"] == "ZWNoLWNvbmZpZw=="
+    assert tls["pinnedPeerCertSha256"] == "sha256-a,sha256-b"
+    assert tls["verifyPeerCertByName"] == "verify.example.com"
+
+    rebuilt = outbounds.build_vless_url_from_config(cfg)
+    query = parse_qs(urlparse(rebuilt or "").query)
+    assert query["ech"] == ["ZWNoLWNvbmZpZw=="]
+    assert query["pcs"] == ["sha256-a,sha256-b"]
+    assert query["vcn"] == ["verify.example.com"]
+
+
 def test_build_vless_url_from_config_accepts_compact_settings_format():
     from services import xray_outbounds as outbounds
 

@@ -94,6 +94,43 @@ def test_xray_align_dry_run_only_counts(xray_client):
     assert response.get_json()["ok"] is True
 
 
+def test_xray_subscription_ping_routes_tcp_mode_without_xray(monkeypatch, tmp_path):
+    from routes import xray_subscriptions as routes
+
+    calls = []
+    monkeypatch.setattr(
+        routes,
+        "probe_subscription_node_tcp_latency",
+        lambda state_dir, sub_id, node_key, timeout_s: calls.append(
+            (state_dir, sub_id, node_key, timeout_s)
+        ) or {"ok": True, "mode": "tcp", "delay_ms": 19},
+    )
+    monkeypatch.setattr(
+        routes,
+        "probe_subscription_node_latency",
+        lambda *_args, **_kwargs: pytest.fail("proxy probe must not run for mode=tcp"),
+    )
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    app.register_blueprint(
+        routes.create_xray_subscriptions_blueprint(
+            ui_state_dir=str(tmp_path),
+            xray_configs_dir=str(tmp_path / "xray"),
+            restart_xkeen=lambda **_kwargs: True,
+            snapshot_xray_config_before_overwrite=lambda _path: None,
+        )
+    )
+
+    response = app.test_client().post(
+        "/api/xray/subscriptions/demo/nodes/ping",
+        json={"node_key": "node-a", "mode": "tcp"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["mode"] == "tcp"
+    assert calls == [(str(tmp_path), "demo", "node-a", 3.0)]
+
+
 def test_mihomo_align_writes_the_state(mihomo_client):
     http, calls = mihomo_client
 

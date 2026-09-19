@@ -113,6 +113,7 @@ ROUTING_AUTO_RULE_KEYS = ("routing_auto_rule", "routingAutoRule")
 SOCKOPT_MARK_255_KEYS = ("sockopt_mark_255", "sockoptMark255", "entware_mark", "entwareMark")
 LAST_NODES_KEYS = ("last_nodes", "lastNodes")
 NODE_LATENCY_KEYS = ("node_latency", "nodeLatency")
+NODE_TCP_LATENCY_KEYS = ("node_tcp_latency", "nodeTcpLatency")
 LAST_WARNINGS_KEYS = ("last_warnings", "lastWarnings")
 LAST_SELECTOR_TERMS_KEYS = ("last_selector_terms", "lastSelectorTerms")
 LAST_GENERATED_OUTBOUNDS_KEYS = ("last_generated_outbounds", "lastGeneratedOutbounds")
@@ -124,10 +125,12 @@ LAST_RUNTIME_ACTIVE_KEYS = ("last_runtime_active", "lastRuntimeActive")
 DEFAULT_PROBE_URL = "https://www.gstatic.com/generate_204"
 DEFAULT_PROBE_FALLBACK_URLS = ("https://cp.cloudflare.com/generate_204",)
 DEFAULT_PROBE_TIMEOUT_SECONDS = 8.0
-PROBE_REQUEST_ATTEMPTS = 2
+DEFAULT_TCP_PROBE_TIMEOUT_SECONDS = 3.0
+PROBE_REQUEST_ATTEMPTS = 1
 PROBE_PROCESS_START_TIMEOUT_SECONDS = 4.0
 PROBE_PROCESS_START_ATTEMPTS = 3
-PROBE_BATCH_CONCURRENCY = 3
+PROBE_BATCH_CONCURRENCY = 6
+TCP_PROBE_BATCH_CONCURRENCY = 16
 PROBE_ERROR_SUMMARY_LIMIT = 240
 PROBE_ERROR_DETAIL_LIMIT = 700
 NODE_LATENCY_HISTORY_LIMIT = 5
@@ -780,6 +783,9 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
         node_latency = _normalize_node_latency_map(
             item.get("node_latency") if "node_latency" in item else item.get("nodeLatency")
         )
+        node_tcp_latency = _normalize_node_latency_map(
+            item.get("node_tcp_latency") if "node_tcp_latency" in item else item.get("nodeTcpLatency")
+        )
 
         clean = dict(item)
         for alias in (
@@ -793,6 +799,7 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
             + LAST_WARNINGS_KEYS[1:]
             + LAST_NODES_KEYS[1:]
             + NODE_LATENCY_KEYS[1:]
+            + NODE_TCP_LATENCY_KEYS[1:]
             + LAST_SELECTOR_TERMS_KEYS[1:]
             + LAST_GENERATED_OUTBOUNDS_KEYS[1:]
             + LAST_RUNTIME_BALANCER_TAGS_KEYS[1:]
@@ -823,6 +830,7 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
                 "last_nodes": last_nodes,
                 "last_generated_outbounds": last_generated_outbounds,
                 "node_latency": _prune_node_latency_map(node_latency, last_nodes),
+                "node_tcp_latency": _prune_node_latency_map(node_tcp_latency, last_nodes),
                 "last_tags": [str(x) for x in item.get("last_tags", []) if str(x or "").strip()]
                 if isinstance(item.get("last_tags"), list)
                 else [],
@@ -942,6 +950,7 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
             + LAST_WARNINGS_KEYS[1:]
             + LAST_NODES_KEYS[1:]
             + NODE_LATENCY_KEYS[1:]
+            + NODE_TCP_LATENCY_KEYS[1:]
             + LAST_SELECTOR_TERMS_KEYS[1:]
             + LAST_GENERATED_OUTBOUNDS_KEYS[1:]
             + LAST_RUNTIME_BALANCER_TAGS_KEYS[1:]
@@ -1959,7 +1968,7 @@ def _json_profile_identity_name(source: Dict[str, Any], name: Any) -> str:
 # Subscription providers commonly rotate per-device credentials and Reality
 # camouflage values without changing the user-facing node.  They must remain
 # in the generated outbound, but should not invalidate a manual exclusion.
-VOLATILE_LINK_QUERY_KEYS = {"sid", "spx", "sni", "fp", "pbk"}
+VOLATILE_LINK_QUERY_KEYS = {"sid", "spx"}
 
 
 def _stable_link_fingerprint_payload(raw: str, protocol: str, name: str) -> str:
@@ -2388,12 +2397,10 @@ def build_subscription_outbounds(
     type_pattern = _compile_regex_filter(type_filter, "фильтра типа")
     transport_pattern = _compile_regex_filter(transport_filter, "фильтра транспорта")
     excluded_keys = {str(item or "").strip() for item in (excluded_node_keys or []) if str(item or "").strip()}
-    # A provider may emit the same logical link more than once (most often
-    # after rotating volatile Reality query parameters such as ``sid``/``spx``).
-    # ``_link_node_meta`` deliberately removes those parameters from the
-    # stable key so manual exclusions survive a refresh; use that same key to
-    # avoid generating duplicate outbounds in the first place.  Distinct
-    # endpoints or names retain their own keys and remain valid separate nodes.
+    # Short IDs and spider paths commonly rotate for the same named node, so
+    # keep their stable-key collapse for exclusion continuity. SNI, public keys
+    # and fingerprints remain part of the key because they change behaviour.
+    # A second pass below removes only byte-equivalent generated outbounds.
     candidates: List[Tuple[str, Dict[str, Any]]] = []
     seen_node_keys: set[str] = set()
     for idx, link in enumerate(links or []):
@@ -2427,12 +2434,19 @@ def build_subscription_outbounds(
     outbounds: List[Dict[str, Any]] = []
     errors: List[Dict[str, Any]] = []
     used: set[str] = set()
+    runtime_identities: set[str] = set()
+    duplicate_preview_indices: set[int] = set()
 
     for idx, (link, meta, preview_idx) in enumerate(filtered_links):
         node = _clean_node_name(str(meta.get("name") or ""), f"node{idx + 1}")
         tag = _unique_tag(prefix, node, used)
         try:
             outbound = build_proxy_outbound_from_link(link, tag)
+            runtime_identity = _outbound_identity_without_tag(outbound)
+            if runtime_identity in runtime_identities:
+                duplicate_preview_indices.add(preview_idx)
+                continue
+            runtime_identities.add(runtime_identity)
             outbounds.append(outbound)
             preview_nodes[preview_idx]["tag"] = tag
         except Exception as exc:
@@ -2441,7 +2455,8 @@ def build_subscription_outbounds(
     return outbounds, errors, {
         "source_count": source_count,
         "filtered_out_count": max(0, source_count - len(filtered_links)),
-        "nodes": preview_nodes,
+        "deduplicated_count": len(duplicate_preview_indices),
+        "nodes": [item for index, item in enumerate(preview_nodes) if index not in duplicate_preview_indices],
     }
 
 
@@ -5404,6 +5419,9 @@ def refresh_subscription(
     filtered_out_count = 0
     preview_nodes: List[Dict[str, Any]] = []
     node_latency: Dict[str, Dict[str, Any]] = _prune_node_latency_map(sub.get("node_latency"), _normalize_last_nodes(sub.get("last_nodes")))
+    node_tcp_latency: Dict[str, Dict[str, Any]] = _prune_node_latency_map(
+        sub.get("node_tcp_latency"), _normalize_last_nodes(sub.get("last_nodes"))
+    )
     fetch_meta: Dict[str, Any] = {}
 
     try:
@@ -5463,6 +5481,7 @@ def refresh_subscription(
         if landing_page_message and source_count <= 0:
             raise RuntimeError(landing_page_message)
         node_latency = _prune_node_latency_map(node_latency, preview_nodes)
+        node_tcp_latency = _prune_node_latency_map(node_tcp_latency, preview_nodes)
         if placeholder_links and not outbounds:
             raise RuntimeError(
                 "Провайдер не принял клиент или HWID и вернул служебную заглушку вместо реальных узлов."
@@ -5484,6 +5503,7 @@ def refresh_subscription(
             filtered_out_count = int(stats.get("filtered_out_count") or 0)
             preview_nodes = _normalize_last_nodes(stats.get("nodes"))
             node_latency = _prune_node_latency_map(node_latency, preview_nodes)
+            node_tcp_latency = _prune_node_latency_map(node_tcp_latency, preview_nodes)
         if not links and not outbounds:
             raise RuntimeError("no_supported_proxies")
         if source_count > 0 and not outbounds and filtered_out_count >= source_count:
@@ -5506,6 +5526,7 @@ def refresh_subscription(
                 filtered_out_count = int(stats.get("filtered_out_count") or 0)
                 preview_nodes = _normalize_last_nodes(stats.get("nodes"))
                 node_latency = _prune_node_latency_map(node_latency, preview_nodes)
+                node_tcp_latency = _prune_node_latency_map(node_tcp_latency, preview_nodes)
                 if source_count > 0 and not outbounds and filtered_out_count >= source_count:
                     raise RuntimeError("Ни один узел не подошёл под фильтры подписки.")
                 if not outbounds:
@@ -5591,6 +5612,7 @@ def refresh_subscription(
                 "last_warnings": warnings,
                 "last_nodes": preview_nodes,
                 "node_latency": node_latency,
+                "node_tcp_latency": node_tcp_latency,
                 "last_tags": tags,
                 "last_selector_terms": runtime_selector_terms,
                 "last_routing_balancer_tags": runtime_balancer_tags,
@@ -5979,6 +6001,75 @@ def _merge_latency_entry(existing: Any, *, checked_at: float, probe_url: str, de
     return out
 
 
+TCP_UNSUPPORTED_TRANSPORTS = {
+    "hysteria",
+    "hysteria2",
+    "hy2",
+    "kcp",
+    "mkcp",
+    "quic",
+    "tuic",
+    "wireguard",
+}
+
+
+def _node_supports_tcp_probe(node: Dict[str, Any]) -> bool:
+    transport = str(node.get("transport") or "").strip().lower()
+    protocol = str(node.get("protocol") or "").strip().lower()
+    return bool(transport not in TCP_UNSUPPORTED_TRANSPORTS and protocol not in {"hysteria", "hysteria2", "hy2", "tuic", "wireguard"})
+
+
+def _tcp_probe_once(host: str, port: int, timeout_value: float) -> Tuple[int | None, str]:
+    started = time.perf_counter()
+    try:
+        with socket.create_connection((host, int(port)), timeout=max(0.2, float(timeout_value))):
+            pass
+        return max(0, int(round((time.perf_counter() - started) * 1000.0))), ""
+    except Exception as exc:
+        return None, str(exc)
+
+
+def _probe_tcp_targets_batch(
+    targets: List[Dict[str, Any]],
+    *,
+    timeout_value: float,
+    concurrency: int = TCP_PROBE_BATCH_CONCURRENCY,
+) -> Dict[str, Dict[str, Any]]:
+    endpoint_keys: Dict[Tuple[str, int], List[str]] = {}
+    for item in targets:
+        key = str(item.get("key") or "").strip()
+        host = str(item.get("host") or "").strip()
+        try:
+            port = int(item.get("port") or 0)
+        except Exception:
+            port = 0
+        if not key or not host or port <= 0 or port > 65535:
+            continue
+        endpoint_keys.setdefault((host, port), []).append(key)
+
+    results: Dict[str, Dict[str, Any]] = {}
+    if not endpoint_keys:
+        return results
+    max_workers = max(1, min(int(concurrency or 1), len(endpoint_keys)))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(_tcp_probe_once, host, port, timeout_value): (host, port)
+            for host, port in endpoint_keys
+        }
+        for future in concurrent.futures.as_completed(futures):
+            endpoint = futures[future]
+            try:
+                delay_ms, error_text = future.result()
+            except Exception as exc:
+                delay_ms, error_text = None, str(exc)
+            for key in endpoint_keys.get(endpoint, []):
+                results[key] = {
+                    "delay_ms": delay_ms,
+                    "error": _trim_probe_text(error_text, limit=PROBE_ERROR_SUMMARY_LIMIT),
+                }
+    return results
+
+
 def _config_outbounds_list(config: Any) -> List[Dict[str, Any]]:
     raw = config
     if isinstance(config, dict):
@@ -6050,6 +6141,171 @@ def _outbounds_map_by_tag(config: Any) -> Dict[str, Dict[str, Any]]:
             continue
         out[tag] = copy.deepcopy(outbound)
     return out
+
+
+def _probe_nodes_tcp_latency(
+    nodes: List[Dict[str, Any]],
+    node_keys: Iterable[Any],
+    *,
+    existing_latency: Any = None,
+    timeout_s: float = DEFAULT_TCP_PROBE_TIMEOUT_SECONDS,
+    strict: bool = False,
+) -> Dict[str, Any]:
+    target_keys = _normalize_probe_node_keys(list(node_keys) if not isinstance(node_keys, list) else node_keys)
+    if not target_keys:
+        raise ValueError("node_keys is required")
+
+    normalized_nodes = _normalize_last_nodes(nodes)
+    nodes_by_key = {
+        str(item.get("key") or "").strip(): dict(item)
+        for item in normalized_nodes
+        if str(item.get("key") or "").strip()
+    }
+    latency_map = _prune_node_latency_map(existing_latency, normalized_nodes)
+    timeout_value = max(0.2, min(30.0, float(timeout_s or DEFAULT_TCP_PROBE_TIMEOUT_SECONDS)))
+    probe_targets: List[Dict[str, Any]] = []
+    immediate_results: Dict[str, Dict[str, Any]] = {}
+
+    for target_key in target_keys:
+        node = nodes_by_key.get(target_key)
+        if not node:
+            if strict:
+                raise KeyError("node not found")
+            immediate_results[target_key] = {
+                "ok": False,
+                "node_key": target_key,
+                "error": "node not found",
+                "error_code": "node_not_found",
+            }
+            continue
+        if not _node_supports_tcp_probe(node):
+            immediate_results[target_key] = {
+                "ok": False,
+                "unavailable": True,
+                "node_key": target_key,
+                "tag": str(node.get("tag") or ""),
+                "error": "TCP-проверка недоступна для UDP/QUIC-транспорта.",
+                "error_code": "unsupported_transport",
+            }
+            continue
+        host = str(node.get("host") or "").strip()
+        try:
+            port = int(node.get("port") or 0)
+        except Exception:
+            port = 0
+        if not host or port <= 0 or port > 65535:
+            immediate_results[target_key] = {
+                "ok": False,
+                "node_key": target_key,
+                "tag": str(node.get("tag") or ""),
+                "error": "node endpoint is missing",
+                "error_code": "endpoint_missing",
+            }
+            continue
+        probe_targets.append({"key": target_key, "host": host, "port": port})
+
+    probe_results = _probe_tcp_targets_batch(
+        probe_targets,
+        timeout_value=timeout_value,
+        concurrency=TCP_PROBE_BATCH_CONCURRENCY,
+    )
+    results: List[Dict[str, Any]] = []
+    ok_count = 0
+    failed_count = 0
+    unavailable_count = 0
+
+    for target_key in target_keys:
+        if target_key in immediate_results:
+            item = dict(immediate_results[target_key])
+            if item.get("unavailable"):
+                unavailable_count += 1
+            else:
+                failed_count += 1
+            results.append(item)
+            continue
+
+        node = nodes_by_key.get(target_key) or {}
+        host = str(node.get("host") or "").strip()
+        port = int(node.get("port") or 0)
+        probe_url = f"tcp://{host}:{port}"
+        probe_item = probe_results.get(target_key, {})
+        checked_at = _now()
+        delay_ms = probe_item.get("delay_ms")
+        error_text = _trim_probe_text(probe_item.get("error"), limit=PROBE_ERROR_SUMMARY_LIMIT)
+        entry = _merge_latency_entry(
+            latency_map.get(target_key),
+            checked_at=checked_at,
+            probe_url=probe_url,
+            delay_ms=delay_ms,
+            error=error_text,
+        )
+        latency_map[target_key] = entry
+        item = {
+            "ok": delay_ms is not None,
+            "node_key": target_key,
+            "tag": str(node.get("tag") or ""),
+            "probe_url": probe_url,
+            "checked_at": checked_at,
+            "entry": entry,
+        }
+        if delay_ms is not None:
+            item["delay_ms"] = delay_ms
+            ok_count += 1
+        else:
+            item["error"] = error_text
+            item["error_code"] = "tcp_unreachable"
+            failed_count += 1
+        results.append(item)
+
+    return {
+        "ok": failed_count == 0,
+        "mode": "tcp",
+        "requested": len(target_keys),
+        "updated": sum(1 for item in results if item.get("entry")),
+        "ok_count": ok_count,
+        "failed_count": failed_count,
+        "unavailable_count": unavailable_count,
+        "nodes": normalized_nodes,
+        "node_tcp_latency": _prune_node_latency_map(latency_map, normalized_nodes),
+        "results": results,
+    }
+
+
+def probe_xray_outbounds_node_tcp_latency(
+    config: Any,
+    node_key: str,
+    *,
+    existing_latency: Any = None,
+    timeout_s: float = DEFAULT_TCP_PROBE_TIMEOUT_SECONDS,
+) -> Dict[str, Any]:
+    target_key = str(node_key or "").strip()
+    if not target_key:
+        raise ValueError("node_key is required")
+    batch = probe_xray_outbounds_nodes_tcp_latency(
+        config,
+        [target_key],
+        existing_latency=existing_latency,
+        timeout_s=timeout_s,
+        strict=True,
+    )
+    return dict(batch["results"][0])
+
+
+def probe_xray_outbounds_nodes_tcp_latency(
+    config: Any,
+    node_keys: Iterable[Any],
+    *,
+    existing_latency: Any = None,
+    timeout_s: float = DEFAULT_TCP_PROBE_TIMEOUT_SECONDS,
+    strict: bool = False,
+) -> Dict[str, Any]:
+    return _probe_nodes_tcp_latency(
+        build_xray_outbounds_nodes(config),
+        node_keys,
+        existing_latency=existing_latency,
+        timeout_s=timeout_s,
+        strict=strict,
+    )
 
 
 def probe_xray_outbounds_node_latency(
@@ -6145,7 +6401,7 @@ def probe_xray_outbounds_nodes_latency(
             targets=probe_targets,
             probe_url=probe_url,
             timeout_value=timeout_value,
-            concurrency=PROBE_BATCH_CONCURRENCY,
+            concurrency=_probe_batch_concurrency(),
         )
 
     results: List[Dict[str, Any]] = []
@@ -6166,6 +6422,7 @@ def probe_xray_outbounds_nodes_latency(
         error_text = _trim_probe_text(probe_item.get("error"), limit=PROBE_ERROR_SUMMARY_LIMIT)
         error_detail = _trim_probe_text(probe_item.get("error_detail"), limit=PROBE_ERROR_DETAIL_LIMIT)
         xray_log_tail = str(probe_item.get("xray_log_tail") or "").strip()
+        error_code = str(probe_item.get("error_code") or "").strip()
         entry = _merge_latency_entry(
             latency_map.get(target_key),
             checked_at=checked_at,
@@ -6189,6 +6446,7 @@ def probe_xray_outbounds_nodes_latency(
             ok_count += 1
         else:
             item["error"] = error_text
+            item["error_code"] = error_code or _probe_error_code(error_text, error_detail, xray_log_tail)
             if error_detail:
                 item["error_detail"] = error_detail
             if xray_log_tail:
@@ -6300,6 +6558,33 @@ def _probe_request_attempts() -> int:
     except Exception:
         raw = PROBE_REQUEST_ATTEMPTS
     return max(1, min(4, raw))
+
+
+def _probe_batch_concurrency() -> int:
+    try:
+        raw = int(os.environ.get("XKEEN_PROBE_BATCH_CONCURRENCY", str(PROBE_BATCH_CONCURRENCY)) or PROBE_BATCH_CONCURRENCY)
+    except Exception:
+        raw = PROBE_BATCH_CONCURRENCY
+    return max(1, min(16, raw))
+
+
+def _probe_error_code(*values: Any) -> str:
+    text = " ".join(str(value or "") for value in values).lower()
+    if "access denied" in text or "tlsv1_alert" in text or "tls alert" in text:
+        return "tls_access_denied"
+    if "certificate" in text and ("verify" in text or "unknown" in text):
+        return "tls_certificate_error"
+    if "10054" in text or "connection reset" in text or "forcibly closed" in text:
+        return "connection_reset"
+    if "timed out" in text or "timeout" in text:
+        return "timeout"
+    if "connection refused" in text or "econnrefused" in text:
+        return "connection_refused"
+    if "network is unreachable" in text or "no route to host" in text:
+        return "network_unreachable"
+    if "name or service not known" in text or "name resolution" in text or "getaddrinfo" in text:
+        return "dns_error"
+    return "probe_failed"
 
 
 def _probe_once_via_local_proxy(port: int, probe_url: str, timeout_value: float) -> tuple[int | None, str]:
@@ -6456,6 +6741,9 @@ def _probe_outbounds_batch(
                     item["error"] = base_error or "xray probe failed"
                     item["xray_log_tail"] = log_tail
                     item["error_detail"] = (base_error + " | " if base_error else "") + "xray: " + log_tail
+            for item in results.values():
+                if item.get("delay_ms") is None:
+                    item["error_code"] = _probe_error_code(item.get("error"), item.get("error_detail"), item.get("xray_log_tail"))
             return results
 
     error_text = last_error or "xray probe start failed"
@@ -6495,9 +6783,13 @@ def _save_subscription_latency_entries(
     ui_state_dir: str,
     sub_id: str,
     entries_by_key: Dict[str, Dict[str, Any]],
+    *,
+    field: str = "node_latency",
 ) -> int:
     if not entries_by_key:
         return 0
+    if field not in {"node_latency", "node_tcp_latency"}:
+        raise ValueError("unsupported latency field")
     with _STATE_LOCK:
         state = load_subscription_state(ui_state_dir)
         idx, current = _find_subscription(state, sub_id)
@@ -6510,7 +6802,7 @@ def _save_subscription_latency_entries(
             for item in current_nodes
             if str(item.get("key") or "").strip()
         }
-        node_latency = _prune_node_latency_map(current.get("node_latency"), current_nodes)
+        node_latency = _prune_node_latency_map(current.get(field), current_nodes)
         saved = 0
         for key, entry in entries_by_key.items():
             key_text = str(key or "").strip()
@@ -6518,10 +6810,72 @@ def _save_subscription_latency_entries(
                 continue
             node_latency[key_text] = entry
             saved += 1
-        current["node_latency"] = node_latency
+        current[field] = node_latency
         state["subscriptions"][idx] = current
         _write_state(ui_state_dir, _normalize_state(state))
     return saved
+
+
+def probe_subscription_node_tcp_latency(
+    ui_state_dir: str,
+    sub_id: str,
+    node_key: str,
+    *,
+    timeout_s: float = DEFAULT_TCP_PROBE_TIMEOUT_SECONDS,
+) -> Dict[str, Any]:
+    target_key = str(node_key or "").strip()
+    if not target_key:
+        raise ValueError("node_key is required")
+    batch = probe_subscription_nodes_tcp_latency(
+        ui_state_dir,
+        sub_id,
+        [target_key],
+        timeout_s=timeout_s,
+        strict=True,
+    )
+    return dict(batch["results"][0])
+
+
+def probe_subscription_nodes_tcp_latency(
+    ui_state_dir: str,
+    sub_id: str,
+    node_keys: Iterable[Any],
+    *,
+    timeout_s: float = DEFAULT_TCP_PROBE_TIMEOUT_SECONDS,
+    strict: bool = False,
+) -> Dict[str, Any]:
+    with _STATE_LOCK:
+        state = load_subscription_state(ui_state_dir)
+        idx, sub = _find_subscription(state, sub_id)
+        if idx < 0 or sub is None:
+            raise KeyError("subscription not found")
+        sub = dict(sub)
+
+    result = _probe_nodes_tcp_latency(
+        _normalize_last_nodes(sub.get("last_nodes")),
+        node_keys,
+        existing_latency=sub.get("node_tcp_latency"),
+        timeout_s=timeout_s,
+        strict=strict,
+    )
+    entries_by_key = {
+        str(item.get("node_key") or "").strip(): dict(item["entry"])
+        for item in result.get("results", [])
+        if isinstance(item, dict) and isinstance(item.get("entry"), dict) and str(item.get("node_key") or "").strip()
+    }
+    saved_count = _save_subscription_latency_entries(
+        ui_state_dir,
+        sub_id,
+        entries_by_key,
+        field="node_tcp_latency",
+    )
+    owner_id = str(sub.get("id") or sub_id)
+    for item in result.get("results", []):
+        if isinstance(item, dict):
+            item["id"] = owner_id
+    result["id"] = owner_id
+    result["updated"] = saved_count
+    return result
 
 
 def probe_subscription_node_latency(
@@ -6651,7 +7005,7 @@ def probe_subscription_nodes_latency(
             targets=probe_targets,
             probe_url=probe_url,
             timeout_value=timeout_value,
-            concurrency=PROBE_BATCH_CONCURRENCY,
+            concurrency=_probe_batch_concurrency(),
         )
 
     for target_key in target_keys:
@@ -6669,6 +7023,7 @@ def probe_subscription_nodes_latency(
         error_text = _trim_probe_text(probe_item.get("error"), limit=PROBE_ERROR_SUMMARY_LIMIT)
         error_detail = _trim_probe_text(probe_item.get("error_detail"), limit=PROBE_ERROR_DETAIL_LIMIT)
         xray_log_tail = str(probe_item.get("xray_log_tail") or "").strip()
+        error_code = str(probe_item.get("error_code") or "").strip()
         entry = _merge_latency_entry(
             existing_latency.get(target_key),
             checked_at=checked_at,
@@ -6692,6 +7047,7 @@ def probe_subscription_nodes_latency(
             ok_count += 1
         else:
             item["error"] = error_text
+            item["error_code"] = error_code or _probe_error_code(error_text, error_detail, xray_log_tail)
             if error_detail:
                 item["error_detail"] = error_detail
             if xray_log_tail:

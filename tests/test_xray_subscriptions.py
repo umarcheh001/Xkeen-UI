@@ -9,18 +9,18 @@ from pathlib import Path
 import pytest
 
 
-def _vless(name: str = "Node") -> str:
+def _vless(name: str = "Node", *, host: str = "example.com") -> str:
     return (
-        "vless://user@example.com:443"
+        f"vless://user@{host}:443"
         "?type=tcp&security=reality&sni=edge.example.com&pbk=pubkey&encryption=none"
         f"#{name}"
     )
 
 
-def _vless_reality(name: str = "Node", *, sid: str = "") -> str:
+def _vless_reality(name: str = "Node", *, sid: str = "", host: str = "example.com") -> str:
     safe_name = str(name or "").replace(" ", "%20")
     return (
-        "vless://user@example.com:443"
+        f"vless://user@{host}:443"
         f"?type=tcp&security=reality&sni=edge.example.com&pbk=pubkey&sid={sid}&spx=%2F&encryption=none"
         f"#{safe_name}"
     )
@@ -958,7 +958,13 @@ def test_refresh_subscription_turns_manual_node_deletion_into_saved_exclusion(tm
     monkeypatch.setattr(
         subs,
         "fetch_subscription_body",
-        lambda _url: ("\n".join([_vless_reality("Alpha"), _vless_reality("Beta")]), {}),
+        lambda _url: (
+            "\n".join([
+                _vless_reality("Alpha", host="alpha.example.com"),
+                _vless_reality("Beta", host="beta.example.com"),
+            ]),
+            {},
+        ),
     )
 
     subs.upsert_subscription(
@@ -1155,7 +1161,11 @@ def test_preview_subscription_returns_nodes_without_state_changes(tmp_path: Path
     ui_state_dir = tmp_path / "state"
     ui_state_dir.mkdir()
 
-    body = "\n".join([_vless("Germany"), _vless("Netherlands"), _trojan("USA")])
+    body = "\n".join([
+        _vless("Germany", host="de.example.com"),
+        _vless("Netherlands", host="nl.example.com"),
+        _trojan("USA"),
+    ])
     monkeypatch.setattr(
         subs,
         "fetch_subscription_body",
@@ -1183,7 +1193,11 @@ def test_preview_subscription_returns_nodes_without_state_changes(tmp_path: Path
 def test_preview_subscription_applies_filters_and_exclusions(tmp_path, monkeypatch):
     from services import xray_subscriptions as subs
 
-    body = "\n".join([_vless("Germany"), _vless("Russia"), _trojan("USA")])
+    body = "\n".join([
+        _vless("Germany", host="de.example.com"),
+        _vless("Russia", host="ru.example.com"),
+        _trojan("USA"),
+    ])
     monkeypatch.setattr(
         subs,
         "fetch_subscription_body",
@@ -4981,9 +4995,9 @@ def test_refresh_subscription_applies_name_and_type_filters_to_links(tmp_path: P
         lambda _url: (
             "\n".join(
                 [
-                    _vless("Germany-01"),
+                    _vless("Germany-01", host="de.example.com"),
                     _trojan("Sweden-02"),
-                    _vless("Netherlands-03"),
+                    _vless("Netherlands-03", host="nl.example.com"),
                 ]
             ),
             {},
@@ -5084,6 +5098,49 @@ def test_build_subscription_outbounds_deduplicates_rotating_link_variants():
     assert len(outbounds) == 2
     assert len(stats["nodes"]) == 2
     assert stats["nodes"][0]["key"] != stats["nodes"][1]["key"]
+
+
+def test_build_subscription_outbounds_deduplicates_only_equal_runtime_configs():
+    from services import xray_subscriptions as subs
+
+    duplicate_alias = _vless("Alias")
+    changed_sni = _vless("Changed SNI").replace("sni=edge.example.com", "sni=other.example.com")
+    outbounds, errors, stats = subs.build_subscription_outbounds(
+        [_vless("Primary"), duplicate_alias, changed_sni],
+        tag_prefix="exact",
+    )
+
+    assert errors == []
+    assert [item["tag"] for item in outbounds] == ["exact--Primary", "exact--Changed_SNI"]
+    assert stats["source_count"] == 3
+    assert stats["deduplicated_count"] == 1
+    assert [item["name"] for item in stats["nodes"]] == ["Primary", "Changed SNI"]
+
+
+def test_tcp_probe_batch_reuses_equal_endpoint(monkeypatch):
+    from services import xray_subscriptions as subs
+
+    calls = []
+
+    def _fake_probe(host, port, timeout_value):
+        calls.append((host, port, timeout_value))
+        return 42 if host == "one.example.com" else 84, ""
+
+    monkeypatch.setattr(subs, "_tcp_probe_once", _fake_probe)
+    result = subs._probe_tcp_targets_batch(
+        [
+            {"key": "a", "host": "one.example.com", "port": 443},
+            {"key": "b", "host": "one.example.com", "port": 443},
+            {"key": "c", "host": "two.example.com", "port": 8443},
+        ],
+        timeout_value=2.5,
+        concurrency=8,
+    )
+
+    assert len(calls) == 2
+    assert result["a"]["delay_ms"] == 42
+    assert result["b"]["delay_ms"] == 42
+    assert result["c"]["delay_ms"] == 84
 
 
 def test_build_subscription_outbounds_keeps_failed_node_tag_blank(monkeypatch):
@@ -6230,6 +6287,66 @@ def test_probe_subscription_node_latency_updates_state(tmp_path: Path, monkeypat
     saved = state["subscriptions"][0]
     assert saved["node_latency"][node["key"]]["delay_ms"] == 123
     assert saved["node_latency"][node["key"]]["history"][0]["status"] == "ok"
+
+
+def test_probe_subscription_nodes_tcp_latency_is_separate_and_skips_udp(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    ui_state_dir.mkdir()
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "tcp-probe",
+            "tag": "tcp-probe",
+            "url": "https://example.com/sub",
+        },
+    )
+    state = subs.load_subscription_state(str(ui_state_dir))
+    state["subscriptions"][0]["last_nodes"] = [
+        {
+            "key": "tcp-node",
+            "tag": "tcp-probe--tcp",
+            "name": "TCP",
+            "protocol": "vless",
+            "transport": "grpc",
+            "host": "tcp.example.com",
+            "port": 443,
+        },
+        {
+            "key": "udp-node",
+            "tag": "tcp-probe--udp",
+            "name": "UDP",
+            "protocol": "hysteria2",
+            "transport": "hysteria",
+            "host": "udp.example.com",
+            "port": 443,
+        },
+    ]
+    subs._write_state(str(ui_state_dir), state)
+
+    monkeypatch.setattr(
+        subs,
+        "_probe_tcp_targets_batch",
+        lambda targets, timeout_value, concurrency=subs.TCP_PROBE_BATCH_CONCURRENCY: {
+            "tcp-node": {"delay_ms": 37, "error": ""}
+        },
+    )
+
+    result = subs.probe_subscription_nodes_tcp_latency(
+        str(ui_state_dir),
+        "tcp-probe",
+        ["tcp-node", "udp-node"],
+    )
+
+    assert result["mode"] == "tcp"
+    assert result["ok_count"] == 1
+    assert result["failed_count"] == 0
+    assert result["unavailable_count"] == 1
+    assert result["results"][1]["error_code"] == "unsupported_transport"
+    saved = subs.load_subscription_state(str(ui_state_dir))["subscriptions"][0]
+    assert saved["node_tcp_latency"]["tcp-node"]["delay_ms"] == 37
+    assert saved["node_latency"] == {}
 
 
 def test_probe_text_summary_keeps_xray_tail_separate():
