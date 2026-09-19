@@ -735,6 +735,10 @@
               <div id="outbounds-active-node-status" class="xk-outbounds-active-status is-unknown hidden" role="status" aria-live="polite"></div>
           </div>
           <div class="xk-sub-nodes-head-actions">
+            <div id="outbounds-nodes-probe-mode" class="xk-sub-probe-mode" role="group" aria-label="Режим проверки задержки">
+              <button type="button" class="xk-sub-probe-mode-btn is-active" data-probe-mode="tcp" aria-pressed="true" data-tooltip="Проверить доступность TCP-порта, как HAPP. Это не подтверждает работу прокси.">TCP</button>
+              <button type="button" class="xk-sub-probe-mode-btn" data-probe-mode="proxy" aria-pressed="false" data-tooltip="Выполнить контрольный HTTPS-запрос через узел и Xray.">Proxy</button>
+            </div>
             <button type="button" id="outbounds-nodes-pingall" class="btn-secondary btn-compact xk-sub-icon-btn" title="Пинг всех узлов" data-tooltip="Проверить задержку всех proxy-узлов в текущем 04_outbounds-фрагменте." aria-label="Пинг всех узлов" disabled>
               {{ op_icon('ping', 'xk-sub-icon-glyph xk-sub-pingall-glyph') }}
               <span class="xk-sub-pingall-spinner" aria-hidden="true"></span>

@@ -95,6 +95,12 @@ async function selectSubscriptionProbeMode(page, mode) {
   await expect(button).toHaveAttribute('aria-pressed', 'true');
 }
 
+async function selectOutboundsProbeMode(page, mode) {
+  const button = page.locator(`#outbounds-nodes-probe-mode [data-probe-mode="${mode}"]`);
+  await button.click();
+  await expect(button).toHaveAttribute('aria-pressed', 'true');
+}
+
 async function openOutboundsPanel(page) {
   await page.goto('/');
   const body = page.locator('#outbounds-body');
@@ -228,7 +234,7 @@ test('main outbounds card keeps proxy nodes inside scrollable panel', async ({ p
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ ok: true, nodes, node_latency: nodeLatency }),
+      body: JSON.stringify({ ok: true, nodes, node_latency: nodeLatency, node_tcp_latency: buildNodeLatency(nodes) }),
     });
   });
 
@@ -253,6 +259,13 @@ test('main outbounds card keeps proxy nodes inside scrollable panel', async ({ p
 
   await openOutboundsPanel(page);
   await expect(page.locator('#outbounds-nodes-panel')).toBeVisible();
+  const probeMode = page.locator('#outbounds-nodes-probe-mode');
+  await expect(probeMode).toBeVisible();
+  await expect(probeMode.locator('[data-probe-mode="tcp"]')).toHaveAttribute('aria-pressed', 'true');
+  await probeMode.locator('[data-probe-mode="proxy"]').click();
+  await expect(probeMode.locator('[data-probe-mode="proxy"]')).toHaveAttribute('aria-pressed', 'true');
+  await probeMode.locator('[data-probe-mode="tcp"]').click();
+  await expect(probeMode.locator('[data-probe-mode="tcp"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#outbounds-nodes-list .xk-outbounds-node-item')).toHaveCount(nodes.length);
   await expect(page.locator('#outbounds-active-node-status')).toContainText('Сейчас/последний выбор');
   await expect(page.locator('#outbounds-nodes-list .xk-outbounds-node-item.is-active-route')).toHaveCount(1);
@@ -947,6 +960,7 @@ test('Xray latency stays visible but becomes muted after five minutes on cards a
   });
 
   await openOutboundsPanel(page);
+  await selectOutboundsProbeMode(page, 'proxy');
   const cardProbe = page.locator('#outbounds-nodes-list .xk-xray-node-probe');
   await expect(cardProbe).toHaveText('180 мс');
   await expect(cardProbe).toHaveAttribute('data-probe-tone', 'good');

@@ -9480,6 +9480,7 @@ html[data-theme="light"] .xk-mi-status.warning {
 
 .xk-sub-probe-mode {
   display: inline-grid;
+  box-sizing: border-box;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   width: 112px;
   min-width: 112px;
@@ -9491,7 +9492,10 @@ html[data-theme="light"] .xk-mi-status.warning {
 }
 
 .xk-sub-probe-mode-btn {
+  box-sizing: border-box;
   min-width: 0;
+  min-height: 0 !important;
+  max-height: 28px;
   height: 28px;
   padding: 0 7px;
   border: 0;

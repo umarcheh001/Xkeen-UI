@@ -64,7 +64,9 @@ from services.xray_subscriptions import (
     list_subscriptions,
     normalize_xray_outbounds_node_latency,
     probe_xray_outbounds_node_latency,
+    probe_xray_outbounds_node_tcp_latency,
     probe_xray_outbounds_nodes_latency,
+    probe_xray_outbounds_nodes_tcp_latency,
 )
 from services.xray_outbounds_runtime import (
     infer_active_xray_outbound,
@@ -670,7 +672,12 @@ def create_xray_configs_blueprint(
         name = os.path.basename(str(sel_path or "")) or os.path.basename(OUTBOUNDS_FILE)
         return name or "04_outbounds.json"
 
-    def _load_outbounds_node_latency(sel_path: str, nodes: list[dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    def _load_outbounds_node_latency(
+        sel_path: str,
+        nodes: list[dict[str, Any]],
+        *,
+        field: str = "node_latency",
+    ) -> Dict[str, Dict[str, Any]]:
         state_path = _outbounds_node_latency_state_path()
         if not state_path:
             return {}
@@ -682,10 +689,16 @@ def create_xray_configs_blueprint(
             return {}
         fragments = obj.get("fragments") if isinstance(obj.get("fragments"), dict) else {}
         item = fragments.get(_outbounds_node_latency_fragment_key(sel_path)) if isinstance(fragments, dict) else {}
-        raw = item.get("node_latency") if isinstance(item, dict) else {}
+        raw = item.get(field) if isinstance(item, dict) else {}
         return normalize_xray_outbounds_node_latency(raw, nodes)
 
-    def _save_outbounds_node_latency(sel_path: str, nodes: list[dict[str, Any]], latency: Any) -> Dict[str, Dict[str, Any]]:
+    def _save_outbounds_node_latency(
+        sel_path: str,
+        nodes: list[dict[str, Any]],
+        latency: Any,
+        *,
+        field: str = "node_latency",
+    ) -> Dict[str, Dict[str, Any]]:
         clean = normalize_xray_outbounds_node_latency(latency, nodes)
         state_path = _outbounds_node_latency_state_path()
         if not state_path:
@@ -703,9 +716,12 @@ def create_xray_configs_blueprint(
             fragments = obj.get("fragments")
             if not isinstance(fragments, dict):
                 fragments = {}
-            fragments[_outbounds_node_latency_fragment_key(sel_path)] = {
-                "node_latency": clean,
-            }
+            fragment_key = _outbounds_node_latency_fragment_key(sel_path)
+            fragment = fragments.get(fragment_key)
+            if not isinstance(fragment, dict):
+                fragment = {}
+            fragment[field] = clean
+            fragments[fragment_key] = fragment
             obj["fragments"] = fragments
             _atomic_write_json(state_path, obj)
         except Exception:
@@ -1457,7 +1473,8 @@ def create_xray_configs_blueprint(
         file_arg = request.args.get("file", "")
         selection = _load_outbounds_selection(file_arg)
         nodes = _enrich_outbounds_nodes(build_xray_outbounds_nodes(selection.get("config")))
-        latency = _load_outbounds_node_latency(str(selection.get("path") or ""), nodes)
+        latency = _load_outbounds_node_latency(str(selection.get("path") or ""), nodes, field="node_latency")
+        tcp_latency = _load_outbounds_node_latency(str(selection.get("path") or ""), nodes, field="node_tcp_latency")
         return (
             jsonify(
                 {
@@ -1466,6 +1483,7 @@ def create_xray_configs_blueprint(
                     "path": selection.get("path"),
                     "nodes": nodes,
                     "node_latency": latency,
+                    "node_tcp_latency": tcp_latency,
                 }
             ),
             200,
@@ -1512,6 +1530,12 @@ def create_xray_configs_blueprint(
         except Exception:
             return 8.0
 
+    def _outbounds_probe_mode(payload: dict[str, Any]) -> str:
+        value = str(payload.get("mode") or request.args.get("mode") or "proxy").strip().lower()
+        if value not in {"proxy", "tcp"}:
+            raise ValueError("mode must be proxy or tcp")
+        return value
+
     def _wants_outbounds_async_probe(payload: dict[str, Any]) -> bool:
         for key in ("async", "background"):
             raw = payload.get(key)
@@ -1538,15 +1562,25 @@ def create_xray_configs_blueprint(
         file_arg = request.args.get("file", "")
         selection = _load_outbounds_selection(file_arg)
         nodes = build_xray_outbounds_nodes(selection.get("config"))
-        existing_latency = _load_outbounds_node_latency(str(selection.get("path") or ""), nodes)
         try:
-            result = probe_xray_outbounds_node_latency(
-                selection.get("config"),
-                node_key,
-                xray_configs_dir=os.path.dirname(str(selection.get("path") or "")) or XRAY_CONFIGS_DIR,
-                existing_latency=existing_latency,
-                timeout_s=_outbounds_node_timeout(payload),
-            )
+            mode = _outbounds_probe_mode(payload)
+        except ValueError as exc:
+            return error_response(str(exc), 400, ok=False)
+        field = "node_tcp_latency" if mode == "tcp" else "node_latency"
+        existing_latency = _load_outbounds_node_latency(str(selection.get("path") or ""), nodes, field=field)
+        try:
+            if mode == "tcp":
+                result = probe_xray_outbounds_node_tcp_latency(
+                    selection.get("config"), node_key, existing_latency=existing_latency, timeout_s=_outbounds_node_timeout(payload)
+                )
+            else:
+                result = probe_xray_outbounds_node_latency(
+                    selection.get("config"),
+                    node_key,
+                    xray_configs_dir=os.path.dirname(str(selection.get("path") or "")) or XRAY_CONFIGS_DIR,
+                    existing_latency=existing_latency,
+                    timeout_s=_outbounds_node_timeout(payload),
+                )
         except KeyError:
             return error_response("node not found", 404, ok=False)
         except ValueError as exc:
@@ -1564,7 +1598,7 @@ def create_xray_configs_blueprint(
 
         if result.get("entry"):
             existing_latency[str(result.get("node_key") or node_key)] = result.get("entry")
-            _save_outbounds_node_latency(str(selection.get("path") or ""), nodes, existing_latency)
+            _save_outbounds_node_latency(str(selection.get("path") or ""), nodes, existing_latency, field=field)
         status = 200 if result.get("ok") else 400
         return jsonify(result), status
 
@@ -1575,7 +1609,12 @@ def create_xray_configs_blueprint(
         file_arg = request.args.get("file", "")
         selection = _load_outbounds_selection(file_arg)
         nodes = build_xray_outbounds_nodes(selection.get("config"))
-        existing_latency = _load_outbounds_node_latency(str(selection.get("path") or ""), nodes)
+        try:
+            mode = _outbounds_probe_mode(payload)
+        except ValueError as exc:
+            return error_response(str(exc), 400, ok=False)
+        field = "node_tcp_latency" if mode == "tcp" else "node_latency"
+        existing_latency = _load_outbounds_node_latency(str(selection.get("path") or ""), nodes, field=field)
         timeout_s = _outbounds_node_timeout(payload)
         if _wants_outbounds_async_probe(payload):
             selection_path = str(selection.get("path") or "")
@@ -1583,31 +1622,39 @@ def create_xray_configs_blueprint(
             config_dir = os.path.dirname(selection_path) or XRAY_CONFIGS_DIR
 
             def _run_probe_job() -> dict[str, Any]:
-                result = probe_xray_outbounds_nodes_latency(
-                    config,
-                    node_keys,
-                    xray_configs_dir=config_dir,
-                    existing_latency=existing_latency,
-                    timeout_s=timeout_s,
-                )
+                if mode == "tcp":
+                    result = probe_xray_outbounds_nodes_tcp_latency(
+                        config, node_keys, existing_latency=existing_latency, timeout_s=timeout_s
+                    )
+                else:
+                    result = probe_xray_outbounds_nodes_latency(
+                        config,
+                        node_keys,
+                        xray_configs_dir=config_dir,
+                        existing_latency=existing_latency,
+                        timeout_s=timeout_s,
+                    )
                 saved_latency = _save_outbounds_node_latency(
-                    selection_path,
-                    nodes,
-                    result.get("node_latency"),
+                    selection_path, nodes, result.get(field), field=field
                 )
-                result["node_latency"] = saved_latency
+                result[field] = saved_latency
                 return result
 
             job = create_latency_job(_run_probe_job)
             return jsonify({"ok": True, "async": True, "job_id": job.id, "status": job.status}), 202
         try:
-            result = probe_xray_outbounds_nodes_latency(
-                selection.get("config"),
-                node_keys,
-                xray_configs_dir=os.path.dirname(str(selection.get("path") or "")) or XRAY_CONFIGS_DIR,
-                existing_latency=existing_latency,
-                timeout_s=timeout_s,
-            )
+            if mode == "tcp":
+                result = probe_xray_outbounds_nodes_tcp_latency(
+                    selection.get("config"), node_keys, existing_latency=existing_latency, timeout_s=timeout_s
+                )
+            else:
+                result = probe_xray_outbounds_nodes_latency(
+                    selection.get("config"),
+                    node_keys,
+                    xray_configs_dir=os.path.dirname(str(selection.get("path") or "")) or XRAY_CONFIGS_DIR,
+                    existing_latency=existing_latency,
+                    timeout_s=timeout_s,
+                )
         except KeyError:
             return error_response("node not found", 404, ok=False)
         except ValueError as exc:
@@ -1626,9 +1673,10 @@ def create_xray_configs_blueprint(
         saved_latency = _save_outbounds_node_latency(
             str(selection.get("path") or ""),
             nodes,
-            result.get("node_latency"),
+            result.get(field),
+            field=field,
         )
-        result["node_latency"] = saved_latency
+        result[field] = saved_latency
         return jsonify(result), 200
 
     # --- API: batch add/update proxy outbounds (for balancer pools) ---

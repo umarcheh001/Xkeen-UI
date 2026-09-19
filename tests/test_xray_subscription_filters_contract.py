@@ -136,6 +136,9 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     settings_panel_src = _read("xkeen-ui/static/js/ui/settings_panel.js")
 
     assert 'id="outbounds-nodes-panel"' in template_src
+    assert 'id="outbounds-nodes-probe-mode"' in template_src
+    assert 'data-probe-mode="tcp"' in template_src
+    assert 'data-probe-mode="proxy"' in template_src
     assert 'id="outbounds-nodes-pingall"' in template_src
     assert "op_icon('ping', 'xk-sub-icon-glyph xk-sub-pingall-glyph')" in template_src
     assert '<span class="xk-sub-pingall-spinner" aria-hidden="true"></span>' in template_src
@@ -160,6 +163,10 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     assert "\\u041f\\u043e\\u0434\\u043f\\u0438\\u0441\\u043e\\u0447\\u043d\\u044b\\u0439 generated-\\u0444\\u0440\\u0430\\u0433\\u043c\\u0435\\u043d\\u0442" in outbounds_src
     assert "function outboundsProbeNode(nodeKey) {" in outbounds_src
     assert "function outboundsProbeAllNodes() {" in outbounds_src
+    assert "let _outboundsProbeMode = 'tcp';" in outbounds_src
+    assert "function outboundsSetProbeMode(mode) {" in outbounds_src
+    assert "node_tcp_latency" in outbounds_src
+    assert "body: JSON.stringify({ node_key: key, mode })" in outbounds_src
     assert "const busy = !!_outboundsPingAllBusy;" in outbounds_src
     assert "btn.classList.toggle('is-busy', busy);" in outbounds_src
     assert "if (busy) btn.setAttribute('aria-busy', 'true');" in outbounds_src
@@ -168,6 +175,9 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     assert "/api/xray/outbounds/active" in routes_src
     assert "/api/xray/outbounds/nodes/ping" in routes_src
     assert "/api/xray/outbounds/nodes/ping-bulk" in routes_src
+    assert "def _outbounds_probe_mode(payload: dict[str, Any]) -> str:" in routes_src
+    assert "probe_xray_outbounds_node_tcp_latency" in routes_src
+    assert "probe_xray_outbounds_nodes_tcp_latency" in routes_src
     assert "subscription_node_name" in routes_src
     assert "list_subscriptions(ui_state_dir)" in routes_src
     assert "function nodeCountryFlagInfo(node) {" in outbounds_src
@@ -202,6 +212,9 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     assert ".xk-outbounds-node-panel {\n  flex: 1 1 auto;" in styles_src
     assert ".xk-outbounds-node-panel {\n  flex: 1 1 auto;\n  margin: 10px 0 12px;\n  overflow: hidden;" in styles_src
     assert ".xk-outbounds-node-panel .xk-sub-nodes-head-actions" in styles_src
+    assert ".xk-sub-probe-mode" in styles_src
+    assert "box-sizing: border-box;" in styles_src.split(".xk-sub-probe-mode {", 1)[1].split("}", 1)[0]
+    assert "min-height: 0 !important;" in styles_src.split(".xk-sub-probe-mode-btn {", 1)[1].split("}", 1)[0]
     assert "flex: 0 0 auto;" in styles_src
     assert ".xk-pool-tag-cell" in styles_src
     assert ".xk-outbounds-node-panel .xk-outbounds-active-status" in styles_src
@@ -593,4 +606,3 @@ def test_xray_subscription_modal_has_no_diagnostics_block():
     # Чип ссылки переехал под свою настоящую роль — статус-строку модалки.
     assert "'xk-sub-link'" in outbounds_src
     assert ".xk-sub-link {" in styles_src
-

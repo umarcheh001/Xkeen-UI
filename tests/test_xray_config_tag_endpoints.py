@@ -69,6 +69,31 @@ def _hy2_url(name: str = "") -> str:
     return f"hy2://secret@example.com:443?sni=edge.example.com&pinSHA256=pin-one{suffix}"
 
 
+def _vless_outbound_config() -> dict:
+    return {
+        "outbounds": [
+            {
+                "tag": "node-a",
+                "protocol": "vless",
+                "settings": {
+                    "vnext": [
+                        {
+                            "address": "example.com",
+                            "port": 443,
+                            "users": [{"id": "11111111-1111-4111-8111-111111111111"}],
+                        }
+                    ]
+                },
+                "streamSettings": {
+                    "network": "tcp",
+                    "security": "tls",
+                    "tlsSettings": {"serverName": "example.com"},
+                },
+            }
+        ]
+    }
+
+
 def _make_app(ui_state_dir: str = "") -> Flask:
     app = Flask(__name__)
     app.config["TESTING"] = True
@@ -367,6 +392,56 @@ def test_xray_outbounds_nodes_include_subscription_source_name(tmp_path, monkeyp
     nodes = response.get_json()["nodes"]
     assert nodes[0]["tag"] == "cdn.pecan.run--Anti_20.70ce"
     assert nodes[0]["subscription_node_name"] == source_name
+
+
+def test_outbounds_tcp_ping_route_uses_separate_latency_field(tmp_path, monkeypatch):
+    from services.xray_subscriptions import build_xray_outbounds_nodes
+
+    configs_dir = tmp_path / "configs"
+    configs_dir.mkdir()
+    outbounds_name = "04_outbounds.json"
+    outbounds_path = configs_dir / outbounds_name
+    outbounds_path.write_text(json.dumps(_vless_outbound_config()), encoding="utf-8")
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "resolve_xray_fragment_file",
+        lambda file_arg, *, kind, default_path: str(configs_dir / (file_arg or Path(default_path).name)),
+    )
+    monkeypatch.setattr(xray_configs_mod, "list_subscriptions", lambda _state_dir: [])
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "probe_xray_outbounds_node_latency",
+        lambda *_args, **_kwargs: pytest.fail("proxy probe must not run for mode=tcp"),
+    )
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "probe_xray_outbounds_nodes_tcp_latency",
+        lambda _config, node_keys, **_kwargs: {
+            "ok": True,
+            "mode": "tcp",
+            "requested": len(node_keys),
+            "ok_count": 1,
+            "failed_count": 0,
+            "node_tcp_latency": {str(node_keys[0]): {"status": "ok", "delay_ms": 17, "checked_at": 1}},
+            "results": [{"node_key": str(node_keys[0]), "entry": {"status": "ok", "delay_ms": 17, "checked_at": 1}}],
+        },
+    )
+
+    app = _make_app(ui_state_dir=str(tmp_path / "state"))
+    with app.test_client() as client:
+        node_key = build_xray_outbounds_nodes(_vless_outbound_config())[0]["key"]
+        response = client.post(
+            f"/api/xray/outbounds/nodes/ping-bulk?file={outbounds_name}",
+            json={"node_keys": [node_key], "mode": "tcp"},
+        )
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["mode"] == "tcp"
+    assert body["node_tcp_latency"][node_key]["delay_ms"] == 17
+    state_path = tmp_path / "state" / "xray_outbounds_node_latency.json"
+    saved = json.loads(state_path.read_text(encoding="utf-8"))
+    assert saved["fragments"][outbounds_name]["node_tcp_latency"][node_key]["delay_ms"] == 17
 
 
 def test_xray_inbound_tags_all_collects_tags_across_all_fragments_and_jsonc(tmp_path, monkeypatch):

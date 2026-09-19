@@ -41,11 +41,13 @@ let outboundsModuleApi = null;
     let _subscriptionOutputFilesTs = 0;
     let _outboundsNodes = [];
     let _outboundsNodeLatency = Object.create(null);
+    let _outboundsNodeTcpLatency = Object.create(null);
     let _outboundsNodePingState = Object.create(null);
     let _outboundsActiveRuntime = null;
     let _outboundsActivePollTimer = null;
     let _outboundsSettingsUnsubscribe = null;
     let _outboundsPingAllBusy = false;
+    let _outboundsProbeMode = 'tcp';
     let _outboundsNodeLayoutSeq = 0;
     let _outboundsLoadSeq = 0;
     let _outboundsNodesLoadSeq = 0;
@@ -73,6 +75,7 @@ let outboundsModuleApi = null;
       caption: 'outbounds-nodes-caption',
       activeStatus: 'outbounds-active-node-status',
       summary: 'outbounds-nodes-summary',
+      probeMode: 'outbounds-nodes-probe-mode',
       pingAll: 'outbounds-nodes-pingall',
       list: 'outbounds-nodes-list',
       empty: 'outbounds-nodes-empty',
@@ -690,21 +693,67 @@ let outboundsModuleApi = null;
       return url;
     }
 
-    function outboundsNodePingStateKey(nodeKey) {
-      return [String(getActiveFragment() || ''), String(nodeKey || '')].join('::');
+    function outboundsNodePingStateKey(nodeKey, mode) {
+      return [String(getActiveFragment() || ''), String(mode || _outboundsProbeMode), String(nodeKey || '')].join('::');
     }
 
-    function outboundsNodeLatencyEntry(nodeKey) {
+    function outboundsNodeLatencyMap(mode) {
+      return String(mode || _outboundsProbeMode) === 'tcp' ? _outboundsNodeTcpLatency : _outboundsNodeLatency;
+    }
+
+    function outboundsNodeLatencyEntry(nodeKey, mode) {
       const key = String(nodeKey || '').trim();
-      const map = (_outboundsNodeLatency && typeof _outboundsNodeLatency === 'object') ? _outboundsNodeLatency : {};
+      const source = outboundsNodeLatencyMap(mode);
+      const map = (source && typeof source === 'object') ? source : {};
       const item = key ? map[key] : null;
       return (item && typeof item === 'object') ? item : null;
     }
 
-    function outboundsSetNodes(nodes, latency) {
+    function outboundsSetNodes(nodes, latency, tcpLatency) {
       _outboundsNodes = Array.isArray(nodes) ? nodes : [];
       _outboundsNodeLatency = (latency && typeof latency === 'object') ? latency : Object.create(null);
+      _outboundsNodeTcpLatency = (tcpLatency && typeof tcpLatency === 'object') ? tcpLatency : Object.create(null);
       outboundsRenderNodeList();
+    }
+
+    function outboundsNodeSupportsTcpProbe(node) {
+      const transport = String(node && node.transport || '').trim().toLowerCase();
+      const protocol = String(node && node.protocol || '').trim().toLowerCase();
+      const unsupported = new Set(['hysteria', 'hysteria2', 'hy2', 'kcp', 'mkcp', 'quic', 'tuic', 'wireguard']);
+      return !!(node && node.host && node.port && !unsupported.has(transport) && !unsupported.has(protocol));
+    }
+
+    function outboundsProbeModeLabel() {
+      return _outboundsProbeMode === 'tcp' ? 'TCP' : 'Proxy';
+    }
+
+    function outboundsProbeModeDescription() {
+      return _outboundsProbeMode === 'tcp'
+        ? 'TCP-проверка показывает доступность порта, как HAPP; она не подтверждает работу прокси.'
+        : 'Proxy-проверка выполняет HTTPS-запрос через Xray и подтверждает реальный трафик.';
+    }
+
+    function outboundsSyncProbeModeControl() {
+      const root = $(OUTBOUND_NODE_IDS.probeMode);
+      if (!root || !root.querySelectorAll) return;
+      root.querySelectorAll('[data-probe-mode]').forEach((button) => {
+        const active = String(button.getAttribute('data-probe-mode') || '') === _outboundsProbeMode;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        button.disabled = !!_outboundsPingAllBusy;
+      });
+    }
+
+    function outboundsSetProbeMode(mode) {
+      const next = String(mode || '').trim().toLowerCase();
+      if (!['tcp', 'proxy'].includes(next) || next === _outboundsProbeMode || _outboundsPingAllBusy) return;
+      _outboundsProbeMode = next;
+      xrayHideDelayHistory();
+      outboundsSyncProbeModeControl();
+      outboundsUpdatePingAllBtnState();
+      try { outboundsRenderNodeList(); } catch (e) {}
+      const statusEl = $('outbounds-status');
+      if (statusEl) setOutboundsStatus(statusEl, outboundsProbeModeDescription(), 'info');
     }
 
     function outboundsActiveDisplayEnabled(settingsSnapshot) {
@@ -992,13 +1041,14 @@ let outboundsModuleApi = null;
         const data = await res.json().catch(() => ({}));
         if (!isCurrentOutboundsFragmentRequest(requestFragment, requestSeq, 'nodes')) return false;
         if (!res.ok || !data || data.ok === false) {
-          outboundsSetNodes([], {});
+          outboundsSetNodes([], {}, {});
           outboundsSetNodesVisible(false);
           return false;
         }
         outboundsSetNodes(
           Array.isArray(data.nodes) ? data.nodes : [],
           (data.node_latency && typeof data.node_latency === 'object') ? data.node_latency : {},
+          (data.node_tcp_latency && typeof data.node_tcp_latency === 'object') ? data.node_tcp_latency : {},
         );
         const hasNodes = Array.isArray(data.nodes) && data.nodes.length > 0;
         outboundsSetNodesVisible(visible !== false && hasNodes);
@@ -1012,7 +1062,7 @@ let outboundsModuleApi = null;
         return hasNodes;
       } catch (e) {
         if (!isCurrentOutboundsFragmentRequest(requestFragment, requestSeq, 'nodes')) return false;
-        outboundsSetNodes([], {});
+        outboundsSetNodes([], {}, {});
         outboundsSetActiveRuntime({ available: false, active: null, reason: 'no_nodes' });
         outboundsSetNodesVisible(false);
         outboundsClearActivePoll();
@@ -1065,18 +1115,22 @@ let outboundsModuleApi = null;
       const btn = $(OUTBOUND_NODE_IDS.pingAll);
       if (!btn) return;
       const nodes = Array.isArray(_outboundsNodes) ? _outboundsNodes : [];
-      const hasPingable = nodes.some((node) => node && node.key && node.tag);
+      outboundsSyncProbeModeControl();
+      const hasPingable = nodes.some((node) => node && node.key && node.tag
+        && (_outboundsProbeMode !== 'tcp' || outboundsNodeSupportsTcpProbe(node)));
       const busy = !!_outboundsPingAllBusy;
       const tooltip = busy
-        ? 'Идёт проверка задержки всех proxy-узлов.'
+        ? `Идёт ${outboundsProbeModeLabel()}-проверка всех proxy-узлов.`
         : (hasPingable
-          ? 'Проверить задержку всех proxy-узлов в текущем 04_outbounds-фрагменте.'
-          : 'В текущем outbounds-фрагменте нет proxy-узлов для проверки.');
+          ? `${outboundsProbeModeDescription()} Проверить поддерживаемые узлы в текущем 04_outbounds-фрагменте.`
+          : (_outboundsProbeMode === 'tcp'
+            ? 'В текущем outbounds-фрагменте нет узлов с TCP-транспортом для проверки.'
+            : 'В текущем outbounds-фрагменте нет proxy-узлов для проверки.'));
       btn.setAttribute('data-tooltip', tooltip);
       btn.setAttribute('title', tooltip);
       btn.setAttribute('aria-label', busy
-        ? 'Идёт проверка задержки всех proxy-узлов'
-        : (hasPingable ? 'Пинг всех proxy-узлов' : 'Пинг всех proxy-узлов недоступен'));
+        ? `Идёт ${outboundsProbeModeLabel()}-проверка proxy-узлов`
+        : (hasPingable ? `Пинг proxy-узлов (${outboundsProbeModeLabel()})` : 'Пинг proxy-узлов недоступен'));
       btn.disabled = busy || !hasPingable;
       btn.classList.toggle('is-busy', busy);
       if (busy) btn.setAttribute('aria-busy', 'true');
@@ -1118,17 +1172,21 @@ let outboundsModuleApi = null;
         const port = escapeHtml(String(node && (node.port || node.port === 0) ? node.port : ''));
         const detail = escapeHtml(String(node && node.detail ? node.detail : ''));
         const endpoint = [host, port].filter(Boolean).join(':');
-        const canPing = !!(keyText && tagText);
-        const pingBusy = !!_outboundsNodePingState[outboundsNodePingStateKey(keyText)];
+        const canPing = !!(keyText && tagText && (_outboundsProbeMode !== 'tcp' || outboundsNodeSupportsTcpProbe(node)));
+        const pingBusy = !!_outboundsNodePingState[outboundsNodePingStateKey(keyText, _outboundsProbeMode)];
         const isActiveRoute = !!entry.active;
-        const latencyEntry = outboundsNodeLatencyEntry(keyText);
+        const latencyEntry = outboundsNodeLatencyEntry(keyText, _outboundsProbeMode);
         const latencyHasDelay = !!(latencyEntry && latencyEntry.delay_ms != null && latencyEntry.delay_ms !== '' && Number.isFinite(Number(latencyEntry.delay_ms)) && Number(latencyEntry.delay_ms) >= 0);
         const latencyStatus = String(latencyEntry && latencyEntry.status || '').trim().toLowerCase();
         const showRuntimeActiveInsteadOfFail = isActiveRoute && !pingBusy && canPing && !latencyHasDelay && latencyStatus === 'error';
         const latencyLabel = showRuntimeActiveInsteadOfFail ? 'активен' : subsNodeLatencyLabel(latencyEntry, pingBusy, canPing);
         const latencyTooltip = showRuntimeActiveInsteadOfFail
           ? `${outboundsActiveRuntimeText()}. Последний ping этого узла завершился ошибкой, но Xray сейчас выбирает его по логам.`
-          : subsNodeLatencyTooltip(latencyEntry, pingBusy, canPing);
+          : (canPing
+            ? `${subsNodeLatencyTooltip(latencyEntry, pingBusy, canPing)}\n${outboundsProbeModeDescription()}`
+            : (_outboundsProbeMode === 'tcp' && keyText && tagText
+              ? 'TCP-проверка недоступна для UDP/QUIC-транспорта.'
+              : subsNodeLatencyTooltip(latencyEntry, pingBusy, canPing)));
         const latencyClass = showRuntimeActiveInsteadOfFail ? 'is-active-route' : subsNodeLatencyTone(latencyEntry, pingBusy, canPing);
         const activeTooltip = isActiveRoute ? escapeHtml(outboundsActiveRuntimeText()) : '';
         const finalStateLabel = isActiveRoute ? 'сейчас' : stateLabel;
@@ -1141,6 +1199,7 @@ let outboundsModuleApi = null;
           canPing,
           entry: latencyEntry,
           scope: 'outbounds',
+          probeMode: _outboundsProbeMode,
           extraClass: 'xk-outbounds-node-ping',
         });
         rows.push(`
@@ -1197,24 +1256,25 @@ let outboundsModuleApi = null;
     async function outboundsProbeNode(nodeKey) {
       const key = String(nodeKey || '').trim();
       if (!key) return false;
-      const pendingKey = outboundsNodePingStateKey(key);
+      const mode = _outboundsProbeMode;
+      const pendingKey = outboundsNodePingStateKey(key, mode);
       if (_outboundsNodePingState[pendingKey]) return false;
       _outboundsNodePingState[pendingKey] = true;
       try { outboundsRenderNodeList(); } catch (e) {}
       const statusEl = $('outbounds-status');
-      if (statusEl) setOutboundsStatus(statusEl, 'Проверяю задержку proxy-узла…', 'loading');
+      if (statusEl) setOutboundsStatus(statusEl, `Проверяю ${mode === 'tcp' ? 'TCP-доступность' : 'реальный трафик'} proxy-узла…`, 'loading');
       try {
         const res = await fetch(outboundsNodesApiUrl('/ping'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ node_key: key }),
+          body: JSON.stringify({ node_key: key, mode }),
         });
         const data = await res.json().catch(() => ({}));
-        if (data && data.entry) _outboundsNodeLatency[key] = data.entry;
+        if (data && data.entry) outboundsNodeLatencyMap(mode)[key] = data.entry;
         if (!res.ok || !data || data.ok === false) {
           const rawError = String((data && (data.error || data.message)) || '');
           const msg = rawError
-            ? subsProbeFailureMessage(rawError, 'proxy-узел')
+            ? subsProbeFailureMessage(rawError, mode === 'tcp' ? 'TCP-порт узла' : 'proxy-узел')
             : 'Не удалось начать проверку подключения через proxy-узел. Повторите попытку позже.';
           if (statusEl) setOutboundsStatus(statusEl, msg, 'warning');
           return false;
@@ -1222,7 +1282,7 @@ let outboundsModuleApi = null;
         const delay = Number(data.delay_ms || (data.entry && data.entry.delay_ms));
         if (statusEl) {
           setOutboundsStatus(statusEl, Number.isFinite(delay) && delay >= 0
-            ? `Задержка proxy-узла: ${Math.round(delay)} мс.`
+            ? `${mode === 'tcp' ? 'TCP-задержка' : 'Задержка proxy-узла'}: ${Math.round(delay)} мс.`
             : 'Проверка proxy-узла завершена.', 'success');
         }
         return true;
@@ -1238,8 +1298,9 @@ let outboundsModuleApi = null;
 
     async function outboundsProbeAllNodes() {
       if (_outboundsPingAllBusy) return false;
+      const mode = _outboundsProbeMode;
       const nodes = (Array.isArray(_outboundsNodes) ? _outboundsNodes : [])
-        .filter((node) => node && node.key && node.tag);
+        .filter((node) => node && node.key && node.tag && (mode !== 'tcp' || outboundsNodeSupportsTcpProbe(node)));
       const statusEl = $('outbounds-status');
       if (!nodes.length) {
         if (statusEl) setOutboundsStatus(statusEl, 'В текущем outbounds-фрагменте нет proxy-узлов для проверки.', 'warning');
@@ -1247,31 +1308,33 @@ let outboundsModuleApi = null;
       }
 
       _outboundsPingAllBusy = true;
-      const pendingKeys = nodes.map((node) => outboundsNodePingStateKey(String(node.key || ''))).filter(Boolean);
+      const pendingKeys = nodes.map((node) => outboundsNodePingStateKey(String(node.key || ''), mode)).filter(Boolean);
       pendingKeys.forEach((key) => { _outboundsNodePingState[key] = true; });
       outboundsUpdatePingAllBtnState();
       try { outboundsRenderNodeList(); } catch (e) {}
-      if (statusEl) setOutboundsStatus(statusEl, `Проверяю задержку: ${nodes.length} proxy-узлов…`, 'loading');
+      if (statusEl) setOutboundsStatus(statusEl, `Проверяю ${mode === 'tcp' ? 'TCP-порты' : 'реальный трафик'}: ${nodes.length} proxy-узлов…`, 'loading');
 
       try {
         const data = await postLatencyProbe(outboundsNodesApiUrl('/ping-bulk'), {
           node_keys: nodes.map((node) => String(node.key || '')).filter(Boolean),
+          mode,
         }, {
           label: 'bulk outbounds latency probe',
           onPoll: (job) => {
             const status = String(job && job.status || '').trim();
             if (statusEl && (status === 'queued' || status === 'running')) {
-              setOutboundsStatus(statusEl, `Проверяю задержку в фоне: ${nodes.length} proxy-узлов…`, 'loading');
+              setOutboundsStatus(statusEl, `Проверяю ${mode === 'tcp' ? 'TCP-порты' : 'реальный трафик'} в фоне: ${nodes.length} proxy-узлов…`, 'loading');
             }
           },
         });
-        if (data.node_latency && typeof data.node_latency === 'object') {
-          _outboundsNodeLatency = data.node_latency;
+        const latencyField = mode === 'tcp' ? 'node_tcp_latency' : 'node_latency';
+        if (data[latencyField] && typeof data[latencyField] === 'object') {
+          outboundsNodeLatencyMap(mode) && Object.assign(outboundsNodeLatencyMap(mode), data[latencyField]);
         } else if (Array.isArray(data.results)) {
           data.results.forEach((item) => {
             const key = String(item && item.node_key || '').trim();
             if (!key || !item || !item.entry) return;
-            _outboundsNodeLatency[key] = item.entry;
+            outboundsNodeLatencyMap(mode)[key] = item.entry;
           });
         }
         const ok = Number(data.ok_count || 0);
@@ -6058,6 +6121,7 @@ let outboundsModuleApi = null;
         });
       };
       collect(_outboundsNodeLatency);
+      collect(_outboundsNodeTcpLatency);
       _subscriptions.forEach((sub) => {
         collect(subsNodeLatencyMap(sub, 'proxy'));
         collect(subsNodeLatencyMap(sub, 'tcp'));
@@ -6131,7 +6195,7 @@ let outboundsModuleApi = null;
       const scope = String(owner?.dataset?.xrayDelayScope || '');
       const nodeKey = String(owner?.dataset?.nodeKey || '');
       if (!nodeKey) return null;
-      if (scope === 'outbounds') return outboundsNodeLatencyEntry(nodeKey);
+      if (scope === 'outbounds') return outboundsNodeLatencyEntry(nodeKey, owner?.dataset?.probeMode || 'proxy');
       if (scope === 'subscription') {
         const sub = subsFindById(owner?.dataset?.subId || '');
         return subsNodeLatencyEntry(sub, nodeKey, owner?.dataset?.probeMode || 'proxy');
@@ -8340,6 +8404,19 @@ let outboundsModuleApi = null;
       safeInitStep('generator-modal', () => wireGeneratorModal());
       safeInitStep('pool-modal', () => wirePoolModal());
       safeInitStep('subscriptions-modal', () => wireSubscriptionsModal());
+      safeInitStep('nodes-probe-mode', () => {
+        const root = $(OUTBOUND_NODE_IDS.probeMode);
+        if (!root || root.dataset.xkProbeModeBound === '1') return;
+        root.addEventListener('click', (event) => {
+          const button = event && event.target && event.target.closest
+            ? event.target.closest('[data-probe-mode]')
+            : null;
+          if (!button || button.disabled) return;
+          outboundsSetProbeMode(button.getAttribute('data-probe-mode'));
+        });
+        root.dataset.xkProbeModeBound = '1';
+        outboundsSyncProbeModeControl();
+      });
       safeInitStep('nodes-pingall', () => wireButton(OUTBOUND_NODE_IDS.pingAll, () => {
         outboundsProbeAllNodes();
       }));

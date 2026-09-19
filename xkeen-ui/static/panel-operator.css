@@ -12675,6 +12675,7 @@ body.panel-page #outbounds-subscriptions-modal :is(.xk-sub-list-head-actions, .x
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-probe-mode {
+  box-sizing: border-box;
   border-color: var(--op-border-strong) !important;
   border-radius: var(--op-control-radius) !important;
   background: var(--op-surface-2) !important;
@@ -12682,6 +12683,10 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-probe-mode {
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-probe-mode-btn {
+  box-sizing: border-box;
+  min-height: 0 !important;
+  max-height: 28px;
+  height: 28px;
   border: 0 !important;
   border-radius: 4px !important;
   background: transparent !important;
