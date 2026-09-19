@@ -73,11 +73,12 @@ MIHOMO_CLASH_DELAY_PRESETS: Mapping[str, MihomoClashDelayPreset] = MappingProxyT
             "https://cp.cloudflare.com/",
             5000,
         ),
-        # A small DNS-over-HTTPS query keeps the Yandex target deterministic:
-        # it returns a bounded DNS message instead of a portal page or CAPTCHA.
-        # The encoded wire query asks Yandex DNS for the A record of ``ya.ru``.
+        # Mihomo performs latency checks with HTTP HEAD.  A DoH endpoint is
+        # specified for GET and POST, so it is unsuitable as a delay target.
+        # Use the public HTTPS origin of Yandex DNS, which accepts HEAD while
+        # still testing reachability to the service's Yandex endpoint.
         "yandex": MihomoClashDelayPreset(
-            "https://common.dot.dns.yandex.net/dns-query?dns=AAABAAABAAAAAAAAAnlhAnJ1AAABAAE",
+            "https://dns.yandex.com/",
             5000,
         ),
     }

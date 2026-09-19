@@ -505,12 +505,11 @@ def test_delay_uses_backend_preset_and_never_accepts_arbitrary_url():
     assert captured.value.code == "delay_preset_not_allowed"
 
 
-def test_delay_supports_the_allowlisted_yandex_dns_probe():
+def test_delay_supports_the_allowlisted_head_compatible_yandex_dns_probe():
     endpoints = {"proxy_delay": MihomoClashEndpoint("GET", "/proxies/{name}/delay", 2, 1024)}
     expected_path = (
         "/proxies/node/delay?"
-        "url=https%3A%2F%2Fcommon.dot.dns.yandex.net%2Fdns-query%3Fdns%3D"
-        "AAABAAABAAAAAAAAAnlhAnJ1AAABAAE&timeout=5000"
+        "url=https%3A%2F%2Fdns.yandex.com%2F&timeout=5000"
     )
     with tcp_server({expected_path: (200, "application/json", b'{"delay":48}')}) as (
         port,
