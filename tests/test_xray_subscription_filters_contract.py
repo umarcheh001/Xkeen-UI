@@ -137,6 +137,7 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
 
     assert 'id="outbounds-nodes-panel"' in template_src
     assert 'id="outbounds-nodes-probe-mode"' in template_src
+    assert 'xk-outbounds-probe-toolbar' in template_src
     assert 'data-probe-mode="tcp"' in template_src
     assert 'data-probe-mode="proxy"' in template_src
     assert 'id="outbounds-nodes-pingall"' in template_src

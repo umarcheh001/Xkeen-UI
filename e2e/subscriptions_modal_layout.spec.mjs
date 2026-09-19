@@ -262,10 +262,14 @@ test('main outbounds card keeps proxy nodes inside scrollable panel', async ({ p
   const probeMode = page.locator('#outbounds-nodes-probe-mode');
   await expect(probeMode).toBeVisible();
   await expect(probeMode.locator('[data-probe-mode="tcp"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(probeMode.locator('[data-probe-mode="tcp"]')).toHaveClass(/is-active/);
   await probeMode.locator('[data-probe-mode="proxy"]').click();
   await expect(probeMode.locator('[data-probe-mode="proxy"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(probeMode.locator('[data-probe-mode="proxy"]')).toHaveClass(/is-active/);
+  await expect(probeMode.locator('[data-probe-mode="tcp"]')).not.toHaveClass(/is-active/);
   await probeMode.locator('[data-probe-mode="tcp"]').click();
   await expect(probeMode.locator('[data-probe-mode="tcp"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(probeMode.locator('[data-probe-mode="tcp"]')).toHaveClass(/is-active/);
   await expect(page.locator('#outbounds-nodes-list .xk-outbounds-node-item')).toHaveCount(nodes.length);
   await expect(page.locator('#outbounds-active-node-status')).toContainText('Сейчас/последний выбор');
   await expect(page.locator('#outbounds-nodes-list .xk-outbounds-node-item.is-active-route')).toHaveCount(1);

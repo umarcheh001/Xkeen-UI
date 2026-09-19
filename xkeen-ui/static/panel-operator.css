@@ -6726,6 +6726,67 @@ body.panel-page .routing-side-card--outbounds .xk-sub-nodes-head-actions {
   margin-left: auto;
 }
 
+/* Keep the outbounds diagnostics controls as one compact, visually related
+ * toolbar.  The subscription modal has its own spacing, but this card also
+ * needs an explicit active state because the operator theme overrides generic
+ * button backgrounds elsewhere. */
+body.panel-page .routing-side-card--outbounds .xk-outbounds-probe-toolbar {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 2px;
+  border: 1px solid var(--op-border-strong);
+  border-radius: var(--op-control-radius);
+  background: var(--op-surface-2);
+}
+
+body.panel-page .routing-side-card--outbounds .xk-outbounds-probe-toolbar .xk-sub-probe-mode {
+  width: 108px;
+  min-width: 108px;
+  height: 28px;
+  min-height: 28px;
+  gap: 3px;
+  padding: 2px;
+  border: 0 !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+}
+
+body.panel-page .routing-side-card--outbounds .xk-outbounds-probe-toolbar .xk-sub-probe-mode-btn {
+  min-width: 0;
+  height: 24px;
+  min-height: 24px !important;
+  max-height: 24px;
+  padding: 0 7px;
+  border: 1px solid transparent !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  color: var(--op-muted) !important;
+  line-height: 1;
+}
+
+body.panel-page .routing-side-card--outbounds .xk-outbounds-probe-toolbar .xk-sub-probe-mode-btn:hover:not(:disabled) {
+  background: var(--op-surface-3) !important;
+  color: var(--op-text) !important;
+}
+
+body.panel-page .routing-side-card--outbounds .xk-outbounds-probe-toolbar .xk-sub-probe-mode-btn.is-active,
+body.panel-page .routing-side-card--outbounds .xk-outbounds-probe-toolbar .xk-sub-probe-mode-btn[aria-pressed="true"] {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent-hover) !important;
+  box-shadow: inset 0 0 0 1px var(--op-accent-border) !important;
+  font-weight: 700;
+}
+
+body.panel-page .routing-side-card--outbounds .xk-outbounds-probe-toolbar #outbounds-nodes-pingall.xk-sub-icon-btn.btn-compact,
+body.panel-page .routing-side-card--outbounds .xk-outbounds-probe-toolbar #outbounds-nodes-summary.xk-pool-summary {
+  height: 28px;
+  min-height: 28px;
+}
+
 body.panel-page .routing-side-card--outbounds #outbounds-nodes-pingall.xk-sub-icon-btn.btn-compact {
   display: inline-grid;
   place-items: center;
