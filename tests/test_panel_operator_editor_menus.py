@@ -83,6 +83,9 @@ def test_operator_editors_share_panel_canvas_and_schema_hover_is_readable():
         "opacity: 0.74;",
         "backdrop-filter: none !important;",
         "--xk-cm-popup-bg: var(--op-surface-2);",
+        "CM6 gives its persistent search panel a local z-index of 300.",
+        "body.panel-page .xkeen-cm6-host .cm-editor {",
+        "isolation: isolate;",
         ".cm-tooltip.cm-tooltip-hover",
         ".cm6-json-schema-hover",
         "background: var(--op-surface-2) !important;",
@@ -105,4 +108,4 @@ def test_operator_editors_share_panel_canvas_and_schema_hover_is_readable():
     ):
         assert fragment in monaco
 
-    assert "filename='panel-operator.css', v='20260917g'" in template
+    assert "filename='panel-operator.css', v='20260919a'" in template

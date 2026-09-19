@@ -436,6 +436,49 @@ test('routing Mihomo proxy tools use a compact operator empty state', async ({ p
 });
 
 
+test('CM6 search panel stays below the Mihomo proxy tools modal', async ({ page }) => {
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  await page.locator('#mihomo-clash-tab-config').click();
+
+  const editor = page.locator('#mihomo-editor + .xkeen-cm6-host .cm-content');
+  await expect(editor).toBeVisible();
+  await editor.click();
+  await page.keyboard.press('Control+f');
+
+  const searchPanel = page.locator('#mihomo-editor + .xkeen-cm6-host .cm-panels.cm-panels-top');
+  await expect(searchPanel).toBeVisible();
+
+  const menu = page.locator('.xk-mihomo-menu');
+  await menu.locator('summary').click();
+  await page.locator('#mihomo-proxy-tools-btn').click();
+
+  const modal = page.locator('#mihomo-proxy-tools-modal');
+  await expect(modal).toBeVisible();
+
+  const overlap = await page.evaluate(() => {
+    const search = document.querySelector('#mihomo-editor + .xkeen-cm6-host .cm-panels.cm-panels-top');
+    const dialog = document.querySelector('#mihomo-proxy-tools-modal .modal-content');
+    if (!search || !dialog) throw new Error('CM6 search panel or proxy tools modal is missing');
+    const a = search.getBoundingClientRect();
+    const b = dialog.getBoundingClientRect();
+    const left = Math.max(a.left, b.left);
+    const right = Math.min(a.right, b.right);
+    const top = Math.max(a.top, b.top);
+    const bottom = Math.min(a.bottom, b.bottom);
+    if (right <= left || bottom <= top) return { intersects: false, coveredByModal: false };
+    const topElement = document.elementFromPoint((left + right) / 2, (top + bottom) / 2);
+    return {
+      intersects: true,
+      coveredByModal: !!topElement?.closest('#mihomo-proxy-tools-modal'),
+    };
+  });
+
+  expect(overlap.intersects).toBe(true);
+  expect(overlap.coveredByModal).toBe(true);
+});
+
+
 test('routing Mihomo proxy tools keep a scrollable resize-safe workbench and aligned action labels', async ({ page }) => {
   await page.goto('/');
   await selectPanelView(page, 'mihomo');

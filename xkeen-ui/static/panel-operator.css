@@ -3114,6 +3114,12 @@ body.panel-page .xkeen-cm6-host {
   --xk-cm-popup-shadow: rgba(0, 0, 0, 0.34);
 }
 
+/* CM6 gives its persistent search panel a local z-index of 300. Isolate the
+ * editor so that layer cannot escape into a panel modal or an editor menu. */
+body.panel-page .xkeen-cm6-host .cm-editor {
+  isolation: isolate;
+}
+
 /* CodeMirror 6 schema hover/tooltips are also rendered as floating surfaces.
  * Override the old navy popup tokens at the panel boundary so CM and Monaco
  * use the same neutral operator treatment. */
