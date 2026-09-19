@@ -8279,8 +8279,8 @@ body.panel-page #xray-devices-modal .xray-devices-actions {
  * width/height can take precedence, and let the preview own the free row. */
 body.panel-page #mihomo-import-modal .modal-content {
   grid-template-rows: 50px minmax(0, 1fr) 50px;
-  width: min(96vw, 1160px);
-  max-width: 1160px;
+  width: min(96vw, 1440px);
+  max-width: 1440px;
   min-height: min(520px, calc(100dvh - 36px));
   height: clamp(520px, 82dvh, 900px);
   max-height: calc(100dvh - 36px);

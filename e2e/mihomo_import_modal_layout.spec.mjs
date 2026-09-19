@@ -2,6 +2,10 @@ import { test, expect, selectPanelView } from './fixtures.mjs';
 
 
 test('Mihomo import uses the resizable Operator workbench and stretches its YAML preview', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 960 });
+  await page.addInitScript(() => {
+    localStorage.removeItem('xk.modal.state.v1.mihomo-import');
+  });
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
@@ -21,6 +25,7 @@ test('Mihomo import uses the resizable Operator workbench and stretches its YAML
     return {
       previewHeight: node.getBoundingClientRect().height,
       contentHeight: content ? content.getBoundingClientRect().height : 0,
+      contentWidth: content ? content.getBoundingClientRect().width : 0,
       gridRows: contentStyle ? contentStyle.gridTemplateRows : '',
       previewFlexGrow: style.flexGrow,
     };
@@ -28,6 +33,7 @@ test('Mihomo import uses the resizable Operator workbench and stretches its YAML
 
   expect(before.gridRows).not.toBe('none');
   expect(before.previewFlexGrow).toBe('1');
+  expect(before.contentWidth).toBeGreaterThan(1400);
 
   const handle = page.locator('#mihomo-import-modal .modal-resizer');
   const box = await handle.boundingBox();
@@ -52,6 +58,34 @@ test('Mihomo import uses the resizable Operator workbench and stretches its YAML
   expect(after.contentHeight).toBeGreaterThan(before.contentHeight + 40);
   expect(after.previewHeight).toBeGreaterThan(before.previewHeight + 40);
   expect(after.editorHeight).toBeGreaterThanOrEqual(after.previewHeight - 2);
+});
+
+
+test('Mihomo import stays within a narrow viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    localStorage.removeItem('xk.modal.state.v1.mihomo-import');
+  });
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  await page.locator('#mihomo-clash-tab-config').click();
+  await page.locator('.xk-mihomo-menu summary').click();
+  await page.locator('#mihomo-import-node-btn').click();
+  await expect(page.locator('#mihomo-import-modal')).toBeVisible();
+
+  const frame = await page.locator('#mihomo-import-modal .modal-content').evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return {
+      left: rect.left,
+      right: rect.right,
+      width: rect.width,
+      viewportWidth: window.innerWidth,
+    };
+  });
+
+  expect(frame.width).toBeGreaterThan(360);
+  expect(frame.left).toBeGreaterThanOrEqual(0);
+  expect(frame.right).toBeLessThanOrEqual(frame.viewportWidth);
 });
 
 
