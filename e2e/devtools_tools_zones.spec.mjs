@@ -256,9 +256,47 @@ test.describe('DevTools Tools zones', () => {
     const below = row.updateBottom - row.logBottom;
     expect(Math.abs(above - below)).toBeLessThanOrEqual(2);
 
-    // Свободная высота растянутой карточки собирается над блоком автопроверки,
-    // поэтому зазор под вердиктом заметно больше зазора вокруг блока лога.
-    expect(row.autocheckTop - row.verdictRowBottom).toBeGreaterThan(below);
+    // Свободной высоты посреди карточки не копится: зазор под вердиктом
+    // остаётся обычным, не больше полей вокруг блока лога.
+    expect(row.autocheckTop - row.verdictRowBottom).toBeLessThanOrEqual(below + 2);
+  });
+
+  test('a tall window does not tear a hole inside the update card', async ({ page }) => {
+    // Сторож против регрессии «высокое окно»: остальные сценарии гоняются на 1000px —
+    // ровно под порогом, за которым карточка ENV начинала расти вместе с окном,
+    // а весь избыток собирался одной дырой над блоком автопроверки.
+    await openTools(page, { width: 1600, height: 1000 });
+
+    const measure = () =>
+      page.evaluate(() => {
+        const b = (s) => document.querySelector(s).getBoundingClientRect();
+        return {
+          envHeight: b('#dt-env-card').height,
+          updateBottom: b('#dt-update-card').bottom,
+          envBottom: b('#dt-env-card').bottom,
+          logBottom: b('.dt-update-log-summary').bottom,
+          verdictToAutocheck: b('.dt-update-autocheck-row').top - b('.dt-update-verdict-row').bottom,
+        };
+      });
+
+    const short = await measure();
+    await page.setViewportSize({ width: 1600, height: 1400 });
+    const tall = await measure();
+
+    // Высоту ряда задаёт содержимое, а не размер окна...
+    expect(Math.abs(tall.envHeight - short.envHeight)).toBeLessThanOrEqual(2);
+    // ...внутри карточки обновления зазоры остаются обычными...
+    expect(tall.verdictToAutocheck).toBeLessThanOrEqual(24);
+    // ...и низы половин ряда по-прежнему сходятся.
+    expect(Math.abs(tall.updateBottom - tall.envBottom)).toBeLessThanOrEqual(2);
+
+    // А когда соседняя карточка и правда выше (у неё длинный список переменных),
+    // слабина растянутой карточки обновления уходит вниз, под блок лога,
+    // а не копится дырой посреди карточки.
+    await page.addStyleTag({ content: '#dt-env-card { min-height: 1200px !important; }' });
+    const stretched = await measure();
+    expect(stretched.verdictToAutocheck).toBeLessThanOrEqual(24);
+    expect(stretched.updateBottom - stretched.logBottom).toBeGreaterThan(100);
   });
 
   test('the update verdict pill is roomy enough to read', async ({ page }) => {

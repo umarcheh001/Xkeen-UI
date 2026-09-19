@@ -847,6 +847,15 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     _waitingForRestart = false;
   }
 
+  // Полный хэш (40 символов) не влезал в строку «Текущая версия:» и рвал её надвое.
+  // Короткого префикса хватает, чтобы сверить сборку, а версии в других местах панели
+  // печатаются так же.
+  function _shortCommit(commit) {
+    const raw = String(commit || '').trim();
+    if (!/^[0-9a-f]{13,}$/i.test(raw)) return raw;
+    return raw.slice(0, 12);
+  }
+
   function _renderInfo(data) {
     const build = (data && data.build && typeof data.build === 'object') ? data.build : {};
     const settings = (data && data.settings && typeof data.settings === 'object') ? data.settings : {};
@@ -863,7 +872,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     _setText('dt-update-channel', channel);
     _setText('dt-update-branch', branch || '—');
     _setText('dt-update-current-version', version);
-    _setText('dt-update-current-commit', commit ? ('(' + commit + ')') : '');
+    _setText('dt-update-current-commit', commit ? ('(' + _shortCommit(commit) + ')') : '');
     _setText('dt-update-current-built', builtUtc ? ('Сборка: ' + _fmtIso(builtUtc)) : '');
 
 

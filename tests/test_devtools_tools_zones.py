@@ -188,24 +188,30 @@ def test_top_row_stretches_the_last_card_to_match_env():
     assert "minmax(400px, 440px) minmax(0, 1fr)" in top_row
 
 
-def test_slack_of_the_stretched_update_card_gathers_above_the_autocheck_block():
-    """Блок лога обрамлён одинаково: сверху поле, снизу — столько же до края карточки."""
+def test_stretched_update_card_keeps_its_slack_at_the_bottom():
+    """Пустота растянутой карточки уходит под блок лога, а не копится посреди неё."""
     template = TEMPLATE.read_text(encoding="utf-8")
     glass = GLASS_CSS.read_text(encoding="utf-8")
     operator = OPERATOR_CSS.read_text(encoding="utf-8")
 
-    # Инлайновый отступ перебил бы `margin-top: auto`, поэтому его в разметке нет.
+    # У блока автопроверки нет инлайновых отступов: разметка не спорит со слоем.
     label_at = template.index('aria-label="Update auto-check settings"')
     grid = template[template.rfind("<div", 0, label_at) : template.index(">", label_at) + 1]
     assert "dt-update-autocheck-row" in grid
     assert "style=" not in grid
 
-    # Свободная высота растянутой карточки собирается над блоком автопроверки.
+    # Слабину над собой блок автопроверки больше не собирает, верхнее поле держит padding.
     row = glass[glass.index(".dt-update-autocheck-row {"):]
     row = row[: row.index("}")]
-    assert "margin-top: auto;" in row
-    # В обычном потоке `auto` даёт ноль, верхнее поле держит padding.
+    assert "margin-top: auto;" not in row
     assert "padding-top: 12px;" in row
+
+    # Карточки верхнего ряда не растут вместе с окном: высоту задаёт содержимое,
+    # низы половин держит `flex: 1 1 auto`, а не привязка к 100vh или к строке грида.
+    assert "body.devtools-page .dt-main-card {" not in glass
+    env_card = operator[operator.index("body.devtools-page #dt-env-card {"):]
+    env_card = env_card[: env_card.index("}")]
+    assert "min-height" not in env_card
 
     # Тема оператора обнуляет margin у всех карточек — блоку лога он возвращён.
     log_box = operator[operator.index("body.devtools-page #dt-update-log-box {"):]
@@ -531,3 +537,18 @@ def test_prefs_io_buttons_are_labelled_in_russian():
         "Сбросить всё",
     ):
         assert label in card, label
+
+
+def test_current_commit_is_printed_as_a_short_hash():
+    """Полные 40 символов рвали строку «Текущая версия:» надвое — печатаем короткий хэш."""
+    script = (ROOT / "xkeen-ui/static/js/features/devtools/update.js").read_text(encoding="utf-8")
+
+    assert "function _shortCommit(" in script
+
+    fn = script[script.index("function _shortCommit("):]
+    fn = fn[: fn.index("\n  }")]
+    assert "slice(0, 12)" in fn
+
+    printed = [ln for ln in script.splitlines() if "'dt-update-current-commit'" in ln]
+    assert printed, "строка с выводом коммита не найдена"
+    assert "_shortCommit(commit)" in printed[0]

@@ -989,8 +989,11 @@ body.devtools-page .dt-tab-star {
   border-radius: var(--op-radius-sm) !important;
 }
 
+/* Высоту карточка ENV берёт от содержимого: прежний `min-height: calc(100vh - 113px)`
+   раздувал её до размера окна независимо от числа переменных, и на высоком окне под
+   списком групп зияла пустота. Низ ряда с соседней колонкой держит
+   `#dt-env-card { flex: 1 1 auto }` в базовом слое. */
 body.devtools-page #dt-env-card {
-  min-height: calc(100vh - 113px);
   padding: 11px 12px 12px;
 }
 
