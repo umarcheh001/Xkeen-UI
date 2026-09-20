@@ -246,6 +246,14 @@ const XRAY_STREAM_SETTINGS_SNIPPETS = [
 
 const XRAY_CONFIG_TOP_LEVEL_SNIPPETS = [
   {
+    id: 'xray-config-api-speed-balancer',
+    label: 'api block (XKeen speed balancer)',
+    detail: 'Xray · config.api',
+    documentation: 'gRPC API для XKeen speed balancer: RoutingService переключает цель балансировщика, StatsService читает статистику. Xray сам создаёт outbound `api`; добавьте API inbound и routing rule в отдельных фрагментах, если не используете упрощённый режим с `listen`.',
+    insertText: '"api": {\n  "tag": "api",\n  "services": [\n    "RoutingService",\n    "StatsService"\n  ]\n}',
+    monacoSnippet: '"api": {\n  "tag": "${1:api}",\n  "services": [\n    "RoutingService",\n    "StatsService"\n  ]\n}$0',
+  },
+  {
     id: 'xray-config-dns',
     label: 'dns block (Keenetic — по инструкции)',
     detail: 'Xray · config.dns',

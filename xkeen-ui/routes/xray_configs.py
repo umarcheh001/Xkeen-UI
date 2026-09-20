@@ -474,6 +474,18 @@ def create_xray_configs_blueprint(
         tag = str(dns.get("tag") or "").strip() if isinstance(dns, dict) else ""
         return [tag] if tag else []
 
+    def _api_outbound_tags_from_config(cfg: Any) -> list[str]:
+        """Return Xray's implicit outbound created by the ``api`` block.
+
+        Xray creates an internal outbound handler with ``api.tag``.  It does
+        not appear in ``outbounds``, but routing rules must target it to reach
+        the API when an explicit API inbound is used.
+        """
+        root = cfg if isinstance(cfg, dict) else {}
+        api = root.get("api") if isinstance(root.get("api"), dict) else {}
+        tag = str(api.get("tag") or "").strip() if isinstance(api, dict) else ""
+        return [tag] if tag else []
+
     def _xray_named_tags_from_config(cfg: Any) -> set[str]:
         tags: set[str] = set()
         tags.update(_outbound_tags_from_config(cfg, proxy_only=False))
@@ -904,7 +916,7 @@ def create_xray_configs_blueprint(
         return tags
 
     def _collect_config_outbound_tags(*, all_fragments: bool) -> list[str]:
-        """Collect real outbound tags from every active Xray fragment.
+        """Collect real and Xray-created outbound tags from every active fragment.
 
         ``list_xray_fragments('outbounds')`` intentionally only lists files
         whose names contain ``outbounds``.  Feature-owned fragments (for
@@ -921,6 +933,26 @@ def create_xray_configs_blueprint(
             except Exception:
                 continue
             for tag in _outbound_tags_from_config(obj, proxy_only=False):
+                _append_unique_tag(tags, seen, tag)
+            for tag in _api_outbound_tags_from_config(obj):
+                _append_unique_tag(tags, seen, tag)
+        return tags
+
+    def _collect_config_inbound_tags(*, all_fragments: bool) -> list[str]:
+        """Collect inbounds from all fragments, including feature-owned ones.
+
+        Files such as ``00_api.json`` are intentionally not named as regular
+        inbounds fragments, yet their API/probe listeners are still valid
+        targets for routing rules.
+        """
+        tags: list[str] = []
+        seen: set[str] = set()
+        for path in _iter_semantic_tag_context_paths(all_fragments=all_fragments):
+            try:
+                obj = _load_xray_fragment_obj(path)
+            except Exception:
+                continue
+            for tag in _inbound_tags_from_config(obj):
                 _append_unique_tag(tags, seen, tag)
         return tags
 
@@ -1242,6 +1274,13 @@ def create_xray_configs_blueprint(
             default_path=INBOUNDS_FILE,
             all_fragments=all_fragments,
         )
+        # The conventional inbounds list deliberately excludes feature-owned
+        # files (for example 00_api.json).  Include those when the routing
+        # editor asks for the complete semantic context.
+        if all_fragments:
+            for tag in _collect_config_inbound_tags(all_fragments=True):
+                if tag not in tags:
+                    tags.append(tag)
         for tag in _collect_loopback_inbound_tags_from_outbounds(
             default_path=OUTBOUNDS_FILE,
             all_fragments=all_fragments,

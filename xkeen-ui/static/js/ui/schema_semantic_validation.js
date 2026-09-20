@@ -742,6 +742,16 @@ function collectXrayDnsInboundTags(data) {
   return tag ? [tag] : [];
 }
 
+function collectXrayApiOutboundTags(data) {
+  if (!isPlainObject(data)) return [];
+  const api = isPlainObject(data.api) ? data.api : null;
+  const tag = cleanName(api && api.tag);
+  // Xray creates an internal outbound handler with api.tag when the API
+  // module is enabled.  It is therefore a valid routing target even though
+  // it is not listed in the document's outbounds array.
+  return tag ? [tag] : [];
+}
+
 function xrayItemPointer(basePointer, index) {
   const base = cleanName(basePointer);
   return base ? `${base}/${index}` : `/${index}`;
@@ -855,6 +865,7 @@ function collectXrayKnownTags(shape, options, kind) {
     : ['contextInbounds', 'context', 'externalInbounds'];
   const docTags = kind === 'outbound'
     ? collectXrayTagsFromArray(shape && shape.outbounds, 'tag').concat(
+        collectXrayApiOutboundTags(shape && shape.data),
         collectXrayLegacyReverseTags(shape && shape.data && shape.data.reverse, 'outbound'),
         collectXrayVlessReverseOutboundTags(shape && shape.inbounds),
       )

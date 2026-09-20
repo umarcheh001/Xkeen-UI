@@ -252,6 +252,30 @@ console.log(JSON.stringify({
     assert '"queryStrategy": "UseIP"' in payload["insertText"]
 
 
+def test_xray_api_speed_balancer_snippet_includes_required_services():
+    payload = _run_node_json(
+        """
+import { getXraySnippets } from './xkeen-ui/static/js/ui/schema_snippets.js';
+
+const snippet = getXraySnippets({
+  schemaKind: 'xray-config',
+  pointer: '/',
+}).find((item) => item && item.id === 'xray-config-api-speed-balancer');
+
+console.log(JSON.stringify({
+  label: snippet ? snippet.label : '',
+  documentation: snippet ? snippet.documentation : '',
+  insertText: snippet ? snippet.insertText : '',
+}));
+"""
+    )
+
+    assert payload["label"] == "api block (XKeen speed balancer)"
+    assert '"tag": "api"' in payload["insertText"]
+    assert '"RoutingService"' in payload["insertText"]
+    assert '"StatsService"' in payload["insertText"]
+
+
 def test_xray_vless_snippets_prefer_compact_settings_format():
     payload = _run_node_json(
         """

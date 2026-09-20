@@ -754,6 +754,70 @@ def test_xray_inbound_tags_all_includes_dns_tag_virtual_inbound(tmp_path, monkey
     ]
 
 
+def test_xray_tag_endpoints_include_api_fragment_inbound_and_implicit_outbound(tmp_path, monkeypatch):
+    configs_dir = tmp_path / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    configs_dir.mkdir()
+    jsonc_dir.mkdir()
+
+    api_name = "00_api.json"
+    inbounds_name = "03_inbounds.json"
+    outbounds_name = "04_outbounds.json"
+    (configs_dir / api_name).write_text(
+        json.dumps(
+            {
+                "api": {"tag": "api", "services": ["RoutingService", "StatsService"]},
+                "inbounds": [
+                    {"tag": "api", "protocol": "tunnel", "port": 10085, "settings": {"address": "127.0.0.1"}},
+                    {"tag": "probe", "protocol": "http", "port": 10808},
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (configs_dir / inbounds_name).write_text(
+        json.dumps({"inbounds": [{"tag": "redirect", "protocol": "dokodemo-door"}]}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    (configs_dir / outbounds_name).write_text(
+        json.dumps({"outbounds": [{"tag": "direct", "protocol": "freedom"}]}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(xray_configs_mod, "XRAY_CONFIGS_DIR", str(configs_dir))
+    monkeypatch.setattr(xray_configs_mod, "INBOUNDS_FILE", str(configs_dir / inbounds_name))
+    monkeypatch.setattr(xray_configs_mod, "OUTBOUNDS_FILE", str(configs_dir / outbounds_name))
+    monkeypatch.setattr(xray_configs_mod, "ROUTING_FILE", str(configs_dir / "05_routing.json"))
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "list_xray_fragments",
+        lambda kind: ([{"name": inbounds_name}] if kind == "inbounds" else [{"name": outbounds_name}] if kind == "outbounds" else []),
+    )
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "resolve_xray_fragment_file",
+        lambda file_arg, *, kind, default_path: str(configs_dir / (file_arg or Path(default_path).name)),
+    )
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "jsonc_path_for",
+        lambda main_path: str(jsonc_dir / (Path(main_path).name + "c")),
+    )
+
+    app = _make_app()
+    with app.test_client() as client:
+        inbound_response = client.get("/api/xray/inbound-tags?all=1")
+        outbound_response = client.get("/api/xray/outbound-tags?all=1")
+
+    assert inbound_response.status_code == 200
+    assert inbound_response.get_json()["tags"] == ["redirect", "api", "probe"]
+    assert outbound_response.status_code == 200
+    assert outbound_response.get_json()["tags"] == ["direct", "api"]
+
+
 def test_xray_outbounds_active_endpoint_marks_last_observed_node(tmp_path, monkeypatch):
     configs_dir = tmp_path / "configs"
     jsonc_dir = tmp_path / "jsonc"

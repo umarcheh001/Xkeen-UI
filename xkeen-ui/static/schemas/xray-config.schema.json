@@ -39,12 +39,12 @@
     },
 
     "api": {
-      "description": "gRPC API для runtime-управления Xray (горячая перезагрузка правил, статистика). Требует отдельного inbound с `protocol: dokodemo-door` и тем же тегом, что указан ниже, а также правила в `routing.rules` с `inboundTag`, ведущего на `outboundTag: api`.",
+      "description": "gRPC API для runtime-управления Xray (горячая перезагрузка правил, статистика и override балансировщика). Xray автоматически создаёт внутренний outbound с именем `api.tag`; при отдельном API-inbound направьте его правилом `inboundTag` на этот outbound. Для XKeen speed balancer нужны `RoutingService` и `StatsService`.",
       "type": "object",
       "properties": {
         "tag": {
           "type": "string",
-          "description": "Тег для сопоставления с inbound, принимающим API-трафик. Стандартное значение — `api`.",
+          "description": "Имя внутреннего API-outbound, который Xray создаёт автоматически. При отдельном inbound его обычно тоже называют `api` и добавляют правило `inboundTag: [\"api\"]` → `outboundTag: \"api\"`.",
           "examples": ["api"]
         },
         "listen": {
@@ -54,13 +54,14 @@
         },
         "services": {
           "type": "array",
-          "description": "Список gRPC-сервисов, которые будут доступны через API. `HandlerService` — управление inbound/outbound, `LoggerService` — реконфигурация логов, `StatsService` — статистика трафика, `RoutingService` — управление правилами, `ReflectionService` — gRPC reflection для клиентов вроде grpcurl.",
+          "description": "Список доступных gRPC-сервисов. Для speed balancer XKeen нужны `RoutingService` (OverrideBalancerTarget) и `StatsService`; `HandlerService` управляет inbound/outbound, `LoggerService` — логом, `ObservatoryService` — observatory, `ReflectionService` — gRPC reflection.",
           "items": {
             "type": "string",
-            "enum": ["HandlerService", "LoggerService", "StatsService", "RoutingService", "ReflectionService"]
+            "enum": ["HandlerService", "LoggerService", "StatsService", "RoutingService", "ObservatoryService", "ReflectionService"]
           }
         }
       },
+      "required": ["tag"],
       "additionalProperties": false
     },
 

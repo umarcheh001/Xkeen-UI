@@ -550,6 +550,37 @@ console.log(JSON.stringify(result.map((item) => ({
     assert "/routing/rules/0/inboundTag/0" not in pointers
 
 
+def test_xray_semantic_validation_accepts_api_tag_as_implicit_outbound():
+    script = """
+import { validateXrayRoutingSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const result = validateXrayRoutingSemantics({
+  api: {
+    tag: 'api',
+    services: ['RoutingService', 'StatsService']
+  },
+  inbounds: [
+    { tag: 'api', protocol: 'tunnel', port: 10085, settings: { address: '127.0.0.1' } }
+  ],
+  routing: {
+    rules: [{ inboundTag: ['api'], outboundTag: 'api' }]
+  }
+});
+
+console.log(JSON.stringify(result.map((item) => ({
+  pointer: item.pointer || '',
+  code: item.code || '',
+  message: item.message || '',
+}))));
+"""
+
+    payload = _run_node_json(script)
+    assert not any(
+        str(item["code"]) in {"outbound-tag-missing", "inbound-tag-missing"}
+        for item in payload
+    )
+
+
 def test_xray_semantic_validation_accepts_available_inbound_tag_alternative():
     script = """
 import { validateXrayRoutingSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
