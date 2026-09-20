@@ -179,10 +179,10 @@ function renderRouteCheck(payload) {
   if (!result) return;
   const state = String(payload?.state || 'unreachable');
   const labels = {
-    'fake-ip': 'Fake-IP подтверждён локальным listener',
-    'real-ip': 'listener отвечает реальным IP (домен может быть в Fake-IP filter)',
+    'fake-ip': 'Fake-IP подтверждён: адрес входит в настроенный диапазон',
+    'real-ip': 'listener вернул обычный IP вне Fake-IP диапазона (домен может быть в filter)',
     'resolved': 'listener отвечает обычным реальным IP',
-    'range-unavailable': 'listener отвечает, но Fake-IP CIDR не найден в конфигурации',
+    'range-unavailable': 'listener ответил IP, но Fake-IP CIDR не удалось прочесть из конфигурации',
     'no-address': 'listener ответил без IP-адресов',
     'unreachable': 'порт 53 не ответил на локальный UDP-запрос',
   };

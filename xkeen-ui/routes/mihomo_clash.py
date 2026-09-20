@@ -361,21 +361,70 @@ def _safe_config_file_payload(config_path: str) -> dict[str, Any]:
 
     Some Mihomo vendor builds omit the ``dns`` object from ``GET /configs``
     even though the resolver is fully configured and working.  The local
-    active config is the authoritative fallback for diagnostics; it is parsed
-    with ``safe_load`` and immediately reduced by ``_safe_config_payload`` so
-    secrets and resolver URLs never enter the API response or cache.
+    active config is the authoritative fallback for diagnostics. It is parsed
+    with ``safe_load`` when available and immediately reduced by
+    ``_safe_config_payload`` so secrets and resolver URLs never enter the API
+    response or cache. Router builds deliberately may not include PyYAML, so
+    the small DNS fragment also has a strict line-oriented fallback.
     """
 
-    if _yaml is None or not config_path:
+    if not config_path:
         return {}
     try:
         path = Path(config_path)
         if path.stat().st_size > MAX_CONFIG_FILE_BYTES:
             return {}
-        parsed = _yaml.safe_load(path.read_text(encoding="utf-8"))
+        content = path.read_text(encoding="utf-8")
     except Exception:  # noqa: BLE001 - optional diagnostic fallback only
         return {}
-    return _safe_config_payload(parsed)
+    if _yaml is not None:
+        try:
+            return _safe_config_payload(_yaml.safe_load(content))
+        except Exception:  # noqa: BLE001 - optional diagnostic fallback only
+            return {}
+
+    # Keep this deliberately narrower than a YAML parser: diagnostics need
+    # only direct scalar keys in a conventional, block-style ``dns:`` mapping.
+    # Do not read nameservers, filters or arbitrary YAML values.
+    match = re.search(r"(?m)^dns:[ \t]*(?:#.*)?(?:\r?\n|$)", content)
+    if not match:
+        return {}
+    dns: dict[str, Any] = {}
+    direct_indent: str | None = None
+    allowed = {
+        "enable",
+        "enhanced-mode",
+        "enhanced_mode",
+        "listen",
+        "fake-ip-range",
+        "fake-ip-range6",
+        "fake-ip-filter-mode",
+    }
+    for line in content[match.end() :].splitlines():
+        if line and not line[0].isspace():
+            break
+        candidate = re.match(r"^[ \t]+([a-zA-Z0-9_-]+)[ \t]*:[ \t]*([^#\r\n]+)", line)
+        if not candidate:
+            continue
+        indentation = line[: len(line) - len(line.lstrip(" \t"))]
+        if direct_indent is None:
+            direct_indent = indentation
+        if indentation != direct_indent:
+            continue
+        key, value = candidate.groups()
+        if key not in allowed:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1].strip()
+        if key == "enable":
+            if value.lower() in {"true", "yes", "on", "1"}:
+                dns[key] = True
+            elif value.lower() in {"false", "no", "off", "0"}:
+                dns[key] = False
+        elif value:
+            dns[key] = value[:96]
+    return {"dns": dns} if dns else {}
 
 
 def _merge_dns_config_fallback(config_payload: Any, config_path: str) -> dict[str, Any]:

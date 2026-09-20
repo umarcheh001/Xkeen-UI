@@ -325,6 +325,46 @@ def test_dns_query_falls_back_to_redacted_local_config_when_configs_omits_dns(mo
     assert "example.test" not in serialized
 
 
+def test_dns_query_reads_fake_ip_range_without_pyyaml(monkeypatch, tmp_path):
+    from tests.test_mihomo_clash_routes import make_app, ready_discovery
+    import routes.mihomo_clash as mihomo_clash_routes
+
+    class ConfigOmittingDnsClient(_DnsClient):
+        def request_json(self, operation: str):
+            if operation == "configs":
+                self.operations.append(operation)
+                return MihomoClashJSONResponse({"mode": "rule"}, 200, 1, 32)
+            return super().request_json(operation)
+
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        "dns:\n"
+        "  enable: true\n"
+        "  listen: 0.0.0.0:53\n"
+        "  enhanced-mode: fake-ip\n"
+        "  fake-ip-range: 198.18.0.1/16\n"
+        "  nameserver:\n"
+        "    enable: false\n"
+        "    fake-ip-range: 192.0.2.0/24\n"
+        "    - https://secret-user:secret-pass@example.test/dns-query\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(mihomo_clash_routes, "_yaml", None)
+    monkeypatch.setenv("XKEEN_MIHOMO_DNS_QUERY_ENABLE", "1")
+    response = make_app(
+        ready_discovery(),
+        ConfigOmittingDnsClient(),
+        mihomo_config_file=str(config_file),
+        mihomo_root=str(tmp_path),
+    ).test_client().get("/api/mihomo/clash/dns/query?name=example.invalid&type=A")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["dns_mode"] == "fake-ip"
+    assert payload["answer_observation"]["range"] == "198.18.0.1/16"
+    assert "secret-user" not in json.dumps(payload, ensure_ascii=False)
+
+
 def test_dns_listener_probe_classifies_fake_ip_without_confusing_controller_answers(monkeypatch):
     import socket
     import struct
