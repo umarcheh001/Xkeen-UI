@@ -30,6 +30,8 @@ test('stopping xkeen releases protected DNS only after confirmation', async ({ p
   });
 
   await page.goto('/');
+  // Кнопки управления сервисом живут в меню статуса компактной шапки.
+  await page.locator('.xk-brand-service-trigger').click();
   await expect(page.locator('#xkeen-stop-btn')).toBeEnabled();
   await page.locator('#xkeen-stop-btn').click();
 
