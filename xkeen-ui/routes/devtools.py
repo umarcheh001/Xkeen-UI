@@ -101,12 +101,37 @@ BACKUP_TAR_UNSUPPORTED_HINT = (
 )
 
 
+# Результат пробы на процесс, а не на запрос.
+#
+# `/api/devtools/update/info` зовут при каждой загрузке страницы панели, а проба
+# создаёт временный каталог и запускает настоящий `tar -czf`: на роутере это
+# секунды и лишняя запись во флеш на каждом открытии. Ключ — сам бинарник tar
+# (путь, время, размер), чтобы после `opkg install tar` панель увидела новый tar
+# без перезапуска.
+_TAR_EXCLUDE_PROBE_CACHE: tuple[tuple[Any, ...], bool] | None = None
+
+
+def _tar_probe_cache_key(tar_bin: str) -> tuple[Any, ...]:
+    try:
+        stat = os.stat(tar_bin)
+    except OSError:
+        return (tar_bin, None, None)
+    return (tar_bin, stat.st_mtime_ns, stat.st_size)
+
+
 def _tar_supports_exclude() -> bool:
     """Return False only when tar is present and clearly rejects --exclude."""
+
+    global _TAR_EXCLUDE_PROBE_CACHE
 
     tar_bin = shutil.which("tar")
     if not tar_bin:
         return False
+
+    cache_key = _tar_probe_cache_key(tar_bin)
+    cached = _TAR_EXCLUDE_PROBE_CACHE
+    if cached is not None and cached[0] == cache_key:
+        return cached[1]
 
     try:
         with tempfile.TemporaryDirectory(prefix="xkeen-tar-probe-") as tmp:
@@ -127,16 +152,23 @@ def _tar_supports_exclude() -> bool:
             )
     except Exception:
         # Unknown probe failure should not block updates; the shell runner will
-        # still write a precise backup error if the real tar command fails.
+        # still write a precise backup error if the real tar command fails. Сбой
+        # пробы не запоминаем: он мог быть разовым.
         return True
 
-    if result.returncode == 0:
-        return True
+    supported = True
+    if result.returncode != 0:
+        err = str(result.stderr or "").lower()
+        if (
+            "--exclude" in err
+            or "unrecognized option" in err
+            or "unknown option" in err
+            or "illegal option" in err
+        ):
+            supported = False
 
-    err = str(result.stderr or "").lower()
-    if "--exclude" in err or "unrecognized option" in err or "unknown option" in err or "illegal option" in err:
-        return False
-    return True
+    _TAR_EXCLUDE_PROBE_CACHE = (cache_key, supported)
+    return supported
 
 
 def _backup_tar_unsupported_payload() -> Dict[str, Any]:
