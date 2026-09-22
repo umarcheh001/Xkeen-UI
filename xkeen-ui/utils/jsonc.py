@@ -9,6 +9,11 @@ Implementation is dependency-free and intentionally conservative.
 
 from __future__ import annotations
 
+import re
+
+# Символы, с которых может начаться строка или комментарий.
+_SPECIAL_RE = re.compile(r'["/#]')
+
 
 def strip_json_comments_text(s: str) -> str:
     """Удаляем //, # и /* */ комментарии вне строк."""
@@ -20,59 +25,65 @@ def strip_json_comments_text(s: str) -> str:
         except Exception:
             return ""
 
+    # Посимвольный проход стоил панели полторы сотни миллисекунд на запрос:
+    # конфигов читается три десятка, и каждый символ уходил в list.append.
+    # Поэтому прыгаем сразу к ближайшему значимому символу и копируем куски
+    # целиком — поведение прежнее, работа идёт срезами.
+    if not _SPECIAL_RE.search(s):
+        return s
+
     res: list[str] = []
-    in_string = False
-    escape = False
     i = 0
     length = len(s)
 
     while i < length:
+        match = _SPECIAL_RE.search(s, i)
+        if match is None:
+            res.append(s[i:])
+            break
+
+        pos = match.start()
+        if pos > i:
+            res.append(s[i:pos])
+        i = pos
         ch = s[i]
 
-        # Внутри строки — просто копируем символы, следим за экранированием
-        if in_string:
-            res.append(ch)
-            if escape:
-                escape = False
-            elif ch == "\\":
-                escape = True
-            elif ch == '"':
-                in_string = False
-            i += 1
-            continue
-
-        # Начало строки
         if ch == '"':
-            in_string = True
-            res.append(ch)
-            i += 1
+            # Экранированная кавычка строку не закрывает, а `\` экранирует
+            # сам себя — поэтому шагаем через пару символов.
+            j = i + 1
+            while True:
+                quote = s.find('"', j)
+                if quote < 0:
+                    # Незакрытая строка: хвост уходит как есть, как и раньше.
+                    j = length
+                    break
+                backslashes = 0
+                probe = quote - 1
+                while probe > i and s[probe] == "\\":
+                    backslashes += 1
+                    probe -= 1
+                j = quote + 1
+                # Нечётное число слэшей экранирует кавычку — строка продолжается.
+                if backslashes % 2 == 0:
+                    break
+            res.append(s[i:j])
+            i = j
             continue
 
-        # Однострочный комментарий // ...
-        if ch == "/" and i + 1 < length and s[i + 1] == "/":
-            # пропускаем до конца строки
-            i += 2
-            while i < length and s[i] != "\n":
-                i += 1
+        if ch == "#" or (ch == "/" and i + 1 < length and s[i + 1] == "/"):
+            # Перевод строки остаётся на месте: по нему считаются номера строк.
+            newline = s.find("\n", i)
+            i = length if newline < 0 else newline
             continue
 
-        # Однострочный комментарий # ...
-        if ch == "#":
-            # пропускаем до конца строки
-            i += 1
-            while i < length and s[i] != "\n":
-                i += 1
-            continue
-
-        # Многострочный комментарий /* ... */
         if ch == "/" and i + 1 < length and s[i + 1] == "*":
-            i += 2
-            while i + 1 < length and not (s[i] == "*" and s[i + 1] == "/"):
-                i += 1
-            i += 2
+            # Незакрытый блок съедает хвост — так было и раньше.
+            closing = s.find("*/", i + 2)
+            i = length if closing < 0 else closing + 2
             continue
 
-        # Обычный символ
+        # Одиночная косая черта — обычный символ.
         res.append(ch)
         i += 1
 
