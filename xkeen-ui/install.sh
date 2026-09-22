@@ -1041,6 +1041,58 @@ sync_bundled_template_dir() {
   done
 }
 
+align_precompressed_mtimes() {
+  STATIC_DIR="$1"
+  [ -n "$STATIC_DIR" ] || return 0
+  [ -d "$STATIC_DIR" ] || return 0
+
+  if ALIGN_OUTPUT="$(
+      PRECOMPRESSED_STATIC_DIR="$STATIC_DIR"       "$PYTHON_BIN" - <<'PY'
+import os
+from pathlib import Path
+
+# ASCII only in this block: it runs as `python3 -`, where a non-UTF-8 locale
+# would turn a Cyrillic comment into a syntax error.
+root = Path(os.environ.get("PRECOMPRESSED_STATIC_DIR", ""))
+if not root.is_dir():
+    print("skip:static_dir_missing")
+    raise SystemExit(0)
+
+aligned = 0
+for packed in root.rglob("*.gz"):
+    source = packed.with_name(packed.name[:-3])
+    try:
+        if not source.is_file() or not packed.is_file():
+            continue
+        src_mtime = source.stat().st_mtime
+        if packed.stat().st_mtime >= src_mtime:
+            continue
+        # Without rsync the tree is copied with `cp -r`, which stamps each file
+        # with the moment it was written. A large source can land a second
+        # after its own .gz, and the serving guard then reads that as "source
+        # edited after packing" and quietly drops the compressed copy.
+        os.utime(packed, (src_mtime, src_mtime))
+        aligned += 1
+    except OSError:
+        continue
+
+print(f"aligned={aligned}")
+PY
+  )"; then
+    ALIGN_STATUS=0
+  else
+    ALIGN_STATUS=$?
+  fi
+
+  if [ "$ALIGN_STATUS" -ne 0 ]; then
+    echo "[!] precompressed mtime alignment failed for $STATIC_DIR (exit $ALIGN_STATUS). Keeping files as-is."
+  elif [ -n "$ALIGN_OUTPUT" ]; then
+    echo "[*] precompressed mtimes: $ALIGN_OUTPUT"
+  fi
+
+  return 0
+}
+
 cleanup_frontend_build_dir() {
   BUILD_DIR="$1"
   [ -n "$BUILD_DIR" ] || return 0
@@ -1133,6 +1185,14 @@ if not loaded_any:
     if errors:
         print("errors=" + " | ".join(errors[:10]))
     raise SystemExit(0)
+
+# Precompressed siblings are produced by the archive builder and never appear
+# in a vite manifest. Without this the cleanup wipes every .gz of the compiled
+# bundle and the panel serves it uncompressed. Orphans are still pruned: a .gz
+# survives only next to a file that survives itself.
+# ASCII only in this block: it runs as `python3 -`, where a non-UTF-8 locale
+# would turn a Cyrillic comment into a syntax error.
+keep |= {rel + ".gz" for rel in keep}
 
 deleted = []
 
@@ -1465,6 +1525,7 @@ fi
 #   XKEEN_UI_UPDATE_REPO, XKEEN_UI_UPDATE_CHANNEL, XKEEN_UI_VERSION, XKEEN_UI_COMMIT
 
 cleanup_frontend_build_dir "$UI_DIR/static/frontend-build"
+align_precompressed_mtimes "$UI_DIR/static"
 
 json_escape() {
   # minimal JSON string escape
