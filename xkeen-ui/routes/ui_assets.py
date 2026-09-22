@@ -13,6 +13,7 @@ import json
 import mimetypes
 import os
 import re
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -142,10 +143,64 @@ def is_hashed_build_asset_path(path: str | None) -> bool:
     return is_hashed_build_asset_filename(raw)
 
 
-def get_static_asset_max_age(filename: str | None) -> int:
+# Короткое окно без перепроверки для остальной статики.
+#
+# Хэша в имени у неё нет, поэтому вечный кэш ей не положен. Но и `max-age=0`
+# дорого: повторный вход в панель — это под две сотни условных запросов (122
+# из них — модули `static/js`), и каждый стоит процессору роутера отдельной
+# обработки, хотя тело приходит пустое. Окно снимает этот поток, пока человек
+# ходит по вкладкам.
+_STATIC_CACHE_SECONDS_ENV = "XKEEN_UI_STATIC_CACHE_SECONDS"
+_DEFAULT_STATIC_CACHE_SECONDS = 600
+
+# ...но только для файлов, которых давно не касались. Штатный способ отладки в
+# этом проекте — правка прямо на роутере по SSH, а обновление панели переписывает
+# файлы целиком. И там, и там mtime становится свежим, и такой файл мы продолжаем
+# отдавать с перепроверкой: изменения видны сразу, без жёсткой перезагрузки.
+_STATIC_RECENTLY_CHANGED_SECONDS = 3600
+
+
+def _static_cache_seconds() -> int:
+    raw = str(os.environ.get(_STATIC_CACHE_SECONDS_ENV) or "").strip()
+    if not raw:
+        return _DEFAULT_STATIC_CACHE_SECONDS
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return _DEFAULT_STATIC_CACHE_SECONDS
+
+
+def get_static_asset_max_age(
+    filename: str | None,
+    static_folder: str | os.PathLike[str] | None = None,
+) -> int:
     if is_hashed_build_asset_filename(filename):
         return _IMMUTABLE_MAX_AGE_SECONDS
-    return 0
+
+    window = _static_cache_seconds()
+    root = str(static_folder or "").strip()
+    # Без известного корня возраст файла не проверить, а кэшировать вслепую
+    # нельзя: отвечаем как раньше.
+    if window <= 0 or not root:
+        return 0
+
+    try:
+        if _is_development_runtime():
+            return 0
+    except Exception:
+        return 0
+
+    try:
+        target = safe_join(root, _normalize_static_filename(filename))
+        if not target or not os.path.isfile(target):
+            return 0
+        changed_ago = time.time() - os.stat(target).st_mtime
+    except Exception:
+        return 0
+
+    if changed_ago < _STATIC_RECENTLY_CHANGED_SECONDS:
+        return 0
+    return window
 
 
 # Предсжатая статика.

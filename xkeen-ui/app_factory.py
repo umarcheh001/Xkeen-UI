@@ -237,7 +237,7 @@ def _create_flask_app():
     class XkeenFlask(PrecompressedStaticMixin, Flask):
         def get_send_file_max_age(self, filename):  # type: ignore[override]
             try:
-                return get_static_asset_max_age(filename)
+                return get_static_asset_max_age(filename, self.static_folder)
             except Exception:
                 return super().get_send_file_max_age(filename)
 
