@@ -14,6 +14,7 @@ import mimetypes
 import os
 import re
 import time
+import zlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -402,6 +403,90 @@ def apply_response_cache_policy(resp: Response) -> Response:
         return _no_cache(resp)
 
     return resp
+
+
+# Сжатие ответов на лету.
+#
+# Предсжатие закрывает только файлы на диске, а документ панели собирается на
+# каждый запрос: около 500 КБ, которые до сих пор уходили по сети как есть.
+# Замер на роутере 22.09.2026 (ARMv8, /opt/bin/python3): уровень 1 стоит 11 мс и
+# сжимает это тело в пять раз, уровень 6 — 32 мс и в 6,6 раза, девятка — 60 мс
+# ради лишних семисот байт. Берём первый: gevent однопоточный, и эти
+# миллисекунды стоят всему циклу событий, а не только текущему клиенту.
+_GZIP_MIN_BYTES_ENV = "XKEEN_UI_GZIP_MIN_BYTES"
+_DEFAULT_GZIP_MIN_BYTES = 32768
+_GZIP_LEVEL = 1
+
+
+def _gzip_min_bytes() -> int:
+    """Порог сжатия; 0 выключает его целиком — аварийная ручка для слабых машин."""
+
+    raw = str(os.environ.get(_GZIP_MIN_BYTES_ENV) or "").strip()
+    if not raw:
+        return _DEFAULT_GZIP_MIN_BYTES
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return _DEFAULT_GZIP_MIN_BYTES
+
+
+def compress_response_if_worthwhile(resp: Response) -> Response:
+    """Сжать крупный HTML-ответ, если клиент об этом просил."""
+
+    if resp is None:
+        return resp
+
+    threshold = _gzip_min_bytes()
+    if threshold <= 0:
+        return resp
+
+    try:
+        if resp.status_code != 200 or "Content-Encoding" in resp.headers:
+            return resp
+        if not _is_html_response(resp):
+            return resp
+        # Потоковый ответ (журналы, выгрузка) втягивать в память нельзя: его
+        # размер заранее неизвестен, а смысл потока — не держать его целиком.
+        if resp.is_streamed or getattr(resp, "direct_passthrough", False):
+            return resp
+    except Exception:
+        return resp
+
+    try:
+        path = str(getattr(request, "path", "") or "")
+    except Exception:
+        path = ""
+    # Рядом со статикой уже лежит готовая .gz, и отдаёт её отдельная ветка.
+    if path.startswith("/static/"):
+        return resp
+
+    try:
+        if not client_accepts_gzip(request.headers.get("Accept-Encoding")):
+            return resp
+    except Exception:
+        return resp
+
+    try:
+        payload = resp.get_data()
+    except Exception:
+        return resp
+    if len(payload) < threshold:
+        return resp
+
+    try:
+        packer = zlib.compressobj(_GZIP_LEVEL, zlib.DEFLATED, 31)
+        packed = packer.compress(payload) + packer.flush()
+    except Exception:
+        return resp
+
+    try:
+        # set_data сам приводит Content-Length к новому телу.
+        resp.set_data(packed)
+        resp.headers["Content-Encoding"] = "gzip"
+    except Exception:
+        return resp
+
+    return add_vary_accept_encoding(resp)
 
 
 def _no_cache(resp: Response) -> Response:

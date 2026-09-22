@@ -228,6 +228,7 @@ def _create_flask_app():
         PrecompressedStaticMixin,
         apply_response_cache_policy,
         apply_response_security_headers,
+        compress_response_if_worthwhile,
         get_static_asset_max_age,
     )
     from services.request_limits import install_request_size_guards
@@ -262,7 +263,10 @@ def _create_flask_app():
     @app.after_request
     def _apply_ui_cache_policy(response):
         response = apply_response_cache_policy(response)
-        return apply_response_security_headers(response)
+        response = apply_response_security_headers(response)
+        # Сжатие идёт последним: Content-Length обязан описывать то тело,
+        # которое реально уходит в сокет.
+        return compress_response_if_worthwhile(response)
 
     return app
 

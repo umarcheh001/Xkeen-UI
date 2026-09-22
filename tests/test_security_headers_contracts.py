@@ -11,8 +11,19 @@ def test_app_factory_applies_global_security_headers_after_cache_policy():
     assert "from routes.ui_assets import (" in app_factory
     assert "apply_response_cache_policy," in app_factory
     assert "apply_response_security_headers," in app_factory
-    assert "response = apply_response_cache_policy(response)" in app_factory
-    assert "return apply_response_security_headers(response)" in app_factory
+    assert "compress_response_if_worthwhile," in app_factory
+
+    # Важен порядок, а не дословное написание: политика кэша, поверх неё
+    # security-заголовки, и только потом сжатие — оно меняет тело, и всё, что
+    # правит заголовки, обязано отработать раньше.
+    steps = [
+        "apply_response_cache_policy(response)",
+        "apply_response_security_headers(response)",
+        "compress_response_if_worthwhile(response)",
+    ]
+    positions = [app_factory.find(step) for step in steps]
+    assert all(pos > 0 for pos in positions), positions
+    assert positions == sorted(positions), positions
 
 
 def test_ui_assets_exposes_conservative_baseline_security_headers():
