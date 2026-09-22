@@ -19,10 +19,20 @@ async function openPanel(page, viewport) {
     localStorage.removeItem('xkeen.panel.last_view.v1');
   });
   await page.goto('/');
-  await expect(page.locator('.panel-header')).toBeVisible();
+  // Шапку прячет класс xk-operator-header-pending, и панель снимает его сама
+  // через 12 секунд, даже если бутстрап не дошёл до конца (templates/panel.html).
+  // Стандартные 10 секунд ожидания попадают внутрь этого окна, и медленная
+  // загрузка на занятой машине выглядит как поломка вёрстки. Ждём дольше
+  // страховки, чтобы падение означало настоящую регрессию.
+  await expect(page.locator('.panel-header')).toBeVisible({ timeout: 15000 });
   await page.waitForFunction(() => typeof window.showView === 'function');
   await page.evaluate(() => window.showView('routing'));
   await expect(page.locator('#view-routing')).toBeVisible();
+  // Шапку панель пересобирает уже после первой отрисовки: переносит кнопки в
+  // компактную полосу и только потом ставит на body класс
+  // xk-operator-header-active. Мерить высоты до этого момента бессмысленно —
+  // получаются размеры промежуточной разметки.
+  await expect(page.locator('body')).toHaveClass(/xk-operator-header-active/);
 }
 
 

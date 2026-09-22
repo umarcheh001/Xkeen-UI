@@ -6,6 +6,14 @@ async function openTools(page, viewport) {
   await page.goto('/devtools');
   await expect(page.locator('body')).toHaveClass(/\bdevtools-page\b/);
   await expect(page.locator('#dt-env-card')).toBeVisible();
+  // Видимой разметки мало: пока инициализация DevTools не дошла до карточек,
+  // клик по ним проваливается впустую, и на загруженной машине тест падает на
+  // ровном месте. Атрибут data-xk-collapsible-wired ставит сама панель, когда
+  // карточки уже связаны с обработчиками (static/js/ui/shared_primitives.js).
+  await expect(page.locator('#dt-terminal-theme-card')).toHaveAttribute(
+    'data-xk-collapsible-wired',
+    '1',
+  );
 }
 
 
@@ -80,8 +88,13 @@ test.describe('DevTools Tools zones', () => {
       document.getElementById('dt-update-log-open').style.display = '';
     });
 
-    await page.locator('#dt-update-log-open').click();
-    await expect(page.locator('#dt-tab-logs')).toBeVisible();
+    // Кнопку рисует один модуль, а вкладки переключает другой, и связываются
+    // они не одновременно. Повторяем клик, пока вкладка не откроется, вместо
+    // того чтобы надеяться на один удачный.
+    await expect(async () => {
+      await page.locator('#dt-update-log-open').click();
+      await expect(page.locator('#dt-tab-logs')).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 20000 });
     await expect(page.locator('#dt-tab-btn-logs')).toHaveAttribute('aria-selected', 'true');
   });
 
@@ -345,8 +358,12 @@ test.describe('DevTools Tools zones', () => {
     const card = page.locator('#dt-terminal-theme-card');
     await expect(card).not.toHaveAttribute('open', /.*/);
 
-    await card.locator('summary').click();
-    await expect(card).toHaveAttribute('open', /.*/);
+    // Карточку перерисовывают уже после первой отрисовки страницы, и клик,
+    // пришедший в этот момент, теряется вместе со старым узлом.
+    await expect(async () => {
+      await card.locator('summary').click();
+      await expect(card).toHaveAttribute('open', /.*/, { timeout: 2000 });
+    }).toPass({ timeout: 20000 });
 
     await page.reload();
     await expect(page.locator('#dt-env-card')).toBeVisible();
