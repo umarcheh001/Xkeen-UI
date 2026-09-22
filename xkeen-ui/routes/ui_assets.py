@@ -82,8 +82,24 @@ _PAGE_CONFIG_TERMINAL_DEFAULTS = {
 
 
 _IMMUTABLE_MAX_AGE_SECONDS = 31536000
-_HASHED_BUILD_ASSET_RE = re.compile(
-    rf"^(?:{re.escape(_BUILD_DIRNAME)}/)?assets/.+\-[A-Za-z0-9_\-]{{8,}}\.[A-Za-z0-9]+$"
+# Хэш в имени — обещание, что содержимое больше не изменится: новая сборка
+# придёт под новым именем. Поэтому решает имя файла, а не каталог.
+_HASHED_ASSET_BASENAME_RE = re.compile(r"^.+\-[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9]+$")
+
+# ...но только внутри каталогов сборки. В остальной статике дефис с восемью
+# буквами ничего не обещает: `auth-operator.css` правят на месте, и вечный кэш
+# оставил бы пользователя со старой панелью.
+#
+# Редактор Monaco лежит своим каталогом, а не в `assets/`, и собран с хэшами —
+# без него 15 МБ перепроверялись при каждой загрузке. При этом внутри того же
+# каталога есть файлы без хэша (`loader.js`, `editor.main.js`,
+# `monaco.contribution.js`, `nls.messages.*`), и они обязаны остаться
+# перепроверяемыми, иначе после обновления браузер удержит старый загрузчик.
+_MONACO_DIRNAME = "monaco-editor"
+_IMMUTABLE_ASSET_ROOTS = (
+    f"{_BUILD_DIRNAME}/assets/",
+    "assets/",
+    f"{_MONACO_DIRNAME}/",
 )
 _HTML_MIME_TYPES = {"text/html", "application/xhtml+xml"}
 _JSON_MIME_TYPES = {"application/json", "application/ld+json"}
@@ -110,7 +126,9 @@ def is_hashed_build_asset_filename(filename: str | None) -> bool:
     normalized = _normalize_static_filename(filename)
     if not normalized:
         return False
-    return bool(_HASHED_BUILD_ASSET_RE.match(normalized))
+    if not normalized.startswith(_IMMUTABLE_ASSET_ROOTS):
+        return False
+    return bool(_HASHED_ASSET_BASENAME_RE.match(normalized.rsplit("/", 1)[-1]))
 
 
 def is_hashed_build_asset_path(path: str | None) -> bool:
@@ -204,10 +222,13 @@ def resolve_precompressed_static(
         if not source.is_file() or not packed.is_file():
             return None
         # Исходник новее сжатой копии — значит файл правили, а .gz остался
-        # прежним. Так бывает после правки прямо на роутере по SSH и после
-        # обновления: install.sh раскладывает архив через `rsync -a` без
-        # `--delete`, так что прошлый .gz никуда не девается. Отдать его
-        # значит показать пользователю старую панель.
+        # прежним: штатный способ отладки в этом проекте — правка прямо на
+        # роутере по SSH. Отдать такую копию значит показать старую панель.
+        #
+        # Обновление под этот признак не попадает: install.sh раскладывает
+        # архив без `--delete` (через rsync, а где его нет — через `cp -r`,
+        # который времена не сохраняет вовсе) и после копирования подтягивает
+        # время каждой .gz к её исходнику.
         if packed.stat().st_mtime < source.stat().st_mtime:
             return None
     except OSError:
