@@ -75,10 +75,22 @@ export async function openDialog(page, status = STATUS) {
   // The rules card ships collapsed and the dialog's button lives inside it.
   await page.addInitScript(() => localStorage.setItem('xk.routing.rules.open.v2', '1'));
   await page.goto('/');
+  // Шапку прячет класс xk-operator-header-pending, и страховка панели снимает
+  // его только через 12 секунд (templates/panel.html). Стандартные 10 секунд
+  // ожидания попадают внутрь этого окна, и медленный старт на загруженной
+  // машине выглядит как поломка вёрстки.
+  await expect(page.locator('.panel-header')).toBeVisible({ timeout: 15000 });
+  await page.waitForFunction(() => typeof window.showView === 'function');
   await expect(page.locator('#view-routing')).toBeVisible();
-  await expect(page.locator('#routing-dns-over-vless-btn')).toBeVisible();
-  await page.locator('#routing-dns-over-vless-btn').click();
-  await expect(page.locator('#routing-dns-over-vless-modal')).toBeVisible();
+  // Карточку правил раскрывает бутстрап, а не разметка, поэтому кнопка
+  // появляется позже самой вкладки.
+  await expect(page.locator('#routing-dns-over-vless-btn')).toBeVisible({ timeout: 15000 });
+  // Кнопку рисует один модуль, а окно открывает другой, и связываются они не
+  // одновременно: повторяем клик, пока окно не откроется.
+  await expect(async () => {
+    await page.locator('#routing-dns-over-vless-btn').click();
+    await expect(page.locator('#routing-dns-over-vless-modal')).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 20000 });
   // Окно открывается со свёрнутыми зонами, поэтому ждём саму зону маршрута,
   // а не её тело: тело появится, только когда зону раскроют.
   if (status === STATUS) await expect(page.locator('.xk-dns-zone[data-zone="route"]')).toBeVisible();
