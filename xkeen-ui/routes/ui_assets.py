@@ -10,6 +10,7 @@ endpoint names referenced from templates via url_for(...).
 from __future__ import annotations
 
 import json
+import mimetypes
 import os
 import re
 from collections.abc import Mapping
@@ -18,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from flask import Flask, Response, current_app, request, send_file, url_for
+from werkzeug.utils import safe_join
 
 _SOURCE_ENTRIES = {
     "panel": "js/pages/panel.entry.js",
@@ -128,6 +130,156 @@ def get_static_asset_max_age(filename: str | None) -> int:
     return 0
 
 
+# Предсжатая статика.
+#
+# gevent pywsgi ответы не сжимает, а жать почти мегабайт CSS на лету на
+# процессоре роутера дороже сэкономленного трафика. Поэтому .gz кладёт рядом
+# упаковщик (scripts/build_user_archive.py), а здесь мы лишь решаем, можно ли
+# его отдать.
+_GZIP_SIBLING_SUFFIX = ".gz"
+_VARY_ACCEPT_ENCODING = "Accept-Encoding"
+
+
+def _encoding_quality(params: str) -> float:
+    for param in params.split(";"):
+        key, _, value = param.partition("=")
+        if key.strip().lower() != "q":
+            continue
+        try:
+            return float(value.strip())
+        except ValueError:
+            return 0.0
+    return 1.0
+
+
+def client_accepts_gzip(accept_encoding: str | None) -> bool:
+    """Разобрать Accept-Encoding так, чтобы явный отказ от gzip был услышан."""
+
+    raw = str(accept_encoding or "").strip()
+    if not raw:
+        return False
+
+    gzip_quality: float | None = None
+    star_quality: float | None = None
+    for part in raw.split(","):
+        token, _, params = part.strip().partition(";")
+        name = token.strip().lower()
+        if name == "gzip":
+            gzip_quality = _encoding_quality(params)
+        elif name == "*":
+            star_quality = _encoding_quality(params)
+
+    # `gzip;q=0` — это «именно gzip мне не присылай», и он сильнее любого `*`.
+    if gzip_quality is not None:
+        return gzip_quality > 0
+    if star_quality is not None:
+        return star_quality > 0
+    return False
+
+
+def resolve_precompressed_static(
+    static_folder: str | os.PathLike[str] | None,
+    filename: str | None,
+    accept_encoding: str | None,
+) -> str | None:
+    """Вернуть путь к <файл>.gz, если его можно отдать вместо исходника."""
+
+    if not client_accepts_gzip(accept_encoding):
+        return None
+
+    root = str(static_folder or "").strip()
+    if not root:
+        return None
+
+    try:
+        target = safe_join(root, _normalize_static_filename(filename))
+    except Exception:
+        return None
+    if not target:
+        return None
+
+    source = Path(target)
+    packed = source.with_name(source.name + _GZIP_SIBLING_SUFFIX)
+    try:
+        if not source.is_file() or not packed.is_file():
+            return None
+        # Исходник новее сжатой копии — значит файл правили, а .gz остался
+        # прежним. Так бывает после правки прямо на роутере по SSH и после
+        # обновления: install.sh раскладывает архив через `rsync -a` без
+        # `--delete`, так что прошлый .gz никуда не девается. Отдать его
+        # значит показать пользователю старую панель.
+        if packed.stat().st_mtime < source.stat().st_mtime:
+            return None
+    except OSError:
+        return None
+
+    return str(packed)
+
+
+def add_vary_accept_encoding(resp: Response) -> Response:
+    """Без Vary промежуточный кэш отдаст сжатое тело тому, кто его не просил."""
+
+    if resp is None:
+        return resp
+    try:
+        existing = str(resp.headers.get("Vary", "") or "").strip()
+        tokens = {token.strip().lower() for token in existing.split(",") if token.strip()}
+        if "accept-encoding" in tokens or "*" in tokens:
+            return resp
+        resp.headers["Vary"] = (
+            f"{existing}, {_VARY_ACCEPT_ENCODING}" if existing else _VARY_ACCEPT_ENCODING
+        )
+    except Exception:
+        pass
+    return resp
+
+
+def send_precompressed_static(
+    static_folder: str | os.PathLike[str] | None,
+    filename: str | None,
+    accept_encoding: str | None,
+    max_age: int | None = None,
+) -> Response | None:
+    packed = resolve_precompressed_static(static_folder, filename, accept_encoding)
+    if packed is None:
+        return None
+
+    # Тип содержимого берём по исходному имени: по .gz Flask выдал бы
+    # application/gzip, и браузер предложил бы скачать файл вместо разбора.
+    mimetype = mimetypes.guess_type(_normalize_static_filename(filename))[0]
+    resp = send_file(
+        packed,
+        mimetype=mimetype or "application/octet-stream",
+        conditional=True,
+        max_age=max_age,
+    )
+    resp.headers["Content-Encoding"] = "gzip"
+    return add_vary_accept_encoding(resp)
+
+
+class PrecompressedStaticMixin:
+    """Отдаёт предсжатый <файл>.gz вместо исходника, когда это безопасно.
+
+    Ставится перед Flask в списке баз, чтобы перекрыть штатный
+    ``send_static_file``. Любой сбой на сжатом пути откатывает нас к обычной
+    отдаче, поэтому включение предсжатия не может уронить статику.
+    """
+
+    def send_static_file(self, filename):  # type: ignore[override]
+        try:
+            resp = send_precompressed_static(
+                self.static_folder,
+                filename,
+                request.headers.get("Accept-Encoding"),
+                self.get_send_file_max_age(filename),
+            )
+            if resp is not None:
+                return resp
+        except Exception:
+            pass
+        return add_vary_accept_encoding(super().send_static_file(filename))
+
+
 def _is_api_like_response(resp: Response) -> bool:
     try:
         if (resp.mimetype or "") in _JSON_MIME_TYPES or bool(getattr(resp, "is_json", False)):
@@ -165,10 +317,10 @@ def apply_response_cache_policy(resp: Response) -> Response:
             resp.headers.pop("Pragma", None)
         except Exception:
             pass
-        return resp
+        return add_vary_accept_encoding(resp)
 
     if path.startswith("/static/"):
-        return resp
+        return add_vary_accept_encoding(resp)
 
     if _is_html_response(resp) or _is_api_like_response(resp):
         return _no_cache(resp)

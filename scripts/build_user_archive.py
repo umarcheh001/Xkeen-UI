@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
+import io
 import json
 import os
 import shutil
@@ -269,6 +271,100 @@ def normalize_script_line_endings(root: Path) -> int:
     return normalized
 
 
+# Статику отдаёт gevent pywsgi, а он ответы не сжимает. Жать почти мегабайт CSS
+# на лету на процессоре роутера дороже сэкономленного трафика, поэтому сжимаем
+# один раз здесь, на сборке: роутер только читает готовый .gz с диска.
+PRECOMPRESS_DIRNAME = "static"
+PRECOMPRESS_SUFFIXES = {".css", ".js", ".mjs", ".svg", ".json", ".html", ".xml", ".txt"}
+# Ниже килобайта второй файл не окупается: выигрыш теряется в накладных
+# расходах, а место в архиве и на флешке роутера он занимает.
+PRECOMPRESS_MIN_BYTES = 1024
+# Уже сжатые форматы gzip только раздувает; держим порог, ниже которого .gz
+# не имеет смысла заводить.
+PRECOMPRESS_MAX_RATIO = 0.9
+# Monaco весит 15 МБ и один давал бы +3.6 МБ к архиву — больше, чем вся
+# остальная статика вместе взятая. При этом редактор грузится лениво и только
+# у тех, кто выбрал его движком вместо CodeMirror, а после первой загрузки
+# лежит в кэше браузера. Удваивать ради этого вес обновления не стоит.
+PRECOMPRESS_EXCLUDED_DIRS = {
+    Path("static/monaco-editor"),
+}
+
+
+@dataclass(frozen=True)
+class PrecompressResult:
+    files: int
+    original_bytes: int
+    compressed_bytes: int
+
+
+def gzip_bytes(payload: bytes) -> bytes:
+    """Сжать воспроизводимо — без времени и без имени файла в заголовке.
+
+    gzip по умолчанию записывает в заголовок mtime и имя исходника, и тогда две
+    сборки одного и того же дерева дали бы разные байты. На этом сломался бы
+    tree_sha256 в BUILD.json, которым сборка опознаётся на роутере.
+    """
+
+    buffer = io.BytesIO()
+    with gzip.GzipFile(
+        filename="", mode="wb", compresslevel=9, fileobj=buffer, mtime=0
+    ) as handle:
+        handle.write(payload)
+    return buffer.getvalue()
+
+
+def precompress_static_assets(root: Path) -> PrecompressResult:
+    """Положить рядом с каждым крупным текстовым ассетом его .gz."""
+
+    static_root = root / PRECOMPRESS_DIRNAME
+    if not static_root.is_dir():
+        return PrecompressResult(files=0, original_bytes=0, compressed_bytes=0)
+
+    files = 0
+    original_bytes = 0
+    compressed_bytes = 0
+    # sorted() материализует обход до того, как мы начнём дописывать файлы,
+    # поэтому новые .gz в эту же итерацию не попадают.
+    for path in sorted(static_root.rglob("*")):
+        if path.is_symlink() or not path.is_file():
+            continue
+        if path.suffix.lower() not in PRECOMPRESS_SUFFIXES:
+            continue
+        rel = path.relative_to(root)
+        if any(
+            excluded == rel or excluded in rel.parents
+            for excluded in PRECOMPRESS_EXCLUDED_DIRS
+        ):
+            continue
+        try:
+            stats = path.stat()
+        except OSError:
+            continue
+        if stats.st_size < PRECOMPRESS_MIN_BYTES:
+            continue
+        try:
+            packed = gzip_bytes(path.read_bytes())
+        except OSError:
+            continue
+        if len(packed) > stats.st_size * PRECOMPRESS_MAX_RATIO:
+            continue
+        target = path.with_name(path.name + ".gz")
+        target.write_bytes(packed)
+        # Отдача сравнивает mtime: .gz никогда не должен выглядеть старше
+        # исходника, иначе сторож в routes/ui_assets.py его отбросит.
+        os.utime(target, (stats.st_atime, stats.st_mtime))
+        files += 1
+        original_bytes += stats.st_size
+        compressed_bytes += len(packed)
+
+    return PrecompressResult(
+        files=files,
+        original_bytes=original_bytes,
+        compressed_bytes=compressed_bytes,
+    )
+
+
 def write_build_json(dst_root: Path, *, stamp: BuildStamp, update_url: str) -> None:
     payload = {
         "version": str(stamp.version or "").strip(),
@@ -356,6 +452,14 @@ def main() -> int:
         normalized = normalize_script_line_endings(package_root)
         if normalized:
             print(f"[*] line endings normalized to LF in {normalized} script(s)")
+        packed = precompress_static_assets(package_root)
+        if packed.files:
+            saved = packed.original_bytes - packed.compressed_bytes
+            print(
+                f"[*] static precompressed: {packed.files} file(s), "
+                f"{packed.original_bytes} -> {packed.compressed_bytes} bytes "
+                f"(-{saved})"
+            )
         write_build_json(package_root, stamp=stamp, update_url=update_url)
 
         fd, temp_archive_raw = tempfile.mkstemp(
