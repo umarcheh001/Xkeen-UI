@@ -2054,6 +2054,25 @@ audit_boot() {
   echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> /opt/var/log/xkeen-ui-boot.log 2>/dev/null || true
 }
 
+warm_bytecode_cache() {
+  # Кэш байткода живёт в PYTHONPYCACHEPREFIX, то есть в tmpfs, и перезагрузка
+  # роутера стирает его целиком. Импорты у панели ленивые, поэтому часть
+  # компиляции 226 модулей достаётся первому человеку, открывшему страницу
+  # (замер на ARMv8: 2,9 с вхолодную против 0,23 с с готовым кэшем; на слабых
+  # роутерах кратно больше). Догоняем это фоном, пока страницу ещё не открыли.
+  #
+  # Прогрев только ускоряет и не имеет права помешать запуску: любая его
+  # неудача гасится, а сам он уходит в фон и уступает процессор панели.
+  NICE_BIN=""
+  command -v nice >/dev/null 2>&1 && NICE_BIN="nice -n 19"
+  (
+    $NICE_BIN "$PYTHON_BIN" -m compileall -q "$UI_DIR" >/dev/null 2>&1       && audit_boot "[start] bytecode cache warmed"       || audit_boot "[start] bytecode warmup skipped (non-fatal)"
+  # Перенаправлять надо всю подоболочку, а не только compileall: фоновая
+  # задача наследует stdout/stderr родителя и держит их открытыми, а тогда
+  # rc.unslung при загрузке ждёт конца компиляции вместо мгновенного возврата.
+  ) > /dev/null 2>&1 < /dev/null &
+}
+
 start_service() {
   # Entware's rc.unslung calls S99 scripts very early at boot, before
   # /opt/etc/profile has been sourced for the user shell. Pull it in so
@@ -2189,6 +2208,7 @@ start_service() {
   sleep 1
   if kill -0 "$CHILD_PID" 2>/dev/null; then
     audit_boot "[start] OK, PID $CHILD_PID"
+    warm_bytecode_cache
     echo "Запущено, PID $CHILD_PID."
     return 0
   else
