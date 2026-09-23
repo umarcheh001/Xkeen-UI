@@ -1165,7 +1165,9 @@ test('subscriptions form uses icon-only actions, visible switches, and themed ad
 
   expect(contract.actions).toEqual([
     { id: 'outbounds-subscriptions-preview-btn', label: 'Скачать подписку (предпросмотр)', text: '', icon: 'download' },
-    { id: 'outbounds-subscriptions-reset-btn', label: 'Очистить форму', text: '', icon: 'restore' },
+    // Кольцо со стрелкой читалось как «обновить» и спорило с соседней кнопкой
+    // обновления; метла ни с чем не путается.
+    { id: 'outbounds-subscriptions-reset-btn', label: 'Очистить форму', text: '', icon: 'broom' },
     { id: 'outbounds-subscriptions-save-btn', label: 'Сохранить настройки', text: '', icon: 'save' },
   ]);
   expect(contract.checks).toEqual([
@@ -1890,3 +1892,63 @@ test('subscriptions status spinner is centred on the first line of text', async 
 
   releaseBulkProbe();
 });
+
+
+// Кнопки списка равняются на окно Mihomo: глиф слева, подпись справа, всё в
+// одну строку. Замеряем геометрию, а не наличие классов: правило может быть
+// перебито соседним, и разметка при этом выглядит правильной.
+test('subscriptions list buttons carry a glyph beside their label', async ({ page }) => {
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscriptions: [buildDemoSubscription()] }),
+    });
+  });
+
+  await openSubscriptionsModal(page);
+
+  const seen = await page.evaluate(() => {
+    const ids = ['outbounds-subscriptions-refresh-due-btn', 'outbounds-subscriptions-align-btn'];
+    return ids.map((id) => {
+      const node = document.getElementById(id);
+      const icon = node?.querySelector('.xk-action-icon');
+      const label = node?.querySelector('.xk-action-label');
+      const iconRect = icon?.getBoundingClientRect();
+      const labelRect = label?.getBoundingClientRect();
+      return {
+        id,
+        icon: String(icon?.querySelector('use')?.getAttribute('href') || '').split('#xk-').pop(),
+        text: String(label?.textContent || '').trim(),
+        iconWidth: iconRect ? Math.round(iconRect.width) : 0,
+        display: node ? window.getComputedStyle(node).display : '',
+        // Глиф стоит перед подписью и не наезжает на неё.
+        glyphLeads: !!(iconRect && labelRect && iconRect.right <= labelRect.left + 1),
+        gap: iconRect && labelRect ? Math.round(labelRect.left - iconRect.right) : -1,
+        sameRow: !!(iconRect && labelRect && Math.abs(
+          (iconRect.top + iconRect.height / 2) - (labelRect.top + labelRect.height / 2)
+        ) <= 2),
+      };
+    });
+  });
+
+  expect(seen.map((item) => ({ id: item.id, icon: item.icon, text: item.text }))).toEqual([
+    { id: 'outbounds-subscriptions-refresh-due-btn', icon: 'refresh', text: 'Обновить просроченные' },
+    { id: 'outbounds-subscriptions-align-btn', icon: 'normalize', text: 'Выровнять расписание' },
+  ]);
+  for (const item of seen) {
+    expect(item.iconWidth).toBe(16);
+    // Раскладка держится на flex-контейнере самой кнопки, а не на случайном
+    // переносе строки: закрепляем это явно.
+    expect(['flex', 'inline-flex']).toContain(item.display);
+    expect(item.glyphLeads).toBe(true);
+    expect(item.sameRow).toBe(true);
+    expect(item.gap).toBeGreaterThanOrEqual(4);
+    expect(item.gap).toBeLessThanOrEqual(10);
+  }
+});
+

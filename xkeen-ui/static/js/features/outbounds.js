@@ -11,7 +11,7 @@ import {
   syncXkeenBodyScrollLock,
   toastXkeen,
 } from './xkeen_runtime.js';
-import { iconHtml } from '../ui/operator_icons.js';
+import { iconHtml, setIcon } from '../ui/operator_icons.js';
 import { appendHappDecryptorCardLink } from '../ui/happ_decryptor_link.js';
 
 let outboundsModuleApi = null;
@@ -5507,7 +5507,9 @@ let outboundsModuleApi = null;
           resetBtn.classList.add('xk-sub-head-chip');
           resetBtn.classList.add('xk-sub-form-action');
           resetBtn.setAttribute('aria-label', String(resetBtn.getAttribute('title') || 'Очистить форму'));
-          resetBtn.innerHTML = iconHtml('restore', 'xk-sub-head-chip-glyph xk-sub-form-action-icon');
+          // Метла, а не кольцо со стрелкой: кольцо читалось как «обновить» и
+          // спорило с кнопкой обновления, стоящей в том же ряду.
+          resetBtn.innerHTML = iconHtml('broom', 'xk-sub-head-chip-glyph xk-sub-form-action-icon');
         }
         const saveBtn = root.querySelector(`#${SUB_IDS.save}`);
         if (saveBtn) {
@@ -5683,8 +5685,8 @@ let outboundsModuleApi = null;
                     </div>
                     <div class="xk-sub-list-head-actions">
                       <div id="outbounds-subscriptions-summary" class="xk-pool-summary">0</div>
-                      <button type="button" id="outbounds-subscriptions-refresh-due-btn" class="btn-secondary btn-compact" title="Обновить просроченные" data-tooltip="Обновить все подписки, у которых уже наступило время следующего обновления.">Обновить просроченные</button>
-                      <button type="button" id="outbounds-subscriptions-align-btn" class="btn-secondary btn-compact" title="Выровнять расписание" data-tooltip="Свести время следующего обновления всех подписок к одному моменту, чтобы дальше они обновлялись одной пачкой.">Выровнять расписание</button>
+                      <button type="button" id="outbounds-subscriptions-refresh-due-btn" class="btn-secondary btn-compact" title="Обновить просроченные" data-tooltip="Обновить все подписки, у которых уже наступило время следующего обновления.">${iconHtml('refresh')}<span class="xk-action-label">Обновить просроченные</span></button>
+                      <button type="button" id="outbounds-subscriptions-align-btn" class="btn-secondary btn-compact" title="Выровнять расписание" data-tooltip="Свести время следующего обновления всех подписок к одному моменту, чтобы дальше они обновлялись одной пачкой.">${iconHtml('normalize')}<span class="xk-action-label">Выровнять расписание</span></button>
                     </div>
                   </div>
                   <div class="xk-sub-tablewrap">
@@ -5718,7 +5720,7 @@ let outboundsModuleApi = null;
                     <div id="outbounds-subscriptions-nodes-caption" class="xk-sub-muted">Нажми ✎ у нужной подписки, чтобы посмотреть состав и transport.</div>
                   </div>
                   <div class="xk-sub-nodes-head-actions">
-                    <button type="button" id="outbounds-subscriptions-nodes-show-hidden" class="btn-secondary btn-compact xk-sub-show-hidden-btn" title="Показать скрытые узлы" data-tooltip="Показать узлы, которые сейчас скрыты фильтрами или исключены кнопкой ×. Нажми ещё раз, чтобы снова скрыть их." hidden>Показать скрытые</button>
+                    <button type="button" id="outbounds-subscriptions-nodes-show-hidden" class="btn-secondary btn-compact xk-sub-show-hidden-btn" title="Показать скрытые узлы" data-tooltip="Показать узлы, которые сейчас скрыты фильтрами или исключены кнопкой ×. Нажми ещё раз, чтобы снова скрыть их." hidden>${iconHtml('preview')}<span class="xk-action-label">Показать скрытые</span></button>
                     <div id="outbounds-subscriptions-nodes-probe-mode" class="xk-sub-probe-mode" role="group" aria-label="Режим проверки задержки">
                       <button type="button" class="xk-sub-probe-mode-btn is-active" data-probe-mode="tcp" aria-pressed="true" data-tooltip="Проверить доступность TCP-порта, как HAPP. Это не подтверждает работу прокси.">TCP</button>
                       <button type="button" class="xk-sub-probe-mode-btn" data-probe-mode="proxy" aria-pressed="false" data-tooltip="Выполнить контрольный HTTPS-запрос через узел и Xray.">Proxy</button>
@@ -7187,9 +7189,11 @@ let outboundsModuleApi = null;
       if (showHiddenBtn) {
         if (hiddenCount > 0) {
           showHiddenBtn.hidden = false;
-          showHiddenBtn.textContent = showHidden
-            ? `Скрыть исключённые (${hiddenCount})`
-            : `Показать скрытые (${hiddenCount})`;
+          setIcon(showHiddenBtn, 'preview', {
+            label: showHidden
+              ? `Скрыть исключённые (${hiddenCount})`
+              : `Показать скрытые (${hiddenCount})`,
+          });
           showHiddenBtn.classList.toggle('is-active', showHidden);
           showHiddenBtn.setAttribute(
             'aria-pressed',

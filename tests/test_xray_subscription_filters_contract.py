@@ -396,7 +396,9 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "resetBtn.classList.add('xk-sub-head-chip');" in outbounds_src
     assert "saveBtn.classList.add('xk-sub-head-chip', 'is-primary');" in outbounds_src
     assert "xk-sub-head-chip-glyph" in outbounds_src
-    assert "resetBtn.innerHTML = iconHtml('restore'" in outbounds_src
+    # Метла, а не кольцо со стрелкой: кольцо читалось как «обновить» и спорило
+    # с кнопкой обновления в том же ряду.
+    assert "resetBtn.innerHTML = iconHtml('broom'" in outbounds_src
     assert "saveBtn.innerHTML = iconHtml('save'" in outbounds_src
     assert '<div class="xk-sub-url-actions">' in outbounds_src
     assert 'title="Очистить форму"' in outbounds_src
