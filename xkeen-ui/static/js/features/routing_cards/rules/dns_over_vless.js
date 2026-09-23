@@ -1637,7 +1637,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const slot = $(DOM.clientsActions);
     if (!slot) return;
     const { added, removed } = captureDiff();
-    if (!added.length && !removed.length) {
+    // Полоса правит живую цепочку firewall. Пока защита выключена, цепочки
+    // нет, и расхождение отмеченного с нею мнимое: сравнивать не с чем, а
+    // выбор и так уедет на роутер вместе с «Включить безопасно».
+    if (!(status && status.enabled) || (!added.length && !removed.length)) {
       slot.classList.add('hidden');
       return;
     }
@@ -1654,16 +1657,11 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       what.textContent = `${parts.join(', ')}: ${names}`;
       what.textContent = what.textContent.charAt(0).toUpperCase() + what.textContent.slice(1);
     }
-    // Пока защита выключена, цепочки нет и ставить правила некуда: выбор
-    // ждёт включения, и об этом говорим прямо, а не гасим кнопку молча.
-    const live = !!(status && status.enabled);
     if (why) {
-      why.textContent = live
-        ? 'Меняются только правила firewall — защита остаётся включённой.'
-        : 'Цепочки в firewall сейчас нет: пока защита выключена, ставить нечего.';
+      why.textContent = 'Меняются только правила firewall — защита остаётся включённой.';
     }
     if (apply) {
-      apply.disabled = busy || !live;
+      apply.disabled = busy;
       // Подпись от существа правки: «добавить выбранное» соврало бы там,
       // где галочку сняли.
       if (added.length && !removed.length) {

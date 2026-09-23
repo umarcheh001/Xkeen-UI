@@ -697,3 +697,41 @@ test('cancelling puts the ticks back the way the router holds them', async ({ pa
   const camera = page.locator('#routing-dns-over-vless-clients-list li', { hasText: 'Камера' });
   await expect(camera.locator('.routing-dns-over-vless-clients-pick')).toBeChecked();
 });
+
+
+// Полоса задумана для включённой защиты: она даёт менять состав захвата, не
+// выключая функцию целиком. Пока защита выключена, цепочки в firewall нет, и
+// сохранённый выбор расходился бы с пустой цепочкой — полоса всплывала сама,
+// ещё до единой галочки, и предлагала правку, которой негде исполниться.
+const STATUS_PICKED_OFF = {
+  ...STATUS,
+  capture_clients: true,
+  capture_macs: ['aa:bb:cc:dd:ee:03'],
+};
+
+
+test('the applying bar stays away while the protection is off', async ({ page }) => {
+  await routeClients(page, CLIENTS);
+  await openDialog(page, STATUS_PICKED_OFF);
+  await openZone(page, 'devices');
+
+  const camera = page.locator('#routing-dns-over-vless-clients-list li', { hasText: 'Камера' });
+  // Сохранённый выбор на месте и ждёт включения — вот только цепочки под него нет.
+  await expect(camera.locator('.routing-dns-over-vless-clients-pick')).toBeChecked();
+  await expect(page.locator('#routing-dns-over-vless-clients-actions')).toBeHidden();
+});
+
+
+test('ticking a device with the protection off keeps the bar away and the choice intact', async ({ page }) => {
+  await routeClients(page, CLIENTS);
+  await openDialog(page, STATUS_PICKED_OFF);
+  await openZone(page, 'devices');
+
+  const phone = page.locator('#routing-dns-over-vless-clients-list li', { hasText: 'Телефон' });
+  await phone.locator('.routing-dns-over-vless-clients-pick').check({ force: true });
+
+  // Отмеченное уедет на роутер вместе с «Включить безопасно»: отдельного
+  // применения тут нет, и предлагать его нечестно.
+  await expect(page.locator('#routing-dns-over-vless-clients-actions')).toBeHidden();
+  await expect(phone.locator('.routing-dns-over-vless-clients-pick')).toBeChecked();
+});
