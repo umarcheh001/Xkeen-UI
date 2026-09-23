@@ -38,6 +38,7 @@ from services import dns_client_capture
 from services import firmware_resolvers
 from utils.firmware import ndmc_path as _resolve_ndmc, run_ndmc
 from utils.jsonc import strip_json_comments_text
+from services.keenetic_rci import fetch_rci_json
 from utils.jsonio import read_jsonc_text
 
 
@@ -2005,7 +2006,45 @@ def _ndmc_path() -> str:
     return _resolve_ndmc()
 
 
+# Ветка настроек opkg в RCI и потолок ожидания для неё.
+#
+# Замер на роутере 23.09.2026: `ndmc show running-config` отдаёт тот же факт за
+# 145 мс, потому что печатает все 16,8 КБ конфига целиком, а сокращённых форм
+# команды прошивка не принимает. Локальный RCI отвечает за 5 мс. Ждать дольше
+# секунды смысла нет: запасной путь всё равно дешевле долгого ожидания.
+_RCI_OPKG_PATH = "/rci/opkg"
+_RCI_OPKG_TIMEOUT = 1.5
+
+
+def _dns_override_from_rci() -> Optional[tuple[bool, str]]:
+    """Спросить прошивку через RCI; None означает «спрашивай по-старому».
+
+    RCI зеркалит включённые флаги (`ntp master` приходит как
+    `{"master": true}`), а выключенные по умолчанию команды не показывает —
+    ровно как и running-config. Поэтому отсутствие ключа читается так же, как
+    сейчас читается отсутствие строки.
+    """
+
+    try:
+        branch = fetch_rci_json(_RCI_OPKG_PATH, timeout=_RCI_OPKG_TIMEOUT)
+    except Exception:  # noqa: BLE001 -- нет RCI, нет токена, не тот ответ
+        return None
+    if not isinstance(branch, dict):
+        return None
+    if "dns-override" not in branch:
+        return False, "rci (команда отсутствует)"
+    value = branch.get("dns-override")
+    # Только явное «да» или «нет». Всё остальное — повод переспросить ndmc,
+    # а не гадать: на этом ответе держится вывод «защита включена».
+    if isinstance(value, bool):
+        return value, "rci"
+    return None
+
+
 def _dns_override_status() -> tuple[Optional[bool], str]:
+    from_rci = _dns_override_from_rci()
+    if from_rci is not None:
+        return from_rci
     if not _ndmc_path():
         return None, "ndmc не найден"
     try:

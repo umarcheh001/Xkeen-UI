@@ -91,6 +91,32 @@ def build_rci_request(
     )
 
 
+RCI_BASE_URL = "http://127.0.0.1:79"
+DEFAULT_RCI_TIMEOUT = 2.0
+
+
+def fetch_rci_json(
+    path: str,
+    *,
+    timeout: float = DEFAULT_RCI_TIMEOUT,
+    token: Optional[str] = None,
+    limit: int = 1024 * 1024,
+) -> Any:
+    """Прочитать одну ветку RCI и вернуть разобранный JSON.
+
+    Ничего не проглатывает: не ответивший RCI, не тот код ответа и не тот
+    формат тела поднимают исключение, и вызывающий сам решает, чем это
+    заменить. На прошивках 5.2+ нужен токен, на машине разработчика RCI нет
+    вовсе, поэтому у каждого вызывающего обязан быть запасной путь.
+    """
+
+    url = path if "://" in path else RCI_BASE_URL + (path if path.startswith("/") else "/" + path)
+    request = build_rci_request(url, token=token)
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - local router RCI
+        raw = response.read(limit)
+    return json.loads(raw.decode("utf-8", "ignore"))
+
+
 def probe_rci_access(
     *,
     url: str = RCI_VERSION_URL,
