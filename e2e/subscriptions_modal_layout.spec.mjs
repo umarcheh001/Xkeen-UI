@@ -2097,3 +2097,18 @@ test('the schedule line names the day instead of a bare timestamp', async ({ pag
   });
   expect(hint).toContain('Точное время:');
 });
+
+test('the listed url keeps the host and the tail that tells subscriptions apart', async ({ page }) => {
+  await routeSubscriptions(page, [buildDemoSubscription(buildDemoNodes().slice(0, 2), {
+    id: 'url-sub',
+    url: 'https://example-provider.com/api/v1/subscribe/a8f3',
+  })]);
+  await openSubscriptionsModal(page);
+
+  const meta = await page.evaluate(() => {
+    const row = document.querySelector('tr[data-sub-id="url-sub"]');
+    const muted = row?.querySelector('td:first-child .xk-sub-muted');
+    return String(muted?.textContent || '');
+  });
+  expect(meta).toContain('example-provider.com/…/a8f3');
+});

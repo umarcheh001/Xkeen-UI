@@ -6337,7 +6337,13 @@ let outboundsModuleApi = null;
       try {
         const u = new URL(raw);
         const path = String(u.pathname || '').replace(/\/+$/g, '');
-        return u.hostname + (path ? path.slice(0, 28) : '');
+        const parts = path.split('/').filter(Boolean);
+        if (!parts.length) return u.hostname;
+        // Две подписки одного провайдера различает хвост пути, а не его начало:
+        // середину сворачиваем, последний сегмент оставляем целиком.
+        const tail = parts[parts.length - 1];
+        const short = tail.length > 18 ? tail.slice(0, 17) + '…' : tail;
+        return u.hostname + (parts.length > 1 ? '/…/' : '/') + short;
       } catch (e) {}
       return raw.length > 42 ? raw.slice(0, 39) + '…' : raw;
     }
