@@ -57,6 +57,7 @@ from services.mihomo_clash_diagnostics import (
     normalize_trace_domain,
 )
 from services.mihomo_traffic_analytics import MihomoTrafficAnalyticsCollector
+from services.mihomo_traffic_simulator import build_demo_traffic_analytics
 from services.router_diagnostics import sample_router_clients
 from services.request_limits import PayloadTooLargeError, read_request_json_limited
 from services.mihomo_clash_target import (
@@ -902,10 +903,13 @@ def create_mihomo_clash_blueprint(
             max_rows=1000,
         )
 
+    analytics_demo = str(
+        os.environ.get("XKEEN_MIHOMO_TRAFFIC_DEMO", "0")
+    ).strip().lower() in {"1", "true", "yes", "on"}
     analytics_enabled = str(
         os.environ.get("XKEEN_MIHOMO_TRAFFIC_ANALYTICS_ENABLE", "1")
     ).strip().lower() not in {"0", "false", "no", "off"}
-    if analytics is None and ui_state_dir and analytics_enabled:
+    if analytics is None and ui_state_dir and analytics_enabled and not analytics_demo:
         try:
             sample_interval = float(
                 os.environ.get("XKEEN_MIHOMO_TRAFFIC_SAMPLE_SECONDS", "10") or 10
@@ -1592,14 +1596,6 @@ def create_mihomo_clash_blueprint(
 
     @bp.get("/api/mihomo/clash/diagnostics/traffic")
     def api_mihomo_clash_diagnostics_traffic():
-        if analytics is None:
-            return error_response(
-                "Сбор статистики трафика недоступен в текущем окружении.",
-                503,
-                ok=False,
-                code="mihomo_traffic_analytics_unavailable",
-                retryable=True,
-            )
         raw_range = str(request.args.get("range") or "24h").strip().lower()
         range_seconds = {
             "1h": 3600,
@@ -1614,6 +1610,19 @@ def create_mihomo_clash_blueprint(
                 ok=False,
                 code="mihomo_traffic_range_invalid",
                 retryable=False,
+            )
+        if analytics_demo:
+            payload = build_demo_traffic_analytics(range_seconds=range_seconds)
+            response = jsonify({"ok": True, **payload})
+            response.headers["Cache-Control"] = "no-store"
+            return response, 200
+        if analytics is None:
+            return error_response(
+                "Сбор статистики трафика недоступен в текущем окружении.",
+                503,
+                ok=False,
+                code="mihomo_traffic_analytics_unavailable",
+                retryable=True,
             )
         try:
             payload = analytics.summary(range_seconds=range_seconds)

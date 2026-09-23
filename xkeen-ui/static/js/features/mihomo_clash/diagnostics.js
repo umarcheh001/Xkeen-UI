@@ -13,6 +13,7 @@ let trafficPayload = null;
 let currentView = 'traffic';
 let trafficTimer = 0;
 let trafficRequest = null;
+let trafficFilters = { device: '', route: '', resource: '' };
 
 function byId(id) { return document.getElementById(id); }
 
@@ -140,12 +141,174 @@ function resultText(result) {
   return lines.join('\n');
 }
 
-function renderTrafficSummary(payload) {
-  const summary = payload?.summary || {};
+function routeKey(item) {
+  return JSON.stringify([String(item?.route || ''), String(item?.node || '')]);
+}
+
+function routeNameFromKey(value) {
+  try {
+    const parsed = JSON.parse(String(value || ''));
+    return Array.isArray(parsed) ? String(parsed[0] || '') : '';
+  } catch (error) {
+    return '';
+  }
+}
+
+function deviceDownload(device) {
+  const explicit = Number(device?.total_download);
+  return Number.isFinite(explicit)
+    ? Math.max(0, explicit)
+    : Math.max(0, Number(device?.mihomo_download) || 0) + Math.max(0, Number(device?.outside_download) || 0);
+}
+
+function deviceUpload(device) {
+  const explicit = Number(device?.total_upload);
+  return Number.isFinite(explicit)
+    ? Math.max(0, explicit)
+    : Math.max(0, Number(device?.mihomo_upload) || 0) + Math.max(0, Number(device?.outside_upload) || 0);
+}
+
+function filteredTrafficView(payload = trafficPayload) {
+  const sourceDevices = Array.isArray(payload?.devices) ? payload.devices : [];
+  const sourceRoutes = Array.isArray(payload?.routes) ? payload.routes : [];
+  const sourceResources = Array.isArray(payload?.resources) ? payload.resources : [];
+  const resourceQuery = trafficFilters.resource.trim().toLocaleLowerCase('ru');
+  const selectedRoute = trafficFilters.route;
+  const selectedRouteName = routeNameFromKey(selectedRoute);
+  let devices = sourceDevices
+    .filter((device) => !trafficFilters.device || String(device?.ip || '') === trafficFilters.device)
+    .map((device) => {
+      const routes = (Array.isArray(device?.routes) ? device.routes : [])
+        .filter((route) => !selectedRoute || routeKey(route) === selectedRoute);
+      if (!selectedRoute) return { ...device, routes };
+      const download = routes.reduce((total, route) => total + (Number(route.download) || 0), 0);
+      const upload = routes.reduce((total, route) => total + (Number(route.upload) || 0), 0);
+      return {
+        ...device,
+        routes,
+        mihomo_download: download,
+        mihomo_upload: upload,
+        mihomo_bytes: download + upload,
+        outside_download: 0,
+        outside_upload: 0,
+        outside_bytes: 0,
+        total_download: download,
+        total_upload: upload,
+        total_bytes: download + upload,
+      };
+    })
+    .filter((device) => !selectedRoute || device.routes.length > 0);
+  const routes = sourceRoutes.map((route) => {
+    if (selectedRoute && routeKey(route) !== selectedRoute) return null;
+    const breakdown = (route.breakdown || [])
+      .filter((row) => !trafficFilters.device || row.ip === trafficFilters.device);
+    if (trafficFilters.device && !breakdown.length) return null;
+    if (!trafficFilters.device) return { ...route };
+    return {
+      ...route,
+      download: breakdown.reduce((total, row) => total + (Number(row.download) || 0), 0),
+      upload: breakdown.reduce((total, row) => total + (Number(row.upload) || 0), 0),
+      bytes: breakdown.reduce((total, row) => total + (Number(row.download) || 0) + (Number(row.upload) || 0), 0),
+      device_count: 1,
+      device_ips: [trafficFilters.device],
+    };
+  }).filter(Boolean);
+  const resources = sourceResources.map((resource) => {
+    if (resourceQuery && !String(resource?.resource || '').toLocaleLowerCase('ru').includes(resourceQuery)) return false;
+    if (selectedRouteName && !(resource?.routes || []).includes(selectedRouteName)) return false;
+    const breakdown = (resource.breakdown || [])
+      .filter((row) => !trafficFilters.device || row.ip === trafficFilters.device)
+      .filter((row) => !selectedRouteName || row.route === selectedRouteName);
+    if (trafficFilters.device || selectedRouteName) {
+      if (!breakdown.length) return null;
+      return {
+        ...resource,
+        download: breakdown.reduce((total, row) => total + (Number(row.download) || 0), 0),
+        upload: breakdown.reduce((total, row) => total + (Number(row.upload) || 0), 0),
+        bytes: breakdown.reduce((total, row) => total + (Number(row.download) || 0) + (Number(row.upload) || 0), 0),
+        devices: [...new Set(breakdown.map((row) => row.name))],
+        device_ips: [...new Set(breakdown.map((row) => row.ip))],
+        routes: [...new Set(breakdown.map((row) => row.route))],
+      };
+    }
+    return { ...resource };
+  }).filter(Boolean);
+  if (resourceQuery) {
+    const deviceTotals = new Map();
+    resources.forEach((resource) => {
+      (resource.breakdown || []).forEach((row) => {
+        if (trafficFilters.device && row.ip !== trafficFilters.device) return;
+        if (selectedRouteName && row.route !== selectedRouteName) return;
+        const current = deviceTotals.get(row.ip) || {
+          ip: row.ip,
+          name: row.name || row.ip,
+          download: 0,
+          upload: 0,
+          routes: new Map(),
+        };
+        current.download += Number(row.download) || 0;
+        current.upload += Number(row.upload) || 0;
+        const route = current.routes.get(row.route) || {
+          route: row.route,
+          node: row.route,
+          download: 0,
+          upload: 0,
+        };
+        route.download += Number(row.download) || 0;
+        route.upload += Number(row.upload) || 0;
+        current.routes.set(row.route, route);
+        deviceTotals.set(row.ip, current);
+      });
+    });
+    devices = Array.from(deviceTotals.values()).map((device) => ({
+      ip: device.ip,
+      name: device.name,
+      mihomo_download: device.download,
+      mihomo_upload: device.upload,
+      mihomo_bytes: device.download + device.upload,
+      outside_download: 0,
+      outside_upload: 0,
+      outside_bytes: 0,
+      total_download: device.download,
+      total_upload: device.upload,
+      total_bytes: device.download + device.upload,
+      routes: Array.from(device.routes.values()),
+    }));
+  }
+  const routeDownload = routes.reduce((total, item) => total + (Number(item?.download) || 0), 0);
+  const routeUpload = routes.reduce((total, item) => total + (Number(item?.upload) || 0), 0);
+  const resourceDownload = resources.reduce((total, item) => total + (Number(item?.download) || 0), 0);
+  const resourceUpload = resources.reduce((total, item) => total + (Number(item?.upload) || 0), 0);
+  const narrowedDownload = resourceQuery ? resourceDownload : selectedRoute ? routeDownload : null;
+  const narrowedUpload = resourceQuery ? resourceUpload : selectedRoute ? routeUpload : null;
+  const summary = {
+    mihomo_bytes: narrowedDownload == null
+      ? devices.reduce((total, item) => total + (Number(item?.mihomo_bytes) || 0), 0)
+      : narrowedDownload + narrowedUpload,
+    outside_bytes: narrowedDownload == null
+      ? devices.reduce((total, item) => total + (Number(item?.outside_bytes) || 0), 0)
+      : 0,
+    download_bytes: narrowedDownload == null
+      ? devices.reduce((total, item) => total + deviceDownload(item), 0)
+      : narrowedDownload,
+    upload_bytes: narrowedUpload == null
+      ? devices.reduce((total, item) => total + deviceUpload(item), 0)
+      : narrowedUpload,
+    device_count: devices.length,
+    route_count: routes.length,
+    resource_count: resources.length,
+  };
+  summary.total_bytes = summary.download_bytes + summary.upload_bytes;
+  return { summary, devices, routes, resources };
+}
+
+function renderTrafficSummary(summary = {}) {
   const target = byId('mihomo-clash-traffic-summary');
   if (!target) return;
   const cards = [
     ['Всего учтено', formatBytes(summary.total_bytes), 'neutral'],
+    ['Загрузка ↓', formatBytes(summary.download_bytes), 'neutral'],
+    ['Отдача ↑', formatBytes(summary.upload_bytes), 'neutral'],
     ['Через Mihomo', formatBytes(summary.mihomo_bytes), 'positive'],
     ['Вне Mihomo · оценка', formatBytes(summary.outside_bytes), summary.outside_bytes ? 'warning' : 'neutral'],
     ['Устройства / маршруты', `${summary.device_count || 0} / ${summary.route_count || 0}`, 'neutral'],
@@ -187,15 +350,14 @@ function routeBar(route, total) {
   const bytes = (Number(route?.download) || 0) + (Number(route?.upload) || 0);
   const width = total > 0 ? Math.max(2, Math.min(100, bytes * 100 / total)) : 0;
   return `<div class="xk-mihomo-device-route">
-    <div><strong>${escapeHtml(route?.route || '—')}</strong><span>${escapeHtml(route?.node || '—')}</span><em>${escapeHtml(formatBytes(bytes))}</em></div>
+    <div><strong>${escapeHtml(route?.route || '—')}</strong><span>${escapeHtml(route?.node || '—')}</span><em>${escapeHtml(`${formatBytes(route?.download)} ↓ · ${formatBytes(route?.upload)} ↑`)}</em></div>
     <i><b style="width:${width.toFixed(1)}%"></b></i>
   </div>`;
 }
 
-function renderTrafficDevices(payload) {
+function renderTrafficDevices(devices = []) {
   const target = byId('mihomo-clash-traffic-devices');
   if (!target) return;
-  const devices = Array.isArray(payload?.devices) ? payload.devices : [];
   target.innerHTML = devices.slice(0, 24).map((device) => {
     const total = Number(device.total_bytes) || 0;
     const mihomo = Number(device.mihomo_bytes) || 0;
@@ -204,39 +366,205 @@ function renderTrafficDevices(payload) {
     return `<article class="xk-mihomo-traffic-device">
       <header><div><strong>${escapeHtml(device.name || device.ip || 'Устройство')}</strong><span>${escapeHtml(device.ip || '')}</span></div><em>${escapeHtml(formatBytes(total))}</em></header>
       <div class="xk-mihomo-device-split" role="img" aria-label="${escapeHtml(`Через Mihomo ${formatBytes(mihomo)}, вне Mihomo ${formatBytes(outside)}`)}"><i class="is-mihomo" style="width:${total ? mihomo * 100 / total : 0}%"></i><i class="is-outside" style="width:${total ? outside * 100 / total : 0}%"></i></div>
-      <div class="xk-mihomo-device-meta"><span>Через Mihomo <strong>${escapeHtml(formatBytes(mihomo))}</strong></span><span>Вне Mihomo · оценка <strong>${escapeHtml(formatBytes(outside))}</strong></span></div>
+      <div class="xk-mihomo-device-meta"><span>↓ <strong>${escapeHtml(formatBytes(deviceDownload(device)))}</strong></span><span>↑ <strong>${escapeHtml(formatBytes(deviceUpload(device)))}</strong></span><span>Через Mihomo <strong>${escapeHtml(formatBytes(mihomo))}</strong></span><span>Вне Mihomo · оценка <strong>${escapeHtml(formatBytes(outside))}</strong></span></div>
       <div class="xk-mihomo-device-routes">${routes.length ? routes.map((route) => routeBar(route, Math.max(mihomo, 1))).join('') : '<span class="xk-mihomo-traffic-empty">Маршруты ещё не накоплены.</span>'}</div>
     </article>`;
   }).join('') || '<div class="xk-mihomo-traffic-empty">Устройства появятся после накопления трафика.</div>';
 }
 
-function renderTrafficTables(payload) {
-  const routes = Array.isArray(payload?.routes) ? payload.routes : [];
+function renderTrafficTables({ routes = [], resources = [] } = {}) {
   const routeBody = byId('mihomo-clash-traffic-routes');
   if (routeBody) {
-    routeBody.innerHTML = routes.slice(0, 24).map((item) => `<tr><td>${escapeHtml(item.route || '—')}</td><td>${escapeHtml(item.node || '—')}</td><td>${Number(item.device_count) || 0}</td><td>${escapeHtml(formatBytes(item.bytes))}</td></tr>`).join('') || '<tr><td colspan="4">Данных пока нет.</td></tr>';
+    routeBody.innerHTML = routes.slice(0, 24).map((item) => `<tr><td>${escapeHtml(item.route || '—')}</td><td>${escapeHtml(item.node || '—')}</td><td>${Number(item.device_count) || 0}</td><td>${escapeHtml(formatBytes(item.download))}</td><td>${escapeHtml(formatBytes(item.upload))}</td></tr>`).join('') || '<tr><td colspan="5">Данных по фильтру нет.</td></tr>';
   }
-  const resources = Array.isArray(payload?.resources) ? payload.resources : [];
   const resourceBody = byId('mihomo-clash-traffic-resources');
   if (resourceBody) {
-    resourceBody.innerHTML = resources.slice(0, 24).map((item) => `<tr><td>${escapeHtml(item.resource || '—')}</td><td>${escapeHtml((item.devices || []).join(', ') || '—')}</td><td>${escapeHtml((item.routes || []).join(', ') || '—')}</td><td>${escapeHtml(formatBytes(item.bytes))}</td></tr>`).join('') || '<tr><td colspan="4">Данных пока нет.</td></tr>';
+    resourceBody.innerHTML = resources.slice(0, 24).map((item) => `<tr><td>${escapeHtml(item.resource || '—')}</td><td>${escapeHtml((item.devices || []).join(', ') || '—')}</td><td>${escapeHtml((item.routes || []).join(', ') || '—')}</td><td>${escapeHtml(formatBytes(item.download))}</td><td>${escapeHtml(formatBytes(item.upload))}</td></tr>`).join('') || '<tr><td colspan="5">Данных по фильтру нет.</td></tr>';
   }
+}
+
+function stateCopy(value) {
+  return {
+    healthy: 'Данные актуальны',
+    partial: 'Частичное покрытие',
+    degraded: 'Есть ошибки',
+    warming_up: 'Накопление данных',
+    demo: 'Демо-данные',
+    live: 'Доступен',
+    stale: 'Устарел',
+    error: 'Ошибка',
+    unavailable: 'Недоступен',
+    waiting: 'Ожидание',
+  }[String(value || '')] || 'Неизвестно';
+}
+
+function stateTone(value) {
+  if (['healthy', 'live'].includes(value)) return 'positive';
+  if (['degraded', 'error'].includes(value)) return 'danger';
+  if (['partial', 'stale', 'unavailable', 'warming_up', 'demo'].includes(value)) return 'warning';
+  return 'neutral';
+}
+
+function renderTrafficQuality(payload) {
+  const quality = payload?.quality || {};
+  const connections = quality.connections || {};
+  const clients = quality.clients || {};
+  const storage = quality.storage || {};
+  const state = byId('mihomo-clash-traffic-quality-state');
+  if (state) {
+    state.textContent = stateCopy(quality.state || payload?.collection?.state);
+    state.dataset.tone = stateTone(quality.state || payload?.collection?.state);
+  }
+  const cards = [
+    ['Классифицировано', quality.classification_percent == null ? '—' : `${quality.classification_percent}%`, quality.classification_percent >= 80 ? 'positive' : 'warning'],
+    ['Mihomo API', `${stateCopy(connections.state)} · ${connections.errors || 0} ошибок`, stateTone(connections.state)],
+    ['Keenetic', `${stateCopy(clients.state)} · ${clients.errors || 0} ошибок`, stateTone(clients.state)],
+    ['Локальная база', formatBytes(storage.database_size_bytes), 'neutral'],
+  ];
+  const target = byId('mihomo-clash-traffic-quality');
+  if (target) {
+    target.innerHTML = cards.map(([label, value, tone]) => `<div class="xk-mihomo-traffic-quality-item" data-tone="${tone}"><span>${escapeHtml(label)}</span><strong title="${escapeHtml(value)}">${escapeHtml(value)}</strong></div>`).join('');
+  }
+  const note = byId('mihomo-clash-traffic-quality-note');
+  if (note) {
+    const truncated = Number(connections.truncated_samples) || 0;
+    note.textContent = payload?.demo === true
+      ? 'Синтетические данные предназначены только для проверки интерфейса и алгоритмов.'
+      : `Статистика VPN является наблюдаемой нижней границей: короткие соединения между снимками могут быть пропущены.${truncated ? ` Снимков с усечённым списком: ${truncated}.` : ''}`;
+  }
+}
+
+function syncTrafficFilters(payload) {
+  const devices = Array.isArray(payload?.devices) ? payload.devices : [];
+  const routes = Array.isArray(payload?.routes) ? payload.routes : [];
+  const deviceSelect = byId('mihomo-clash-traffic-device');
+  if (deviceSelect) {
+    const selected = trafficFilters.device;
+    deviceSelect.replaceChildren(new Option('Все устройства', ''));
+    devices.forEach((device) => deviceSelect.add(new Option(`${device.name || device.ip} · ${device.ip}`, device.ip)));
+    trafficFilters.device = devices.some((device) => device.ip === selected) ? selected : '';
+    deviceSelect.value = trafficFilters.device;
+  }
+  const routeSelect = byId('mihomo-clash-traffic-route');
+  if (routeSelect) {
+    const selected = trafficFilters.route;
+    routeSelect.replaceChildren(new Option('Все маршруты', ''));
+    routes.forEach((route) => routeSelect.add(new Option(`${route.route || '—'} → ${route.node || '—'}`, routeKey(route))));
+    trafficFilters.route = routes.some((route) => routeKey(route) === selected) ? selected : '';
+    routeSelect.value = trafficFilters.route;
+  }
+  const resource = byId('mihomo-clash-traffic-resource');
+  if (resource && resource.value !== trafficFilters.resource) resource.value = trafficFilters.resource;
+}
+
+function renderFilteredTraffic() {
+  if (!trafficPayload) return;
+  const view = filteredTrafficView(trafficPayload);
+  renderTrafficSummary(view.summary);
+  renderTrafficDevices(view.devices);
+  renderTrafficTables(view);
 }
 
 function renderTraffic(payload) {
   trafficPayload = payload;
   const content = byId('mihomo-clash-traffic-content');
   if (content) content.hidden = false;
-  renderTrafficSummary(payload);
+  syncTrafficFilters(payload);
+  renderFilteredTraffic();
   renderTrafficChart(payload);
-  renderTrafficDevices(payload);
-  renderTrafficTables(payload);
+  renderTrafficQuality(payload);
   const coverage = byId('mihomo-clash-traffic-coverage');
   if (coverage) {
     coverage.textContent = payload?.coverage?.keenetic_client_counters
       ? 'Mihomo + общие счётчики Keenetic · выборочное наблюдение'
       : 'Только трафик через Mihomo · выборочное наблюдение';
   }
+}
+
+function downloadTrafficFile(contents, filename, type) {
+  const blob = new Blob([contents], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.hidden = true;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function csvCell(value) {
+  const text = String(value ?? '');
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function exportTraffic(format) {
+  if (!trafficPayload) return false;
+  const view = filteredTrafficView(trafficPayload);
+  const date = new Date().toISOString().slice(0, 10);
+  if (format === 'json') {
+    const payload = {
+      schema_version: 1,
+      exported_at: new Date().toISOString(),
+      range_seconds: trafficPayload.range_seconds,
+      filters: { ...trafficFilters },
+      summary: view.summary,
+      quality: trafficPayload.quality || {},
+      devices: view.devices,
+      routes: view.routes,
+      resources: view.resources,
+    };
+    downloadTrafficFile(
+      `${JSON.stringify(payload, null, 2)}\n`,
+      `xkeen-mihomo-traffic-${date}.json`,
+      'application/json;charset=utf-8',
+    );
+    setTrafficNotice('JSON с текущими фильтрами подготовлен.', 'positive');
+    return true;
+  }
+  const rows = [[
+    'kind', 'device', 'ip', 'route', 'node', 'resource',
+    'download_bytes', 'upload_bytes', 'outside_bytes',
+  ]];
+  view.devices.forEach((device) => {
+    (device.routes || []).forEach((route) => rows.push([
+      'route', device.name, device.ip, route.route, route.node, '',
+      Number(route.download) || 0, Number(route.upload) || 0, 0,
+    ]));
+    if (Number(device.outside_bytes) > 0) {
+      rows.push([
+        'outside_estimated', device.name, device.ip, '', '', '',
+        Number(device.outside_download) || 0,
+        Number(device.outside_upload) || 0,
+        Number(device.outside_bytes) || 0,
+      ]);
+    }
+  });
+  view.resources.forEach((resource) => rows.push([
+    'resource',
+    (resource.devices || []).join(' | '),
+    (resource.device_ips || []).join(' | '),
+    (resource.routes || []).join(' | '),
+    '',
+    resource.resource,
+    Number(resource.download) || 0,
+    Number(resource.upload) || 0,
+    0,
+  ]));
+  downloadTrafficFile(
+    `\uFEFF${rows.map((row) => row.map(csvCell).join(',')).join('\r\n')}\r\n`,
+    `xkeen-mihomo-traffic-${date}.csv`,
+    'text/csv;charset=utf-8',
+  );
+  setTrafficNotice('CSV с текущими фильтрами подготовлен.', 'positive');
+  return true;
+}
+
+function resetTrafficFilters() {
+  trafficFilters = { device: '', route: '', resource: '' };
+  syncTrafficFilters(trafficPayload);
+  renderFilteredTraffic();
 }
 
 async function refreshTraffic({ quiet = false } = {}) {
@@ -252,11 +580,18 @@ async function refreshTraffic({ quiet = false } = {}) {
     renderTraffic(payload);
     const last = payload?.collection?.last_sample_at;
     const error = payload?.collection?.last_error;
+    const qualityState = payload?.quality?.state;
     setTrafficNotice(
-      error
+      payload?.demo === true
+        ? 'Демо-режим: показаны синтетические устройства, VPN и ресурсы; реальные данные роутера не используются.'
+        : error
         ? `Последний сбор завершился ошибкой: ${error}. Показана накопленная история.`
+        : qualityState === 'partial'
+        ? 'Трафик Mihomo собирается, но общие счётчики Keenetic недоступны: объём вне Mihomo пока не определяется.'
+        : qualityState === 'warming_up'
+        ? 'Сборщик запущен и накапливает первые контрольные снимки.'
         : `Сбор активен${last ? ` · последний снимок ${new Date(last * 1000).toLocaleTimeString('ru-RU')}` : ''}.`,
-      error ? 'warning' : 'positive',
+      payload?.demo === true || error || ['partial', 'warming_up'].includes(qualityState) ? 'warning' : 'positive',
     );
     return true;
   } catch (error) {
@@ -349,9 +684,24 @@ export function initMihomoClashDiagnostics() {
     if (event.target.closest('#mihomo-clash-diagnostics-run')) void run();
     if (event.target.closest('#mihomo-clash-diagnostics-copy')) void copyReport();
     if (event.target.closest('#mihomo-clash-traffic-refresh')) void refreshTraffic();
+    if (event.target.closest('#mihomo-clash-traffic-filters-reset')) resetTrafficFilters();
+    if (event.target.closest('#mihomo-clash-traffic-export-csv')) exportTraffic('csv');
+    if (event.target.closest('#mihomo-clash-traffic-export-json')) exportTraffic('json');
   });
   root.addEventListener('change', (event) => {
     if (event.target?.id === 'mihomo-clash-traffic-range') void refreshTraffic();
+    if (event.target?.id === 'mihomo-clash-traffic-device') {
+      trafficFilters.device = event.target.value || '';
+      renderFilteredTraffic();
+    }
+    if (event.target?.id === 'mihomo-clash-traffic-route') {
+      trafficFilters.route = event.target.value || '';
+      renderFilteredTraffic();
+    }
+  });
+  byId('mihomo-clash-traffic-resource')?.addEventListener('input', (event) => {
+    trafficFilters.resource = event.target.value || '';
+    renderFilteredTraffic();
   });
   byId('mihomo-clash-diagnostics-domain')?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') void run();

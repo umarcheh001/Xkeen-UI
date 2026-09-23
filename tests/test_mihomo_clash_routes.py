@@ -550,6 +550,22 @@ def test_diagnostics_traffic_rejects_unknown_range():
     assert response.get_json()["code"] == "mihomo_traffic_range_invalid"
 
 
+def test_diagnostics_traffic_demo_mode_needs_no_router_or_database(monkeypatch):
+    monkeypatch.setenv("XKEEN_MIHOMO_TRAFFIC_DEMO", "1")
+    client = StubClient()
+    response = make_app(
+        ready_discovery(),
+        client,
+    ).test_client().get("/api/mihomo/clash/diagnostics/traffic?range=24h")
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body["demo"] is True
+    assert body["collection"]["state"] == "demo"
+    assert body["summary"]["device_count"] == 3
+    assert client.operations == []
+
+
 def groups_payload(now: str = "node-a", *, group_type: str = "Selector", fixed: str = ""):
     return {
         "proxies": {

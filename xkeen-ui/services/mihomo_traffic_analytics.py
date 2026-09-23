@@ -153,6 +153,15 @@ class MihomoTrafficAnalyticsCollector:
         self._last_prune_at = 0.0
         self._last_error = ""
         self._client_state = "waiting"
+        self._connection_error = ""
+        self._client_error = ""
+        self._connection_samples = 0
+        self._connection_errors = 0
+        self._client_samples = 0
+        self._client_errors = 0
+        self._connection_truncated_samples = 0
+        self._last_connection_success_at = 0
+        self._last_client_success_at = 0
         self._connections_initialized = False
         self._clients_initialized = False
         self._previous_connections: dict[str, tuple[int, int]] = {}
@@ -279,15 +288,14 @@ class MihomoTrafficAnalyticsCollector:
             started = self.clock()
             try:
                 self._sample_connections(started)
-                if started - self._last_client_at >= self.client_interval_seconds:
-                    self._sample_clients(started)
-                    self._last_client_at = started
-                with self._lock:
-                    self._last_sample_at = int(started)
-                    self._last_error = ""
             except Exception as exc:  # noqa: BLE001 - collector must survive source outages
-                with self._lock:
-                    self._last_error = str(exc or "sample_failed")[:160]
+                self._record_source_error("connections", exc)
+            if started - self._last_client_at >= self.client_interval_seconds:
+                try:
+                    self._sample_clients(started)
+                except Exception as exc:  # noqa: BLE001 - collector must survive source outages
+                    self._record_source_error("clients", exc)
+                self._last_client_at = started
             if started - self._last_flush_at >= FLUSH_SECONDS:
                 self._flush_pending()
                 self._last_flush_at = started
@@ -297,9 +305,27 @@ class MihomoTrafficAnalyticsCollector:
             elapsed = max(0.0, self.clock() - started)
             self._stop.wait(max(0.2, self.sample_interval_seconds - elapsed))
 
+    def _record_source_error(self, source: str, exc: Exception) -> None:
+        message = str(exc or "sample_failed")[:160]
+        with self._lock:
+            if source == "connections":
+                self._connection_errors += 1
+                self._connection_error = message
+            else:
+                self._client_errors += 1
+                self._client_error = message
+                self._client_state = "error"
+            self._last_error = self._connection_error or self._client_error
+
     def _sample_connections(self, now: float) -> None:
         payload = self.connections_factory()
         raw_connections = payload.get("connections") if isinstance(payload, Mapping) else None
+        source_count = (
+            len(raw_connections)
+            if isinstance(raw_connections, Sequence)
+            and not isinstance(raw_connections, (str, bytes, bytearray))
+            else 0
+        )
         rows = (
             list(raw_connections[:MAX_CONNECTIONS])
             if isinstance(raw_connections, Sequence)
@@ -350,6 +376,13 @@ class MihomoTrafficAnalyticsCollector:
         with self._lock:
             self._previous_connections = current
             self._connections_initialized = True
+            self._connection_samples += 1
+            self._last_connection_success_at = int(now)
+            self._last_sample_at = int(now)
+            self._connection_error = ""
+            if source_count > MAX_CONNECTIONS:
+                self._connection_truncated_samples += 1
+            self._last_error = self._client_error
 
     def _sample_clients(self, now: float) -> None:
         payload = self.clients_factory()
@@ -365,6 +398,11 @@ class MihomoTrafficAnalyticsCollector:
         if not available or not rows:
             with self._lock:
                 self._client_state = "unavailable"
+                self._client_samples += 1
+                self._last_client_success_at = int(now)
+                self._last_sample_at = int(now)
+                self._client_error = ""
+                self._last_error = self._connection_error
             return
         with self._lock:
             pending_mihomo = {
@@ -403,6 +441,11 @@ class MihomoTrafficAnalyticsCollector:
             self._previous_clients = current
             self._clients_initialized = True
             self._client_state = "available" if available and current else "unavailable"
+            self._client_samples += 1
+            self._last_client_success_at = int(now)
+            self._last_sample_at = int(now)
+            self._client_error = ""
+            self._last_error = self._connection_error
 
     @staticmethod
     def _top_rows(
@@ -622,11 +665,27 @@ class MihomoTrafficAnalyticsCollector:
             device_route["upload"] += up
             route_item = routes.setdefault(
                 route_key,
-                {"route": str(route), "node": str(node), "download": 0, "upload": 0, "devices": set()},
+                {
+                    "route": str(route),
+                    "node": str(node),
+                    "download": 0,
+                    "upload": 0,
+                    "_devices": {},
+                },
             )
             route_item["download"] += down
             route_item["upload"] += up
-            route_item["devices"].add(str(device_ip))
+            route_device = route_item["_devices"].setdefault(
+                str(device_ip),
+                {
+                    "ip": str(device_ip),
+                    "name": str(device_name or device_ip),
+                    "download": 0,
+                    "upload": 0,
+                },
+            )
+            route_device["download"] += down
+            route_device["upload"] += up
 
         rci_samples = 0
         for raw_total_row in total_rows:
@@ -692,13 +751,28 @@ class MihomoTrafficAnalyticsCollector:
                     "download": 0,
                     "upload": 0,
                     "devices": set(),
+                    "device_ips": set(),
                     "routes": set(),
+                    "_breakdown": {},
                 },
             )
             item["download"] += down
             item["upload"] += up
             item["devices"].add(str(device_name or device_ip))
+            item["device_ips"].add(str(device_ip))
             item["routes"].add(str(route))
+            breakdown = item["_breakdown"].setdefault(
+                (str(device_ip), str(route)),
+                {
+                    "ip": str(device_ip),
+                    "name": str(device_name or device_ip),
+                    "route": str(route),
+                    "download": 0,
+                    "upload": 0,
+                },
+            )
+            breakdown["download"] += down
+            breakdown["upload"] += up
 
         device_items: list[dict[str, Any]] = []
         for device in devices.values():
@@ -719,7 +793,14 @@ class MihomoTrafficAnalyticsCollector:
 
         route_items = []
         for item in routes.values():
-            item["device_count"] = len(item.pop("devices"))
+            breakdown = sorted(
+                item.pop("_devices").values(),
+                key=lambda row: row["download"] + row["upload"],
+                reverse=True,
+            )
+            item["device_count"] = len(breakdown)
+            item["device_ips"] = sorted(row["ip"] for row in breakdown)[:16]
+            item["breakdown"] = breakdown[:16]
             item["bytes"] = item["download"] + item["upload"]
             route_items.append(item)
         route_items.sort(key=lambda item: item["bytes"], reverse=True)
@@ -728,7 +809,13 @@ class MihomoTrafficAnalyticsCollector:
         for item in resources.values():
             item["device_count"] = len(item["devices"])
             item["devices"] = sorted(item["devices"])[:8]
+            item["device_ips"] = sorted(item["device_ips"])[:16]
             item["routes"] = sorted(item["routes"])[:8]
+            item["breakdown"] = sorted(
+                item.pop("_breakdown").values(),
+                key=lambda row: row["download"] + row["upload"],
+                reverse=True,
+            )[:32]
             item["bytes"] = item["download"] + item["upload"]
             resource_items.append(item)
         resource_items.sort(key=lambda item: item["bytes"], reverse=True)
@@ -749,9 +836,67 @@ class MihomoTrafficAnalyticsCollector:
             )
             cursor += BUCKET_SECONDS
 
-        mihomo_bytes = sum(item["mihomo_bytes"] for item in device_items)
-        outside_bytes = sum(item["outside_bytes"] for item in device_items)
+        mihomo_download = sum(item["mihomo_download"] for item in device_items)
+        mihomo_upload = sum(item["mihomo_upload"] for item in device_items)
+        outside_download = sum(item["outside_download"] for item in device_items)
+        outside_upload = sum(item["outside_upload"] for item in device_items)
+        mihomo_bytes = mihomo_download + mihomo_upload
+        outside_bytes = outside_download + outside_upload
+        total_bytes = mihomo_bytes + outside_bytes
+        database_size = 0
+        for suffix in ("", "-wal", "-shm"):
+            try:
+                database_size += max(0, os.path.getsize(f"{self.db_path}{suffix}"))
+            except OSError:
+                pass
+        with self._connect() as connection:
+            storage_rows = {
+                table: int(
+                    connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                )
+                for table in ("traffic_route", "traffic_resource", "traffic_total")
+            }
         with self._lock:
+            connection_age = (
+                max(0, now - self._last_connection_success_at)
+                if self._last_connection_success_at
+                else None
+            )
+            client_age = (
+                max(0, now - self._last_client_success_at)
+                if self._last_client_success_at
+                else None
+            )
+            if not self._connection_samples:
+                connection_state = "waiting"
+            elif self._connection_error:
+                connection_state = "error"
+            elif connection_age is not None and connection_age > max(
+                30, self.sample_interval_seconds * 3
+            ):
+                connection_state = "stale"
+            else:
+                connection_state = "live"
+            if not self._client_samples:
+                client_state = "waiting"
+            elif self._client_state == "unavailable":
+                client_state = "unavailable"
+            elif self._client_error:
+                client_state = "error"
+            elif client_age is not None and client_age > max(
+                90, self.client_interval_seconds * 3
+            ):
+                client_state = "stale"
+            else:
+                client_state = "live"
+            if connection_state == "waiting":
+                quality_state = "warming_up"
+            elif connection_state in {"error", "stale"}:
+                quality_state = "degraded"
+            elif client_state != "live":
+                quality_state = "partial"
+            else:
+                quality_state = "healthy"
             collection = {
                 "state": "collecting" if self.running else "stopped",
                 "started_at": self._started_at or None,
@@ -762,6 +907,38 @@ class MihomoTrafficAnalyticsCollector:
                 "client_counters": self._client_state,
                 "retention_seconds": self.retention_seconds,
             }
+            quality = {
+                "state": quality_state,
+                "classification_percent": (
+                    round(mihomo_bytes * 100.0 / total_bytes, 1)
+                    if total_bytes
+                    else None
+                ),
+                "confirmed_bytes": mihomo_bytes,
+                "estimated_bytes": outside_bytes,
+                "unclassified_bytes": None if not rci_samples else 0,
+                "connections": {
+                    "state": connection_state,
+                    "samples": self._connection_samples,
+                    "errors": self._connection_errors,
+                    "last_success_at": self._last_connection_success_at or None,
+                    "age_seconds": connection_age,
+                    "truncated_samples": self._connection_truncated_samples,
+                    "last_error": self._connection_error or None,
+                },
+                "clients": {
+                    "state": client_state,
+                    "samples": self._client_samples,
+                    "errors": self._client_errors,
+                    "last_success_at": self._last_client_success_at or None,
+                    "age_seconds": client_age,
+                    "last_error": self._client_error or None,
+                },
+                "storage": {
+                    "database_size_bytes": database_size,
+                    "rows": storage_rows,
+                },
+            }
         return {
             "schema_version": TRAFFIC_ANALYTICS_SCHEMA_VERSION,
             "range_seconds": seconds,
@@ -769,8 +946,14 @@ class MihomoTrafficAnalyticsCollector:
             "to": now,
             "summary": {
                 "mihomo_bytes": mihomo_bytes,
+                "mihomo_download_bytes": mihomo_download,
+                "mihomo_upload_bytes": mihomo_upload,
                 "outside_bytes": outside_bytes,
-                "total_bytes": mihomo_bytes + outside_bytes,
+                "outside_download_bytes": outside_download,
+                "outside_upload_bytes": outside_upload,
+                "download_bytes": mihomo_download + outside_download,
+                "upload_bytes": mihomo_upload + outside_upload,
+                "total_bytes": total_bytes,
                 "device_count": len(device_items),
                 "route_count": len(route_items),
                 "resource_count": len(resource_items),
@@ -788,6 +971,7 @@ class MihomoTrafficAnalyticsCollector:
                 "accuracy": "observed_lower_bound",
             },
             "collection": collection,
+            "quality": quality,
         }
 
 

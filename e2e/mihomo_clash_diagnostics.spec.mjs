@@ -53,6 +53,7 @@ function trafficPayload() {
   return {
     ok: true,
     schema_version: 1,
+    demo: true,
     range_seconds: 86400,
     summary: {
       mihomo_bytes: 900 * 1024 * 1024,
@@ -71,6 +72,9 @@ function trafficPayload() {
       {
         ip: '192.0.2.10', name: 'Ноутбук', total_bytes: 700_000_000,
         mihomo_bytes: 650_000_000, outside_bytes: 50_000_000,
+        total_download: 640_000_000, total_upload: 60_000_000,
+        mihomo_download: 600_000_000, mihomo_upload: 50_000_000,
+        outside_download: 40_000_000, outside_upload: 10_000_000,
         routes: [
           { route: 'AUTO', node: 'vpn-a', download: 500_000_000, upload: 50_000_000 },
           { route: 'WORK', node: 'vpn-b', download: 90_000_000, upload: 10_000_000 },
@@ -79,22 +83,35 @@ function trafficPayload() {
       {
         ip: '192.0.2.20', name: 'Телевизор', total_bytes: 300_000_000,
         mihomo_bytes: 250_000_000, outside_bytes: 50_000_000,
+        total_download: 285_000_000, total_upload: 15_000_000,
+        mihomo_download: 240_000_000, mihomo_upload: 10_000_000,
+        outside_download: 45_000_000, outside_upload: 5_000_000,
         routes: [{ route: 'MEDIA', node: 'vpn-c', download: 240_000_000, upload: 10_000_000 }],
       },
     ],
     routes: [
-      { route: 'AUTO', node: 'vpn-a', device_count: 1, bytes: 550_000_000 },
-      { route: 'MEDIA', node: 'vpn-c', device_count: 1, bytes: 250_000_000 },
+      { route: 'AUTO', node: 'vpn-a', device_count: 1, device_ips: ['192.0.2.10'], download: 500_000_000, upload: 50_000_000, bytes: 550_000_000, breakdown: [{ ip: '192.0.2.10', name: 'Ноутбук', download: 500_000_000, upload: 50_000_000 }] },
+      { route: 'MEDIA', node: 'vpn-c', device_count: 1, device_ips: ['192.0.2.20'], download: 240_000_000, upload: 10_000_000, bytes: 250_000_000, breakdown: [{ ip: '192.0.2.20', name: 'Телевизор', download: 240_000_000, upload: 10_000_000 }] },
     ],
     resources: [
-      { resource: 'github.com', routes: ['AUTO'], devices: ['Ноутбук'], bytes: 300_000_000 },
-      { resource: 'youtube.com', routes: ['MEDIA'], devices: ['Телевизор'], bytes: 240_000_000 },
+      { resource: 'github.com', routes: ['AUTO'], devices: ['Ноутбук'], device_ips: ['192.0.2.10'], download: 290_000_000, upload: 10_000_000, bytes: 300_000_000, breakdown: [{ ip: '192.0.2.10', name: 'Ноутбук', route: 'AUTO', download: 290_000_000, upload: 10_000_000 }] },
+      { resource: 'youtube.com', routes: ['MEDIA'], devices: ['Телевизор'], device_ips: ['192.0.2.20'], download: 235_000_000, upload: 5_000_000, bytes: 240_000_000, breakdown: [{ ip: '192.0.2.20', name: 'Телевизор', route: 'MEDIA', download: 235_000_000, upload: 5_000_000 }] },
     ],
     coverage: {
       mihomo: true,
       keenetic_client_counters: true,
       outside_estimated: true,
       outside_method: 'keenetic_total_minus_mihomo',
+    },
+    quality: {
+      state: 'demo',
+      classification_percent: 90,
+      confirmed_bytes: 900_000_000,
+      estimated_bytes: 100_000_000,
+      unclassified_bytes: 0,
+      connections: { state: 'demo', samples: 100, errors: 0, age_seconds: 0 },
+      clients: { state: 'demo', samples: 100, errors: 0, age_seconds: 0 },
+      storage: { database_size_bytes: 2_000_000, rows: {} },
     },
     collection: {
       state: 'collecting',
@@ -123,12 +140,38 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     await openDiagnostics(page, viewport);
     await expect(page.locator('#mihomo-clash-panel-diagnostics')).toBeVisible();
     await expect(page.locator('#mihomo-clash-traffic-summary')).toContainText('Через Mihomo');
+    await expect(page.locator('#mihomo-clash-traffic-notice')).toContainText('Демо-режим');
     await expect(page.locator('#mihomo-clash-traffic-devices .xk-mihomo-traffic-device')).toHaveCount(2);
     await expect(page.locator('#mihomo-clash-traffic-devices')).toContainText('vpn-a');
     await expect(page.locator('#mihomo-clash-traffic-resources')).toContainText('github.com');
     await expect(page.locator('.xk-mihomo-traffic-svg path.mihomo')).toHaveCount(1);
+    await expect(page.locator('#mihomo-clash-traffic-quality')).toContainText('90%');
+    await page.locator('#mihomo-clash-traffic-device').selectOption('192.0.2.10');
+    await expect(page.locator('#mihomo-clash-traffic-devices .xk-mihomo-traffic-device')).toHaveCount(1);
+    await expect(page.locator('#mihomo-clash-traffic-devices')).not.toContainText('Телевизор');
+    await expect(page.locator('#mihomo-clash-traffic-routes tr')).toHaveCount(1);
+    await page.locator('#mihomo-clash-traffic-resource').fill('github');
+    await expect(page.locator('#mihomo-clash-traffic-resources tr')).toHaveCount(1);
+    const jsonDownload = page.waitForEvent('download');
+    await page.locator('#mihomo-clash-traffic-export-json').click();
+    expect((await jsonDownload).suggestedFilename()).toMatch(/^xkeen-mihomo-traffic-\d{4}-\d{2}-\d{2}\.json$/);
+    await page.locator('#mihomo-clash-traffic-filters-reset').click();
+    await expect(page.locator('#mihomo-clash-traffic-devices .xk-mihomo-traffic-device')).toHaveCount(2);
+    await page.locator('#mihomo-clash-traffic-route').selectOption(JSON.stringify(['AUTO', 'vpn-a']));
+    await expect(page.locator('#mihomo-clash-traffic-routes tr')).toHaveCount(1);
+    const csvDownload = page.waitForEvent('download');
+    await page.locator('#mihomo-clash-traffic-export-csv').click();
+    expect((await csvDownload).suggestedFilename()).toMatch(/^xkeen-mihomo-traffic-\d{4}-\d{2}-\d{2}\.csv$/);
+    await page.locator('#mihomo-clash-traffic-filters-reset').click();
     const trafficButtons = await page.evaluate(() => (
-      ['mihomo-clash-diagnostics-tab-traffic', 'mihomo-clash-diagnostics-tab-trace', 'mihomo-clash-traffic-refresh'].map((id) => {
+      [
+        'mihomo-clash-diagnostics-tab-traffic',
+        'mihomo-clash-diagnostics-tab-trace',
+        'mihomo-clash-traffic-refresh',
+        'mihomo-clash-traffic-filters-reset',
+        'mihomo-clash-traffic-export-csv',
+        'mihomo-clash-traffic-export-json',
+      ].map((id) => {
         const button = document.getElementById(id);
         const icon = button?.querySelector('.xk-action-icon')?.getBoundingClientRect();
         const label = button?.querySelector('span:not(.xk-action-icon)')?.getBoundingClientRect();
