@@ -286,12 +286,16 @@ def build_demo_traffic_analytics(
         weight = max(0.08, raw_weight) / weight_sum
         mihomo = int(round(mihomo_total * weight))
         outside = int(round(outside_total * weight))
+        download = int(round((mihomo_download_total + outside_download_total) * weight))
+        upload = int(round((mihomo_upload_total + outside_upload_total) * weight))
         series.append(
             {
                 "at": end - interval * (point_count - index - 1),
                 "mihomo_bytes": mihomo,
                 "outside_bytes": outside,
-                "total_bytes": mihomo + outside,
+                "download_bytes": download,
+                "upload_bytes": upload,
+                "total_bytes": download + upload,
             }
         )
 

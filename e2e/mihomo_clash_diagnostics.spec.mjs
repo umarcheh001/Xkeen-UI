@@ -64,9 +64,9 @@ function trafficPayload() {
       resource_count: 2,
     },
     series: [
-      { at: now - 120, mihomo_bytes: 10_000_000, outside_bytes: 2_000_000, total_bytes: 12_000_000 },
-      { at: now - 60, mihomo_bytes: 16_000_000, outside_bytes: 1_000_000, total_bytes: 17_000_000 },
-      { at: now, mihomo_bytes: 12_000_000, outside_bytes: 3_000_000, total_bytes: 15_000_000 },
+      { at: now - 120, mihomo_bytes: 10_000_000, outside_bytes: 2_000_000, download_bytes: 10_500_000, upload_bytes: 1_500_000, total_bytes: 12_000_000 },
+      { at: now - 60, mihomo_bytes: 16_000_000, outside_bytes: 1_000_000, download_bytes: 15_500_000, upload_bytes: 1_500_000, total_bytes: 17_000_000 },
+      { at: now, mihomo_bytes: 12_000_000, outside_bytes: 3_000_000, download_bytes: 13_500_000, upload_bytes: 1_500_000, total_bytes: 15_000_000 },
     ],
     devices: [
       {
@@ -179,6 +179,31 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     await expect(page.locator('#mihomo-clash-traffic-resources')).toContainText('github.com');
     await expect(page.locator('.xk-mihomo-traffic-svg path.mihomo')).toHaveCount(1);
     await expect(page.locator('#mihomo-clash-traffic-quality')).toContainText('90%');
+    await expect(page.locator('#mihomo-clash-traffic-chart-stats .xk-mihomo-traffic-chart-stat')).toHaveCount(2);
+    await expect(page.locator('#mihomo-clash-traffic-chart path.mihomo')).toHaveCount(1);
+    await page.locator('[data-mihomo-traffic-series="download"]').click();
+    await expect(page.locator('#mihomo-clash-traffic-chart-stats .xk-mihomo-traffic-chart-stat')).toHaveCount(3);
+    await page.locator('[data-mihomo-traffic-series="upload"]').click();
+    await page.mouse.move(0, 0);
+    const seriesState = await page.locator('[data-mihomo-traffic-series]').evaluateAll((buttons) => buttons.map((button) => ({
+      pressed: button.getAttribute('aria-pressed'),
+      active: button.classList.contains('is-active'),
+      background: getComputedStyle(button).backgroundColor,
+      color: getComputedStyle(button).color,
+    })));
+    expect(seriesState.every((item) => item.pressed === 'true' && item.active)).toBe(true);
+    expect(new Set(seriesState.map((item) => item.background)).size).toBe(1);
+    expect(new Set(seriesState.map((item) => item.color)).size).toBe(1);
+    if (viewport.width >= 800) {
+      const hit = page.locator('#mihomo-clash-traffic-chart [data-chart-hit]');
+      const box = await hit.boundingBox();
+      await hit.dispatchEvent('pointermove', {
+        clientX: (box?.x || 0) + Math.min(260, (box?.width || 300) - 4),
+        clientY: (box?.y || 0) + 80,
+      });
+      await expect(page.locator('#mihomo-clash-traffic-tooltip')).toBeVisible();
+      await expect(page.locator('#mihomo-clash-traffic-tooltip')).toContainText('Загрузка');
+    }
     await page.locator('#mihomo-clash-traffic-device').selectOption('192.0.2.10');
     await expect(page.locator('#mihomo-clash-traffic-devices .xk-mihomo-traffic-device')).toHaveCount(1);
     await expect(page.locator('#mihomo-clash-traffic-devices')).not.toContainText('Телевизор');
@@ -281,11 +306,15 @@ test('empty analytics keeps six desktop metrics compact and separates filters fr
       summaryRows: new Set(cards.map((card) => Math.round(card.getBoundingClientRect().top))).size,
       chartHeight: chart?.height || 0,
       filterQualityGap: filters && quality ? quality.top - filters.bottom : 0,
+      qualityChartGap: quality && document.querySelector('.xk-mihomo-traffic-chart-section .xk-mihomo-diagnostic-steps-head')
+        ? document.querySelector('.xk-mihomo-traffic-chart-section .xk-mihomo-diagnostic-steps-head').getBoundingClientRect().top - quality.bottom
+        : 0,
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     };
   });
   expect(layout.summaryRows).toBe(1);
   expect(layout.chartHeight).toBeLessThanOrEqual(80);
   expect(layout.filterQualityGap).toBeGreaterThanOrEqual(20);
+  expect(layout.qualityChartGap).toBeGreaterThanOrEqual(20);
   expect(layout.overflow).toBeLessThanOrEqual(1);
 });

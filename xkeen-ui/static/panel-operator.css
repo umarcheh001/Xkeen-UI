@@ -1888,6 +1888,11 @@ body.panel-page .xk-mihomo-traffic-chart-section,
 body.panel-page .xk-mihomo-traffic-section {
   min-width: 0;
 }
+body.panel-page .xk-mihomo-traffic-chart-section {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--op-border);
+}
 body.panel-page :is(
   .xk-mihomo-traffic-quality,
   .xk-mihomo-traffic-chart-section,
@@ -1895,7 +1900,65 @@ body.panel-page :is(
 ) > .xk-mihomo-diagnostic-steps-head {
   margin-top: 0;
 }
+body.panel-page .xk-mihomo-traffic-chart-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-width: 0;
+}
+body.panel-page .xk-mihomo-traffic-series {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+body.panel-page .xk-mihomo-traffic-series button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 2px 6px;
+  border: 0 !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  color: var(--op-muted) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  white-space: nowrap;
+}
+body.panel-page .xk-mihomo-traffic-series button:hover,
+body.panel-page .xk-mihomo-traffic-series button[aria-pressed="true"] {
+  background: var(--op-surface-3) !important;
+  color: var(--op-text-strong) !important;
+}
+body.panel-page .xk-mihomo-traffic-series button.is-active,
+body.panel-page .xk-mihomo-traffic-series button.is-active:hover,
+body.panel-page .xk-mihomo-traffic-series button[aria-pressed="true"],
+body.panel-page .xk-mihomo-traffic-series button[aria-pressed="true"]:hover {
+  border: 1px solid var(--op-border-strong) !important;
+  background: var(--op-surface-3) !important;
+  color: var(--op-text-strong) !important;
+  box-shadow: inset 0 0 0 1px var(--op-accent-soft);
+}
+body.panel-page .xk-mihomo-traffic-series button.is-active > span,
+body.panel-page .xk-mihomo-traffic-series button[aria-pressed="true"] > span {
+  color: var(--op-text-strong) !important;
+}
+body.panel-page .xk-mihomo-traffic-series button i {
+  display: block;
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--op-muted);
+}
+body.panel-page .xk-mihomo-traffic-series button[data-mihomo-traffic-series="mihomo"] i { background: var(--op-accent); }
+body.panel-page .xk-mihomo-traffic-series button[data-mihomo-traffic-series="outside"] i { background: var(--op-warning); }
+body.panel-page .xk-mihomo-traffic-series button[data-mihomo-traffic-series="download"] i { background: var(--op-info, #42a5e8); }
+body.panel-page .xk-mihomo-traffic-series button[data-mihomo-traffic-series="upload"] i { background: var(--op-danger); }
 body.panel-page .xk-mihomo-traffic-chart {
+  position: relative;
   min-height: 220px;
   padding: 8px 0 0;
 }
@@ -1930,6 +1993,82 @@ body.panel-page .xk-mihomo-traffic-svg path {
 }
 body.panel-page .xk-mihomo-traffic-svg path.mihomo { stroke: var(--op-accent); }
 body.panel-page .xk-mihomo-traffic-svg path.outside { stroke: var(--op-warning); }
+body.panel-page .xk-mihomo-traffic-svg path.download { stroke: var(--op-info, #42a5e8); }
+body.panel-page .xk-mihomo-traffic-svg path.upload { stroke: var(--op-danger); }
+body.panel-page .xk-mihomo-traffic-svg .chart-hit-area {
+  fill: transparent;
+  cursor: crosshair;
+}
+body.panel-page .xk-mihomo-traffic-svg .chart-guide {
+  stroke: var(--op-border-strong);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+body.panel-page .xk-mihomo-traffic-tooltip {
+  position: absolute;
+  z-index: 3;
+  min-width: 160px;
+  padding: 8px 10px;
+  border: 1px solid var(--op-border-strong);
+  border-radius: var(--op-control-radius);
+  background: var(--op-surface-3);
+  color: var(--op-text);
+  box-shadow: var(--op-shadow-sm, 0 6px 20px rgba(0, 0, 0, .24));
+  pointer-events: none;
+  font-size: 11px;
+}
+body.panel-page .xk-mihomo-traffic-tooltip strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--op-text-strong);
+}
+body.panel-page .xk-mihomo-traffic-tooltip span {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  color: var(--op-muted);
+}
+body.panel-page .xk-mihomo-traffic-tooltip span b { color: var(--op-text); font-weight: 600; }
+body.panel-page .xk-mihomo-traffic-chart-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+}
+body.panel-page .xk-mihomo-traffic-chart-stat {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 7px 9px;
+  border-radius: var(--op-control-radius);
+  background: var(--op-surface-2);
+}
+body.panel-page .xk-mihomo-traffic-chart-stat > header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--op-muted);
+  font-size: 11px;
+}
+body.panel-page .xk-mihomo-traffic-chart-stat > header i {
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+}
+body.panel-page .xk-mihomo-traffic-chart-stat[data-series="mihomo"] header i { background: var(--op-accent); }
+body.panel-page .xk-mihomo-traffic-chart-stat[data-series="outside"] header i { background: var(--op-warning); }
+body.panel-page .xk-mihomo-traffic-chart-stat[data-series="download"] header i { background: var(--op-info, #42a5e8); }
+body.panel-page .xk-mihomo-traffic-chart-stat[data-series="upload"] header i { background: var(--op-danger); }
+body.panel-page .xk-mihomo-traffic-chart-stat dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 3px;
+  margin: 0;
+}
+body.panel-page .xk-mihomo-traffic-chart-stat dt { color: var(--op-muted); font-size: 9px; text-transform: uppercase; }
+body.panel-page .xk-mihomo-traffic-chart-stat dd { margin: 0; color: var(--op-text); font-size: 10px; white-space: nowrap; }
 body.panel-page .xk-mihomo-traffic-legend,
 body.panel-page .xk-mihomo-device-meta {
   display: flex;
@@ -2100,6 +2239,13 @@ body.panel-page .xk-mihomo-traffic-devices:has(.xk-mihomo-traffic-empty) {
   body.panel-page .xk-mihomo-traffic-filter-actions { justify-content: flex-end; }
   body.panel-page .xk-mihomo-traffic-filter-actions > button { width: auto; min-width: max-content; }
   body.panel-page .xk-mihomo-traffic-quality-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body.panel-page .xk-mihomo-traffic-chart-tools {
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 5px;
+  }
+  body.panel-page .xk-mihomo-traffic-series { justify-content: flex-end; }
+  body.panel-page .xk-mihomo-traffic-chart-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   body.panel-page .xk-mihomo-traffic-devices,
   body.panel-page .xk-mihomo-traffic-grid { grid-template-columns: 1fr; }
   body.panel-page .xk-mihomo-diagnostic-step { grid-template-columns: 24px minmax(0, 1fr); }
@@ -2122,6 +2268,9 @@ body.panel-page .xk-mihomo-traffic-devices:has(.xk-mihomo-traffic-empty) {
   body.panel-page .xk-mihomo-traffic-filter-actions #mihomo-clash-traffic-filters-reset { grid-column: 1 / -1; }
   body.panel-page .xk-mihomo-traffic-filter-actions > button { width: 100%; min-width: 0; }
   body.panel-page .xk-mihomo-traffic-quality-grid { grid-template-columns: 1fr; }
+  body.panel-page .xk-mihomo-traffic-chart-tools { align-items: stretch; width: 100%; }
+  body.panel-page .xk-mihomo-traffic-series { justify-content: flex-start; }
+  body.panel-page .xk-mihomo-traffic-chart-stats { grid-template-columns: 1fr; }
   body.panel-page .xk-mihomo-device-route > div { grid-template-columns: minmax(0, 1fr) auto; }
   body.panel-page .xk-mihomo-device-route > div span { grid-column: 1 / -1; grid-row: 2; }
 }

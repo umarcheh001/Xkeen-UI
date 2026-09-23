@@ -826,12 +826,16 @@ class MihomoTrafficAnalyticsCollector:
             item = series.get(cursor, {})
             mihomo = _counter(item.get("mihomo_download")) + _counter(item.get("mihomo_upload"))
             outside = _counter(item.get("outside_download")) + _counter(item.get("outside_upload"))
+            download = _counter(item.get("mihomo_download")) + _counter(item.get("outside_download"))
+            upload = _counter(item.get("mihomo_upload")) + _counter(item.get("outside_upload"))
             series_items.append(
                 {
                     "at": cursor,
                     "mihomo_bytes": mihomo,
                     "outside_bytes": outside,
-                    "total_bytes": mihomo + outside,
+                    "download_bytes": download,
+                    "upload_bytes": upload,
+                    "total_bytes": download + upload,
                 }
             )
             cursor += BUCKET_SECONDS
