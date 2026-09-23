@@ -81,7 +81,10 @@ test('Mihomo header preserves controls, service state and navigation in both the
   await page.screenshot({ path: '.tmp/mihomo-header-config-fixed.png' });
   await page.locator('#mihomo-clash-tab-control').focus();
   await page.keyboard.press('ArrowLeft');
-  await expect(page.locator('#mihomo-clash-tab-logs')).toBeFocused();
+  // С первой вкладки стрелка влево заворачивается на последнюю видимую:
+  // вкладка конфигурации в этот момент спрятана (проверено выше), поэтому
+  // крайней стоит «Диагностика». Новая вкладка в шапке сдвигает эту точку.
+  await expect(page.locator('#mihomo-clash-tab-diagnostics')).toBeFocused();
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('Enter');
   await expect(page.locator('#mihomo-clash-status-strip')).toBeHidden();
