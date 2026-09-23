@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import ipaddress
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 
 MAX_TRACE_RULES = 5000
 MAX_TRACE_STEPS = 250
 MAX_TRACE_CHAIN = 32
+RuleSetMatcher = Callable[[str, str, Sequence[str]], tuple[str, str]]
 
 
 def normalize_trace_domain(value: Any) -> str:
@@ -82,6 +83,8 @@ def _rule_parts(rule: Mapping[str, Any]) -> tuple[str, str, str]:
         "IPCIDR6": "IP-CIDR6",
         "GEOIP": "GEOIP",
         "RULESET": "RULE-SET",
+        "OR": "OR",
+        "AND": "AND",
         "MATCH": "MATCH",
     }.get(compact_type, raw_type.upper().replace("_", "-"))
     payload = _text(rule.get("payload"), 1024)
@@ -101,7 +104,106 @@ def _ip_matches(addresses: Sequence[str], payload: str) -> bool:
     )
 
 
-def _evaluate_rule(rule_type: str, payload: str, domain: str, addresses: Sequence[str]) -> tuple[str, str]:
+def _strip_outer_parentheses(value: str) -> str:
+    text = str(value or "").strip()
+    while text.startswith("(") and text.endswith(")"):
+        depth = 0
+        enclosed = True
+        for index, char in enumerate(text):
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0 and index != len(text) - 1:
+                    enclosed = False
+                    break
+            if depth < 0:
+                enclosed = False
+                break
+        if not enclosed or depth != 0:
+            break
+        text = text[1:-1].strip()
+    return text
+
+
+def _split_top_level(value: str, separator: str) -> list[str]:
+    parts: list[str] = []
+    start = 0
+    depth = 0
+    quote = ""
+    for index, char in enumerate(value):
+        if quote:
+            if char == quote:
+                quote = ""
+            continue
+        if char in {"'", '"'}:
+            quote = char
+        elif char == "(":
+            depth += 1
+        elif char == ")" and depth:
+            depth -= 1
+        elif depth == 0 and value.startswith(separator, index):
+            parts.append(value[start:index].strip())
+            start = index + len(separator)
+    parts.append(value[start:].strip())
+    return [part for part in parts if part]
+
+
+def _combine_results(operator: str, results: Sequence[tuple[str, str]]) -> tuple[str, str]:
+    if operator == "OR":
+        if any(result == "match" for result, _reason in results):
+            return "match", "Одно из условий составного правила совпало."
+        if any(result == "unknown" for result, _reason in results):
+            return "unknown", "Часть условий составного правила нельзя безопасно вычислить."
+        return "skip", "Условия составного правила не совпали."
+    if any(result == "skip" for result, _reason in results):
+        return "skip", "Одно из условий составного правила не совпало."
+    if any(result == "unknown" for result, _reason in results):
+        return "unknown", "Часть условий составного правила нельзя безопасно вычислить."
+    return "match", "Все условия составного правила совпали."
+
+
+def _evaluate_expression(
+    expression: str,
+    domain: str,
+    addresses: Sequence[str],
+    rule_set_matcher: RuleSetMatcher | None,
+) -> tuple[str, str]:
+    value = _strip_outer_parentheses(expression)
+    for separator, operator in (("||", "OR"), ("&&", "AND")):
+        parts = _split_top_level(value, separator)
+        if len(parts) > 1:
+            return _combine_results(
+                operator,
+                [_evaluate_expression(part, domain, addresses, rule_set_matcher) for part in parts],
+            )
+    parts = _split_top_level(value, ",")
+    if not parts:
+        return "unknown", "Составное правило не содержит условий."
+    raw_type = parts[0]
+    payload = parts[1] if len(parts) > 1 else ""
+    compact_type = re.sub(r"[^A-Z0-9]", "", raw_type.upper())
+    rule_type = {
+        "DOMAIN": "DOMAIN",
+        "DOMAINSUFFIX": "DOMAIN-SUFFIX",
+        "DOMAINSUFFIX6": "DOMAIN-SUFFIX6",
+        "DOMAINKEYWORD": "DOMAIN-KEYWORD",
+        "IPCIDR": "IP-CIDR",
+        "IPCIDR6": "IP-CIDR6",
+        "GEOIP": "GEOIP",
+        "RULESET": "RULE-SET",
+        "MATCH": "MATCH",
+    }.get(compact_type, raw_type.upper().replace("_", "-"))
+    return _evaluate_rule(rule_type, payload, domain, addresses, rule_set_matcher)
+
+
+def _evaluate_rule(
+    rule_type: str,
+    payload: str,
+    domain: str,
+    addresses: Sequence[str],
+    rule_set_matcher: RuleSetMatcher | None = None,
+) -> tuple[str, str]:
     """Return ``match``, ``skip`` or ``unknown`` plus an operator-facing reason."""
 
     if rule_type == "DOMAIN":
@@ -121,6 +223,12 @@ def _evaluate_rule(rule_type: str, payload: str, domain: str, addresses: Sequenc
             return "unknown", "GEOIP требует базу геолокации ядра; панель не угадывает результат."
         matched = _ip_matches(addresses, payload)
         return ("match" if matched else "skip", "IP входит в указанную сеть.")
+    if rule_type == "RULE-SET":
+        if rule_set_matcher is None:
+            return "unknown", "RULE-SET требует содержимое rule-provider; оно недоступно для этой проверки."
+        return rule_set_matcher(payload, domain, addresses)
+    if rule_type in {"OR", "AND"}:
+        return _evaluate_expression(payload, domain, addresses, rule_set_matcher)
     if rule_type == "MATCH":
         return "match", "Финальное правило MATCH."
     return "unknown", "Тип правила нельзя безопасно вычислить только по домену."
@@ -164,6 +272,7 @@ def build_trace_result(
     dns_payload: Any,
     rules_payload: Any,
     proxies_payload: Any,
+    rule_set_matcher: RuleSetMatcher | None = None,
 ) -> dict[str, Any]:
     """Build a bounded rule trace while clearly marking unknown semantics."""
 
@@ -177,7 +286,7 @@ def build_trace_result(
         if disabled:
             result, reason = "skip", "Правило отключено."
         else:
-            result, reason = _evaluate_rule(rule_type, payload, domain, addresses)
+            result, reason = _evaluate_rule(rule_type, payload, domain, addresses, rule_set_matcher)
         step = {
             "index": index,
             "type": rule_type,

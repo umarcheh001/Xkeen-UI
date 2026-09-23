@@ -7,6 +7,8 @@ resolved from the active Mihomo config and never accepted from request input.
 from __future__ import annotations
 
 import hashlib
+import ipaddress
+import io
 import os
 import re
 import selectors
@@ -39,6 +41,8 @@ MAX_RULE_CHARS = 4096
 MAX_YAML_NODES = 50_000
 MAX_YAML_ALIASES = 1_000
 MAX_CACHE_ENTRIES = 8
+MAX_TRACE_MATCH_CACHE_ENTRIES = 256
+MAX_TRACE_MATCH_RULES = 250_000
 CONVERT_TIMEOUT_SECONDS = 12
 _ALLOWED_FORMATS = {"yaml", "text", "mrs"}
 _ALLOWED_BEHAVIORS = {"domain", "ipcidr", "classical"}
@@ -75,6 +79,7 @@ class _CachedRules:
 
 
 _cache: OrderedDict[tuple[Any, ...], _CachedRules] = OrderedDict()
+_trace_match_cache: OrderedDict[tuple[Any, ...], tuple[str, str]] = OrderedDict()
 _cache_lock = threading.Lock()
 _mrs_converter_lock = threading.Lock()
 
@@ -82,6 +87,7 @@ _mrs_converter_lock = threading.Lock()
 def clear_rule_provider_inspector_cache() -> None:
     with _cache_lock:
         _cache.clear()
+        _trace_match_cache.clear()
 
 
 def _read_bounded(
@@ -558,6 +564,322 @@ def _parse_mrs(
     finally:
         _mrs_converter_lock.release()
     return _parse_text(data)
+
+
+def _iter_text_rules(data: bytes):
+    """Yield every bounded text rule without retaining a second large list."""
+
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise RuleProviderInspectorError("provider_encoding_invalid", "Rule-provider не является UTF-8 текстом.", 409) from exc
+    for line in io.StringIO(text):
+        stripped = line.strip()
+        if stripped and not stripped.startswith(("#", "//")):
+            yield _rule_text(stripped)
+
+
+def _iter_yaml_rules(data: bytes):
+    if _yaml is None:
+        raise RuleProviderInspectorError("yaml_parser_unavailable", "На роутере нет YAML parser.", 503)
+    try:
+        parsed = _safe_load_yaml(data.decode("utf-8-sig"))
+    except Exception as exc:
+        raise RuleProviderInspectorError("provider_yaml_invalid", "YAML rule-provider не удалось разобрать.", 409) from exc
+    if isinstance(parsed, Mapping):
+        parsed = parsed.get("payload") if parsed.get("payload") is not None else parsed.get("rules")
+    if not isinstance(parsed, Sequence) or isinstance(parsed, (str, bytes, bytearray)):
+        raise RuleProviderInspectorError("provider_yaml_invalid", "В YAML rule-provider нет списка payload/rules.", 409)
+    for item in parsed:
+        if isinstance(item, (str, int, float)) and not isinstance(item, bool):
+            rule = _rule_text(item)
+            if rule:
+                yield rule
+
+
+def _mrs_data_for_match(
+    path: Path,
+    behavior: str,
+    mihomo_binary: str | None,
+    expected_stat: os.stat_result,
+) -> bytes:
+    """Decode one MRS snapshot for trace matching without populating the UI cache."""
+
+    if not _mrs_converter_lock.acquire(timeout=1):
+        raise RuleProviderInspectorError(
+            "mrs_converter_busy",
+            "Другой MRS rule-provider уже декодируется. Повторите попытку.",
+            429,
+        )
+    try:
+        binary = _mihomo_binary(mihomo_binary)
+        source = _read_bounded(
+            path,
+            MAX_PROVIDER_FILE_BYTES,
+            code="provider_file_too_large",
+            no_follow=True,
+            expected_stat=expected_stat,
+        )
+        with tempfile.TemporaryDirectory(prefix="xkeen-mrs-") as directory:
+            input_path = Path(directory) / "provider.mrs"
+            output_pipe = Path(directory) / "rules.pipe"
+            descriptor = os.open(input_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(source)
+            os.mkfifo(output_pipe, 0o600)
+            return _convert_mrs_bounded(binary, behavior, input_path, output_pipe)
+    except RuleProviderInspectorError:
+        raise
+    except OSError as exc:
+        raise RuleProviderInspectorError("mrs_converter_unavailable", "Не удалось запустить Mihomo для просмотра MRS.", 503) from exc
+    finally:
+        _mrs_converter_lock.release()
+
+
+def _trace_match_cache_get(key: tuple[Any, ...]) -> tuple[str, str] | None:
+    with _cache_lock:
+        value = _trace_match_cache.get(key)
+        if value is not None:
+            _trace_match_cache.move_to_end(key)
+        return value
+
+
+def _trace_match_cache_put(key: tuple[Any, ...], value: tuple[str, str]) -> None:
+    with _cache_lock:
+        _trace_match_cache[key] = value
+        _trace_match_cache.move_to_end(key)
+        while len(_trace_match_cache) > MAX_TRACE_MATCH_CACHE_ENTRIES:
+            _trace_match_cache.popitem(last=False)
+
+
+def _strip_outer_parentheses(value: str) -> str:
+    text = str(value or "").strip()
+    while text.startswith("(") and text.endswith(")"):
+        depth = 0
+        enclosed = True
+        for index, char in enumerate(text):
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0 and index != len(text) - 1:
+                    enclosed = False
+                    break
+            if depth < 0:
+                enclosed = False
+                break
+        if not enclosed or depth != 0:
+            break
+        text = text[1:-1].strip()
+    return text
+
+
+def _split_top_level(value: str, separator: str) -> list[str]:
+    parts: list[str] = []
+    start = 0
+    depth = 0
+    quote = ""
+    for index, char in enumerate(value):
+        if quote:
+            if char == quote:
+                quote = ""
+            continue
+        if char in {"'", '"'}:
+            quote = char
+        elif char == "(":
+            depth += 1
+        elif char == ")" and depth:
+            depth -= 1
+        elif depth == 0 and value.startswith(separator, index):
+            parts.append(value[start:index].strip())
+            start = index + len(separator)
+    parts.append(value[start:].strip())
+    return [part for part in parts if part]
+
+
+def _domain_matches(domain: str, value: str) -> bool:
+    candidate = str(value or "").strip().lower().lstrip(".")
+    if candidate.startswith("+."):
+        candidate = candidate[2:]
+    if candidate.startswith("*."):
+        candidate = candidate[2:]
+    return bool(candidate) and (domain == candidate or domain.endswith(f".{candidate}"))
+
+
+def _ip_matches(addresses: Sequence[str], value: str) -> bool:
+    try:
+        network = ipaddress.ip_network(str(value or "").strip(), strict=False)
+    except ValueError:
+        return False
+    for address in addresses:
+        try:
+            if ipaddress.ip_address(address) in network:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def _port_matches(port: int, value: str) -> bool:
+    for item in re.split(r"[/,]", str(value or "")):
+        item = item.strip()
+        if not item:
+            continue
+        try:
+            if "-" in item:
+                low, high = (int(part) for part in item.split("-", 1))
+                if low <= port <= high:
+                    return True
+            elif int(item) == port:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def _combine_rule_results(operator: str, results: Sequence[tuple[str, str]]) -> tuple[str, str]:
+    if operator == "OR":
+        if any(result == "match" for result, _reason in results):
+            return "match", "Одно из условий классического rule-provider совпало."
+        if any(result == "unknown" for result, _reason in results):
+            return "unknown", "Часть условий классического rule-provider нельзя безопасно вычислить."
+        return "skip", "Условия классического rule-provider не совпали."
+    if any(result == "skip" for result, _reason in results):
+        return "skip", "Одно из условий классического rule-provider не совпало."
+    if any(result == "unknown" for result, _reason in results):
+        return "unknown", "Часть условий классического rule-provider нельзя безопасно вычислить."
+    return "match", "Все условия классического rule-provider совпали."
+
+
+def _match_classical_rule(
+    raw_rule: str,
+    domain: str,
+    addresses: Sequence[str],
+    network: str,
+    destination_port: int,
+) -> tuple[str, str]:
+    rule = _strip_outer_parentheses(raw_rule)
+    parts = _split_top_level(rule, ",")
+    if not parts:
+        return "unknown", "Пустое правило в классическом rule-provider."
+    rule_type = re.sub(r"[^A-Z0-9]", "", parts[0].upper())
+    if rule_type in {"OR", "AND"}:
+        expression = _strip_outer_parentheses(",".join(parts[1:]))
+        terms = _split_top_level(expression, ",")
+        if not terms:
+            return "unknown", "Составное правило не содержит условий."
+        outcomes = [
+            _match_classical_rule(term, domain, addresses, network, destination_port)
+            for term in terms
+        ]
+        return _combine_rule_results("OR" if rule_type == "OR" else "AND", outcomes)
+    payload = parts[1].strip() if len(parts) > 1 else ""
+    if rule_type == "DOMAIN":
+        return ("match", "Точное совпадение домена в классическом rule-provider.") if domain == payload.lower().lstrip(".") else ("skip", "Домен не совпал.")
+    if rule_type in {"DOMAINSUFFIX", "DOMAINSUFFIX6"}:
+        return ("match", "Домен совпал с suffix из классического rule-provider.") if _domain_matches(domain, payload) else ("skip", "Домен не совпал.")
+    if rule_type == "DOMAINKEYWORD":
+        return ("match", "Домен содержит keyword из классического rule-provider.") if payload.lower() in domain else ("skip", "Домен не совпал.")
+    if rule_type in {"IPCIDR", "IPCIDR6"}:
+        return ("match", "IP совпал с сетью из классического rule-provider.") if _ip_matches(addresses, payload) else ("skip", "IP не совпал.")
+    if rule_type == "NETWORK":
+        return ("match", "Тип соединения совпал.") if payload.lower() == network.lower() else ("skip", "Тип соединения не совпал.")
+    if rule_type in {"DSTPORT", "SRCDESTPORT"}:
+        return ("match", "Порт назначения совпал.") if _port_matches(destination_port, payload) else ("skip", "Порт назначения не совпал.")
+    if rule_type == "MATCH":
+        return "match", "Финальное правило MATCH из классического rule-provider."
+    return "unknown", "Тип правила в классическом rule-provider нельзя безопасно вычислить."
+
+
+def _match_provider_rules(
+    spec: _ProviderSpec,
+    domain: str,
+    addresses: Sequence[str],
+    network: str,
+    destination_port: int,
+    mihomo_binary: str | None,
+) -> tuple[str, str]:
+    if spec.provider_type == "inline":
+        rules = iter(spec.payload)
+    else:
+        assert spec.path is not None
+        try:
+            info = spec.path.stat()
+        except OSError as exc:
+            raise RuleProviderInspectorError("provider_file_missing", "Файл rule-provider ещё не создан.", 404) from exc
+        if spec.format == "mrs":
+            rules = _iter_text_rules(_mrs_data_for_match(spec.path, spec.behavior, mihomo_binary, info))
+        else:
+            data = _read_bounded(
+                spec.path,
+                MAX_PROVIDER_FILE_BYTES,
+                code="provider_file_too_large",
+                no_follow=True,
+                expected_stat=info,
+            )
+            rules = _iter_yaml_rules(data) if spec.format == "yaml" else _iter_text_rules(data)
+    unknown_reason = ""
+    for index, raw_rule in enumerate(rules, start=1):
+        if index > MAX_TRACE_MATCH_RULES:
+            return "unknown", "Rule-provider превышает лимит точной проверки диагностики."
+        if spec.behavior == "domain":
+            result = "match" if _domain_matches(domain, raw_rule) else "skip"
+            reason = "Домен найден в rule-provider." if result == "match" else "Домен отсутствует в rule-provider."
+        elif spec.behavior == "ipcidr":
+            result = "match" if _ip_matches(addresses, raw_rule) else "skip"
+            reason = "IP найден в rule-provider." if result == "match" else "IP отсутствует в rule-provider."
+        else:
+            result, reason = _match_classical_rule(raw_rule, domain, addresses, network, destination_port)
+        if result == "match":
+            return "match", f"Rule-provider «{spec.name}»: {reason}"
+        if result == "unknown" and not unknown_reason:
+            unknown_reason = reason
+    if unknown_reason:
+        return "unknown", f"Rule-provider «{spec.name}»: {unknown_reason}"
+    return "skip", f"Rule-provider «{spec.name}»: совпадений нет."
+
+
+def match_rule_provider(
+    *,
+    config_file: str,
+    mihomo_root: str,
+    provider_name: str,
+    domain: str,
+    addresses: Sequence[str],
+    network: str = "tcp",
+    destination_port: int = 443,
+    mihomo_binary: str | None = None,
+) -> tuple[str, str]:
+    """Evaluate one configured provider for a bounded diagnostic trace."""
+
+    spec = _provider_spec(config_file, mihomo_root, provider_name)
+    if spec.provider_type == "inline":
+        fingerprint: tuple[Any, ...] = (
+            "inline",
+            spec.name,
+            hashlib.sha256("\0".join(spec.payload).encode("utf-8", "replace")).hexdigest(),
+        )
+    else:
+        assert spec.path is not None
+        try:
+            info = spec.path.stat()
+        except OSError as exc:
+            raise RuleProviderInspectorError("provider_file_missing", "Файл rule-provider ещё не создан.", 404) from exc
+        fingerprint = (str(spec.path), info.st_mtime_ns, info.st_size, spec.behavior, spec.format)
+    cache_key = (*fingerprint, domain, tuple(addresses), network.lower(), int(destination_port))
+    cached = _trace_match_cache_get(cache_key)
+    if cached is not None:
+        return cached
+    outcome = _match_provider_rules(
+        spec,
+        str(domain or "").lower(),
+        addresses,
+        str(network or "tcp").lower(),
+        int(destination_port),
+        mihomo_binary,
+    )
+    _trace_match_cache_put(cache_key, outcome)
+    return outcome
 
 
 def _cache_get(key: tuple[Any, ...]) -> _CachedRules | None:

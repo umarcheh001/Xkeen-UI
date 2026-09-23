@@ -13,6 +13,7 @@ from services.mihomo_rule_provider_inspector import (
     RuleProviderInspectorError,
     clear_rule_provider_inspector_cache,
     inspect_rule_provider,
+    match_rule_provider,
 )
 
 
@@ -44,6 +45,42 @@ def inspect(root: Path, config: Path, name: str, **options):
     return inspect_rule_provider(
         config_file=str(config), mihomo_root=str(root), provider_name=name, **options
     )
+
+
+def match(root: Path, config: Path, name: str, domain: str, addresses: list[str], **options):
+    return match_rule_provider(
+        config_file=str(config),
+        mihomo_root=str(root),
+        provider_name=name,
+        domain=domain,
+        addresses=addresses,
+        **options,
+    )
+
+
+def test_trace_matcher_evaluates_domain_ipcidr_and_classical_providers(tmp_path: Path):
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    (rules / "github.txt").write_text("github.com\n", encoding="utf-8")
+    (rules / "google.txt").write_text("142.251.0.0/16\n", encoding="utf-8")
+    config = write_config(
+        tmp_path,
+        "  github@domain: { type: file, behavior: domain, format: text, path: ./rules/github.txt }\n"
+        "  google@ipcidr: { type: file, behavior: ipcidr, format: text, path: ./rules/google.txt }\n"
+        "  quic@inline: { type: inline, behavior: classical, payload: ['AND,((NETWORK,udp),(DST-PORT,443))'] }\n",
+    )
+
+    assert match(tmp_path, config, "github@domain", "github.com", ["140.82.121.4"])[0] == "match"
+    assert match(tmp_path, config, "google@ipcidr", "google.com", ["142.251.142.206"])[0] == "match"
+    assert match(tmp_path, config, "quic@inline", "github.com", ["140.82.121.4"])[0] == "skip"
+    assert match(
+        tmp_path,
+        config,
+        "quic@inline",
+        "github.com",
+        ["140.82.121.4"],
+        network="udp",
+    )[0] == "match"
 
 
 def test_inline_provider_is_bounded_searchable_and_has_no_path(tmp_path: Path):

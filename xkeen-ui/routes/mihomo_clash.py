@@ -6,6 +6,7 @@ import json
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -48,6 +49,7 @@ from services.mihomo_clash_dns import (
 from services.mihomo_rule_provider_inspector import (
     RuleProviderInspectorError,
     inspect_rule_provider,
+    match_rule_provider,
 )
 from services.mihomo_clash_devices import get_mihomo_clash_device_map
 from services.mihomo_egress_info import MihomoEgressInfoError, get_mihomo_egress_info
@@ -1576,11 +1578,25 @@ def create_mihomo_clash_blueprint(
             dns_response = client.query_dns(domain, "A")
             rules_response = client.request_json("rules")
             proxies_response = client.request_json("proxies")
+            def match_rule_set(provider_name: str, trace_domain: str, addresses: Sequence[str]) -> tuple[str, str]:
+                try:
+                    return match_rule_provider(
+                        config_file=mihomo_config_file,
+                        mihomo_root=root,
+                        provider_name=provider_name,
+                        domain=trace_domain,
+                        addresses=addresses,
+                        network="tcp",
+                        destination_port=443,
+                    )
+                except RuleProviderInspectorError as exc:
+                    return "unknown", exc.message
             payload = build_trace_result(
                 domain=domain,
                 dns_payload=dns_response.payload,
                 rules_payload=rules_response.payload,
                 proxies_payload=proxies_response.payload,
+                rule_set_matcher=match_rule_set,
             )
         except MihomoClashClientError as exc:
             return _safe_client_error(exc)

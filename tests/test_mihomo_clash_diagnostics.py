@@ -63,3 +63,57 @@ def test_trace_marks_ruleset_as_unknown_instead_of_guessing():
     assert result["steps"][0]["result"] == "unknown"
     assert result["route"]["policy"] == "AUTO"
     assert result["route"]["chain"] == []
+
+
+def test_trace_evaluates_rulesets_and_composite_or_with_configured_matcher():
+    outcomes = {
+        "adlist@domain": ("skip", "Rule-provider «adlist@domain»: совпадений нет."),
+        "quic@inline": ("skip", "Rule-provider «quic@inline»: тип соединения не совпал."),
+        "github@domain": ("match", "Rule-provider «github@domain»: домен найден."),
+        "google@domain": ("match", "Rule-provider «google@domain»: домен найден."),
+        "google@ipcidr": ("skip", "Rule-provider «google@ipcidr»: IP отсутствует."),
+    }
+
+    def matcher(name, _domain, _addresses):
+        return outcomes[name]
+
+    proxies = {
+        "proxies": {
+            "GitHub": {"type": "Selector", "now": "PASS"},
+            "Google": {"type": "Selector", "now": "PASS"},
+            "PASS": {"type": "Pass"},
+        }
+    }
+    github = build_trace_result(
+        domain="github.com",
+        dns_payload={"Answer": [{"data": "140.82.121.4"}]},
+        rules_payload={
+            "rules": [
+                {"type": "RuleSet", "payload": "adlist@domain", "proxy": "REJECT"},
+                {"type": "RuleSet", "payload": "quic@inline", "proxy": "REJECT"},
+                {"type": "RuleSet", "payload": "github@domain", "proxy": "GitHub"},
+            ]
+        },
+        proxies_payload=proxies,
+        rule_set_matcher=matcher,
+    )
+    google = build_trace_result(
+        domain="google.com",
+        dns_payload={"Answer": [{"data": "142.251.142.206"}]},
+        rules_payload={
+            "rules": [
+                {
+                    "type": "OR",
+                    "payload": "((RuleSet,google@domain) || (RuleSet,google@ipcidr))",
+                    "proxy": "Google",
+                }
+            ]
+        },
+        proxies_payload=proxies,
+        rule_set_matcher=matcher,
+    )
+
+    assert [step["result"] for step in github["steps"]] == ["skip", "skip", "match"]
+    assert github["route"]["chain"] == ["GitHub", "PASS"]
+    assert google["matched_rule"]["result"] == "match"
+    assert google["route"]["chain"] == ["Google", "PASS"]
