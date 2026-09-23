@@ -3213,23 +3213,14 @@ html[data-theme="light"] .btn-link:hover {
 /* Обе половины верхнего ряда кончаются на одной линии: последняя карточка каждой
    колонки забирает остаток высоты. Содержимое при этом остаётся вверху — строка
    итога по логу стоит сразу под статусом, а не съезжает к нижнему краю. */
-.dt-tools-left > #dt-update-card[open] {
+.dt-tools-left > #dt-update-card {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
-/* Chrome 131+ отдаёт содержимое <details> через слот ::details-content: без
-   правила на самом слоте высота до тела карточки не доходит. */
-.dt-tools-left > #dt-update-card[open]::details-content {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.dt-tools-left > #dt-update-card[open] > .dt-collapsible-body {
+.dt-tools-left > #dt-update-card > .dt-update-body {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;

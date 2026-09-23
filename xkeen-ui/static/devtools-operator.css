@@ -873,9 +873,26 @@ body.devtools-page .dt-collapsible-icon {
   font-size: calc(12px * var(--xk-font-scale, 1));
 }
 
-body.devtools-page .dt-collapsible-body {
+body.devtools-page .dt-collapsible-body,
+body.devtools-page .dt-update-body {
   margin-top: 0;
   padding: 10px 11px 11px;
+}
+
+/* Карточка обновления не сворачивается, но коробка у неё прежняя: поля живут
+   у шапки и тела, а не у самой карточки — иначе левая колонка садится ниже
+   соседней и высоту ряда начинает диктовать окно, а не содержимое. */
+body.devtools-page #dt-update-card {
+  padding: 0;
+}
+
+body.devtools-page .dt-update-head {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 11px;
+  border-bottom: 1px solid var(--op-border);
+  border-radius: var(--op-radius) var(--op-radius) 0 0;
 }
 
 body.devtools-page #dt-service-card {
@@ -1494,8 +1511,14 @@ html[data-theme="light"] body.devtools-page {
     padding: 0 10px;
   }
 
-  body.devtools-page .dt-collapsible-body {
+  body.devtools-page .dt-collapsible-body,
+  body.devtools-page .dt-update-body {
     padding: 9px 10px 10px;
+  }
+
+  body.devtools-page .dt-update-head {
+    min-height: var(--op-touch-target);
+    padding: 0 10px;
   }
 
   body.devtools-page .dt-env-head {

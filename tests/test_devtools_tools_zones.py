@@ -128,12 +128,49 @@ def test_terminal_card_starts_collapsed_and_others_do_not():
     terminal = terminal[: terminal.index(">")]
     assert " open" not in terminal
 
-    for card_id in ("dt-update-card", "dt-happ-decryptor-card", "dt-logging-card",
+    for card_id in ("dt-happ-decryptor-card", "dt-logging-card",
                     "dt-ui-prefs-card", "dt-branding-card", "dt-ui-prefs-io-card",
                     "dt-layout-card"):
         opening = template[template.index('id="%s"' % card_id):]
         opening = opening[: opening.index(">")]
         assert " open" in opening, card_id
+
+
+def test_update_card_is_not_collapsible():
+    template = TEMPLATE.read_text(encoding="utf-8")
+    base = BASE_CSS.read_text(encoding="utf-8")
+
+    opening = template[template.index('id="dt-update-card"') - 200:]
+    opening = opening[: opening.index('id="dt-update-card"') + 200]
+    assert '<section class="card" id="dt-update-card"' in opening
+    assert "dt-collapsible" not in opening
+
+    card = template[template.index('id="dt-update-card"'): template.index('id="dt-env-card"')]
+    assert "<summary" not in card
+    assert "dt-collapsible-body" not in card
+    assert '<h2 class="dt-update-head"' in card
+    assert '<div class="dt-update-body">' in card
+    assert "</details>" not in card
+
+    # Ни одно правило карточки больше не завязано на состояние <details>.
+    assert "#dt-update-card[open]" not in base
+    assert "#dt-update-card[open]::details-content" not in base
+
+    # Коробка карточки осталась прежней: поля у шапки и тела, а не у карточки.
+    # Иначе левая колонка садится ниже соседней, и высоту ряда начинает задавать
+    # окно (у списка ENV max-height считается от 100vh) — регрессия «высокого окна».
+    operator = OPERATOR_CSS.read_text(encoding="utf-8")
+    box = operator[operator.index("body.devtools-page #dt-update-card {"):]
+    box = box[: box.index("}")]
+    assert "padding: 0;" in box
+
+    head = operator[operator.index("body.devtools-page .dt-update-head {"):]
+    head = head[: head.index("}")]
+    assert "min-height: 40px;" in head
+    assert "padding: 0 11px;" in head
+
+    glass = GLASS_CSS.read_text(encoding="utf-8")
+    assert "body.devtools-page .dt-update-head {" in glass
 
 
 def test_wide_cards_use_multi_column_inner_grids():
@@ -169,17 +206,19 @@ def test_top_row_stretches_the_last_card_to_match_env():
 
     # Последняя карточка каждой колонки тянется до низа ряда, поэтому обе половины
     # кончаются на одной линии.
-    for selector in (".dt-tools-left > #dt-update-card[open] {", ".dt-tools-right > #dt-env-card {"):
+    for selector in (".dt-tools-left > #dt-update-card {", ".dt-tools-right > #dt-env-card {"):
         stretch = base[base.index(selector):]
         stretch = stretch[: stretch.index("}")]
         assert "flex: 1 1 auto;" in stretch, selector
 
-    assert ".dt-tools-left > #dt-update-card[open]::details-content {" in base
+    body_rule = base[base.index(".dt-tools-left > #dt-update-card > .dt-update-body {"):]
+    body_rule = body_rule[: body_rule.index("}")]
+    assert "flex: 1 1 auto;" in body_rule
 
     # Содержимое остаётся вверху: строка итога по логу стоит сразу под статусом.
     pinned_rule = ".dt-update-log-summary {" + chr(10) + "  margin-top: auto;"
     assert pinned_rule not in base
-    assert "#dt-update-card[open] .dt-update-log-summary" not in base
+    assert "#dt-update-card .dt-update-log-summary" not in base
 
     # В теме оператора верхний ряд тоже растягивается
     top_row = operator[operator.index("body.devtools-page .dt-tools-layout {"):]

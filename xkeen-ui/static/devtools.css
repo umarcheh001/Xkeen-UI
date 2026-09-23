@@ -37,6 +37,12 @@ details.dt-collapsible:not([open]) .dt-collapsible-icon {
   margin-top: 10px;
 }
 
+/* Карточка обновления не сворачивается: у неё обычный заголовок
+   вместо summary, но отступ до тела такой же. */
+.dt-update-body {
+  margin-top: 10px;
+}
+
 /* Theme editor: sliders in ONE column to avoid overlap */
 .dt-theme-sliders {
   display: flex !important;
@@ -1299,13 +1305,15 @@ body.devtools-page .dt-page-header p {
   color: rgba(191, 219, 254, 0.74);
 }
 
-body.devtools-page .dt-collapsible-summary {
+body.devtools-page .dt-collapsible-summary,
+body.devtools-page .dt-update-head {
   min-height: 56px;
   padding: 0 4px;
 }
 
 body.devtools-page details.dt-collapsible[open] > summary,
-body.devtools-page details.dt-subcard[open] > summary {
+body.devtools-page details.dt-subcard[open] > summary,
+body.devtools-page .dt-update-head {
   border-bottom: 1px solid rgba(96, 165, 250, 0.1);
 }
 

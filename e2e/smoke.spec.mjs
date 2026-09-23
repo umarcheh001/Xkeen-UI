@@ -119,7 +119,7 @@ test('devtools page renders update and env sections', async ({ page }) => {
 
   await expect(page).toHaveTitle(/DevTools/i);
   await expect(page.locator('#dt-update-card')).toBeVisible();
-  await page.locator('#dt-update-card').evaluate((node) => { node.open = true; });
+  // Карточка обновления не сворачивается — её кнопки видны сразу, без раскрытия.
   await expect(page.locator('#dt-update-check')).toBeVisible();
   await expect(page.locator('#dt-update-run')).toBeVisible();
   await expect(page.locator('#dt-env-card')).toBeVisible();
