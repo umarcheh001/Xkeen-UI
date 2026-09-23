@@ -38,6 +38,7 @@ from services import dns_client_capture
 from services import firmware_resolvers
 from utils.firmware import ndmc_path as _resolve_ndmc, run_ndmc
 from utils.jsonc import strip_json_comments_text
+from utils.jsonio import read_jsonc_text
 
 
 MANAGED_FRAGMENT = "02_dns_over_vless.json"
@@ -295,8 +296,7 @@ class DnsOverVlessError(RuntimeError):
 
 def _read_json(path: str, default: Any = None) -> Any:
     try:
-        text = Path(path).read_text(encoding="utf-8")
-        return json.loads(strip_json_comments_text(text))
+        return json.loads(read_jsonc_text(path))
     except Exception:
         return copy.deepcopy(default)
 
