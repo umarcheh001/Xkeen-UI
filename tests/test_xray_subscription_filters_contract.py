@@ -568,21 +568,28 @@ def test_xray_subscription_list_surfaces_operational_status_badges():
     assert "if (delta < 45) return 'обновлено только что';" in outbounds_src
     assert "return `обновлено ${Math.max(1, Math.floor(delta / 60))} мин назад`;" in outbounds_src
     assert "return `обновлено ${Math.max(1, Math.floor(delta / 3600))} ч назад`;" in outbounds_src
-    assert "label: 'ошибка'," in outbounds_src
-    assert "label: 'due'," in outbounds_src
+    # Беда, наступивший срок и время обновления стоят словами в колонке
+    # состояния, а не отдельными бейджами рядом.
+    assert "label: 'ошибка'," not in outbounds_src
+    assert "label: 'due'," not in outbounds_src
     assert "label: `скрыто ${filteredOutCount}`," in outbounds_src
     assert "title: `Фильтрами скрыто ${filteredOutCount} узл.`," in outbounds_src
     assert '<div class="xk-sub-badges">${badgesHtml}</div>' in outbounds_src
     assert 'return `<span class="xk-sub-badge is-${tone}" title="${tooltip}" data-tooltip="${tooltip}">${label}</span>`;' in outbounds_src
     assert ".xk-sub-badges {" in styles_src
     assert ".xk-sub-badge {" in styles_src
-    assert ".xk-sub-badge.is-error {" in styles_src
-    assert ".xk-sub-badge.is-due {" in styles_src
-    assert ".xk-sub-badge.is-updated {" in styles_src
     assert ".xk-sub-badge.is-filtered {" in styles_src
     assert "html[data-theme=\"light\"] .xk-sub-badge {" in styles_src
-    assert "html[data-theme=\"light\"] .xk-sub-badge.is-error {" in styles_src
-    assert "html[data-theme=\"light\"] .xk-sub-badge.is-due {" in styles_src
+    # Снятые тона не должны остаться мёртвым грузом в таблице стилей.
+    assert ".xk-sub-badge.is-error {" not in styles_src
+    assert ".xk-sub-badge.is-due {" not in styles_src
+    assert ".xk-sub-badge.is-updated {" not in styles_src
+
+    # Новый язык колонки: точка тоном, слово рядом, подробности и срок.
+    assert "function subsStateOf(sub, nowTs) {" in outbounds_src
+    assert "function subsNextUpdateSummary(sub, nowTs) {" in outbounds_src
+    assert '<div class="xk-sub-state" data-state="${state.tone}">' in outbounds_src
+    assert ".xk-sub-state {" in styles_src
 
 
 def test_xray_subscription_modal_has_no_diagnostics_block():

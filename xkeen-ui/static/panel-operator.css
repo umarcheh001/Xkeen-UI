@@ -12709,6 +12709,74 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-node-latency {
   animation: none !important;
 }
 
+/* Состояние подписки говорит тем же языком, что подсказка окна DNS-over-VLESS:
+   точка тоном, слово рядом, подробности строкой ниже. */
+body.panel-page #outbounds-subscriptions-modal .xk-sub-state-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 7px;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-state-row .xk-sub-muted {
+  margin-top: 0;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-state i {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--op-muted);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--op-muted) 18%, transparent);
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-state b {
+  color: var(--op-text) !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 620;
+  line-height: 1.3;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-state[data-state="ok"] b {
+  color: var(--op-success) !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-state[data-state="ok"] i {
+  background: var(--op-success);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--op-success) 18%, transparent);
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-state[data-state="due"] b {
+  color: var(--op-warning) !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-state[data-state="due"] i {
+  background: var(--op-warning);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--op-warning) 18%, transparent);
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-state[data-state="bad"] b {
+  color: var(--op-danger) !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-state[data-state="bad"] i {
+  background: var(--op-danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--op-danger) 18%, transparent);
+}
+
 body.panel-page #outbounds-subscriptions-modal .xk-sub-draft-badge {
   margin-left: 7px;
   padding: 1px 6px;

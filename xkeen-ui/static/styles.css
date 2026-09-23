@@ -10127,29 +10127,57 @@ html[data-theme="light"] .xk-sub-draft-badge {
   white-space: nowrap;
 }
 
-.xk-sub-badge.is-error {
-  border-color: rgba(248, 113, 113, 0.34);
-  background: rgba(127, 29, 29, 0.28);
-  color: #fecaca;
-}
-
-.xk-sub-badge.is-due {
-  border-color: rgba(251, 191, 36, 0.34);
-  background: rgba(120, 53, 15, 0.26);
-  color: #fde68a;
-}
-
-.xk-sub-badge.is-updated {
-  border-color: rgba(56, 189, 248, 0.28);
-  background: rgba(14, 116, 144, 0.22);
-  color: #bae6fd;
-}
-
 .xk-sub-badge.is-filtered {
   border-color: rgba(148, 163, 184, 0.24);
   background: rgba(30, 41, 59, 0.48);
   color: #cbd5e1;
 }
+
+/* Состояние подписки словом: точка тоном, слово рядом, подробности строкой
+   ниже. Раньше здесь стояло «OK · 2», а причина и срок жили в бейджах. */
+.xk-sub-state-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.xk-sub-state-row .xk-sub-muted {
+  margin-top: 0;
+}
+
+.xk-sub-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.xk-sub-state i {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.xk-sub-state b {
+  color: #e2e8f0;
+  font-size: calc(12px * var(--xk-font-scale));
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.xk-sub-state[data-state="ok"] b { color: #6ee7b7; }
+
+.xk-sub-state[data-state="ok"] i { background: #34d399; }
+
+.xk-sub-state[data-state="due"] b { color: #fcd34d; }
+
+.xk-sub-state[data-state="due"] i { background: #fbbf24; }
+
+.xk-sub-state[data-state="bad"] b { color: #fca5a5; }
+
+.xk-sub-state[data-state="bad"] i { background: #f87171; }
 
 .xk-sub-muted {
   margin-top: 3px;
@@ -11986,24 +12014,6 @@ html[data-theme="light"] .xk-sub-badge {
   border-color: rgba(172, 188, 214, 0.42);
   background: rgba(255, 255, 255, 0.9);
   color: #465975;
-}
-
-html[data-theme="light"] .xk-sub-badge.is-error {
-  border-color: rgba(239, 68, 68, 0.24);
-  background: rgba(254, 242, 242, 0.96);
-  color: #991b1b;
-}
-
-html[data-theme="light"] .xk-sub-badge.is-due {
-  border-color: rgba(217, 119, 6, 0.26);
-  background: rgba(254, 243, 199, 0.96);
-  color: #92400e;
-}
-
-html[data-theme="light"] .xk-sub-badge.is-updated {
-  border-color: rgba(14, 165, 233, 0.22);
-  background: rgba(224, 242, 254, 0.96);
-  color: #0c4a6e;
 }
 
 html[data-theme="light"] .xk-sub-badge.is-filtered {

@@ -1952,3 +1952,148 @@ test('subscriptions list buttons carry a glyph beside their label', async ({ pag
   }
 });
 
+
+// Колонка состояния говорит словами. Раньше там стояло «OK · 2»: слово не
+// по-русски, число без подписи, а «due» и «обновлено N назад» дублировались
+// отдельными бейджами рядом.
+async function routeSubscriptions(page, subscriptions) {
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscriptions }),
+    });
+  });
+}
+
+function readState(page, subId) {
+  return page.evaluate((id) => {
+    const row = document.querySelector(`tr[data-sub-id="${id}"]`);
+    const state = row?.querySelector('.xk-sub-state');
+    const lines = Array.from(row?.querySelectorAll('.xk-sub-status-cell .xk-sub-muted') || []);
+    return {
+      tone: state?.getAttribute('data-state') || '',
+      word: String(state?.querySelector('b')?.textContent || '').trim(),
+      hasDot: !!state?.querySelector('i'),
+      lines: lines.map((node) => String(node.textContent || '').trim()),
+      badges: Array.from(row?.querySelectorAll('.xk-sub-badge') || [])
+        .map((node) => String(node.textContent || '').trim()),
+    };
+  }, subId);
+}
+
+test('a working subscription says so in words and counts its nodes', async ({ page }) => {
+  const now = Math.floor(Date.now() / 1000);
+  await routeSubscriptions(page, [buildDemoSubscription(buildDemoNodes().slice(0, 5), {
+    id: 'live-sub',
+    last_ok: true,
+    last_count: 5,
+    last_source_count: 7,
+    last_filtered_out_count: 2,
+    last_update_ts: now - 300,
+    next_update_ts: now + 26 * 3600,
+    interval_hours: 24,
+  })]);
+  await openSubscriptionsModal(page);
+
+  const seen = await readState(page, 'live-sub');
+  expect(seen.tone).toBe('ok');
+  expect(seen.word).toBe('Работает');
+  expect(seen.hasDot).toBe(true);
+  expect(seen.lines[0]).toBe('5 узлов из 7 · обновлено 5 мин назад');
+  // Слово состояния и время обновления переехали из бейджей: дублировать их
+  // рядом больше незачем, «скрыто N» остаётся.
+  expect(seen.badges).toEqual(['скрыто 2']);
+});
+
+test('a failed subscription leads with the failure, not with a stale count', async ({ page }) => {
+  const now = Math.floor(Date.now() / 1000);
+  await routeSubscriptions(page, [buildDemoSubscription(buildDemoNodes().slice(0, 3), {
+    id: 'bad-sub',
+    last_ok: false,
+    last_count: 3,
+    last_source_count: 3,
+    last_filtered_out_count: 0,
+    last_error: 'провайдер ответил 403',
+    last_update_ts: now - 7200,
+    next_update_ts: now + 3600,
+  })]);
+  await openSubscriptionsModal(page);
+
+  const seen = await readState(page, 'bad-sub');
+  expect(seen.tone).toBe('bad');
+  expect(seen.word).toBe('Ошибка обновления');
+  expect(seen.lines[0]).toContain('провайдер ответил 403');
+});
+
+test('an overdue subscription states it plainly instead of a due badge', async ({ page }) => {
+  const now = Math.floor(Date.now() / 1000);
+  await routeSubscriptions(page, [buildDemoSubscription(buildDemoNodes().slice(0, 2), {
+    id: 'due-sub',
+    last_ok: true,
+    last_count: 2,
+    last_source_count: 2,
+    last_filtered_out_count: 0,
+    last_update_ts: now - 3 * 86400,
+    next_update_ts: now - 600,
+    interval_hours: 24,
+    profile_update_interval_hours: 24,
+  })]);
+  await openSubscriptionsModal(page);
+
+  const seen = await readState(page, 'due-sub');
+  expect(seen.tone).toBe('due');
+  expect(seen.word).toBe('Пора обновить');
+  expect(seen.badges).not.toContain('due');
+  expect(seen.lines[1]).toBe('Срок наступил — обновится при ближайшей проверке · каждые 24 ч');
+});
+
+test('a never-updated subscription admits it has no nodes yet', async ({ page }) => {
+  await routeSubscriptions(page, [buildDemoSubscription([], {
+    id: 'fresh-sub',
+    last_ok: null,
+    last_count: 0,
+    last_source_count: 0,
+    last_filtered_out_count: 0,
+    last_update_ts: 0,
+    next_update_ts: 0,
+    last_nodes: [],
+  })]);
+  await openSubscriptionsModal(page);
+
+  const seen = await readState(page, 'fresh-sub');
+  expect(seen.tone).toBe('idle');
+  expect(seen.word).toBe('Ещё не обновлялась');
+  expect(seen.lines[0]).toBe('узлы появятся после первого обновления');
+});
+
+test('the schedule line names the day instead of a bare timestamp', async ({ page }) => {
+  const now = Math.floor(Date.now() / 1000);
+  await routeSubscriptions(page, [
+    buildDemoSubscription(buildDemoNodes().slice(0, 2), {
+      id: 'soon-sub', last_ok: true, last_count: 2, last_source_count: 2,
+      last_filtered_out_count: 0, last_update_ts: now - 60,
+      next_update_ts: now + 26 * 3600, interval_hours: 24, profile_update_interval_hours: 24,
+    }),
+  ]);
+  await openSubscriptionsModal(page);
+
+  const seen = await readState(page, 'soon-sub');
+  const schedule = seen.lines[1];
+  // Секунды и английское «next» уходят: точное время остаётся в подсказке.
+  expect(schedule).not.toContain('next:');
+  expect(schedule).toMatch(/^Следующее обновление (сегодня|завтра|\d{2}\.\d{2}) в \d{2}:\d{2} · каждые 24 ч$/);
+
+  const hint = await page.evaluate(() => {
+    const row = document.querySelector('tr[data-sub-id="soon-sub"]');
+    const lines = Array.from(row?.querySelectorAll('.xk-sub-status-cell .xk-sub-muted') || []);
+    // Подсказку панель переносит из title в data-tooltip и title снимает,
+    // поэтому спрашиваем именно её.
+    return lines[1]?.getAttribute('data-tooltip') || '';
+  });
+  expect(hint).toContain('Точное время:');
+});

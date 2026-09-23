@@ -6687,44 +6687,108 @@ let outboundsModuleApi = null;
       return list.sort((a, b) => subsCompareSubscriptions(a, b, nowTs));
     }
 
+    function subsNodeWord(count) {
+      const n = Math.abs(Number(count) || 0);
+      const tail = n % 100;
+      if (tail >= 11 && tail <= 14) return 'узлов';
+      switch (n % 10) {
+        case 1: return 'узел';
+        case 2:
+        case 3:
+        case 4: return 'узла';
+        default: return 'узлов';
+      }
+    }
+
+    // Состояние подписки словом: «OK · 2» не говорило ни что такое OK, ни что
+    // за число рядом. Беда, просроченный срок и время обновления жили
+    // отдельными бейджами и повторяли друг друга -- теперь всё здесь.
+    function subsStateOf(sub, nowTs) {
+      const s = sub && typeof sub === 'object' ? sub : {};
+      const currentTs = subsTimestamp(nowTs) || subsNowTs();
+      const lastUpdateTs = subsLastUpdateTs(s);
+      const count = Number(s.last_count || 0);
+      const rawSource = Number(s.last_source_count || 0);
+      const sourceCount = Number.isFinite(rawSource) && rawSource > 0 ? rawSource : count;
+      const relative = lastUpdateTs > 0 ? subsRelativeUpdateLabel(lastUpdateTs, currentTs) : '';
+      const nodes = sourceCount > count
+        ? `${count} ${subsNodeWord(count)} из ${sourceCount}`
+        : `${count} ${subsNodeWord(count)}`;
+
+      if (s.last_ok === false) {
+        const errorText = String(s.last_error || '').trim();
+        return {
+          tone: 'bad',
+          word: 'Ошибка обновления',
+          detail: errorText || 'последнее обновление не удалось',
+        };
+      }
+      if (lastUpdateTs <= 0) {
+        return {
+          tone: 'idle',
+          word: 'Ещё не обновлялась',
+          detail: 'узлы появятся после первого обновления',
+        };
+      }
+      const detail = relative ? `${nodes} · ${relative}` : nodes;
+      if (subsIsDue(s, currentTs)) {
+        return { tone: 'due', word: 'Пора обновить', detail };
+      }
+      return { tone: 'ok', word: 'Работает', detail };
+    }
+
+    // «next: 23.09.2026, 21:02:46» обещало точность, которой неоткуда взяться:
+    // обновление случится при ближайшей проверке планировщика. Показываем день
+    // и время, а полную дату оставляем в подсказке.
+    function subsNextUpdateSummary(sub, nowTs) {
+      const s = sub && typeof sub === 'object' ? sub : {};
+      const currentTs = subsTimestamp(nowTs) || subsNowTs();
+      const interval = subsIntervalSummary(s);
+      const nextTs = subsTimestamp(s.next_update_ts);
+      if (subsIsDue(s, currentTs)) {
+        return {
+          text: `Срок наступил — обновится при ближайшей проверке · ${interval}`,
+          title: nextTs > 0 ? `Срок наступил: ${subsFormatTime(nextTs)}.` : '',
+        };
+      }
+      if (nextTs <= 0) return { text: interval, title: '' };
+      let day = '';
+      let clock = '';
+      try {
+        const when = new Date(nextTs * 1000);
+        const now = new Date(currentTs * 1000);
+        const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const days = Math.round((new Date(when.getFullYear(), when.getMonth(), when.getDate()) - midnight) / 86400000);
+        const dd = String(when.getDate()).padStart(2, '0');
+        const mm = String(when.getMonth() + 1).padStart(2, '0');
+        day = days === 0 ? 'сегодня' : (days === 1 ? 'завтра' : `${dd}.${mm}`);
+        // Панель везде показывает время сутками по 24 часа; локаль браузера
+        // иначе выдала бы «03:11 PM» там, где рядом стоит «каждые 24 ч».
+        clock = when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+      } catch (e) {
+        return { text: interval, title: '' };
+      }
+      return {
+        text: `Следующее обновление ${day} в ${clock} · ${interval}`,
+        title: `Точное время: ${subsFormatTime(nextTs)}.`,
+      };
+    }
+
     function subsBuildStatusBadges(sub, nowTs) {
       const s = sub && typeof sub === 'object' ? sub : {};
       const currentTs = subsTimestamp(nowTs) || subsNowTs();
       const badges = [];
       const lastUpdateTs = subsLastUpdateTs(s);
       const filteredOutCount = Number(s.last_filtered_out_count || 0);
-      const due = subsIsDue(s, currentTs);
-      const errorText = String(s.last_error || '').trim();
       const hwid = subsHwidDiagnostics(s);
 
-      if (s.last_ok === false) {
-        badges.push({
-          label: 'ошибка',
-          tone: 'error',
-          title: errorText || 'Последнее обновление завершилось ошибкой.',
-        });
-      }
-      if (due) {
-        badges.push({
-          label: 'due',
-          tone: 'due',
-          title: s.next_update_ts
-            ? `Срок обновления наступил: ${subsFormatTime(s.next_update_ts)}.`
-            : 'Срок обновления наступил.',
-        });
-      }
+      // Беда, наступивший срок и время последнего обновления теперь стоят
+      // словами в колонке состояния: бейджами их дублировать незачем.
       if (hwid.active) {
         badges.push({
           label: hwid.reached ? 'HWID лимит' : 'HWID',
           tone: hwid.reached ? 'warning' : 'info',
           title: (hwid.lines && hwid.lines[0]) || (hwid.summary ? `Устройства: ${hwid.summary}` : 'HWID-данные из ответа провайдера.'),
-        });
-      }
-      if (lastUpdateTs > 0) {
-        badges.push({
-          label: subsRelativeUpdateLabel(lastUpdateTs, currentTs),
-          tone: 'updated',
-          title: `Последнее обновление: ${subsFormatTime(lastUpdateTs)}.`,
         });
       }
       if (Number.isFinite(filteredOutCount) && filteredOutCount > 0) {
@@ -6814,18 +6878,8 @@ let outboundsModuleApi = null;
           tr.setAttribute('data-sub-id', String(sub && sub.id ? sub.id : ''));
           tr.classList.toggle('is-selected', String(sub && sub.id ? sub.id : '') === String(_subscriptionEditId || ''));
         } catch (e0) {}
-        const ok = sub && sub.last_ok === true;
-        const bad = sub && sub.last_ok === false;
-        const due = subsIsDue(sub, nowTs);
-        const count = Number(sub && sub.last_count ? sub.last_count : 0);
-        const rawSourceCount = Number(sub && sub.last_source_count ? sub.last_source_count : 0);
-        const sourceCount = Number.isFinite(rawSourceCount) && rawSourceCount > 0 ? rawSourceCount : count;
-        const filteredOutCount = Number(sub && sub.last_filtered_out_count ? sub.last_filtered_out_count : 0);
-        const lastUpdateTs = subsLastUpdateTs(sub);
-        const statusText = ok
-          ? (`OK · ${count}` + (sourceCount > count ? ` из ${sourceCount}` : ''))
-          : (bad ? 'Ошибка обновления' : (lastUpdateTs > 0 ? 'Обновление без ошибок' : 'Ожидает обновления'));
-        const next = subsFormatTime(sub && sub.next_update_ts);
+        const state = subsStateOf(sub, nowTs);
+        const schedule = subsNextUpdateSummary(sub, nowTs);
         const title = escapeHtml(String(sub && sub.name ? sub.name : sub && sub.id ? sub.id : ''));
         const tag = escapeHtml(String(sub && sub.tag ? sub.tag : ''));
         const url = escapeHtml(subsShortUrl(sub && sub.url));
@@ -6838,7 +6892,6 @@ let outboundsModuleApi = null;
         if (title) metaBits.push(title);
         if (url) metaBits.push(url);
         if (filterText) metaBits.push(filterText);
-        const nextBits = [due ? 'next: due' : ('next: ' + next), subsIntervalSummary(sub)];
         const badges = subsBuildStatusBadges(sub, nowTs);
         const badgesHtml = badges.map((badge) => {
           const label = escapeHtml(String(badge && badge.label ? badge.label : ''));
@@ -6852,9 +6905,12 @@ let outboundsModuleApi = null;
             ${badgesHtml ? `<div class="xk-sub-badges">${badgesHtml}</div>` : ''}
             <div class="xk-sub-muted">${metaBits.join(' · ')}</div>
           </td>
-          <td>
-            <div class="${bad ? 'xk-sub-bad' : (ok ? 'xk-sub-ok' : 'xk-sub-muted')}">${statusText}</div>
-            <div class="xk-sub-muted">${escapeHtml(nextBits.join(' · '))}</div>
+          <td class="xk-sub-status-cell">
+            <div class="xk-sub-state-row">
+              <div class="xk-sub-state" data-state="${state.tone}"><i aria-hidden="true"></i><b>${escapeHtml(state.word)}</b></div>
+              <div class="xk-sub-muted">${escapeHtml(state.detail)}</div>
+            </div>
+            <div class="xk-sub-muted"${schedule.title ? ` title="${escapeHtml(schedule.title)}" data-tooltip="${escapeHtml(schedule.title)}"` : ''}>${escapeHtml(schedule.text)}</div>
           </td>
           <td class="xk-sub-file-cell">
             <button
