@@ -108,6 +108,8 @@ UI_STEP_LABEL=""
 UI_STEP_AT=0
 UI_RUN_AT=0
 UI_TICKER=""
+UI_TICKER_FILE=""
+UI_STATE_FILE=""
 UI_STICKY=0
 UI_SPIN_N=0
 : "${UI_PROGRESS_TTY:=0}"
@@ -134,7 +136,7 @@ ui_since() {
 }
 
 ui_clock() {
-  _ui_sec=$(( $(ui_now) - UI_RUN_AT ))
+  _ui_sec=$(( $(ui_now) - ${1:-$UI_RUN_AT} ))
   [ "$_ui_sec" -lt 0 ] && _ui_sec=0
   printf '%02d:%02d' $(( _ui_sec / 60 )) $(( _ui_sec % 60 ))
 }
@@ -142,6 +144,8 @@ ui_clock() {
 # Шкала: пройденные шаги — залитый квадрат, текущий — обведённый, остальные
 # пустые. Между этапами двойной пробел, чтобы были видны их границы.
 ui_squares() {
+  _ui_done="$1"
+  _ui_cur="$2"
   _ui_idx=0
   _ui_first_group=1
   for _ui_count in $UI_PLAN; do
@@ -151,9 +155,9 @@ ui_squares() {
     while [ "$_ui_i" -lt "$_ui_count" ]; do
       _ui_idx=$(( _ui_idx + 1 ))
       [ "$_ui_i" -eq 0 ] || printf ' ' >&"$INSTALL_UI_FD"
-      if [ "$_ui_idx" -le "$UI_STEP_DONE" ]; then
+      if [ "$_ui_idx" -le "$_ui_done" ]; then
         printf '%b■%b' "$UI_CYAN" "$UI_RESET" >&"$INSTALL_UI_FD"
-      elif [ "$_ui_idx" -eq "$UI_STEP_CURRENT" ]; then
+      elif [ "$_ui_idx" -eq "$_ui_cur" ]; then
         printf '%b▣%b' "$UI_YELLOW" "$UI_RESET" >&"$INSTALL_UI_FD"
       else
         printf '%b□%b' "$UI_DIM" "$UI_RESET" >&"$INSTALL_UI_FD"
@@ -180,20 +184,36 @@ ui_spin_frame() {
   esac
 }
 
+# Снимок состояния для тикера: он читает файл на каждом тике, поэтому видит
+# свежие шаги, а не те, что были на момент его запуска. Через переменные это не
+# передать: фоновый процесс уносит копию и больше её не обновляет.
+ui_state_write() {
+  [ -n "$UI_STATE_FILE" ] || return 0
+  {
+    printf '%s %s %s %s %s\n' "$UI_STEP_DONE" "$UI_STEP_CURRENT" "$UI_STAGE_NO" "$UI_RUN_AT" "$UI_STEP_AT"
+    printf '%s\n' "$UI_STEP_LABEL"
+  } > "$UI_STATE_FILE" 2>/dev/null || true
+}
+
 # Нижний блок: две строки, курсор остаётся в начале первой из них.
 ui_sticky_draw() {
   [ "$UI_PROGRESS_TTY" -eq 1 ] || return 0
-  [ -n "$UI_STEP_LABEL" ] || return 0
+  [ -n "$UI_STATE_FILE" ] && [ -f "$UI_STATE_FILE" ] || return 0
+  { read -r _ui_nums; read -r _ui_label; } < "$UI_STATE_FILE" 2>/dev/null || return 0
+  [ -n "$_ui_label" ] || return 0
+  set -- $_ui_nums
+  [ $# -ge 5 ] || return 0
+  _ui_done="$1"; _ui_cur="$2"; _ui_stage="$3"; _ui_run="$4"; _ui_step_at="$5"
   UI_SPIN_N=$(( UI_SPIN_N + 1 ))
   _ui_frame=$(ui_spin_frame)
   printf '\r\033[K  %b%s%b  %s  %b%s%b\n' \
-    "$UI_CYAN" "$_ui_frame" "$UI_RESET" "$UI_STEP_LABEL" \
-    "$UI_DIM" "$(ui_since "$UI_STEP_AT")" "$UI_RESET" >&"$INSTALL_UI_FD"
+    "$UI_CYAN" "$_ui_frame" "$UI_RESET" "$_ui_label" \
+    "$UI_DIM" "$(ui_since "$_ui_step_at")" "$UI_RESET" >&"$INSTALL_UI_FD"
   printf '\033[K  ' >&"$INSTALL_UI_FD"
-  ui_squares
+  ui_squares "$_ui_done" "$_ui_cur"
   printf '  %s/%s  %bэтап %s/5  ·  всего %s%b\033[1A\r' \
-    "$UI_STEP_DONE" "$UI_STEP_TOTAL" \
-    "$UI_DIM" "$UI_STAGE_NO" "$(ui_clock)" "$UI_RESET" >&"$INSTALL_UI_FD"
+    "$_ui_done" "$UI_STEP_TOTAL" \
+    "$UI_DIM" "$_ui_stage" "$(ui_clock "$_ui_run")" "$UI_RESET" >&"$INSTALL_UI_FD"
   UI_STICKY=1
 }
 
@@ -209,7 +229,6 @@ ui_sticky_clear() {
 ui_ticker_start() {
   [ "$UI_PROGRESS_TTY" -eq 1 ] || return 0
   [ -n "$UI_TICKER" ] && return 0
-  UI_TICKER_FILE="${TMPDIR:-/tmp}/xkeen-ui-progress.$$"
   ui_ticker_loop &
   UI_TICKER=$!
 }
@@ -248,7 +267,9 @@ ui_progress_start() {
   fi
   if [ "$UI_PROGRESS_TTY" -eq 1 ]; then
     UI_TICKER_FILE="${TMPDIR:-/tmp}/xkeen-ui-progress.$$"
+    UI_STATE_FILE="${TMPDIR:-/tmp}/xkeen-ui-progress-state.$$"
     : > "$UI_TICKER_FILE" 2>/dev/null || UI_PROGRESS_TTY=0
+    : > "$UI_STATE_FILE" 2>/dev/null || UI_PROGRESS_TTY=0
     printf '\033[?25l' >&"$INSTALL_UI_FD"
   fi
 }
@@ -266,6 +287,10 @@ ui_progress_stop() {
     printf '\033[?25h' >&"$INSTALL_UI_FD"
   fi
   UI_STEP_LABEL=""
+  if [ -n "$UI_STATE_FILE" ]; then
+    rm -f "$UI_STATE_FILE" 2>/dev/null || true
+    UI_STATE_FILE=""
+  fi
 }
 
 # Этап объявляет, сколько в нём шагов: знаменатель шкалы честный, а сторожевой
@@ -273,12 +298,14 @@ ui_progress_stop() {
 ui_stage_plan() {
   UI_STAGE_NO=$(( UI_STAGE_NO + 1 ))
   UI_STAGE_LEFT="$1"
+  ui_state_write
 }
 
 ui_step() {
   UI_STEP_LABEL="$1"
   UI_STEP_AT=$(ui_now)
   UI_STEP_CURRENT=$(( UI_STEP_DONE + 1 ))
+  ui_state_write
   if [ "$UI_PROGRESS_TTY" -eq 1 ]; then
     ui_ticker_start
     ui_hold
@@ -295,6 +322,10 @@ ui_step_close() {
   _ui_tail="$3"
   UI_STEP_DONE=$(( UI_STEP_DONE + 1 ))
   UI_STEP_CURRENT=0
+  _ui_closed="$UI_STEP_LABEL"
+  UI_STEP_LABEL=""
+  ui_state_write
+  UI_STEP_LABEL="$_ui_closed"
   ui_hold
   ui_sticky_clear
   printf '%b      %s%b  %s  %b%s%b\n' \

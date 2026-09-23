@@ -113,9 +113,7 @@ def test_squares_show_done_current_and_pending():
     out = _run(
         """
         UI_PLAN="2 3"
-        UI_STEP_DONE=3
-        UI_STEP_CURRENT=4
-        ui_squares
+        ui_squares 3 4
         printf '\\n'
         """
     )
@@ -232,3 +230,53 @@ def test_plain_lines_erase_the_sticky_block_before_printing():
         assert "ui_hold" in body, name
         assert "ui_sticky_clear" in body, name
         assert "ui_release" in body, name
+
+
+def test_ticker_sees_steps_that_started_after_it():
+    """Тикер — отдельный процесс: он обязан читать состояние, а не копию переменных.
+
+    На роутере это выглядело так: внизу вечно висел первый шаг, «0/16» и
+    «этап 1/5», пока сверху уже шёл четвёртый этап.
+    """
+
+    out = _run(
+        """
+        ui_progress_start
+        ui_stage_plan 2
+        ui_step "первый шаг"
+        sleep 2
+        ui_step_done
+        ui_step "второй шаг"
+        sleep 3
+        ui_step_done
+        ui_progress_stop
+        """,
+        tty="1",
+    )
+
+    # Нижний блок успел показать второй шаг и закрытый первый квадрат.
+    drawn = [ln for ln in out.splitlines() if "второй шаг" in ln]
+    assert drawn, out
+    assert "1/16" in out, "счётчик застрял на нуле — тикер читает свою копию"
+    assert "■" in out, "ни один квадрат не залился"
+
+
+def test_stage_number_in_the_bar_follows_the_current_stage():
+    out = _run(
+        """
+        ui_progress_start
+        ui_stage_plan 1
+        ui_step "шаг первого этапа"
+        sleep 1
+        ui_step_done
+        ui_stage_plan 1
+        ui_step "шаг второго этапа"
+        sleep 2
+        ui_step_done
+        ui_progress_stop
+        """,
+        tty="1",
+    )
+
+    assert "этап 2/5" in out, "номер этапа в шкале не догоняет заголовки"
+
