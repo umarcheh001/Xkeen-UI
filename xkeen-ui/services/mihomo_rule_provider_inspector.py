@@ -786,6 +786,16 @@ def _match_classical_rule(
         return ("match", "Тип соединения совпал.") if payload.lower() == network.lower() else ("skip", "Тип соединения не совпал.")
     if rule_type in {"DSTPORT", "SRCDESTPORT"}:
         return ("match", "Порт назначения совпал.") if _port_matches(destination_port, payload) else ("skip", "Порт назначения не совпал.")
+    if rule_type in {"PROCESSNAME", "PROCESSNAMEREGEX", "INBOUND", "SRCIPCIDR", "SRCIPCIDR6"}:
+        return "skip", "Правило требует контекст соединения, которого нет в доменной трассировке."
+    if rule_type == "NOT":
+        expression = _strip_outer_parentheses(",".join(parts[1:]))
+        result, reason = _match_classical_rule(expression, domain, addresses, network, destination_port)
+        if result == "match":
+            return "skip", "Отрицательное условие совпало."
+        if result == "skip":
+            return "match", "Отрицательное условие не совпало."
+        return "unknown", reason
     if rule_type == "MATCH":
         return "match", "Финальное правило MATCH из классического rule-provider."
     return "unknown", "Тип правила в классическом rule-provider нельзя безопасно вычислить."

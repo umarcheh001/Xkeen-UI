@@ -67,7 +67,8 @@ def test_trace_matcher_evaluates_domain_ipcidr_and_classical_providers(tmp_path:
         tmp_path,
         "  github@domain: { type: file, behavior: domain, format: text, path: ./rules/github.txt }\n"
         "  google@ipcidr: { type: file, behavior: ipcidr, format: text, path: ./rules/google.txt }\n"
-        "  quic@inline: { type: inline, behavior: classical, payload: ['AND,((NETWORK,udp),(DST-PORT,443))'] }\n",
+        "  quic@inline: { type: inline, behavior: classical, payload: ['AND,((NETWORK,udp),(DST-PORT,443))'] }\n"
+        "  discord@classical: { type: inline, behavior: classical, payload: ['PROCESS-NAME-REGEX,^discord$', 'AND,((DOMAIN-KEYWORD,discord),(NOT,((DOMAIN-SUFFIX,ru))))'] }\n",
     )
 
     assert match(tmp_path, config, "github@domain", "github.com", ["140.82.121.4"])[0] == "match"
@@ -81,6 +82,7 @@ def test_trace_matcher_evaluates_domain_ipcidr_and_classical_providers(tmp_path:
         ["140.82.121.4"],
         network="udp",
     )[0] == "match"
+    assert match(tmp_path, config, "discord@classical", "github.com", ["140.82.121.4"])[0] == "skip"
 
 
 def test_inline_provider_is_bounded_searchable_and_has_no_path(tmp_path: Path):
