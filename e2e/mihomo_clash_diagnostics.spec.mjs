@@ -123,12 +123,45 @@ function trafficPayload() {
   };
 }
 
+function emptyTrafficPayload() {
+  const now = Math.floor(Date.now() / 60000) * 60;
+  return {
+    ok: true,
+    schema_version: 1,
+    range_seconds: 86400,
+    summary: {
+      mihomo_bytes: 0, outside_bytes: 0, total_bytes: 0,
+      download_bytes: 0, upload_bytes: 0,
+      device_count: 0, route_count: 0, resource_count: 0,
+    },
+    series: [],
+    devices: [],
+    routes: [],
+    resources: [],
+    coverage: { mihomo: true, keenetic_client_counters: false, outside_estimated: true },
+    quality: {
+      state: 'partial',
+      classification_percent: null,
+      connections: { state: 'live', samples: 2, errors: 0, age_seconds: 0 },
+      clients: { state: 'unavailable', samples: 2, errors: 0, age_seconds: 0 },
+      storage: { database_size_bytes: 72 * 1024, rows: {} },
+    },
+    collection: {
+      state: 'collecting',
+      last_sample_at: now,
+      last_error: null,
+      sample_interval_seconds: 10,
+      client_interval_seconds: 30,
+    },
+  };
+}
 
-async function openDiagnostics(page, viewport) {
+
+async function openDiagnostics(page, viewport, analytics = trafficPayload()) {
   await page.setViewportSize(viewport);
   await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
   await page.route('**/api/mihomo/clash/diagnostics/trace**', (route) => route.fulfill({ json: tracePayload() }));
-  await page.route('**/api/mihomo/clash/diagnostics/traffic**', (route) => route.fulfill({ json: trafficPayload() }));
+  await page.route('**/api/mihomo/clash/diagnostics/traffic**', (route) => route.fulfill({ json: analytics }));
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await page.locator('#mihomo-clash-tab-diagnostics').click();
@@ -191,6 +224,12 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       expect(Math.abs(button.iconCenterY - button.labelCenterY)).toBeLessThanOrEqual(1);
       expect(button.contentFits).toBe(true);
     }
+    if (viewport.width >= 1281) {
+      const summaryRows = await page.locator('#mihomo-clash-traffic-summary .xk-mihomo-diagnostic-stat').evaluateAll(
+        (cards) => [...new Set(cards.map((card) => Math.round(card.getBoundingClientRect().top)))],
+      );
+      expect(summaryRows).toHaveLength(1);
+    }
     await page.locator('#mihomo-clash-diagnostics-tab-trace').click();
     await page.locator('#mihomo-clash-diagnostics-domain').fill('github.com');
     await page.locator('#mihomo-clash-diagnostics-run').click();
@@ -228,3 +267,25 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     }
   });
 }
+
+
+test('empty analytics keeps six desktop metrics compact and separates filters from quality', async ({ page }) => {
+  await openDiagnostics(page, { width: 1440, height: 900 }, emptyTrafficPayload());
+  await expect(page.locator('#mihomo-clash-traffic-summary .xk-mihomo-diagnostic-stat')).toHaveCount(6);
+  const layout = await page.evaluate(() => {
+    const cards = Array.from(document.querySelectorAll('#mihomo-clash-traffic-summary .xk-mihomo-diagnostic-stat'));
+    const chart = document.querySelector('#mihomo-clash-traffic-chart')?.getBoundingClientRect();
+    const filters = document.querySelector('.xk-mihomo-traffic-filters')?.getBoundingClientRect();
+    const quality = document.querySelector('#mihomo-clash-traffic-quality')?.getBoundingClientRect();
+    return {
+      summaryRows: new Set(cards.map((card) => Math.round(card.getBoundingClientRect().top))).size,
+      chartHeight: chart?.height || 0,
+      filterQualityGap: filters && quality ? quality.top - filters.bottom : 0,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+  expect(layout.summaryRows).toBe(1);
+  expect(layout.chartHeight).toBeLessThanOrEqual(80);
+  expect(layout.filterQualityGap).toBeGreaterThanOrEqual(20);
+  expect(layout.overflow).toBeLessThanOrEqual(1);
+});

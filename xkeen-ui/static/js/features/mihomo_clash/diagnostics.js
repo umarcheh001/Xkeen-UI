@@ -324,9 +324,11 @@ function renderTrafficChart(payload) {
   const rows = Array.isArray(payload?.series) ? payload.series : [];
   const points = rows.filter((item) => Number(item?.total_bytes) > 0);
   if (!points.length) {
+    target.classList.add('is-empty');
     target.innerHTML = '<div class="xk-mihomo-traffic-empty">Данных для графика пока нет.</div>';
     return;
   }
+  target.classList.remove('is-empty');
   const width = Math.max(320, Math.round(target.clientWidth || 1000));
   const height = 220;
   const padding = { top: 18, right: 12, bottom: 32, left: 54 };

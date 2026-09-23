@@ -726,6 +726,10 @@ def test_diagnostics_traffic_analytics_exposes_devices_routes_resources_and_hist
         ".xk-mihomo-traffic-table",
         ".xk-mihomo-traffic-filters",
         ".xk-mihomo-traffic-quality-grid",
+        "#mihomo-clash-traffic-summary",
+        "grid-template-columns: repeat(6, minmax(0, 1fr))",
+        ".xk-mihomo-traffic-chart.is-empty",
+        "#mihomo-clash-traffic-quality",
     ):
         assert fragment in markup or fragment in client or fragment in diagnostics or fragment in css
 
