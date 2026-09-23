@@ -113,14 +113,15 @@ export function initPanelOperatorHeader() {
     }
     const config = byId('mihomo-clash-tab-config');
     const tabs = mihomoView.querySelector('.xk-mihomo-workspace-tabs');
+    const diagnosticsTabs = byId('mihomo-clash-diagnostics-tabs');
     tabs?.after(titleActions);
     // Config remains a workspace tab, now owned across the shared toolbar.
     if (tabs && config) tabs.setAttribute('aria-owns', config.id);
     const toolbar = mihomoView.querySelector('.xk-mihomo-groups-toolbar');
     const runtime = byId('mihomo-clash-runtime');
     const controlContent = byId('mihomo-clash-control-content');
-    const mode = byId('mihomo-clash-mode-switch');
-    const strip = byId('mihomo-clash-status-strip');
+      const mode = byId('mihomo-clash-mode-switch');
+      const strip = byId('mihomo-clash-status-strip');
     const params = disclosure('Параметры', 'xk-mihomo-parameters-menu');
     params.container.classList.add('xk-mihomo-parameters');
     setIcon(params.trigger, 'settings', { label: 'Параметры' });
@@ -178,7 +179,11 @@ export function initPanelOperatorHeader() {
       const searchInput = byId('mihomo-clash-groups-filter');
       if (searchInput) searchInput.placeholder = 'Группа, узел или IP';
       if (search) search.after(params.container);
-      if (config) params.container.after(config);
+      if (diagnosticsTabs) {
+        diagnosticsTabs.classList.add('xk-mihomo-diagnostics-toolbar-tabs');
+        params.container.after(diagnosticsTabs);
+      }
+      if (config) (diagnosticsTabs || params.container).after(config);
       params.container.after(summaryToggle);
       const count = byId('mihomo-clash-groups-count');
       if (count) mihomoView.querySelector('.xk-mihomo-workspace-head').append(count);
@@ -186,9 +191,11 @@ export function initPanelOperatorHeader() {
         closeMenus();
         const control = byId('mihomo-clash-tab-control')?.getAttribute('aria-selected') === 'true';
         const configuration = config?.getAttribute('aria-selected') === 'true';
+        const diagnostics = byId('mihomo-clash-tab-diagnostics')?.getAttribute('aria-selected') === 'true';
         summaryToggle.hidden = !summary || byId('mihomo-clash-tab-connections')?.getAttribute('aria-selected') !== 'true';
         titleActions.hidden = configuration;
         toolbar.hidden = configuration;
+        if (diagnosticsTabs) diagnosticsTabs.hidden = !diagnostics;
         toolbar.dataset.controlReady = String(control && !controlContent?.hidden);
         if (count) count.hidden = !control;
         if (configuration) {

@@ -1607,6 +1607,11 @@ body.panel-page .xk-mihomo-diagnostic-steps-head {
 }
 body.panel-page .xk-mihomo-diagnostics-head h3,
 body.panel-page .xk-mihomo-diagnostic-steps-head h4 { margin: 0; }
+body.panel-page .xk-mihomo-traffic-title-tooltip {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
 body.panel-page .xk-mihomo-diagnostics-tabs {
   display: flex;
   align-items: center;
@@ -1614,6 +1619,12 @@ body.panel-page .xk-mihomo-diagnostics-tabs {
   padding-bottom: 10px;
   border-bottom: 1px solid var(--op-border);
 }
+body.panel-page .xk-mihomo-diagnostics-toolbar-tabs {
+  align-self: center;
+  padding: 0;
+  border-bottom: 0;
+}
+body.panel-page .xk-mihomo-diagnostics-toolbar-tabs[hidden] { display: none !important; }
 body.panel-page .xk-mihomo-diagnostics-tabs > button {
   display: inline-flex;
   align-items: center;
@@ -2160,11 +2171,6 @@ body.panel-page .xk-mihomo-device-route > i > b {
   height: 100%;
   background: var(--op-accent);
 }
-body.panel-page .xk-mihomo-traffic-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
 body.panel-page .xk-mihomo-traffic-table-wrap {
   overflow-x: auto;
   margin-top: 8px;
@@ -2217,7 +2223,7 @@ body.panel-page #view-mihomo .xk-mihomo-groups-toolbar {
   border: 1px solid var(--op-border);
   border-top: 0;
 }
-body.panel-page #view-mihomo .xk-mihomo-groups-toolbar[data-control-ready="false"] > :not(#mihomo-clash-tab-config):not(.xk-mihomo-mode-field):not(.xk-mihomo-parameters):not(#mihomo-clash-connections-summary-toggle),
+body.panel-page #view-mihomo .xk-mihomo-groups-toolbar[data-control-ready="false"] > :not(#mihomo-clash-tab-config):not(.xk-mihomo-mode-field):not(.xk-mihomo-parameters):not(.xk-mihomo-diagnostics-toolbar-tabs):not(#mihomo-clash-connections-summary-toggle),
 body.panel-page #view-mihomo .xk-mihomo-groups-toolbar[data-control-ready="false"] #xk-mihomo-parameters-menu > :not(#mihomo-clash-status-strip),
 body.panel-page #view-mihomo .xk-mihomo-groups-toolbar[hidden] { display: none !important; }
 body.panel-page #view-mihomo #mihomo-clash-connections-summary-toggle { display: inline-flex; align-items: center; gap: 8px; }
@@ -15042,7 +15048,6 @@ body.panel-page :is(.fm-panel-error-retry, .fm-empty-action) .xk-action-icon {
   body.panel-page .xk-mihomo-traffic-controls select { flex: 1; min-width: 0; }
   body.panel-page .xk-mihomo-traffic-controls #mihomo-clash-traffic-refresh { width: auto; }
   body.panel-page .xk-mihomo-traffic-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  body.panel-page .xk-mihomo-traffic-resource-filter,
   body.panel-page .xk-mihomo-traffic-filter-actions { grid-column: 1 / -1; }
   body.panel-page .xk-mihomo-traffic-filter-actions { justify-content: flex-end; }
   body.panel-page .xk-mihomo-traffic-filter-actions > button { width: auto; min-width: max-content; }
@@ -15054,8 +15059,7 @@ body.panel-page :is(.fm-panel-error-retry, .fm-empty-action) .xk-action-icon {
   }
   body.panel-page .xk-mihomo-traffic-series { justify-content: flex-end; }
   body.panel-page .xk-mihomo-traffic-chart-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  body.panel-page .xk-mihomo-traffic-devices,
-  body.panel-page .xk-mihomo-traffic-grid { grid-template-columns: 1fr; }
+  body.panel-page .xk-mihomo-traffic-devices { grid-template-columns: 1fr; }
   body.panel-page .xk-mihomo-diagnostic-step { grid-template-columns: 24px minmax(0, 1fr); }
   body.panel-page .xk-mihomo-diagnostic-step em { grid-column: 2; text-align: left; }
 }
@@ -15067,7 +15071,6 @@ body.panel-page :is(.fm-panel-error-retry, .fm-empty-action) .xk-action-icon {
   body.panel-page .xk-mihomo-traffic-controls { align-items: stretch; flex-direction: column; }
   body.panel-page .xk-mihomo-traffic-controls #mihomo-clash-traffic-refresh { width: 100%; }
   body.panel-page .xk-mihomo-traffic-filters { grid-template-columns: 1fr; }
-  body.panel-page .xk-mihomo-traffic-resource-filter,
   body.panel-page .xk-mihomo-traffic-filter-actions { grid-column: auto; }
   body.panel-page .xk-mihomo-traffic-filter-actions {
     display: grid;

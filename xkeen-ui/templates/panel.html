@@ -1510,7 +1510,7 @@
 
     <div id="mihomo-clash-panel-diagnostics" class="xk-mihomo-runtime-panel" data-mihomo-clash-panel="diagnostics" role="tabpanel" aria-labelledby="mihomo-clash-tab-diagnostics" hidden>
       <section id="mihomo-clash-diagnostics" class="xk-mihomo-diagnostics" aria-labelledby="mihomo-clash-diagnostics-title">
-        <div class="xk-mihomo-diagnostics-tabs" role="tablist" aria-label="Разделы диагностики">
+        <div id="mihomo-clash-diagnostics-tabs" class="xk-mihomo-diagnostics-tabs" role="tablist" aria-label="Разделы диагностики">
           <button type="button" class="is-active" id="mihomo-clash-diagnostics-tab-traffic" data-mihomo-diagnostics-view="traffic" role="tab" aria-selected="true" aria-controls="mihomo-clash-diagnostics-view-traffic">{{ op_icon('dashboard') }}<span>Аналитика трафика</span></button>
           <button type="button" id="mihomo-clash-diagnostics-tab-trace" data-mihomo-diagnostics-view="trace" role="tab" aria-selected="false" aria-controls="mihomo-clash-diagnostics-view-trace">{{ op_icon('ping') }}<span>Трассировка домена</span></button>
         </div>
@@ -1518,8 +1518,7 @@
         <div id="mihomo-clash-diagnostics-view-traffic" data-mihomo-diagnostics-panel="traffic" role="tabpanel" aria-labelledby="mihomo-clash-diagnostics-tab-traffic">
           <div class="xk-mihomo-diagnostics-head">
             <div>
-              <h3 id="mihomo-clash-diagnostics-title">Аналитика трафика</h3>
-              <p>Локальная история по устройствам, маршрутам/VPN и запрошенным доменам. Сохраняются только минутные счётчики, без содержимого трафика.</p>
+              <h3 id="mihomo-clash-diagnostics-title"><span class="xk-mihomo-traffic-title-tooltip" data-tooltip="Локальная история по устройствам, маршрутам/VPN и запрошенным доменам. Сохраняются только минутные счётчики, без содержимого трафика.">Аналитика трафика</span></h3>
             </div>
             <div class="xk-mihomo-traffic-controls">
               <select id="mihomo-clash-traffic-range" aria-label="Период статистики">
@@ -1537,7 +1536,6 @@
             <div class="xk-mihomo-traffic-filters" role="toolbar" aria-label="Фильтры и экспорт аналитики трафика">
               <label><span>Устройство</span><select id="mihomo-clash-traffic-device" aria-label="Фильтр по устройству"><option value="">Все устройства</option></select></label>
               <label><span>VPN / узел</span><select id="mihomo-clash-traffic-route" aria-label="Фильтр по VPN или узлу"><option value="">Все маршруты</option></select></label>
-              <label class="xk-mihomo-traffic-resource-filter"><span>Ресурс</span><span class="xk-mihomo-traffic-search">{{ op_icon('search') }}<input id="mihomo-clash-traffic-resource" type="search" autocomplete="off" placeholder="Домен или IP" aria-label="Фильтр по домену или IP"></span></label>
               <div class="xk-mihomo-traffic-filter-actions">
                 <button type="button" id="mihomo-clash-traffic-filters-reset" class="btn-secondary">{{ op_icon('clear') }}<span>Сбросить</span></button>
                 <button type="button" id="mihomo-clash-traffic-export-csv" class="btn-secondary">{{ op_icon('download') }}<span>CSV</span></button>
@@ -1577,20 +1575,12 @@
               </div>
               <div id="mihomo-clash-traffic-devices" class="xk-mihomo-traffic-devices"></div>
             </section>
-            <div class="xk-mihomo-traffic-grid">
-              <section class="xk-mihomo-traffic-section" aria-labelledby="mihomo-clash-traffic-routes-title">
-                <div class="xk-mihomo-diagnostic-steps-head"><h4 id="mihomo-clash-traffic-routes-title">VPN и маршруты</h4></div>
-                <div class="xk-mihomo-traffic-table-wrap">
-                  <table class="xk-mihomo-traffic-table"><thead><tr><th>Маршрут</th><th>Узел</th><th>Устройств</th><th>↓</th><th>↑</th></tr></thead><tbody id="mihomo-clash-traffic-routes"></tbody></table>
-                </div>
-              </section>
-              <section class="xk-mihomo-traffic-section" aria-labelledby="mihomo-clash-traffic-resources-title">
-                <div class="xk-mihomo-diagnostic-steps-head"><h4 id="mihomo-clash-traffic-resources-title">Запрошенные ресурсы</h4></div>
-                <div class="xk-mihomo-traffic-table-wrap">
-                  <table class="xk-mihomo-traffic-table"><thead><tr><th>Домен / IP</th><th>Устройства</th><th>Маршрут</th><th>↓</th><th>↑</th></tr></thead><tbody id="mihomo-clash-traffic-resources"></tbody></table>
-                </div>
-              </section>
-            </div>
+            <section class="xk-mihomo-traffic-section" aria-labelledby="mihomo-clash-traffic-routes-title">
+              <div class="xk-mihomo-diagnostic-steps-head"><h4 id="mihomo-clash-traffic-routes-title">VPN и маршруты</h4></div>
+              <div class="xk-mihomo-traffic-table-wrap">
+                <table class="xk-mihomo-traffic-table"><thead><tr><th>Маршрут</th><th>Узел</th><th>Устройств</th><th>↓</th><th>↑</th></tr></thead><tbody id="mihomo-clash-traffic-routes"></tbody></table>
+              </div>
+            </section>
           </div>
         </div>
 

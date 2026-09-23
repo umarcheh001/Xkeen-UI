@@ -6,6 +6,7 @@ import {
 import { mihomoTrafficChartSvg } from './visuals.js';
 
 let root = null;
+let workspaceRoot = null;
 let active = false;
 let busy = false;
 let trafficBusy = false;
@@ -14,7 +15,7 @@ let trafficPayload = null;
 let currentView = 'traffic';
 let trafficTimer = 0;
 let trafficRequest = null;
-let trafficFilters = { device: '', route: '', resource: '' };
+let trafficFilters = { device: '', route: '' };
 const trafficVisibleSeries = new Set(['mihomo', 'outside']);
 const TRAFFIC_SERIES = Object.freeze({
   mihomo: { field: 'mihomo_bytes', label: 'Через Mihomo', tone: 'mihomo' },
@@ -153,15 +154,6 @@ function routeKey(item) {
   return JSON.stringify([String(item?.route || ''), String(item?.node || '')]);
 }
 
-function routeNameFromKey(value) {
-  try {
-    const parsed = JSON.parse(String(value || ''));
-    return Array.isArray(parsed) ? String(parsed[0] || '') : '';
-  } catch (error) {
-    return '';
-  }
-}
-
 function deviceDownload(device) {
   const explicit = Number(device?.total_download);
   return Number.isFinite(explicit)
@@ -179,11 +171,8 @@ function deviceUpload(device) {
 function filteredTrafficView(payload = trafficPayload) {
   const sourceDevices = Array.isArray(payload?.devices) ? payload.devices : [];
   const sourceRoutes = Array.isArray(payload?.routes) ? payload.routes : [];
-  const sourceResources = Array.isArray(payload?.resources) ? payload.resources : [];
-  const resourceQuery = trafficFilters.resource.trim().toLocaleLowerCase('ru');
   const selectedRoute = trafficFilters.route;
-  const selectedRouteName = routeNameFromKey(selectedRoute);
-  let devices = sourceDevices
+  const devices = sourceDevices
     .filter((device) => !trafficFilters.device || String(device?.ip || '') === trafficFilters.device)
     .map((device) => {
       const routes = (Array.isArray(device?.routes) ? device.routes : [])
@@ -221,93 +210,16 @@ function filteredTrafficView(payload = trafficPayload) {
       device_ips: [trafficFilters.device],
     };
   }).filter(Boolean);
-  const resources = sourceResources.map((resource) => {
-    if (resourceQuery && !String(resource?.resource || '').toLocaleLowerCase('ru').includes(resourceQuery)) return false;
-    if (selectedRouteName && !(resource?.routes || []).includes(selectedRouteName)) return false;
-    const breakdown = (resource.breakdown || [])
-      .filter((row) => !trafficFilters.device || row.ip === trafficFilters.device)
-      .filter((row) => !selectedRouteName || row.route === selectedRouteName);
-    if (trafficFilters.device || selectedRouteName) {
-      if (!breakdown.length) return null;
-      return {
-        ...resource,
-        download: breakdown.reduce((total, row) => total + (Number(row.download) || 0), 0),
-        upload: breakdown.reduce((total, row) => total + (Number(row.upload) || 0), 0),
-        bytes: breakdown.reduce((total, row) => total + (Number(row.download) || 0) + (Number(row.upload) || 0), 0),
-        devices: [...new Set(breakdown.map((row) => row.name))],
-        device_ips: [...new Set(breakdown.map((row) => row.ip))],
-        routes: [...new Set(breakdown.map((row) => row.route))],
-      };
-    }
-    return { ...resource };
-  }).filter(Boolean);
-  if (resourceQuery) {
-    const deviceTotals = new Map();
-    resources.forEach((resource) => {
-      (resource.breakdown || []).forEach((row) => {
-        if (trafficFilters.device && row.ip !== trafficFilters.device) return;
-        if (selectedRouteName && row.route !== selectedRouteName) return;
-        const current = deviceTotals.get(row.ip) || {
-          ip: row.ip,
-          name: row.name || row.ip,
-          download: 0,
-          upload: 0,
-          routes: new Map(),
-        };
-        current.download += Number(row.download) || 0;
-        current.upload += Number(row.upload) || 0;
-        const route = current.routes.get(row.route) || {
-          route: row.route,
-          node: row.route,
-          download: 0,
-          upload: 0,
-        };
-        route.download += Number(row.download) || 0;
-        route.upload += Number(row.upload) || 0;
-        current.routes.set(row.route, route);
-        deviceTotals.set(row.ip, current);
-      });
-    });
-    devices = Array.from(deviceTotals.values()).map((device) => ({
-      ip: device.ip,
-      name: device.name,
-      mihomo_download: device.download,
-      mihomo_upload: device.upload,
-      mihomo_bytes: device.download + device.upload,
-      outside_download: 0,
-      outside_upload: 0,
-      outside_bytes: 0,
-      total_download: device.download,
-      total_upload: device.upload,
-      total_bytes: device.download + device.upload,
-      routes: Array.from(device.routes.values()),
-    }));
-  }
-  const routeDownload = routes.reduce((total, item) => total + (Number(item?.download) || 0), 0);
-  const routeUpload = routes.reduce((total, item) => total + (Number(item?.upload) || 0), 0);
-  const resourceDownload = resources.reduce((total, item) => total + (Number(item?.download) || 0), 0);
-  const resourceUpload = resources.reduce((total, item) => total + (Number(item?.upload) || 0), 0);
-  const narrowedDownload = resourceQuery ? resourceDownload : selectedRoute ? routeDownload : null;
-  const narrowedUpload = resourceQuery ? resourceUpload : selectedRoute ? routeUpload : null;
   const summary = {
-    mihomo_bytes: narrowedDownload == null
-      ? devices.reduce((total, item) => total + (Number(item?.mihomo_bytes) || 0), 0)
-      : narrowedDownload + narrowedUpload,
-    outside_bytes: narrowedDownload == null
-      ? devices.reduce((total, item) => total + (Number(item?.outside_bytes) || 0), 0)
-      : 0,
-    download_bytes: narrowedDownload == null
-      ? devices.reduce((total, item) => total + deviceDownload(item), 0)
-      : narrowedDownload,
-    upload_bytes: narrowedUpload == null
-      ? devices.reduce((total, item) => total + deviceUpload(item), 0)
-      : narrowedUpload,
+    mihomo_bytes: devices.reduce((total, item) => total + (Number(item?.mihomo_bytes) || 0), 0),
+    outside_bytes: devices.reduce((total, item) => total + (Number(item?.outside_bytes) || 0), 0),
+    download_bytes: devices.reduce((total, item) => total + deviceDownload(item), 0),
+    upload_bytes: devices.reduce((total, item) => total + deviceUpload(item), 0),
     device_count: devices.length,
     route_count: routes.length,
-    resource_count: resources.length,
   };
   summary.total_bytes = summary.download_bytes + summary.upload_bytes;
-  return { summary, devices, routes, resources };
+  return { summary, devices, routes };
 }
 
 function renderTrafficSummary(summary = {}) {
@@ -497,14 +409,10 @@ function renderTrafficDevices(devices = []) {
   }).join('') || '<div class="xk-mihomo-traffic-empty">Устройства появятся после накопления трафика.</div>';
 }
 
-function renderTrafficTables({ routes = [], resources = [] } = {}) {
+function renderTrafficTables({ routes = [] } = {}) {
   const routeBody = byId('mihomo-clash-traffic-routes');
   if (routeBody) {
     routeBody.innerHTML = routes.slice(0, 24).map((item) => `<tr><td>${escapeHtml(item.route || '—')}</td><td>${escapeHtml(item.node || '—')}</td><td>${Number(item.device_count) || 0}</td><td>${escapeHtml(formatBytes(item.download))}</td><td>${escapeHtml(formatBytes(item.upload))}</td></tr>`).join('') || '<tr><td colspan="5">Данных по фильтру нет.</td></tr>';
-  }
-  const resourceBody = byId('mihomo-clash-traffic-resources');
-  if (resourceBody) {
-    resourceBody.innerHTML = resources.slice(0, 24).map((item) => `<tr><td>${escapeHtml(item.resource || '—')}</td><td>${escapeHtml((item.devices || []).join(', ') || '—')}</td><td>${escapeHtml((item.routes || []).join(', ') || '—')}</td><td>${escapeHtml(formatBytes(item.download))}</td><td>${escapeHtml(formatBytes(item.upload))}</td></tr>`).join('') || '<tr><td colspan="5">Данных по фильтру нет.</td></tr>';
   }
 }
 
@@ -578,8 +486,6 @@ function syncTrafficFilters(payload) {
     trafficFilters.route = routes.some((route) => routeKey(route) === selected) ? selected : '';
     routeSelect.value = trafficFilters.route;
   }
-  const resource = byId('mihomo-clash-traffic-resource');
-  if (resource && resource.value !== trafficFilters.resource) resource.value = trafficFilters.resource;
 }
 
 function renderFilteredTraffic() {
@@ -638,7 +544,6 @@ function exportTraffic(format) {
       quality: trafficPayload.quality || {},
       devices: view.devices,
       routes: view.routes,
-      resources: view.resources,
     };
     downloadTrafficFile(
       `${JSON.stringify(payload, null, 2)}\n`,
@@ -649,34 +554,23 @@ function exportTraffic(format) {
     return true;
   }
   const rows = [[
-    'kind', 'device', 'ip', 'route', 'node', 'resource',
+    'kind', 'device', 'ip', 'route', 'node',
     'download_bytes', 'upload_bytes', 'outside_bytes',
   ]];
   view.devices.forEach((device) => {
     (device.routes || []).forEach((route) => rows.push([
-      'route', device.name, device.ip, route.route, route.node, '',
+      'route', device.name, device.ip, route.route, route.node,
       Number(route.download) || 0, Number(route.upload) || 0, 0,
     ]));
     if (Number(device.outside_bytes) > 0) {
       rows.push([
-        'outside_estimated', device.name, device.ip, '', '', '',
+        'outside_estimated', device.name, device.ip, '', '',
         Number(device.outside_download) || 0,
         Number(device.outside_upload) || 0,
         Number(device.outside_bytes) || 0,
       ]);
     }
   });
-  view.resources.forEach((resource) => rows.push([
-    'resource',
-    (resource.devices || []).join(' | '),
-    (resource.device_ips || []).join(' | '),
-    (resource.routes || []).join(' | '),
-    '',
-    resource.resource,
-    Number(resource.download) || 0,
-    Number(resource.upload) || 0,
-    0,
-  ]));
   downloadTrafficFile(
     `\uFEFF${rows.map((row) => row.map(csvCell).join(',')).join('\r\n')}\r\n`,
     `xkeen-mihomo-traffic-${date}.csv`,
@@ -687,7 +581,7 @@ function exportTraffic(format) {
 }
 
 function resetTrafficFilters() {
-  trafficFilters = { device: '', route: '', resource: '' };
+  trafficFilters = { device: '', route: '' };
   syncTrafficFilters(trafficPayload);
   renderFilteredTraffic();
 }
@@ -708,7 +602,7 @@ async function refreshTraffic({ quiet = false } = {}) {
     const qualityState = payload?.quality?.state;
     setTrafficNotice(
       payload?.demo === true
-        ? 'Демо-режим: показаны синтетические устройства, VPN и ресурсы; реальные данные роутера не используются.'
+        ? 'Демо-режим: показаны синтетические устройства и VPN; реальные данные роутера не используются.'
         : error
         ? `Последний сбор завершился ошибкой: ${error}. Показана накопленная история.`
         : qualityState === 'partial'
@@ -737,7 +631,7 @@ function scheduleTraffic() {
 
 function switchView(view) {
   currentView = view === 'trace' ? 'trace' : 'traffic';
-  root?.querySelectorAll('[data-mihomo-diagnostics-view]').forEach((button) => {
+  workspaceRoot?.querySelectorAll('[data-mihomo-diagnostics-view]').forEach((button) => {
     const selected = button.dataset.mihomoDiagnosticsView === currentView;
     button.classList.toggle('is-active', selected);
     button.setAttribute('aria-selected', selected ? 'true' : 'false');
@@ -802,10 +696,13 @@ async function copyReport() {
 export function initMihomoClashDiagnostics() {
   if (root) return true;
   root = byId('mihomo-clash-diagnostics');
+  workspaceRoot = byId('view-mihomo') || root;
   if (!root) return false;
-  root.addEventListener('click', (event) => {
+  byId('mihomo-clash-diagnostics-tabs')?.addEventListener('click', (event) => {
     const view = event.target.closest('[data-mihomo-diagnostics-view]')?.dataset.mihomoDiagnosticsView;
     if (view) switchView(view);
+  });
+  root.addEventListener('click', (event) => {
     const seriesButton = event.target.closest('[data-mihomo-traffic-series]');
     if (seriesButton) {
       const key = seriesButton.dataset.mihomoTrafficSeries;
@@ -833,10 +730,6 @@ export function initMihomoClashDiagnostics() {
       trafficFilters.route = event.target.value || '';
       renderFilteredTraffic();
     }
-  });
-  byId('mihomo-clash-traffic-resource')?.addEventListener('input', (event) => {
-    trafficFilters.resource = event.target.value || '';
-    renderFilteredTraffic();
   });
   byId('mihomo-clash-diagnostics-domain')?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') void run();

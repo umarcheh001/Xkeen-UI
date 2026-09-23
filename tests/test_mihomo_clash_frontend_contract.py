@@ -20,6 +20,7 @@ EGRESS = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "eg
 LAZY = ROOT / "xkeen-ui" / "static" / "js" / "pages" / "panel.lazy_bindings.runtime.js"
 VIEW_RUNTIME = ROOT / "xkeen-ui" / "static" / "js" / "pages" / "panel.view_runtime.js"
 INVENTORY = ROOT / "docs" / "panel-operator-icon-inventory.json"
+OPERATOR_HEADER = ROOT / "xkeen-ui" / "static" / "js" / "pages" / "panel.mihomo_header.js"
 
 
 def _text(path: Path) -> str:
@@ -33,6 +34,7 @@ def _mihomo_markup() -> str:
 
 def test_workspace_shell_preserves_existing_mihomo_editor_ids_inside_config_subview():
     markup = _mihomo_markup()
+    operator_header = _text(OPERATOR_HEADER)
     assert 'role="tablist" aria-label="Рабочая область Mihomo"' in markup
     for subview in ("control", "connections", "rules", "logs", "diagnostics", "config"):
         assert f'data-mihomo-clash-subview="{subview}"' in markup
@@ -52,6 +54,9 @@ def test_workspace_shell_preserves_existing_mihomo_editor_ids_inside_config_subv
     config_start = markup.index('id="mihomo-clash-panel-config"')
     assert markup.index('id="mihomo-body"') > config_start
     assert markup.index('xk-mihomo-log-card') > config_start
+    assert "mihomo-clash-diagnostics-tabs" in operator_header
+    assert "xk-mihomo-diagnostics-toolbar-tabs" in operator_header
+    assert "diagnosticsTabs.hidden = !diagnostics" in operator_header
 
 
 def test_workspace_uses_operator_sprite_and_has_no_raw_emoji():
@@ -693,7 +698,7 @@ def test_diagnostics_trace_is_manual_read_only_and_copyable():
     assert "POST" not in diagnostics
 
 
-def test_diagnostics_traffic_analytics_exposes_devices_routes_resources_and_history():
+def test_diagnostics_traffic_analytics_exposes_devices_routes_and_history():
     markup = _mihomo_markup()
     client = _text(CLIENT)
     diagnostics = _text(DIAGNOSTICS)
@@ -701,15 +706,16 @@ def test_diagnostics_traffic_analytics_exposes_devices_routes_resources_and_hist
 
     for fragment in (
         'id="mihomo-clash-diagnostics-tab-traffic"',
+        'id="mihomo-clash-diagnostics-tabs"',
         'data-mihomo-diagnostics-view="traffic"',
         'id="mihomo-clash-traffic-range"',
+        'xk-mihomo-traffic-title-tooltip',
+        'Локальная история по устройствам, маршрутам/VPN и запрошенным доменам.',
         'id="mihomo-clash-traffic-chart"',
         'id="mihomo-clash-traffic-devices"',
         'id="mihomo-clash-traffic-routes"',
-        'id="mihomo-clash-traffic-resources"',
         'id="mihomo-clash-traffic-device"',
         'id="mihomo-clash-traffic-route"',
-        'id="mihomo-clash-traffic-resource"',
         'id="mihomo-clash-traffic-export-csv"',
         'id="mihomo-clash-traffic-export-json"',
         'id="mihomo-clash-traffic-quality"',

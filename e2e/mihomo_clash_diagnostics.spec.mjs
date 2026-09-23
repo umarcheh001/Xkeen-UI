@@ -176,7 +176,23 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     await expect(page.locator('#mihomo-clash-traffic-notice')).toContainText('Демо-режим');
     await expect(page.locator('#mihomo-clash-traffic-devices .xk-mihomo-traffic-device')).toHaveCount(2);
     await expect(page.locator('#mihomo-clash-traffic-devices')).toContainText('vpn-a');
-    await expect(page.locator('#mihomo-clash-traffic-resources')).toContainText('github.com');
+    const diagnosticsTabs = page.locator('.xk-mihomo-groups-toolbar #mihomo-clash-diagnostics-tabs');
+    await expect(diagnosticsTabs).toBeVisible();
+    if (viewport.width >= 800) {
+      const toolbarOrder = await page.evaluate(() => (
+        ['.xk-mihomo-parameters', '#mihomo-clash-diagnostics-tabs', '#mihomo-clash-tab-config']
+          .map((selector) => document.querySelector(selector)?.getBoundingClientRect().left ?? -1)
+      ));
+      expect(toolbarOrder[0]).toBeLessThan(toolbarOrder[1]);
+      expect(toolbarOrder[1]).toBeLessThan(toolbarOrder[2]);
+    }
+    const trafficTitle = page.locator('#mihomo-clash-diagnostics-title .xk-mihomo-traffic-title-tooltip');
+    await expect(trafficTitle).toHaveAttribute('data-tooltip', /Локальная история по устройствам, маршрутам\/VPN и запрошенным доменам/);
+    if (viewport.width >= 800) {
+      await trafficTitle.hover();
+      await expect(trafficTitle).toHaveCSS('cursor', 'help');
+    }
+    await expect(page.getByRole('heading', { name: 'Запрошенные ресурсы' })).toHaveCount(0);
     await expect(page.locator('.xk-mihomo-traffic-svg path.mihomo')).toHaveCount(1);
     await expect(page.locator('#mihomo-clash-traffic-quality')).toContainText('90%');
     await expect(page.locator('#mihomo-clash-traffic-chart-stats .xk-mihomo-traffic-chart-stat')).toHaveCount(2);
@@ -208,8 +224,6 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     await expect(page.locator('#mihomo-clash-traffic-devices .xk-mihomo-traffic-device')).toHaveCount(1);
     await expect(page.locator('#mihomo-clash-traffic-devices')).not.toContainText('Телевизор');
     await expect(page.locator('#mihomo-clash-traffic-routes tr')).toHaveCount(1);
-    await page.locator('#mihomo-clash-traffic-resource').fill('github');
-    await expect(page.locator('#mihomo-clash-traffic-resources tr')).toHaveCount(1);
     const jsonDownload = page.waitForEvent('download');
     await page.locator('#mihomo-clash-traffic-export-json').click();
     expect((await jsonDownload).suggestedFilename()).toMatch(/^xkeen-mihomo-traffic-\d{4}-\d{2}-\d{2}\.json$/);
