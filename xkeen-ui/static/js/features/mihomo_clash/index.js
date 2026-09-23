@@ -38,6 +38,11 @@ import {
   initMihomoClashLogs,
 } from './logs.js';
 import {
+  activateMihomoClashDiagnostics,
+  deactivateMihomoClashDiagnostics,
+  initMihomoClashDiagnostics,
+} from './diagnostics.js';
+import {
   closeMihomoTelemetry,
   connectMihomoTelemetry,
   subscribeMihomoTelemetry,
@@ -245,6 +250,11 @@ function renderStatus(state, payload = null) {
   } else if (currentSubview !== 'logs' || state !== 'loading') {
     deactivateMihomoClashLogs();
   }
+  if (state === 'ready' && active && visible && currentSubview === 'diagnostics') {
+    activateMihomoClashDiagnostics();
+  } else if (currentSubview !== 'diagnostics' || state !== 'loading') {
+    deactivateMihomoClashDiagnostics();
+  }
 
   const openConfig = document.querySelector('[data-mihomo-clash-action="open-config"]');
   if (openConfig) {
@@ -439,6 +449,7 @@ function applySubview(name, options = {}) {
     deactivateMihomoClashConnections();
     deactivateMihomoClashRules();
     deactivateMihomoClashLogs();
+    deactivateMihomoClashDiagnostics();
     try {
       document.dispatchEvent(new CustomEvent('xkeen:mihomo-config-subview-shown', {
         detail: { reason: options.reason || 'subview' },
@@ -452,6 +463,7 @@ function applySubview(name, options = {}) {
     if (next !== 'connections') deactivateMihomoClashConnections();
     if (next !== 'rules') deactivateMihomoClashRules();
     if (next !== 'logs') deactivateMihomoClashLogs();
+    if (next !== 'diagnostics') deactivateMihomoClashDiagnostics();
     void refreshMihomoClashStatus({ reason: options.reason || 'subview' });
   }
   return next;
@@ -545,6 +557,7 @@ function bindVisibility() {
       deactivateMihomoClashConnections();
       deactivateMihomoClashRules();
       deactivateMihomoClashLogs();
+      deactivateMihomoClashDiagnostics();
       if (active && currentSubview !== 'config') renderStatus('paused', statusPayload);
     } else if (active && currentSubview !== 'config') {
       void refreshMihomoClashStatus({ reason: 'visibility' });
@@ -565,6 +578,7 @@ export function initMihomoClashWorkspace() {
   initMihomoClashConnections();
   initMihomoClashRules();
   initMihomoClashLogs();
+  initMihomoClashDiagnostics();
   subscribeMihomoTelemetry(({ state, frame }) => {
     const target = byId('mihomo-clash-telemetry-state');
     if (!target) return;
@@ -612,6 +626,7 @@ export function deactivateMihomoClashWorkspace() {
   deactivateMihomoClashConnections();
   deactivateMihomoClashRules();
   deactivateMihomoClashLogs();
+  deactivateMihomoClashDiagnostics();
   closeMihomoTelemetry('paused');
   return true;
 }

@@ -1177,6 +1177,9 @@
       <button type="button" class="xk-mihomo-workspace-tab" id="mihomo-clash-tab-logs" data-mihomo-clash-subview="logs" role="tab" aria-selected="false" aria-controls="mihomo-clash-panel-logs">
         {{ op_icon('terminal') }}<span>Логи</span>
       </button>
+      <button type="button" class="xk-mihomo-workspace-tab" id="mihomo-clash-tab-diagnostics" data-mihomo-clash-subview="diagnostics" role="tab" aria-selected="false" aria-controls="mihomo-clash-panel-diagnostics">
+        {{ op_icon('tools') }}<span>Диагностика</span>
+      </button>
       <button type="button" class="xk-mihomo-workspace-tab" id="mihomo-clash-tab-config" data-mihomo-clash-subview="config" role="tab" aria-selected="false" aria-controls="mihomo-clash-panel-config">
         {{ op_icon('settings') }}<span>Конфигурация</span>
       </button>
@@ -1502,6 +1505,95 @@
           </div>
           <ol id="mihomo-clash-logs-list" class="xk-mihomo-logs-list" aria-live="off"></ol>
           <div id="mihomo-clash-logs-empty" class="xk-mihomo-logs-empty">Новые записи появятся здесь в реальном времени.</div>
+      </section>
+    </div>
+
+    <div id="mihomo-clash-panel-diagnostics" class="xk-mihomo-runtime-panel" data-mihomo-clash-panel="diagnostics" role="tabpanel" aria-labelledby="mihomo-clash-tab-diagnostics" hidden>
+      <section id="mihomo-clash-diagnostics" class="xk-mihomo-diagnostics" aria-labelledby="mihomo-clash-diagnostics-title">
+        <div class="xk-mihomo-diagnostics-tabs" role="tablist" aria-label="Разделы диагностики">
+          <button type="button" class="is-active" id="mihomo-clash-diagnostics-tab-traffic" data-mihomo-diagnostics-view="traffic" role="tab" aria-selected="true" aria-controls="mihomo-clash-diagnostics-view-traffic">{{ op_icon('dashboard') }}<span>Аналитика трафика</span></button>
+          <button type="button" id="mihomo-clash-diagnostics-tab-trace" data-mihomo-diagnostics-view="trace" role="tab" aria-selected="false" aria-controls="mihomo-clash-diagnostics-view-trace">{{ op_icon('ping') }}<span>Трассировка домена</span></button>
+        </div>
+
+        <div id="mihomo-clash-diagnostics-view-traffic" data-mihomo-diagnostics-panel="traffic" role="tabpanel" aria-labelledby="mihomo-clash-diagnostics-tab-traffic">
+          <div class="xk-mihomo-diagnostics-head">
+            <div>
+              <h3 id="mihomo-clash-diagnostics-title">Аналитика трафика</h3>
+              <p>Локальная история по устройствам, маршрутам/VPN и запрошенным доменам. Сохраняются только минутные счётчики, без содержимого трафика.</p>
+            </div>
+            <div class="xk-mihomo-traffic-controls">
+              <select id="mihomo-clash-traffic-range" aria-label="Период статистики">
+                <option value="1h">1 час</option>
+                <option value="6h">6 часов</option>
+                <option value="24h" selected>24 часа</option>
+                <option value="7d">7 дней</option>
+              </select>
+              <button type="button" id="mihomo-clash-traffic-refresh" class="btn-secondary">{{ op_icon('refresh') }}<span>Обновить</span></button>
+            </div>
+          </div>
+          <div id="mihomo-clash-traffic-notice" class="xk-mihomo-diagnostics-notice" role="status" aria-live="polite">Сборщик накапливает данные локально. Первые значения появятся после двух снимков.</div>
+          <div id="mihomo-clash-traffic-content" hidden>
+            <div id="mihomo-clash-traffic-summary" class="xk-mihomo-diagnostic-summary"></div>
+            <section class="xk-mihomo-traffic-chart-section" aria-labelledby="mihomo-clash-traffic-chart-title">
+              <div class="xk-mihomo-diagnostic-steps-head">
+                <h4 id="mihomo-clash-traffic-chart-title">Трафик по времени</h4>
+                <span id="mihomo-clash-traffic-coverage">—</span>
+              </div>
+              <div id="mihomo-clash-traffic-chart" class="xk-mihomo-traffic-chart" role="img" aria-label="График трафика через Mihomo и вне Mihomo"></div>
+            </section>
+            <section class="xk-mihomo-traffic-section" aria-labelledby="mihomo-clash-traffic-devices-title">
+              <div class="xk-mihomo-diagnostic-steps-head">
+                <h4 id="mihomo-clash-traffic-devices-title">Устройства и маршруты</h4>
+                <span>Трафик через Mihomo распределён по фактической цепочке соединения</span>
+              </div>
+              <div id="mihomo-clash-traffic-devices" class="xk-mihomo-traffic-devices"></div>
+            </section>
+            <div class="xk-mihomo-traffic-grid">
+              <section class="xk-mihomo-traffic-section" aria-labelledby="mihomo-clash-traffic-routes-title">
+                <div class="xk-mihomo-diagnostic-steps-head"><h4 id="mihomo-clash-traffic-routes-title">VPN и маршруты</h4></div>
+                <div class="xk-mihomo-traffic-table-wrap">
+                  <table class="xk-mihomo-traffic-table"><thead><tr><th>Маршрут</th><th>Узел</th><th>Устройств</th><th>Трафик</th></tr></thead><tbody id="mihomo-clash-traffic-routes"></tbody></table>
+                </div>
+              </section>
+              <section class="xk-mihomo-traffic-section" aria-labelledby="mihomo-clash-traffic-resources-title">
+                <div class="xk-mihomo-diagnostic-steps-head"><h4 id="mihomo-clash-traffic-resources-title">Запрошенные ресурсы</h4></div>
+                <div class="xk-mihomo-traffic-table-wrap">
+                  <table class="xk-mihomo-traffic-table"><thead><tr><th>Домен / IP</th><th>Устройства</th><th>Маршрут</th><th>Трафик</th></tr></thead><tbody id="mihomo-clash-traffic-resources"></tbody></table>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+
+        <div id="mihomo-clash-diagnostics-view-trace" data-mihomo-diagnostics-panel="trace" role="tabpanel" aria-labelledby="mihomo-clash-diagnostics-tab-trace" hidden>
+          <div class="xk-mihomo-diagnostics-head">
+            <div>
+              <h3>Диагностика маршрута</h3>
+              <p>Показывает, как Mihomo разрешает домен, какое правило срабатывает и через какой узел проходит новый трафик. Настройки и соединения не изменяются.</p>
+            </div>
+            <button type="button" id="mihomo-clash-diagnostics-copy" class="btn-secondary" disabled>{{ op_icon('duplicate') }}<span>Скопировать отчёт</span></button>
+          </div>
+          <div class="xk-mihomo-diagnostics-toolbar" role="toolbar" aria-label="Трассировка домена">
+            <label for="mihomo-clash-diagnostics-domain">
+              {{ op_icon('search') }}
+              <input id="mihomo-clash-diagnostics-domain" type="text" inputmode="url" autocomplete="off" placeholder="например: github.com" aria-label="Домен для диагностики">
+            </label>
+            <button type="button" id="mihomo-clash-diagnostics-run" class="btn-primary">{{ op_icon('ping') }}<span>Проверить маршрут</span></button>
+          </div>
+          <div id="mihomo-clash-diagnostics-notice" class="xk-mihomo-diagnostics-notice" role="status" aria-live="polite">Диагностика запускается только вручную и ничего не изменяет.</div>
+          <div id="mihomo-clash-diagnostics-result" hidden>
+            <div id="mihomo-clash-diagnostics-summary" class="xk-mihomo-diagnostic-summary"></div>
+            <div class="xk-mihomo-diagnostic-chain">
+              <span>Цепочка прокси</span>
+              <code id="mihomo-clash-diagnostics-chain">—</code>
+            </div>
+            <div class="xk-mihomo-diagnostic-steps-head">
+              <h4>Проверка правил по порядку</h4>
+              <span id="mihomo-clash-diagnostics-truncated" hidden>Показана ограниченная часть списка</span>
+            </div>
+            <ol id="mihomo-clash-diagnostics-steps" class="xk-mihomo-diagnostic-steps"></ol>
+          </div>
+        </div>
       </section>
     </div>
   </section>

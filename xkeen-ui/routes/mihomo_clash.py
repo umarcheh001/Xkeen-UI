@@ -52,6 +52,12 @@ from services.mihomo_rule_provider_inspector import (
 from services.mihomo_clash_devices import get_mihomo_clash_device_map
 from services.mihomo_egress_info import MihomoEgressInfoError, get_mihomo_egress_info
 from services.mihomo_egress_setup import configured_egress_proxy_port
+from services.mihomo_clash_diagnostics import (
+    build_trace_result,
+    normalize_trace_domain,
+)
+from services.mihomo_traffic_analytics import MihomoTrafficAnalyticsCollector
+from services.router_diagnostics import sample_router_clients
 from services.request_limits import PayloadTooLargeError, read_request_json_limited
 from services.mihomo_clash_target import (
     MihomoClashDiscovery,
@@ -866,6 +872,7 @@ def create_mihomo_clash_blueprint(
     *,
     mihomo_config_file: str,
     mihomo_root: str | None = None,
+    ui_state_dir: str | None = None,
     discovery_factory: DiscoveryFactory = discover_mihomo_clash_target,
     client_factory: ClientFactory = MihomoClashClient,
     audit_logger: AuditLogger | None = None,
@@ -873,6 +880,7 @@ def create_mihomo_clash_blueprint(
     cache: Cache | None = None,
     device_map_factory: DeviceMapFactory = get_mihomo_clash_device_map,
     egress_info_factory: EgressInfoFactory = get_mihomo_egress_info,
+    traffic_analytics: MihomoTrafficAnalyticsCollector | None = None,
 ) -> Blueprint:
     bp = Blueprint("mihomo_clash", __name__)
     root = str(mihomo_root or Path(mihomo_config_file).parent)
@@ -881,6 +889,44 @@ def create_mihomo_clash_blueprint(
     # cache. The production app passes the process-wide shared instance below
     # so config/runtime mutations can invalidate every Mihomo facade route.
     snapshot_cache = cache or MihomoClashCache()
+    analytics = traffic_analytics
+
+    def _analytics_connections() -> Mapping[str, Any]:
+        discovery = discovery_factory(mihomo_config_file, root)
+        if discovery.target is None:
+            raise RuntimeError("mihomo_target_unavailable")
+        response = client_factory(discovery.target).request_json("connections_snapshot")
+        return build_mihomo_clash_connections_dto(
+            response.payload,
+            device_map=device_map_factory(),
+            max_rows=1000,
+        )
+
+    analytics_enabled = str(
+        os.environ.get("XKEEN_MIHOMO_TRAFFIC_ANALYTICS_ENABLE", "1")
+    ).strip().lower() not in {"0", "false", "no", "off"}
+    if analytics is None and ui_state_dir and analytics_enabled:
+        try:
+            sample_interval = float(
+                os.environ.get("XKEEN_MIHOMO_TRAFFIC_SAMPLE_SECONDS", "10") or 10
+            )
+            client_interval = float(
+                os.environ.get("XKEEN_MIHOMO_TRAFFIC_CLIENT_SECONDS", "30") or 30
+            )
+            retention_days = int(
+                os.environ.get("XKEEN_MIHOMO_TRAFFIC_RETENTION_DAYS", "7") or 7
+            )
+            analytics = MihomoTrafficAnalyticsCollector(
+                db_path=str(Path(ui_state_dir) / "mihomo-traffic.sqlite3"),
+                connections_factory=_analytics_connections,
+                clients_factory=sample_router_clients,
+                sample_interval_seconds=sample_interval,
+                client_interval_seconds=client_interval,
+                retention_seconds=retention_days * 24 * 60 * 60,
+            )
+            analytics.start()
+        except Exception:
+            analytics = None
 
     def _client_or_response():
         discovery = discovery_factory(mihomo_config_file, root)
@@ -1500,6 +1546,88 @@ def create_mihomo_clash_blueprint(
             "lookup_host": "ipapi.co",
             **info,
         }), 200
+
+    @bp.get("/api/mihomo/clash/diagnostics/trace")
+    def api_mihomo_clash_diagnostics_trace():
+        """Explain one domain's DNS answer and first safely-evaluable rule."""
+
+        try:
+            domain = normalize_trace_domain(request.args.get("domain"))
+        except ValueError:
+            return error_response(
+                "Укажите корректное доменное имя.",
+                400,
+                ok=False,
+                code="mihomo_trace_domain_invalid",
+                retryable=False,
+            )
+
+        client, unavailable = _client_or_response()
+        if unavailable:
+            return unavailable
+        try:
+            # Keep the trace read-only and use only named, allow-listed client
+            # operations. No raw paths or user-supplied upstream URLs cross
+            # the facade boundary.
+            dns_response = client.query_dns(domain, "A")
+            rules_response = client.request_json("rules")
+            proxies_response = client.request_json("proxies")
+            payload = build_trace_result(
+                domain=domain,
+                dns_payload=dns_response.payload,
+                rules_payload=rules_response.payload,
+                proxies_payload=proxies_response.payload,
+            )
+        except MihomoClashClientError as exc:
+            return _safe_client_error(exc)
+        except Exception:
+            return error_response(
+                "Не удалось построить трассировку маршрута.",
+                502,
+                ok=False,
+                code="mihomo_trace_failed",
+                retryable=True,
+            )
+        return jsonify({"ok": True, **payload}), 200
+
+    @bp.get("/api/mihomo/clash/diagnostics/traffic")
+    def api_mihomo_clash_diagnostics_traffic():
+        if analytics is None:
+            return error_response(
+                "Сбор статистики трафика недоступен в текущем окружении.",
+                503,
+                ok=False,
+                code="mihomo_traffic_analytics_unavailable",
+                retryable=True,
+            )
+        raw_range = str(request.args.get("range") or "24h").strip().lower()
+        range_seconds = {
+            "1h": 3600,
+            "6h": 6 * 3600,
+            "24h": 24 * 3600,
+            "7d": 7 * 24 * 3600,
+        }.get(raw_range)
+        if range_seconds is None:
+            return error_response(
+                "Допустимые диапазоны: 1h, 6h, 24h или 7d.",
+                400,
+                ok=False,
+                code="mihomo_traffic_range_invalid",
+                retryable=False,
+            )
+        try:
+            payload = analytics.summary(range_seconds=range_seconds)
+        except Exception:
+            return error_response(
+                "Не удалось прочитать локальную статистику трафика.",
+                503,
+                ok=False,
+                code="mihomo_traffic_analytics_failed",
+                retryable=True,
+            )
+        response = jsonify({"ok": True, **payload})
+        response.headers["Cache-Control"] = "no-store"
+        return response, 200
 
     @bp.put("/api/mihomo/clash/runtime-mode")
     def api_mihomo_clash_runtime_mode():

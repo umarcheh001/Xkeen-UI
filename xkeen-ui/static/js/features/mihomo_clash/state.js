@@ -3,6 +3,7 @@ export const MIHOMO_CLASH_SUBVIEWS = Object.freeze([
   'connections',
   'rules',
   'logs',
+  'diagnostics',
   'config',
 ]);
 

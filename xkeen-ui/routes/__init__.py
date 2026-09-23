@@ -131,6 +131,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
         create_mihomo_clash_blueprint(
             mihomo_config_file=ctx.mihomo_config_file,
             mihomo_root=os.path.dirname(ctx.mihomo_config_file),
+            ui_state_dir=ctx.ui_state_dir,
             audit_logger=ctx.append_restart_log,
             cache=get_shared_mihomo_clash_cache(),
         )

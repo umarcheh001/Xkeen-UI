@@ -16,6 +16,8 @@ const MIGRATION_PREVIEW_ENDPOINT = '/api/mihomo/security/migration-preview';
 const MIGRATION_APPLY_ENDPOINT = '/api/mihomo/security/migration-apply';
 const EGRESS_LISTENER_PREVIEW_ENDPOINT = '/api/mihomo/security/egress-listener-preview';
 const EGRESS_LISTENER_APPLY_ENDPOINT = '/api/mihomo/security/egress-listener-apply';
+const DIAGNOSTICS_TRACE_ENDPOINT = '/api/mihomo/clash/diagnostics/trace';
+const DIAGNOSTICS_TRAFFIC_ENDPOINT = '/api/mihomo/clash/diagnostics/traffic';
 const WS_TOKEN_ENDPOINT = '/api/ws-token';
 
 function httpApi() {
@@ -53,6 +55,30 @@ export async function fetchMihomoClashStatus(options = {}) {
     signal: options && options.signal ? options.signal : undefined,
   };
   return requestJSON(STATUS_ENDPOINT, init);
+}
+
+export function traceMihomoClashDomain(domain, options = {}) {
+  const params = new URLSearchParams({ domain: String(domain || '').trim() });
+  return requestJSON(`${DIAGNOSTICS_TRACE_ENDPOINT}?${params.toString()}`, {
+    method: 'GET',
+    cache: 'no-store',
+    credentials: 'same-origin',
+    timeoutMs: 15000,
+    retry: 0,
+    signal: options.signal,
+  });
+}
+
+export function fetchMihomoClashTrafficAnalytics(range = '24h', options = {}) {
+  const params = new URLSearchParams({ range: String(range || '24h') });
+  return requestJSON(`${DIAGNOSTICS_TRAFFIC_ENDPOINT}?${params.toString()}`, {
+    method: 'GET',
+    cache: 'no-store',
+    credentials: 'same-origin',
+    timeoutMs: 10000,
+    retry: 0,
+    signal: options.signal,
+  });
 }
 
 export function queryMihomoClashDns(name, type = 'A', options = {}) {

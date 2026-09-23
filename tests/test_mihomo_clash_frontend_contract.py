@@ -15,6 +15,7 @@ GROUPS = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "gr
 CONNECTIONS = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "connections.js"
 RULES = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "rules.js"
 LOGS = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "logs.js"
+DIAGNOSTICS = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "diagnostics.js"
 EGRESS = ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "egress.js"
 LAZY = ROOT / "xkeen-ui" / "static" / "js" / "pages" / "panel.lazy_bindings.runtime.js"
 VIEW_RUNTIME = ROOT / "xkeen-ui" / "static" / "js" / "pages" / "panel.view_runtime.js"
@@ -33,7 +34,7 @@ def _mihomo_markup() -> str:
 def test_workspace_shell_preserves_existing_mihomo_editor_ids_inside_config_subview():
     markup = _mihomo_markup()
     assert 'role="tablist" aria-label="Рабочая область Mihomo"' in markup
-    for subview in ("control", "connections", "rules", "logs", "config"):
+    for subview in ("control", "connections", "rules", "logs", "diagnostics", "config"):
         assert f'data-mihomo-clash-subview="{subview}"' in markup
     assert 'data-mihomo-clash-panel="config"' in markup
 
@@ -663,6 +664,62 @@ def test_connection_inspector_cross_links_to_rules_without_persistent_mutation()
     assert 'id="mihomo-clash-connection-rule-link"' in markup
     assert "xkeen:mihomo-clash-open-rule" in connections
     assert "focusMihomoClashRule" in feature
+
+
+def test_diagnostics_trace_is_manual_read_only_and_copyable():
+    markup = _mihomo_markup()
+    client = _text(CLIENT)
+    diagnostics = _text(DIAGNOSTICS)
+    state = _text(STATE)
+    css = _text(CSS)
+
+    for fragment in (
+        'id="mihomo-clash-tab-diagnostics"',
+        'data-mihomo-clash-subview="diagnostics"',
+        'id="mihomo-clash-panel-diagnostics"',
+        'id="mihomo-clash-diagnostics-domain"',
+        'id="mihomo-clash-diagnostics-run"',
+        'id="mihomo-clash-diagnostics-copy"',
+        "traceMihomoClashDomain",
+        "navigator.clipboard.writeText",
+        "Диагностика запускается только вручную",
+        ".xk-mihomo-diagnostic-summary",
+        ".xk-mihomo-diagnostic-step",
+    ):
+        assert fragment in markup or fragment in client or fragment in diagnostics or fragment in css
+
+    assert "'diagnostics'," in state
+    assert "method: 'GET'" in client
+    assert "POST" not in diagnostics
+
+
+def test_diagnostics_traffic_analytics_exposes_devices_routes_resources_and_history():
+    markup = _mihomo_markup()
+    client = _text(CLIENT)
+    diagnostics = _text(DIAGNOSTICS)
+    css = _text(CSS)
+
+    for fragment in (
+        'id="mihomo-clash-diagnostics-tab-traffic"',
+        'data-mihomo-diagnostics-view="traffic"',
+        'id="mihomo-clash-traffic-range"',
+        'id="mihomo-clash-traffic-chart"',
+        'id="mihomo-clash-traffic-devices"',
+        'id="mihomo-clash-traffic-routes"',
+        'id="mihomo-clash-traffic-resources"',
+        "fetchMihomoClashTrafficAnalytics",
+        "renderTrafficChart",
+        "renderTrafficDevices",
+        "Вне Mihomo · оценка",
+        ".xk-mihomo-traffic-svg",
+        ".xk-mihomo-traffic-device",
+        ".xk-mihomo-traffic-table",
+    ):
+        assert fragment in markup or fragment in client or fragment in diagnostics or fragment in css
+
+    assert "DIAGNOSTICS_TRAFFIC_ENDPOINT" in client
+    assert "window.setInterval" in diagnostics
+    assert "trafficRequest?.abort()" in diagnostics
 
 
 def test_rule_provider_inspector_is_read_only_bounded_and_searchable():

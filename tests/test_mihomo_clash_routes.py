@@ -47,6 +47,12 @@ class StubClient:
             MihomoClashJSONResponse({"inuse": 200}, 200, 1, 16),
         )
 
+    def query_dns(self, name: str, qtype: str = "A"):
+        self.operations.append(f"dns:{name}:{qtype}")
+        if self.error:
+            raise self.error
+        return self.responses["dns_query"]
+
     def select_proxy(self, group_name: str, proxy_name: str):
         self.selections.append((group_name, proxy_name))
         if self.error:
@@ -123,6 +129,7 @@ def make_app(
     mihomo_config_file="/safe/mihomo/config.yaml",
     mihomo_root="/safe/mihomo",
     egress_info_factory=None,
+    traffic_analytics=None,
 ) -> Flask:
     app = Flask(__name__)
     app.config["TESTING"] = True
@@ -133,6 +140,7 @@ def make_app(
             discovery_factory=lambda _config, _root: discovery,
             client_factory=lambda _target: client,
             audit_logger=audit_logger,
+            traffic_analytics=traffic_analytics,
             **({"egress_info_factory": egress_info_factory} if egress_info_factory else {}),
             **({"device_map_factory": device_map_factory} if device_map_factory else {}),
         )
@@ -431,6 +439,115 @@ def test_status_route_maps_unreachable_core_without_disclosing_target():
     assert response.status_code == 200
     assert response.get_json()["state"] == "core_stopped"
     assert "/private/mihomo.sock" not in serialized
+
+
+def test_diagnostics_trace_is_read_only_and_bounded():
+    client = StubClient(
+        responses={
+            "dns_query": MihomoClashJSONResponse(
+                {"Answer": [{"type": 1, "data": "140.82.121.5"}]},
+                200,
+                2,
+                80,
+            ),
+            "rules": MihomoClashJSONResponse(
+                {
+                    "rules": [
+                        {"type": "DomainSuffix", "payload": "github.com", "proxy": "AUTO"},
+                        {"type": "Match", "payload": "", "proxy": "DIRECT"},
+                    ]
+                },
+                200,
+                2,
+                120,
+            ),
+            "proxies": MihomoClashJSONResponse(
+                {
+                    "proxies": {
+                        "AUTO": {"type": "Selector", "now": "node-a", "all": ["node-a"]},
+                        "node-a": {"type": "VLESS"},
+                    }
+                },
+                200,
+                2,
+                120,
+            ),
+        }
+    )
+    response = make_app(ready_discovery(), client).test_client().get(
+        "/api/mihomo/clash/diagnostics/trace?domain=https%3A%2F%2Fgithub.com%2Fopenai"
+    )
+    body = response.get_json()
+    assert response.status_code == 200
+    assert body["domain"] == "github.com"
+    assert body["matched_rule"]["type"] == "DOMAIN-SUFFIX"
+    assert body["route"]["chain"] == ["AUTO", "node-a"]
+    assert client.operations == ["dns:github.com:A", "rules", "proxies"]
+
+
+def test_diagnostics_trace_rejects_invalid_domain_before_upstream_calls():
+    client = StubClient()
+    response = make_app(ready_discovery(), client).test_client().get(
+        "/api/mihomo/clash/diagnostics/trace?domain=bad%20host"
+    )
+    assert response.status_code == 400
+    assert response.get_json()["code"] == "mihomo_trace_domain_invalid"
+    assert client.operations == []
+
+
+def test_diagnostics_traffic_returns_local_aggregate_without_upstream_calls():
+    class Analytics:
+        def summary(self, *, range_seconds):
+            assert range_seconds == 24 * 3600
+            return {
+                "schema_version": 1,
+                "range_seconds": range_seconds,
+                "summary": {
+                    "mihomo_bytes": 300,
+                    "outside_bytes": 100,
+                    "total_bytes": 400,
+                    "device_count": 1,
+                    "route_count": 1,
+                    "resource_count": 1,
+                },
+                "series": [],
+                "devices": [],
+                "routes": [],
+                "resources": [],
+                "coverage": {
+                    "mihomo": True,
+                    "keenetic_client_counters": True,
+                    "outside_estimated": True,
+                },
+                "collection": {"state": "collecting"},
+            }
+
+    client = StubClient()
+    response = make_app(
+        ready_discovery(),
+        client,
+        traffic_analytics=Analytics(),
+    ).test_client().get("/api/mihomo/clash/diagnostics/traffic?range=24h")
+
+    assert response.status_code == 200
+    assert response.get_json()["summary"]["total_bytes"] == 400
+    assert response.headers["Cache-Control"] == "no-store"
+    assert client.operations == []
+
+
+def test_diagnostics_traffic_rejects_unknown_range():
+    class Analytics:
+        def summary(self, *, range_seconds):
+            raise AssertionError(range_seconds)
+
+    response = make_app(
+        ready_discovery(),
+        StubClient(),
+        traffic_analytics=Analytics(),
+    ).test_client().get("/api/mihomo/clash/diagnostics/traffic?range=30d")
+
+    assert response.status_code == 400
+    assert response.get_json()["code"] == "mihomo_traffic_range_invalid"
 
 
 def groups_payload(now: str = "node-a", *, group_type: str = "Selector", fixed: str = ""):
