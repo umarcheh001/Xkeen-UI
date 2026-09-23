@@ -3,6 +3,7 @@ import {
   fetchMihomoClashTrafficAnalytics,
   traceMihomoClashDomain,
 } from './client.js';
+import { mihomoTrafficChartSvg } from './visuals.js';
 
 let root = null;
 let active = false;
@@ -360,19 +361,41 @@ function renderTrafficChart(payload) {
     points.length - 1,
   ]));
   const yTicks = [0, .5, 1];
-  const chartPaths = visibleSeries.map((key) => (
-    `<path d="${path(TRAFFIC_SERIES[key].field)}" class="${TRAFFIC_SERIES[key].tone}" data-series-path="${key}"/>`
-  )).join('');
-  const xLabels = tickIndexes.map((index) => (
-    `<text x="${x(index)}" y="${height - 8}" text-anchor="${index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle'}">${escapeHtml(formatChartTime(points[index].at, payload?.range_seconds))}</text>`
-  )).join('');
-  target.innerHTML = `<svg class="xk-mihomo-traffic-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Интерактивный график трафика">
-    ${yTicks.map((ratio) => `<line x1="${padding.left}" y1="${y(maxValue * ratio)}" x2="${width - padding.right}" y2="${y(maxValue * ratio)}" class="grid"/><text x="${padding.left - 8}" y="${y(maxValue * ratio) + 4}" text-anchor="end">${escapeHtml(formatBytes(maxValue * ratio))}</text>`).join('')}
-    ${chartPaths}
-    <line class="chart-guide" data-chart-guide x1="${x(0)}" y1="${padding.top}" x2="${x(0)}" y2="${height - padding.bottom}" hidden/>
-    <rect class="chart-hit-area" data-chart-hit x="${padding.left}" y="${padding.top}" width="${innerWidth}" height="${innerHeight + 4}"/>
-    ${xLabels}
-  </svg><div id="mihomo-clash-traffic-tooltip" class="xk-mihomo-traffic-tooltip" role="status" aria-live="polite" hidden></div>`;
+  target.innerHTML = `${mihomoTrafficChartSvg({
+    width,
+    height,
+    yTicks: yTicks.map((ratio) => ({
+      x1: padding.left,
+      y1: y(maxValue * ratio),
+      x2: width - padding.right,
+      y2: y(maxValue * ratio),
+      labelX: padding.left - 8,
+      labelY: y(maxValue * ratio) + 4,
+      label: formatBytes(maxValue * ratio),
+    })),
+    paths: visibleSeries.map((key) => ({
+      key,
+      tone: TRAFFIC_SERIES[key].tone,
+      d: path(TRAFFIC_SERIES[key].field),
+    })),
+    guide: {
+      x: x(0),
+      y1: padding.top,
+      y2: height - padding.bottom,
+    },
+    hitArea: {
+      x: padding.left,
+      y: padding.top,
+      width: innerWidth,
+      height: innerHeight + 4,
+    },
+    xLabels: tickIndexes.map((index) => ({
+      x: x(index),
+      y: height - 8,
+      anchor: index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle',
+      label: formatChartTime(points[index].at, payload?.range_seconds),
+    })),
+  })}<div id="mihomo-clash-traffic-tooltip" class="xk-mihomo-traffic-tooltip" role="status" aria-live="polite" hidden></div>`;
   syncTrafficSeriesButtons();
   renderTrafficChartStats(points);
   const svg = target.querySelector('.xk-mihomo-traffic-svg');

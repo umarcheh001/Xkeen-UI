@@ -1203,7 +1203,7 @@
           "accessible_label": "Скачать"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/diagnostics.js:L21",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/diagnostics.js:L22",
           "control_type": "runtime-action",
           "accessible_label": "Скачать"
         },
@@ -2041,12 +2041,12 @@
           "accessible_label": "Загрузка"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/diagnostics.js:L66",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/diagnostics.js:L67",
           "control_type": "runtime-action",
           "accessible_label": "Загрузка"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/diagnostics.js:L78",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/diagnostics.js:L79",
           "control_type": "runtime-action",
           "accessible_label": "Загрузка"
         },
@@ -2418,7 +2418,7 @@
       "tabler_asset": "stopwatch",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/diagnostics.js:L66",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/diagnostics.js:L67",
           "control_type": "runtime-action",
           "accessible_label": "Проверить задержку"
         },
@@ -2614,7 +2614,7 @@
           "accessible_label": "Обновить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/diagnostics.js:L79",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/diagnostics.js:L80",
           "control_type": "runtime-action",
           "accessible_label": "Обновить"
         },
@@ -3574,7 +3574,7 @@
           "accessible_label": "Загрузить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/diagnostics.js:L22",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/diagnostics.js:L23",
           "control_type": "runtime-action",
           "accessible_label": "Загрузить"
         },
