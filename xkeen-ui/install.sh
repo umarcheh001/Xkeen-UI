@@ -56,26 +56,266 @@ ui_header() {
   printf '%b  ╚%s╝%b\n\n' "$UI_CYAN" "$UI_HEADER_BAR" "$UI_RESET" >&3
 }
 
+# Любая обычная строка сначала гасит нижний блок прогресса, иначе две руки
+# пишут в один терминал и вывод рвётся. Пока прогресса нет, это пустые вызовы.
 ui_stage() {
   INSTALL_STAGE="$2"
+  ui_hold; ui_sticky_clear
   printf '  %b%s%b  %s\n' "$UI_CYAN" "$1" "$UI_RESET" "$2" >&3
+  ui_release
 }
 
 ui_info() {
+  ui_hold; ui_sticky_clear
   printf '      %s\n' "$*" >&3
+  ui_sticky_draw; ui_release
 }
 
 ui_success() {
+  ui_hold; ui_sticky_clear
   printf '%b  ✓%b  %s\n' "$UI_GREEN" "$UI_RESET" "$*" >&3
+  ui_sticky_draw; ui_release
 }
 
 ui_warning() {
+  ui_hold; ui_sticky_clear
   printf '%b  !%b  %s\n' "$UI_YELLOW" "$UI_RESET" "$*" >&3
+  ui_sticky_draw; ui_release
 }
 
 ui_error() {
+  ui_hold; ui_sticky_clear
   printf '\n%b  ×  %s%b\n' "$UI_RED" "$*" "$UI_RESET" >&3
+  ui_release
 }
+
+# --- ui-progress: begin --------------------------------------------------
+# Ход установки. Шаги с галочками говорят, что уже сделано; нижний блок из
+# двух строк — что процесс жив: спиннер, имя текущего шага, его таймер и
+# шкала из квадратов (один квадрат — один шаг, группы разделены по этапам).
+#
+# Рисовать поверх строк можно только в настоящем терминале. Если вывод
+# перехвачен (curl | sh в файл, запуск из панели), нижний блок не печатается
+# вовсе, а шаги идут обычными строками: «→ шаг…» и «✓ шаг · 12 с».
+
+UI_PLAN="2 4 2 5 3"          # сколько шагов в каждом из пяти этапов
+UI_STEP_TOTAL=16             # сумма UI_PLAN; держится сторожевым тестом
+UI_STEP_DONE=0               # закрытых шагов
+UI_STEP_CURRENT=0            # номер идущего шага, 0 — ни одного
+UI_STAGE_NO=0
+UI_STAGE_LEFT=0
+UI_STEP_LABEL=""
+UI_STEP_AT=0
+UI_RUN_AT=0
+UI_TICKER=""
+UI_STICKY=0
+UI_SPIN_N=0
+: "${UI_PROGRESS_TTY:=0}"
+
+ui_now() {
+  date '+%s' 2>/dev/null || echo 0
+}
+
+ui_since() {
+  _ui_from="$1"
+  _ui_sec=$(( $(ui_now) - _ui_from ))
+  [ "$_ui_sec" -lt 0 ] && _ui_sec=0
+  if [ "$_ui_sec" -lt 60 ]; then
+    printf '%s с' "$_ui_sec"
+  else
+    _ui_m=$(( _ui_sec / 60 ))
+    _ui_s=$(( _ui_sec % 60 ))
+    if [ "$_ui_s" -eq 0 ]; then
+      printf '%s м' "$_ui_m"
+    else
+      printf '%s м %s с' "$_ui_m" "$_ui_s"
+    fi
+  fi
+}
+
+ui_clock() {
+  _ui_sec=$(( $(ui_now) - UI_RUN_AT ))
+  [ "$_ui_sec" -lt 0 ] && _ui_sec=0
+  printf '%02d:%02d' $(( _ui_sec / 60 )) $(( _ui_sec % 60 ))
+}
+
+# Шкала: пройденные шаги — залитый квадрат, текущий — обведённый, остальные
+# пустые. Между этапами двойной пробел, чтобы были видны их границы.
+ui_squares() {
+  _ui_idx=0
+  _ui_first_group=1
+  for _ui_count in $UI_PLAN; do
+    [ "$_ui_first_group" -eq 1 ] || printf '  ' >&"$INSTALL_UI_FD"
+    _ui_first_group=0
+    _ui_i=0
+    while [ "$_ui_i" -lt "$_ui_count" ]; do
+      _ui_idx=$(( _ui_idx + 1 ))
+      [ "$_ui_i" -eq 0 ] || printf ' ' >&"$INSTALL_UI_FD"
+      if [ "$_ui_idx" -le "$UI_STEP_DONE" ]; then
+        printf '%b■%b' "$UI_CYAN" "$UI_RESET" >&"$INSTALL_UI_FD"
+      elif [ "$_ui_idx" -eq "$UI_STEP_CURRENT" ]; then
+        printf '%b▣%b' "$UI_YELLOW" "$UI_RESET" >&"$INSTALL_UI_FD"
+      else
+        printf '%b□%b' "$UI_DIM" "$UI_RESET" >&"$INSTALL_UI_FD"
+      fi
+      _ui_i=$(( _ui_i + 1 ))
+    done
+  done
+}
+
+# Кадр спиннера выбирается перебором, а не вырезкой из строки: `cut -c` на
+# роутере считает байты, а не символы, и режет трёхбайтовый символ пополам.
+ui_spin_frame() {
+  case $(( UI_SPIN_N % 10 )) in
+    0) printf '⠋' ;;
+    1) printf '⠙' ;;
+    2) printf '⠹' ;;
+    3) printf '⠸' ;;
+    4) printf '⠼' ;;
+    5) printf '⠴' ;;
+    6) printf '⠦' ;;
+    7) printf '⠧' ;;
+    8) printf '⠇' ;;
+    *) printf '⠏' ;;
+  esac
+}
+
+# Нижний блок: две строки, курсор остаётся в начале первой из них.
+ui_sticky_draw() {
+  [ "$UI_PROGRESS_TTY" -eq 1 ] || return 0
+  [ -n "$UI_STEP_LABEL" ] || return 0
+  UI_SPIN_N=$(( UI_SPIN_N + 1 ))
+  _ui_frame=$(ui_spin_frame)
+  printf '\r\033[K  %b%s%b  %s  %b%s%b\n' \
+    "$UI_CYAN" "$_ui_frame" "$UI_RESET" "$UI_STEP_LABEL" \
+    "$UI_DIM" "$(ui_since "$UI_STEP_AT")" "$UI_RESET" >&"$INSTALL_UI_FD"
+  printf '\033[K  ' >&"$INSTALL_UI_FD"
+  ui_squares
+  printf '  %s/%s  %bэтап %s/5  ·  всего %s%b\033[1A\r' \
+    "$UI_STEP_DONE" "$UI_STEP_TOTAL" \
+    "$UI_DIM" "$UI_STAGE_NO" "$(ui_clock)" "$UI_RESET" >&"$INSTALL_UI_FD"
+  UI_STICKY=1
+}
+
+ui_sticky_clear() {
+  [ "$UI_STICKY" -eq 1 ] || return 0
+  printf '\r\033[K\n\033[K\033[1A\r' >&"$INSTALL_UI_FD"
+  UI_STICKY=0
+}
+
+# Тикер живёт отдельным процессом: пока установщик ждёт долгую команду, сам он
+# ничего нарисовать не может. На время печати обычных строк тикер замораживается
+# сигналом STOP, иначе две руки пишут в один терминал и вывод рвётся.
+ui_ticker_start() {
+  [ "$UI_PROGRESS_TTY" -eq 1 ] || return 0
+  [ -n "$UI_TICKER" ] && return 0
+  UI_TICKER_FILE="${TMPDIR:-/tmp}/xkeen-ui-progress.$$"
+  ui_ticker_loop &
+  UI_TICKER=$!
+}
+
+ui_ticker_loop() {
+  # Второе условие — против осиротевшего тикера: если установщика убили жёстко,
+  # файл-флаг останется, и без этой проверки процесс писал бы в мёртвый терминал.
+  while [ -f "$UI_TICKER_FILE" ] && kill -0 "$UI_OWNER_PID" 2>/dev/null; do
+    ui_sticky_draw
+    sleep 1
+  done
+}
+
+ui_hold() {
+  [ -n "$UI_TICKER" ] && kill -STOP "$UI_TICKER" 2>/dev/null || true
+}
+
+ui_release() {
+  [ -n "$UI_TICKER" ] && kill -CONT "$UI_TICKER" 2>/dev/null || true
+}
+
+# Печать обычной строки: гасим нижний блок, печатаем, рисуем блок заново.
+ui_line() {
+  ui_hold
+  ui_sticky_clear
+  printf '%b\n' "$*" >&"$INSTALL_UI_FD"
+  ui_sticky_draw
+  ui_release
+}
+
+ui_progress_start() {
+  UI_RUN_AT=$(ui_now)
+  UI_OWNER_PID=$$
+  if [ -n "$UI_RESET" ]; then
+    UI_PROGRESS_TTY=1
+  fi
+  if [ "$UI_PROGRESS_TTY" -eq 1 ]; then
+    UI_TICKER_FILE="${TMPDIR:-/tmp}/xkeen-ui-progress.$$"
+    : > "$UI_TICKER_FILE" 2>/dev/null || UI_PROGRESS_TTY=0
+    printf '\033[?25l' >&"$INSTALL_UI_FD"
+  fi
+}
+
+ui_progress_stop() {
+  if [ -n "$UI_TICKER" ]; then
+    kill -CONT "$UI_TICKER" 2>/dev/null || true
+    rm -f "$UI_TICKER_FILE" 2>/dev/null || true
+    kill "$UI_TICKER" 2>/dev/null || true
+    wait "$UI_TICKER" 2>/dev/null || true
+    UI_TICKER=""
+  fi
+  if [ "$UI_PROGRESS_TTY" -eq 1 ]; then
+    ui_sticky_clear
+    printf '\033[?25h' >&"$INSTALL_UI_FD"
+  fi
+  UI_STEP_LABEL=""
+}
+
+# Этап объявляет, сколько в нём шагов: знаменатель шкалы честный, а сторожевой
+# тест следит, чтобы обещание совпадало с числом ui_step внутри этапа.
+ui_stage_plan() {
+  UI_STAGE_NO=$(( UI_STAGE_NO + 1 ))
+  UI_STAGE_LEFT="$1"
+}
+
+ui_step() {
+  UI_STEP_LABEL="$1"
+  UI_STEP_AT=$(ui_now)
+  UI_STEP_CURRENT=$(( UI_STEP_DONE + 1 ))
+  if [ "$UI_PROGRESS_TTY" -eq 1 ]; then
+    ui_ticker_start
+    ui_hold
+    ui_sticky_draw
+    ui_release
+  else
+    printf '      →  %s…\n' "$UI_STEP_LABEL" >&"$INSTALL_UI_FD"
+  fi
+}
+
+ui_step_close() {
+  _ui_mark="$1"
+  _ui_color="$2"
+  _ui_tail="$3"
+  UI_STEP_DONE=$(( UI_STEP_DONE + 1 ))
+  UI_STEP_CURRENT=0
+  ui_hold
+  ui_sticky_clear
+  printf '%b      %s%b  %s  %b%s%b\n' \
+    "$_ui_color" "$_ui_mark" "$UI_RESET" "$UI_STEP_LABEL" \
+    "$UI_DIM" "$_ui_tail" "$UI_RESET" >&"$INSTALL_UI_FD"
+  UI_STEP_LABEL=""
+  ui_release
+}
+
+ui_step_done() {
+  ui_step_close "✓" "$UI_GREEN" "$(ui_since "$UI_STEP_AT")"
+}
+
+ui_step_skip() {
+  ui_step_close "✓" "$UI_DIM" "$1"
+}
+
+ui_step_warn() {
+  ui_step_close "!" "$UI_YELLOW" "$1"
+}
+# --- ui-progress: end ----------------------------------------------------
 
 choose_geodat_option() {
   case "${XKEEN_GEODAT_INSTALL:-}" in
@@ -153,6 +393,7 @@ fail_install() {
 installer_on_exit() {
   INSTALL_STATUS="$1"
   trap - 0
+  ui_progress_stop
   if [ "$INSTALL_STATUS" -ne 0 ] && [ "$INSTALL_FINISHED" -ne 1 ]; then
     ui_error "Установка остановлена"
     if [ -n "$INSTALL_ERROR_HINT" ]; then
@@ -186,6 +427,7 @@ log_install() {
 
 prepare_install_log
 trap 'installer_on_exit $?' 0
+ui_progress_start
 trap 'INSTALL_ERROR_HINT="Операция прервана пользователем."; exit 130' HUP INT TERM
 
 if [ -f "$UI_DIR/app.py" ] || [ -f "$UI_DIR/run_server.py" ]; then
@@ -201,6 +443,8 @@ choose_geodat_option
 choose_happ_option
 printf '\n' >&3
 ui_stage "01/05" "Проверка окружения"
+ui_stage_plan 2
+ui_step "Служба панели и каталоги"
 
 # Never reuse Entware's shared __pycache__. A power loss or interrupted package
 # upgrade can leave a stdlib .pyc truncated; Python then fails before the UI
@@ -267,6 +511,8 @@ if [ -z "$JSONC_DIR" ]; then
 fi
 
 # Определяем архитектуру устройства, чтобы решить, устанавливать ли gevent
+ui_step_done
+ui_step "Модель роутера и архитектура"
 ARCH="$(uname -m 2>/dev/null || echo unknown)"
 WANT_GEVENT=1
 GEVENT_PIP_SPEC="${XKEEN_GEVENT_PIP_SPEC:-gevent}"
@@ -609,11 +855,14 @@ verify_python_package_files() {
   return 0
 }
 
+ui_step_done
 ui_success "Устройство распознано"
 echo "========================================"
 echo "  Xkeen Web UI — УСТАНОВКА"
 echo "========================================"
 ui_stage "02/05" "Подготовка компонентов"
+ui_stage_plan 4
+ui_step "Python 3"
 
 # --- Python3 ---
 
@@ -675,6 +924,8 @@ else
   echo "[*] Архитектура $ARCH: пропускаю установку gevent/gevent-websocket, будет использован HTTP-пулинг."
 fi
 
+ui_step_done
+ui_step "Библиотеки панели"
 if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_GEVENT" -eq 1 ]; then
   ui_info "Настраиваю Python-зависимости панели..."
   echo "[*] Flask и/или gevent не найдены. Пытаюсь установить зависимости через Entware и pip..."
@@ -812,6 +1063,8 @@ echo "[*] Python-зависимости в порядке."
 
 # --- lftp (для файлового менеджера) ---
 
+ui_step_done
+ui_step "Файловый менеджер"
 echo "[*] Проверяю наличие lftp для файлового менеджера..."
 
 if ! command -v lftp >/dev/null 2>&1; then
@@ -847,6 +1100,8 @@ fi
 
 # --- sysmon: утилиты для расширенной диагностики (coreutils-df, procps-ng-free, procps-ng-uptime) ---
 
+ui_step_done
+ui_step "Утилиты системного монитора"
 echo "[*] Проверяю утилиты для системного монитора (sysmon)..."
 
 SYSMON_PKGS=""
@@ -877,6 +1132,7 @@ else
   echo "[*] Утилиты sysmon уже установлены."
 fi
 
+ui_step_done
 ui_success "Системные компоненты готовы"
 
 
@@ -1347,6 +1603,8 @@ PY
 }
 
 ui_stage "03/05" "Настройка панели"
+ui_stage_plan 2
+ui_step "Порт панели"
 
 EXISTING_APP="$UI_DIR/app.py"
 EXISTING_RUN="$UI_DIR/run_server.py"
@@ -1456,6 +1714,8 @@ ui_info "Порт панели: $PANEL_PORT"
 echo "[*] Сохраняю порт панели в $EXISTING_ENV_FILE (XKEEN_UI_PORT=$PANEL_PORT)..."
 write_env_numeric_field "$EXISTING_ENV_FILE" "XKEEN_UI_PORT" "$PANEL_PORT"
 
+ui_step_done
+ui_step "Настройки прошлой установки"
 if [ "$FIRST_INSTALL" = "yes" ]; then
   echo "[*] Первая установка: создаю бэкапы конфигов Xray в $BACKUP_DIR..."
   backup_config_file "$ROUTING_FILE"
@@ -1480,8 +1740,11 @@ fi
 
 # --- Копирование файлов панели ---
 
+ui_step_done
 ui_success "Параметры панели подготовлены"
 ui_stage "04/05" "Установка файлов"
+ui_stage_plan 5
+ui_step "Каталоги и файлы панели"
 echo "[*] Создаю директории..."
 mkdir -p "$UI_DIR" "$INIT_DIR" "$LOG_DIR" "$RUN_DIR" "$BACKUP_DIR" "$JSONC_DIR"
 
@@ -1632,6 +1895,8 @@ if [ -s "$TMP_BUILD" ]; then
   mv -f "$TMP_BUILD" "$UI_DIR/BUILD.json" 2>/dev/null || true
 fi
 
+ui_step_done
+ui_step "Терминал и редактор кода"
 echo "[*] Проверяю наличие локальных файлов xterm для веб-терминала..."
 XTERM_DIR="$UI_DIR/static/xterm"
 XTERM_MISSING=0
@@ -1841,6 +2106,8 @@ cleanup_legacy_xray_templates
 
 # --- Шаблоны Mihomo ---
 
+ui_step_done
+ui_step "Шаблоны Mihomo и Xray"
 if [ -d "$SRC_MIHOMO_TEMPLATES" ]; then
   echo "[*] Устанавливаю шаблон Mihomo в $MIHOMO_TEMPLATES_DIR..."
   mkdir -p "$MIHOMO_TEMPLATES_DIR"
@@ -1889,6 +2156,8 @@ sync_bundled_template_dir "$SRC_XRAY_OBSERVATORY_TEMPLATES" "$XRAY_OBSERVATORY_T
 # Панель, в свою очередь, хранит/обновляет DAT по умолчанию в $XRAY_DAT_DIR.
 # Чтобы не заставлять пользователя переносить файлы вручную — создаём symlink в $XRAY_BIN_DIR.
 
+ui_step_done
+ui_step "Списки GeoIP и GeoSite"
 if [ -d "$XRAY_DAT_DIR" ] && [ -d "$XRAY_BIN_DIR" ]; then
   echo "[*] Xray DAT: создаю symlink *.dat из $XRAY_DAT_DIR в $XRAY_BIN_DIR (для ext:... )"
   for f in "$XRAY_DAT_DIR"/*.dat; do
@@ -1959,6 +2228,8 @@ fi
 RUN_SERVER="$UI_DIR/run_server.py"
 APP_FILE="$UI_DIR/app.py"
 
+ui_step_done
+ui_step "Порт в файлах панели"
 echo "[*] Обновляю порт в run_server.py / app.py..."
 UPDATED=0
 
@@ -2025,8 +2296,11 @@ fi
 
 # --- Init-скрипт ---
 
+ui_step_done
 ui_success "Основные файлы установлены"
 ui_stage "05/05" "Запуск и проверка"
+ui_stage_plan 3
+ui_step "Служба автозапуска"
 echo "[*] Создаю init-скрипт $INIT_SCRIPT..."
 
 cat > "$INIT_SCRIPT" << 'EOF'
@@ -2281,12 +2555,15 @@ if [ "$INIT_SCRIPT" != "$LEGACY_INIT_SCRIPT" ] && [ -e "$LEGACY_INIT_SCRIPT" ] &
   rm -f "$LEGACY_INIT_SCRIPT" 2>/dev/null || true
 fi
 
+ui_step_done
+ui_step "Запуск сервиса"
 echo "[*] Запускаю сервис..."
 if ! "$INIT_SCRIPT" restart 3>&- || ! "$INIT_SCRIPT" status 3>&-; then
   fail_install "Сервис Xkeen UI не запустился. Проверьте журнал запуска панели."
 fi
 
 log_install "[=] Итог установки:"
+ui_step_done
 if [ "$WS_VERDICT" = "on" ]; then
   log_install "[=] WebSocket: ВКЛ — доступен полноценный терминал (PTY) и потоковые логи Xray."
 else
@@ -2301,6 +2578,7 @@ log_install "[=] Подробности установки: $INSTALL_LOG"
 INSTALL_SRC_DIR="$SRC_DIR"
 INSTALL_PARENT_DIR="$(dirname "$INSTALL_SRC_DIR")"
 
+ui_step "Уборка установочных файлов"
 echo "[*] Очищаю установочные файлы..."
 
 if [ -n "$INSTALL_PARENT_DIR" ] && [ -d "$INSTALL_PARENT_DIR" ]; then
@@ -2317,6 +2595,8 @@ if [ "$INSTALL_SRC_DIR" != "$UI_DIR" ] && [ -d "$INSTALL_SRC_DIR" ]; then
   rm -rf "$INSTALL_SRC_DIR" || echo "[!] Не удалось удалить директорию $INSTALL_SRC_DIR"
 fi
 
+ui_step_done
+ui_progress_stop
 PANEL_IP="$(ip -4 addr show br0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/p' | head -n 1 || true)"
 [ -n "$PANEL_IP" ] || PANEL_IP="<IP_роутера>"
 PANEL_URL="http://${PANEL_IP}:${PANEL_PORT}/"
