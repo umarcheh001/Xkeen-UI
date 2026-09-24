@@ -1623,6 +1623,51 @@ def _managed_fragment(
     }
 
 
+def migrate_managed_fragment(*, configs_dir: str) -> Dict[str, Any]:
+    """Bring the fragment on disk to the form the current cores accept.
+
+    The panel used to write the route of the pass-through as ``proxySettings``.
+    A core updated to 26.9 refuses that outright and does not start at all --
+    and with no running Xray :func:`apply_action` refuses every request, so the
+    owner can neither switch the feature off nor on.  Waiting for the guard to
+    hand DNS back works, but it costs minutes of dead resolution and leaves the
+    feature off.  So the repair happens here: at startup, without the core, and
+    without asking.
+
+    The running core is not restarted.  It keeps serving from the configuration
+    it already loaded, and the corrected file is what it reads next time --
+    including the restart the guard is about to attempt when the core is down.
+    """
+    managed_path = os.path.join(configs_dir, MANAGED_FRAGMENT)
+    if not os.path.isfile(managed_path):
+        return {"action": "absent"}
+    fragment = _read_json(managed_path, None)
+    outbounds = (fragment or {}).get("outbounds") if isinstance(fragment, dict) else None
+    first = next(iter(outbounds or []), None)
+    # Only our own DNS outbound is rewritten.  ``proxySettings`` on anything
+    # else belongs to whoever wrote it.
+    if not isinstance(first, dict) or _clean_tag(first.get("tag")) != DNS_OUT_TAG:
+        return {"action": "idle"}
+    if first.get("protocol") != "dns" or not isinstance(first.get("proxySettings"), dict):
+        return {"action": "idle"}
+
+    node = _clean_tag(first["proxySettings"].get("tag"))
+    first.pop("proxySettings", None)
+    stream = first.get("streamSettings")
+    stream = stream if isinstance(stream, dict) else {}
+    sockopt = stream.get("sockopt")
+    sockopt = sockopt if isinstance(sockopt, dict) else {}
+    # A fragment carrying both spellings keeps the one the core still reads.
+    if node and not _clean_tag(sockopt.get("dialerProxy")):
+        sockopt["dialerProxy"] = node
+    if sockopt:
+        stream["sockopt"] = sockopt
+    if stream:
+        first["streamSettings"] = stream
+    _atomic_write_json(managed_path, fragment)
+    return {"action": "migrated", "node": node}
+
+
 def _owned_rule(rule: Any) -> bool:
     return isinstance(rule, dict) and _clean_tag(rule.get("ruleTag")) in {
         PROXY_RULE_TAG,
@@ -3290,11 +3335,27 @@ def apply_action(
                 code="dns_override_unknown",
                 details=detail,
             )
-        if detect_running_core() != "xray":
-            raise DnsOverVlessError(
-                "DNS-over-VLESS можно менять только при активном ядре Xray.",
-                code="xray_not_active",
-            )
+        running = detect_running_core()
+        if running != "xray":
+            # Switching off is allowed with no core running at all.  Any bad
+            # config brings Xray down, and clearing this setting is the one
+            # action able to remove the config keeping it down -- refusing it
+            # here locked the owner out exactly when it mattered, until the
+            # guard ran out of restarts and released DNS on its own.  Another
+            # core actually running is a different matter: its own protection
+            # may hold port 53, and the guard releases that case by itself.
+            unlocked = normalized == "disable" and not running and bool(_xray_binary())
+            if not unlocked:
+                if running:
+                    message = "DNS-over-VLESS можно менять только при активном ядре Xray."
+                elif normalized == "enable":
+                    message = (
+                        "Xray сейчас не запущен, включать DNS-over-VLESS нечем. "
+                        "Выключить настройку можно и без запущенного ядра."
+                    )
+                else:
+                    message = "Ядро Xray не найдено, снимать настройку нечем."
+                raise DnsOverVlessError(message, code="xray_not_active")
 
         routing, _raw = _read_routing_with_raw(routing_file)
         runtime = _collect_runtime(configs_dir, routing)

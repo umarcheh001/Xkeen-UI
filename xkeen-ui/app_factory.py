@@ -721,6 +721,38 @@ def create_app(*, ws_runtime: bool = False):
             pass
 
     try:
+        from services.dns_over_vless import migrate_managed_fragment
+
+        # Ahead of the guard on purpose: a fragment still written the way the
+        # core dropped in 26.9 keeps Xray from starting at all, and a core that
+        # is down leaves the panel refusing every action -- the owner can then
+        # neither switch the feature off nor on.  Corrected here, the restart
+        # the guard is about to attempt brings the core back instead of ending
+        # in the release that hands DNS back and leaves the feature off.
+        repaired = migrate_managed_fragment(configs_dir=XRAY_CONFIGS_DIR)
+        if repaired.get("action") == "migrated":
+            from core.logging import core_log_once
+
+            core_log_once(
+                "info",
+                "dns_over_vless_fragment_migrated",
+                "DNS-over-VLESS fragment rewritten to the form current cores accept",
+                node=str(repaired.get("node") or ""),
+            )
+    except Exception as e:  # noqa: BLE001
+        try:
+            from core.logging import core_log_once
+
+            core_log_once(
+                "warning",
+                "dns_over_vless_migration_failed",
+                "dns-over-vless fragment migration failed (non-fatal)",
+                error=str(e),
+            )
+        except Exception:
+            pass
+
+    try:
         from services.dns_guard import start_guard as start_dns_guard
 
         # One guard for both assistants: whichever of them currently owns port

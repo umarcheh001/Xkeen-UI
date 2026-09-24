@@ -2922,6 +2922,175 @@ def test_an_unmarked_install_still_gets_a_plain_dns_outbound(tmp_path: Path):
     }
 
 
+def _core_is_down(monkeypatch) -> None:
+    """No core process at all -- what a config the core refuses looks like."""
+    monkeypatch.setattr(dns, "detect_running_core", lambda: None)
+    monkeypatch.setattr(dns, "_xray_binary", lambda: "/opt/sbin/xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda **_k: True)
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(
+        dns,
+        "_write_routing_preserving_comments",
+        lambda path, obj, **_kwargs: _write(Path(path), obj),
+    )
+
+
+def test_the_feature_can_be_switched_off_while_the_core_is_down(tmp_path: Path, monkeypatch):
+    """A core that refuses to start must not lock the owner out.
+
+    Any bad config brings Xray down, and the panel keyed every action to a
+    running process -- so the one setting that could clear the bad config was
+    refused precisely when it was needed.  Switching off is safe with the core
+    down: it is what the guard does by itself once its restarts run out.
+    """
+    configs, routing_path, state = _base_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    target = dns._select_target(dns._collect_runtime(str(configs), routing), "proxy")
+    _write(configs / dns.MANAGED_FRAGMENT, dns._managed_fragment())
+    _write(routing_path, dns._build_enabled_routing(routing, target))
+    _write(state / dns.STATE_FILENAME, {"enabled": True, "original_dns_override": False})
+    _core_is_down(monkeypatch)
+
+    dns.apply_action(
+        "disable",
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+    )
+
+    assert not (configs / dns.MANAGED_FRAGMENT).exists()
+    assert json.loads((state / dns.STATE_FILENAME).read_text(encoding="utf-8"))["enabled"] is False
+
+
+def test_switching_on_still_needs_a_core_that_runs(tmp_path: Path, monkeypatch):
+    """Turning the feature on with no core is writing a config nobody reads."""
+    configs, routing_path, state = _base_config(tmp_path)
+    _core_is_down(monkeypatch)
+
+    with pytest.raises(dns.DnsOverVlessError) as exc:
+        dns.apply_action(
+            "enable",
+            configs_dir=str(configs),
+            routing_file=str(routing_path),
+            ui_state_dir=str(state),
+            restart_xkeen=lambda **_k: True,
+            target_tag="proxy",
+        )
+
+    assert exc.value.code == "xray_not_active"
+
+
+def test_another_core_at_the_wheel_still_blocks_both_actions(tmp_path: Path, monkeypatch):
+    """Mihomo running is a deliberate switch, not an outage.
+
+    Its own DNS protection may hold port 53, and undoing the Xray setting from
+    here would reach into it.  The guard releases that case by itself.
+    """
+    configs, routing_path, state = _base_config(tmp_path)
+    _write(state / dns.STATE_FILENAME, {"enabled": True, "original_dns_override": False})
+    _core_is_down(monkeypatch)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "mihomo")
+
+    with pytest.raises(dns.DnsOverVlessError) as exc:
+        dns.apply_action(
+            "disable",
+            configs_dir=str(configs),
+            routing_file=str(routing_path),
+            ui_state_dir=str(state),
+            restart_xkeen=lambda **_k: True,
+        )
+
+    assert exc.value.code == "xray_not_active"
+
+
+def test_the_repair_is_wired_into_startup_ahead_of_the_guard():
+    """Where the repair is called from decides whether it helps at all.
+
+    The owner who needs it is exactly the one who never opens the window, so
+    the call cannot live in the status path.  It also has to run before the
+    guard: with the fragment already corrected, the restart the guard attempts
+    brings the core back up instead of ending in the release that switches the
+    feature off.
+    """
+    text = Path("xkeen-ui/app_factory.py").read_text(encoding="utf-8")
+
+    assert "migrate_managed_fragment(" in text
+    assert text.index("migrate_managed_fragment(") < text.index("start_dns_guard(")
+
+
+def test_the_fragment_on_disk_is_brought_to_the_new_form_without_the_core(tmp_path: Path):
+    """The panel repairs its own fragment at startup, with the core down.
+
+    A core updated to 26.9 refuses the old spelling and does not start at all,
+    and with no running Xray the panel refuses every action -- so the owner can
+    neither switch the feature off nor on.  The repair therefore has to happen
+    on its own, without the core and without asking.
+    """
+    configs = tmp_path / "configs"
+    configs.mkdir()
+    fragment = dns._managed_fragment(pass_node="my_proxy_1", mark=255)
+    outbound = fragment["outbounds"][0]
+    outbound["proxySettings"] = {"tag": outbound["streamSettings"]["sockopt"].pop("dialerProxy")}
+    _write(configs / dns.MANAGED_FRAGMENT, fragment)
+
+    result = dns.migrate_managed_fragment(configs_dir=str(configs))
+
+    assert result["action"] == "migrated"
+    saved = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+    assert saved == dns._managed_fragment(pass_node="my_proxy_1", mark=255)
+    # The mark has to survive: an unmarked DNS outbound turns Entware proxying
+    # off for the whole install.
+    assert saved["outbounds"][0]["streamSettings"]["sockopt"]["mark"] == 255
+
+
+def test_a_fragment_already_in_the_new_form_is_left_alone(tmp_path: Path):
+    """Nothing to repair means nothing written: the file keeps its timestamp."""
+    configs = tmp_path / "configs"
+    configs.mkdir()
+    path = configs / dns.MANAGED_FRAGMENT
+    _write(path, dns._managed_fragment(pass_node="my_proxy_1", mark=255))
+    before = path.stat().st_mtime_ns
+
+    result = dns.migrate_managed_fragment(configs_dir=str(configs))
+
+    assert result["action"] == "idle"
+    assert path.stat().st_mtime_ns == before
+
+
+def test_the_repair_keeps_its_hands_off_somebody_elses_outbound(tmp_path: Path):
+    """``proxySettings`` elsewhere is not this panel's to rewrite."""
+    configs = tmp_path / "configs"
+    configs.mkdir()
+    path = configs / dns.MANAGED_FRAGMENT
+    alien = {
+        "outbounds": [
+            {
+                "tag": "someone-elses",
+                "protocol": "vless",
+                "proxySettings": {"tag": "my_proxy_1"},
+            }
+        ]
+    }
+    _write(path, alien)
+
+    result = dns.migrate_managed_fragment(configs_dir=str(configs))
+
+    assert result["action"] == "idle"
+    assert json.loads(path.read_text(encoding="utf-8")) == alien
+
+
+def test_a_missing_fragment_is_not_an_error(tmp_path: Path):
+    """Most installs have no fragment at all -- the repair stays quiet."""
+    configs = tmp_path / "configs"
+    configs.mkdir()
+
+    assert dns.migrate_managed_fragment(configs_dir=str(configs))["action"] == "absent"
+
+
 def test_the_pass_through_route_is_written_as_a_dialer_proxy():
     """`proxySettings` is gone from the core; `dialerProxy` takes its place.
 
