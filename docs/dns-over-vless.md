@@ -408,9 +408,17 @@ DNS, целится в осмысленный адрес, и всё работа
 | --- | --- | --- |
 | Локальные | `lan`, `local`, `home`, `home.arpa`, `internal`, `localdomain` | не делегированы в интернете |
 | Обратные приватные | `10.in-addr.arpa`, `168.192.in-addr.arpa`, `254.169.in-addr.arpa`, `d.f.ip6.arpa`, `8.e.f.ip6.arpa` | PTR о приватном адресе рассказал бы публичному резолверу о сети |
-| Keenetic | `keenetic.net`, `keenetic.io`, `keenetic.pro`, `keenetic.name`, `keenetic.link` | вход в веб-интерфейс, редирект с `my.keenetic.net`, имена KeenDNS |
-| Netcraze | `netcraze.net`, `netcraze.pro` | вход в веб-интерфейс, имена CrazeDNS |
+| Keenetic | `keenetic.pro`, `keenetic.name`, `keenetic.link`, `keenetic.io`, `mykeenetic.com`, `mykeenetic.net`, `keenetic.net` | имена KeenDNS, редирект с `my.keenetic.net` |
+| Netcraze | `netcraze.pro`, `netcraze.io`, `netcraze.link`, `netcraze.club`, `crazedns.ru`, `mykeenetic.ru`, `netcraze.net` | имена CrazeDNS, сайт вендора для обновлений |
 | 172.16/12 | шестнадцать зон `16.172.in-addr.arpa` … `31.172.in-addr.arpa` | не в дефолте: дома редок, чаще Docker и корпоративные сети |
+
+Состав вендорских наборов проверен делегированием, а не по бренду в имени: зона
+бронирования — та, чьи NS ведут на серверы KeenDNS (`ndns*.knt9.xyz` у Keenetic,
+`ndns*.omni.ru` у Netcraze). `keenetic.io` своих NS наружу не отдаёт, но её SOA — той же
+формы, что у остальных зон бронирования (`ns.<зона>` / `admin.ns.<зона>`, таймеры
+`90 60 8640 60`), поэтому она в наборе. А `keenetic.ru`, `keenetic.com`, `netcraze.ru`,
+`netcraze.com` и `netcraze.name` — обычные домены на `nic.ru`, `ks*.knt9` и ClouDNS:
+имена в них роутер не раздаёт, и уводить их на резолвер прошивки незачем.
 
 Запись без префикса дополняется до `domain:`. Это не косметика: в Xray голая строка
 ищется как подстрока, поэтому зона `lan` совпала бы и с `atlantic.com`. Явные `full:`,

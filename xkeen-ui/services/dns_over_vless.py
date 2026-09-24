@@ -115,6 +115,10 @@ KEENETIC_ZONES = [
     "domain:keenetic.pro",
     "domain:keenetic.name",
     "domain:keenetic.link",
+    # Same KeenDNS servers, but the zone publishes no NS of its own: what it
+    # does answer is a SOA in the KeenDNS shape the booking zones share
+    # (``ns.<zone>`` / ``admin.ns.<zone>``, timers 90 60 8640 60).
+    "domain:keenetic.io",
     "domain:mykeenetic.com",
     "domain:mykeenetic.net",
     # Not a booking zone: my.keenetic.net is the name the box redirects to
@@ -126,6 +130,7 @@ NETCRAZE_ZONES = [
     "domain:netcraze.pro",
     "domain:netcraze.io",
     "domain:netcraze.link",
+    "domain:netcraze.club",
     "domain:crazedns.ru",
     "domain:mykeenetic.ru",
     # The vendor's own site: kept because the router talks to it for firmware

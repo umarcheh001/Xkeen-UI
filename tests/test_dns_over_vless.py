@@ -1730,6 +1730,23 @@ def test_default_zones_are_local_by_definition_plus_vendor_zones():
     assert dns.ZONE_PRESETS["ptr172"] == dns.PTR_172_ZONES
 
 
+def test_vendor_presets_carry_every_booking_zone():
+    # Checked by delegation, not by guesswork: a booking zone is the one whose
+    # NS records point at the vendor's KeenDNS servers -- ndns*.knt9.xyz on the
+    # Keenetic side, ndns*.omni.ru on the Netcraze one.  keenetic.io publishes
+    # no NS of its own, but its SOA carries the same KeenDNS shape as the rest
+    # (ns.<zone> / admin.ns.<zone>, timers 90 60 8640 60).
+    for zone in ("keenetic.pro", "keenetic.name", "keenetic.link", "keenetic.io"):
+        assert f"domain:{zone}" in dns.KEENETIC_ZONES
+    for zone in ("netcraze.pro", "netcraze.io", "netcraze.link", "netcraze.club", "crazedns.ru"):
+        assert f"domain:{zone}" in dns.NETCRAZE_ZONES
+
+    # Brand domains parked at nic.ru or ClouDNS are not KeenDNS and have no
+    # business being answered by the firmware resolver.
+    for zone in ("keenetic.ru", "keenetic.com", "netcraze.ru", "netcraze.com", "netcraze.name"):
+        assert f"domain:{zone}" not in dns.DEFAULT_LOCAL_DOMAINS
+
+
 def test_status_offers_the_zone_presets(tmp_path: Path, monkeypatch):
     configs, routing_path, state = _scenario_config(tmp_path)
     monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
