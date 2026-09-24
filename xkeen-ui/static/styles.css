@@ -19852,7 +19852,6 @@ html[data-theme="light"] .routing-dns-over-vless-route-fallback[data-state="fail
 .routing-dns-over-vless-clients-list li > b { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .routing-dns-over-vless-clients-pick { flex: none; margin: 0; cursor: pointer; }
 .routing-dns-over-vless-clients-pick:disabled { cursor: not-allowed; }
-.routing-dns-over-vless-capture-toggle { margin-top: 4px; }
 .routing-dns-over-vless-capture-cost { border-left: 3px solid #f59e0b; padding-left: 10px; }
 /* Панель сняла правило сама -- об этом нужно сказать так, чтобы человек это
    увидел, а не обнаружил потом по пропавшей галочке. */

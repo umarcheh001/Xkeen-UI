@@ -377,7 +377,7 @@ test('an unreadable device list is admitted instead of passing for success', asy
 });
 
 
-test('devices are ticked one by one and only with the switch on', async ({ page }) => {
+test('devices are ticked one by one, with no switch standing in the way', async ({ page }) => {
   const status = { ...STATUS, capture_clients: false, capture_macs: [] };
   await routeClients(page, CLIENTS);
   await openDialog(page, status);
@@ -387,12 +387,10 @@ test('devices are ticked one by one and only with the switch on', async ({ page 
   // Отмечать можно только тех, у кого DNS забирает политика: ноутбук доходит
   // и без правила, галочки у него нет.
   await expect(picks).toHaveCount(2);
-  // Пока переключатель выключен, цепочки нет вовсе — и галочки не трогаются.
-  await expect(picks.first()).toBeDisabled();
-
-  const toggle = page.locator('#routing-dns-over-vless-capture');
-  await toggle.check({ force: true });
+  // Галочка и есть согласие: отдельного переключателя перед ней больше нет,
+  // и ради единственного сценария этого окна щёлкать нечего.
   await expect(picks.first()).toBeEnabled();
+  await expect(page.locator('#routing-dns-over-vless-capture')).toHaveCount(0);
 
   const phone = page.locator('#routing-dns-over-vless-clients-list li', { hasText: 'Телефон' });
   // Адрес резолвера прошивки в строке не называется. Совет вписать его нужен
@@ -462,7 +460,6 @@ test('with the feature on, the window still shows what the router holds', async 
     capture_macs: ['aa:bb:cc:dd:ee:02'],
   });
 
-  await expect(page.locator('#routing-dns-over-vless-capture')).toBeChecked();
   await expect(page.locator('#routing-dns-over-vless-remote')).toBeChecked();
   await expect(page.locator('#routing-dns-over-vless-upstreams')).toHaveValue('127.0.0.53');
 
@@ -505,7 +502,6 @@ test('the reset button clears the window without touching the router', async ({ 
   // начать с чистого листа.
   await expect(upstreams).toHaveValue('8.8.8.8');
   await expect(remote).not.toBeChecked();
-  await expect(page.locator('#routing-dns-over-vless-capture')).not.toBeChecked();
   await expect(phone.locator('.routing-dns-over-vless-clients-pick')).not.toBeChecked();
   // Роутер при этом не трогаем: сброс — это только поля окна.
   expect(posted).toBe(0);
@@ -580,12 +576,10 @@ test('a rule taken away is announced, not just quietly gone', async ({ page }) =
   await expect(note).toBeVisible();
   await expect(note).toContainText('Ноутбук');
   await expect(note).toContainText('не состоит в политике доступа');
-  // Список опустел вместе с правилом, и переключатель обещать больше нечего.
-  await expect(page.locator('#routing-dns-over-vless-capture')).not.toBeChecked();
+  // Список опустел вместе с правилом: отмеченных устройств не осталось.
+  await expect(page.locator('.routing-dns-over-vless-clients-pick:checked')).toHaveCount(0);
 
   // И главное: снятое правило не возвращается ближайшим применением.
-  const toggle = page.locator('#routing-dns-over-vless-capture');
-  await toggle.check({ force: true });
   const phone = page.locator('#routing-dns-over-vless-clients-list li', { hasText: 'Телефон' });
   await phone.locator('.routing-dns-over-vless-clients-pick').check({ force: true });
 
@@ -676,6 +670,45 @@ test('a changed choice offers its own applying, without touching the protection'
   // Включение защиты — дорогая операция с перезапуском ядра, и выбор
   // устройств её не задевает: подтверждения об этом не спрашивают.
   await expect(page.locator('#confirm-modal')).toHaveClass(/hidden/);
+});
+
+
+test('unticking the last device turns the capture off by itself', async ({ page }) => {
+  await routeClients(page, CLIENTS_LIVE);
+  await openDialog(page, STATUS_LIVE);
+  await openZone(page, 'devices');
+
+  const camera = page.locator('#routing-dns-over-vless-clients-list li', { hasText: 'Камера' });
+  await camera.locator('.routing-dns-over-vless-clients-pick').uncheck({ force: true });
+
+  let sent = null;
+  await page.route('**/api/routing/dns-over-vless', async (route) => {
+    if (route.request().method() === 'POST') {
+      sent = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          applied: true,
+          added: [],
+          removed: ['aa:bb:cc:dd:ee:03'],
+          capture_macs: [],
+          capture_clients: false,
+        }),
+      });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(STATUS_LIVE) });
+  });
+
+  await page.locator('#routing-dns-over-vless-clients-apply').click();
+
+  // Пустой выбор и есть выключенный захват: отдельного переключателя, который
+  // пришлось бы гасить следом, в окне нет.
+  await expect.poll(() => sent && sent.action).toBe('capture');
+  expect(sent.capture_clients).toBe(false);
+  expect(sent.capture_macs).toEqual([]);
 });
 
 

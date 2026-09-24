@@ -18,7 +18,7 @@ IDS = (
     "multi", "multi-row", "upstreams", "remote", "local", "zones", "zones-row",
     "zone-presets", "direct", "direct-zones", "direct-zones-row",
     "direct-from-rules", "pass", "pass-row", "pass-node", "pass-health",
-    "clients", "clients-summary", "clients-list", "capture", "reset",
+    "clients", "clients-summary", "clients-list", "reset",
 )
 
 
@@ -78,11 +78,21 @@ def test_zones_live_in_two_rails():
 
 
 def test_section_switches_sit_in_the_subheader():
-    for zone, switch in (("records", "pass"), ("devices", "capture")):
-        start = MODAL.index(f'data-zone="{zone}"')
-        head = MODAL[start:MODAL.index("</summary>", start)]
-        assert f'id="routing-dns-over-vless-{switch}"' in head, zone
-        assert "xk-switch-bare" in head, zone
+    start = MODAL.index('data-zone="records"')
+    head = MODAL[start:MODAL.index("</summary>", start)]
+    assert 'id="routing-dns-over-vless-pass"' in head
+    assert "xk-switch-bare" in head
+
+
+def test_devices_zone_has_no_switch_over_the_ticks():
+    # Переключатель тут стоял и гасил галочки, пока его не включат, -- лишний
+    # шаг перед единственным действием, ради которого окно и открывают.
+    # Отмеченное устройство и есть согласие; пустой выбор означает, что захвата
+    # нет.
+    start = MODAL.index('data-zone="devices"')
+    head = MODAL[start:MODAL.index("</summary>", start)]
+    assert "dt-switch" not in head
+    assert "capture" not in head
 
 
 def test_flag_switch_is_bare_too():

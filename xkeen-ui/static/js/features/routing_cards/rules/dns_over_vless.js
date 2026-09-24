@@ -62,7 +62,6 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     clientsActionsWhy: 'routing-dns-over-vless-clients-actions-why',
     clientsApply: 'routing-dns-over-vless-clients-apply',
     clientsCancel: 'routing-dns-over-vless-clients-cancel',
-    capture: 'routing-dns-over-vless-capture',
     reset: 'routing-dns-over-vless-reset',
     lockedNote: 'routing-dns-over-vless-locked-note',
   };
@@ -77,6 +76,9 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   // экране: список перечитывается сам по себе, а выбор должен пережить
   // и перечитывание, и уход устройства из сети.
   let capturedMacs = [];
+  // Тронутый выбор не затирается ответом сервера -- то же, что dataset.touched
+  // у полей окна; у галочек самих по себе такого места для отметки нет.
+  let capturedTouched = false;
   // Что реально стоит в цепочке роутера -- с этим и сравнивается выбор:
   // сохранённый список пережил бы перестройку цепочек прошивкой, а рассказ
   // окна должен идти от firewall, а не от намерений.
@@ -163,13 +165,11 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       // otherwise would pin a choice the user cannot see.
       if (pass.checked && node && node.value) settings.pass_non_ip_node = node.value;
     }
-    const capture = $(DOM.capture);
-    if (capture) {
-      settings.capture_clients = !!capture.checked;
-      // Список шлём всегда: снятая галочка при выключенном переключателе
-      // должна запомниться, а не потеряться до следующего включения.
-      settings.capture_macs = capturedMacs.slice();
-    }
+    // Отмеченное устройство и есть согласие на правило в firewall: отдельного
+    // переключателя перед галочками нет, и пустой выбор означает выключённый
+    // захват. Список шлём всегда -- снятая галочка должна запомниться.
+    settings.capture_clients = !!capturedMacs.length;
+    settings.capture_macs = capturedMacs.slice();
     return settings;
   }
 
@@ -181,8 +181,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     // только при включении, и слать их отсюда значило бы применить незаметно
     // то, чего человек не просил.
     if (action === 'capture') {
-      const capture = $(DOM.capture);
-      payload.capture_clients = !!(capture && capture.checked);
+      payload.capture_clients = !!capturedMacs.length;
       payload.capture_macs = capturedMacs.slice();
     }
     const client = http();
@@ -491,7 +490,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const note = $(DOM.lockedNote);
     if (note) note.classList.toggle('hidden', !fieldsLocked);
     const ids = [DOM.upstreams, DOM.remote, DOM.firmware, DOM.local, DOM.zones, DOM.direct,
-      DOM.directZones, DOM.pass, DOM.passNode, DOM.capture];
+      DOM.directZones, DOM.pass, DOM.passNode];
     for (let i = 0; i < ids.length; i += 1) {
       const field = $(ids[i]);
       if (field) field.disabled = fieldsLocked || busy;
@@ -559,14 +558,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       if (!remote.dataset.touched) remote.checked = !!(data && data.upstreams_remote);
       remote.disabled = busy || fieldsLocked;
     }
-    const capture = $(DOM.capture);
-    if (capture) {
-      if (!capture.dataset.touched) {
-        capture.checked = !!(data && data.capture_clients);
-        capturedMacs = ((data && data.capture_macs) || []).slice();
-      }
-      capture.disabled = busy || fieldsLocked;
-    }
+    if (!capturedTouched) capturedMacs = ((data && data.capture_macs) || []).slice();
     const pass = $(DOM.pass);
     const passRow = $(DOM.passRow);
     const passNode = $(DOM.passNode);
@@ -1331,7 +1323,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       field.value = value;
       field.dataset.touched = '1';
     });
-    [DOM.remote, DOM.pass, DOM.capture, DOM.multi].forEach((id) => {
+    [DOM.remote, DOM.pass, DOM.multi].forEach((id) => {
       const box = $(id);
       if (!box) return;
       box.checked = false;
@@ -1347,6 +1339,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const node = $(DOM.passNode);
     if (node) delete node.dataset.touched;
     capturedMacs = [];
+    capturedTouched = true;
     // Маршрут тоже возвращается к тому, что панель предложила бы сама.
     chosenTargets = [];
     targetsTouched = false;
@@ -1561,12 +1554,13 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     // переставал обновляться с сервера, даже после переоткрытия окна.
     [
       DOM.upstreams, DOM.local, DOM.firmware, DOM.zones, DOM.direct, DOM.directZones,
-      DOM.remote, DOM.pass, DOM.passNode, DOM.capture, DOM.multi,
+      DOM.remote, DOM.pass, DOM.passNode, DOM.multi,
     ].forEach((id) => {
       const field = $(id);
       if (field) delete field.dataset.touched;
     });
     capturedMacs = [];
+    capturedTouched = false;
     lastClients = null;
     const text = $(DOM.status);
     const badge = $(DOM.badge);
@@ -1603,8 +1597,6 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       const at = capturedMacs.indexOf(item.mac);
       if (at !== -1) capturedMacs.splice(at, 1);
     });
-    const capture = $(DOM.capture);
-    if (capture && !capturedMacs.length && !capture.dataset.touched) capture.checked = false;
   }
 
   // Выбор устройств применяется сам по себе: цепочка уже стоит, меняются
@@ -1710,8 +1702,6 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       if (a.active !== b.active) return a.active ? -1 : 1;
       return String(a.title || '').localeCompare(String(b.title || ''), 'ru');
     });
-    const capture = $(DOM.capture);
-    const capturing = !!(capture && capture.checked);
     clients.forEach((item) => {
       const row = document.createElement('li');
       row.dataset.verdict = item.verdict || 'unknown';
@@ -1723,16 +1713,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         pick.type = 'checkbox';
         pick.className = 'routing-dns-over-vless-clients-pick';
         pick.checked = capturedMacs.indexOf(item.mac) !== -1;
-        pick.disabled = busy || !capturing;
-        pick.title = capturing
-          ? 'Завести DNS этого устройства в туннель'
-          : 'Сначала включите переключатель ниже';
+        pick.disabled = busy;
+        pick.title = 'Завести DNS этого устройства в туннель';
         pick.setAttribute('aria-label', `Завести DNS: ${item.title || item.mac}`);
         pick.addEventListener('change', () => {
           const at = capturedMacs.indexOf(item.mac);
           if (pick.checked && at === -1) capturedMacs.push(item.mac);
           if (!pick.checked && at !== -1) capturedMacs.splice(at, 1);
-          if (capture) capture.dataset.touched = '1';
+          capturedTouched = true;
           renderCaptureActions();
         });
         title.appendChild(pick);
@@ -1789,13 +1777,11 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     busy = true;
     renderCaptureActions();
     try {
-      const capture = $(DOM.capture);
-      const result = await postAction('capture', []);
+      await postAction('capture', []);
       const names = added.concat(removed).map(nameOf).join(', ');
       if (added.length && !removed.length) toast(`Правило поставлено: ${names}`);
       else if (removed.length && !added.length) toast(`Правило снято: ${names}`);
       else toast('Выбор устройств применён.');
-      if (capture && result && result.capture_clients === false) capture.checked = false;
     } catch (error) {
       const data = error && error.data ? error.data : null;
       toast(String((data && data.error) || (error && error.message) || 'Выбор применить не удалось.'), true);
@@ -2007,17 +1993,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         // Возврат к тому, что стоит на роутере: снимать галочки вручную по
         // одной человек догадываться не обязан.
         capturedMacs = appliedMacs.slice();
+        capturedTouched = true;
         if (lastClients) renderClients(lastClients);
-      });
-    }
-    const captureBox = $(DOM.capture);
-    if (captureBox) {
-      captureBox.addEventListener('change', () => {
-        captureBox.dataset.touched = '1';
-        // Галочки у устройств живут только при включённом переключателе:
-        // перерисуем список, чтобы это было видно, а не только на словах.
-        if (lastClients) renderClients(lastClients);
-        renderCaptureActions();
       });
     }
     const multiBox = $(DOM.multi);
@@ -2036,7 +2013,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     // в разметке; остаются крестик, «Отмена» и Escape.
     // Клик по переключателю в подшапке меняет настройку, а не сворачивает зону.
     // <summary> сворачивает <details> от клика в любом своём месте, а
-    // переключатели зон records/devices сидят внутри него.
+    // переключатель зоны records сидит внутри него.
     document.addEventListener('click', (event) => {
       const target = event.target;
       if (!target || !target.closest) return;
