@@ -531,7 +531,7 @@ def test_a_rule_that_cannot_be_put_back_is_reported_not_swallowed(monkeypatch):
 def test_the_xray_protection_also_watches_its_pass_through(tmp_path: Path, monkeypatch):
     """The shared probe asks for A, which says nothing about MX and TXT.
 
-    Those ride one node named in ``proxySettings``, so their failure is
+    Those ride one node named in ``dialerProxy``, so their failure is
     invisible to the tick itself and has to be looked for separately.
     """
     calls: list[str] = []

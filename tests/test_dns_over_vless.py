@@ -1899,7 +1899,7 @@ def test_dns_outbound_stays_bare_until_the_other_record_types_are_let_through():
         },
         # Without a route of their own those queries would leave the router in
         # the clear, so the pass-through always names one.
-        "proxySettings": {"tag": "my_proxy_1"},
+        "streamSettings": {"sockopt": {"dialerProxy": "my_proxy_1"}},
     }
     # A server on a port of its own carries that port into the rewrite.
     assert dns._dns_outbound("my_proxy_1", ["127.0.0.53:5353"])["settings"]["rewritePort"] == 5353
@@ -1984,7 +1984,7 @@ def test_enable_can_let_the_other_record_types_through(tmp_path: Path, monkeypat
             "tag": dns.DNS_OUT_TAG,
             "protocol": "dns",
             "settings": {"nonIPQuery": "skip", "address": "8.8.8.8"},
-            "proxySettings": {"tag": "my_proxy_2"},
+            "streamSettings": {"sockopt": {"dialerProxy": "my_proxy_2"}},
         }
     ]
     # The listener stays plain: rewriting there would move the destination port
@@ -2013,7 +2013,7 @@ def test_a_half_written_pass_through_reads_back_as_drift(tmp_path: Path, monkeyp
     fragment = dns._managed_fragment(pass_node="my_proxy_1")
     # ``nonIPQuery`` without a route of its own is not something this panel
     # writes: the skipped queries would leave in the clear.
-    del fragment["outbounds"][0]["proxySettings"]
+    del fragment["outbounds"][0]["streamSettings"]
     _write(configs / dns.MANAGED_FRAGMENT, fragment)
     _write(state / dns.STATE_FILENAME, {"enabled": True, "pass_non_ip": True})
     monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
@@ -2559,7 +2559,7 @@ def test_one_quiet_answer_is_watched_rather_than_acted_on(tmp_path: Path, monkey
     assert result["action"] == "watching"
     assert restarts == []
     fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
-    assert fragment["outbounds"][0]["proxySettings"] == {"tag": "my_proxy_1"}
+    assert fragment["outbounds"][0]["streamSettings"]["sockopt"]["dialerProxy"] == "my_proxy_1"
     health = json.loads((state / dns.STATE_FILENAME).read_text(encoding="utf-8"))["pass_non_ip_health"]
     assert health["ok"] is False
     assert health["fails"] == 1
@@ -2587,7 +2587,7 @@ def test_the_other_record_types_move_to_the_next_node_when_theirs_stays_quiet(
     assert result["node"] == "my_proxy_2"
     assert restarts, "switching nodes has to reach the core"
     fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
-    assert fragment["outbounds"][0]["proxySettings"] == {"tag": "my_proxy_2"}
+    assert fragment["outbounds"][0]["streamSettings"]["sockopt"]["dialerProxy"] == "my_proxy_2"
     saved = json.loads((state / dns.STATE_FILENAME).read_text(encoding="utf-8"))
     assert saved["pass_non_ip_node"] == "my_proxy_2"
     health = saved["pass_non_ip_health"]
@@ -2922,12 +2922,68 @@ def test_an_unmarked_install_still_gets_a_plain_dns_outbound(tmp_path: Path):
     }
 
 
+def test_the_pass_through_route_is_written_as_a_dialer_proxy():
+    """`proxySettings` is gone from the core; `dialerProxy` takes its place.
+
+    Xray 26.9.9 refuses to build this outbound at all -- "the feature outbound
+    `proxySettings` has been removed and migrated to
+    `streamSettings.sockopt.dialerProxy`" -- while 26.6.27 and 26.7.28 already
+    understand the new spelling.  So only the new one is written, and the mark
+    keeps its place beside it instead of being replaced by the route.
+    """
+    outbound = dns._dns_outbound("my_proxy_1", ["8.8.8.8"], mark=255)
+
+    assert "proxySettings" not in outbound
+    assert outbound["streamSettings"]["sockopt"] == {
+        "mark": 255,
+        "dialerProxy": "my_proxy_1",
+    }
+
+
+def test_a_pass_through_without_a_mark_still_gets_its_route():
+    """The route lives in ``sockopt`` now, so an unmarked install grows one."""
+    outbound = dns._dns_outbound("my_proxy_1", ["8.8.8.8"])
+
+    assert outbound["streamSettings"]["sockopt"] == {"dialerProxy": "my_proxy_1"}
+
+
+def test_an_install_that_still_says_proxy_settings_reads_back_as_ours(
+    tmp_path: Path, monkeypatch
+):
+    """A fragment written before the move must not read as somebody's edit.
+
+    The panel refuses to touch a fragment it does not recognise, so misreading
+    the old spelling would leave exactly the installs that need the fix unable
+    to receive it.
+    """
+    configs, routing_path, state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    target = dns._select_target(dns._collect_runtime(str(configs), routing), "balancer_main")
+    _write(routing_path, dns._build_enabled_routing(routing, target))
+    fragment = dns._managed_fragment(pass_node="my_proxy_1", mark=255)
+    outbound = fragment["outbounds"][0]
+    sockopt = outbound["streamSettings"]["sockopt"]
+    outbound["proxySettings"] = {"tag": sockopt.pop("dialerProxy")}
+    _write(configs / dns.MANAGED_FRAGMENT, fragment)
+    _write(state / dns.STATE_FILENAME, {"enabled": True, "pass_non_ip": True})
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["presence"]["fragment"] is True
+    assert result["tampered"] is False
+    assert result["can_disable"] is True
+
+
 def test_the_pass_through_is_written_in_the_form_the_core_understands():
     """`nonIPQuery` is deprecated: the core warns it "will be removed soon".
 
     The replacement is a rules list -- `hijack` sends A and AAAA to the built-in
     DNS, `direct` hands everything else on -- and it was measured to behave
-    identically on Xray 26.7.28, `proxySettings` included.
+    identically on Xray 26.7.28, the pass-through route included.
     """
     modern = dns._dns_outbound("my_proxy_1", ["8.8.8.8"], modern=True)["settings"]
 

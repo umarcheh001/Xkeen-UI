@@ -947,8 +947,8 @@ def _pass_node_options(
 ) -> list[str]:
     """Plain outbounds that may carry the other record types, in route order.
 
-    ``proxySettings`` names one outbound handler, so a balancer is spelled out
-    into the outbounds it selects.  With no usable route to go on, every live
+    ``sockopt.dialerProxy`` names one outbound handler, so a balancer is
+    spelled out into the outbounds it selects.  With no usable route to go on, every live
     proxy is offered rather than nothing: the caller still has to pick one.
     """
     candidates = list_candidates(runtime, routing if isinstance(routing, dict) else {})
@@ -1491,16 +1491,19 @@ def _dns_outbound(
     upstreams: Optional[list[str]] = None,
     mark: Optional[int] = None,
     modern: bool = True,
+    legacy_route: bool = False,
 ) -> Dict[str, Any]:
     """The DNS outbound, optionally letting the other record types through.
 
     Xray's built-in DNS answers A and AAAA and nothing else: MX, TXT, SRV,
     HTTPS, NS and SOA come back as ``NOERROR`` with no records, which a client
     reads as "no such record" and does not retry.  The pass-through hands those
-    queries on instead, and ``proxySettings`` decides where they go -- without
-    it they would leave in the clear.  A balancer cannot be named there (Xray
-    looks for an outbound handler and fails to start), so these types ride
-    exactly one node.
+    queries on instead, and ``sockopt.dialerProxy`` decides where they go --
+    without it they would leave in the clear.  A balancer cannot be named there
+    (Xray looks for an outbound handler and fails to start), so these types
+    ride exactly one node.  ``legacy_route`` spells the same route the way the
+    core wanted it before 26.9 (``proxySettings``); it is there to recognise a
+    fragment written back then, never to write one.
 
     Two forms say this.  ``rules`` is the current one: ``hijack`` sends A and
     AAAA into the built-in DNS, ``direct`` hands the rest to the destination.
@@ -1534,12 +1537,21 @@ def _dns_outbound(
             if port and port != LISTENER_PORT:
                 settings["port"] = port
         outbound["settings"] = settings
-        outbound["proxySettings"] = {"tag": pass_node}
+        if legacy_route:
+            outbound["proxySettings"] = {"tag": pass_node}
+    sockopt: Dict[str, Any] = {}
     if mark is not None:
         # XKeen marks what Xray sends so its own traffic escapes the rules that
         # redirect everything else; an unmarked outbound here turns Entware
         # proxying off for the whole install.  See ``_service_mark``.
-        outbound["streamSettings"] = {"sockopt": {"mark": int(mark)}}
+        sockopt["mark"] = int(mark)
+    if pass_node and not legacy_route:
+        # 26.9 dropped ``proxySettings`` outright -- the core refuses to build
+        # this outbound and names the replacement in the error.  Every core the
+        # panel meets understands ``dialerProxy``, so only it is written.
+        sockopt["dialerProxy"] = pass_node
+    if sockopt:
+        outbound["streamSettings"] = {"sockopt": sockopt}
     return outbound
 
 
@@ -1552,6 +1564,7 @@ def _managed_fragment(
     pass_node: str = "",
     mark: Optional[int] = None,
     modern: bool = True,
+    legacy_route: bool = False,
 ) -> Dict[str, Any]:
     servers: list[Any] = []
     resolvers = list(local_resolvers or [])
@@ -1604,7 +1617,9 @@ def _managed_fragment(
             "tag": DNS_IN_TAG,
         },
         "inbounds": [_dns_listener()],
-        "outbounds": [_dns_outbound(pass_node, public_upstreams, mark, modern)],
+        "outbounds": [
+            _dns_outbound(pass_node, public_upstreams, mark, modern, legacy_route)
+        ],
     }
 
 
@@ -1871,16 +1886,29 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
     # move to ``rules`` keeps the deprecated one, and reading it as somebody's
     # hand edit would leave the panel unable to disable its own configuration.
     declared_modern = True
+    # Where the route of the pass-through is written: ``sockopt.dialerProxy``
+    # is the current spelling, ``proxySettings`` the one the core dropped in
+    # 26.9.  Both are read back -- an install written before the move would
+    # otherwise look hand-edited, and the panel refuses to touch those, which
+    # is exactly the install that needs the new spelling.
+    declared_legacy_route = False
     first_outbound = next(iter((fragment or {}).get("outbounds") or []), None)
     if isinstance(first_outbound, dict):
         settings = first_outbound.get("settings")
+        stream = first_outbound.get("streamSettings")
+        sockopt = stream.get("sockopt") if isinstance(stream, dict) else None
+        route = _clean_tag(sockopt.get("dialerProxy")) if isinstance(sockopt, dict) else ""
         proxy_settings = first_outbound.get("proxySettings")
-        if isinstance(settings, dict) and isinstance(proxy_settings, dict):
+        if not route and isinstance(proxy_settings, dict):
+            route = _clean_tag(proxy_settings.get("tag"))
+            declared_legacy_route = bool(route)
+        if isinstance(settings, dict) and route:
             if settings.get("nonIPQuery") == "skip":
-                declared_pass = _clean_tag(proxy_settings.get("tag"))
+                declared_pass = route
                 declared_modern = False
             elif isinstance(settings.get("rules"), list) and settings.get("rules"):
-                declared_pass = _clean_tag(proxy_settings.get("tag"))
+                declared_pass = route
+    declared_legacy_route = declared_legacy_route and bool(declared_pass)
     # The mark is read back from the fragment rather than from the config as it
     # stands now: a proxy added since then may carry a different one, and that
     # is not the panel's writing having drifted.
@@ -1903,6 +1931,7 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
         declared_pass,
         declared_mark,
         declared_modern,
+        declared_legacy_route,
     )
     capture_rule_obj = next((item for item in rules if _clean_tag(item.get("ruleTag")) == CAPTURE_RULE_TAG), None)
     balancer_obj = next(
@@ -2939,7 +2968,7 @@ def _pass_probe() -> Dict[str, Any]:
 
     A TXT query cannot be answered by the built-in DNS at all, so an answer to
     it proves the whole chain: ``nonIPQuery: "skip"`` is in force and the node
-    named in ``proxySettings`` is carrying the query.  A truncated answer proves
+    named in ``dialerProxy`` is carrying the query.  A truncated answer proves
     it just as well -- it came back from the far side -- while an empty one is
     exactly the failure being looked for.
     """
@@ -2956,7 +2985,7 @@ def check_pass_non_ip(
 ) -> Dict[str, Any]:
     """Watch the one node that carries MX, TXT, SRV and the rest.
 
-    ``proxySettings`` names a single outbound -- Xray refuses a balancer there
+    ``dialerProxy`` names a single outbound -- Xray refuses a balancer there
     -- so that node is a single point of failure the main guard cannot see: its
     probe asks for ``A``, which the built-in DNS answers by itself no matter
     what happened to the pass-through.
