@@ -1246,3 +1246,39 @@ console.log(JSON.stringify(result.map((item) => ({
     assert "observatory-duplicates-external" in codes
     assert "/observatory" in pointers
     assert any("07_observatory.json" in hint for hint in hints)
+
+
+def test_xray_reality_semantics_warns_about_mihomo_min_client_ver_compatibility():
+    payload = _run_node_json(
+        """
+import { validateXrayConfigSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+function realityInbound(minClientVer) {
+  const realitySettings = {
+    privateKey: 'private-key',
+    shortIds: ['abcd'],
+  };
+  if (minClientVer !== undefined) realitySettings.minClientVer = minClientVer;
+  return {
+    inbounds: [{
+      tag: 'reality-in',
+      protocol: 'vless',
+      streamSettings: {
+        security: 'reality',
+        realitySettings,
+      },
+    }],
+  };
+}
+
+console.log(JSON.stringify({
+  missing: validateXrayConfigSemantics(realityInbound()).map((item) => item.code),
+  compatible: validateXrayConfigSemantics(realityInbound('0.0.0')).map((item) => item.code),
+  incompatible: validateXrayConfigSemantics(realityInbound('26.3.27')).map((item) => item.code),
+}));
+"""
+    )
+
+    assert "inbound-reality-min-client-ver-missing" in payload["missing"]
+    assert "inbound-reality-min-client-ver-missing" not in payload["compatible"]
+    assert "inbound-reality-min-client-ver-mihomo-incompatible" in payload["incompatible"]

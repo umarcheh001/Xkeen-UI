@@ -764,6 +764,24 @@ function buildXraySemanticQuickFixes(text, data, semanticOptions) {
       return;
     }
 
+    if ((code === 'inbound-reality-min-client-ver-missing' || code === 'inbound-reality-min-client-ver-mihomo-incompatible') && path.length) {
+      const realitySettingsPath = code === 'inbound-reality-min-client-ver-mihomo-incompatible'
+        ? path.slice(0, -1)
+        : path;
+      const fix = modifyJsonText(text, realitySettingsPath.concat('minClientVer'), '0.0.0', {
+        id: `xray-reality-min-client-ver-${path.join('.')}`,
+        title: 'Для совместимости задать `minClientVer: "0.0.0"`',
+        code,
+        isPreferred: true,
+        priority: 95,
+        rangeFrom: range.from,
+        rangeTo: range.to,
+        family: 'semantic',
+      });
+      if (fix) fixes.push(fix);
+      return;
+    }
+
     if (code === 'private-ip-rule-not-first' && path.length >= 3) {
       const ruleIndex = path[path.length - 1];
       if (typeof ruleIndex !== 'number' || ruleIndex <= 0) return;
@@ -1430,6 +1448,21 @@ function buildMihomoSemanticQuickFixes(text, data) {
       return;
     }
 
+    if (code === 'proxy-reality-mlkem-support-unknown' && path.length) {
+      const fix = upsertYamlMappingEntry(text, index, data, path, 'support-x25519mlkem768', true, {
+        id: `mihomo-reality-mlkem-${path.join('.')}`,
+        title: 'Включить `support-x25519mlkem768: true`',
+        code,
+        isPreferred: true,
+        priority: 80,
+        rangeFrom,
+        rangeTo,
+        family: 'semantic',
+      });
+      if (fix) fixes.push(fix);
+      return;
+    }
+
     if (code === 'proxy-group-empty' && path.length) {
       const fix = insertYamlMappingEntry(text, index, path, 'proxies', ['DIRECT'], {
         id: `mihomo-group-empty-${path.join('.')}`,
@@ -1477,6 +1510,33 @@ function buildMihomoSemanticQuickFixes(text, data) {
       });
       if (fix) fixes.push(fix);
     }
+  });
+
+  (Array.isArray(data && data.proxies) ? data.proxies : []).forEach((proxy, proxyIndex) => {
+    if (!isPlainObject(proxy)) return;
+    const type = cleanName(proxy.type).toLowerCase();
+    const realityOpts = isPlainObject(proxy['reality-opts']) ? proxy['reality-opts'] : null;
+    if (type !== 'vless' || proxy.tls !== true || !realityOpts) return;
+    if (Object.prototype.hasOwnProperty.call(realityOpts, 'support-x25519mlkem768')) return;
+
+    const path = ['proxies', proxyIndex, 'reality-opts'];
+    const token = findYamlToken(index, path, 'value');
+    const pathString = pathToString(path);
+    const location = index.map && index.map.get(pathString);
+    const rangeFrom = token ? token.from : (location ? location.offset : 0);
+    const rangeTo = token ? token.to : Math.max(rangeFrom + 1, rangeFrom);
+    const fix = upsertYamlMappingEntry(text, index, data, path, 'support-x25519mlkem768', true, {
+      id: `mihomo-reality-mlkem-${path.join('.')}`,
+      title: 'Включить `support-x25519mlkem768: true`',
+      code: 'proxy-reality-mlkem-support-unknown',
+      isPreferred: true,
+      priority: 80,
+      rangeFrom,
+      rangeTo,
+      family: 'compatibility',
+      hint: 'Только для Xray-core v26.9.8+; старые Reality-серверы могут быть несовместимы.',
+    });
+    if (fix) fixes.push(fix);
   });
 
   return fixes;

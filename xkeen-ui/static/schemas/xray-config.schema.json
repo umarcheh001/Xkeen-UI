@@ -895,7 +895,10 @@
             "serverName": { "type": "string" },
             "mldsa65Verify": { "type": "string", "description": "Клиентский публичный ключ проверки подписи ML-DSA-65." },
             "spiderX": { "type": "string" },
-            "minClientVer": { "type": "string" },
+            "minClientVer": {
+              "type": "string",
+              "description": "Минимальная версия клиента REALITY. В Xray-core v26.7.11+ пустое значение по умолчанию — 26.3.27; для совместимости со старыми клиентами явно укажите \"0.0.0\"."
+            },
             "maxClientVer": { "type": "string" },
             "maxTimeDiff": { "type": "integer" },
             "limitFallbackUpload": { "$ref": "#/definitions/realityFallbackRateLimit" },

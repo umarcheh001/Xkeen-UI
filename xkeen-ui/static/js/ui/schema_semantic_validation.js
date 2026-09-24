@@ -13,6 +13,22 @@ function cleanName(value) {
   return text || '';
 }
 
+function parseVersionTriplet(value) {
+  const match = cleanName(value).replace(/^v/i, '').match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (!match) return null;
+  return match.slice(1).map((part) => Number(part));
+}
+
+function compareVersionTriplets(left, right) {
+  const a = parseVersionTriplet(left);
+  const b = parseVersionTriplet(right);
+  if (!a || !b) return null;
+  for (let index = 0; index < 3; index += 1) {
+    if (a[index] !== b[index]) return a[index] - b[index];
+  }
+  return 0;
+}
+
 function uniqueSorted(values) {
   return Array.from(new Set((Array.isArray(values) ? values : []).map(cleanName).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 }
@@ -1420,6 +1436,23 @@ function validateXrayStreamSettingsItem(item, pointer, role, diagnostics) {
         severity: 'warning',
         source: 'xray-semantic',
         code: 'inbound-reality-shortids-missing',
+      }));
+    }
+
+    const minClientVer = cleanName(realitySettings.minClientVer);
+    if (!minClientVer) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/streamSettings/realitySettings`, `Inbound "${itemLabel}" не задаёт \`minClientVer\`. В Xray-core v26.7.11 и новее пустое значение по умолчанию означает минимум \`26.3.27\`, поэтому Mihomo и другие старые REALITY-клиенты могут получать \`REALITY authentication failed\`.`, {
+        severity: 'warning',
+        source: 'xray-semantic',
+        code: 'inbound-reality-min-client-ver-missing',
+        hint: 'Для совместимости явно задайте `minClientVer: "0.0.0"`; это отключает проверку минимальной версии.',
+      }));
+    } else if ((compareVersionTriplets(minClientVer, '26.3.27') ?? -1) >= 0) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/streamSettings/realitySettings/minClientVer`, `Inbound "${itemLabel}" задаёт \`minClientVer: ${minClientVer}\`. Такое значение не пропустит Mihomo, который сообщает REALITY-версию \`1.8.2\`.`, {
+        severity: 'warning',
+        source: 'xray-semantic',
+        code: 'inbound-reality-min-client-ver-mihomo-incompatible',
+        hint: 'Используйте `0.0.0` для совместимости со старыми клиентами или более узкое значение, если ограничение версии действительно нужно.',
       }));
     }
   }

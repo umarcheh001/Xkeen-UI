@@ -693,3 +693,121 @@ console.log(JSON.stringify({
     assert payload["ruleCount"] == 3
     assert payload["firstIp"] == ["127.0.0.0/8", "10.0.0.0/8", "192.168.0.0/16"]
     assert payload["firstOutbound"] == "direct"
+
+
+def test_xray_quickfix_sets_explicit_compatible_reality_min_client_ver():
+    payload = _run_node_json(
+        """
+import { applyQuickFixText, createXrayQuickFixProvider } from './xkeen-ui/static/js/ui/schema_quickfixes.js';
+
+const text = [
+  '{',
+  '  "inbounds": [{',
+  '    "tag": "reality-in",',
+  '    "protocol": "vless",',
+  '    "streamSettings": {',
+  '      "security": "reality",',
+  '      "realitySettings": {',
+  '        "privateKey": "private-key",',
+  '        "shortIds": ["abcd"]',
+  '      }',
+  '    }',
+  '  }]',
+  '}',
+  '',
+].join('\\n');
+
+const provider = createXrayQuickFixProvider();
+const fixes = provider.getQuickFixes({ text });
+const fix = fixes.find((item) => item.code === 'inbound-reality-min-client-ver-missing');
+const next = fix ? applyQuickFixText(text, fix) : text;
+console.log(JSON.stringify({
+  hasFix: !!fix,
+  title: fix ? fix.title : null,
+  minClientVer: JSON.parse(next).inbounds[0].streamSettings.realitySettings.minClientVer,
+}));
+"""
+    )
+
+    assert payload["hasFix"] is True
+    assert "minClientVer" in payload["title"]
+    assert payload["minClientVer"] == "0.0.0"
+
+
+def test_xray_quickfix_replaces_incompatible_reality_min_client_ver():
+    payload = _run_node_json(
+        """
+import { applyQuickFixText, createXrayQuickFixProvider } from './xkeen-ui/static/js/ui/schema_quickfixes.js';
+
+const text = [
+  '{',
+  '  "inbounds": [{',
+  '    "tag": "reality-in",',
+  '    "protocol": "vless",',
+  '    "streamSettings": {',
+  '      "security": "reality",',
+  '      "realitySettings": {',
+  '        "privateKey": "private-key",',
+  '        "shortIds": ["abcd"],',
+  '        "minClientVer": "26.3.27"',
+  '      }',
+  '    }',
+  '  }]',
+  '}',
+  '',
+].join('\\n');
+
+const provider = createXrayQuickFixProvider();
+const fixes = provider.getQuickFixes({ text });
+const fix = fixes.find((item) => item.code === 'inbound-reality-min-client-ver-mihomo-incompatible');
+const next = fix ? applyQuickFixText(text, fix) : text;
+const reality = JSON.parse(next).inbounds[0].streamSettings.realitySettings;
+console.log(JSON.stringify({
+  hasFix: !!fix,
+  minClientVer: reality.minClientVer,
+  nested: !!(reality.minClientVer && typeof reality.minClientVer === 'object' && Object.prototype.hasOwnProperty.call(reality.minClientVer, 'minClientVer')),
+}));
+"""
+    )
+
+    assert payload["hasFix"] is True
+    assert payload["minClientVer"] == "0.0.0"
+    assert payload["nested"] is False
+
+
+def test_mihomo_quickfix_enables_mlkem_only_on_user_choice():
+    payload = _run_node_json(
+        """
+import { applyQuickFixText, createMihomoQuickFixProvider } from './xkeen-ui/static/js/ui/schema_quickfixes.js';
+import { load } from 'js-yaml';
+
+const text = [
+  'proxies:',
+  '  - name: reality-node',
+  '    type: vless',
+  '    server: 198.51.100.10',
+  '    port: 443',
+  '    uuid: 11111111-1111-4111-8111-111111111111',
+  '    network: tcp',
+  '    tls: true',
+  '    reality-opts:',
+  '      public-key: public-key',
+  '      short-id: abcd',
+  '',
+].join('\\n');
+
+const provider = createMihomoQuickFixProvider();
+const fixes = provider.getQuickFixes({ text });
+const fix = fixes.find((item) => item.code === 'proxy-reality-mlkem-support-unknown');
+const next = fix ? applyQuickFixText(text, fix) : text;
+console.log(JSON.stringify({
+  hasFix: !!fix,
+  title: fix ? fix.title : null,
+  mlkem: load(next).proxies[0]['reality-opts']['support-x25519mlkem768'],
+}));
+"""
+    )
+
+    assert payload["hasFix"] is True
+    assert "support-x25519mlkem768" in payload["title"]
+    assert payload["mlkem"] is True
