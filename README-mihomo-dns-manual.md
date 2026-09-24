@@ -250,10 +250,12 @@ CIDR из `ipv4_exclude`, атомарно запишет файл, переза
 создать конфликт с реальными или локальными сетями и не является рекомендуемым
 исправлением.
 
-Без GeoSite кнопка добавляет три доменных MRS-провайдера MetaCubeX на верхнем
-уровне конфигурации. Имя `category-ai@domain` сохраняется как понятный
+Без GeoSite кнопка добавляет четыре доменных MRS-провайдера MetaCubeX на
+верхнем уровне конфигурации. Имя `category-ai@domain` сохраняется как понятный
 идентификатор профиля; его источником служит актуальный список
 `category-ai-chat-!cn.mrs`, поскольку файла `category-ai.mrs` у MetaCubeX нет.
+`github@domain` остаётся отдельным исключением и при GeoSite: обновления панели,
+GitHub Releases и другие обращения к GitHub получают реальные IP.
 
 ```yaml
 rule-providers:
@@ -275,6 +277,12 @@ rule-providers:
     format: mrs
     interval: 86400
     url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/category-ai-chat-!cn.mrs
+  github@domain:
+    type: http
+    behavior: domain
+    format: mrs
+    interval: 86400
+    url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/github.mrs
 ```
 
 В существующий единственный раздел `dns:` добавьте/измените поля:
@@ -291,6 +299,7 @@ dns:
     - 'rule-set:category_ru@domain'
     - 'rule-set:geosite_private@domain'
     - 'rule-set:category-ai@domain'
+    - 'rule-set:github@domain'
     - '+.tsarea.tv'
   cache-algorithm: arc
   prefer-h3: false
@@ -331,7 +340,7 @@ VPN и другими реальными сетями. Не используйт
 
 - **`blacklist`** — Fake-IP выдаётся всем доменам, кроме перечисленных. В
   профиле кнопки private MRS-список заменяет ручные `*.lan`/`*.local`, а RU,
-  AI и `tsarea.tv` также получают реальные адреса.
+  AI, GitHub и `tsarea.tv` также получают реальные адреса.
 - **`whitelist`** — Fake-IP выдаётся только доменам из списка; остальные
   получают реальные адреса.
 - **`rule`** — каждая строка является правилом Mihomo и должна заканчиваться
@@ -351,7 +360,8 @@ VPN и другими реальными сетями. Не используйт
 Фильтры `geosite:private` и `geosite:category-ru` работают только при наличии
 подходящей GeoSite-базы. По умолчанию кнопка использует MRS-провайдеры выше.
 Если включить альтернативный GeoSite-переключатель, она заменит ими MRS-фильтры
-и добавит в верхний уровень конфигурации (не внутрь `dns:`):
+и добавит в верхний уровень конфигурации (не внутрь `dns:`). Исключение
+`rule-set:github@domain` сохраняется и в этом варианте:
 
 ```yaml
 geodata-mode: true

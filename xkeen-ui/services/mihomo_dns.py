@@ -76,6 +76,8 @@ DEFAULT_DOMAIN_RULE_PROVIDERS = {
     # name requested by the UI profile, but point it at the maintained
     # non-China AI/chat category which covers ChatGPT, Claude, Gemini, etc.
     "category-ai@domain": "https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/category-ai-chat-!cn.mrs",
+    # Keep GitHub, Releases and GitHub-hosted panel updates on real addresses.
+    "github@domain": "https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/github.mrs",
     # Mobile operator whitelist used by the optional protected-DNS preset.
     "whitelist-yota": "https://raw.githubusercontent.com/tobedeclared/mihomo/rules/domains/whitelist-yota.mrs",
 }
@@ -985,6 +987,7 @@ def _normalize_domain_rule_providers(value: Any) -> list[str]:
         "geosite_private": "geosite_private@domain",
         "category_ai": "category-ai@domain",
         "category-ai": "category-ai@domain",
+        "github": "github@domain",
     }
     known = {name.lower(): name for name in DEFAULT_DOMAIN_RULE_PROVIDERS}
     selected: list[str] = []
@@ -1004,6 +1007,7 @@ def _domain_rule_provider_status(config_text: str) -> dict[str, dict[str, Any]]:
         "category_ru@domain": ("category-ru@domain",),
         "geosite_private@domain": ("geosite-private@domain",),
         "category-ai@domain": ("category_ai@domain",),
+        "github@domain": (),
     }
     return {
         name: {
@@ -1040,6 +1044,7 @@ def _with_domain_rule_provider_defaults(text: str, providers: Any = None) -> str
         "category_ru@domain": ("category-ru@domain",),
         "geosite_private@domain": ("geosite-private@domain",),
         "category-ai@domain": ("category_ai@domain",),
+        "github@domain": (),
     }
     missing = [
         name for name in selected
@@ -1080,6 +1085,15 @@ def _fake_ip_default_filters(config_text: str = "") -> list[str]:
         for details in providers.values()
         if details["configured"]
     ]
+    if geodata["private_source"] == "geodata" and geodata["private_filter"]:
+        filters = [str(geodata["private_filter"])]
+        filters.append("geosite:category-ru")
+        # GeoSite is the source for broad domain categories. GitHub remains a
+        # deliberately small MRS exception so releases receive real IPs.
+        github = providers.get("github@domain") or {}
+        if github.get("configured") and github.get("filter"):
+            filters.append(str(github["filter"]))
+        return filters + list(DEFAULT_FAKE_IP_EXTRA_FILTERS)
     if provider_filters:
         # The MRS profile keeps local/private names real and also preserves
         # the user's TorrServer hostname outside the downloaded lists.
@@ -1087,10 +1101,7 @@ def _fake_ip_default_filters(config_text: str = "") -> list[str]:
             provider_filters.extend(DEFAULT_FAKE_IP_FILTERS)
         return provider_filters + list(DEFAULT_FAKE_IP_EXTRA_FILTERS)
     if geodata["private_filter"]:
-        filters = [str(geodata["private_filter"])]
-        if geodata["private_source"] == "geodata":
-            filters.append("geosite:category-ru")
-        return filters + list(DEFAULT_FAKE_IP_EXTRA_FILTERS)
+        return [str(geodata["private_filter"])] + list(DEFAULT_FAKE_IP_EXTRA_FILTERS)
     return list(DEFAULT_FAKE_IP_FILTERS)
 
 
@@ -2015,6 +2026,7 @@ def _managed_dns_block(
             "rule-set:category_ru@domain": "Российские сайты",
             "rule-set:geosite_private@domain": "Локальные устройства и приватные доменные зоны",
             "rule-set:category-ai@domain": "Список доменов AI-сервисов",
+            "rule-set:github@domain": "GitHub и GitHub Releases",
             "+.tsarea.tv": "TorrServer",
         }
         fake_block = (
@@ -2224,8 +2236,14 @@ def build_enabled_config(
     # GeoSite DAT and domain MRS providers are alternative sources.  Never add
     # both for one activation: the selected source determines the generated
     # fake-ip filters and avoids duplicate downloads at runtime.
-    if normalized_mode == "fake-ip" and not geodata:
-        source = _with_domain_rule_provider_defaults(source, rule_providers)
+    if normalized_mode == "fake-ip":
+        # GeoSite replaces the broad RU/private MRS lists, but GitHub remains
+        # a small independent rule-set: releases and UI updates must receive
+        # real addresses in either Fake-IP profile.
+        source = _with_domain_rule_provider_defaults(
+            source,
+            [*(_normalize_domain_rule_providers(rule_providers) if not geodata else []), "github@domain"],
+        )
     if mobile_bs:
         source = _with_domain_rule_provider_defaults(source, [MOBILE_BS_PROVIDER])
     fake_options = _normalize_fake_ip_options(fake_ip, config_text=source) if normalized_mode == "fake-ip" else None

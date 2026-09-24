@@ -377,27 +377,60 @@ test('Mihomo DNS: rule-provider buttons fill the fake-ip payload', async ({ page
   await expect(page.locator('#mihomo-dns-provider-category-ru')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#mihomo-dns-provider-private')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#mihomo-dns-provider-category-ai')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#mihomo-dns-provider-github')).toHaveAttribute('aria-pressed', 'true');
 
   const defaultFilters = await page.locator('#mihomo-dns-fake-filters').inputValue();
   await page.locator('#mihomo-dns-fake-filters').fill('rule-set:geosite_private@domain\n+.tsarea.tv');
   await expect(page.locator('#mihomo-dns-provider-category-ru')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('#mihomo-dns-provider-private')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#mihomo-dns-provider-category-ai')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#mihomo-dns-provider-github')).toHaveAttribute('aria-pressed', 'false');
   await page.locator('#mihomo-dns-fake-filters').fill(defaultFilters);
   await expect(page.locator('#mihomo-dns-provider-category-ru')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#mihomo-dns-provider-category-ai')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#mihomo-dns-provider-github')).toHaveAttribute('aria-pressed', 'true');
 
   await page.locator('#mihomo-dns-apply').click();
   await expect(page.locator('#confirm-modal')).toBeVisible();
   await page.locator('#confirm-modal-ok-btn').click();
   await expect.poll(() => postBodies.length).toBe(1);
-  expect(postBodies[0].rule_providers).toEqual(['category_ru@domain', 'geosite_private@domain', 'category-ai@domain']);
+  expect(postBodies[0].rule_providers).toEqual(['category_ru@domain', 'geosite_private@domain', 'category-ai@domain', 'github@domain']);
   expect(postBodies[0].fake_ip.filters).toContain('rule-set:category_ru@domain');
   expect(postBodies[0].fake_ip.filters).toContain('rule-set:geosite_private@domain');
   expect(postBodies[0].fake_ip.filters).toContain('rule-set:category-ai@domain');
+  expect(postBodies[0].fake_ip.filters).toContain('rule-set:github@domain');
   expect(postBodies[0].fake_ip.filters).toContain('+.tsarea.tv');
   expect(postBodies[0].fake_ip.filters).not.toContain('*.lan');
   expect(postBodies[0].fake_ip.filters).not.toContain('*.local');
+});
+
+test('Mihomo DNS: GitHub stays a default Fake-IP exception', async ({ page }) => {
+  const postBodies = [];
+  await openMihomo(page, MIHOMO_RULE_PROVIDER_STATUS);
+  await page.route('**/api/mihomo/dns', async (route) => {
+    if (route.request().method() === 'POST') {
+      postBodies.push(route.request().postDataJSON());
+      await route.fulfill({
+        json: {
+          ...MIHOMO_ENABLED,
+          mode: 'fake-ip',
+          probe: { ok: true, latency_ms: 17 },
+        },
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await expect(page.locator('#mihomo-dns-provider-github')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#mihomo-dns-fake-filters')).toContainText('rule-set:github@domain');
+
+  await page.locator('#mihomo-dns-apply').click();
+  await page.locator('#confirm-modal-ok-btn').click();
+  await expect.poll(() => postBodies.length).toBe(1);
+  expect(postBodies[0].mode).toBe('fake-ip');
+  expect(postBodies[0].rule_providers).toContain('github@domain');
+  expect(postBodies[0].fake_ip.filters).toContain('rule-set:github@domain');
 });
 
 test('Mihomo DNS: redir-host uses the compact two-column layout', async ({ page }) => {

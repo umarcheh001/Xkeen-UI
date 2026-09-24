@@ -31,6 +31,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     providerCategoryRu: 'mihomo-dns-provider-category-ru',
     providerPrivate: 'mihomo-dns-provider-private',
     providerCategoryAi: 'mihomo-dns-provider-category-ai',
+    providerGithub: 'mihomo-dns-provider-github',
     fakeRange: 'mihomo-dns-fake-range',
     fakeFilterMode: 'mihomo-dns-fake-filter-mode',
     fakeFilters: 'mihomo-dns-fake-filters',
@@ -63,18 +64,21 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     'rule-set:category_ru@domain',
     'rule-set:geosite_private@domain',
     'rule-set:category-ai@domain',
+    'rule-set:github@domain',
     '+.tsarea.tv',
   ];
-  const GEO_FAKE_IP_FILTERS = ['geosite:private', 'geosite:category-ru'];
+  const GEO_FAKE_IP_FILTERS = ['geosite:private', 'geosite:category-ru', 'rule-set:github@domain'];
   const DOMAIN_RULE_PROVIDER_FILTERS = [
     ['category_ru@domain', 'rule-set:category_ru@domain', IDS.providerCategoryRu],
     ['geosite_private@domain', 'rule-set:geosite_private@domain', IDS.providerPrivate],
     ['category-ai@domain', 'rule-set:category-ai@domain', IDS.providerCategoryAi],
+    ['github@domain', 'rule-set:github@domain', IDS.providerGithub],
   ];
   const RULE_PROVIDER_LABELS = Object.freeze({
     'category_ru@domain': 'RU',
     'geosite_private@domain': 'Private',
     'category-ai@domain': 'AI',
+    'github@domain': 'GitHub',
   });
 
   function fakeIpRouteHint(data) {
@@ -386,6 +390,9 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     const selectorInfo = data?.dns_selector || {};
     if (dnsSelectorEnable && !busy) dnsSelectorEnable.checked = !!selectorInfo.enabled;
     if (mobileBsEnable && !busy) mobileBsEnable.checked = data?.mobile_bs === true;
+    if (!busy && !Array.isArray(dnsOptions.tunnel) && !tunnelServersTouched) {
+      setDefaultTunnelServers(mode?.value || data?.mode || 'redir-host');
+    }
     if (dnsSelectorEnable) {
       dnsSelectorEnable.disabled = settingsLocked || selectorInfo.conflict === true;
     }

@@ -28,6 +28,7 @@ def test_mihomo_dns_has_named_settings_and_diagnostics_columns():
 def test_mihomo_dns_packs_portable_resolver_controls_without_empty_grid_cells():
     assert 'mihomo-dns-proxy-options' in MODAL
     assert 'mihomo-dns-mode-options' in MODAL
+    assert 'mihomo-dns-preset' not in MODAL
     assert 'mihomo-dns-tunnel-options' in MODAL
     assert 'mihomo-dns-local-options' in MODAL
     assert 'mihomo-dns-direct-options' in MODAL
@@ -69,6 +70,7 @@ def test_existing_runtime_hooks_remain_inside_the_modal():
         "mihomo-dns-selector-enable",
         "mihomo-dns-geodata-enable",
         "mihomo-dns-rule-providers",
+        "mihomo-dns-provider-github",
         "mihomo-dns-listener-state",
         "mihomo-dns-override-state",
         "mihomo-dns-update",

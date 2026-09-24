@@ -306,9 +306,11 @@ def test_build_enabled_config_adds_geosite_ru_filters_for_fake_ip_geodata():
     start = lines.index("  fake-ip-filter:")
     assert lines[start + 1] == "    - 'geosite:private'"
     assert lines[start + 2] == "    - 'geosite:category-ru'"
-    assert lines[start + 3] == "    - '+.tsarea.tv'  # TorrServer"
+    assert lines[start + 3] == "    - 'rule-set:github@domain'  # GitHub и GitHub Releases"
+    assert lines[start + 4] == "    - '+.tsarea.tv'  # TorrServer"
     assert "*.lan" not in content
     assert "*.local" not in content
+    assert "github@domain" in content
 
 
 def test_build_enabled_config_adds_domain_rule_providers_without_geodata():
@@ -326,6 +328,7 @@ def test_build_enabled_config_adds_domain_rule_providers_without_geodata():
     assert "geosite_private@domain" in content
     assert "rule-set:category_ru@domain" in content
     assert "rule-set:geosite_private@domain" in content
+    assert "rule-set:github@domain" in content
     assert "geosite:private" not in content
 
 
@@ -375,10 +378,12 @@ def test_build_enabled_config_adds_recommended_fake_ip_profile_by_default():
         "    - 'rule-set:category_ru@domain'  # Российские сайты\n"
         "    - 'rule-set:geosite_private@domain'  # Локальные устройства и приватные доменные зоны\n"
         "    - 'rule-set:category-ai@domain'  # Список доменов AI-сервисов\n"
+        "    - 'rule-set:github@domain'  # GitHub и GitHub Releases\n"
         "    - '+.tsarea.tv'  # TorrServer\n"
     )
     assert expected_filters in content
     assert "category-ai-chat-!cn.mrs" in content
+    assert "geosite/github.mrs" in content
     assert "    - 77.88.8.8\n    - 77.88.8.1" in content
     for nameserver in (
         "https://geohide.ru/dns-query",
