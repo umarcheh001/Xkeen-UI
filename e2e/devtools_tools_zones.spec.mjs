@@ -3,6 +3,8 @@ import { test, expect } from './fixtures.mjs';
 
 async function openTools(page, viewport) {
   await page.setViewportSize(viewport);
+  const envLoaded = page.waitForResponse((res) => new URL(res.url()).pathname === '/api/devtools/env');
+  const updateLoaded = page.waitForResponse((res) => new URL(res.url()).pathname === '/api/devtools/update/info');
   await page.goto('/devtools');
   await expect(page.locator('body')).toHaveClass(/\bdevtools-page\b/);
   await expect(page.locator('#dt-env-card')).toBeVisible();
@@ -14,11 +16,56 @@ async function openTools(page, viewport) {
     'data-xk-collapsible-wired',
     '1',
   );
+  await Promise.all([envLoaded, updateLoaded]);
+  await waitForToolsToSettle(page);
+}
+
+// Проводка обработчиков ещё не значит, что карточки доросли: «Сервис»,
+// «Обновление» и список ENV догружают данные и прибавляют в высоте ещё
+// до полусекунды (замер 25.09.2026: ENV 806 → 851 → 930 px при неизменном
+// окне). Замер до этого момента выдаёт рост от загрузки за рост от окна —
+// так сторож «высокого окна» падал на ровном месте с разницей в 45 px.
+// Ждём, пока высоты карточек ряда простоят без изменений заметное время.
+async function waitForToolsToSettle(page) {
+  const heights = () => page.evaluate(() => (
+    ['#dt-service-card', '#dt-update-card', '#dt-env-card']
+      .map((s) => Math.round(document.querySelector(s)?.getBoundingClientRect().height || 0))
+      .join(',')
+  ));
+  const stableForMs = 800;
+  const deadline = Date.now() + 10000;
+  let last = await heights();
+  let stableSince = Date.now();
+  while (Date.now() - stableSince < stableForMs) {
+    if (Date.now() > deadline) throw new Error(`Карточки вкладки Tools не перестали расти: ${last}`);
+    await page.waitForTimeout(100);
+    const next = await heights();
+    if (next !== last) {
+      last = next;
+      stableSince = Date.now();
+    }
+  }
 }
 
 
 test.describe('DevTools Tools zones', () => {
   test('cards are laid out in three zones without horizontal scroll', async ({ page }) => {
+    // Проверка ниже про «чистый стенд», а сервер у e2e общий: smoke в том же
+    // прогоне жмёт «Обновить панель», и на Windows запуск падает с
+    // spawn_failed. Раньше тест успевал прочитать вердикт до ответа статуса и
+    // этого не видел; теперь он дожидается загрузки, поэтому статус подменяем.
+    await page.route('**/api/devtools/update/status*', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        status: { state: 'idle' },
+        log_tail: [],
+        lock: { exists: false, alive: false, stale: false },
+        backups: [],
+        has_backup: false,
+      }),
+    }));
     await openTools(page, { width: 1600, height: 1000 });
 
     const heads = page.locator('#dt-tab-tools .dt-zone-head');

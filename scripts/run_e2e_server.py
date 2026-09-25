@@ -95,6 +95,11 @@ def main() -> int:
     env["XDG_CONFIG_HOME"] = str(HOME_DIR / ".config")
     env["XKEEN_UI_STATE_DIR"] = str(STATE_DIR)
     env["XKEEN_LOG_DIR"] = str(LOG_DIR)
+    # Состояние самообновления (status.json, lock, update.log) по умолчанию
+    # живёт в /opt/var, а на Windows это настоящий C:\opt\var: туда можно
+    # писать, песочница его не чистит, и след «Обновить панель» из smoke
+    # переживал все прогоны, ломая проверки «чистого стенда».
+    env["XKEEN_UI_UPDATE_DIR"] = str(VAR_DIR / "lib" / "xkeen-ui" / "update")
     env["XKEEN_UI_SECRET_KEY"] = "e2e-secret-key"
     env.setdefault("XKEEN_UI_PORT", str(env.get("XKEEN_E2E_PORT") or "18188"))
     env["XKEEN_RUNTIME"] = "dev"

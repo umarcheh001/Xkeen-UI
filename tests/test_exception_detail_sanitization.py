@@ -127,6 +127,9 @@ def test_config_exchange_local_import_hides_invalid_json_parse_details():
 
 
 def test_devtools_spawn_failed_hides_exception_details_in_response_and_status(monkeypatch, tmp_path: Path):
+    # Без этого status.json ложится в /opt/var, а на Windows это настоящий
+    # C:\opt\var: тест оставлял там «обновление упало», и след жил между прогонами.
+    monkeypatch.setenv("XKEEN_UI_UPDATE_DIR", str(tmp_path / "update"))
     devtools = _reload("routes.devtools")
     app = Flask("devtools-sanitize-spawn")
     app.register_blueprint(devtools.create_devtools_blueprint(str(tmp_path)))
