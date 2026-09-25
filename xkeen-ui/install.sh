@@ -1328,6 +1328,54 @@ sync_bundled_template_dir() {
   done
 }
 
+drop_previous_precompressed() {
+  STATIC_DIR="$1"
+  [ -n "$STATIC_DIR" ] || return 0
+  [ -d "$STATIC_DIR" ] || return 0
+
+  if DROP_OUTPUT="$(
+      PRECOMPRESSED_STATIC_DIR="$STATIC_DIR" "$PYTHON_BIN" - <<'PY'
+import os
+from pathlib import Path
+
+# ASCII only in this block: it runs as `python3 -`, where a non-UTF-8 locale
+# would turn a Cyrillic comment into a syntax error.
+#
+# Every .gz under static belongs to the previous install. The new package
+# brings its own (or none, like a CI release), and neither `cp -r` nor
+# `rsync -a` removes leftovers. A leftover .gz would then be pulled forward
+# by align_precompressed_mtimes and served instead of the new source.
+root = Path(os.environ.get("PRECOMPRESSED_STATIC_DIR", ""))
+if not root.is_dir():
+    print("skip:static_dir_missing")
+    raise SystemExit(0)
+
+dropped = 0
+for packed in root.rglob("*.gz"):
+    try:
+        if packed.is_file() and not packed.is_symlink():
+            packed.unlink()
+            dropped += 1
+    except OSError:
+        continue
+
+print(f"dropped={dropped}")
+PY
+  )"; then
+    DROP_STATUS=0
+  else
+    DROP_STATUS=$?
+  fi
+
+  if [ "$DROP_STATUS" -ne 0 ]; then
+    echo "[!] previous precompressed copies were not removed from $STATIC_DIR (exit $DROP_STATUS)."
+  elif [ -n "$DROP_OUTPUT" ]; then
+    echo "[*] previous precompressed copies: $DROP_OUTPUT"
+  fi
+
+  return 0
+}
+
 align_precompressed_mtimes() {
   STATIC_DIR="$1"
   [ -n "$STATIC_DIR" ] || return 0
@@ -1782,6 +1830,13 @@ mkdir -p "$UI_DIR" "$INIT_DIR" "$LOG_DIR" "$RUN_DIR" "$BACKUP_DIR" "$JSONC_DIR"
 # Этап 7 (install/upgrade): гарантируем наличие отдельного каталога для JSONC
 # и пытаемся убрать legacy *.jsonc из XRAY_CONFIG_DIR.
 migrate_legacy_jsonc_files || true
+
+# Сжатые копии прежней установки убираем до копирования: новый архив приносит
+# свои .gz (или не приносит вовсе), а старые иначе отдавались бы вместо новых файлов.
+# Запуск прямо из каталога панели не трогаем — там это и есть новые копии.
+if [ "$(cd "$UI_DIR" 2>/dev/null && pwd)" != "$SRC_DIR" ]; then
+  drop_previous_precompressed "$UI_DIR/static"
+fi
 
 echo "[*] Копирую файлы панели в $UI_DIR..."
 if command -v rsync >/dev/null 2>&1; then

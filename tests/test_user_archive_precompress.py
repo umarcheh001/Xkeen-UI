@@ -254,3 +254,15 @@ def test_tree_hash_describes_the_archive_together_with_its_gzip_siblings(
     recorded = json.loads((root / "BUILD.json").read_text(encoding="utf-8"))["tree_sha256"]
 
     assert recorded == builder.compute_tree_sha256(root, exclude={"BUILD.json"})
+
+
+def test_release_workflow_precompresses_before_the_stamp():
+    """Релизный архив из CI тоже несёт .gz, и штамп считается после сжатия.
+
+    До 25.09.2026 CI собирал архив без сжатия: пользователи релиза ускорения не
+    получали, а на роутерах после локального архива оставались старые .gz.
+    """
+
+    workflow = (ROOT / ".github" / "workflows" / "build-user-archive.yml").read_text(encoding="utf-8")
+    assert "builder.precompress_static_assets(root)" in workflow
+    assert workflow.index("builder.precompress_static_assets(root)") < workflow.index("builder.write_build_json(")

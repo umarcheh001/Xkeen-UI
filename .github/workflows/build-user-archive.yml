@@ -95,6 +95,11 @@ jobs:
 
           root = Path("package-root/xkeen-ui")
           sha = os.environ["GITHUB_SHA"]
+          # Сжатие статики — как в локальной сборке и до штампа: tree_sha256
+          # должен описывать дерево вместе с .gz.
+          packed = builder.precompress_static_assets(root)
+          print(f"static precompressed: {packed.files} file(s), "
+                f"{packed.original_bytes} -> {packed.compressed_bytes} bytes")
           builder.write_build_json(
               root,
               stamp=builder.BuildStamp(
