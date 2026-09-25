@@ -107,7 +107,7 @@ def test_fetch_subscription_body_retries_through_loopback_mihomo_proxy_after_net
     assert preview_body == body
     assert preview_headers[subs.SUBSCRIPTION_FETCH_VIA_HEADER] == subs.SUBSCRIPTION_FETCH_VIA_MIHOMO
     assert meta["fetch_mode"] == "mihomo-proxy"
-    assert any("fake-IP DNS" in line for line in meta["warnings"])
+    assert any("через локальный прокси Mihomo" in line for line in meta["warnings"])
     assert [item["proxy_port"] for item in calls] == [None, 17890, None, 17890]
 
 

@@ -1790,7 +1790,7 @@ def _try_subscription_request_variants(
                 == SUBSCRIPTION_FETCH_VIA_MIHOMO
             ):
                 warnings.append(
-                    "Подписка скачана через локальный Mihomo proxy: это обход fake-IP DNS для процесса панели."
+                    "Подписка скачана через локальный прокси Mihomo: в режиме fake-IP напрямую до её адреса панель бы не достучалась."
                 )
             meta = {
                 "fetch_mode": fetch_mode,
@@ -1854,7 +1854,7 @@ def fetch_subscription_body_for_xray(url: str) -> Tuple[str, Dict[str, str], Dic
     fetch_warnings = list(happ_warnings)
     if fetched_via_mihomo_proxy:
         fetch_warnings.append(
-            "Подписка скачана через локальный Mihomo proxy: это обход fake-IP DNS для процесса панели."
+            "Подписка скачана через локальный прокси Mihomo: в режиме fake-IP напрямую до её адреса панель бы не достучалась."
         )
     meta: Dict[str, Any] = {
         "fetch_mode": "mihomo-proxy" if fetched_via_mihomo_proxy else "direct",
