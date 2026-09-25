@@ -946,11 +946,24 @@ def frontend_page_config(
     )
 
 
+def register_build_stamp_global(app: Flask, ui_state_dir: str) -> None:
+    """Expose `ui_build_stamp()` to templates.
+
+    Страница всегда уходит с `no-store`, поэтому номер сборки в ней свежий даже
+    тогда, когда модули ещё лежат в кэше браузера под окном без перепроверки.
+    """
+
+    from services.build_info import build_stamp
+
+    app.add_template_global(lambda: build_stamp(ui_state_dir), name="ui_build_stamp")
+
+
 def register_ui_assets_routes(app: Flask, *, UI_STATE_DIR: str, devtools_service=None) -> None:
     """Register /ui/* asset endpoints and frontend build helpers."""
 
     if not isinstance(app.extensions.get(_APP_EXTENSIONS_KEY), FrontendAssetHelper):
         init_ui_assets_helpers(app)
+    register_build_stamp_global(app, UI_STATE_DIR)
 
     # Lazy import to avoid any accidental circular deps.
     if devtools_service is None:

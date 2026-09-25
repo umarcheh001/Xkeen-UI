@@ -1,3 +1,8 @@
+{% set _xk_build_stamp = ui_build_stamp() if ui_build_stamp is defined else '' %}
+{% if _xk_build_stamp %}
+<!-- After a panel update: refetch statics the browser cached under the old build -->
+<script src="{{ url_for('static', filename='js/ui/build_refresh.js', v=_xk_build_stamp) }}" data-build-stamp="{{ _xk_build_stamp }}" data-static-base="{{ url_for('static', filename='') }}"></script>
+{% endif %}
 <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">

@@ -12,6 +12,7 @@ So we try a few candidate locations.
 
 from __future__ import annotations
 
+import hashlib
 import os
 from typing import Any, Dict, List, Optional
 
@@ -108,3 +109,25 @@ def read_build_info(ui_state_dir: Optional[str] = None) -> Dict[str, Any]:
         break
 
     return info
+
+
+def build_stamp(ui_state_dir: Optional[str] = None) -> str:
+    """Short opaque id of the installed build, or "" when BUILD.json is absent.
+
+    Pages carry it so the browser can tell that the panel was updated: modules
+    cached under the static revalidation window would otherwise be reused for
+    up to ten minutes after an update (see static/js/ui/build_refresh.js).
+    tree_sha256 is part of the id because a local archive may be packed from
+    uncommitted changes on top of the same commit.
+    """
+
+    try:
+        info = read_build_info(ui_state_dir)
+        if not info.get("exists"):
+            return ""
+        parts = [str(info.get(k) or "") for k in ("version", "commit", "tree_sha256", "built_utc")]
+        if not any(parts):
+            return ""
+        return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:16]
+    except Exception:
+        return ""
