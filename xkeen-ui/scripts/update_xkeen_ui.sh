@@ -363,6 +363,12 @@ release_lock() {
 cleanup() {
   # best-effort cleanup
   release_lock
+  # Our own mktemp dir only: after a failed update it still holds the whole
+  # downloaded archive, and /tmp on the router is RAM.
+  if [ "${WORK_DIR_OWNED:-0}" = "1" ] && [ -n "${WORK_DIR:-}" ] && [ -d "$WORK_DIR" ]; then
+    cd / 2>/dev/null || true
+    rm -rf "$WORK_DIR" 2>/dev/null || true
+  fi
 }
 
 # Release the lock only on final shell exit. During service restart the runner
@@ -1340,6 +1346,8 @@ if [ -z "$WORK_DIR" ]; then
   WORK_DIR="/tmp/xkeen-ui-update-$$"
   mkdir -p "$WORK_DIR" 2>/dev/null || true
 fi
+# Both paths above are created by us for this run: cleanup() may remove it.
+WORK_DIR_OWNED="1"
 
 TARBALL="$WORK_DIR/$ASSET_NAME"
 log "[*] Downloading to: $TARBALL"

@@ -1289,6 +1289,13 @@ migrate_legacy_jsonc_files() {
 
 # --- Определяем существующую установку и её порт ---
 
+same_ignoring_cr() {
+  # Локальный архив, собранный на Windows, везёт шаблоны с CRLF, релизный — с LF.
+  # Такая разница — не правка пользователя, и копия под неё не нужна.
+  [ -f "$1" ] && [ -f "$2" ] || return 1
+  [ "$(tr -d '\r' < "$1" | md5sum | cut -d' ' -f1)" = "$(tr -d '\r' < "$2" | md5sum | cut -d' ' -f1)" ]
+}
+
 sync_bundled_template_dir() {
   src_dir="$1"
   dest_dir="$2"
@@ -1317,7 +1324,9 @@ sync_bundled_template_dir() {
       continue
     fi
 
-    if [ -f "$dest" ]; then
+    if same_ignoring_cr "$f" "$dest"; then
+      :
+    elif [ -f "$dest" ]; then
       cp -f "$dest" "$dest.dist-$TS" 2>/dev/null || true
       echo "[*] ~ обновляю built-in шаблон $base (backup: $base.dist-$TS)"
     else
