@@ -122,3 +122,66 @@ def test_install_sh_runs_the_step_after_copying_panel_files():
     line = next(l for l in text.splitlines() if "scripts/install_happ_decryptor.py" in l and "PYTHON_BIN" in l)
     assert '"$UI_DIR/scripts/install_happ_decryptor.py"' in line, "the copied script finds the panel's bin/ next to it"
     assert line.rstrip().endswith("|| true")
+
+
+# --- Уборка файлов прежнего эмулятора при обновлении панели -----------------
+#
+# 25.09.2026: на 45.1 и 10.1 рядом с движком на Go лежали ~5,4 МБ файлов
+# эмулятора. Уборка жила только в install_engine, а движок там поставили до её
+# появления и больше не переставляли: обновление панели его не трогает.
+
+from services.happ_decryptor.engine import OLD_EMULATOR_FILES  # noqa: E402
+
+KEY_FILES = ("crypt5-keys.json", "crypt5-keys.json.bak", "legacy_keys.json", "happ-keys.json")
+
+
+def _engine_dir(tmp_path: Path, head: bytes) -> tuple[Path, Path]:
+    bin_path = tmp_path / "bin" / "happ-decrypt-universal"
+    assets = tmp_path / "bin" / "happ-decrypt-universal.assets"
+    assets.mkdir(parents=True)
+    bin_path.write_bytes(head + b"\0" * 64)
+    for name in OLD_EMULATOR_FILES + KEY_FILES:
+        (assets / name).write_bytes(b"x")
+    return bin_path, assets
+
+
+def _run_with_engine(bin_path: Path, env=None):
+    installer = Installer()
+    out = io.StringIO()
+    code = _load().main(
+        [], env=env or {"XKEEN_HAPP_DECRYPTOR_INSTALL": "0"}, stdin=FakeStdin(None, False),
+        out=out, installer=installer, bin_path=str(bin_path),
+    )
+    return code, out.getvalue(), installer
+
+
+def test_update_removes_old_emulator_files_next_to_native_engine(tmp_path):
+    bin_path, assets = _engine_dir(tmp_path, b"\x7fELF")
+
+    code, text, installer = _run_with_engine(bin_path)
+
+    assert (code, installer.calls) == (0, 0), "the engine itself is not reinstalled"
+    assert not any((assets / name).exists() for name in OLD_EMULATOR_FILES)
+    assert all((assets / name).exists() for name in KEY_FILES), "keys and their backups stay"
+    assert bin_path.exists()
+    assert f"убраны файлы прежнего эмулятора: {len(OLD_EMULATOR_FILES)}" in text
+
+
+def test_old_node_engine_keeps_its_emulator_files(tmp_path):
+    """Прежний движок на Node без этих файлов не работает."""
+
+    bin_path, assets = _engine_dir(tmp_path, b"#!/opt/bin/node\n")
+
+    _code, text, _installer = _run_with_engine(bin_path)
+
+    assert all((assets / name).exists() for name in OLD_EMULATOR_FILES)
+    assert "эмулятора" not in text
+
+
+def test_nothing_to_tidy_is_silent(tmp_path):
+    bin_path = tmp_path / "bin" / "happ-decrypt-universal"
+
+    code, text, _installer = _run_with_engine(bin_path)
+
+    assert code == 0
+    assert "эмулятора" not in text

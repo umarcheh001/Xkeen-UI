@@ -195,12 +195,27 @@ def _published_sha256(fetch: Fetch, base: str, asset: str, work_dir: str) -> str
 OLD_EMULATOR_FILES = ("emu_core.mjs", "keytable.json", "liberror-code.so", "unicorn-wrapper.js", "unicorn_aarch64.js")
 
 
-def _remove_old_emulator_files(assets_dir: str) -> None:
+def _remove_old_emulator_files(assets_dir: str) -> list[str]:
+    removed = []
     for name in OLD_EMULATOR_FILES:
         try:
             os.remove(os.path.join(assets_dir, name))
+            removed.append(name)
         except OSError:
             pass
+    return removed
+
+
+def tidy_old_emulator_files(bin_path: str) -> list[str]:
+    """Remove emulator leftovers next to an already installed native engine.
+
+    install_engine() cleans them only when it installs an engine. Engines put
+    in place before that cleanup existed are not reinstalled by panel updates,
+    so install.sh calls this on every update. A Node engine still needs them.
+    """
+    if detect_kind(bin_path) != "native":
+        return []
+    return _remove_old_emulator_files(assets_dir_for(bin_path))
 
 
 def install_engine(

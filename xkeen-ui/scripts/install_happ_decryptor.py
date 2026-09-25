@@ -62,10 +62,24 @@ def _report(out, result: dict) -> None:
         _say(out, "ключи: " + ", ".join(key_info["installed"]) + origin)
 
 
-def main(argv=None, *, env=None, stdin=None, out=None, installer=None) -> int:
+def _tidy_old_emulator(out, bin_path) -> None:
+    # Runs on every update, whatever the answer below: the engine itself is
+    # not reinstalled by a panel update, and its old neighbours would stay.
+    try:
+        from services.happ_decryptor import engine
+
+        removed = engine.tidy_old_emulator_files(bin_path or engine.default_bin_path())
+    except Exception:  # noqa: BLE001 - tidying must never break install.sh
+        return
+    if removed:
+        _say(out, f"убраны файлы прежнего эмулятора: {len(removed)}")
+
+
+def main(argv=None, *, env=None, stdin=None, out=None, installer=None, bin_path=None) -> int:
     env = os.environ if env is None else env
     stdin = sys.stdin if stdin is None else stdin
     out = sys.stdout if out is None else out
+    _tidy_old_emulator(out, bin_path)
     try:
         from services.happ_decryptor.errors import HappDecryptorError
     except Exception:  # noqa: BLE001 - a broken panel copy must not break install.sh
