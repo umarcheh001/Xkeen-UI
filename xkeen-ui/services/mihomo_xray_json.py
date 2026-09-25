@@ -1,10 +1,14 @@
-"""Convert Xray-style JSON subscriptions to Mihomo proxy YAML blocks.
+"""Convert Xray- and sing-box-style JSON subscriptions to Mihomo proxy YAML blocks.
 
 Subscription formats handled (auto-detected via `_load_subscription_json`):
   - bare JSON array of full Xray configs (each with its own `outbounds[]`)
   - single Xray config object with `outbounds[]`
   - container objects like `{configs: [...]}` / `{nodes: [...]}` / etc.
+  - sing-box client configs with VLESS or Trojan endpoint outbounds
   - any of the above wrapped in base64
+
+For sing-box documents, mobile-only inbounds, DNS, and route settings are not
+imported: only the supported endpoint outbound becomes a router proxy.
 
 Transports/security supported for VLESS:
   - network: tcp / ws / grpc / xhttp / httpupgrade
@@ -26,7 +30,9 @@ from .mihomo_proxy_parsers import (
 )
 from .xray_subscriptions import (
     SubscriptionPlaceholderError,
+    _is_sing_box_subscription_config,
     _is_proxy_outbound,
+    _iter_sing_box_proxy_outbounds,
     _json_name_hint,
     _load_subscription_json,
     _subscription_body_source_probe,
@@ -34,7 +40,7 @@ from .xray_subscriptions import (
 )
 
 
-SUPPORTED_PROTOCOLS = {"vless", "hysteria", "hysteria2", "hy2"}
+SUPPORTED_PROTOCOLS = {"trojan", "vless", "hysteria", "hysteria2", "hy2"}
 
 
 def convert_outbound_to_mihomo(
@@ -56,6 +62,8 @@ def convert_outbound_to_mihomo(
 
     if proto == "vless":
         return _convert_vless(settings, stream, name)
+    if proto == "trojan":
+        return _convert_trojan(settings, stream, name)
     if proto in {"hysteria", "hysteria2", "hy2"}:
         return _convert_hysteria2(settings, stream, name, proto)
     return None
@@ -237,6 +245,78 @@ def _first_value(*values: Any) -> Any:
 
 def _as_mapping(value: Any) -> Dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _convert_trojan(
+    settings: Dict[str, Any], stream: Dict[str, Any], name: str
+) -> Optional[ProxyParseResult]:
+    servers = settings.get("servers") if isinstance(settings, dict) else None
+    server_config = servers[0] if isinstance(servers, list) and servers and isinstance(servers[0], dict) else {}
+    server = str(server_config.get("address") or "").strip()
+    password = str(server_config.get("password") or "").strip()
+    port = _int_port(server_config.get("port"))
+    if not server or not password or port is None:
+        return None
+
+    stream = _as_mapping(stream)
+    network = str(stream.get("network") or "tcp").strip().lower() or "tcp"
+    security = str(stream.get("security") or "tls").strip().lower()
+    tls_settings = _as_mapping(stream.get("tlsSettings"))
+    sni = _first_text(tls_settings.get("serverName"), tls_settings.get("server_name"))
+    alpn = _string_list(tls_settings.get("alpn"))
+    fingerprint = _first_text(tls_settings.get("fingerprint"))
+    allow_insecure = _mapping_bool(tls_settings, "allowInsecure", "allow_insecure") is True
+
+    yaml_lines: List[str] = []
+    yaml_lines.append(f"- name: {_yaml_str(name)}")
+    yaml_lines.append("  type: trojan")
+    yaml_lines.append(f"  server: {_yaml_str(server)}")
+    yaml_lines.append(f"  port: {port}")
+    yaml_lines.append(f"  password: {_yaml_str(password)}")
+    yaml_lines.append("  udp: true")
+
+    if security == "tls":
+        yaml_lines.append("  tls: true")
+        yaml_lines.append("  tfo: true")
+        if sni:
+            yaml_lines.append(f"  sni: {_yaml_str(sni)}")
+        if alpn:
+            yaml_lines.append(f"  alpn: {_yaml_list(alpn)}")
+        if fingerprint:
+            yaml_lines.append(f"  client-fingerprint: {_yaml_str(fingerprint)}")
+        if allow_insecure:
+            yaml_lines.append("  skip-cert-verify: true")
+
+    yaml_lines.append(f"  network: {_yaml_str(network)}")
+    if network == "ws":
+        ws_settings = _as_mapping(stream.get("wsSettings"))
+        path = _first_text(ws_settings.get("path")) or "/"
+        headers = _as_mapping(ws_settings.get("headers"))
+        host = _first_text(headers.get("Host"), headers.get("host"))
+        yaml_lines.append("  ws-opts:")
+        yaml_lines.append(f"    path: {_yaml_str(path)}")
+        if host:
+            yaml_lines.append("    headers:")
+            yaml_lines.append(f"      Host: {_yaml_str(host)}")
+    elif network == "grpc":
+        grpc_settings = _as_mapping(stream.get("grpcSettings"))
+        service_name = _first_text(grpc_settings.get("serviceName"), grpc_settings.get("service_name"))
+        if service_name:
+            yaml_lines.append("  grpc-opts:")
+            yaml_lines.append(f"    grpc-service-name: {_yaml_str(service_name)}")
+    elif network == "httpupgrade":
+        httpupgrade_settings = _as_mapping(stream.get("httpupgradeSettings"))
+        path = _first_text(httpupgrade_settings.get("path")) or "/"
+        host = _first_text(httpupgrade_settings.get("host"))
+        yaml_lines.append("  http-upgrade-opts:")
+        yaml_lines.append(f"    path: {_yaml_str(path)}")
+        if host:
+            yaml_lines.append("    headers:")
+            yaml_lines.append(f"      Host: {_yaml_str(host)}")
+    elif network not in {"tcp"}:
+        return None
+
+    return ProxyParseResult(name=name, yaml="\n".join(yaml_lines) + "\n")
 
 
 def _int_port(value: Any) -> Optional[int]:
@@ -441,6 +521,11 @@ def _iter_json_proxy_profiles(
     if not isinstance(obj, dict):
         return
 
+    if _is_sing_box_subscription_config(obj):
+        for outbound, name_hint in _iter_sing_box_proxy_outbounds(obj):
+            yield [(outbound, name_hint)]
+        return
+
     name_hint = _json_name_hint(obj) or parent_name
     if _is_proxy_outbound(obj):
         yield [(obj, name_hint)]
@@ -468,12 +553,12 @@ def convert_subscription_text(
     *,
     existing_names: Optional[Iterable[str]] = None,
 ) -> SubscriptionResult:
-    """Parse Xray-JSON subscription text and convert each outbound to Mihomo YAML.
+    """Parse Xray/sing-box JSON subscription text and convert each outbound to Mihomo YAML.
 
     Returns (proxies, skipped). `proxies` are ProxyParseResult with unique names.
     `existing_names` lets the caller seed the name registry to avoid collisions
     with proxies already present in the target config.
-    Raises ValueError if the body does not look like Xray-JSON.
+    Raises ValueError if the body does not look like a supported JSON subscription.
     """
     parsed = _load_subscription_json(body)
     if parsed is None:

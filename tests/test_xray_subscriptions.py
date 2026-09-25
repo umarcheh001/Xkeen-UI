@@ -83,6 +83,80 @@ def test_subscription_url_policy_can_disable_public_http(monkeypatch):
     )
 
 
+def test_fetch_subscription_body_retries_through_loopback_mihomo_proxy_after_network_timeout(monkeypatch):
+    from services import xray_subscriptions as subs
+    from services.url_policy import URLPolicy
+
+    calls = []
+
+    def fake_read(url, *, policy, timeout, max_bytes, request_headers=None, proxy_port=None):
+        calls.append({"url": url, "timeout": timeout, "proxy_port": proxy_port})
+        if proxy_port is None:
+            raise urllib.error.URLError(TimeoutError("timed out"))
+        return _vless("Via Mihomo"), {"content-type": "text/plain"}
+
+    monkeypatch.setattr(subs, "_subscription_policy", lambda: URLPolicy(("example.test",)))
+    monkeypatch.setattr(subs, "_read_subscription_response", fake_read)
+    monkeypatch.setattr(subs, "_subscription_mihomo_proxy_port", lambda: 17890)
+
+    body, headers = subs._fetch_subscription_body_once("https://example.test/sub")
+    preview_body, preview_headers, meta = subs.fetch_subscription_body_for_xray("https://example.test/sub")
+
+    assert body == _vless("Via Mihomo")
+    assert headers[subs.SUBSCRIPTION_FETCH_VIA_HEADER] == subs.SUBSCRIPTION_FETCH_VIA_MIHOMO
+    assert preview_body == body
+    assert preview_headers[subs.SUBSCRIPTION_FETCH_VIA_HEADER] == subs.SUBSCRIPTION_FETCH_VIA_MIHOMO
+    assert meta["fetch_mode"] == "mihomo-proxy"
+    assert any("fake-IP DNS" in line for line in meta["warnings"])
+    assert [item["proxy_port"] for item in calls] == [None, 17890, None, 17890]
+
+
+def test_fetch_subscription_body_uses_mihomo_proxy_first_for_fake_ip_dns(monkeypatch):
+    from services import xray_subscriptions as subs
+    from services.url_policy import URLPolicy
+
+    calls = []
+
+    def fake_read(url, *, policy, timeout, max_bytes, request_headers=None, proxy_port=None):
+        calls.append(proxy_port)
+        assert proxy_port == 17890
+        return _vless("Fake IP"), {"content-type": "text/plain"}
+
+    monkeypatch.setattr(subs, "_subscription_policy", lambda: URLPolicy(("example.test",)))
+    monkeypatch.setattr(subs, "_read_subscription_response", fake_read)
+    monkeypatch.setattr(subs, "_subscription_mihomo_proxy_port", lambda: 17890)
+    monkeypatch.setattr(
+        subs.socket,
+        "getaddrinfo",
+        lambda *_args, **_kwargs: [(None, None, None, None, ("198.18.0.246", 0))],
+    )
+
+    body, headers = subs._fetch_subscription_body_once("https://example.test/sub")
+
+    assert body == _vless("Fake IP")
+    assert headers[subs.SUBSCRIPTION_FETCH_VIA_HEADER] == subs.SUBSCRIPTION_FETCH_VIA_MIHOMO
+    assert calls == [17890]
+
+
+def test_fetch_subscription_body_does_not_proxy_retry_http_errors(monkeypatch):
+    from services import xray_subscriptions as subs
+    from services.url_policy import URLPolicy
+
+    def fake_read(url, *, policy, timeout, max_bytes, request_headers=None, proxy_port=None):
+        raise urllib.error.HTTPError(url, 403, "Forbidden", {}, None)
+
+    monkeypatch.setattr(subs, "_subscription_policy", lambda: URLPolicy(("example.test",)))
+    monkeypatch.setattr(subs, "_read_subscription_response", fake_read)
+    monkeypatch.setattr(
+        subs,
+        "_subscription_mihomo_proxy_port",
+        lambda: (_ for _ in ()).throw(AssertionError("proxy fallback must not run for HTTP errors")),
+    )
+
+    with pytest.raises(urllib.error.HTTPError):
+        subs._fetch_subscription_body_once("https://example.test/sub")
+
+
 def test_fetch_subscription_body_resolves_happ_landing_via_helper(monkeypatch):
     from services import xray_subscriptions as subs
 
@@ -3410,7 +3484,6 @@ def test_refresh_subscription_only_preserves_manual_edits_after_activation(tmp_p
         "subscription.example",
         "manual-added-after-subscription",
     ]
-
 
 @pytest.mark.parametrize(
     ("routing_mode", "tag_prefix"),
@@ -6994,3 +7067,70 @@ def test_align_schedule_reports_nothing_to_align_for_one_subscription(tmp_path: 
 
     assert plan["reason"] == "nothing_to_align"
     assert _due_moments(subs, ui_state_dir) == before
+
+
+def test_build_subscription_json_outbounds_converts_sing_box_vless_and_trojan_configs():
+    from services import xray_subscriptions as subs
+
+    common = {
+        "log": {"level": "warn"},
+        "dns": {"servers": [{"tag": "remote", "address": "1.1.1.1"}]},
+        "inbounds": [{"type": "tun", "tag": "tun-in"}],
+        "route": {"rules": [{"inbound": "tun-in", "outbound": "proxy"}]},
+    }
+    cases = [
+        (
+            "vless",
+            {
+                "type": "vless",
+                "tag": "proxy",
+                "server": "vless.example.com",
+                "server_port": 443,
+                "uuid": "11111111-1111-1111-1111-111111111111",
+                "tls": {"enabled": True, "server_name": "edge.example.com"},
+                "transport": {"type": "ws", "path": "/vless-ws"},
+                "multiplex": {"enabled": True, "padding": True},
+            },
+        ),
+        (
+            "trojan",
+            {
+                "type": "trojan",
+                "tag": "proxy",
+                "server": "trojan.example.com",
+                "server_port": 443,
+                "password": "test-password",
+                "tls": {"enabled": True, "server_name": "edge.example.com"},
+                "transport": {"type": "ws", "path": "/trojan-ws"},
+                "multiplex": {"enabled": True, "padding": True},
+            },
+        ),
+    ]
+
+    for protocol, sing_box_outbound in cases:
+        body = json.dumps({**common, "outbounds": [{"type": "direct", "tag": "direct"}, sing_box_outbound]})
+        outbounds, errors, stats = subs.build_subscription_json_outbounds(body, tag_prefix="ssb")
+
+        assert errors == []
+        assert stats["source_count"] == 1
+        assert stats["filtered_out_count"] == 0
+        assert len(outbounds) == 1
+        outbound = outbounds[0]
+        assert outbound["protocol"] == protocol
+        assert outbound["tag"] == "ssb--proxy"
+        assert outbound["streamSettings"] == {
+            "network": "ws",
+            "security": "tls",
+            "tlsSettings": {"serverName": "edge.example.com"},
+            "wsSettings": {"path": f"/{protocol}-ws"},
+        }
+        assert "inbounds" not in outbound
+        assert "route" not in outbound
+        assert "dns" not in outbound
+        if protocol == "vless":
+            user = outbound["settings"]["vnext"][0]["users"][0]
+            assert outbound["settings"]["vnext"][0]["address"] == "vless.example.com"
+            assert user == {"id": "11111111-1111-1111-1111-111111111111", "encryption": "none"}
+        else:
+            server = outbound["settings"]["servers"][0]
+            assert server == {"address": "trojan.example.com", "port": 443, "password": "test-password"}

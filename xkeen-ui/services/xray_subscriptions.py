@@ -12,6 +12,7 @@ import concurrent.futures
 import contextlib
 import copy
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -58,6 +59,9 @@ MIN_INTERVAL_HOURS = 1
 MAX_INTERVAL_HOURS = 168
 DEFAULT_FETCH_TIMEOUT_SECONDS = 20
 DEFAULT_MAX_BODY_BYTES = 1024 * 1024
+DEFAULT_MIHOMO_EGRESS_CONFIG_PATH = "/opt/etc/mihomo/config.yaml"
+SUBSCRIPTION_FETCH_VIA_HEADER = "x-xkeen-subscription-fetch-via"
+SUBSCRIPTION_FETCH_VIA_MIHOMO = "mihomo-proxy"
 DEFAULT_ERROR_RETRY_SECONDS = 15 * 60
 MIN_ERROR_RETRY_SECONDS = 60
 MAX_ERROR_RETRY_SECONDS = 6 * 3600
@@ -80,6 +84,18 @@ IGNORED_OUTBOUND_PROTOCOLS = {
     "dns",
     "freedom",
     "loopback",
+}
+
+SING_BOX_PROXY_OUTBOUND_TYPES = {
+    "trojan",
+    "vless",
+}
+
+SING_BOX_TRANSPORT_TYPES = {
+    "grpc",
+    "httpupgrade",
+    "tcp",
+    "ws",
 }
 
 RESERVED_TAGS = {
@@ -1132,29 +1148,58 @@ class _SafeRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def _fetch_subscription_body_once(url: str, request_headers: Dict[str, str] | None = None) -> Tuple[str, Dict[str, str]]:
-    url_s = str(url or "").strip()
-    policy = _subscription_policy()
-    ok, reason = is_url_allowed(url_s, policy)
-    if not ok:
-        raise RuntimeError("url_blocked:" + reason)
+def _subscription_mihomo_proxy_port() -> int | None:
+    """Return the configured loopback-only Mihomo proxy, when available.
 
-    timeout = DEFAULT_FETCH_TIMEOUT_SECONDS
+    Mihomo fake-IP mode intentionally maps regular domain answers into its
+    synthetic subnet. A local Python process is not necessarily redirected
+    through Mihomo, so a subscription fetch to that synthetic address hangs.
+    The UI's optional loopback listener is the safe escape hatch: it resolves
+    the original host inside Mihomo and never exposes a proxy on the LAN.
+    """
+    if not env_flag("XKEEN_SUBSCRIPTION_MIHOMO_PROXY_FALLBACK", True):
+        return None
+
+    raw_port = str(os.environ.get("XKEEN_SUBSCRIPTION_MIHOMO_PROXY_PORT") or "").strip()
+    if raw_port:
+        try:
+            port = int(raw_port)
+        except (TypeError, ValueError):
+            return None
+        return port if 1 <= port <= 65535 else None
+
+    config_path = str(
+        os.environ.get("XKEEN_MIHOMO_CONFIG_FILE") or DEFAULT_MIHOMO_EGRESS_CONFIG_PATH
+    ).strip()
+    if not config_path:
+        return None
     try:
-        timeout = max(3, min(120, int(os.environ.get("XKEEN_SUBSCRIPTION_FETCH_TIMEOUT", str(timeout)))))
-    except Exception:
-        timeout = DEFAULT_FETCH_TIMEOUT_SECONDS
+        from services.mihomo_egress_setup import configured_egress_proxy_port
 
-    max_bytes = DEFAULT_MAX_BODY_BYTES
-    try:
-        max_bytes = max(64 * 1024, int(os.environ.get("XKEEN_SUBSCRIPTION_MAX_BYTES", str(max_bytes))))
+        config_text = load_text(config_path, default="") or ""
+        return configured_egress_proxy_port(config_text)
     except Exception:
-        max_bytes = DEFAULT_MAX_BODY_BYTES
+        return None
 
-    opener = urllib.request.build_opener(_SafeRedirect(policy))
+
+def _read_subscription_response(
+    url: str,
+    *,
+    policy: URLPolicy,
+    timeout: int,
+    max_bytes: int,
+    request_headers: Dict[str, str] | None = None,
+    proxy_port: int | None = None,
+) -> Tuple[str, Dict[str, str]]:
+    handlers: List[Any] = []
+    if proxy_port is not None:
+        proxy_url = f"http://127.0.0.1:{int(proxy_port)}"
+        handlers.append(urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url}))
+    handlers.append(_SafeRedirect(policy))
+    opener = urllib.request.build_opener(*handlers)
     headers = {"User-Agent": "XKeen-UI Subscription Fetcher"}
     headers.update({str(k): str(v) for k, v in (request_headers or {}).items() if str(k or "").strip()})
-    req = urllib.request.Request(url_s, headers=headers)
+    req = urllib.request.Request(str(url or "").strip(), headers=headers)
     with opener.open(req, timeout=timeout) as resp:
         status = getattr(resp, "status", None)
         if isinstance(status, int) and status >= 400:
@@ -1177,9 +1222,134 @@ def _fetch_subscription_body_once(url: str, request_headers: Dict[str, str] | No
                 raise RuntimeError("size_limit")
             chunks.append(chunk)
 
-        headers = {str(k).lower(): str(v) for k, v in dict(resp.headers.items()).items()}
+        response_headers = {str(k).lower(): str(v) for k, v in dict(resp.headers.items()).items()}
+        if proxy_port is not None:
+            response_headers[SUBSCRIPTION_FETCH_VIA_HEADER] = SUBSCRIPTION_FETCH_VIA_MIHOMO
         body = b"".join(chunks).decode("utf-8", errors="replace")
-        return body, headers
+        return body, response_headers
+
+
+def _subscription_host_uses_mihomo_fake_ip(url: str) -> bool:
+    """Return whether the system resolver answered only from Mihomo's fake-IP space."""
+    try:
+        host = str(urlparse(str(url or "")).hostname or "").strip()
+    except Exception:
+        return False
+    if not host:
+        return False
+    try:
+        records = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+    except OSError:
+        return False
+
+    addresses = set()
+    for record in records:
+        try:
+            address = str(record[4][0] or "").strip()
+            addresses.add(ipaddress.ip_address(address))
+        except (IndexError, TypeError, ValueError):
+            continue
+    if not addresses:
+        return False
+    fake_range = ipaddress.ip_network("198.18.0.0/15")
+    return all(address.version == 4 and address in fake_range for address in addresses)
+
+
+def _read_subscription_via_mihomo_proxy(
+    url: str,
+    *,
+    policy: URLPolicy,
+    timeout: int,
+    max_bytes: int,
+    request_headers: Dict[str, str] | None,
+    proxy_port: int,
+) -> Tuple[str, Dict[str, str]]:
+    body, headers = _read_subscription_response(
+        url,
+        policy=policy,
+        timeout=timeout,
+        max_bytes=max_bytes,
+        request_headers=request_headers,
+        proxy_port=proxy_port,
+    )
+    tagged_headers = {str(key).lower(): str(value) for key, value in (headers or {}).items()}
+    tagged_headers[SUBSCRIPTION_FETCH_VIA_HEADER] = SUBSCRIPTION_FETCH_VIA_MIHOMO
+    return body, tagged_headers
+
+
+def _can_retry_subscription_via_mihomo_proxy(exc: BaseException) -> bool:
+    if isinstance(exc, urllib.error.HTTPError):
+        return False
+    if isinstance(exc, urllib.error.URLError):
+        reason = str(getattr(exc, "reason", "") or "").strip()
+        return not reason.startswith("url_blocked:")
+    return isinstance(exc, (TimeoutError, OSError))
+
+
+def _fetch_subscription_body_once(url: str, request_headers: Dict[str, str] | None = None) -> Tuple[str, Dict[str, str]]:
+    url_s = str(url or "").strip()
+    policy = _subscription_policy()
+    ok, reason = is_url_allowed(url_s, policy)
+    if not ok:
+        raise RuntimeError("url_blocked:" + reason)
+
+    timeout = DEFAULT_FETCH_TIMEOUT_SECONDS
+    try:
+        timeout = max(3, min(120, int(os.environ.get("XKEEN_SUBSCRIPTION_FETCH_TIMEOUT", str(timeout)))))
+    except Exception:
+        timeout = DEFAULT_FETCH_TIMEOUT_SECONDS
+
+    max_bytes = DEFAULT_MAX_BODY_BYTES
+    try:
+        max_bytes = max(64 * 1024, int(os.environ.get("XKEEN_SUBSCRIPTION_MAX_BYTES", str(max_bytes))))
+    except Exception:
+        max_bytes = DEFAULT_MAX_BODY_BYTES
+
+    # Avoid spending the full subscription timeout on a synthetic fake-IP
+    # destination. The loopback proxy has the original hostname in CONNECT and
+    # resolves it in Mihomo, so it is both quicker and semantically correct.
+    if _subscription_host_uses_mihomo_fake_ip(url_s):
+        proxy_port = _subscription_mihomo_proxy_port()
+        if proxy_port is not None:
+            try:
+                return _read_subscription_via_mihomo_proxy(
+                    url_s,
+                    policy=policy,
+                    timeout=min(timeout, 12),
+                    max_bytes=max_bytes,
+                    request_headers=request_headers,
+                    proxy_port=proxy_port,
+                )
+            except Exception:
+                # A stale config can name a listener from a stopped Mihomo core.
+                # Preserve the ordinary direct path in that case.
+                pass
+
+    try:
+        return _read_subscription_response(
+            url_s,
+            policy=policy,
+            timeout=timeout,
+            max_bytes=max_bytes,
+            request_headers=request_headers,
+        )
+    except Exception as direct_error:
+        if not _can_retry_subscription_via_mihomo_proxy(direct_error):
+            raise
+        proxy_port = _subscription_mihomo_proxy_port()
+        if proxy_port is None:
+            raise
+        try:
+            return _read_subscription_via_mihomo_proxy(
+                url_s,
+                policy=policy,
+                timeout=min(timeout, 12),
+                max_bytes=max_bytes,
+                request_headers=request_headers,
+                proxy_port=proxy_port,
+            )
+        except Exception:
+            raise direct_error
 
 
 def _mark_happ_resolution_headers(
@@ -1615,6 +1785,13 @@ def _try_subscription_request_variants(
                 + _subscription_hwid_warning_messages(hwid_headers)
                 + [success_message]
             )
+            if (
+                str(headers.get(SUBSCRIPTION_FETCH_VIA_HEADER) or "").strip()
+                == SUBSCRIPTION_FETCH_VIA_MIHOMO
+            ):
+                warnings.append(
+                    "Подписка скачана через локальный Mihomo proxy: это обход fake-IP DNS для процесса панели."
+                )
             meta = {
                 "fetch_mode": fetch_mode,
                 "hwid_response_headers": hwid_headers,
@@ -1670,11 +1847,20 @@ def fetch_subscription_body_for_xray(url: str) -> Tuple[str, Dict[str, str], Dic
         or bool(probe.get("placeholder"))
     )
     happ_warnings = _subscription_happ_resolution_warnings(headers)
+    fetched_via_mihomo_proxy = (
+        str(headers.get(SUBSCRIPTION_FETCH_VIA_HEADER) or "").strip()
+        == SUBSCRIPTION_FETCH_VIA_MIHOMO
+    )
+    fetch_warnings = list(happ_warnings)
+    if fetched_via_mihomo_proxy:
+        fetch_warnings.append(
+            "Подписка скачана через локальный Mihomo proxy: это обход fake-IP DNS для процесса панели."
+        )
     meta: Dict[str, Any] = {
-        "fetch_mode": "direct",
+        "fetch_mode": "mihomo-proxy" if fetched_via_mihomo_proxy else "direct",
         "hwid_response_headers": hwid_headers,
         "hwid_limit_info": _subscription_hwid_limit_info(hwid_headers),
-        "warnings": list(happ_warnings),
+        "warnings": fetch_warnings,
     }
     if happ_warnings:
         meta["fetch_mode"] = "happ-helper"
@@ -1837,6 +2023,203 @@ def _iter_json_proxy_outbounds(obj: Any, parent_name: str = "") -> Iterable[Tupl
         child = obj.get(key)
         if isinstance(child, (dict, list)):
             yield from _iter_json_proxy_outbounds(child, name_hint)
+
+
+def _sing_box_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _sing_box_port(value: Any) -> int | None:
+    try:
+        port = int(value)
+    except (TypeError, ValueError):
+        return None
+    return port if 1 <= port <= 65535 else None
+
+
+def _is_sing_box_proxy_outbound(obj: Any) -> bool:
+    if not isinstance(obj, dict):
+        return False
+    outbound_type = str(obj.get("type") or "").strip().lower()
+    if outbound_type not in SING_BOX_PROXY_OUTBOUND_TYPES:
+        return False
+    return bool(str(obj.get("server") or "").strip()) and _sing_box_port(obj.get("server_port")) is not None
+
+
+def _is_sing_box_subscription_config(obj: Any) -> bool:
+    if not isinstance(obj, dict):
+        return False
+    outbounds = obj.get("outbounds")
+    if not isinstance(outbounds, list):
+        return False
+    return any(
+        isinstance(item, dict) and str(item.get("type") or "").strip()
+        for item in outbounds
+    )
+
+
+def _sing_box_tls_settings(source: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+    tls = source.get("tls") if isinstance(source.get("tls"), dict) else {}
+    if not _sing_box_bool(tls.get("enabled")):
+        return "", {}
+
+    server_name = str(tls.get("server_name") or tls.get("serverName") or "").strip()
+    insecure = _sing_box_bool(tls.get("insecure")) or _sing_box_bool(tls.get("allow_insecure"))
+    alpn_raw = tls.get("alpn")
+    alpn = [str(item).strip() for item in alpn_raw if str(item or "").strip()] if isinstance(alpn_raw, list) else []
+
+    reality = tls.get("reality") if isinstance(tls.get("reality"), dict) else {}
+    if _sing_box_bool(reality.get("enabled")):
+        settings: Dict[str, Any] = {}
+        if server_name:
+            settings["serverName"] = server_name
+        public_key = str(reality.get("public_key") or reality.get("publicKey") or "").strip()
+        if public_key:
+            settings["publicKey"] = public_key
+        short_id = str(reality.get("short_id") or reality.get("shortId") or "").strip()
+        if short_id:
+            settings["shortId"] = short_id
+        spider_x = str(reality.get("spider_x") or reality.get("spiderX") or "").strip()
+        if spider_x:
+            settings["spiderX"] = spider_x
+        utls = tls.get("utls") if isinstance(tls.get("utls"), dict) else {}
+        fingerprint = str(utls.get("fingerprint") or tls.get("fingerprint") or "").strip()
+        if fingerprint:
+            settings["fingerprint"] = fingerprint
+        return "reality", settings
+
+    settings = {}
+    if server_name:
+        settings["serverName"] = server_name
+    if insecure:
+        settings["allowInsecure"] = True
+    if alpn:
+        settings["alpn"] = alpn
+    utls = tls.get("utls") if isinstance(tls.get("utls"), dict) else {}
+    fingerprint = str(utls.get("fingerprint") or tls.get("fingerprint") or "").strip()
+    if fingerprint:
+        settings["fingerprint"] = fingerprint
+    return "tls", settings
+
+
+def _sing_box_stream_settings(source: Dict[str, Any]) -> Dict[str, Any] | None:
+    transport = source.get("transport") if isinstance(source.get("transport"), dict) else {}
+    network = str(transport.get("type") or "tcp").strip().lower() or "tcp"
+    if network not in SING_BOX_TRANSPORT_TYPES:
+        return None
+
+    security, tls_settings = _sing_box_tls_settings(source)
+    stream: Dict[str, Any] = {"network": network}
+    if security:
+        stream["security"] = security
+        stream["realitySettings" if security == "reality" else "tlsSettings"] = tls_settings
+
+    if network == "ws":
+        ws: Dict[str, Any] = {}
+        path = str(transport.get("path") or "").strip()
+        if path:
+            ws["path"] = path
+        headers = transport.get("headers") if isinstance(transport.get("headers"), dict) else {}
+        if headers:
+            ws["headers"] = {
+                str(key): str(value)
+                for key, value in headers.items()
+                if str(key or "").strip() and str(value or "").strip()
+            }
+        if ws:
+            stream["wsSettings"] = ws
+    elif network == "grpc":
+        service_name = str(transport.get("service_name") or transport.get("serviceName") or "").strip()
+        if service_name:
+            stream["grpcSettings"] = {"serviceName": service_name}
+    elif network == "httpupgrade":
+        httpupgrade: Dict[str, Any] = {}
+        path = str(transport.get("path") or "").strip()
+        host = str(transport.get("host") or "").strip()
+        if path:
+            httpupgrade["path"] = path
+        if host:
+            httpupgrade["host"] = host
+        if httpupgrade:
+            stream["httpupgradeSettings"] = httpupgrade
+    return stream
+
+
+def _sing_box_outbound_to_xray(source: Dict[str, Any]) -> Dict[str, Any] | None:
+    """Convert one supported sing-box outbound into an Xray outbound fragment.
+
+    A sing-box client document also contains mobile-only inbounds, DNS and
+    route configuration. Only its endpoint outbound belongs in the router's
+    subscription model.
+    """
+    if not _is_sing_box_proxy_outbound(source):
+        return None
+
+    protocol = str(source.get("type") or "").strip().lower()
+    server = str(source.get("server") or "").strip()
+    port = _sing_box_port(source.get("server_port"))
+    stream = _sing_box_stream_settings(source)
+    if port is None or stream is None:
+        return None
+
+    tag = str(source.get("tag") or "").strip()
+    outbound: Dict[str, Any] = {
+        "protocol": protocol,
+        "settings": {},
+        "streamSettings": stream,
+    }
+    if tag:
+        outbound["tag"] = tag
+
+    if protocol == "vless":
+        uuid = str(source.get("uuid") or "").strip()
+        if not uuid:
+            return None
+        user: Dict[str, Any] = {
+            "id": uuid,
+            "encryption": str(source.get("encryption") or "none").strip() or "none",
+        }
+        flow = str(source.get("flow") or "").strip()
+        if flow:
+            user["flow"] = flow
+        outbound["settings"] = {
+            "vnext": [{"address": server, "port": port, "users": [user]}],
+        }
+        return outbound
+
+    if protocol == "trojan":
+        password = str(source.get("password") or "").strip()
+        if not password:
+            return None
+        outbound["settings"] = {
+            "servers": [{"address": server, "port": port, "password": password}],
+        }
+        return outbound
+    return None
+
+
+def _iter_sing_box_proxy_outbounds(obj: Any) -> Iterable[Tuple[Dict[str, Any], str]]:
+    if not _is_sing_box_subscription_config(obj):
+        return
+    outbounds = obj.get("outbounds")
+    if not isinstance(outbounds, list):
+        return
+    for source in outbounds:
+        if not isinstance(source, dict):
+            continue
+        outbound = _sing_box_outbound_to_xray(source)
+        if outbound is None:
+            continue
+        yield outbound, _json_name_hint(source)
+
+
+def _iter_subscription_json_proxy_outbounds(obj: Any) -> Iterable[Tuple[Dict[str, Any], str]]:
+    if _is_sing_box_subscription_config(obj):
+        yield from _iter_sing_box_proxy_outbounds(obj)
+        return
+    yield from _iter_json_proxy_outbounds(obj)
 
 
 def _parse_profile_interval_hours(headers: Dict[str, str]) -> int | None:
@@ -2480,7 +2863,7 @@ def build_subscription_json_outbounds(
     excluded_keys = {str(item or "").strip() for item in (excluded_node_keys or []) if str(item or "").strip()}
     candidates: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
     seen_logical_names: set[str] = set()
-    for idx, (source, name_hint) in enumerate(_iter_json_proxy_outbounds(obj)):
+    for idx, (source, name_hint) in enumerate(_iter_subscription_json_proxy_outbounds(obj)):
         meta = _json_outbound_node_meta(source, name_hint, idx)
         logical_name = _json_profile_identity_name(source, meta.get("name"))
         if logical_name and logical_name in seen_logical_names:

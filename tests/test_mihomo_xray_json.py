@@ -225,7 +225,6 @@ def test_convert_hysteria_v2_emits_hysteria2_yaml():
     assert parsed["up"] == "110 mbps"
     assert parsed["down"] == "110 mbps"
 
-
 @pytest.mark.parametrize("short_id", ["28000000", "12345", "0"])
 def test_numeric_looking_short_ids_stay_strings(short_id):
     """Reality short-id values that look numeric must round-trip as strings."""
@@ -396,3 +395,76 @@ def test_format_proxies_section_indents_each_block():
     assert len(parsed["proxies"]) == 2
     assert {p["name"] for p in parsed["proxies"]} == {"A", "B"}
     assert "mode: auto\n\n  - name: B" in text
+
+
+@pytest.mark.parametrize(
+    ("protocol", "outbound", "expected"),
+    [
+        (
+            "vless",
+            {
+                "type": "vless",
+                "tag": "proxy",
+                "server": "vless.example.com",
+                "server_port": 443,
+                "uuid": "11111111-1111-1111-1111-111111111111",
+                "tls": {"enabled": True, "server_name": "edge.example.com"},
+                "transport": {"type": "ws", "path": "/vless-ws"},
+            },
+            {
+                "type": "vless",
+                "server": "vless.example.com",
+                "uuid": "11111111-1111-1111-1111-111111111111",
+                "servername": "edge.example.com",
+                "path": "/vless-ws",
+            },
+        ),
+        (
+            "trojan",
+            {
+                "type": "trojan",
+                "tag": "proxy",
+                "server": "trojan.example.com",
+                "server_port": 443,
+                "password": "test-password",
+                "tls": {"enabled": True, "server_name": "edge.example.com"},
+                "transport": {"type": "ws", "path": "/trojan-ws"},
+            },
+            {
+                "type": "trojan",
+                "server": "trojan.example.com",
+                "password": "test-password",
+                "sni": "edge.example.com",
+                "path": "/trojan-ws",
+            },
+        ),
+    ],
+)
+def test_convert_subscription_source_text_converts_sing_box_client_configs(protocol, outbound, expected):
+    body = json.dumps(
+        {
+            "inbounds": [{"type": "tun", "tag": "tun-in"}],
+            "dns": {"servers": [{"tag": "remote", "address": "1.1.1.1"}]},
+            "route": {"rules": [{"inbound": "tun-in", "outbound": "proxy"}]},
+            "outbounds": [{"type": "direct", "tag": "direct"}, outbound],
+        }
+    )
+
+    proxies, skipped, source_format = convert_subscription_source_text(body)
+
+    assert source_format == "xray-json"
+    assert skipped == []
+    assert [proxy.name for proxy in proxies] == ["proxy"]
+    parsed = yaml.safe_load(proxies[0].yaml)[0]
+    assert parsed["type"] == expected["type"]
+    assert parsed["server"] == expected["server"]
+    assert parsed["port"] == 443
+    assert parsed["network"] == "ws"
+    assert parsed["tls"] is True
+    assert parsed["ws-opts"]["path"] == expected["path"]
+    if protocol == "vless":
+        assert parsed["uuid"] == expected["uuid"]
+        assert parsed["servername"] == expected["servername"]
+    else:
+        assert parsed["password"] == expected["password"]
+        assert parsed["sni"] == expected["sni"]
