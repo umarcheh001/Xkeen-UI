@@ -185,6 +185,29 @@ def _backup_tar_unsupported_payload() -> Dict[str, Any]:
 def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
     bp = Blueprint("devtools", __name__)
 
+    # Разовые параметры одного запуска раннера. После самообновления панель
+    # перезапускается из раннера и наследует их, и без чистки следующий запуск
+    # без `resolved` молча поставил бы заново прошлый релиз.
+    _RUNNER_PER_RUN_ENV = (
+        "XKEEN_UI_LOCK_PRECREATED",
+        "XKEEN_UI_UPDATE_ACTION",
+        "XKEEN_UI_UPDATE_ASSET_URL",
+        "XKEEN_UI_UPDATE_ASSET_NAME",
+        "XKEEN_UI_UPDATE_TAG",
+        "XKEEN_UI_UPDATE_SHA_URL",
+        "XKEEN_UI_UPDATE_SHA_KIND",
+        "XKEEN_UI_UPDATE_SKIP_BACKUP",
+        "XKEEN_UI_UPDATE_RUNNER_PID",
+        "XKEEN_UI_ROLLBACK_FILE",
+        "XKEEN_UI_ROLLBACK_KEEP_CURRENT",
+    )
+
+    def _runner_base_env() -> Dict[str, str]:
+        env = os.environ.copy()
+        for name in _RUNNER_PER_RUN_ENV:
+            env.pop(name, None)
+        return env
+
     def _find_update_runner() -> str:
         """Return absolute path to update runner script (best-effort)."""
         # This module was moved under routes/. Keep script lookup stable by
@@ -540,7 +563,7 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
         }
         write_status(paths["status_file"], base_status)
 
-        env = os.environ.copy()
+        env = _runner_base_env()
         env["XKEEN_UI_LOCK_PRECREATED"] = "1"
         env["XKEEN_UI_UPDATE_DIR"] = paths["update_dir"]
         env["XKEEN_UI_UPDATE_ACTION"] = "update"
@@ -680,7 +703,7 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
         }
         write_status(paths["status_file"], base_status)
 
-        env = os.environ.copy()
+        env = _runner_base_env()
         env["XKEEN_UI_LOCK_PRECREATED"] = "1"
         env["XKEEN_UI_UPDATE_DIR"] = paths["update_dir"]
         env["XKEEN_UI_UPDATE_ACTION"] = "rollback"

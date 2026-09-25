@@ -131,6 +131,72 @@ class DevtoolsUpdateSmokeTests(unittest.TestCase):
         env = captured["kwargs"]["env"]
         self.assertEqual(env["XKEEN_UI_UPDATE_SKIP_BACKUP"], "1")
 
+    # После самообновления панель перезапускается из раннера и наследует его
+    # окружение. Без чистки следующий запуск без `resolved` молча ставил бы
+    # заново прошлый релиз из унаследованного XKEEN_UI_UPDATE_ASSET_URL.
+    _LEAKED_RUN_ENV = {
+        "XKEEN_UI_UPDATE_ASSET_URL": "https://github.com/umarcheh001/Xkeen-UI/releases/download/v.2.8.4/xkeen-ui-routing.tar.gz",
+        "XKEEN_UI_UPDATE_TAG": "v.2.8.4",
+        "XKEEN_UI_UPDATE_SHA_URL": "https://github.com/umarcheh001/Xkeen-UI/releases/download/v.2.8.4/xkeen-ui-routing.tar.gz.sha256",
+        "XKEEN_UI_UPDATE_SHA_KIND": "sidecar",
+        "XKEEN_UI_UPDATE_ASSET_NAME": "xkeen-ui-routing.tar.gz",
+        "XKEEN_UI_UPDATE_SKIP_BACKUP": "1",
+        "XKEEN_UI_UPDATE_RUNNER_PID": "17196",
+        "XKEEN_UI_ROLLBACK_FILE": "/opt/var/lib/xkeen-ui/backups/old.tar.gz",
+        "XKEEN_UI_ROLLBACK_KEEP_CURRENT": "1",
+    }
+
+    def _run_update_with_leaked_env(self, payload):
+        devtools = _reload("routes.devtools")
+        captured = {}
+
+        class FakeProcess:
+            pid = 4343
+
+        def fake_popen(*args, **kwargs):
+            captured["kwargs"] = kwargs
+            return FakeProcess()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app = Flask("devtools-update-leaked-env")
+            leaked = dict(self._LEAKED_RUN_ENV, XKEEN_UI_UPDATE_DIR=tmp, XKEEN_UI_UPDATE_TIMEOUT_MARK="keep")
+            with patch.dict(os.environ, leaked, clear=False):
+                app.register_blueprint(devtools.create_devtools_blueprint(tmp))
+
+            with patch.dict(os.environ, leaked, clear=False), patch.object(
+                devtools.shutil, "which", self._which_with_update_deps
+            ), patch.object(
+                devtools, "_tar_supports_exclude", return_value=True
+            ), patch.object(
+                devtools.subprocess, "Popen", fake_popen
+            ), patch.object(
+                devtools, "get_build_info", return_value={"repo": "umarcheh001/Xkeen-UI", "channel": "stable"}
+            ):
+                response = app.test_client().post("/api/devtools/update/run", json=payload)
+
+        self.assertTrue(response.get_json()["started"])
+        return captured["kwargs"]["env"]
+
+    def test_update_run_drops_per_run_overrides_inherited_from_previous_update(self):
+        env = self._run_update_with_leaked_env({})
+
+        for name in self._LEAKED_RUN_ENV:
+            self.assertNotIn(name, env)
+        # Настройки пользователя не трогаем — чистятся только разовые параметры запуска.
+        self.assertEqual(env["XKEEN_UI_UPDATE_TIMEOUT_MARK"], "keep")
+        self.assertEqual(env["XKEEN_UI_UPDATE_ACTION"], "update")
+
+    def test_update_run_still_passes_fresh_resolved_release(self):
+        fresh = "https://github.com/umarcheh001/Xkeen-UI/releases/download/v.2.8.5/xkeen-ui-routing.tar.gz"
+        env = self._run_update_with_leaked_env(
+            {"resolved": {"asset_url": fresh, "tag": "v.2.8.5", "sha_kind": "sidecar"}}
+        )
+
+        self.assertEqual(env["XKEEN_UI_UPDATE_ASSET_URL"], fresh)
+        self.assertEqual(env["XKEEN_UI_UPDATE_TAG"], "v.2.8.5")
+        self.assertEqual(env["XKEEN_UI_UPDATE_SHA_KIND"], "sidecar")
+        self.assertNotIn("XKEEN_UI_UPDATE_SHA_URL", env)
+
     def test_update_log_is_exposed_in_devtools_logs(self):
         devtools = _reload("routes.devtools")
 
