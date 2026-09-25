@@ -94,3 +94,72 @@ def test_gitattributes_keeps_shell_scripts_on_lf():
 
     assert "*.sh text eol=lf" in attributes
     assert "*.py text eol=lf" in attributes
+
+
+# --- Остальные текстовые файлы: локальный архив = релизный -------------------
+#
+# 25.09.2026: локальный архив с Windows вёз шаблоны, JS и HTML с CRLF, релиз из
+# CI — с LF. Роутер, который ставил то один, то другой, «менял» каждый файл, а
+# установщик копил резервные копии шаблонов. Приводим к LF ровно то, что git
+# хранит с LF: такие CRLF в рабочем дереве добавил сам git при выгрузке. Файлы,
+# которые и в репозитории лежат со смешанными окончаниями, CI отдаёт как есть —
+# значит, и мы их не трогаем.
+
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+
+import pytest  # noqa: E402
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(["git", *args], cwd=str(repo), check=True, capture_output=True)
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="нужен git")
+def test_tracked_lf_text_is_packed_with_lf_and_mixed_files_stay_as_stored(tmp_path):
+    builder = _load_builder()
+    repo = tmp_path / "repo"
+    project = repo / "xkeen-ui"
+    (project / "templates").mkdir(parents=True)
+    _git(repo, "init", "-q")
+    _git(repo, "config", "core.autocrlf", "false")
+    (project / "templates" / "base.jsonc").write_bytes(b"{\n  \"a\": 1\n}\n")
+    (project / "mixed.js").write_bytes(b"a\r\nb\n")
+    (project / "logo.png").write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00")
+    _git(repo, "add", "-A")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init")
+    # Так их выписал бы git на Windows с core.autocrlf=true.
+    (project / "templates" / "base.jsonc").write_bytes(b"{\r\n  \"a\": 1\r\n}\r\n")
+
+    packaged = tmp_path / "pkg" / "xkeen-ui"
+    shutil.copytree(project, packaged)
+    lf_paths = builder.git_lf_text_paths(repo, "xkeen-ui")
+    changed = builder.normalize_tracked_text_line_endings(packaged, lf_paths)
+
+    assert changed == 1
+    assert (packaged / "templates" / "base.jsonc").read_bytes() == b"{\n  \"a\": 1\n}\n"
+    assert (packaged / "mixed.js").read_bytes() == b"a\r\nb\n"
+    assert (packaged / "logo.png").read_bytes() == b"\x89PNG\r\n\x1a\n\x00\x00"
+
+
+def test_no_git_means_nothing_extra_is_touched(tmp_path):
+    builder = _load_builder()
+
+    assert builder.git_lf_text_paths(tmp_path / "not-a-repo", "xkeen-ui") == set()
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="нужен git")
+def test_real_template_is_packed_exactly_as_stored_in_git(tmp_path):
+    builder = _load_builder()
+    rel = "opt/etc/xray/templates/routing/05_routing_base.jsonc"
+    packaged = tmp_path / "xkeen-ui"
+    target = packaged / rel
+    target.parent.mkdir(parents=True)
+    target.write_bytes((ROOT / "xkeen-ui" / rel).read_bytes())
+
+    builder.normalize_tracked_text_line_endings(packaged, builder.git_lf_text_paths(ROOT, "xkeen-ui"))
+
+    stored = subprocess.run(
+        ["git", "show", f"HEAD:xkeen-ui/{rel}"], cwd=str(ROOT), check=True, capture_output=True
+    ).stdout
+    assert target.read_bytes() == stored

@@ -271,6 +271,47 @@ def normalize_script_line_endings(root: Path) -> int:
     return normalized
 
 
+# Остальной текст роутеру CRLF не ломает, но из-за него локальный архив
+# расходился с релизным из CI (там Linux, LF): роутер, который ставил то один,
+# то другой, «менял» каждый файл, и установщик копил резервные копии шаблонов.
+# Приводим к LF ровно то, что git хранит с LF: такой CRLF в рабочем дереве
+# добавил сам git при выгрузке на Windows. Файлы, которые и в репозитории лежат
+# со смешанными окончаниями, CI отдаёт как есть — и мы их не трогаем.
+def git_lf_text_paths(repo_root: Path, pathspec: str) -> Set[str]:
+    """Paths under ``pathspec`` (relative to it) that git stores as LF-only text."""
+    try:
+        output = subprocess.check_output(
+            ["git", "ls-files", "--eol", "-z", "--", pathspec],
+            cwd=str(repo_root),
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        return set()
+    prefix = pathspec.rstrip("/") + "/"
+    paths: Set[str] = set()
+    for entry in output.decode("utf-8", "surrogateescape").split("\0"):
+        info, sep, path = entry.partition("\t")
+        if not sep or not info.split() or info.split()[0] != "i/lf":
+            continue
+        if path.startswith(prefix):
+            paths.add(path[len(prefix):])
+    return paths
+
+
+def normalize_tracked_text_line_endings(root: Path, lf_paths: Set[str]) -> int:
+    normalized = 0
+    for rel in sorted(lf_paths):
+        path = root / rel
+        if path.is_symlink() or not path.is_file():
+            continue
+        data = path.read_bytes()
+        if b"\r\n" not in data:
+            continue
+        path.write_bytes(data.replace(b"\r\n", b"\n"))
+        normalized += 1
+    return normalized
+
+
 # Статику отдаёт gevent pywsgi, а он ответы не сжимает. Жать почти мегабайт CSS
 # на лету на процессоре роутера дороже сэкономленного трафика, поэтому сжимаем
 # один раз здесь, на сборке: роутер только читает готовый .gz с диска.
@@ -452,6 +493,11 @@ def main() -> int:
         normalized = normalize_script_line_endings(package_root)
         if normalized:
             print(f"[*] line endings normalized to LF in {normalized} script(s)")
+        text_normalized = normalize_tracked_text_line_endings(
+            package_root, git_lf_text_paths(REPO_ROOT, PROJECT_DIRNAME)
+        )
+        if text_normalized:
+            print(f"[*] line endings normalized to LF in {text_normalized} text file(s)")
         packed = precompress_static_assets(package_root)
         if packed.files:
             saved = packed.original_bytes - packed.compressed_bytes
