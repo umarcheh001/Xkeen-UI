@@ -2434,6 +2434,16 @@ button:disabled {
   box-shadow: 0 10px 30px var(--xk-tooltip-shadow, rgba(0, 0, 0, 0.55));
 }
 
+#xk-tooltip-portal .xk-tooltip-bubble.is-multiline {
+  max-width: 360px;
+  text-align: left;
+  white-space: pre-line;
+}
+
+#xk-tooltip-portal .xk-tooltip-bubble.is-multiline .xk-tooltip-text::first-line {
+  font-weight: 650;
+}
+
 #xk-tooltip-portal .xk-tooltip-arrow {
   position: absolute;
   width: 12px;

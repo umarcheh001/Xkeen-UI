@@ -1172,9 +1172,9 @@ test('subscriptions form uses icon-only actions, visible switches, and themed ad
   ]);
   expect(contract.checks).toEqual([
     expect.objectContaining({ id: 'outbounds-subscriptions-enabled', label: 'Авто', inputLabel: 'Авто', text: 'Автообн.', inputOpacity: '0' }),
-    expect.objectContaining({ id: 'outbounds-subscriptions-ping', label: 'Пинг', inputLabel: 'Пинг', text: 'Пинг', inputOpacity: '0' }),
+    expect.objectContaining({ id: 'outbounds-subscriptions-ping', label: 'Замер', inputLabel: 'Замер', text: 'Замер', inputOpacity: '0' }),
     expect.objectContaining({ id: 'outbounds-subscriptions-refresh-now', label: 'Обновить', inputLabel: 'Обновить', text: 'Сразу', inputOpacity: '0' }),
-    expect.objectContaining({ id: 'outbounds-subscriptions-routing-auto-rule', label: 'Служебный пул', inputLabel: 'Служебный пул', text: 'Pool', inputOpacity: '0' }),
+    expect.objectContaining({ id: 'outbounds-subscriptions-routing-auto-rule', label: 'Пул', inputLabel: 'Пул', text: 'Пул', inputOpacity: '0' }),
   ]);
   for (const check of contract.checks) {
     expect(check.sliderOffset).toBeGreaterThanOrEqual(9);
@@ -1182,6 +1182,80 @@ test('subscriptions form uses icon-only actions, visible switches, and themed ad
   }
   expect(contract.hasCaret).toBe(true);
   expect(contract.advancedOpen).toBe(true);
+});
+
+// «Пул» — это leastPing-балансировщик: без «Замера» ему не по чему выбирать,
+// и Xray уводит трафик в fallbackTag (direct). Поэтому «Пул» включает «Замер»
+// и не даёт его выключить, а старую сохранённую пару «Пул без замера»
+// окно не чинит молча, а показывает предупреждение.
+test('subscription pool keeps latency probing on and warns about a pool without it', async ({ page }) => {
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscriptions: [] }),
+    });
+  });
+
+  await openSubscriptionsModal(page);
+  const advanced = page.locator('#outbounds-subscriptions-modal .xk-sub-advanced');
+  await advanced.locator('summary').click();
+  await expect(advanced).toHaveAttribute('open', '');
+
+  const ping = page.locator('#outbounds-subscriptions-ping');
+  const pool = page.locator('#outbounds-subscriptions-routing-auto-rule');
+  const poolLabel = pool.locator('xpath=ancestor::label[1]');
+  const pingLabel = ping.locator('xpath=ancestor::label[1]');
+  const warning = page.locator('#outbounds-subscriptions-pool-warning');
+
+  await expect(pool).toBeChecked();
+  await expect(ping).toBeChecked();
+  await expect(ping).toBeDisabled();
+  await expect(warning).toBeHidden();
+  await expect(pingLabel).toHaveAttribute('data-tooltip', /«Замер» выключить нельзя/);
+
+  await poolLabel.click();
+  await expect(pool).not.toBeChecked();
+  await expect(ping).toBeEnabled();
+  await pingLabel.click();
+  await expect(ping).not.toBeChecked();
+  await expect(warning).toBeHidden();
+
+  await poolLabel.click();
+  await expect(pool).toBeChecked();
+  await expect(ping).toBeChecked();
+  await expect(ping).toBeDisabled();
+
+  // Так выглядит подписка, сохранённая до появления блокировки.
+  await page.evaluate(() => {
+    const input = document.getElementById('outbounds-subscriptions-ping');
+    input.disabled = false;
+    input.checked = false;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await expect(warning).toBeVisible();
+  await expect(warning).toContainText('пустит трафик напрямую');
+  await expect(ping).toBeEnabled();
+  await pingLabel.click();
+  await expect(ping).toBeChecked();
+  await expect(warning).toBeHidden();
+
+  await poolLabel.hover();
+  const bubble = page.locator('#xk-tooltip-portal .xk-tooltip-bubble');
+  await expect(bubble).toBeVisible();
+  await expect(bubble).toHaveClass(/is-multiline/);
+  await expect(bubble).toHaveCSS('white-space', 'pre-line');
+  const tipText = await bubble.locator('.xk-tooltip-text').textContent();
+  // Абзацы разделены пустой строкой: заголовок, пусто, первый абзац.
+  const tipLines = tipText.split('\n');
+  expect(tipLines[0]).toBe('Пускать трафик через самый быстрый узел');
+  expect(tipLines[1]).toBe('');
+  expect(tipLines[2]).toMatch(/^Узлы подписки попадают/);
+  expect(tipText).not.toMatch(/\n\n\n/);
 });
 
 test('subscriptions routing controls stay compact and balancers wrap as tiles', async ({ page }) => {

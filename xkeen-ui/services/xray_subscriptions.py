@@ -554,7 +554,7 @@ def _normalize_generated_outbound_baselines(value: Any) -> List[Dict[str, Any]]:
 def _deprecated_transport_message(transport: str) -> str:
     value = str(transport or "").strip().lower()
     if value == "grpc":
-        return "Transport gRPC устарел в актуальных версиях Xray; по возможности используйте XHTTP (stream-up H2)."
+        return "Транспорт gRPC устарел в актуальных версиях Xray; по возможности используйте XHTTP (stream-up H2)."
     return ""
 
 
@@ -586,14 +586,14 @@ def _subscription_result_warnings(nodes: Iterable[Dict[str, Any]]) -> List[str]:
     if len(grpc_nodes) == 1:
         name = grpc_nodes[0]
         return [
-            f'Узел "{name}" использует устаревший transport gRPC. {_deprecated_transport_message("grpc")}'
+            f'Узел "{name}" использует устаревший транспорт gRPC. {_deprecated_transport_message("grpc")}'
         ]
 
     preview = ", ".join(grpc_nodes[:3])
     if len(grpc_nodes) > 3:
         preview += f" и ещё {len(grpc_nodes) - 3}"
     return [
-        f"В generated fragment есть {len(grpc_nodes)} узла с устаревшим transport gRPC ({preview}). {_deprecated_transport_message('grpc')}"
+        f"Узлов с устаревшим транспортом gRPC: {len(grpc_nodes)} ({preview}). {_deprecated_transport_message('grpc')}"
     ]
 
 
@@ -1542,7 +1542,7 @@ def _subscription_happ_resolution_warnings(headers: Dict[str, str] | None) -> Li
         return [f"Ссылка Happ расшифрована внешним сервисом из {happ_links.HAPP_DECRYPTOR_REMOTE_URL_ENV}."]
     if via == "decryptor":
         return ["Подписка получена по ссылке Happ."]
-    return ["Подписка получена через Happ helper."]
+    return ["Подписка получена через помощник Happ."]
 
 
 _HWID_PLACEHOLDER_LINK_RE = re.compile(r"://[^\s#]*@?0\.0\.0\.0:1(?=$|[/?#])", re.IGNORECASE)

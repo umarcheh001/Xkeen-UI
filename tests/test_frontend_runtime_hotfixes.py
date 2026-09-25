@@ -58,8 +58,8 @@ def test_happ_deep_links_reach_backend_import_paths():
     assert "const isHappDeepLink = protocol === 'happ:'" in outbounds
     assert r"/^happ:\/\/crypt[0-9]*\//i.test(state.url)" in outbounds
     assert 'type="text" inputmode="url"' in outbounds
-    assert "HTTP(S) URL или Happ deep-link" in outbounds
-    assert "mobile connector URL" in outbounds
+    assert "HTTP(S)-адрес или ссылку Happ" in outbounds
+    assert "адрес мобильного коннектора" in outbounds
 
 
 def test_hwid_modal_handoffs_unsupported_inputs_to_general_import():

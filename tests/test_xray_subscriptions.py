@@ -341,7 +341,7 @@ def test_preview_subscription_accepts_happ_landing_when_helper_returns_links(mon
     assert preview["ok"] is True
     assert preview["count"] == 1
     assert preview["fetch_mode"] == "happ-helper"
-    assert any("Happ helper" in line for line in preview["warnings"])
+    assert any("помощник Happ" in line for line in preview["warnings"])
 
 
 def test_fetch_subscription_body_for_xray_retries_raw_happ_with_happ_hwid_after_direct_error(monkeypatch):

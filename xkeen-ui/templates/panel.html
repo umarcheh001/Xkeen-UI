@@ -737,7 +737,7 @@
           <div class="xk-sub-nodes-head-actions xk-outbounds-probe-toolbar">
             <div id="outbounds-nodes-probe-mode" class="xk-sub-probe-mode" role="group" aria-label="Режим проверки задержки">
               <button type="button" class="xk-sub-probe-mode-btn is-active" data-probe-mode="tcp" aria-pressed="true" data-tooltip="Проверить доступность TCP-порта, как HAPP. Это не подтверждает работу прокси.">TCP</button>
-              <button type="button" class="xk-sub-probe-mode-btn" data-probe-mode="proxy" aria-pressed="false" data-tooltip="Выполнить контрольный HTTPS-запрос через узел и Xray.">Proxy</button>
+              <button type="button" class="xk-sub-probe-mode-btn" data-probe-mode="proxy" aria-pressed="false" data-tooltip="Выполнить контрольный HTTPS-запрос через узел и Xray.">Прокси</button>
             </div>
             <button type="button" id="outbounds-nodes-pingall" class="btn-secondary btn-compact xk-sub-icon-btn" title="Пинг всех узлов" data-tooltip="Проверить задержку всех proxy-узлов в текущем 04_outbounds-фрагменте." aria-label="Пинг всех узлов" disabled>
               {{ op_icon('ping', 'xk-sub-icon-glyph xk-sub-pingall-glyph') }}
@@ -3225,7 +3225,7 @@ rule-set:github@domain
             <a href="#" data-help-target="xk-bhelp-what">Как связаны компоненты</a>
             <a href="#" data-help-target="xk-bhelp-quickstart">Быстрый старт</a>
             <a href="#" data-help-target="xk-bhelp-manual">Источники прокси</a>
-            <a href="#" data-help-target="xk-bhelp-subscriptions">Подписки и routing</a>
+            <a href="#" data-help-target="xk-bhelp-subscriptions">Подписки и маршрутизация</a>
             <a href="#" data-help-target="xk-bhelp-balancer">Ручной балансировщик</a>
             <a href="#" data-help-target="xk-bhelp-rules">Правила и порядок</a>
             <a href="#" data-help-target="xk-bhelp-forced">Сервисы и IP</a>
@@ -3279,23 +3279,23 @@ rule-set:github@domain
             </section>
 
             <section class="xk-balancer-help-section" aria-labelledby="xk-bhelp-subscriptions">
-              <h3 id="xk-bhelp-subscriptions">Подписки и routing</h3>
+              <h3 id="xk-bhelp-subscriptions">Подписки и маршрутизация</h3>
               <details class="xk-balancer-help-details" open>
                 <summary>Что делает форма подписки сейчас</summary>
                 <ul>
-                  <li><b>Tag prefix</b> формирует generated-теги вида <code>prefix--node</code>. Xray-селекторы сопоставляются по началу тега.</li>
-                  <li><b>Пинг</b> добавляет prefix в <code>observatory.subjectSelector</code>; сам по себе routing не меняет.</li>
-                  <li><b>Служебный пул</b> ведёт auto-managed leastPing-balancer и правило <code>xk_auto_leastPing</code> для redirect/tproxy.</li>
-                  <li><b>Balancer selectors</b> подключает prefix к отмеченным пользовательским балансировщикам.</li>
-                  <li>Исключённые в списке узлы не попадают в generated-фрагмент при сохранении или следующем обновлении.</li>
+                  <li><b>Префикс тегов</b> — с него начинаются теги всех узлов подписки: <code>prefix--узел</code>. Балансировщики и замер находят узлы подписки по этому префиксу.</li>
+                  <li><b>Замер</b> — Xray в фоне проверяет задержку узлов подписки (префикс попадает в <code>observatory.subjectSelector</code>). Без замера балансировщикам не по чему выбирать быстрый узел. На маршрутизацию сам по себе не влияет.</li>
+                  <li><b>Пул</b> пускает трафик клиентов роутера (redirect/tproxy) через самый быстрый узел: узлы подписки попадают в служебный балансировщик <code>proxy</code>, а правило <code>xk_auto_leastPing</code> направляет трафик в него. Работает только вместе с «Замером»; если живых узлов нет, трафик идёт напрямую.</li>
+                  <li><b>Найденные балансировщики</b> — в отмеченные балансировщики из <code>05_routing.json</code> добавляются узлы подписки; узлы, которые там уже были, остаются.</li>
+                  <li>Исключённые в списке узлы не попадают в файл узлов подписки при сохранении или следующем обновлении.</li>
                 </ul>
               </details>
               <details class="xk-balancer-help-details">
                 <summary>Режим «Применение»</summary>
                 <div class="xk-balancer-help-flow">
-                  <div><b>Безопасно</b><span>Синхронизирует leastPing-пул и fallback, не переносит существующие явные proxy-правила.</span></div>
-                  <div><b>Жёстко · pool</b><span>Совместимые auto-правила на одиночный proxy переводятся на <code>balancerTag</code> пула.</span></div>
-                  <div><b>Только подписка</b><span>Служебный пул использует generated nodes; одиночный proxy в ручном outbounds-файле не требуется.</span></div>
+                  <div><b>Рядом с моим сервером</b><span>Ничего твоего не трогает: остальной трафик идёт через самый быстрый узел, и твой сервер vless-reality тоже участвует в выборе. Сайты, которые ты сам направил на свой сервер, так и ходят через него.</span></div>
+                  <div><b>Мои правила — через пул</b><span>Правила «сайт → мой сервер» переводятся на пул (<code>balancerTag</code>). Правила со своим <code>ruleTag</code> не трогаются; при возврате в «Рядом с моим сервером» правила возвращаются как были.</span></div>
+                  <div><b>Только подписка</b><span>Служебный пул работает только на узлах подписки, и весь проксируемый трафик, в том числе по твоим правилам, идёт через него. Отдельный сервер в ручном файле outbounds не нужен; правила на direct, block и dns остаются.</span></div>
                 </div>
               </details>
               <div class="xk-balancer-help-callout">

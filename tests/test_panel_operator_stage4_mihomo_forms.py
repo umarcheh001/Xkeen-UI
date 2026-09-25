@@ -34,7 +34,7 @@ def test_profiles_markup_and_runtime_expose_form_table_validation_contract():
 
 def test_subscription_form_aligns_labels_hints_validation_units_and_disclosure():
     runtime = SUBSCRIPTIONS_JS.read_text(encoding="utf-8")
-    for fragment in ('class="xk-sub-advanced xk-sub-wide"', '<summary>', 'class="xk-sub-advanced-heading"', 'Дополнительные настройки</span>', 'class="xk-sub-advanced-grid"', 'id="outbounds-subscriptions-interval-unit" class="xk-op-unit">ч</span>', 'required aria-required="true" aria-describedby="outbounds-subscriptions-url-note"', 'aria-describedby="outbounds-subscriptions-name-filter-note"', 'aria-describedby="outbounds-subscriptions-type-filter-note"', 'aria-describedby="outbounds-subscriptions-transport-filter-note"', 'class="xk-sub-field-hint">Regex; пусто — все имена.', "el.setAttribute('aria-invalid', invalid ? 'true' : 'false')", "setAttribute('role', invalid ? 'alert' : 'status')"):
+    for fragment in ('class="xk-sub-advanced xk-sub-wide"', '<summary>', 'class="xk-sub-advanced-heading"', 'Дополнительные настройки</span>', 'class="xk-sub-advanced-grid"', 'id="outbounds-subscriptions-interval-unit" class="xk-op-unit">ч</span>', 'required aria-required="true" aria-describedby="outbounds-subscriptions-url-note"', 'aria-describedby="outbounds-subscriptions-name-filter-note"', 'aria-describedby="outbounds-subscriptions-type-filter-note"', 'aria-describedby="outbounds-subscriptions-transport-filter-note"', 'class="xk-sub-field-hint">Рег. выражение; пусто — все.', "el.setAttribute('aria-invalid', invalid ? 'true' : 'false')", "setAttribute('role', invalid ? 'alert' : 'status')"):
         assert fragment in runtime
 
 

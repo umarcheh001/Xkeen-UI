@@ -17,6 +17,7 @@
 
   const ATTR = 'data-tooltip';
   const PLACEMENT_ATTR = 'data-tooltip-placement';
+  const MULTILINE_ATTR = 'data-tooltip-multiline';
   // We skip only <option> because it behaves inconsistently across browsers.
   // Inputs/selects/textarea are supported by the portal tooltip renderer.
   const SKIP_TAGS = new Set(['OPTION', 'SCRIPT', 'STYLE']);
@@ -311,13 +312,20 @@
         return;
       }
 
-      const tip = normalizeText(el.getAttribute(ATTR));
+      // Многострочная подсказка (data-tooltip-multiline): каждая строка —
+      // отдельный абзац, между абзацами пустая строка, чтобы заголовок и
+      // пункты не сливались в один сплошной текст.
+      const multiline = !!(el.hasAttribute && el.hasAttribute(MULTILINE_ATTR));
+      const tip = multiline
+        ? String(el.getAttribute(ATTR) || '').split('\n').map(normalizeText).filter(Boolean).join('\n\n')
+        : normalizeText(el.getAttribute(ATTR));
       if (!tip) {
         hide();
         return;
       }
 
       // Fill text first, then measure bubble.
+      bubble.classList.toggle('is-multiline', multiline);
       textEl.textContent = tip;
       portal.removeAttribute('hidden');
       portal.style.opacity = '0';

@@ -23,7 +23,7 @@ def test_xray_subscription_form_exposes_regex_filters_and_payload_fields():
     assert '<span class="xk-pool-fieldlabel">Фильтр по имени</span>' in outbounds_src
     assert '<span class="xk-pool-fieldlabel">Фильтр по типу</span>' in outbounds_src
     assert '<span class="xk-pool-fieldlabel">Фильтр по транспорту</span>' in outbounds_src
-    assert '<span class="xk-pool-fieldlabel">Balancer selectors</span>' in outbounds_src
+    assert '<span class="xk-pool-fieldlabel">Найденные балансировщики</span>' in outbounds_src
     assert '<span class="xk-pool-fieldlabel">Интервал обновления</span>' in outbounds_src
     assert '<option value="subscription-only">Только подписка</option>' in outbounds_src
     assert "const SUB_ROUTING_MODE_SUBSCRIPTION_ONLY = 'subscription-only';" in outbounds_src
@@ -320,7 +320,7 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "transport_filter: String(($(SUB_IDS.transportFilter) && $(SUB_IDS.transportFilter).value) || '').trim()," in outbounds_src
     assert "routing_mode: String(($(SUB_IDS.routingMode) && $(SUB_IDS.routingMode).value) || 'safe-fallback').trim() || 'safe-fallback'," in outbounds_src
     assert "routing_auto_rule: !!state.routing_auto_rule," in outbounds_src
-    assert "Только подписка: служебный pool работает только через generated nodes; одиночный outbound в 04_outbounds.json не нужен." in outbounds_src
+    assert "Только подписка: твой сервер больше не нужен" in outbounds_src
     assert "routing_balancer_tags: state.routing_balancer_tags.slice()," in outbounds_src
     assert "excluded_node_keys: state.excluded_node_keys.slice()," in outbounds_src
     assert "function subsRenderNodeList() {" in outbounds_src
@@ -332,7 +332,7 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "function subsProtocolFilterText(protocol) {" in outbounds_src
     assert "xk-sub-update-note" in outbounds_src
     assert "Автообновление" in outbounds_src
-    assert "LeastPing и generated fragments" in outbounds_src
+    assert "Как работают подписки" in outbounds_src
     assert "nodesProbeMode: 'outbounds-subscriptions-nodes-probe-mode'" in outbounds_src
     assert 'data-probe-mode="tcp"' in outbounds_src
     assert 'data-probe-mode="proxy"' in outbounds_src
@@ -386,12 +386,13 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "btn.setAttribute('aria-busy', 'true');" in outbounds_src
     assert "btn.removeAttribute('aria-busy');" in outbounds_src
     assert "btn.disabled = !hasPingable;" in outbounds_src
-    assert "Нет активных узлов в generated fragment." in outbounds_src
-    assert "Tag prefix" in outbounds_src
-    assert "selector и subjectSelector по prefix-match" in outbounds_src
-    assert "через subjectSelector для LeastPing." in outbounds_src
+    assert "В файле узлов нет активных узлов." in outbounds_src
+    assert '<span class="xk-pool-fieldlabel">Префикс тегов</span>' in outbounds_src
+    assert "По нему балансировщики и замер находят узлы подписки." in outbounds_src
+    assert "Фоновая проверка скорости узлов" in outbounds_src
+    assert "Пускать трафик через самый быстрый узел" in outbounds_src
     assert "имя будет сгенерировано автоматически при сохранении" in outbounds_src
-    assert "префикс будет сгенерирован автоматически при сохранении" in outbounds_src
+    assert "при сохранении панель придумает префикс сама" in outbounds_src
     assert "xk-sub-node-toggle" in outbounds_src
     assert "resetBtn.classList.add('xk-sub-head-chip');" in outbounds_src
     assert "saveBtn.classList.add('xk-sub-head-chip', 'is-primary');" in outbounds_src
@@ -408,7 +409,8 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "btn-danger btn-compact xk-sub-node-toggle" in outbounds_src
     assert "xk-sub-node-toggle-restore" in outbounds_src
     assert "outbounds-subscriptions-routing-mode" in outbounds_src
-    assert "Жёстко · pool" in outbounds_src
+    assert '<option value="migrate-vless-rules">Мои правила — через пул</option>' in outbounds_src
+    assert '<option value="safe-fallback">Рядом с моим сервером</option>' in outbounds_src
     assert ".xk-sub-node-list" in styles_src
     assert ".xk-sub-modal {" in styles_src
     assert ".xk-sub-modal.xk-sub-modal-compact .xk-sub-grid" in styles_src
@@ -515,9 +517,9 @@ def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
     assert "badge.textContent = _subscriptionPreview" in outbounds_src
     assert "Есть правки · нажми «Сохранить»" in outbounds_src
     assert "Пустое поле сохранит текущее имя:" in outbounds_src
-    assert "Пустое поле сохранит текущий prefix:" in outbounds_src
+    assert "Пустое поле сохранит текущий префикс:" in outbounds_src
     assert "Оставь поле пустым, и имя появится после ввода URL." in outbounds_src
-    assert "После сохранения будет использован prefix:" in outbounds_src
+    assert "После сохранения будет использован префикс:" in outbounds_src
     assert "applyBtn.textContent = canApply ? `${providerHours} ч` : '';" in outbounds_src
     assert "Рекомендовано: ${providerHours} ч" in outbounds_src
     assert "Принять рекомендацию провайдера: обновлять подписку каждые ${providerHours} ч." in outbounds_src
