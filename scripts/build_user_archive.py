@@ -418,7 +418,7 @@ def write_build_json(dst_root: Path, *, stamp: BuildStamp, update_url: str) -> N
         "update_url": str(update_url or "").strip(),
     }
     path = dst_root / "BUILD.json"
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
 def build_archive(src_root: Path, archive_path: Path) -> None:

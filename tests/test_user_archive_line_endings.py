@@ -163,3 +163,23 @@ def test_real_template_is_packed_exactly_as_stored_in_git(tmp_path):
         ["git", "show", f"HEAD:xkeen-ui/{rel}"], cwd=str(ROOT), check=True, capture_output=True
     ).stdout
     assert target.read_bytes() == stored
+
+
+def test_build_json_is_written_with_lf(tmp_path):
+    builder = _load_builder()
+    stamp = builder.BuildStamp(version="abc1234", base_commit="abc1234", commit="abc1234" * 5, dirty=False)
+
+    builder.write_build_json(tmp_path, stamp=stamp, update_url="")
+
+    assert b"\r" not in (tmp_path / "BUILD.json").read_bytes()
+
+
+def test_generators_of_packed_files_write_lf_on_any_machine():
+    """BUILD.json, мосты frontend-build и манифесты вендора в git не лежат —
+    их пишут наши скрипты. На Windows `write_text` без newline даёт CRLF."""
+
+    for rel in ("scripts/build_user_archive.py", "scripts/sync_frontend_build_manifest.py", "scripts/sync_frontend_vendor.py"):
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        for line in text.splitlines():
+            if ".write_text(" in line and "sha_path" not in line:
+                assert 'newline="\\n"' in line, f"{rel}: {line.strip()}"

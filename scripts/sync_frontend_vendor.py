@@ -117,7 +117,7 @@ def write_vendor_manifest(packages: list[dict[str, str]], prettier_meta: dict[st
         "packages": sorted(packages, key=lambda item: item["name"]),
         "prettier": prettier_meta,
     }
-    manifest_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    manifest_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
 def split_specifier_suffix(specifier: str) -> tuple[str, str]:
@@ -181,7 +181,7 @@ def patch_browser_relative_imports() -> tuple[int, int]:
         updated, file_replacements = patch_browser_relative_imports_in_text(source_file, original)
         if file_replacements <= 0:
             continue
-        source_file.write_text(updated, encoding="utf-8")
+        source_file.write_text(updated, encoding="utf-8", newline="\n")
         files_changed += 1
         replacements += file_replacements
     return files_changed, replacements

@@ -265,14 +265,14 @@ def sync_manifest_wrappers(repo_root: Path, *, check: bool = False, stdout: obje
 
     bridge_manifest_path = repo_root / PROJECT_DIRNAME / BRIDGE_MANIFEST_RELATIVE_PATH
     expected_manifest_text = _json_text(build_bridge_manifest(specs))
-    current_manifest_text = bridge_manifest_path.read_text(encoding="utf-8") if bridge_manifest_path.is_file() else None
+    current_manifest_text = bridge_manifest_path.read_bytes().decode("utf-8") if bridge_manifest_path.is_file() else None
     if current_manifest_text != expected_manifest_text:
         changed_paths.append(bridge_manifest_path)
         if check:
             print(f"MISMATCH {bridge_manifest_path.relative_to(repo_root).as_posix()}", file=stream)
         else:
             bridge_manifest_path.parent.mkdir(parents=True, exist_ok=True)
-            bridge_manifest_path.write_text(expected_manifest_text, encoding="utf-8")
+            bridge_manifest_path.write_text(expected_manifest_text, encoding="utf-8", newline="\n")
             print(f"UPDATED {bridge_manifest_path.relative_to(repo_root).as_posix()}", file=stream)
     else:
         print(f"OK {bridge_manifest_path.relative_to(repo_root).as_posix()}", file=stream)
@@ -281,7 +281,7 @@ def sync_manifest_wrappers(repo_root: Path, *, check: bool = False, stdout: obje
         wrapper_path = repo_root / PROJECT_DIRNAME / "static" / "frontend-build" / spec.build_file
         wrapper_path.parent.mkdir(parents=True, exist_ok=True)
         expected = spec.wrapper_text
-        current = wrapper_path.read_text(encoding="utf-8") if wrapper_path.is_file() else None
+        current = wrapper_path.read_bytes().decode("utf-8") if wrapper_path.is_file() else None
         if current == expected:
             print(f"OK {wrapper_path.relative_to(repo_root).as_posix()}", file=stream)
             continue
@@ -289,7 +289,7 @@ def sync_manifest_wrappers(repo_root: Path, *, check: bool = False, stdout: obje
         if check:
             print(f"MISMATCH {wrapper_path.relative_to(repo_root).as_posix()}", file=stream)
             continue
-        wrapper_path.write_text(expected, encoding="utf-8")
+        wrapper_path.write_text(expected, encoding="utf-8", newline="\n")
         print(f"UPDATED {wrapper_path.relative_to(repo_root).as_posix()}", file=stream)
 
     if check and changed_paths:
