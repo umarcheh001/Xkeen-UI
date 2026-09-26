@@ -8,6 +8,8 @@ import pytest
 from services.amnezia_premium import (
     AMNEZIA_PREMIUM_GATEWAY_URL,
     AmneziaPremiumImportError,
+    _mihomo_proxy_port,
+    _post_to_gateway,
     _x25519,
     decode_connection_key,
     generate_wireguard_keypair,
@@ -100,6 +102,33 @@ def test_import_connection_key_requests_gateway_and_returns_mihomo_compatible_aw
     assert "random-trailers: true" in proxy.yaml
 
 
+def test_import_connection_key_downloads_selected_panel_location_by_default():
+    downloaded = """\
+[Interface]
+PrivateKey = private-key
+Address = 10.8.0.2/32
+
+[Peer]
+PublicKey = server-key
+Endpoint = fi-edge.example:51820
+AllowedIPs = 0.0.0.0/0
+"""
+    with patch(
+        "services.amnezia_premium._download_panel_config",
+        return_value=downloaded,
+    ) as download:
+        result = import_connection_key(
+            _connection_key(),
+            server_country_code="FI",
+        )
+
+    assert result == downloaded
+    assert download.call_args.kwargs == {
+        "country_code": "fi",
+        "declared_country_code": "ru",
+    }
+
+
 def test_import_rejects_unrecognized_or_unsupported_connection_keys():
     with pytest.raises(AmneziaPremiumImportError, match="Некорректный ключ"):
         decode_connection_key("vpn://not-a-valid-key")
@@ -147,15 +176,62 @@ def test_list_available_locations_uses_account_endpoint_without_issuing_configs(
             },
         ]
     }
-    with patch("services.amnezia_premium._post_to_gateway", return_value=response) as gateway:
+    with patch("services.amnezia_premium._cp_request", return_value={"data": response}) as gateway:
         locations = list_available_locations(_connection_key())
 
     assert locations == [
         {"code": "FI", "name": "Finland"},
         {"code": "DE", "name": "Germany"},
     ]
-    assert gateway.call_args.kwargs["endpoint"] == "account_info"
-    assert "public_key" not in gateway.call_args.args[0]
+    gateway.assert_called_once_with(_connection_key(), "/api/account-info?appLanguage=ru")
+
+
+def test_gateway_uses_configured_loopback_mihomo_proxy(monkeypatch, tmp_path):
+    config = tmp_path / "mihomo.yaml"
+    config.write_text(
+        """\
+listeners:
+  - name: xkeen-ui-egress-check
+    type: mixed
+    port: 17890
+    listen: 127.0.0.1
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("XKEEN_MIHOMO_CONFIG_FILE", str(config))
+    monkeypatch.delenv("XKEEN_AMNEZIA_PREMIUM_MIHOMO_PROXY_PORT", raising=False)
+    monkeypatch.delenv("XKEEN_SUBSCRIPTION_MIHOMO_PROXY_PORT", raising=False)
+
+    assert _mihomo_proxy_port() == 17890
+
+    class Response:
+        status = 200
+        headers = {}
+
+        def read(self, _limit):
+            return b'{"available_countries":[]}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    class Opener:
+        def open(self, _request, timeout):
+            assert timeout == 20
+            return Response()
+
+    with patch("services.amnezia_premium.urllib.request.build_opener", return_value=Opener()) as build_opener:
+        result = _post_to_gateway({"service_type": "amnezia-premium"}, endpoint="account_info")
+
+    assert result == {"available_countries": []}
+    handlers = build_opener.call_args.args
+    assert len(handlers) == 1
+    assert handlers[0].proxies == {
+        "http": "http://127.0.0.1:17890",
+        "https": "http://127.0.0.1:17890",
+    }
 
 
 def test_x25519_public_key_matches_rfc_7748_vector():

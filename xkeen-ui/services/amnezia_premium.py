@@ -1,15 +1,16 @@
-"""Import Amnezia Premium ``vpn://`` connection keys as Mihomo WireGuard configs.
+"""Import Amnezia Premium ``vpn://`` keys as Mihomo WireGuard configs.
 
-Amnezia Premium keys are compact, URL-safe-base64 payloads. They carry the
-subscription metadata and API key, not a ready-to-use peer configuration. An
-explicit import requests one AmneziaWG/WireGuard client configuration from the
-official gateway and keeps the connection key in memory only.
+The key is accepted by the same authenticated control-panel API used by the
+Amnezia web dashboard. On routers, those HTTPS requests go through Mihomo's
+loopback mixed listener so the panel can use the router's working egress path.
 """
 
 from __future__ import annotations
 
 import base64
+import http.cookiejar
 import json
+import os
 import secrets
 import urllib.error
 import urllib.request
@@ -21,10 +22,12 @@ from typing import Any, Callable, Mapping
 
 AMNEZIA_PREMIUM_GATEWAY_URL = "https://gw.amnezia.org/v1/config"
 AMNEZIA_PREMIUM_ACCOUNT_URL = "https://gw.amnezia.org/v1/account_info"
+AMNEZIA_PREMIUM_PANEL_URL = "https://cp.amnezia.org"
 _CONNECTION_KEY_SIGNATURE = b"\x00\x00\x00\xff"
 _MAX_CONNECTION_KEY_BYTES = 32 * 1024
 _MAX_GATEWAY_RESPONSE_BYTES = 512 * 1024
 _SUPPORTED_PROTOCOLS = {"awg", "wireguard"}
+_DEFAULT_MIHOMO_CONFIG_PATH = "/opt/etc/mihomo/config.yaml"
 
 GatewayPost = Callable[[Mapping[str, Any]], Mapping[str, Any]]
 
@@ -69,6 +72,21 @@ def import_connection_key(
             "Для Mihomo сейчас доступны AmneziaWG и WireGuard."
         )
 
+    if gateway_post is None:
+        country_code = str(server_country_code or "").strip().lower()
+        if not country_code:
+            locations = list_available_locations(value)
+            if not locations:
+                raise AmneziaPremiumImportError(
+                    "Amnezia Premium не вернул доступных локаций."
+                )
+            country_code = str(locations[0]["code"]).strip().lower()
+        return _download_panel_config(
+            value,
+            country_code=country_code,
+            declared_country_code=_declared_country_code(connection),
+        )
+
     private_key, public_key = generate_wireguard_keypair()
     payload = _gateway_payload(
         connection,
@@ -76,7 +94,7 @@ def import_connection_key(
         server_country_code=server_country_code,
     )
 
-    response = (gateway_post or _post_to_gateway)(payload)
+    response = gateway_post(payload)
     server_config = _decode_gateway_config(response)
     return _render_wireguard_config(
         server_config,
@@ -95,13 +113,14 @@ def list_available_locations(
         raise AmneziaPremiumImportError(
             "Этот ключ Amnezia Premium использует неподдерживаемый протокол."
         )
-    response = _post_to_gateway(
-        _gateway_payload(connection),
-        endpoint="account_info",
+    response = _cp_request(
+        value,
+        "/api/account-info?appLanguage=ru",
     )
-    raw_locations = response.get("available_countries")
+    account = _mapping(response.get("data")) or response
+    raw_locations = account.get("available_countries")
     if not isinstance(raw_locations, list):
-        raw_locations = _mapping(response.get("api_config")).get("available_countries")
+        raw_locations = _mapping(account.get("api_config")).get("available_countries")
     if not isinstance(raw_locations, list):
         raise AmneziaPremiumImportError(
             "Amnezia Premium не вернул список доступных локаций."
@@ -144,6 +163,169 @@ def list_available_locations(
             "Для этого ключа Amnezia Premium не найдено доступных локаций Mihomo."
         )
     return locations
+
+
+def _declared_country_code(connection: AmneziaPremiumConnection) -> str:
+    value = _text(connection.user_country_code).lower()
+    return value if value in {"ru", "ag"} else "ru"
+
+
+def _cp_request(
+    connection_key: str,
+    path: str,
+    payload: Mapping[str, Any] | None = None,
+) -> Mapping[str, Any]:
+    """Use the same authenticated panel API as the Amnezia web dashboard."""
+    cookie_jar = http.cookiejar.CookieJar()
+    handlers: list[Any] = [urllib.request.HTTPCookieProcessor(cookie_jar)]
+    proxy_port = _mihomo_proxy_port()
+    if proxy_port is not None:
+        proxy_url = f"http://127.0.0.1:{proxy_port}"
+        handlers.insert(
+            0,
+            urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url}),
+        )
+    opener = urllib.request.build_opener(*handlers)
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Connection": "close",
+        "User-Agent": "Xkeen-UI/Amnezia-Premium-Import",
+    }
+
+    def request_json(url: str, body: Mapping[str, Any] | None = None) -> bytes:
+        data = json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8") if body is not None else None
+        request = urllib.request.Request(url, data=data, headers=headers, method="POST" if data else "GET")
+        try:
+            with opener.open(request, timeout=20) as response:
+                raw = response.read(_MAX_GATEWAY_RESPONSE_BYTES + 1)
+        except urllib.error.HTTPError as exc:
+            raise AmneziaPremiumImportError(
+                "Amnezia Premium не принял ключ. Проверьте подписку и попробуйте ещё раз."
+            ) from exc
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            raise AmneziaPremiumImportError(
+                "Не удалось подключиться к панели Amnezia Premium. "
+                "Проверьте подключение и попробуйте ещё раз."
+            ) from exc
+        if len(raw) > _MAX_GATEWAY_RESPONSE_BYTES:
+            raise AmneziaPremiumImportError("Ответ Amnezia Premium слишком большой.")
+        return raw
+
+    login_raw = request_json(
+        f"{AMNEZIA_PREMIUM_PANEL_URL}/api/login",
+        {"vpnKey": str(connection_key or "").strip(), "remember": False},
+    )
+    try:
+        login = json.loads(login_raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise AmneziaPremiumImportError("Панель Amnezia Premium вернула некорректный ответ.") from exc
+    if not isinstance(login, Mapping) or _text(login.get("message")).lower() != "ok":
+        raise AmneziaPremiumImportError("Amnezia Premium не подтвердил ключ.")
+
+    raw = request_json(f"{AMNEZIA_PREMIUM_PANEL_URL}{path}", payload)
+    try:
+        decoded = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise AmneziaPremiumImportError("Панель Amnezia Premium вернула некорректный список локаций.") from exc
+    if not isinstance(decoded, Mapping):
+        raise AmneziaPremiumImportError("Панель Amnezia Premium вернула некорректный ответ.")
+    return decoded
+
+
+def _download_panel_config(
+    connection_key: str,
+    *,
+    country_code: str,
+    declared_country_code: str,
+) -> str:
+    """Download one native AmneziaWG config through the authenticated panel."""
+    cookie_jar = http.cookiejar.CookieJar()
+    handlers: list[Any] = [urllib.request.HTTPCookieProcessor(cookie_jar)]
+    proxy_port = _mihomo_proxy_port()
+    if proxy_port is not None:
+        proxy_url = f"http://127.0.0.1:{proxy_port}"
+        handlers.insert(
+            0,
+            urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url}),
+        )
+    opener = urllib.request.build_opener(*handlers)
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Connection": "close",
+        "User-Agent": "Xkeen-UI/Amnezia-Premium-Import",
+    }
+
+    def post(url: str, body: Mapping[str, Any]) -> bytes:
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        try:
+            with opener.open(request, timeout=30) as response:
+                raw = response.read(_MAX_GATEWAY_RESPONSE_BYTES + 1)
+        except urllib.error.HTTPError as exc:
+            raw = exc.read(_MAX_GATEWAY_RESPONSE_BYTES + 1)
+            try:
+                detail = json.loads(raw.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                detail = {}
+            error_code = _text(detail.get("errorCode"))
+            if error_code == "NO_PROTOCOL_COMPATIBLE_WORKER":
+                raise AmneziaPremiumImportError(
+                    "Для выбранной локации сейчас нет совместимого сервера Amnezia Premium."
+                ) from exc
+            if error_code in {"CONFIG_LIMIT", "MAX_DEVICES_REACHED"}:
+                raise AmneziaPremiumImportError(
+                    "Достигнут лимит конфигураций Amnezia Premium."
+                ) from exc
+            raise AmneziaPremiumImportError(
+                "Amnezia Premium не выдал конфигурацию для выбранной локации."
+            ) from exc
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            raise AmneziaPremiumImportError(
+                "Не удалось скачать конфигурацию Amnezia Premium."
+            ) from exc
+        if len(raw) > _MAX_GATEWAY_RESPONSE_BYTES:
+            raise AmneziaPremiumImportError("Конфигурация Amnezia Premium слишком большая.")
+        return raw
+
+    login_raw = post(
+        f"{AMNEZIA_PREMIUM_PANEL_URL}/api/login",
+        {"vpnKey": str(connection_key or "").strip(), "remember": False},
+    )
+    try:
+        login = json.loads(login_raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise AmneziaPremiumImportError("Панель Amnezia Premium вернула некорректный ответ.") from exc
+    if not isinstance(login, Mapping) or _text(login.get("message")).lower() != "ok":
+        raise AmneziaPremiumImportError("Amnezia Premium не подтвердил ключ.")
+
+    raw = post(
+        f"{AMNEZIA_PREMIUM_PANEL_URL}/api/download-config",
+        {
+            "countryCode": _text(country_code).lower(),
+            "declaredCountryCode": _text(declared_country_code).lower(),
+        },
+    )
+    if raw.lstrip().startswith(b"{"):
+        try:
+            error = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            error = {}
+        raise AmneziaPremiumImportError(
+            _text(error.get("message")) or "Amnezia Premium не выдал конфигурацию."
+        )
+    try:
+        config = raw.decode("utf-8").strip()
+    except UnicodeDecodeError as exc:
+        raise AmneziaPremiumImportError("Конфигурация Amnezia Premium имеет неверную кодировку.") from exc
+    if "[interface]" not in config.lower() or "[peer]" not in config.lower():
+        raise AmneziaPremiumImportError("Amnezia Premium вернул неподдерживаемую конфигурацию.")
+    return config + "\n"
 
 
 def decode_connection_key(value: str) -> AmneziaPremiumConnection:
@@ -206,8 +388,16 @@ def _post_to_gateway(
         },
         method="POST",
     )
+    opener = urllib.request.build_opener()
+    proxy_port = _mihomo_proxy_port()
+    if proxy_port is not None:
+        proxy_url = f"http://127.0.0.1:{proxy_port}"
+        opener = urllib.request.build_opener(
+            urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
+        )
+
     try:
-        with urllib.request.urlopen(request, timeout=20) as response:
+        with opener.open(request, timeout=20) as response:
             raw = response.read(_MAX_GATEWAY_RESPONSE_BYTES + 1)
     except urllib.error.HTTPError as exc:
         if exc.code in {401, 403}:
@@ -231,6 +421,36 @@ def _post_to_gateway(
     if not isinstance(payload_obj, Mapping):
         raise AmneziaPremiumImportError("Шлюз Amnezia Premium вернул некорректный ответ.")
     return payload_obj
+
+
+def _mihomo_proxy_port() -> int | None:
+    """Return the loopback Mihomo proxy used for router-originated HTTPS.
+
+    On some router uplinks direct connections to Amnezia's gateway time out,
+    while the same destination is reachable through Mihomo's configured
+    loopback mixed listener. Local development and test environments simply
+    fall back to a direct request when no listener is configured.
+    """
+    raw_port = str(
+        os.environ.get("XKEEN_AMNEZIA_PREMIUM_MIHOMO_PROXY_PORT")
+        or os.environ.get("XKEEN_SUBSCRIPTION_MIHOMO_PROXY_PORT")
+        or ""
+    ).strip()
+    if raw_port:
+        try:
+            port = int(raw_port)
+        except (TypeError, ValueError):
+            return None
+        return port if 1 <= port <= 65535 else None
+
+    config_path = str(os.environ.get("XKEEN_MIHOMO_CONFIG_FILE") or "").strip() or _DEFAULT_MIHOMO_CONFIG_PATH
+    try:
+        from services.mihomo_egress_setup import configured_egress_proxy_port
+        from utils.fs import load_text
+
+        return configured_egress_proxy_port(load_text(config_path, default="") or "")
+    except Exception:
+        return None
 
 
 def _decode_gateway_config(response: Mapping[str, Any]) -> Mapping[str, Any]:
