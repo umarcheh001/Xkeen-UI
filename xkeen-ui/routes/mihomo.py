@@ -2632,12 +2632,19 @@ def create_mihomo_blueprint(
                             server_country_code=code,
                             display_name=label,
                         )
-                        parsed = parse_wireguard(wireguard_config, custom_name=name or label)
+                        parsed = parse_wireguard(
+                            wireguard_config,
+                            custom_name=name or f"{code} {label}",
+                        )
                         proxy_name = parsed.name
+                        duplicate_names = {proxy_name, label}
+                        if name:
+                            duplicate_names.add(name)
                         suffix = 2
-                        while proxy_name in existing_names:
+                        while proxy_name in existing_names or bool(duplicate_names & existing_names):
                             proxy_name = f"{parsed.name}_{suffix}"
                             suffix += 1
+                            duplicate_names = {proxy_name}
                         if proxy_name != parsed.name:
                             parsed = parse_wireguard(wireguard_config, custom_name=proxy_name)
                         existing_names.add(proxy_name)

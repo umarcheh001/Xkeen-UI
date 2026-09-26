@@ -10,6 +10,7 @@ import {
 import { getXkeenFilePath } from './xkeen_runtime.js';
 import { iconHtml } from '../ui/operator_icons.js';
 import { appendHappDecryptorCardLink } from '../ui/happ_decryptor_link.js';
+import { mihomoCountryFlag } from './mihomo_clash/visuals.js';
 
 let mihomoImportModuleApi = null;
 
@@ -2369,10 +2370,12 @@ let mihomoImportModuleApi = null;
       const name = String(location && location.name || code).trim() || code;
       if (!code) return '';
       const checked = selectedCodes.has(code) ? ' checked' : '';
+      const flag = mihomoCountryFlag(code);
+      const flagHtml = flag.svg || escapeHtml(flag.region || flag.code || '');
       return (
         '<label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center; margin:4px 0;">' +
           '<input type="checkbox" class="mihomo-import-amnezia-location-cb" data-location-code="' + escapeHtml(code) + '"' + checked + '>' +
-          '<span>' + escapeHtml(name) + ' <code>' + escapeHtml(code) + '</code></span>' +
+          '<span class="xk-mi-amnezia-location-label"><span class="xk-sub-node-country xk-mi-amnezia-location-flag" data-country="' + escapeHtml(code) + '" aria-hidden="true">' + flagHtml + '</span>' + escapeHtml(name) + ' <code>' + escapeHtml(code) + '</code></span>' +
         '</label>'
       );
     }).filter(Boolean);

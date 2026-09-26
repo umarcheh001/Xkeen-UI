@@ -1,9 +1,10 @@
 const COUNTRY_NAMES = Object.freeze({
   AE: 'United Arab Emirates', AU: 'Australia', BR: 'Brazil', CA: 'Canada', CH: 'Switzerland',
-  CN: 'China', CZ: 'Czechia', DE: 'Germany', ES: 'Spain', FI: 'Finland', FR: 'France',
+  CN: 'China', CZ: 'Czechia', DE: 'Germany', EE: 'Estonia', ES: 'Spain', FI: 'Finland', FR: 'France',
+  GL: 'Greenland',
   GB: 'United Kingdom', HK: 'Hong Kong', ID: 'Indonesia', IL: 'Israel', IN: 'India',
   IT: 'Italy', JP: 'Japan', KR: 'South Korea', KZ: 'Kazakhstan', LV: 'Latvia',
-  MY: 'Malaysia', NL: 'Netherlands', NO: 'Norway', PL: 'Poland', RU: 'Russia',
+  MY: 'Malaysia', NL: 'Netherlands', NO: 'Norway', PL: 'Poland', PT: 'Portugal', RU: 'Russia',
   SE: 'Sweden', SG: 'Singapore', TH: 'Thailand', TR: 'Turkey', TW: 'Taiwan',
   UA: 'Ukraine', US: 'United States', VN: 'Vietnam',
 });
@@ -48,6 +49,9 @@ const NODE_FLAG_SVG = Object.freeze({
   IT: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#fff"/><rect width="6.667" height="14" fill="#009246"/><rect x="13.333" width="6.667" height="14" fill="#ce2b37"/></svg>',
   GB: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#012169"/><path d="M0 0l20 14M20 0L0 14" stroke="#fff" stroke-width="3"/><path d="M0 0l20 14M20 0L0 14" stroke="#c8102e" stroke-width="1.25"/><path d="M10 0v14M0 7h20" stroke="#fff" stroke-width="4"/><path d="M10 0v14M0 7h20" stroke="#c8102e" stroke-width="2"/></svg>',
   FI: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#fff"/><rect x="6" width="3.2" height="14" fill="#002f6c"/><rect y="5.4" width="20" height="3.2" fill="#002f6c"/></svg>',
+  EE: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#fff"/><rect width="20" height="9.333" fill="#000"/><rect width="20" height="4.667" fill="#4891d9"/></svg>',
+  GL: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#fff"/><rect y="7" width="20" height="7" fill="#d00c33"/><circle cx="10" cy="7" r="3.2" fill="#d00c33"/><path d="M6.8 7a3.2 3.2 0 0 0 6.4 0z" fill="#fff"/></svg>',
+  PT: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#ff2939"/><rect width="8" height="14" fill="#046a38"/><circle cx="8" cy="7" r="2.1" fill="#ffcf00" stroke="#b22234" stroke-width=".45"/></svg>',
   NO: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#ba0c2f"/><rect x="5.6" width="4.4" height="14" fill="#fff"/><rect y="4.9" width="20" height="4.2" fill="#fff"/><rect x="6.9" width="1.8" height="14" fill="#00205b"/><rect y="6.1" width="20" height="1.8" fill="#00205b"/></svg>',
   SG: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#fff"/><rect width="20" height="7" fill="#ef3340"/><circle cx="5.1" cy="3.5" r="2.2" fill="#fff"/><circle cx="5.8" cy="3.5" r="1.8" fill="#ef3340"/><circle cx="8.1" cy="2.1" r=".35" fill="#fff"/><circle cx="9" cy="3.1" r=".35" fill="#fff"/><circle cx="8.7" cy="4.4" r=".35" fill="#fff"/><circle cx="7.4" cy="4.4" r=".35" fill="#fff"/><circle cx="7.1" cy="3.1" r=".35" fill="#fff"/></svg>',
   HK: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#de2910"/><g fill="#fff" transform="translate(10 7)"><ellipse rx="1.1" ry="3.1" transform="rotate(0) translate(0 -2.2)"/><ellipse rx="1.1" ry="3.1" transform="rotate(72) translate(0 -2.2)"/><ellipse rx="1.1" ry="3.1" transform="rotate(144) translate(0 -2.2)"/><ellipse rx="1.1" ry="3.1" transform="rotate(216) translate(0 -2.2)"/><ellipse rx="1.1" ry="3.1" transform="rotate(288) translate(0 -2.2)"/></g></svg>',

@@ -820,7 +820,8 @@ function nodeFlagHtml(countryCode) {
   const flag = mihomoCountryFlag(countryCode);
   const label = flag.label || countryCode;
   const svg = flag.svg || '';
-  return `<span class="xk-sub-node-country xk-mihomo-node-country" data-country="${countryCode}" role="img" aria-label="${escapeHtml(label)}" data-tooltip="${escapeHtml(label)}">${svg}</span>`;
+  const fallback = flag.region ? escapeHtml(flag.region) : escapeHtml(flag.code);
+  return `<span class="xk-sub-node-country xk-mihomo-node-country" data-country="${countryCode}" role="img" aria-label="${escapeHtml(label)}" data-tooltip="${escapeHtml(label)}">${svg || fallback}</span>`;
 }
 
 function thematicGroupIcon(name) {

@@ -137,7 +137,7 @@ AllowedIPs = 0.0.0.0/0
 
     assert response.status_code == 200
     result = response.get_json()
-    assert [proxy["proxy_name"] for proxy in result["proxies"]] == ["Finland", "Germany_2"]
+    assert [proxy["proxy_name"] for proxy in result["proxies"]] == ["FI Finland", "DE Germany_2"]
     assert "server: fi.example" in result["proxies"][0]["proxy_yaml"]
     assert "server: de.example" in result["proxies"][1]["proxy_yaml"]
     assert calls == [
