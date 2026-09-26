@@ -50,6 +50,134 @@ proxy-groups:
     assert config_path.read_text(encoding="utf-8") == "proxies: []\n"
 
 
+def test_parse_amnezia_premium_key_returns_mihomo_proxy(client):
+    http, _config_path = client
+    wireguard_config = """\
+[Interface]
+Name = Amnezia Premium
+PrivateKey = private-key
+Address = 10.0.0.2/32
+Jc = 5
+
+[Peer]
+PublicKey = server-key
+Endpoint = fi-edge.example:51820
+AllowedIPs = 0.0.0.0/0
+"""
+    with patch(
+        "routes.mihomo._amnezia_import_connection_key",
+        return_value=wireguard_config,
+    ) as importer:
+        response = http.post(
+            "/api/mihomo/parse/amnezia-premium",
+            json={"text": "vpn://test-key"},
+        )
+
+    assert response.status_code == 200
+    result = response.get_json()
+    assert result["proxy_name"] == "Amnezia Premium"
+    assert "server: fi-edge.example" in result["proxy_yaml"]
+    assert "jc: 5" in result["proxy_yaml"]
+    importer.assert_called_once_with("vpn://test-key")
+
+
+def test_amnezia_premium_locations_route_only_loads_available_locations(client):
+    http, _config_path = client
+    locations = [
+        {"code": "FI", "name": "Finland"},
+        {"code": "DE", "name": "Germany"},
+    ]
+    with patch(
+        "routes.mihomo._amnezia_list_available_locations",
+        return_value=locations,
+    ) as list_locations:
+        response = http.post(
+            "/api/mihomo/amnezia-premium/locations",
+            json={"text": "vpn://test-key"},
+        )
+
+    assert response.status_code == 200
+    assert response.get_json()["locations"] == locations
+    list_locations.assert_called_once_with("vpn://test-key")
+
+
+def test_parse_amnezia_premium_key_returns_every_selected_location(client):
+    http, _config_path = client
+    calls = []
+
+    def issue_config(text, *, server_country_code="", display_name=""):
+        calls.append((text, server_country_code, display_name))
+        return f"""\
+[Interface]
+PrivateKey = private-{server_country_code}
+Address = 10.0.0.2/32
+
+[Peer]
+PublicKey = server-{server_country_code}
+Endpoint = {server_country_code.lower()}.example:51820
+AllowedIPs = 0.0.0.0/0
+"""
+
+    with patch(
+        "routes.mihomo._amnezia_import_connection_key",
+        side_effect=issue_config,
+    ):
+        response = http.post(
+            "/api/mihomo/parse/amnezia-premium",
+            json={
+                "text": "vpn://test-key",
+                "server_country_codes": ["FI", "DE"],
+                "locations": [
+                    {"code": "FI", "name": "Finland"},
+                    {"code": "DE", "name": "Germany"},
+                ],
+                "existing_names": ["Germany"],
+            },
+        )
+
+    assert response.status_code == 200
+    result = response.get_json()
+    assert [proxy["proxy_name"] for proxy in result["proxies"]] == ["Finland", "Germany_2"]
+    assert "server: fi.example" in result["proxies"][0]["proxy_yaml"]
+    assert "server: de.example" in result["proxies"][1]["proxy_yaml"]
+    assert calls == [
+        ("vpn://test-key", "FI", "Finland"),
+        ("vpn://test-key", "DE", "Germany"),
+    ]
+
+
+def test_import_draft_route_auto_detects_amnezia_premium_key(client):
+    http, _config_path = client
+    wireguard_config = """\
+[Interface]
+Name = Amnezia Premium
+PrivateKey = private-key
+Address = 10.0.0.2/32
+
+[Peer]
+PublicKey = server-key
+Endpoint = fi-edge.example:51820
+AllowedIPs = 0.0.0.0/0
+"""
+    with patch(
+        "routes.mihomo._amnezia_import_connection_key",
+        return_value=wireguard_config,
+    ) as importer:
+        response = http.post(
+            "/api/mihomo/node/import-draft",
+            json={
+                "content": "proxies: []\n",
+                "source": "vpn://test-key",
+                "mode": "auto",
+                "groups": [],
+            },
+        )
+
+    assert response.status_code == 200
+    assert "server: fi-edge.example" in response.get_json()["content"]
+    importer.assert_called_once_with("vpn://test-key")
+
+
 def test_import_draft_route_falls_back_to_safe_provider_adapter(client):
     http, _config_path = client
     with patch(

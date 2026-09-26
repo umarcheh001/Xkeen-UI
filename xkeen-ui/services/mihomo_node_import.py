@@ -22,7 +22,15 @@ from services.mihomo_proxy_parsers import (
 )
 
 
-SUPPORTED_MODES = {"auto", "proxy", "subscription", "wireguard", "openvpn", "tailscale"}
+SUPPORTED_MODES = {
+    "auto",
+    "proxy",
+    "subscription",
+    "amnezia-premium",
+    "wireguard",
+    "openvpn",
+    "tailscale",
+}
 _URL_RE = re.compile(r"^(?:https?://|happ://crypt)", re.IGNORECASE)
 _PROXY_NAME_RE = re.compile(r"^(\s*)-\s+name\s*:\s*(.+?)\s*$")
 _TOP_LEVEL_KEY_RE = re.compile(r"^(?!\s|#)[A-Za-z0-9_.-]+\s*:")

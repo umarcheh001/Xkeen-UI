@@ -17,7 +17,8 @@ let mihomoImportModuleApi = null;
   'use strict';
 
   // Mihomo Import (Parser) UI
-  // - Paste vless/trojan/vmess/ss/hysteria2/hy2, https-subscription, WireGuard, OpenVPN, or Tailscale
+  // - Paste vless/trojan/vmess/ss/hysteria2/hy2, an Amnezia Premium vpn:// key,
+  //   https-subscription, WireGuard, OpenVPN, or Tailscale
   // - Convert to Mihomo YAML and insert into config.yaml editor
   // Legacy globals are published by features/compat/mihomo_import.js.
 
@@ -34,6 +35,12 @@ let mihomoImportModuleApi = null;
     input: 'mihomo-import-input',
     modeSelect: 'mihomo-import-mode',
     preview: 'mihomo-import-preview',
+    amneziaPremiumHint: 'mihomo-import-amnezia-premium-hint',
+    amneziaLocationsBlock: 'mihomo-import-amnezia-locations-block',
+    amneziaLocations: 'mihomo-import-amnezia-locations',
+    amneziaLocationsCount: 'mihomo-import-amnezia-locations-count',
+    amneziaLocationsAllBtn: 'mihomo-import-amnezia-locations-all-btn',
+    amneziaLocationsNoneBtn: 'mihomo-import-amnezia-locations-none-btn',
 
 
     engineSelect: 'mihomo-import-engine-select',
@@ -69,6 +76,9 @@ let mihomoImportModuleApi = null;
   let _previewLayoutRaf = 0;
   let _previewResizeObserver = null;
   let _managedXraySubscriptions = [];
+  let _amneziaLocations = [];
+  let _amneziaLocationKey = '';
+  let _amneziaIssuedSelectionKey = '';
 
   // Groups selection (proxy-groups)
   const GROUPS_PREF_KEY = 'xkeen.mihomo.import.groups.v1';
@@ -79,7 +89,7 @@ let mihomoImportModuleApi = null;
   const XRAY_MAX_INTERVAL_HOURS = 168;
 
 
-  // Import mode (Auto / Proxy / Subscription / WireGuard / OpenVPN / Tailscale)
+  // Import mode (Auto / Proxy / Subscription / Amnezia Premium / WireGuard / OpenVPN / Tailscale)
   const MODE_PREF_KEY = 'xkeen.mihomo.import.mode.v1';
 
   function getImportMode() {
@@ -112,7 +122,15 @@ let mihomoImportModuleApi = null;
     const inp = $(IDS.input);
     if (!inp) return;
     const mode = getImportMode();
-    if (mode === 'wireguard') {
+    const premiumHint = $(IDS.amneziaPremiumHint);
+    if (premiumHint) premiumHint.classList.toggle('hidden', mode !== 'amnezia-premium');
+    const premiumLocations = $(IDS.amneziaLocationsBlock);
+    if (premiumLocations && mode !== 'amnezia-premium') premiumLocations.classList.add('hidden');
+    const staticBtn = $(IDS.btnParseStatic);
+    if (staticBtn) staticBtn.classList.toggle('hidden', mode === 'amnezia-premium');
+    if (mode === 'amnezia-premium') {
+      inp.placeholder = 'vpn://...';
+    } else if (mode === 'wireguard') {
       inp.placeholder = '[Interface]\nPrivateKey = ...\nAddress = ...\n\n[Peer]\nPublicKey = ...\nEndpoint = host:port\nAllowedIPs = 0.0.0.0/0';
     } else if (mode === 'openvpn') {
       inp.placeholder = 'client\nremote vpn.example.com 1194\nproto udp\n<ca>\n...\n</ca>\n<tls-crypt>\n...\n</tls-crypt>';
@@ -2323,6 +2341,154 @@ let mihomoImportModuleApi = null;
     return b + '_' + Date.now();
   }
 
+  function setParseButtonLabel(label) {
+    const button = $(IDS.btnParse);
+    const target = button && button.querySelector ? button.querySelector('.xk-action-label') : null;
+    if (target) target.textContent = String(label || 'Преобразовать');
+  }
+
+  function resetAmneziaLocations() {
+    _amneziaLocations = [];
+    _amneziaLocationKey = '';
+    _amneziaIssuedSelectionKey = '';
+    const block = $(IDS.amneziaLocationsBlock);
+    const box = $(IDS.amneziaLocations);
+    const count = $(IDS.amneziaLocationsCount);
+    if (block) block.classList.add('hidden');
+    if (box) box.innerHTML = '';
+    if (count) count.textContent = 'Локации ещё не загружены.';
+    setParseButtonLabel('Преобразовать');
+  }
+
+  function renderAmneziaLocations(locations, selectedCodes = new Set()) {
+    const block = $(IDS.amneziaLocationsBlock);
+    const box = $(IDS.amneziaLocations);
+    if (!block || !box) return;
+    const parts = (locations || []).map((location) => {
+      const code = String(location && location.code || '').trim().toUpperCase();
+      const name = String(location && location.name || code).trim() || code;
+      if (!code) return '';
+      const checked = selectedCodes.has(code) ? ' checked' : '';
+      return (
+        '<label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center; margin:4px 0;">' +
+          '<input type="checkbox" class="mihomo-import-amnezia-location-cb" data-location-code="' + escapeHtml(code) + '"' + checked + '>' +
+          '<span>' + escapeHtml(name) + ' <code>' + escapeHtml(code) + '</code></span>' +
+        '</label>'
+      );
+    }).filter(Boolean);
+    box.innerHTML = parts.join('') || '<div class="xk-card-desc">Нет доступных локаций.</div>';
+    block.classList.remove('hidden');
+    updateAmneziaLocationsCount();
+  }
+
+  function readSelectedAmneziaLocations() {
+    const box = $(IDS.amneziaLocations);
+    if (!box) return [];
+    const selected = new Set(
+      Array.from(box.querySelectorAll('input.mihomo-import-amnezia-location-cb:checked'))
+        .map((checkbox) => String(checkbox.dataset && checkbox.dataset.locationCode || '').trim().toUpperCase())
+        .filter(Boolean),
+    );
+    return _amneziaLocations.filter((location) => selected.has(String(location.code || '').toUpperCase()));
+  }
+
+  function selectedAmneziaLocationsKey() {
+    return readSelectedAmneziaLocations()
+      .map((location) => String(location.code || '').trim().toUpperCase())
+      .filter(Boolean)
+      .sort()
+      .join(',');
+  }
+
+  function setAllAmneziaLocationsChecked(checked) {
+    const box = $(IDS.amneziaLocations);
+    if (!box) return;
+    box.querySelectorAll('input.mihomo-import-amnezia-location-cb').forEach((checkbox) => {
+      checkbox.checked = !!checked;
+    });
+    updateAmneziaLocationsCount();
+  }
+
+  function updateAmneziaLocationsCount() {
+    const count = $(IDS.amneziaLocationsCount);
+    if (!count) return;
+    const selected = readSelectedAmneziaLocations().length;
+    const total = _amneziaLocations.length;
+    count.textContent = total
+      ? `Выбрано: ${selected} из ${total}. Конфиг будет выпущен только для выбранных локаций.`
+      : 'Локации ещё не загружены.';
+  }
+
+  async function loadAmneziaLocations(connectionKey) {
+    const http = getMihomoCoreHttpApi();
+    const post = http && typeof http.postJSON === 'function' ? http.postJSON : null;
+    if (!post) throw new Error('core http.postJSON недоступен');
+
+    setStatus('Проверяю доступные локации Amnezia Premium…', false, null, { busy: true });
+    const data = await post('/api/mihomo/amnezia-premium/locations', { text: String(connectionKey || '') });
+    if (!data || data.ok === false) {
+      throw new Error((data && data.error) ? data.error : 'Не удалось получить локации Amnezia Premium.');
+    }
+    const locations = Array.isArray(data.locations) ? data.locations : [];
+    _amneziaLocations = locations
+      .map((location) => ({
+        code: String(location && location.code || '').trim().toUpperCase(),
+        name: String(location && location.name || '').trim(),
+      }))
+      .filter((location) => location.code);
+    if (!_amneziaLocations.length) {
+      throw new Error('Amnezia Premium не вернул доступные локации.');
+    }
+    _amneziaLocationKey = String(connectionKey || '').trim();
+    renderAmneziaLocations(_amneziaLocations);
+    setParseButtonLabel('Получить выбранные');
+    setPreview('');
+    setHint('Выберите нужные локации, затем нажмите «Получить выбранные».');
+    updateXrayRefreshUi([]);
+    const insert = $(IDS.btnInsert);
+    if (insert) insert.disabled = true;
+    setStatus(`Доступно локаций: ${_amneziaLocations.length}. Выберите нужные серверы.`, false);
+  }
+
+  async function parseSelectedAmneziaLocations(connectionKey, existingConfig) {
+    const locations = readSelectedAmneziaLocations();
+    if (!locations.length) {
+      throw new Error('Выберите хотя бы одну локацию Amnezia Premium.');
+    }
+    const http = getMihomoCoreHttpApi();
+    const post = http && typeof http.postJSON === 'function' ? http.postJSON : null;
+    if (!post) throw new Error('core http.postJSON недоступен');
+
+    setStatus(`Получаю ${locations.length} ${pluralRu(locations.length, ['локацию', 'локации', 'локаций'])} Amnezia Premium…`, false, null, { busy: true });
+    const data = await post('/api/mihomo/parse/amnezia-premium', {
+      text: String(connectionKey || ''),
+      server_country_codes: locations.map((location) => location.code),
+      locations,
+      existing_names: collectProxyNamesFromText(existingConfig),
+    });
+    if (!data || data.ok === false) {
+      throw new Error((data && data.error) ? data.error : 'Не удалось получить выбранные локации Amnezia Premium.');
+    }
+    const proxies = Array.isArray(data.proxies) ? data.proxies : [];
+    const outputs = proxies.map((proxy) => {
+      const proxyName = String(proxy && (proxy.proxy_name || proxy.name) || '').trim();
+      const content = String(proxy && (proxy.proxy_yaml || proxy.yaml) || '').trimEnd();
+      if (!proxyName || !content) return null;
+      return { type: 'proxy', proxy_name: proxyName, content: content + '\n', uri: 'Amnezia Premium' };
+    }).filter(Boolean);
+    if (!outputs.length) {
+      throw new Error('Amnezia Premium не вернул конфигурации для выбранных локаций.');
+    }
+    const errors = (Array.isArray(data.failed_locations) ? data.failed_locations : [])
+      .map((location) => {
+        const name = String(location && (location.name || location.code) || '').trim();
+        const error = String(location && location.error || '').trim();
+        return name && error ? `${name}: ${error}` : (name || error);
+      })
+      .filter(Boolean);
+    return { outputs, errors };
+  }
+
   async function parseConfigViaApi(kind, confText, desiredName) {
     const http = getMihomoCoreHttpApi();
     const post = http && typeof http.postJSON === 'function' ? http.postJSON : null;
@@ -2414,7 +2580,8 @@ let mihomoImportModuleApi = null;
 
     if (!rawText.trim()) {
       let msg = 'Вставь ссылку узла или https-подписку.';
-      if (mode === 'wireguard') msg = 'Вставь WireGuard / AmneziaWG 3.x (.conf) и нажми «Преобразовать».';
+      if (mode === 'amnezia-premium') msg = 'Вставь ключ Amnezia Premium (vpn://...) и нажми «Преобразовать».';
+      else if (mode === 'wireguard') msg = 'Вставь WireGuard / AmneziaWG 3.x (.conf) и нажми «Преобразовать».';
       else if (mode === 'openvpn') msg = 'Вставь OpenVPN (.ovpn) и нажми «Преобразовать».';
       else if (mode === 'tailscale') msg = 'Вставь Tailscale-параметры и нажми «Преобразовать».';
       setStatus(msg, true);
@@ -2432,8 +2599,35 @@ let mihomoImportModuleApi = null;
     const outputs = [];
     const errors = [];
 
+    // Amnezia Premium is deliberately two-step: location discovery does not
+    // issue any configs, while the second click issues only checked locations.
+    if (mode === 'amnezia-premium') {
+      const key = rawText.trim();
+      if (_amneziaLocationKey && _amneziaLocationKey !== key) resetAmneziaLocations();
+      if (!_amneziaLocations.length) {
+        try {
+          await loadAmneziaLocations(key);
+        } catch (e) {
+          setStatus(e && e.message ? e.message : String(e || 'ошибка'), true);
+          setHint('');
+        }
+        return;
+      }
+      const selectionKey = selectedAmneziaLocationsKey();
+      if (_lastResult && _amneziaIssuedSelectionKey && _amneziaIssuedSelectionKey === selectionKey) {
+        setStatus('Конфигурации для этого набора локаций уже готовы. Нажмите «Вставить в конфиг».', false);
+        return;
+      }
+      try {
+        const result = await parseSelectedAmneziaLocations(key, existing);
+        outputs.push(...result.outputs);
+        errors.push(...result.errors);
+        _amneziaIssuedSelectionKey = selectionKey;
+      } catch (e) {
+        errors.push(e && e.message ? e.message : String(e || 'ошибка'));
+      }
     // Config modes: parse whole textarea as a single config.
-    if (mode === 'wireguard' || mode === 'openvpn' || mode === 'tailscale') {
+    } else if (mode === 'wireguard' || mode === 'openvpn' || mode === 'tailscale') {
       const label = mode === 'wireguard' ? 'WireGuard / AmneziaWG 3.x' : (mode === 'openvpn' ? 'OpenVPN' : 'Tailscale');
       setStatus('Разбираю ' + label + '…', false, null, { busy: true });
       try {
@@ -2625,6 +2819,11 @@ let mihomoImportModuleApi = null;
         `Распознана HWID-подписка: ${providerStaticNodeCount} узлов будут вставлены как блок proxies. Автообновление: каждые ${intervalHours} ч после вставки.`,
         false,
       );
+    } else if (mode === 'amnezia-premium') {
+      setStatus(
+        `Готово: ${outputs.length} ${pluralRu(outputs.length, ['локация', 'локации', 'локаций'])} будет добавлено в выбранные proxy-groups. После вставки выбирайте их в селекторах Mihomo/Clash API.`,
+        false,
+      );
     } else {
       setStatus('Готово. Нажми «Вставить в конфиг».', false);
     }
@@ -2754,11 +2953,14 @@ let mihomoImportModuleApi = null;
     // Groups (proxy-groups) selection helpers
     wireButton(IDS.groupsAllBtn, () => { setAllGroupsChecked(true); maybePersistGroupsSelection(); });
     wireButton(IDS.groupsNoneBtn, () => { setAllGroupsChecked(false); maybePersistGroupsSelection(); });
+    wireButton(IDS.amneziaLocationsAllBtn, () => setAllAmneziaLocationsChecked(true));
+    wireButton(IDS.amneziaLocationsNoneBtn, () => setAllAmneziaLocationsChecked(false));
 
     // Import mode selector
     const modeSel = $(IDS.modeSelect);
     if (modeSel && (!modeSel.dataset || modeSel.dataset.mihomoImportModeBound !== '1')) {
       modeSel.addEventListener('change', () => {
+        if (getImportMode() !== 'amnezia-premium') resetAmneziaLocations();
         try { updateModeUi(); } catch (e) {}
         try { saveImportModePref(getImportMode()); } catch (e2) {}
       });
@@ -2780,6 +2982,12 @@ let mihomoImportModuleApi = null;
     if (groupsBox && (!groupsBox.dataset || groupsBox.dataset.mihomoImportGroupsBound !== '1')) {
       groupsBox.addEventListener('change', () => { try { maybePersistGroupsSelection(); } catch (e) {} });
       if (groupsBox.dataset) groupsBox.dataset.mihomoImportGroupsBound = '1';
+    }
+
+    const amneziaLocationsBox = $(IDS.amneziaLocations);
+    if (amneziaLocationsBox && (!amneziaLocationsBox.dataset || amneziaLocationsBox.dataset.mihomoImportLocationsBound !== '1')) {
+      amneziaLocationsBox.addEventListener('change', () => updateAmneziaLocationsCount());
+      if (amneziaLocationsBox.dataset) amneziaLocationsBox.dataset.mihomoImportLocationsBound = '1';
     }
 
     const xrayIntervalInput = $(IDS.xrayInterval);

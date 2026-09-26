@@ -62,6 +62,11 @@ from mihomo_server_core import (
 from services.mihomo_proxy_parsers import parse_wireguard
 from services.mihomo_proxy_parsers import parse_openvpn, parse_tailscale
 from services.mihomo_node_import import build_mihomo_node_draft
+from services.amnezia_premium import (
+    import_connection_key as _amnezia_import_connection_key,
+    is_amnezia_premium_connection_key as _is_amnezia_premium_connection_key,
+    list_available_locations as _amnezia_list_available_locations,
+)
 from services.mihomo_proxy_config import (
     apply_proxy_insert,
     rename_proxy_in_config,
@@ -2578,6 +2583,141 @@ def create_mihomo_blueprint(
                 status=400,
             )
 
+    @bp.post("/api/mihomo/parse/amnezia-premium")
+    def api_mihomo_parse_amnezia_premium():
+        """Resolve one or more Amnezia Premium locations to Mihomo proxies."""
+        guard = _patch_guard()
+        if guard is not None:
+            return guard
+
+        data = request.get_json(silent=True) or {}
+        text = _norm_text(data.get("text") or "")
+        name = (data.get("name") or "").strip() or None
+        raw_requested_codes = data.get("server_country_codes") or []
+        if not isinstance(raw_requested_codes, list):
+            raw_requested_codes = []
+        requested_codes = []
+        for raw_code in raw_requested_codes:
+            code = str(raw_code or "").strip().upper()
+            if code and code not in requested_codes:
+                requested_codes.append(code)
+
+        if request.content_length is None:
+            total = len(text) + (len(name) if name else 0) + sum(len(code) for code in requested_codes)
+            if total > _PATCH_MAX_BYTES:
+                return _api_error("payload too large", 413, ok=False)
+
+        if not text.strip():
+            return _api_error("text is required", 400, ok=False)
+
+        try:
+            if requested_codes:
+                location_names = {
+                    str(item.get("code") or "").strip().upper(): str(item.get("name") or "").strip()
+                    for item in (data.get("locations") or [])
+                    if isinstance(item, dict) and str(item.get("code") or "").strip()
+                }
+                existing_names = {
+                    str(item or "").strip()
+                    for item in (data.get("existing_names") or [])
+                    if str(item or "").strip()
+                }
+                proxies = []
+                failed_locations = []
+                for code in requested_codes:
+                    label = location_names.get(code) or f"Amnezia Premium {code}"
+                    try:
+                        wireguard_config = _amnezia_import_connection_key(
+                            text,
+                            server_country_code=code,
+                            display_name=label,
+                        )
+                        parsed = parse_wireguard(wireguard_config, custom_name=name or label)
+                        proxy_name = parsed.name
+                        suffix = 2
+                        while proxy_name in existing_names:
+                            proxy_name = f"{parsed.name}_{suffix}"
+                            suffix += 1
+                        if proxy_name != parsed.name:
+                            parsed = parse_wireguard(wireguard_config, custom_name=proxy_name)
+                        existing_names.add(proxy_name)
+                        proxies.append(
+                            {"proxy_name": parsed.name, "proxy_yaml": parsed.yaml}
+                        )
+                    except ValueError as exc:
+                        failed_locations.append({"code": code, "name": label, "error": str(exc)})
+                if not proxies:
+                    message = (
+                        failed_locations[0]["error"]
+                        if failed_locations
+                        else "Не удалось получить выбранные локации Amnezia Premium."
+                    )
+                    raise ValueError(message)
+                return jsonify(
+                    {
+                        "ok": True,
+                        "proxies": proxies,
+                        "failed_locations": failed_locations,
+                    }
+                ), 200
+
+            wireguard_config = _amnezia_import_connection_key(text)
+            parsed = parse_wireguard(wireguard_config, custom_name=name)
+            return jsonify({"ok": True, "proxy_name": parsed.name, "proxy_yaml": parsed.yaml}), 200
+        except ValueError as e:
+            return _mihomo_exception(
+                str(e) or "Не удалось получить конфигурацию Amnezia Premium.",
+                code="parse_amnezia_premium_failed",
+                hint=(
+                    "Вставьте ключ vpn:// целиком. При импорте он однократно запрашивает "
+                    "AmneziaWG-конфигурацию у Amnezia; ключ не сохраняется в Xkeen."
+                ),
+                exc=e,
+                status=400,
+            )
+        except Exception as e:
+            return _mihomo_exception(
+                "Не удалось получить конфигурацию Amnezia Premium.",
+                code="parse_amnezia_premium_failed",
+                hint="Проверьте ключ, состояние подписки и подключение к интернету.",
+                exc=e,
+                status=400,
+            )
+
+    @bp.post("/api/mihomo/amnezia-premium/locations")
+    def api_mihomo_amnezia_premium_locations():
+        """Return locations available to an Amnezia Premium connection key."""
+        guard = _patch_guard()
+        if guard is not None:
+            return guard
+
+        data = request.get_json(silent=True) or {}
+        text = _norm_text(data.get("text") or "")
+        if request.content_length is None and len(text) > _PATCH_MAX_BYTES:
+            return _api_error("payload too large", 413, ok=False)
+        if not text.strip():
+            return _api_error("text is required", 400, ok=False)
+
+        try:
+            locations = _amnezia_list_available_locations(text)
+            return jsonify({"ok": True, "locations": locations}), 200
+        except ValueError as e:
+            return _mihomo_exception(
+                str(e) or "Не удалось получить список локаций Amnezia Premium.",
+                code="amnezia_premium_locations_failed",
+                hint="Проверьте ключ и состояние подписки.",
+                exc=e,
+                status=400,
+            )
+        except Exception as e:
+            return _mihomo_exception(
+                "Не удалось получить список локаций Amnezia Premium.",
+                code="amnezia_premium_locations_failed",
+                hint="Проверьте ключ, подписку и подключение к интернету.",
+                exc=e,
+                status=400,
+            )
+
     @bp.post("/api/mihomo/parse/openvpn")
     def api_mihomo_parse_openvpn():
         """Parse OpenVPN .ovpn config text and return Mihomo proxy YAML block."""
@@ -2658,6 +2798,19 @@ def create_mihomo_blueprint(
         except Exception:
             interval_hours = 24
         parsed_xray_sources = []
+
+        if mode == "amnezia-premium" or (
+            mode == "auto" and _is_amnezia_premium_connection_key(source)
+        ):
+            try:
+                source = _amnezia_import_connection_key(source)
+                mode = "wireguard"
+            except ValueError as exc:
+                return _mihomo_error(
+                    str(exc) or "Не удалось получить конфигурацию Amnezia Premium.",
+                    status=400,
+                    code="mihomo_node_import_invalid",
+                )
 
         if request.content_length is None:
             total = len(content) + len(source) + sum(len(group) for group in groups)

@@ -3935,6 +3935,7 @@ vless://...#mytag"></textarea>
                     <option value="auto">Auto</option>
                     <option value="proxy">Proxy link</option>
                     <option value="subscription">HTTPS subscription</option>
+                    <option value="amnezia-premium">Amnezia Premium key (vpn://)</option>
                     <option value="wireguard">WireGuard / AmneziaWG 3.x (.conf)</option>
                     <option value="openvpn">OpenVPN (.ovpn)</option>
                     <option value="tailscale">Tailscale</option>
@@ -3942,11 +3943,28 @@ vless://...#mytag"></textarea>
                 </label>
 
                 <label class="xk-mi-field xk-mi-field--grow">
-                  <span class="hint-label">Ссылка / подписка / конфиг</span>
+                  <span class="hint-label">Ссылка / ключ / подписка / конфиг</span>
                   <textarea id="mihomo-import-input" class="xkeen-textarea outbounds-gen-preview xk-mi-input" spellcheck="false" placeholder="vless://...
 или
 https://..."></textarea>
                 </label>
+              </div>
+              <p id="mihomo-import-amnezia-premium-hint" class="modal-hint xk-mi-target hidden">
+                Ключ будет однократно отправлен в Amnezia для выпуска AmneziaWG-конфига. В Xkeen ключ не сохраняется.
+              </p>
+              <div id="mihomo-import-amnezia-locations-block" class="xk-mi-groups-card hidden">
+                <div class="xk-mi-section-head">
+                  <div>
+                    <div class="xk-mi-section-title">Локации Amnezia Premium</div>
+                    <div class="xk-mi-section-subtitle">Выберите серверы. Конфиг выпускается только для отмеченных локаций.</div>
+                  </div>
+                  <div class="xk-mi-inline-actions">
+                    <button type="button" id="mihomo-import-amnezia-locations-all-btn" class="btn-compact">Все</button>
+                    <button type="button" id="mihomo-import-amnezia-locations-none-btn" class="btn-compact">Снять</button>
+                  </div>
+                </div>
+                <div id="mihomo-import-amnezia-locations" class="xk-mi-groups-shell"></div>
+                <div id="mihomo-import-amnezia-locations-count" class="xk-card-desc" style="opacity:0.75;">Локации ещё не загружены.</div>
               </div>
 
               <div id="mihomo-import-status" class="status xk-mi-status hidden"></div>
