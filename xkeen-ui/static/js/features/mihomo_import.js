@@ -2373,7 +2373,7 @@ let mihomoImportModuleApi = null;
       const flag = mihomoCountryFlag(code);
       const flagHtml = flag.svg || escapeHtml(flag.region || flag.code || '');
       return (
-        '<label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center; margin:4px 0;">' +
+        '<label class="global-autorestart-toggle xk-mi-amnezia-location-row">' +
           '<input type="checkbox" class="mihomo-import-amnezia-location-cb" data-location-code="' + escapeHtml(code) + '"' + checked + '>' +
           '<span class="xk-mi-amnezia-location-label"><span class="xk-sub-node-country xk-mi-amnezia-location-flag" data-country="' + escapeHtml(code) + '" aria-hidden="true">' + flagHtml + '</span>' + escapeHtml(name) + ' <code>' + escapeHtml(code) + '</code></span>' +
         '</label>'

@@ -1,6 +1,69 @@
 import { test, expect, selectPanelView } from './fixtures.mjs';
 
 
+const AMNEZIA_LOCATIONS = [
+  'FI', 'DE', 'FR', 'GB', 'NL', 'SE', 'NO', 'PL', 'ES', 'IT',
+  'CH', 'AT', 'BE', 'CZ', 'DK', 'EE', 'GR', 'HU', 'IE', 'IS',
+  'LT', 'LU', 'LV', 'PT', 'RO', 'SK', 'SI', 'US', 'CA', 'BR',
+  'AU', 'JP', 'KR', 'SG', 'HK', 'AE', 'TR', 'KZ', 'IN', 'ID',
+].map((code) => ({ code, name: `Location ${code}` }));
+
+
+async function openMihomoImport(page) {
+  await selectPanelView(page, 'mihomo');
+  await expect(page.locator('#view-mihomo')).toBeVisible();
+  await page.locator('#mihomo-clash-tab-config').click();
+  const menu = page.locator('.xk-mihomo-menu');
+  await menu.locator('summary').click();
+  await expect(page.locator('#mihomo-import-node-btn')).toBeVisible();
+  await page.locator('#mihomo-import-node-btn').click();
+  await expect(page.locator('#mihomo-import-modal')).toBeVisible();
+}
+
+
+test('Amnezia Premium locations use compact flags and a two-column scroller', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 960 });
+  await page.route('**/api/mihomo/amnezia-premium/locations', (route) => route.fulfill({
+    json: { ok: true, locations: AMNEZIA_LOCATIONS },
+  }));
+  await page.goto('/');
+  await openMihomoImport(page);
+
+  await page.locator('#mihomo-import-mode').selectOption('amnezia-premium');
+  await page.locator('#mihomo-import-input').fill('vpn://fixture-key');
+  await page.locator('#mihomo-import-parse-btn').click();
+
+  const shell = page.locator('#mihomo-import-amnezia-locations');
+  await expect(shell.locator('.mihomo-import-amnezia-location-cb')).toHaveCount(40);
+
+  const layout = await shell.evaluate((node) => {
+    const flag = node.querySelector('.xk-mi-amnezia-location-flag');
+    const svg = flag?.querySelector('svg');
+    const flagRect = flag?.getBoundingClientRect();
+    const svgRect = svg?.getBoundingClientRect();
+    return {
+      columns: getComputedStyle(node).gridTemplateColumns.split(' ').filter(Boolean).length,
+      clientHeight: node.clientHeight,
+      scrollHeight: node.scrollHeight,
+      flagWidth: flagRect?.width,
+      flagHeight: flagRect?.height,
+      svgWidth: svgRect?.width,
+      svgHeight: svgRect?.height,
+    };
+  });
+
+  expect(layout.columns).toBe(2);
+  expect(layout.clientHeight).toBeGreaterThanOrEqual(172);
+  expect(layout.scrollHeight).toBeGreaterThan(layout.clientHeight);
+  expect(layout.flagWidth).toBe(20);
+  expect(layout.flagHeight).toBe(14);
+  expect(layout.svgWidth).toBeGreaterThanOrEqual(12);
+  expect(layout.svgWidth).toBeLessThanOrEqual(20);
+  expect(layout.svgHeight).toBeGreaterThanOrEqual(10);
+  expect(layout.svgHeight).toBeLessThanOrEqual(14);
+});
+
+
 test('Mihomo import uses the resizable Operator workbench and stretches its YAML preview', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 960 });
   await page.addInitScript(() => {

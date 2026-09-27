@@ -8992,6 +8992,50 @@ html[data-theme="light"] #routing-forced-rules-modal .xk-chip[data-kind="ip"] {
   background: rgba(2, 6, 23, 0.34);
 }
 
+#mihomo-import-amnezia-locations.xk-mi-groups-shell {
+  min-height: 172px;
+  max-height: 248px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 2px 16px;
+}
+
+.xk-mi-amnezia-location-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 28px;
+  margin: 0;
+}
+
+.xk-mi-amnezia-location-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.xk-mi-amnezia-location-flag.xk-sub-node-country {
+  display: inline-flex;
+  width: 20px;
+  height: 14px;
+  margin-top: 0;
+}
+
+.xk-mi-amnezia-location-label code {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 620px) {
+  #mihomo-import-amnezia-locations.xk-mi-groups-shell {
+    grid-template-columns: minmax(0, 1fr);
+    max-height: 224px;
+  }
+}
+
 .xk-mi-remember {
   display: inline-flex;
   align-items: center;
