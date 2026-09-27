@@ -233,6 +233,22 @@ def test_install_key_files_replaces_files_and_records_their_origin(upstream, tmp
     assert not [p for p in assets.iterdir() if p.name.startswith(".")], "no staging leftovers"
 
 
+def test_install_key_files_keeps_previous_backup_when_content_is_unchanged(upstream, tmp_path):
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    crypt5_bytes = json.dumps(upstream["table"]).encode()
+    (assets / keys.CRYPT5_FILE).write_bytes(crypt5_bytes)
+    (assets / (keys.CRYPT5_FILE + ".bak")).write_bytes(b'{"older": "x"}')
+    (assets / keys.LEGACY_FILE).write_bytes(json.dumps(upstream["legacy"]).encode())
+
+    keys.install_key_files(str(assets), {keys.CRYPT5_FILE: crypt5_bytes, keys.LEGACY_FILE: (assets / keys.LEGACY_FILE).read_bytes()},
+                           meta={"source": "manifest"})
+
+    assert (assets / keys.CRYPT5_FILE).read_bytes() == crypt5_bytes
+    assert (assets / (keys.CRYPT5_FILE + ".bak")).read_bytes() == b'{"older": "x"}', "a real rollback copy is not overwritten by an identical one"
+    assert not (assets / (keys.LEGACY_FILE + ".bak")).exists(), "no backup that equals the installed file"
+
+
 def test_install_key_files_verifies_the_complete_candidate_set(upstream, tmp_path):
     assets = tmp_path / "assets"
     assets.mkdir()

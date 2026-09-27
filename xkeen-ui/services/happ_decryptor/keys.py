@@ -4,7 +4,8 @@ The keys are not ours to ship. ``keys_manifest.json`` pins the upstream commit
 and the size and sha256 of every file; the installer downloads exactly those
 bytes, turns ``src/decrypt.js`` into ``legacy_keys.json``, stages the result
 together with the key files already in place, lets the caller check the
-complete set and only then swaps the files in, keeping one ``.bak`` of each.
+complete set and only then swaps the files in, keeping one ``.bak`` of each
+file whose content actually changed.
 """
 
 from __future__ import annotations
@@ -274,6 +275,16 @@ def read_keys_meta(assets_dir: str) -> dict[str, Any] | None:
     return meta if isinstance(meta, dict) else None
 
 
+def _same_bytes(path: str, data: bytes) -> bool:
+    try:
+        if os.path.getsize(path) != len(data):
+            return False
+        with open(path, "rb") as f:
+            return f.read() == data
+    except OSError:
+        return False
+
+
 def install_key_files(
     assets_dir: str,
     files: dict[str, bytes],
@@ -302,6 +313,9 @@ def install_key_files(
 
         for name in files:
             dest = os.path.join(assets_dir, name)
+            if _same_bytes(dest, files[name]):
+                # Same content: an identical .bak is clutter and would evict the real rollback copy.
+                continue
             had_old = os.path.exists(dest)
             swapped.append((name, had_old))
             if had_old:
