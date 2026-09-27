@@ -99,6 +99,59 @@ def test_filter_reconcile_repairs_runtime_without_saving(monkeypatch):
     assert calls == ["dns-proxy no filter engine"]
 
 
+_NO_FILTER_COMMAND = "Command::Base error[7405600]: no such command: filter."
+
+
+def _refuse_filter_command(calls):
+    def run(command, **_kwargs):
+        calls.append(command)
+        if command == "dns-proxy no filter engine":
+            raise dns.MihomoDnsError(
+                "Keenetic отклонил настройку DNS.", code="ndmc_failed", details=_NO_FILTER_COMMAND
+            )
+        return ""
+
+    return run
+
+
+def test_filter_reconcile_accepts_firmware_without_internet_filter(monkeypatch):
+    """Без компонента интернет-фильтра выключать нечего: сторож не должен
+    повторять отвергнутую команду на каждом тике и сорить в журнал роутера."""
+    calls = []
+    monkeypatch.setattr(dns, "_ndmc", _refuse_filter_command(calls))
+
+    first = dns.reconcile_keenetic_dns_filter()
+    second = dns.reconcile_keenetic_dns_filter()
+
+    assert first == {"ok": True, "filter_engine": "absent"}
+    assert second == {"ok": True, "filter_engine": "recent"}
+    assert calls == ["dns-proxy no filter engine"]
+
+
+def test_enabling_override_saves_on_firmware_without_internet_filter(monkeypatch):
+    calls = []
+    monkeypatch.setattr(dns, "_ndmc", _refuse_filter_command(calls))
+
+    dns._set_dns_override(True)
+
+    assert calls == [
+        "opkg dns-override",
+        "dns-proxy no filter engine",
+        "system configuration save",
+    ]
+
+
+def test_filter_reconcile_still_reports_other_firmware_errors(monkeypatch):
+    def refuse(command, **_kwargs):
+        raise dns.MihomoDnsError("Keenetic отклонил настройку DNS.", code="ndmc_failed", details="% Error: busy")
+
+    monkeypatch.setattr(dns, "_ndmc", refuse)
+
+    with pytest.raises(dns.MihomoDnsError):
+        dns.reconcile_keenetic_dns_filter()
+    assert "at" not in dns._FILTER_RECONCILE_STATE
+
+
 def test_running_config_reports_transit_and_provider_dns_policy():
     running = """interface GigabitEthernet1
     rename ISP

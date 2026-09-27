@@ -2569,17 +2569,31 @@ def _set_dns_override(enabled: bool) -> None:
     _remember_dns_override((bool(enabled), "panel"))
 
 
-def _disable_keenetic_dns_filter() -> None:
+def _disable_keenetic_dns_filter() -> str:
     """Keep Internet filters from intercepting DNS owned by Mihomo.
 
     The command is idempotent and deliberately does not save by itself.  The
     activation transaction saves immediately afterwards, while the watchdog
     uses this helper only to repair boot-time runtime drift without writing to
     flash every polling interval.
+
+    Firmware built without the Internet-filter component has no
+    ``dns-proxy filter`` branch at all and answers ``no such command:
+    filter``.  There is nothing to intercept DNS then, so that answer counts
+    as done: raising would abort the activation before its save, and leaving
+    the stamp unset made the guard retry -- and log an ndm error -- on every
+    30-second tick.
     """
 
-    _ndmc("dns-proxy no filter engine")
+    try:
+        _ndmc("dns-proxy no filter engine")
+        state = "disabled"
+    except MihomoDnsError as exc:
+        if "no such command: filter" not in str(exc.details or "").lower():
+            raise
+        state = "absent"
     _FILTER_RECONCILE_STATE["at"] = time.monotonic()
+    return state
 
 
 def reconcile_keenetic_dns_filter() -> dict[str, Any]:
@@ -2597,8 +2611,7 @@ def reconcile_keenetic_dns_filter() -> dict[str, Any]:
     if stamp is not None and 0 <= time.monotonic() - stamp < FILTER_RECONCILE_INTERVAL:
         filter_state = "recent"
     else:
-        _disable_keenetic_dns_filter()
-        filter_state = "disabled"
+        filter_state = _disable_keenetic_dns_filter()
 
     # Keenetic can rebuild _NDM_HOTSPOT_DNSREDIR when a policy or interface
     # changes.  Re-install our first PREROUTING jump while Mihomo owns :53;
