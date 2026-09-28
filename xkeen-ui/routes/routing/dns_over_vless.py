@@ -117,6 +117,8 @@ def register_dns_over_vless_routes(
         direct_domains = payload.get("direct_domains", None)
         # Static answers of the DNS module (``dns.hosts``): name -> address.
         hosts = payload.get("hosts", None)
+        # Whether they are written into the config; off keeps the list.
+        hosts_enabled = payload.get("hosts_enabled", None)
         # Whether the record types the built-in DNS cannot answer are let
         # through, and which node carries them.
         # Whether the DNS servers above are resolved at the exit node.
@@ -191,6 +193,7 @@ def register_dns_over_vless_routes(
                 capture_clients=capture_clients,
                 capture_macs=capture_macs,
                 hosts=hosts,
+                hosts_enabled=hosts_enabled,
             )
             audit(True, action=action, summary=("DNS-over-VLESS включён" if action == "enable" else "DNS-over-VLESS отключён"))
             return jsonify(result)

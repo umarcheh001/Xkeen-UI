@@ -4051,7 +4051,89 @@ def test_window_has_the_optional_hosts_zone():
     )
     zone = template.split('data-zone="hosts"', 1)[1].split("</details>\n            <details", 1)[0]
     assert 'id="routing-dns-over-vless-hosts"' in zone
-    assert 'id="routing-dns-over-vless-hosts-clear"' in zone
+    # Переключатель в заголовке, как у прочих типов записей; кнопки,
+    # стирающей список, больше нет.
+    head = zone.split("</summary>", 1)[0]
+    assert 'id="routing-dns-over-vless-hosts-on"' in head
+    assert "routing-dns-over-vless-hosts-clear" not in template
     # Необязательная секция: без плашки «обязательно».
     assert 'data-required' not in template.split('data-zone="hosts"', 1)[0].rsplit("<details", 1)[1]
     assert "xk-dns-zone-req" not in zone.split("</summary>", 1)[0]
+
+
+def test_switching_hosts_off_keeps_the_list_out_of_the_config(tmp_path: Path, monkeypatch):
+    configs, routing_path, state, common = _hosts_env(tmp_path, monkeypatch)
+    dns.apply_action("enable", hosts=M_YOUTUBE, hosts_enabled=True, **common)
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    # Окно шлёт и список, и выключенный переключатель.
+    dns.apply_action("enable", hosts="full:m.youtube.com = www.youtube.com", hosts_enabled=False, **common)
+
+    assert "hosts" not in _fragment(configs)["dns"]
+    result = _status(configs, routing_path, state, monkeypatch)
+    assert result["tampered"] is False
+    assert result["hosts_enabled"] is False
+    assert result["hosts"] == M_YOUTUBE
+
+
+def test_hosts_set_aside_survive_a_rebuild_and_come_back(tmp_path: Path, monkeypatch):
+    configs, routing_path, state, common = _hosts_env(tmp_path, monkeypatch)
+    dns.apply_action("enable", hosts=M_YOUTUBE, hosts_enabled=False, **common)
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    # Пересборка без упоминания подмены не теряет отложенный список.
+    dns.apply_action("enable", upstreams=["1.1.1.1"], **common)
+    assert "hosts" not in _fragment(configs)["dns"]
+    assert _status(configs, routing_path, state, monkeypatch)["hosts"] == M_YOUTUBE
+
+    dns.apply_action("enable", hosts_enabled=True, **common)
+    assert _fragment(configs)["dns"]["hosts"] == M_YOUTUBE
+
+
+def test_state_from_before_the_switch_keeps_hosts_in_force(tmp_path: Path, monkeypatch):
+    configs, routing_path, state, common = _hosts_env(tmp_path, monkeypatch)
+    dns._save_state(str(state), {"version": dns.STATE_VERSION, "hosts": M_YOUTUBE})
+
+    dns.apply_action("enable", **common)
+
+    assert _fragment(configs)["dns"]["hosts"] == M_YOUTUBE
+    assert _status(configs, routing_path, state, monkeypatch)["hosts_enabled"] is True
+
+
+def test_hosts_written_into_the_file_by_hand_read_as_switched_on(tmp_path: Path, monkeypatch):
+    configs, routing_path, state, common = _hosts_env(tmp_path, monkeypatch)
+    dns.apply_action("enable", hosts=M_YOUTUBE, hosts_enabled=False, **common)
+    fragment = _fragment(configs)
+    fragment["dns"]["hosts"] = {"m.youtube.com": "www.youtube.com"}
+    _write(configs / dns.MANAGED_FRAGMENT, fragment)
+
+    result = _status(configs, routing_path, state, monkeypatch)
+    assert result["tampered"] is False
+    assert result["hosts_enabled"] is True
+    assert result["hosts"] == {"m.youtube.com": "www.youtube.com"}
+
+
+def test_http_contract_forwards_the_hosts_switch(tmp_path: Path, monkeypatch):
+    from routes.routing import dns_over_vless as dns_routes
+
+    configs, routing_path, state = _scenario_config(tmp_path)
+    seen: Dict[str, Any] = {}
+
+    def fake_apply(action, **kwargs):
+        seen.update(kwargs)
+        return {"ok": True, "action": action}
+
+    monkeypatch.setattr(dns_routes, "apply_action", fake_apply)
+    app = Flask(__name__)
+    dns_routes.register_dns_over_vless_routes(
+        app,
+        xray_configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_kwargs: True,
+    )
+    client = app.test_client()
+    client.post("/api/routing/dns-over-vless", json={"action": "enable", "hosts_enabled": False})
+    assert seen["hosts_enabled"] is False
+    client.post("/api/routing/dns-over-vless", json={"action": "enable"})
+    assert seen["hosts_enabled"] is None

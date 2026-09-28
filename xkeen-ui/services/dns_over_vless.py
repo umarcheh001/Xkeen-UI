@@ -3250,16 +3250,55 @@ def _safe_capture_macs(value: Any) -> list[str]:
         return []
 
 
-def _status_hosts(configs_dir: str, state: Dict[str, Any]) -> Dict[str, Any]:
-    managed_path = os.path.join(configs_dir, MANAGED_FRAGMENT)
+def _resolve_hosts(
+    managed_path: str,
+    state: Dict[str, Any],
+    hosts: Any = None,
+    hosts_enabled: Any = None,
+) -> tuple[Dict[str, Any], bool]:
+    """The list of static answers and whether it is written into the config.
+
+    The switch lets the list be set aside without losing it, so the list and
+    the switch are kept apart.  While the fragment exists it is the truth
+    about the switch -- entries added to it by hand are in force -- and a
+    list that is on disk wins over the remembered one.  A list set aside is
+    not in the file, so it comes from the state.  A request overrides both.
+    """
+
+    on_disk: Optional[Dict[str, Any]] = None
     if os.path.isfile(managed_path):
         on_disk = _declared_hosts(_read_json(managed_path, None))
-        if on_disk is not None:
-            return on_disk
     try:
-        return _hosts(state.get("hosts"))
+        remembered = _hosts(state.get("hosts"))
     except DnsOverVlessError:
-        return {}
+        remembered = {}
+    if hosts is not None:
+        wanted = _hosts(hosts)
+    elif on_disk:
+        wanted = on_disk
+    else:
+        wanted = remembered
+    if hosts_enabled is not None:
+        enabled = bool(hosts_enabled)
+    elif hosts is not None:
+        # A list sent without the switch -- the API before the switch existed
+        # -- means the list is wanted in force.
+        enabled = bool(wanted)
+    elif on_disk is not None:
+        enabled = bool(on_disk)
+    elif "hosts_enabled" in state:
+        enabled = bool(state.get("hosts_enabled"))
+    else:
+        # A state written before the switch existed: the list was in force.
+        enabled = bool(remembered)
+    return wanted, enabled
+
+
+def _status_hosts(configs_dir: str, state: Dict[str, Any]) -> tuple[Dict[str, Any], bool]:
+    try:
+        return _resolve_hosts(os.path.join(configs_dir, MANAGED_FRAGMENT), state)
+    except DnsOverVlessError:
+        return {}, False
 
 
 def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dict[str, Any]:
@@ -3270,6 +3309,7 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
     core = detect_running_core() or ""
     available_cores = detect_available_cores()
     state = _load_state(ui_state_dir)
+    hosts_list, hosts_on = _status_hosts(configs_dir, state)
     complete_config = _managed_config_complete(presence)
     tampered = _managed_config_tampered(presence)
     enabled = bool(complete_config and override is True)
@@ -3393,9 +3433,10 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
             state.get("direct_domains") if isinstance(state.get("direct_domains"), list) else []
         ),
         "max_direct_domains": MAX_DIRECT_DOMAINS,
-        # Static answers: read from the fragment while it is there -- entries
-        # added to it by hand are the ones in force -- otherwise remembered.
-        "hosts": _status_hosts(configs_dir, state),
+        # Static answers and whether they are in force; a list set aside by
+        # the switch is still shown, so switching it back loses nothing.
+        "hosts": hosts_list,
+        "hosts_enabled": hosts_on,
         "max_hosts": MAX_HOSTS,
         # Domains the user already sends past the tunnel: the card offers them
         # as a starting list so nobody keeps two copies of it in sync by hand.
@@ -3456,6 +3497,7 @@ def apply_action(
     capture_clients: Any = None,
     capture_macs: Any = None,
     hosts: Any = None,
+    hosts_enabled: Any = None,
 ) -> Dict[str, Any]:
     normalized = str(action or "").strip().lower()
     if normalized not in {"enable", "disable"}:
@@ -3551,16 +3593,12 @@ def apply_action(
             if direct_domains is not None
             else _direct_domains(stored_state.get("direct_domains"))
         )
-        # Static answers: a request wins; while the feature is on, the fragment
-        # on disk is what the user last saw working -- entries added there by
-        # hand survive the rebuild; with no fragment, the state remembers them.
-        if hosts is not None:
-            wanted_hosts = _hosts(hosts)
-        elif os.path.isfile(managed_path):
-            on_disk = _declared_hosts(_read_json(managed_path, None))
-            wanted_hosts = on_disk if on_disk is not None else _hosts(stored_state.get("hosts"))
-        else:
-            wanted_hosts = _hosts(stored_state.get("hosts"))
+        # Static answers: the list survives the switch being off, only the
+        # fragment goes without it.  Entries added to the file by hand are the
+        # ones in force and survive the rebuild.
+        wanted_hosts, wanted_hosts_on = _resolve_hosts(
+            managed_path, stored_state, hosts, hosts_enabled
+        )
         # Devices whose DNS the firmware takes away can be brought back with a
         # rule of our own.  The switch and the list are separate on purpose:
         # with the switch off no chain is created at all, so a checkbox left
@@ -3681,7 +3719,7 @@ def apply_action(
                     wanted_pass_node,
                     _service_mark(runtime),
                     _core_supports_dns_rules() if wanted_pass_node else True,
-                    hosts=wanted_hosts,
+                    hosts=wanted_hosts if wanted_hosts_on else None,
                 )
                 if _managed_config_complete(presence) and current_fragment == expected_fragment:
                     # Idempotent recovery path: configuration is already
@@ -3849,6 +3887,7 @@ def apply_action(
                         "capture_clients": wanted_capture,
                         "capture_macs": wanted_capture_macs,
                         "hosts": wanted_hosts,
+                        "hosts_enabled": wanted_hosts_on,
                         "target": ({k: v for k, v in target.items() if k != "managed_balancer"} if target else previous_state.get("target")),
                         "last_transaction": snapshot_dir,
                     },

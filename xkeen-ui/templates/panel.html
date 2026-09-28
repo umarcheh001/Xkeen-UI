@@ -2914,6 +2914,10 @@
               <summary class="xk-dns-zone-head">
                 <b>Подмена адресов</b>
                 <span class="xk-dns-zone-sum" data-zone-sum="hosts"></span>
+                <label class="dt-switch xk-switch-bare" title="Выключенная подмена не попадает в конфиг Xray, а список записей сохраняется.">
+                  <input type="checkbox" id="routing-dns-over-vless-hosts-on" aria-label="Подменять адреса">
+                  <span class="dt-switch-slider" aria-hidden="true"></span>
+                </label>
               </summary>
               <div class="xk-dns-zone-body">
                 <label for="routing-dns-over-vless-hosts">Имя → чьи адреса ему отдавать</label>
@@ -2921,11 +2925,8 @@
                 <div class="modal-hint">Необязательно. Имя получит адреса другого имени или указанный IP, а сайт при подключении всё равно увидит своё настоящее имя. Помогает, когда провайдер режет конкретный узел сервиса, а соседний проходит.
                   <details class="xk-hint-more">
                     <summary>Подробнее</summary>
-                    <p>По одной записи в строке: <code>имя = адрес</code>. Справа — имя, IP или несколько адресов через запятую. Имя без префикса совпадает только само с собой; <code>domain:youtube.com</code> захватит и все поддомены. Действует на устройства, чей DNS идёт через Xray. Не больше 64 строк.</p>
+                    <p>По одной записи в строке: <code>имя = адрес</code>. Справа — имя, IP или несколько адресов через запятую. Имя без префикса совпадает только само с собой; <code>domain:youtube.com</code> захватит и все поддомены. Действует на устройства, чей DNS идёт через Xray. Не больше 64 строк. Переключатель в заголовке снимает подмену, не стирая список: так её можно временно отключить для проверки.</p>
                   </details>
-                </div>
-                <div class="routing-dns-over-vless-zone-presets">
-                  <button type="button" id="routing-dns-over-vless-hosts-clear" class="routing-dns-over-vless-zone-preset">Не использовать эту область</button>
                 </div>
               </div>
             </details>

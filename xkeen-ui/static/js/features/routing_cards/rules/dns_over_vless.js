@@ -55,7 +55,7 @@ import {
     directFromRules: 'routing-dns-over-vless-direct-from-rules',
     directClear: 'routing-dns-over-vless-direct-clear',
     hosts: 'routing-dns-over-vless-hosts',
-    hostsClear: 'routing-dns-over-vless-hosts-clear',
+    hostsOn: 'routing-dns-over-vless-hosts-on',
     pass: 'routing-dns-over-vless-pass',
     passRow: 'routing-dns-over-vless-pass-row',
     passNode: 'routing-dns-over-vless-pass-node',
@@ -168,6 +168,9 @@ import {
     // Текст уходит как есть, разбирает его сервер: ошибку он назовёт с номером
     // строки. Пустое поле — «подмены нет», поэтому шлём и его.
     if (hosts) settings.hosts = String(hosts.value || '').trim();
+    // Переключатель отдельно от списка: выключенная подмена список не стирает.
+    const hostsOn = $(DOM.hostsOn);
+    if (hostsOn) settings.hosts_enabled = !!hostsOn.checked;
     const pass = $(DOM.pass);
     if (pass) {
       settings.pass_non_ip = !!pass.checked;
@@ -514,7 +517,7 @@ import {
     const note = $(DOM.lockedNote);
     if (note) note.classList.toggle('hidden', !fieldsLocked);
     const ids = [DOM.upstreams, DOM.remote, DOM.firmware, DOM.local, DOM.zones, DOM.direct,
-      DOM.directZones, DOM.hosts, DOM.pass, DOM.passNode];
+      DOM.directZones, DOM.hosts, DOM.hostsOn, DOM.pass, DOM.passNode];
     for (let i = 0; i < ids.length; i += 1) {
       const field = $(ids[i]);
       if (field) field.disabled = fieldsLocked || busy;
@@ -582,9 +585,10 @@ import {
       if (!hosts.dataset.touched) hosts.value = hostsText(data && data.hosts);
       hosts.disabled = busy || fieldsLocked;
     }
-    const hostsClear = $(DOM.hostsClear);
-    if (hostsClear) {
-      hostsClear.disabled = busy || fieldsLocked || !(hosts && String(hosts.value || '').trim());
+    const hostsOn = $(DOM.hostsOn);
+    if (hostsOn) {
+      if (!hostsOn.dataset.touched) hostsOn.checked = !!(data && data.hosts_enabled);
+      hostsOn.disabled = busy || fieldsLocked;
     }
     const remote = $(DOM.remote);
     if (remote) {
@@ -1071,7 +1075,9 @@ import {
     if (zone === 'hosts') {
       const count = hostsCount();
       if (!count) return { text: 'не используется' };
-      return { text: `${count} ${plural(count, 'запись', 'записи', 'записей')}` };
+      const text = `${count} ${plural(count, 'запись', 'записи', 'записей')}`;
+      const on = $(DOM.hostsOn);
+      return { text: on && !on.checked ? `выключено · ${text}` : text };
     }
     if (zone === 'records') {
       if (!(data && data.pass_non_ip)) return { text: 'выключено' };
@@ -1379,7 +1385,7 @@ import {
       field.value = value;
       field.dataset.touched = '1';
     });
-    [DOM.remote, DOM.pass, DOM.multi].forEach((id) => {
+    [DOM.remote, DOM.pass, DOM.multi, DOM.hostsOn].forEach((id) => {
       const box = $(id);
       if (!box) return;
       box.checked = false;
@@ -1610,7 +1616,7 @@ import {
     // переставал обновляться с сервера, даже после переоткрытия окна.
     [
       DOM.upstreams, DOM.local, DOM.firmware, DOM.zones, DOM.direct, DOM.directZones,
-      DOM.hosts, DOM.remote, DOM.pass, DOM.passNode, DOM.multi,
+      DOM.hosts, DOM.hostsOn, DOM.remote, DOM.pass, DOM.passNode, DOM.multi,
     ].forEach((id) => {
       const field = $(id);
       if (field) delete field.dataset.touched;
@@ -1985,11 +1991,23 @@ import {
     [DOM.upstreams, DOM.local, DOM.zones, DOM.direct, DOM.directZones, DOM.hosts].forEach((id) => {
       const field = $(id);
       if (!field) return;
+      let wasEmpty = !String(field.value || '').trim();
+      field.addEventListener('focus', () => { wasEmpty = !String(field.value || '').trim(); });
       field.addEventListener('input', () => {
         field.dataset.touched = '1';
-        // Typing a resolver reveals the matching domain list straight away;
-        // the clear button of the hosts follows its field the same way.
-        if ((id === DOM.local || id === DOM.direct || id === DOM.hosts) && status) renderDnsFields(status);
+        // Первая запись в пустой список включает подмену: иначе запись легко
+        // вписать и не понять, почему она не действует.
+        if (id === DOM.hosts) {
+          const on = $(DOM.hostsOn);
+          const hasText = !!String(field.value || '').trim();
+          if (on && wasEmpty && hasText && !on.checked) {
+            on.checked = true;
+            on.dataset.touched = '1';
+          }
+          wasEmpty = !hasText;
+        }
+        // Typing a resolver reveals the matching domain list straight away.
+        if ((id === DOM.local || id === DOM.direct) && status) renderDnsFields(status);
         // Сводка в шапке считается по полям, а не по ответу сервера.
         renderZoneSummaries(status);
         // Editing the list by hand must keep the group buttons honest.
@@ -2004,16 +2022,10 @@ import {
         clearDirectZone();
       });
     }
-    const hostsClear = $(DOM.hostsClear);
-    if (hostsClear) {
-      hostsClear.addEventListener('click', (event) => {
-        event.preventDefault();
-        if (busy || fieldsLocked) return;
-        const field = $(DOM.hosts);
-        if (!field) return;
-        field.value = '';
-        field.dataset.touched = '1';
-        if (status) renderDnsFields(status);
+    const hostsOnBox = $(DOM.hostsOn);
+    if (hostsOnBox) {
+      hostsOnBox.addEventListener('change', () => {
+        hostsOnBox.dataset.touched = '1';
         renderZoneSummaries(status);
       });
     }

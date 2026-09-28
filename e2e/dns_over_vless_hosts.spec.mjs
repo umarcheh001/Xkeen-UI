@@ -46,9 +46,11 @@ test('записи с сервера видны строками, сводка �
   await openDialog(page, {
     ...STATUS,
     hosts: { 'full:m.youtube.com': 'www.youtube.com', 'domain:example.org': ['1.2.3.4', '5.6.7.8'] },
+    hosts_enabled: true,
   });
 
   await expect(summary(page)).toHaveText('2 записи');
+  await expect(page.locator('#routing-dns-over-vless-hosts-on')).toBeChecked();
   await openZone(page, 'hosts');
   await expect(page.locator('#routing-dns-over-vless-hosts')).toHaveValue(
     'full:m.youtube.com = www.youtube.com\ndomain:example.org = 1.2.3.4, 5.6.7.8',
@@ -61,27 +63,44 @@ test('введённая запись уходит на сервер текст�
   await openZone(page, 'hosts');
   const box = await catchApply(page, STATUS);
 
+  // Первая запись в пустой список сама включает подмену.
+  await expect(page.locator('#routing-dns-over-vless-hosts-on')).not.toBeChecked();
   await page.locator('#routing-dns-over-vless-hosts').fill('m.youtube.com = www.youtube.com');
+  await expect(page.locator('#routing-dns-over-vless-hosts-on')).toBeChecked();
   await expect(summary(page)).toHaveText('1 запись');
   await applyDialog(page);
 
   await expect.poll(() => box.sent).not.toBeNull();
   expect(box.sent.hosts).toBe('m.youtube.com = www.youtube.com');
+  expect(box.sent.hosts_enabled).toBe(true);
 });
 
 
-test('«Не использовать эту область» стирает записи и уходит пустой строкой', async ({ page }) => {
-  const status = { ...STATUS, hosts: { 'm.youtube.com': 'www.youtube.com' } };
+test('выключенный переключатель снимает подмену, но список остаётся', async ({ page }) => {
+  const status = { ...STATUS, hosts: { 'm.youtube.com': 'www.youtube.com' }, hosts_enabled: true };
   await openDialog(page, status);
-  await openZone(page, 'hosts');
   const box = await catchApply(page, status);
 
-  await page.locator('#routing-dns-over-vless-hosts-clear').click();
-  await expect(page.locator('#routing-dns-over-vless-hosts')).toHaveValue('');
-  await expect(summary(page)).toHaveText('не используется');
-  await expect(page.locator('#routing-dns-over-vless-hosts-clear')).toBeDisabled();
+  // Клик по переключателю в заголовке не сворачивает и не раскрывает секцию.
+  await page.locator('.xk-dns-zone[data-zone="hosts"] .xk-dns-zone-head .dt-switch').click();
+  await expect(page.locator('#routing-dns-over-vless-hosts-on')).not.toBeChecked();
+  await expect(zone(page)).not.toHaveAttribute('open', '');
+  await expect(summary(page)).toHaveText('выключено · 1 запись');
   await applyDialog(page);
 
   await expect.poll(() => box.sent).not.toBeNull();
-  expect(box.sent.hosts).toBe('');
+  expect(box.sent.hosts_enabled).toBe(false);
+  expect(box.sent.hosts).toBe('m.youtube.com = www.youtube.com');
+});
+
+
+test('отложенный список виден в окне и возвращается переключателем', async ({ page }) => {
+  await openDialog(page, { ...STATUS, hosts: { 'm.youtube.com': 'www.youtube.com' }, hosts_enabled: false });
+
+  await expect(summary(page)).toHaveText('выключено · 1 запись');
+  await expect(page.locator('#routing-dns-over-vless-hosts-on')).not.toBeChecked();
+  await openZone(page, 'hosts');
+  await expect(page.locator('#routing-dns-over-vless-hosts')).toHaveValue('m.youtube.com = www.youtube.com');
+  await page.locator('.xk-dns-zone[data-zone="hosts"] .xk-dns-zone-head .dt-switch').click();
+  await expect(summary(page)).toHaveText('1 запись');
 });
