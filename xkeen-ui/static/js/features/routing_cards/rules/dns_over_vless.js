@@ -1952,7 +1952,9 @@ import {
         toast(`${message} Предыдущая конфигурация восстановлена; проверяем запуск Xray.`, true);
         await followRollback(data.rollback || {}, message);
       } else {
-        toast(message, true);
+        // «Итог неизвестен» уже сказан оранжевой плашкой; красное уведомление
+        // с тем же текстом только пугало бы.
+        if (!(error && error.unknown)) toast(message, true);
         await refresh();
       }
     } finally {

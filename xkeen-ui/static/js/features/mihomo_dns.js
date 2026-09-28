@@ -660,7 +660,9 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     } catch (error) {
       const data = error?.data || null;
       const messageText = String(data?.error || error?.message || 'Настройки не применены.');
-      toastXkeen(`${messageText}${data?.rolled_back ? ' Предыдущая конфигурация восстановлена.' : ''}`, 'error');
+      // «Итог неизвестен» уже сказан оранжевой плашкой; красное уведомление
+      // с тем же текстом только пугало бы.
+      if (!error?.unknown) toastXkeen(`${messageText}${data?.rolled_back ? ' Предыдущая конфигурация восстановлена.' : ''}`, 'error');
       await refresh();
     } finally {
       busy = false;
@@ -713,7 +715,9 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     } catch (error) {
       const data = error?.data || null;
       const messageText = String(data?.error || error?.message || 'Операция не выполнена.');
-      toastXkeen(`${messageText}${data?.rolled_back ? ' Предыдущая конфигурация восстановлена.' : ''}`, 'error');
+      // «Итог неизвестен» уже сказан оранжевой плашкой; красное уведомление
+      // с тем же текстом только пугало бы.
+      if (!error?.unknown) toastXkeen(`${messageText}${data?.rolled_back ? ' Предыдущая конфигурация восстановлена.' : ''}`, 'error');
       await refresh();
     } finally {
       busy = false;
