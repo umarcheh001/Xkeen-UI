@@ -3,7 +3,7 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseSummary, g
 import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 import {
   awaitDnsOperation,
-  DNS_OPERATION_WAITING_TEXT,
+  createDnsOperationNotice,
   newDnsOperationId,
 } from '../../dns_operation_recovery.js';
 
@@ -187,6 +187,38 @@ import {
     return settings;
   }
 
+  // Плашка ожидания живёт, пока операция не закончится; «итог неизвестен»
+  // остаётся до следующей операции или повторного открытия окна.
+  let operationNotice = null;
+
+  function paintOperationNotice() {
+    if (operationNotice) operationNotice.paint();
+  }
+
+  function dropOperationNotice() {
+    if (operationNotice) operationNotice.clear();
+    operationNotice = null;
+  }
+
+  function trackOperation(buttonId, run, labelId) {
+    dropOperationNotice();
+    const notice = createDnsOperationNotice({ labelId, statusId: DOM.status, buttonId });
+    operationNotice = notice;
+    return run((startedAt) => notice.waiting(startedAt)).then(
+      (data) => {
+        if (operationNotice === notice) dropOperationNotice();
+        return data;
+      },
+      (error) => {
+        if (operationNotice === notice) {
+          if (error && error.unknown) notice.unknown();
+          else dropOperationNotice();
+        }
+        throw error;
+      },
+    );
+  }
+
   async function postAction(action, targets) {
     const list = Array.isArray(targets) ? targets.filter(Boolean) : [];
     const payload = list.length ? { action, targets: list } : { action };
@@ -203,17 +235,14 @@ import {
       // Ответ может потеряться вместе с соединением, которое рвёт перезапуск
       // ядра: тогда итог достаётся из статуса по номеру операции.
       payload.operation_id = newDnsOperationId();
-      return awaitDnsOperation({
+      return trackOperation(DOM.apply, (onWaiting) => awaitDnsOperation({
         operationId: payload.operation_id,
         send: () => client.postJSON('/api/routing/dns-over-vless', payload, { timeoutMs: 90000, retry: 0 }),
         readStatus: (timeoutMs) => client.fetchJSON('/api/routing/dns-over-vless', {
           cache: 'no-store', timeoutMs, retry: 0,
         }),
-        onWaiting: () => {
-          const text = $(DOM.status);
-          if (text) text.textContent = DNS_OPERATION_WAITING_TEXT;
-        },
-      });
+        onWaiting,
+      }));
     }
     const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const response = await fetch('/api/routing/dns-over-vless', {
@@ -1348,6 +1377,7 @@ import {
     }
     const resetButton = $(DOM.reset);
     if (resetButton) resetButton.disabled = busy || !!(rollbackStatus && rollbackStatus.phase === 'waiting');
+    paintOperationNotice();
   }
 
   function renderError(error) {
@@ -1364,6 +1394,7 @@ import {
       apply.disabled = true;
       apply.textContent = 'Недоступно';
     }
+    paintOperationNotice();
   }
 
   // Настройки теперь переживают выключение функции, поэтому нужен способ
@@ -1602,6 +1633,7 @@ import {
   }
 
   async function open() {
+    if (!busy) dropOperationNotice();
     rollbackPollGeneration += 1;
     rollbackStatus = null;
     showModal(true);
