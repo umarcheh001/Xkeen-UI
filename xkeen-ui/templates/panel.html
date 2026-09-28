@@ -2910,6 +2910,26 @@
               </div>
             </details>
 
+            <details class="xk-dns-zone" data-zone="hosts">
+              <summary class="xk-dns-zone-head">
+                <b>Подмена адресов</b>
+                <span class="xk-dns-zone-sum" data-zone-sum="hosts"></span>
+              </summary>
+              <div class="xk-dns-zone-body">
+                <label for="routing-dns-over-vless-hosts">Имя → чьи адреса ему отдавать</label>
+                <textarea id="routing-dns-over-vless-hosts" class="routing-rule-input" rows="3" autocomplete="off" spellcheck="false" placeholder="m.youtube.com = www.youtube.com"></textarea>
+                <div class="modal-hint">Необязательно. Имя получит адреса другого имени или указанный IP, а сайт при подключении всё равно увидит своё настоящее имя. Помогает, когда провайдер режет конкретный узел сервиса, а соседний проходит.
+                  <details class="xk-hint-more">
+                    <summary>Подробнее</summary>
+                    <p>По одной записи в строке: <code>имя = адрес</code>. Справа — имя, IP или несколько адресов через запятую. Имя без префикса совпадает только само с собой; <code>domain:youtube.com</code> захватит и все поддомены. Действует на устройства, чей DNS идёт через Xray. Не больше 64 строк.</p>
+                  </details>
+                </div>
+                <div class="routing-dns-over-vless-zone-presets">
+                  <button type="button" id="routing-dns-over-vless-hosts-clear" class="routing-dns-over-vless-zone-preset">Не использовать эту область</button>
+                </div>
+              </div>
+            </details>
+
             <details class="xk-dns-zone" data-zone="records">
               <summary class="xk-dns-zone-head">
                 <b>Прочие типы записей</b>

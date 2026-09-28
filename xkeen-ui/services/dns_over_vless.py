@@ -1417,6 +1417,31 @@ def _host_text(value: Any, max_len: int = 300) -> str:
     return text
 
 
+def _hosts_from_text(text: str) -> Dict[str, Any]:
+    """The window's form: one ``name = address[, address]`` per line."""
+    result: Dict[str, Any] = {}
+    for number, line in enumerate(text.splitlines(), start=1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        name, sep, answer = line.partition("=")
+        name = name.strip()
+        addresses = [item for item in re.split(r"[,;\s]+", answer) if item]
+        if not sep or not name or not addresses:
+            raise DnsOverVlessError(
+                f"Строка {number} подмены адресов: нужно «имя = адрес», например "
+                "«m.youtube.com = www.youtube.com».",
+                code="hosts_invalid",
+            )
+        if name in result:
+            raise DnsOverVlessError(
+                f"Строка {number} подмены адресов: имя {name} уже указано выше.",
+                code="hosts_invalid",
+            )
+        result[name] = addresses[0] if len(addresses) == 1 else addresses
+    return result
+
+
 def _hosts(value: Any) -> Dict[str, Any]:
     """User entries for ``dns.hosts``, in the form the core reads them.
 
@@ -1428,6 +1453,10 @@ def _hosts(value: Any) -> Dict[str, Any]:
     """
     if value is None or value == "" or value == {}:
         return {}
+    if isinstance(value, str):
+        value = _hosts_from_text(value)
+        if not value:
+            return {}
     if not isinstance(value, dict):
         raise DnsOverVlessError(
             "Статические записи DNS (hosts) должны быть объектом «имя → адрес».",

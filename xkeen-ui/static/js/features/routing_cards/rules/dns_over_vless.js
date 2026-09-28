@@ -49,6 +49,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     directZonesRow: 'routing-dns-over-vless-direct-zones-row',
     directFromRules: 'routing-dns-over-vless-direct-from-rules',
     directClear: 'routing-dns-over-vless-direct-clear',
+    hosts: 'routing-dns-over-vless-hosts',
+    hostsClear: 'routing-dns-over-vless-hosts-clear',
     pass: 'routing-dns-over-vless-pass',
     passRow: 'routing-dns-over-vless-pass-row',
     passNode: 'routing-dns-over-vless-pass-node',
@@ -157,6 +159,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     // состояния, видит половину настройки и отказывается включаться — выключить
     // область через интерфейс становится нельзя.
     if (directZones) settings.direct_domains = String(directZones.value || '').trim();
+    const hosts = $(DOM.hosts);
+    // Текст уходит как есть, разбирает его сервер: ошибку он назовёт с номером
+    // строки. Пустое поле — «подмены нет», поэтому шлём и его.
+    if (hosts) settings.hosts = String(hosts.value || '').trim();
     const pass = $(DOM.pass);
     if (pass) {
       settings.pass_non_ip = !!pass.checked;
@@ -490,7 +496,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const note = $(DOM.lockedNote);
     if (note) note.classList.toggle('hidden', !fieldsLocked);
     const ids = [DOM.upstreams, DOM.remote, DOM.firmware, DOM.local, DOM.zones, DOM.direct,
-      DOM.directZones, DOM.pass, DOM.passNode];
+      DOM.directZones, DOM.hosts, DOM.pass, DOM.passNode];
     for (let i = 0; i < ids.length; i += 1) {
       const field = $(ids[i]);
       if (field) field.disabled = fieldsLocked || busy;
@@ -553,6 +559,15 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const hasDirect = !!(direct && String(direct.value || '').trim());
     const directHasDomains = !!(directZones && String(directZones.value || '').trim());
     if (directZonesRow) directZonesRow.classList.toggle('hidden', !hasDirect && !directHasDomains);
+    const hosts = $(DOM.hosts);
+    if (hosts) {
+      if (!hosts.dataset.touched) hosts.value = hostsText(data && data.hosts);
+      hosts.disabled = busy || fieldsLocked;
+    }
+    const hostsClear = $(DOM.hostsClear);
+    if (hostsClear) {
+      hostsClear.disabled = busy || fieldsLocked || !(hosts && String(hosts.value || '').trim());
+    }
     const remote = $(DOM.remote);
     if (remote) {
       if (!remote.dataset.touched) remote.checked = !!(data && data.upstreams_remote);
@@ -667,6 +682,23 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     }
     if (status) renderDnsFields(status);
     renderZoneSummaries(status);
+  }
+
+  // Записи приходят объектом, как их читает ядро; в окне — по строке на имя.
+  function hostsText(value) {
+    if (!value || typeof value !== 'object') return '';
+    return Object.keys(value).map((name) => {
+      const answer = value[name];
+      return `${name} = ${Array.isArray(answer) ? answer.join(', ') : answer}`;
+    }).join('\n');
+  }
+
+  function hostsCount() {
+    const field = $(DOM.hosts);
+    return String((field && field.value) || '')
+      .split('\n')
+      .filter((line) => line.trim() && !line.trim().startsWith('#'))
+      .length;
   }
 
   function passHealthMoment(seconds) {
@@ -1018,6 +1050,11 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       const domains = (data && data.direct_domains) || [];
       return { text: `${list.length} резолвер(ов) · ${domains.length} доменов` };
     }
+    if (zone === 'hosts') {
+      const count = hostsCount();
+      if (!count) return { text: 'не используется' };
+      return { text: `${count} ${plural(count, 'запись', 'записи', 'записей')}` };
+    }
     if (zone === 'records') {
       if (!(data && data.pass_non_ip)) return { text: 'выключено' };
       const node = (data && data.pass_non_ip_node) || '';
@@ -1316,6 +1353,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       [DOM.zones, ''],
       [DOM.direct, ''],
       [DOM.directZones, ''],
+      [DOM.hosts, ''],
     ];
     values.forEach(([id, value]) => {
       const field = $(id);
@@ -1554,7 +1592,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     // переставал обновляться с сервера, даже после переоткрытия окна.
     [
       DOM.upstreams, DOM.local, DOM.firmware, DOM.zones, DOM.direct, DOM.directZones,
-      DOM.remote, DOM.pass, DOM.passNode, DOM.multi,
+      DOM.hosts, DOM.remote, DOM.pass, DOM.passNode, DOM.multi,
     ].forEach((id) => {
       const field = $(id);
       if (field) delete field.dataset.touched;
@@ -1926,13 +1964,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         if (status) render(status);
       });
     }
-    [DOM.upstreams, DOM.local, DOM.zones, DOM.direct, DOM.directZones].forEach((id) => {
+    [DOM.upstreams, DOM.local, DOM.zones, DOM.direct, DOM.directZones, DOM.hosts].forEach((id) => {
       const field = $(id);
       if (!field) return;
       field.addEventListener('input', () => {
         field.dataset.touched = '1';
-        // Typing a resolver reveals the matching domain list straight away.
-        if ((id === DOM.local || id === DOM.direct) && status) renderDnsFields(status);
+        // Typing a resolver reveals the matching domain list straight away;
+        // the clear button of the hosts follows its field the same way.
+        if ((id === DOM.local || id === DOM.direct || id === DOM.hosts) && status) renderDnsFields(status);
         // Сводка в шапке считается по полям, а не по ответу сервера.
         renderZoneSummaries(status);
         // Editing the list by hand must keep the group buttons honest.
@@ -1945,6 +1984,19 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         event.preventDefault();
         if (busy || fieldsLocked) return;
         clearDirectZone();
+      });
+    }
+    const hostsClear = $(DOM.hostsClear);
+    if (hostsClear) {
+      hostsClear.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (busy || fieldsLocked) return;
+        const field = $(DOM.hosts);
+        if (!field) return;
+        field.value = '';
+        field.dataset.touched = '1';
+        if (status) renderDnsFields(status);
+        renderZoneSummaries(status);
       });
     }
     const fromRules = $(DOM.directFromRules);

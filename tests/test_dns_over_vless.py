@@ -4007,3 +4007,51 @@ def test_http_contract_forwards_hosts(tmp_path: Path, monkeypatch):
     # Omitted means "keep what is there", not "wipe".
     client.post("/api/routing/dns-over-vless", json={"action": "enable"})
     assert seen["hosts"] is None
+
+
+def test_window_text_form_of_hosts_is_parsed_line_by_line():
+    text = (
+        "m.youtube.com = www.youtube.com\n"
+        "\n"
+        "# комментарий\n"
+        "domain:example.org = 1.2.3.4, 5.6.7.8\n"
+    )
+    assert dns._hosts(text) == {
+        "m.youtube.com": "www.youtube.com",
+        "domain:example.org": ["1.2.3.4", "5.6.7.8"],
+    }
+    assert dns._hosts("  \n# пусто\n") == {}
+
+
+@pytest.mark.parametrize(
+    "text, line",
+    [
+        ("m.youtube.com www.youtube.com", 1),
+        ("a.example = 1.1.1.1\n = 2.2.2.2", 2),
+        ("a.example = 1.1.1.1\nb.example =", 2),
+        ("a.example = 1.1.1.1\na.example = 2.2.2.2", 2),
+    ],
+)
+def test_bad_lines_of_hosts_name_their_number(text, line):
+    with pytest.raises(dns.DnsOverVlessError) as exc:
+        dns._hosts(text)
+    assert exc.value.code == "hosts_invalid"
+    assert f"Строка {line}" in str(exc.value)
+
+
+def test_window_text_reaches_the_fragment(tmp_path: Path, monkeypatch):
+    configs, _routing_path, _state, common = _hosts_env(tmp_path, monkeypatch)
+    dns.apply_action("enable", hosts="m.youtube.com = www.youtube.com", **common)
+    assert _fragment(configs)["dns"]["hosts"] == {"m.youtube.com": "www.youtube.com"}
+
+
+def test_window_has_the_optional_hosts_zone():
+    template = (Path(__file__).resolve().parents[1] / "xkeen-ui" / "templates" / "panel.html").read_text(
+        encoding="utf-8"
+    )
+    zone = template.split('data-zone="hosts"', 1)[1].split("</details>\n            <details", 1)[0]
+    assert 'id="routing-dns-over-vless-hosts"' in zone
+    assert 'id="routing-dns-over-vless-hosts-clear"' in zone
+    # Необязательная секция: без плашки «обязательно».
+    assert 'data-required' not in template.split('data-zone="hosts"', 1)[0].rsplit("<details", 1)[1]
+    assert "xk-dns-zone-req" not in zone.split("</summary>", 1)[0]
