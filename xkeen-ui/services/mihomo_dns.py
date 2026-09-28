@@ -2583,8 +2583,17 @@ def _disable_keenetic_dns_filter() -> str:
     as done: raising would abort the activation before its save, and leaving
     the stamp unset made the guard retry -- and log an ndm error -- on every
     30-second tick.
+
+    ndm writes that error to the router log no matter how the answer is taken
+    here, so asking again every interval still logged it every ten minutes.
+    The answer is remembered instead: the component only arrives with a
+    firmware update or a component install, both of which reboot the router
+    and restart the panel with it.
     """
 
+    if _FILTER_RECONCILE_STATE.get("absent"):
+        _FILTER_RECONCILE_STATE["at"] = time.monotonic()
+        return "absent"
     try:
         _ndmc("dns-proxy no filter engine")
         state = "disabled"
@@ -2592,6 +2601,7 @@ def _disable_keenetic_dns_filter() -> str:
         if "no such command: filter" not in str(exc.details or "").lower():
             raise
         state = "absent"
+        _FILTER_RECONCILE_STATE["absent"] = 1.0
     _FILTER_RECONCILE_STATE["at"] = time.monotonic()
     return state
 

@@ -128,6 +128,22 @@ def test_filter_reconcile_accepts_firmware_without_internet_filter(monkeypatch):
     assert calls == ["dns-proxy no filter engine"]
 
 
+def test_firmware_without_internet_filter_is_not_asked_again(monkeypatch):
+    """ndm пишет «no such command: filter» в журнал при каждом вопросе, как бы
+    панель ни поняла ответ, — поэтому после первого отказа команду больше не
+    шлём: ни по истечении интервала сторожа, ни при включении dns-override."""
+    calls = []
+    monkeypatch.setattr(dns, "_ndmc", _refuse_filter_command(calls))
+
+    assert dns.reconcile_keenetic_dns_filter()["filter_engine"] == "absent"
+    for _ in range(3):
+        dns._FILTER_RECONCILE_STATE["at"] -= dns.FILTER_RECONCILE_INTERVAL + 1
+        assert dns.reconcile_keenetic_dns_filter()["filter_engine"] == "absent"
+    dns._set_dns_override(True)
+
+    assert calls.count("dns-proxy no filter engine") == 1
+
+
 def test_enabling_override_saves_on_firmware_without_internet_filter(monkeypatch):
     calls = []
     monkeypatch.setattr(dns, "_ndmc", _refuse_filter_command(calls))
