@@ -2,6 +2,7 @@ import { confirmMihomoAction } from './mihomo_runtime.js';
 import { getXkeenCoreHttpApi, toastXkeen } from './xkeen_runtime.js';
 import { getMihomoPanelApi } from './mihomo_panel.js';
 import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } from './dns_guard_text.js';
+import { awaitDnsOperation, DNS_OPERATION_WAITING_TEXT, newDnsOperationId } from './dns_operation_recovery.js';
 
 /* Guarded, one-click protected DNS assistant for Mihomo. */
 (() => {
@@ -204,7 +205,18 @@ import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } fro
     const payload = { action, confirmed: true, ...selectedOptions() };
     const client = getXkeenCoreHttpApi();
     if (client && typeof client.postJSON === 'function') {
-      return client.postJSON('/api/mihomo/dns', payload, { timeoutMs: 120000, retry: 0 });
+      // Ответ может потеряться вместе с соединением, которое рвёт перезапуск
+      // ядра: тогда итог достаётся из статуса по номеру операции.
+      payload.operation_id = newDnsOperationId();
+      return awaitDnsOperation({
+        operationId: payload.operation_id,
+        send: () => client.postJSON('/api/mihomo/dns', payload, { timeoutMs: 120000, retry: 0 }),
+        readStatus: (timeoutMs) => client.fetchJSON('/api/mihomo/dns', { cache: 'no-store', timeoutMs, retry: 0 }),
+        onWaiting: () => {
+          const text = $(IDS.status);
+          if (text) text.textContent = DNS_OPERATION_WAITING_TEXT;
+        },
+      });
     }
     const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const response = await fetch('/api/mihomo/dns', {

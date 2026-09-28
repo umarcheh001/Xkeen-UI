@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from flask import Blueprint, jsonify, request
 
+from services import dns_operations
 from services.dns_clients import client_report
 from services.dns_guard import conflicting_protection
 from services.dns_over_vless import (
@@ -37,18 +38,36 @@ def register_dns_over_vless_routes(
 
     @bp.get("/api/routing/dns-over-vless")
     def api_dns_over_vless_status() -> Any:
+        # The answer of the last switch travels with every status, failed ones
+        # included: a window that lost it to a dropped connection reads it here.
+        last_operation = dns_operations.last(ui_state_dir, "dns-over-vless")
         try:
-            return jsonify(
-                get_status(
-                    configs_dir=xray_configs_dir,
-                    routing_file=routing_file,
-                    ui_state_dir=ui_state_dir,
-                )
+            status = get_status(
+                configs_dir=xray_configs_dir,
+                routing_file=routing_file,
+                ui_state_dir=ui_state_dir,
             )
+            status["last_operation"] = last_operation
+            return jsonify(status)
         except DnsOverVlessError as exc:
-            return jsonify({"ok": False, "error": str(exc), "code": exc.code, "details": exc.details}), 409
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": str(exc),
+                    "code": exc.code,
+                    "details": exc.details,
+                    "last_operation": last_operation,
+                }
+            ), 409
         except Exception:
-            return jsonify({"ok": False, "error": "Не удалось проверить DNS-over-VLESS.", "code": "status_failed"}), 500
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "Не удалось проверить DNS-over-VLESS.",
+                    "code": "status_failed",
+                    "last_operation": last_operation,
+                }
+            ), 500
 
     @bp.get("/api/routing/dns-over-vless/clients")
     def api_dns_over_vless_clients() -> Any:
@@ -79,6 +98,8 @@ def register_dns_over_vless_routes(
     def api_dns_over_vless_apply() -> Any:
         payload = request.get_json(silent=True) or {}
         action = str(payload.get("action") or "").strip().lower()
+        # Whatever this request answers is also kept under the window's id.
+        dns_operations.remember_response(ui_state_dir, "dns-over-vless", payload)
         # Accept one tag or several: several plain proxies are balanced together.
         raw_target = payload.get("targets")
         if raw_target is None:
