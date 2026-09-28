@@ -76,6 +76,7 @@ from services.mihomo_egress_setup import (
     MihomoEgressSetupError,
     build_mihomo_egress_setup,
 )
+from services import dns_operations
 from services.dns_guard import (
     conflicting_protection as _dns_conflicting_protection,
     watchdog_settings as _dns_watchdog_settings,
@@ -1486,6 +1487,9 @@ def create_mihomo_blueprint(
     @bp.get("/api/mihomo/dns")
     def api_mihomo_dns_status():
         """Return the guarded one-click DNS assistant state."""
+        # The answer of the last switch travels with every status, failed ones
+        # included: a window that lost it to a dropped connection reads it here.
+        last_operation = dns_operations.last(ui_state_dir, "mihomo-dns")
         try:
             status = get_mihomo_dns_status(
                 config_file=MIHOMO_CONFIG_FILE,
@@ -1494,6 +1498,7 @@ def create_mihomo_blueprint(
             # The port-53 guard is one loop for both protections; the window
             # describes it with the same numbers the DNS-over-VLESS one shows.
             status["watchdog_settings"] = _dns_watchdog_settings()
+            status["last_operation"] = last_operation
             return jsonify(status), 200
         except MihomoDnsError as exc:
             return _api_error(
@@ -1502,6 +1507,7 @@ def create_mihomo_blueprint(
                 ok=False,
                 code=exc.code,
                 details=exc.details,
+                last_operation=last_operation,
             )
         except Exception:
             return _api_error(
@@ -1509,6 +1515,7 @@ def create_mihomo_blueprint(
                 500,
                 ok=False,
                 code="mihomo_dns_status_failed",
+                last_operation=last_operation,
             )
 
     @bp.post("/api/mihomo/dns")
@@ -1516,6 +1523,8 @@ def create_mihomo_blueprint(
         """Apply, restore, or softly release Mihomo DNS after confirmation."""
         data = request.get_json(silent=True) or {}
         action = str(data.get("action") or "").strip().lower()
+        # Whatever this request answers is also kept under the window's id.
+        dns_operations.remember_response(ui_state_dir, "mihomo-dns", data)
         mode = str(data.get("mode") or "redir-host").strip().lower()
         fake_ip = data.get("fake_ip") if isinstance(data.get("fake_ip"), dict) else None
         geodata = bool(data.get("geodata"))

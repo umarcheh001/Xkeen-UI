@@ -1,6 +1,11 @@
 import { getXkeenCoreHttpApi } from '../../xkeen_runtime.js';
 import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseSummary, guardReleaseText, guardRescueNote } from '../../dns_guard_text.js';
 import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
+import {
+  awaitDnsOperation,
+  DNS_OPERATION_WAITING_TEXT,
+  newDnsOperationId,
+} from '../../dns_operation_recovery.js';
 
 /* Guarded, one-click DNS-over-VLESS assistant. */
 (function () {
@@ -192,7 +197,20 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     }
     const client = http();
     if (client && typeof client.postJSON === 'function') {
-      return client.postJSON('/api/routing/dns-over-vless', payload, { timeoutMs: 90000, retry: 0 });
+      // Ответ может потеряться вместе с соединением, которое рвёт перезапуск
+      // ядра: тогда итог достаётся из статуса по номеру операции.
+      payload.operation_id = newDnsOperationId();
+      return awaitDnsOperation({
+        operationId: payload.operation_id,
+        send: () => client.postJSON('/api/routing/dns-over-vless', payload, { timeoutMs: 90000, retry: 0 }),
+        readStatus: (timeoutMs) => client.fetchJSON('/api/routing/dns-over-vless', {
+          cache: 'no-store', timeoutMs, retry: 0,
+        }),
+        onWaiting: () => {
+          const text = $(DOM.status);
+          if (text) text.textContent = DNS_OPERATION_WAITING_TEXT;
+        },
+      });
     }
     const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const response = await fetch('/api/routing/dns-over-vless', {
