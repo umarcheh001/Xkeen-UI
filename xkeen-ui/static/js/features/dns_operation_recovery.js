@@ -13,10 +13,15 @@ export const DNS_OPERATION_POLL_MS = 3000;
 export const DNS_OPERATION_STATUS_TIMEOUT_MS = 5000;
 export const DNS_OPERATION_GIVE_UP_MS = 150000;
 
+export const DNS_OPERATION_WAITING_TITLE = 'Ждём ответа роутера';
 export const DNS_OPERATION_WAITING_TEXT =
-  'Ответ от роутера задерживается — возможно, прервалась связь. Проверяем, чем закончилась операция…';
+  'Ответ задерживается — скорее всего, прервалась связь: так бывает, когда перезапускается ядро, '
+  + 'а к роутеру вы подключены через туннель. Операция на роутере продолжается; окно само покажет '
+  + 'итог, как только связь вернётся. Ничего нажимать не нужно.';
+export const DNS_OPERATION_UNKNOWN_TITLE = 'Итог операции неизвестен';
 export const DNS_OPERATION_UNKNOWN_TEXT =
-  'Связь с роутером не восстановилась, итог операции неизвестен. Обновите страницу, чтобы увидеть текущее состояние.';
+  'Связь с роутером не восстановилась за две с половиной минуты. Операция на роутере могла '
+  + 'завершиться — обновите страницу, чтобы увидеть текущее состояние.';
 
 export function newDnsOperationId() {
   try {
@@ -65,7 +70,8 @@ function recordFor(operationId, source) {
  *
  * send()            — сам POST, промис с ответом сервера;
  * readStatus(ms)    — GET статуса окна с заданным тайм-аутом;
- * onWaiting()       — вызывается один раз, когда окно перешло к переспросу.
+ * onWaiting(start)  — вызывается один раз, когда окно перешло к переспросу;
+ *                     start — момент отправки запроса, для счётчика секунд.
  */
 export async function awaitDnsOperation({
   operationId,
@@ -87,7 +93,7 @@ export async function awaitDnsOperation({
   if (answered(outcome)) return unwrap(outcome);
 
   if (typeof onWaiting === 'function') {
-    try { onWaiting(); } catch (error) { /* подсказка не важнее итога */ }
+    try { onWaiting(startedAt); } catch (error) { /* подсказка не важнее итога */ }
   }
   while (Date.now() - startedAt < giveUpMs) {
     if (answered(outcome)) return unwrap(outcome);
@@ -100,11 +106,133 @@ export async function awaitDnsOperation({
     }
     if (answered(outcome)) return unwrap(outcome);
     if (entry) return unwrap(fromRecord(entry));
-    await Promise.race([request, sleep(pollMs)]);
+    // Пока запрос ещё висит, его ответ может прийти раньше паузы. Упавший
+    // запрос уже ничего не принесёт, и гонка с ним закончилась бы мгновенно:
+    // без паузы окно засыпало бы роутер запросами статуса.
+    await (outcome ? sleep(pollMs) : Promise.race([request, sleep(pollMs)]));
   }
   if (answered(outcome)) return unwrap(outcome);
   const error = new Error(DNS_OPERATION_UNKNOWN_TEXT);
   error.code = 'operation_unknown';
   error.unknown = true;
   throw error;
+}
+
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const ICON_PATHS = {
+  // Стрелка по кругу: идёт процесс.
+  info: ['M21 12a9 9 0 1 1-3-6.7', 'M21 4v5h-5'],
+  // Треугольник с восклицательным знаком: нужно действие человека.
+  warn: ['M12 3 2 21h20L12 3z', 'M12 10v5', 'M12 18h.01'],
+};
+
+function noticeIcon(tone) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', '18');
+  svg.setAttribute('height', '18');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2.2');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add('xk-dns-op-notice-icon');
+  (ICON_PATHS[tone] || ICON_PATHS.info).forEach((d) => {
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('d', d);
+    svg.appendChild(path);
+  });
+  return svg;
+}
+
+/**
+ * Плашка в строке статуса и кнопка со счётчиком на время ожидания.
+ *
+ * labelId — элемент подписи внутри кнопки, если в ней есть иконка.
+ *
+ * Окно перерисовывает строку статуса и кнопку по каждому ответу сервера,
+ * поэтому плашка накладывается поверх, а окно зовёт paint() в конце своей
+ * отрисовки. Синяя плашка — ждём, делать ничего не нужно; оранжевая — итог
+ * так и не пришёл, человеку пора обновить страницу.
+ */
+export function createDnsOperationNotice({ statusId, buttonId, labelId = '' }) {
+  let notice = null;
+  let timer = null;
+
+  function stopTimer() {
+    if (timer) clearInterval(timer);
+    timer = null;
+  }
+
+  function releaseButton() {
+    const button = document.getElementById(buttonId);
+    if (!button) return;
+    button.removeAttribute('aria-disabled');
+    button.classList.remove('xk-dns-op-waiting');
+  }
+
+  function paint() {
+    if (!notice) return;
+    const waiting = notice.kind === 'wait';
+    const tone = waiting ? 'info' : 'warn';
+    const seconds = waiting ? Math.max(0, Math.round((Date.now() - notice.startedAt) / 1000)) : 0;
+    const status = document.getElementById(statusId);
+    if (status) {
+      let box = status.querySelector(':scope > .xk-dns-op-notice');
+      if (!box || box.dataset.tone !== tone) {
+        status.textContent = '';
+        box = document.createElement('div');
+        box.className = 'xk-dns-op-notice';
+        box.dataset.tone = tone;
+        box.setAttribute('role', 'status');
+        const body = document.createElement('div');
+        body.className = 'xk-dns-op-notice-body';
+        const title = document.createElement('b');
+        title.className = 'xk-dns-op-notice-title';
+        const text = document.createElement('span');
+        text.className = 'xk-dns-op-notice-text';
+        text.textContent = waiting ? DNS_OPERATION_WAITING_TEXT : DNS_OPERATION_UNKNOWN_TEXT;
+        body.append(title, text);
+        box.append(noticeIcon(tone), body);
+        status.appendChild(box);
+      }
+      box.querySelector('.xk-dns-op-notice-title').textContent = waiting
+        ? `${DNS_OPERATION_WAITING_TITLE} · ${seconds} с`
+        : DNS_OPERATION_UNKNOWN_TITLE;
+    }
+    const button = document.getElementById(buttonId);
+    if (button && waiting) {
+      // Кнопка остаётся яркой — бледную выключенную со счётчиком никто не
+      // заметит. Нажатия окно и так не примет, пока идёт операция.
+      button.disabled = false;
+      button.setAttribute('aria-disabled', 'true');
+      button.classList.add('xk-dns-op-waiting');
+      // У кнопки с иконкой подпись в своём элементе — иконку не трогаем.
+      const label = labelId ? document.getElementById(labelId) : null;
+      (label || button).textContent = `${DNS_OPERATION_WAITING_TITLE}… ${seconds} с`;
+    }
+  }
+
+  return {
+    waiting(startedAt) {
+      stopTimer();
+      notice = { kind: 'wait', startedAt: Number(startedAt) || Date.now() };
+      paint();
+      timer = setInterval(paint, 1000);
+    },
+    unknown() {
+      stopTimer();
+      releaseButton();
+      notice = { kind: 'unknown' };
+      paint();
+    },
+    clear() {
+      stopTimer();
+      releaseButton();
+      notice = null;
+    },
+    paint,
+  };
 }

@@ -2,7 +2,7 @@ import { confirmMihomoAction } from './mihomo_runtime.js';
 import { getXkeenCoreHttpApi, toastXkeen } from './xkeen_runtime.js';
 import { getMihomoPanelApi } from './mihomo_panel.js';
 import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } from './dns_guard_text.js';
-import { awaitDnsOperation, DNS_OPERATION_WAITING_TEXT, newDnsOperationId } from './dns_operation_recovery.js';
+import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from './dns_operation_recovery.js';
 
 /* Guarded, one-click protected DNS assistant for Mihomo. */
 (() => {
@@ -201,6 +201,38 @@ import { awaitDnsOperation, DNS_OPERATION_WAITING_TEXT, newDnsOperationId } from
     return payload;
   }
 
+  // Плашка ожидания живёт, пока операция не закончится; «итог неизвестен»
+  // остаётся до следующей операции или повторного открытия окна.
+  let operationNotice = null;
+
+  function paintOperationNotice() {
+    if (operationNotice) operationNotice.paint();
+  }
+
+  function dropOperationNotice() {
+    if (operationNotice) operationNotice.clear();
+    operationNotice = null;
+  }
+
+  function trackOperation(buttonId, run, labelId) {
+    dropOperationNotice();
+    const notice = createDnsOperationNotice({ labelId, statusId: IDS.status, buttonId });
+    operationNotice = notice;
+    return run((startedAt) => notice.waiting(startedAt)).then(
+      (data) => {
+        if (operationNotice === notice) dropOperationNotice();
+        return data;
+      },
+      (error) => {
+        if (operationNotice === notice) {
+          if (error && error.unknown) notice.unknown();
+          else dropOperationNotice();
+        }
+        throw error;
+      },
+    );
+  }
+
   async function postAction(action) {
     const payload = { action, confirmed: true, ...selectedOptions() };
     const client = getXkeenCoreHttpApi();
@@ -208,15 +240,14 @@ import { awaitDnsOperation, DNS_OPERATION_WAITING_TEXT, newDnsOperationId } from
       // Ответ может потеряться вместе с соединением, которое рвёт перезапуск
       // ядра: тогда итог достаётся из статуса по номеру операции.
       payload.operation_id = newDnsOperationId();
-      return awaitDnsOperation({
+      // «Применить настройки» — своя кнопка; счётчик идёт на той, что нажали.
+      const reconfigure = action === 'reconfigure';
+      return trackOperation(reconfigure ? IDS.update : IDS.apply, (onWaiting) => awaitDnsOperation({
         operationId: payload.operation_id,
         send: () => client.postJSON('/api/mihomo/dns', payload, { timeoutMs: 120000, retry: 0 }),
         readStatus: (timeoutMs) => client.fetchJSON('/api/mihomo/dns', { cache: 'no-store', timeoutMs, retry: 0 }),
-        onWaiting: () => {
-          const text = $(IDS.status);
-          if (text) text.textContent = DNS_OPERATION_WAITING_TEXT;
-        },
-      });
+        onWaiting,
+      }), reconfigure ? IDS.updateLabel : '');
     }
     const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const response = await fetch('/api/mihomo/dns', {
@@ -554,6 +585,7 @@ import { awaitDnsOperation, DNS_OPERATION_WAITING_TEXT, newDnsOperationId } from
     }
 
     syncApplyControl(data);
+    paintOperationNotice();
   }
 
   function renderError(error) {
@@ -577,6 +609,7 @@ import { awaitDnsOperation, DNS_OPERATION_WAITING_TEXT, newDnsOperationId } from
     }
     setRuntimeState(IDS.listenerState, null, 'Mihomo :53 · включён', 'Mihomo :53 · выключен');
     setRuntimeState(IDS.overrideState, null, 'Keenetic override · включён', 'Keenetic override · выключен');
+    paintOperationNotice();
   }
 
   async function refresh() {
@@ -591,6 +624,7 @@ import { awaitDnsOperation, DNS_OPERATION_WAITING_TEXT, newDnsOperationId } from
   }
 
   async function open() {
+    if (!busy) dropOperationNotice();
     providerSelectionTouched = false;
     tunnelServersTouched = false;
     showModal(true);
