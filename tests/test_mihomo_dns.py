@@ -144,6 +144,80 @@ def test_firmware_without_internet_filter_is_not_asked_again(monkeypatch):
     assert calls.count("dns-proxy no filter engine") == 1
 
 
+_REAL_FINGERPRINT = dns._firmware_fingerprint
+
+
+def test_absent_filter_is_not_asked_after_a_panel_restart(monkeypatch):
+    """Даже одна строка при запуске панели лишняя: вердикт хранится на диске
+    вместе с отпечатком прошивки, и перезапуск панели его не теряет."""
+    calls = []
+    monkeypatch.setattr(dns, "_ndmc", _refuse_filter_command(calls))
+
+    assert dns.reconcile_keenetic_dns_filter()["filter_engine"] == "absent"
+    dns._FILTER_RECONCILE_STATE.clear()  # перезапуск панели
+    assert dns.reconcile_keenetic_dns_filter()["filter_engine"] == "absent"
+    dns._FILTER_RECONCILE_STATE.clear()
+    dns._set_dns_override(True)
+
+    assert calls.count("dns-proxy no filter engine") == 1
+
+
+def test_changed_firmware_is_asked_again(monkeypatch):
+    calls = []
+    monkeypatch.setattr(dns, "_ndmc", _refuse_filter_command(calls))
+    dns.reconcile_keenetic_dns_filter()
+
+    dns._FILTER_RECONCILE_STATE.clear()
+    monkeypatch.setattr(dns, "_firmware_fingerprint", lambda: "fw-2")
+    dns.reconcile_keenetic_dns_filter()
+
+    assert calls.count("dns-proxy no filter engine") == 2
+
+
+def test_without_rci_the_verdict_is_not_stored(monkeypatch):
+    calls = []
+    monkeypatch.setattr(dns, "_ndmc", _refuse_filter_command(calls))
+    monkeypatch.setattr(dns, "_firmware_fingerprint", lambda: "")
+
+    dns.reconcile_keenetic_dns_filter()
+
+    assert not Path(dns._FILTER_ABSENT_FILE).exists()
+
+
+def test_firmware_with_the_filter_keeps_the_scheduled_command(monkeypatch):
+    """Прошивка с фильтром отвечает на команду штатно: вердикта нет, команда
+    уходит по расписанию, как раньше."""
+    calls = []
+    monkeypatch.setattr(dns, "_ndmc", lambda command, **_k: calls.append(command) or "")
+
+    assert dns.reconcile_keenetic_dns_filter()["filter_engine"] == "disabled"
+    assert not Path(dns._FILTER_ABSENT_FILE).exists()
+
+
+def test_fingerprint_reads_release_and_components(monkeypatch):
+    payloads = iter([
+        {"release": "4.3.6", "ndw": {"components": "wireguard,base"}},
+        {"release": "4.3.6", "ndw": {"components": "base,wireguard"}},
+        {"release": "4.3.6", "ndw": {"components": "base,wireguard,skydns"}},
+        {"release": "4.3.7", "ndw": {"components": "base,wireguard"}},
+    ])
+    monkeypatch.setattr(dns, "fetch_rci_json", lambda _path: next(payloads))
+
+    first, same, more, newer = (_REAL_FINGERPRINT() for _ in range(4))
+
+    assert first and first == same
+    assert more != first and newer != first
+
+
+def test_fingerprint_is_empty_without_rci(monkeypatch):
+
+    def refuse(_path):
+        raise OSError("no rci")
+
+    monkeypatch.setattr(dns, "fetch_rci_json", refuse)
+    assert _REAL_FINGERPRINT() == ""
+
+
 def test_enabling_override_saves_on_firmware_without_internet_filter(monkeypatch):
     calls = []
     monkeypatch.setattr(dns, "_ndmc", _refuse_filter_command(calls))
@@ -1675,10 +1749,14 @@ def test_http_contract_forwards_portable_dns_options(tmp_path: Path, monkeypatch
 
 
 @pytest.fixture(autouse=True)
-def _reset_firmware_call_caches():
+def _reset_firmware_call_caches(tmp_path, monkeypatch):
     dns._OVERRIDE_STATUS_CACHE.clear()
     dns._RUNNING_CONFIG_CACHE.clear()
     dns._FILTER_RECONCILE_STATE.clear()
+    # Вердикт «фильтра нет» живёт на диске: в тестах — во временном каталоге,
+    # а отпечаток прошивки подменён, RCI на машине разработчика нет.
+    monkeypatch.setattr(dns, "_FILTER_ABSENT_FILE", str(tmp_path / dns.FILTER_ABSENT_FILENAME))
+    monkeypatch.setattr(dns, "_firmware_fingerprint", lambda: "fw-1")
     yield
     dns._OVERRIDE_STATUS_CACHE.clear()
     dns._RUNNING_CONFIG_CACHE.clear()

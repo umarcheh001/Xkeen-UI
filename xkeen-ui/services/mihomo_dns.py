@@ -32,7 +32,9 @@ from typing import Any, Callable, Optional
 from urllib.parse import urlsplit
 
 from services.cores import detect_running_core
+from core.paths import UI_STATE_DIR
 from services.io.atomic import _atomic_write_json, _atomic_write_text
+from services.keenetic_rci import fetch_rci_json
 from services.xkeen_commands_catalog import resolve_xkeen_init_script
 from utils.firmware import ndmc_path as _resolve_ndmc, run_ndmc
 
@@ -61,6 +63,12 @@ _RUNNING_CONFIG_CACHE: dict[str, Any] = {}
 # appears when the router boots, so repeating it every guard tick buys nothing.
 FILTER_RECONCILE_INTERVAL = 600.0
 _FILTER_RECONCILE_STATE: dict[str, float] = {}
+# Firmware without the Internet-filter component answers the command with an
+# error ndm writes to the router log.  The answer is kept on disk together with
+# what the firmware is -- its release and its component list -- so a panel
+# restart does not ask again; an update or a new component asks once more.
+FILTER_ABSENT_FILENAME = "keenetic_dns_filter.json"
+_FILTER_ABSENT_FILE = os.path.join(UI_STATE_DIR, FILTER_ABSENT_FILENAME)
 DEFAULT_FAKE_IP_RANGE = "198.18.0.1/16"
 DEFAULT_FAKE_IP_FILTER_MODE = "blacklist"
 DEFAULT_FAKE_IP_FILTERS = ("*.lan", "*.local")
@@ -2591,7 +2599,8 @@ def _disable_keenetic_dns_filter() -> str:
     and restart the panel with it.
     """
 
-    if _FILTER_RECONCILE_STATE.get("absent"):
+    if _FILTER_RECONCILE_STATE.get("absent") or _filter_known_absent():
+        _FILTER_RECONCILE_STATE["absent"] = 1.0
         _FILTER_RECONCILE_STATE["at"] = time.monotonic()
         return "absent"
     try:
@@ -2602,8 +2611,58 @@ def _disable_keenetic_dns_filter() -> str:
             raise
         state = "absent"
         _FILTER_RECONCILE_STATE["absent"] = 1.0
+        _remember_filter_absent()
     _FILTER_RECONCILE_STATE["at"] = time.monotonic()
     return state
+
+
+def _firmware_fingerprint() -> str:
+    """Release and component list of the firmware, read over RCI.
+
+    RCI is a plain HTTP read and leaves nothing in the router log, unlike the
+    command it stands in for.  Empty when RCI does not answer: then nothing
+    is remembered or trusted, and the command is simply asked as before.
+    """
+
+    try:
+        payload = fetch_rci_json("/rci/show/version")
+    except Exception:
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    ndw = payload.get("ndw") if isinstance(payload.get("ndw"), dict) else {}
+    release = str(payload.get("release") or payload.get("title") or "").strip()
+    components = ndw.get("components")
+    if isinstance(components, list):
+        components = ",".join(str(item) for item in components)
+    components = ",".join(sorted(item.strip() for item in str(components or "").split(",") if item.strip()))
+    if not release or not components:
+        return ""
+    return hashlib.sha256(f"{release}\n{components}".encode("utf-8")).hexdigest()
+
+
+def _filter_known_absent() -> bool:
+    try:
+        with open(_FILTER_ABSENT_FILE, "r", encoding="utf-8") as handle:
+            saved = json.load(handle)
+    except (OSError, ValueError):
+        return False
+    stored = str((saved or {}).get("fingerprint") or "") if isinstance(saved, dict) else ""
+    if not stored:
+        return False
+    return _firmware_fingerprint() == stored
+
+
+def _remember_filter_absent() -> None:
+    fingerprint = _firmware_fingerprint()
+    if not fingerprint:
+        return
+    try:
+        os.makedirs(os.path.dirname(_FILTER_ABSENT_FILE), exist_ok=True)
+        _atomic_write_json(_FILTER_ABSENT_FILE, {"absent": True, "fingerprint": fingerprint})
+    except OSError:
+        # Only a quieter log is lost: the next start asks once more.
+        pass
 
 
 def reconcile_keenetic_dns_filter() -> dict[str, Any]:
