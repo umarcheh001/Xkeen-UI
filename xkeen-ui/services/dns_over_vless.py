@@ -169,6 +169,10 @@ MAX_LOCAL_DOMAINS = 64
 # question the user has to answer twice.
 MAX_DIRECT_RESOLVERS = 16
 MAX_DIRECT_DOMAINS = 64
+# Static answers of the DNS module (``dns.hosts``).  A handful is the real use:
+# handing one name the addresses of another while the TLS name stays as is.
+MAX_HOSTS = 64
+MAX_HOST_ADDRESSES = 16
 # Schemes the core actually implements for a DNS server.  Checked on Xray
 # 26.7.28: ``https://`` builds a DoH client and ``tcp://`` a TCP one, while
 # ``tls://`` and ``quic://`` are not recognised at all -- the core silently
@@ -1406,6 +1410,75 @@ def _direct_domains(value: Any) -> list[str]:
     return result
 
 
+def _host_text(value: Any, max_len: int = 300) -> str:
+    text = value.strip() if isinstance(value, str) else ""
+    if not text or len(text) > max_len or any(ch.isspace() or ord(ch) < 32 for ch in text):
+        return ""
+    return text
+
+
+def _hosts(value: Any) -> Dict[str, Any]:
+    """User entries for ``dns.hosts``, in the form the core reads them.
+
+    A key is any domain matcher Xray accepts (``full:``, ``domain:``,
+    ``regexp:``...), a value is an address or a name -- one string or a list of
+    them.  Nothing is lowercased: a ``regexp:`` key is case-sensitive, and the
+    panel must write back exactly what it read, or its own file reads as drift.
+    Empty means none.
+    """
+    if value is None or value == "" or value == {}:
+        return {}
+    if not isinstance(value, dict):
+        raise DnsOverVlessError(
+            "Статические записи DNS (hosts) должны быть объектом «имя → адрес».",
+            code="hosts_invalid",
+        )
+    if len(value) > MAX_HOSTS:
+        raise DnsOverVlessError(
+            f"Слишком много статических записей DNS: не больше {MAX_HOSTS}.",
+            code="hosts_invalid",
+        )
+    result: Dict[str, Any] = {}
+    for raw_key, raw_value in value.items():
+        key = _host_text(raw_key)
+        if not key or key in result:
+            raise DnsOverVlessError(
+                f"Неверное имя в статических записях DNS: {raw_key!r}.",
+                code="hosts_invalid",
+            )
+        if isinstance(raw_value, list):
+            addresses = [_host_text(item, 253) for item in raw_value]
+            ok = bool(addresses) and len(addresses) <= MAX_HOST_ADDRESSES and all(addresses)
+            answer: Any = addresses
+        else:
+            answer = _host_text(raw_value, 253)
+            ok = bool(answer)
+        if not ok:
+            raise DnsOverVlessError(
+                f"Неверный адрес для {key} в статических записях DNS: "
+                "нужен адрес или имя, либо список из них "
+                f"(не больше {MAX_HOST_ADDRESSES}).",
+                code="hosts_invalid",
+            )
+        result[key] = answer
+    return result
+
+
+def _declared_hosts(fragment: Any) -> Optional[Dict[str, Any]]:
+    """``dns.hosts`` as the fragment on disk declares it, or None when the
+    entry is not one this panel would write back unchanged."""
+    dns_section = fragment.get("dns") if isinstance(fragment, dict) else None
+    raw = dns_section.get("hosts") if isinstance(dns_section, dict) else None
+    if raw is None:
+        return {}
+    try:
+        hosts = _hosts(raw)
+    except DnsOverVlessError:
+        return None
+    # An empty object is not written by the panel either: it drops the key.
+    return hosts if hosts and hosts == raw else None
+
+
 def _resolver_label(resolver: Dict[str, Any]) -> str:
     return "%s:%s" % (resolver["address"], resolver.get("port") or 53)
 
@@ -1565,6 +1638,7 @@ def _managed_fragment(
     mark: Optional[int] = None,
     modern: bool = True,
     legacy_route: bool = False,
+    hosts: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     servers: list[Any] = []
     resolvers = list(local_resolvers or [])
@@ -1601,8 +1675,15 @@ def _managed_fragment(
     # internet are the exception: retrying them abroad returns NXDOMAIN anyway
     # and hands over the names of the machines at home.
     needs_fallback = bool(resolvers and delegated_zones) or bool(bypass and bypass_zones)
-    return {
-        "dns": {
+    dns_section: Dict[str, Any] = {}
+    # The user's static answers.  They have to live in this very file: the
+    # core does not merge ``dns`` across fragments, a later file replaces the
+    # whole section.  Written only when there are any, so an install without
+    # them keeps a byte-identical fragment.
+    if hosts:
+        dns_section["hosts"] = dict(hosts)
+    dns_section.update(
+        {
             # Explicit public upstreams; the DNS outbound carries these UDP
             # requests through the selected VLESS route.
             "servers": servers,
@@ -1615,7 +1696,10 @@ def _managed_fragment(
             # server exists, the fallback has to stay on even with one upstream.
             "disableFallback": public_count < 2 and not needs_fallback,
             "tag": DNS_IN_TAG,
-        },
+        }
+    )
+    return {
+        "dns": dns_section,
         "inbounds": [_dns_listener()],
         "outbounds": [
             _dns_outbound(pass_node, public_upstreams, mark, modern, legacy_route)
@@ -1967,7 +2051,10 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
                 declared_mark = int(raw_mark)
             except (TypeError, ValueError):
                 declared_mark = None
-    exact_fragment = bool(declared) and fragment == _managed_fragment(
+    # Static answers are the user's own and are written back as they stand;
+    # only a form the panel could not write itself reads as drift.
+    declared_hosts = _declared_hosts(fragment)
+    exact_fragment = bool(declared) and declared_hosts is not None and fragment == _managed_fragment(
         declared,
         local_declared,
         _zones_of(local_declared),
@@ -1977,6 +2064,7 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
         declared_mark,
         declared_modern,
         declared_legacy_route,
+        declared_hosts,
     )
     capture_rule_obj = next((item for item in rules if _clean_tag(item.get("ruleTag")) == CAPTURE_RULE_TAG), None)
     balancer_obj = next(
@@ -3133,6 +3221,18 @@ def _safe_capture_macs(value: Any) -> list[str]:
         return []
 
 
+def _status_hosts(configs_dir: str, state: Dict[str, Any]) -> Dict[str, Any]:
+    managed_path = os.path.join(configs_dir, MANAGED_FRAGMENT)
+    if os.path.isfile(managed_path):
+        on_disk = _declared_hosts(_read_json(managed_path, None))
+        if on_disk is not None:
+            return on_disk
+    try:
+        return _hosts(state.get("hosts"))
+    except DnsOverVlessError:
+        return {}
+
+
 def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dict[str, Any]:
     routing, _raw = _read_routing_with_raw(routing_file)
     runtime = _collect_runtime(configs_dir, routing)
@@ -3264,6 +3364,10 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
             state.get("direct_domains") if isinstance(state.get("direct_domains"), list) else []
         ),
         "max_direct_domains": MAX_DIRECT_DOMAINS,
+        # Static answers: read from the fragment while it is there -- entries
+        # added to it by hand are the ones in force -- otherwise remembered.
+        "hosts": _status_hosts(configs_dir, state),
+        "max_hosts": MAX_HOSTS,
         # Domains the user already sends past the tunnel: the card offers them
         # as a starting list so nobody keeps two copies of it in sync by hand.
         "direct_rule_domains": _domains_routed_direct(runtime, routing),
@@ -3322,6 +3426,7 @@ def apply_action(
     upstreams_remote: Any = None,
     capture_clients: Any = None,
     capture_macs: Any = None,
+    hosts: Any = None,
 ) -> Dict[str, Any]:
     normalized = str(action or "").strip().lower()
     if normalized not in {"enable", "disable"}:
@@ -3417,6 +3522,16 @@ def apply_action(
             if direct_domains is not None
             else _direct_domains(stored_state.get("direct_domains"))
         )
+        # Static answers: a request wins; while the feature is on, the fragment
+        # on disk is what the user last saw working -- entries added there by
+        # hand survive the rebuild; with no fragment, the state remembers them.
+        if hosts is not None:
+            wanted_hosts = _hosts(hosts)
+        elif os.path.isfile(managed_path):
+            on_disk = _declared_hosts(_read_json(managed_path, None))
+            wanted_hosts = on_disk if on_disk is not None else _hosts(stored_state.get("hosts"))
+        else:
+            wanted_hosts = _hosts(stored_state.get("hosts"))
         # Devices whose DNS the firmware takes away can be brought back with a
         # rule of our own.  The switch and the list are separate on purpose:
         # with the switch off no chain is created at all, so a checkbox left
@@ -3537,6 +3652,7 @@ def apply_action(
                     wanted_pass_node,
                     _service_mark(runtime),
                     _core_supports_dns_rules() if wanted_pass_node else True,
+                    hosts=wanted_hosts,
                 )
                 if _managed_config_complete(presence) and current_fragment == expected_fragment:
                     # Idempotent recovery path: configuration is already
@@ -3703,6 +3819,7 @@ def apply_action(
                         "pass_non_ip_node": wanted_pass_node,
                         "capture_clients": wanted_capture,
                         "capture_macs": wanted_capture_macs,
+                        "hosts": wanted_hosts,
                         "target": ({k: v for k, v in target.items() if k != "managed_balancer"} if target else previous_state.get("target")),
                         "last_transaction": snapshot_dir,
                     },

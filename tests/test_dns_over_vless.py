@@ -3840,3 +3840,170 @@ def test_enable_keeps_a_previously_cleared_resolver_empty(tmp_path: Path, monkey
     assert saved["local_resolvers"] == []
     assert saved["use_firmware_resolver"] is False
     assert saved["firmware_resolvers_applied"] == []
+
+
+def _hosts_env(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _scenario_config(tmp_path)
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *_a, **_k: {"ok": True})
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda *_a, **_k: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda *_a, **_k: {"ok": True, "answers": 1})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda enabled: None)
+    monkeypatch.setattr(
+        dns, "_write_routing_preserving_comments", lambda path, obj, **_kwargs: _write(Path(path), obj)
+    )
+    common = dict(
+        configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_k: True,
+        target_tag="balancer_main",
+    )
+    return configs, routing_path, state, common
+
+
+def _fragment(configs: Path) -> Dict[str, Any]:
+    return json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+
+
+def _status(configs: Path, routing_path: Path, state: Path, monkeypatch) -> Dict[str, Any]:
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    return dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+
+M_YOUTUBE = {"full:m.youtube.com": "www.youtube.com"}
+
+
+def test_static_hosts_reach_the_fragment_and_are_not_drift(tmp_path: Path, monkeypatch):
+    """m.youtube.com отдаётся адресами www, а SNI остаётся своим: секция dns
+    из разных файлов не сливается, так что hosts живут в нашем фрагменте."""
+
+    configs, routing_path, state, common = _hosts_env(tmp_path, monkeypatch)
+    dns.apply_action("enable", hosts=M_YOUTUBE, **common)
+
+    assert _fragment(configs)["dns"]["hosts"] == M_YOUTUBE
+    result = _status(configs, routing_path, state, monkeypatch)
+    assert result["enabled"] is True
+    assert result["tampered"] is False
+    assert result["hosts"] == M_YOUTUBE
+
+
+def test_static_hosts_survive_a_rebuild_that_does_not_mention_them(tmp_path: Path, monkeypatch):
+    configs, _routing_path, _state, common = _hosts_env(tmp_path, monkeypatch)
+    dns.apply_action("enable", hosts=M_YOUTUBE, **common)
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    dns.apply_action("enable", upstreams=["1.1.1.1", "9.9.9.9"], **common)
+
+    fragment = _fragment(configs)
+    assert fragment["dns"]["hosts"] == M_YOUTUBE
+    assert fragment["dns"]["servers"][-2:] == ["1.1.1.1", "9.9.9.9"]
+
+
+def test_hosts_added_to_the_file_by_hand_are_kept_and_the_feature_stays_manageable(
+    tmp_path: Path, monkeypatch
+):
+    configs, routing_path, state, common = _hosts_env(tmp_path, monkeypatch)
+    dns.apply_action("enable", **common)
+    fragment = _fragment(configs)
+    assert "hosts" not in fragment["dns"]
+    fragment["dns"]["hosts"] = {"full:m.youtube.com": ["www.youtube.com"]}
+    _write(configs / dns.MANAGED_FRAGMENT, fragment)
+
+    result = _status(configs, routing_path, state, monkeypatch)
+    assert result["tampered"] is False
+    assert result["hosts"] == {"full:m.youtube.com": ["www.youtube.com"]}
+
+    dns.apply_action("enable", upstreams=["1.1.1.1"], **common)
+    assert _fragment(configs)["dns"]["hosts"] == {"full:m.youtube.com": ["www.youtube.com"]}
+
+    dns.apply_action("disable", **common)
+    assert not (configs / dns.MANAGED_FRAGMENT).exists()
+
+
+def test_static_hosts_come_back_after_disable_and_enable(tmp_path: Path, monkeypatch):
+    configs, routing_path, state, common = _hosts_env(tmp_path, monkeypatch)
+    dns.apply_action("enable", hosts=M_YOUTUBE, **common)
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    dns.apply_action("disable", **common)
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (False, "test"))
+
+    dns.apply_action("enable", **common)
+    assert _fragment(configs)["dns"]["hosts"] == M_YOUTUBE
+
+
+def test_an_empty_hosts_request_removes_them(tmp_path: Path, monkeypatch):
+    configs, _routing_path, _state, common = _hosts_env(tmp_path, monkeypatch)
+    dns.apply_action("enable", hosts=M_YOUTUBE, **common)
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    dns.apply_action("enable", hosts={}, **common)
+    assert "hosts" not in _fragment(configs)["dns"]
+
+
+def test_a_fragment_without_hosts_is_unchanged():
+    assert "hosts" not in dns._managed_fragment(["8.8.8.8"])["dns"]
+    assert "hosts" not in dns._managed_fragment(["8.8.8.8"], hosts={})["dns"]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        ["full:m.youtube.com"],
+        {"": "www.youtube.com"},
+        {"full:m.youtube.com": ""},
+        {"full:m.youtube.com": []},
+        {"full:m.youtube.com": "www youtube.com"},
+        {"full:m.youtube.com": 42},
+        {f"full:h{i}.example": "1.2.3.4" for i in range(dns.MAX_HOSTS + 1)},
+    ],
+)
+def test_malformed_hosts_are_refused(value):
+    with pytest.raises(dns.DnsOverVlessError) as exc:
+        dns._hosts(value)
+    assert exc.value.code == "hosts_invalid"
+
+
+def test_hosts_the_panel_could_not_write_read_as_drift(tmp_path: Path, monkeypatch):
+    configs, routing_path, state, common = _hosts_env(tmp_path, monkeypatch)
+    dns.apply_action("enable", **common)
+    fragment = _fragment(configs)
+    fragment["dns"]["hosts"] = {"full:m.youtube.com": 42}
+    _write(configs / dns.MANAGED_FRAGMENT, fragment)
+
+    assert _status(configs, routing_path, state, monkeypatch)["tampered"] is True
+
+
+def test_http_contract_forwards_hosts(tmp_path: Path, monkeypatch):
+    from routes.routing import dns_over_vless as dns_routes
+
+    configs, routing_path, state = _scenario_config(tmp_path)
+    seen: Dict[str, Any] = {}
+
+    def fake_apply(action, **kwargs):
+        seen.update(kwargs)
+        return {"ok": True, "action": action}
+
+    monkeypatch.setattr(dns_routes, "apply_action", fake_apply)
+    app = Flask(__name__)
+    app.config["WTF_CSRF_ENABLED"] = False
+    dns_routes.register_dns_over_vless_routes(
+        app,
+        xray_configs_dir=str(configs),
+        routing_file=str(routing_path),
+        ui_state_dir=str(state),
+        restart_xkeen=lambda **_kwargs: True,
+    )
+
+    client = app.test_client()
+    response = client.post("/api/routing/dns-over-vless", json={"action": "enable", "hosts": M_YOUTUBE})
+    assert response.status_code == 200
+    assert seen["hosts"] == M_YOUTUBE
+
+    # Omitted means "keep what is there", not "wipe".
+    client.post("/api/routing/dns-over-vless", json={"action": "enable"})
+    assert seen["hosts"] is None
