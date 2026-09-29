@@ -102,9 +102,8 @@ def test_system_availability_and_dependency_resolution_are_reported_without_runt
     assert set(xray["missing_requirement_ids"]) == {"xkeen", "xray"}
     assert mihomo["status"] == "unavailable"
     assert happ["available"] is True
-    assert happ["status"] == "unavailable"
-    assert happ["reason"] == "dependency_unavailable"
-    assert "engine.mihomo" in happ["unavailable_dependency_ids"]
+    assert happ["status"] == "enabled"
+    assert happ["reason"] is None
 
 
 def test_disable_rejects_enabled_dependents_and_persists_a_custom_change(tmp_path):
@@ -119,7 +118,6 @@ def test_disable_rejects_enabled_dependents_and_persists_a_custom_change(tmp_pat
         assert set(error.details["dependent_module_ids"]) >= {
             "engine.xray",
             "engine.mihomo",
-            "integration.happ",
         }
     else:
         raise AssertionError("disabling a required dependency must fail")
@@ -181,6 +179,78 @@ def test_runtime_activation_preserves_legacy_full_and_gates_custom_profiles(tmp_
     assert custom_activation["inactive_modules"]["engine.mihomo"] == "user_disabled"
 
 
+def test_is_runtime_active_uses_frozen_process_activation(tmp_path):
+    registry = _registry(tmp_path)
+    registry.get_registry()
+    activation = {
+        "schema_version": STATE_SCHEMA_VERSION,
+        "profile": "custom",
+        "runtime_gates_active": True,
+        "active_module_ids": ["core", "tool.editor", "engine.xray"],
+        "inactive_modules": {"engine.mihomo": "user_disabled"},
+    }
+    registry.set_runtime_activation(activation)
+
+    registry.set_enabled("engine.mihomo", False)
+    assert registry.is_runtime_active("engine.xray") is True
+    assert registry.is_runtime_active("engine.mihomo") is False
+
+
+def test_corrupt_state_is_backed_up_and_recovers_to_legacy_full(tmp_path):
+    state_path = tmp_path / "modules.json"
+    state_path.write_text("{not-json", encoding="utf-8")
+    registry = _registry(tmp_path)
+
+    payload = registry.get_registry()
+
+    assert payload["profile"] == LEGACY_FULL_PROFILE
+    assert payload["configured_module_ids"] == list(MODULE_IDS)
+    assert payload["recovery_reason"] == "corrupt_state"
+    assert list(tmp_path.glob("modules.json.bad.*"))
+
+
+def test_unknown_future_schema_is_backed_up_and_recovers_safely(tmp_path):
+    state_path = tmp_path / "modules.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": STATE_SCHEMA_VERSION + 99,
+                "profile": "custom",
+                "modules": {"engine.xray": {"enabled": False}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    registry = _registry(tmp_path)
+
+    payload = registry.get_registry()
+
+    assert payload["profile"] == LEGACY_FULL_PROFILE
+    assert payload["recovery_reason"] == "unknown_schema_version"
+    assert list(tmp_path.glob("modules.json.bad.*"))
+
+
+def test_environment_safe_mode_forces_legacy_full_runtime_activation(tmp_path):
+    registry = ModuleRegistry(
+        str(tmp_path),
+        which=_available_which,
+        environ={"ComSpec": "cmd.exe", "XKEEN_UI_MODULE_SAFE_MODE": "legacy-full"},
+    )
+    registry.set_runtime_activation(
+        {
+            "profile": "custom",
+            "active_module_ids": ["core"],
+            "runtime_gates_active": True,
+        }
+    )
+
+    activation = registry.runtime_activation()
+
+    assert activation["safe_mode"] is True
+    assert activation["safe_mode_reason"] == "environment"
+    assert activation["active_module_ids"] == list(MODULE_IDS)
+
+
 def test_module_api_contract_and_mutations(tmp_path):
     registry = _registry(tmp_path)
     app = Flask("module-registry-test")
@@ -233,6 +303,17 @@ def test_registry_metadata_stays_aligned_with_stage0_module_snapshot():
         assert list(definition.dependencies) == stage0["depends_on"]
         assert definition.size_bytes == stage0["size_bytes"]
         assert definition.removable == stage0["removable"]
+
+
+def test_registry_sizes_are_loaded_from_generated_manifest():
+    root = Path(__file__).resolve().parents[1]
+    manifest = json.loads(
+        (root / "xkeen-ui" / "module-sizes.json").read_text(encoding="utf-8")
+    )
+    sizes = manifest["modules"]
+
+    assert {definition.id for definition in MODULE_DEFINITIONS} == set(sizes)
+    assert all(definition.size_bytes == sizes[definition.id] for definition in MODULE_DEFINITIONS)
 
 
 def test_stage1_closure_is_reflected_in_documentation():

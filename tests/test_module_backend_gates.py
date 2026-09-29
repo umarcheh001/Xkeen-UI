@@ -75,10 +75,12 @@ def test_xray_only_registers_xray_routes_and_excludes_mihomo_tools(tmp_path):
     assert "commands" not in app.blueprints
     assert "fs" not in app.blueprints
     assert "fileops" not in app.blueprints
-    assert "devtools" not in app.blueprints
+    assert "devtools" in app.blueprints
     assert "/api/mihomo/config" not in rules
     assert "/api/run-command" not in rules
+    assert app.test_client().get("/api/devtools/update/status").status_code == 200
     assert app.test_client().get("/api/mihomo/config").status_code == 404
+    assert app.extensions["xkeen.module_owner_errors"] == []
 
 
 def test_mihomo_only_registers_mihomo_routes_and_excludes_xray_tools(tmp_path):
@@ -93,6 +95,7 @@ def test_mihomo_only_registers_mihomo_routes_and_excludes_xray_tools(tmp_path):
     assert "commands" not in app.blueprints
     assert "fs" not in app.blueprints
     assert "fileops" not in app.blueprints
+    assert "devtools" in app.blueprints
     assert "/api/xray/subscriptions" not in rules
     assert "/api/mihomo/clash/status" in rules
     assert app.test_client().get("/api/xray/subscriptions").status_code == 404
@@ -108,6 +111,36 @@ def test_disabled_module_state_is_visible_through_registry_and_capabilities(tmp_
     assert modules["runtime_gates_active"] is True
     assert capabilities["moduleRegistry"]["runtime_gates_active"] is True
     assert "engine.mihomo" not in app.extensions["xkeen.module_activation"]["active_module_ids"]
+
+
+def test_mihomo_only_keeps_dns_stop_lifecycle_available(tmp_path):
+    app = _register(tmp_path, ["core", "tool.editor", "engine.mihomo"])
+    response = app.test_client().get("/api/xkeen/stop-check")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["dns_protection"]["active"] is False
+
+
+def test_api_cannot_disable_active_core(tmp_path):
+    app = _register(tmp_path, ["core", "tool.editor", "engine.xray"])
+    response = app.test_client().patch(
+        "/api/modules/engine.xray",
+        json={"enabled": False},
+    )
+
+    assert response.status_code == 409
+    assert response.get_json()["code"] == "active_core_module"
+
+
+def test_advanced_diagnostics_routes_are_not_exposed_when_optional_module_is_off(tmp_path):
+    app = _register(tmp_path, ["core", "tool.editor", "engine.xray"])
+    client = app.test_client()
+
+    assert client.get("/api/devtools/update/status").status_code == 200
+    assert client.get("/api/devtools/env").status_code == 404
+    assert client.get("/api/system/resources").status_code == 404
 
 
 def test_stage3_closure_is_reflected_in_documentation():

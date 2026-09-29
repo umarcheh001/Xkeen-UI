@@ -87,18 +87,17 @@ from services.self_update.state import (
 from services.self_update.github import github_get_latest_release, github_get_latest_main
 from services.self_update.security import is_url_allowed, security_snapshot
 
-try:
-    from services.logging_setup import refresh_runtime_from_env as _refresh_logging
-except Exception:  # logging is optional
-    _refresh_logging = None
-
-
 BACKUP_TAR_INSTALL_COMMAND = "opkg update && opkg install tar"
 BACKUP_TAR_UNSUPPORTED_HINT = (
     "Бэкап перед обновлением не может быть создан: текущий tar не поддерживает --exclude "
     "(часто это BusyBox tar). Установите полноценный tar командой "
     f"`{BACKUP_TAR_INSTALL_COMMAND}` или запустите обновление без бэкапа."
 )
+
+try:
+    from services.logging_setup import refresh_runtime_from_env as _refresh_logging
+except Exception:  # logging is optional
+    _refresh_logging = None
 
 
 # Результат пробы на процесс, а не на запрос.
@@ -182,8 +181,33 @@ def _backup_tar_unsupported_payload() -> Dict[str, Any]:
 
 
 
-def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
+def create_devtools_blueprint(
+    ui_state_dir: str,
+    *,
+    include_advanced: bool = True,
+) -> Blueprint:
     bp = Blueprint("devtools", __name__)
+
+    @bp.before_request
+    def _gate_optional_advanced_routes():
+        if include_advanced:
+            return None
+        path = request.path
+        advanced_prefixes = (
+            "/api/devtools/env",
+            "/api/devtools/terminal_theme",
+            "/api/devtools/branding",
+            "/api/devtools/ui/",
+        )
+        if path.startswith(advanced_prefixes):
+            return jsonify(
+                {
+                    "ok": False,
+                    "code": "module_not_enabled",
+                    "module_id": "tool.advanced-diagnostics",
+                }
+            ), 404
+        return None
 
     # Разовые параметры одного запуска раннера. После самообновления панель
     # перезапускается из раннера и наследует их, и без чистки следующий запуск

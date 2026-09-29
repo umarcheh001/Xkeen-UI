@@ -84,8 +84,8 @@ def test_module_capabilities_distinguish_disabled_from_environment_unavailable(t
     assert xray["reason"] == "system_requirements_unmet"
     assert set(xray["missing_requirement_ids"]) == {"xkeen", "xray"}
     assert happ_dependency["available"] is True
-    assert happ_dependency["effective_available"] is False
-    assert happ_dependency["reason"] == "dependency_unavailable"
+    assert happ_dependency["effective_available"] is True
+    assert happ_dependency["reason"] is None
 
 
 def test_module_capabilities_keep_legacy_result_when_registry_state_is_unavailable():

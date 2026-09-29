@@ -70,7 +70,7 @@ MODULE_SPECS: dict[str, dict[str, Any]] = {
     "integration.happ": {
         "name": "Happ",
         "description": "Декриптор Happ, payload/link helpers и Mihomo HWID/Happ subscriptions.",
-        "depends_on": ["core", "engine.mihomo"],
+        "depends_on": ["core"],
         "system_requirements": ["happ-decrypt-universal (optional)"],
         "removable": True,
     },

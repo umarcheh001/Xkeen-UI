@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from flask import Blueprint, jsonify, request
 
@@ -13,7 +13,11 @@ from services.module_registry import ModuleRegistry, ModuleRegistryError
 _MAX_PATCH_BYTES = 8 * 1024
 
 
-def create_modules_blueprint(module_registry: ModuleRegistry) -> Blueprint:
+def create_modules_blueprint(
+    module_registry: ModuleRegistry,
+    *,
+    before_change: Callable[[str, bool], dict[str, Any] | None] | None = None,
+) -> Blueprint:
     """Create the configuration-only module registry API blueprint."""
 
     bp = Blueprint("modules", __name__)
@@ -66,6 +70,20 @@ def create_modules_blueprint(module_registry: ModuleRegistry) -> Blueprint:
 
     def update_module(module_id: str, enabled: bool):
         try:
+            if before_change is not None:
+                blocked = before_change(module_id, enabled)
+                if blocked:
+                    return error_response(
+                        str(blocked.get("message") or "module change is unsafe"),
+                        int(blocked.get("status") or 409),
+                        ok=False,
+                        code=str(blocked.get("code") or "module_change_blocked"),
+                        **{
+                            key: value
+                            for key, value in blocked.items()
+                            if key not in {"message", "status", "code"}
+                        },
+                    )
             payload, changed = module_registry.set_enabled(module_id, enabled)
             payload["changed"] = changed
             return success(payload)

@@ -28,6 +28,80 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     def module_active(module_id: str) -> bool:
         return module_id in active_modules
 
+    def module_change_guard(module_id: str, enabled: bool) -> dict[str, object] | None:
+        if enabled or module_id not in {"engine.xray", "engine.mihomo"}:
+            return None
+        try:
+            from services.dns_service_lifecycle import get_stop_protection
+
+            protection = get_stop_protection(
+                ui_state_dir=ctx.ui_state_dir,
+                mihomo_config_file=ctx.mihomo_config_file,
+            )
+            owner_module = {
+                "dns-over-vless": "engine.xray",
+                "mihomo-dns": "engine.mihomo",
+            }.get(str(protection.get("owner") or ""))
+            if protection.get("active") and owner_module == module_id:
+                return {
+                    "status": 409,
+                    "code": "dns_protection_active",
+                    "message": "Сначала безопасно снимите активную DNS-защиту.",
+                    "owner": protection.get("owner"),
+                    "module_id": module_id,
+                }
+        except Exception as exc:
+            return {
+                "status": 409,
+                "code": "dns_protection_state_unknown",
+                "message": "Нельзя отключить ядро: состояние DNS-защиты неизвестно.",
+                "error": str(exc),
+                "module_id": module_id,
+            }
+        if module_id in active_modules:
+            return {
+                "status": 409,
+                "code": "active_core_module",
+                "message": "Нельзя отключить активное ядро до безопасного переключения.",
+                "module_id": module_id,
+            }
+        return None
+
+    def publish_blueprint_owner_diagnostic() -> None:
+        owner_map = {
+            "utils": "core",
+            "ui_settings": "core",
+            "capabilities": "core",
+            "modules": "core",
+            "cores_status": "core",
+            "xkeen_lists": "core",
+            "config_exchange": "core",
+            "service": "core",
+            "devtools": "core",
+            "ws_support": "core",
+            "ws_streams": "core",
+            "routing": "engine.xray",
+            "xray_configs": "engine.xray",
+            "xray_subscriptions": "engine.xray",
+            "xray_logs": "engine.xray",
+            "mihomo": "engine.mihomo",
+            "mihomo_clash": "engine.mihomo",
+            "happ_decryptor": "integration.happ",
+            "backups": "tool.backups",
+            "commands": "tool.terminal",
+            "system_resources": "tool.advanced-diagnostics",
+            "storage_usb": "tool.files",
+            "fs": "tool.files",
+            "remotefs": "tool.files",
+            "fileops": "tool.files",
+        }
+        registered = sorted(app.blueprints)
+        unknown = sorted(set(registered) - set(owner_map))
+        app.extensions["xkeen.module_owner_map"] = {
+            name: owner_map[name] for name in registered if name in owner_map
+        }
+        app.extensions["xkeen.module_owner_errors"] = unknown
+
     def _warn_init(key: str, msg: str, exc: Exception) -> None:
         err = str(exc)
         try:
@@ -55,7 +129,12 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     app.register_blueprint(create_utils_blueprint())
     app.register_blueprint(create_ui_settings_blueprint())
     app.register_blueprint(create_capabilities_blueprint(ctx.module_registry))
-    app.register_blueprint(create_modules_blueprint(ctx.module_registry))
+    app.register_blueprint(
+        create_modules_blueprint(
+            ctx.module_registry,
+            before_change=module_change_guard,
+        )
+    )
     app.register_blueprint(create_cores_status_blueprint(ctx.ui_state_dir))
     app.register_blueprint(create_xkeen_lists_blueprint(restart_xkeen=ctx.restart_xkeen))
     app.register_blueprint(
@@ -182,7 +261,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
             )
         )
 
-    if module_active("engine.xray"):
+    if module_active("engine.xray") or module_active("engine.mihomo"):
         from services.dns_service_lifecycle import get_stop_protection, release_for_service_stop
 
         def dns_stop_status():
@@ -227,14 +306,24 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
 
         app.register_blueprint(create_commands_blueprint())
 
+    # Core-owned maintenance APIs (self-update, core.log, recovery and
+    # module-control diagnostics) must remain available even when the optional
+    # advanced diagnostics UI is disabled.
+    from .devtools import create_devtools_blueprint
+    app.register_blueprint(
+        create_devtools_blueprint(
+            ctx.ui_state_dir,
+            include_advanced=module_active("tool.advanced-diagnostics"),
+        )
+    )
+
     if module_active("tool.advanced-diagnostics"):
-        from .devtools import create_devtools_blueprint
         from .system_resources import create_system_resources_blueprint
 
         app.register_blueprint(create_system_resources_blueprint())
-        app.register_blueprint(create_devtools_blueprint(ctx.ui_state_dir))
 
     if not module_active("tool.files"):
+        publish_blueprint_owner_diagnostic()
         return
 
     # FS / RemoteFS / FileOps are one ownership group and are never imported
@@ -291,3 +380,5 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
         app.register_blueprint(fileops_bp)
     except Exception as exc:  # noqa: BLE001
         _warn_init("fileops_init_failed", "fileops init failed (non-fatal)", exc)
+
+    publish_blueprint_owner_diagnostic()

@@ -875,12 +875,13 @@ def create_app(*, ws_runtime: bool = False):
             except Exception:
                 pass
 
-    if "engine.xray" in active_modules:
+    if "engine.xray" in active_modules or "engine.mihomo" in active_modules:
         try:
             from services.dns_guard import start_guard as start_dns_guard
 
-            # One guard for both assistants: whichever of them currently owns port
-            # 53, it is the same LAN that loses DNS when the core stops answering.
+            # One core-owned guard for both assistants: whichever of them
+            # currently owns port 53, it is the same LAN that loses DNS when
+            # the active core stops answering.
             try:
                 from mihomo_server_core import save_config as _dns_guard_save_mihomo
             except Exception:
@@ -917,7 +918,7 @@ def create_app(*, ws_runtime: bool = False):
             }
             for task_id, module_id in (
                 ("xray.subscription_scheduler", "engine.xray"),
-                ("xray.dns_guard", "engine.xray"),
+                ("dns.shared_guard", "core"),
                 ("mihomo.subscription_scheduler", "engine.mihomo"),
                 ("terminal.pty_cleanup", "tool.terminal"),
                 ("files.worker_queue", "tool.files"),

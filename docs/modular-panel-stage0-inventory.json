@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 375,
-      "size_bytes": 5743568,
+      "size_bytes": 5755590,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 17,
@@ -314,8 +314,7 @@
       "name": "Happ",
       "description": "Декриптор Happ, payload/link helpers и Mihomo HWID/Happ subscriptions.",
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "system_requirements": [
         "happ-decrypt-universal (optional)"
@@ -361,7 +360,7 @@
       ],
       "removable": true,
       "unit_count": 26,
-      "size_bytes": 617718,
+      "size_bytes": 618396,
       "kind_counts": {
         "backend_route": 2,
         "backend_service": 8,
@@ -418,7 +417,7 @@
       "module_id": "core",
       "kind": "app_runtime",
       "path": "xkeen-ui/app_factory.py",
-      "size_bytes": 34346,
+      "size_bytes": 34410,
       "depends_on": [
         "engine.mihomo",
         "engine.xray",
@@ -534,15 +533,15 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/__init__.py",
-      "size_bytes": 12019,
+      "size_bytes": 15630,
       "depends_on": [
+        "tool.advanced-diagnostics",
         "tool.files",
         "engine.xray",
         "engine.mihomo",
         "integration.happ",
         "tool.backups",
-        "tool.terminal",
-        "tool.advanced-diagnostics"
+        "tool.terminal"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -797,7 +796,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/modules.py",
-      "size_bytes": 4526,
+      "size_bytes": 5309,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -1773,7 +1772,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_registry.py",
-      "size_bytes": 32493,
+      "size_bytes": 36194,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -1785,7 +1784,8 @@
         "flask"
       ],
       "environment_variables": [
-        "XKEEN_BIN"
+        "XKEEN_BIN",
+        "XKEEN_UI_MODULE_SAFE_MODE"
       ],
       "removable": false
     },
@@ -3834,7 +3834,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_stage4_1_contract.py",
-      "size_bytes": 6330,
+      "size_bytes": 6211,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3870,7 +3870,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_backend_gates.py",
-      "size_bytes": 5845,
+      "size_bytes": 7128,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3888,7 +3888,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_capabilities.py",
-      "size_bytes": 6572,
+      "size_bytes": 6551,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3906,7 +3906,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_registry.py",
-      "size_bytes": 10161,
+      "size_bytes": 12881,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3917,7 +3917,9 @@
         "python3",
         "flask"
       ],
-      "environment_variables": [],
+      "environment_variables": [
+        "XKEEN_UI_MODULE_SAFE_MODE"
+      ],
       "removable": false
     },
     {
@@ -15036,8 +15038,7 @@
       "path": "xkeen-ui/routes/happ_decryptor.py",
       "size_bytes": 5010,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15082,8 +15083,7 @@
       "path": "xkeen-ui/services/happ_decryptor/__init__.py",
       "size_bytes": 375,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15103,7 +15103,6 @@
       "size_bytes": 15253,
       "depends_on": [
         "core",
-        "engine.mihomo",
         "engine.xray"
       ],
       "starts_background_task": false,
@@ -15127,8 +15126,7 @@
       "path": "xkeen-ui/services/happ_decryptor/errors.py",
       "size_bytes": 317,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15147,8 +15145,7 @@
       "path": "xkeen-ui/services/happ_decryptor/keys.py",
       "size_bytes": 13387,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15169,8 +15166,7 @@
       "path": "xkeen-ui/services/happ_decryptor/service.py",
       "size_bytes": 3699,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15189,8 +15185,7 @@
       "path": "xkeen-ui/services/happ_links.py",
       "size_bytes": 25314,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15215,8 +15210,7 @@
       "path": "xkeen-ui/services/happ_payloads.py",
       "size_bytes": 8106,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15236,8 +15230,8 @@
       "size_bytes": 68929,
       "depends_on": [
         "core",
-        "engine.mihomo",
-        "engine.xray"
+        "engine.xray",
+        "engine.mihomo"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15263,8 +15257,7 @@
       "path": "tests/test_happ_decryptor_engine.py",
       "size_bytes": 13743,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15284,7 +15277,6 @@
       "size_bytes": 1841,
       "depends_on": [
         "core",
-        "engine.mihomo",
         "tool.advanced-diagnostics"
       ],
       "starts_background_task": false,
@@ -15310,8 +15302,7 @@
       "path": "tests/test_happ_decryptor_frontend_contract.py",
       "size_bytes": 2938,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15330,8 +15321,7 @@
       "path": "tests/test_happ_decryptor_keys.py",
       "size_bytes": 12752,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15350,8 +15340,7 @@
       "path": "tests/test_happ_decryptor_routes.py",
       "size_bytes": 11054,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15370,8 +15359,7 @@
       "path": "tests/test_happ_decryptor_workflows.py",
       "size_bytes": 4471,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15390,8 +15378,7 @@
       "path": "tests/test_install_happ_decryptor_script.py",
       "size_bytes": 7319,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15412,8 +15399,7 @@
       "path": "tests/test_mihomo_hwid_routes.py",
       "size_bytes": 32009,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15436,8 +15422,7 @@
       "path": "tests/test_mihomo_hwid_sub.py",
       "size_bytes": 23754,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15461,8 +15446,7 @@
       "path": "xkeen-ui/static/js/features/compat/mihomo_hwid_sub.js",
       "size_bytes": 475,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15488,7 +15472,6 @@
       "size_bytes": 17505,
       "depends_on": [
         "core",
-        "engine.mihomo",
         "tool.advanced-diagnostics"
       ],
       "starts_background_task": false,
@@ -15545,8 +15528,7 @@
       "path": "e2e/devtools_happ_decryptor.spec.mjs",
       "size_bytes": 5779,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15565,8 +15547,7 @@
       "path": "e2e/mihomo_hwid_modal_layout.spec.mjs",
       "size_bytes": 4695,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15585,8 +15566,7 @@
       "path": "xkeen-ui/static/js/ui/happ_decryptor_link.js",
       "size_bytes": 1027,
       "depends_on": [
-        "core",
-        "engine.mihomo"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -15610,7 +15590,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/devtools.py",
-      "size_bytes": 37540,
+      "size_bytes": 38218,
       "depends_on": [
         "core"
       ],
@@ -25477,16 +25457,10 @@
       {
         "from": "integration.happ",
         "to": "engine.mihomo",
-        "unit_count": 24,
+        "unit_count": 2,
         "examples": [
-          "xkeen-ui/routes/happ_decryptor.py",
-          "xkeen-ui/services/happ_decryptor/__init__.py",
-          "xkeen-ui/services/happ_decryptor/engine.py",
-          "xkeen-ui/services/happ_decryptor/errors.py",
-          "xkeen-ui/services/happ_decryptor/keys.py",
-          "xkeen-ui/services/happ_decryptor/service.py",
-          "xkeen-ui/services/happ_links.py",
-          "xkeen-ui/services/happ_payloads.py"
+          "xkeen-ui/services/mihomo_hwid_sub.py",
+          "xkeen-ui/static/js/features/mihomo_hwid_sub.js"
         ]
       },
       {
@@ -25956,16 +25930,10 @@
       {
         "from": "integration.happ",
         "to": "engine.mihomo",
-        "unit_count": 13,
+        "unit_count": 2,
         "examples": [
-          "xkeen-ui/routes/happ_decryptor.py",
-          "xkeen-ui/services/happ_decryptor/__init__.py",
-          "xkeen-ui/services/happ_decryptor/engine.py",
-          "xkeen-ui/services/happ_decryptor/errors.py",
-          "xkeen-ui/services/happ_decryptor/keys.py",
-          "xkeen-ui/services/happ_decryptor/service.py",
-          "xkeen-ui/services/happ_links.py",
-          "xkeen-ui/services/happ_payloads.py"
+          "xkeen-ui/services/mihomo_hwid_sub.py",
+          "xkeen-ui/static/js/features/mihomo_hwid_sub.js"
         ]
       },
       {
@@ -26583,7 +26551,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 26,
-          "size_bytes": 617718
+          "size_bytes": 618396
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

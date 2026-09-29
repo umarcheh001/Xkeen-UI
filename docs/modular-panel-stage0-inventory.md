@@ -36,7 +36,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 375 | 5.48 МБ | 75 | 4 | 35 | нет |
+| `core` | 375 | 5.49 МБ | 75 | 4 | 35 | нет |
 | `engine.xray` | 114 | 3.33 МБ | 52 | 3 | 14 | да |
 | `engine.mihomo` | 126 | 2.84 МБ | 88 | 4 | 6 | да |
 | `tool.editor` | 25 | 808.7 КБ | 0 | 0 | 2 | да |
@@ -44,7 +44,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `tool.files` | 85 | 972.6 КБ | 43 | 1 | 1 | да |
 | `tool.backups` | 8 | 107.0 КБ | 17 | 0 | 1 | да |
 | `integration.happ` | 24 | 339.2 КБ | 5 | 0 | 1 | да |
-| `tool.advanced-diagnostics` | 26 | 603.2 КБ | 26 | 0 | 2 | да |
+| `tool.advanced-diagnostics` | 26 | 603.9 КБ | 26 | 0 | 2 | да |
 
 ## Backend routes и регистрация
 
@@ -119,7 +119,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `engine.xray` | `tool.files` | 2 | `xkeen-ui/routes/routing/dat.py`<br>`xkeen-ui/services/geodat/runner.py` |
 | `engine.xray` | `tool.terminal` | 2 | `xkeen-ui/routes/routing/config.py`<br>`xkeen-ui/routes/xray_configs.py` |
 | `integration.happ` | `core` | 24 | `xkeen-ui/routes/happ_decryptor.py`<br>`xkeen-ui/services/happ_decryptor/__init__.py`<br>`xkeen-ui/services/happ_decryptor/engine.py` |
-| `integration.happ` | `engine.mihomo` | 24 | `xkeen-ui/routes/happ_decryptor.py`<br>`xkeen-ui/services/happ_decryptor/__init__.py`<br>`xkeen-ui/services/happ_decryptor/engine.py` |
+| `integration.happ` | `engine.mihomo` | 2 | `xkeen-ui/services/mihomo_hwid_sub.py`<br>`xkeen-ui/static/js/features/mihomo_hwid_sub.js` |
 | `integration.happ` | `engine.xray` | 2 | `xkeen-ui/services/happ_decryptor/engine.py`<br>`xkeen-ui/services/mihomo_hwid_sub.py` |
 | `integration.happ` | `tool.advanced-diagnostics` | 2 | `tests/test_happ_decryptor_env.py`<br>`xkeen-ui/static/js/features/devtools/happ_decryptor.js` |
 | `tool.advanced-diagnostics` | `core` | 26 | `xkeen-ui/routes/devtools.py`<br>`xkeen-ui/routes/system_resources.py`<br>`xkeen-ui/services/devtools/__init__.py` |

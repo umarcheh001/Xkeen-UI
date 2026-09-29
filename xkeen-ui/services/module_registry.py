@@ -16,10 +16,11 @@ import shutil
 import sys
 import threading
 import time
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
-from services.io import read_json, safe_write_text
+from services.io import safe_write_text
 
 
 API_VERSION = 1
@@ -27,8 +28,34 @@ STATE_SCHEMA_VERSION = 1
 REGISTRY_VERSION = "1.0.0"
 STATE_FILENAME = "modules.json"
 RUNTIME_DIAGNOSTICS_FILENAME = "module-runtime.json"
+MODULE_SIZES_FILENAME = "module-sizes.json"
 LEGACY_FULL_PROFILE = "legacy-full"
 CUSTOM_PROFILE = "custom"
+SAFE_MODE_ENV = "XKEEN_UI_MODULE_SAFE_MODE"
+
+
+def _load_module_sizes() -> dict[str, int]:
+    path = os.path.join(os.path.dirname(os.path.dirname(__file__)), MODULE_SIZES_FILENAME)
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        values = payload.get("modules") if isinstance(payload, dict) else None
+        if not isinstance(values, dict):
+            return {}
+        return {
+            str(module_id): max(0, int(size))
+            for module_id, size in values.items()
+            if isinstance(size, int) and not isinstance(size, bool)
+        }
+    except Exception:
+        return {}
+
+
+_MODULE_SIZES = _load_module_sizes()
+
+
+def _module_size(module_id: str) -> int:
+    return int(_MODULE_SIZES.get(module_id, 0))
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,7 +102,7 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         dependencies=(),
         conflicts=(),
         system_requirements=(_requirement("python3"), _requirement("flask")),
-        size_bytes=5743568,
+        size_bytes=_module_size("core"),
         removable=False,
         can_disable=False,
         requires_restart=False,
@@ -90,7 +117,7 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         dependencies=("core", "tool.editor"),
         conflicts=(),
         system_requirements=(_requirement("xkeen"), _requirement("xray")),
-        size_bytes=3492303,
+        size_bytes=_module_size("engine.xray"),
         removable=True,
         can_disable=True,
         requires_restart=True,
@@ -105,7 +132,7 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         dependencies=("core", "tool.editor"),
         conflicts=(),
         system_requirements=(_requirement("xkeen"), _requirement("mihomo")),
-        size_bytes=2977909,
+        size_bytes=_module_size("engine.mihomo"),
         removable=True,
         can_disable=True,
         requires_restart=True,
@@ -120,7 +147,7 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         dependencies=("core",),
         conflicts=(),
         system_requirements=(_requirement("browser-esm"),),
-        size_bytes=828077,
+        size_bytes=_module_size("tool.editor"),
         removable=True,
         can_disable=True,
         requires_restart=True,
@@ -137,7 +164,7 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
             _requirement("gevent", optional=True),
             _requirement("gevent-websocket", optional=True),
         ),
-        size_bytes=508806,
+        size_bytes=_module_size("tool.terminal"),
         removable=True,
         can_disable=True,
         requires_restart=True,
@@ -155,7 +182,7 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
             _requirement("lftp", optional=True),
             _requirement("ndmc", optional=True),
         ),
-        size_bytes=995945,
+        size_bytes=_module_size("tool.files"),
         removable=True,
         can_disable=True,
         requires_restart=True,
@@ -170,7 +197,7 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         dependencies=("core",),
         conflicts=(),
         system_requirements=(),
-        size_bytes=109598,
+        size_bytes=_module_size("tool.backups"),
         removable=True,
         can_disable=True,
         requires_restart=True,
@@ -182,10 +209,10 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         name="Happ",
         description="Декриптор Happ, payload/link helpers и Mihomo HWID/Happ subscriptions.",
         version=REGISTRY_VERSION,
-        dependencies=("core", "engine.mihomo"),
+        dependencies=("core",),
         conflicts=(),
         system_requirements=(_requirement("happ-decrypt-universal", optional=True),),
-        size_bytes=347312,
+        size_bytes=_module_size("integration.happ"),
         removable=True,
         can_disable=True,
         requires_restart=True,
@@ -198,7 +225,7 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         dependencies=("core",),
         conflicts=(),
         system_requirements=(_requirement("ndmc", optional=True),),
-        size_bytes=617718,
+        size_bytes=_module_size("tool.advanced-diagnostics"),
         removable=True,
         can_disable=True,
         requires_restart=True,
@@ -238,6 +265,7 @@ class ModuleRegistry:
         self._environ = environ
         self._lock = threading.RLock()
         self._runtime_activation: dict[str, Any] | None = None
+        self._recovery_reason: str | None = None
 
     @property
     def state_path(self) -> str:
@@ -266,6 +294,21 @@ class ModuleRegistry:
         registry.  Any explicit profile uses the effective dependency and
         system-requirement result.
         """
+
+        safe_mode = str(self._environ_value(SAFE_MODE_ENV) or "").strip().lower()
+        if safe_mode == LEGACY_FULL_PROFILE:
+            return {
+                "schema_version": STATE_SCHEMA_VERSION,
+                "api_version": API_VERSION,
+                "profile": LEGACY_FULL_PROFILE,
+                "legacy_compatibility": True,
+                "runtime_gates_active": True,
+                "active_module_ids": list(MODULE_IDS),
+                "inactive_modules": {},
+                "restart_required": False,
+                "safe_mode": True,
+                "safe_mode_reason": "environment",
+            }
 
         try:
             snapshot = self.get_registry()
@@ -296,6 +339,11 @@ class ModuleRegistry:
                 "active_module_ids": active,
                 "inactive_modules": inactive,
                 "restart_required": bool(snapshot.get("restart_required")),
+                **(
+                    {"recovery_reason": self._recovery_reason}
+                    if self._recovery_reason
+                    else {}
+                ),
             }
 
         except Exception:
@@ -323,7 +371,10 @@ class ModuleRegistry:
         """Return whether a module is active for backend registration."""
 
         normalized_id = self._require_known_module(module_id)
-        return normalized_id in set(self.runtime_activation()["active_module_ids"])
+        activation = self._runtime_activation
+        if activation is None:
+            activation = self.runtime_activation()
+        return normalized_id in set(activation.get("active_module_ids") or [])
 
     def write_runtime_diagnostic(
         self,
@@ -467,9 +518,50 @@ class ModuleRegistry:
 
     def _load_state_locked(self) -> tuple[dict[str, Any], bool]:
         file_exists = os.path.isfile(self._path)
-        raw = read_json(self._path, default=None) if file_exists else None
+        raw = None
+        if file_exists:
+            try:
+                with open(self._path, "r", encoding="utf-8", errors="strict") as handle:
+                    raw = json.load(handle)
+            except Exception:
+                self._recover_state("corrupt_state")
+                return self._default_state(), True
+
+            schema_version = raw.get("schema_version") if isinstance(raw, dict) else None
+            if isinstance(schema_version, int) and not isinstance(schema_version, bool):
+                if schema_version > STATE_SCHEMA_VERSION:
+                    self._recover_state("unknown_schema_version")
+                    return self._default_state(), True
+
         state, normalized = self._normalize_state(raw)
         return state, normalized or not file_exists
+
+    def _recover_state(self, reason: str) -> None:
+        self._recovery_reason = str(reason)
+        if os.path.isfile(self._path):
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            backup_path = f"{self._path}.bad.{stamp}"
+            try:
+                shutil.copyfile(self._path, backup_path)
+            except Exception:
+                pass
+        try:
+            from core.logging import core_log_once
+
+            core_log_once(
+                "warning",
+                "module_registry_recovery",
+                "module registry state moved to safe legacy-full recovery",
+                reason=self._recovery_reason,
+                state_path=self._path,
+            )
+        except Exception:
+            pass
+
+    def _environ_value(self, key: str) -> str | None:
+        if self._environ is not None:
+            return self._environ.get(key)
+        return os.environ.get(key)
 
     def _write_state_locked(self, state: Mapping[str, Any]) -> None:
         text = json.dumps(state, ensure_ascii=False, indent=2) + "\n"
@@ -594,7 +686,7 @@ class ModuleRegistry:
         effective_module_ids = [
             item["id"] for item in module_payloads if bool(item["effective_enabled"])
         ]
-        return {
+        snapshot = {
             "ok": True,
             "api_version": API_VERSION,
             "schema_version": STATE_SCHEMA_VERSION,
@@ -608,6 +700,9 @@ class ModuleRegistry:
             "effective_module_ids": effective_module_ids,
             "modules": module_payloads,
         }
+        if self._recovery_reason:
+            snapshot["recovery_reason"] = self._recovery_reason
+        return snapshot
 
     def _module_payloads(self, state: Mapping[str, Any]) -> list[dict[str, Any]]:
         requirement_status = {
