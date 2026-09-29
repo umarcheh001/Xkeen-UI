@@ -36,7 +36,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 366 | 5.44 МБ | 75 | 4 | 35 | нет |
+| `core` | 367 | 5.47 МБ | 75 | 4 | 35 | нет |
 | `engine.xray` | 114 | 3.33 МБ | 52 | 3 | 14 | да |
 | `engine.mihomo` | 126 | 2.84 МБ | 88 | 4 | 6 | да |
 | `tool.editor` | 25 | 808.7 КБ | 0 | 0 | 2 | да |
@@ -96,8 +96,8 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | From | To | Units | Примеры |
 |---|---|---:|---|
-| `core` | `engine.mihomo` | 18 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/run_server.py`<br>`xkeen-ui/routes/__init__.py` |
-| `core` | `engine.xray` | 35 | `xkeen-ui/app.py`<br>`xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py` |
+| `core` | `engine.mihomo` | 17 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/run_server.py`<br>`xkeen-ui/routes/__init__.py` |
+| `core` | `engine.xray` | 34 | `xkeen-ui/app.py`<br>`xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py` |
 | `core` | `integration.happ` | 4 | `xkeen-ui/routes/__init__.py`<br>`tests/test_check_keys_upstream.py`<br>`xkeen-ui/static/js/features/index.js` |
 | `core` | `tool.advanced-diagnostics` | 7 | `xkeen-ui/routes/__init__.py`<br>`tests/test_devtools_env_whitelist.py`<br>`xkeen-ui/static/js/features/compat/devtools.js` |
 | `core` | `tool.backups` | 7 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py`<br>`tests/test_backup_path_hardening.py` |
@@ -145,7 +145,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 Большинство Blueprint регистрируется без пользовательских module gates.
 
-Следующий шаг: Этап 3: применить registry как backend gates.
+Следующий шаг: Этап 4: разделить frontend shell и экраны.
 
 ### `mihomo-startup-is-eager`
 
@@ -163,7 +163,7 @@ Mihomo scheduler запускается из app_factory независимо о
 
 Core сейчас импортирует код будущих отключаемых модулей.
 
-Следующий шаг: Этап 3: заменить прямые связи registry hooks.
+Следующий шаг: Этапы 4/5: сохранить frontend module boundaries.
 
 ### `frontend-split-is-useful-baseline`
 
@@ -175,7 +175,7 @@ Routing, Mihomo, terminal и file manager уже имеют отдельные E
 
 Terminal, files, editor и diagnostics можно отделять независимо от engine-профиля.
 
-Следующий шаг: Этапы 3, 4 и 6.
+Следующий шаг: Этапы 4, 5 и 6.
 
 ## Решения о границах модулей
 
@@ -198,4 +198,4 @@ Terminal, files, editor и diagnostics можно отделять незави�
 - выявлены current gates и cross-module coupling;
 - snapshot защищён тестом на синхронность с генератором.
 
-Следующий этап: **Этап 3 — Backend gates**.
+Следующий этап: **Этап 4 — разделение frontend shell и экранов**.

@@ -159,6 +159,28 @@ def test_enabling_a_module_repairs_its_declared_dependencies(tmp_path):
     assert persisted["restart_required"] is True
 
 
+def test_runtime_activation_preserves_legacy_full_and_gates_custom_profiles(tmp_path):
+    legacy = _registry(tmp_path)
+    legacy_activation = legacy.runtime_activation()
+
+    assert legacy_activation["legacy_compatibility"] is True
+    assert legacy_activation["runtime_gates_active"] is True
+    assert legacy_activation["active_module_ids"] == list(MODULE_IDS)
+
+    custom = _registry(tmp_path / "custom")
+    custom.get_registry()
+    custom.set_enabled("integration.happ", False)
+    custom.set_enabled("engine.mihomo", False)
+    custom_activation = custom.runtime_activation()
+
+    assert custom_activation["legacy_compatibility"] is False
+    assert "engine.mihomo" not in custom_activation["active_module_ids"]
+    assert "integration.happ" not in custom_activation["active_module_ids"]
+    assert "engine.xray" in custom_activation["active_module_ids"]
+    assert "core" in custom_activation["active_module_ids"]
+    assert custom_activation["inactive_modules"]["engine.mihomo"] == "user_disabled"
+
+
 def test_module_api_contract_and_mutations(tmp_path):
     registry = _registry(tmp_path)
     app = Flask("module-registry-test")
@@ -235,7 +257,7 @@ def test_stage1_closure_is_reflected_in_documentation():
         "GET   /api/modules",
         "runtime_gates_active: false",
         "Критерий готовности Этапа 1: **выполнен**.",
-        "Этап 3 — Backend gates",
+        "Этап 4 — разделение frontend shell и экранов",
     ):
         assert fragment in contract
 

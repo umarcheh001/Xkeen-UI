@@ -66,20 +66,7 @@ from app import (
     _subscribe_ws,
     _unsubscribe_ws,
 )
-from services.ws_pty import handle_pty_request, start_cleanup_loop as start_pty_cleanup_loop
-from services.mihomo_clash_ws import (
-    handle_mihomo_clash_connections_request,
-    handle_mihomo_clash_logs_request,
-    handle_mihomo_clash_telemetry_request,
-)
-from services.mihomo_runtime import CONFIG_PATH as MIHOMO_CONFIG_FILE, MIHOMO_ROOT
-from services.ws_wsgi import (
-    redact_ws_query_string,
-    handle_xray_logs_request,
-    handle_xray_logs2_request,
-    handle_command_status_request,
-    handle_events_request,
-)
+_ACTIVE_MODULES = set(app.extensions.get("xkeen.module_activation", {}).get("active_module_ids", []))
 from services.memory_guard import start_memory_guard
 
 
@@ -87,7 +74,9 @@ try:
     import app as _appmod  # noqa
 
     try:
-        if GEVENT_AVAILABLE:
+        if GEVENT_AVAILABLE and _ACTIVE_MODULES.intersection(
+            {"tool.terminal", "engine.xray", "engine.mihomo", "tool.advanced-diagnostics"}
+        ):
             if hasattr(_appmod, "set_ws_runtime"):
                 _appmod.set_ws_runtime(True)
             else:
@@ -100,9 +89,11 @@ except Exception:
 
 def application(environ, start_response):
     path = environ.get("PATH_INFO", "")
-    qs_safe = redact_ws_query_string(environ.get("QUERY_STRING", ""))
 
-    if GEVENT_AVAILABLE and path == "/ws/xray-logs":
+    if GEVENT_AVAILABLE and "engine.xray" in _ACTIVE_MODULES and path == "/ws/xray-logs":
+        from services.ws_wsgi import handle_xray_logs_request, redact_ws_query_string
+
+        qs_safe = redact_ws_query_string(environ.get("QUERY_STRING", ""))
         return handle_xray_logs_request(
             environ,
             start_response,
@@ -115,7 +106,10 @@ def application(environ, start_response):
             adjust_log_timezone=adjust_log_timezone,
         )
 
-    if GEVENT_AVAILABLE and path == "/ws/xray-logs2":
+    if GEVENT_AVAILABLE and "engine.xray" in _ACTIVE_MODULES and path == "/ws/xray-logs2":
+        from services.ws_wsgi import handle_xray_logs2_request, redact_ws_query_string
+
+        qs_safe = redact_ws_query_string(environ.get("QUERY_STRING", ""))
         return handle_xray_logs2_request(
             environ,
             start_response,
@@ -128,7 +122,10 @@ def application(environ, start_response):
             adjust_log_timezone=adjust_log_timezone,
         )
 
-    if GEVENT_AVAILABLE and path == "/ws/command-status":
+    if GEVENT_AVAILABLE and "tool.terminal" in _ACTIVE_MODULES and path == "/ws/command-status":
+        from services.ws_wsgi import handle_command_status_request, redact_ws_query_string
+
+        qs_safe = redact_ws_query_string(environ.get("QUERY_STRING", ""))
         return handle_command_status_request(
             environ,
             start_response,
@@ -139,7 +136,11 @@ def application(environ, start_response):
             get_command_job=_get_command_job,
         )
 
-    if GEVENT_AVAILABLE and path == "/ws/pty":
+    if GEVENT_AVAILABLE and "tool.terminal" in _ACTIVE_MODULES and path == "/ws/pty":
+        from services.ws_pty import handle_pty_request
+        from services.ws_wsgi import redact_ws_query_string
+
+        qs_safe = redact_ws_query_string(environ.get("QUERY_STRING", ""))
         return handle_pty_request(
             environ,
             start_response,
@@ -149,7 +150,16 @@ def application(environ, start_response):
             validate_ws_token=validate_ws_token,
         )
 
-    if GEVENT_AVAILABLE and path == "/ws/events":
+    if (
+        GEVENT_AVAILABLE
+        and _ACTIVE_MODULES.intersection(
+            {"tool.terminal", "engine.xray", "engine.mihomo", "tool.advanced-diagnostics"}
+        )
+        and path == "/ws/events"
+    ):
+        from services.ws_wsgi import handle_events_request, redact_ws_query_string
+
+        qs_safe = redact_ws_query_string(environ.get("QUERY_STRING", ""))
         return handle_events_request(
             environ,
             start_response,
@@ -162,7 +172,10 @@ def application(environ, start_response):
             event_subscribers=EVENT_SUBSCRIBERS,
         )
 
-    if GEVENT_AVAILABLE and path == "/ws/mihomo-clash/connections":
+    if GEVENT_AVAILABLE and "engine.mihomo" in _ACTIVE_MODULES and path == "/ws/mihomo-clash/connections":
+        from services.mihomo_clash_ws import handle_mihomo_clash_connections_request
+        from services.mihomo_runtime import CONFIG_PATH as MIHOMO_CONFIG_FILE, MIHOMO_ROOT
+
         return handle_mihomo_clash_connections_request(
             environ,
             start_response,
@@ -173,7 +186,10 @@ def application(environ, start_response):
             mihomo_root=str(MIHOMO_ROOT),
         )
 
-    if GEVENT_AVAILABLE and path == "/ws/mihomo-clash/telemetry":
+    if GEVENT_AVAILABLE and "engine.mihomo" in _ACTIVE_MODULES and path == "/ws/mihomo-clash/telemetry":
+        from services.mihomo_clash_ws import handle_mihomo_clash_telemetry_request
+        from services.mihomo_runtime import CONFIG_PATH as MIHOMO_CONFIG_FILE, MIHOMO_ROOT
+
         return handle_mihomo_clash_telemetry_request(
             environ,
             start_response,
@@ -184,7 +200,10 @@ def application(environ, start_response):
             mihomo_root=str(MIHOMO_ROOT),
         )
 
-    if GEVENT_AVAILABLE and path == "/ws/mihomo-clash/logs":
+    if GEVENT_AVAILABLE and "engine.mihomo" in _ACTIVE_MODULES and path == "/ws/mihomo-clash/logs":
+        from services.mihomo_clash_ws import handle_mihomo_clash_logs_request
+        from services.mihomo_runtime import CONFIG_PATH as MIHOMO_CONFIG_FILE, MIHOMO_ROOT
+
         return handle_mihomo_clash_logs_request(
             environ,
             start_response,
@@ -204,8 +223,10 @@ if __name__ == "__main__":
         start_memory_guard()
     except Exception:
         pass
-    if GEVENT_AVAILABLE:
+    if GEVENT_AVAILABLE and "tool.terminal" in _ACTIVE_MODULES:
         try:
+            from services.ws_pty import start_cleanup_loop as start_pty_cleanup_loop
+
             start_pty_cleanup_loop()
         except Exception:
             pass

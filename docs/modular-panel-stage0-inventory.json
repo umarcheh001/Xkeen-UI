@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 366,
-      "size_bytes": 5708997,
+      "unit_count": 367,
+      "size_bytes": 5735362,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 17,
         "backend_service": 49,
-        "backend_test": 159,
+        "backend_test": 160,
         "configuration": 10,
         "frontend_bundle": 3,
         "frontend_entrypoint": 2,
@@ -129,7 +129,7 @@
       ],
       "removable": true,
       "unit_count": 126,
-      "size_bytes": 2976495,
+      "size_bytes": 2976878,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -395,7 +395,7 @@
       "module_id": "core",
       "kind": "app_runtime",
       "path": "xkeen-ui/app.py",
-      "size_bytes": 2692,
+      "size_bytes": 3184,
       "depends_on": [
         "engine.xray",
         "tool.terminal"
@@ -418,7 +418,7 @@
       "module_id": "core",
       "kind": "app_runtime",
       "path": "xkeen-ui/app_factory.py",
-      "size_bytes": 28265,
+      "size_bytes": 34346,
       "depends_on": [
         "engine.mihomo",
         "engine.xray",
@@ -444,6 +444,7 @@
         "flask"
       ],
       "environment_variables": [
+        "XKEEN_BIN",
         "XKEEN_CONFIG_DIR",
         "XKEEN_GITHUB_BRANCH",
         "XKEEN_GITHUB_OWNER",
@@ -451,7 +452,13 @@
         "XKEEN_GITHUB_REPO_URL",
         "XKEEN_RESTART_CMD",
         "XKEEN_RESTART_LOG_FILE",
-        "XKEEN_XRAY_LOG_TZ_OFFSET"
+        "XKEEN_XRAY_CONFIGS_DIR",
+        "XKEEN_XRAY_INBOUNDS_FILE",
+        "XKEEN_XRAY_JSONC_DIR",
+        "XKEEN_XRAY_LOG_TZ_OFFSET",
+        "XKEEN_XRAY_OUTBOUNDS_FILE",
+        "XKEEN_XRAY_ROUTING_FILE",
+        "XKEEN_XRAY_ROUTING_FILE_RAW"
       ],
       "removable": false
     },
@@ -459,7 +466,7 @@
       "module_id": "core",
       "kind": "app_runtime",
       "path": "xkeen-ui/run_server.py",
-      "size_bytes": 6842,
+      "size_bytes": 8402,
       "depends_on": [
         "tool.terminal",
         "engine.mihomo"
@@ -527,15 +534,15 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/__init__.py",
-      "size_bytes": 10414,
+      "size_bytes": 12019,
       "depends_on": [
+        "tool.files",
         "engine.xray",
-        "integration.happ",
         "engine.mihomo",
+        "integration.happ",
         "tool.backups",
         "tool.terminal",
-        "tool.advanced-diagnostics",
-        "tool.files"
+        "tool.advanced-diagnostics"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -834,7 +841,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/pages.py",
-      "size_bytes": 6434,
+      "size_bytes": 9020,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -1048,7 +1055,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/ws_streams.py",
-      "size_bytes": 6517,
+      "size_bytes": 7268,
       "depends_on": [
         "engine.xray"
       ],
@@ -1299,11 +1306,9 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/capabilities.py",
-      "size_bytes": 14595,
+      "size_bytes": 15461,
       "depends_on": [
-        "engine.mihomo",
-        "tool.terminal",
-        "engine.xray"
+        "tool.terminal"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -1329,7 +1334,11 @@
         "XKEEN_RESTART_LOG_FILE",
         "XKEEN_RUNTIME",
         "XKEEN_WS_ERROR",
-        "XKEEN_WS_RUNTIME"
+        "XKEEN_WS_RUNTIME",
+        "XKEEN_XRAY_CONFIGS_DIR",
+        "XKEEN_XRAY_INBOUNDS_FILE",
+        "XKEEN_XRAY_OUTBOUNDS_FILE",
+        "XKEEN_XRAY_ROUTING_FILE"
       ],
       "removable": false
     },
@@ -1764,7 +1773,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_registry.py",
-      "size_bytes": 28034,
+      "size_bytes": 32493,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2150,7 +2159,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xkeen.py",
-      "size_bytes": 8655,
+      "size_bytes": 8865,
       "depends_on": [
         "tool.terminal",
         "engine.mihomo"
@@ -3807,7 +3816,25 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_stage0_inventory.py",
-      "size_bytes": 6439,
+      "size_bytes": 6479,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_module_backend_gates.py",
+      "size_bytes": 6313,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3825,7 +3852,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_capabilities.py",
-      "size_bytes": 6532,
+      "size_bytes": 6572,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3843,7 +3870,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_registry.py",
-      "size_bytes": 9110,
+      "size_bytes": 10161,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5647,7 +5674,7 @@
       "module_id": "core",
       "kind": "frontend_entrypoint",
       "path": "xkeen-ui/static/js/pages/panel.entry.js",
-      "size_bytes": 623,
+      "size_bytes": 934,
       "depends_on": [
         "engine.mihomo"
       ],
@@ -9943,7 +9970,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_clash_routes.py",
-      "size_bytes": 61462,
+      "size_bytes": 61845,
       "depends_on": [
         "core",
         "tool.editor"
@@ -25024,31 +25051,31 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 18,
+        "unit_count": 17,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/services/amnezia_premium.py",
-          "xkeen-ui/services/capabilities.py",
           "xkeen-ui/services/dns_service_lifecycle.py",
           "xkeen-ui/services/memory_guard.py",
-          "xkeen-ui/services/xkeen.py"
+          "xkeen-ui/services/xkeen.py",
+          "tests/test_amnezia_premium.py"
         ]
       },
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 35,
+        "unit_count": 34,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/routes/mobile.py",
           "xkeen-ui/routes/ws_streams.py",
-          "xkeen-ui/services/capabilities.py",
           "xkeen-ui/services/config_exchange_local.py",
-          "xkeen-ui/services/cores.py"
+          "xkeen-ui/services/cores.py",
+          "xkeen-ui/services/memory_guard.py"
         ]
       },
       {
@@ -25509,31 +25536,31 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 15,
+        "unit_count": 14,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/services/amnezia_premium.py",
-          "xkeen-ui/services/capabilities.py",
           "xkeen-ui/services/dns_service_lifecycle.py",
           "xkeen-ui/services/memory_guard.py",
-          "xkeen-ui/services/xkeen.py"
+          "xkeen-ui/services/xkeen.py",
+          "xkeen-ui/static/js/pages/panel.entry.js"
         ]
       },
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 26,
+        "unit_count": 25,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/routes/mobile.py",
           "xkeen-ui/routes/ws_streams.py",
-          "xkeen-ui/services/capabilities.py",
           "xkeen-ui/services/config_exchange_local.py",
-          "xkeen-ui/services/cores.py"
+          "xkeen-ui/services/cores.py",
+          "xkeen-ui/services/memory_guard.py"
         ]
       },
       {
@@ -25987,31 +26014,31 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 15,
+        "unit_count": 14,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/services/amnezia_premium.py",
-          "xkeen-ui/services/capabilities.py",
           "xkeen-ui/services/dns_service_lifecycle.py",
           "xkeen-ui/services/memory_guard.py",
-          "xkeen-ui/services/xkeen.py"
+          "xkeen-ui/services/xkeen.py",
+          "xkeen-ui/static/js/pages/panel.entry.js"
         ]
       },
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 26,
+        "unit_count": 25,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/routes/mobile.py",
           "xkeen-ui/routes/ws_streams.py",
-          "xkeen-ui/services/capabilities.py",
           "xkeen-ui/services/config_exchange_local.py",
-          "xkeen-ui/services/cores.py"
+          "xkeen-ui/services/cores.py",
+          "xkeen-ui/services/memory_guard.py"
         ]
       },
       {
@@ -26095,31 +26122,31 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 18,
+        "unit_count": 17,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/services/amnezia_premium.py",
-          "xkeen-ui/services/capabilities.py",
           "xkeen-ui/services/dns_service_lifecycle.py",
           "xkeen-ui/services/memory_guard.py",
-          "xkeen-ui/services/xkeen.py"
+          "xkeen-ui/services/xkeen.py",
+          "tests/test_amnezia_premium.py"
         ]
       },
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 35,
+        "unit_count": 34,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/routes/mobile.py",
           "xkeen-ui/routes/ws_streams.py",
-          "xkeen-ui/services/capabilities.py",
           "xkeen-ui/services/config_exchange_local.py",
-          "xkeen-ui/services/cores.py"
+          "xkeen-ui/services/cores.py",
+          "xkeen-ui/services/memory_guard.py"
         ]
       },
       {
@@ -26233,7 +26260,7 @@
           }
         ]
       },
-      "next_stage": "Этап 3: применить registry как backend gates."
+      "next_stage": "Этап 4: разделить frontend shell и экраны."
     },
     {
       "id": "mihomo-startup-is-eager",
@@ -26270,31 +26297,31 @@
         {
           "from": "core",
           "to": "engine.mihomo",
-          "unit_count": 15,
+          "unit_count": 14,
           "examples": [
             "xkeen-ui/app_factory.py",
             "xkeen-ui/run_server.py",
             "xkeen-ui/routes/__init__.py",
             "xkeen-ui/services/amnezia_premium.py",
-            "xkeen-ui/services/capabilities.py",
             "xkeen-ui/services/dns_service_lifecycle.py",
             "xkeen-ui/services/memory_guard.py",
-            "xkeen-ui/services/xkeen.py"
+            "xkeen-ui/services/xkeen.py",
+            "xkeen-ui/static/js/pages/panel.entry.js"
           ]
         },
         {
           "from": "core",
           "to": "engine.xray",
-          "unit_count": 26,
+          "unit_count": 25,
           "examples": [
             "xkeen-ui/app.py",
             "xkeen-ui/app_factory.py",
             "xkeen-ui/routes/__init__.py",
             "xkeen-ui/routes/mobile.py",
             "xkeen-ui/routes/ws_streams.py",
-            "xkeen-ui/services/capabilities.py",
             "xkeen-ui/services/config_exchange_local.py",
-            "xkeen-ui/services/cores.py"
+            "xkeen-ui/services/cores.py",
+            "xkeen-ui/services/memory_guard.py"
           ]
         },
         {
@@ -26374,7 +26401,7 @@
           ]
         }
       ],
-      "next_stage": "Этап 3: заменить прямые связи registry hooks."
+      "next_stage": "Этапы 4/5: сохранить frontend module boundaries."
     },
     {
       "id": "frontend-split-is-useful-baseline",
@@ -26415,7 +26442,7 @@
           "size_bytes": 617690
         }
       },
-      "next_stage": "Этапы 3, 4 и 6."
+      "next_stage": "Этапы 4, 5 и 6."
     }
   ]
 }

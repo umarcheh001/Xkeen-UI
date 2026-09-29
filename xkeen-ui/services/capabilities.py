@@ -19,11 +19,8 @@ import sys
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 
 from core.paths import UI_STATE_DIR, BASE_ETC_DIR, BASE_VAR_DIR
-from core.mihomo_paths import init_mihomo_paths
-from mihomo_server_core import CONFIG_PATH
 from services.logging_setup import get_log_dir
 from services.xkeen_commands_catalog import get_full_shell_policy
-from services.xray_config_files import ROUTING_FILE, INBOUNDS_FILE, OUTBOUNDS_FILE, XRAY_CONFIGS_DIR
 
 if TYPE_CHECKING:
     from services.module_registry import ModuleRegistry
@@ -330,7 +327,19 @@ def detect_capabilities(
     default_log_dir = os.path.join(str(BASE_VAR_DIR), "log", "xkeen-ui")
     ui_log_dir = get_log_dir(default_log_dir)
 
-    mihomo_config_file, mihomo_root_dir, _tmpl_dir, _default_tmpl = init_mihomo_paths(CONFIG_PATH)
+    # Do not import Mihomo runtime merely to describe paths: this endpoint is
+    # also used by Xray-only installations.  The runtime owns a compatible
+    # default rooted at MIHOMO_ROOT when the module is enabled.
+    mihomo_root_dir = str(
+        env.get("MIHOMO_ROOT")
+        or os.environ.get("MIHOMO_ROOT")
+        or os.path.join(str(BASE_ETC_DIR), "mihomo")
+    )
+    mihomo_config_file = str(
+        env.get("MIHOMO_CONFIG_FILE")
+        or os.environ.get("MIHOMO_CONFIG_FILE")
+        or os.path.join(mihomo_root_dir, "config.yaml")
+    )
 
     runtime = {
         "mode": rt_mode,
@@ -346,10 +355,21 @@ def detect_capabilities(
 
     restart_log_file = env.get("XKEEN_RESTART_LOG_FILE") or os.path.join(UI_STATE_DIR, "restart.log")
 
+    xray_configs_dir = str(
+        env.get("XKEEN_XRAY_CONFIGS_DIR")
+        or os.environ.get("XKEEN_XRAY_CONFIGS_DIR")
+        or os.path.join(str(BASE_ETC_DIR), "xray", "configs")
+    )
     files = {
-        "routing": ROUTING_FILE,
-        "inbounds": INBOUNDS_FILE,
-        "outbounds": OUTBOUNDS_FILE,
+        "routing": env.get("XKEEN_XRAY_ROUTING_FILE")
+        or os.environ.get("XKEEN_XRAY_ROUTING_FILE")
+        or os.path.join(xray_configs_dir, "05_routing.json"),
+        "inbounds": env.get("XKEEN_XRAY_INBOUNDS_FILE")
+        or os.environ.get("XKEEN_XRAY_INBOUNDS_FILE")
+        or os.path.join(xray_configs_dir, "03_inbounds.json"),
+        "outbounds": env.get("XKEEN_XRAY_OUTBOUNDS_FILE")
+        or os.environ.get("XKEEN_XRAY_OUTBOUNDS_FILE")
+        or os.path.join(xray_configs_dir, "04_outbounds.json"),
         "mihomo": mihomo_config_file,
         "restart_log": restart_log_file,
     }

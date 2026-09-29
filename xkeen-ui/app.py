@@ -60,6 +60,7 @@ def set_ws_runtime(enabled: bool = True) -> None:
 from app_factory import create_app
 
 app = create_app(ws_runtime=WS_RUNTIME)
+_ACTIVE_MODULES = set(app.extensions.get("xkeen.module_activation", {}).get("active_module_ids", []))
 
 
 # ----------------------------
@@ -68,12 +69,28 @@ app = create_app(ws_runtime=WS_RUNTIME)
 
 from services.ws_debug import ws_debug  # noqa: E402
 from services.ws_tokens import WS_TOKEN_SCOPES, validate_ws_token  # noqa: E402
-from services.xray_log_api import (  # noqa: E402
-    resolve_xray_log_path_for_ws as _resolve_xray_log_path_for_ws,
-    tail_lines,
-    adjust_log_timezone,
-)
-from services.command_jobs import get_command_job as _get_command_job  # noqa: E402
+if "engine.xray" in _ACTIVE_MODULES:
+    from services.xray_log_api import (  # noqa: E402
+        resolve_xray_log_path_for_ws as _resolve_xray_log_path_for_ws,
+        tail_lines,
+        adjust_log_timezone,
+    )
+else:
+    def _resolve_xray_log_path_for_ws(*_args, **_kwargs):
+        return ""
+
+    def tail_lines(*_args, **_kwargs):
+        return []
+
+    def adjust_log_timezone(value, *_args, **_kwargs):
+        return value
+
+
+if "tool.terminal" in _ACTIVE_MODULES:
+    from services.command_jobs import get_command_job as _get_command_job  # noqa: E402
+else:
+    def _get_command_job(*_args, **_kwargs):
+        return None
 from services.events import EVENT_SUBSCRIBERS, subscribe as _subscribe_ws, unsubscribe as _unsubscribe_ws  # noqa: E402
 
 

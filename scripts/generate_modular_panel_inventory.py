@@ -120,6 +120,7 @@ WORKTREE_MODULAR_PANEL_PATHS = frozenset(
         "xkeen-ui/services/module_registry.py",
         "tests/test_module_registry.py",
         "tests/test_module_capabilities.py",
+        "tests/test_module_backend_gates.py",
     }
 )
 
@@ -1118,7 +1119,7 @@ class ModularPanelInventoryGenerator:
                         if item["current_gate"] != "always"
                     ],
                 },
-                "next_stage": "Этап 3: применить registry как backend gates.",
+                "next_stage": "Этап 4: разделить frontend shell и экраны.",
             },
             {
                 "id": "mihomo-startup-is-eager",
@@ -1146,7 +1147,7 @@ class ModularPanelInventoryGenerator:
                 "severity": "high",
                 "summary": "Core сейчас импортирует код будущих отключаемых модулей.",
                 "evidence": coupling["core_to_optional_edges"],
-                "next_stage": "Этап 3: заменить прямые связи registry hooks.",
+                "next_stage": "Этапы 4/5: сохранить frontend module boundaries.",
             },
             {
                 "id": "frontend-split-is-useful-baseline",
@@ -1171,7 +1172,7 @@ class ModularPanelInventoryGenerator:
                         "tool.advanced-diagnostics",
                     )
                 },
-                "next_stage": "Этапы 3, 4 и 6.",
+                "next_stage": "Этапы 4, 5 и 6.",
             },
         ]
 
@@ -1324,7 +1325,7 @@ class ModularPanelInventoryGenerator:
                 "- выявлены current gates и cross-module coupling;",
                 "- snapshot защищён тестом на синхронность с генератором.",
                 "",
-                "Следующий этап: **Этап 3 — Backend gates**.",
+                "Следующий этап: **Этап 4 — разделение frontend shell и экранов**.",
                 "",
             ]
         )

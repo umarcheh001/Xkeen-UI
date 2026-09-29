@@ -25,7 +25,57 @@ def _parse_sections_whitelist(raw: str | None) -> set[str] | None:
     }
 
 
-def _detect_panel_core_ui() -> dict[str, object]:
+def _detect_panel_core_ui(active_module_ids: set[str] | None = None) -> dict[str, object]:
+    """Build panel visibility from runtime-gated modules when supplied."""
+
+    if active_module_ids is not None:
+        has_xray = "engine.xray" in active_module_ids
+        has_mihomo = "engine.mihomo" in active_module_ids
+        has_terminal = "tool.terminal" in active_module_ids
+        has_files = "tool.files" in active_module_ids
+        has_diagnostics = "tool.advanced-diagnostics" in active_module_ids
+        available_cores = [
+            core
+            for core, module_id in (("xray", "engine.xray"), ("mihomo", "engine.mihomo"))
+            if module_id in active_module_ids
+        ]
+        supported_sections: list[str] = []
+        if has_xray:
+            supported_sections.extend(["routing", "xray-logs"])
+        if has_mihomo:
+            supported_sections.extend(["mihomo", "mihomo-generator"])
+        supported_sections.append("xkeen")
+        if has_terminal:
+            supported_sections.append("commands")
+        if has_files:
+            supported_sections.append("files")
+        if has_diagnostics:
+            supported_sections.append("devtools")
+        supported_sections.append("donate")
+
+        requested_sections = _parse_sections_whitelist(
+            os.environ.get("XKEEN_UI_PANEL_SECTIONS_WHITELIST")
+        )
+        effective_sections = (
+            supported_sections
+            if requested_sections is None
+            else [section for section in supported_sections if section in requested_sections]
+        )
+        if not effective_sections:
+            effective_sections = supported_sections
+        return {
+            "available_cores": available_cores,
+            "detected_cores": available_cores,
+            "core_ui_fallback": False,
+            "has_xray": has_xray,
+            "has_mihomo": has_mihomo,
+            "has_terminal": has_terminal,
+            "has_files": has_files,
+            "has_diagnostics": has_diagnostics,
+            "multi_core": len(available_cores) > 1,
+            "panel_sections_whitelist": ",".join(effective_sections) if effective_sections else "__none__",
+        }
+
     detected_cores = list(detect_available_cores())
     available_cores = list(detected_cores)
     core_ui_fallback = False
@@ -65,6 +115,9 @@ def _detect_panel_core_ui() -> dict[str, object]:
         "core_ui_fallback": core_ui_fallback,
         "has_xray": has_xray,
         "has_mihomo": has_mihomo,
+        "has_terminal": True,
+        "has_files": True,
+        "has_diagnostics": True,
         "multi_core": len(available_cores) > 1,
         "panel_sections_whitelist": ",".join(effective_sections) if effective_sections else "__none__",
     }
@@ -87,6 +140,7 @@ def _no_cache(resp):
 def register_pages_routes(
     app: Flask,
     *,
+    module_activation: dict[str, object] | None = None,
     ROUTING_FILE: str,
     MIHOMO_CONFIG_FILE: str,
     INBOUNDS_FILE: str,
@@ -97,6 +151,11 @@ def register_pages_routes(
 ) -> None:
     """Register UI page routes on the app."""
 
+    active_module_ids = (
+        {str(module_id) for module_id in module_activation.get("active_module_ids", [])}
+        if isinstance(module_activation, dict)
+        else None
+    )
 
     @app.get("/")
     def index():
@@ -124,7 +183,7 @@ def register_pages_routes(
         except Exception:
             _fm_right_default = "/tmp/mnt"
 
-        _core_ui = _detect_panel_core_ui()
+        _core_ui = _detect_panel_core_ui(active_module_ids)
         page_ctx = {
             "machine": _machine,
             "is_mips": _is_mips,
@@ -161,20 +220,22 @@ def register_pages_routes(
         except Exception:
             return render_template("xkeen.html")
 
-    @app.get("/mihomo_generator")
-    def mihomo_generator_page():
-        if not _detect_panel_core_ui().get("has_mihomo"):
-            return redirect(url_for("index"))
-        try:
-            return _no_cache(make_response(render_template("mihomo_generator.html")))
-        except Exception:
-            return render_template("mihomo_generator.html")
+    if active_module_ids is None or "engine.mihomo" in active_module_ids:
 
-    @app.get("/devtools")
-    def devtools_page():
-        # Avoid stale cached HTML holding on to old static asset versions
-        try:
-            resp = make_response(render_template("devtools.html"))
-            return _no_cache(resp)
-        except Exception:
-            return render_template("devtools.html")
+        @app.get("/mihomo_generator")
+        def mihomo_generator_page():
+            try:
+                return _no_cache(make_response(render_template("mihomo_generator.html")))
+            except Exception:
+                return render_template("mihomo_generator.html")
+
+    if active_module_ids is None or "tool.advanced-diagnostics" in active_module_ids:
+
+        @app.get("/devtools")
+        def devtools_page():
+            # Avoid stale cached HTML holding on to old static asset versions
+            try:
+                resp = make_response(render_template("devtools.html"))
+                return _no_cache(resp)
+            except Exception:
+                return render_template("devtools.html")

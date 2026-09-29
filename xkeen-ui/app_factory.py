@@ -222,6 +222,56 @@ def _init_xray_startup_migrations(*, base_etc_dir: str, base_var_dir: str, ui_st
     }
 
 
+def _inactive_xray_context(*, base_etc_dir: str, base_var_dir: str, ui_state_dir: str) -> Dict[str, Any]:
+    """Provide inert path/callback values without importing Xray services."""
+
+    try:
+        log_tz_offset = int(os.environ.get("XKEEN_XRAY_LOG_TZ_OFFSET", "3") or "3")
+    except (TypeError, ValueError):
+        log_tz_offset = 3
+
+    configs_dir = os.environ.get(
+        "XKEEN_XRAY_CONFIGS_DIR",
+        os.path.join(base_etc_dir, "xray", "configs"),
+    )
+    jsonc_dir = os.environ.get("XKEEN_XRAY_JSONC_DIR", os.path.join(ui_state_dir, "xray-jsonc"))
+    routing_file = os.environ.get(
+        "XKEEN_XRAY_ROUTING_FILE",
+        os.path.join(configs_dir, "05_routing.json"),
+    )
+    return {
+        "XRAY_CONFIGS_DIR": configs_dir,
+        "XRAY_CONFIGS_DIR_REAL": os.path.realpath(configs_dir),
+        "XRAY_JSONC_DIR_REAL": os.path.realpath(jsonc_dir),
+        "ROUTING_FILE": routing_file,
+        "ROUTING_FILE_RAW": os.environ.get(
+            "XKEEN_XRAY_ROUTING_FILE_RAW",
+            os.path.join(jsonc_dir, os.path.basename(routing_file) + ".jsonc"),
+        ),
+        "INBOUNDS_FILE": os.environ.get(
+            "XKEEN_XRAY_INBOUNDS_FILE",
+            os.path.join(configs_dir, "03_inbounds.json"),
+        ),
+        "OUTBOUNDS_FILE": os.environ.get(
+            "XKEEN_XRAY_OUTBOUNDS_FILE",
+            os.path.join(configs_dir, "04_outbounds.json"),
+        ),
+        "BACKUP_DIR": os.path.join(configs_dir, "backups"),
+        "BACKUP_DIR_REAL": os.path.realpath(os.path.join(configs_dir, "backups")),
+        "snapshot_xray_config_before_overwrite": lambda *_args, **_kwargs: None,
+        "is_history_backup_filename": lambda _name: False,
+        "XKEEN_RESTART_CMD": [str(os.environ.get("XKEEN_BIN", "xkeen")), "-restart"],
+        "RESTART_LOG_FILE": os.environ.get(
+            "XKEEN_RESTART_LOG_FILE",
+            os.path.join(ui_state_dir, "restart.log"),
+        ),
+        "XRAY_LOG_CONFIG_FILE": os.path.join(base_etc_dir, "xray", "configs", "01_log.json"),
+        "XRAY_ACCESS_LOG": os.path.join(base_var_dir, "log", "xray", "access.log"),
+        "XRAY_ERROR_LOG": os.path.join(base_var_dir, "log", "xray", "error.log"),
+        "XRAY_LOG_TZ_OFFSET_HOURS": log_tz_offset,
+    }
+
+
 def _create_flask_app():
     from flask import Flask
     from routes.ui_assets import (
@@ -285,6 +335,7 @@ def _init_auth_and_pages(
     app,
     *,
     ui_state_dir: str,
+    module_activation: Dict[str, Any],
     routing_file: str,
     mihomo_config_file: str,
     inbounds_file: str,
@@ -297,18 +348,25 @@ def _init_auth_and_pages(
 
     init_auth(app)
 
-    from services import devtools as _svc_devtools
     from routes.ui_assets import init_ui_assets_helpers, register_ui_assets_routes
     from routes.auth import register_auth_routes
-    from routes.mobile import register_mobile_routes
     from routes.pages import register_pages_routes
+
+    if "tool.advanced-diagnostics" in set(module_activation.get("active_module_ids", [])):
+        from services import devtools as _svc_devtools
+    else:
+        _svc_devtools = False
 
     init_ui_assets_helpers(app)
     register_ui_assets_routes(app, UI_STATE_DIR=ui_state_dir, devtools_service=_svc_devtools)
     register_auth_routes(app)
-    register_mobile_routes(app)
+    if "engine.xray" in set(module_activation.get("active_module_ids", [])):
+        from routes.mobile import register_mobile_routes
+
+        register_mobile_routes(app)
     register_pages_routes(
         app,
+        module_activation=module_activation,
         ROUTING_FILE=routing_file,
         MIHOMO_CONFIG_FILE=mihomo_config_file,
         INBOUNDS_FILE=inbounds_file,
@@ -403,9 +461,6 @@ def create_app(*, ws_runtime: bool = False):
     # Local imports to reduce side-effects on module import.
     settings, env = _init_settings_and_logging(ws_runtime=ws_runtime)
 
-    # Importing mihomo_server_core can be early; do it after logging is ready so best-effort
-    # failures leave a trace.
-    CONFIG_PATH = _ensure_runtime_env()
     UI_STATE_DIR = env["UI_STATE_DIR"]
     BASE_ETC_DIR = env["BASE_ETC_DIR"]
     BASE_VAR_DIR = env["BASE_VAR_DIR"]
@@ -432,6 +487,17 @@ def create_app(*, ws_runtime: bool = False):
         except Exception:
             pass
 
+    module_activation = module_registry.runtime_activation()
+    module_registry.set_runtime_activation(module_activation)
+    active_modules = set(module_activation.get("active_module_ids", []))
+
+    # Do not bootstrap/import Mihomo runtime for a disabled engine.
+    if "engine.mihomo" in active_modules:
+        CONFIG_PATH = _ensure_runtime_env()
+    else:
+        mihomo_root = os.environ.get("MIHOMO_ROOT", os.path.join(BASE_ETC_DIR, "mihomo"))
+        CONFIG_PATH = os.path.join(mihomo_root, "config.yaml")
+
     _cleanup_legacy_global_theme_files(ui_state_dir=UI_STATE_DIR)
 
     try:
@@ -439,10 +505,18 @@ def create_app(*, ws_runtime: bool = False):
     except Exception:  # noqa: BLE001 - diagnostics must never block startup
         pass
 
-    xray_ctx = _init_xray_startup_migrations(
-        base_etc_dir=BASE_ETC_DIR,
-        base_var_dir=BASE_VAR_DIR,
-        ui_state_dir=UI_STATE_DIR,
+    xray_ctx = (
+        _init_xray_startup_migrations(
+            base_etc_dir=BASE_ETC_DIR,
+            base_var_dir=BASE_VAR_DIR,
+            ui_state_dir=UI_STATE_DIR,
+        )
+        if "engine.xray" in active_modules
+        else _inactive_xray_context(
+            base_etc_dir=BASE_ETC_DIR,
+            base_var_dir=BASE_VAR_DIR,
+            ui_state_dir=UI_STATE_DIR,
+        )
     )
 
     XRAY_CONFIGS_DIR = xray_ctx["XRAY_CONFIGS_DIR"]
@@ -463,11 +537,20 @@ def create_app(*, ws_runtime: bool = False):
     XRAY_ERROR_LOG = xray_ctx["XRAY_ERROR_LOG"]
     XRAY_LOG_TZ_OFFSET_HOURS = xray_ctx["XRAY_LOG_TZ_OFFSET_HOURS"]
 
-    from core.mihomo_paths import init_mihomo_paths
+    if "engine.mihomo" in active_modules:
+        from core.mihomo_paths import init_mihomo_paths
 
-    MIHOMO_CONFIG_FILE, MIHOMO_ROOT_DIR, MIHOMO_TEMPLATES_DIR, MIHOMO_DEFAULT_TEMPLATE = (
-        init_mihomo_paths(CONFIG_PATH)
-    )
+        MIHOMO_CONFIG_FILE, MIHOMO_ROOT_DIR, MIHOMO_TEMPLATES_DIR, MIHOMO_DEFAULT_TEMPLATE = (
+            init_mihomo_paths(CONFIG_PATH)
+        )
+    else:
+        MIHOMO_CONFIG_FILE = CONFIG_PATH
+        MIHOMO_ROOT_DIR = os.path.dirname(CONFIG_PATH)
+        MIHOMO_TEMPLATES_DIR = os.environ.get(
+            "MIHOMO_TEMPLATES_DIR",
+            os.path.join(MIHOMO_ROOT_DIR, "templates"),
+        )
+        MIHOMO_DEFAULT_TEMPLATE = os.path.join(MIHOMO_TEMPLATES_DIR, "custom.yaml")
 
     from services.xkeen_lists import PORT_PROXYING_FILE
 
@@ -482,33 +565,40 @@ def create_app(*, ws_runtime: bool = False):
         "XKEEN_GITHUB_REPO_URL", f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}"
     )
 
-    # -------- Command catalog + background jobs
-    from services.xkeen_commands_catalog import COMMAND_GROUPS
+    # Command catalog is terminal-owned and is not imported for profiles where
+    # the terminal module is disabled.
+    if "tool.terminal" in active_modules:
+        from services.xkeen_commands_catalog import COMMAND_GROUPS
+    else:
+        COMMAND_GROUPS = []
 
     # -------- Core utilities
     from utils.jsonc import strip_json_comments_text
     from utils.jsonio import load_json, save_json
 
-    # Bind Xray log helpers (cache + config) for WS and UI.
-    from services.xray_log_api import init_xray_log_api
+    if "engine.xray" in active_modules:
+        # Bind Xray log helpers (cache + config) only with the Xray module.
+        from services.xray_log_api import init_xray_log_api
 
-    init_xray_log_api(
-        load_json,
-        save_json,
-        XRAY_LOG_CONFIG_FILE,
-        XRAY_ACCESS_LOG,
-        XRAY_ERROR_LOG,
-        tz_offset_hours=XRAY_LOG_TZ_OFFSET_HOURS,
-    )
+        init_xray_log_api(
+            load_json,
+            save_json,
+            XRAY_LOG_CONFIG_FILE,
+            XRAY_ACCESS_LOG,
+            XRAY_ERROR_LOG,
+            tz_offset_hours=XRAY_LOG_TZ_OFFSET_HOURS,
+        )
 
     # -------- Flask app
     app = _create_flask_app()
     app.extensions["xkeen.module_registry"] = module_registry
+    app.extensions["xkeen.module_activation"] = module_activation
     _register_favicon(app)
 
     _init_auth_and_pages(
         app,
         ui_state_dir=UI_STATE_DIR,
+        module_activation=module_activation,
         routing_file=ROUTING_FILE,
         mihomo_config_file=MIHOMO_CONFIG_FILE,
         inbounds_file=INBOUNDS_FILE,
@@ -536,7 +626,10 @@ def create_app(*, ws_runtime: bool = False):
         read_operation_diagnostic as _svc_read_operation_diagnostic,
         save_operation_diagnostic as _svc_save_operation_diagnostic,
     )
-    from services.xray import restart_xray_core as _svc_restart_xray_core
+    if "engine.xray" in active_modules:
+        from services.xray import restart_xray_core as _svc_restart_xray_core
+    else:
+        _svc_restart_xray_core = None
 
     def append_restart_log(ok, source: str = "api", **meta):
         return _svc_append_restart_log(RESTART_LOG_FILE, ok, source=source, **meta)
@@ -560,6 +653,8 @@ def create_app(*, ws_runtime: bool = False):
         return _svc_restart_xkeen(XKEEN_RESTART_CMD, RESTART_LOG_FILE, source=source)
 
     def restart_xray_core(**kwargs) -> tuple[bool, str]:
+        if _svc_restart_xray_core is None:
+            return False, "module_not_enabled"
         try:
             return _svc_restart_xray_core(**kwargs)
         except Exception as e:  # noqa: BLE001
@@ -643,6 +738,7 @@ def create_app(*, ws_runtime: bool = False):
         settings=settings,
         logger=core_logger(),
         module_registry=module_registry,
+        module_activation=module_activation,
         ui_state_dir=UI_STATE_DIR,
         github_owner=GITHUB_OWNER,
         github_repo=GITHUB_REPO,
@@ -676,133 +772,172 @@ def create_app(*, ws_runtime: bool = False):
         restart_xray_core=restart_xray_core,
     )
 
-    from routes.mobile import configure_mobile_routing_service
-    from routes.routing.config import _run_xray_preflight
-    from services.mobile_routing import MobileRoutingService
-    from services.routing.templates import _paths_for_routing
+    if "engine.xray" in active_modules:
+        from routes.mobile import configure_mobile_routing_service
+        from routes.routing.config import _run_xray_preflight
+        from services.mobile_routing import MobileRoutingService
+        from services.routing.templates import _paths_for_routing
 
-    configure_mobile_routing_service(
-        app,
-        MobileRoutingService(
-            ui_state_dir=UI_STATE_DIR,
-            routing_file=ROUTING_FILE,
-            routing_file_raw=ROUTING_FILE_RAW,
-            xray_configs_dir=XRAY_CONFIGS_DIR,
-            xray_configs_dir_real=XRAY_CONFIGS_DIR_REAL,
-            paths_for_routing=_paths_for_routing,
-            run_preflight=_run_xray_preflight,
-            snapshot_before_overwrite=snapshot_xray_config_before_overwrite,
-            restart_xkeen=restart_xkeen,
-        ),
-    )
+        configure_mobile_routing_service(
+            app,
+            MobileRoutingService(
+                ui_state_dir=UI_STATE_DIR,
+                routing_file=ROUTING_FILE,
+                routing_file_raw=ROUTING_FILE_RAW,
+                xray_configs_dir=XRAY_CONFIGS_DIR,
+                xray_configs_dir_real=XRAY_CONFIGS_DIR_REAL,
+                paths_for_routing=_paths_for_routing,
+                run_preflight=_run_xray_preflight,
+                snapshot_before_overwrite=snapshot_xray_config_before_overwrite,
+                restart_xkeen=restart_xkeen,
+            ),
+        )
 
     _register_api_blueprints(app, ctx)
 
-    try:
-        from services.xray_subscriptions import start_subscription_scheduler
+    if "engine.xray" in active_modules:
+        try:
+            from services.xray_subscriptions import start_subscription_scheduler
 
-        start_subscription_scheduler(
-            UI_STATE_DIR,
-            xray_configs_dir=XRAY_CONFIGS_DIR,
-            snapshot=snapshot_xray_config_before_overwrite,
-            restart_xkeen=restart_xkeen,
+            start_subscription_scheduler(
+                UI_STATE_DIR,
+                xray_configs_dir=XRAY_CONFIGS_DIR,
+                snapshot=snapshot_xray_config_before_overwrite,
+                restart_xkeen=restart_xkeen,
+            )
+        except Exception as e:  # noqa: BLE001
+            try:
+                from core.logging import core_log_once
+
+                core_log_once(
+                    "warning",
+                    "xray_subscriptions_scheduler_failed",
+                    "xray subscriptions scheduler init failed (non-fatal)",
+                    error=str(e),
+                )
+            except Exception:
+                pass
+
+    if "engine.mihomo" in active_modules:
+        try:
+            from mihomo_server_core import save_config as _mihomo_save_config
+            from services.mihomo_subscriptions import start_subscription_scheduler as start_mihomo_subscription_scheduler
+
+            start_mihomo_subscription_scheduler(
+                UI_STATE_DIR,
+                mihomo_config_file=MIHOMO_CONFIG_FILE,
+                restart_xkeen=restart_xkeen,
+                save_callback=_mihomo_save_config,
+            )
+        except Exception as e:  # noqa: BLE001
+            try:
+                from core.logging import core_log_once
+
+                core_log_once(
+                    "warning",
+                    "mihomo_subscriptions_scheduler_failed",
+                    "mihomo subscriptions scheduler init failed (non-fatal)",
+                    error=str(e),
+                )
+            except Exception:
+                pass
+
+    if "engine.xray" in active_modules:
+        try:
+            from services.dns_over_vless import migrate_managed_fragment
+
+            # Ahead of the guard on purpose: a fragment still written the way the
+            # core dropped in 26.9 keeps Xray from starting at all, and a core that
+            # is down leaves the panel refusing every action -- the owner can then
+            # neither switch the feature off nor on.  Corrected here, the restart
+            # the guard is about to attempt brings the core back instead of ending
+            # in the release that hands DNS back and leaves the feature off.
+            repaired = migrate_managed_fragment(configs_dir=XRAY_CONFIGS_DIR)
+            if repaired.get("action") == "migrated":
+                from core.logging import core_log_once
+
+                core_log_once(
+                    "info",
+                    "dns_over_vless_fragment_migrated",
+                    "DNS-over-VLESS fragment rewritten to the form current cores accept",
+                    node=str(repaired.get("node") or ""),
+                )
+        except Exception as e:  # noqa: BLE001
+            try:
+                from core.logging import core_log_once
+
+                core_log_once(
+                    "warning",
+                    "dns_over_vless_migration_failed",
+                    "dns-over-vless fragment migration failed (non-fatal)",
+                    error=str(e),
+                )
+            except Exception:
+                pass
+
+    if "engine.xray" in active_modules:
+        try:
+            from services.dns_guard import start_guard as start_dns_guard
+
+            # One guard for both assistants: whichever of them currently owns port
+            # 53, it is the same LAN that loses DNS when the core stops answering.
+            try:
+                from mihomo_server_core import save_config as _dns_guard_save_mihomo
+            except Exception:
+                _dns_guard_save_mihomo = None
+
+            start_dns_guard(
+                configs_dir=XRAY_CONFIGS_DIR,
+                routing_file=ROUTING_FILE,
+                ui_state_dir=UI_STATE_DIR,
+                mihomo_config_file=MIHOMO_CONFIG_FILE,
+                save_mihomo_config=_dns_guard_save_mihomo,
+                restart_xkeen=restart_xkeen,
+                audit=append_restart_log,
+            )
+        except Exception as e:  # noqa: BLE001
+            try:
+                from core.logging import core_log_once
+
+                core_log_once(
+                    "warning",
+                    "dns_guard_failed",
+                    "dns guard init failed (non-fatal)",
+                    error=str(e),
+                )
+            except Exception:
+                pass
+
+    try:
+        background_tasks = [
+            {
+                "id": task_id,
+                "module_id": module_id,
+                "status": "active" if module_id in active_modules else "gated",
+            }
+            for task_id, module_id in (
+                ("xray.subscription_scheduler", "engine.xray"),
+                ("xray.dns_guard", "engine.xray"),
+                ("mihomo.subscription_scheduler", "engine.mihomo"),
+                ("terminal.pty_cleanup", "tool.terminal"),
+                ("files.worker_queue", "tool.files"),
+                ("mihomo.clash_telemetry_workers", "engine.mihomo"),
+            )
+        ]
+        diagnostic = module_registry.write_runtime_diagnostic(
+            module_activation,
+            registered_blueprints=list(app.blueprints),
+            background_tasks=background_tasks,
         )
-    except Exception as e:  # noqa: BLE001
+        app.extensions["xkeen.module_runtime_diagnostic"] = diagnostic
+    except Exception as exc:  # noqa: BLE001 - diagnostics must never block startup
         try:
-            from core.logging import core_log_once
+            from core.logging import core_warn_budget
 
-            core_log_once(
-                "warning",
-                "xray_subscriptions_scheduler_failed",
-                "xray subscriptions scheduler init failed (non-fatal)",
-                error=str(e),
-            )
-        except Exception:
-            pass
-
-    try:
-        from mihomo_server_core import save_config as _mihomo_save_config
-        from services.mihomo_subscriptions import start_subscription_scheduler as start_mihomo_subscription_scheduler
-
-        start_mihomo_subscription_scheduler(
-            UI_STATE_DIR,
-            mihomo_config_file=MIHOMO_CONFIG_FILE,
-            restart_xkeen=restart_xkeen,
-            save_callback=_mihomo_save_config,
-        )
-    except Exception as e:  # noqa: BLE001
-        try:
-            from core.logging import core_log_once
-
-            core_log_once(
-                "warning",
-                "mihomo_subscriptions_scheduler_failed",
-                "mihomo subscriptions scheduler init failed (non-fatal)",
-                error=str(e),
-            )
-        except Exception:
-            pass
-
-    try:
-        from services.dns_over_vless import migrate_managed_fragment
-
-        # Ahead of the guard on purpose: a fragment still written the way the
-        # core dropped in 26.9 keeps Xray from starting at all, and a core that
-        # is down leaves the panel refusing every action -- the owner can then
-        # neither switch the feature off nor on.  Corrected here, the restart
-        # the guard is about to attempt brings the core back instead of ending
-        # in the release that hands DNS back and leaves the feature off.
-        repaired = migrate_managed_fragment(configs_dir=XRAY_CONFIGS_DIR)
-        if repaired.get("action") == "migrated":
-            from core.logging import core_log_once
-
-            core_log_once(
-                "info",
-                "dns_over_vless_fragment_migrated",
-                "DNS-over-VLESS fragment rewritten to the form current cores accept",
-                node=str(repaired.get("node") or ""),
-            )
-    except Exception as e:  # noqa: BLE001
-        try:
-            from core.logging import core_log_once
-
-            core_log_once(
-                "warning",
-                "dns_over_vless_migration_failed",
-                "dns-over-vless fragment migration failed (non-fatal)",
-                error=str(e),
-            )
-        except Exception:
-            pass
-
-    try:
-        from services.dns_guard import start_guard as start_dns_guard
-
-        # One guard for both assistants: whichever of them currently owns port
-        # 53, it is the same LAN that loses DNS when the core stops answering.
-        try:
-            from mihomo_server_core import save_config as _dns_guard_save_mihomo
-        except Exception:
-            _dns_guard_save_mihomo = None
-
-        start_dns_guard(
-            configs_dir=XRAY_CONFIGS_DIR,
-            routing_file=ROUTING_FILE,
-            ui_state_dir=UI_STATE_DIR,
-            mihomo_config_file=MIHOMO_CONFIG_FILE,
-            save_mihomo_config=_dns_guard_save_mihomo,
-            restart_xkeen=restart_xkeen,
-            audit=append_restart_log,
-        )
-    except Exception as e:  # noqa: BLE001
-        try:
-            from core.logging import core_log_once
-
-            core_log_once(
-                "warning",
-                "dns_guard_failed",
-                "dns guard init failed (non-fatal)",
-                error=str(e),
+            core_warn_budget(
+                "module_runtime_diagnostic_failed",
+                "module runtime diagnostic write failed (non-fatal)",
+                error=str(exc),
             )
         except Exception:
             pass

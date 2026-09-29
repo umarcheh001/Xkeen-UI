@@ -163,7 +163,7 @@ def test_stage2_closure_is_reflected_in_documentation():
         "moduleRegistry",
         "runtime_gates_active: false",
         "Критерий готовности Этапа 2: **выполнен**.",
-        "Этап 3 — Backend gates",
+        "Этап 4 — разделение frontend shell и экранов",
     ):
         assert fragment in contract
 

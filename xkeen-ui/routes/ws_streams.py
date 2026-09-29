@@ -11,22 +11,18 @@ import json
 import os
 from typing import Any
 
-from flask import Blueprint, request
+from flask import Blueprint, current_app, request
 
 from services.auth_setup import auth_is_configured, _is_logged_in
 from services.ws_debug import ws_debug
 from services.ws_tokens import validate_ws_token
-from services.log_filter import build_line_matcher as _build_line_matcher
-from services.xray_log_api import (
-    tail_lines,
-    adjust_log_timezone,
-    resolve_xray_log_path_for_ws as _resolve_xray_log_path_for_ws,
-)
-from services import devtools as _svc_devtools
-from services.ws_tail import stream_xray_logs_ws, stream_devtools_logs_ws
-from services.ws_logs2 import stream_xray_logs_ws2
 
 ws_streams_bp = Blueprint("ws_streams", __name__)
+
+
+def _module_active(module_id: str) -> bool:
+    activation = current_app.extensions.get("xkeen.module_activation", {})
+    return module_id in set(activation.get("active_module_ids", []))
 
 
 def create_ws_streams_blueprint() -> Blueprint:
@@ -44,6 +40,15 @@ def _ws_send(ws: Any, payload: dict) -> bool:
 @ws_streams_bp.route("/ws/xray-logs")
 def ws_xray_logs():
     """WebSocket-стрим логов Xray (legacy payloads)."""
+    if not _module_active("engine.xray"):
+        return "Not Found", 404
+    from services.log_filter import build_line_matcher as _build_line_matcher
+    from services.ws_tail import stream_xray_logs_ws
+    from services.xray_log_api import (
+        adjust_log_timezone,
+        resolve_xray_log_path_for_ws as _resolve_xray_log_path_for_ws,
+        tail_lines,
+    )
     file_name = request.args.get("file", "error")
     filter_expr = request.args.get("filter")
     client_ip = request.remote_addr or "unknown"
@@ -113,6 +118,15 @@ def ws_xray_logs():
 @ws_streams_bp.route("/ws/xray-logs2")
 def ws_xray_logs2():
     """WebSocket-стрим логов Xray (v2 protocol: switch/clear/pause without reconnect)."""
+    if not _module_active("engine.xray"):
+        return "Not Found", 404
+    from services.log_filter import build_line_matcher as _build_line_matcher
+    from services.ws_logs2 import stream_xray_logs_ws2
+    from services.xray_log_api import (
+        adjust_log_timezone,
+        resolve_xray_log_path_for_ws as _resolve_xray_log_path_for_ws,
+        tail_lines,
+    )
     file_name = request.args.get("file", "error")
     filter_expr = request.args.get("filter")
     client_ip = request.remote_addr or "unknown"
@@ -172,6 +186,10 @@ def ws_xray_logs2():
 @ws_streams_bp.route("/ws/devtools-logs")
 def ws_devtools_logs():
     """WebSocket tail -f for DevTools logs (legacy payloads)."""
+    if not _module_active("tool.advanced-diagnostics"):
+        return "Not Found", 404
+    from services import devtools as _svc_devtools
+    from services.ws_tail import stream_devtools_logs_ws
 
     name = (request.args.get("name") or "").strip()
     cursor_in = request.args.get("cursor")

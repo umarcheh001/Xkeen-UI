@@ -1661,6 +1661,19 @@ def test_routes_registry_registers_mihomo_clash_facade(monkeypatch):
         ),
         logger=app.logger,
         module_registry=ModuleRegistry("/tmp/state"),
+        module_activation={
+            "active_module_ids": [
+                "core",
+                "engine.xray",
+                "engine.mihomo",
+                "tool.editor",
+                "tool.terminal",
+                "tool.files",
+                "tool.backups",
+                "integration.happ",
+                "tool.advanced-diagnostics",
+            ]
+        },
         ui_state_dir="/tmp/state",
         github_owner="owner",
         github_repo="repo",

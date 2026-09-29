@@ -15,6 +15,7 @@ import os
 import shutil
 import sys
 import threading
+import time
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
@@ -25,6 +26,7 @@ API_VERSION = 1
 STATE_SCHEMA_VERSION = 1
 REGISTRY_VERSION = "1.0.0"
 STATE_FILENAME = "modules.json"
+RUNTIME_DIAGNOSTICS_FILENAME = "module-runtime.json"
 LEGACY_FULL_PROFILE = "legacy-full"
 CUSTOM_PROFILE = "custom"
 
@@ -73,7 +75,7 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         dependencies=(),
         conflicts=(),
         system_requirements=(_requirement("python3"), _requirement("flask")),
-        size_bytes=5708997,
+        size_bytes=5735362,
         removable=False,
         can_disable=False,
         requires_restart=False,
@@ -103,7 +105,7 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         dependencies=("core", "tool.editor"),
         conflicts=(),
         system_requirements=(_requirement("xkeen"), _requirement("mihomo")),
-        size_bytes=2976495,
+        size_bytes=2976878,
         removable=True,
         can_disable=True,
         requires_restart=True,
@@ -235,6 +237,7 @@ class ModuleRegistry:
         self._which = which
         self._environ = environ
         self._lock = threading.RLock()
+        self._runtime_activation: dict[str, Any] | None = None
 
     @property
     def state_path(self) -> str:
@@ -253,6 +256,100 @@ class ModuleRegistry:
             if changed:
                 self._write_state_locked(state)
             return self._snapshot_from_state(state)
+
+    def runtime_activation(self) -> dict[str, Any]:
+        """Resolve the module set used by backend gates during this process.
+
+        A missing/legacy state must not make an existing installation lose
+        routes.  ``legacy-full`` therefore keeps the historical eager
+        activation while still exposing unavailable requirements in the
+        registry.  Any explicit profile uses the effective dependency and
+        system-requirement result.
+        """
+
+        try:
+            snapshot = self.get_registry()
+            legacy_compatibility = snapshot.get("profile") == LEGACY_FULL_PROFILE
+            active: list[str] = []
+            inactive: dict[str, str] = {}
+            for item in snapshot.get("modules", []):
+                module_id = str(item.get("id") or "").strip()
+                if not module_id:
+                    continue
+                if not bool(item.get("enabled")):
+                    inactive[module_id] = str(item.get("reason") or "user_disabled")
+                elif legacy_compatibility or bool(item.get("effective_enabled")):
+                    active.append(module_id)
+                else:
+                    inactive[module_id] = str(item.get("reason") or "module_unavailable")
+
+            if "core" not in active:
+                active.insert(0, "core")
+                inactive.pop("core", None)
+
+            return {
+                "schema_version": STATE_SCHEMA_VERSION,
+                "api_version": API_VERSION,
+                "profile": snapshot.get("profile"),
+                "legacy_compatibility": legacy_compatibility,
+                "runtime_gates_active": True,
+                "active_module_ids": active,
+                "inactive_modules": inactive,
+                "restart_required": bool(snapshot.get("restart_required")),
+            }
+
+        except Exception:
+            # A registry I/O failure must not brick an existing panel.  Keep
+            # the same safe legacy-full activation and expose the failure for
+            # diagnostics.
+            return {
+                "schema_version": STATE_SCHEMA_VERSION,
+                "api_version": API_VERSION,
+                "profile": LEGACY_FULL_PROFILE,
+                "legacy_compatibility": True,
+                "runtime_gates_active": True,
+                "active_module_ids": list(MODULE_IDS),
+                "inactive_modules": {},
+                "restart_required": False,
+                "reason": "module_registry_unavailable",
+            }
+
+    def set_runtime_activation(self, activation: Mapping[str, Any]) -> None:
+        """Publish the activation used by the current Flask process."""
+
+        self._runtime_activation = dict(activation)
+
+    def is_runtime_active(self, module_id: str) -> bool:
+        """Return whether a module is active for backend registration."""
+
+        normalized_id = self._require_known_module(module_id)
+        return normalized_id in set(self.runtime_activation()["active_module_ids"])
+
+    def write_runtime_diagnostic(
+        self,
+        activation: Mapping[str, Any],
+        *,
+        registered_blueprints: list[str],
+        background_tasks: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Persist a compact, secret-free report of the composed backend."""
+
+        payload = {
+            "schema_version": 1,
+            "written_at": int(time.time()),
+            "profile": activation.get("profile"),
+            "runtime_gates_active": True,
+            "active_module_ids": list(activation.get("active_module_ids") or []),
+            "inactive_modules": dict(activation.get("inactive_modules") or {}),
+            "registered_blueprints": sorted(set(registered_blueprints)),
+            "background_tasks": list(background_tasks),
+        }
+        safe_write_text(
+            os.path.join(self.ui_state_dir, RUNTIME_DIAGNOSTICS_FILENAME),
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            mode=0o600,
+        )
+        return payload
 
     def get_registry(self) -> dict[str, Any]:
         """Return the complete, stable registry payload."""
@@ -277,7 +374,7 @@ class ModuleRegistry:
                     "registry_version": REGISTRY_VERSION,
                     "profile": snapshot["profile"],
                     "restart_required": snapshot["restart_required"],
-                    "runtime_gates_active": False,
+                    "runtime_gates_active": bool(snapshot["runtime_gates_active"]),
                     "configured_module_ids": snapshot["configured_module_ids"],
                     "effective_module_ids": snapshot["effective_module_ids"],
                     "module": item,
@@ -360,7 +457,7 @@ class ModuleRegistry:
                     "registry_version": REGISTRY_VERSION,
                     "profile": snapshot["profile"],
                     "restart_required": snapshot["restart_required"],
-                    "runtime_gates_active": False,
+                    "runtime_gates_active": bool(snapshot["runtime_gates_active"]),
                     "configured_module_ids": snapshot["configured_module_ids"],
                     "effective_module_ids": snapshot["effective_module_ids"],
                     "module": module_payload,
@@ -506,7 +603,7 @@ class ModuleRegistry:
             "restart_required": bool(state["restart_required"]),
             # This documents the intentional Stage 1 compatibility boundary.
             # The effective set is an eligibility calculation until Stage 3.
-            "runtime_gates_active": False,
+            "runtime_gates_active": bool(self._runtime_activation),
             "configured_module_ids": configured_module_ids,
             "effective_module_ids": effective_module_ids,
             "modules": module_payloads,
@@ -634,7 +731,12 @@ class ModuleRegistry:
                     or env.get("ComSpec")
                 )
             if requirement_id == "xkeen":
-                return bool(self._which(str(env.get("XKEEN_BIN", "xkeen"))))
+                return bool(
+                    self._which(str(env.get("XKEEN_BIN", "xkeen")))
+                    or self._executable_path("/opt/sbin/xkeen")
+                    or self._executable_path("/opt/etc/init.d/S05xkeen")
+                    or self._executable_path("/opt/etc/init.d/S99xkeen")
+                )
             if requirement_id == "xray":
                 return bool(
                     self._executable_path("/opt/sbin/xray")

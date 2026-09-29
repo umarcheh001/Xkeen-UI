@@ -27,6 +27,7 @@ class AppContext:
     settings: "Settings"
     logger: Logger
     module_registry: "ModuleRegistry"
+    module_activation: dict[str, Any]
 
     # Paths / repo info
     ui_state_dir: str
