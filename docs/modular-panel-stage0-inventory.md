@@ -36,7 +36,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 362 | 5.39 МБ | 70 | 4 | 35 | нет |
+| `core` | 365 | 5.43 МБ | 75 | 4 | 35 | нет |
 | `engine.xray` | 114 | 3.33 МБ | 52 | 3 | 14 | да |
 | `engine.mihomo` | 126 | 2.84 МБ | 88 | 4 | 6 | да |
 | `tool.editor` | 25 | 808.7 КБ | 0 | 0 | 2 | да |
@@ -48,9 +48,9 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 ## Backend routes и регистрация
 
-- Endpoint declarations: **303**.
-- Файлов с route decorators/WS dispatch: **52**.
-- Точек регистрации: **28**.
+- Endpoint declarations: **308**.
+- Файлов с route decorators/WS dispatch: **53**.
+- Точек регистрации: **29**.
 
 Текущее исключение — RemoteFS регистрируется по capability. FS/FileOps защищены `try/except`, но это ещё не пользовательские module gates. Xray, Mihomo, terminal-related и большая часть tool routes сейчас подключаются eagerly.
 
@@ -145,7 +145,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 Большинство Blueprint регистрируется без пользовательских module gates.
 
-Следующий шаг: Этап 1/3: registry и backend gates.
+Следующий шаг: Этап 3: применить registry как backend gates.
 
 ### `mihomo-startup-is-eager`
 
@@ -163,7 +163,7 @@ Mihomo scheduler запускается из app_factory независимо о
 
 Core сейчас импортирует код будущих отключаемых модулей.
 
-Следующий шаг: Этап 1/3: заменить прямые связи registry hooks.
+Следующий шаг: Этап 3: заменить прямые связи registry hooks.
 
 ### `frontend-split-is-useful-baseline`
 
@@ -175,7 +175,7 @@ Routing, Mihomo, terminal и file manager уже имеют отдельные E
 
 Terminal, files, editor и diagnostics можно отделять независимо от engine-профиля.
 
-Следующий шаг: Этапы 1, 4 и 6.
+Следующий шаг: Этапы 2, 4 и 6.
 
 ## Решения о границах модулей
 
@@ -198,4 +198,4 @@ Terminal, files, editor и diagnostics можно отделять незави�
 - выявлены current gates и cross-module coupling;
 - snapshot защищён тестом на синхронность с генератором.
 
-Следующий этап: **Этап 1 — базовый Module Registry**.
+Следующий этап: **Этап 2 — расширение capabilities**.

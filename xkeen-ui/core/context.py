@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 
 if TYPE_CHECKING:
     from core.settings import Settings
+    from services.module_registry import ModuleRegistry
 
 
 @dataclass
@@ -25,6 +26,7 @@ class AppContext:
     # Core
     settings: "Settings"
     logger: Logger
+    module_registry: "ModuleRegistry"
 
     # Paths / repo info
     ui_state_dir: str

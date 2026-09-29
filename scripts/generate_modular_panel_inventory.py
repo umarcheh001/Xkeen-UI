@@ -111,6 +111,17 @@ CONFIG_GLOBS = (
     "xkeen-ui/opt/**/*",
 )
 
+# When a Stage 1 file is newly created locally, include it in the snapshot
+# before it has been added to the Git index.  This keeps the reproducibility
+# guard valid for an implementation worktree as well as for a committed tree.
+WORKTREE_STAGE1_PATHS = frozenset(
+    {
+        "xkeen-ui/routes/modules.py",
+        "xkeen-ui/services/module_registry.py",
+        "tests/test_module_registry.py",
+    }
+)
+
 PY_ROUTE_DECORATOR_RE = re.compile(r"^(get|post|put|patch|delete|route|websocket)$")
 ENV_RE = re.compile(r"\bXKEEN_[A-Z0-9_]+\b")
 STATIC_IMPORT_RE = re.compile(
@@ -248,6 +259,8 @@ class ModularPanelInventoryGenerator:
             yield from emit(self.root.glob(pattern), "configuration")
 
     def _is_tracked_path(self, rel: str) -> bool:
+        if rel in WORKTREE_STAGE1_PATHS:
+            return True
         if self._tracked_paths is None:
             return True
         return rel in self._tracked_paths
@@ -1104,7 +1117,7 @@ class ModularPanelInventoryGenerator:
                         if item["current_gate"] != "always"
                     ],
                 },
-                "next_stage": "Этап 1/3: registry и backend gates.",
+                "next_stage": "Этап 3: применить registry как backend gates.",
             },
             {
                 "id": "mihomo-startup-is-eager",
@@ -1132,7 +1145,7 @@ class ModularPanelInventoryGenerator:
                 "severity": "high",
                 "summary": "Core сейчас импортирует код будущих отключаемых модулей.",
                 "evidence": coupling["core_to_optional_edges"],
-                "next_stage": "Этап 1/3: заменить прямые связи registry hooks.",
+                "next_stage": "Этап 3: заменить прямые связи registry hooks.",
             },
             {
                 "id": "frontend-split-is-useful-baseline",
@@ -1157,7 +1170,7 @@ class ModularPanelInventoryGenerator:
                         "tool.advanced-diagnostics",
                     )
                 },
-                "next_stage": "Этапы 1, 4 и 6.",
+                "next_stage": "Этапы 2, 4 и 6.",
             },
         ]
 
@@ -1310,7 +1323,7 @@ class ModularPanelInventoryGenerator:
                 "- выявлены current gates и cross-module coupling;",
                 "- snapshot защищён тестом на синхронность с генератором.",
                 "",
-                "Следующий этап: **Этап 1 — базовый Module Registry**.",
+                "Следующий этап: **Этап 2 — расширение capabilities**.",
                 "",
             ]
         )

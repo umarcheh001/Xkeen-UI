@@ -41,6 +41,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     from .ws_support import create_ws_support_blueprint
     from .ws_streams import create_ws_streams_blueprint
     from .capabilities import create_capabilities_blueprint
+    from .modules import create_modules_blueprint
     from .xkeen_lists import create_xkeen_lists_blueprint
     from .config_exchange import create_config_exchange_blueprint
     from .routing import create_routing_blueprint
@@ -69,6 +70,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     app.register_blueprint(create_ws_support_blueprint())
     app.register_blueprint(create_ws_streams_blueprint())
     app.register_blueprint(create_capabilities_blueprint())
+    app.register_blueprint(create_modules_blueprint(ctx.module_registry))
     app.register_blueprint(create_system_resources_blueprint())
 
     app.register_blueprint(create_xkeen_lists_blueprint(restart_xkeen=ctx.restart_xkeen))

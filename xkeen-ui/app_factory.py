@@ -411,6 +411,27 @@ def create_app(*, ws_runtime: bool = False):
     BASE_VAR_DIR = env["BASE_VAR_DIR"]
     UI_WS_LOG = env["UI_WS_LOG"]
 
+    from services.module_registry import ModuleRegistry
+
+    module_registry = ModuleRegistry(UI_STATE_DIR)
+    try:
+        # Missing state is migrated to legacy-full before routes/background
+        # services start.  Stage 1 deliberately does not add runtime gates.
+        module_registry.initialize_for_startup()
+    except Exception as e:  # noqa: BLE001 - registry API will report a state I/O error later
+        try:
+            from core.logging import core_log_once
+
+            core_log_once(
+                "warning",
+                "module_registry_startup_failed",
+                "module registry state initialization failed (non-fatal)",
+                error=str(e),
+                ui_state_dir=UI_STATE_DIR,
+            )
+        except Exception:
+            pass
+
     _cleanup_legacy_global_theme_files(ui_state_dir=UI_STATE_DIR)
 
     try:
@@ -482,6 +503,7 @@ def create_app(*, ws_runtime: bool = False):
 
     # -------- Flask app
     app = _create_flask_app()
+    app.extensions["xkeen.module_registry"] = module_registry
     _register_favicon(app)
 
     _init_auth_and_pages(
@@ -620,6 +642,7 @@ def create_app(*, ws_runtime: bool = False):
     ctx = AppContext(
         settings=settings,
         logger=core_logger(),
+        module_registry=module_registry,
         ui_state_dir=UI_STATE_DIR,
         github_owner=GITHUB_OWNER,
         github_repo=GITHUB_REPO,

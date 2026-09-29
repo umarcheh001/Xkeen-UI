@@ -1634,6 +1634,7 @@ def test_routes_registry_registers_mihomo_clash_facade(monkeypatch):
     import routes
     from core.context import AppContext
     from core.settings import Settings
+    from services.module_registry import ModuleRegistry
 
     app = Flask(__name__)
     app.config["TESTING"] = True
@@ -1659,6 +1660,7 @@ def test_routes_registry_registers_mihomo_clash_facade(monkeypatch):
             base_var_dir="/tmp/var",
         ),
         logger=app.logger,
+        module_registry=ModuleRegistry("/tmp/state"),
         ui_state_dir="/tmp/state",
         github_owner="owner",
         github_repo="repo",
@@ -1688,6 +1690,7 @@ def test_routes_registry_registers_mihomo_clash_facade(monkeypatch):
     routes.register_blueprints(app, context)
 
     assert "mihomo_clash" in registered
+    assert "modules" in registered
     rules: dict[str, set[str]] = {}
     for rule in app.url_map.iter_rules():
         rules.setdefault(rule.rule, set()).update(rule.methods or ())

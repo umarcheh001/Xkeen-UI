@@ -172,7 +172,7 @@ def test_stage0_closure_is_reflected_in_documentation():
         "## Фоновые задачи",
         "## Frontend и UI surfaces",
         "Критерий завершения **выполнен**",
-        "Этап 1 — базовый Module Registry",
+        "Этап 2 — расширение capabilities",
     ):
         assert fragment in contract
 
