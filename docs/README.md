@@ -5,7 +5,7 @@
 ## Основные документы
 
 - `README_frontend_migration_plan.md` — текущий статус закрытого migration scope и список guardrails, которые нельзя откатывать.
-- `../README-modular-panel-plan.md` — план модульной панели; Этапы 0–3 закрыты, следующий — Этап 4.
+- `../README-modular-panel-plan.md` — план модульной панели; Этапы 0–3 и подэтап 4.1 закрыты, после review добавлен обязательный backlog 3R, затем продолжится подэтап 4.2.
 - `frontend-target-architecture.md` — целевой архитектурный контракт фронтенда в текущем репозитории.
 - `frontend-feature-api.md` — правила для feature API, registry и compat-слоя.
 - `config-schema-ux-roadmap.md` — roadmap по развитию UX вокруг схем Xray JSON и Mihomo YAML: schema enrichment, semantic validation, snippets, quick fixes и guided flows.
@@ -29,6 +29,7 @@
 - `modular-panel-stage1-module-registry.md` — закрытый Этап 1: базовый Module Registry, состояние `modules.json`, миграции и API.
 - `modular-panel-stage2-capabilities.md` — закрытый Этап 2: расширенный `/api/capabilities` с module projection и frontend mapping.
 - `modular-panel-stage3-backend-gates.md` — закрытый Этап 3: runtime activation, gated Blueprints/schedulers/WS и diagnostics.
+- `modular-panel-stage4.1-contract.md` — закрытый подэтап 4.1: контракт границ frontend shell, экранов, модальных окон, mixed-boundaries и профильный HTML baseline.
 - `devtools-operator-theme.md` — закрытый перевод DevTools со старой blue-glass темы на общие с основной панелью Operator tokens, flat shell/data rows/log canvas/modals и responsive dark/light contract.
 - `top-level-navigation-plan.md` — итог по уже закрытому переводу всех five canonical entrypoints с document navigation на in-app navigation и фиксация финального five-route runtime contract.
 - `panel-operator-stage0-contract.md` — закрытый Этап 0 редизайна Operator Console: presentation ownership, матрица views/accordions/editors/modals, DOM freeze и dark/light visual baseline.
@@ -52,6 +53,7 @@
 
 - `frontend-page-inventory.json` — snapshot page inventory, который должен оставаться синхронным с `scripts/generate_frontend_inventory.py`.
 - `modular-panel-stage0-inventory.json` — machine-readable snapshot Этапа 0 модульной панели; пересобирается `scripts/generate_modular_panel_inventory.py`.
+- `modular-panel-stage4.1-contract.json` — machine-readable contract подэтапа 4.1; пересобирается `scripts/generate_modular_panel_stage4_1_contract.py`.
 - `panel-operator-stage0-inventory.json` — machine-readable snapshot контракта Operator Console; пересобирается `scripts/generate_panel_operator_inventory.py` и содержит hashes baseline-снимков.
 - `panel-operator-icon-inventory.json` — machine-readable inventory semantic icon → Tabler asset → usage/control/accessibility; пересобирается `scripts/generate_operator_icon_inventory.py`.
 

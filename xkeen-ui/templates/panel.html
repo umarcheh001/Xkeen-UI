@@ -208,6 +208,7 @@
                 title="UI settings"
               >{{ op_icon('settings') }}<span class="xk-action-label">UI</span></button>
 
+              {% if has_diagnostics %}
               <a
                 href="{{ url_for('devtools_page') }}"
                 class="service-core-text xk-header-btn xk-header-btn-devtools"
@@ -227,6 +228,7 @@
                 <span class="xk-update-dot" aria-hidden="true"></span>
                 <span data-xk-update-label>Обновление</span>
               </a>
+              {% endif %}
 
               <button
                 type="button"

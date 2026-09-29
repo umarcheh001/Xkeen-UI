@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 367,
-      "size_bytes": 5733872,
+      "unit_count": 368,
+      "size_bytes": 5740236,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 17,
         "backend_service": 49,
-        "backend_test": 160,
+        "backend_test": 161,
         "configuration": 10,
         "frontend_bundle": 3,
         "frontend_entrypoint": 2,
@@ -3817,6 +3817,24 @@
       "kind": "backend_test",
       "path": "tests/test_modular_panel_stage0_inventory.py",
       "size_bytes": 6479,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_modular_panel_stage4_1_contract.py",
+      "size_bytes": 6299,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -8439,7 +8457,7 @@
       "module_id": "core",
       "kind": "template",
       "path": "xkeen-ui/templates/panel.html",
-      "size_bytes": 425384,
+      "size_bytes": 425449,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -26285,7 +26303,7 @@
         "template": "xkeen-ui/templates/panel.html",
         "panel_views": 6,
         "panel_modals": 53,
-        "size_bytes": 425384
+        "size_bytes": 425449
       },
       "next_stage": "Этап 4: template partials и module composition."
     },
