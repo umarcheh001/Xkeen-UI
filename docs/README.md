@@ -14,6 +14,7 @@
 
 ## Активные инициативы
 
+- `../README-modular-panel-plan.md` — поэтапный план модульной панели, профилей установки и официального каталога модулей Xkeen UI; Этап 0 закрыт, следующий — базовый Module Registry.
 - `panel-operator-redesign-completion-plan.md` — план завершения переезда панели на Operator Console; Этап 4 закрыт; в Этапе 5 закрыты editor/workbench, comments/schema status labels, responsive editor help, mobile fullscreen сложных модалов и применение четырёх modal families ко всем 50 static modals; Этапы 5–7 в целом открыты; сквозной icon-поток I0–I6 закрыт.
 - `mihomo-capability-matrix.json` и `panel-operator-stage0-mihomo-contract.md` — capability/contract baseline нового Mihomo roadmap (Этап 0).
 - `panel-operator-stage3-explainability-logs.md` — закрытый Этап 3 Mihomo: доказательная routing chain, rule counters и allow-listed upstream log level.
@@ -24,6 +25,7 @@
 
 ## Недавние закрытые инициативы
 
+- `modular-panel-stage0-inventory.md` — закрытый Этап 0 модульной панели: границы `core`/engines/tools, routes, background tasks, frontend bundles, UI surfaces и cross-module coupling.
 - `devtools-operator-theme.md` — закрытый перевод DevTools со старой blue-glass темы на общие с основной панелью Operator tokens, flat shell/data rows/log canvas/modals и responsive dark/light contract.
 - `top-level-navigation-plan.md` — итог по уже закрытому переводу всех five canonical entrypoints с document navigation на in-app navigation и фиксация финального five-route runtime contract.
 - `panel-operator-stage0-contract.md` — закрытый Этап 0 редизайна Operator Console: presentation ownership, матрица views/accordions/editors/modals, DOM freeze и dark/light visual baseline.
@@ -46,6 +48,7 @@
 ## Сгенерированные артефакты
 
 - `frontend-page-inventory.json` — snapshot page inventory, который должен оставаться синхронным с `scripts/generate_frontend_inventory.py`.
+- `modular-panel-stage0-inventory.json` — machine-readable snapshot Этапа 0 модульной панели; пересобирается `scripts/generate_modular_panel_inventory.py`.
 - `panel-operator-stage0-inventory.json` — machine-readable snapshot контракта Operator Console; пересобирается `scripts/generate_panel_operator_inventory.py` и содержит hashes baseline-снимков.
 - `panel-operator-icon-inventory.json` — machine-readable inventory semantic icon → Tabler asset → usage/control/accessibility; пересобирается `scripts/generate_operator_icon_inventory.py`.
 
