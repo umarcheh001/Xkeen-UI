@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 367,
-      "size_bytes": 5733831,
+      "size_bytes": 5733872,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 17,
@@ -129,7 +129,7 @@
       ],
       "removable": true,
       "unit_count": 126,
-      "size_bytes": 2976878,
+      "size_bytes": 2977965,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -5500,7 +5500,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "requirements-dev.txt",
-      "size_bytes": 86,
+      "size_bytes": 127,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -11135,7 +11135,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/mihomo_clash/groups.js",
-      "size_bytes": 82100,
+      "size_bytes": 83187,
       "depends_on": [
         "core",
         "tool.editor"

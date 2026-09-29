@@ -47,6 +47,7 @@ const NO_SORT_TYPES = new Set([
   'load-balance',
 ]);
 const COLLAPSED_GROUPS_STORAGE_KEY = 'xkeen:mihomo-clash-collapsed-groups';
+const DELAY_HISTORY_SESSION_KEY = 'xkeen:mihomo-clash-delay-history.v1';
 // A status refresh can finish while the previous group activation is still
 // rendering. Do not abort a healthy request (or immediately refetch its
 // result) when the same view is activated twice in quick succession.
@@ -89,6 +90,34 @@ const delayHistories = new Map();
 let delayHistoryPopover = null;
 let delayHistoryOwner = null;
 let delayHistoryTimer = 0;
+
+function restorePersistedDelayHistories() {
+  try {
+    const stored = JSON.parse(window.sessionStorage.getItem(DELAY_HISTORY_SESSION_KEY) || '{}');
+    if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return;
+    for (const [identity, entries] of Object.entries(stored)) {
+      const normalized = Array.isArray(entries)
+        ? entries
+          .map((entry) => ({
+            delay: Number(entry?.delay),
+            measuredAt: String(entry?.measuredAt || ''),
+          }))
+          .filter((entry) => Number.isFinite(entry.delay) && entry.delay > 0)
+          .slice(-MAX_DELAY_HISTORY)
+        : [];
+      if (normalized.length) delayHistories.set(identity, normalized);
+    }
+  } catch (error) {}
+}
+
+function persistDelayHistories() {
+  try {
+    const snapshot = Object.fromEntries(delayHistories.entries());
+    window.sessionStorage.setItem(DELAY_HISTORY_SESSION_KEY, JSON.stringify(snapshot));
+  } catch (error) {}
+}
+
+restorePersistedDelayHistories();
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -453,6 +482,7 @@ function rememberDelayMeasurement(identity, delay, measuredAt = new Date().toISO
     measuredAt: String(measuredAt || ''),
   }].slice(-MAX_DELAY_HISTORY);
   delayHistories.set(identity, next);
+  persistDelayHistories();
 }
 
 function seedDelayHistories(groupItems) {
