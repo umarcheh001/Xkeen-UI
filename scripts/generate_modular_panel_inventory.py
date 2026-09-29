@@ -4,6 +4,7 @@ import argparse
 import ast
 import json
 import re
+import subprocess
 from collections import Counter, defaultdict
 from html.parser import HTMLParser
 from pathlib import Path
@@ -154,6 +155,7 @@ class ModularPanelInventoryGenerator:
         self.project_root = self.root / PROJECT_DIRNAME
         self.docs_root = self.root / "docs"
         self._module_cache: dict[str, str] = {}
+        self._tracked_paths = self._load_tracked_paths()
         self._frontend_bundle_map = self._build_frontend_bundle_map()
 
     def build_inventory(self) -> dict[str, Any]:
@@ -213,6 +215,9 @@ class ModularPanelInventoryGenerator:
                     continue
                 if "__pycache__" in path.parts:
                     continue
+                rel = path.relative_to(self.root).as_posix()
+                if not self._is_tracked_path(rel):
+                    continue
                 seen.add(resolved)
                 yield path, kind
 
@@ -242,6 +247,33 @@ class ModularPanelInventoryGenerator:
         for pattern in CONFIG_GLOBS:
             yield from emit(self.root.glob(pattern), "configuration")
 
+    def _is_tracked_path(self, rel: str) -> bool:
+        if self._tracked_paths is None:
+            return True
+        return rel in self._tracked_paths
+
+    def _load_tracked_paths(self) -> set[str] | None:
+        if not (self.root / ".git").exists():
+            return None
+        try:
+            result = subprocess.run(
+                ["git", "ls-files", "-z"],
+                cwd=self.root,
+                capture_output=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                return None
+            return {
+                item.decode("utf-8", errors="surrogateescape").replace("\\", "/")
+                for item in result.stdout.split(b"\0")
+                if item
+            }
+        except OSError:
+            # Release archives may not contain .git. In that environment all
+            # files inside the archive are part of the canonical source tree.
+            return None
+
     def _build_unit(self, path: Path, kind: str) -> dict[str, Any]:
         rel = path.relative_to(self.root).as_posix()
         text = self._read_text(path)
@@ -263,7 +295,11 @@ class ModularPanelInventoryGenerator:
             "module_id": module_id,
             "kind": self._refine_kind(rel, kind),
             "path": rel,
-            "size_bytes": path.stat().st_size,
+            # Physical file sizes differ between Windows and Linux checkouts
+            # when Git normalizes line endings. Inventory snapshots must be
+            # reproducible on both, so measure canonical UTF-8 text after
+            # universal-newline normalization instead of stat().st_size.
+            "size_bytes": len(text.encode("utf-8")),
             "depends_on": dependencies,
             "starts_background_task": bool(background_markers),
             "background_markers": background_markers,
@@ -1210,7 +1246,8 @@ class ModularPanelInventoryGenerator:
                 f"- Canonical/top-level страниц: **{len(surfaces['pages'])}**.",
                 f"- Вкладок `data-view` в `panel.html`: **{len(surfaces['panel_views'])}**.",
                 f"- Статических modal containers в `panel.html`: **{len(surfaces['panel_modals'])}**.",
-                f"- Размер `panel.html`: **{self._format_bytes((self.project_root / 'templates/panel.html').stat().st_size)}**.",
+                f"- Нормализованный UTF-8 размер `panel.html`: "
+                f"**{self._format_bytes(len(self._read_text(self.project_root / 'templates/panel.html').encode('utf-8')))}**.",
                 "",
                 "Уже существующие границы, пригодные для модульной загрузки:",
                 "",

@@ -36,14 +36,14 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 366,
-      "size_bytes": 5663920,
+      "unit_count": 362,
+      "size_bytes": 5655060,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 16,
         "backend_service": 48,
-        "backend_test": 158,
-        "configuration": 13,
+        "backend_test": 157,
+        "configuration": 10,
         "frontend_bundle": 3,
         "frontend_entrypoint": 2,
         "frontend_feature": 26,
@@ -129,7 +129,7 @@
       ],
       "removable": true,
       "unit_count": 126,
-      "size_bytes": 2976843,
+      "size_bytes": 2976350,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -251,7 +251,7 @@
       ],
       "removable": true,
       "unit_count": 85,
-      "size_bytes": 995980,
+      "size_bytes": 995945,
       "kind_counts": {
         "backend_route": 22,
         "backend_service": 32,
@@ -2493,28 +2493,6 @@
     {
       "module_id": "core",
       "kind": "backend_test",
-      "path": "tests/test_debian_packaging_contract.py",
-      "size_bytes": 1877,
-      "depends_on": [],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "python3",
-        "flask"
-      ],
-      "environment_variables": [
-        "XKEEN_RUNTIME",
-        "XKEEN_UI_ENV_FILE",
-        "XKEEN_UI_STATE_DIR"
-      ],
-      "removable": false
-    },
-    {
-      "module_id": "core",
-      "kind": "backend_test",
       "path": "tests/test_device_lock_detector_script.py",
       "size_bytes": 2966,
       "depends_on": [],
@@ -3532,7 +3510,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_jsonc_stripping.py",
-      "size_bytes": 6755,
+      "size_bytes": 7507,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5340,85 +5318,6 @@
       "kind": "configuration",
       "path": "package.json",
       "size_bytes": 2845,
-      "depends_on": [],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "python3",
-        "flask"
-      ],
-      "environment_variables": [],
-      "removable": false
-    },
-    {
-      "module_id": "core",
-      "kind": "configuration",
-      "path": "packaging/debian/env/xkeen-ui.env.example",
-      "size_bytes": 415,
-      "depends_on": [],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "python3",
-        "flask"
-      ],
-      "environment_variables": [
-        "XKEEN_RUNTIME",
-        "XKEEN_UI_CONTROL_CMD",
-        "XKEEN_UI_ENV_FILE",
-        "XKEEN_UI_PORT",
-        "XKEEN_UI_STATE_DIR",
-        "XKEEN_XRAY_CONFIGS_DIR",
-        "XKEEN_XRAY_JSONC_DIR"
-      ],
-      "removable": false
-    },
-    {
-      "module_id": "core",
-      "kind": "configuration",
-      "path": "packaging/debian/install-debian.sh",
-      "size_bytes": 6795,
-      "depends_on": [],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "python3",
-        "flask"
-      ],
-      "environment_variables": [
-        "XKEEN_DEBIAN_APT_PACKAGES",
-        "XKEEN_DEBIAN_ETC_DIR",
-        "XKEEN_DEBIAN_GROUP",
-        "XKEEN_DEBIAN_PIP_PACKAGES_FULL",
-        "XKEEN_DEBIAN_PIP_PACKAGES_MIN",
-        "XKEEN_DEBIAN_ROOT",
-        "XKEEN_DEBIAN_SERVICE_NAME",
-        "XKEEN_DEBIAN_SKIP_APT",
-        "XKEEN_DEBIAN_USER",
-        "XKEEN_RUNTIME",
-        "XKEEN_UI_CONTROL_CMD",
-        "XKEEN_UI_ENV_FILE",
-        "XKEEN_UI_PORT",
-        "XKEEN_UI_STATE_DIR",
-        "XKEEN_XRAY_CONFIGS_DIR",
-        "XKEEN_XRAY_JSONC_DIR"
-      ],
-      "removable": false
-    },
-    {
-      "module_id": "core",
-      "kind": "configuration",
-      "path": "packaging/debian/systemd/xkeen-ui.service",
-      "size_bytes": 525,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -10755,7 +10654,7 @@
       "module_id": "engine.mihomo",
       "kind": "configuration",
       "path": "xkeen-ui/opt/etc/mihomo/templates/custom.yaml",
-      "size_bytes": 13411,
+      "size_bytes": 13170,
       "depends_on": [
         "core",
         "tool.editor"
@@ -10797,7 +10696,7 @@
       "module_id": "engine.mihomo",
       "kind": "configuration",
       "path": "xkeen-ui/opt/etc/mihomo/templates/zkeen.yaml",
-      "size_bytes": 10779,
+      "size_bytes": 10527,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18772,7 +18671,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/actions_modals.js",
-      "size_bytes": 7567,
+      "size_bytes": 7565,
       "depends_on": [
         "core"
       ],
@@ -18799,7 +18698,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/api.js",
-      "size_bytes": 6268,
+      "size_bytes": 6266,
       "depends_on": [
         "core"
       ],
@@ -18934,7 +18833,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/dragdrop.js",
-      "size_bytes": 18912,
+      "size_bytes": 18910,
       "depends_on": [
         "core"
       ],
@@ -18988,7 +18887,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/errors.js",
-      "size_bytes": 8238,
+      "size_bytes": 8236,
       "depends_on": [
         "core"
       ],
@@ -19015,7 +18914,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/hash.js",
-      "size_bytes": 7706,
+      "size_bytes": 7704,
       "depends_on": [
         "core"
       ],
@@ -19042,7 +18941,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/init.js",
-      "size_bytes": 738,
+      "size_bytes": 736,
       "depends_on": [
         "core"
       ],
@@ -19069,7 +18968,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/list_model.js",
-      "size_bytes": 4054,
+      "size_bytes": 4052,
       "depends_on": [
         "core"
       ],
@@ -19096,7 +18995,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/listing.js",
-      "size_bytes": 10375,
+      "size_bytes": 10373,
       "depends_on": [
         "core"
       ],
@@ -19125,7 +19024,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/navigation.js",
-      "size_bytes": 11601,
+      "size_bytes": 11599,
       "depends_on": [
         "core"
       ],
@@ -19152,7 +19051,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/ops.js",
-      "size_bytes": 50323,
+      "size_bytes": 50321,
       "depends_on": [
         "core"
       ],
@@ -19179,7 +19078,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/prefs.js",
-      "size_bytes": 6491,
+      "size_bytes": 6489,
       "depends_on": [
         "core"
       ],
@@ -19206,7 +19105,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/progress.js",
-      "size_bytes": 16136,
+      "size_bytes": 16134,
       "depends_on": [
         "core"
       ],
@@ -19233,7 +19132,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/props.js",
-      "size_bytes": 16211,
+      "size_bytes": 16209,
       "depends_on": [
         "core"
       ],
@@ -19260,7 +19159,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/remote.js",
-      "size_bytes": 41400,
+      "size_bytes": 41398,
       "depends_on": [
         "core"
       ],
@@ -19314,7 +19213,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/selection.js",
-      "size_bytes": 11568,
+      "size_bytes": 11566,
       "depends_on": [
         "core"
       ],
@@ -19368,7 +19267,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/status.js",
-      "size_bytes": 4814,
+      "size_bytes": 4812,
       "depends_on": [
         "core"
       ],
@@ -19422,7 +19321,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/terminal.js",
-      "size_bytes": 6294,
+      "size_bytes": 6293,
       "depends_on": [
         "core"
       ],
@@ -19449,7 +19348,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/transfers.js",
-      "size_bytes": 30676,
+      "size_bytes": 30674,
       "depends_on": [
         "core"
       ],
@@ -26372,7 +26271,7 @@
         },
         "tool.files": {
           "unit_count": 85,
-          "size_bytes": 995980
+          "size_bytes": 995945
         },
         "tool.advanced-diagnostics": {
           "unit_count": 26,
