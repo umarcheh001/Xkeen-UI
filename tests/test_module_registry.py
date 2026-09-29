@@ -235,7 +235,7 @@ def test_stage1_closure_is_reflected_in_documentation():
         "GET   /api/modules",
         "runtime_gates_active: false",
         "Критерий готовности Этапа 1: **выполнен**.",
-        "Этап 2 — расширение capabilities",
+        "Этап 3 — Backend gates",
     ):
         assert fragment in contract
 

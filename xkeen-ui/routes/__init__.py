@@ -69,7 +69,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     app.register_blueprint(create_ui_settings_blueprint())
     app.register_blueprint(create_ws_support_blueprint())
     app.register_blueprint(create_ws_streams_blueprint())
-    app.register_blueprint(create_capabilities_blueprint())
+    app.register_blueprint(create_capabilities_blueprint(ctx.module_registry))
     app.register_blueprint(create_modules_blueprint(ctx.module_registry))
     app.register_blueprint(create_system_resources_blueprint())
 
@@ -212,7 +212,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     from services import get_capabilities, get_remotefs_state
 
     try:
-        _caps = get_capabilities(dict(os.environ))
+        _caps = get_capabilities(dict(os.environ), module_registry=ctx.module_registry)
         app.extensions["xkeen.capabilities"] = _caps
     except Exception as _e:  # noqa: BLE001
         _caps = None

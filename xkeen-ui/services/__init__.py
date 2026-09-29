@@ -37,12 +37,16 @@ def get_capabilities(
     env: Optional[Dict[str, str]] = None,
     *,
     which: Callable[[str], Optional[str]] = __import__("shutil").which,
+    module_registry: Any = None,
 ) -> Dict[str, Any]:
     """Detect backend capabilities (payload for /api/capabilities)."""
 
-    from .capabilities import detect_capabilities
+    from .capabilities import detect_capabilities, extend_capabilities_with_modules
 
-    return detect_capabilities(env or {}, which=which)
+    capabilities = detect_capabilities(env or {}, which=which)
+    if module_registry is not None:
+        capabilities = extend_capabilities_with_modules(capabilities, module_registry)
+    return capabilities
 
 
 def get_remotefs_state(

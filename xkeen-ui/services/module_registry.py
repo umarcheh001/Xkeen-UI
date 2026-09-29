@@ -52,6 +52,8 @@ class ModuleDefinition:
     removable: bool
     can_disable: bool
     requires_restart: bool
+    frontend_bundles: tuple[str, ...] = ()
+    navigation_views: tuple[str, ...] = ()
     installed: bool = True
 
 
@@ -71,10 +73,12 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         dependencies=(),
         conflicts=(),
         system_requirements=(_requirement("python3"), _requirement("flask")),
-        size_bytes=5696871,
+        size_bytes=5708997,
         removable=False,
         can_disable=False,
         requires_restart=False,
+        frontend_bundles=("panel-core",),
+        navigation_views=("xkeen",),
     ),
     ModuleDefinition(
         id="engine.xray",
@@ -88,6 +92,8 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         removable=True,
         can_disable=True,
         requires_restart=True,
+        frontend_bundles=("panel-routing",),
+        navigation_views=("routing", "xray-logs"),
     ),
     ModuleDefinition(
         id="engine.mihomo",
@@ -101,6 +107,8 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         removable=True,
         can_disable=True,
         requires_restart=True,
+        frontend_bundles=("panel-mihomo", "mihomo-generator-page"),
+        navigation_views=("mihomo",),
     ),
     ModuleDefinition(
         id="tool.editor",
@@ -131,6 +139,8 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         removable=True,
         can_disable=True,
         requires_restart=True,
+        frontend_bundles=("terminal-lazy",),
+        navigation_views=("commands",),
     ),
     ModuleDefinition(
         id="tool.files",
@@ -147,6 +157,8 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         removable=True,
         can_disable=True,
         requires_restart=True,
+        frontend_bundles=("file-manager-lazy",),
+        navigation_views=("files",),
     ),
     ModuleDefinition(
         id="tool.backups",
@@ -160,6 +172,8 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         removable=True,
         can_disable=True,
         requires_restart=True,
+        frontend_bundles=("backups-page",),
+        navigation_views=("backups",),
     ),
     ModuleDefinition(
         id="integration.happ",
@@ -186,6 +200,8 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         removable=True,
         can_disable=True,
         requires_restart=True,
+        frontend_bundles=("devtools-page",),
+        navigation_views=("devtools",),
     ),
 )
 
@@ -566,6 +582,10 @@ class ModuleRegistry:
                 "removable": definition.removable,
                 "can_disable": definition.can_disable,
                 "requires_restart": definition.requires_restart,
+                "frontend": {
+                    "bundles": list(definition.frontend_bundles),
+                    "navigation_views": list(definition.navigation_views),
+                },
                 "installed": definition.installed,
                 # `enabled` is the persisted user request; `effective_enabled`
                 # is the dependency/system eligibility result.

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 
 from core.paths import UI_STATE_DIR, BASE_ETC_DIR, BASE_VAR_DIR
 from core.mihomo_paths import init_mihomo_paths
@@ -24,6 +24,12 @@ from mihomo_server_core import CONFIG_PATH
 from services.logging_setup import get_log_dir
 from services.xkeen_commands_catalog import get_full_shell_policy
 from services.xray_config_files import ROUTING_FILE, INBOUNDS_FILE, OUTBOUNDS_FILE, XRAY_CONFIGS_DIR
+
+if TYPE_CHECKING:
+    from services.module_registry import ModuleRegistry
+
+
+MODULE_CAPABILITIES_SCHEMA_VERSION = 1
 
 
 def _env_bool(env: Dict[str, str], name: str, default: bool = False) -> bool:
@@ -212,6 +218,97 @@ def detect_terminal_state(
         "reason": reason,
         "ws_error": ws_error,
     }
+
+
+def extend_capabilities_with_modules(
+    capabilities: Dict[str, object],
+    module_registry: "ModuleRegistry",
+) -> Dict[str, object]:
+    """Append registry-backed module capabilities without changing legacy keys.
+
+    The public ``modules`` mapping deliberately distinguishes:
+
+    - installation state (``installed``);
+    - persisted user configuration (``enabled``);
+    - direct environment readiness (``available``);
+    - effective readiness after dependencies (``effective_available``);
+    - the machine-readable reason for a non-effective module.
+
+    ``runtime_gates_active`` remains false in Stage 2: these fields are a
+    frontend composition contract, not a claim that routes/tasks are already
+    conditionally registered.
+    """
+
+    payload = dict(capabilities)
+    try:
+        snapshot = module_registry.get_registry()
+        module_states: Dict[str, Dict[str, Any]] = {}
+        for item in snapshot.get("modules", []):
+            if not isinstance(item, dict):
+                continue
+            module_id = str(item.get("id") or "").strip()
+            if not module_id:
+                continue
+
+            frontend = item.get("frontend")
+            module_states[module_id] = {
+                "id": module_id,
+                "installed": bool(item.get("installed")),
+                "enabled": bool(item.get("enabled")),
+                # Direct environment/system-requirement result.  It remains
+                # true for a user-disabled module when its environment is
+                # healthy, which is why effective availability is separate.
+                "available": bool(item.get("available")),
+                "effective_available": bool(item.get("effective_enabled")),
+                "status": str(item.get("status") or "unavailable"),
+                "reason": item.get("reason"),
+                "requires_restart": bool(item.get("requires_restart")),
+                "dependencies": list(item.get("dependencies") or []),
+                "conflicts": list(item.get("conflicts") or []),
+                "system_requirements": list(item.get("system_requirements") or []),
+                "missing_requirement_ids": list(item.get("missing_requirement_ids") or []),
+                "unavailable_dependency_ids": list(item.get("unavailable_dependency_ids") or []),
+                "frontend": {
+                    "bundles": list(frontend.get("bundles") or [])
+                    if isinstance(frontend, dict)
+                    else [],
+                    "navigation_views": list(frontend.get("navigation_views") or [])
+                    if isinstance(frontend, dict)
+                    else [],
+                },
+            }
+
+        payload["moduleRegistry"] = {
+            "schema_version": MODULE_CAPABILITIES_SCHEMA_VERSION,
+            "api_version": snapshot.get("api_version"),
+            "registry_version": snapshot.get("registry_version"),
+            "profile": snapshot.get("profile"),
+            "restart_required": bool(snapshot.get("restart_required")),
+            "runtime_gates_active": bool(snapshot.get("runtime_gates_active")),
+            "available": True,
+            "reason": None,
+            "configured_module_ids": list(snapshot.get("configured_module_ids") or []),
+            "effective_module_ids": list(snapshot.get("effective_module_ids") or []),
+        }
+        payload["modules"] = module_states
+    except Exception:
+        # The legacy capability contract remains available if UI-state storage
+        # is temporarily unreadable.  The dedicated /api/modules endpoint
+        # provides the detailed storage error.
+        payload["moduleRegistry"] = {
+            "schema_version": MODULE_CAPABILITIES_SCHEMA_VERSION,
+            "api_version": None,
+            "registry_version": None,
+            "profile": None,
+            "restart_required": False,
+            "runtime_gates_active": False,
+            "available": False,
+            "reason": "module_registry_unavailable",
+            "configured_module_ids": [],
+            "effective_module_ids": [],
+        }
+        payload["modules"] = {}
+    return payload
 
 
 def detect_capabilities(

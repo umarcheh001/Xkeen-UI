@@ -36,7 +36,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 365 | 5.43 МБ | 75 | 4 | 35 | нет |
+| `core` | 366 | 5.44 МБ | 75 | 4 | 35 | нет |
 | `engine.xray` | 114 | 3.33 МБ | 52 | 3 | 14 | да |
 | `engine.mihomo` | 126 | 2.84 МБ | 88 | 4 | 6 | да |
 | `tool.editor` | 25 | 808.7 КБ | 0 | 0 | 2 | да |
@@ -175,7 +175,7 @@ Routing, Mihomo, terminal и file manager уже имеют отдельные E
 
 Terminal, files, editor и diagnostics можно отделять независимо от engine-профиля.
 
-Следующий шаг: Этапы 2, 4 и 6.
+Следующий шаг: Этапы 3, 4 и 6.
 
 ## Решения о границах модулей
 
@@ -198,4 +198,4 @@ Terminal, files, editor и diagnostics можно отделять незави�
 - выявлены current gates и cross-module coupling;
 - snapshot защищён тестом на синхронность с генератором.
 
-Следующий этап: **Этап 2 — расширение capabilities**.
+Следующий этап: **Этап 3 — Backend gates**.

@@ -5,7 +5,7 @@
 ## Основные документы
 
 - `README_frontend_migration_plan.md` — текущий статус закрытого migration scope и список guardrails, которые нельзя откатывать.
-- `../README-modular-panel-plan.md` — план модульной панели; Этапы 0 и 1 закрыты, следующий — Этап 2.
+- `../README-modular-panel-plan.md` — план модульной панели; Этапы 0, 1 и 2 закрыты, следующий — Этап 3.
 - `frontend-target-architecture.md` — целевой архитектурный контракт фронтенда в текущем репозитории.
 - `frontend-feature-api.md` — правила для feature API, registry и compat-слоя.
 - `config-schema-ux-roadmap.md` — roadmap по развитию UX вокруг схем Xray JSON и Mihomo YAML: schema enrichment, semantic validation, snippets, quick fixes и guided flows.
@@ -27,6 +27,7 @@
 
 - `modular-panel-stage0-inventory.md` — закрытый Этап 0 модульной панели: границы `core`/engines/tools, routes, background tasks, frontend bundles, UI surfaces и cross-module coupling.
 - `modular-panel-stage1-module-registry.md` — закрытый Этап 1: базовый Module Registry, состояние `modules.json`, миграции и API.
+- `modular-panel-stage2-capabilities.md` — закрытый Этап 2: расширенный `/api/capabilities` с module projection и frontend mapping.
 - `devtools-operator-theme.md` — закрытый перевод DevTools со старой blue-glass темы на общие с основной панелью Operator tokens, flat shell/data rows/log canvas/modals и responsive dark/light contract.
 - `top-level-navigation-plan.md` — итог по уже закрытому переводу всех five canonical entrypoints с document navigation на in-app navigation и фиксация финального five-route runtime contract.
 - `panel-operator-stage0-contract.md` — закрытый Этап 0 редизайна Operator Console: presentation ownership, матрица views/accordions/editors/modals, DOM freeze и dark/light visual baseline.

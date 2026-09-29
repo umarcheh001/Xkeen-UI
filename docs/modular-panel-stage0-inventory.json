@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 365,
-      "size_bytes": 5696871,
+      "unit_count": 366,
+      "size_bytes": 5708997,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 17,
         "backend_service": 49,
-        "backend_test": 158,
+        "backend_test": 159,
         "configuration": 10,
         "frontend_bundle": 3,
         "frontend_entrypoint": 2,
@@ -527,7 +527,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/__init__.py",
-      "size_bytes": 10358,
+      "size_bytes": 10414,
       "depends_on": [
         "engine.xray",
         "integration.happ",
@@ -627,7 +627,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/capabilities.py",
-      "size_bytes": 660,
+      "size_bytes": 848,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -1174,7 +1174,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/__init__.py",
-      "size_bytes": 2954,
+      "size_bytes": 3176,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -1299,7 +1299,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/capabilities.py",
-      "size_bytes": 10323,
+      "size_bytes": 14595,
       "depends_on": [
         "engine.mihomo",
         "tool.terminal",
@@ -1764,7 +1764,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_registry.py",
-      "size_bytes": 27138,
+      "size_bytes": 28034,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3807,7 +3807,25 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_stage0_inventory.py",
-      "size_bytes": 6459,
+      "size_bytes": 6439,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_module_capabilities.py",
+      "size_bytes": 6532,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3825,7 +3843,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_registry.py",
-      "size_bytes": 9130,
+      "size_bytes": 9110,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -26397,7 +26415,7 @@
           "size_bytes": 617690
         }
       },
-      "next_stage": "Этапы 2, 4 и 6."
+      "next_stage": "Этапы 3, 4 и 6."
     }
   ]
 }

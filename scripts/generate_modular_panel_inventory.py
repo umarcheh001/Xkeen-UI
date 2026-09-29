@@ -111,14 +111,15 @@ CONFIG_GLOBS = (
     "xkeen-ui/opt/**/*",
 )
 
-# When a Stage 1 file is newly created locally, include it in the snapshot
+# When a modular-panel file is newly created locally, include it in the snapshot
 # before it has been added to the Git index.  This keeps the reproducibility
 # guard valid for an implementation worktree as well as for a committed tree.
-WORKTREE_STAGE1_PATHS = frozenset(
+WORKTREE_MODULAR_PANEL_PATHS = frozenset(
     {
         "xkeen-ui/routes/modules.py",
         "xkeen-ui/services/module_registry.py",
         "tests/test_module_registry.py",
+        "tests/test_module_capabilities.py",
     }
 )
 
@@ -259,7 +260,7 @@ class ModularPanelInventoryGenerator:
             yield from emit(self.root.glob(pattern), "configuration")
 
     def _is_tracked_path(self, rel: str) -> bool:
-        if rel in WORKTREE_STAGE1_PATHS:
+        if rel in WORKTREE_MODULAR_PANEL_PATHS:
             return True
         if self._tracked_paths is None:
             return True
@@ -1170,7 +1171,7 @@ class ModularPanelInventoryGenerator:
                         "tool.advanced-diagnostics",
                     )
                 },
-                "next_stage": "Этапы 2, 4 и 6.",
+                "next_stage": "Этапы 3, 4 и 6.",
             },
         ]
 
@@ -1323,7 +1324,7 @@ class ModularPanelInventoryGenerator:
                 "- выявлены current gates и cross-module coupling;",
                 "- snapshot защищён тестом на синхронность с генератором.",
                 "",
-                "Следующий этап: **Этап 2 — расширение capabilities**.",
+                "Следующий этап: **Этап 3 — Backend gates**.",
                 "",
             ]
         )
