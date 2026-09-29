@@ -2498,9 +2498,29 @@ def _write_routing_preserving_comments(
     _atomic_write_json(path, obj)
 
 
+# Снимок нужен только для отката внутри операции, которая его сделала; после
+# неё его никто не читает.  Без чистки каталоги копились с каждым включением.
+TRANSACTIONS_KEEP = 10
+_TXID_RE = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{8}$")
+
+
+def _transactions_dir(ui_state_dir: str) -> str:
+    return os.path.join(ui_state_dir, "dns-over-vless", "transactions")
+
+
+def _prune_transactions(ui_state_dir: str, keep: int = TRANSACTIONS_KEEP) -> None:
+    root = _transactions_dir(ui_state_dir)
+    try:
+        names = sorted(name for name in os.listdir(root) if _TXID_RE.match(name))
+    except OSError:
+        return
+    for name in names[:-keep] if keep > 0 else names:
+        shutil.rmtree(os.path.join(root, name), ignore_errors=True)
+
+
 def _snapshot(paths: Iterable[str], ui_state_dir: str) -> tuple[str, Dict[str, Any]]:
     txid = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
-    directory = os.path.join(ui_state_dir, "dns-over-vless", "transactions", txid)
+    directory = os.path.join(_transactions_dir(ui_state_dir), txid)
     os.makedirs(directory, exist_ok=True)
     manifest: Dict[str, Any] = {"id": txid, "created_at": int(time.time()), "files": []}
     for idx, path in enumerate(paths):
@@ -2512,6 +2532,7 @@ def _snapshot(paths: Iterable[str], ui_state_dir: str) -> tuple[str, Dict[str, A
             item["backup"] = backup
         manifest["files"].append(item)
     _atomic_write_json(os.path.join(directory, "manifest.json"), manifest)
+    _prune_transactions(ui_state_dir)
     return directory, manifest
 
 
