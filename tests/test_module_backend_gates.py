@@ -136,14 +136,3 @@ def test_stage3_closure_is_reflected_in_documentation():
         assert fragment in contract
 
     assert "modular-panel-stage3-backend-gates.md" in docs_index
-
-
-def test_panel_defers_mihomo_top_level_import_until_gated_markup_exists():
-    root = Path(__file__).resolve().parents[1]
-    entry = (root / "xkeen-ui" / "static" / "js" / "pages" / "panel.entry.js").read_text(
-        encoding="utf-8"
-    )
-
-    assert "import { registerPanelMihomoTopLevelScreens }" not in entry
-    assert "document.querySelector('[data-xk-section=\"mihomo\"]')" in entry
-    assert "await import('./top_level_panel_mihomo.shared.js')" in entry

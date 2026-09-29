@@ -9,6 +9,7 @@ from typing import Iterable, List, Sequence
 from services.restart_log import append_restart_log as _append_restart_log
 from services.restart_log import append_restart_log_text as _append_restart_log_text
 from services.restart_log import read_restart_log as _read_restart_log
+from services.xkeen_commands_catalog import build_xkeen_cmd, resolve_xkeen_init_script
 
 
 def append_restart_log(log_file: str, ok: bool, source: str = "api", **meta: object) -> None:
@@ -101,11 +102,6 @@ def build_xkeen_control_cmds(
     normalized = str(action or "").strip().lower()
     if normalized not in {"start", "stop", "restart", "status"}:
         return []
-
-    # Command catalog is owned by the optional terminal module.  Service
-    # restart operations remain core functionality, so import its builders
-    # only when a control command is actually requested.
-    from services.xkeen_commands_catalog import build_xkeen_cmd, resolve_xkeen_init_script
 
     seen: set[tuple[str, ...]] = set()
     commands: list[list[str]] = []

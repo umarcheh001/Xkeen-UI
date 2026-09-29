@@ -45,10 +45,13 @@ config exchange и cores status — остаются зарегистриров�
 после отключения модуля.
 
 `run_server.py` выбирает WebSocket handler только для активного владельца.
-Mihomo WS, PTY и Xray log WS не импортируются для отключённых модулей.
+Для совместимости с существующим static import-contract service imports
+сохраняются, но Mihomo WS, PTY и Xray log handlers не выбираются и не
+выполняются для отключённых модулей.
 
-`panel.entry.js` загружает Mihomo top-level bundle через `import()` только
-когда gated Mihomo markup присутствует в документе.
+Gated Mihomo markup и Mihomo-specific backend API отсутствуют в
+Xray-only profile. Полное разделение frontend entrypoints выполняется на
+Этапе 4/5, чтобы не нарушить действующий frontend static-contract.
 
 ## Проверка
 

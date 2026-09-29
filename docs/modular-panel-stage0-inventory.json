@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 367,
-      "size_bytes": 5735362,
+      "size_bytes": 5733831,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 17,
@@ -466,7 +466,7 @@
       "module_id": "core",
       "kind": "app_runtime",
       "path": "xkeen-ui/run_server.py",
-      "size_bytes": 8402,
+      "size_bytes": 7854,
       "depends_on": [
         "tool.terminal",
         "engine.mihomo"
@@ -2159,7 +2159,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xkeen.py",
-      "size_bytes": 8865,
+      "size_bytes": 8655,
       "depends_on": [
         "tool.terminal",
         "engine.mihomo"
@@ -3834,7 +3834,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_backend_gates.py",
-      "size_bytes": 6313,
+      "size_bytes": 5845,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5674,7 +5674,7 @@
       "module_id": "core",
       "kind": "frontend_entrypoint",
       "path": "xkeen-ui/static/js/pages/panel.entry.js",
-      "size_bytes": 934,
+      "size_bytes": 629,
       "depends_on": [
         "engine.mihomo"
       ],
