@@ -1,0 +1,49 @@
+<body class="panel-page xk-panel-startup xk-operator-header-pending{% if is_mips %} xk-perf-lite{% endif %}">
+  <script>
+    window.__xkPanelStartupAt = window.performance ? window.performance.now() : Date.now();
+    // Fail open if a runtime error prevents the panel bootstrap from finishing.
+    window.__xkPanelStartupFailOpen = window.setTimeout(function () {
+      if (document.body) document.body.classList.remove('xk-operator-header-pending');
+      if (document.body) document.body.classList.remove('xk-panel-startup');
+      var overlay = document.getElementById('global-xkeen-spinner');
+      if (overlay && overlay.classList.contains('is-startup')) {
+        overlay.classList.remove('is-active', 'is-startup', 'is-leaving');
+        overlay.setAttribute('aria-busy', 'false');
+      }
+    }, 12000);
+  </script>
+  {% set top_level_spinner_text = 'Загружаем панель…' %}
+  {% set top_level_spinner_class = 'is-active is-startup' %}
+  {% set top_level_spinner_initial_active = true %}
+  {% include '_top_level_global_spinner.html' %}
+
+  <!-- Wider container (match DevTools page width) -->
+  <div class="container container-wide">
+    {% include "panel/header.html" %}
+    {% include "panel/navigation.html" %}
+      </div>
+    
+<div class="xkeen-ctrl-row">
+  <div class="xkeen-ctrl-group xkeen-ctrl-group-main">
+    <button id="xkeen-start-btn" class="xkeen-ctrl-btn xkeen-ctrl-btn-start" data-tooltip="Запустить сервис xkeen.">Запустить</button>
+    <button id="xkeen-stop-btn" class="xkeen-ctrl-btn xkeen-ctrl-btn-stop" data-tooltip="Остановить сервис xkeen.">Остановить</button>
+    <button id="xkeen-restart-btn" class="xkeen-ctrl-btn xkeen-ctrl-btn-restart" data-tooltip="Перезапустить сервис xkeen.">Перезапустить</button>
+    <div class="xkeen-ctrl-group-routing-focus" data-xk-section="routing">
+      <div id="routing-focus-switch" class="routing-focus-switch routing-focus-switch-compact" role="toolbar" aria-label="Режим редактирования роутинга">
+        <button id="routing-focus-gui-btn" type="button" class="routing-focus-btn routing-focus-btn-gui" aria-pressed="false" data-tooltip="Сфокусироваться на GUI-карточках правил и балансировщиков">GUI</button>
+        <button id="routing-focus-raw-btn" type="button" class="routing-focus-btn routing-focus-btn-raw" aria-pressed="false" data-tooltip="Сфокусироваться на raw JSON/JSONC редакторе">RAW</button>
+        <span id="routing-focus-note" class="routing-focus-note" title="GUI — быстрые карточки; RAW — точный JSON/JSONC редактор.">RAW: JSON/JSONC</span>
+      </div>
+    </div>
+  </div>
+  <div class="global-toggle-right">
+    <label class="dt-switch xk-global-autorestart-switch"
+           title="Автоматически перезапускать xkeen после сохранения конфигов.">
+      <input type="checkbox" id="global-autorestart-xkeen" checked>
+      <span class="dt-switch-slider" aria-hidden="true"></span>
+      <span class="dt-switch-label">Авто‑рестарт</span>
+    </label>
+  </div>
+</div>
+
+</header>

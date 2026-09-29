@@ -10,6 +10,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Iterable
 
+from panel_template_source import compose_panel_template
+
 
 PROJECT_DIRNAME = "xkeen-ui"
 SCHEMA_VERSION = 1
@@ -122,6 +124,13 @@ WORKTREE_MODULAR_PANEL_PATHS = frozenset(
         "tests/test_module_capabilities.py",
         "tests/test_module_backend_gates.py",
         "tests/test_modular_panel_stage4_1_contract.py",
+        "tests/test_modular_panel_stage4_2_shell.py",
+        "xkeen-ui/templates/panel/macros.html",
+        "xkeen-ui/templates/panel/head.html",
+        "xkeen-ui/templates/panel/page_config.html",
+        "xkeen-ui/templates/panel/shell.html",
+        "xkeen-ui/templates/panel/header.html",
+        "xkeen-ui/templates/panel/navigation.html",
     }
 )
 
@@ -885,8 +894,7 @@ class ModularPanelInventoryGenerator:
         return tasks
 
     def _build_ui_surface_inventory(self) -> dict[str, Any]:
-        panel_path = self.project_root / "templates/panel.html"
-        panel_text = self._read_text(panel_path)
+        panel_text = compose_panel_template(self.root)
         views = []
         for view in _ordered_unique(TOP_VIEW_RE.findall(panel_text)):
             views.append(

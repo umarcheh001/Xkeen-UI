@@ -1,8 +1,8 @@
 # План модульной архитектуры панели Xkeen UI
 
-**Статус:** Этапы 0, 1, 2, 3 и 4.1 закрыты; после review добавлен
+**Статус:** Этапы 0, 1, 2, 3, 4.1 и 4.2 закрыты; после review добавлен
 обязательный backlog hardening; следующий обязательный этап — Этап 3R,
-затем Этап 4.2<br>
+затем Этап 4.3<br>
 **Дата:** 29 сентября 2026 года  
 **Область:** облегчение панели, профили установки и официальный каталог модулей
 
@@ -10,7 +10,8 @@
 29 сентября 2026 года; Этап 2 закрыт 29 сентября 2026 года; Этап 3 закрыт
 29 сентября 2026 года; подэтап 4.1 закрыт 29 сентября 2026 года; по итогам
 повторной проверки добавлены обязательные safety-задачи; следующий основной
-этап — Этап 3R, runtime safety hardening; Этап 4.2 можно готовить параллельно.
+этап — Этап 3R, runtime safety hardening; подэтап 4.2 закрыт параллельно;
+после hardening следующий основной подэтап — Этап 4.3.
 
 ## 1. Цель проекта
 
@@ -704,8 +705,8 @@ optional advanced части.
 
 ## Этап 4. Разделение frontend shell и экранов
 
-**Статус:** в работе; подэтап 4.1 закрыт, подэтап 4.2 следует после
-обязательного Этапа 3R. Всего шесть последовательных подэтапов.
+**Статус:** в работе; подэтапы 4.1 и 4.2 закрыты, следующий — подэтап 4.3
+после обязательного Этапа 3R. Всего шесть последовательных подэтапов.
 
 Этап 4 отвечает за **серверную композицию HTML** и границы шаблонов. Он не
 должен одновременно решать задачу ленивой загрузки JavaScript/CSS: проверка
@@ -722,6 +723,7 @@ optional advanced части.
 xkeen-ui/templates/
 ├── panel.html                         # совместимый entrypoint/composition root
 └── panel/
+    ├── macros.html                    # общий op_icon
     ├── shell.html                     # общий каркас страницы
     ├── head.html                      # title, CSS и общие head-assets
     ├── header.html                    # header, статус и глобальные действия
@@ -805,9 +807,34 @@ xkeen-ui/templates/
 DOM id, менять `data-xk-*`/`data-view`-контракт или переносить screen-specific
 разметку в shell.
 
-**Критерий готовности 4.2:** после рендера Full/Legacy профиль сохраняет
-текущий shell, все существующие селекторы и page-level bootstrap продолжают
-работать, а screen-specific markup ещё не дублируется в shell.
+**Статус:** закрыт 29 сентября 2026 года.
+
+Артефакты:
+
+- `docs/modular-panel-stage4.2-frontend-shell.md` — контракт выделенного shell;
+- `scripts/panel_template_source.py` — resolver состава Jinja partials для
+  static inventory;
+- `tests/test_modular_panel_stage4_2_shell.py` — guardrails composition root,
+  DOM-контракта и Jinja compile.
+
+Реализация:
+
+- `panel/head.html` и `panel/page_config.html` владеют `<head>` и canonical
+  page config;
+- `panel/shell.html` владеет `<body>`, startup fail-open, spinner, root
+  container и global controls;
+- `panel/header.html` владеет branding, service status, summary и actions;
+- `panel/navigation.html` владеет top-level navigation;
+- `panel.html` сохраняет screens, modals, footer и entrypoint scripts до
+  следующих подэтапов.
+
+Static inventory и contract-тесты анализируют composed source через
+`scripts/panel_template_source.py`, поэтому split не ослабляет существующие
+DOM/API guardrails.
+
+**Критерий готовности 4.2:** **выполнен**. После рендера Full/Legacy профиль
+сохраняет текущий shell, все существующие селекторы и page-level bootstrap
+продолжают работать, а screen-specific markup не дублируется в shell.
 
 ### Подэтап 4.3. Выделение экранов по модульным границам
 

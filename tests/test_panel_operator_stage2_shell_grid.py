@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
-PANEL_TEMPLATE = ROOT / "xkeen-ui/templates/panel.html"
+PANEL_TEMPLATE = compose_panel_template(ROOT)
 OPERATOR_CSS = ROOT / "xkeen-ui/static/panel-operator.css"
 OPERATOR_HEADER = ROOT / "xkeen-ui/static/js/pages/panel.mihomo_header.js"
 PANEL_BOOTSTRAP = ROOT / "xkeen-ui/static/js/pages/panel.screen.bootstrap.js"
@@ -14,7 +16,7 @@ DOCS_INDEX = ROOT / "docs/README.md"
 
 
 def test_stage2_header_has_two_zones_without_replacing_runtime_nodes():
-    template = PANEL_TEMPLATE.read_text(encoding="utf-8")
+    template = PANEL_TEMPLATE
 
     assert template.count('data-xk-shell-zone=') == 2
     assert 'data-xk-shell-zone="identity"' in template
@@ -81,7 +83,7 @@ def test_stage2_shell_and_grid_rules_live_in_canonical_sections():
 
 
 def test_compact_header_blocks_legacy_first_paint_and_initializes_early():
-    template = PANEL_TEMPLATE.read_text(encoding="utf-8")
+    template = PANEL_TEMPLATE
     css = OPERATOR_CSS.read_text(encoding="utf-8")
     header_js = OPERATOR_HEADER.read_text(encoding="utf-8")
     bootstrap = PANEL_BOOTSTRAP.read_text(encoding="utf-8")

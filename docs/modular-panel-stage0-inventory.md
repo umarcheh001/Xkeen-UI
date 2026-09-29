@@ -36,7 +36,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 368 | 5.47 МБ | 75 | 4 | 35 | нет |
+| `core` | 375 | 5.48 МБ | 75 | 4 | 35 | нет |
 | `engine.xray` | 114 | 3.33 МБ | 52 | 3 | 14 | да |
 | `engine.mihomo` | 126 | 2.84 МБ | 88 | 4 | 6 | да |
 | `tool.editor` | 25 | 808.7 КБ | 0 | 0 | 2 | да |
@@ -78,7 +78,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 - Canonical/top-level страниц: **5**.
 - Вкладок `data-view` в `panel.html`: **6**.
 - Статических modal containers в `panel.html`: **53**.
-- Нормализованный UTF-8 размер `panel.html`: **415.5 КБ**.
+- Нормализованный UTF-8 размер `panel.html`: **401.1 КБ**.
 
 Уже существующие границы, пригодные для модульной загрузки:
 

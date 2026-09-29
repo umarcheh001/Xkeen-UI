@@ -1,0 +1,48 @@
+  {% set panel_page_config = frontend_page_config(
+    'panel',
+    sections={
+      'panelWhitelist': panel_sections_whitelist,
+      'devtoolsWhitelist': devtools_sections_whitelist,
+    },
+    flags={
+      'hasXray': has_xray,
+      'hasMihomo': has_mihomo,
+      'isMips': is_mips,
+      'multiCore': multi_core,
+      'mihomoConfigExists': mihomo_config_exists,
+    },
+    cores={
+      'available': available_cores,
+      'detected': detected_cores,
+      'uiFallback': core_ui_fallback,
+    },
+    files={
+      'routing': routing_file,
+      'inbounds': inbounds_file,
+      'outbounds': outbounds_file,
+      'mihomo': mihomo_config_file,
+    },
+    file_manager={
+      'rightDefault': fm_right_default,
+    },
+    github={
+      'repoUrl': github_repo_url,
+    },
+    static={
+      'base': url_for('static', filename=''),
+      'version': '20260324d',
+    },
+    runtime={
+      'debug': xkeen_runtime_debug,
+    },
+    terminal={
+      'supportsPty': terminal_supports_pty,
+      'enableOptionalAddons': xkeen_terminal_enable_optional_addons,
+    },
+  ) %}
+  <!-- Page runtime contract (Stage 6 / final): publish canonical pageConfig only. -->
+  <script>
+    window.XKeen = window.XKeen || {};
+    var pageConfig = {{ panel_page_config|tojson }};
+    window.XKeen.pageConfig = pageConfig;
+  </script>

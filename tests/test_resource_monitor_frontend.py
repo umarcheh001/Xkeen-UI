@@ -2,15 +2,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE = ROOT / "xkeen-ui/templates/panel.html"
+TEMPLATE = compose_panel_template(ROOT)
 SCRIPT = ROOT / "xkeen-ui/static/js/features/resource_monitor.js"
 CSS = ROOT / "xkeen-ui/static/panel-operator.css"
 
 
 def test_resource_monitor_opens_diagnostic_dashboard_from_header():
-    template = TEMPLATE.read_text(encoding="utf-8")
+    template = TEMPLATE
     script = SCRIPT.read_text(encoding="utf-8")
     css = CSS.read_text(encoding="utf-8")
 

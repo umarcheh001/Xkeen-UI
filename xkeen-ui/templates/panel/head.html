@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Xkeen UI — Routing / Inbounds / Outbounds</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+
+  {% include '_top_level_host_head_assets.html' %}
+  {% include '_codemirror6_importmap.html' %}
+
+  {% include "panel/page_config.html" %}
+  <script src="{{ url_for('static', filename='js/ui/sections.js', v='20260101c') }}"></script>
+  <!-- Editor payload is lazy-loaded by js/runtime/lazy_runtime.js + js/ui/editor_engine.js. -->
+  {% include '_top_level_host_theme_bootstrap.html' %}
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260907a') }}">
+  <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
+  {# Global Custom CSS (DevTools) — last in order so it can override everything. #}
+<!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
+  {# Isolated panel redesign. Keep last so the legacy cascade remains removable. #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260924b') }}"><script>document.documentElement.classList.remove('xk-panel-operator-pending');document.getElementById('xk-panel-operator-paint-guard')?.remove();</script>
+    <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
+</head>

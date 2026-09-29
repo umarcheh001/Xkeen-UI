@@ -8,12 +8,14 @@
   },
   "source": {
     "template": "xkeen-ui/templates/panel.html",
+    "composition_source": "scripts/panel_template_source.py",
     "inventory": "docs/modular-panel-stage0-inventory.json",
-    "sha256": "38b35e99dab29353e0a30270845cd7eef34ef9474a1ecf015b2850445da173ae",
-    "utf8_bytes": 425449,
+    "sha256": "2c3cd8f374f949384859e759ae1646781ebee794992a3d2dc49500a1f12ea82e",
+    "utf8_bytes": 425148,
     "line_count": 5608,
     "id_count": 1348,
-    "duplicate_ids": []
+    "duplicate_ids": [],
+    "entrypoint_sha256": "38b6b66753297f8119b40dc927d07148011283f6f6bbd0ed706077bbbcc68ff0"
   },
   "composition": {
     "current_entrypoint": "xkeen-ui/templates/panel.html",
@@ -72,7 +74,7 @@
         "js/ui/sections.js"
       ],
       "api_groups": [],
-      "line": 6
+      "line": 3
     },
     {
       "id": "page_config",
@@ -107,7 +109,7 @@
         "canonical window.XKeen.pageConfig"
       ],
       "api_groups": [],
-      "line": 15
+      "line": 12
     },
     {
       "id": "startup",
@@ -129,7 +131,7 @@
         "global spinner"
       ],
       "api_groups": [],
-      "line": 75
+      "line": 74
     },
     {
       "id": "header",
@@ -165,7 +167,7 @@
         "/api/cores/*",
         "/api/capabilities"
       ],
-      "line": 96
+      "line": 95
     },
     {
       "id": "navigation",
@@ -235,7 +237,7 @@
           "gate": "always"
         }
       ],
-      "line": 249
+      "line": 248
     },
     {
       "id": "global_controls",
@@ -259,7 +261,7 @@
         "/api/service/*",
         "/api/settings/*"
       ],
-      "line": 284
+      "line": 283
     }
   ],
   "screens": [

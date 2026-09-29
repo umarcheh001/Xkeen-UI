@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "xkeen-ui/templates/panel.html"
@@ -156,7 +158,7 @@ def test_stage0_inventory_classifies_all_inline_styles_and_dom_hooks(tmp_path):
 
 
 def test_operator_stylesheet_is_last_owned_and_fully_scoped():
-    template = TEMPLATE.read_text(encoding="utf-8")
+    template = compose_panel_template(ROOT)
     operator_css = OPERATOR_CSS.read_text(encoding="utf-8")
     legacy_css = LEGACY_CSS.read_text(encoding="utf-8")
 

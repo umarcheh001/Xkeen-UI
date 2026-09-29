@@ -1,8 +1,10 @@
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE = ROOT / "xkeen-ui/templates/panel.html"
+TEMPLATE = compose_panel_template(ROOT)
 CSS = ROOT / "xkeen-ui/static/panel-operator.css"
 XRAY_LOGS = ROOT / "xkeen-ui/static/js/features/xray_logs.js"
 RESTART_LOG = ROOT / "xkeen-ui/static/js/features/restart_log.js"
@@ -12,7 +14,7 @@ INDEX = ROOT / "docs/README.md"
 
 
 def test_logs_markup_keeps_runtime_hooks_and_exposes_shared_operator_regions():
-    text = TEMPLATE.read_text(encoding="utf-8")
+    text = TEMPLATE
     view = text[text.index('id="view-xray-logs"') : text.index('<!-- Xray log: device names -->')]
 
     for runtime_id in (
@@ -43,7 +45,7 @@ def test_logs_markup_keeps_runtime_hooks_and_exposes_shared_operator_regions():
 
 
 def test_logs_toolbar_distinguishes_screen_cleanup_and_file_deletion():
-    template = TEMPLATE.read_text(encoding="utf-8")
+    template = TEMPLATE
     css = CSS.read_text(encoding="utf-8")
     runtime = XRAY_LOGS.read_text(encoding="utf-8")
 
@@ -71,7 +73,7 @@ def test_logs_toolbar_distinguishes_screen_cleanup_and_file_deletion():
 
 
 def test_restart_log_actions_are_icon_only_and_keep_descriptive_tooltips():
-    text = TEMPLATE.read_text(encoding="utf-8")
+    text = TEMPLATE
     restart = RESTART_LOG.read_text(encoding="utf-8")
     journal_markup = "\n".join(
         part.split('</section>', 1)[0]
@@ -130,7 +132,7 @@ def test_logs_operator_layer_unifies_filters_counters_details_and_states():
 
 
 def test_xray_devices_modal_uses_operator_data_rows_instead_of_blue_cards():
-    template = TEMPLATE.read_text(encoding="utf-8")
+    template = TEMPLATE
     css = CSS.read_text(encoding="utf-8")
     xray = XRAY_LOGS.read_text(encoding="utf-8")
     modal = css[

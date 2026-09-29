@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from panel_template_source import compose_panel_template
+
 
 PROJECT_DIRNAME = "xkeen-ui"
 
@@ -84,6 +86,11 @@ class InventoryGenerator:
         entry_path = self.project_root / entry_rel
         init_path = self.project_root / init_rel
         template_path = self.project_root / spec["template"]
+        template_source = (
+            compose_panel_template(self.root)
+            if spec["template"] == "templates/panel.html"
+            else template_path.read_text(encoding="utf-8")
+        )
 
         entry_scan = self._scan_module(entry_path)
         init_scan = self._scan_module(init_path)
@@ -96,7 +103,7 @@ class InventoryGenerator:
             "init": init_rel,
             "shared_imports": entry_scan.static_imports,
             "dynamic_imports": entry_scan.dynamic_imports,
-            "template_script_tags": self._parse_template_script_tags(template_path),
+            "template_script_tags": self._parse_template_script_tags(template_source),
             "esm_bootstrap_files": [self._serialize_module(path) for path in graph_paths],
             "direct_init_globals": init_scan.globals,
             "direct_init_lazy_features": init_scan.lazy_features,
@@ -206,8 +213,7 @@ class InventoryGenerator:
                 ordered.append(name)
         return ordered
 
-    def _parse_template_script_tags(self, template_path: Path) -> list[str]:
-        text = template_path.read_text(encoding="utf-8")
+    def _parse_template_script_tags(self, text: str) -> list[str]:
         return [match.group(1) for match in SCRIPT_TAG_SRC_RE.finditer(text)]
 
     def _parse_lazy_runtime_inventory(self, lazy_runtime_path: Path) -> dict[str, object]:

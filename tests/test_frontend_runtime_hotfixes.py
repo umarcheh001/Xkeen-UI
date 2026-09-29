@@ -1,9 +1,12 @@
 from pathlib import Path
+
 import json
 import shutil
 import re
 
 import pytest
+
+from scripts.panel_template_source import compose_panel_template
 
 
 def test_monaco_context_menu_paste_reads_system_clipboard_when_no_paste_event():
@@ -318,7 +321,7 @@ def test_top_level_navigation_controls_use_shared_helper_contract():
     devtools_init = Path('xkeen-ui/static/js/pages/devtools.init.js').read_text(encoding='utf-8')
     xkeen_init = Path('xkeen-ui/static/js/pages/xkeen.init.js').read_text(encoding='utf-8')
     mihomo_init = Path('xkeen-ui/static/js/pages/mihomo_generator.init.js').read_text(encoding='utf-8')
-    panel_template = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
+    panel_template = compose_panel_template(Path('.'))
     backups_template = Path('xkeen-ui/templates/backups.html').read_text(encoding='utf-8')
     devtools_template = Path('xkeen-ui/templates/devtools.html').read_text(encoding='utf-8')
     xkeen_template = Path('xkeen-ui/templates/xkeen.html').read_text(encoding='utf-8')
@@ -423,7 +426,7 @@ def test_xray_live_logs_clear_uses_portal_confirm_modal():
 
 
 def test_xray_live_logs_card_uses_russian_visible_labels():
-    panel = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
+    panel = compose_panel_template(Path('.'))
     devtools = Path('xkeen-ui/templates/devtools.html').read_text(encoding='utf-8')
     layout_prefs = Path('xkeen-ui/static/js/features/layout_prefs.js').read_text(encoding='utf-8')
     xray_logs = Path('xkeen-ui/static/js/features/xray_logs.js').read_text(encoding='utf-8')
@@ -736,7 +739,7 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     boot = Path('xkeen-ui/static/js/ui/codemirror6_boot.js').read_text(encoding='utf-8')
     json_modal = Path('xkeen-ui/static/js/ui/json_editor_modal.js').read_text(encoding='utf-8')
     routing = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
-    template = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
+    template = compose_panel_template(Path('.'))
     vite = Path('vite.config.mjs').read_text(encoding='utf-8')
     monaco_shared = Path('xkeen-ui/static/js/ui/monaco_shared.js').read_text(encoding='utf-8')
     schema_loader = schema_loader_path.read_text(encoding='utf-8')
@@ -918,7 +921,7 @@ def test_xray_stream_network_schema_marks_grpc_as_deprecated():
         assert network_schema['deprecatedValues'] == ['grpc']
         assert 'XHTTP' in network_schema['deprecationMessage']
 
-    panel = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
+    panel = compose_panel_template(Path('.'))
     assert 'gRPC (deprecated)' in panel
 
     outbounds_src = Path('xkeen-ui/static/js/features/outbounds.js').read_text(encoding='utf-8')
@@ -943,7 +946,7 @@ def test_mihomo_yaml_schema_runtime_is_wired_into_panel_editor():
     codemirror_runtime = Path('xkeen-ui/static/js/ui/codemirror6_boot.js').read_text(encoding='utf-8')
     monaco_shared = Path('xkeen-ui/static/js/ui/monaco_shared.js').read_text(encoding='utf-8')
     mihomo_panel = Path('xkeen-ui/static/js/features/mihomo_panel.js').read_text(encoding='utf-8')
-    template = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
+    template = compose_panel_template(Path('.'))
     schema_path = Path('xkeen-ui/static/schemas/mihomo-config.schema.json')
 
     assert schema_path.is_file()
@@ -1151,7 +1154,7 @@ def test_mihomo_schema_tracks_wireguard_and_amnezia_wg_v31_fields():
 
 
 def test_mihomo_import_and_generator_expose_amnezia_wg_v3_support():
-    panel = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
+    panel = compose_panel_template(Path('.'))
     importer = Path('xkeen-ui/static/js/features/mihomo_import.js').read_text(encoding='utf-8')
     generator = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
     snippets = Path('xkeen-ui/static/js/ui/schema_snippets.js').read_text(encoding='utf-8')
@@ -1225,13 +1228,21 @@ def test_source_mode_templates_include_codemirror6_importmap_before_entry_module
     ]
 
     for rel in templates:
-        text = Path(rel).read_text(encoding='utf-8')
+        if rel == 'xkeen-ui/templates/panel.html':
+            text = compose_panel_template(Path('.'))
+            source_head = Path('xkeen-ui/templates/panel/head.html').read_text(encoding='utf-8')
+        else:
+            text = Path(rel).read_text(encoding='utf-8')
+            source_head = text
         include_marker = "{% include '_codemirror6_importmap.html' %}"
         module_marker = 'frontend_page_entry_url('
 
-        assert include_marker in text, rel
+        assert include_marker in source_head, rel
         assert module_marker in text, rel
-        assert text.index(include_marker) < text.index(module_marker), rel
+        if rel == 'xkeen-ui/templates/panel.html':
+            assert text.index(module_marker) > 0, rel
+        else:
+            assert text.index(include_marker) < text.index(module_marker), rel
 
 
 def test_p4_top_level_templates_share_host_partials_without_forcing_single_template_merge():
@@ -1253,9 +1264,11 @@ def test_p4_top_level_templates_share_host_partials_without_forcing_single_templ
         ],
     }
     template_expectations = {
-        'xkeen-ui/templates/panel.html': [
+        'xkeen-ui/templates/panel/head.html': [
             "{% include '_top_level_host_head_assets.html' %}",
             "{% include '_top_level_host_theme_bootstrap.html' %}",
+        ],
+        'xkeen-ui/templates/panel/shell.html': [
             "{% include '_top_level_global_spinner.html' %}",
         ],
         'xkeen-ui/templates/devtools.html': [
@@ -1777,7 +1790,7 @@ def test_mihomo_server_side_config_swaps_resync_editor_after_activate_and_restor
 
 
 def test_mihomo_profiles_backups_panel_uses_compact_premium_vault_layout():
-    template = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
+    template = compose_panel_template(Path('.'))
     styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
     script = Path('xkeen-ui/static/js/features/mihomo_panel.js').read_text(encoding='utf-8')
 
@@ -1978,7 +1991,7 @@ def test_routing_template_modals_stretch_preview_and_edit_editors_with_modal_res
 
 def test_routing_dat_card_keeps_visible_current_file_labels_in_sync_with_selected_names():
     ids_text = Path('xkeen-ui/static/js/features/routing_cards/ids.js').read_text(encoding='utf-8')
-    panel_text = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
+    panel_text = compose_panel_template(Path('.'))
     card_text = Path('xkeen-ui/static/js/features/routing_cards/dat/card.js').read_text(encoding='utf-8')
 
     assert "datGeositeCurrentFile: 'routing-dat-geosite-current-file'" in ids_text
@@ -2077,7 +2090,7 @@ def test_xray_logs_css_keeps_live_window_resizable_past_restart_log_cap():
 
 def test_xray_logs_device_names_ui_contract():
     script = Path('xkeen-ui/static/js/features/xray_logs.js').read_text(encoding='utf-8')
-    template = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
+    template = compose_panel_template(Path('.'))
     css = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
 
     assert 'id="xray-log-devices-btn"' in template
@@ -2132,7 +2145,7 @@ def test_xray_logs_destination_domain_hints_ui_contract():
 
 
 def test_xray_logs_dns_display_toggle_is_in_toolbar_without_legacy_banner():
-    template = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
+    template = compose_panel_template(Path('.'))
     script = Path('xkeen-ui/static/js/features/xray_logs.js').read_text(encoding='utf-8')
 
     assert 'id="xray-log-toggle-domains"' in template

@@ -8,6 +8,8 @@ from collections import defaultdict
 from html import unescape
 from pathlib import Path
 
+from panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SPRITE_GENERATOR = ROOT / "scripts" / "generate_operator_icon_sprite.py"
@@ -94,7 +96,11 @@ def add_usage(usages: dict[str, list[dict[str, str]]], name: str, item: dict[str
 
 def scan_templates(usages: dict[str, list[dict[str, str]]], names: set[str], unknown: set[str]) -> None:
     for path in TEMPLATE_SOURCES:
-        source = path.read_text(encoding="utf-8")
+        source = (
+            compose_panel_template(ROOT)
+            if path == ROOT / "xkeen-ui" / "templates" / "panel.html"
+            else path.read_text(encoding="utf-8")
+        )
         for control in CONTROL_RE.finditer(source):
             tag, attrs, body = control.group("tag"), control.group("attrs"), control.group("body")
             for icon in ICON_RE.finditer(body):

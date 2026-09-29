@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
 GENERATOR = ROOT / "scripts" / "generate_modular_panel_stage4_1_contract.py"
@@ -70,7 +72,7 @@ def test_stage4_1_contract_covers_shell_screens_modals_and_profiles(tmp_path):
     assert shell["head"]["module_id"] == "core"
     assert "window.XKeen.pageConfig" in shell["page_config"]["dom_anchors"]
     assert "top-tab-mihomo-generator" in shell["navigation"]["dom_anchors"]
-    panel_template = (ROOT / "xkeen-ui/templates/panel.html").read_text(encoding="utf-8")
+    panel_template = compose_panel_template(ROOT)
     devtools_link_start = panel_template.index("url_for('devtools_page')")
     devtools_link_end = panel_template.index("panel-core-ui-refresh-btn")
     assert "{% if has_diagnostics %}" in panel_template[devtools_link_start - 200 : devtools_link_end]
@@ -143,7 +145,7 @@ def test_stage4_1_closure_is_reflected_in_documentation():
     docs_index = DOCS_INDEX.read_text(encoding="utf-8")
 
     for fragment in (
-        "Этапы 0, 1, 2, 3 и 4.1 закрыты; после review добавлен",
+        "Этапы 0, 1, 2, 3, 4.1 и 4.2 закрыты; после review добавлен",
         "обязательный backlog hardening; следующий обязательный этап — Этап 3R",
         "### Подэтап 4.1. Контракт границ shell, экранов и модальных окон",
         "docs/modular-panel-stage4.1-contract.md",

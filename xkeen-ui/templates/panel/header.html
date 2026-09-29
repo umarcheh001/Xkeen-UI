@@ -1,0 +1,151 @@
+{% from "panel/macros.html" import op_icon %}
+    <header class="panel-header panel-header-shell" data-xk-shell="panel-header">
+      <div class="header-main panel-header-shell-main">
+        <div class="panel-shell-identity" data-xk-shell-zone="identity">
+          <div class="header-title-group panel-shell-brand" data-xk-shell-group="brand">
+            <div class="panel-shell-branding">
+              <img id="xk-brand-logo" class="xk-brand-logo hidden" alt="Logo" />
+              <h1 id="xk-brand-title" data-xk-brand-title>Xkeen UI</h1>
+            </div>
+            <div class="panel-shell-status" data-xk-shell-slot="status" aria-live="polite">
+              <span
+                id="xkeen-service-lamp"
+                class="service-status-lamp"
+                data-state="pending"
+                title="Проверка статуса..."
+              ></span>
+              <span id="xkeen-service-text" class="service-status-text">
+                Проверка статуса...
+              </span>
+            </div>
+          </div>
+
+          <div class="header-center panel-shell-center" data-xk-shell-group="service">
+            <div class="panel-shell-core" data-xk-shell-slot="core">
+              <button
+                id="xkeen-core-text"
+                type="button"
+                class="service-core-text{% if not multi_core %} hidden{% endif %}"
+                data-loading="true"
+                aria-busy="true"
+                aria-disabled="true"
+                {% if not multi_core %}aria-hidden="true" tabindex="-1"{% endif %}
+              >Ядро</button>
+            </div>
+
+            {% if has_xray %}
+            <div class="panel-shell-badges" data-xk-shell-slot="badges">
+              <!-- Notice: global Xray logging is enabled (loglevel!=none) -->
+              <span
+                id="xray-logs-badge"
+                class="xray-logs-badge"
+                data-state="off"
+                data-live="off"
+                title="Логи Xray выключены"
+                aria-label="Логи Xray выключены"
+              >
+                {{ op_icon('terminal') }}
+              </span>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="header-right panel-shell-right" data-xk-shell-zone="global-actions" data-xk-shell-group="actions">
+          <div class="panel-shell-summary" data-xk-shell-slot="summary">
+
+            <button
+              type="button"
+              id="xk-resource-monitor"
+              class="xk-resource-monitor"
+              aria-label="Ресурсы роутера: загрузка данных"
+              title="Ресурсы роутера обновляются каждые 5 секунд"
+              data-state="loading"
+              aria-haspopup="dialog"
+              data-resource-dashboard-target="xk-resource-dashboard-modal"
+            >
+              <span class="xk-resource-monitor-item">
+                <span class="xk-resource-monitor-label">CPU</span>
+                <strong id="xk-resource-cpu">—</strong>
+                <span class="xk-resource-meter" aria-hidden="true"><i id="xk-resource-cpu-meter"></i></span>
+              </span>
+              <span class="xk-resource-monitor-item">
+                <span class="xk-resource-monitor-label">RAM</span>
+                <strong id="xk-resource-memory">—</strong>
+                <span class="xk-resource-meter" aria-hidden="true"><i id="xk-resource-memory-meter"></i></span>
+              </span>
+              <span id="xk-resource-monitor-stale" class="xk-resource-monitor-stale" hidden>нет данных</span>
+            </button>
+
+            <div
+              class="xk-global-header-activity"
+              data-xk-global-spinner-anchor
+              aria-live="polite"
+              aria-atomic="true"
+              aria-label="Операция выполняется…"
+              title="Операция выполняется…"
+            >
+              <span class="xk-global-header-activity__icon" aria-hidden="true"></span>
+              <span class="xk-visually-hidden" data-xk-global-spinner-text>Операция выполняется…</span>
+            </div>
+            <button
+              type="button"
+              id="last-load"
+              class="last-load-badge last-load-chip hidden"
+              title="Последняя операция с конфигом"
+              aria-label="Последняя операция с конфигом"
+              aria-expanded="false"
+            ></button>
+          </div>
+
+          <div class="header-actions panel-shell-actions">
+            <div class="panel-shell-actions-primary" data-xk-shell-slot="workspace-actions">
+              <button
+                type="button"
+                id="theme-toggle-btn"
+                class="theme-toggle-btn theme-toggle-header xk-header-btn xk-header-btn-theme"
+                aria-label="Переключить тему"
+              >{{ op_icon('sun', 'theme-toggle-icon') }}<span class="theme-toggle-text">Светлая тема</span></button>
+
+              <button
+                type="button"
+                id="ui-settings-open-btn"
+                class="service-core-text xk-header-btn xk-header-btn-ui"
+                title="UI settings"
+              >{{ op_icon('settings') }}<span class="xk-action-label">UI</span></button>
+
+              {% if has_diagnostics %}
+              <a
+                href="{{ url_for('devtools_page') }}"
+                class="service-core-text xk-header-btn xk-header-btn-devtools"
+                data-xk-top-nav="1"
+                title="DevTools"
+              >DevTools</a>
+
+              <a
+                href="{{ url_for('devtools_page') }}#dt-update-card"
+                id="xk-update-link"
+                class="service-core-text hidden"
+                data-xk-top-nav="1"
+                data-loading="true"
+                aria-busy="true"
+                title="Обновление"
+              >
+                <span class="xk-update-dot" aria-hidden="true"></span>
+                <span data-xk-update-label>Обновление</span>
+              </a>
+              {% endif %}
+
+              <button
+                type="button"
+                id="panel-core-ui-refresh-btn"
+                class="service-core-text xk-header-btn hidden"
+                title="Обновить панель после изменения набора ядер"
+              >Обновить панель</button>
+            </div>
+
+            <div class="panel-shell-actions-secondary" data-xk-shell-slot="session-actions">
+              {% set logout_button_class = 'service-core-text xk-header-btn xk-header-btn-logout' %}
+              {% include '_logout_button.html' %}
+            </div>
+          </div>

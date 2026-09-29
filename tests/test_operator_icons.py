@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
 GENERATOR = ROOT / "scripts/generate_operator_icon_sprite.py"
@@ -34,17 +36,17 @@ FILE_MANAGER_STORAGE = ROOT / "xkeen-ui/static/js/features/file_manager/storage.
 
 
 def header_markup() -> str:
-    template = TEMPLATE.read_text(encoding="utf-8")
+    template = compose_panel_template(ROOT)
     return template[template.index('<header ') : template.index('<div id="view-routing"')]
 
 
 def top_level_markup() -> str:
-    template = TEMPLATE.read_text(encoding="utf-8")
+    template = compose_panel_template(ROOT)
     return template[template.index('<div id="view-xkeen"') : template.index('<!-- Xray log: context modal -->')]
 
 
 def routing_markup() -> str:
-    template = TEMPLATE.read_text(encoding="utf-8")
+    template = compose_panel_template(ROOT)
     return template[template.index('<div id="view-routing"') : template.index('<div id="view-mihomo"')]
 
 

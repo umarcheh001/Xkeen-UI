@@ -1,13 +1,13 @@
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CSS = ROOT / "xkeen-ui/static/panel-operator.css"
 EDITOR_ACTIONS = ROOT / "xkeen-ui/static/js/ui/editor_actions.js"
 MONACO_SHARED = ROOT / "xkeen-ui/static/js/ui/monaco_shared.js"
-PANEL_TEMPLATE = ROOT / "xkeen-ui/templates/panel.html"
-
-
+PANEL_TEMPLATE = compose_panel_template(ROOT)
 def test_operator_editor_menus_replace_legacy_blue_glass_surfaces():
     css = CSS.read_text(encoding="utf-8")
     stage = css[css.index("/* Editor overflow menus are flat operator surfaces") : css.index("body.panel-page .routing-editor-meta {")]
@@ -64,7 +64,7 @@ def test_mihomo_menu_and_fullscreen_toolbar_stay_inside_viewport():
 def test_operator_editors_share_panel_canvas_and_schema_hover_is_readable():
     css = CSS.read_text(encoding="utf-8")
     monaco = MONACO_SHARED.read_text(encoding="utf-8")
-    template = PANEL_TEMPLATE.read_text(encoding="utf-8")
+    template = PANEL_TEMPLATE
 
     for fragment in (
         "--op-editor: #0d0f13;",

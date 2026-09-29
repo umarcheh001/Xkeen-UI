@@ -1,8 +1,10 @@
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
-PANEL = ROOT / "xkeen-ui/templates/panel.html"
+PANEL = compose_panel_template(ROOT)
 GENERATOR = ROOT / "xkeen-ui/templates/mihomo_generator.html"
 CSS = ROOT / "xkeen-ui/static/panel-operator.css"
 MIHOMO_JS = ROOT / "xkeen-ui/static/js/features/mihomo_panel.js"
@@ -14,7 +16,7 @@ INDEX = ROOT / "docs/README.md"
 
 def test_mihomo_generator_reuses_late_scoped_operator_layer():
     template = GENERATOR.read_text(encoding="utf-8")
-    panel_template = PANEL.read_text(encoding="utf-8")
+    panel_template = PANEL
     assert '<body class="panel-page mihomo-generator-page">' in template
     assert "filename='panel-operator.css', v='20260919b'" in template
     assert "filename='panel-operator.css', v='20260924b'" in panel_template
@@ -24,7 +26,7 @@ def test_mihomo_generator_reuses_late_scoped_operator_layer():
 
 
 def test_profiles_markup_and_runtime_expose_form_table_validation_contract():
-    panel = PANEL.read_text(encoding="utf-8")
+    panel = PANEL
     runtime = MIHOMO_JS.read_text(encoding="utf-8")
     for fragment in ('aria-label="Профили Mihomo"', 'aria-label="Бэкапы Mihomo"', 'id="mihomo-profile-create-form"', 'class="xk-mihomo-profile-field"', 'aria-describedby="mihomo-new-profile-name-hint mihomo-new-profile-name-error"', 'id="mihomo-new-profile-name-error"', 'role="alert" hidden', 'Без расширения <code>.yaml</code>.'):
         assert fragment in panel
@@ -61,7 +63,7 @@ def test_profile_actions_and_create_row_keep_the_compact_layout_aligned():
 
 
 def test_profiles_and_backups_use_icon_only_actions_without_decorative_heading_icon():
-    panel = PANEL.read_text(encoding="utf-8")
+    panel = PANEL
     runtime = MIHOMO_JS.read_text(encoding="utf-8")
     heading = panel.split('id="mihomo-profiles-link"', 1)[1].split('</div>', 1)[0]
 
@@ -139,7 +141,7 @@ def test_mihomo_generator_validation_result_uses_flat_operator_diagnostic_contra
 
 
 def test_routing_mihomo_validation_uses_the_same_flat_operator_diagnostic_contract():
-    template = PANEL.read_text(encoding="utf-8")
+    template = PANEL
     css = CSS.read_text(encoding="utf-8")
 
     modal = template[template.index('id="mihomo-validation-modal"'):template.index('id="ssh-modal"')]

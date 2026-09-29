@@ -9,8 +9,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE = (ROOT / "xkeen-ui/templates/panel.html").read_text(encoding="utf-8")
+TEMPLATE = compose_panel_template(ROOT)
 SHELL = (ROOT / "xkeen-ui/static/js/pages/panel_shell.shared.js").read_text(encoding="utf-8")
 STATUS = (ROOT / "xkeen-ui/static/js/features/service_status.js").read_text(encoding="utf-8")
 

@@ -10,6 +10,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Iterable
 
+from panel_template_source import compose_panel_template
+
 
 TEMPLATE_REL = "xkeen-ui/templates/panel.html"
 OPERATOR_CSS_REL = "xkeen-ui/static/panel-operator.css"
@@ -623,8 +625,7 @@ class PanelOperatorInventoryGenerator:
         self.root = root.resolve()
 
     def build(self) -> dict[str, object]:
-        template_path = self.root / TEMPLATE_REL
-        source = template_path.read_text(encoding="utf-8")
+        source = compose_panel_template(self.root)
         parser = TemplateParser()
         parser.feed(source)
         elements = parser.elements
@@ -640,6 +641,7 @@ class PanelOperatorInventoryGenerator:
             "generated_from": "scripts/generate_panel_operator_inventory.py",
             "sources": {
                 "template": TEMPLATE_REL,
+                "composed_template": "scripts/panel_template_source.py",
                 "operator_stylesheet": OPERATOR_CSS_REL,
                 "legacy_stylesheet": LEGACY_CSS_REL,
             },

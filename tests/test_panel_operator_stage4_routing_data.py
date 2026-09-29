@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CSS_PATH = ROOT / "xkeen-ui/static/panel-operator.css"
-TEMPLATE_PATH = ROOT / "xkeen-ui/templates/panel.html"
+TEMPLATE_PATH = compose_panel_template(ROOT)
 RENDER_PATH = ROOT / "xkeen-ui/static/js/features/routing_cards/rules/render.js"
 DND_PATH = ROOT / "xkeen-ui/static/js/features/routing_cards/rules/dnd_pointer.js"
 MODEL_PATH = ROOT / "xkeen-ui/static/js/features/routing_cards/rules/model.js"
@@ -115,7 +117,7 @@ def test_stage4_balancers_use_summary_disclosure_and_compact_selector():
 
 
 def test_stage4_routing_section_has_one_primary_apply_action():
-    template = TEMPLATE_PATH.read_text(encoding="utf-8")
+    template = TEMPLATE_PATH
     model = MODEL_PATH.read_text(encoding="utf-8")
     rules_start = template.index('id="routing-rules-card"')
     rules_end = template.index('<!-- Сворачиваемый блок routing -->', rules_start)

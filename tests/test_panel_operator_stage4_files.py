@@ -1,8 +1,10 @@
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE = ROOT / "xkeen-ui/templates/panel.html"
+TEMPLATE = compose_panel_template(ROOT)
 CSS = ROOT / "xkeen-ui/static/panel-operator.css"
 RENDER = ROOT / "xkeen-ui/static/js/features/file_manager/render.js"
 LISTING = ROOT / "xkeen-ui/static/js/features/file_manager/listing.js"
@@ -16,7 +18,7 @@ INDEX = ROOT / "docs/README.md"
 
 
 def test_files_markup_exposes_toolbar_and_dual_grid_contract():
-    text = TEMPLATE.read_text(encoding="utf-8")
+    text = TEMPLATE
     view = text[text.index('id="view-files"') : text.index('id="view-xray-logs"')]
 
     for fragment in (
@@ -127,7 +129,7 @@ def test_files_bottom_resize_and_same_folder_drop_cancel_are_explicit():
 def test_file_bookmark_controls_use_centered_operator_icons_without_emoji_actions():
     css = CSS.read_text(encoding="utf-8")
     bookmarks = (ROOT / "xkeen-ui/static/js/features/file_manager/bookmarks.js").read_text(encoding="utf-8")
-    template = TEMPLATE.read_text(encoding="utf-8")
+    template = TEMPLATE
 
     for fragment in (
         ".fm-bookmarks-control",

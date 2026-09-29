@@ -1,11 +1,11 @@
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 ROOT = Path(__file__).resolve().parents[1]
 CSS = ROOT / "xkeen-ui/static/panel-operator.css"
 MODAL = ROOT / "xkeen-ui/static/js/ui/xray_preflight_modal.js"
-TEMPLATE = ROOT / "xkeen-ui/templates/panel.html"
-
-
+TEMPLATE = compose_panel_template(ROOT)
 def test_dynamic_xray_preflight_uses_operator_modal_contract():
     source = MODAL.read_text(encoding="utf-8")
 
@@ -42,5 +42,5 @@ def test_xray_preflight_operator_layer_is_flat_and_state_aware():
 
 
 def test_xray_preflight_stylesheet_cache_key_is_current():
-    template = TEMPLATE.read_text(encoding="utf-8")
+    template = TEMPLATE
     assert "filename='panel-operator.css', v='20260924b'" in template

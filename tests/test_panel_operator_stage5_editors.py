@@ -1,8 +1,10 @@
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE = ROOT / "xkeen-ui/templates/panel.html"
+TEMPLATE = compose_panel_template(ROOT)
 CSS = ROOT / "xkeen-ui/static/panel-operator.css"
 PLAN = ROOT / "docs/panel-operator-redesign-completion-plan.md"
 CONTRACT = ROOT / "docs/panel-operator-stage5-editor-workbench.md"
@@ -10,7 +12,7 @@ INDEX = ROOT / "docs/README.md"
 
 
 def test_stage5_editor_workbench_frame_is_shared_by_json_file_and_snapshot():
-    template = TEMPLATE.read_text(encoding="utf-8")
+    template = TEMPLATE
     css = CSS.read_text(encoding="utf-8")
 
     for modal_id in ("json-editor-modal", "fm-editor-modal", "xray-snapshot-modal"):
@@ -34,7 +36,7 @@ def test_stage5_editor_workbench_frame_is_shared_by_json_file_and_snapshot():
 
 
 def test_stage5_json_statuses_are_labels_not_legacy_pills():
-    template = TEMPLATE.read_text(encoding="utf-8")
+    template = TEMPLATE
     css = CSS.read_text(encoding="utf-8")
     json_modal = template[template.index('id="json-editor-modal"'):template.index('<!-- DAT GeoSite/GeoIP')]
 
@@ -81,7 +83,7 @@ def test_stage5_monaco_completion_and_parameter_widgets_use_operator_surfaces():
 
 
 def test_stage5_all_static_modals_are_bound_to_one_of_the_four_family_frames():
-    template = TEMPLATE.read_text(encoding="utf-8")
+    template = TEMPLATE
     css = CSS.read_text(encoding="utf-8")
 
     expected_counts = {
@@ -176,7 +178,7 @@ def test_stage5_editor_help_is_a_responsive_workbench_sidecar():
 
 
 def test_stage5_modal_geometry_is_scoped_and_empty_or_error_restores_auto_height():
-    template = TEMPLATE.read_text(encoding="utf-8")
+    template = TEMPLATE
     css = CSS.read_text(encoding="utf-8")
     plan = PLAN.read_text(encoding="utf-8")
     contract = CONTRACT.read_text(encoding="utf-8")

@@ -10,10 +10,10 @@
 - Stage 0 inventory: `docs/modular-panel-stage0-inventory.json`;
 - machine-readable contract: `docs/modular-panel-stage4.1-contract.json`;
 - пересборка: `python .\scripts\generate_modular_panel_stage4_1_contract.py --root .`;
-- UTF-8 размер: `425449` байт;
+- UTF-8 размер: `425148` байт;
 - строк: `5608`;
 - статических `id`: `1348`, дубликатов: `0`;
-- SHA-256 текущего baseline: `38b35e99dab29353e0a30270845cd7eef34ef9474a1ecf015b2850445da173ae`.
+- SHA-256 текущего baseline: `2c3cd8f374f949384859e759ae1646781ebee794992a3d2dc49500a1f12ea82e`.
 
 ## Правила composition
 
@@ -33,12 +33,12 @@ head → startup → header → navigation → global_controls → screens → m
 
 | Область | Владелец | Целевой partial | Якорь, строка | DOM-контракт |
 | --- | --- | --- | --- | --- |
-| head | core | xkeen-ui/templates/panel/head.html | 6 | `xk-terminal-theme-link`, `xk-panel-operator-paint-guard` |
-| page_config | core | xkeen-ui/templates/panel/page_config.html | 15 | `window.XKeen.pageConfig`, `var pageConfig` |
-| startup | core | xkeen-ui/templates/panel/shell.html | 75 | `global-xkeen-spinner`, `xk-panel-operator-paint-guard`, `xk-panel-operator-pending` |
-| header | core | xkeen-ui/templates/panel/header.html | 96 | `xk-brand-logo`, `xkeen-service-lamp`, `xkeen-service-text`, `xkeen-core-text`, `xray-logs-badge` |
-| navigation | core | xkeen-ui/templates/panel/navigation.html | 249 | `data-view=routing`, `data-view=mihomo`, `data-view=xkeen`, `data-view=xray-logs`, `data-view=commands` |
-| global_controls | core | xkeen-ui/templates/panel/shell.html | 284 | `xkeen-start-btn`, `xkeen-stop-btn`, `xkeen-restart-btn`, `global-autorestart-xkeen`, `routing-focus-switch` |
+| head | core | xkeen-ui/templates/panel/head.html | 3 | `xk-terminal-theme-link`, `xk-panel-operator-paint-guard` |
+| page_config | core | xkeen-ui/templates/panel/page_config.html | 12 | `window.XKeen.pageConfig`, `var pageConfig` |
+| startup | core | xkeen-ui/templates/panel/shell.html | 74 | `global-xkeen-spinner`, `xk-panel-operator-paint-guard`, `xk-panel-operator-pending` |
+| header | core | xkeen-ui/templates/panel/header.html | 95 | `xk-brand-logo`, `xkeen-service-lamp`, `xkeen-service-text`, `xkeen-core-text`, `xray-logs-badge` |
+| navigation | core | xkeen-ui/templates/panel/navigation.html | 248 | `data-view=routing`, `data-view=mihomo`, `data-view=xkeen`, `data-view=xray-logs`, `data-view=commands` |
+| global_controls | core | xkeen-ui/templates/panel/shell.html | 283 | `xkeen-start-btn`, `xkeen-stop-btn`, `xkeen-restart-btn`, `global-autorestart-xkeen`, `routing-focus-switch` |
 
 ## Screen boundaries
 

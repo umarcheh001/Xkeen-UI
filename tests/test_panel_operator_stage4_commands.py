@@ -1,8 +1,10 @@
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE = ROOT / "xkeen-ui/templates/panel.html"
+TEMPLATE = compose_panel_template(ROOT)
 CSS = ROOT / "xkeen-ui/static/panel-operator.css"
 SCRIPT = ROOT / "xkeen-ui/static/js/features/commands_list.js"
 CORES_SCRIPT = ROOT / "xkeen-ui/static/js/features/cores_status.js"
@@ -12,7 +14,7 @@ INDEX = ROOT / "docs/README.md"
 
 
 def test_commands_rows_keep_runtime_hooks_and_expose_string_action_model():
-    text = TEMPLATE.read_text(encoding="utf-8")
+    text = TEMPLATE
     view = text[text.index('id="view-commands"') : text.index('<!-- Restart log -->')]
     # The catalog is rendered by a Jinja loop; the template therefore keeps
     # one canonical row source plus the seven explicit panel utility rows.
@@ -51,7 +53,7 @@ def test_commands_operator_layer_is_a_balanced_three_column_catalog():
 
 
 def test_commands_header_exposes_terminal_and_integrated_core_status():
-    text = TEMPLATE.read_text(encoding="utf-8")
+    text = TEMPLATE
     view = text[text.index('id="view-commands"') : text.index('<!-- Restart log -->')]
     assert 'class="commands-header-actions"' in view
     assert view.count('<span>Открыть терминал</span>') == 2

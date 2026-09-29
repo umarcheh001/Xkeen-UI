@@ -1,4 +1,6 @@
 from pathlib import Path
+
+from scripts.panel_template_source import compose_panel_template
 import re
 
 
@@ -10,9 +12,7 @@ PLAN = ROOT / "docs/panel-operator-redesign-completion-plan.md"
 DOC = ROOT / "docs/devtools-operator-theme.md"
 INDEX = ROOT / "docs/README.md"
 THEME_BOOTSTRAP = ROOT / "xkeen-ui/templates/_top_level_host_theme_bootstrap.html"
-PANEL_TEMPLATE = ROOT / "xkeen-ui/templates/panel.html"
-
-
+PANEL_TEMPLATE = compose_panel_template(ROOT)
 def test_devtools_operator_stylesheet_is_isolated_and_loaded_last():
     template = TEMPLATE.read_text(encoding="utf-8")
     css = CSS.read_text(encoding="utf-8")
@@ -112,7 +112,7 @@ def test_devtools_operator_migration_is_documented():
 
 def test_devtools_back_navigation_has_operator_first_paint_guard():
     bootstrap = THEME_BOOTSTRAP.read_text(encoding="utf-8")
-    panel = PANEL_TEMPLATE.read_text(encoding="utf-8")
+    panel = PANEL_TEMPLATE
 
     assert "document.referrer" in bootstrap
     assert "(location.pathname || '') === '/'" in bootstrap

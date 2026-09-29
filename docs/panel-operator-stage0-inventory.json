@@ -3,6 +3,7 @@
   "generated_from": "scripts/generate_panel_operator_inventory.py",
   "sources": {
     "template": "xkeen-ui/templates/panel.html",
+    "composed_template": "scripts/panel_template_source.py",
     "operator_stylesheet": "xkeen-ui/static/panel-operator.css",
     "legacy_stylesheet": "xkeen-ui/static/styles.css"
   },
@@ -20,7 +21,7 @@
   "top_level_views": [
     {
       "name": "routing",
-      "control_locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-routing@L251",
+      "control_locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-routing@L250",
       "target_id": "view-routing",
       "target_present": true,
       "initial_visibility": "visible",
@@ -38,7 +39,7 @@
     },
     {
       "name": "mihomo",
-      "control_locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-mihomo@L256",
+      "control_locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-mihomo@L255",
       "target_id": "view-mihomo",
       "target_present": true,
       "initial_visibility": "hidden",
@@ -52,7 +53,7 @@
     },
     {
       "name": "xkeen",
-      "control_locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-xkeen@L260",
+      "control_locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-xkeen@L259",
       "target_id": "view-xkeen",
       "target_present": true,
       "initial_visibility": "hidden",
@@ -66,7 +67,7 @@
     },
     {
       "name": "xray-logs",
-      "control_locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-logs@L264",
+      "control_locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-logs@L263",
       "target_id": "view-xray-logs",
       "target_present": true,
       "initial_visibility": "hidden",
@@ -82,7 +83,7 @@
     },
     {
       "name": "commands",
-      "control_locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-commands@L268",
+      "control_locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-commands@L267",
       "target_id": "view-commands",
       "target_present": true,
       "initial_visibility": "hidden",
@@ -8397,17 +8398,17 @@
     "data_attribute_count": 628,
     "data_attributes": [
       {
-        "locator": "header.panel-header.panel-header-shell@L96",
+        "locator": "header.panel-header.panel-header-shell@L95",
         "name": "data-xk-shell",
         "value": "panel-header"
       },
       {
-        "locator": "div.panel-shell-identity@L98",
+        "locator": "div.panel-shell-identity@L97",
         "name": "data-xk-shell-zone",
         "value": "identity"
       },
       {
-        "locator": "div.header-title-group.panel-shell-brand@L99",
+        "locator": "div.header-title-group.panel-shell-brand@L98",
         "name": "data-xk-shell-group",
         "value": "brand"
       },
@@ -8417,7 +8418,7 @@
         "value": ""
       },
       {
-        "locator": "div.panel-shell-status@L104",
+        "locator": "div.panel-shell-status@L103",
         "name": "data-xk-shell-slot",
         "value": "status"
       },
@@ -8427,12 +8428,12 @@
         "value": "pending"
       },
       {
-        "locator": "div.header-center.panel-shell-center@L117",
+        "locator": "div.header-center.panel-shell-center@L116",
         "name": "data-xk-shell-group",
         "value": "service"
       },
       {
-        "locator": "div.panel-shell-core@L118",
+        "locator": "div.panel-shell-core@L117",
         "name": "data-xk-shell-slot",
         "value": "core"
       },
@@ -8442,7 +8443,7 @@
         "value": "true"
       },
       {
-        "locator": "div.panel-shell-badges@L131",
+        "locator": "div.panel-shell-badges@L130",
         "name": "data-xk-shell-slot",
         "value": "badges"
       },
@@ -8457,17 +8458,17 @@
         "value": "off"
       },
       {
-        "locator": "div.header-right.panel-shell-right@L148",
+        "locator": "div.header-right.panel-shell-right@L147",
         "name": "data-xk-shell-group",
         "value": "actions"
       },
       {
-        "locator": "div.header-right.panel-shell-right@L148",
+        "locator": "div.header-right.panel-shell-right@L147",
         "name": "data-xk-shell-zone",
         "value": "global-actions"
       },
       {
-        "locator": "div.panel-shell-summary@L149",
+        "locator": "div.panel-shell-summary@L148",
         "name": "data-xk-shell-slot",
         "value": "summary"
       },
@@ -8482,22 +8483,22 @@
         "value": "loading"
       },
       {
-        "locator": "div.xk-global-header-activity@L174",
+        "locator": "div.xk-global-header-activity@L173",
         "name": "data-xk-global-spinner-anchor",
         "value": ""
       },
       {
-        "locator": "span.xk-visually-hidden@L183",
+        "locator": "span.xk-visually-hidden@L182",
         "name": "data-xk-global-spinner-text",
         "value": ""
       },
       {
-        "locator": "div.panel-shell-actions-primary@L196",
+        "locator": "div.panel-shell-actions-primary@L195",
         "name": "data-xk-shell-slot",
         "value": "workspace-actions"
       },
       {
-        "locator": "a.service-core-text.xk-header-btn.xk-header-btn-devtools@L212",
+        "locator": "a.service-core-text.xk-header-btn.xk-header-btn-devtools@L211",
         "name": "data-xk-top-nav",
         "value": "1"
       },
@@ -8512,62 +8513,62 @@
         "value": "1"
       },
       {
-        "locator": "span@L229",
+        "locator": "span@L228",
         "name": "data-xk-update-label",
         "value": ""
       },
       {
-        "locator": "div.panel-shell-actions-secondary@L241",
+        "locator": "div.panel-shell-actions-secondary@L240",
         "name": "data-xk-shell-slot",
         "value": "session-actions"
       },
       {
-        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-routing@L251",
+        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-routing@L250",
         "name": "data-view",
         "value": "routing"
       },
       {
-        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-routing@L251",
+        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-routing@L250",
         "name": "data-xk-section",
         "value": "routing"
       },
       {
-        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-mihomo@L256",
+        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-mihomo@L255",
         "name": "data-view",
         "value": "mihomo"
       },
       {
-        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-mihomo@L256",
+        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-mihomo@L255",
         "name": "data-xk-section",
         "value": "mihomo"
       },
       {
-        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-xkeen@L260",
+        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-xkeen@L259",
         "name": "data-view",
         "value": "xkeen"
       },
       {
-        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-xkeen@L260",
+        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-xkeen@L259",
         "name": "data-xk-section",
         "value": "xkeen"
       },
       {
-        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-logs@L264",
+        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-logs@L263",
         "name": "data-view",
         "value": "xray-logs"
       },
       {
-        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-logs@L264",
+        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-logs@L263",
         "name": "data-xk-section",
         "value": "xray-logs"
       },
       {
-        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-commands@L268",
+        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-commands@L267",
         "name": "data-view",
         "value": "commands"
       },
       {
-        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-commands@L268",
+        "locator": "button.top-tab-btn.xk-top-tab.xk-top-tab-commands@L267",
         "name": "data-xk-section",
         "value": "commands"
       },
@@ -8617,7 +8618,7 @@
         "value": "Перезапустить сервис xkeen."
       },
       {
-        "locator": "div.xkeen-ctrl-group-routing-focus@L289",
+        "locator": "div.xkeen-ctrl-group-routing-focus@L288",
         "name": "data-xk-section",
         "value": "routing"
       },

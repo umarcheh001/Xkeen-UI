@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
-PANEL_TEMPLATE = ROOT / "xkeen-ui/templates/panel.html"
+PANEL_TEMPLATE = compose_panel_template(ROOT)
 OPERATOR_CSS = ROOT / "xkeen-ui/static/panel-operator.css"
 PLAN_DOC = ROOT / "docs/panel-operator-redesign-completion-plan.md"
 CONTRACT_DOC = ROOT / "docs/panel-operator-stage4-ports.md"
@@ -20,7 +22,7 @@ EDITOR_CONTRACT = (
 
 
 def test_stage4_ports_preserve_runtime_hooks_in_compact_footers():
-    template = PANEL_TEMPLATE.read_text(encoding="utf-8")
+    template = PANEL_TEMPLATE
     view = template[template.index('id="view-xkeen"') : template.index('id="view-commands"')]
 
     assert view.count('class="xkeen-mini-footer"') == 4
@@ -70,7 +72,7 @@ def test_stage4_ports_override_legacy_fixed_geometry_in_workspace_section():
 
 
 def test_stage4_ports_closure_is_reflected_in_documentation():
-    template = PANEL_TEMPLATE.read_text(encoding="utf-8")
+    template = PANEL_TEMPLATE
     plan = PLAN_DOC.read_text(encoding="utf-8")
     contract = CONTRACT_DOC.read_text(encoding="utf-8")
     index = DOCS_INDEX.read_text(encoding="utf-8")

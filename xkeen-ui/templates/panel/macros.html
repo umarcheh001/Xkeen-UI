@@ -1,0 +1,3 @@
+{% macro op_icon(name, class_name='') -%}
+<svg class="xk-action-icon{% if class_name %} {{ class_name }}{% endif %}" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg', v='20260916a') }}#xk-{{ name }}"></use></svg>
+{%- endmacro %}

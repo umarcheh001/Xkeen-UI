@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
-PANEL_TEMPLATE = ROOT / "xkeen-ui/templates/panel.html"
+PANEL_TEMPLATE = compose_panel_template(ROOT)
 OPERATOR_CSS = ROOT / "xkeen-ui/static/panel-operator.css"
 INBOUNDS_JS = ROOT / "xkeen-ui/static/js/features/inbounds.js"
 OUTBOUNDS_JS = ROOT / "xkeen-ui/static/js/features/outbounds.js"
@@ -30,7 +32,7 @@ ACCORDIONS = (
 
 
 def test_stage3_routing_cards_expose_one_accordion_contract():
-    template = PANEL_TEMPLATE.read_text(encoding="utf-8")
+    template = PANEL_TEMPLATE
     collapse = COLLAPSE_JS.read_text(encoding="utf-8")
     lazy_bindings = LAZY_BINDINGS_JS.read_text(encoding="utf-8")
     inbounds = INBOUNDS_JS.read_text(encoding="utf-8")
@@ -58,7 +60,7 @@ def test_stage3_routing_cards_expose_one_accordion_contract():
 
 
 def test_inbounds_mode_copy_uses_hybrid_label_and_compact_actions():
-    template = PANEL_TEMPLATE.read_text(encoding="utf-8")
+    template = PANEL_TEMPLATE
     inbounds = INBOUNDS_JS.read_text(encoding="utf-8")
     css = OPERATOR_CSS.read_text(encoding="utf-8")
 
@@ -119,7 +121,7 @@ def test_inbounds_mode_copy_uses_hybrid_label_and_compact_actions():
 
 
 def test_backups_card_keeps_full_history_in_the_operator_panel():
-    template = PANEL_TEMPLATE.read_text(encoding="utf-8")
+    template = PANEL_TEMPLATE
     css = OPERATOR_CSS.read_text(encoding="utf-8")
     backups = BACKUPS_JS.read_text(encoding="utf-8")
 
@@ -160,7 +162,7 @@ def test_backups_card_keeps_full_history_in_the_operator_panel():
 
 
 def test_stage3_dat_and_outbound_rows_have_explicit_state_semantics():
-    template = PANEL_TEMPLATE.read_text(encoding="utf-8")
+    template = PANEL_TEMPLATE
     dat_card = DAT_CARD_JS.read_text(encoding="utf-8")
     dat_api = DAT_API_JS.read_text(encoding="utf-8")
     inbounds = INBOUNDS_JS.read_text(encoding="utf-8")
@@ -211,7 +213,7 @@ def test_stage3_dat_and_outbound_rows_have_explicit_state_semantics():
 
 
 def test_dat_file_picker_uses_its_listbox_contract_without_an_overlapping_tooltip():
-    template = PANEL_TEMPLATE.read_text(encoding="utf-8")
+    template = PANEL_TEMPLATE
     combo = (ROOT / "xkeen-ui/static/js/features/routing_cards/dat/combo.js").read_text(encoding="utf-8")
     tooltips = TOOLTIPS_JS.read_text(encoding="utf-8")
 
@@ -264,7 +266,7 @@ def test_stage3_css_is_flat_dense_and_kept_inside_canonical_sections():
 
 
 def test_stage3_closure_is_reflected_in_documentation():
-    template = PANEL_TEMPLATE.read_text(encoding="utf-8")
+    template = PANEL_TEMPLATE
     plan = PLAN_DOC.read_text(encoding="utf-8")
     contract = CONTRACT_DOC.read_text(encoding="utf-8")
     index = DOCS_INDEX.read_text(encoding="utf-8")

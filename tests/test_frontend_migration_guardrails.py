@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGES_DIR = ROOT / "xkeen-ui" / "static" / "js" / "pages"
@@ -1120,7 +1122,7 @@ def test_terminal_remaining_core_controllers_and_modules_use_runtime_adapters():
 
 
 def test_templates_publish_final_page_config_contract():
-    panel_src = (ROOT / "xkeen-ui" / "templates" / "panel.html").read_text(encoding="utf-8")
+    panel_src = compose_panel_template(ROOT)
     devtools_src = (ROOT / "xkeen-ui" / "templates" / "devtools.html").read_text(encoding="utf-8")
     mihomo_src = (ROOT / "xkeen-ui" / "templates" / "mihomo_generator.html").read_text(encoding="utf-8")
 

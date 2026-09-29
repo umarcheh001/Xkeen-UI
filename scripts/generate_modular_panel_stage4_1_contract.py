@@ -8,6 +8,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from panel_template_source import compose_panel_template
+
 
 SCHEMA_VERSION = 1
 STAGE = {
@@ -434,7 +436,8 @@ def _build_view_contract(lines: list[str]) -> list[dict[str, Any]]:
 
 def build_contract(root: Path) -> dict[str, Any]:
     template_path = root / PANEL_TEMPLATE
-    template_text = template_path.read_text(encoding="utf-8")
+    raw_template_text = template_path.read_text(encoding="utf-8")
+    template_text = compose_panel_template(root)
     lines = template_text.splitlines()
     inventory = _load_inventory(root)
     ids = _find_all_ids(template_text)
@@ -487,12 +490,14 @@ def build_contract(root: Path) -> dict[str, Any]:
         "stage": STAGE,
         "source": {
             "template": PANEL_TEMPLATE,
+            "composition_source": "scripts/panel_template_source.py",
             "inventory": INVENTORY_PATH,
             "sha256": source_sha256,
             "utf8_bytes": len(template_text.encode("utf-8")),
             "line_count": len(lines),
             "id_count": len(ids),
             "duplicate_ids": duplicate_ids,
+            "entrypoint_sha256": hashlib.sha256(raw_template_text.encode("utf-8")).hexdigest(),
         },
         "composition": {
             "current_entrypoint": PANEL_TEMPLATE,
