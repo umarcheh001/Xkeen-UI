@@ -22,6 +22,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          # The Stage 3R.1 baseline generator reads its pinned historical
+          # commit, so the CI checkout must include repository history.
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
