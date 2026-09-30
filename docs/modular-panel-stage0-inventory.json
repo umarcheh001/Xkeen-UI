@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 380,
-      "size_bytes": 5809041,
+      "size_bytes": 5817290,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 17,
@@ -533,14 +533,14 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/__init__.py",
-      "size_bytes": 16413,
+      "size_bytes": 17784,
       "depends_on": [
         "tool.advanced-diagnostics",
         "tool.files",
         "engine.xray",
-        "tool.backups",
         "engine.mihomo",
         "integration.happ",
+        "tool.backups",
         "tool.terminal"
       ],
       "starts_background_task": false,
@@ -1814,7 +1814,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_registry.py",
-      "size_bytes": 43633,
+      "size_bytes": 45917,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3948,11 +3948,14 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_backend_gates.py",
-      "size_bytes": 9157,
+      "size_bytes": 10910,
       "depends_on": [
         "tool.terminal",
         "integration.happ",
-        "engine.mihomo"
+        "engine.mihomo",
+        "tool.backups",
+        "tool.files",
+        "engine.xray"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -3988,7 +3991,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_registry.py",
-      "size_bytes": 17669,
+      "size_bytes": 20510,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -25246,7 +25249,7 @@
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 34,
+        "unit_count": 35,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
@@ -25287,11 +25290,12 @@
       {
         "from": "core",
         "to": "tool.backups",
-        "unit_count": 7,
+        "unit_count": 8,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/routes/__init__.py",
           "tests/test_backup_path_hardening.py",
+          "tests/test_module_backend_gates.py",
           "xkeen-ui/static/js/features/compat/backups.js",
           "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/pages/top_level_backups_screen.js",
@@ -25314,10 +25318,11 @@
       {
         "from": "core",
         "to": "tool.files",
-        "unit_count": 7,
+        "unit_count": 8,
         "examples": [
           "xkeen-ui/routes/__init__.py",
           "tests/test_filemanager_trash_policy.py",
+          "tests/test_module_backend_gates.py",
           "tests/test_remotefs_remove_regressions.py",
           "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/pages/panel.core_ui_watch.runtime.js",
@@ -26306,7 +26311,7 @@
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 34,
+        "unit_count": 35,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
@@ -26347,11 +26352,12 @@
       {
         "from": "core",
         "to": "tool.backups",
-        "unit_count": 7,
+        "unit_count": 8,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/routes/__init__.py",
           "tests/test_backup_path_hardening.py",
+          "tests/test_module_backend_gates.py",
           "xkeen-ui/static/js/features/compat/backups.js",
           "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/pages/top_level_backups_screen.js",
@@ -26374,10 +26380,11 @@
       {
         "from": "core",
         "to": "tool.files",
-        "unit_count": 7,
+        "unit_count": 8,
         "examples": [
           "xkeen-ui/routes/__init__.py",
           "tests/test_filemanager_trash_policy.py",
+          "tests/test_module_backend_gates.py",
           "tests/test_remotefs_remove_regressions.py",
           "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/pages/panel.core_ui_watch.runtime.js",

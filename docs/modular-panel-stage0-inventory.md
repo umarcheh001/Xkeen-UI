@@ -36,7 +36,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 380 | 5.54 МБ | 75 | 4 | 35 | нет |
+| `core` | 380 | 5.55 МБ | 75 | 4 | 35 | нет |
 | `engine.xray` | 114 | 3.33 МБ | 52 | 3 | 14 | да |
 | `engine.mihomo` | 126 | 2.84 МБ | 88 | 4 | 6 | да |
 | `tool.editor` | 25 | 808.7 КБ | 0 | 0 | 2 | да |
@@ -97,12 +97,12 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | From | To | Units | Примеры |
 |---|---|---:|---|
 | `core` | `engine.mihomo` | 18 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/run_server.py`<br>`xkeen-ui/routes/__init__.py` |
-| `core` | `engine.xray` | 34 | `xkeen-ui/app.py`<br>`xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py` |
+| `core` | `engine.xray` | 35 | `xkeen-ui/app.py`<br>`xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py` |
 | `core` | `integration.happ` | 5 | `xkeen-ui/routes/__init__.py`<br>`tests/test_check_keys_upstream.py`<br>`tests/test_module_backend_gates.py` |
 | `core` | `tool.advanced-diagnostics` | 7 | `xkeen-ui/routes/__init__.py`<br>`tests/test_devtools_env_whitelist.py`<br>`xkeen-ui/static/js/features/compat/devtools.js` |
-| `core` | `tool.backups` | 7 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py`<br>`tests/test_backup_path_hardening.py` |
+| `core` | `tool.backups` | 8 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py`<br>`tests/test_backup_path_hardening.py` |
 | `core` | `tool.editor` | 6 | `xkeen-ui/static/js/pages/panel.shared_compat.bundle.js`<br>`xkeen-ui/static/js/pages/config_shell.shared.js`<br>`xkeen-ui/static/js/pages/panel.screen.bootstrap.js` |
-| `core` | `tool.files` | 7 | `xkeen-ui/routes/__init__.py`<br>`tests/test_filemanager_trash_policy.py`<br>`tests/test_remotefs_remove_regressions.py` |
+| `core` | `tool.files` | 8 | `xkeen-ui/routes/__init__.py`<br>`tests/test_filemanager_trash_policy.py`<br>`tests/test_module_backend_gates.py` |
 | `core` | `tool.terminal` | 15 | `xkeen-ui/app.py`<br>`xkeen-ui/app_factory.py`<br>`xkeen-ui/run_server.py` |
 | `engine.mihomo` | `core` | 126 | `xkeen-ui/bootstrap_mihomo_env.py`<br>`xkeen-ui/mihomo_config_generator.py`<br>`xkeen-ui/mihomo_server_core.py` |
 | `engine.mihomo` | `engine.xray` | 6 | `xkeen-ui/routes/mihomo.py`<br>`xkeen-ui/services/mihomo_clash_devices.py`<br>`xkeen-ui/services/mihomo_clash_dto.py` |

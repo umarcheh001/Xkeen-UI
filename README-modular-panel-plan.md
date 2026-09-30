@@ -355,8 +355,9 @@ Full → Xray Minimal невозможен.
 проверка в момент PATCH недостаточна: между PATCH и рестартом можно включить
 DNS-защиту или переключить ядро. Проверка повторяется при старте
 (`initialize_for_startup`); если отложенное отключение стало опасным, модуль
-остаётся активным, а причина (`deferred_disable_blocked`) пишется в state,
-`core.log` и `/api/modules`.
+остаётся активным на время текущего процесса, а причина
+(`deferred_disable_blocked`) видна в `/api/modules` и пишется в `core.log`.
+Выбор пользователя в state при этом не меняется.
 
 ## 6. Этапы работ
 
@@ -769,8 +770,13 @@ optional advanced части.
 
 - работающий engine нельзя отключить — API возвращает `409 active_core_module`;
 - неработающий engine в Full-профиле можно отключить;
-- при старте registry восстанавливает отключённый engine, который фактически
-  продолжает работать, и отмечает `blocked_reason=deferred_disable_blocked`;
+- при старте отключённый engine, который фактически продолжает работать,
+  остаётся активным только в текущем процессе: в `/api/modules` он виден как
+  `enabled=false`, `effective_enabled=true`,
+  `blocked_reason=deferred_disable_blocked`, событие пишется в `core.log`.
+  Выбор пользователя в `modules.json` не меняется, поэтому отключение
+  применяется при первом старте без работающего ядра; вместе с engine
+  удерживаются и его зависимости;
 - проверка владельца DNS выполняется до изменения registry state.
 
 Изменение профиля применяется после штатного restart; workers не остаются
@@ -780,7 +786,10 @@ optional advanced части.
 
 Ошибка optional-модуля не останавливает core:
 
-- factory ошибки Mihomo, Happ и terminal перехватываются на границе регистрации;
+- factory ошибки всех optional-модулей (Xray, Mihomo, утилита ссылок,
+  backups, terminal, advanced diagnostics, files) перехватываются на границе
+  регистрации; blueprints модуля сначала создаются все, затем регистрируются,
+  поэтому упавший модуль не остаётся зарегистрированным наполовину;
 - ошибки scheduler также перехватываются на startup;
 - `ModuleRegistry.record_initialization_failure()` сохраняет `last_error`;
 - `last_error` описывает только предыдущий процесс: `initialize_for_startup()`
@@ -804,8 +813,9 @@ optional advanced части.
 
 ### 3R.1.4. `installed` из фактических файлов
 
-Registry учитывает `module-installed.json` и file markers модулей. Safe mode и
-legacy-full активируют только реально установленные модули. Удалённый пакет
+Registry учитывает `module-installed.json` и file markers модулей. Safe mode,
+legacy-full и аварийный fallback при недоступном state активируют только
+реально установленные модули. Удалённый пакет
 `engine.mihomo` не импортируется и не попадает в runtime active set.
 
 ### 3R.1.5. Ownership и registry
@@ -817,7 +827,10 @@ legacy-full активируют только реально установле�
   `app.extensions["xkeen.module_owner_errors"]`;
 - `tool.editor.can_disable` динамически становится `false`, пока активен
   хотя бы один engine;
-- `integration.happ` использует нейтральные name/description и зависит от core;
+- `integration.happ` использует нейтральные name/description («Утилита ссылок
+  подписок») и нейтральный id системного требования
+  `subscription-link-utility`, зависит от core; признак установки — собственные
+  файлы модуля, а не core-owned `happ_links`;
 - `tool.advanced-diagnostics` больше не заявляет self-update как собственную
   функцию; maintenance API остаётся core-owned.
 

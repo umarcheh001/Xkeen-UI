@@ -276,10 +276,60 @@ def test_startup_blocks_deferred_disable_of_running_core(tmp_path, monkeypatch):
 
     snapshot = registry.initialize_for_startup()
     xray = _module(snapshot, "engine.xray")
+    activation = registry.runtime_activation()
+    persisted = json.loads((tmp_path / "modules.json").read_text(encoding="utf-8"))
 
-    assert xray["enabled"] is True
+    # The user's choice survives; only this process keeps the running core.
+    assert xray["enabled"] is False
     assert xray["effective_enabled"] is True
+    assert xray["status"] == "enabled"
     assert xray["blocked_reason"] == "deferred_disable_blocked"
+    assert "engine.xray" in activation["active_module_ids"]
+    assert persisted["modules"]["engine.xray"] == {"enabled": False}
+
+    monkeypatch.setattr("services.cores.detect_running_core", lambda: None)
+    restarted = _registry(tmp_path)
+    snapshot = restarted.initialize_for_startup()
+    xray = _module(snapshot, "engine.xray")
+
+    assert xray["status"] == "disabled"
+    assert "blocked_reason" not in xray
+    assert "engine.xray" not in restarted.runtime_activation()["active_module_ids"]
+
+
+def test_startup_drops_block_persisted_by_older_builds(tmp_path, monkeypatch):
+    monkeypatch.setattr("services.cores.detect_running_core", lambda: None)
+    state = {
+        "schema_version": STATE_SCHEMA_VERSION,
+        "profile": "custom",
+        "restart_required": False,
+        "modules": {module_id: {"enabled": True} for module_id in MODULE_IDS},
+    }
+    state["modules"]["engine.xray"]["blocked_reason"] = "deferred_disable_blocked"
+    (tmp_path / "modules.json").write_text(json.dumps(state), encoding="utf-8")
+
+    snapshot = _registry(tmp_path).initialize_for_startup()
+
+    assert "blocked_reason" not in _module(snapshot, "engine.xray")
+
+
+def test_registry_failure_fallback_activates_only_installed_modules(tmp_path, monkeypatch):
+    (tmp_path / "module-installed.json").write_text(
+        json.dumps({"modules": {"engine.mihomo": False}}),
+        encoding="utf-8",
+    )
+    registry = _registry(tmp_path)
+
+    def broken_registry():
+        raise OSError("state dir is not readable")
+
+    monkeypatch.setattr(registry, "get_registry", broken_registry)
+    activation = registry.runtime_activation()
+
+    assert activation["reason"] == "module_registry_unavailable"
+    assert "engine.mihomo" not in activation["active_module_ids"]
+    assert activation["inactive_modules"]["engine.mihomo"] == "module_not_installed"
+    assert "core" in activation["active_module_ids"]
 
 
 def test_initialization_failure_does_not_disable_module_after_restart(tmp_path, monkeypatch):
@@ -431,9 +481,28 @@ def test_registry_sizes_are_loaded_from_generated_manifest():
 def test_optional_module_metadata_is_neutral_and_registry_owns_runtime_boundaries():
     metadata = {definition.id: definition for definition in MODULE_DEFINITIONS}
 
-    assert "happ" not in metadata["integration.happ"].name.lower()
-    assert "happ" not in metadata["integration.happ"].description.lower()
+    integration = metadata["integration.happ"]
+    visible = " ".join(
+        [
+            integration.name,
+            integration.description,
+            *(requirement.id for requirement in integration.system_requirements),
+        ]
+    ).lower()
+    assert "happ" not in visible
+    assert "decrypt" not in visible
+    assert integration.name == "Утилита ссылок подписок"
     assert "update" not in metadata["tool.advanced-diagnostics"].description.lower()
+
+
+def test_subscription_link_utility_install_marker_ignores_core_helpers():
+    from services.module_registry import _MODULE_INSTALL_MARKERS
+
+    markers = _MODULE_INSTALL_MARKERS["integration.happ"]
+
+    # happ_links/happ_payloads are core-owned and stay after module removal.
+    assert all("happ_links" not in marker and "happ_payloads" not in marker for marker in markers)
+    assert "xkeen-ui/routes/happ_decryptor.py" in markers
 
 
 def test_editor_reports_non_disableable_while_an_engine_depends_on_it(tmp_path):

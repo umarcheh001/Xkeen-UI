@@ -62,9 +62,13 @@ size metadata покрыты кодом и тестами.
 ## Сверка с кодом
 
 - guard использует фактически запущенный core и повторяется при startup;
-- optional initialization failure сохраняется в registry как `failed`;
+  удержание работающего engine действует только в текущем процессе и не
+  переписывает выбор пользователя;
+- optional initialization failure сохраняется в registry как `failed` до
+  следующего старта; упавший модуль не регистрируется наполовину;
 - future schema не перезаписывает исходный `modules.json`;
-- installed markers ограничивают legacy-full/safe-mode активным составом файлов;
+- installed markers ограничивают legacy-full/safe-mode и fallback при
+  недоступном state активным составом файлов;
 - owner maps находятся в registry boundary и публикуются в diagnostics;
 - baseline initial HTML сохранён до Stage 4.3.
 

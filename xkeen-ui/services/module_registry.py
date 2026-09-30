@@ -1,10 +1,8 @@
 """Versioned registry and persisted activation state for Xkeen UI modules.
 
-The registry is intentionally configuration-only in Stage 1 of the modular
-panel rollout.  It records the requested/effective module set and exposes
-stable metadata, but it does *not* yet gate Flask blueprint registration,
-frontend imports, or background tasks.  Those runtime gates are introduced in
-later stages after the registry has been deployed and migrated safely.
+The registry records the requested/effective module set, exposes stable
+metadata and resolves the runtime activation that gates Flask blueprints,
+background tasks and panel composition for the current process.
 """
 
 from __future__ import annotations
@@ -78,9 +76,19 @@ _MODULE_INSTALL_MARKERS: dict[str, tuple[str, ...]] = {
     "tool.terminal": ("xkeen-ui/static/js/pages/terminal.lazy.entry.js",),
     "tool.files": ("xkeen-ui/static/js/pages/file_manager.lazy.entry.js",),
     "tool.backups": ("xkeen-ui/templates/backups.html",),
-    "integration.happ": ("xkeen-ui/services/happ_links.py",),
+    # happ_links/happ_payloads are core-owned shared helpers; only the
+    # module's own route and service package prove that it is installed.
+    "integration.happ": (
+        "xkeen-ui/routes/happ_decryptor.py",
+        "xkeen-ui/services/happ_decryptor/__init__.py",
+    ),
     "tool.advanced-diagnostics": ("xkeen-ui/routes/devtools.py", "xkeen-ui/templates/devtools.html"),
 }
+
+
+# User-visible requirement ids stay neutral; the binary name is internal.
+SUBSCRIPTION_LINK_UTILITY_REQUIREMENT = "subscription-link-utility"
+_SUBSCRIPTION_LINK_UTILITY_BIN = "happ-decrypt-universal"
 
 
 def _load_module_sizes() -> dict[str, int]:
@@ -255,12 +263,12 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
     ),
     ModuleDefinition(
         id="integration.happ",
-        name="Subscription link integration",
-        description="Общие link/payload helpers подписок и optional subscription integration flows.",
+        name="Утилита ссылок подписок",
+        description="Установка и проверка утилиты ссылок подписок, HWID-подписки.",
         version=REGISTRY_VERSION,
         dependencies=("core",),
         conflicts=(),
-        system_requirements=(_requirement("happ-decrypt-universal", optional=True),),
+        system_requirements=(_requirement(SUBSCRIPTION_LINK_UTILITY_REQUIREMENT, optional=True),),
         size_bytes=_module_size("integration.happ"),
         removable=True,
         can_disable=True,
@@ -320,6 +328,9 @@ class ModuleRegistry:
         # Failures recorded by this process.  They are shown even when the
         # persisted state is read-only (future schema recovery).
         self._runtime_failures: dict[str, str] = {}
+        # Modules the user disabled while their core kept running.  They stay
+        # active for this process only; the persisted choice is untouched.
+        self._deferred_blocked: set[str] = set()
 
     @property
     def state_path(self) -> str:
@@ -338,6 +349,10 @@ class ModuleRegistry:
             for item in state["modules"].values():
                 if item.pop("last_error", None) is not None:
                     changed = True
+                # Older builds persisted the startup block; it is recomputed now.
+                if item.pop("blocked_reason", None) is not None:
+                    changed = True
+            self._deferred_blocked = set()
             try:
                 from services.cores import detect_running_core
 
@@ -348,13 +363,25 @@ class ModuleRegistry:
                 "xray": "engine.xray",
                 "mihomo": "engine.mihomo",
             }.get(running_core or "")
-            if running_module:
-                item = state["modules"].get(running_module) or {}
-                if not bool(item.get("enabled")):
-                    item["enabled"] = True
-                    item["blocked_reason"] = "deferred_disable_blocked"
-                    state["modules"][running_module] = item
-                    changed = True
+            if running_module and not bool(state["modules"][running_module]["enabled"]):
+                # The running core keeps its owner until it is stopped; the
+                # user's disable request applies on the next restart without it.
+                self._deferred_blocked = {
+                    running_module,
+                    *self._transitive_dependencies(running_module),
+                }
+                try:
+                    from core.logging import core_log_once
+
+                    core_log_once(
+                        "warning",
+                        "module_deferred_disable_blocked",
+                        "disabled engine module is kept active while its core is running",
+                        module_id=running_module,
+                        running_core=running_core,
+                    )
+                except Exception:
+                    pass
             if state["restart_required"]:
                 state["restart_required"] = False
                 changed = True
@@ -403,7 +430,7 @@ class ModuleRegistry:
                 module_id = str(item.get("id") or "").strip()
                 if not module_id:
                     continue
-                if not bool(item.get("enabled")):
+                if not bool(item.get("enabled")) and not item.get("blocked_reason"):
                     inactive[module_id] = str(item.get("reason") or "user_disabled")
                 elif (
                     (legacy_compatibility and bool(item.get("installed", True)))
@@ -436,15 +463,24 @@ class ModuleRegistry:
         except Exception:
             # A registry I/O failure must not brick an existing panel.  Keep
             # the same safe legacy-full activation and expose the failure for
-            # diagnostics.
+            # diagnostics, but never import a module whose files are gone.
+            installed_ids = [
+                module_id for module_id in MODULE_IDS if self._is_module_installed(module_id)
+            ]
+            if "core" not in installed_ids:
+                installed_ids.insert(0, "core")
             return {
                 "schema_version": STATE_SCHEMA_VERSION,
                 "api_version": API_VERSION,
                 "profile": LEGACY_FULL_PROFILE,
                 "legacy_compatibility": True,
                 "runtime_gates_active": True,
-                "active_module_ids": list(MODULE_IDS),
-                "inactive_modules": {},
+                "active_module_ids": installed_ids,
+                "inactive_modules": {
+                    module_id: "module_not_installed"
+                    for module_id in MODULE_IDS
+                    if module_id not in installed_ids
+                },
                 "restart_required": False,
                 "reason": "module_registry_unavailable",
             }
@@ -757,9 +793,9 @@ class ModuleRegistry:
                 elif raw_error is not None:
                     changed = True
                 blocked_reason = raw_item.get("blocked_reason")
-                if isinstance(blocked_reason, str) and blocked_reason.strip():
-                    last_error = last_error or None
-                elif blocked_reason is not None:
+                if blocked_reason is not None and not (
+                    isinstance(blocked_reason, str) and blocked_reason.strip()
+                ):
                     changed = True
             elif raw_item is not None:
                 changed = True
@@ -855,6 +891,7 @@ class ModuleRegistry:
             module_state = state["modules"][module_id]
             installed = self._is_module_installed(module_id)
             requested_enabled = bool(module_state["enabled"])
+            deferred_blocked = module_id in self._deferred_blocked and not requested_enabled
             requirements = requirement_status[module_id]
             missing_requirements = [
                 item["id"] for item in requirements if not item["optional"] and not item["available"]
@@ -870,6 +907,8 @@ class ModuleRegistry:
             effective_enabled = False
             last_error = module_state.get("last_error") or self._runtime_failures.get(module_id)
             blocked_reason = module_state.get("blocked_reason")
+            if deferred_blocked:
+                blocked_reason = "deferred_disable_blocked"
             editor_required_by_engine = module_id == "tool.editor" and any(
                 bool(state["modules"][engine_id]["enabled"])
                 for engine_id in ("engine.xray", "engine.mihomo")
@@ -878,7 +917,7 @@ class ModuleRegistry:
             if not installed:
                 status = "not_installed"
                 reason = "module_not_installed"
-            elif not requested_enabled:
+            elif not requested_enabled and not deferred_blocked:
                 status = "disabled"
                 reason = "user_disabled"
             elif isinstance(last_error, str) and last_error:
@@ -999,6 +1038,12 @@ class ModuleRegistry:
                     self._executable_path("/opt/sbin/mihomo")
                     or self._executable_path("/opt/bin/mihomo")
                     or self._which(str(env.get("MIHOMO_BIN", "mihomo")))
+                )
+            if requirement_id == SUBSCRIPTION_LINK_UTILITY_REQUIREMENT:
+                root = os.path.dirname(os.path.dirname(__file__))
+                return bool(
+                    self._executable_path(os.path.join(root, "bin", _SUBSCRIPTION_LINK_UTILITY_BIN))
+                    or self._which(_SUBSCRIPTION_LINK_UTILITY_BIN)
                 )
             if requirement_id == "gevent":
                 return importlib.util.find_spec("gevent") is not None

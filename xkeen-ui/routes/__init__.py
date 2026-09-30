@@ -116,6 +116,30 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
         except Exception:
             pass
 
+    def fail_module(module_id: str, key: str, exc: Exception) -> None:
+        try:
+            ctx.module_registry.record_initialization_failure(module_id, exc)
+        except Exception:
+            pass
+        _warn_init(key, f"{module_id} init failed (non-fatal)", exc)
+
+    def register_module_blueprints(module_id: str, key: str, build) -> bool:
+        """Build every blueprint of a module, then register them together.
+
+        ``build`` imports and creates the blueprints.  Flask cannot unregister
+        a blueprint, so nothing is registered unless all of them were created:
+        a failing optional module never stays half-registered or stops core.
+        """
+
+        try:
+            blueprints = list(build())
+        except Exception as exc:  # noqa: BLE001
+            fail_module(module_id, key, exc)
+            return False
+        for blueprint in blueprints:
+            app.register_blueprint(blueprint)
+        return True
+
     # Core routes always remain available.
     from .capabilities import create_capabilities_blueprint
     from .config_exchange import create_config_exchange_blueprint
@@ -162,112 +186,108 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
 
     # Xray: routing/config APIs, subscriptions and logs.
     if module_active("engine.xray"):
-        from .routing import create_routing_blueprint
-        from .xray_configs import create_xray_configs_blueprint
-        from .xray_logs import create_xray_logs_blueprint
-        from .xray_subscriptions import create_xray_subscriptions_blueprint
+        def _build_xray():
+            from .routing import create_routing_blueprint
+            from .xray_configs import create_xray_configs_blueprint
+            from .xray_logs import create_xray_logs_blueprint
+            from .xray_subscriptions import create_xray_subscriptions_blueprint
 
-        app.register_blueprint(
-            create_routing_blueprint(
-                ROUTING_FILE=ctx.routing_file,
-                ROUTING_FILE_RAW=ctx.routing_file_raw,
-                XRAY_CONFIGS_DIR=ctx.xray_configs_dir,
-                XRAY_CONFIGS_DIR_REAL=ctx.xray_configs_dir_real,
-                BACKUP_DIR=ctx.backup_dir,
-                BACKUP_DIR_REAL=ctx.backup_dir_real,
-                load_json=ctx.load_json,
-                strip_json_comments_text=ctx.strip_json_comments_text,
-                restart_xkeen=ctx.restart_xkeen,
-                UI_STATE_DIR=ctx.ui_state_dir,
-                MIHOMO_CONFIG_FILE=ctx.mihomo_config_file,
-                append_restart_log=ctx.append_restart_log,
-                save_operation_diagnostic=ctx.save_operation_diagnostic,
+            return (
+                create_routing_blueprint(
+                    ROUTING_FILE=ctx.routing_file,
+                    ROUTING_FILE_RAW=ctx.routing_file_raw,
+                    XRAY_CONFIGS_DIR=ctx.xray_configs_dir,
+                    XRAY_CONFIGS_DIR_REAL=ctx.xray_configs_dir_real,
+                    BACKUP_DIR=ctx.backup_dir,
+                    BACKUP_DIR_REAL=ctx.backup_dir_real,
+                    load_json=ctx.load_json,
+                    strip_json_comments_text=ctx.strip_json_comments_text,
+                    restart_xkeen=ctx.restart_xkeen,
+                    UI_STATE_DIR=ctx.ui_state_dir,
+                    MIHOMO_CONFIG_FILE=ctx.mihomo_config_file,
+                    append_restart_log=ctx.append_restart_log,
+                    save_operation_diagnostic=ctx.save_operation_diagnostic,
+                ),
+                create_xray_configs_blueprint(
+                    restart_xkeen=ctx.restart_xkeen,
+                    load_json=ctx.load_json,
+                    save_json=ctx.save_json,
+                    strip_json_comments_text=ctx.strip_json_comments_text,
+                    snapshot_xray_config_before_overwrite=ctx.snapshot_xray_config_before_overwrite,
+                    ui_state_dir=ctx.ui_state_dir,
+                ),
+                create_xray_subscriptions_blueprint(
+                    ui_state_dir=ctx.ui_state_dir,
+                    xray_configs_dir=ctx.xray_configs_dir,
+                    restart_xkeen=ctx.restart_xkeen,
+                    snapshot_xray_config_before_overwrite=ctx.snapshot_xray_config_before_overwrite,
+                ),
+                create_xray_logs_blueprint(
+                    ws_debug=ctx.ws_debug,
+                    restart_xray_core=ctx.restart_xray_core,
+                    ui_state_dir=ctx.ui_state_dir,
+                    append_restart_log=ctx.append_restart_log,
+                ),
             )
-        )
-        app.register_blueprint(
-            create_xray_configs_blueprint(
-                restart_xkeen=ctx.restart_xkeen,
-                load_json=ctx.load_json,
-                save_json=ctx.save_json,
-                strip_json_comments_text=ctx.strip_json_comments_text,
-                snapshot_xray_config_before_overwrite=ctx.snapshot_xray_config_before_overwrite,
-                ui_state_dir=ctx.ui_state_dir,
-            )
-        )
-        app.register_blueprint(
-            create_xray_subscriptions_blueprint(
-                ui_state_dir=ctx.ui_state_dir,
-                xray_configs_dir=ctx.xray_configs_dir,
-                restart_xkeen=ctx.restart_xkeen,
-                snapshot_xray_config_before_overwrite=ctx.snapshot_xray_config_before_overwrite,
-            )
-        )
-        app.register_blueprint(
-            create_xray_logs_blueprint(
-                ws_debug=ctx.ws_debug,
-                restart_xray_core=ctx.restart_xray_core,
-                ui_state_dir=ctx.ui_state_dir,
-                append_restart_log=ctx.append_restart_log,
-            )
-        )
+
+        register_module_blueprints("engine.xray", "xray_blueprint_init_failed", _build_xray)
 
     # Mihomo: config, Clash API/cache/telemetry and optional Happ integration.
     if module_active("engine.mihomo"):
-        try:
+        def _build_mihomo():
             from .mihomo import create_mihomo_blueprint
             from .mihomo_clash import create_mihomo_clash_blueprint
             from services.mihomo_clash_cache import get_shared_mihomo_clash_cache
 
-            app.register_blueprint(
+            return (
                 create_mihomo_blueprint(
                     MIHOMO_CONFIG_FILE=ctx.mihomo_config_file,
                     MIHOMO_TEMPLATES_DIR=ctx.mihomo_templates_dir,
                     MIHOMO_DEFAULT_TEMPLATE=ctx.mihomo_default_template,
                     ui_state_dir=ctx.ui_state_dir,
                     restart_xkeen=ctx.restart_xkeen,
-                )
-            )
-            app.register_blueprint(
+                ),
                 create_mihomo_clash_blueprint(
                     mihomo_config_file=ctx.mihomo_config_file,
                     mihomo_root=os.path.dirname(ctx.mihomo_config_file),
                     ui_state_dir=ctx.ui_state_dir,
                     audit_logger=ctx.append_restart_log,
                     cache=get_shared_mihomo_clash_cache(),
-                )
+                ),
             )
-        except Exception as exc:  # noqa: BLE001
-            ctx.module_registry.record_initialization_failure("engine.mihomo", exc)
-            _warn_init("mihomo_blueprint_init_failed", "mihomo blueprint init failed", exc)
+
+        register_module_blueprints("engine.mihomo", "mihomo_blueprint_init_failed", _build_mihomo)
 
     if module_active("integration.happ"):
-        try:
+        def _build_happ():
             from .happ_decryptor import create_happ_decryptor_blueprint
 
-            app.register_blueprint(create_happ_decryptor_blueprint())
-        except Exception as exc:  # noqa: BLE001
-            ctx.module_registry.record_initialization_failure("integration.happ", exc)
-            _warn_init("happ_blueprint_init_failed", "happ blueprint init failed", exc)
+            return (create_happ_decryptor_blueprint(),)
+
+        register_module_blueprints("integration.happ", "happ_blueprint_init_failed", _build_happ)
 
     if module_active("tool.backups"):
-        from .backups import create_backups_blueprint
+        def _build_backups():
+            from .backups import create_backups_blueprint
 
-        app.register_blueprint(
-            create_backups_blueprint(
-                BACKUP_DIR=ctx.backup_dir,
-                ROUTING_FILE=ctx.routing_file,
-                ROUTING_FILE_RAW=ctx.routing_file_raw,
-                INBOUNDS_FILE=ctx.inbounds_file,
-                OUTBOUNDS_FILE=ctx.outbounds_file,
-                load_json=ctx.load_json,
-                save_json=ctx.save_json,
-                list_backups=ctx.list_backups,
-                _detect_backup_target_file=ctx.detect_backup_target_file,
-                _find_latest_auto_backup_for=ctx.find_latest_auto_backup_for,
-                strip_json_comments_text=ctx.strip_json_comments_text,
-                restart_xkeen=ctx.restart_xkeen,
+            return (
+                create_backups_blueprint(
+                    BACKUP_DIR=ctx.backup_dir,
+                    ROUTING_FILE=ctx.routing_file,
+                    ROUTING_FILE_RAW=ctx.routing_file_raw,
+                    INBOUNDS_FILE=ctx.inbounds_file,
+                    OUTBOUNDS_FILE=ctx.outbounds_file,
+                    load_json=ctx.load_json,
+                    save_json=ctx.save_json,
+                    list_backups=ctx.list_backups,
+                    _detect_backup_target_file=ctx.detect_backup_target_file,
+                    _find_latest_auto_backup_for=ctx.find_latest_auto_backup_for,
+                    strip_json_comments_text=ctx.strip_json_comments_text,
+                    restart_xkeen=ctx.restart_xkeen,
+                ),
             )
-        )
+
+        register_module_blueprints("tool.backups", "backups_blueprint_init_failed", _build_backups)
 
     if module_active("engine.xray") or module_active("engine.mihomo"):
         from services.dns_service_lifecycle import get_stop_protection, release_for_service_stop
@@ -310,13 +330,12 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     )
 
     if module_active("tool.terminal"):
-        try:
+        def _build_terminal():
             from .commands import create_commands_blueprint
 
-            app.register_blueprint(create_commands_blueprint())
-        except Exception as exc:  # noqa: BLE001
-            ctx.module_registry.record_initialization_failure("tool.terminal", exc)
-            _warn_init("terminal_blueprint_init_failed", "terminal blueprint init failed", exc)
+            return (create_commands_blueprint(),)
+
+        register_module_blueprints("tool.terminal", "terminal_blueprint_init_failed", _build_terminal)
 
     # Core-owned maintenance APIs (self-update, core.log, recovery and
     # module-control diagnostics) must remain available even when the optional
@@ -330,9 +349,16 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     )
 
     if module_active("tool.advanced-diagnostics"):
-        from .system_resources import create_system_resources_blueprint
+        def _build_system_resources():
+            from .system_resources import create_system_resources_blueprint
 
-        app.register_blueprint(create_system_resources_blueprint())
+            return (create_system_resources_blueprint(),)
+
+        register_module_blueprints(
+            "tool.advanced-diagnostics",
+            "system_resources_blueprint_init_failed",
+            _build_system_resources,
+        )
 
     if not module_active("tool.files"):
         publish_blueprint_owner_diagnostic()
@@ -340,13 +366,22 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
 
     # FS / RemoteFS / FileOps are one ownership group and are never imported
     # for installations where the files tool is disabled.
-    from .fileops import create_fileops_blueprint
-    from .fs import create_fs_blueprint
-    from .remotefs.blueprint import create_remotefs_blueprint
-    from .storage_usb import create_storage_usb_blueprint
-    from services import get_capabilities, get_remotefs_state
+    try:
+        from .fileops import create_fileops_blueprint
+        from .fs import create_fs_blueprint
+        from .remotefs.blueprint import create_remotefs_blueprint
+        from .storage_usb import create_storage_usb_blueprint
+        from services import get_capabilities, get_remotefs_state
+    except Exception as exc:  # noqa: BLE001
+        fail_module("tool.files", "files_import_failed", exc)
+        publish_blueprint_owner_diagnostic()
+        return
 
-    app.register_blueprint(create_storage_usb_blueprint())
+    register_module_blueprints(
+        "tool.files",
+        "storage_usb_blueprint_init_failed",
+        lambda: (create_storage_usb_blueprint(),),
+    )
     remotefs_mgr = None
     try:
         fs_bp = create_fs_blueprint(
