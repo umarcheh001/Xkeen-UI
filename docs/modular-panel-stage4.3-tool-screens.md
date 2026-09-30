@@ -54,22 +54,24 @@ xkeen-ui/templates/panel/screens/files.html
 
 Smoke сравнён с baseline до выделения экранов (`435237e8`) на том же стенде.
 Набор ошибок Xray-minimal до и после совпадает — выделение экранов новых
-ошибок не добавило. Оставшиеся ошибки — frontend-вызовы API выключенных
-модулей:
+ошибок не добавило. Найденные frontend-вызовы API выключенных модулей
+устранены:
 
-- `features/resource_monitor.js` (resource summary в core header) опрашивает
-  `/api/system/resources`, который принадлежит `tool.advanced-diagnostics`:
-  `404` в Xray-minimal и Mihomo-minimal;
-- `features/routing_cards/dat/api.js` (карточка GeoIP/GeoSite, `engine.xray`)
-  вызывает `/api/fs/stat-batch` из `tool.files`; в Xray-minimal при старте
-  также приходит `404` на `/api/fs/list`.
+- resource summary в header (`#xk-resource-monitor`) опрашивал
+  `/api/system/*` модуля `tool.advanced-diagnostics`; кнопка теперь
+  рендерится под `{% if has_diagnostics %}`, и без корня опрос не стартует;
+- карточка GeoIP/GeoSite (`engine.xray`) использовала `/api/fs/*` модуля
+  `tool.files`; теперь у неё собственные `/api/routing/dat/stat`, `/files`,
+  `/upload` и `/download` (`routes/routing/dat_files.py`), проверенные
+  `tests/test_routing_dat_files.py`.
 
-Ошибки WebSocket `/ws/events` и `net::ERR_ABORTED` воспроизводятся и в Full на
-Windows-стенде и к профилям не относятся.
+Повторный smoke: в Xray-minimal и Mihomo-minimal нет `4xx/5xx`. Единственные
+ошибки консоли — handshake `/ws/events`: на Windows-стенде нет
+`gevent-websocket`, и он не работает и в Full.
 
 ## Критерий завершения
 
 Критерий завершения **выполнен** для экранов commands и files: markup имеет
 единственного владельца, отсутствует в физическом composition root и в initial
 HTML профиля без соответствующего модуля, DOM/bootstrap contract сохранён.
-Подэтап 4.3 целиком остаётся открытым до решения по console errors выше.
+Вместе с исправлениями выше подэтап 4.3 закрыт целиком.

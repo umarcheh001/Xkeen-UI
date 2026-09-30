@@ -54,6 +54,8 @@
         <div class="header-right panel-shell-right" data-xk-shell-zone="global-actions" data-xk-shell-group="actions">
           <div class="panel-shell-summary" data-xk-shell-slot="summary">
 
+            {# Router resources poll /api/system/*, owned by tool.advanced-diagnostics. #}
+            {% if has_diagnostics %}
             <button
               type="button"
               id="xk-resource-monitor"
@@ -76,6 +78,7 @@
               </span>
               <span id="xk-resource-monitor-stale" class="xk-resource-monitor-stale" hidden>нет данных</span>
             </button>
+            {% endif %}
 
             <div
               class="xk-global-header-activity"

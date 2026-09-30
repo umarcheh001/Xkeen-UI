@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 385,
-      "size_bytes": 5759986,
+      "unit_count": 386,
+      "size_bytes": 5767203,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 17,
         "backend_service": 51,
-        "backend_test": 166,
+        "backend_test": 167,
         "configuration": 10,
         "frontend_bundle": 3,
         "frontend_entrypoint": 2,
@@ -85,10 +85,10 @@
         "xray"
       ],
       "removable": true,
-      "unit_count": 116,
-      "size_bytes": 3506877,
+      "unit_count": 117,
+      "size_bytes": 3515652,
       "kind_counts": {
-        "backend_route": 12,
+        "backend_route": 13,
         "backend_service": 17,
         "backend_test": 33,
         "configuration": 4,
@@ -98,7 +98,7 @@
         "frontend_ui": 1,
         "template": 1
       },
-      "route_count": 52,
+      "route_count": 56,
       "background_task_count": 3,
       "ui_surface_count": 14,
       "representative_paths": [
@@ -106,14 +106,14 @@
         "xkeen-ui/routes/routing/blueprint.py",
         "xkeen-ui/routes/routing/config.py",
         "xkeen-ui/routes/routing/dat.py",
+        "xkeen-ui/routes/routing/dat_files.py",
         "xkeen-ui/routes/routing/dns_over_vless.py",
         "xkeen-ui/routes/routing/errors.py",
         "xkeen-ui/routes/routing/fragments.py",
         "xkeen-ui/routes/routing/geodat.py",
         "xkeen-ui/routes/routing/templates.py",
         "xkeen-ui/routes/xray_configs.py",
-        "xkeen-ui/routes/xray_logs.py",
-        "xkeen-ui/routes/xray_subscriptions.py"
+        "xkeen-ui/routes/xray_logs.py"
       ]
     },
     {
@@ -1876,7 +1876,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/request_limits.py",
-      "size_bytes": 10192,
+      "size_bytes": 11360,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -1892,6 +1892,7 @@
         "XKEEN_GEODAT_UPLOAD_MAX_BYTES",
         "XKEEN_JSON_BODY_MAX_BYTES",
         "XKEEN_JSON_HEAVY_MAX_BYTES",
+        "XKEEN_MAX_DAT_MB",
         "XKEEN_MIHOMO_JSON_MAX_BYTES",
         "XKEEN_REMOTEFM_MAX_UPLOAD_MB",
         "XKEEN_ROUTING_SAVE_MAX_BYTES",
@@ -3895,7 +3896,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_stage4_1_contract.py",
-      "size_bytes": 6218,
+      "size_bytes": 6227,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3949,7 +3950,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_stage4_3_tool_screens.py",
-      "size_bytes": 4804,
+      "size_bytes": 4970,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4490,6 +4491,30 @@
         "flask"
       ],
       "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_routing_dat_files.py",
+      "size_bytes": 5709,
+      "depends_on": [
+        "engine.xray"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [
+        "XKEEN_LOCALFM_ROOTS",
+        "XKEEN_MAX_DAT_MB",
+        "XKEEN_UI_PANEL_SECTIONS_WHITELIST"
+      ],
       "removable": false
     },
     {
@@ -7707,7 +7732,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/panel_operator_stage3_routing_cards.spec.mjs",
-      "size_bytes": 17999,
+      "size_bytes": 18012,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -8639,7 +8664,7 @@
       "module_id": "core",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/header.html",
-      "size_bytes": 6878,
+      "size_bytes": 7030,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -12272,7 +12297,7 @@
       "module_id": "engine.xray",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/routing/blueprint.py",
-      "size_bytes": 3608,
+      "size_bytes": 3689,
       "depends_on": [
         "core",
         "tool.editor"
@@ -12373,6 +12398,51 @@
       ],
       "environment_variables": [
         "XKEEN_DAT",
+        "XKEEN_MAX_DAT_MB"
+      ],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
+      "kind": "backend_route",
+      "path": "xkeen-ui/routes/routing/dat_files.py",
+      "size_bytes": 8592,
+      "depends_on": [
+        "core",
+        "tool.editor",
+        "tool.files"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": true,
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/routing/dat/download",
+          "decorator": "bp.get"
+        },
+        {
+          "method": "GET",
+          "path": "/api/routing/dat/files",
+          "decorator": "bp.get"
+        },
+        {
+          "method": "POST",
+          "path": "/api/routing/dat/stat",
+          "decorator": "bp.post"
+        },
+        {
+          "method": "POST",
+          "path": "/api/routing/dat/upload",
+          "decorator": "bp.post"
+        }
+      ],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [
         "XKEEN_MAX_DAT_MB"
       ],
       "removable": true
@@ -14269,7 +14339,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/routing_cards/dat/api.js",
-      "size_bytes": 14650,
+      "size_bytes": 14752,
       "depends_on": [
         "core",
         "tool.editor"
@@ -21292,8 +21362,8 @@
     }
   ],
   "routes": {
-    "endpoint_count": 308,
-    "files_with_routes": 53,
+    "endpoint_count": 312,
+    "files_with_routes": 54,
     "endpoint_files": [
       {
         "module_id": "core",
@@ -22291,6 +22361,32 @@
           {
             "method": "POST",
             "path": "/api/routing/dat/update",
+            "decorator": "bp.post"
+          }
+        ]
+      },
+      {
+        "module_id": "engine.xray",
+        "path": "xkeen-ui/routes/routing/dat_files.py",
+        "routes": [
+          {
+            "method": "GET",
+            "path": "/api/routing/dat/download",
+            "decorator": "bp.get"
+          },
+          {
+            "method": "GET",
+            "path": "/api/routing/dat/files",
+            "decorator": "bp.get"
+          },
+          {
+            "method": "POST",
+            "path": "/api/routing/dat/stat",
+            "decorator": "bp.post"
+          },
+          {
+            "method": "POST",
+            "path": "/api/routing/dat/upload",
             "decorator": "bp.post"
           }
         ]
@@ -25432,7 +25528,7 @@
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 35,
+        "unit_count": 36,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
@@ -25610,16 +25706,16 @@
       {
         "from": "engine.xray",
         "to": "core",
-        "unit_count": 116,
+        "unit_count": 117,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
           "xkeen-ui/routes/routing/config.py",
           "xkeen-ui/routes/routing/dat.py",
+          "xkeen-ui/routes/routing/dat_files.py",
           "xkeen-ui/routes/routing/dns_over_vless.py",
           "xkeen-ui/routes/routing/errors.py",
-          "xkeen-ui/routes/routing/fragments.py",
-          "xkeen-ui/routes/routing/geodat.py"
+          "xkeen-ui/routes/routing/fragments.py"
         ]
       },
       {
@@ -25654,24 +25750,25 @@
       {
         "from": "engine.xray",
         "to": "tool.editor",
-        "unit_count": 116,
+        "unit_count": 117,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
           "xkeen-ui/routes/routing/config.py",
           "xkeen-ui/routes/routing/dat.py",
+          "xkeen-ui/routes/routing/dat_files.py",
           "xkeen-ui/routes/routing/dns_over_vless.py",
           "xkeen-ui/routes/routing/errors.py",
-          "xkeen-ui/routes/routing/fragments.py",
-          "xkeen-ui/routes/routing/geodat.py"
+          "xkeen-ui/routes/routing/fragments.py"
         ]
       },
       {
         "from": "engine.xray",
         "to": "tool.files",
-        "unit_count": 2,
+        "unit_count": 3,
         "examples": [
           "xkeen-ui/routes/routing/dat.py",
+          "xkeen-ui/routes/routing/dat_files.py",
           "xkeen-ui/services/geodat/runner.py"
         ]
       },
@@ -26083,16 +26180,16 @@
       {
         "from": "engine.xray",
         "to": "core",
-        "unit_count": 74,
+        "unit_count": 75,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
           "xkeen-ui/routes/routing/config.py",
           "xkeen-ui/routes/routing/dat.py",
+          "xkeen-ui/routes/routing/dat_files.py",
           "xkeen-ui/routes/routing/dns_over_vless.py",
           "xkeen-ui/routes/routing/errors.py",
-          "xkeen-ui/routes/routing/fragments.py",
-          "xkeen-ui/routes/routing/geodat.py"
+          "xkeen-ui/routes/routing/fragments.py"
         ]
       },
       {
@@ -26127,24 +26224,25 @@
       {
         "from": "engine.xray",
         "to": "tool.editor",
-        "unit_count": 74,
+        "unit_count": 75,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
           "xkeen-ui/routes/routing/config.py",
           "xkeen-ui/routes/routing/dat.py",
+          "xkeen-ui/routes/routing/dat_files.py",
           "xkeen-ui/routes/routing/dns_over_vless.py",
           "xkeen-ui/routes/routing/errors.py",
-          "xkeen-ui/routes/routing/fragments.py",
-          "xkeen-ui/routes/routing/geodat.py"
+          "xkeen-ui/routes/routing/fragments.py"
         ]
       },
       {
         "from": "engine.xray",
         "to": "tool.files",
-        "unit_count": 2,
+        "unit_count": 3,
         "examples": [
           "xkeen-ui/routes/routing/dat.py",
+          "xkeen-ui/routes/routing/dat_files.py",
           "xkeen-ui/services/geodat/runner.py"
         ]
       },
@@ -26494,7 +26592,7 @@
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 35,
+        "unit_count": 36,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",

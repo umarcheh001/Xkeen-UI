@@ -111,10 +111,10 @@ def test_stage4_3_tool_screens_closure_is_documented():
     index = (ROOT / "docs/README.md").read_text(encoding="utf-8")
 
     assert "Commands и Files screens: **закрыты 30 сентября 2026 года**" in plan
-    # 4.3 stays open until minimal profiles load without console errors.
     assert "5. `commands.html` — `tool.terminal` — **выполнено**;" in plan
     assert "6. `files.html` — `tool.files` — **выполнено**." in plan
-    assert "не выполнен критерий console errors" in plan
+    assert "### Подэтап 4.3. Выделение экранов по модульным границам\n\n**Статус:** закрыт 30 сентября 2026 года." in plan
+    assert "Вместе с исправлениями выше подэтап 4.3 закрыт целиком." in contract
     assert "modular-panel-stage4.3-tool-screens.md" in plan
     assert "modular-panel-stage4.3-tool-screens.md" in index
     assert "Критерий завершения **выполнен**" in contract

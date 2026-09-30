@@ -1,14 +1,14 @@
 # План модульной архитектуры панели Xkeen UI
 
-**Статус:** Этапы 0, 1, 2, 3, 3R, 3R.1, 4.1 и 4.2 закрыты; подэтап 4.3
-в работе: все шесть экранов вынесены, не выполнен критерий console errors<br>
+**Статус:** Этапы 0, 1, 2, 3, 3R, 3R.1, 4.1, 4.2 и 4.3 закрыты; следующий —
+подэтап 4.4<br>
 **Дата:** 30 сентября 2026 года
 **Область:** облегчение панели, профили установки и официальный каталог модулей
 
-**Текущий прогресс:** Этапы 0–3 и 3R, подэтапы 4.1 и 4.2 закрыты;
-Этап 3R.1 и baseline initial HTML закрыты; в подэтапе 4.3 закрыты экраны
-вынесены все шесть экранов; критерий «minimal-профиль без console errors»
-не выполнен из-за frontend-вызовов API выключенных модулей (см. 4.3).
+**Текущий прогресс:** Этапы 0–3 и 3R, подэтапы 4.1, 4.2 и 4.3 закрыты;
+Этап 3R.1 и baseline initial HTML закрыты; в подэтапе 4.3 все шесть экранов
+вынесены в module-owned partials, minimal-профили открываются без console
+errors. Следующий — подэтап 4.4 (модальные окна).
 
 ## 1. Цель проекта
 
@@ -854,7 +854,7 @@ neutral module metadata и initial-HTML baseline реализованы и за�
 
 ## Этап 4. Разделение frontend shell и экранов
 
-**Статус:** в работе; подэтапы 4.1 и 4.2 закрыты, следующий — подэтап 4.3.
+**Статус:** в работе; подэтапы 4.1, 4.2 и 4.3 закрыты, следующий — подэтап 4.4.
 Всего шесть последовательных подэтапов.
 
 Этап 4 отвечает за **серверную композицию HTML** и границы шаблонов. Он не
@@ -987,7 +987,7 @@ DOM/API guardrails.
 
 ### Подэтап 4.3. Выделение экранов по модульным границам
 
-**Статус:** в работе.
+**Статус:** закрыт 30 сентября 2026 года.
 
 Routing screen: **закрыт 30 сентября 2026 года**.
 
@@ -1047,12 +1047,29 @@ Commands и Files screens: **закрыты 30 сентября 2026 года**.
 **Browser smoke 30 сентября 2026 года** (E2E-стенд, профили через
 `modules.json`): в Full, Xray-minimal и Mihomo-minimal рендерятся только свои
 экраны, все видимые вкладки открываются, набор ошибок Xray-minimal совпадает с
-baseline до выделения экранов. Критерий «без console errors» при этом не
-выполнен: `features/resource_monitor.js` опрашивает `/api/system/resources`
-(`tool.advanced-diagnostics`), а карточка GeoIP/GeoSite вызывает
-`/api/fs/stat-batch` (`tool.files`), что даёт `404` в minimal-профилях.
-Ошибки не связаны с выделением экранов; способ их устранения — отдельное
-решение (Этап 5 или доработка до закрытия 4.3).
+baseline до выделения экранов. Оставшиеся `404` были frontend-вызовами API
+выключенных модулей и устранены до закрытия 4.3:
+
+- сводка ресурсов в header (`#xk-resource-monitor`) опрашивает
+  `/api/system/*` модуля `tool.advanced-diagnostics` и теперь рендерится под
+  `{% if has_diagnostics %}`; без корня `initResourceMonitor()` не запускает
+  опрос;
+- карточка GeoIP/GeoSite (`engine.xray`) использовала `/api/fs/stat-batch`,
+  `/api/fs/list`, `/api/fs/upload` и `/api/fs/download` модуля `tool.files`.
+  Теперь у неё собственные `/api/routing/dat/stat`, `/files`, `/upload` и
+  `/download` (`routes/routing/dat_files.py`): только `.dat`, та же allowlist,
+  что у `/api/routing/dat/update`, загрузка потоком с лимитом
+  `XKEEN_MAX_DAT_MB`. Загрузка и скачивание DAT больше не ломаются в профиле
+  без файлового менеджера.
+
+Повторный smoke: в Xray-minimal и Mihomo-minimal нет ни одного `4xx/5xx`;
+единственные ошибки консоли — handshake `/ws/events`, который на Windows-стенде
+без `gevent-websocket` не работает и в Full.
+
+Остаётся backend-связь для Этапа 7: `routes/routing/dat.py` и `dat_files.py`
+(`engine.xray`) импортируют `services/fs_common/local.py`, а `dat.py` ещё и
+`services/filemanager/metadata.py`; по inventory оба принадлежат `tool.files`.
+При удалении файлов модуля их нужно оставить или перевести в core.
 
 Последовательно вынести разметку экранов в partials:
 
@@ -1217,13 +1234,9 @@ tool.files
 baseline, но убрать оставшиеся static imports, которые подтягивают optional
 код через `panel-core`, `panel.mihomo_header` или shared compatibility layers.
 
-Известные нарушения по smoke 4.3 (30 сентября 2026 года):
-
-- `features/resource_monitor.js` в core header опрашивает
-  `/api/system/resources`, принадлежащий `tool.advanced-diagnostics`;
-- `features/routing_cards/dat/api.js` (`engine.xray`) вызывает
-  `/api/fs/stat-batch` из `tool.files`; в Xray-minimal при старте также
-  приходит `404` на `/api/fs/list`.
+Smoke 4.3 (30 сентября 2026 года) нашёл и закрыл два frontend-вызова API
+выключенных модулей (resource summary и карточка GeoIP/GeoSite). Этап 5
+должен закрепить это E2E-guardrails для всех профилей.
 
 Для каждого optional frontend-модуля зафиксировать:
 

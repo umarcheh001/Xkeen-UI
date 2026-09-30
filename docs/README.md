@@ -5,7 +5,7 @@
 ## Основные документы
 
 - `README_frontend_migration_plan.md` — текущий статус закрытого migration scope и список guardrails, которые нельзя откатывать.
-- `../README-modular-panel-plan.md` — план модульной панели; Этапы 0–3 и 3R, подэтапы 4.1–4.2 закрыты, следующий — подэтап 4.3.
+- `../README-modular-panel-plan.md` — план модульной панели; Этапы 0–3, 3R и 3R.1, подэтапы 4.1–4.3 закрыты, следующий — подэтап 4.4.
 - `frontend-target-architecture.md` — целевой архитектурный контракт фронтенда в текущем репозитории.
 - `frontend-feature-api.md` — правила для feature API, registry и compat-слоя.
 - `config-schema-ux-roadmap.md` — roadmap по развитию UX вокруг схем Xray JSON и Mihomo YAML: schema enrichment, semantic validation, snippets, quick fixes и guided flows.

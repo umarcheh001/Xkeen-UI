@@ -14,7 +14,7 @@ const accordions = [
 async function mockRoutingCardData(page) {
   let statBatchCalls = 0;
 
-  await page.route('**/api/fs/stat-batch', async (route) => {
+  await page.route('**/api/routing/dat/stat', async (route) => {
     statBatchCalls += 1;
     if (statBatchCalls > 1) {
       await new Promise((resolve) => setTimeout(resolve, 700));
@@ -335,7 +335,7 @@ test.describe('Operator Console Stage 3 routing cards', () => {
       await datHelp.locator('.xk-card-help-trigger').click();
       await expect(datHelp).not.toHaveAttribute('open', '');
 
-      await page.route('**/api/fs/list?**', async (route) => {
+      await page.route('**/api/routing/dat/files?**', async (route) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',

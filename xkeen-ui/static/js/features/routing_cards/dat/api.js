@@ -91,12 +91,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   }
 
   // -------- Low-level endpoints --------
+  // Xray-owned /api/routing/dat/* file endpoints: the card must keep working
+  // in profiles without the file manager module.
 
   async function statBatch(paths) {
-    const resp = await fetch('/api/fs/stat-batch', {
+    const resp = await fetch('/api/routing/dat/stat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target: 'local', paths: paths || [] }),
+      body: JSON.stringify({ paths: paths || [] }),
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data || data.ok === false) {
@@ -109,7 +111,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     const p = String(path || '').trim();
     if (!p) return null;
     try {
-      const resp = await fetch('/api/fs/list?target=local&path=' + encodeURIComponent(p));
+      const resp = await fetch('/api/routing/dat/files?dir=' + encodeURIComponent(p));
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || !data || data.ok === false) return null;
       return data;
@@ -121,14 +123,14 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   async function upload(path, file, overwrite) {
     const fd = new FormData();
     fd.append('file', file);
-    const url = '/api/fs/upload?target=local&path=' + encodeURIComponent(path) + (overwrite ? '&overwrite=1' : '');
+    const url = '/api/routing/dat/upload?path=' + encodeURIComponent(path) + (overwrite ? '&overwrite=1' : '');
     const resp = await fetch(url, { method: 'POST', body: fd });
     const data = await resp.json().catch(() => ({}));
     return { resp, data };
   }
 
   function downloadUrl(path) {
-    return '/api/fs/download?target=local&path=' + encodeURIComponent(path);
+    return '/api/routing/dat/download?path=' + encodeURIComponent(path);
   }
 
   async function update(kind, url, path) {
