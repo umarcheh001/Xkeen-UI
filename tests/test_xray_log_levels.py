@@ -4,6 +4,8 @@ import json
 import subprocess
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -139,7 +141,7 @@ def test_xray_logs_view_uses_shared_semantic_level_filter():
 
 def test_terminal_xray_level_control_is_error_log_only():
     script = (ROOT / "xkeen-ui/static/js/terminal/xray_tail.js").read_text(encoding="utf-8")
-    template = (ROOT / "xkeen-ui/templates/panel.html").read_text(encoding="utf-8")
+    template = compose_panel_template(ROOT)
 
     assert "levelSel.disabled = !isError;" in script
     assert "preserveActiveLevel: kind === 'access'" in script

@@ -4,6 +4,8 @@ import json
 import re
 import time
 from pathlib import Path
+
+from scripts.panel_template_source import compose_panel_template
 from typing import Any, Dict
 
 import pytest
@@ -304,7 +306,7 @@ def test_http_contract_returns_guarded_status(tmp_path: Path, monkeypatch):
 
 def test_frontend_has_dns_button_modal_and_guard_copy():
     root = Path(__file__).resolve().parents[1]
-    template = (root / "xkeen-ui/templates/panel.html").read_text(encoding="utf-8")
+    template = compose_panel_template(root)
     script = (root / "xkeen-ui/static/js/features/routing_cards/rules/dns_over_vless.js").read_text(encoding="utf-8")
 
     assert 'id="routing-dns-over-vless-btn"' in template
@@ -1817,7 +1819,7 @@ def test_one_address_in_both_resolver_groups_is_refused(tmp_path: Path, monkeypa
 def test_field_hint_names_the_firmware_resolver_ports():
     # Адреса не угадываются, и подставляет их сама панель, но подсказка
     # обязана объяснять, что именно она нашла и чего стоит отказ.
-    markup = Path("xkeen-ui/templates/panel.html").read_text(encoding="utf-8")
+    markup = compose_panel_template(Path("."))
     hint_start = markup.index('id="routing-dns-over-vless-firmware"')
     hint = markup[hint_start : hint_start + 1600]
     assert "127.0.0.1:41100" in hint

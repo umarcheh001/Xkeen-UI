@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 ROOT = Path(__file__).resolve().parents[1]
 JS = (ROOT / "xkeen-ui/static/js/features/routing_cards/rules/dns_over_vless.js").read_text(encoding="utf-8")
 
@@ -40,7 +42,7 @@ def test_locked_state_survives_the_field_render():
 
 
 def test_locked_note_lives_in_the_template():
-    template = (ROOT / "xkeen-ui/templates/panel.html").read_text(encoding="utf-8")
+    template = compose_panel_template(ROOT)
     assert 'id="routing-dns-over-vless-locked-note"' in template
 
 

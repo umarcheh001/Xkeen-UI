@@ -4,11 +4,15 @@ import re
 
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def _read(rel_path: str) -> str:
+    if rel_path == "xkeen-ui/templates/panel.html":
+        return compose_panel_template(ROOT)
     return (ROOT / rel_path).read_text(encoding="utf-8")
 
 

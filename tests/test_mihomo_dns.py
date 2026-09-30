@@ -4,6 +4,8 @@ import json
 import stat
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 import pytest
 from flask import Flask
 
@@ -1635,7 +1637,7 @@ def test_http_contract_and_frontend(tmp_path: Path, monkeypatch):
     assert response.get_json()["can_enable"] is True
 
     root = Path(__file__).resolve().parents[1]
-    template = (root / "xkeen-ui/templates/panel.html").read_text(encoding="utf-8")
+    template = compose_panel_template(root)
     script = (root / "xkeen-ui/static/js/features/mihomo_dns.js").read_text(encoding="utf-8")
     bundle = (root / "xkeen-ui/static/js/pages/panel.mihomo.bundle.js").read_text(encoding="utf-8")
     assert 'id="mihomo-dns-btn"' in template

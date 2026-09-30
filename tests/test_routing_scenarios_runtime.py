@@ -5,6 +5,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 import pytest
 
 
@@ -390,7 +392,7 @@ console.log(JSON.stringify({
 
 
 def test_routing_scenario_switcher_is_wired_into_panel():
-    template = (ROOT / "xkeen-ui/templates/panel.html").read_text(encoding="utf-8")
+    template = compose_panel_template(ROOT)
     routing_src = (ROOT / "xkeen-ui/static/js/features/routing.js").read_text(encoding="utf-8")
     settings_src = (ROOT / "xkeen-ui/static/js/ui/settings.js").read_text(encoding="utf-8")
     settings_panel_src = (ROOT / "xkeen-ui/static/js/ui/settings_panel.js").read_text(encoding="utf-8")
@@ -447,7 +449,7 @@ def test_routing_scenario_switcher_is_wired_into_panel():
 
 
 def test_routing_dat_card_uses_shared_sidebar_collapse_style():
-    template = (ROOT / "xkeen-ui/templates/panel.html").read_text(encoding="utf-8")
+    template = compose_panel_template(ROOT)
     styles = (ROOT / "xkeen-ui/static/styles.css").read_text(encoding="utf-8")
 
     assert 'class="card routing-dat-card routing-side-card"' in template

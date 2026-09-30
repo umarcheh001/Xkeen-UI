@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 378,
-      "size_bytes": 5802852,
+      "unit_count": 380,
+      "size_bytes": 5805324,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 17,
         "backend_service": 51,
-        "backend_test": 163,
+        "backend_test": 164,
         "configuration": 10,
         "frontend_bundle": 3,
         "frontend_entrypoint": 2,
@@ -52,7 +52,7 @@
         "frontend_test": 31,
         "frontend_ui": 17,
         "stylesheet": 5,
-        "template": 15
+        "template": 16
       },
       "route_count": 75,
       "background_task_count": 4,
@@ -86,7 +86,7 @@
       ],
       "removable": true,
       "unit_count": 114,
-      "size_bytes": 3492303,
+      "size_bytes": 3492667,
       "kind_counts": {
         "backend_route": 12,
         "backend_service": 17,
@@ -129,7 +129,7 @@
       ],
       "removable": true,
       "unit_count": 126,
-      "size_bytes": 2978168,
+      "size_bytes": 2978382,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -2855,7 +2855,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_dns_modal_hints.py",
-      "size_bytes": 1965,
+      "size_bytes": 1991,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2873,7 +2873,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_dns_modal_layouts.py",
-      "size_bytes": 1081,
+      "size_bytes": 1107,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2891,7 +2891,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_dns_modal_switches.py",
-      "size_bytes": 2364,
+      "size_bytes": 2390,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2909,7 +2909,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_dns_modal_zones.py",
-      "size_bytes": 4997,
+      "size_bytes": 5023,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3894,7 +3894,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_stage4_1_contract.py",
-      "size_bytes": 6211,
+      "size_bytes": 6200,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3912,7 +3912,25 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_stage4_2_shell.py",
-      "size_bytes": 2864,
+      "size_bytes": 2934,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_modular_panel_stage4_3_routing_screen.py",
+      "size_bytes": 2069,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4416,7 +4434,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_restart_log_subscription_ux.py",
-      "size_bytes": 12143,
+      "size_bytes": 12305,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4494,7 +4512,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_routing_scenarios_runtime.py",
-      "size_bytes": 19231,
+      "size_bytes": 19217,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -8541,7 +8559,7 @@
       "module_id": "core",
       "kind": "template",
       "path": "xkeen-ui/templates/panel.html",
-      "size_bytes": 410703,
+      "size_bytes": 358406,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -8632,6 +8650,24 @@
       "kind": "template",
       "path": "xkeen-ui/templates/panel/page_config.html",
       "size_bytes": 1315,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "template",
+      "path": "xkeen-ui/templates/panel/screens/routing.html",
+      "size_bytes": 52389,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -10368,7 +10404,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_dns.py",
-      "size_bytes": 76104,
+      "size_bytes": 76130,
       "depends_on": [
         "core",
         "tool.editor"
@@ -10393,7 +10429,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_dns_layout.py",
-      "size_bytes": 3315,
+      "size_bytes": 3341,
       "depends_on": [
         "core",
         "tool.editor"
@@ -10456,7 +10492,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_feature_api_consistency.py",
-      "size_bytes": 12248,
+      "size_bytes": 12410,
       "depends_on": [
         "core",
         "tool.editor"
@@ -13028,7 +13064,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_dns_over_vless.py",
-      "size_bytes": 191875,
+      "size_bytes": 191869,
       "depends_on": [
         "core",
         "tool.editor"
@@ -13056,7 +13092,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_dns_over_vless_backdrop.py",
-      "size_bytes": 1402,
+      "size_bytes": 1428,
       "depends_on": [
         "core",
         "tool.editor"
@@ -13098,7 +13134,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_dns_over_vless_direct_zone_reset.py",
-      "size_bytes": 3818,
+      "size_bytes": 3844,
       "depends_on": [
         "core",
         "tool.editor"
@@ -13119,7 +13155,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_dns_over_vless_fields_visible.py",
-      "size_bytes": 3431,
+      "size_bytes": 3457,
       "depends_on": [
         "core",
         "tool.editor"
@@ -13206,7 +13242,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_dns_over_vless_firmware_toggle_ui.py",
-      "size_bytes": 4317,
+      "size_bytes": 4343,
       "depends_on": [
         "core",
         "tool.editor"
@@ -13227,7 +13263,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_dns_over_vless_layout_switch.py",
-      "size_bytes": 2972,
+      "size_bytes": 2998,
       "depends_on": [
         "core",
         "tool.editor"
@@ -13248,7 +13284,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_dns_over_vless_modal_width.py",
-      "size_bytes": 2616,
+      "size_bytes": 2642,
       "depends_on": [
         "core",
         "tool.editor"
@@ -13290,7 +13326,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_dns_over_vless_resolver_hint_markup.py",
-      "size_bytes": 1813,
+      "size_bytes": 1839,
       "depends_on": [
         "core",
         "tool.editor"
@@ -13547,7 +13583,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_log_levels.py",
-      "size_bytes": 5580,
+      "size_bytes": 5606,
       "depends_on": [
         "core",
         "tool.editor"
@@ -13655,7 +13691,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_subscription_filters_contract.py",
-      "size_bytes": 42859,
+      "size_bytes": 43021,
       "depends_on": [
         "core",
         "tool.editor"
@@ -26419,7 +26455,7 @@
         "template": "xkeen-ui/templates/panel.html",
         "panel_views": 6,
         "panel_modals": 53,
-        "size_bytes": 410703
+        "size_bytes": 358406
       },
       "next_stage": "Этап 4: template partials и module composition."
     },

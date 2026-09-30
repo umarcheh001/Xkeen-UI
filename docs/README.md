@@ -33,6 +33,7 @@
 - `modular-panel-stage3r1-runtime-safety.md` — закрытый Этап 3R.1: сверка runtime safety с кодом, deferred disable, optional-init isolation, future-schema read-only recovery, installed markers и initial-HTML baseline.
 - `modular-panel-stage4.1-contract.md` — закрытый подэтап 4.1: контракт границ frontend shell, экранов, модальных окон, mixed-boundaries и профильный HTML baseline.
 - `modular-panel-stage4.2-frontend-shell.md` — закрытый подэтап 4.2: выделение общего shell в Jinja partials и composed-source guardrails.
+- `modular-panel-stage4.3-routing-screen.md` — первый закрытый экран подэтапа 4.3: routing markup вынесен в partial `engine.xray`.
 - `devtools-operator-theme.md` — закрытый перевод DevTools со старой blue-glass темы на общие с основной панелью Operator tokens, flat shell/data rows/log canvas/modals и responsive dark/light contract.
 - `top-level-navigation-plan.md` — итог по уже закрытому переводу всех five canonical entrypoints с document navigation на in-app navigation и фиксация финального five-route runtime contract.
 - `panel-operator-stage0-contract.md` — закрытый Этап 0 редизайна Operator Console: presentation ownership, матрица views/accordions/editors/modals, DOM freeze и dark/light visual baseline.

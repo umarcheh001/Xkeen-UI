@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 ROOT = Path(__file__).resolve().parents[1]
 CSS = (ROOT / "xkeen-ui/static/panel-operator.css").read_text(encoding="utf-8")
-TEMPLATE = (ROOT / "xkeen-ui/templates/panel.html").read_text(encoding="utf-8")
+TEMPLATE = compose_panel_template(ROOT)
 MODAL = TEMPLATE[
     TEMPLATE.index('<div id="mihomo-dns-modal"'):
     TEMPLATE.index('<div id="inbounds-apply-modal"')

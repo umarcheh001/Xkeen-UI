@@ -1,0 +1,699 @@
+{% from "panel/macros.html" import op_icon %}
+    <div id="view-routing" class="view-section" data-xk-section="routing">
+<!-- Routing editor + Mihomo config -->
+    <div class="layout-2col routing-layout">
+
+            <div class="layout-side routing-side">
+        <div class="routing-side-grid">
+    <section class="card routing-dat-card routing-side-card">
+              <div class="commands-header" id="routing-dat-header" role="button" tabindex="0" aria-controls="routing-dat-body" aria-expanded="false">
+                <h2>Базы GeoIP и GeoSite</h2>
+                <span id="routing-dat-arrow">▼</span>
+              </div>
+
+              <div id="routing-dat-body" style="display:none;">
+                <div class="routing-dat-toolbar">
+                  <div class="routing-dat-toolbar-left">
+                    <button id="routing-dat-refresh-btn" class="btn-secondary btn-icon" type="button" aria-label="Обновить статусы" data-tooltip="Проверить наличие DAT-файлов и обновить информацию о размере/дате.">{{ op_icon('refresh') }}</button>
+                    <button id="routing-dat-geodat-install-btn" class="btn-secondary btn-compact" type="button" data-tooltip="Установить/обновить xk-geodat (включит просмотр содержимого DAT и добавление тегов в правила).">xk-geodat</button>
+                    <button id="routing-dat-geodat-install-file-btn" class="btn-secondary btn-icon" type="button" aria-label="Установить xk-geodat из файла" data-tooltip="Установить xk-geodat из файла (если вы тестируете до релиза или ставите свой бинарник).">{{ op_icon('upload') }}</button>
+                    <details class="xk-card-help-popover routing-dat-help-popover">
+                      <summary class="xk-card-help-trigger"
+                               aria-label="Подсказка по DAT-файлам"
+                               title="О DAT-файлах"
+                               data-tooltip="О DAT-файлах">
+                        {{ op_icon('help', 'xk-card-help-icon') }}
+                      </summary>
+                      <div class="xk-card-help-panel">
+                        Хранилища <code>GeoIP</code> и <code>GeoSite</code> используются правилами <code>geoip:</code> и <code>geosite:</code>.
+                        Здесь можно быстро обновить DAT-файлы, заменить их вручную и открыть содержимое тегов через <code>xk-geodat</code>.
+                      </div>
+                    </details>
+                    <input id="routing-dat-geodat-install-file" type="file" style="display:none" />
+                  </div>
+                  <div id="routing-dat-status" class="status" role="status" aria-live="polite" data-state="idle"></div>
+                </div>
+
+                <div class="routing-dat-grid">
+                  <div class="routing-dat-item" data-kind="geosite">
+                    <div class="routing-dat-head">
+                      <div class="routing-dat-title">
+                        <span class="routing-dat-name">GeoSite</span>
+                        <span id="routing-dat-geosite-current-file" class="routing-dat-file">geosite.dat</span>
+                      </div>
+                      <div class="routing-dat-meta" id="routing-dat-geosite-meta">—</div>
+                    </div>
+
+                    <div class="routing-dat-fields-row">
+                      <label class="routing-dat-field">
+                        <span>Папка</span>
+                        <input id="routing-dat-geosite-dir" class="routing-dat-input" type="text" placeholder="/opt/etc/xray/dat">
+                      </label>
+
+                      <label class="routing-dat-field">
+                        <span>Имя файла</span>
+                        <div class="routing-dat-combo" data-kind="geosite">
+                          <input id="routing-dat-geosite-name" class="routing-dat-input" type="text" placeholder="geosite.dat">
+                          <button id="routing-dat-geosite-browse" class="btn-secondary btn-icon routing-dat-combo-btn" type="button" aria-label="Обнаруженные DAT" aria-controls="routing-dat-geosite-found" aria-expanded="false" aria-haspopup="listbox">{{ op_icon('chevron-down') }}</button>
+                        </div>
+                        <datalist id="routing-dat-geosite-name-list" hidden></datalist>
+                      </label>
+                    </div>
+
+                    <div id="routing-dat-geosite-found" class="routing-dat-found" role="listbox" aria-label="Обнаруженные файлы GeoSite">—</div>
+
+                    <label class="routing-dat-field">
+                      <span>URL обновления</span>
+                      <input id="routing-dat-geosite-url" class="routing-dat-input" type="url" placeholder="https://.../geosite.dat">
+                    </label>
+
+                    <input id="routing-dat-geosite-file" type="file" accept=".dat" style="display:none">
+
+                    <div class="actions xk-actions-inline routing-dat-actions-inline" aria-label="Действия GeoSite">
+                      <button id="routing-dat-geosite-upload-btn" type="button" aria-label="Загрузить" data-tooltip="Загрузить DAT-файл с компьютера и сохранить по указанному пути.">{{ op_icon('upload') }}<span class="xk-action-label">Загрузить</span></button>
+                      <button id="routing-dat-geosite-update-btn" type="button" aria-label="Обновить" data-tooltip="Скачать DAT по URL и заменить текущий файл (с подтверждением).">{{ op_icon('download') }}<span class="xk-action-label">Обновить</span></button>
+                      <button id="routing-dat-geosite-download-btn" type="button" aria-label="Скачать" data-tooltip="Скачать текущий локальный DAT-файл.">{{ op_icon('download') }}<span class="xk-action-label">Скачать</span></button>
+                      <button id="routing-dat-geosite-content-btn" type="button" aria-label="Содержимое" data-tooltip="Открыть просмотр тегов/содержимого GeoSite (поиск + копирование geosite:TAG).">{{ op_icon('catalog') }}<span class="xk-action-label">Открыть</span></button>
+                    </div>
+                  </div>
+
+                  <div class="routing-dat-item" data-kind="geoip">
+                    <div class="routing-dat-head">
+                      <div class="routing-dat-title">
+                        <span class="routing-dat-name">GeoIP</span>
+                        <span id="routing-dat-geoip-current-file" class="routing-dat-file">geoip.dat</span>
+                      </div>
+                      <div class="routing-dat-meta" id="routing-dat-geoip-meta">—</div>
+                    </div>
+
+                    <div class="routing-dat-fields-row">
+                      <label class="routing-dat-field">
+                        <span>Папка</span>
+                        <input id="routing-dat-geoip-dir" class="routing-dat-input" type="text" placeholder="/opt/etc/xray/dat">
+                      </label>
+
+                      <label class="routing-dat-field">
+                        <span>Имя файла</span>
+                        <div class="routing-dat-combo" data-kind="geoip">
+                          <input id="routing-dat-geoip-name" class="routing-dat-input" type="text" placeholder="geoip.dat">
+                          <button id="routing-dat-geoip-browse" class="btn-secondary btn-icon routing-dat-combo-btn" type="button" aria-label="Обнаруженные DAT" aria-controls="routing-dat-geoip-found" aria-expanded="false" aria-haspopup="listbox">{{ op_icon('chevron-down') }}</button>
+                        </div>
+                        <datalist id="routing-dat-geoip-name-list" hidden></datalist>
+                      </label>
+                    </div>
+
+                    <div id="routing-dat-geoip-found" class="routing-dat-found" role="listbox" aria-label="Обнаруженные файлы GeoIP">—</div>
+
+                    <label class="routing-dat-field">
+                      <span>URL обновления</span>
+                      <input id="routing-dat-geoip-url" class="routing-dat-input" type="url" placeholder="https://.../geoip.dat">
+                    </label>
+
+                    <input id="routing-dat-geoip-file" type="file" accept=".dat" style="display:none">
+
+                    <div class="actions xk-actions-inline routing-dat-actions-inline" aria-label="Действия GeoIP">
+                      <button id="routing-dat-geoip-upload-btn" type="button" aria-label="Загрузить" data-tooltip="Загрузить DAT-файл с компьютера и сохранить по указанному пути.">{{ op_icon('upload') }}<span class="xk-action-label">Загрузить</span></button>
+                      <button id="routing-dat-geoip-update-btn" type="button" aria-label="Обновить" data-tooltip="Скачать DAT по URL и заменить текущий файл (с подтверждением).">{{ op_icon('download') }}<span class="xk-action-label">Обновить</span></button>
+                      <button id="routing-dat-geoip-download-btn" type="button" aria-label="Скачать" data-tooltip="Скачать текущий локальный DAT-файл.">{{ op_icon('download') }}<span class="xk-action-label">Скачать</span></button>
+                      <button id="routing-dat-geoip-content-btn" type="button" aria-label="Содержимое" data-tooltip="Открыть просмотр тегов/содержимого GeoIP (поиск + копирование geoip:TAG).">{{ op_icon('catalog') }}<span class="xk-action-label">Открыть</span></button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+    <!-- Inbounds mode -->
+    <section class="card routing-side-card routing-side-card--inbounds">
+      <div class="commands-header" id="inbounds-header" role="button" tabindex="0" aria-controls="inbounds-body" aria-expanded="false">
+        <h2>Входящие подключения</h2>
+        <span id="inbounds-arrow">▼</span>
+      </div>
+
+      <div id="inbounds-body" style="display:none;">
+
+      <div class="xk-fragment-row">
+        <label class="xk-fragment-select">
+          <select id="inbounds-fragment-select" class="xray-log-select" data-current="{{ inbounds_name|e }}"
+                  title="Выбор файла inbounds для редактирования"
+                  data-tooltip="Выбор файла inbounds для редактирования"
+                  aria-label="Файл inbounds"></select>
+        </label>
+        <button id="inbounds-fragment-refresh-btn" type="button" class="btn-icon btn-secondary" aria-label="Обновить список файлов" data-tooltip="Обновить список файлов inbounds из /opt/etc/xray/configs/">{{ op_icon('refresh') }}</button>
+      </div>
+      <p class="xk-card-desc">Активный фрагмент: <code id="inbounds-file-code">{{ inbounds_file }}</code></p>
+
+      <div class="inbounds-modes">
+        <label class="mode-item">
+          <input type="radio" name="inbounds_mode" value="mixed">
+          <div>
+            <strong>Hybrid</strong><br>
+            <small class="xk-card-desc">UDP через TProxy, TCP через Redirect</small>
+          </div>
+        </label>
+
+        <label class="mode-item">
+          <input type="radio" name="inbounds_mode" value="tproxy">
+          <div>
+            <strong>TProxy</strong><br>
+            <small class="xk-card-desc">TCP+UDP через TProxy</small>
+          </div>
+        </label>
+
+        <label class="mode-item">
+          <input type="radio" name="inbounds_mode" value="redirect">
+          <div>
+            <strong>Redirect</strong><br>
+            <small class="xk-card-desc">Только TCP через Redirect</small>
+          </div>
+        </label>
+      </div>
+
+      <label class="dt-switch xk-mini-switch" title="После смены режима автоматически применить конфиг и перезапустить xkeen.">
+        <input type="checkbox" id="inbounds-autorestart" checked>
+        <span class="dt-switch-slider" aria-hidden="true"></span>
+        <span class="dt-switch-label">Перезапускать xkeen после смены режима</span>
+      </label>
+
+      <div class="actions xk-actions-inline">
+        <button id="inbounds-open-editor-btn" class="btn-icon" aria-label="Редактировать" data-tooltip="Открыть {{ inbounds_name|e }} в редакторе JSON.">{{ op_icon('edit') }}<span class="xk-action-label">Правка</span></button>
+        <button id="inbounds-save-btn" class="btn-icon btn-primary" aria-label="Сохранить" data-tooltip="Сохранить {{ inbounds_name|e }}.">{{ op_icon('save') }}<span class="xk-action-label">Сохр.</span></button>
+        <button id="inbounds-backup-btn" class="btn-icon" aria-label="Создать резервную копию" data-tooltip="Сделать бэкап {{ inbounds_name|e }}.">{{ op_icon('archive') }}<span class="xk-action-label">Бэкап</span></button>
+        <button id="inbounds-restore-auto-btn" class="btn-icon" aria-label="Восстановить из резервной копии" data-tooltip="Восстановить inbounds из автобэкапа.">{{ op_icon('restore') }}<span class="xk-action-label">Восст.</span></button>
+      </div>
+
+	      <div id="inbounds-status" class="status" role="status" aria-live="polite"></div>
+	      </div>
+	    </section>
+
+	    <!-- Routing scenario switcher -->
+	    <section class="card routing-side-card routing-side-card--scenario xk-only-routing">
+	      <div class="commands-header" id="routing-scenario-header" role="button" tabindex="0" aria-controls="routing-scenario-body" aria-expanded="false">
+	        <h2>Сценарий маршрутизации</h2>
+	        <span id="routing-scenario-badge">—</span>
+	        <span id="routing-scenario-arrow">▼</span>
+	      </div>
+
+	      <div id="routing-scenario-body" style="display:none;">
+	        <div class="routing-scenario-help-row">
+	          <details class="xk-card-help-popover routing-scenario-help-popover">
+	            <summary class="xk-card-help-trigger"
+	                     aria-label="Справка по сценарию маршрутизации"
+	                     title="О сценарии маршрутизации"
+	                     data-tooltip="О сценарии маршрутизации">
+	              {{ op_icon('help', 'xk-card-help-icon') }}
+	              <span class="xk-card-help-label">Как это работает</span>
+	            </summary>
+	            <div class="xk-card-help-panel routing-scenario-help-panel">
+	              <p><b>Сценарий маршрутизации</b> быстро перестраивает текущий routing-файл под тип подключения.</p>
+	              <ul>
+	                <li><b>Обычный</b> режим убирает управляемый аварийный блок и оставляет ваши текущие правила: заблокированное через VPS/резерв, остальное по текущему routing.</li>
+	                <li><b>Мобильный white-list</b> нужен для провайдеров с жёсткими белыми списками. Он создаёт fallback-цепочку <code>balancer_main</code> → <code>balancer_reserv</code> → <code>balancer_white_list</code>.</li>
+	                <li><code>balancer_main</code> использует selector <code>my_proxy</code> и fallback <code>loopback_to_reserv</code>; <code>balancer_reserv</code> использует <code>reserve_proxy</code> и fallback <code>loopback_to_white</code>.</li>
+	                <li>Loopback outbounds должны вернуть трафик в routing с inboundTag <code>from_balancer_main</code> и <code>from_balancer_reserv</code>; эти теги сценарий перехватывает отдельными правилами.</li>
+	                <li>Финальный balancer <code>balancer_white_list</code> выбирает outbounds по selector <code>white_list</code>, поэтому в подписках должен быть профиль с тегом/префиксом <code>white_list</code>.</li>
+	                <li>В карточке <b>Прокси</b> откройте <b>Подписки</b>, разделите подписку на профили <code>reserve_proxy</code> и <code>white_list</code>, обновите их и проверьте, что outbounds получили теги вида <code>reserve_proxy--...</code> и <code>white_list--...</code>.</li>
+	              </ul>
+	              <p>Перед применением панель проверит, найдены ли <code>my_proxy</code>, <code>reserve_proxy</code>, <code>white_list</code> и loopback outbounds.</p>
+	            </div>
+	          </details>
+	        </div>
+        <div class="routing-scenario-options" role="radiogroup" aria-label="Сценарий маршрутизации Xray">
+	          <label class="mode-item routing-scenario-option">
+	            <input id="routing-scenario-normal" type="radio" name="routing_scenario" value="normal" checked>
+	            <div>
+	              <strong>Обычный</strong><br>
+	              <small class="xk-card-desc">Текущие правила файла: заблокированное через VPS/резерв, остальное по routing.</small>
+	            </div>
+	          </label>
+
+	          <label class="mode-item routing-scenario-option">
+	            <input id="routing-scenario-mobile" type="radio" name="routing_scenario" value="mobile-whitelist">
+	            <div>
+	              <strong>Мобильный white-list</strong><br>
+	              <small class="xk-card-desc">Fallback через <code>my_proxy</code>, <code>reserve_proxy</code> и <code>white_list</code>.</small>
+	            </div>
+	          </label>
+	        </div>
+
+	        <div class="actions xk-actions-inline routing-scenario-actions">
+	          <button id="routing-scenario-apply-btn" class="btn-primary" type="button"
+	                  data-tooltip="Применить выбранный сценарий к текущему routing-файлу и сохранить его.">{{ op_icon('save') }}<span class="xk-action-label">Применить</span></button>
+	        </div>
+	        <div id="routing-scenario-status" class="routing-scenario-status" role="status" aria-live="polite"></div>
+	      </div>
+	    </section>
+
+	    <!-- Outbounds VLESS editor -->
+	    <section class="card routing-side-card routing-side-card--outbounds">
+      <div class="commands-header" id="outbounds-header" role="button" tabindex="0" aria-controls="outbounds-body" aria-expanded="false">
+        <h2>Прокси-серверы</h2>
+        <span id="outbounds-arrow">▼</span>
+      </div>
+
+      <div id="outbounds-body" style="display:none;">
+
+      <div class="xk-fragment-row">
+        <label class="xk-fragment-select">
+          <select id="outbounds-fragment-select" class="xray-log-select" data-current="{{ outbounds_name|e }}"
+                  title="Выбор файла outbounds для редактирования"
+                  data-tooltip="Выбор файла outbounds для редактирования"
+                  aria-label="Файл outbounds"></select>
+        </label>
+        <button id="outbounds-fragment-refresh-btn" type="button" class="btn-icon btn-secondary" aria-label="Обновить список файлов" data-tooltip="Обновить список файлов outbounds из /opt/etc/xray/configs/">{{ op_icon('refresh') }}</button>
+      </div>
+      <p class="xk-card-desc">Активный фрагмент: <code id="outbounds-file-code">{{ outbounds_file }}</code></p>
+      <div id="outbounds-fragment-summary" class="outbounds-fragment-summary hidden" aria-live="polite"></div>
+      <section id="outbounds-nodes-panel" class="xk-sub-panel xk-sub-node-panel xk-outbounds-node-panel hidden">
+        <div class="xk-sub-panelhead">
+          <div>
+            <div class="xk-pool-kicker">Серверы</div>
+            <div class="terminal-menu-title xk-op-m-0">Узлы текущего proxy-фрагмента</div>
+            <div id="outbounds-nodes-caption" class="xk-sub-muted">Список появится после загрузки proxy-фрагмента.</div>
+              <div id="outbounds-active-node-status" class="xk-outbounds-active-status is-unknown hidden" role="status" aria-live="polite"></div>
+          </div>
+          <div class="xk-sub-nodes-head-actions xk-outbounds-probe-toolbar">
+            <div id="outbounds-nodes-probe-mode" class="xk-sub-probe-mode" role="group" aria-label="Режим проверки задержки">
+              <button type="button" class="xk-sub-probe-mode-btn is-active" data-probe-mode="tcp" aria-pressed="true" data-tooltip="Проверить доступность TCP-порта, как HAPP. Это не подтверждает работу прокси.">TCP</button>
+              <button type="button" class="xk-sub-probe-mode-btn" data-probe-mode="proxy" aria-pressed="false" data-tooltip="Выполнить контрольный HTTPS-запрос через узел и Xray.">Прокси</button>
+            </div>
+            <button type="button" id="outbounds-nodes-pingall" class="btn-secondary btn-compact xk-sub-icon-btn" title="Пинг всех узлов" data-tooltip="Проверить задержку всех proxy-узлов в текущем 04_outbounds-фрагменте." aria-label="Пинг всех узлов" disabled>
+              {{ op_icon('ping', 'xk-sub-icon-glyph xk-sub-pingall-glyph') }}
+              <span class="xk-sub-pingall-spinner" aria-hidden="true"></span>
+              <span class="xk-visually-hidden">Проверить задержку всех proxy-узлов</span>
+            </button>
+            <div id="outbounds-nodes-summary" class="xk-pool-summary">0</div>
+          </div>
+        </div>
+        <div id="outbounds-nodes-list" class="xk-sub-node-list xk-outbounds-node-list"></div>
+        <div id="outbounds-nodes-empty" class="xk-pool-empty">Proxy-узлы не найдены.</div>
+      </section>
+
+      <div class="outbounds-hints">
+        <label class="outbounds-hint-field">
+          <span class="hint-label">Протокол</span>
+          <select id="outbounds-proto" class="xray-log-select">
+            <option value="auto" selected>Авто</option>
+            <option value="vless">VLESS</option>
+            <option value="trojan">Trojan</option>
+            <option value="vmess">VMess</option>
+            <option value="ss">Shadowsocks</option>
+            <option value="hy2">Hysteria2 (HY2)</option>
+          </select>
+        </label>
+
+        <label class="outbounds-hint-field">
+          <span class="hint-label">Транспорт</span>
+          <select id="outbounds-type" class="xray-log-select">
+            <option value="auto" selected>Авто</option>
+            <option value="tcp">TCP</option>
+            <option value="ws">WebSocket</option>
+            <option value="grpc">gRPC (deprecated)</option>
+            <option value="httpupgrade">HTTP Upgrade</option>
+            <option value="kcp">mKCP</option>
+            <option value="raw">RAW</option>
+            <option value="xhttp">XHTTP</option>
+          </select>
+        </label>
+
+        <label class="outbounds-hint-field">
+          <span class="hint-label">Security</span>
+          <select id="outbounds-security" class="xray-log-select">
+            <option value="auto" selected>Авто</option>
+            <option value="none">None</option>
+            <option value="tls">TLS</option>
+            <option value="reality">Reality</option>
+          </select>
+        </label>
+
+        <details class="outbounds-help-popover">
+          <summary class="outbounds-help-trigger"
+                   aria-label="Подсказка по ссылке прокси"
+                   title="Что вставлять в это поле"
+                   data-tooltip="Подсказка по ссылке прокси">{{ op_icon('help') }}</summary>
+          <div class="outbounds-help-panel">
+            Укажи ссылку прокси <code>vless / trojan / vmess / ss / hy2</code>,
+            на основе которой будет собран конфиг <code>{{ outbounds_name|e }}</code>.
+          </div>
+        </details>
+      </div>
+
+      <div class="outbounds-url-row">
+        <input id="outbounds-url" type="text" placeholder="vless://... / trojan://... / vmess://... / ss://... / hy2://...">
+        <details class="outbounds-tag-menu">
+          <summary id="outbounds-tag-trigger"
+                   class="outbounds-tag-trigger"
+                   aria-label="Tag outbound"
+                   title="Tag outbound"
+                   data-tooltip="Tag outbound для одиночного outbound.">Tag</summary>
+          <div class="outbounds-tag-panel">
+            <label for="outbounds-tag">Tag outbound</label>
+            <input id="outbounds-tag" type="text" value="proxy" placeholder="proxy">
+          </div>
+        </details>
+        <button type="button" id="outbounds-entware-mark-btn" class="xk-entware-mark-toggle" aria-label="Entware mark 255" aria-pressed="false" title="Добавлять sockopt.mark=255 для проксирования Entware" data-tooltip="Добавлять sockopt.mark=255 для проксирования Entware.">{{ op_icon('bolt') }}</button>
+      </div>
+
+      <!-- Parsed preview + validation (client-side) -->
+      <div id="outbounds-parse-box" class="outbounds-parse-box" style="display:none;">
+        <div class="outbounds-parse-badges">
+          <span id="outbounds-badge-proto" class="outbounds-badge">—</span>
+          <span id="outbounds-badge-type" class="outbounds-badge">—</span>
+          <span id="outbounds-badge-sec" class="outbounds-badge">—</span>
+          <span id="outbounds-badge-state" class="outbounds-badge outbounds-badge-ok" style="display:none;">OK</span>
+          <span id="outbounds-badge-state-bad" class="outbounds-badge outbounds-badge-bad" style="display:none;">Ошибка</span>
+        </div>
+
+        <div id="outbounds-parse-error" class="outbounds-parse-msg outbounds-parse-error" style="display:none;"></div>
+        <div id="outbounds-parse-warn" class="outbounds-parse-msg outbounds-parse-warn" style="display:none;"></div>
+
+        <div id="outbounds-parse-kv" class="outbounds-parse-kv"></div>
+      </div>
+
+      <div class="actions xk-actions-inline outbounds-actions">
+        <button id="outbounds-open-editor-btn" class="btn-icon" aria-label="Редактор" data-tooltip="Открыть {{ outbounds_name|e }} в редакторе JSON.">{{ op_icon('edit') }}<span class="xk-action-label">Правка</span></button>
+        <button id="outbounds-normalize-btn" class="btn-icon" aria-label="Нормализовать" data-tooltip="Нормализовать ссылку: дефолты, алиасы, порядок параметров.">{{ op_icon('normalize') }}<span class="xk-action-label">Норм.</span></button>
+        <button id="outbounds-build-btn" class="btn-icon" aria-label="Собрать" data-tooltip="Открыть мини-генератор и собрать ссылку из подсказок (protocol/type/security).">{{ op_icon('tools') }}<span class="xk-action-label">Собрать</span></button>
+        <button id="outbounds-pool-btn" class="btn-icon" aria-label="Пул" data-tooltip="Пул прокси (несколько ссылок) — удобно для балансировщика.">{{ op_icon('pool') }}<span class="xk-action-label">Пул</span></button>
+        <button id="outbounds-subscriptions-btn" class="btn-icon" aria-label="Подписки" data-tooltip="Подписки: автообновление outbounds и observatory-пинг.">{{ op_icon('subscriptions') }}<span class="xk-action-label">Подписки</span></button>
+        <button id="outbounds-save-btn" class="btn-icon btn-primary" aria-label="Сохранить" data-tooltip="Распарсить ссылку и сохранить как outbounds для Xray.">{{ op_icon('save') }}<span class="xk-action-label">Сохр.</span></button>
+        <button id="outbounds-backup-btn" class="btn-icon" aria-label="Backup" data-tooltip="Сделать бэкап {{ outbounds_name|e }}.">{{ op_icon('archive') }}<span class="xk-action-label">Бэкап</span></button>
+        <button id="outbounds-restore-auto-btn" class="btn-icon" aria-label="Restore" data-tooltip="Восстановить outbounds из автобэкапа.">{{ op_icon('restore') }}<span class="xk-action-label">Восст.</span></button>
+      </div>
+
+      <div id="outbounds-status" class="status" role="status" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <!-- Backups list -->
+    <section class="card routing-side-card routing-side-card--backups">
+      <div class="commands-header" id="routing-backups-header" role="button" tabindex="0" aria-controls="routing-backups-body" aria-expanded="false">
+        <h2>Бэкапы Xray</h2>
+          <span id="routing-backups-arrow">▼</span>
+      </div>
+
+      <div id="routing-backups-body" style="display:none;">
+        <div class="xk-backups-intro">
+          <p class="routing-backups-path xk-card-desc">Все точки возврата Xray в одном месте. Каталог: <code>{{ backup_dir }}</code></p>
+          <div class="xk-backups-mode-tabs" aria-label="Тип бэкапов Xray">
+            <button id="backups-mode-snapshots-btn" class="xk-backups-mode-tab is-active" type="button" aria-pressed="true">Снимки</button>
+            <button id="backups-mode-history-btn" class="xk-backups-mode-tab" type="button" aria-pressed="false">История</button>
+          </div>
+        </div>
+
+        <div class="xk-backups-toolbar">
+          <span id="backups-mode-description" class="xk-backups-mode-description xk-card-desc">Rollback-снимки предыдущего состояния файлов.</span>
+          <div class="xk-backups-toolbar-actions">
+            <button
+              type="button"
+              id="backups-refresh-btn"
+              class="btn-secondary btn-icon xk-backups-toolbar-btn"
+              aria-label="Обновить список бэкапов"
+              data-tooltip="Обновить список бэкапов"
+            >{{ op_icon('refresh') }}</button>
+            <button
+              type="button"
+              id="backups-clear-snapshots-btn"
+              class="btn-secondary xk-backups-toolbar-btn xk-backups-clear-btn"
+              data-tooltip="Удалить все rollback-снимки. History-backup и auto-backup не затрагиваются."
+            >{{ op_icon('trash') }}<span class="xk-action-label">Очистить</span></button>
+          </div>
+        </div>
+
+        <table id="backups-table" data-mode="snapshots">
+          <thead>
+            <tr>
+              <th>Имя файла</th>
+              <th>Размер</th>
+              <th>Создан</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+
+        <div id="backups-status" class="status" role="status" aria-live="polite"></div>
+
+        <div class="xk-card-help-row xk-card-help-row--corner">
+          <details class="xk-card-help-popover">
+            <summary class="xk-card-help-trigger"
+                     aria-label="Подсказка по снимкам Xray"
+                     title="О снимках Xray"
+                     data-tooltip="О снимках Xray">
+              {{ op_icon('help', 'xk-card-help-icon') }}
+            </summary>
+            <div class="xk-card-help-panel">
+              Сюда попадают <b>snapshots</b> — rollback-копии <b>предыдущего</b> состояния каждого Xray-файла.
+              Снимок обновляется при сохранении конфига, а из списка ниже его можно быстро открыть или восстановить.
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- Help block -->
+    <section class="card routing-side-card routing-side-card--help">
+      <div class="commands-header" id="routing-help-header" role="button" tabindex="0" aria-controls="routing-help-body" aria-expanded="false">
+        <h2>Справка и ссылки</h2>
+          <span id="routing-help-arrow">▼</span>
+      </div>
+      <div id="routing-help-body" style="display:none;">
+        <ul class="links">
+          <li><a href="https://github.com/Corvus-Malus/XKeen" target="_blank" rel="noopener">GitHub Corvus-Malus/XKeen</a></li>
+          <li><a href="https://github.com/umarcheh001/Xkeen-UI" target="_blank" rel="noopener">Xkeen UI by umarcheh</a></li>
+          <li><a href="https://jameszero.net/faq-xkeen.htm" target="_blank" rel="noopener">FAQ по XKeen (jameszero.net)</a></li>
+          <li><a href="https://t.me/c/2138190368/23" target="_blank" rel="noopener">Telegram чат XKeen</a></li>
+          <li><a href="https://github.com/jameszeroX/XKeen" target="_blank" rel="noopener">GitHub jameszeroX/XKeen</a></li>
+          <li><a href="https://github.com/jameszeroX/XKeen/wiki" target="_blank" rel="noopener">Wiki XKeen</a></li>
+          <li><a href="https://github.com/jameszeroX/XKeen/discussions" target="_blank" rel="noopener">Идеи и опыт XKeen</a></li>
+          <li><a href="https://github.com/jameszeroX/XKeen/tree/main/test" target="_blank" rel="noopener">XKeen beta</a></li>
+        </ul>
+        <div class="xk-card-help-row xk-card-help-row--corner">
+          <details class="xk-card-help-popover">
+            <summary class="xk-card-help-trigger"
+                     aria-label="Подсказка по JSONC-комментариям и применению"
+                     title="О JSONC и применении"
+                     data-tooltip="О JSONC и применении">
+              {{ op_icon('help', 'xk-card-help-icon') }}
+            </summary>
+            <div class="xk-card-help-panel">
+              <p><b>GUI и RAW:</b> карточки «Правила маршрутизации» и «Балансировщики» меняют модель маршрутизации, а кнопка «Применить» переносит эти правки в RAW JSON/JSONC-редактор. Сохранение файла и перезапуск Xray выполняются отдельным действием редактора.</p>
+              <p>Если используется JSONC, панель сначала точечно обновляет <code>routing.rules</code>, <code>routing.balancers</code> и <code>domainStrategy</code>, чтобы сохранить комментарии вокруг элементов. Уникальные <code>ruleTag</code> у правил и <code>tag</code> у балансировщиков делают такую синхронизацию надёжнее.</p>
+              <p>Комментарии внутри изменённого правила или балансировщика могут быть перезаписаны. Если точечное обновление недоступно, панель спросит разрешение на полную перезапись; при отмене RAW-текст останется без изменений.</p>
+              <p>Включённое в настройках «Автоприменение правок маршрутизации» синхронизирует GUI с RAW только безопасным способом и не запускает полную перезапись без подтверждения.</p>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+        </div>
+      </div>
+
+<div class="routing-col routing-col-center">
+        <section id="routing-rules-card" class="card routing-rules-card xk-only-routing" data-focus-role="gui">
+          <div class="commands-header" id="routing-rules-header" role="button" tabindex="0" aria-controls="routing-rules-body" aria-expanded="false">
+            <h2>Правила маршрутизации</h2>
+            <span id="routing-rules-arrow">▼</span>
+          </div>
+
+          <div id="routing-rules-body" style="display:none;">
+            <div class="routing-rules-toolbar">
+              <div class="routing-rules-summary">
+                <span id="routing-rules-count">—</span>
+                <span class="routing-rules-dot">•</span>
+                <span id="routing-rules-geo">—</span>
+              </div>
+              <div class="routing-rules-controls">
+                <input type="search" id="routing-rules-filter" class="routing-rules-filter" placeholder="Фильтр по тегам / типам / значениям">
+                <button id="routing-rules-refresh-btn" class="btn-secondary" type="button">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
+              </div>
+            </div>
+
+            <div class="routing-rules-config">
+              <div class="routing-rules-settings">
+                <label class="routing-rule-field">
+                  <span class="routing-rule-key"><span>domainStrategy</span></span>
+                  <select id="routing-domain-strategy" class="routing-rule-input routing-domain-strategy-select">
+                    <option value="">(по умолчанию)</option>
+                    <option value="AsIs">AsIs</option>
+                    <option value="IPIfNonMatch">IPIfNonMatch</option>
+                    <option value="IPOnDemand">IPOnDemand</option>
+                  </select>
+                </label>
+              </div>
+              <div class="routing-rules-actions">
+                <button id="routing-dns-over-vless-btn" class="btn-secondary routing-dns-over-vless-btn" type="button" data-tooltip="DNS-over-VLESS: безопасная настройка DNS через Xray" aria-label="DNS-over-VLESS">{{ op_icon('dns') }}<span class="xk-action-label">DNS</span><span id="routing-dns-over-vless-dot" class="routing-dns-over-vless-dot" aria-hidden="true"></span></button>
+                <button id="routing-balancer-quick-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Быстрый старт: leastPing + observatory + сохранить+рестарт" aria-label="Быстрый старт балансировщика">{{ op_icon('quick-start') }}</button>
+                <button id="routing-balancer-help-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Справка по балансировщикам" aria-label="Справка по балансировщикам">{{ op_icon('help') }}</button>
+                <button id="routing-forced-rules-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Направить сервисы или IP через нужный прокси либо напрямую" aria-label="Маршрутизация сервисов и IP">{{ op_icon('lock') }}</button>
+                <button id="routing-balancer-add-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Добавить балансировщик" aria-label="Добавить балансировщик">{{ op_icon('add-balancer') }}</button>
+                <button id="routing-rules-add-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Добавить правило" aria-label="Добавить правило">{{ op_icon('add-rule') }}</button>
+                <button id="routing-rules-apply-btn" class="btn-primary btn-icon routing-rules-apply-primary" type="button" data-tooltip="Применить изменения в JSON‑редактор (с сохранением JSONC‑комментариев, best effort)" aria-label="Применить в JSON">{{ op_icon('save') }}</button>
+                <button id="routing-rules-reload-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Перезагрузить из JSON-редактора" aria-label="Перезагрузить из JSON">{{ op_icon('reload') }}</button>
+              </div>
+            </div>
+
+            <div class="routing-balancers">
+              <div class="routing-balancers-title">Балансировщики</div>
+              <div id="routing-balancers-list" class="routing-balancers-grid"></div>
+            </div>
+
+            <div id="routing-rules-list" class="routing-rule-grid"></div>
+            <div id="routing-rules-empty" class="xk-card-desc">Здесь появятся правила из routing.rules.</div>
+          </div>
+        </section>
+
+        <!-- Сворачиваемый блок routing -->
+
+        <section id="routing-editor-card" class="card" data-focus-role="raw">
+          <div class="commands-header" id="routing-header" role="button" tabindex="0">
+            <h2>
+              Редактор конфигурации Xray
+              {# Show Xray profile badge only for Hysteria2 configs. #}
+              {% if xray_profile == 'hys2' %}
+                <span class="xray-profile-badge" data-profile="{{ xray_profile|e }}">Хистерия2</span>
+              {% endif %}
+            </h2>
+            <span id="routing-arrow">▼</span>
+          </div>
+
+          <div id="routing-body">
+            <!-- Compact header row (file selector + editor toolbar) -->
+            <div class="xk-routing-topbar">
+              <div class="xk-routing-fileblock">
+                <div class="xk-routing-fileline">
+                  {# Server-rendered fallback option so the selector is never empty if /api/routing/fragments fails. #}
+                  <select id="routing-fragment-select" class="xray-log-select" data-current="{{ routing_name|e }}"
+                          data-tooltip="Текущий файл роутинга: {{ routing_name|e }}. Режим редактора определяется автоматически."
+                          title="Текущий файл роутинга: {{ routing_name|e }}. Режим редактора определяется автоматически.">
+                    <option value="{{ routing_name|e }}">{{ routing_name|e }}</option>
+                  </select>
+
+                </div>
+              </div>
+
+              {# Right side: service controls live near the editor toolbar (keeps fileline clean). #}
+              <div class="xk-routing-toolbararea">
+                <button
+                  id="routing-save-btn"
+                  type="button"
+                  class="terminal-tool-btn xk-save-btn xk-save-btn-primary xk-icon-btn"
+                  data-tooltip="Сохранить текущий файл (routing.json или выбранный фрагмент)."
+                  aria-label="Сохранить файл"
+                >
+                  {{ op_icon('save') }}
+                </button>
+
+                <button
+                  id="routing-reset-btn"
+                  type="button"
+                  class="terminal-tool-btn xk-save-btn xk-reset-btn xk-icon-btn"
+                  data-tooltip="Откатить несохранённые изменения и вернуть текст к последней сохранённой версии."
+                  aria-label="Откатить изменения"
+                  disabled
+                >
+                  {{ op_icon('restore') }}
+                </button>
+
+                <button
+                  id="routing-dns-over-vless-toolbar-btn"
+                  type="button"
+                  class="terminal-tool-btn routing-dns-over-vless-btn routing-dns-over-vless-toolbar-btn"
+                  data-tooltip="DNS-over-VLESS: безопасная настройка DNS через Xray"
+                  aria-label="DNS-over-VLESS"
+                >
+                  {{ op_icon('dns') }}<span class="xk-action-label">DNS</span><span id="routing-dns-over-vless-toolbar-dot" class="routing-dns-over-vless-dot" aria-hidden="true"></span>
+                </button>
+
+                <details class="dt-log-menu xk-routing-menu">
+                  <summary class="terminal-tool-btn xk-routing-menu-trigger" data-tooltip="Меню" aria-label="Меню">{{ op_icon('more') }}</summary>
+
+                  <div class="dt-log-menu-panel xk-routing-menu-panel">
+                    <div class="terminal-menu-section" aria-label="Файл">
+                      <div class="terminal-menu-title">Файл</div>
+                      <code id="routing-file-code">{{ routing_file }}</code>
+
+                      <button id="routing-fragment-refresh-btn"
+                              type="button"
+                              class="terminal-tool-btn"
+                              data-tooltip="Обновить список файлов роутинга из /opt/etc/xray/configs/">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить список</span></button>
+
+                    </div>
+
+                    <div class="terminal-menu-sep" role="separator" aria-hidden="true"></div>
+
+                    <div class="terminal-menu-section" aria-label="Действия">
+                      <div class="terminal-menu-title">Действия</div>
+
+                      <button id="routing-format-btn" type="button" class="terminal-tool-btn"
+                              data-tooltip="Отформатировать JSON (красивые отступы).">{{ op_icon('format') }}<span class="xk-action-label">Форматировать JSON</span></button>
+                      <button id="routing-backup-btn" type="button" class="terminal-tool-btn"
+                              data-tooltip="Создать бэкап файла: {{ routing_name|e }}">{{ op_icon('archive') }}<span class="xk-action-label">Бэкап</span></button>
+                      <button id="routing-restore-auto-btn" type="button" class="terminal-tool-btn"
+                              data-tooltip="Восстановить авто-бэкап файла: {{ routing_name|e }}">{{ op_icon('restore') }}<span class="xk-action-label">Авто-бэкап</span></button>
+
+                      <button id="routing-export-local-btn" type="button" class="terminal-tool-btn"
+                              data-tooltip="Скачать текущий файл из редактора на компьютер.">{{ op_icon('export') }}<span class="xk-action-label">Экспорт</span></button>
+                      <button id="routing-import-local-btn" type="button" class="terminal-tool-btn"
+                              data-tooltip="Загрузить файл в редактор (без автосохранения).">{{ op_icon('import') }}<span class="xk-action-label">Импорт</span></button>
+
+                      <button id="routing-import-template-btn" type="button" class="terminal-tool-btn xk-only-routing"
+                              data-tooltip="Импортировать готовый шаблон роутинга (заменит текст в редакторе, без автосохранения).">{{ op_icon('template') }}<span class="xk-action-label">Шаблоны</span></button>
+                    </div>
+
+                    <div class="terminal-menu-sep xk-only-routing" role="separator" aria-hidden="true"></div>
+
+                    <div class="terminal-menu-section xk-only-routing" aria-label="GitHub">
+                      <div class="terminal-menu-title">GitHub</div>
+                      <button id="github-export-btn" type="button" class="terminal-tool-btn"
+                              data-tooltip="Выгрузить текущий routing.json в GitHub‑каталог конфигов.">{{ op_icon('github') }}<span class="xk-action-label">Выгрузить в репозитарий</span></button>
+                      <button id="github-open-catalog-btn" type="button" class="terminal-tool-btn"
+                              data-tooltip="Открыть каталог конфигураций (GitHub).">{{ op_icon('catalog') }}<span class="xk-action-label">Каталог конфигураций</span></button>
+                    </div>
+                  </div>
+                </details>
+
+                <div class="xk-routing-toolbarhost" id="routing-toolbar-host"></div>
+              </div>
+            </div>
+
+            <textarea id="routing-editor" spellcheck="false"></textarea>
+
+            <div id="routing-editor-meta" class="routing-editor-meta" aria-live="polite">
+              <span id="routing-editor-valid-badge" class="routing-editor-badge">JSON: —</span>
+              <span id="routing-editor-schema-badge" class="routing-editor-badge is-muted" data-tooltip="JSON-схема пока не загружена.">Schema: —</span>
+              <span id="routing-editor-dirty-badge" class="routing-editor-badge">Состояние: —</span>
+              <span id="routing-editor-comments-badge" class="routing-editor-badge is-muted">Комментарии: —</span>
+            </div>
+
+            <div id="routing-error" class="error"></div>
+
+<input type="file"
+       id="local-config-file-input"
+       accept=".json,.jsonc,application/json,text/plain"
+       style="display:none">
+
+            <div id="routing-status" class="status"></div>
+          </div>
+</section>
+
+        <!-- Restart log (Routing) -->
+        <section class="card log-card xk-restart-log-card xk-routing-log-card">
+          <div class="log-header-row">
+            <h2>Журнал операций Xkeen</h2>
+            <div class="log-header-actions">
+              <button type="button" class="btn-secondary log-btn btn-icon restart-log-filter-btn" data-xk-restart-log-filter="all" aria-pressed="true" title="Показать все записи" aria-label="Показать все записи">{{ op_icon('list-details') }}</button>
+              <button type="button" class="btn-secondary log-btn btn-icon restart-log-filter-btn" data-xk-restart-log-filter="errors" aria-pressed="false" title="Показать только ошибки" aria-label="Показать только ошибки">{{ op_icon('alert') }}</button>
+              <button type="button" class="btn-secondary log-btn btn-icon" data-xk-restart-log-action="refresh" title="Обновить журнал" aria-label="Обновить журнал">{{ op_icon('refresh') }}</button>
+              <button type="button" class="btn-secondary log-btn btn-icon" data-xk-restart-log-action="clear" title="Очистить журнал" aria-label="Очистить журнал">{{ op_icon('clear') }}</button>
+              <button type="button" class="btn-secondary log-btn btn-icon" data-xk-restart-log-action="copy" title="Скопировать журнал" aria-label="Скопировать журнал">{{ op_icon('duplicate') }}</button>
+            </div>
+          </div>
+          <div class="restart-log-summary" data-xk-restart-log-summary="1" hidden></div>
+          <pre class="log-block" data-xk-restart-log="1"></pre>
+        </section>
+
+      </div>
+    </div>
+</div>

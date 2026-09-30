@@ -31,7 +31,8 @@ def test_stage4_2_shell_partials_and_thin_composition_root_exist():
     assert "<head>" not in source
     assert '<body class=' not in source
     assert '<header class="panel-header' not in source
-    assert 'id="view-routing"' in source
+    assert '{% include "panel/screens/routing.html" %}' in source
+    assert 'id="view-routing"' not in source
     assert 'id="view-mihomo"' in source
 
 

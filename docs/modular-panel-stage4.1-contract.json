@@ -15,7 +15,7 @@
     "line_count": 5608,
     "id_count": 1348,
     "duplicate_ids": [],
-    "entrypoint_sha256": "38b6b66753297f8119b40dc927d07148011283f6f6bbd0ed706077bbbcc68ff0"
+    "entrypoint_sha256": "ec571a33e626fbe668f46e1aa355539c5436e3a3e9bc5877029709f03229b8b9"
   },
   "composition": {
     "current_entrypoint": "xkeen-ui/templates/panel.html",

@@ -7,6 +7,7 @@
     "closed_on": "2026-09-30"
   },
   "source": {
+    "commit": "186f43acca82d440c851075df90da03cca312c8b",
     "entrypoint": "xkeen-ui/templates/panel.html",
     "composed_source": "scripts/panel_template_source.py",
     "raw_sha256": "38b6b66753297f8119b40dc927d07148011283f6f6bbd0ed706077bbbcc68ff0",

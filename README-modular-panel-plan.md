@@ -1,14 +1,13 @@
 # План модульной архитектуры панели Xkeen UI
 
-**Статус:** Этапы 0, 1, 2, 3, 3R, 4.1 и 4.2 закрыты; следующий основной
-этап — 3R.1 (доработка runtime safety по сверке с кодом), затем
-baseline-метрики и подэтап 4.3<br>
+**Статус:** Этапы 0, 1, 2, 3, 3R, 3R.1, 4.1 и 4.2 закрыты; подэтап 4.3
+в работе, routing screen закрыт<br>
 **Дата:** 30 сентября 2026 года
 **Область:** облегчение панели, профили установки и официальный каталог модулей
 
 **Текущий прогресс:** Этапы 0–3 и 3R, подэтапы 4.1 и 4.2 закрыты;
-сверка плана с кодом завершена, Этап 3R.1 закрыт; следующий шаг —
-baseline-метрики Этапа 10 и подэтап 4.3.
+Этап 3R.1 и baseline initial HTML закрыты; в подэтапе 4.3 первый экран
+`routing.html` закрыт, следующий экран — `xray_logs.html`.
 
 ## 1. Цель проекта
 
@@ -966,9 +965,19 @@ DOM/API guardrails.
 
 ### Подэтап 4.3. Выделение экранов по модульным границам
 
+**Статус:** в работе.
+
+Routing screen: **закрыт 30 сентября 2026 года**.
+
+Артефакты:
+
+- `docs/modular-panel-stage4.3-routing-screen.md`;
+- `xkeen-ui/templates/panel/screens/routing.html`;
+- `tests/test_modular_panel_stage4_3_routing_screen.py`.
+
 Последовательно вынести разметку экранов в partials:
 
-1. `routing.html` — `engine.xray`;
+1. `routing.html` — `engine.xray` — **выполнено**;
 2. `xray_logs.html` — `engine.xray`;
 3. `mihomo.html` — `engine.mihomo`;
 4. `xkeen.html` — core-owned Xkeen screen;
