@@ -105,6 +105,26 @@ function egressPayload(cached = false) {
   };
 }
 
+async function setHiddenGroupsVisible(page, visible = true) {
+  const menu = page.locator('#xk-mihomo-parameters-menu');
+  const input = menu.locator('#mihomo-clash-show-hidden');
+  const switchControl = menu.locator('label.xk-mihomo-groups-hidden-toggle');
+
+  await expect(input).toBeAttached();
+  if (!(await menu.isVisible())) {
+    await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
+    await expect(menu).toBeVisible();
+  }
+  if ((await input.isChecked()) !== visible) {
+    await switchControl.click();
+  }
+  if (visible) {
+    await expect(input).toBeChecked();
+  } else {
+    await expect(input).not.toBeChecked();
+  }
+}
+
 
 test('Mihomo groups recover from transient snapshot failures without restarting the panel', async ({ page }) => {
   let requests = 0;
@@ -472,8 +492,7 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await expect(page.locator('#mihomo-clash-delay-history-popover .xk-mihomo-delay-history-row')).toHaveCount(3);
   await expect(page.locator('#mihomo-clash-delay-history-popover')).toContainText('44 мс');
 
-  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
-  await page.locator('#mihomo-clash-show-hidden').check();
+  await setHiddenGroupsVisible(page);
   await page.keyboard.press('Escape');
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('HIDDEN');
   await expect(page.locator('[data-group-name="HIDDEN"] .xk-mihomo-group-icon--default')).toHaveCount(1);
@@ -1202,9 +1221,7 @@ test('automatic fixed group shows lock, unfix action and sorting', async ({ page
   // Операторская шапка переносит переключатели групп в меню «Параметры» уже
   // после отрисовки вкладки и закрывает меню, если открыть его раньше. Ждём,
   // пока переключатель окажется внутри меню, а не спим наугад.
-  await expect(page.locator('#xk-mihomo-parameters-menu #mihomo-clash-show-hidden')).toBeAttached();
-  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
-  await page.locator('#mihomo-clash-show-hidden').check();
+  await setHiddenGroupsVisible(page);
   await page.keyboard.press('Escape');
   await page.locator('[data-group-name="HIDDEN"] .xk-mihomo-group-head').click();
   await page.locator('[data-group-name="FALLBACK"] .xk-mihomo-group-head').click();
@@ -1402,8 +1419,7 @@ test('Mihomo group disclosures keep the workspace compact and keyboard accessibl
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('AUTO');
 
   const hiddenToggle = page.locator('[data-group-name="HIDDEN"] .xk-mihomo-group-head');
-  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
-  await page.locator('#mihomo-clash-show-hidden').check();
+  await setHiddenGroupsVisible(page);
   await page.keyboard.press('Escape');
   await expect(hiddenToggle).toHaveAttribute('aria-expanded', 'false');
   await hiddenToggle.focus();
