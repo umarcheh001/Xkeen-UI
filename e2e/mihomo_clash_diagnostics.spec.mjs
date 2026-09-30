@@ -201,6 +201,11 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     await expect(page.locator('#mihomo-clash-traffic-chart-stats .xk-mihomo-traffic-chart-stat')).toHaveCount(3);
     await page.locator('[data-mihomo-traffic-series="upload"]').click();
     await page.mouse.move(0, 0);
+    // The last clicked button animates its background; read the state only
+    // after the transition has settled instead of mid-way (rgba … 0.925).
+    await expect.poll(() => page.locator('[data-mihomo-traffic-series]').evaluateAll(
+      (buttons) => new Set(buttons.map((button) => getComputedStyle(button).backgroundColor)).size,
+    )).toBe(1);
     const seriesState = await page.locator('[data-mihomo-traffic-series]').evaluateAll((buttons) => buttons.map((button) => ({
       pressed: button.getAttribute('aria-pressed'),
       active: button.classList.contains('is-active'),
