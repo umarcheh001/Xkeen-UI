@@ -129,7 +129,7 @@
       ],
       "removable": true,
       "unit_count": 126,
-      "size_bytes": 2977909,
+      "size_bytes": 2978168,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -11905,7 +11905,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_clash_groups.spec.mjs",
-      "size_bytes": 74958,
+      "size_bytes": 75217,
       "depends_on": [
         "core",
         "tool.editor"
