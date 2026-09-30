@@ -1,0 +1,240 @@
+from __future__ import annotations
+
+import hashlib
+import importlib
+import io
+import time
+import zipfile
+
+import pytest
+
+
+profiles = importlib.import_module("services.core_profiles")
+installer_module = importlib.import_module("services.core_installer")
+state_module = importlib.import_module("services.core_profile_state")
+
+
+def _xray_archive(payload: bytes) -> bytes:
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w") as archive:
+        archive.writestr("xray", payload)
+    return stream.getvalue()
+
+
+def _release_for(payload: bytes, *, checksum: str | None = None) -> dict:
+    archive = _xray_archive(payload)
+    return {
+        "stable": {"tag": "v26.3.27", "url": "https://example.test/release", "published_at": "2026-09-30T00:00:00Z"},
+        "asset": {"name": "Xray-linux-64.zip", "url": "https://example.test/xray.zip"},
+        "checksum": {"sha256": checksum or hashlib.sha256(archive).hexdigest(), "name": "Xray-linux-64.zip.dgst"},
+        "binary_name": "xray",
+        "platform": {"machine": "x86_64", "opkg_arch": "x86_64", "endianness": "le"},
+        "installable": True,
+        "reason": "",
+        "stale": False,
+        "fetched_at": time.time(),
+    }
+
+
+def _wait_for_terminal(installer, operation_id: str) -> dict:
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        operation = installer.status("xray", operation_id)
+        if operation["status"] in {"succeeded", "failed", "rolled_back"}:
+            return operation
+        time.sleep(0.01)
+    raise AssertionError("installation operation did not finish")
+
+
+def _installer(
+    tmp_path,
+    *,
+    payload: bytes = b"new-xray",
+    release: dict | None = None,
+    preflight=(0, "ok"),
+    running="xray",
+    running_after_restart: str | None = None,
+):
+    target = tmp_path / "xray"
+    target.write_bytes(b"old-xray")
+    archive = _xray_archive(payload)
+    store = state_module.CoreProfileStateStore(str(tmp_path / "state"))
+    active = {"core": running}
+
+    def restart(*_args, **_kwargs):
+        if running_after_restart is not None:
+            active["core"] = running_after_restart
+        return True
+
+    install = installer_module.CoreInstaller(
+        state_store=store,
+        binary_paths={"xray": str(target), "mihomo": str(tmp_path / "mihomo")},
+        xray_configs_dir=str(tmp_path / "xray-configs"),
+        mihomo_config_file=str(tmp_path / "mihomo.yaml"),
+        restart=restart,
+        running_core=lambda: active["core"],
+        release_resolver=lambda *_args, **_kwargs: release or _release_for(payload),
+        downloader=lambda *_args, **_kwargs: archive,
+        run_command=lambda *_args, **_kwargs: preflight,
+        health_timeout_s=0.1,
+    )
+    return install, store, target
+
+
+def test_selected_profile_and_installed_profile_are_persisted_separately(tmp_path):
+    store = state_module.CoreProfileStateStore(str(tmp_path / "state"))
+    store.set_selected("mihomo", "mihomo-enhanced")
+    store.set_installed("mihomo", profile_id="official", release_tag="v1.19.0", asset_name="mihomo-linux-amd64.gz")
+
+    value = state_module.CoreProfileStateStore(str(tmp_path / "state")).get("mihomo")
+    assert value["selected_profile_id"] == "mihomo-enhanced"
+    assert value["installed_profile_id"] == "official"
+    assert value["installed_release_tag"] == "v1.19.0"
+
+
+def test_apply_replaces_verified_binary_and_marks_installed(tmp_path):
+    install, store, target = _installer(tmp_path)
+    prepared = install.prepare("xray")
+    accepted = install.apply("xray", prepared["confirmation_id"])
+    operation = _wait_for_terminal(install, accepted["operation_id"])
+
+    assert operation["status"] == "succeeded"
+    assert target.read_bytes() == b"new-xray"
+    assert store.get("xray")["selected_profile_id"] == "official"
+    assert store.get("xray")["installed_profile_id"] == "official"
+    assert store.get("xray")["installed_release_tag"] == "v26.3.27"
+
+
+def test_confirmation_is_single_use_and_profile_status_reads_binary_version(tmp_path):
+    install, _store, _target = _installer(tmp_path)
+    install.run_command = lambda command, **_kwargs: (0, "Xray 26.3.27") if "-version" in command else (0, "ok")
+    prepared = install.prepare("xray")
+    install.apply("xray", prepared["confirmation_id"])
+
+    with pytest.raises(installer_module.CoreInstallError) as exc_info:
+        install.apply("xray", prepared["confirmation_id"])
+
+    assert exc_info.value.code == "confirmation_expired"
+    assert install.profiles("xray")["state"]["detected_version"] == "26.3.27"
+
+
+def test_resolved_release_metadata_is_cached_per_profile_and_architecture(tmp_path):
+    calls = []
+    release = _release_for(b"new-xray")
+    install, _store, _target = _installer(tmp_path, release=release)
+    install.release_resolver = lambda *args, **kwargs: calls.append(args[0].profile_id) or release
+
+    install.profiles("xray")
+    install.profiles("xray")
+
+    assert calls == ["official", "uwuray", "gfw-knocker"]
+
+
+def test_bad_checksum_never_replaces_binary_or_creates_rollback_state(tmp_path):
+    install, store, target = _installer(tmp_path, release=_release_for(b"new-xray", checksum="0" * 64))
+    prepared = install.prepare("xray")
+    operation = _wait_for_terminal(install, install.apply("xray", prepared["confirmation_id"])["operation_id"])
+
+    assert operation["status"] == "failed"
+    assert operation["phase"] == "verify"
+    assert target.read_bytes() == b"old-xray"
+    assert store.get("xray")["installed_profile_id"] is None
+
+
+def test_failed_preflight_restores_binary_and_prior_state(tmp_path):
+    install, store, target = _installer(tmp_path, preflight=(1, "invalid config"))
+    store.set_installed("xray", profile_id="official", release_tag="v26.3.26", asset_name="Xray-linux-64.zip")
+    prepared = install.prepare("xray")
+    operation = _wait_for_terminal(install, install.apply("xray", prepared["confirmation_id"])["operation_id"])
+
+    assert operation["status"] == "rolled_back"
+    assert operation["phase"] == "rolled_back"
+    assert target.read_bytes() == b"old-xray"
+    assert store.get("xray")["installed_release_tag"] == "v26.3.26"
+    assert (tmp_path / "state" / "core-profiles" / "backups" / operation["operation_id"] / "state.json").is_file()
+    assert "invalid config" not in operation["error"]
+
+
+def test_failed_healthcheck_restores_binary_and_prior_state(tmp_path):
+    install, store, target = _installer(tmp_path, running_after_restart="mihomo")
+    store.set_installed("xray", profile_id="official", release_tag="v26.3.26", asset_name="Xray-linux-64.zip")
+    prepared = install.prepare("xray")
+    operation = _wait_for_terminal(install, install.apply("xray", prepared["confirmation_id"])["operation_id"])
+
+    assert operation["status"] == "rolled_back"
+    assert target.read_bytes() == b"old-xray"
+    assert store.get("xray")["installed_release_tag"] == "v26.3.26"
+
+
+def test_active_core_change_before_replacement_leaves_binary_untouched(tmp_path):
+    install, _store, target = _installer(tmp_path)
+    active = {"core": "xray"}
+    archive = _xray_archive(b"new-xray")
+    install.running_core = lambda: active["core"]
+
+    def switch_core_while_downloading(*_args, **_kwargs):
+        active["core"] = "mihomo"
+        return archive
+
+    install.downloader = switch_core_while_downloading
+    prepared = install.prepare("xray")
+    operation = _wait_for_terminal(install, install.apply("xray", prepared["confirmation_id"])["operation_id"])
+
+    assert operation["status"] == "failed"
+    assert target.read_bytes() == b"old-xray"
+
+
+def test_healthcheck_observes_the_restarted_core_for_the_full_window(tmp_path):
+    install, _store, target = _installer(tmp_path)
+    state = {"restarted": False, "checks_after_restart": 0}
+
+    def running_core():
+        if not state["restarted"]:
+            return "xray"
+        state["checks_after_restart"] += 1
+        return "xray" if state["checks_after_restart"] == 1 else None
+
+    def restart(*_args, **_kwargs):
+        state["restarted"] = True
+        return True
+
+    install.running_core = running_core
+    install.restart = restart
+    prepared = install.prepare("xray")
+    operation = _wait_for_terminal(install, install.apply("xray", prepared["confirmation_id"])["operation_id"])
+
+    assert operation["status"] == "rolled_back"
+    assert target.read_bytes() == b"old-xray"
+
+
+def test_rollback_preserves_source_selection_for_other_engine(tmp_path):
+    install, store, _target = _installer(tmp_path, preflight=(1, "invalid config"))
+
+    def fail_preflight(*_args, **_kwargs):
+        store.set_selected("mihomo", "mihomo-enhanced")
+        return 1, "invalid config"
+
+    install.run_command = fail_preflight
+    prepared = install.prepare("xray")
+    operation = _wait_for_terminal(install, install.apply("xray", prepared["confirmation_id"])["operation_id"])
+
+    assert operation["status"] == "rolled_back"
+    assert store.get("mihomo")["selected_profile_id"] == "mihomo-enhanced"
+
+
+def test_status_rejects_unknown_operation_id(tmp_path):
+    install, _store, _target = _installer(tmp_path)
+
+    with pytest.raises(installer_module.CoreInstallError) as exc_info:
+        install.status("xray", "not-an-operation")
+
+    assert exc_info.value.code == "operation_not_found"
+
+
+def test_prepare_rejects_inactive_core(tmp_path):
+    install, _store, _target = _installer(tmp_path, running="mihomo")
+
+    with pytest.raises(installer_module.CoreInstallError) as exc_info:
+        install.prepare("xray")
+
+    assert exc_info.value.code == "inactive_core"

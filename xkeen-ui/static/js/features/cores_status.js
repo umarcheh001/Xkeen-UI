@@ -758,9 +758,6 @@ let coresStatusModuleApi = null;
   function applyUpdates(payload) {
     const latest = (payload && payload.latest) ? payload.latest : {};
     const upd = (payload && payload.update_available) ? payload.update_available : {};
-    const preUpd = (payload && payload.prerelease_update_available)
-      ? payload.prerelease_update_available
-      : {};
     const installed = (payload && payload.installed) ? payload.installed : lastInstalled;
     const checkedTs = payload && payload.checked_ts ? payload.checked_ts : null;
     const stale = !!(payload && payload.stale);
@@ -787,8 +784,6 @@ let coresStatusModuleApi = null;
     const xPre = x.prerelease || null;
     const xLatestEl = $('core-xray-latest');
     const xPreEl = $('core-xray-prerelease');
-    const xUpdateBtn = $('core-xray-update-btn');
-    const xPreUpdateBtn = $('core-xray-prerelease-update-btn');
     const pillX = $('core-pill-xray');
     const xInstalled = !!(installed && installed.xray && installed.xray.installed);
 
@@ -798,16 +793,6 @@ let coresStatusModuleApi = null;
       title: 'Открыть стабильный релиз на GitHub',
     });
     setReleaseVisible('xray', 'stable', xInstalled && !!(xStable && xStable.tag));
-    applyReleaseLink(xPreEl, xPre, {
-      versionSelector: '.core-prerelease-ver',
-      title: 'Открыть pre-release на GitHub',
-    });
-    setReleaseVisible('xray', 'prerelease', xInstalled && !!(xPre && xPre.tag));
-    configurePrereleaseAction(xPreUpdateBtn, xPre, installed && installed.xray, !!preUpd.xray, {
-      flag: '-ux',
-      coreLabel: 'Xray',
-    });
-    show(xUpdateBtn, xInstalled && !!upd.xray);
     setPillState(pillX, { hasUpdate: !!upd.xray, hasError: globalFailure || x.ok === false });
     setCoreState('xray', releaseErrorLabel(x) || (globalFailure ? 'GitHub недоступен' : ''));
 
@@ -816,8 +801,6 @@ let coresStatusModuleApi = null;
     const mPre = m.prerelease || null;
     const mLatestEl = $('core-mihomo-latest');
     const mPreEl = $('core-mihomo-prerelease');
-    const mUpdateBtn = $('core-mihomo-update-btn');
-    const mPreUpdateBtn = $('core-mihomo-prerelease-update-btn');
     const pillM = $('core-pill-mihomo');
     const mInstalled = !!(installed && installed.mihomo && installed.mihomo.installed);
 
@@ -827,16 +810,6 @@ let coresStatusModuleApi = null;
       title: 'Открыть стабильный релиз на GitHub',
     });
     setReleaseVisible('mihomo', 'stable', mInstalled && !!(mStable && mStable.tag));
-    applyReleaseLink(mPreEl, mPre, {
-      versionSelector: '.core-prerelease-ver',
-      title: 'Открыть pre-release на GitHub',
-    });
-    setReleaseVisible('mihomo', 'prerelease', mInstalled && !!(mPre && mPre.tag));
-    configurePrereleaseAction(mPreUpdateBtn, mPre, installed && installed.mihomo, !!preUpd.mihomo, {
-      flag: '-um',
-      coreLabel: 'Mihomo',
-    });
-    show(mUpdateBtn, mInstalled && !!upd.mihomo);
     setPillState(pillM, { hasUpdate: !!upd.mihomo, hasError: globalFailure || m.ok === false });
     setCoreState('mihomo', releaseErrorLabel(m) || (globalFailure ? 'GitHub недоступен' : ''));
   }
@@ -895,39 +868,6 @@ let coresStatusModuleApi = null;
       checkBtn.dataset.xkWired = '1';
     }
 
-    const xUpd = $('core-xray-update-btn');
-    if (xUpd && !xUpd.dataset.xkWired) {
-      xUpd.addEventListener('click', async () => {
-        const ok = await runXkeenCommand('-ux');
-        if (!ok) toastMsg('Терминал недоступен.', 'error');
-      });
-      xUpd.dataset.xkWired = '1';
-    }
-
-    const xPreUpd = $('core-xray-prerelease-update-btn');
-    if (xPreUpd && !xPreUpd.dataset.xkWired) {
-      xPreUpd.addEventListener('click', async () => {
-        await runPrereleaseUpdate(xPreUpd);
-      });
-      xPreUpd.dataset.xkWired = '1';
-    }
-
-    const mUpd = $('core-mihomo-update-btn');
-    if (mUpd && !mUpd.dataset.xkWired) {
-      mUpd.addEventListener('click', async () => {
-        const ok = await runXkeenCommand('-um');
-        if (!ok) toastMsg('Терминал недоступен.', 'error');
-      });
-      mUpd.dataset.xkWired = '1';
-    }
-
-    const mPreUpd = $('core-mihomo-prerelease-update-btn');
-    if (mPreUpd && !mPreUpd.dataset.xkWired) {
-      mPreUpd.addEventListener('click', async () => {
-        await runPrereleaseUpdate(mPreUpd);
-      });
-      mPreUpd.dataset.xkWired = '1';
-    }
   }
 
   let started = false;

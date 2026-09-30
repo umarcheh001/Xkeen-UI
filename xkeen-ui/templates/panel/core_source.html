@@ -1,0 +1,61 @@
+{% from "panel/macros.html" import op_icon %}
+{% macro render_core_source(engine_id, engine_label) -%}
+<section class="xk-core-source-card" data-core-source data-core-engine="{{ engine_id }}" aria-labelledby="{{ engine_id }}-core-source-title">
+  <div class="xk-core-source-card-copy">
+    <div class="xk-core-source-card-heading">
+      <h2 id="{{ engine_id }}-core-source-title">Ядро {{ engine_label }}</h2>
+      <span class="xk-core-source-status" data-core-source-status role="status" aria-live="polite">Загружаем состояние</span>
+    </div>
+    <div class="xk-core-source-summary" data-core-source-summary>
+      <span data-core-source-installed>Установленный профиль: неизвестен</span>
+      <span data-core-source-selected>Источник: проверяется</span>
+    </div>
+  </div>
+  <div class="xk-core-source-actions" aria-label="Действия с ядром {{ engine_label }}">
+    <button type="button" class="btn-secondary" data-core-source-action="open" data-tooltip="Выбрать проверенный источник сборки">
+      {{ op_icon('github') }}<span>Источник</span>
+    </button>
+    <button type="button" class="btn-primary" data-core-source-action="prepare" data-tooltip="Проверить релиз и подготовить безопасную установку" disabled>
+      {{ op_icon('download') }}<span>Обновить</span>
+    </button>
+  </div>
+</section>
+
+<div id="{{ engine_id }}-core-source-modal" class="modal hidden xk-core-source-modal" data-core-source-modal data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-labelledby="{{ engine_id }}-core-source-modal-title">
+  <div class="modal-content xk-modal-width xk-modal-width-760">
+    <div class="modal-header">
+      <div>
+        <h2 id="{{ engine_id }}-core-source-modal-title">Источник {{ engine_label }}</h2>
+        <p class="modal-description" data-core-source-platform>Проверяем архитектуру роутера</p>
+      </div>
+      <button type="button" class="btn-secondary btn-icon" data-core-source-action="close" aria-label="Закрыть выбор источника" data-tooltip="Закрыть">{{ op_icon('close') }}</button>
+    </div>
+    <div class="xk-core-source-profiles" data-core-source-profiles role="radiogroup" aria-label="Проверенные источники {{ engine_label }}"></div>
+    <p class="xk-core-source-notice">Для установки используется только стабильный релиз с совпавшей SHA-256. Неподходящие для роутера сборки недоступны.</p>
+    <div class="xk-core-source-message" data-core-source-message role="status" aria-live="polite"></div>
+    <div class="modal-actions xk-core-source-modal-actions">
+      <button type="button" class="btn-secondary" data-core-source-action="close">Отмена</button>
+      <button type="button" class="btn-secondary" data-core-source-action="restore">Вернуть официальный</button>
+      <button type="button" class="btn-primary" data-core-source-action="save">Сохранить выбор</button>
+    </div>
+  </div>
+</div>
+
+<div id="{{ engine_id }}-core-install-modal" class="modal hidden xk-core-source-modal" data-core-install-modal data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-labelledby="{{ engine_id }}-core-install-title">
+  <div class="modal-content xk-modal-width xk-modal-width-640">
+    <div class="modal-header">
+      <div>
+        <h2 id="{{ engine_id }}-core-install-title">Подтвердить установку {{ engine_label }}</h2>
+        <p class="modal-description">Текущий бинарник и состояние профиля будут сохранены. При ошибке проверки или запуска панель вернёт предыдущую версию.</p>
+      </div>
+      <button type="button" class="btn-secondary btn-icon" data-core-source-action="close-confirm" aria-label="Закрыть подтверждение" data-tooltip="Закрыть">{{ op_icon('close') }}</button>
+    </div>
+    <dl class="xk-core-install-details" data-core-install-details></dl>
+    <div class="xk-core-source-message" data-core-install-message role="status" aria-live="polite"></div>
+    <div class="modal-actions xk-core-source-modal-actions">
+      <button type="button" class="btn-secondary" data-core-source-action="close-confirm">Отмена</button>
+      <button type="button" class="btn-primary" data-core-source-action="apply">Установить</button>
+    </div>
+  </div>
+</div>
+{%- endmacro %}

@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 380,
-      "size_bytes": 5805699,
+      "size_bytes": 5797417,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 17,
@@ -129,7 +129,7 @@
       ],
       "removable": true,
       "unit_count": 126,
-      "size_bytes": 2978382,
+      "size_bytes": 2978482,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -533,7 +533,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/__init__.py",
-      "size_bytes": 16413,
+      "size_bytes": 18337,
       "depends_on": [
         "tool.advanced-diagnostics",
         "tool.files",
@@ -1814,7 +1814,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_registry.py",
-      "size_bytes": 42501,
+      "size_bytes": 42587,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2591,7 +2591,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_cores_status_prereleases.py",
-      "size_bytes": 17217,
+      "size_bytes": 15927,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4134,7 +4134,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_panel_operator_stage0_contract.py",
-      "size_bytes": 10200,
+      "size_bytes": 10190,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5741,7 +5741,7 @@
       "module_id": "core",
       "kind": "frontend_bundle",
       "path": "xkeen-ui/static/js/pages/panel.routing.bundle.js",
-      "size_bytes": 1657,
+      "size_bytes": 1754,
       "depends_on": [
         "engine.xray"
       ],
@@ -6096,7 +6096,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/cores_status.js",
-      "size_bytes": 37082,
+      "size_bytes": 34721,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6752,7 +6752,7 @@
       "module_id": "core",
       "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js",
-      "size_bytes": 31407,
+      "size_bytes": 31257,
       "depends_on": [
         "tool.terminal",
         "engine.xray",
@@ -7681,7 +7681,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/panel_operator_stage4_commands.spec.mjs",
-      "size_bytes": 15964,
+      "size_bytes": 8732,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -8415,7 +8415,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 726413,
+      "size_bytes": 729677,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -8559,7 +8559,7 @@
       "module_id": "core",
       "kind": "template",
       "path": "xkeen-ui/templates/panel.html",
-      "size_bytes": 358406,
+      "size_bytes": 355689,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -8667,7 +8667,7 @@
       "module_id": "core",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/screens/routing.html",
-      "size_bytes": 52389,
+      "size_bytes": 52496,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -11111,7 +11111,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_bundle",
       "path": "xkeen-ui/static/js/pages/panel.mihomo.bundle.js",
-      "size_bytes": 174,
+      "size_bytes": 274,
       "depends_on": [
         "core",
         "tool.editor"
@@ -22982,6 +22982,12 @@
         "current_gate": "always"
       },
       {
+        "factory": "create_core_profiles_blueprint",
+        "module_id": "core",
+        "registered_from": "xkeen-ui/routes/__init__.py",
+        "current_gate": "always"
+      },
+      {
         "factory": "create_cores_status_blueprint",
         "module_id": "core",
         "registered_from": "xkeen-ui/routes/__init__.py",
@@ -23249,7 +23255,7 @@
     {
       "id": "panel-core",
       "root": "xkeen-ui/static/js/pages/panel.entry.js",
-      "file_count": 267,
+      "file_count": 268,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -23284,6 +23290,7 @@
         "xkeen-ui/static/js/features/compat/routing.js",
         "xkeen-ui/static/js/features/compat/routing_cards.js",
         "xkeen-ui/static/js/features/compat/routing_shell.js",
+        "xkeen-ui/static/js/features/core_source.js",
         "xkeen-ui/static/js/features/cores_status.js",
         "xkeen-ui/static/js/features/devtools.js",
         "xkeen-ui/static/js/features/devtools/env.js",
@@ -23534,7 +23541,7 @@
     {
       "id": "panel-routing",
       "root": "xkeen-ui/static/js/pages/panel.routing.bundle.js",
-      "file_count": 57,
+      "file_count": 58,
       "module_ids": [
         "core",
         "engine.xray",
@@ -23548,6 +23555,7 @@
         "xkeen-ui/static/js/features/compat/routing.js",
         "xkeen-ui/static/js/features/compat/routing_cards.js",
         "xkeen-ui/static/js/features/compat/routing_shell.js",
+        "xkeen-ui/static/js/features/core_source.js",
         "xkeen-ui/static/js/features/dns_guard_text.js",
         "xkeen-ui/static/js/features/dns_operation_recovery.js",
         "xkeen-ui/static/js/features/inbounds.js",
@@ -23605,7 +23613,7 @@
     {
       "id": "panel-mihomo",
       "root": "xkeen-ui/static/js/pages/panel.mihomo.bundle.js",
-      "file_count": 22,
+      "file_count": 23,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -23614,6 +23622,7 @@
       ],
       "files": [
         "xkeen-ui/static/js/features/compat/mihomo_panel.js",
+        "xkeen-ui/static/js/features/core_source.js",
         "xkeen-ui/static/js/features/dns_guard_text.js",
         "xkeen-ui/static/js/features/dns_operation_recovery.js",
         "xkeen-ui/static/js/features/mihomo_dns.js",
@@ -23750,7 +23759,7 @@
     {
       "id": "backups-page",
       "root": "xkeen-ui/static/js/pages/backups.entry.js",
-      "file_count": 267,
+      "file_count": 268,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -23785,6 +23794,7 @@
         "xkeen-ui/static/js/features/compat/routing.js",
         "xkeen-ui/static/js/features/compat/routing_cards.js",
         "xkeen-ui/static/js/features/compat/routing_shell.js",
+        "xkeen-ui/static/js/features/core_source.js",
         "xkeen-ui/static/js/features/cores_status.js",
         "xkeen-ui/static/js/features/devtools.js",
         "xkeen-ui/static/js/features/devtools/env.js",
@@ -24035,7 +24045,7 @@
     {
       "id": "devtools-page",
       "root": "xkeen-ui/static/js/pages/devtools.entry.js",
-      "file_count": 267,
+      "file_count": 268,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -24070,6 +24080,7 @@
         "xkeen-ui/static/js/features/compat/routing.js",
         "xkeen-ui/static/js/features/compat/routing_cards.js",
         "xkeen-ui/static/js/features/compat/routing_shell.js",
+        "xkeen-ui/static/js/features/core_source.js",
         "xkeen-ui/static/js/features/cores_status.js",
         "xkeen-ui/static/js/features/devtools.js",
         "xkeen-ui/static/js/features/devtools/env.js",
@@ -24320,7 +24331,7 @@
     {
       "id": "xkeen-page",
       "root": "xkeen-ui/static/js/pages/xkeen.entry.js",
-      "file_count": 267,
+      "file_count": 268,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -24355,6 +24366,7 @@
         "xkeen-ui/static/js/features/compat/routing.js",
         "xkeen-ui/static/js/features/compat/routing_cards.js",
         "xkeen-ui/static/js/features/compat/routing_shell.js",
+        "xkeen-ui/static/js/features/core_source.js",
         "xkeen-ui/static/js/features/cores_status.js",
         "xkeen-ui/static/js/features/devtools.js",
         "xkeen-ui/static/js/features/devtools/env.js",
@@ -24605,7 +24617,7 @@
     {
       "id": "mihomo-generator-page",
       "root": "xkeen-ui/static/js/pages/mihomo_generator.entry.js",
-      "file_count": 267,
+      "file_count": 268,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -24640,6 +24652,7 @@
         "xkeen-ui/static/js/features/compat/routing.js",
         "xkeen-ui/static/js/features/compat/routing_cards.js",
         "xkeen-ui/static/js/features/compat/routing_shell.js",
+        "xkeen-ui/static/js/features/core_source.js",
         "xkeen-ui/static/js/features/cores_status.js",
         "xkeen-ui/static/js/features/devtools.js",
         "xkeen-ui/static/js/features/devtools/env.js",
@@ -26408,7 +26421,7 @@
       "severity": "high",
       "summary": "Большинство Blueprint регистрируется без пользовательских module gates.",
       "evidence": {
-        "registration_points": 29,
+        "registration_points": 30,
         "non_always_gates": [
           {
             "factory": "create_fileops_blueprint",
@@ -26455,7 +26468,7 @@
         "template": "xkeen-ui/templates/panel.html",
         "panel_views": 6,
         "panel_modals": 53,
-        "size_bytes": 358406
+        "size_bytes": 355689
       },
       "next_stage": "Этап 4: template partials и module composition."
     },

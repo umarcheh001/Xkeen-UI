@@ -162,10 +162,27 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
 
     # Xray: routing/config APIs, subscriptions and logs.
     if module_active("engine.xray"):
+        from .core_profiles import create_core_profiles_blueprint
         from .routing import create_routing_blueprint
         from .xray_configs import create_xray_configs_blueprint
         from .xray_logs import create_xray_logs_blueprint
         from .xray_subscriptions import create_xray_subscriptions_blueprint
+        from services.core_installer import CoreInstaller
+        from services.core_profile_state import CoreProfileStateStore
+        from services.cores import detect_running_core
+
+        core_installer = app.extensions.get("xkeen.core_installer")
+        if core_installer is None:
+            core_installer = CoreInstaller(
+                state_store=CoreProfileStateStore(ctx.ui_state_dir),
+                binary_paths={"xray": "/opt/sbin/xray", "mihomo": "/opt/sbin/mihomo"},
+                xray_configs_dir=ctx.xray_configs_dir,
+                mihomo_config_file=ctx.mihomo_config_file,
+                restart=ctx.restart_xkeen,
+                running_core=detect_running_core,
+            )
+            app.extensions["xkeen.core_installer"] = core_installer
+        app.register_blueprint(create_core_profiles_blueprint("xray", core_installer))
 
         app.register_blueprint(
             create_routing_blueprint(
@@ -214,9 +231,26 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     # Mihomo: config, Clash API/cache/telemetry and optional Happ integration.
     if module_active("engine.mihomo"):
         try:
+            from .core_profiles import create_core_profiles_blueprint
             from .mihomo import create_mihomo_blueprint
             from .mihomo_clash import create_mihomo_clash_blueprint
+            from services.core_installer import CoreInstaller
+            from services.core_profile_state import CoreProfileStateStore
+            from services.cores import detect_running_core
             from services.mihomo_clash_cache import get_shared_mihomo_clash_cache
+
+            core_installer = app.extensions.get("xkeen.core_installer")
+            if core_installer is None:
+                core_installer = CoreInstaller(
+                    state_store=CoreProfileStateStore(ctx.ui_state_dir),
+                    binary_paths={"xray": "/opt/sbin/xray", "mihomo": "/opt/sbin/mihomo"},
+                    xray_configs_dir=ctx.xray_configs_dir,
+                    mihomo_config_file=ctx.mihomo_config_file,
+                    restart=ctx.restart_xkeen,
+                    running_core=detect_running_core,
+                )
+                app.extensions["xkeen.core_installer"] = core_installer
+            app.register_blueprint(create_core_profiles_blueprint("mihomo", core_installer))
 
             app.register_blueprint(
                 create_mihomo_blueprint(

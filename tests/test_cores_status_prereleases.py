@@ -387,54 +387,35 @@ def test_cores_updates_returns_stale_cache_while_refresh_runs_in_background(tmp_
     assert settled["refreshing"] is False
 
 
-def test_commands_panel_has_dedicated_prerelease_links_and_styles():
+def test_commands_panel_is_read_only_and_core_sources_are_module_owned():
     template = (ROOT / "xkeen-ui" / "templates" / "panel.html").read_text(encoding="utf-8")
-    styles = (ROOT / "xkeen-ui" / "static" / "styles.css").read_text(encoding="utf-8")
     script = (ROOT / "xkeen-ui" / "static" / "js" / "features" / "cores_status.js").read_text(encoding="utf-8")
+    source_template = (ROOT / "xkeen-ui" / "templates" / "panel" / "core_source.html").read_text(encoding="utf-8")
+    source_script = (ROOT / "xkeen-ui" / "static" / "js" / "features" / "core_source.js").read_text(encoding="utf-8")
 
-    assert 'id="core-xray-prerelease"' in template
-    assert 'id="core-mihomo-prerelease"' in template
-    assert 'id="core-xray-prerelease-update-btn"' in template
-    assert 'id="core-mihomo-prerelease-update-btn"' in template
-    assert '.commands-status-row .core-prerelease {' in styles
-    assert '.commands-status-row .btn-prerelease-action {' in styles
-    assert '.core-update-action {\n  /* Keep this non-important:' in (
-        ROOT / "xkeen-ui" / "static" / "panel-operator.css"
-    ).read_text(encoding="utf-8")
-    assert 'function buildPrereleaseUpdateCommand(flag, tag, coreLabel)' in script
-    assert 'function buildPrereleaseVersionSummaryCommand(flag, coreLabel)' in script
-    assert 'function buildMihomoPrereleaseInstallCommand(tag, installMeta, coreLabel)' in script
-    assert 'function buildQuietTerminalScript(lines)' in script
-    assert 'function buildShellScript(lines)' in script
-    assert 'function formatInstalledVersionLabel(version)' in script
-    assert "Запускаем обновление ${normalizedCore} до pre-release ${releaseLabel}." in script
-    assert "Xkeen ниже выполнит установку и покажет свой прогресс." in script
-    assert "Обновление ${normalizedCore} завершено." in script
-    assert "printf '%s\\\\n%s\\\\n' '9'" in script
-    assert '/opt/sbin/xray version 2>/dev/null | head -n 1' in script
-    assert 'Текущая версия ${normalizedCore}: $__xk_installed_version' in script
-    assert 'stty -echo 2>/dev/null || true' in script
-    assert 'return buildQuietTerminalScript(lines.filter(Boolean));' in script
-    assert "btn.dataset.prereleaseMode = 'direct_asset';" in script
-    assert "command = buildMihomoPrereleaseInstallCommand(tag, installMeta, coreLabel);" in script
-    assert 'const installedIsCurrentDirect = !!installedToken && buildIds.includes(installedToken);' in script
-    assert "const displayTag = String((release && (release.display_tag || release.tag)) || '').trim();" in script
-    assert ".join('\\n');" in script
-    assert ".join('; ');" not in script
-    assert "return parts.filter(Boolean).join(' ');" not in script
-    assert 'btn.dataset.tooltip = btn.title;' in script
-    assert "const xPre = x.prerelease || null;" in script
-    assert "const mPre = m.prerelease || null;" in script
+    assert 'id="core-xray-update-btn"' not in template
+    assert 'id="core-mihomo-update-btn"' not in template
+    assert 'id="core-xray-prerelease-update-btn"' not in template
+    assert 'id="core-mihomo-prerelease-update-btn"' not in template
+    assert 'addEventListener(\'click\', async () => {\n        await runPrereleaseUpdate' not in script
+    assert 'data-core-source' in source_template
+    assert 'data-core-install-modal' in source_template
+    assert 'data-core-source-action="prepare" data-tooltip="Проверить релиз и подготовить безопасную установку" disabled' in source_template
+    assert 'confirmation_id' in source_script
+    assert '/core-install/prepare' in source_script
+    assert '/core-install/apply' in source_script
+    assert 'SHA-256' in source_script
+    assert 'const MAX_POLL_MS = 10 * 60 * 1000;' in source_script
+    assert 'Контрольная сумма релиза не опубликована.' in source_script
+    assert "setTimeout(() => poll(operationId), 700);" in source_script
 
 
-def test_core_update_actions_click_the_real_command_buttons_and_are_lazy_wired():
-    script = (ROOT / "xkeen-ui" / "static" / "js" / "features" / "cores_status.js").read_text(encoding="utf-8")
+def test_commands_lazy_runtime_does_not_reintroduce_legacy_install_buttons():
     lazy_runtime = (
         ROOT / "xkeen-ui" / "static" / "js" / "pages" / "panel.lazy_bindings.runtime.js"
     ).read_text(encoding="utf-8")
 
-    assert "commandItem.querySelector('.command-item-action')" in script
-    assert "actionButton.click()" in script
-    assert "commandItem.click()" not in script
-    assert "#core-xray-prerelease-update-btn" in lazy_runtime
-    assert "#core-mihomo-prerelease-update-btn" in lazy_runtime
+    assert "#core-xray-update-btn" not in lazy_runtime
+    assert "#core-mihomo-update-btn" not in lazy_runtime
+    assert "#core-xray-prerelease-update-btn" not in lazy_runtime
+    assert "#core-mihomo-prerelease-update-btn" not in lazy_runtime

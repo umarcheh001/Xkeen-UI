@@ -26,5 +26,7 @@ import { initRoutingCards } from '../features/routing_cards.js';
 import '../features/compat/routing_cards.js';
 import '../features/local_io.js';
 import '../features/compat/local_io.js';
+import { initCoreSources } from '../features/core_source.js';
 
 initRoutingCards();
+initCoreSources(document, 'xray');

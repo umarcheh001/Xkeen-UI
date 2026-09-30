@@ -133,10 +133,10 @@ def test_stage0_inventory_classifies_all_inline_styles_and_dom_hooks(tmp_path):
     inline = payload["inline_styles"]
     dom = payload["dom_contract"]
 
-    # Stage 5 moved static max-width/gap/margin declarations into scoped
-    # modal classes, so the canonical inline-style baseline is lower.
-    assert inline["attribute_count"] == 209
-    assert sum(inline["attribute_kind_counts"].values()) == 209
+    # The engine-owned source cards removed six legacy Commands action hooks,
+    # so the canonical inline-style baseline is lower.
+    assert inline["attribute_count"] == 203
+    assert sum(inline["attribute_kind_counts"].values()) == 203
     assert inline["attribute_kind_counts"]["state-visibility-hook"] > 0
     assert inline["attribute_kind_counts"]["presentation-geometry"] > 0
     assert inline["attribute_kind_counts"]["mixed-state-and-presentation"] > 0
