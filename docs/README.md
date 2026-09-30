@@ -35,6 +35,7 @@
 - `modular-panel-stage4.2-frontend-shell.md` — закрытый подэтап 4.2: выделение общего shell в Jinja partials и composed-source guardrails.
 - `modular-panel-stage4.3-routing-screen.md` — первый закрытый экран подэтапа 4.3: routing markup вынесен в partial `engine.xray`.
 - `modular-panel-stage4.3-xray-logs-screen.md` — второй закрытый экран подэтапа 4.3: логи Xray вынесены в partial `engine.xray` и больше не попадают в Mihomo-only HTML.
+- `modular-panel-stage4.3-mihomo-screen.md` — третий закрытый экран подэтапа 4.3: экран Mihomo вынесен в partial `engine.mihomo` и больше не попадает в Xray-only HTML.
 - `devtools-operator-theme.md` — закрытый перевод DevTools со старой blue-glass темы на общие с основной панелью Operator tokens, flat shell/data rows/log canvas/modals и responsive dark/light contract.
 - `top-level-navigation-plan.md` — итог по уже закрытому переводу всех five canonical entrypoints с document navigation на in-app navigation и фиксация финального five-route runtime contract.
 - `panel-operator-stage0-contract.md` — закрытый Этап 0 редизайна Operator Console: presentation ownership, матрица views/accordions/editors/modals, DOM freeze и dark/light visual baseline.

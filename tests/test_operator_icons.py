@@ -136,7 +136,8 @@ def test_i6_guard_rejects_action_emoji_and_feature_local_svg_except_documented_c
     emoji_or_legacy_action = re.compile(r"[\U0001F300-\U0001FAFF×✕✖←→↔⛶⋯▶■⛔🗑📋⚙✏➕➖⌕⟳↻⇣↓↑⏹⏸⏻🗕⌚👁]")
     controls = re.compile(r'<(?:button|summary)\b[^>]*>(.*?)</(?:button|summary)>', re.IGNORECASE | re.DOTALL)
     for path in (TEMPLATE, ROOT / "xkeen-ui/templates/mihomo_generator.html"):
-        source = path.read_text(encoding="utf-8")
+        # panel.html is a composition root; screens live in Jinja partials.
+        source = compose_panel_template(ROOT) if path == TEMPLATE else path.read_text(encoding="utf-8")
         for control in controls.findall(source):
             visible = re.sub(r'<[^>]+>|{{\s*op_icon\([^}]+}}', '', control)
             assert not emoji_or_legacy_action.search(visible), path
@@ -214,7 +215,7 @@ def test_operator_icon_css_contract_is_monochrome_and_state_driven():
 
 
 def test_mihomo_routing_and_related_forms_use_operator_sprite_contract():
-    panel = TEMPLATE.read_text(encoding="utf-8")
+    panel = compose_panel_template(ROOT)
     generator = (ROOT / "xkeen-ui/templates/mihomo_generator.html").read_text(encoding="utf-8")
     panel_mihomo = panel[panel.index('<div id="view-mihomo"') : panel.index('<div id="view-xkeen"')]
     related_forms = panel[panel.index('id="mihomo-import-modal"') : panel.index('id="fm-upload-conflict-modal"') ]
@@ -317,7 +318,7 @@ def test_top_level_action_controls_have_no_emoji_or_feature_local_svg():
 
 
 def test_modal_action_icons_are_inline_and_duplicate_dismiss_controls_are_presentation_only():
-    template = TEMPLATE.read_text(encoding="utf-8")
+    template = compose_panel_template(ROOT)
     css = CSS.read_text(encoding="utf-8")
 
     for control_id, icon in (

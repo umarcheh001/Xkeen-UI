@@ -4,6 +4,8 @@ import json
 import re
 from pathlib import Path
 
+from scripts.panel_template_source import compose_panel_template
+
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "xkeen-ui" / "templates" / "panel.html"
@@ -24,6 +26,8 @@ OPERATOR_HEADER = ROOT / "xkeen-ui" / "static" / "js" / "pages" / "panel.mihomo_
 
 
 def _text(path: Path) -> str:
+    if path == TEMPLATE:
+        return compose_panel_template(ROOT)
     return path.read_text(encoding="utf-8")
 
 

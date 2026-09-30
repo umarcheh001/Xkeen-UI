@@ -8,6 +8,7 @@ import urllib.error
 from pathlib import Path
 
 from flask import Flask
+from scripts.panel_template_source import compose_panel_template
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -388,7 +389,7 @@ def test_cores_updates_returns_stale_cache_while_refresh_runs_in_background(tmp_
 
 
 def test_commands_panel_has_dedicated_prerelease_links_and_styles():
-    template = (ROOT / "xkeen-ui" / "templates" / "panel.html").read_text(encoding="utf-8")
+    template = compose_panel_template(ROOT)
     styles = (ROOT / "xkeen-ui" / "static" / "styles.css").read_text(encoding="utf-8")
     script = (ROOT / "xkeen-ui" / "static" / "js" / "features" / "cores_status.js").read_text(encoding="utf-8")
 

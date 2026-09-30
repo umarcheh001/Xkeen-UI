@@ -18,6 +18,7 @@ from services.mihomo_panel_switch import (
 )
 from routes.mihomo import create_mihomo_blueprint
 import routes.mihomo as mihomo_routes
+from scripts.panel_template_source import compose_panel_template
 
 
 EXTERNAL = """mode: rule
@@ -88,7 +89,7 @@ def test_loopback_dashboard_is_also_remembered(tmp_path: Path):
 
 
 def test_frontend_does_not_expose_panel_switch_controls():
-    markup = (APP_DIR / "templates" / "panel.html").read_text(encoding="utf-8")
+    markup = compose_panel_template(ROOT)
     client = (APP_DIR / "static" / "js" / "features" / "mihomo_clash" / "client.js").read_text(encoding="utf-8")
     index = (APP_DIR / "static" / "js" / "features" / "mihomo_clash" / "index.js").read_text(encoding="utf-8")
     assert 'id="mihomo-clash-panel-switch"' not in markup

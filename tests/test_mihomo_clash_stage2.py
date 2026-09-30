@@ -486,7 +486,9 @@ def test_dns_diagnostics_ui_has_inline_actions_and_visibility_toggle():
     from pathlib import Path
 
     root = Path(__file__).parents[1]
-    template = (root / "xkeen-ui" / "templates" / "panel.html").read_text(encoding="utf-8")
+    from scripts.panel_template_source import compose_panel_template
+
+    template = compose_panel_template(root)
     styles = (root / "xkeen-ui" / "static" / "panel-operator.css").read_text(encoding="utf-8")
     script = (root / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "dns.js").read_text(encoding="utf-8")
 

@@ -9,6 +9,10 @@ EDITOR_ENGINE = ROOT / "xkeen-ui" / "static" / "js" / "ui" / "editor_engine.js"
 
 
 def _read(path: Path) -> str:
+    if path == PANEL_TEMPLATE:
+        from scripts.panel_template_source import compose_panel_template
+
+        return compose_panel_template(ROOT)
     return path.read_text(encoding="utf-8")
 
 

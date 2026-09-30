@@ -6,6 +6,11 @@ from pathlib import Path
 from flask import Flask
 
 from scripts.panel_template_source import compose_panel_template
+from tests.support.panel_render import (
+    MIHOMO_MINIMAL_MODULE_IDS,
+    XRAY_MINIMAL_MODULE_IDS,
+    render_panel,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -75,46 +80,10 @@ def test_xray_logs_screen_renders_only_with_engine_xray():
     assert _render_screen(False).strip() == ""
 
 
-def _render_panel(active_module_ids: list[str], tmp_path: Path) -> str:
-    from routes.pages import register_pages_routes
-    from routes.ui_assets import init_ui_assets_helpers, register_build_stamp_global
-
-    app = Flask(
-        "panel-profile",
-        root_path=str(ROOT / "xkeen-ui"),
-        static_folder="static",
-        template_folder="templates",
-    )
-    init_ui_assets_helpers(app)
-    register_build_stamp_global(app, str(tmp_path))
-    # Endpoints owned by other blueprints; the page only builds their URLs.
-    app.add_url_rule("/logout", "logout_post", lambda: "", methods=["POST"])
-    app.add_url_rule("/terminal-theme.css", "terminal_theme_css", lambda: "")
-    if "tool.advanced-diagnostics" not in active_module_ids:
-        app.add_url_rule("/devtools", "devtools_page", lambda: "")
-    if "engine.mihomo" not in active_module_ids:
-        app.add_url_rule("/mihomo_generator", "mihomo_generator_page", lambda: "")
-    app.context_processor(lambda: {"csrf_token": "token", "terminal_theme_v": 0})
-    register_pages_routes(
-        app,
-        module_activation={"active_module_ids": active_module_ids},
-        ROUTING_FILE=str(tmp_path / "05_routing.json"),
-        MIHOMO_CONFIG_FILE=str(tmp_path / "config.yaml"),
-        INBOUNDS_FILE=str(tmp_path / "03_inbounds.json"),
-        OUTBOUNDS_FILE=str(tmp_path / "04_outbounds.json"),
-        BACKUP_DIR=str(tmp_path / "backups"),
-        COMMAND_GROUPS=[],
-        GITHUB_REPO_URL="https://example.invalid/repo",
-    )
-    response = app.test_client().get("/")
-    assert response.status_code == 200
-    return response.get_data(as_text=True)
-
-
 def test_xray_logs_screen_follows_profile_in_initial_html(tmp_path, monkeypatch):
     monkeypatch.delenv("XKEEN_UI_PANEL_SECTIONS_WHITELIST", raising=False)
-    xray_html = _render_panel(["core", "tool.editor", "engine.xray"], tmp_path / "xray")
-    mihomo_html = _render_panel(["core", "tool.editor", "engine.mihomo"], tmp_path / "mihomo")
+    xray_html = render_panel(XRAY_MINIMAL_MODULE_IDS, tmp_path / "xray")
+    mihomo_html = render_panel(MIHOMO_MINIMAL_MODULE_IDS, tmp_path / "mihomo")
 
     assert xray_html.count('id="view-xray-logs"') == 1
     assert 'id="xray-log-output"' in xray_html
