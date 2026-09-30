@@ -130,6 +130,7 @@ WORKTREE_MODULAR_PANEL_PATHS = frozenset(
         "tests/test_modular_panel_stage4_3_xray_logs_screen.py",
         "tests/test_modular_panel_stage4_3_mihomo_screen.py",
         "tests/test_modular_panel_stage4_3_xkeen_screen.py",
+        "tests/test_modular_panel_stage4_3_tool_screens.py",
         "tests/support/panel_render.py",
         "xkeen-ui/templates/panel/macros.html",
         "xkeen-ui/templates/panel/head.html",
@@ -141,6 +142,8 @@ WORKTREE_MODULAR_PANEL_PATHS = frozenset(
         "xkeen-ui/templates/panel/screens/xray_logs.html",
         "xkeen-ui/templates/panel/screens/mihomo.html",
         "xkeen-ui/templates/panel/screens/xkeen.html",
+        "xkeen-ui/templates/panel/screens/commands.html",
+        "xkeen-ui/templates/panel/screens/files.html",
     }
 )
 

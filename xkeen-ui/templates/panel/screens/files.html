@@ -1,0 +1,92 @@
+{% from "panel/macros.html" import op_icon %}
+<div id="view-files" class="view-section" style="display:none;" data-xk-section="files">
+  <section class="card fm-card" aria-labelledby="fm-title" data-fm-workspace="1">
+    <div class="fm-header">
+      <h2 id="fm-title">Файловый менеджер</h2>
+      <div class="fm-header-actions fm-toolbar" role="toolbar" aria-label="Действия файлового менеджера">
+        <button type="button" class="btn-secondary btn-icon" id="fm-volumes-btn" style="display:none;" title="USB-диски/разделы: список и Mount/Unmount" aria-label="Диски">{{ op_icon('storage') }}</button>
+        <button type="button" class="btn-secondary btn-icon" id="fm-ops-btn" data-fm-lite-hide="1" title="Операции с файлами (копировать, переместить, удалить, архивы и т.д.)" aria-label="Операции">{{ op_icon('list-details') }}</button>
+      </div>
+    </div>
+
+    <div class="fm-top-notes" aria-live="polite">
+      <div id="fm-disabled-note" class="status" style="display:none;"></div>
+      <div id="fm-footer-status" class="status fm-status-note" aria-live="polite"></div>
+    </div>
+
+    <!-- Busy overlay: shown when opening remote files (SFTP) so the user sees progress and
+         doesn't click "open" multiple times while content is loading into the editor. -->
+    <div id="fm-open-overlay" class="fm-busy-overlay hidden" role="status" aria-live="polite" aria-hidden="true">
+      <div class="fm-busy-box">
+        <div class="fm-busy-spinner" aria-hidden="true"></div>
+        <div class="fm-busy-text" id="fm-open-overlay-text">Открываю файл…</div>
+      </div>
+    </div>
+
+    <div class="fm-two" id="fm-root">
+      <div class="fm-panel" data-side="left" data-state="loading">
+        <div class="fm-panel-bar fm-toolbar" role="toolbar" aria-label="Навигация левой панели">
+          <select class="fm-target-select" aria-label="Источник левой панели" title="Локальный или удалённый источник">
+            <option value="local">L</option>
+            <option value="remote" data-fm-lite-hide="1">R</option>
+          </select>
+          <button type="button" class="btn-secondary fm-connect-btn" data-fm-lite-hide="1" title="Подключиться к удалённому хосту (SFTP)">Connect…</button>
+          <button type="button" class="btn-secondary fm-disconnect-btn" data-fm-lite-hide="1" title="Отключиться от удалённого хоста" style="display:none;">Disconnect</button>
+          <input class="fm-path-input" spellcheck="false" placeholder="/opt/var" title="Путь текущей папки (Enter — перейти)" />
+          <button type="button" class="btn-secondary fm-root-btn" title="В корень (FTP) / домой (SFTP)" aria-label="В корень или домой">{{ op_icon('home') }}</button>
+          <button type="button" class="btn-secondary fm-up-btn" title="Вверх" aria-label="Вверх">{{ op_icon('move-up') }}</button>
+          <button type="button" class="btn-secondary fm-refresh-btn" title="Обновить">{{ op_icon('refresh') }}</button>
+          <div class="fm-filter-wrap">
+            <input class="terminal-input fm-filter-input" type="text" placeholder="Фильтр…" title="Фильтр по имени в текущей папке" autocomplete="off" spellcheck="false" />
+            <button type="button" class="btn-secondary fm-filter-clear-btn hidden" title="Очистить фильтр">{{ op_icon('close') }}</button>
+          </div>
+        </div>
+        <div class="fm-list" tabindex="0" role="grid" aria-multiselectable="true" aria-label="Файлы левой панели" aria-busy="true"></div>
+      </div>
+
+      <div class="fm-panel" data-side="right" data-state="loading">
+        <div class="fm-panel-bar fm-toolbar" role="toolbar" aria-label="Навигация правой панели">
+          <select class="fm-target-select" aria-label="Источник правой панели" title="Локальный или удалённый источник">
+            <option value="local">L</option>
+            <option value="remote" data-fm-lite-hide="1">R</option>
+          </select>
+          <button type="button" class="btn-secondary fm-connect-btn" data-fm-lite-hide="1" title="Подключиться к удалённому хосту (SFTP)">Connect…</button>
+          <button type="button" class="btn-secondary fm-disconnect-btn" data-fm-lite-hide="1" title="Отключиться от удалённого хоста" style="display:none;">Disconnect</button>
+          <input class="fm-path-input" spellcheck="false" placeholder="/opt/var" title="Путь текущей папки (Enter — перейти)" />
+          <button type="button" class="btn-secondary fm-root-btn" title="В корень (FTP) / домой (SFTP)" aria-label="В корень или домой">{{ op_icon('home') }}</button>
+          <button type="button" class="btn-secondary fm-up-btn" title="Вверх" aria-label="Вверх">{{ op_icon('move-up') }}</button>
+          <button type="button" class="btn-secondary fm-refresh-btn" title="Обновить">{{ op_icon('refresh') }}</button>
+          <div class="fm-filter-wrap">
+            <input class="terminal-input fm-filter-input" type="text" placeholder="Фильтр…" title="Фильтр по имени в текущей папке" autocomplete="off" spellcheck="false" />
+            <button type="button" class="btn-secondary fm-filter-clear-btn hidden" title="Очистить фильтр">{{ op_icon('close') }}</button>
+          </div>
+        </div>
+        <div class="fm-list" tabindex="0" role="grid" aria-multiselectable="true" aria-label="Файлы правой панели" aria-busy="true"></div>
+      </div>
+    </div>
+    <div class="fm-hints">
+      <div class="fm-hints-text">
+        <span><b>Tab</b> — смена панели</span>
+        <span><b>Enter</b> — открыть</span>
+        <span><b>Backspace</b> — вверх</span>
+        <span><b>Ctrl+A</b> — выделить всё</span>
+        <span><b>Ctrl+I</b> — инвертировать</span>
+        <span><b>Ctrl+M</b> — выделить по маске</span>
+        <span><b>Ctrl+Shift+C</b> — копировать полный путь</span>
+        <span><b>F7</b> — новая папка</span>
+        <span><b>Shift+F7</b> — новый файл</span>
+        <span><b>F2</b> — Rename</span>
+        <span><b>ПКМ</b> — контекстное меню</span>
+        <span data-fm-lite-hide="1"><b>F5</b> — Copy</span>
+        <span data-fm-lite-hide="1"><b>F6</b> — Move</span>
+        <span data-fm-lite-hide="1"><b>Drag&Drop</b> — выбрать Move / Copy</span>
+        <span data-fm-lite-hide="1"><b>F8</b> — в корзину (в корзине — удалить навсегда)</span>
+      </div>
+    </div>
+
+    <div class="fm-footer">
+      <button type="button" class="btn-secondary fm-footer-action fm-help-btn" id="fm-help-btn" title="Справка (F1)" aria-label="Справка">{{ op_icon('help') }}<span class="xk-action-label">Справка</span></button>
+      <div class="fm-footer-actions fm-toolbar" role="toolbar" aria-label="Операции с файлами"></div>
+    </div>
+  </section>
+</div>

@@ -1,14 +1,14 @@
 # План модульной архитектуры панели Xkeen UI
 
 **Статус:** Этапы 0, 1, 2, 3, 3R, 3R.1, 4.1 и 4.2 закрыты; подэтап 4.3
-в работе, routing, Xray logs, Mihomo и Xkeen screens закрыты<br>
+в работе: все шесть экранов вынесены, не выполнен критерий console errors<br>
 **Дата:** 30 сентября 2026 года
 **Область:** облегчение панели, профили установки и официальный каталог модулей
 
 **Текущий прогресс:** Этапы 0–3 и 3R, подэтапы 4.1 и 4.2 закрыты;
 Этап 3R.1 и baseline initial HTML закрыты; в подэтапе 4.3 закрыты экраны
-`routing.html`, `xray_logs.html`, `mihomo.html` и `xkeen.html`, следующий
-экран — `commands.html`.
+вынесены все шесть экранов; критерий «minimal-профиль без console errors»
+не выполнен из-за frontend-вызовов API выключенных модулей (см. 4.3).
 
 ## 1. Цель проекта
 
@@ -1032,14 +1032,36 @@ Xkeen screen: **закрыт 30 сентября 2026 года**.
 
 Экран принадлежит core и подключается без module gate.
 
+Commands и Files screens: **закрыты 30 сентября 2026 года**.
+
+Артефакты:
+
+- `docs/modular-panel-stage4.3-tool-screens.md`;
+- `xkeen-ui/templates/panel/screens/commands.html`;
+- `xkeen-ui/templates/panel/screens/files.html`;
+- `tests/test_modular_panel_stage4_3_tool_screens.py`.
+
+Строка статуса и обновления ядер осталась в экране команд (`tool.terminal`):
+обновление выполняется через каталог команд терминала.
+
+**Browser smoke 30 сентября 2026 года** (E2E-стенд, профили через
+`modules.json`): в Full, Xray-minimal и Mihomo-minimal рендерятся только свои
+экраны, все видимые вкладки открываются, набор ошибок Xray-minimal совпадает с
+baseline до выделения экранов. Критерий «без console errors» при этом не
+выполнен: `features/resource_monitor.js` опрашивает `/api/system/resources`
+(`tool.advanced-diagnostics`), а карточка GeoIP/GeoSite вызывает
+`/api/fs/stat-batch` (`tool.files`), что даёт `404` в minimal-профилях.
+Ошибки не связаны с выделением экранов; способ их устранения — отдельное
+решение (Этап 5 или доработка до закрытия 4.3).
+
 Последовательно вынести разметку экранов в partials:
 
 1. `routing.html` — `engine.xray` — **выполнено**;
 2. `xray_logs.html` — `engine.xray` — **выполнено**;
 3. `mihomo.html` — `engine.mihomo` — **выполнено**;
 4. `xkeen.html` — core-owned Xkeen screen — **выполнено**;
-5. `commands.html` — `tool.terminal`;
-6. `files.html` — `tool.files`.
+5. `commands.html` — `tool.terminal` — **выполнено**;
+6. `files.html` — `tool.files` — **выполнено**.
 
 Для каждого экрана:
 
@@ -1194,6 +1216,14 @@ tool.files
 Текущие conditional `import()` для Xray/Mihomo сохранить как промежуточный
 baseline, но убрать оставшиеся static imports, которые подтягивают optional
 код через `panel-core`, `panel.mihomo_header` или shared compatibility layers.
+
+Известные нарушения по smoke 4.3 (30 сентября 2026 года):
+
+- `features/resource_monitor.js` в core header опрашивает
+  `/api/system/resources`, принадлежащий `tool.advanced-diagnostics`;
+- `features/routing_cards/dat/api.js` (`engine.xray`) вызывает
+  `/api/fs/stat-batch` из `tool.files`; в Xray-minimal при старте также
+  приходит `404` на `/api/fs/list`.
 
 Для каждого optional frontend-модуля зафиксировать:
 

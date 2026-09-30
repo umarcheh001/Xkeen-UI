@@ -37,7 +37,10 @@ def test_stage4_2_shell_partials_and_thin_composition_root_exist():
     assert 'id="view-mihomo"' not in source
     assert '{% include "panel/screens/xkeen.html" %}' in source
     assert 'id="view-xkeen"' not in source
-    assert 'id="view-commands"' in source
+    assert '{% include "panel/screens/commands.html" %}' in source
+    assert '{% include "panel/screens/files.html" %}' in source
+    for screen in ("commands", "files"):
+        assert f'id="view-{screen}"' not in source
 
 
 def test_stage4_2_composed_source_preserves_shell_and_screen_contract():
