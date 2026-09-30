@@ -5,7 +5,7 @@
 ## Основные документы
 
 - `README_frontend_migration_plan.md` — текущий статус закрытого migration scope и список guardrails, которые нельзя откатывать.
-- `../README-modular-panel-plan.md` — план модульной панели; Этапы 0–3, 3R и 3R.1, подэтапы 4.1–4.3 закрыты, следующий — подэтап 4.4.
+- `../README-modular-panel-plan.md` — план модульной панели; Этапы 0–3, 3R и 3R.1, подэтапы 4.1–4.4 закрыты, следующий — подэтап 4.5.
 - `frontend-target-architecture.md` — целевой архитектурный контракт фронтенда в текущем репозитории.
 - `frontend-feature-api.md` — правила для feature API, registry и compat-слоя.
 - `config-schema-ux-roadmap.md` — roadmap по развитию UX вокруг схем Xray JSON и Mihomo YAML: schema enrichment, semantic validation, snippets, quick fixes и guided flows.
@@ -37,6 +37,7 @@
 - `modular-panel-stage4.3-xray-logs-screen.md` — второй закрытый экран подэтапа 4.3: логи Xray вынесены в partial `engine.xray` и больше не попадают в Mihomo-only HTML.
 - `modular-panel-stage4.3-mihomo-screen.md` — третий закрытый экран подэтапа 4.3: экран Mihomo вынесен в partial `engine.mihomo` и больше не попадает в Xray-only HTML.
 - `modular-panel-stage4.3-xkeen-screen.md` — четвёртый закрытый экран подэтапа 4.3: core-owned экран Xkeen вынесен в partial без module gate.
+- `modular-panel-stage4.4-modals.md` — закрытый подэтап 4.4: модальные окна и оверлей терминала разнесены по owner-partials с gates в composition root, составные gates HWID и редактора файлов, браузерный замер стилей до и после.
 - `modular-panel-stage4.3-tool-screens.md` — экраны команд (`tool.terminal`) и файлов (`tool.files`) вынесены в partials; итоги browser smoke minimal-профилей и оставшиеся frontend-вызовы API выключенных модулей.
 - `devtools-operator-theme.md` — закрытый перевод DevTools со старой blue-glass темы на общие с основной панелью Operator tokens, flat shell/data rows/log canvas/modals и responsive dark/light contract.
 - `top-level-navigation-plan.md` — итог по уже закрытому переводу всех five canonical entrypoints с document navigation на in-app navigation и фиксация финального five-route runtime contract.

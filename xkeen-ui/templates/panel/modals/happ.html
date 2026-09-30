@@ -1,0 +1,126 @@
+{% from "panel/macros.html" import op_icon %}
+    <!-- Mihomo: HWID subscription wizard modal -->
+    <div id="mihomo-hwid-modal" class="modal hidden" data-operator-modal-family="editor-workbench" role="dialog" aria-modal="true" aria-label="HWID‑подписка Mihomo">
+      <div class="modal-content xk-hw-modal xk-modal-width xk-modal-width-1160" data-modal-key="mihomo-hwid">
+        <div class="modal-header xk-hw-header">
+          <div class="xk-hw-titlebox">
+            <span class="xk-hw-kicker">Mihomo · Premium HWID subscription</span>
+            <span class="modal-title">HWID‑подписка</span>
+            <p class="xk-hw-subtitle">
+              Добавляет <b>proxy-provider</b> с HWID‑заголовками в <code>config.yaml</code>.
+              Проверь ссылку и preview, затем вставь provider или примени его с рестартом.
+            </p>
+          </div>
+          <button type="button" class="modal-close" id="mihomo-hwid-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+
+        <div class="modal-body xk-hw-body">
+          <div class="xk-hw-grid">
+            <section class="xk-hw-panel xk-hw-panel--controls">
+              <div class="xk-hw-form-grid">
+                <label class="xk-hw-field xk-hw-field--full">
+                  <span class="hint-label">URL подписки</span>
+                  <input id="mihomo-hwid-url" class="xkeen-input xk-hw-control" type="text" placeholder="https://..." />
+                </label>
+
+                <label class="xk-hw-field">
+                  <span class="hint-label">Имя provider</span>
+                  <input id="mihomo-hwid-name" class="xkeen-input xk-hw-control" type="text" placeholder="например: My_Sub" />
+                </label>
+
+                <label class="xk-hw-switch xk-hw-switch--full xk-hw-switch--compact">
+                  <input type="checkbox" id="mihomo-hwid-insecure">
+                  <div class="xk-hw-switch-copy">
+                    <strong>Игнорировать TLS</strong>
+                    <small>Используй только для битого или самоподписанного сертификата.</small>
+                  </div>
+                </label>
+              </div>
+
+              <div id="mihomo-hwid-status" class="status xk-hw-status hidden"></div>
+              <div id="mihomo-hwid-meta" class="xk-hw-meta hidden"></div>
+              <div id="mihomo-hwid-tip" class="xk-hw-tip hidden"></div>
+
+              <section id="mihomo-hwid-diag" class="xk-hw-diag xk-hw-device-editor hidden" aria-live="polite">
+                <div class="xk-hw-section-head xk-hw-device-editor__head">
+                  <div>
+                    <div class="xk-hw-section-title">Профиль устройства</div>
+                    <div class="xk-hw-section-subtitle">Эти значения панель отправит провайдеру в HWID-заголовках.</div>
+                  </div>
+                  <button type="button" id="mihomo-hwid-reset-btn" class="btn-secondary btn-compact xk-hw-reset-btn" title="Вернуть автоматически определённые значения панели">
+                    {{ op_icon('restart') }}<span>Сбросить</span>
+                  </button>
+                </div>
+
+                <div class="xk-hw-device-grid">
+                  <label class="xk-hw-field xk-hw-field--full">
+                    <span class="hint-label">HWID</span>
+                    <input id="mihomo-hwid-device-hwid" class="xkeen-input xk-hw-control xk-hw-device-input xk-hw-device-input--mono" type="text" autocomplete="off" spellcheck="false" />
+                  </label>
+
+                  <label class="xk-hw-field">
+                    <span class="hint-label">Платформа</span>
+                    <input id="mihomo-hwid-device-os" class="xkeen-input xk-hw-control xk-hw-device-input" type="text" autocomplete="off" />
+                  </label>
+
+                  <label class="xk-hw-field">
+                    <span class="hint-label">Версия OS</span>
+                    <input id="mihomo-hwid-device-os-version" class="xkeen-input xk-hw-control xk-hw-device-input xk-hw-device-input--mono" type="text" autocomplete="off" />
+                  </label>
+
+                  <label class="xk-hw-field xk-hw-field--full">
+                    <span class="hint-label">Модель</span>
+                    <input id="mihomo-hwid-device-model" class="xkeen-input xk-hw-control xk-hw-device-input" type="text" autocomplete="off" />
+                  </label>
+
+                  <label class="xk-hw-field xk-hw-field--full">
+                    <span class="hint-label">User-Agent</span>
+                    <input id="mihomo-hwid-device-ua" class="xkeen-input xk-hw-control xk-hw-device-input xk-hw-device-input--mono" type="text" autocomplete="off" spellcheck="false" />
+                    <small class="xk-hw-field-note">Для Mihomo оставь авто-UA <code>ClashMeta/…; mihomo/…</code>. UA Happ может переключить подписку на Xray-формат.</small>
+                  </label>
+                </div>
+
+                <div class="xk-hw-editor-meta">
+                  <span id="mihomo-hwid-diag-source" class="xk-hw-editor-meta__item">Источник: —</span>
+                  <span id="mihomo-hwid-diag-router" class="xk-hw-editor-meta__item">Router HWID: —</span>
+                </div>
+
+                <details class="xk-hw-provider-response">
+                  <summary>Ответ провайдера</summary>
+                  <pre id="mihomo-hwid-diag-response" class="xk-hw-diag-pre">Появится после «Проверить».</pre>
+                </details>
+              </section>
+            </section>
+
+            <section class="xk-hw-panel xk-hw-panel--preview">
+              <div class="xk-hw-section-head">
+                <div>
+                  <div class="xk-hw-section-title">YAML preview</div>
+                  <div class="xk-hw-section-subtitle">Provider будет добавлен в <code>proxy-providers</code> именно в таком виде.</div>
+                </div>
+                <div class="xk-editor-engine xk-hw-editor-engine" id="mihomo-hwid-preview-engine">
+                  <span class="xk-editor-engine-label">Редактор</span>
+                  <select id="mihomo-hwid-engine-select" class="xk-editor-engine-select" title="Выбор движка YAML preview" data-tooltip="Выбор движка YAML preview" aria-label="Выбор движка YAML preview">
+                    <option value="codemirror">CodeMirror</option>
+                    <option value="monaco">Monaco</option>
+                  </select>
+                </div>
+              </div>
+              <div class="xk-hw-preview-wrap">
+                <div id="mihomo-hwid-preview-monaco" class="xk-monaco-editor xk-monaco-editor--modal xk-hw-preview-monaco hidden"></div>
+                <textarea id="mihomo-hwid-preview" class="xkeen-textarea outbounds-gen-preview xk-hw-preview" spellcheck="false" readonly></textarea>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div class="modal-actions xk-hw-footer">
+          <div class="xk-hw-footer-actions">
+            <button type="button" id="mihomo-hwid-probe-btn" class="btn-secondary btn-compact xk-hw-secondary-btn" data-tooltip="Проверить ссылку, собрать HWID-заголовки и показать YAML preview.">{{ op_icon('validate') }}<span class="xk-action-label">Проверить</span></button>
+            <button type="button" id="mihomo-hwid-insert-btn" class="btn-primary btn-compact xk-hw-primary-btn" data-tooltip="Вставить proxy-provider в config.yaml редактора и закрыть окно." disabled>{{ op_icon('add-node') }}<span class="xk-action-label">Вставить в конфиг</span></button>
+            <button type="button" id="mihomo-hwid-apply-restart-btn" class="btn-primary btn-compact xk-hw-primary-btn" data-tooltip="Сервер сохранит config.yaml и поставит рестарт в очередь." disabled>{{ op_icon('restart') }}<span class="xk-action-label">Применить + рестарт</span></button>
+          </div>
+          <button type="button" id="mihomo-hwid-cancel-btn" class="btn-secondary btn-compact" data-operator-dismiss-duplicate="true">Отмена</button>
+        </div>
+      </div>
+    </div>

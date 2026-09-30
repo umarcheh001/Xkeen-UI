@@ -1,0 +1,1169 @@
+{% from "panel/macros.html" import op_icon %}
+    <!-- Xray log: context modal -->
+    <div id="xray-context-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-labelledby="xray-context-title">
+      <div class="modal-content xray-context-modal-content" data-modal-key="xray-log-context">
+        <div class="modal-header">
+          <span class="modal-title" id="xray-context-title">Контекст строки Xray</span>
+          <button type="button" class="modal-close" id="xray-context-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body">
+          <pre id="xray-context-output" class="log-block" aria-label="Контекст выбранной строки" tabindex="0"></pre>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="xray-context-copy-btn" title="Скопировать контекст">Скопировать</button>
+          <button type="button" class="btn-secondary" id="xray-context-close-btn2" title="Закрыть" data-operator-dismiss-duplicate="true">Закрыть</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Xray log: device names -->
+    <div id="xray-devices-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-label="Имена устройств в логах Xray">
+      <div class="modal-content xray-devices-modal-content" data-modal-key="xray-log-devices">
+        <div class="modal-header">
+          <span class="modal-title">Имена устройств</span>
+          <button type="button" class="modal-close" id="xray-devices-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body xray-devices-body">
+          <div class="xray-devices-toolbar">
+            <button type="button" class="btn-secondary btn-icon" id="xray-devices-refresh-btn" title="Обновить список устройств" aria-label="Обновить список устройств">{{ op_icon('refresh') }}</button>
+            <span id="xray-devices-summary" class="small xray-devices-summary" role="status" aria-live="polite"></span>
+          </div>
+          <div class="xray-devices-form" aria-label="Ручное имя устройства">
+            <input id="xray-devices-ip" class="xray-log-filter" type="text" inputmode="numeric" placeholder="IP-адрес" aria-label="IP-адрес устройства" autocomplete="off">
+            <input id="xray-devices-name" class="xray-log-filter" type="text" placeholder="Имя устройства" aria-label="Имя устройства" autocomplete="off">
+            <button type="button" class="btn-primary" id="xray-devices-save-btn">{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
+          </div>
+          <div id="xray-devices-list" class="xray-devices-list" role="list" aria-label="Список устройств"></div>
+        </div>
+        <div class="modal-actions xray-devices-actions">
+          <button type="button" class="btn-secondary" id="xray-devices-close-btn2" data-operator-dismiss-duplicate="true">Закрыть</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="routing-dns-over-vless-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" data-modal-noresize="1" data-modal-nopos="1" data-modal-remember="0" data-modal-backdrop-close="0" role="dialog" aria-modal="true" aria-labelledby="routing-dns-over-vless-title">
+      <div class="modal-content xk-modal-width xk-modal-width-fluid-1440 routing-dns-over-vless-modal-content" data-dns-layout="single">
+        <div class="modal-header">
+          <span class="modal-title" id="routing-dns-over-vless-title">DNS-over-VLESS</span>
+          <div class="routing-dns-over-vless-header-actions">
+            <button type="button" id="routing-dns-over-vless-layout" class="routing-dns-over-vless-layout-btn" title="Раскладка окна" aria-label="Раскладка окна">{{ op_icon('compare') }}</button>
+            <button type="button" class="modal-close" id="routing-dns-over-vless-close" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+          </div>
+        </div>
+        <div class="modal-body routing-dns-over-vless-body">
+          <div class="routing-dns-over-vless-lead">
+            <span class="routing-dns-over-vless-lead-icon" aria-hidden="true">{{ op_icon('dns') }}</span>
+            <div>
+              <strong id="routing-dns-over-vless-lead-title">DNS через защищённый туннель Xray</strong>
+              <p id="routing-dns-over-vless-lead-text">Панель подготовит отдельный DNS-фрагмент, добавит только два служебных правила и включит перехват DNS в Keenetic.</p>
+            </div>
+            <span id="routing-dns-over-vless-badge" class="routing-dns-over-vless-badge">Проверка…</span>
+          </div>
+
+          <div class="routing-dns-over-vless-state">
+            <div id="routing-dns-over-vless-status" class="routing-dns-over-vless-status" role="status" aria-live="polite">Проверяем текущую конфигурацию…</div>
+
+            <div class="routing-dns-over-vless-safety" aria-label="Защита операции">
+              <div>{{ op_icon('validate') }}<span><b>Xray preflight</b><small>Проверка во временном каталоге до записи</small></span></div>
+              <div>{{ op_icon('archive') }}<span><b>Полный снимок</b><small>DNS, routing, JSONC и состояние мастера</small></span></div>
+              <div>{{ op_icon('restore') }}<span><b>Автооткат</b><small>При ошибке старта или DNS-теста</small></span></div>
+            </div>
+
+            <ul id="routing-dns-over-vless-details" class="routing-dns-over-vless-details"></ul>
+          </div>
+
+          <!-- Рельсы: в две колонки это левый и правый столбцы, в одну -- просто
+               два блока подряд. Порядок чтения одинаков в обеих раскладках. -->
+          <div class="xk-dns-rail xk-dns-rail-form">
+            <details class="xk-dns-zone" data-zone="route" data-required="1">
+              <summary class="xk-dns-zone-head">
+                <b id="routing-dns-over-vless-target-label">Маршрут для DNS-запросов</b>
+                <span class="xk-dns-zone-req" data-zone-req="route">обязательно</span>
+                <span class="xk-dns-zone-sum" data-zone-sum="route"></span>
+              </summary>
+              <div class="xk-dns-zone-body" id="routing-dns-over-vless-route">
+                <label id="routing-dns-over-vless-multi-row" class="routing-dns-over-vless-multi hidden">
+                  <input type="checkbox" id="routing-dns-over-vless-multi">
+                  <span>Балансировать между несколькими прокси</span>
+                </label>
+                <div id="routing-dns-over-vless-target-tools" class="routing-dns-over-vless-picker-tools hidden">
+                  <span id="routing-dns-over-vless-target-count" class="routing-dns-over-vless-picker-count"></span>
+                  <button type="button" id="routing-dns-over-vless-target-all" class="routing-dns-over-vless-picker-bulk">Отметить все</button>
+                  <button type="button" id="routing-dns-over-vless-target-none" class="routing-dns-over-vless-picker-bulk">Снять все</button>
+                </div>
+                <div id="routing-dns-over-vless-target" class="routing-dns-over-vless-picker" role="listbox" aria-labelledby="routing-dns-over-vless-target-label" aria-describedby="routing-dns-over-vless-route-hint"></div>
+                <p class="modal-hint" id="routing-dns-over-vless-route-hint">DNS пойдёт через выбранный балансировщик или прокси. Выбор сохраняется и используется при последующих включениях.</p>
+                <p id="routing-dns-over-vless-route-fallback" class="routing-dns-over-vless-route-fallback hidden"></p>
+              </div>
+            </details>
+
+            <details class="xk-dns-zone" data-zone="servers" data-required="1">
+              <summary class="xk-dns-zone-head">
+                <b>DNS-серверы в туннеле</b>
+                <span class="xk-dns-zone-req" data-zone-req="servers">обязательно</span>
+                <span class="xk-dns-zone-sum" data-zone-sum="servers"></span>
+              </summary>
+              <div class="xk-dns-zone-body">
+                <p id="routing-dns-over-vless-locked-note" class="modal-hint hidden">Функция включена, поэтому настройки только для чтения. Правки применятся при следующем включении.</p>
+                <label for="routing-dns-over-vless-upstreams">DNS-серверы в туннеле</label>
+                <input type="text" id="routing-dns-over-vless-upstreams" class="routing-rule-input" placeholder="8.8.8.8, 1.1.1.1" autocomplete="off" spellcheck="false">
+                <div class="modal-hint">Через запятую, только по IP-адресу.
+                  <details class="xk-hint-more">
+                    <summary>Подробнее</summary>
+                    <p>имя хоста пришлось бы разрешать до того, как заработает сам DNS, — резолвить его нечем. Второй и следующие используются, когда первый не отвечает. Порт указывайте, если резолвер слушает не на 53 — например <code>127.0.0.53:5353</code>. Шифрованный апстрим задаётся схемой <code>https://</code> — с адресом и обязательным путём, например <code>https://1.1.1.1/dns-query</code>; без пути сервер не ответит. Есть ещё <code>tcp://</code> — обычный DNS поверх TCP. Схемы <code>tls://</code> и <code>quic://</code> ядро Xray не понимает, панель их не примет. На остальные типы записей схема не распространяется: при включённом пропуске ниже они уходят к тому же адресу обычным DNS на порт 53.</p>
+                  </details>
+                </div>
+
+                <label class="dt-switch routing-dns-over-vless-remote-toggle xk-switch-bare" title="Адрес разыменовывается на выходном узле, а не в вашей сети.">
+                  <input type="checkbox" id="routing-dns-over-vless-remote">
+                  <span class="dt-switch-slider" aria-hidden="true"></span>
+                  <span class="dt-switch-label">DNS-сервер на стороне выходного узла</span>
+                </label>
+                <div class="modal-hint">Запросы к серверам из списка выше и так идут через туннель, поэтому адрес можно указать такой, какой видит выходной узел, а не вы.
+                  <details class="xk-hint-more">
+                    <summary>Подробнее</summary>
+                    <p>Например <code>127.0.0.53</code> — штатный резолвер Ubuntu и Debian: тогда имена разрешает сам VPS, наружу не выходит ни одного открытого запроса, а адреса сайтов приходят ровно те, что видны из точки выхода. Так же указывается AdGuard Home, поднятый на VPS. Без этой отметки панель отвергает адреса петли и домашних сетей — их обычно вписывают по ошибке вместо поля локальных DNS. Проверьте, что на VPS ничего не блокирует обращения к приватным адресам: правило вида <code>geoip:private → block</code> оставит DNS без ответа. На ядре 26.5.3 и новее его не обязательно убирать — перенесите такое правило в <code>finalRules</code>: блокировка останется, а резолв на локальный адрес пройдёт.</p>
+                  </details>
+                </div>
+              </div>
+            </details>
+
+            <details class="xk-dns-zone" data-zone="home">
+              <summary class="xk-dns-zone-head">
+                <b>Домашние имена</b>
+                <span class="xk-dns-zone-sum" data-zone-sum="home"></span>
+              </summary>
+              <div class="xk-dns-zone-body">
+                <label class="dt-switch xk-switch-bare" title="Имя роутера, хостнеймы из DHCP и обратные зоны разрешает резолвер прошивки, а не зарубежный сервер в туннеле.">
+                  <input type="checkbox" id="routing-dns-over-vless-firmware" checked>
+                  <span class="dt-switch-slider" aria-hidden="true"></span>
+                  <span class="dt-switch-label">Домашние имена разрешает резолвер прошивки</span>
+                </label>
+                <div id="routing-dns-over-vless-local-hint" class="modal-hint hidden">
+                  <span id="routing-dns-over-vless-local-hint-text"></span>
+                </div>
+                <div class="modal-hint">Адрес панель находит сама и чинит, когда прошивка переставляет порты. Выключайте, только если домашние имена должны разрешаться из туннеля.
+                  <details class="xk-hint-more">
+                    <summary>Подробнее</summary>
+                    <p>На Keenetic домашние имена и хостнеймы из DHCP знает резолвер прошивки: он слушает на <code>127.0.0.1:41100</code> и дальше по одному порту на каждую политику доступа — <code>41101</code>, <code>41102</code>. Номер порта раздаётся по порядку создания политик, а не по их номеру, поэтому вычислить его нельзя — панель читает его из конфигурации прошивки. Без этого <code>router.lan</code>, имена устройств из DHCP и обратные зоны уходят в туннель и возвращаются ни с чем.</p>
+                  </details>
+                </div>
+
+                <label for="routing-dns-over-vless-local">Свои локальные DNS</label>
+                <input type="text" id="routing-dns-over-vless-local" class="routing-rule-input" placeholder="нет" autocomplete="off" spellcheck="false">
+                <div class="modal-hint">Необязательно. Собственные резолверы вашей сети — контроллер домена, Pi-hole, DNS отдельного сегмента. Запросы к ним пойдут напрямую, мимо туннеля.
+                  <details class="xk-hint-more">
+                    <summary>Подробнее</summary>
+                    <p>Через запятую, если сегментов сети несколько; порт указывайте, если резолвер слушает не на 53. Только адрес и порт — схемы вроде <code>https://</code> здесь не принимаются: эти запросы уходят напрямую, мимо туннеля. Спрашиваются по очереди, свои раньше резолвера прошивки. Порт 53 здесь занят самим DNS-over-VLESS: указать его нельзя, запрос вернулся бы сюда же и зациклился.</p>
+                  </details>
+                </div>
+
+                <div id="routing-dns-over-vless-zones-row" class="routing-dns-over-vless-zones hidden">
+                  <label for="routing-dns-over-vless-zones">Зоны, которые остаются в локальной сети</label>
+                  <textarea id="routing-dns-over-vless-zones" class="routing-rule-input" rows="3" autocomplete="off" spellcheck="false"></textarea>
+                  <div id="routing-dns-over-vless-zone-presets" class="routing-dns-over-vless-zone-presets" role="group" aria-label="Наборы зон"></div>
+                  <div class="modal-hint">Заполнено частыми случаями — дополните своими, если в сети используется собственная зона.
+                    <details class="xk-hint-more">
+                      <summary>Подробнее</summary>
+                      <p>Через запятую; запись без префикса дополняется до <code>domain:</code>, иначе Xray искал бы её как подстроку и захватил бы чужие домены. Обратные зоны <code>in-addr.arpa</code> и <code>ip6.arpa</code> держат PTR-запросы о приватных адресах внутри сети.</p>
+                    </details>
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <details class="xk-dns-zone" data-zone="direct">
+              <summary class="xk-dns-zone-head">
+                <b>DNS для доменов мимо туннеля</b>
+                <span class="xk-dns-zone-sum" data-zone-sum="direct"></span>
+              </summary>
+              <div class="xk-dns-zone-body">
+                <label for="routing-dns-over-vless-direct">DNS для доменов мимо туннеля</label>
+                <input type="text" id="routing-dns-over-vless-direct" class="routing-rule-input" placeholder="не используется" autocomplete="off" spellcheck="false">
+                <div class="modal-hint">Необязательно. Домены, которые вы и так пускаете напрямую, сейчас получают адрес от зарубежного резолвера — сайт с CDN отдаёт узел рядом с точкой выхода, а не рядом с вами.
+                  <details class="xk-hint-more">
+                    <summary>Подробнее</summary>
+                    <p>Укажите резолверы, которые ответят на них правильно: через запятую, спрашиваются по очереди, порт — если не 53; схемы вроде <code>https://</code> здесь не принимаются, как и в поле локальных DNS. Адрес, уже занятый в поле выше, сюда не подойдёт: группы различаются по адресам, и один и тот же в обеих панель прочитать не сможет.</p>
+                  </details>
+                </div>
+
+                <div id="routing-dns-over-vless-direct-zones-row" class="routing-dns-over-vless-zones hidden">
+                  <label for="routing-dns-over-vless-direct-zones">Домены, которые резолвятся мимо туннеля</label>
+                  <textarea id="routing-dns-over-vless-direct-zones" class="routing-rule-input" rows="3" autocomplete="off" spellcheck="false"></textarea>
+                  <div class="routing-dns-over-vless-zone-presets">
+                    <button type="button" id="routing-dns-over-vless-direct-from-rules" class="routing-dns-over-vless-zone-preset">Взять из правил, ведущих напрямую</button>
+                    <button type="button" id="routing-dns-over-vless-direct-clear" class="routing-dns-over-vless-zone-preset" data-tooltip="Очистит и адреса DNS, и список доменов — область перестанет использоваться.">Не использовать эту область</button>
+                  </div>
+                  <div class="modal-hint">Эти запросы увидит провайдер. Для сайтов, которые вы и так открываете напрямую, это обычно не важно — их трафик он видит в любом случае, — зато адрес вы получите ближайший.
+                    <details class="xk-hint-more">
+                      <summary>Подробнее</summary>
+                      <p>Если все указанные резолверы молчат, имя всё же спросят у DNS-сервера в туннеле.</p>
+                    </details>
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <details class="xk-dns-zone" data-zone="hosts">
+              <summary class="xk-dns-zone-head">
+                <b>Подмена адресов</b>
+                <span class="xk-dns-zone-sum" data-zone-sum="hosts"></span>
+                <label class="dt-switch xk-switch-bare" title="Выключенная подмена не попадает в конфиг Xray, а список записей сохраняется.">
+                  <input type="checkbox" id="routing-dns-over-vless-hosts-on" aria-label="Подменять адреса">
+                  <span class="dt-switch-slider" aria-hidden="true"></span>
+                </label>
+              </summary>
+              <div class="xk-dns-zone-body">
+                <label for="routing-dns-over-vless-hosts">Имя → чьи адреса ему отдавать</label>
+                <textarea id="routing-dns-over-vless-hosts" class="routing-rule-input" rows="3" autocomplete="off" spellcheck="false" placeholder="m.youtube.com = www.youtube.com"></textarea>
+                <div class="modal-hint">Необязательно. Имя получит адреса другого имени или указанный IP, а сайт при подключении всё равно увидит своё настоящее имя. Помогает, когда провайдер режет конкретный узел сервиса, а соседний проходит.
+                  <details class="xk-hint-more">
+                    <summary>Подробнее</summary>
+                    <p>По одной записи в строке: <code>имя = адрес</code>. Справа — имя, IP или несколько адресов через запятую. Имя без префикса совпадает только само с собой; <code>domain:youtube.com</code> захватит и все поддомены. Действует на устройства, чей DNS идёт через Xray. Не больше 64 строк. Переключатель в заголовке снимает подмену, не стирая список: так её можно временно отключить для проверки.</p>
+                  </details>
+                </div>
+              </div>
+            </details>
+
+            <details class="xk-dns-zone" data-zone="records">
+              <summary class="xk-dns-zone-head">
+                <b>Прочие типы записей</b>
+                <span class="xk-dns-zone-sum" data-zone-sum="records"></span>
+                <label class="dt-switch xk-switch-bare" title="Пропускать типы записей, на которые встроенный DNS Xray не отвечает.">
+                  <input type="checkbox" id="routing-dns-over-vless-pass" aria-label="Пропускать остальные типы записей">
+                  <span class="dt-switch-slider" aria-hidden="true"></span>
+                </label>
+              </summary>
+              <div class="xk-dns-zone-body">
+                <div class="modal-hint">Встроенный DNS Xray отвечает только на A и AAAA.
+                  <details class="xk-hint-more">
+                    <summary>Подробнее</summary>
+                    <p>Почтовые MX, TXT, SRV для автообнаружения (SIP, Autodiscover) и HTTPS/SVCB он возвращает пустыми — клиент понимает пустой ответ как «такой записи не существует» и не переспрашивает. С этой настройкой они уходят в туннель как есть — к первому DNS-серверу из списка выше.</p>
+                  </details>
+                </div>
+
+                <div id="routing-dns-over-vless-pass-row" class="routing-dns-over-vless-zones hidden">
+                  <label for="routing-dns-over-vless-pass-node">Узел для этих запросов</label>
+                  <select id="routing-dns-over-vless-pass-node" class="routing-rule-input"></select>
+                  <div class="modal-hint">Xray принимает здесь только один outbound — балансировщик указать нельзя.
+                    <details class="xk-hint-more">
+                      <summary>Подробнее</summary>
+                      <p>Поэтому такие запросы пойдут через один узел: если он недоступен, они останутся без ответа, тогда как A и AAAA продолжат идти обычным маршрутом. Выбранный узел запоминается и не меняется сам, даже если вы переставите узлы в своём балансировщике. Если он перестанет отвечать на эти типы записей, сторож переведёт их на следующий узел маршрута — не чаще раза в час и по одному кругу: когда узлы кончатся, панель скажет об этом здесь и перестанет трогать ядро. Адрес назначения панель проставляет сама: без него запросы клиентов, которые спрашивают сам роутер, ушли бы в туннель на домашний адрес и остались бы без ответа. Берётся первый DNS-сервер из списка выше, и резерва у самого адреса нет: если замолчит он, эти типы перестанут отвечать, тогда как A и AAAA переключатся на следующий сервер списка.</p>
+                    </details>
+                  </div>
+                  <p id="routing-dns-over-vless-pass-health" class="routing-dns-over-vless-route-fallback hidden"></p>
+                </div>
+              </div>
+            </details>
+          </div>
+
+          <div class="xk-dns-rail xk-dns-rail-side">
+            <details class="xk-dns-zone" data-zone="devices" data-required="1">
+              <summary class="xk-dns-zone-head">
+                <b>Какие устройства пользуются функцией</b>
+                <span class="xk-dns-zone-req" data-zone-req="devices">обязательно</span>
+                <span class="xk-dns-zone-sum" data-zone-sum="devices"></span>
+              </summary>
+              <div class="xk-dns-zone-body" id="routing-dns-over-vless-clients">
+                <span id="routing-dns-over-vless-clients-summary" class="modal-hint">Проверяем…</span>
+                <p id="routing-dns-over-vless-clients-dropped" class="routing-dns-over-vless-clients-dropped hidden" role="status"></p>
+                <p class="routing-dns-over-vless-clients-legend" aria-label="Как читать цвета">
+                  <span data-verdict="reaches">DNS идёт через туннель</span>
+                  <span data-verdict="intercepted">забирает политика доступа</span>
+                  <span data-verdict="unknown">определить не удалось</span>
+                  <span data-verdict="offline">не в сети — приглушены</span>
+                </p>
+                <ul id="routing-dns-over-vless-clients-list" class="routing-dns-over-vless-clients-list"></ul>
+                <div id="routing-dns-over-vless-clients-actions" class="routing-dns-over-vless-clients-actions hidden" role="group" aria-label="Применить выбор устройств">
+                  <span class="routing-dns-over-vless-clients-actions-text">
+                    <b id="routing-dns-over-vless-clients-actions-what"></b>
+                    <i id="routing-dns-over-vless-clients-actions-why"></i>
+                  </span>
+                  <span class="routing-dns-over-vless-clients-actions-buttons">
+                    <button type="button" id="routing-dns-over-vless-clients-cancel" class="btn-secondary">Отменить</button>
+                    <button type="button" id="routing-dns-over-vless-clients-apply" class="btn-primary">Применить выбор</button>
+                  </span>
+                </div>
+
+                <div class="modal-hint">Панель добавляет в firewall роутера собственную цепочку и ставит её перед правилом прошивки: DNS отмеченных устройств уходит к Xray, а не к резолверу прошивки.
+                  <details class="xk-hint-more">
+                    <summary>Подробнее</summary>
+                    <p>Отмечать можно только те устройства, у которых DNS забирает политика доступа — остальные и так доходят. Если отмеченное устройство потом выведут из политики, панель снимет его правило сама при открытии этого окна и скажет об этом строкой над списком. Перехватываются запросы, адресованные самому роутеру: если устройству прописан собственный DNS-сервер, отметка на него не подействует. Цепочка живёт, пока отмечено хоть одно устройство, и снимается при выключении функции, в том числе аварийном.</p>
+                  </details>
+                </div>
+                <div class="modal-hint routing-dns-over-vless-capture-cost">Чем за это платит отмеченное устройство: перестают действовать DNS-фильтры прошивки (Яндекс.DNS, SkyDNS, родительский контроль).
+                  <details class="xk-hint-more">
+                    <summary>Подробнее</summary>
+                    <p>и подмены адресов, на которых работают сторонние прокси-сервисы, — заблокированные сайты у него пойдут через туннель, а не их обходом. Пропадут и домашние имена с хостнеймами из DHCP, если не заполнить поле локальных DNS выше: там нужен порт резолвера его политики, порты перечислены в подсказке к самому полю. IPv6-запросы правило не затрагивает. И ещё одно: отметка действует даже на устройство, исключённое из XKeen — правило панели срабатывает раньше исключения, поэтому его DNS всё равно уйдёт в туннель, хотя остальной трафик пойдёт мимо.</p>
+                  </details>
+                </div>
+                <div class="modal-hint">Занятый порт 53 ещё не значит, что функцией пользуются: DNS-запросы устройств, состоящих в политике доступа, прошивка заворачивает на собственный резолвер раньше, чем они дойдут до Xray.
+                  <details class="xk-hint-more">
+                    <summary>Подробнее</summary>
+                    <p>Устройства вне политик доходят. У отмеченных синим DNS не сломан — его обслуживает резолвер прошивки. Разница в другом: адреса приходят с геолокацией его апстрима, а не выходного узла туннеля, и настройки этого окна на такие устройства не действуют — ни списки зон, ни домены мимо туннеля, ни пропуск остальных типов записей. Чтобы завернуть в туннель и остальных, устройству нужно указать внешний DNS-сервер вручную — тогда его запрос попадёт в туннель по общему правилу.</p>
+                  </details>
+                </div>
+              </div>
+            </details>
+            <div class="routing-dns-over-vless-foot">
+              <div class="modal-hint routing-dns-over-vless-warning">Настройка применяется при работающем ядре Xray.
+                <details class="xk-hint-more">
+                  <summary>Подробнее</summary>
+                  <p>Прокси-outbound и существующие правила не переписываются. Резервный маршрут балансировщика переносится только тогда, когда вся его цепочка остаётся внутри прокси; fallback, ведущий в прямое соединение, отбрасывается, чтобы не допустить утечку или петлю.</p>
+                </details>
+              </div>
+              <p class="routing-dns-over-vless-links">Описание схемы: <a href="https://jameszero.net/4773.htm" target="_blank" rel="noopener noreferrer">упрощённый вариант</a> · <a href="https://jameszero.net/3398.htm" target="_blank" rel="noopener noreferrer">первая часть</a></p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions routing-dns-over-vless-actions">
+          <button type="button" id="routing-dns-over-vless-reset" class="btn-secondary routing-dns-over-vless-reset" title="Вернуть поля окна к значениям по умолчанию. Роутер при этом не меняется — настройки применятся, только когда вы включите функцию.">{{ op_icon('refresh') }}<span class="xk-action-label">Сбросить настройки</span></button>
+          <button type="button" id="routing-dns-over-vless-cancel" class="btn-secondary" data-operator-dismiss-duplicate="true">Закрыть</button>
+          <button type="button" id="routing-dns-over-vless-apply" class="btn-primary" disabled>Проверяем…</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inbounds preset apply modal (preserve extras + optional socks-in) -->
+    <div id="inbounds-apply-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Применение режима inbounds">
+      <div class="modal-content xk-modal-width xk-modal-width-760" data-modal-key="inbounds-apply">
+        <div class="modal-header">
+          <span class="modal-title">Применение режима inbounds</span>
+          <button type="button" class="modal-close" id="inbounds-apply-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description" id="inbounds-apply-desc">
+            Вы применяете пресет режима. Можно сохранить пользовательские секции и при желании добавить локальный SOCKS-in.
+          </p>
+
+          <label class="dt-switch xk-switch-bare xk-mini-switch" title="Сохранять все inbounds кроме системных (redirect/tproxy).">
+            <input type="checkbox" id="inbounds-apply-preserve-extras" checked>
+            <span class="dt-switch-slider" aria-hidden="true"></span>
+            <span class="dt-switch-label">Сохранить пользовательские inbounds</span>
+          </label>
+          <div id="inbounds-apply-extras-hint" class="modal-hint xk-modal-mt-6 xk-modal-mb-12 xk-modal-ml-34"></div>
+
+          <label class="dt-switch xk-switch-bare xk-mini-switch" title="Добавить inbound для локального SOCKS-прокси (tag: socks-in).">
+            <input type="checkbox" id="inbounds-apply-add-socks">
+            <span class="dt-switch-slider" aria-hidden="true"></span>
+            <span class="dt-switch-label">Добавить SOCKS-in</span>
+          </label>
+
+          <div id="inbounds-apply-socks-row" class="xk-modal-mt-8 xk-modal-ml-34" style="display:none;">
+            <div class="xk-modal-gap-12" style="display:flex; align-items:flex-start; flex-wrap: wrap;">
+              <label class="routing-rule-field xk-modal-m-0" style="min-width: 220px;">
+                <span class="routing-rule-key"><span>Порт</span></span>
+                <input id="inbounds-apply-socks-port" class="routing-rule-input" type="number" min="1" max="65535" step="1" placeholder="1080" inputmode="numeric">
+              </label>
+              <div class="modal-hint xk-modal-mt-2 xk-modal-max-width-420">
+                Будет создан inbound <code>tag: socks-in</code>, <code>protocol: socks</code>, <code>udp: true</code> + <code>sniffing</code>.
+              </div>
+            </div>
+          </div>
+
+          <div id="inbounds-apply-warn" class="modal-hint xk-modal-mt-10" style="display:none; color: var(--warning, #f59e0b);"></div>
+
+          <div id="inbounds-apply-error" class="modal-hint xk-modal-mt-10" style="display:none; color: var(--danger, #ef4444);"></div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="inbounds-apply-cancel-btn" data-operator-dismiss-duplicate="true">Отмена</button>
+          <button type="button" id="inbounds-apply-ok-btn" class="btn-primary">Применить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Balancers help (current operator workflow) -->
+    <div id="routing-balancer-help-modal" class="modal hidden" data-operator-modal-family="drawer-help" role="dialog" aria-modal="true" aria-label="Справка по балансировщикам">
+      <div class="modal-content xk-modal-width xk-modal-width-980" data-modal-key="routing-balancer-help">
+        <div class="modal-header">
+          <span class="modal-title">Балансировщики Xray: актуальная схема работы</span>
+          <button type="button" class="modal-close" id="routing-balancer-help-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body routing-help-body xk-balancer-help-grid">
+          <nav class="xk-balancer-help-toc" aria-label="Навигация по справке">
+            <div class="terminal-menu-title">Разделы</div>
+            <a href="#" data-help-target="xk-bhelp-what">Как связаны компоненты</a>
+            <a href="#" data-help-target="xk-bhelp-quickstart">Быстрый старт</a>
+            <a href="#" data-help-target="xk-bhelp-manual">Источники прокси</a>
+            <a href="#" data-help-target="xk-bhelp-subscriptions">Подписки и маршрутизация</a>
+            <a href="#" data-help-target="xk-bhelp-balancer">Ручной балансировщик</a>
+            <a href="#" data-help-target="xk-bhelp-rules">Правила и порядок</a>
+            <a href="#" data-help-target="xk-bhelp-forced">Сервисы и IP</a>
+            <a href="#" data-help-target="xk-bhelp-troubles">Диагностика</a>
+          </nav>
+
+          <div class="xk-balancer-help-main">
+            <div class="xk-balancer-help-callout">
+              <strong>Рекомендуемый путь:</strong> добавьте прокси через <b>Подписки</b> или <b>Пул прокси</b>, затем подключите их к routing в форме подписки либо через <b>Быстрый старт</b>. Панель умеет согласованно обновить routing, observatory и выполнить перезапуск.
+            </div>
+
+            <section class="xk-balancer-help-section" aria-labelledby="xk-bhelp-what">
+              <h3 id="xk-bhelp-what">Как связаны компоненты</h3>
+              <div class="xk-balancer-help-flow">
+                <div><code>04_outbounds.json</code><span>Ручные proxy-outbound и служебные direct/block/dns.</span></div>
+                <div><code>04_outbounds.&lt;id&gt;.json</code><span>Отдельные generated-фрагменты подписок; ручной файл не перезаписывается.</span></div>
+                <div><code>05_routing*.json</code><span>Правила и балансировщики активного routing-фрагмента.</span></div>
+                <div><code>07_observatory.json</code><span>Проверка доступности и задержки для <code>leastPing</code>.</span></div>
+              </div>
+              <p class="modal-hint">Активный routing-файл показан в селекторе над редактором. Изменения карточек сначала попадают в редактор, а Xray начинает использовать сохранённый конфиг после перезапуска.</p>
+            </section>
+
+            <section class="xk-balancer-help-section" aria-labelledby="xk-bhelp-quickstart">
+              <h3 id="xk-bhelp-quickstart">Быстрый старт leastPing</h3>
+              <details class="xk-balancer-help-details" open>
+                <summary>Когда использовать кнопку с молнией</summary>
+                <p>Мастер подходит, когда outbounds уже существуют, но routing и observatory ещё не настроены или их нужно синхронизировать.</p>
+                <ol>
+                  <li>Откройте <b>Правила маршрутизации</b> и нажмите кнопку <b>Быстрый старт</b> с молнией.</li>
+                  <li>Проверьте <code>balancer.tag</code>, <code>fallbackTag</code>, адрес и интервал проверки.</li>
+                  <li>Нажмите <b>Обновить</b>: мастер загрузит обычные outbound-теги, исключив direct/block/dns. Список можно отредактировать вручную.</li>
+                  <li>Оставьте <b>Перезаписать observatory</b>, если панель должна обновлять <code>07_observatory.json</code>.</li>
+                  <li>Опция <b>Сделать балансировщик дефолтным</b> создаёт служебное правило для inbound <code>redirect</code>/<code>tproxy</code>.</li>
+                  <li><b>Только применить</b> обновляет GUI и RAW без сохранения. <b>Применить + Рестарт</b> сохраняет конфиг и запускает Xray через журнал операций.</li>
+                </ol>
+              </details>
+              <div class="xk-balancer-help-code"><code>outbound tags → balancer.selector → rule.balancerTag → observatory leastPing</code></div>
+            </section>
+
+            <section class="xk-balancer-help-section" aria-labelledby="xk-bhelp-manual">
+              <h3 id="xk-bhelp-manual">Источники прокси</h3>
+              <details class="xk-balancer-help-details" open>
+                <summary>Пул, мини-генератор или подписка</summary>
+                <ul>
+                  <li><b>Пул прокси</b> принимает несколько share-ссылок, позволяет назначить теги и обновляет ручной <code>04_outbounds.json</code>.</li>
+                  <li><b>Мини-генератор</b> собирает один outbound из параметров протокола и вставляет его в текущий фрагмент.</li>
+                  <li><b>Подписки</b> создают отдельные generated-фрагменты, поддерживают расписание, фильтры, исключения узлов, проверку задержки и routing-интеграцию.</li>
+                </ul>
+                <p class="modal-hint">Теги должны быть уникальными. Не используйте системные значения <code>direct</code>, <code>block</code> и <code>dns</code> для прокси.</p>
+              </details>
+            </section>
+
+            <section class="xk-balancer-help-section" aria-labelledby="xk-bhelp-subscriptions">
+              <h3 id="xk-bhelp-subscriptions">Подписки и маршрутизация</h3>
+              <details class="xk-balancer-help-details" open>
+                <summary>Что делает форма подписки сейчас</summary>
+                <ul>
+                  <li><b>Префикс тегов</b> — с него начинаются теги всех узлов подписки: <code>prefix--узел</code>. Балансировщики и замер находят узлы подписки по этому префиксу.</li>
+                  <li><b>Замер</b> — Xray в фоне проверяет задержку узлов подписки (префикс попадает в <code>observatory.subjectSelector</code>). Без замера балансировщикам не по чему выбирать быстрый узел. На маршрутизацию сам по себе не влияет.</li>
+                  <li><b>Пул</b> пускает трафик клиентов роутера (redirect/tproxy) через самый быстрый узел: узлы подписки попадают в служебный балансировщик <code>proxy</code>, а правило <code>xk_auto_leastPing</code> направляет трафик в него. Работает только вместе с «Замером»; если живых узлов нет, трафик идёт напрямую.</li>
+                  <li><b>Найденные балансировщики</b> — в отмеченные балансировщики из <code>05_routing.json</code> добавляются узлы подписки; узлы, которые там уже были, остаются.</li>
+                  <li>Исключённые в списке узлы не попадают в файл узлов подписки при сохранении или следующем обновлении.</li>
+                </ul>
+              </details>
+              <details class="xk-balancer-help-details">
+                <summary>Режим «Применение»</summary>
+                <div class="xk-balancer-help-flow">
+                  <div><b>Рядом с моим сервером</b><span>Ничего твоего не трогает: остальной трафик идёт через самый быстрый узел, и твой сервер vless-reality тоже участвует в выборе. Сайты, которые ты сам направил на свой сервер, так и ходят через него.</span></div>
+                  <div><b>Мои правила — через пул</b><span>Правила «сайт → мой сервер» переводятся на пул (<code>balancerTag</code>). Правила со своим <code>ruleTag</code> не трогаются; при возврате в «Рядом с моим сервером» правила возвращаются как были.</span></div>
+                  <div><b>Только подписка</b><span>Служебный пул работает только на узлах подписки, и весь проксируемый трафик, в том числе по твоим правилам, идёт через него. Отдельный сервер в ручном файле outbounds не нужен; правила на direct, block и dns остаются.</span></div>
+                </div>
+              </details>
+              <div class="xk-balancer-help-callout">
+                Не создавайте второй одинаковый служебный пул через быстрый мастер без необходимости: сначала проверьте план изменений в форме подписки и существующие <code>routing.balancers</code>.
+              </div>
+            </section>
+
+            <section class="xk-balancer-help-section" aria-labelledby="xk-bhelp-balancer">
+              <h3 id="xk-bhelp-balancer">Ручной балансировщик</h3>
+              <details class="xk-balancer-help-details" open>
+                <summary>Поля карточки балансировщика</summary>
+                <ul>
+                  <li><code>tag</code> — уникальное имя, на которое ссылается <code>rule.balancerTag</code>.</li>
+                  <li><code>selector</code> — один или несколько префиксов outbound-тегов. Префикс <code>sub</code> включает теги вида <code>sub--nl</code> и <code>sub--de</code>.</li>
+                  <li><code>strategy.type</code> — <code>leastPing</code>, <code>leastLoad</code>, <code>random</code> или <code>roundRobin</code>.</li>
+                  <li><code>fallbackTag</code> — маршрут на случай, когда подходящий proxy недоступен; часто это <code>direct</code>.</li>
+                </ul>
+                <p class="modal-hint"><code>leastPing</code> требует observatory. Избегайте пересекающихся selector-префиксов: <code>node-1</code> также совпадёт с <code>node-10</code>.</p>
+              </details>
+            </section>
+
+            <section class="xk-balancer-help-section" aria-labelledby="xk-bhelp-rules">
+              <h3 id="xk-bhelp-rules">Правила и порядок</h3>
+              <details class="xk-balancer-help-details" open>
+                <summary>Как направить трафик</summary>
+                <ul>
+                  <li><code>outboundTag</code> отправляет трафик в конкретный outbound.</li>
+                  <li><code>balancerTag</code> отправляет трафик в балансировщик. Не задавайте оба поля в одном правиле.</li>
+                  <li>Правила выполняются сверху вниз; побеждает первое совпадение.</li>
+                  <li>Специальные domain/ip-правила размещайте выше общего правила, а catch-all — в конце соответствующей группы.</li>
+                </ul>
+                <div class="xk-balancer-help-code"><code>{ "type": "field", "domain": ["geosite:category-ads-all"], "outboundTag": "block" }</code><br><code>{ "type": "field", "inboundTag": ["redirect", "tproxy"], "balancerTag": "proxy" }</code></div>
+                <p class="modal-hint">После правок в карточках нажмите <b>Применить в JSON</b>, затем сохраните активный routing-файл. Мастера с действием «Применить + Рестарт» выполняют эти шаги сами.</p>
+              </details>
+            </section>
+
+            <section class="xk-balancer-help-section" aria-labelledby="xk-bhelp-forced">
+              <h3 id="xk-bhelp-forced">Маршрутизация сервисов и IP</h3>
+              <details class="xk-balancer-help-details" open>
+                <summary>Прокси или прямое подключение для выбранных адресов</summary>
+                <p>Мастер направляет домены, списки сервисов и IP в конкретный прокси либо в <code>direct</code>, не отдавая их общему балансировщику. Это удобно для банков, IPTV, локальных ресурсов и сервисов, которым нужен определённый регион.</p>
+                <ul>
+                  <li>Вставляйте вперемешку домены, полные ссылки, IP/CIDR, <code>geosite:TAG</code> и <code>geoip:TAG</code> — тип определяется автоматически.</li>
+                  <li>Обычный домен преобразуется в точное правило для домена и его поддоменов; из полной ссылки берётся только имя хоста.</li>
+                  <li>Один адрес может вести только в один маршрут: при повторном назначении мастер переносит его, а не создаёт конфликт.</li>
+                  <li><b>Только трафик этого роутера</b> ограничивает правило входами <code>redirect</code> / <code>tproxy</code>. Порядок и импорт старых правил находятся в дополнительных настройках.</li>
+                </ul>
+              </details>
+            </section>
+
+            <section class="xk-balancer-help-section" aria-labelledby="xk-bhelp-troubles">
+              <h3 id="xk-bhelp-troubles">Диагностика</h3>
+              <details class="xk-balancer-help-details">
+                <summary>В мастере нет outbound-тегов</summary>
+                <p>Сначала сохраните или обновите пул/подписку, затем нажмите <b>Обновить</b> в мастере. Проверьте уникальность тегов и активный outbounds-фрагмент.</p>
+              </details>
+              <details class="xk-balancer-help-details">
+                <summary>leastPing не выбирает узлы</summary>
+                <p>Проверьте <code>07_observatory.json</code>, совпадение <code>subjectSelector</code> и <code>balancer.selector</code> с реальными тегами, доступность probe URL и факт перезапуска Xray.</p>
+              </details>
+              <details class="xk-balancer-help-details">
+                <summary>Трафик идёт не по ожидаемому правилу</summary>
+                <p>Проверьте порядок правил сверху вниз, условия <code>domain</code>/<code>ip</code>/<code>source</code>/<code>inboundTag</code> и отсутствие более раннего catch-all.</p>
+              </details>
+              <details class="xk-balancer-help-details">
+                <summary>Роутер перегружен после подписки</summary>
+                <p>Сократите число активных узлов фильтрами и ручными исключениями. Observatory проверяет каждый подходящий outbound, поэтому десятки узлов безопаснее сотен на устройствах с ограниченной RAM и CPU.</p>
+              </details>
+              <details class="xk-balancer-help-details">
+                <summary>Где смотреть результат операции</summary>
+                <p>Действия с сохранением и перезапуском публикуют результат в <b>Журнале операций XKeen</b>. Ошибки Xray после запуска дополнительно проверяйте во вкладке логов Xray.</p>
+              </details>
+            </section>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="routing-balancer-help-ok-btn" data-operator-dismiss-duplicate="true">Закрыть</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Xray snapshots preview modal (read-only) -->
+    <div id="xray-snapshot-modal" class="modal hidden" data-operator-modal-family="editor-workbench" role="dialog" aria-modal="true" aria-label="Просмотр снимка Xray конфигурации">
+      <div class="modal-content xk-modal-width xk-modal-width-980" data-modal-key="xray-snapshot-preview">
+        <div class="modal-header">
+          <span class="modal-title">Снимок: <span id="xray-snapshot-title">—</span></span>
+          <button type="button" class="modal-close" id="xray-snapshot-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body">
+          <div class="xk-editor-workbench-toolbar xk-editor-workbench-toolbar--snapshot xk-modal-gap-12 xk-modal-mb-10" style="display:flex; align-items:flex-start; justify-content:space-between;">
+            <p id="xray-snapshot-meta" class="modal-description xk-modal-m-0">—</p>
+            <div class="xk-editor-engine xk-modal-mt-2" id="xray-snapshot-engine">
+              <span class="xk-editor-engine-label">Редактор</span>
+              <select id="xray-snapshot-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" data-tooltip="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" aria-label="Выбор движка редактора">
+                <option value="codemirror">CodeMirror</option>
+                <option value="monaco">Monaco</option>
+              </select>
+            </div>
+          </div>
+          <div id="xray-snapshot-preview-monaco" class="xk-monaco-editor xray-snapshot-preview-monaco hidden"></div>
+          <textarea class="routing-template-preview-code" id="xray-snapshot-preview" readonly>// загрузка…</textarea>
+          <div id="xray-snapshot-status" class="modal-hint xk-modal-mt-10"></div>
+        </div>
+        <div class="modal-actions xk-editor-workbench-actions" style="justify-content: space-between;">
+          <button type="button" class="btn-secondary" id="xray-snapshot-copy-btn" data-tooltip="Скопировать текст снимка в буфер обмена">{{ op_icon('duplicate') }}<span class="xk-action-label">Копировать</span></button>
+          <div class="xk-editor-workbench-action-group xk-modal-gap-10" style="display:flex;">
+            <button type="button" id="xray-snapshot-cancel-btn" data-operator-dismiss-duplicate="true">Закрыть</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Routing templates: import preset into 05_routing.json (no auto-save) -->
+    <div id="routing-template-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-label="Импорт шаблона роутинга">
+      <div class="modal-content xk-modal-width xk-modal-width-860" data-modal-key="routing-templates">
+        <div class="modal-header">
+          <span class="modal-title">Импорт шаблона роутинга <span id="routing-template-count" class="xk-count-badge">0</span></span>
+          <button type="button" class="modal-close" id="routing-template-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description xk-modal-mb-12">
+            Выбери готовый шаблон. Он будет загружен в редактор и заменит текущий текст <b>без автосохранения</b>.
+          </p>
+
+          <div class="routing-template-grid">
+            <div class="routing-template-list" id="routing-template-list"></div>
+
+            <div class="routing-template-preview">
+              <div class="routing-template-preview-header">
+          <div class="xk-modal-gap-10" style="display:flex; align-items:flex-start; justify-content:space-between;">
+                  <div>
+                    <div class="routing-template-preview-title" id="routing-template-title">—</div>
+                    <div class="routing-template-preview-desc" id="routing-template-desc">Выбери шаблон слева, чтобы увидеть описание и превью.</div>
+                  </div>
+                  <div class="xk-editor-engine" id="routing-template-preview-engine">
+                    <span class="xk-editor-engine-label">Редактор</span>
+                    <select id="routing-template-preview-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" data-tooltip="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" aria-label="Выбор движка редактора">
+                      <option value="codemirror">CodeMirror</option>
+                      <option value="monaco">Monaco</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div id="routing-template-preview-monaco" class="xk-monaco-editor routing-template-preview-monaco hidden"></div>
+              <textarea class="routing-template-preview-code" id="routing-template-preview" readonly>// превью появится здесь</textarea>
+            </div>
+          </div>
+
+          <div id="routing-template-status" class="modal-hint xk-modal-mt-10"></div>
+        </div>
+        <div class="modal-actions" style="justify-content: space-between;">
+          <div class="xk-modal-gap-10" style="display:flex; flex-wrap: wrap;">
+            <button type="button" class="btn-secondary" id="routing-template-refresh-btn" data-tooltip="Перечитать список шаблонов из /opt/etc/xray/templates/routing">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить</span></button>
+            <button type="button" class="btn-secondary" id="routing-template-save-btn" data-tooltip="Сохранить текущий текст из редактора как новый пользовательский шаблон">{{ op_icon('save') }}<span class="xk-action-label">Сохранить как шаблон</span></button>
+            <button type="button" class="btn-secondary" id="routing-template-edit-btn" disabled data-tooltip="Редактировать выбранный шаблон (только пользовательские)">{{ op_icon('edit') }}<span class="xk-action-label">Редактировать</span></button>
+            <button type="button" class="btn-danger" id="routing-template-delete-btn" disabled data-tooltip="Удалить выбранный шаблон (только пользовательские)">{{ op_icon('trash') }}<span class="xk-action-label">Удалить</span></button>
+          </div>
+          <div class="xk-modal-gap-10" style="display:flex;">
+            <button type="button" id="routing-template-import-btn" class="btn-primary" disabled data-tooltip="Заменить текст в редакторе выбранным шаблоном">Импортировать</button>
+            <button type="button" class="btn-secondary" id="routing-template-cancel-btn" data-operator-dismiss-duplicate="true">Закрыть</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Routing templates: save current editor content as a user template -->
+    <div id="routing-template-save-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Сохранить шаблон роутинга">
+      <div class="modal-content xk-modal-width xk-modal-width-560" data-modal-key="routing-template-save">
+        <div class="modal-header">
+          <span class="modal-title">Сохранить как шаблон</span>
+          <button type="button" class="modal-close" id="routing-template-save-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description xk-modal-mb-10">
+            Сохранит текущий текст из редактора как новый пользовательский шаблон в <code>/opt/etc/xray/templates/routing</code>.
+          </p>
+
+          <div class="routing-template-save-form">
+            <label>
+              <span class="hint-label">Имя файла</span>
+              <input id="routing-template-save-filename" class="xray-log-filter" type="text" placeholder="my_template.jsonc">
+            </label>
+            <label>
+              <span class="hint-label">Название (опционально)</span>
+              <input id="routing-template-save-title" class="xray-log-filter" type="text" placeholder="Например: Мой роутинг">
+            </label>
+            <label>
+              <span class="hint-label">Описание (опционально)</span>
+              <textarea id="routing-template-save-desc" class="xray-log-filter routing-template-save-textarea" rows="3" placeholder="Коротко опиши, что делает этот шаблон..."></textarea>
+            </label>
+          </div>
+
+          <div id="routing-template-save-status" class="modal-hint xk-modal-mt-10"></div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="routing-template-save-cancel-btn" data-operator-dismiss-duplicate="true">Отмена</button>
+          <button type="button" class="btn-primary" id="routing-template-save-confirm-btn">Сохранить</button>
+        </div>
+      </div>
+    </div>
+
+<!-- Routing templates: edit existing user template -->
+<div id="routing-template-edit-modal" class="modal hidden" data-operator-modal-family="editor-workbench" role="dialog" aria-modal="true" aria-label="Редактировать шаблон роутинга">
+      <div class="modal-content xk-modal-width xk-modal-width-860" data-modal-key="routing-template-edit">
+    <div class="modal-header">
+      <span class="modal-title">Редактировать шаблон</span>
+          <div class="xk-modal-gap-10" style="display:flex; align-items:center;">
+        <div class="xk-editor-engine" id="routing-template-edit-engine">
+          <span class="xk-editor-engine-label">Редактор</span>
+          <select id="routing-template-edit-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" data-tooltip="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" aria-label="Выбор движка редактора">
+            <option value="codemirror">CodeMirror</option>
+            <option value="monaco">Monaco</option>
+          </select>
+        </div>
+        <button type="button" class="modal-close" id="routing-template-edit-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+      </div>
+    </div>
+    <div class="modal-body">
+          <p class="modal-description xk-modal-mb-10">
+        Измени <b>имя / название / описание</b> и содержимое шаблона. Доступно только для <b>пользовательских</b> шаблонов.
+      </p>
+
+      <div class="routing-template-edit-form">
+        <div class="routing-template-edit-row">
+          <label>
+            <span class="hint-label">Имя файла</span>
+            <input id="routing-template-edit-filename" class="xray-log-filter" type="text" placeholder="my_template.jsonc">
+          </label>
+          <label>
+            <span class="hint-label">Название (опционально)</span>
+            <input id="routing-template-edit-title" class="xray-log-filter" type="text" placeholder="Например: Мой роутинг">
+          </label>
+        </div>
+
+        <label>
+          <span class="hint-label">Описание (опционально)</span>
+          <textarea id="routing-template-edit-desc" class="xray-log-filter routing-template-save-textarea" rows="2" placeholder="Коротко опиши, что делает этот шаблон..."></textarea>
+        </label>
+
+        <label>
+          <span class="hint-label">Шаблон (JSON / JSONC)</span>
+          <div id="routing-template-edit-monaco" class="xk-monaco-editor routing-template-edit-monaco hidden"></div>
+          <textarea id="routing-template-edit-content" class="routing-template-edit-textarea" rows="14" spellcheck="false"></textarea>
+        </label>
+      </div>
+
+          <div id="routing-template-edit-status" class="modal-hint xk-modal-mt-10"></div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="routing-template-edit-cancel-btn" data-operator-dismiss-duplicate="true">Отмена</button>
+      <button type="button" class="btn-primary" id="routing-template-edit-confirm-btn">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+    <!-- Outbounds: mini generator modal (build proxy link from hints) -->
+    <div id="outbounds-generator-modal" class="modal hidden" data-operator-modal-family="master-detail" data-modal-key="outbounds-generator-premium-v1" role="dialog" aria-modal="true" aria-label="Сборка ссылки прокси">
+      <div class="modal-content xk-gen-modal" data-modal-key="outbounds-generator-premium-v1-content">
+        <div class="modal-header">
+          <span class="modal-title">Генератор ссылки прокси</span>
+          <button type="button" class="modal-close" id="outbounds-generator-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body">
+          <div class="xk-gen-lead">
+            <div class="xk-gen-lead-icon">{{ op_icon('tools') }}</div>
+            <div class="xk-gen-lead-copy">
+              <div class="xk-gen-lead-title">Параметры → аккуратно собранная ссылка</div>
+              <p class="modal-description xk-modal-m-0">
+                Выберите <b>протокол</b>, укажите базовые поля и при необходимости заполните дополнительные параметры.
+                Ниже панель соберёт готовую ссылку для <code>04_outbounds.json</code>, которую можно сразу вставить в поле прокси.
+              </p>
+            </div>
+          </div>
+
+          <div class="xk-gen-grid2">
+            <section class="xk-gen-panel xk-gen-form-panel">
+              <div class="xk-gen-panelhead">
+                <div>
+                  <div class="xk-gen-kicker">Шаг 1</div>
+                  <div class="terminal-menu-title xk-modal-m-0">Основные параметры</div>
+                </div>
+                <div id="outbounds-gen-summary" class="xk-gen-summary" data-tooltip="Текущая схема сборки">VLESS · TCP · Reality</div>
+              </div>
+
+              <div class="xk-gen-selects">
+                <label>
+                  <span class="xk-gen-fieldlabel">Протокол</span>
+                  <select id="outbounds-gen-proto" class="xray-log-select">
+                    <option value="auto" selected>Авто</option>
+                    <option value="vless">VLESS</option>
+                    <option value="trojan">Trojan</option>
+                    <option value="vmess">VMess</option>
+                    <option value="ss">Shadowsocks</option>
+                    <option value="hy2">Hysteria2 (HY2)</option>
+                  </select>
+                </label>
+
+                <label>
+                  <span class="xk-gen-fieldlabel">Транспорт</span>
+                  <select id="outbounds-gen-type" class="xray-log-select">
+                    <option value="auto" selected>Авто</option>
+                    <option value="tcp">TCP</option>
+                    <option value="ws">WebSocket</option>
+                    <option value="grpc">gRPC (deprecated)</option>
+                    <option value="httpupgrade">HTTP Upgrade</option>
+                    <option value="kcp">mKCP</option>
+                    <option value="raw">RAW</option>
+                    <option value="xhttp">XHTTP</option>
+                  </select>
+                </label>
+
+                <label>
+                  <span class="xk-gen-fieldlabel">Security</span>
+                  <select id="outbounds-gen-security" class="xray-log-select">
+                    <option value="auto" selected>Авто</option>
+                    <option value="none">None</option>
+                    <option value="tls">TLS</option>
+                    <option value="reality">Reality</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="xk-gen-fields-grid">
+                <label>
+                  <span class="xk-gen-fieldlabel">Server (host)</span>
+                  <input id="outbounds-gen-host" class="xray-log-filter" type="text" placeholder="example.com">
+                </label>
+
+                <label>
+                  <span class="xk-gen-fieldlabel">Port</span>
+                  <input id="outbounds-gen-port" class="xray-log-filter" type="number" placeholder="443" min="1" max="65535">
+                </label>
+
+                <label>
+                  <span class="xk-gen-fieldlabel">Tag (необязательно)</span>
+                  <input id="outbounds-gen-tag" class="xray-log-filter" type="text" placeholder="proxy">
+                </label>
+              </div>
+
+              <div class="xk-gen-credentials-card">
+                <div class="xk-gen-subtitle">Учетные данные</div>
+                <div class="xk-gen-fields-grid xk-gen-credentials-grid">
+                  <label id="outbounds-gen-cred-vless">
+                    <span class="xk-gen-fieldlabel">UUID (VLESS)</span>
+                    <input id="outbounds-gen-uuid" class="xray-log-filter" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                  </label>
+
+                  <label id="outbounds-gen-cred-trojan" style="display:none;">
+                    <span class="xk-gen-fieldlabel">Password (Trojan)</span>
+                    <input id="outbounds-gen-pass" class="xray-log-filter" type="text" placeholder="password">
+                  </label>
+
+                  <label id="outbounds-gen-cred-vmess" style="display:none;">
+                    <span class="xk-gen-fieldlabel">UUID (VMess)</span>
+                    <input id="outbounds-gen-vmess-uuid" class="xray-log-filter" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                  </label>
+
+                  <label id="outbounds-gen-cred-ss" style="display:none;">
+                    <span class="xk-gen-fieldlabel">Method (SS)</span>
+                    <select id="outbounds-gen-ss-method" class="xray-log-select">
+                      <option value="aes-128-gcm">aes-128-gcm</option>
+                      <option value="aes-256-gcm">aes-256-gcm</option>
+                      <option value="chacha20-ietf-poly1305" selected>chacha20-ietf-poly1305</option>
+                      <option value="2022-blake3-aes-128-gcm">2022-blake3-aes-128-gcm</option>
+                      <option value="2022-blake3-aes-256-gcm">2022-blake3-aes-256-gcm</option>
+                    </select>
+                  </label>
+
+                  <label id="outbounds-gen-cred-ss-pass" style="display:none;">
+                    <span class="xk-gen-fieldlabel">Password (SS)</span>
+                    <input id="outbounds-gen-ss-pass" class="xray-log-filter" type="text" placeholder="password">
+                  </label>
+
+                  <label id="outbounds-gen-cred-hy2" style="display:none;">
+                    <span class="xk-gen-fieldlabel">Auth (HY2)</span>
+                    <input id="outbounds-gen-hy2-auth" class="xray-log-filter" type="text" placeholder="password или user:pass">
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <section class="xk-gen-panel xk-gen-result-panel">
+              <div class="xk-gen-panelhead">
+                <div>
+                  <div class="xk-gen-kicker">Шаг 2</div>
+                  <div class="terminal-menu-title xk-modal-m-0">Дополнительно и результат</div>
+                </div>
+                <div id="outbounds-gen-prefill-hint" class="modal-hint xk-gen-sidehint">Можно взять данные из текущего поля</div>
+              </div>
+
+              <details id="outbounds-gen-advanced" class="outbounds-gen-advanced xk-gen-advanced-card">
+                <summary>Дополнительные параметры</summary>
+                <div class="xk-gen-fields-grid xk-gen-adv-grid">
+                  <label id="outbounds-gen-field-sni">
+                    <span class="xk-gen-fieldlabel">SNI</span>
+                    <input id="outbounds-gen-sni" class="xray-log-filter" type="text" placeholder="example.com">
+                  </label>
+
+                  <label id="outbounds-gen-field-fp">
+                    <span class="xk-gen-fieldlabel">Fingerprint (fp)</span>
+                    <input id="outbounds-gen-fp" class="xray-log-filter" type="text" placeholder="chrome">
+                  </label>
+
+                  <label id="outbounds-gen-field-alpn">
+                    <span class="xk-gen-fieldlabel">ALPN</span>
+                    <input id="outbounds-gen-alpn" class="xray-log-filter" type="text" placeholder="h2,http/1.1">
+                  </label>
+
+                  <label id="outbounds-gen-field-flow">
+                    <span class="xk-gen-fieldlabel">Flow (VLESS)</span>
+                    <select id="outbounds-gen-flow" class="xray-log-select">
+                      <option value="">(нет)</option>
+                      <option value="xtls-rprx-vision">xtls-rprx-vision</option>
+                    </select>
+                  </label>
+
+                  <label id="outbounds-gen-field-path">
+                    <span class="xk-gen-fieldlabel">Path (WS/HTTP Upgrade)</span>
+                    <input id="outbounds-gen-path" class="xray-log-filter" type="text" placeholder="/">
+                  </label>
+
+                  <label id="outbounds-gen-field-hosthdr">
+                    <span class="xk-gen-fieldlabel">Host header (WS/HTTP Upgrade)</span>
+                    <input id="outbounds-gen-hosthdr" class="xray-log-filter" type="text" placeholder="cdn.example.com">
+                  </label>
+
+                  <label id="outbounds-gen-field-grpc-service">
+                    <span class="xk-gen-fieldlabel">gRPC serviceName</span>
+                    <input id="outbounds-gen-service" class="xray-log-filter" type="text" placeholder="grpc">
+                  </label>
+
+                  <label id="outbounds-gen-field-grpc-authority">
+                    <span class="xk-gen-fieldlabel">gRPC authority</span>
+                    <input id="outbounds-gen-authority" class="xray-log-filter" type="text" placeholder="example.com">
+                  </label>
+
+                  <label id="outbounds-gen-field-grpc-mode">
+                    <span class="xk-gen-fieldlabel">gRPC mode</span>
+                    <select id="outbounds-gen-grpc-mode" class="xray-log-select">
+                      <option value="">auto</option>
+                      <option value="multi">multi</option>
+                    </select>
+                  </label>
+
+                  <label id="outbounds-gen-field-reality-pbk">
+                    <span class="xk-gen-fieldlabel">Reality PBK (pbk)</span>
+                    <input id="outbounds-gen-pbk" class="xray-log-filter" type="text" placeholder="publicKey">
+                  </label>
+
+                  <label id="outbounds-gen-field-reality-sid">
+                    <span class="xk-gen-fieldlabel">Reality SID (sid)</span>
+                    <input id="outbounds-gen-sid" class="xray-log-filter" type="text" placeholder="shortId">
+                  </label>
+
+                  <label id="outbounds-gen-field-reality-spx">
+                    <span class="xk-gen-fieldlabel">Reality SPX (spx)</span>
+                    <input id="outbounds-gen-spx" class="xray-log-filter" type="text" placeholder="/" value="/">
+                  </label>
+
+                  <label id="outbounds-gen-field-ss-plugin" style="display:none;">
+                    <span class="xk-gen-fieldlabel">SS plugin (необязательно)</span>
+                    <input id="outbounds-gen-ss-plugin" class="xray-log-filter" type="text" placeholder="v2ray-plugin;mode=websocket;tls">
+                  </label>
+
+                  <label id="outbounds-gen-field-hy2-insecure" style="display:none;">
+                    <span class="xk-gen-fieldlabel">HY2 insecure</span>
+                    <select id="outbounds-gen-hy2-insecure" class="xray-log-select">
+                      <option value="0" selected>0 (проверять TLS)</option>
+                      <option value="1">1 (allow insecure)</option>
+                    </select>
+                  </label>
+
+                  <label id="outbounds-gen-field-hy2-obfs" style="display:none;">
+                    <span class="xk-gen-fieldlabel">HY2 obfs</span>
+                    <select id="outbounds-gen-hy2-obfs" class="xray-log-select">
+                      <option value="" selected>(нет)</option>
+                      <option value="salamander">salamander</option>
+                    </select>
+                  </label>
+
+                  <label id="outbounds-gen-field-hy2-obfspwd" style="display:none;">
+                    <span class="xk-gen-fieldlabel">HY2 obfs-password</span>
+                    <input id="outbounds-gen-hy2-obfspwd" class="xray-log-filter" type="text" placeholder="obfs password">
+                  </label>
+
+                  <label id="outbounds-gen-field-hy2-pinsha256" style="display:none;">
+                    <span class="xk-gen-fieldlabel">PinSHA256 (HY2)</span>
+                    <input id="outbounds-gen-hy2-pinsha256" class="xray-log-filter" type="text" placeholder="33:83:...:95">
+                  </label>
+
+                  <label id="outbounds-gen-field-allowinsecure">
+                    <span class="xk-gen-fieldlabel">TLS allowInsecure</span>
+                    <select id="outbounds-gen-allowinsecure" class="xray-log-select">
+                      <option value="0" selected>Нет</option>
+                      <option value="1">Да</option>
+                    </select>
+                  </label>
+                </div>
+              </details>
+
+              <div id="outbounds-gen-status" class="status xk-gen-statusbar"></div>
+
+              <label class="xk-gen-preview-block">
+                <span class="xk-gen-fieldlabel">Готовая ссылка</span>
+                <textarea id="outbounds-gen-preview" class="xkeen-textarea outbounds-gen-preview xk-gen-preview" spellcheck="false" readonly></textarea>
+              </label>
+              <div class="xk-gen-note">Сначала нажмите «Собрать», затем при необходимости сразу вставьте результат в основное поле.</div>
+            </section>
+          </div>
+        </div>
+        <div class="modal-actions xk-gen-footer">
+          <div class="xk-gen-footer-left">
+            <button type="button" id="outbounds-gen-prefill-btn" class="btn-secondary btn-compact xk-gen-footer-btn" data-tooltip="Заполнить поля генератора из ссылки, вставленной в поле на странице (удобно для редактирования существующего прокси).">{{ op_icon('restore') }}<span>Заполнить из поля</span></button>
+          </div>
+          <div class="xk-gen-footer-actions">
+            <button type="button" id="outbounds-gen-cancel-btn" class="btn-compact" data-operator-dismiss-duplicate="true">Отмена</button>
+            <button type="button" id="outbounds-gen-generate-btn" class="btn-secondary btn-compact xk-gen-footer-btn" data-tooltip="Собрать ссылку из заполненных полей.">{{ op_icon('format') }}<span>Собрать</span></button>
+            <button type="button" id="outbounds-gen-insert-btn" class="btn-primary btn-compact xk-gen-footer-btn xk-gen-primary-action" data-tooltip="Вставить ссылку в поле на странице и закрыть окно." disabled>{{ op_icon('apply') }}<span>Вставить в поле</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+	    <!-- Outbounds: proxy pool modal (multiple links) -->
+	    <div id="outbounds-pool-modal" class="modal hidden" data-operator-modal-family="master-detail" data-modal-key="outbounds-pool-premium-v2" role="dialog" aria-modal="true" aria-label="Пул прокси для балансировщика">
+	      <div class="modal-content" data-modal-key="outbounds-pool-premium-v2-content">
+	        <div class="modal-header">
+	          <span class="modal-title">Пул прокси (несколько ссылок)</span>
+	          <button type="button" class="modal-close" id="outbounds-pool-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+	        </div>
+	        <div class="modal-body">
+	          <div class="xk-pool-lead">
+	            <div class="xk-pool-lead-icon">🧱</div>
+	            <div class="xk-pool-lead-text">
+	              <div class="xk-pool-lead-title">Несколько ссылок → готовый пул тегов</div>
+	              <p class="modal-description xk-modal-m-0">
+	                Вставьте ссылки по одной на строку. Поддерживаются форматы <code>tag | url</code>, <code>tag = url</code> и просто <code>url</code>.
+	                Панель соберёт outbounds, аккуратно обновит <code>04_outbounds.json</code> и подготовит теги для балансировщика <code>leastPing</code>.
+	              </p>
+	            </div>
+	          </div>
+
+	          <div class="xk-pool-grid">
+	            <section class="xk-pool-panel xk-pool-input-panel">
+	              <div class="xk-pool-panelhead">
+	                <div>
+	                  <div class="xk-pool-kicker">Шаг 1</div>
+	                  <div class="terminal-menu-title xk-modal-m-0">Вставка и подготовка</div>
+	                </div>
+	              </div>
+
+	              <label class="xk-pool-editor-block">
+	                <span class="xk-pool-fieldlabel">Список ссылок</span>
+	                <textarea id="outbounds-pool-input" class="xkeen-textarea outbounds-gen-preview" spellcheck="false" placeholder="p1 | vless://...
+p2 = vless://...
+vless://...#mytag"></textarea>
+	              </label>
+
+	              <div class="xk-pool-toolbar">
+	                <button type="button" id="outbounds-pool-add-btn" class="btn-secondary btn-compact xk-pool-action"><span class="xk-btn-inline-glyph" aria-hidden="true">＋</span><span>Добавить в список</span></button>
+	                <button type="button" id="outbounds-pool-clear-btn" class="btn-secondary btn-compact xk-pool-action">{{ op_icon('clear') }}<span>Очистить</span></button>
+	                <button type="button" id="outbounds-pool-entware-mark-btn" class="xk-entware-mark-toggle xk-entware-mark-toggle--pool" aria-label="Entware mark 255" aria-pressed="false" title="Добавлять sockopt.mark=255 для проксирования Entware" data-tooltip="Добавлять sockopt.mark=255 для всех proxy-outbound пула и direct.">{{ op_icon('bolt') }}</button>
+	              </div>
+
+	              <div class="xk-pool-note">
+	                <div><b>Подсказка:</b> если tag не указан, он будет предложен автоматически по <code>#fragment</code> или host.</div>
+	                <div id="outbounds-pool-existing" class="modal-hint xk-pool-existing">Существующие теги загрузятся автоматически…</div>
+	              </div>
+	            </section>
+
+	            <section class="xk-pool-panel xk-pool-preview-panel">
+	              <div class="xk-pool-panelhead">
+	                <div>
+	                  <div class="xk-pool-kicker">Шаг 2</div>
+	                  <div class="terminal-menu-title xk-modal-m-0">Итоговый пул</div>
+	                </div>
+	                <div id="outbounds-pool-summary" class="xk-pool-summary" data-tooltip="Количество строк, подготовленных к сохранению">0 строк · 0 tag</div>
+	              </div>
+
+	              <div class="xk-pool-listbox">
+	                <div class="xk-pool-listhead">
+	                  <div class="xk-pool-listtitle">
+	                    <div class="terminal-menu-title xk-modal-m-0">Список для записи</div>
+	                    <div class="xk-pool-list-subtitle">Tag можно поправить вручную, URL — заменить прямо в таблице. Кнопка справа удаляет строку.</div>
+	                  </div>
+	                  <div id="outbounds-pool-status" class="modal-hint xk-pool-status xk-modal-m-0"></div>
+	                </div>
+
+	                <div class="xk-pool-tablewrap">
+	                  <table class="xk-pool-table">
+	                    <thead>
+	                      <tr>
+	                        <th>Tag</th>
+	                        <th>URL</th>
+	                        <th class="xk-pool-table-actions-col"></th>
+	                      </tr>
+	                    </thead>
+	                    <tbody id="outbounds-pool-tbody"></tbody>
+	                  </table>
+	                  <div id="outbounds-pool-empty" class="xk-pool-empty">Пока пусто. Добавьте ссылки слева, чтобы собрать пул.</div>
+	                </div>
+	              </div>
+	            </section>
+	          </div>
+	        </div>
+
+	        <div class="modal-actions xk-pool-footer">
+	          <label class="xk-pool-replace-card">
+	            <input type="checkbox" id="outbounds-pool-replace" />
+	            <div class="xk-pool-replace-copy">
+	              <strong>Заменить весь пул</strong>
+	              <small>Удалить старые прокси-теги и оставить только текущий список + служебные outbounds.</small>
+	            </div>
+	          </label>
+	          <div class="xk-pool-footer-actions">
+	            <button type="button" id="outbounds-pool-cancel-btn" class="btn-compact" data-operator-dismiss-duplicate="true">Отмена</button>
+	            <button type="button" id="outbounds-pool-save-btn" class="btn-primary btn-compact xk-pool-primary-action">{{ op_icon('save') }}<span>Сохранить</span></button>
+	          </div>
+	        </div>
+	      </div>
+	    </div>
+
+    <!-- DAT GeoSite/GeoIP: просмотр тегов и содержимого (copy geosite:TAG / geoip:TAG) -->
+    <div id="routing-dat-contents-modal" class="modal hidden xk-dat-modal-shell" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-label="DAT content viewer">
+      <div class="modal-content dat-contents-modal-content xk-dat-modal-content">
+        <div class="modal-header xk-dat-modal-header">
+          <div class="xk-dat-modal-titlebox">
+            <span class="xk-dat-modal-kicker">DAT EXPLORER</span>
+            <span class="modal-title" id="routing-dat-contents-title">DAT — Содержимое</span>
+          </div>
+          <button type="button" class="modal-close" id="routing-dat-contents-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body dat-contents-modal-body xk-dat-modal-body">
+          <div class="dat-contents-head xk-dat-head">
+            <div class="dat-contents-meta xk-dat-meta">
+              <span class="dat-contents-kind" id="routing-dat-contents-kind">geosite:</span>
+              <code class="dat-contents-path" id="routing-dat-contents-path">—</code>
+            </div>
+            <div class="dat-contents-controls xk-dat-controls">
+              <button type="button" id="routing-dat-contents-install-geodat-btn" class="btn-secondary" data-tooltip="Установить/обновить xk-geodat (нужен для просмотра содержимого DAT).">{{ op_icon('download') }}<span class="xk-action-label">xk-geodat</span></button>
+              <button type="button" id="routing-dat-contents-reload-btn" class="btn-secondary" data-tooltip="Обновить список тегов" aria-label="Обновить содержимое">{{ op_icon('refresh') }}</button>
+            </div>
+          </div>
+
+          <div class="dat-contents-layout">
+            <div class="dat-contents-tags">
+              <div class="dat-contents-tags-top">
+                <div class="dat-contents-search-row">
+                  <input id="routing-dat-contents-search" class="routing-dat-input" type="text" placeholder="Поиск тега…">
+                  <input id="routing-dat-contents-search-value" class="routing-dat-input" type="text" placeholder="Поиск по домену/IP…" title="Найти теги по домену (GeoSite) или IP (GeoIP)">
+                </div>
+                <div id="routing-dat-contents-tags-status" class="dat-contents-status"></div>
+              </div>
+              <div id="routing-dat-contents-tags-list" class="dat-contents-tags-list"></div>
+            </div>
+
+            <div class="dat-contents-items">
+              <div class="dat-contents-items-top">
+                <div class="dat-contents-selected">
+                  <span class="dat-contents-selected-label">Тег:</span>
+                  <code id="routing-dat-contents-selected-tag">—</code>
+                  <span id="routing-dat-contents-used-badge" class="dat-contents-used-badge" data-tooltip="Тег используется в routing.rules">✓ используется</span>
+                </div>
+                <div class="dat-contents-toolbar">
+                  <button type="button" id="routing-dat-contents-copy-selected-btn" class="btn-secondary" disabled data-tooltip="Выберите тег" aria-label="Copy">{{ op_icon('duplicate') }}</button>
+                  <div class="dat-contents-pager dat-contents-pager-inline">
+                    <button type="button" id="routing-dat-contents-prev-btn" class="btn-secondary" disabled data-tooltip="Предыдущая страница" aria-label="Prev">{{ op_icon('back') }}</button>
+                    <div id="routing-dat-contents-page-info" class="dat-contents-page-info"></div>
+                    <button type="button" id="routing-dat-contents-next-btn" class="btn-secondary" disabled data-tooltip="Следующая страница" aria-label="Next">{{ op_icon('forward') }}</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- PR3: быстрый перенос выбранного тега в routing.rules (создать/добавить) -->
+              <div class="dat-contents-routingbar" id="routing-dat-contents-routingbar">
+                <span class="dat-contents-routing-label">В routing:</span>
+                <select id="routing-dat-contents-target-rule" class="routing-dat-input dat-contents-select" data-tooltip="Куда добавить выбранный тег"></select>
+                <select id="routing-dat-contents-target-outbound" class="routing-dat-input dat-contents-select" data-tooltip="outboundTag для нового правила"></select>
+                <button type="button" id="routing-dat-contents-inrouting-btn" class="btn-secondary" disabled data-tooltip="Добавить выбранный тег в правило" aria-label="Добавить в маршрутизацию">{{ op_icon('add-node') }}</button>
+                <div id="routing-dat-contents-routing-status" class="dat-contents-status"></div>
+              </div>
+
+              <div class="dat-contents-items-search-row">
+                <input id="routing-dat-contents-search-items" class="routing-dat-input" type="text" placeholder="Поиск в списке…" title="Фильтровать элементы выбранного тега (текущая страница)">
+
+                <!-- Search mode: local (current page) vs server (whole tag) -->
+                <div class="dat-contents-search-mode" role="group" aria-label="Режим поиска">
+                  <button type="button" id="routing-dat-contents-search-items-mode-local" class="btn-secondary is-active" data-tooltip="Фильтр по текущей странице">Локально</button>
+                  <button type="button" id="routing-dat-contents-search-items-mode-server" class="btn-secondary" data-tooltip="Поиск по всему тегу (сервер)">Весь тег</button>
+                </div>
+
+                <!-- Quick IP version filter (GeoIP only) -->
+                <div id="routing-dat-contents-ipfilter" class="dat-contents-ipfilter" role="group" aria-label="IP версия" style="display:none;">
+                  <button type="button" id="routing-dat-contents-ipfilter-all" class="btn-secondary is-active" data-tooltip="Показать все записи (сбросить фильтры)">Все</button>
+                  <button type="button" id="routing-dat-contents-ipfilter-v4" class="btn-secondary" data-tooltip="Только IPv4 (поиск по всему тегу)">v4</button>
+                  <button type="button" id="routing-dat-contents-ipfilter-v6" class="btn-secondary" data-tooltip="Только IPv6 (поиск по всему тегу)">v6</button>
+                </div>
+
+                <button type="button" id="routing-dat-contents-search-items-more" class="btn-secondary" style="display:none" data-tooltip="Найти ещё совпадения">Ещё</button>
+              </div>
+
+              <div id="routing-dat-contents-items-status" class="dat-contents-status"></div>
+              <div id="routing-dat-contents-items-list" class="dat-contents-items-list"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions xk-dat-modal-actions" style="justify-content:flex-end;">
+          <button type="button" id="routing-dat-contents-ok-btn" class="btn-secondary" data-operator-dismiss-duplicate="true">Закрыть</button>
+        </div>
+      </div>
+    </div>

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from scripts.panel_template_source import compose_panel_template
+from tests.support.template_blocks import element_markup
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,7 +39,7 @@ def test_stage5_editor_workbench_frame_is_shared_by_json_file_and_snapshot():
 def test_stage5_json_statuses_are_labels_not_legacy_pills():
     template = TEMPLATE
     css = CSS.read_text(encoding="utf-8")
-    json_modal = template[template.index('id="json-editor-modal"'):template.index('<!-- DAT GeoSite/GeoIP')]
+    json_modal = element_markup(template, "json-editor-modal")
 
     for status_id in ("json-editor-comments-status", "json-editor-schema-status"):
         line = next(line for line in json_modal.splitlines() if f'id="{status_id}"' in line)

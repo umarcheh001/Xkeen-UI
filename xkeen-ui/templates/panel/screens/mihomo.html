@@ -527,12 +527,16 @@
                 {{ op_icon('add-node') }}<span class="xk-action-label">Узел</span>
               </button>
 
+              {# Mixed boundary: the HWID trigger belongs to integration.happ; the
+                 screen itself is already gated by has_mihomo in panel.html. #}
+              {% if has_happ %}
               <button id="mihomo-hwid-sub-btn"
                       type="button"
                       class="terminal-tool-btn"
                       data-tooltip="HWID-подписка Mihomo: probe заголовков, YAML preview и diagnostics/compare view.">
                 {{ op_icon('hwid') }}<span class="xk-action-label">HWID</span>
               </button>
+              {% endif %}
 
               <button id="mihomo-proxy-tools-btn"
                       type="button"

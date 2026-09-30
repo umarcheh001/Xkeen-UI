@@ -131,6 +131,7 @@ WORKTREE_MODULAR_PANEL_PATHS = frozenset(
         "tests/test_modular_panel_stage4_3_mihomo_screen.py",
         "tests/test_modular_panel_stage4_3_xkeen_screen.py",
         "tests/test_modular_panel_stage4_3_tool_screens.py",
+        "tests/test_modular_panel_stage4_4_modals.py",
         "tests/support/panel_render.py",
         "xkeen-ui/templates/panel/macros.html",
         "xkeen-ui/templates/panel/head.html",
@@ -144,6 +145,15 @@ WORKTREE_MODULAR_PANEL_PATHS = frozenset(
         "xkeen-ui/templates/panel/screens/xkeen.html",
         "xkeen-ui/templates/panel/screens/commands.html",
         "xkeen-ui/templates/panel/screens/files.html",
+        "xkeen-ui/templates/panel/modals/diagnostics.html",
+        "xkeen-ui/templates/panel/modals/routing.html",
+        "xkeen-ui/templates/panel/modals/commands.html",
+        "xkeen-ui/templates/panel/modals/shared.html",
+        "xkeen-ui/templates/panel/modals/mihomo.html",
+        "xkeen-ui/templates/panel/modals/happ.html",
+        "xkeen-ui/templates/panel/modals/files.html",
+        "xkeen-ui/templates/panel/modals/files_editor.html",
+        "xkeen-ui/templates/panel/modals/editor.html",
     }
 )
 

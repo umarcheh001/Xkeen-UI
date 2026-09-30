@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from scripts.panel_template_source import compose_panel_template
+from tests.support.template_blocks import element_markup
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -218,7 +219,10 @@ def test_mihomo_routing_and_related_forms_use_operator_sprite_contract():
     panel = compose_panel_template(ROOT)
     generator = (ROOT / "xkeen-ui/templates/mihomo_generator.html").read_text(encoding="utf-8")
     panel_mihomo = panel[panel.index('<div id="view-mihomo"') : panel.index('<div id="view-xkeen"')]
-    related_forms = panel[panel.index('id="mihomo-import-modal"') : panel.index('id="fm-upload-conflict-modal"') ]
+    related_forms = "\n".join(
+        element_markup(panel, modal_id)
+        for modal_id in ("mihomo-import-modal", "mihomo-proxy-tools-modal", "mihomo-hwid-modal")
+    )
     dynamic_sources = {
         "panel": (ROOT / "xkeen-ui/static/js/features/mihomo_panel.js").read_text(encoding="utf-8"),
         "import": (ROOT / "xkeen-ui/static/js/features/mihomo_import.js").read_text(encoding="utf-8"),

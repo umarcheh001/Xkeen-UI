@@ -5,10 +5,11 @@ import re
 from pathlib import Path
 
 from scripts.panel_template_source import compose_panel_template
+from tests.support.template_blocks import element_markup
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = compose_panel_template(ROOT)
-MODAL = TEMPLATE[TEMPLATE.index('<div id="routing-dns-over-vless-modal"'):TEMPLATE.index('<div id="mihomo-dns-modal"')]
+MODAL = element_markup(TEMPLATE, "routing-dns-over-vless-modal")
 
 ZONES = ("route", "servers", "home", "direct", "records", "devices")
 

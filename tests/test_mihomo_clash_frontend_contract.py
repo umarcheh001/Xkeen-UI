@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from scripts.panel_template_source import compose_panel_template
+from tests.support.template_blocks import element_markup
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -436,7 +437,7 @@ def test_runtime_status_mode_is_a_capability_gated_compact_switch():
 
 def test_core_switch_modal_keeps_only_core_cards_without_redundant_status_chrome():
     markup = _text(ROOT / "xkeen-ui/templates/panel.html")
-    modal = markup[markup.index('id="core-modal"'):markup.index('id="confirm-modal"')]
+    modal = element_markup(markup, "core-modal")
 
     assert 'xk-core-engine-list' in modal
     assert 'data-core="xray"' in modal

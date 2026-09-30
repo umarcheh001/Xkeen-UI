@@ -1,0 +1,37 @@
+{% from "panel/macros.html" import op_icon %}
+    <!-- File manager: text file viewer/editor -->
+    <div id="fm-editor-modal" class="modal hidden" data-operator-modal-family="editor-workbench" role="dialog" aria-modal="true" aria-label="Редактор файла">
+      <div class="modal-content xk-modal-width xk-modal-width-980">
+        <div class="modal-header">
+          <div class="xk-editor-workbench-title xk-modal-gap-2" style="display:flex; flex-direction:column;">
+            <span class="modal-title" id="fm-editor-title">Файл</span>
+            <span id="fm-editor-subtitle" class="modal-hint xk-modal-m-0" style="font-size: 0.82rem; opacity:0.75;"></span>
+          </div>
+          <div class="xk-editor-workbench-header-tools xk-modal-gap-10" style="display:flex; align-items:center;">
+            <div class="xk-editor-engine" id="fm-editor-engine">
+              <span class="xk-editor-engine-label">Редактор</span>
+              <select id="fm-editor-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" data-tooltip="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" aria-label="Выбор движка редактора">
+                <option value="codemirror">CodeMirror</option>
+                <option value="monaco">Monaco</option>
+              </select>
+            </div>
+            <button type="button" class="modal-close" id="fm-editor-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div id="fm-editor-warning" class="status" style="display:none;"></div>
+          <div id="fm-editor-error" class="error" style="display:none;"></div>
+          <div id="fm-editor-monaco" class="xk-monaco-editor xk-monaco-editor--modal hidden"></div>
+          <textarea id="fm-editor-textarea" spellcheck="false"></textarea>
+        </div>
+        <div class="modal-actions xk-editor-workbench-actions">
+          <div class="xk-editor-workbench-action-group xk-modal-gap-8" style="display:flex; align-items:center;">
+            <button type="button" class="btn-secondary" id="fm-editor-download-btn">{{ op_icon('download') }}<span class="xk-action-label">Скачать</span></button>
+          </div>
+          <div class="xk-editor-workbench-action-group xk-modal-gap-8" style="display:flex; align-items:center;">
+            <button type="button" id="fm-editor-cancel-btn" data-operator-dismiss-duplicate="true">Закрыть</button>
+            <button type="button" id="fm-editor-save-btn">{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
+          </div>
+        </div>
+      </div>
+    </div>

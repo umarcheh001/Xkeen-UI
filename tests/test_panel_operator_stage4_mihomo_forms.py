@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from scripts.panel_template_source import compose_panel_template
+from tests.support.template_blocks import element_markup
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -144,7 +145,7 @@ def test_routing_mihomo_validation_uses_the_same_flat_operator_diagnostic_contra
     template = PANEL
     css = CSS.read_text(encoding="utf-8")
 
-    modal = template[template.index('id="mihomo-validation-modal"'):template.index('id="ssh-modal"')]
+    modal = element_markup(template, "mihomo-validation-modal")
     assert 'data-operator-modal-family="master-detail"' in modal
 
     for fragment in (

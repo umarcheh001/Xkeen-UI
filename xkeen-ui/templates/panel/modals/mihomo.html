@@ -1,0 +1,482 @@
+{% from "panel/macros.html" import op_icon %}
+    <div id="mihomo-dns-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" data-modal-noresize="1" data-modal-nopos="1" data-modal-remember="0" role="dialog" aria-modal="true" aria-labelledby="mihomo-dns-title">
+      <div class="modal-content xk-modal-width xk-modal-width-fluid-1280 routing-dns-over-vless-modal-content mihomo-dns-modal-content">
+        <div class="modal-header">
+          <span class="modal-title" id="mihomo-dns-title">Защищённый DNS Mihomo</span>
+          <button type="button" class="modal-close" id="mihomo-dns-close" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body routing-dns-over-vless-body mihomo-dns-body">
+          <div class="routing-dns-over-vless-lead">
+            <span class="routing-dns-over-vless-lead-icon" aria-hidden="true">{{ op_icon('dns') }}</span>
+            <div>
+              <strong>DNS через Mihomo</strong>
+              <p>Панель направит публичные DNS-запросы через выбранную proxy-группу и передаст порт 53 Mihomo.</p>
+            </div>
+            <span id="mihomo-dns-badge" class="routing-dns-over-vless-badge">Проверка…</span>
+          </div>
+
+          <div class="routing-dns-over-vless-state mihomo-dns-state">
+            <div id="mihomo-dns-status" class="routing-dns-over-vless-status" role="status" aria-live="polite">Проверяем текущую конфигурацию…</div>
+
+            <div class="mihomo-dns-runtime-status" aria-label="Состояние DNS-тракта">
+              <span id="mihomo-dns-listener-state" data-state="unknown">Mihomo :53 · проверка</span>
+              <span id="mihomo-dns-override-state" data-state="unknown">Keenetic override · проверка</span>
+            </div>
+
+            <div class="routing-dns-over-vless-safety" aria-label="Защита операции">
+              <div>{{ op_icon('validate') }}<span><b>Mihomo preflight</b><small>Проверка временного YAML до записи</small></span></div>
+              <div>{{ op_icon('backup') }}<span><b>Полный снимок</b><small>Исходный config.yaml и DNS override</small></span></div>
+              <div>{{ op_icon('restore') }}<span><b>Автооткат без потери правок</b><small>Изменённый DNS-блок можно сохранить и отключить</small></span></div>
+            </div>
+
+            <ul id="mihomo-dns-details" class="routing-dns-over-vless-details"></ul>
+          </div>
+
+          <div class="mihomo-dns-settings">
+            <details class="xk-dns-zone mihomo-dns-route-zone" data-zone="mihomo-route" open>
+              <summary class="xk-dns-zone-head">
+                <b>Маршрут и режим</b>
+              </summary>
+              <div class="xk-dns-zone-body routing-dns-over-vless-route mihomo-dns-mode-picker">
+                <div class="mihomo-dns-field mihomo-dns-proxy-options">
+                  <label for="mihomo-dns-proxy-group">Proxy-группа для DoH</label>
+                  <select id="mihomo-dns-proxy-group"><option value="">Автоматический выбор</option></select>
+                  <label class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-geodata-toggle mihomo-dns-selector-toggle" title="Добавить в Mihomo отдельную группу DNS Proxy с выбранным маршрутом и DIRECT.">
+                    <input type="checkbox" id="mihomo-dns-selector-enable" aria-describedby="mihomo-dns-selector-hint">
+                    <span class="dt-switch-slider" aria-hidden="true"></span>
+                    <span class="dt-switch-label">Создать переключатель DNS Proxy</span>
+                  </label>
+                  <p id="mihomo-dns-selector-hint" class="modal-hint" role="status" aria-live="polite">После запуска позволит переключать DNS между выбранной группой и DIRECT.</p>
+                  <label class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-geodata-toggle mihomo-dns-selector-toggle" title="Направить домены из whitelist-yota в Yandex Safe DoT.">
+                    <input type="checkbox" id="mihomo-dns-mobile-bs-enable" aria-describedby="mihomo-dns-mobile-bs-hint">
+                    <span class="dt-switch-slider" aria-hidden="true"></span>
+                    <span class="dt-switch-label">Мобильные БС → Яндекс DoT</span>
+                  </label>
+                  <p id="mihomo-dns-mobile-bs-hint" class="modal-hint" role="status" aria-live="polite">Добавит whitelist-yota, Yandex Safe DoT для БС и DoT Cloudflare/Google для остальных запросов.</p>
+                </div>
+                <div class="mihomo-dns-field mihomo-dns-mode-options">
+                  <label for="mihomo-dns-mode">Режим обработки имён</label>
+                  <select id="mihomo-dns-mode">
+                    <option value="redir-host" selected>redir-host — реальные IP (рекомендуется)</option>
+                    <option value="fake-ip">fake-ip — виртуальные IP</option>
+                  </select>
+                  <p id="mihomo-dns-mode-hint" class="modal-hint">Совместимо с TProxy и большинством устройств LAN.</p>
+                </div>
+                <div class="mihomo-dns-field mihomo-dns-portable-options mihomo-dns-tunnel-options">
+                  <label for="mihomo-dns-tunnel-servers">DNS-серверы в туннеле</label>
+                  <input id="mihomo-dns-tunnel-servers" type="text" value="https://8.8.8.8/dns-query, https://1.1.1.1/dns-query" autocomplete="off" spellcheck="false">
+                  <p class="modal-hint">Через запятую. Mihomo направит их через выбранную proxy-группу.</p>
+                </div>
+                <div class="mihomo-dns-field mihomo-dns-portable-options mihomo-dns-local-options">
+                  <label for="mihomo-dns-local-servers">Локальные DNS для домашних имён</label>
+                  <input id="mihomo-dns-local-servers" type="text" placeholder="например, 192.168.1.1" autocomplete="off" spellcheck="false">
+                  <label for="mihomo-dns-local-domains">Домены локальной сети</label>
+                  <input id="mihomo-dns-local-domains" type="text" placeholder="домены: lan, local" autocomplete="off" spellcheck="false">
+                  <p class="modal-hint">Необязательно. Пара «серверы + домены» остаётся в локальной сети.</p>
+                </div>
+                <div class="mihomo-dns-field mihomo-dns-portable-options mihomo-dns-direct-options">
+                  <label for="mihomo-dns-direct-servers">DNS для доменов мимо туннеля</label>
+                  <input id="mihomo-dns-direct-servers" type="text" placeholder="например, 192.168.1.1" autocomplete="off" spellcheck="false">
+                  <label for="mihomo-dns-direct-domains">Домены прямого DNS</label>
+                  <input id="mihomo-dns-direct-domains" type="text" placeholder="домены: example.org, cdn.example" autocomplete="off" spellcheck="false">
+                  <p class="modal-hint">Необязательно. Эти зоны получат DNS напрямую (с route DIRECT).</p>
+                </div>
+              </div>
+            </details>
+
+            <details id="mihomo-dns-fake-options" class="xk-dns-zone mihomo-dns-fake-options hidden" data-zone="mihomo-fake" open>
+              <summary class="xk-dns-zone-head">
+                <b>Настройки Fake-IP</b>
+                <span class="xk-dns-zone-opt">только для fake-ip</span>
+              </summary>
+              <div class="xk-dns-zone-body mihomo-dns-fake-body">
+                <div class="mihomo-dns-fake-core">
+                  <div class="mihomo-dns-field">
+                    <label for="mihomo-dns-fake-range">Диапазон Fake-IP</label>
+                    <input id="mihomo-dns-fake-range" type="text" value="198.18.0.1/16" spellcheck="false" autocomplete="off">
+                  </div>
+                  <div class="mihomo-dns-field">
+                    <label for="mihomo-dns-fake-filter-mode">Режим фильтра</label>
+                    <select id="mihomo-dns-fake-filter-mode">
+                      <option value="blacklist" selected>blacklist — исключения получают реальные IP</option>
+                      <option value="whitelist">whitelist — Fake-IP только для списка</option>
+                      <option value="rule">rule — правила Mihomo</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="mihomo-dns-field mihomo-dns-filter-field">
+                  <label for="mihomo-dns-fake-filters">Исключения Fake-IP</label>
+                  <textarea id="mihomo-dns-fake-filters" rows="6" spellcheck="false">rule-set:category_ru@domain
+rule-set:geosite_private@domain
+rule-set:category-ai@domain
+rule-set:github@domain
++.tsarea.tv</textarea>
+                  <p class="modal-hint">По одному правилу на строку.</p>
+                </div>
+                <div class="mihomo-dns-sources">
+                  <div id="mihomo-dns-rule-providers" class="mihomo-dns-rule-providers">
+                    <b class="mihomo-dns-rule-providers-title">Доменные списки MRS</b>
+                    <div class="mihomo-dns-rule-provider-buttons" role="group" aria-label="Доменные MRS-провайдеры">
+                      <button type="button" id="mihomo-dns-provider-category-ru" class="btn-secondary mihomo-dns-provider-btn" data-provider="category_ru@domain" aria-pressed="false" title="category_ru@domain">RU</button>
+                      <button type="button" id="mihomo-dns-provider-private" class="btn-secondary mihomo-dns-provider-btn" data-provider="geosite_private@domain" aria-pressed="false" title="geosite_private@domain">Private</button>
+                      <button type="button" id="mihomo-dns-provider-category-ai" class="btn-secondary mihomo-dns-provider-btn" data-provider="category-ai@domain" aria-pressed="false" title="category-ai@domain">AI</button>
+                      <button type="button" id="mihomo-dns-provider-github" class="btn-secondary mihomo-dns-provider-btn" data-provider="github@domain" aria-pressed="false" title="github@domain">GitHub</button>
+                    </div>
+                    <p id="mihomo-dns-rule-providers-hint" class="modal-hint" role="status" aria-live="polite">Выбрано: RU, Private, AI и GitHub.</p>
+                  </div>
+                  <div class="mihomo-dns-geodata-option">
+                    <label class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-geodata-toggle" title="Использовать GeoSite V2Fly вместо доменных MRS-списков.">
+                      <input type="checkbox" id="mihomo-dns-geodata-enable">
+                      <span class="dt-switch-slider" aria-hidden="true"></span>
+                      <span class="dt-switch-label">Использовать GeoSite вместо MRS</span>
+                    </label>
+                    <p id="mihomo-dns-geodata-hint" class="modal-hint hidden" role="status" aria-live="polite"></p>
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <div class="routing-dns-over-vless-foot mihomo-dns-foot">
+              <p class="modal-hint routing-dns-over-vless-warning">Пользовательский раздел <code>dns:</code> не заменяется пресетом. При возврате DNS прошивке он остаётся в файле с <code>enable: false</code>; один <code>no opkg dns-override</code> не отключает слушатель Mihomo.</p>
+              <p class="routing-dns-over-vless-links">Устройства по‑прежнему используют DNS роутера — Keenetic автоматически направляет запросы в Mihomo.</p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions routing-dns-over-vless-actions">
+          <button type="button" id="mihomo-dns-update" class="btn-secondary" hidden disabled>{{ op_icon('save') }}<span id="mihomo-dns-update-label" class="xk-action-label">Применить изменения</span></button>
+          <button type="button" id="mihomo-dns-cancel" class="btn-secondary" data-operator-dismiss-duplicate="true">Закрыть</button>
+          <button type="button" id="mihomo-dns-apply" class="btn-primary" disabled>Проверяем…</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mihomo: import proxy / subscription modal (parser) -->
+    <div id="mihomo-import-modal" class="modal hidden" data-operator-modal-family="editor-workbench" role="dialog" aria-modal="true" aria-label="Импорт узла Mihomo">
+      <div class="modal-content xk-mi-modal" data-modal-key="mihomo-import">
+        <div class="modal-header xk-mi-header">
+          <div class="xk-mi-titlebox">
+            <span class="modal-title">Mihomo Premium Import</span>
+          </div>
+          <button type="button" class="modal-close" id="mihomo-import-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body xk-mi-body">
+          <div class="xk-mi-grid">
+            <section class="xk-mi-panel xk-mi-panel--controls">
+              <div class="xk-mi-field-grid">
+                <label class="xk-mi-field">
+                  <span class="hint-label">Тип импорта</span>
+                  <select id="mihomo-import-mode" class="xray-log-select xk-mi-control">
+                    <option value="auto">Auto</option>
+                    <option value="proxy">Proxy link</option>
+                    <option value="subscription">HTTPS subscription</option>
+                    <option value="amnezia-premium">Amnezia Premium key (vpn://)</option>
+                    <option value="wireguard">WireGuard / AmneziaWG 3.x (.conf)</option>
+                    <option value="openvpn">OpenVPN (.ovpn)</option>
+                    <option value="tailscale">Tailscale</option>
+                  </select>
+                </label>
+
+                <label class="xk-mi-field xk-mi-field--grow">
+                  <span class="hint-label">Ссылка / ключ / подписка / конфиг</span>
+                  <textarea id="mihomo-import-input" class="xkeen-textarea outbounds-gen-preview xk-mi-input" spellcheck="false" placeholder="vless://...
+или
+https://..."></textarea>
+                </label>
+              </div>
+              <p id="mihomo-import-amnezia-premium-hint" class="modal-hint xk-mi-target hidden">
+                Ключ будет однократно отправлен в Amnezia для выпуска AmneziaWG-конфига. В Xkeen ключ не сохраняется.
+              </p>
+              <div id="mihomo-import-amnezia-locations-block" class="xk-mi-groups-card hidden">
+                <div class="xk-mi-section-head">
+                  <div>
+                    <div class="xk-mi-section-title">Локации Amnezia Premium</div>
+                    <div class="xk-mi-section-subtitle">Выберите серверы. Конфиг выпускается только для отмеченных локаций.</div>
+                  </div>
+                  <div class="xk-mi-inline-actions">
+                    <button type="button" id="mihomo-import-amnezia-locations-all-btn" class="btn-compact">Все</button>
+                    <button type="button" id="mihomo-import-amnezia-locations-none-btn" class="btn-compact">Снять</button>
+                  </div>
+                </div>
+                <div id="mihomo-import-amnezia-locations" class="xk-mi-groups-shell"></div>
+                <div id="mihomo-import-amnezia-locations-count" class="xk-card-desc">Локации ещё не загружены.</div>
+              </div>
+
+              <div id="mihomo-import-status" class="status xk-mi-status hidden"></div>
+              <p id="mihomo-import-target-hint" class="modal-hint xk-mi-target hidden"></p>
+
+              <div id="mihomo-import-groups-block" class="xk-mi-groups-card">
+                <div class="xk-mi-section-head">
+                  <div>
+                    <div class="xk-mi-section-title">Добавить в группы</div>
+                    <div class="xk-mi-section-subtitle">Выбор из текущего <code>config.yaml</code> для статических <code>proxies</code>.</div>
+                  </div>
+                  <div class="xk-mi-inline-actions">
+                    <button type="button" id="mihomo-import-groups-all-btn" class="btn-compact" data-tooltip="Выбрать все группы">Все</button>
+                    <button type="button" id="mihomo-import-groups-none-btn" class="btn-compact" data-tooltip="Снять выбор со всех групп">Снять</button>
+                  </div>
+                </div>
+                <div id="mihomo-import-groups" class="xk-mi-groups-shell">
+                  <div class="xk-card-desc" style="opacity:0.75;">Группы будут подхвачены из текущего <code>config.yaml</code>.</div>
+                </div>
+                <label class="global-autorestart-toggle xk-mi-remember">
+                  <input type="checkbox" id="mihomo-import-groups-remember">
+                  <span>Запомнить выбор</span>
+                </label>
+              </div>
+
+              <div id="mihomo-import-xray-refresh-block" class="xk-mi-groups-card xk-mi-refresh-card hidden">
+                <div class="xk-mi-section-head">
+                  <div>
+                    <div class="xk-mi-section-title">Автообновление Xray-JSON</div>
+                    <div class="xk-mi-section-subtitle">Появляется для Xray-JSON подписок, которые импортируются как статический блок <code>proxies</code>.</div>
+                  </div>
+                </div>
+                <label class="xk-mi-field xk-mi-refresh-field">
+                  <span class="hint-label">Интервал обновления, часов</span>
+                  <input id="mihomo-import-xray-interval" class="xray-log-select xk-mi-control" type="number" min="1" max="168" step="1" value="24" inputmode="numeric">
+                </label>
+                <div id="mihomo-import-xray-managed" class="mihomo-managed-sub-list xk-mi-managed-list"></div>
+                <p id="mihomo-import-xray-refresh-note" class="modal-hint xk-mi-refresh-note">От 1 часа до 7 дней. Отдельная кнопка сохранения не нужна: интервал применяется при вставке в конфиг.</p>
+              </div>
+            </section>
+
+            <section class="xk-mi-panel xk-mi-panel--preview">
+              <div class="xk-mi-section-head xk-mi-section-head--preview">
+                <div>
+                  <div class="xk-mi-section-title">YAML preview</div>
+                  <div class="xk-mi-section-subtitle">Показываем итоговый фрагмент до вставки в конфиг.</div>
+                </div>
+                <div class="xk-editor-engine" id="mihomo-import-preview-engine">
+                  <span class="xk-editor-engine-label">Редактор</span>
+                  <select id="mihomo-import-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" data-tooltip="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" aria-label="Выбор движка редактора">
+                    <option value="codemirror">CodeMirror</option>
+                    <option value="monaco">Monaco</option>
+                  </select>
+                </div>
+              </div>
+              <div class="xk-mi-preview-wrap">
+                <div id="mihomo-import-preview-monaco" class="xk-monaco-editor xk-monaco-editor--modal xk-mihomo-import-preview-monaco hidden"></div>
+                <textarea id="mihomo-import-preview" class="xkeen-textarea outbounds-gen-preview xk-mi-preview" spellcheck="false" readonly></textarea>
+              </div>
+            </section>
+          </div>
+        </div>
+        <div class="modal-actions xk-mi-footer">
+          <div class="xk-mi-footer-actions">
+            <button type="button" id="mihomo-import-parse-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Преобразовать ссылку в YAML и показать результат.">{{ op_icon('format') }}<span class="xk-action-label">Преобразовать</span></button>
+            <button type="button" id="mihomo-import-parse-static-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Скачать подписку через доступные заголовки и вставить найденные узлы как статические proxies.">{{ op_icon('download') }}<span class="xk-action-label">В proxies</span></button>
+            <button type="button" id="mihomo-import-insert-btn" class="btn-primary btn-compact xk-mi-primary-action" data-tooltip="Вставить YAML в config.yaml (proxies / proxy-providers) и закрыть окно." disabled>{{ op_icon('add-node') }}<span class="xk-action-label">Вставить в конфиг</span></button>
+          </div>
+          <button type="button" id="mihomo-import-cancel-btn" class="btn-secondary btn-compact" data-operator-dismiss-duplicate="true">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mihomo: proxy tools (rename / replace) -->
+    <div id="mihomo-proxy-tools-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-labelledby="mihomo-proxy-tools-title" aria-describedby="mihomo-proxy-tools-subtitle">
+      <div class="modal-content xk-pt-modal xk-modal-width xk-modal-width-1040" data-modal-key="mihomo-proxy-tools">
+        <div class="modal-header xk-pt-header">
+          <div class="xk-pt-titlebox">
+            <span class="xk-pt-kicker">Mihomo · static proxies</span>
+            <span class="modal-title" id="mihomo-proxy-tools-title">Управление proxy</span>
+            <p class="xk-pt-subtitle" id="mihomo-proxy-tools-subtitle">
+              Выберите статический узел из <code>proxies:</code>. Его можно переименовать с обновлением групп или заменить новым конфигом, сохранив имя узла.
+            </p>
+          </div>
+          <button type="button" class="modal-close" id="mihomo-proxy-tools-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+
+        <div class="modal-body xk-pt-body">
+          <section class="xk-pt-lead">
+            <div class="xk-pt-lead-icon" aria-hidden="true">⇄</div>
+            <div class="xk-pt-lead-copy">
+              <div class="xk-pt-lead-title">Управление статическими узлами</div>
+              <div class="xk-pt-lead-desc">Работаем только с текущим содержимым редактора. Сначала выбери целевой proxy, затем либо переименуй его, либо подготовь новый YAML и замени только один блок внутри <code>proxies:</code>.</div>
+            </div>
+            <div class="xk-pt-chiprow" aria-hidden="true">
+              <span class="xk-pt-chip">Rename</span>
+              <span class="xk-pt-chip">Replace</span>
+              <span class="xk-pt-chip">Safe preview</span>
+            </div>
+          </section>
+
+          <div class="xk-pt-shell">
+            <section class="xk-pt-panel xk-pt-panel--target">
+              <div class="xk-pt-panel-head">
+                <div>
+                  <div class="xk-pt-section-kicker">Шаг 1</div>
+                  <div class="xk-pt-section-title">Выберите proxy</div>
+                  <div class="xk-pt-section-subtitle">Список берётся из текущей секции <code>proxies:</code> в <code>config.yaml</code>.</div>
+                </div>
+                <div id="mihomo-proxy-tools-current" class="xk-pt-current is-empty">— не выбран —</div>
+              </div>
+
+              <label class="xk-pt-field">
+                <span class="hint-label">Proxy в config.yaml</span>
+                <select id="mihomo-proxy-tools-select" class="xray-log-select xk-pt-control">
+                  <option value="">— нет proxies —</option>
+                </select>
+              </label>
+
+              <div id="mihomo-proxy-tools-status" class="status xk-pt-status hidden"></div>
+
+              <div id="mihomo-proxy-tools-no-proxies" class="xk-pt-empty hidden" style="display:none;">
+                <div class="xk-pt-empty-kicker">Static proxies</div>
+                <div class="xk-pt-empty-title">В конфиге нет статических узлов</div>
+                <div id="mihomo-proxy-tools-no-proxies-text" class="xk-pt-empty-text">
+                  Этот инструмент работает с секцией <code>proxies:</code>, а не с <code>proxy-providers</code>. Добавьте пример статического узла, если хотите настроить его вручную.
+                </div>
+                <div class="xk-pt-empty-actions">
+                  <button type="button" id="mihomo-proxy-tools-add-static-btn" class="btn-primary xk-pt-primary-btn" data-tooltip="Вставить секцию proxies: с примером статического узла в текущий YAML.">{{ op_icon('add-node') }}<span class="xk-action-label">Добавить пример proxy</span></button>
+                </div>
+                <div class="xk-pt-empty-note">
+                  Будет добавлен шаблон <code>socks5</code> в <code>proxies:</code>. После этого укажите сервер и порт в редакторе.
+                </div>
+              </div>
+            </section>
+
+            <div id="mihomo-proxy-tools-actions" class="xk-pt-workgrid">
+              <section class="xk-pt-card xk-pt-card--rename">
+                <div class="xk-pt-card-head">
+                  <div>
+                    <div class="xk-pt-section-kicker">Шаг 2A</div>
+                    <div class="xk-pt-section-title">Переименовать</div>
+                    <div class="xk-pt-section-subtitle">Меняем <code>- name:</code> и обновляем все ссылки на узел внутри <code>proxy-groups</code>.</div>
+                  </div>
+                </div>
+
+                <label class="xk-pt-field">
+                  <span class="hint-label">Новое имя</span>
+                  <input id="mihomo-proxy-tools-rename-input" class="xkeen-input xk-pt-control" type="text" placeholder="например: MyProxy" />
+                </label>
+
+                <div class="xk-pt-card-actions">
+                  <button type="button" id="mihomo-proxy-tools-rename-btn" class="btn-primary xk-pt-primary-btn" data-tooltip="Переименовать proxy и обновить все упоминания в proxy-groups.">{{ op_icon('edit') }}<span class="xk-action-label">Переименовать</span></button>
+                </div>
+
+                <div class="xk-pt-note">
+                  Полезно, когда хочешь унифицировать названия узлов, не перебирая вручную группы и селекторы.
+                </div>
+              </section>
+
+              <section class="xk-pt-card xk-pt-card--replace">
+                <div class="xk-pt-card-head">
+                  <div>
+                    <div class="xk-pt-section-kicker">Шаг 2B</div>
+                    <div class="xk-pt-section-title">Заменить конфиг</div>
+                    <div class="xk-pt-section-subtitle">Подготовь новый YAML-фрагмент и замени только выбранный proxy block, сохранив структуру конфига.</div>
+                  </div>
+                </div>
+
+                <div class="xk-pt-topbar">
+                  <label class="xk-pt-field xk-pt-field--compact">
+                    <span class="hint-label">Источник</span>
+                    <select id="mihomo-proxy-tools-replace-type" class="xray-log-select xk-pt-control">
+                      <option value="auto">Auto (proxy link)</option>
+                      <option value="wireguard">WireGuard / AmneziaWG 3.x (.conf)</option>
+                      <option value="openvpn">OpenVPN (.ovpn)</option>
+                      <option value="tailscale">Tailscale</option>
+                    </select>
+                  </label>
+
+                  <div class="xk-pt-inline-actions">
+                    <button type="button" id="mihomo-proxy-tools-prepare-btn" class="xk-pt-secondary-btn" data-tooltip="Преобразовать ссылку/конфиг в YAML и показать preview.">{{ op_icon('format') }}<span class="xk-action-label">Подготовить</span></button>
+                    <button type="button" id="mihomo-proxy-tools-replace-btn" class="btn-danger xk-pt-danger-btn" data-tooltip="Заменить выбранный proxy block на подготовленный YAML." disabled>{{ op_icon('transfer') }}<span class="xk-action-label">Заменить</span></button>
+                  </div>
+                </div>
+
+                <div class="xk-pt-editor-grid">
+                  <label class="xk-pt-field">
+                    <span class="hint-label">Ссылка / конфиг</span>
+                    <textarea id="mihomo-proxy-tools-replace-input" class="xkeen-textarea outbounds-gen-preview xk-pt-textarea" spellcheck="false" placeholder="vless://...
+
+или WireGuard/OpenVPN/Tailscale конфиг"></textarea>
+                  </label>
+
+                  <label class="xk-pt-field">
+                    <span class="hint-label">YAML preview</span>
+                    <textarea id="mihomo-proxy-tools-replace-preview" class="xkeen-textarea outbounds-gen-preview xk-pt-textarea xk-pt-textarea--preview" spellcheck="false" readonly></textarea>
+                  </label>
+                </div>
+
+                <div class="xk-pt-note">
+                  При замене сохраняется имя выбранного узла. Группы и остальная структура <code>config.yaml</code> не трогаются.
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-actions xk-pt-footer">
+          <div class="xk-pt-footer-note">Изменения выполняются только в редакторе. Для применения к сервису сохрани и примени общий конфиг Mihomo.</div>
+          <button type="button" id="mihomo-proxy-tools-close2-btn" class="btn-compact" data-operator-dismiss-duplicate="true">Закрыть</button>
+        </div>
+      </div>
+    </div>
+
+<div
+  id="mihomo-validation-modal"
+  class="modal hidden" data-operator-modal-family="master-detail"
+  data-kind="info"
+  data-modal-dismiss="mihomo-validation"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="mihomo-validation-modal-title"
+>
+  <div class="modal-content">
+    <div class="modal-header xk-mihomo-validation-header">
+      <div class="xk-mihomo-validation-titlebox">
+        <div id="mihomo-validation-modal-kicker" class="xk-mihomo-validation-kicker">Mihomo / validate</div>
+        <span id="mihomo-validation-modal-title" class="modal-title">Проверка конфигурации Mihomo</span>
+        <div id="mihomo-validation-modal-subtitle" class="xk-mihomo-validation-subtitle">
+          Подробности проверки, ключевая причина и лог ядра показываются в одном компактном окне.
+        </div>
+      </div>
+      <button type="button" class="modal-close" data-dismiss="mihomo-validation" aria-label="Закрыть" title="Закрыть">{{ op_icon('close') }}</button>
+    </div>
+
+    <div class="modal-body xk-mihomo-validation-body">
+      <section class="xk-mihomo-validation-lead">
+        <div id="mihomo-validation-modal-icon" class="xk-mihomo-validation-lead-icon">MH</div>
+        <div class="xk-mihomo-validation-lead-copy">
+          <div id="mihomo-validation-modal-lead-title" class="xk-mihomo-validation-lead-title">Mihomo сообщает результат проверки</div>
+          <p id="mihomo-validation-modal-lead-desc" class="xk-mihomo-validation-lead-desc">
+            После проверки смотрите не только на лог, но и на расшифровку ниже: она подсказывает, где искать проблему и что исправить в первую очередь.
+          </p>
+        </div>
+        <div id="mihomo-validation-modal-badge" class="xk-mihomo-validation-state-badge">Инфо</div>
+      </section>
+
+      <div id="mihomo-validation-grid" class="xk-mihomo-validation-grid" data-has-log="0">
+        <section class="xk-mihomo-validation-panel xk-mihomo-validation-panel--main">
+          <div class="xk-mihomo-validation-overview">
+            <div id="mihomo-validation-summary-wrap" class="xk-mihomo-validation-block" style="display:none;">
+              <div class="xk-mihomo-validation-block-title">Сводка</div>
+              <div id="mihomo-validation-summary" class="xk-mihomo-validation-summary"></div>
+            </div>
+
+            <div id="mihomo-validation-explain-wrap" class="xk-mihomo-validation-block" style="display:none;">
+              <div class="xk-mihomo-validation-block-title">Расшифровка</div>
+              <div id="mihomo-validation-explain" class="xk-mihomo-validation-explainer"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="mihomo-validation-side-panel" class="xk-mihomo-validation-panel xk-mihomo-validation-panel--side" style="display:none;">
+          <div id="mihomo-validation-log-wrap" class="xk-mihomo-validation-log-shell" style="display:none;">
+            <div class="xk-mihomo-validation-block-title">Лог / детали</div>
+            <div id="mihomo-validation-modal-body" class="xk-mihomo-validation-terminal" aria-live="polite"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div class="modal-actions xk-mihomo-validation-footer">
+      <div id="mihomo-validation-copy-status" class="xk-mihomo-validation-copy-status" aria-live="polite"></div>
+      <div class="xk-mihomo-validation-footer-actions">
+        <button type="button" id="mihomo-validation-copy-btn" class="btn-secondary">Скопировать детали</button>
+        <button type="button" class="btn-primary" data-dismiss="mihomo-validation" data-operator-dismiss-duplicate="true">Закрыть</button>
+      </div>
+    </div>
+  </div>
+</div>

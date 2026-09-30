@@ -10,12 +10,12 @@
     "template": "xkeen-ui/templates/panel.html",
     "composition_source": "scripts/panel_template_source.py",
     "inventory": "docs/modular-panel-stage0-inventory.json",
-    "sha256": "bd3a28139f4b8663b04eec98d3ca425c5c225a5926cda903e46c2582ca1e01d7",
-    "utf8_bytes": 422813,
-    "line_count": 5615,
+    "sha256": "6e1cf899fdc4dcde913b839e1514edb84afac06d1265de9468f482c8a33e376a",
+    "utf8_bytes": 423456,
+    "line_count": 5631,
     "id_count": 1340,
     "duplicate_ids": [],
-    "entrypoint_sha256": "1141035bea352c20b0afcebd8f04fe25f082ac3e73b6929338d157008f322c62"
+    "entrypoint_sha256": "a735d677a407fc29748bddcdf7429822c942763cdfc2080d3a19613583cb3e28"
   },
   "composition": {
     "current_entrypoint": "xkeen-ui/templates/panel.html",
@@ -282,7 +282,7 @@
         "core",
         "tool.editor"
       ],
-      "line": 471,
+      "line": 474,
       "dom_contract": [
         "#view-routing",
         "data-xk-section=\"routing\"",
@@ -305,7 +305,7 @@
         "core",
         "tool.editor"
       ],
-      "line": 1174,
+      "line": 1177,
       "dom_contract": [
         "#view-mihomo",
         "data-xk-section=\"mihomo\"",
@@ -328,7 +328,7 @@
       "dependencies": [
         "core"
       ],
-      "line": 1904,
+      "line": 1911,
       "dom_contract": [
         "#view-xkeen",
         "data-xk-section=\"xkeen\"",
@@ -351,7 +351,7 @@
       "dependencies": [
         "core"
       ],
-      "line": 2354,
+      "line": 2361,
       "dom_contract": [
         "#view-xray-logs",
         "data-xk-section=\"xray-logs\"",
@@ -375,7 +375,7 @@
       "dependencies": [
         "core"
       ],
-      "line": 2021,
+      "line": 2028,
       "dom_contract": [
         "#view-commands",
         "data-xk-section=\"commands\"",
@@ -399,7 +399,7 @@
       "dependencies": [
         "core"
       ],
-      "line": 2259,
+      "line": 2266,
       "dom_contract": [
         "#view-files",
         "data-xk-section=\"files\"",
@@ -410,7 +410,7 @@
   "modals": [
     {
       "id": "xk-resource-dashboard-modal",
-      "line": 312,
+      "line": 313,
       "current_inventory_module_id": "tool.advanced-diagnostics",
       "target_module_id": "tool.advanced-diagnostics",
       "target_partial": "xkeen-ui/templates/panel/modals/diagnostics.html",
@@ -427,7 +427,7 @@
     },
     {
       "id": "xray-context-modal",
-      "line": 2473,
+      "line": 2482,
       "current_inventory_module_id": "engine.xray",
       "target_module_id": "engine.xray",
       "target_partial": "xkeen-ui/templates/panel/modals/routing.html",
@@ -444,7 +444,7 @@
     },
     {
       "id": "xray-devices-modal",
-      "line": 2490,
+      "line": 2499,
       "current_inventory_module_id": "engine.xray",
       "target_module_id": "engine.xray",
       "target_partial": "xkeen-ui/templates/panel/modals/routing.html",
@@ -460,57 +460,8 @@
       ]
     },
     {
-      "id": "terminal-history-modal",
-      "line": 2668,
-      "current_inventory_module_id": "tool.terminal",
-      "target_module_id": "tool.terminal",
-      "target_partial": "xkeen-ui/templates/panel/modals/commands.html",
-      "boundary": "owned",
-      "dependencies": [
-        "core",
-        "tool.terminal"
-      ],
-      "dom_contract": [
-        "#terminal-history-modal",
-        "id attributes of all descendants remain stable",
-        "aria-* and data-modal-* attributes remain stable"
-      ]
-    },
-    {
-      "id": "core-modal",
-      "line": 2691,
-      "current_inventory_module_id": "core",
-      "target_module_id": "core",
-      "target_partial": "xkeen-ui/templates/panel/modals/shared.html",
-      "boundary": "shared",
-      "dependencies": [
-        "core"
-      ],
-      "dom_contract": [
-        "#core-modal",
-        "id attributes of all descendants remain stable",
-        "aria-* and data-modal-* attributes remain stable"
-      ]
-    },
-    {
-      "id": "confirm-modal",
-      "line": 2743,
-      "current_inventory_module_id": "core",
-      "target_module_id": "core",
-      "target_partial": "xkeen-ui/templates/panel/modals/shared.html",
-      "boundary": "shared",
-      "dependencies": [
-        "core"
-      ],
-      "dom_contract": [
-        "#confirm-modal",
-        "id attributes of all descendants remain stable",
-        "aria-* and data-modal-* attributes remain stable"
-      ]
-    },
-    {
       "id": "routing-dns-over-vless-modal",
-      "line": 2759,
+      "line": 2523,
       "current_inventory_module_id": "engine.xray",
       "target_module_id": "engine.xray",
       "target_partial": "xkeen-ui/templates/panel/modals/routing.html",
@@ -526,25 +477,8 @@
       ]
     },
     {
-      "id": "mihomo-dns-modal",
-      "line": 3042,
-      "current_inventory_module_id": "engine.mihomo",
-      "target_module_id": "engine.mihomo",
-      "target_partial": "xkeen-ui/templates/panel/modals/mihomo.html",
-      "boundary": "owned",
-      "dependencies": [
-        "core",
-        "engine.mihomo"
-      ],
-      "dom_contract": [
-        "#mihomo-dns-modal",
-        "id attributes of all descendants remain stable",
-        "aria-* and data-modal-* attributes remain stable"
-      ]
-    },
-    {
       "id": "inbounds-apply-modal",
-      "line": 3194,
+      "line": 2807,
       "current_inventory_module_id": "engine.xray",
       "target_module_id": "engine.xray",
       "target_partial": "xkeen-ui/templates/panel/modals/routing.html",
@@ -561,7 +495,7 @@
     },
     {
       "id": "routing-balancer-help-modal",
-      "line": 3246,
+      "line": 2855,
       "current_inventory_module_id": "engine.xray",
       "target_module_id": "engine.xray",
       "target_partial": "xkeen-ui/templates/panel/modals/routing.html",
@@ -578,7 +512,7 @@
     },
     {
       "id": "xray-snapshot-modal",
-      "line": 3411,
+      "line": 3020,
       "current_inventory_module_id": "engine.xray",
       "target_module_id": "engine.xray",
       "target_partial": "xkeen-ui/templates/panel/modals/routing.html",
@@ -595,7 +529,7 @@
     },
     {
       "id": "routing-template-modal",
-      "line": 3441,
+      "line": 3051,
       "current_inventory_module_id": "engine.xray",
       "target_module_id": "engine.xray",
       "target_partial": "xkeen-ui/templates/panel/modals/routing.html",
@@ -612,7 +546,7 @@
     },
     {
       "id": "routing-template-save-modal",
-      "line": 3494,
+      "line": 3104,
       "current_inventory_module_id": "engine.xray",
       "target_module_id": "engine.xray",
       "target_partial": "xkeen-ui/templates/panel/modals/routing.html",
@@ -629,7 +563,7 @@
     },
     {
       "id": "routing-template-edit-modal",
-      "line": 3530,
+      "line": 3140,
       "current_inventory_module_id": "engine.xray",
       "target_module_id": "engine.xray",
       "target_partial": "xkeen-ui/templates/panel/modals/routing.html",
@@ -646,7 +580,7 @@
     },
     {
       "id": "outbounds-generator-modal",
-      "line": 3583,
+      "line": 3194,
       "current_inventory_module_id": "engine.xray",
       "target_module_id": "engine.xray",
       "target_partial": "xkeen-ui/templates/panel/modals/routing.html",
@@ -663,7 +597,7 @@
     },
     {
       "id": "outbounds-pool-modal",
-      "line": 3851,
+      "line": 3462,
       "current_inventory_module_id": "engine.xray",
       "target_module_id": "engine.xray",
       "target_partial": "xkeen-ui/templates/panel/modals/routing.html",
@@ -679,8 +613,223 @@
       ]
     },
     {
+      "id": "routing-dat-contents-modal",
+      "line": 3561,
+      "current_inventory_module_id": "engine.xray",
+      "target_module_id": "engine.xray",
+      "target_partial": "xkeen-ui/templates/panel/modals/routing.html",
+      "boundary": "owned",
+      "dependencies": [
+        "core",
+        "engine.xray"
+      ],
+      "dom_contract": [
+        "#routing-dat-contents-modal",
+        "id attributes of all descendants remain stable",
+        "aria-* and data-modal-* attributes remain stable"
+      ]
+    },
+    {
+      "id": "terminal-history-modal",
+      "line": 3806,
+      "current_inventory_module_id": "tool.terminal",
+      "target_module_id": "tool.terminal",
+      "target_partial": "xkeen-ui/templates/panel/modals/commands.html",
+      "boundary": "owned",
+      "dependencies": [
+        "core",
+        "tool.terminal"
+      ],
+      "dom_contract": [
+        "#terminal-history-modal",
+        "id attributes of all descendants remain stable",
+        "aria-* and data-modal-* attributes remain stable"
+      ]
+    },
+    {
+      "id": "ssh-modal",
+      "line": 3827,
+      "current_inventory_module_id": "core",
+      "target_module_id": "tool.terminal",
+      "target_partial": "xkeen-ui/templates/panel/modals/commands.html",
+      "boundary": "mixed-current-classification",
+      "dependencies": [
+        "core",
+        "tool.terminal"
+      ],
+      "dom_contract": [
+        "#ssh-modal",
+        "id attributes of all descendants remain stable",
+        "aria-* and data-modal-* attributes remain stable"
+      ]
+    },
+    {
+      "id": "ssh-edit-modal",
+      "line": 3859,
+      "current_inventory_module_id": "core",
+      "target_module_id": "tool.terminal",
+      "target_partial": "xkeen-ui/templates/panel/modals/commands.html",
+      "boundary": "mixed-current-classification",
+      "dependencies": [
+        "core",
+        "tool.terminal"
+      ],
+      "dom_contract": [
+        "#ssh-edit-modal",
+        "id attributes of all descendants remain stable",
+        "aria-* and data-modal-* attributes remain stable"
+      ]
+    },
+    {
+      "id": "ssh-confirm-modal",
+      "line": 3900,
+      "current_inventory_module_id": "core",
+      "target_module_id": "tool.terminal",
+      "target_partial": "xkeen-ui/templates/panel/modals/commands.html",
+      "boundary": "mixed-current-classification",
+      "dependencies": [
+        "core",
+        "tool.terminal"
+      ],
+      "dom_contract": [
+        "#ssh-confirm-modal",
+        "id attributes of all descendants remain stable",
+        "aria-* and data-modal-* attributes remain stable"
+      ]
+    },
+    {
+      "id": "ssh-transfer-modal",
+      "line": 3916,
+      "current_inventory_module_id": "core",
+      "target_module_id": "tool.terminal",
+      "target_partial": "xkeen-ui/templates/panel/modals/commands.html",
+      "boundary": "mixed-current-classification",
+      "dependencies": [
+        "core",
+        "tool.terminal"
+      ],
+      "dom_contract": [
+        "#ssh-transfer-modal",
+        "id attributes of all descendants remain stable",
+        "aria-* and data-modal-* attributes remain stable"
+      ]
+    },
+    {
+      "id": "core-modal",
+      "line": 3939,
+      "current_inventory_module_id": "core",
+      "target_module_id": "core",
+      "target_partial": "xkeen-ui/templates/panel/modals/shared.html",
+      "boundary": "shared",
+      "dependencies": [
+        "core"
+      ],
+      "dom_contract": [
+        "#core-modal",
+        "id attributes of all descendants remain stable",
+        "aria-* and data-modal-* attributes remain stable"
+      ]
+    },
+    {
+      "id": "confirm-modal",
+      "line": 3991,
+      "current_inventory_module_id": "core",
+      "target_module_id": "core",
+      "target_partial": "xkeen-ui/templates/panel/modals/shared.html",
+      "boundary": "shared",
+      "dependencies": [
+        "core"
+      ],
+      "dom_contract": [
+        "#confirm-modal",
+        "id attributes of all descendants remain stable",
+        "aria-* and data-modal-* attributes remain stable"
+      ]
+    },
+    {
+      "id": "github-export-modal",
+      "line": 4007,
+      "current_inventory_module_id": "core",
+      "target_module_id": "core",
+      "target_partial": "xkeen-ui/templates/panel/modals/shared.html",
+      "boundary": "shared",
+      "dependencies": [
+        "core"
+      ],
+      "dom_contract": [
+        "#github-export-modal",
+        "id attributes of all descendants remain stable",
+        "aria-* and data-modal-* attributes remain stable"
+      ]
+    },
+    {
+      "id": "github-catalog-modal",
+      "line": 4026,
+      "current_inventory_module_id": "core",
+      "target_module_id": "core",
+      "target_partial": "xkeen-ui/templates/panel/modals/shared.html",
+      "boundary": "shared",
+      "dependencies": [
+        "core"
+      ],
+      "dom_contract": [
+        "#github-catalog-modal",
+        "id attributes of all descendants remain stable",
+        "aria-* and data-modal-* attributes remain stable"
+      ]
+    },
+    {
+      "id": "donate-modal",
+      "line": 4053,
+      "current_inventory_module_id": "core",
+      "target_module_id": "core",
+      "target_partial": "xkeen-ui/templates/panel/modals/shared.html",
+      "boundary": "shared",
+      "dependencies": [
+        "core"
+      ],
+      "dom_contract": [
+        "#donate-modal",
+        "id attributes of all descendants remain stable",
+        "aria-* and data-modal-* attributes remain stable"
+      ]
+    },
+    {
+      "id": "ui-settings-modal",
+      "line": 4109,
+      "current_inventory_module_id": "core",
+      "target_module_id": "core",
+      "target_partial": "xkeen-ui/templates/panel/modals/shared.html",
+      "boundary": "shared",
+      "dependencies": [
+        "core"
+      ],
+      "dom_contract": [
+        "#ui-settings-modal",
+        "id attributes of all descendants remain stable",
+        "aria-* and data-modal-* attributes remain stable"
+      ]
+    },
+    {
+      "id": "mihomo-dns-modal",
+      "line": 4131,
+      "current_inventory_module_id": "engine.mihomo",
+      "target_module_id": "engine.mihomo",
+      "target_partial": "xkeen-ui/templates/panel/modals/mihomo.html",
+      "boundary": "owned",
+      "dependencies": [
+        "core",
+        "engine.mihomo"
+      ],
+      "dom_contract": [
+        "#mihomo-dns-modal",
+        "id attributes of all descendants remain stable",
+        "aria-* and data-modal-* attributes remain stable"
+      ]
+    },
+    {
       "id": "mihomo-import-modal",
-      "line": 3950,
+      "line": 4283,
       "current_inventory_module_id": "engine.mihomo",
       "target_module_id": "engine.mihomo",
       "target_partial": "xkeen-ui/templates/panel/modals/mihomo.html",
@@ -697,7 +846,7 @@
     },
     {
       "id": "mihomo-proxy-tools-modal",
-      "line": 4073,
+      "line": 4405,
       "current_inventory_module_id": "engine.mihomo",
       "target_module_id": "engine.mihomo",
       "target_partial": "xkeen-ui/templates/panel/modals/mihomo.html",
@@ -713,8 +862,25 @@
       ]
     },
     {
+      "id": "mihomo-validation-modal",
+      "line": 4547,
+      "current_inventory_module_id": "engine.mihomo",
+      "target_module_id": "engine.mihomo",
+      "target_partial": "xkeen-ui/templates/panel/modals/mihomo.html",
+      "boundary": "owned",
+      "dependencies": [
+        "core",
+        "engine.mihomo"
+      ],
+      "dom_contract": [
+        "#mihomo-validation-modal",
+        "id attributes of all descendants remain stable",
+        "aria-* and data-modal-* attributes remain stable"
+      ]
+    },
+    {
       "id": "mihomo-hwid-modal",
-      "line": 4216,
+      "line": 4616,
       "current_inventory_module_id": "integration.happ",
       "target_module_id": "integration.happ",
       "target_partial": "xkeen-ui/templates/panel/modals/happ.html",
@@ -732,7 +898,7 @@
     },
     {
       "id": "fm-upload-conflict-modal",
-      "line": 4342,
+      "line": 4744,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -748,208 +914,8 @@
       ]
     },
     {
-      "id": "fm-editor-modal",
-      "line": 4363,
-      "current_inventory_module_id": "tool.editor",
-      "target_module_id": "tool.editor",
-      "target_partial": "xkeen-ui/templates/panel/modals/editor.html",
-      "boundary": "owned",
-      "dependencies": [
-        "core",
-        "tool.editor"
-      ],
-      "dom_contract": [
-        "#fm-editor-modal",
-        "id attributes of all descendants remain stable",
-        "aria-* and data-modal-* attributes remain stable"
-      ]
-    },
-    {
-      "id": "github-export-modal",
-      "line": 4399,
-      "current_inventory_module_id": "core",
-      "target_module_id": "core",
-      "target_partial": "xkeen-ui/templates/panel/modals/shared.html",
-      "boundary": "shared",
-      "dependencies": [
-        "core"
-      ],
-      "dom_contract": [
-        "#github-export-modal",
-        "id attributes of all descendants remain stable",
-        "aria-* and data-modal-* attributes remain stable"
-      ]
-    },
-    {
-      "id": "github-catalog-modal",
-      "line": 4418,
-      "current_inventory_module_id": "core",
-      "target_module_id": "core",
-      "target_partial": "xkeen-ui/templates/panel/modals/shared.html",
-      "boundary": "shared",
-      "dependencies": [
-        "core"
-      ],
-      "dom_contract": [
-        "#github-catalog-modal",
-        "id attributes of all descendants remain stable",
-        "aria-* and data-modal-* attributes remain stable"
-      ]
-    },
-    {
-      "id": "donate-modal",
-      "line": 4445,
-      "current_inventory_module_id": "core",
-      "target_module_id": "core",
-      "target_partial": "xkeen-ui/templates/panel/modals/shared.html",
-      "boundary": "shared",
-      "dependencies": [
-        "core"
-      ],
-      "dom_contract": [
-        "#donate-modal",
-        "id attributes of all descendants remain stable",
-        "aria-* and data-modal-* attributes remain stable"
-      ]
-    },
-    {
-      "id": "ui-settings-modal",
-      "line": 4502,
-      "current_inventory_module_id": "core",
-      "target_module_id": "core",
-      "target_partial": "xkeen-ui/templates/panel/modals/shared.html",
-      "boundary": "shared",
-      "dependencies": [
-        "core"
-      ],
-      "dom_contract": [
-        "#ui-settings-modal",
-        "id attributes of all descendants remain stable",
-        "aria-* and data-modal-* attributes remain stable"
-      ]
-    },
-    {
-      "id": "json-editor-modal",
-      "line": 4540,
-      "current_inventory_module_id": "tool.editor",
-      "target_module_id": "tool.editor",
-      "target_partial": "xkeen-ui/templates/panel/modals/editor.html",
-      "boundary": "owned",
-      "dependencies": [
-        "core",
-        "tool.editor"
-      ],
-      "dom_contract": [
-        "#json-editor-modal",
-        "id attributes of all descendants remain stable",
-        "aria-* and data-modal-* attributes remain stable"
-      ]
-    },
-    {
-      "id": "routing-dat-contents-modal",
-      "line": 4584,
-      "current_inventory_module_id": "engine.xray",
-      "target_module_id": "engine.xray",
-      "target_partial": "xkeen-ui/templates/panel/modals/routing.html",
-      "boundary": "owned",
-      "dependencies": [
-        "core",
-        "engine.xray"
-      ],
-      "dom_contract": [
-        "#routing-dat-contents-modal",
-        "id attributes of all descendants remain stable",
-        "aria-* and data-modal-* attributes remain stable"
-      ]
-    },
-    {
-      "id": "mihomo-validation-modal",
-      "line": 4674,
-      "current_inventory_module_id": "engine.mihomo",
-      "target_module_id": "engine.mihomo",
-      "target_partial": "xkeen-ui/templates/panel/modals/mihomo.html",
-      "boundary": "owned",
-      "dependencies": [
-        "core",
-        "engine.mihomo"
-      ],
-      "dom_contract": [
-        "#mihomo-validation-modal",
-        "id attributes of all descendants remain stable",
-        "aria-* and data-modal-* attributes remain stable"
-      ]
-    },
-    {
-      "id": "ssh-modal",
-      "line": 4740,
-      "current_inventory_module_id": "core",
-      "target_module_id": "tool.terminal",
-      "target_partial": "xkeen-ui/templates/panel/modals/commands.html",
-      "boundary": "mixed-current-classification",
-      "dependencies": [
-        "core",
-        "tool.terminal"
-      ],
-      "dom_contract": [
-        "#ssh-modal",
-        "id attributes of all descendants remain stable",
-        "aria-* and data-modal-* attributes remain stable"
-      ]
-    },
-    {
-      "id": "ssh-edit-modal",
-      "line": 4772,
-      "current_inventory_module_id": "core",
-      "target_module_id": "tool.terminal",
-      "target_partial": "xkeen-ui/templates/panel/modals/commands.html",
-      "boundary": "mixed-current-classification",
-      "dependencies": [
-        "core",
-        "tool.terminal"
-      ],
-      "dom_contract": [
-        "#ssh-edit-modal",
-        "id attributes of all descendants remain stable",
-        "aria-* and data-modal-* attributes remain stable"
-      ]
-    },
-    {
-      "id": "ssh-confirm-modal",
-      "line": 4813,
-      "current_inventory_module_id": "core",
-      "target_module_id": "tool.terminal",
-      "target_partial": "xkeen-ui/templates/panel/modals/commands.html",
-      "boundary": "mixed-current-classification",
-      "dependencies": [
-        "core",
-        "tool.terminal"
-      ],
-      "dom_contract": [
-        "#ssh-confirm-modal",
-        "id attributes of all descendants remain stable",
-        "aria-* and data-modal-* attributes remain stable"
-      ]
-    },
-    {
-      "id": "ssh-transfer-modal",
-      "line": 4829,
-      "current_inventory_module_id": "core",
-      "target_module_id": "tool.terminal",
-      "target_partial": "xkeen-ui/templates/panel/modals/commands.html",
-      "boundary": "mixed-current-classification",
-      "dependencies": [
-        "core",
-        "tool.terminal"
-      ],
-      "dom_contract": [
-        "#ssh-transfer-modal",
-        "id attributes of all descendants remain stable",
-        "aria-* and data-modal-* attributes remain stable"
-      ]
-    },
-    {
       "id": "fm-connect-modal",
-      "line": 4851,
+      "line": 4765,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -966,7 +932,7 @@
     },
     {
       "id": "fm-knownhosts-modal",
-      "line": 4949,
+      "line": 4863,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -983,7 +949,7 @@
     },
     {
       "id": "fm-create-modal",
-      "line": 4980,
+      "line": 4894,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1000,7 +966,7 @@
     },
     {
       "id": "fm-rename-modal",
-      "line": 5017,
+      "line": 4931,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1017,7 +983,7 @@
     },
     {
       "id": "fm-archive-modal",
-      "line": 5042,
+      "line": 4956,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1034,7 +1000,7 @@
     },
     {
       "id": "fm-extract-modal",
-      "line": 5081,
+      "line": 4995,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1051,7 +1017,7 @@
     },
     {
       "id": "fm-folder-picker-modal",
-      "line": 5138,
+      "line": 5052,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1068,7 +1034,7 @@
     },
     {
       "id": "fm-archive-list-modal",
-      "line": 5162,
+      "line": 5076,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1085,7 +1051,7 @@
     },
     {
       "id": "fm-mask-modal",
-      "line": 5198,
+      "line": 5112,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1102,7 +1068,7 @@
     },
     {
       "id": "fm-props-modal",
-      "line": 5222,
+      "line": 5136,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1119,7 +1085,7 @@
     },
     {
       "id": "fm-hash-modal",
-      "line": 5241,
+      "line": 5155,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1136,7 +1102,7 @@
     },
     {
       "id": "fm-chmod-modal",
-      "line": 5273,
+      "line": 5187,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1153,7 +1119,7 @@
     },
     {
       "id": "fm-chown-modal",
-      "line": 5326,
+      "line": 5240,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1170,7 +1136,7 @@
     },
     {
       "id": "fm-dropop-modal",
-      "line": 5360,
+      "line": 5273,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1187,7 +1153,7 @@
     },
     {
       "id": "fm-conflicts-modal",
-      "line": 5380,
+      "line": 5293,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1204,7 +1170,7 @@
     },
     {
       "id": "fm-bookmarks-modal",
-      "line": 5407,
+      "line": 5320,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1221,7 +1187,7 @@
     },
     {
       "id": "fm-download-multi-modal",
-      "line": 5435,
+      "line": 5348,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1238,7 +1204,7 @@
     },
     {
       "id": "fm-progress-modal",
-      "line": 5475,
+      "line": 5388,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1255,7 +1221,7 @@
     },
     {
       "id": "fm-ops-modal",
-      "line": 5496,
+      "line": 5409,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1272,7 +1238,7 @@
     },
     {
       "id": "fm-volumes-modal",
-      "line": 5527,
+      "line": 5440,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1289,7 +1255,7 @@
     },
     {
       "id": "fm-help-modal",
-      "line": 5549,
+      "line": 5462,
       "current_inventory_module_id": "core",
       "target_module_id": "tool.files",
       "target_partial": "xkeen-ui/templates/panel/modals/files.html",
@@ -1300,6 +1266,40 @@
       ],
       "dom_contract": [
         "#fm-help-modal",
+        "id attributes of all descendants remain stable",
+        "aria-* and data-modal-* attributes remain stable"
+      ]
+    },
+    {
+      "id": "fm-editor-modal",
+      "line": 5530,
+      "current_inventory_module_id": "tool.editor",
+      "target_module_id": "tool.editor",
+      "target_partial": "xkeen-ui/templates/panel/modals/editor.html",
+      "boundary": "owned",
+      "dependencies": [
+        "core",
+        "tool.editor"
+      ],
+      "dom_contract": [
+        "#fm-editor-modal",
+        "id attributes of all descendants remain stable",
+        "aria-* and data-modal-* attributes remain stable"
+      ]
+    },
+    {
+      "id": "json-editor-modal",
+      "line": 5569,
+      "current_inventory_module_id": "tool.editor",
+      "target_module_id": "tool.editor",
+      "target_partial": "xkeen-ui/templates/panel/modals/editor.html",
+      "boundary": "owned",
+      "dependencies": [
+        "core",
+        "tool.editor"
+      ],
+      "dom_contract": [
+        "#json-editor-modal",
         "id attributes of all descendants remain stable",
         "aria-* and data-modal-* attributes remain stable"
       ]
@@ -1413,11 +1413,7 @@
         "xk-resource-dashboard-modal",
         "xray-context-modal",
         "xray-devices-modal",
-        "terminal-history-modal",
-        "core-modal",
-        "confirm-modal",
         "routing-dns-over-vless-modal",
-        "mihomo-dns-modal",
         "inbounds-apply-modal",
         "routing-balancer-help-modal",
         "xray-snapshot-modal",
@@ -1426,22 +1422,24 @@
         "routing-template-edit-modal",
         "outbounds-generator-modal",
         "outbounds-pool-modal",
-        "mihomo-import-modal",
-        "mihomo-proxy-tools-modal",
-        "mihomo-hwid-modal",
-        "fm-upload-conflict-modal",
-        "fm-editor-modal",
-        "github-export-modal",
-        "github-catalog-modal",
-        "donate-modal",
-        "ui-settings-modal",
-        "json-editor-modal",
         "routing-dat-contents-modal",
-        "mihomo-validation-modal",
+        "terminal-history-modal",
         "ssh-modal",
         "ssh-edit-modal",
         "ssh-confirm-modal",
         "ssh-transfer-modal",
+        "core-modal",
+        "confirm-modal",
+        "github-export-modal",
+        "github-catalog-modal",
+        "donate-modal",
+        "ui-settings-modal",
+        "mihomo-dns-modal",
+        "mihomo-import-modal",
+        "mihomo-proxy-tools-modal",
+        "mihomo-validation-modal",
+        "mihomo-hwid-modal",
+        "fm-upload-conflict-modal",
         "fm-connect-modal",
         "fm-knownhosts-modal",
         "fm-create-modal",
@@ -1462,7 +1460,9 @@
         "fm-progress-modal",
         "fm-ops-modal",
         "fm-volumes-modal",
-        "fm-help-modal"
+        "fm-help-modal",
+        "fm-editor-modal",
+        "json-editor-modal"
       ],
       "forbidden_modal_ids": []
     },
@@ -1505,11 +1505,7 @@
         "xk-resource-dashboard-modal",
         "xray-context-modal",
         "xray-devices-modal",
-        "terminal-history-modal",
-        "core-modal",
-        "confirm-modal",
         "routing-dns-over-vless-modal",
-        "mihomo-dns-modal",
         "inbounds-apply-modal",
         "routing-balancer-help-modal",
         "xray-snapshot-modal",
@@ -1518,22 +1514,24 @@
         "routing-template-edit-modal",
         "outbounds-generator-modal",
         "outbounds-pool-modal",
-        "mihomo-import-modal",
-        "mihomo-proxy-tools-modal",
-        "mihomo-hwid-modal",
-        "fm-upload-conflict-modal",
-        "fm-editor-modal",
-        "github-export-modal",
-        "github-catalog-modal",
-        "donate-modal",
-        "ui-settings-modal",
-        "json-editor-modal",
         "routing-dat-contents-modal",
-        "mihomo-validation-modal",
+        "terminal-history-modal",
         "ssh-modal",
         "ssh-edit-modal",
         "ssh-confirm-modal",
         "ssh-transfer-modal",
+        "core-modal",
+        "confirm-modal",
+        "github-export-modal",
+        "github-catalog-modal",
+        "donate-modal",
+        "ui-settings-modal",
+        "mihomo-dns-modal",
+        "mihomo-import-modal",
+        "mihomo-proxy-tools-modal",
+        "mihomo-validation-modal",
+        "mihomo-hwid-modal",
+        "fm-upload-conflict-modal",
         "fm-connect-modal",
         "fm-knownhosts-modal",
         "fm-create-modal",
@@ -1554,7 +1552,9 @@
         "fm-progress-modal",
         "fm-ops-modal",
         "fm-volumes-modal",
-        "fm-help-modal"
+        "fm-help-modal",
+        "fm-editor-modal",
+        "json-editor-modal"
       ],
       "forbidden_modal_ids": []
     },
@@ -1586,8 +1586,6 @@
       "expected_modal_ids": [
         "xray-context-modal",
         "xray-devices-modal",
-        "core-modal",
-        "confirm-modal",
         "routing-dns-over-vless-modal",
         "inbounds-apply-modal",
         "routing-balancer-help-modal",
@@ -1597,27 +1595,29 @@
         "routing-template-edit-modal",
         "outbounds-generator-modal",
         "outbounds-pool-modal",
-        "fm-editor-modal",
+        "routing-dat-contents-modal",
+        "core-modal",
+        "confirm-modal",
         "github-export-modal",
         "github-catalog-modal",
         "donate-modal",
         "ui-settings-modal",
-        "json-editor-modal",
-        "routing-dat-contents-modal"
+        "fm-editor-modal",
+        "json-editor-modal"
       ],
       "forbidden_modal_ids": [
         "xk-resource-dashboard-modal",
         "terminal-history-modal",
-        "mihomo-dns-modal",
-        "mihomo-import-modal",
-        "mihomo-proxy-tools-modal",
-        "mihomo-hwid-modal",
-        "fm-upload-conflict-modal",
-        "mihomo-validation-modal",
         "ssh-modal",
         "ssh-edit-modal",
         "ssh-confirm-modal",
         "ssh-transfer-modal",
+        "mihomo-dns-modal",
+        "mihomo-import-modal",
+        "mihomo-proxy-tools-modal",
+        "mihomo-validation-modal",
+        "mihomo-hwid-modal",
+        "fm-upload-conflict-modal",
         "fm-connect-modal",
         "fm-knownhosts-modal",
         "fm-create-modal",
@@ -1669,22 +1669,21 @@
       "expected_modal_ids": [
         "core-modal",
         "confirm-modal",
-        "mihomo-dns-modal",
-        "mihomo-import-modal",
-        "mihomo-proxy-tools-modal",
-        "fm-editor-modal",
         "github-export-modal",
         "github-catalog-modal",
         "donate-modal",
         "ui-settings-modal",
-        "json-editor-modal",
-        "mihomo-validation-modal"
+        "mihomo-dns-modal",
+        "mihomo-import-modal",
+        "mihomo-proxy-tools-modal",
+        "mihomo-validation-modal",
+        "fm-editor-modal",
+        "json-editor-modal"
       ],
       "forbidden_modal_ids": [
         "xk-resource-dashboard-modal",
         "xray-context-modal",
         "xray-devices-modal",
-        "terminal-history-modal",
         "routing-dns-over-vless-modal",
         "inbounds-apply-modal",
         "routing-balancer-help-modal",
@@ -1694,13 +1693,14 @@
         "routing-template-edit-modal",
         "outbounds-generator-modal",
         "outbounds-pool-modal",
-        "mihomo-hwid-modal",
-        "fm-upload-conflict-modal",
         "routing-dat-contents-modal",
+        "terminal-history-modal",
         "ssh-modal",
         "ssh-edit-modal",
         "ssh-confirm-modal",
         "ssh-transfer-modal",
+        "mihomo-hwid-modal",
+        "fm-upload-conflict-modal",
         "fm-connect-modal",
         "fm-knownhosts-modal",
         "fm-create-modal",

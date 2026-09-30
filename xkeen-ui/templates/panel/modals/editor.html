@@ -1,0 +1,44 @@
+{% from "panel/macros.html" import op_icon %}
+    <!-- Модальный JSON-редактор для 03_inbounds.json / 04_outbounds.json -->
+    <div id="json-editor-modal" class="modal hidden" data-operator-modal-family="editor-workbench">
+      <div class="modal-content">
+        <div class="modal-header">
+          <span class="modal-title" id="json-editor-title">Редактор JSON</span>
+          <button type="button" class="modal-close" id="json-editor-close-btn" aria-label="Закрыть" title="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body">
+          {#
+            NOTE:
+            The modal title already contains the active filename (e.g. "Редактор 03_inbounds.json").
+            Showing an extra "Файл: …" row wastes vertical space in small editors.
+            Keep the element for backward-compat (JS can still set text), but hide it by default.
+          #}
+          <p id="json-editor-file-label" class="xk-editor-file-label hidden"></p>
+
+          <div class="xk-editor-toolbar xk-editor-workbench-toolbar" id="json-editor-toolbar">
+            <!-- Engine toggle (CodeMirror / Monaco) -->
+            <div class="xk-editor-engine" id="json-editor-engine">
+              <span class="xk-editor-engine-label">Редактор</span>
+              <select id="json-editor-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" data-tooltip="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" aria-label="Выбор движка редактора">
+                <option value="codemirror">CodeMirror</option>
+                <option value="monaco">Monaco</option>
+              </select>
+            </div>
+
+          </div>
+
+          <textarea id="json-editor-textarea" spellcheck="false"></textarea>
+          <div id="json-editor-monaco" class="xk-monaco-editor xk-monaco-editor--modal hidden" aria-label="Monaco editor host"></div>
+          <div id="json-editor-runtime-meta" class="xk-editor-runtime-meta" aria-live="polite">
+            <span id="json-editor-comments-status" class="xk-editor-status-label xk-comments-off" role="status" data-tooltip="Статус JSONC sidecar (комментарии)">Комментарии: —</span>
+            <span id="json-editor-schema-status" class="xk-editor-status-label xk-schema-off" role="status" data-tooltip="JSON-схема пока не загружена.">Schema: —</span>
+          </div>
+          <div id="json-editor-error" class="error"></div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="json-editor-format-btn" class="btn-secondary" data-tooltip="Форматировать JSON/JSONC (с комментариями)">{{ op_icon('format') }}<span class="xk-action-label">Форматировать</span></button>
+          <button id="json-editor-save-btn">{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
+          <button id="json-editor-cancel-btn" data-operator-dismiss-duplicate="true">Отмена</button>
+        </div>
+      </div>
+    </div>

@@ -3,11 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from scripts.panel_template_source import compose_panel_template
+from tests.support.template_blocks import element_markup
 
 ROOT = Path(__file__).resolve().parents[1]
 CSS = (ROOT / "xkeen-ui/static/panel-operator.css").read_text(encoding="utf-8")
 TEMPLATE = compose_panel_template(ROOT)
-MODAL = TEMPLATE[TEMPLATE.index('<div id="routing-dns-over-vless-modal"'):TEMPLATE.index('<div id="mihomo-dns-modal"')]
+MODAL = element_markup(TEMPLATE, "routing-dns-over-vless-modal")
 
 
 def test_modal_starts_in_a_known_layout():

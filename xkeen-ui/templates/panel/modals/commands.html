@@ -1,0 +1,285 @@
+{% from "panel/macros.html" import op_icon %}
+    <!-- Мини-терминал XKeen -->
+    <div id="terminal-overlay" class="terminal-overlay" style="display:none;">
+      <div class="terminal-window">
+        <div class="terminal-header">
+	          <div class="terminal-header-left">
+	            <span>Терминал XKeen</span>
+	            <span id="terminal-conn-lamp" class="service-status-lamp terminal-conn-lamp" data-state="stopped" title="Терминал: отключено" aria-label="Статус терминала"></span>
+	            <span id="terminal-uptime" class="terminal-uptime" title="Аптайм">00:00</span>
+</div>
+	          <div class="terminal-toolbar" aria-label="Terminal toolbar">
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-fullscreen" title="Полный экран / обычный режим" aria-label="Полный экран / обычный режим">{{ op_icon('fullscreen') }}</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-overflow" title="Меню терминала" aria-label="Меню терминала">{{ op_icon('more') }}</button>
+
+              <div id="terminal-overflow-menu" class="terminal-overflow-menu hidden" role="menu" aria-label="Меню терминала">
+                <div class="terminal-menu-section" aria-label="Сессия" data-collapsible="1" data-section="session">
+                  <div class="terminal-menu-title">Сессия</div>
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-reconnect" title="Переподключиться" aria-label="Переподключиться">{{ op_icon('reload') }}<span class="xk-action-label">Переподключиться</span></button>
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-retry-now" title="Повторить сейчас" aria-label="Повторить сейчас">{{ op_icon('reload') }}<span class="xk-action-label">Повторить сейчас</span></button>
+                  <button type="button" class="terminal-tool-btn terminal-tool-btn-danger" id="terminal-btn-stop-retry" title="Остановить автоподключение" aria-label="Остановить автоподключение">{{ op_icon('stop') }}<span class="xk-action-label">Остановить автоподключение</span></button>
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-new-session" title="Новая сессия" aria-label="Новая сессия">{{ op_icon('add-node') }}<span class="xk-action-label">Новая сессия</span></button>
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-detach" title="Отсоединиться (оставить PTY живым)" aria-label="Отсоединиться">{{ op_icon('detach') }}<span class="xk-action-label">Отсоединиться</span></button>
+                  <button type="button" class="terminal-tool-btn terminal-tool-btn-danger" id="terminal-btn-kill" title="Завершить PTY-сессию" aria-label="Завершить PTY">{{ op_icon('stop') }}<span class="xk-action-label">Завершить сессию</span></button>
+                </div>
+
+                <div class="terminal-menu-sep" role="separator" aria-hidden="true"></div>
+
+                <div class="terminal-menu-section" aria-label="Сигналы" data-collapsible="1" data-section="signals">
+                  <div class="terminal-menu-title">Сигналы</div>
+                  <button type="button" class="terminal-tool-btn terminal-tool-btn-kbd" id="terminal-btn-ctrlc" title="Отправить Ctrl+C" aria-label="Отправить Ctrl+C">Ctrl+C</button>
+                  <button type="button" class="terminal-tool-btn terminal-tool-btn-kbd" id="terminal-btn-ctrld" title="Отправить Ctrl+D" aria-label="Отправить Ctrl+D">Ctrl+D</button>
+                  <button type="button" class="terminal-signals-item terminal-pty-only" data-terminal-signal="INT" title="Отправить SIGINT">SIGINT</button>
+                  <button type="button" class="terminal-signals-item terminal-pty-only" data-terminal-signal="TERM" title="Отправить SIGTERM">SIGTERM</button>
+                  <button type="button" class="terminal-signals-item terminal-pty-only" data-terminal-signal="HUP" title="Отправить SIGHUP">SIGHUP</button>
+                  <button type="button" class="terminal-signals-item terminal-tool-btn-danger terminal-pty-only" data-terminal-signal="KILL" title="Отправить SIGKILL">SIGKILL</button>
+                  <button type="button" class="terminal-signals-item terminal-pty-only" data-terminal-signal="QUIT" title="Отправить SIGQUIT">SIGQUIT</button>
+                </div>
+
+                <div class="terminal-menu-sep" role="separator" aria-hidden="true"></div>
+
+                <div class="terminal-menu-section" aria-label="Инструменты" data-collapsible="1" data-section="tools">
+                  <div class="terminal-menu-title">Инструменты</div>
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-xraylogs" data-menu-keepopen="1" title="Логи Xray (tail -f в PTY)" aria-label="Логи Xray">{{ op_icon('list-details') }}<span class="xk-action-label">Логи Xray</span></button>
+                  <div id="terminal-xraylogs-menu" class="terminal-xraylogs-menu hidden" role="menu" aria-label="Логи Xray">
+                    <div class="terminal-xraylogs-row">
+                      <select id="terminal-xraylogs-file" class="xray-log-select" title="Файл лога" aria-label="Файл лога">
+                        <option value="error">error.log</option>
+                        <option value="access">access.log</option>
+                      </select>
+                      <select id="terminal-xraylogs-level" class="xray-log-select" title="Уровень error.log" aria-label="Уровень error.log">
+                        <option value="debug">debug</option>
+                        <option value="info">info</option>
+                        <option value="warning" selected>warning</option>
+                        <option value="error">error</option>
+                      </select>
+                    </div>
+                    <div class="terminal-xraylogs-actions">
+                      <button type="button" class="terminal-tool-btn terminal-xraylogs-iconbtn" id="terminal-xraylogs-start" title="Старт" aria-label="Запустить tail">{{ op_icon('play') }}</button>
+                      <button type="button" class="terminal-tool-btn terminal-tool-btn-danger terminal-xraylogs-iconbtn" id="terminal-xraylogs-stop" title="Стоп (остановить tail)" aria-label="Остановить tail">{{ op_icon('stop') }}</button>
+                      <button type="button" class="terminal-tool-btn terminal-tool-btn-danger terminal-xraylogs-iconbtn" id="terminal-xraylogs-disable" title="Отключить логи" aria-label="Отключить логи">{{ op_icon('alert') }}</button>
+                    </div>
+                  </div>
+
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-ssh" title="Профили SSH" aria-label="Профили SSH">SSH Профили</button>
+                  <button type="button" class="terminal-tool-btn" id="terminal-history-btn" title="История команд" aria-label="История">{{ op_icon('list-details') }}<span class="xk-action-label">История</span></button>
+                </div>
+
+                <div class="terminal-menu-sep" role="separator" aria-hidden="true"></div>
+
+                <div class="terminal-menu-section" aria-label="Окно">
+                  <div class="terminal-menu-title">Окно</div>
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-minimize" title="Свернуть (скрыть окно, не разрывая WS)" aria-label="Свернуть">{{ op_icon('minimize') }}<span class="xk-action-label">Свернуть</span></button>
+                </div>
+              </div>
+
+              <button type="button" class="terminal-close" id="terminal-btn-close" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+            </div>
+        </div>
+        <input id="terminal-command"
+               class="terminal-command"
+               type="text"
+               placeholder="Команда (например: ls -la /)">
+	        <div class="terminal-search-row" id="terminal-search-row" aria-label="Terminal search">
+	          <input id="terminal-search-input"
+	                 class="terminal-search-input"
+	                 type="text"
+	                 placeholder="Поиск в терминале (Ctrl+F / F3)"
+	                 autocomplete="off"
+	                 spellcheck="false">
+	          <button type="button" class="terminal-search-btn" id="terminal-search-prev" title="Предыдущее (Shift+F3)" aria-label="Предыдущее совпадение">{{ op_icon('move-up') }}</button>
+	          <button type="button" class="terminal-search-btn" id="terminal-search-next" title="Следующее (F3 / Enter)" aria-label="Следующее совпадение">{{ op_icon('move-down') }}</button>
+	          <span id="terminal-search-counter" class="terminal-search-counter" title="Совпадения" aria-label="Количество совпадений">0/0</span>
+	          <button type="button" class="terminal-search-btn" id="terminal-search-clear" title="Очистить" aria-label="Очистить поиск">{{ op_icon('close') }}</button>
+	        </div>
+        <div id="terminal-ws-notice" class="terminal-ws-notice hidden" role="status" aria-live="polite"></div>
+        <div id="terminal-xterm" class="terminal-output hidden"></div>
+        <pre id="terminal-output" class="terminal-output"></pre>
+        <div class="terminal-footer" aria-label="Terminal footer toolbar">
+          <div class="terminal-footer-group terminal-footer-group-view" aria-label="Отображение">
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-view-menu" title="Вид" aria-label="Вид">{{ op_icon('preview') }}<span class="xk-action-label">Вид</span></button>
+            <div id="terminal-view-menu" class="terminal-view-menu hidden" role="menu" aria-label="Вид">
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-font-dec" title="Шрифт −" aria-label="Шрифт меньше">A− Шрифт меньше</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-font-inc" title="Шрифт +" aria-label="Шрифт больше">A+ Шрифт больше</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-cursorblink" title="Мигание курсора" aria-label="Мигание курсора">▮ Мигание курсора</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-ansi" title="ANSI-фильтр (скрыть/показать ANSI-коды)" aria-label="ANSI-фильтр">ANSI ANSI-фильтр</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-loghl" title="Подсветка логов" aria-label="Подсветка логов">{{ op_icon('format') }}<span class="xk-action-label">Подсветка логов</span></button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-follow" title="Автопрокрутка" aria-label="Автопрокрутка">{{ op_icon('more') }}<span class="xk-action-label">Следить</span></button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-bottom" title="В конец" aria-label="В конец">{{ op_icon('move-down') }}<span class="xk-action-label">В конец</span></button>
+            </div>
+          </div>
+
+          <div class="terminal-footer-group terminal-footer-group-buffer" id="terminal-buffer-group" aria-label="Буфер обмена">
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-buffer-menu" title="Буфер" aria-label="Буфер">{{ op_icon('more') }}<span class="xk-action-label">Буфер</span></button>
+            <div id="terminal-buffer-menu" class="terminal-buffer-menu hidden" role="menu" aria-label="Буфер">
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-copy" title="Копировать" aria-label="Копировать">{{ op_icon('duplicate') }}<span class="xk-action-label">Копировать</span></button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-copyall" title="Копировать весь буфер" aria-label="Копировать весь буфер">{{ op_icon('duplicate') }}<span class="xk-action-label">Копировать всё</span></button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-paste" title="Вставить" aria-label="Вставить">{{ op_icon('import') }}<span class="xk-action-label">Вставить</span></button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-clear" title="Очистить" aria-label="Очистить">{{ op_icon('clear') }}<span class="xk-action-label">Очистить</span></button>
+
+              <div class="terminal-menu-sep" role="separator" aria-hidden="true"></div>
+
+              <div class="terminal-menu-title terminal-menu-title-inline">Скачать</div>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-download" title="Скачать вывод (.txt)" aria-label="Скачать вывод">.txt</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-download-html" title="Скачать вывод (.html, с цветами)" aria-label="Скачать вывод HTML">.html</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-snapshot-vt" title="Снапшот VT (с ESC-последовательностями)" aria-label="Снапшот VT">VT (snapshot)</button>
+            </div>
+          </div>
+
+          <div class="terminal-footer-group terminal-footer-group-commands" id="terminal-commands-group" aria-label="Команды">
+            <span class="terminal-footer-label">Команды</span>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-commands" title="Быстрые команды" aria-label="Быстрые команды">{{ op_icon('more') }}<span class="xk-action-label">Команды</span></button>
+            <div id="terminal-commands-menu" class="terminal-commands-menu hidden" role="menu" aria-label="Меню команд">
+              <div class="terminal-commands-head">
+                <div class="terminal-commands-title">Быстрые команды</div>
+                <div class="terminal-commands-mode" role="group" aria-label="Mode">
+                  <button type="button" class="terminal-commands-mode-btn" id="terminal-qc-mode-insert" title="Вставить (lite) или набрать в PTY">Insert</button>
+                  <button type="button" class="terminal-commands-mode-btn" id="terminal-qc-mode-run" title="Выполнить (PTY или lite)">Run</button>
+                </div>
+              </div>
+              <div class="terminal-commands-list" id="terminal-commands-list"></div>
+              <div class="terminal-commands-hint">Клик — по режиму. Ctrl/⌘+клик — Run, Shift+клик — Insert.</div>
+            </div>
+          </div>
+        </div>
+        <div class="terminal-input-row">
+          <input id="terminal-input"
+                 class="terminal-input"
+                 type="text"
+                 placeholder="Текст для подтверждения (например: yes). Пусто — просто Enter.">
+          <button type="button" class="terminal-send" id="terminal-send-btn">Отправить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- History drawer for terminal commands -->
+    <div id="terminal-history-modal" class="modal modal-drawer hidden" data-operator-modal-family="drawer-help" aria-label="История терминала">
+      <div class="modal-content terminal-history-content">
+        <div class="modal-header">
+          <span class="modal-title">История команд</span>
+          <button type="button" class="modal-close" id="terminal-history-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body">
+          <input id="terminal-history-filter" class="terminal-history-filter" type="text" placeholder="Фильтр (например: iptables, log, ping)" autocomplete="off" spellcheck="false">
+          <div id="terminal-history-list" class="terminal-history-list" role="list"></div>
+          <div class="terminal-history-hint">Клик — вставить в поле команды. Двойной клик — выполнить.</div>
+        </div>
+	        <div class="modal-actions">
+	          <!-- In the history drawer, action buttons should share the same sizing/style.
+	               `terminal-tool-btn` is a compact toolbar style, so we keep only the danger palette here. -->
+	          <button type="button" id="terminal-history-clear-btn" class="terminal-tool-btn-danger" title="Очистить историю команд">{{ op_icon('clear') }}<span class="xk-action-label">Очистить</span></button>
+          <button type="button" id="terminal-history-insert-btn" title="Вставить выбранную команду в поле команды">Вставить</button>
+          <button type="button" id="terminal-history-run-btn" title="Выполнить выбранную команду">Выполнить</button>
+        </div>
+      </div>
+    </div>
+
+<div id="ssh-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-label="SSH profiles">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span class="modal-title">SSH профили</span>
+      <button type="button" class="modal-close" id="ssh-modal-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="xk-modal-gap-8 xk-modal-mb-10" style="display:flex; flex-wrap:wrap;">
+        <button type="button" id="ssh-add-btn">{{ op_icon('add-node') }}<span class="xk-action-label">Добавить</span></button>
+        <button type="button" id="ssh-delete-selected-btn" disabled>{{ op_icon('trash') }}<span class="xk-action-label">Удалить</span></button>
+        <button type="button" id="ssh-export-btn">{{ op_icon('export') }}<span class="xk-action-label">Export</span></button>
+        <button type="button" id="ssh-import-btn">{{ op_icon('import') }}<span class="xk-action-label">Import</span></button>
+      </div>
+
+      <div id="ssh-profiles-list" class="xk-modal-gap-8" style="display:flex; flex-direction:column;"></div>
+
+      <hr class="xk-modal-m-0 xk-modal-mt-12 xk-modal-mb-12" style="border:0; border-top:1px solid #334155;">
+
+      <div class="xk-modal-gap-8" style="display:flex; flex-direction:column;">
+        <label style="opacity:.85;">Команда (будет отправлена в PTY)</label>
+        <input id="ssh-command-preview" class="terminal-input" style="width:100%;" placeholder="ssh user@host -p 22" />
+        <div class="xk-modal-gap-8" style="display:flex; justify-content:flex-end; flex-wrap:wrap;">
+          <button type="button" id="ssh-copy-preview-btn">{{ op_icon('duplicate') }}<span class="xk-action-label">Copy</span></button>
+          <button type="button" id="ssh-run-preview-btn">{{ op_icon('play') }}<span class="xk-action-label">Run</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SSH profile editor (no browser prompts/alerts) -->
+<div id="ssh-edit-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="SSH profile editor">
+    <div class="modal-content xk-modal-width xk-modal-width-640">
+    <div class="modal-header">
+      <span class="modal-title" id="ssh-edit-title">SSH профиль</span>
+      <button type="button" class="modal-close" id="ssh-edit-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="ssh-form-grid">
+        <label for="ssh-edit-name">Название</label>
+        <input id="ssh-edit-name" class="terminal-input" placeholder="Напр. Домашний роутер" />
+
+        <label for="ssh-edit-host">Host *</label>
+        <input id="ssh-edit-host" class="terminal-input" placeholder="IP или DNS" />
+
+        <label for="ssh-edit-user">User</label>
+        <input id="ssh-edit-user" class="terminal-input" placeholder="root" />
+
+        <label for="ssh-edit-port">Port</label>
+        <input id="ssh-edit-port" class="terminal-input" placeholder="22" inputmode="numeric" />
+
+        <label for="ssh-edit-key">Key path</label>
+        <input id="ssh-edit-key" class="terminal-input" placeholder="/opt/home/user/.ssh/id_ed25519" />
+
+        <label for="ssh-edit-jump">ProxyJump</label>
+        <input id="ssh-edit-jump" class="terminal-input" placeholder="user@jump-host" />
+      </div>
+      <div id="ssh-edit-error" class="error"></div>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="ssh-edit-cancel-btn" data-operator-dismiss-duplicate="true">Отмена</button>
+      <div class="xk-modal-gap-8" style="display:flex; justify-content:flex-end;">
+        <button type="button" id="ssh-edit-delete-btn">{{ op_icon('trash') }}<span class="xk-action-label">Удалить</span></button>
+        <button type="button" class="btn-primary" id="ssh-edit-save-btn">{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Small confirm modal for delete -->
+<div id="ssh-confirm-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Confirm">
+    <div class="modal-content xk-modal-width xk-modal-width-420">
+    <div class="modal-header">
+      <span class="modal-title">Подтверждение</span>
+      <button type="button" class="modal-close" id="ssh-confirm-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
+    </div>
+    <div class="modal-body">
+      <div id="ssh-confirm-text" style="white-space:pre-wrap;"></div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="ssh-confirm-cancel-btn" data-operator-dismiss-duplicate="true">Отмена</button>
+      <button type="button" id="ssh-confirm-ok" class="btn-primary">OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="ssh-transfer-modal" class="modal hidden" data-operator-modal-family="editor-workbench" role="dialog" aria-modal="true" aria-label="SSH profile transfer">
+    <div class="modal-content xk-modal-width xk-modal-width-760">
+    <div class="modal-header">
+      <span class="modal-title" id="ssh-transfer-title">SSH профили</span>
+      <button type="button" class="modal-close" id="ssh-transfer-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
+    </div>
+    <div class="modal-body xk-modal-gap-10" style="display:flex; flex-direction:column;">
+      <div id="ssh-transfer-help" style="opacity:.85;"></div>
+      <textarea id="ssh-transfer-text" class="xkeen-textarea" rows="14" spellcheck="false" style="min-height:280px;"></textarea>
+      <div id="ssh-transfer-error" class="error"></div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="ssh-transfer-cancel-btn" data-operator-dismiss-duplicate="true">Отмена</button>
+      <div class="xk-modal-gap-8" style="display:flex; justify-content:flex-end;">
+        <button type="button" id="ssh-transfer-copy-btn">Копировать</button>
+        <button type="button" class="btn-primary" id="ssh-transfer-submit-btn">Сохранить</button>
+      </div>
+    </div>
+  </div>
+</div>

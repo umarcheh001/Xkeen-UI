@@ -1,0 +1,192 @@
+{% from "panel/macros.html" import op_icon %}
+    <div
+      id="core-modal"
+      class="modal hidden xk-core-modal-shell" data-operator-modal-family="confirm-compact-form"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Выбор ядра XKeen"
+      data-modal-remember="0"
+      data-modal-nopos="1"
+    >
+      <div class="modal-content xk-core-modal-content">
+        <div class="modal-header xk-core-modal-header">
+          <div class="xk-core-titleline">
+            <span class="xk-core-title-icon" aria-hidden="true">{{ op_icon('settings') }}</span>
+            <div class="xk-core-titlebox">
+              <span class="xk-core-kicker">XKEEN · ЯДРО</span>
+              <span class="modal-title">Управление ядром</span>
+            </div>
+          </div>
+          <button type="button" class="modal-close" id="core-modal-close-btn" aria-label="Закрыть" title="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body xk-core-modal-body">
+          <div class="core-select-row xk-core-engine-list" role="radiogroup" aria-label="Выбор ядра XKeen">
+            <div class="xk-core-engine-row">
+              <button type="button" class="core-option xk-core-option" data-core="xray" role="radio" aria-checked="false">
+                <span class="xk-core-option-mark" aria-hidden="true">XR</span>
+                <span class="xk-core-option-copy">
+                  <span class="xk-core-option-title">Xray</span>
+                  <span class="xk-core-option-note">Ядро прокси-сервиса</span>
+                </span>
+              </button>
+            </div>
+            <div class="xk-core-engine-row">
+              <button type="button" class="core-option xk-core-option" data-core="mihomo" role="radio" aria-checked="false">
+                <span class="xk-core-option-mark" aria-hidden="true">MH</span>
+                <span class="xk-core-option-copy">
+                  <span class="xk-core-option-title">Mihomo</span>
+                  <span class="xk-core-option-note">Ядро прокси-сервиса</span>
+                </span>
+              </button>
+            </div>
+          </div>
+          <p id="core-modal-status" class="modal-hint xk-core-status" role="status" aria-live="polite"></p>
+        </div>
+        <div class="modal-actions xk-core-modal-actions">
+          <div class="xk-core-actions-row">
+            <button type="button" id="core-modal-cancel-btn" class="btn-secondary btn-compact" data-operator-dismiss-duplicate="true">Отмена</button>
+            <button type="button" id="core-modal-confirm-btn" class="btn-primary btn-compact">Переключить</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shared confirm modal (replaces browser confirm alerts) -->
+    <div id="confirm-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Подтверждение">
+      <div class="modal-content">
+        <div class="modal-header">
+          <span class="modal-title" id="confirm-modal-title">Подтверждение</span>
+          <button type="button" class="modal-close" id="confirm-modal-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body">
+          <p id="confirm-modal-message" class="modal-description"></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="confirm-modal-cancel-btn" data-operator-dismiss-duplicate="true">Отменить</button>
+          <button type="button" id="confirm-modal-ok-btn" class="btn-danger">OK</button>
+        </div>
+      </div>
+    </div>
+
+<div id="github-export-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form">
+      <div class="modal-content">
+        <div class="modal-header">
+          <span class="modal-title">Выгрузка конфигурации</span>
+          <button type="button" class="modal-close" id="github-export-cancel-btn-header" aria-label="Закрыть" title="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body">
+          <div class="github-export-form">
+            <input id="github-export-tag-input" type="text" placeholder="Тэг конфигурации (опционально)">
+            <textarea id="github-export-desc-input" rows="3" placeholder="Описание конфигурации (опционально)"></textarea>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button id="github-export-cancel-btn" data-operator-dismiss-duplicate="true">Отмена</button>
+          <button id="github-export-confirm-btn">Выгрузить</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="github-catalog-modal" class="modal hidden" data-operator-modal-family="master-detail">
+      <div class="modal-content">
+        <div class="modal-header">
+          <span class="modal-title">Каталог конфигураций</span>
+          <button type="button" class="modal-close" id="github-catalog-close-btn-header" aria-label="Закрыть" title="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body">
+          <div class="github-catalog-messages">
+            <div id="github-catalog-status" class="status xk-modal-mt-0"></div>
+            <div id="github-catalog-error" class="error xk-modal-mt-0" style="display:none;"></div>
+          </div>
+          <div id="github-catalog-list">Загрузка...</div>
+        </div>
+        <div class="modal-actions">
+          <div class="xk-modal-gap-8" style="display:flex; align-items:center; flex-wrap:wrap;">
+            <button type="button" class="btn-secondary btn-compact" id="github-catalog-retry-btn" title="Повторить загрузку каталога">{{ op_icon('refresh') }}<span class="xk-action-label">Повторить</span></button>
+            <span id="github-catalog-stale-pill" class="github-stale-pill hidden" title="Показаны данные из кэша">кэш</span>
+            <a id="github-repo-link" href="{{ github_repo_url }}" target="_blank">Открыть репозиторий на GitHub</a>
+          </div>
+          <div class="xk-modal-gap-8" style="display:flex; align-items:center;">
+            <button id="github-catalog-close-btn" data-operator-dismiss-duplicate="true">Закрыть</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Donate modal (💰 Донат) -->
+    <div id="donate-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Поддержать проект">
+      <div class="modal-content donate-modal-content">
+        <div class="modal-header">
+          <span class="modal-title">💰 Поддержать проект</span>
+          <button type="button" class="modal-close" id="donate-modal-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+
+        <div class="modal-body">
+          <p class="donate-lead">
+            Если вам понравилась панель, вы можете поддержать проект и купить автору кофе ☕
+          </p>
+
+          <div class="donate-coins" role="list">
+            <div class="donate-coin" role="listitem">
+              <div class="donate-coin-title">USDT <span class="donate-coin-sub">(сеть TON)</span></div>
+              <button type="button" class="donate-address xk-tooltip" data-tooltip="Копировать" data-copy="UQBm03wCEyD99CkEjjrfbtk08WrlgKqfyQGoueAwvhMEYV7L" aria-label="Скопировать адрес USDT (TON)">
+                <span class="donate-address-text">UQBm03wCEyD99CkEjjrfbtk08WrlgKqfyQGoueAwvhMEYV7L</span>
+                {{ op_icon('duplicate', 'donate-address-icon') }}
+              </button>
+            </div>
+
+            <div class="donate-coin" role="listitem">
+              <div class="donate-coin-title">TONCOIN</div>
+              <button type="button" class="donate-address xk-tooltip" data-tooltip="Копировать" data-copy="UQBm03wCEyD99CkEjjrfbtk08WrlgKqfyQGoueAwvhMEYV7L" aria-label="Скопировать адрес TONCOIN">
+                <span class="donate-address-text">UQBm03wCEyD99CkEjjrfbtk08WrlgKqfyQGoueAwvhMEYV7L</span>
+                {{ op_icon('duplicate', 'donate-address-icon') }}
+              </button>
+            </div>
+
+            <div class="donate-coin" role="listitem">
+              <div class="donate-coin-title">BITCOIN</div>
+              <button type="button" class="donate-address xk-tooltip" data-tooltip="Копировать" data-copy="bc1quhqk7l53vgmm9djyfktl6sflcvk83wgw0zqka6" aria-label="Скопировать адрес BITCOIN">
+                <span class="donate-address-text">bc1quhqk7l53vgmm9djyfktl6sflcvk83wgw0zqka6</span>
+                {{ op_icon('duplicate', 'donate-address-icon') }}
+              </button>
+            </div>
+
+            <div class="donate-coin" role="listitem">
+              <div class="donate-coin-title">Ethereum <span class="donate-coin-sub">(сеть Ethereum)</span></div>
+              <button type="button" class="donate-address xk-tooltip" data-tooltip="Копировать" data-copy="0x8BA4b535ef7C990B96bc982083f9bFB392134F5e" aria-label="Скопировать адрес Ethereum">
+                <span class="donate-address-text">0x8BA4b535ef7C990B96bc982083f9bFB392134F5e</span>
+                {{ op_icon('duplicate', 'donate-address-icon') }}
+              </button>
+            </div>
+          </div>
+
+          <div class="donate-hint">Нажмите на адрес, чтобы скопировать в буфер обмена.</div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" id="donate-modal-ok-btn" class="btn-secondary">Понятно</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- UI settings modal -->
+    <div id="ui-settings-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-label="Настройки интерфейса" data-modal-focus="#ui-settings-nav-btn-editor">
+      <div class="modal-content xk-ui-settings-modal-content" data-modal-key="ui-settings">
+        <div class="modal-header xk-ui-settings-header">
+          <div class="xk-ui-settings-titlebox">
+            <span class="modal-title">Настройки интерфейса</span>
+          </div>
+          <button type="button" class="modal-close" id="ui-settings-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body xk-ui-settings-body">
+          <div class="xk-ui-settings-shell">
+            <nav id="ui-settings-nav" class="xk-ui-settings-nav" aria-label="Разделы настроек интерфейса"></nav>
+            <div id="ui-settings-sections" class="xk-ui-settings-sections" aria-live="polite"></div>
+          </div>
+        </div>
+        <div class="modal-actions xk-ui-settings-footer">
+          <div id="ui-settings-status" class="modal-hint xk-ui-settings-status is-empty"></div>
+          <button type="button" id="ui-settings-ok-btn" class="btn-secondary" data-operator-dismiss-duplicate="true">Закрыть</button>
+        </div>
+      </div>
+    </div>

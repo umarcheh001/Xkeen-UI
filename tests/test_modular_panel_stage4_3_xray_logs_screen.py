@@ -31,9 +31,8 @@ def test_xray_logs_screen_is_owned_by_engine_xray_partial():
     assert "{% if has_xray %}" not in xray_logs
     assert 'id="view-xray-logs"' in xray_logs
     assert 'data-xk-section="xray-logs"' in xray_logs
-    # Modals are split in 4.4; the log context modal stays in panel.html.
+    # The log context modal is an engine.xray modal partial since 4.4.
     assert 'id="xray-context-modal"' not in xray_logs
-    assert 'id="xray-context-modal"' in panel
     for foreign in ('id="view-routing"', 'id="view-mihomo"', 'id="view-files"'):
         assert foreign not in xray_logs
 

@@ -145,7 +145,7 @@ def test_stage4_1_closure_is_reflected_in_documentation():
     docs_index = DOCS_INDEX.read_text(encoding="utf-8")
 
     for fragment in (
-        "Этапы 0, 1, 2, 3, 3R, 3R.1, 4.1, 4.2 и 4.3 закрыты; следующий —",
+        "Этапы 0, 1, 2, 3, 3R, 3R.1, 4.1, 4.2, 4.3 и 4.4 закрыты;",
         "### Подэтап 4.1. Контракт границ shell, экранов и модальных окон",
         "docs/modular-panel-stage4.1-contract.md",
         "Критерий готовности 4.1:",

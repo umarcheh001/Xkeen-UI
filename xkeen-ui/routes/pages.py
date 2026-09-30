@@ -34,6 +34,8 @@ def _detect_panel_core_ui(active_module_ids: set[str] | None = None) -> dict[str
         has_terminal = "tool.terminal" in active_module_ids
         has_files = "tool.files" in active_module_ids
         has_diagnostics = "tool.advanced-diagnostics" in active_module_ids
+        has_editor = "tool.editor" in active_module_ids
+        has_happ = "integration.happ" in active_module_ids
         available_cores = [
             core
             for core, module_id in (("xray", "engine.xray"), ("mihomo", "engine.mihomo"))
@@ -72,6 +74,8 @@ def _detect_panel_core_ui(active_module_ids: set[str] | None = None) -> dict[str
             "has_terminal": has_terminal,
             "has_files": has_files,
             "has_diagnostics": has_diagnostics,
+            "has_editor": has_editor,
+            "has_happ": has_happ,
             "multi_core": len(available_cores) > 1,
             "panel_sections_whitelist": ",".join(effective_sections) if effective_sections else "__none__",
         }
@@ -118,6 +122,8 @@ def _detect_panel_core_ui(active_module_ids: set[str] | None = None) -> dict[str
         "has_terminal": True,
         "has_files": True,
         "has_diagnostics": True,
+        "has_editor": True,
+        "has_happ": True,
         "multi_core": len(available_cores) > 1,
         "panel_sections_whitelist": ",".join(effective_sections) if effective_sections else "__none__",
     }

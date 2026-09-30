@@ -4048,9 +4048,7 @@ def test_window_text_reaches_the_fragment(tmp_path: Path, monkeypatch):
 
 
 def test_window_has_the_optional_hosts_zone():
-    template = (Path(__file__).resolve().parents[1] / "xkeen-ui" / "templates" / "panel.html").read_text(
-        encoding="utf-8"
-    )
+    template = compose_panel_template(Path(__file__).resolve().parents[1])
     zone = template.split('data-zone="hosts"', 1)[1].split("</details>\n            <details", 1)[0]
     assert 'id="routing-dns-over-vless-hosts"' in zone
     # Переключатель в заголовке, как у прочих типов записей; кнопки,
