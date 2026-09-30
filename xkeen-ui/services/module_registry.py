@@ -33,6 +33,55 @@ LEGACY_FULL_PROFILE = "legacy-full"
 CUSTOM_PROFILE = "custom"
 SAFE_MODE_ENV = "XKEEN_UI_MODULE_SAFE_MODE"
 
+BLUEPRINT_OWNERS: dict[str, str] = {
+    "utils": "core",
+    "ui_settings": "core",
+    "capabilities": "core",
+    "modules": "core",
+    "cores_status": "core",
+    "xkeen_lists": "core",
+    "config_exchange": "core",
+    "service": "core",
+    "devtools": "core",
+    "ws_support": "core",
+    "ws_streams": "core",
+    "routing": "engine.xray",
+    "xray_configs": "engine.xray",
+    "xray_subscriptions": "engine.xray",
+    "xray_logs": "engine.xray",
+    "mihomo": "engine.mihomo",
+    "mihomo_clash": "engine.mihomo",
+    "happ_decryptor": "integration.happ",
+    "backups": "tool.backups",
+    "commands": "tool.terminal",
+    "system_resources": "tool.advanced-diagnostics",
+    "storage_usb": "tool.files",
+    "fs": "tool.files",
+    "remotefs": "tool.files",
+    "fileops": "tool.files",
+}
+
+WS_HANDLER_OWNERS: dict[str, str] = {
+    "/ws/xray-logs": "engine.xray",
+    "/ws/mihomo-clash/connections": "engine.mihomo",
+    "/ws/mihomo-clash/telemetry": "engine.mihomo",
+    "/ws/mihomo-clash/logs": "engine.mihomo",
+    "/ws/pty": "tool.terminal",
+    "/ws/events": "core",
+}
+
+_MODULE_INSTALL_MARKERS: dict[str, tuple[str, ...]] = {
+    "core": ("xkeen-ui/services/module_registry.py",),
+    "engine.xray": ("xkeen-ui/routes/routing/__init__.py", "xkeen-ui/services/xray_subscriptions.py"),
+    "engine.mihomo": ("xkeen-ui/routes/mihomo.py", "xkeen-ui/services/mihomo_subscriptions.py"),
+    "tool.editor": ("xkeen-ui/static/js/pages/codemirror6.shared.js",),
+    "tool.terminal": ("xkeen-ui/static/js/pages/terminal.lazy.entry.js",),
+    "tool.files": ("xkeen-ui/static/js/pages/file_manager.lazy.entry.js",),
+    "tool.backups": ("xkeen-ui/templates/backups.html",),
+    "integration.happ": ("xkeen-ui/services/happ_links.py",),
+    "tool.advanced-diagnostics": ("xkeen-ui/routes/devtools.py", "xkeen-ui/templates/devtools.html"),
+}
+
 
 def _load_module_sizes() -> dict[str, int]:
     path = os.path.join(os.path.dirname(os.path.dirname(__file__)), MODULE_SIZES_FILENAME)
@@ -206,8 +255,8 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
     ),
     ModuleDefinition(
         id="integration.happ",
-        name="Happ",
-        description="Декриптор Happ, payload/link helpers и Mihomo HWID/Happ subscriptions.",
+        name="Subscription link integration",
+        description="Общие link/payload helpers подписок и optional subscription integration flows.",
         version=REGISTRY_VERSION,
         dependencies=("core",),
         conflicts=(),
@@ -220,7 +269,7 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
     ModuleDefinition(
         id="tool.advanced-diagnostics",
         name="Расширенная диагностика",
-        description="DevTools, ресурсы, router diagnostics, update UI и служебные журналы.",
+        description="DevTools, ресурсы, router diagnostics и служебные журналы.",
         version=REGISTRY_VERSION,
         dependencies=("core",),
         conflicts=(),
@@ -266,6 +315,7 @@ class ModuleRegistry:
         self._lock = threading.RLock()
         self._runtime_activation: dict[str, Any] | None = None
         self._recovery_reason: str | None = None
+        self._state_read_only_recovery = False
 
     @property
     def state_path(self) -> str:
@@ -278,6 +328,23 @@ class ModuleRegistry:
 
         with self._lock:
             state, changed = self._load_state_locked()
+            try:
+                from services.cores import detect_running_core
+
+                running_core = detect_running_core()
+            except Exception:
+                running_core = None
+            running_module = {
+                "xray": "engine.xray",
+                "mihomo": "engine.mihomo",
+            }.get(running_core or "")
+            if running_module:
+                item = state["modules"].get(running_module) or {}
+                if not bool(item.get("enabled")):
+                    item["enabled"] = True
+                    item["blocked_reason"] = "deferred_disable_blocked"
+                    state["modules"][running_module] = item
+                    changed = True
             if state["restart_required"]:
                 state["restart_required"] = False
                 changed = True
@@ -297,14 +364,21 @@ class ModuleRegistry:
 
         safe_mode = str(self._environ_value(SAFE_MODE_ENV) or "").strip().lower()
         if safe_mode == LEGACY_FULL_PROFILE:
+            installed_ids = [
+                module_id for module_id in MODULE_IDS if self._is_module_installed(module_id)
+            ]
             return {
                 "schema_version": STATE_SCHEMA_VERSION,
                 "api_version": API_VERSION,
                 "profile": LEGACY_FULL_PROFILE,
                 "legacy_compatibility": True,
                 "runtime_gates_active": True,
-                "active_module_ids": list(MODULE_IDS),
-                "inactive_modules": {},
+                "active_module_ids": installed_ids,
+                "inactive_modules": {
+                    module_id: "module_not_installed"
+                    for module_id in MODULE_IDS
+                    if module_id not in installed_ids
+                },
                 "restart_required": False,
                 "safe_mode": True,
                 "safe_mode_reason": "environment",
@@ -321,7 +395,10 @@ class ModuleRegistry:
                     continue
                 if not bool(item.get("enabled")):
                     inactive[module_id] = str(item.get("reason") or "user_disabled")
-                elif legacy_compatibility or bool(item.get("effective_enabled")):
+                elif (
+                    (legacy_compatibility and bool(item.get("installed", True)))
+                    or bool(item.get("effective_enabled"))
+                ):
                     active.append(module_id)
                 else:
                     inactive[module_id] = str(item.get("reason") or "module_unavailable")
@@ -366,6 +443,16 @@ class ModuleRegistry:
         """Publish the activation used by the current Flask process."""
 
         self._runtime_activation = dict(activation)
+
+    def record_initialization_failure(self, module_id: str, error: BaseException) -> None:
+        """Persist a non-fatal optional-module initialization failure."""
+
+        normalized_id = self._require_known_module(module_id)
+        message = str(error or "initialization_failed").strip()[:_MAX_LAST_ERROR_CHARS]
+        with self._lock:
+            state, _normalized = self._load_state_locked()
+            state["modules"][normalized_id]["last_error"] = message or "initialization_failed"
+            self._write_state_locked(state)
 
     def is_runtime_active(self, module_id: str) -> bool:
         """Return whether a module is active for backend registration."""
@@ -446,7 +533,19 @@ class ModuleRegistry:
             )
 
         with self._lock:
+            if self._state_read_only_recovery:
+                raise ModuleRegistryError(
+                    "state_schema_newer",
+                    "Состояние модулей создано более новой версией панели.",
+                    status=409,
+                )
             state, normalized = self._load_state_locked()
+            if self._state_read_only_recovery:
+                raise ModuleRegistryError(
+                    "state_schema_newer",
+                    "Состояние модулей создано более новой версией панели.",
+                    status=409,
+                )
             definition = _DEFINITIONS_BY_ID[normalized_id]
             current_enabled = bool(state["modules"][normalized_id]["enabled"])
 
@@ -491,6 +590,7 @@ class ModuleRegistry:
             changed = current_enabled != enabled or (enabled and dependency_changed)
             if changed:
                 state["modules"][normalized_id]["enabled"] = enabled
+                state["modules"][normalized_id].pop("blocked_reason", None)
                 state["profile"] = CUSTOM_PROFILE
                 if definition.requires_restart:
                     state["restart_required"] = True
@@ -530,14 +630,15 @@ class ModuleRegistry:
             schema_version = raw.get("schema_version") if isinstance(raw, dict) else None
             if isinstance(schema_version, int) and not isinstance(schema_version, bool):
                 if schema_version > STATE_SCHEMA_VERSION:
-                    self._recover_state("unknown_schema_version")
-                    return self._default_state(), True
+                    self._recover_state("unknown_schema_version", read_only=True)
+                    return self._default_state(), False
 
         state, normalized = self._normalize_state(raw)
         return state, normalized or not file_exists
 
-    def _recover_state(self, reason: str) -> None:
+    def _recover_state(self, reason: str, *, read_only: bool = False) -> None:
         self._recovery_reason = str(reason)
+        self._state_read_only_recovery = bool(read_only)
         if os.path.isfile(self._path):
             stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             backup_path = f"{self._path}.bad.{stamp}"
@@ -635,6 +736,11 @@ class ModuleRegistry:
                         changed = True
                 elif raw_error is not None:
                     changed = True
+                blocked_reason = raw_item.get("blocked_reason")
+                if isinstance(blocked_reason, str) and blocked_reason.strip():
+                    last_error = last_error or None
+                elif blocked_reason is not None:
+                    changed = True
             elif raw_item is not None:
                 changed = True
 
@@ -643,6 +749,8 @@ class ModuleRegistry:
                 changed = True
 
             item: dict[str, Any] = {"enabled": enabled}
+            if isinstance(raw_item, dict) and isinstance(raw_item.get("blocked_reason"), str):
+                item["blocked_reason"] = raw_item["blocked_reason"].strip()
             if last_error:
                 item["last_error"] = last_error
             modules[definition.id] = item
@@ -725,6 +833,7 @@ class ModuleRegistry:
 
             definition = _DEFINITIONS_BY_ID[module_id]
             module_state = state["modules"][module_id]
+            installed = self._is_module_installed(module_id)
             requested_enabled = bool(module_state["enabled"])
             requirements = requirement_status[module_id]
             missing_requirements = [
@@ -740,8 +849,13 @@ class ModuleRegistry:
             reason: str | None = None
             effective_enabled = False
             last_error = module_state.get("last_error")
+            blocked_reason = module_state.get("blocked_reason")
+            editor_required_by_engine = module_id == "tool.editor" and any(
+                bool(state["modules"][engine_id]["enabled"])
+                for engine_id in ("engine.xray", "engine.mihomo")
+            )
 
-            if not definition.installed:
+            if not installed:
                 status = "not_installed"
                 reason = "module_not_installed"
             elif not requested_enabled:
@@ -758,6 +872,8 @@ class ModuleRegistry:
                 reason = "dependency_unavailable"
             else:
                 effective_enabled = True
+                if isinstance(blocked_reason, str) and blocked_reason:
+                    reason = blocked_reason
 
             payload: dict[str, Any] = {
                 "id": definition.id,
@@ -772,13 +888,13 @@ class ModuleRegistry:
                 "system_requirements": requirements,
                 "size_bytes": definition.size_bytes,
                 "removable": definition.removable,
-                "can_disable": definition.can_disable,
+                "can_disable": definition.can_disable and not editor_required_by_engine,
                 "requires_restart": definition.requires_restart,
                 "frontend": {
                     "bundles": list(definition.frontend_bundles),
                     "navigation_views": list(definition.navigation_views),
                 },
-                "installed": definition.installed,
+                "installed": installed,
                 # `enabled` is the persisted user request; `effective_enabled`
                 # is the dependency/system eligibility result.
                 "enabled": requested_enabled,
@@ -791,12 +907,32 @@ class ModuleRegistry:
             }
             if isinstance(last_error, str) and last_error:
                 payload["last_error"] = last_error
+            if isinstance(blocked_reason, str) and blocked_reason:
+                payload["blocked_reason"] = blocked_reason
 
             resolving.remove(module_id)
             results[module_id] = payload
             return payload
 
         return [resolve(definition.id) for definition in MODULE_DEFINITIONS]
+
+    def _is_module_installed(self, module_id: str) -> bool:
+        manifest_path = os.path.join(self.ui_state_dir, "module-installed.json")
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as handle:
+                manifest = json.load(handle)
+            values = manifest.get("modules") if isinstance(manifest, dict) else None
+            if isinstance(values, dict) and module_id in values:
+                return bool(values[module_id])
+            if isinstance(values, list):
+                return module_id in {str(item) for item in values}
+        except Exception:
+            pass
+        markers = _MODULE_INSTALL_MARKERS.get(module_id)
+        if not markers:
+            return True
+        root = os.path.dirname(os.path.dirname(__file__))
+        return all(os.path.isfile(os.path.join(root, os.path.relpath(marker, "xkeen-ui"))) for marker in markers)
 
     def _requirement_status(self, definition: ModuleDefinition) -> list[dict[str, Any]]:
         return [

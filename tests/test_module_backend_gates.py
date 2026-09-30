@@ -5,6 +5,9 @@ from pathlib import Path
 from flask import Flask
 
 import routes
+import routes.commands
+import routes.happ_decryptor
+import routes.mihomo
 from core.context import AppContext
 from core.settings import Settings
 from services.module_registry import ModuleRegistry
@@ -123,9 +126,21 @@ def test_mihomo_only_keeps_dns_stop_lifecycle_available(tmp_path):
     assert payload["dns_protection"]["active"] is False
 
 
-def test_api_cannot_disable_active_core(tmp_path):
-    app = _register(tmp_path, ["core", "tool.editor", "engine.xray"])
-    response = app.test_client().patch(
+def test_api_uses_running_core_for_deferred_disable_guard(tmp_path, monkeypatch):
+    monkeypatch.setattr("services.cores.detect_running_core", lambda: "xray")
+    app = _register(
+        tmp_path,
+        ["core", "tool.editor", "engine.xray", "engine.mihomo"],
+    )
+    client = app.test_client()
+
+    allowed = client.patch(
+        "/api/modules/engine.mihomo",
+        json={"enabled": False},
+    )
+    assert allowed.status_code == 200
+
+    response = client.patch(
         "/api/modules/engine.xray",
         json={"enabled": False},
     )
@@ -141,6 +156,50 @@ def test_advanced_diagnostics_routes_are_not_exposed_when_optional_module_is_off
     assert client.get("/api/devtools/update/status").status_code == 200
     assert client.get("/api/devtools/env").status_code == 404
     assert client.get("/api/system/resources").status_code == 404
+
+
+def test_optional_module_factory_failures_do_not_stop_core(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        routes.mihomo,
+        "create_mihomo_blueprint",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("mihomo-init")),
+    )
+    app = _register(tmp_path / "mihomo", ["core", "tool.editor", "engine.mihomo"])
+    assert app.test_client().get("/api/modules").status_code == 200
+    mihomo = next(
+        item
+        for item in app.test_client().get("/api/modules").get_json()["modules"]
+        if item["id"] == "engine.mihomo"
+    )
+    assert mihomo["status"] == "failed"
+
+    monkeypatch.setattr(
+        routes.commands,
+        "create_commands_blueprint",
+        lambda: (_ for _ in ()).throw(RuntimeError("terminal-init")),
+    )
+    app = _register(tmp_path / "terminal", ["core", "tool.terminal"])
+    assert app.test_client().get("/api/modules").status_code == 200
+    terminal = next(
+        item
+        for item in app.test_client().get("/api/modules").get_json()["modules"]
+        if item["id"] == "tool.terminal"
+    )
+    assert terminal["status"] == "failed"
+
+    monkeypatch.setattr(
+        routes.happ_decryptor,
+        "create_happ_decryptor_blueprint",
+        lambda: (_ for _ in ()).throw(RuntimeError("integration-init")),
+    )
+    app = _register(tmp_path / "integration", ["core", "integration.happ"])
+    assert app.test_client().get("/api/modules").status_code == 200
+    integration = next(
+        item
+        for item in app.test_client().get("/api/modules").get_json()["modules"]
+        if item["id"] == "integration.happ"
+    )
+    assert integration["status"] == "failed"
 
 
 def test_stage3_closure_is_reflected_in_documentation():

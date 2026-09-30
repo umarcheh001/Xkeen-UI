@@ -222,12 +222,21 @@ def test_unknown_future_schema_is_backed_up_and_recovers_safely(tmp_path):
         encoding="utf-8",
     )
     registry = _registry(tmp_path)
+    original = state_path.read_bytes()
 
     payload = registry.get_registry()
 
     assert payload["profile"] == LEGACY_FULL_PROFILE
     assert payload["recovery_reason"] == "unknown_schema_version"
     assert list(tmp_path.glob("modules.json.bad.*"))
+    assert state_path.read_bytes() == original
+    try:
+        registry.set_enabled("engine.xray", False)
+    except ModuleRegistryError as error:
+        assert error.code == "state_schema_newer"
+        assert error.status == 409
+    else:
+        raise AssertionError("future schema must be read-only")
 
 
 def test_environment_safe_mode_forces_legacy_full_runtime_activation(tmp_path):
@@ -249,6 +258,46 @@ def test_environment_safe_mode_forces_legacy_full_runtime_activation(tmp_path):
     assert activation["safe_mode"] is True
     assert activation["safe_mode_reason"] == "environment"
     assert activation["active_module_ids"] == list(MODULE_IDS)
+
+
+def test_startup_blocks_deferred_disable_of_running_core(tmp_path, monkeypatch):
+    monkeypatch.setattr("services.cores.detect_running_core", lambda: "xray")
+    state = {
+        "schema_version": STATE_SCHEMA_VERSION,
+        "profile": "custom",
+        "restart_required": True,
+        "modules": {
+            module_id: {"enabled": module_id != "engine.xray"}
+            for module_id in MODULE_IDS
+        },
+    }
+    (tmp_path / "modules.json").write_text(json.dumps(state), encoding="utf-8")
+    registry = _registry(tmp_path)
+
+    snapshot = registry.initialize_for_startup()
+    xray = _module(snapshot, "engine.xray")
+
+    assert xray["enabled"] is True
+    assert xray["effective_enabled"] is True
+    assert xray["blocked_reason"] == "deferred_disable_blocked"
+
+
+def test_missing_module_manifest_keeps_safe_mode_from_importing_removed_engine(tmp_path):
+    (tmp_path / "module-installed.json").write_text(
+        json.dumps({"modules": {"engine.mihomo": False}}),
+        encoding="utf-8",
+    )
+    registry = ModuleRegistry(
+        str(tmp_path),
+        which=_available_which,
+        environ={"ComSpec": "cmd.exe", "XKEEN_UI_MODULE_SAFE_MODE": "legacy-full"},
+    )
+
+    payload = registry.get_registry()
+    activation = registry.runtime_activation()
+
+    assert _module(payload, "engine.mihomo")["status"] == "not_installed"
+    assert "engine.mihomo" not in activation["active_module_ids"]
 
 
 def test_module_api_contract_and_mutations(tmp_path):
@@ -314,6 +363,25 @@ def test_registry_sizes_are_loaded_from_generated_manifest():
 
     assert {definition.id for definition in MODULE_DEFINITIONS} == set(sizes)
     assert all(definition.size_bytes == sizes[definition.id] for definition in MODULE_DEFINITIONS)
+
+
+def test_optional_module_metadata_is_neutral_and_registry_owns_runtime_boundaries():
+    metadata = {definition.id: definition for definition in MODULE_DEFINITIONS}
+
+    assert "happ" not in metadata["integration.happ"].name.lower()
+    assert "happ" not in metadata["integration.happ"].description.lower()
+    assert "update" not in metadata["tool.advanced-diagnostics"].description.lower()
+
+
+def test_editor_reports_non_disableable_while_an_engine_depends_on_it(tmp_path):
+    registry = _registry(tmp_path)
+    full = registry.get_registry()
+    assert _module(full, "tool.editor")["can_disable"] is False
+
+    registry.set_enabled("engine.xray", False)
+    registry.set_enabled("engine.mihomo", False)
+    reduced = registry.get_registry()
+    assert _module(reduced, "tool.editor")["can_disable"] is True
 
 
 def test_stage1_closure_is_reflected_in_documentation():

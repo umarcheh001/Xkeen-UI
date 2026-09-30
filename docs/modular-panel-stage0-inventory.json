@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 375,
-      "size_bytes": 5755590,
+      "unit_count": 378,
+      "size_bytes": 5802852,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 17,
-        "backend_service": 49,
-        "backend_test": 162,
+        "backend_service": 51,
+        "backend_test": 163,
         "configuration": 10,
         "frontend_bundle": 3,
         "frontend_entrypoint": 2,
@@ -311,8 +311,8 @@
     },
     {
       "id": "integration.happ",
-      "name": "Happ",
-      "description": "Декриптор Happ, payload/link helpers и Mihomo HWID/Happ subscriptions.",
+      "name": "Subscription link integration",
+      "description": "Общие link/payload helpers подписок и optional subscription integration flows.",
       "depends_on": [
         "core"
       ],
@@ -320,11 +320,11 @@
         "happ-decrypt-universal (optional)"
       ],
       "removable": true,
-      "unit_count": 24,
-      "size_bytes": 347312,
+      "unit_count": 22,
+      "size_bytes": 313892,
       "kind_counts": {
         "backend_route": 1,
-        "backend_service": 8,
+        "backend_service": 6,
         "backend_test": 9,
         "frontend_feature": 3,
         "frontend_test": 2,
@@ -340,18 +340,18 @@
         "xkeen-ui/services/happ_decryptor/errors.py",
         "xkeen-ui/services/happ_decryptor/keys.py",
         "xkeen-ui/services/happ_decryptor/service.py",
-        "xkeen-ui/services/happ_links.py",
-        "xkeen-ui/services/happ_payloads.py",
         "xkeen-ui/services/mihomo_hwid_sub.py",
         "tests/test_happ_decryptor_engine.py",
         "tests/test_happ_decryptor_env.py",
-        "tests/test_happ_decryptor_frontend_contract.py"
+        "tests/test_happ_decryptor_frontend_contract.py",
+        "tests/test_happ_decryptor_keys.py",
+        "tests/test_happ_decryptor_routes.py"
       ]
     },
     {
       "id": "tool.advanced-diagnostics",
       "name": "Расширенная диагностика",
-      "description": "DevTools, ресурсы, router diagnostics, update UI и служебные журналы.",
+      "description": "DevTools, ресурсы, router diagnostics и служебные журналы.",
       "depends_on": [
         "core"
       ],
@@ -417,7 +417,7 @@
       "module_id": "core",
       "kind": "app_runtime",
       "path": "xkeen-ui/app_factory.py",
-      "size_bytes": 34410,
+      "size_bytes": 34708,
       "depends_on": [
         "engine.mihomo",
         "engine.xray",
@@ -533,14 +533,14 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/__init__.py",
-      "size_bytes": 15630,
+      "size_bytes": 16413,
       "depends_on": [
         "tool.advanced-diagnostics",
         "tool.files",
         "engine.xray",
+        "tool.backups",
         "engine.mihomo",
         "integration.happ",
-        "tool.backups",
         "tool.terminal"
       ],
       "starts_background_task": false,
@@ -1569,6 +1569,48 @@
     {
       "module_id": "core",
       "kind": "backend_service",
+      "path": "xkeen-ui/services/happ_links.py",
+      "size_bytes": 25314,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [
+        "XKEEN_HAPP_DECRYPTOR_CMD",
+        "XKEEN_HAPP_DECRYPTOR_REMOTE_URL",
+        "XKEEN_HAPP_DECRYPTOR_TIMEOUT",
+        "XKEEN_HAPP_HELPER_CMD",
+        "XKEEN_HAPP_HELPER_TIMEOUT"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/happ_payloads.py",
+      "size_bytes": 8106,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
       "path": "xkeen-ui/services/io/__init__.py",
       "size_bytes": 358,
       "depends_on": [],
@@ -1772,7 +1814,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_registry.py",
-      "size_bytes": 36194,
+      "size_bytes": 42501,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3833,6 +3875,24 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_modular_panel_stage3r1.py",
+      "size_bytes": 1847,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_modular_panel_stage4_1_contract.py",
       "size_bytes": 6211,
       "depends_on": [],
@@ -3870,8 +3930,12 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_backend_gates.py",
-      "size_bytes": 7128,
-      "depends_on": [],
+      "size_bytes": 9157,
+      "depends_on": [
+        "tool.terminal",
+        "integration.happ",
+        "engine.mihomo"
+      ],
       "starts_background_task": false,
       "background_markers": [],
       "registers_routes": false,
@@ -3906,7 +3970,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_registry.py",
-      "size_bytes": 12881,
+      "size_bytes": 15459,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -15182,50 +15246,6 @@
     {
       "module_id": "integration.happ",
       "kind": "backend_service",
-      "path": "xkeen-ui/services/happ_links.py",
-      "size_bytes": 25314,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "happ-decrypt-universal (optional)"
-      ],
-      "environment_variables": [
-        "XKEEN_HAPP_DECRYPTOR_CMD",
-        "XKEEN_HAPP_DECRYPTOR_REMOTE_URL",
-        "XKEEN_HAPP_DECRYPTOR_TIMEOUT",
-        "XKEEN_HAPP_HELPER_CMD",
-        "XKEEN_HAPP_HELPER_TIMEOUT"
-      ],
-      "removable": true
-    },
-    {
-      "module_id": "integration.happ",
-      "kind": "backend_service",
-      "path": "xkeen-ui/services/happ_payloads.py",
-      "size_bytes": 8106,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "happ-decrypt-universal (optional)"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "integration.happ",
-      "kind": "backend_service",
       "path": "xkeen-ui/services/mihomo_hwid_sub.py",
       "size_bytes": 68929,
       "depends_on": [
@@ -25175,7 +25195,7 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 17,
+        "unit_count": 18,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
@@ -25205,10 +25225,11 @@
       {
         "from": "core",
         "to": "integration.happ",
-        "unit_count": 4,
+        "unit_count": 5,
         "examples": [
           "xkeen-ui/routes/__init__.py",
           "tests/test_check_keys_upstream.py",
+          "tests/test_module_backend_gates.py",
           "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
         ]
@@ -25271,7 +25292,7 @@
       {
         "from": "core",
         "to": "tool.terminal",
-        "unit_count": 14,
+        "unit_count": 15,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
@@ -25442,7 +25463,7 @@
       {
         "from": "integration.happ",
         "to": "core",
-        "unit_count": 24,
+        "unit_count": 22,
         "examples": [
           "xkeen-ui/routes/happ_decryptor.py",
           "xkeen-ui/services/happ_decryptor/__init__.py",
@@ -25450,8 +25471,8 @@
           "xkeen-ui/services/happ_decryptor/errors.py",
           "xkeen-ui/services/happ_decryptor/keys.py",
           "xkeen-ui/services/happ_decryptor/service.py",
-          "xkeen-ui/services/happ_links.py",
-          "xkeen-ui/services/happ_payloads.py"
+          "xkeen-ui/services/mihomo_hwid_sub.py",
+          "tests/test_happ_decryptor_engine.py"
         ]
       },
       {
@@ -25915,7 +25936,7 @@
       {
         "from": "integration.happ",
         "to": "core",
-        "unit_count": 13,
+        "unit_count": 11,
         "examples": [
           "xkeen-ui/routes/happ_decryptor.py",
           "xkeen-ui/services/happ_decryptor/__init__.py",
@@ -25923,8 +25944,8 @@
           "xkeen-ui/services/happ_decryptor/errors.py",
           "xkeen-ui/services/happ_decryptor/keys.py",
           "xkeen-ui/services/happ_decryptor/service.py",
-          "xkeen-ui/services/happ_links.py",
-          "xkeen-ui/services/happ_payloads.py"
+          "xkeen-ui/services/mihomo_hwid_sub.py",
+          "xkeen-ui/static/js/features/compat/mihomo_hwid_sub.js"
         ]
       },
       {
@@ -26234,7 +26255,7 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 17,
+        "unit_count": 18,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
@@ -26264,10 +26285,11 @@
       {
         "from": "core",
         "to": "integration.happ",
-        "unit_count": 4,
+        "unit_count": 5,
         "examples": [
           "xkeen-ui/routes/__init__.py",
           "tests/test_check_keys_upstream.py",
+          "tests/test_module_backend_gates.py",
           "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
         ]
@@ -26330,7 +26352,7 @@
       {
         "from": "core",
         "to": "tool.terminal",
-        "unit_count": 14,
+        "unit_count": 15,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",

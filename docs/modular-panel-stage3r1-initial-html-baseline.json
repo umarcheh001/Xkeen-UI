@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "stage": {
+    "id": "3R.1.6",
+    "name": "Baseline initial HTML до выделения экранов",
+    "status": "closed",
+    "closed_on": "2026-09-30"
+  },
+  "source": {
+    "entrypoint": "xkeen-ui/templates/panel.html",
+    "composed_source": "scripts/panel_template_source.py",
+    "raw_sha256": "38b6b66753297f8119b40dc927d07148011283f6f6bbd0ed706077bbbcc68ff0",
+    "composed_sha256": "2c3cd8f374f949384859e759ae1646781ebee794992a3d2dc49500a1f12ea82e",
+    "raw_utf8_bytes": 410703,
+    "composed_utf8_bytes": 425148,
+    "composed_line_count": 5608,
+    "dom_id_count": 1348,
+    "duplicate_dom_ids": []
+  },
+  "profiles": [
+    {
+      "id": "legacy-full",
+      "active_module_ids": [
+        "core",
+        "engine.xray",
+        "engine.mihomo",
+        "tool.editor",
+        "tool.terminal",
+        "tool.files",
+        "tool.backups",
+        "integration.happ",
+        "tool.advanced-diagnostics"
+      ],
+      "expected_views": [
+        "routing",
+        "mihomo",
+        "xkeen",
+        "xray-logs",
+        "commands",
+        "files"
+      ],
+      "expected_navigation_sections": [
+        "routing",
+        "mihomo",
+        "xkeen",
+        "xray-logs",
+        "commands",
+        "files",
+        "mihomo-generator",
+        "devtools",
+        "donate"
+      ],
+      "expected_modal_count": 53,
+      "forbidden_modal_count": 0
+    },
+    {
+      "id": "full",
+      "active_module_ids": [
+        "core",
+        "engine.xray",
+        "engine.mihomo",
+        "tool.editor",
+        "tool.terminal",
+        "tool.files",
+        "tool.backups",
+        "integration.happ",
+        "tool.advanced-diagnostics"
+      ],
+      "expected_views": [
+        "routing",
+        "mihomo",
+        "xkeen",
+        "xray-logs",
+        "commands",
+        "files"
+      ],
+      "expected_navigation_sections": [
+        "routing",
+        "mihomo",
+        "xkeen",
+        "xray-logs",
+        "commands",
+        "files",
+        "mihomo-generator",
+        "devtools",
+        "donate"
+      ],
+      "expected_modal_count": 53,
+      "forbidden_modal_count": 0
+    },
+    {
+      "id": "xray-only",
+      "active_module_ids": [
+        "core",
+        "tool.editor",
+        "engine.xray"
+      ],
+      "expected_views": [
+        "routing",
+        "xkeen",
+        "xray-logs"
+      ],
+      "expected_navigation_sections": [
+        "routing",
+        "xkeen",
+        "xray-logs",
+        "donate"
+      ],
+      "expected_modal_count": 20,
+      "forbidden_modal_count": 33
+    },
+    {
+      "id": "mihomo-only",
+      "active_module_ids": [
+        "core",
+        "tool.editor",
+        "engine.mihomo"
+      ],
+      "expected_views": [
+        "mihomo",
+        "xkeen"
+      ],
+      "expected_navigation_sections": [
+        "mihomo",
+        "xkeen",
+        "mihomo-generator",
+        "donate"
+      ],
+      "expected_modal_count": 12,
+      "forbidden_modal_count": 41
+    }
+  ],
+  "reproduce": {
+    "command": "python .\\scripts\\generate_modular_panel_stage3r1_baseline.py --root .",
+    "note": "This is a structural initial-HTML baseline. Runtime browser Network/RSS measurements remain in Stage 10."
+  }
+}

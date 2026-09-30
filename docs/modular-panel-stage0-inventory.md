@@ -36,14 +36,14 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 375 | 5.49 МБ | 75 | 4 | 35 | нет |
+| `core` | 378 | 5.53 МБ | 75 | 4 | 35 | нет |
 | `engine.xray` | 114 | 3.33 МБ | 52 | 3 | 14 | да |
 | `engine.mihomo` | 126 | 2.84 МБ | 88 | 4 | 6 | да |
 | `tool.editor` | 25 | 808.7 КБ | 0 | 0 | 2 | да |
 | `tool.terminal` | 49 | 496.9 КБ | 2 | 2 | 2 | да |
 | `tool.files` | 85 | 972.6 КБ | 43 | 1 | 1 | да |
 | `tool.backups` | 8 | 107.0 КБ | 17 | 0 | 1 | да |
-| `integration.happ` | 24 | 339.2 КБ | 5 | 0 | 1 | да |
+| `integration.happ` | 22 | 306.5 КБ | 5 | 0 | 1 | да |
 | `tool.advanced-diagnostics` | 26 | 603.9 КБ | 26 | 0 | 2 | да |
 
 ## Backend routes и регистрация
@@ -96,14 +96,14 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | From | To | Units | Примеры |
 |---|---|---:|---|
-| `core` | `engine.mihomo` | 17 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/run_server.py`<br>`xkeen-ui/routes/__init__.py` |
+| `core` | `engine.mihomo` | 18 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/run_server.py`<br>`xkeen-ui/routes/__init__.py` |
 | `core` | `engine.xray` | 34 | `xkeen-ui/app.py`<br>`xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py` |
-| `core` | `integration.happ` | 4 | `xkeen-ui/routes/__init__.py`<br>`tests/test_check_keys_upstream.py`<br>`xkeen-ui/static/js/features/index.js` |
+| `core` | `integration.happ` | 5 | `xkeen-ui/routes/__init__.py`<br>`tests/test_check_keys_upstream.py`<br>`tests/test_module_backend_gates.py` |
 | `core` | `tool.advanced-diagnostics` | 7 | `xkeen-ui/routes/__init__.py`<br>`tests/test_devtools_env_whitelist.py`<br>`xkeen-ui/static/js/features/compat/devtools.js` |
 | `core` | `tool.backups` | 7 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py`<br>`tests/test_backup_path_hardening.py` |
 | `core` | `tool.editor` | 6 | `xkeen-ui/static/js/pages/panel.shared_compat.bundle.js`<br>`xkeen-ui/static/js/pages/config_shell.shared.js`<br>`xkeen-ui/static/js/pages/panel.screen.bootstrap.js` |
 | `core` | `tool.files` | 7 | `xkeen-ui/routes/__init__.py`<br>`tests/test_filemanager_trash_policy.py`<br>`tests/test_remotefs_remove_regressions.py` |
-| `core` | `tool.terminal` | 14 | `xkeen-ui/app.py`<br>`xkeen-ui/app_factory.py`<br>`xkeen-ui/run_server.py` |
+| `core` | `tool.terminal` | 15 | `xkeen-ui/app.py`<br>`xkeen-ui/app_factory.py`<br>`xkeen-ui/run_server.py` |
 | `engine.mihomo` | `core` | 126 | `xkeen-ui/bootstrap_mihomo_env.py`<br>`xkeen-ui/mihomo_config_generator.py`<br>`xkeen-ui/mihomo_server_core.py` |
 | `engine.mihomo` | `engine.xray` | 6 | `xkeen-ui/routes/mihomo.py`<br>`xkeen-ui/services/mihomo_clash_devices.py`<br>`xkeen-ui/services/mihomo_clash_dto.py` |
 | `engine.mihomo` | `integration.happ` | 3 | `xkeen-ui/routes/mihomo.py`<br>`xkeen-ui/services/mihomo_subscriptions.py`<br>`xkeen-ui/static/js/features/mihomo_import.js` |
@@ -118,7 +118,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `engine.xray` | `tool.editor` | 114 | `xkeen-ui/routes/routing/__init__.py`<br>`xkeen-ui/routes/routing/blueprint.py`<br>`xkeen-ui/routes/routing/config.py` |
 | `engine.xray` | `tool.files` | 2 | `xkeen-ui/routes/routing/dat.py`<br>`xkeen-ui/services/geodat/runner.py` |
 | `engine.xray` | `tool.terminal` | 2 | `xkeen-ui/routes/routing/config.py`<br>`xkeen-ui/routes/xray_configs.py` |
-| `integration.happ` | `core` | 24 | `xkeen-ui/routes/happ_decryptor.py`<br>`xkeen-ui/services/happ_decryptor/__init__.py`<br>`xkeen-ui/services/happ_decryptor/engine.py` |
+| `integration.happ` | `core` | 22 | `xkeen-ui/routes/happ_decryptor.py`<br>`xkeen-ui/services/happ_decryptor/__init__.py`<br>`xkeen-ui/services/happ_decryptor/engine.py` |
 | `integration.happ` | `engine.mihomo` | 2 | `xkeen-ui/services/mihomo_hwid_sub.py`<br>`xkeen-ui/static/js/features/mihomo_hwid_sub.js` |
 | `integration.happ` | `engine.xray` | 2 | `xkeen-ui/services/happ_decryptor/engine.py`<br>`xkeen-ui/services/mihomo_hwid_sub.py` |
 | `integration.happ` | `tool.advanced-diagnostics` | 2 | `tests/test_happ_decryptor_env.py`<br>`xkeen-ui/static/js/features/devtools/happ_decryptor.js` |

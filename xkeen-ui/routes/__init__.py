@@ -32,6 +32,18 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
         if enabled or module_id not in {"engine.xray", "engine.mihomo"}:
             return None
         try:
+            from services.cores import detect_running_core
+
+            running_core = detect_running_core()
+        except Exception:
+            running_core = None
+        running_module = {
+            "xray": "engine.xray",
+            "mihomo": "engine.mihomo",
+        }.get(running_core or "")
+        if running_module != module_id:
+            return None
+        try:
             from services.dns_service_lifecycle import get_stop_protection
 
             protection = get_stop_protection(
@@ -68,42 +80,30 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
         return None
 
     def publish_blueprint_owner_diagnostic() -> None:
-        owner_map = {
-            "utils": "core",
-            "ui_settings": "core",
-            "capabilities": "core",
-            "modules": "core",
-            "cores_status": "core",
-            "xkeen_lists": "core",
-            "config_exchange": "core",
-            "service": "core",
-            "devtools": "core",
-            "ws_support": "core",
-            "ws_streams": "core",
-            "routing": "engine.xray",
-            "xray_configs": "engine.xray",
-            "xray_subscriptions": "engine.xray",
-            "xray_logs": "engine.xray",
-            "mihomo": "engine.mihomo",
-            "mihomo_clash": "engine.mihomo",
-            "happ_decryptor": "integration.happ",
-            "backups": "tool.backups",
-            "commands": "tool.terminal",
-            "system_resources": "tool.advanced-diagnostics",
-            "storage_usb": "tool.files",
-            "fs": "tool.files",
-            "remotefs": "tool.files",
-            "fileops": "tool.files",
-        }
+        from services.module_registry import BLUEPRINT_OWNERS, WS_HANDLER_OWNERS
+
+        owner_map = BLUEPRINT_OWNERS
         registered = sorted(app.blueprints)
         unknown = sorted(set(registered) - set(owner_map))
         app.extensions["xkeen.module_owner_map"] = {
             name: owner_map[name] for name in registered if name in owner_map
         }
         app.extensions["xkeen.module_owner_errors"] = unknown
+        app.extensions["xkeen.ws_owner_map"] = dict(WS_HANDLER_OWNERS)
 
     def _warn_init(key: str, msg: str, exc: Exception) -> None:
         err = str(exc)
+        owner_by_error = {
+            "fs_blueprint_init_failed": "tool.files",
+            "remotefs_init_failed": "tool.files",
+            "fileops_init_failed": "tool.files",
+        }
+        owner = owner_by_error.get(key)
+        if owner:
+            try:
+                ctx.module_registry.record_initialization_failure(owner, exc)
+            except Exception:
+                pass
         try:
             if callable(ctx.ws_debug):
                 ctx.ws_debug(msg, error=err)
@@ -213,33 +213,41 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
 
     # Mihomo: config, Clash API/cache/telemetry and optional Happ integration.
     if module_active("engine.mihomo"):
-        from .mihomo import create_mihomo_blueprint
-        from .mihomo_clash import create_mihomo_clash_blueprint
-        from services.mihomo_clash_cache import get_shared_mihomo_clash_cache
+        try:
+            from .mihomo import create_mihomo_blueprint
+            from .mihomo_clash import create_mihomo_clash_blueprint
+            from services.mihomo_clash_cache import get_shared_mihomo_clash_cache
 
-        app.register_blueprint(
-            create_mihomo_blueprint(
-                MIHOMO_CONFIG_FILE=ctx.mihomo_config_file,
-                MIHOMO_TEMPLATES_DIR=ctx.mihomo_templates_dir,
-                MIHOMO_DEFAULT_TEMPLATE=ctx.mihomo_default_template,
-                ui_state_dir=ctx.ui_state_dir,
-                restart_xkeen=ctx.restart_xkeen,
+            app.register_blueprint(
+                create_mihomo_blueprint(
+                    MIHOMO_CONFIG_FILE=ctx.mihomo_config_file,
+                    MIHOMO_TEMPLATES_DIR=ctx.mihomo_templates_dir,
+                    MIHOMO_DEFAULT_TEMPLATE=ctx.mihomo_default_template,
+                    ui_state_dir=ctx.ui_state_dir,
+                    restart_xkeen=ctx.restart_xkeen,
+                )
             )
-        )
-        app.register_blueprint(
-            create_mihomo_clash_blueprint(
-                mihomo_config_file=ctx.mihomo_config_file,
-                mihomo_root=os.path.dirname(ctx.mihomo_config_file),
-                ui_state_dir=ctx.ui_state_dir,
-                audit_logger=ctx.append_restart_log,
-                cache=get_shared_mihomo_clash_cache(),
+            app.register_blueprint(
+                create_mihomo_clash_blueprint(
+                    mihomo_config_file=ctx.mihomo_config_file,
+                    mihomo_root=os.path.dirname(ctx.mihomo_config_file),
+                    ui_state_dir=ctx.ui_state_dir,
+                    audit_logger=ctx.append_restart_log,
+                    cache=get_shared_mihomo_clash_cache(),
+                )
             )
-        )
+        except Exception as exc:  # noqa: BLE001
+            ctx.module_registry.record_initialization_failure("engine.mihomo", exc)
+            _warn_init("mihomo_blueprint_init_failed", "mihomo blueprint init failed", exc)
 
     if module_active("integration.happ"):
-        from .happ_decryptor import create_happ_decryptor_blueprint
+        try:
+            from .happ_decryptor import create_happ_decryptor_blueprint
 
-        app.register_blueprint(create_happ_decryptor_blueprint())
+            app.register_blueprint(create_happ_decryptor_blueprint())
+        except Exception as exc:  # noqa: BLE001
+            ctx.module_registry.record_initialization_failure("integration.happ", exc)
+            _warn_init("happ_blueprint_init_failed", "happ blueprint init failed", exc)
 
     if module_active("tool.backups"):
         from .backups import create_backups_blueprint
@@ -302,9 +310,13 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     )
 
     if module_active("tool.terminal"):
-        from .commands import create_commands_blueprint
+        try:
+            from .commands import create_commands_blueprint
 
-        app.register_blueprint(create_commands_blueprint())
+            app.register_blueprint(create_commands_blueprint())
+        except Exception as exc:  # noqa: BLE001
+            ctx.module_registry.record_initialization_failure("tool.terminal", exc)
+            _warn_init("terminal_blueprint_init_failed", "terminal blueprint init failed", exc)
 
     # Core-owned maintenance APIs (self-update, core.log, recovery and
     # module-control diagnostics) must remain available even when the optional

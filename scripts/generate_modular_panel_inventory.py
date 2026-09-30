@@ -68,15 +68,15 @@ MODULE_SPECS: dict[str, dict[str, Any]] = {
         "removable": True,
     },
     "integration.happ": {
-        "name": "Happ",
-        "description": "Декриптор Happ, payload/link helpers и Mihomo HWID/Happ subscriptions.",
+        "name": "Subscription link integration",
+        "description": "Общие link/payload helpers подписок и optional subscription integration flows.",
         "depends_on": ["core"],
         "system_requirements": ["happ-decrypt-universal (optional)"],
         "removable": True,
     },
     "tool.advanced-diagnostics": {
         "name": "Расширенная диагностика",
-        "description": "DevTools, ресурсы, router diagnostics, update UI и служебные журналы.",
+        "description": "DevTools, ресурсы, router diagnostics и служебные журналы.",
         "depends_on": ["core"],
         "system_requirements": ["ndmc (router diagnostics optional)"],
         "removable": True,
@@ -125,6 +125,7 @@ WORKTREE_MODULAR_PANEL_PATHS = frozenset(
         "tests/test_module_backend_gates.py",
         "tests/test_modular_panel_stage4_1_contract.py",
         "tests/test_modular_panel_stage4_2_shell.py",
+        "tests/test_modular_panel_stage3r1.py",
         "xkeen-ui/templates/panel/macros.html",
         "xkeen-ui/templates/panel/head.html",
         "xkeen-ui/templates/panel/page_config.html",
@@ -361,7 +362,11 @@ class ModularPanelInventoryGenerator:
         p = rel.lower().replace("\\", "/")
         name = Path(p).name
 
-        if any(token in p for token in ("/happ_", "/happ-", "/happ/", "happ_decryptor")) or "mihomo_hwid" in p:
+        if (
+            "happ_decryptor" in p
+            or "mihomo_hwid" in p
+            or "/routes/happ" in p
+        ):
             module_id = "integration.happ"
         elif (
             "/routes/fs/" in p

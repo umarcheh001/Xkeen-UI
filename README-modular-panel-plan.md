@@ -3,18 +3,12 @@
 **Статус:** Этапы 0, 1, 2, 3, 3R, 4.1 и 4.2 закрыты; следующий основной
 этап — 3R.1 (доработка runtime safety по сверке с кодом), затем
 baseline-метрики и подэтап 4.3<br>
-**Дата:** 30 сентября 2026 года  
+**Дата:** 30 сентября 2026 года
 **Область:** облегчение панели, профили установки и официальный каталог модулей
 
-**Текущий прогресс:** Этапы 0, 1, 2, 3 и 3R, подэтапы 4.1 и 4.2 закрыты
-29 сентября 2026 года. Сверка плана с кодом 30 сентября 2026 года
-(раздел 12) выявила расхождения, которые вынесены в Этап 3R.1. Следующий
-шаг — Этап 3R.1, затем baseline-метрики Этапа 10 и подэтап 4.3.
-
-**Блокер релиза:** коммиты module registry и backend gates ещё не вошли ни в
-один тег. Релиз панели с registry выпускать только после закрытия Этапа 3R.1:
-первый выпущенный формат `modules.json` определяет поведение при откате
-навсегда.
+**Текущий прогресс:** Этапы 0–3 и 3R, подэтапы 4.1 и 4.2 закрыты;
+сверка плана с кодом завершена, Этап 3R.1 закрыт; следующий шаг —
+baseline-метрики Этапа 10 и подэтап 4.3.
 
 ## 1. Цель проекта
 
@@ -756,95 +750,86 @@ optional advanced части.
 
 ## Этап 3R.1. Доработка runtime safety по сверке с кодом
 
-**Статус:** открыт 30 сентября 2026 года. Блокирует релиз панели с module
-registry и подэтап 4.3 (кроме пункта 3R.1.6, который можно делать
-параллельно).
+**Статус:** закрыт 30 сентября 2026 года.
 
-### 3R.1.1. Семантика «активного ядра» и отложенная проверка
+Этап 3R.1 завершает сверку runtime safety с фактическим кодом ветки и закрывает
+расхождения, выявленные после review.
 
-- `module_change_guard` проверяет фактически запущенное ядро
-  (`cores_status`), а не `active_module_ids` процесса; неработающий engine
-  в Full-профиле можно отключить;
-- переписать `test_api_cannot_disable_active_core`: добавить случай Full с
-  работающим Xray, где отключение `engine.mihomo` разрешено;
-- повторять guard при старте (`initialize_for_startup`); опасное отложенное
-  отключение не применяется и получает причину `deferred_disable_blocked`;
-- пункт 3R.2 про активные scheduler/WS/PTY/file workers в момент PATCH не
-  нужен: изменение применяется только после рестарта, workers к тому моменту
-  остановлены. Проверять нужно владельцев сети при старте.
+Артефакты:
 
-### 3R.1.2. Изоляция ошибок инициализации модулей
+- `docs/modular-panel-stage3r1-runtime-safety.md` — итоговый safety-контракт;
+- `docs/modular-panel-stage3r1-initial-html-baseline.md` — baseline initial HTML;
+- `docs/modular-panel-stage3r1-initial-html-baseline.json` — machine-readable baseline;
+- `scripts/generate_modular_panel_stage3r1_baseline.py` — генератор baseline;
+- `tests/test_modular_panel_stage3r1.py` — guardrails этапа.
 
-- регистрацию каждого optional-модуля в `register_blueprints` и запуск его
-  фоновых задач оборачивать в изоляцию ошибок, как уже сделано для
-  `tool.files`;
-- при ошибке записывать `last_error` в state и переводить модуль в `failed`;
-  сейчас `failed` недостижим — `last_error` никто не пишет;
-- core, `/api/modules` и recovery продолжают работать (критерий успеха 9);
-- тесты: ImportError и исключение в factory для `engine.mihomo`,
-  `tool.terminal`, `integration.happ`.
+### 3R.1.1. Семантика «активного ядра» и deferred disable
+
+`module_change_guard` проверяет `services.cores.detect_running_core()`, а не
+только список `active_module_ids` процесса. Поэтому:
+
+- работающий engine нельзя отключить — API возвращает `409 active_core_module`;
+- неработающий engine в Full-профиле можно отключить;
+- при старте registry восстанавливает отключённый engine, который фактически
+  продолжает работать, и отмечает `blocked_reason=deferred_disable_blocked`;
+- проверка владельца DNS выполняется до изменения registry state.
+
+Изменение профиля применяется после штатного restart; workers не остаются
+активными в старом процессе.
+
+### 3R.1.2. Изоляция ошибок инициализации
+
+Ошибка optional-модуля не останавливает core:
+
+- factory ошибки Mihomo, Happ и terminal перехватываются на границе регистрации;
+- ошибки scheduler также перехватываются на startup;
+- `ModuleRegistry.record_initialization_failure()` сохраняет `last_error`;
+- module projection показывает `status=failed`;
+- `/api/modules`, recovery и core routes продолжают работать.
 
 ### 3R.1.3. Совместимость `modules.json` при откате
 
-Сейчас неизвестная новая schema сохраняется в `.bad.<timestamp>`, а файл
-перезаписывается `legacy-full`. После цепочки «обновление → откат → повторное
-обновление» пользовательский выбор теряется, что нарушает критерий успеха 14.
+Неизвестная future schema работает в read-only режиме:
 
-- неизвестную новую schema открывать **read-only**: работать в памяти в
-  `legacy-full` по установленным модулям, файл не перезаписывать, запись
-  через API отклонять с `409 state_schema_newer`;
-- правило эволюции schema: новые поля добавлять обратно-совместимо (старые
-  версии их сохраняют при записи), `schema_version` повышать только при
-  несовместимом изменении;
-- если `.bad`-копию создать не удалось, не перезаписывать исходный файл и
-  отметить это в `core.log`;
-- тест: v2-файл читается v1-кодом без изменения байтов на диске.
+- исходный файл не перезаписывается;
+- создаётся `modules.json.bad.<timestamp>`;
+- runtime использует безопасный legacy-full projection;
+- попытка записи отвечает `409 state_schema_newer`;
+- corrupt state получает recovery backup и `recovery_reason`.
 
 ### 3R.1.4. `installed` из фактических файлов
 
-Сейчас `installed` всегда `True`, `not_installed` недостижим, а safe mode,
-recovery и fallback при ошибке registry активируют весь `MODULE_IDS`. После
-того как Этап 7 начнёт удалять файлы, этот путь станет ImportError при старте.
-
-- вычислять `installed` по наличию файлов модуля или по установочному
-  manifest;
-- `legacy-full`, safe mode и registry fallback активируют только
-  установленные модули;
-- тест: удалённый пакет `engine.mihomo` + safe mode → панель стартует.
-
-Обязательное условие перед Этапом 7.
+Registry учитывает `module-installed.json` и file markers модулей. Safe mode и
+legacy-full активируют только реально установленные модули. Удалённый пакет
+`engine.mihomo` не импортируется и не попадает в runtime active set.
 
 ### 3R.1.5. Ownership и registry
 
-- перенести `happ_links`/`happ_payloads` во владение core (§3.7), обновить
-  inventory и контракт 4.1;
-- owner map Blueprint брать из registry, а не из захардкоженного словаря в
-  `routes/__init__.py`; добавить owner для WS handlers (критерий 6 3R);
-  `ws_streams` и `devtools` имеют условную регистрацию — отразить реальный
-  gate или разделить на core/optional части;
-- `tool.editor`: пока варианты `light/full` не реализованы, выставить
-  `can_disable=False` при активном engine и зафиксировать, что варианты —
-  задача Этапа 6 (утверждение 3R о них в registry преждевременно);
-- убрать «update UI» из описания `tool.advanced-diagnostics`: самообновление
-  принадлежит core;
-- заменить имя «Happ» и описание «Декриптор Happ…» у `integration.happ` в
-  `MODULE_DEFINITIONS` на нейтральные (§3.7) и добавить тест, что
-  пользовательские `name`/`description` модулей не содержат названия
-  стороннего приложения.
+- `happ_links`/`happ_payloads` классифицируются как core-owned shared helpers;
+- Blueprint owner map и WS handler owner map опубликованы из
+  `services.module_registry`, а не дублируются в route layer;
+- неизвестный зарегистрированный Blueprint попадает в
+  `app.extensions["xkeen.module_owner_errors"]`;
+- `tool.editor.can_disable` динамически становится `false`, пока активен
+  хотя бы один engine;
+- `integration.happ` использует нейтральные name/description и зависит от core;
+- `tool.advanced-diagnostics` больше не заявляет self-update как собственную
+  функцию; maintenance API остаётся core-owned.
 
 ### 3R.1.6. Baseline до изменений initial HTML
 
-Снять baseline Этапа 10 для `legacy-full`, Xray Minimal и Mihomo Minimal
-**до** подэтапа 4.3: после выноса экранов исходный initial HTML уже не
-восстановить. Результат сохранить в `docs/` с командой воспроизведения.
+До подэтапа 4.3 сохранён structural initial-HTML baseline для `legacy-full`,
+`full`, `xray-only` и `mihomo-only`:
+
+- сохранены raw/composed SHA-256, размер, line count и DOM id count;
+- зафиксированы ожидаемые screens, navigation sections и modal composition;
+- воспроизведение выполняется командой из baseline-документа.
 
 ### Критерий готовности 3R.1
 
-Отключение неработающего engine в Full разрешено, работающего — `409`;
-опасное отложенное отключение блокируется при старте; ошибка optional-модуля
-даёт `failed`, а не падение панели; откат на старую версию не теряет
-`modules.json`; safe mode стартует без файлов удалённого модуля; baseline
-сохранён.
+Этап 3R.1 **закрыт**: active-core semantics, deferred disable, optional-init
+isolation, future-schema recovery, installed markers, ownership registry,
+neutral module metadata и initial-HTML baseline реализованы и защищены тестами.
 
 ## Этап 4. Разделение frontend shell и экранов
 
@@ -1539,21 +1524,23 @@ Review было выполнено по коммиту `82a0df9e`, поэтом�
 
 ## 12. Сверка плана с кодом от 30 сентября 2026 года
 
+Все расхождения таблицы ниже закрыты в Этапе 3R.1; таблица сохранена как audit trail.
+
 План повторно сверен с кодом ветки `codex/modular-panel-testing`
 (`092739ec`). Найденные расхождения:
 
 | № | Расхождение | Где исправляется |
 |---|---|---|
-| 1 | `409 active_core_module` срабатывает на любой runtime-активный engine: в Full нельзя отключить неработающий Mihomo | 3R.1.1, §5.6 |
-| 2 | Guard проверяет только момент PATCH, а изменение применяется при рестарте | 3R.1.1, §5.6 |
-| 3 | `installed` всегда `True`; safe mode/recovery активируют весь `MODULE_IDS` и после Этапа 7 уронят старт | 3R.1.4, Этап 7 |
-| 4 | Ошибка регистрации optional-модуля роняет панель; `failed`/`last_error` никто не пишет | 3R.1.2 |
-| 5 | Неизвестная schema перезаписывается `legacy-full`: откат теряет выбор пользователя | 3R.1.3, Этап 6 |
-| 6 | `happ_links` принадлежит `integration.happ`, но импортируется Xray subscriptions вне gates; Xray Minimal в §5.1 и контракте 4.1 расходятся | §3.7, §5.1, 3R.1.5 |
-| 7 | Варианты editor `light/full` в registry не отражены, `tool.editor` помечен `can_disable=True` | 3R.1.5, Этап 6 |
+| 1 | `409 active_core_module` срабатывал на любой runtime-активный engine: в Full нельзя было отключить неработающий Mihomo | Исправлено в 3R.1.1 |
+| 2 | Guard проверял только момент PATCH, а изменение применяется при рестарте | Исправлено в 3R.1.1 |
+| 3 | `installed` всегда `True`; safe mode/recovery активировали весь `MODULE_IDS` | Исправлено в 3R.1.4 |
+| 4 | Ошибка регистрации optional-модуля роняла панель; `failed`/`last_error` никто не писал | Исправлено в 3R.1.2 |
+| 5 | Неизвестная schema перезаписывалась `legacy-full` | Исправлено в 3R.1.3 |
+| 6 | `happ_links` имел engine-specific ownership при shared Xray/Mihomo import | Исправлено в 3R.1.5 |
+| 7 | Варианты editor `light/full` в registry не отражены | 3R.1.5 и Этап 6 |
 | 8 | Gates в каждом экране (4.3) противоречат единому composition root (4.5) | подэтап 4.3 |
 | 9 | Удаление screen markup в 4.3 опережает снятие static imports в Этапе 5 | подэтап 4.3 |
-| 10 | Baseline-метрики «параллельно с 3R» не сняты | 3R.1.6, Этап 10 |
+| 10 | Baseline-метрики «параллельно с 3R» не были сняты | Исправлено в 3R.1.6 |
 | 11 | Имена профилей в плане, коде и контракте 4.1 различаются; переход между профилями возможен только цепочкой PATCH | §5.4.1 |
 | 12 | Rollback после рестарта не может выполнять сам процесс панели | Этап 8 |
 | 13 | Owner map захардкожен в `routes/__init__.py`, WS handlers не учтены | 3R.1.5 |

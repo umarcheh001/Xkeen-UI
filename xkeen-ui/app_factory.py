@@ -807,6 +807,10 @@ def create_app(*, ws_runtime: bool = False):
             )
         except Exception as e:  # noqa: BLE001
             try:
+                module_registry.record_initialization_failure("engine.xray", e)
+            except Exception:
+                pass
+            try:
                 from core.logging import core_log_once
 
                 core_log_once(
@@ -830,6 +834,10 @@ def create_app(*, ws_runtime: bool = False):
                 save_callback=_mihomo_save_config,
             )
         except Exception as e:  # noqa: BLE001
+            try:
+                module_registry.record_initialization_failure("engine.mihomo", e)
+            except Exception:
+                pass
             try:
                 from core.logging import core_log_once
 
