@@ -315,7 +315,11 @@ class ModuleRegistry:
         self._lock = threading.RLock()
         self._runtime_activation: dict[str, Any] | None = None
         self._recovery_reason: str | None = None
+        self._recovery_backup_taken = False
         self._state_read_only_recovery = False
+        # Failures recorded by this process.  They are shown even when the
+        # persisted state is read-only (future schema recovery).
+        self._runtime_failures: dict[str, str] = {}
 
     @property
     def state_path(self) -> str:
@@ -328,6 +332,12 @@ class ModuleRegistry:
 
         with self._lock:
             state, changed = self._load_state_locked()
+            # ``last_error`` describes the previous process.  A new start is a
+            # new initialization attempt; keeping the error would make one
+            # transient failure disable the module on every later restart.
+            for item in state["modules"].values():
+                if item.pop("last_error", None) is not None:
+                    changed = True
             try:
                 from services.cores import detect_running_core
 
@@ -449,9 +459,14 @@ class ModuleRegistry:
 
         normalized_id = self._require_known_module(module_id)
         message = str(error or "initialization_failed").strip()[:_MAX_LAST_ERROR_CHARS]
+        message = message or "initialization_failed"
         with self._lock:
+            self._runtime_failures[normalized_id] = message
             state, _normalized = self._load_state_locked()
-            state["modules"][normalized_id]["last_error"] = message or "initialization_failed"
+            if self._state_read_only_recovery:
+                # A newer panel owns the state file; never overwrite it.
+                return
+            state["modules"][normalized_id]["last_error"] = message
             self._write_state_locked(state)
 
     def is_runtime_active(self, module_id: str) -> bool:
@@ -639,6 +654,11 @@ class ModuleRegistry:
     def _recover_state(self, reason: str, *, read_only: bool = False) -> None:
         self._recovery_reason = str(reason)
         self._state_read_only_recovery = bool(read_only)
+        # A read-only state is re-read on every API call; one diagnostic copy
+        # per process is enough and does not litter the router flash.
+        if self._recovery_backup_taken:
+            return
+        self._recovery_backup_taken = True
         if os.path.isfile(self._path):
             stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             backup_path = f"{self._path}.bad.{stamp}"
@@ -848,7 +868,7 @@ class ModuleRegistry:
             status = "enabled"
             reason: str | None = None
             effective_enabled = False
-            last_error = module_state.get("last_error")
+            last_error = module_state.get("last_error") or self._runtime_failures.get(module_id)
             blocked_reason = module_state.get("blocked_reason")
             editor_required_by_engine = module_id == "tool.editor" and any(
                 bool(state["modules"][engine_id]["enabled"])

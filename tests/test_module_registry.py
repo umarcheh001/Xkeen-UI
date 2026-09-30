@@ -282,6 +282,69 @@ def test_startup_blocks_deferred_disable_of_running_core(tmp_path, monkeypatch):
     assert xray["blocked_reason"] == "deferred_disable_blocked"
 
 
+def test_initialization_failure_does_not_disable_module_after_restart(tmp_path, monkeypatch):
+    monkeypatch.setattr("services.cores.detect_running_core", lambda: None)
+    registry = _registry(tmp_path)
+    registry.initialize_for_startup()
+    registry.set_enabled("tool.files", False)
+    registry.record_initialization_failure("engine.xray", RuntimeError("scheduler hiccup"))
+
+    failed = _module(registry.get_registry(), "engine.xray")
+    assert failed["status"] == "failed"
+    assert failed["last_error"] == "scheduler hiccup"
+
+    restarted = _registry(tmp_path)
+    snapshot = restarted.initialize_for_startup()
+    xray = _module(snapshot, "engine.xray")
+    activation = restarted.runtime_activation()
+
+    assert snapshot["profile"] == "custom"
+    assert xray["status"] == "enabled"
+    assert "last_error" not in xray
+    assert "engine.xray" in activation["active_module_ids"]
+
+
+def test_initialization_failure_keeps_future_schema_state_untouched(tmp_path):
+    state_path = tmp_path / "modules.json"
+    state_path.write_text(
+        json.dumps({"schema_version": STATE_SCHEMA_VERSION + 1, "profile": "xray-minimal"}),
+        encoding="utf-8",
+    )
+    original = state_path.read_bytes()
+    registry = _registry(tmp_path)
+
+    registry.record_initialization_failure("engine.mihomo", RuntimeError("boom"))
+
+    assert state_path.read_bytes() == original
+    assert _module(registry.get_registry(), "engine.mihomo")["status"] == "failed"
+
+
+def test_future_schema_backup_is_taken_once_per_process(tmp_path, monkeypatch):
+    stamps = iter(f"20260930T0000{index:02d}Z" for index in range(10))
+
+    class _Clock:
+        @staticmethod
+        def now(_tz=None):
+            class _Stamp:
+                @staticmethod
+                def strftime(_fmt):
+                    return next(stamps)
+
+            return _Stamp()
+
+    monkeypatch.setattr("services.module_registry.datetime", _Clock)
+    (tmp_path / "modules.json").write_text(
+        json.dumps({"schema_version": STATE_SCHEMA_VERSION + 1}),
+        encoding="utf-8",
+    )
+    registry = _registry(tmp_path)
+
+    for _ in range(3):
+        registry.get_registry()
+
+    assert len(list(tmp_path.glob("modules.json.bad.*"))) == 1
+
+
 def test_missing_module_manifest_keeps_safe_mode_from_importing_removed_engine(tmp_path):
     (tmp_path / "module-installed.json").write_text(
         json.dumps({"modules": {"engine.mihomo": False}}),

@@ -1154,7 +1154,9 @@ class ModularPanelInventoryGenerator:
                     "template": "xkeen-ui/templates/panel.html",
                     "panel_views": len(ui_surfaces["panel_views"]),
                     "panel_modals": len(ui_surfaces["panel_modals"]),
-                    "size_bytes": (self.project_root / "templates/panel.html").stat().st_size,
+                    "size_bytes": len(
+                        self._read_text(self.project_root / "templates/panel.html").encode("utf-8")
+                    ),
                 },
                 "next_stage": "Этап 4: template partials и module composition.",
             },

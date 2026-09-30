@@ -783,6 +783,10 @@ optional advanced части.
 - factory ошибки Mihomo, Happ и terminal перехватываются на границе регистрации;
 - ошибки scheduler также перехватываются на startup;
 - `ModuleRegistry.record_initialization_failure()` сохраняет `last_error`;
+- `last_error` описывает только предыдущий процесс: `initialize_for_startup()`
+  стирает его, и каждый старт — новая попытка инициализации. Иначе разовый
+  сбой (например, расписания подписок) навсегда выключал модуль в любом
+  профиле, кроме `legacy-full`, а `enable` его не возвращал;
 - module projection показывает `status=failed`;
 - `/api/modules`, recovery и core routes продолжают работать.
 
@@ -790,8 +794,10 @@ optional advanced части.
 
 Неизвестная future schema работает в read-only режиме:
 
-- исходный файл не перезаписывается;
-- создаётся `modules.json.bad.<timestamp>`;
+- исходный файл не перезаписывается, в том числе записью `last_error`
+  (ошибка инициализации в этом режиме хранится только в памяти процесса);
+- создаётся `modules.json.bad.<timestamp>` — одна копия за процесс, а не при
+  каждом чтении состояния;
 - runtime использует безопасный legacy-full projection;
 - попытка записи отвечает `409 state_schema_newer`;
 - corrupt state получает recovery backup и `recovery_reason`.
